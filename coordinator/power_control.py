@@ -173,6 +173,29 @@ def is_valid_power_control_entity(
     ) is not None
 
 
+def entity_max_watts(hass, entity_id: str) -> float | None:
+    """The highest value the control entity accepts, in watts.
+
+    ``None`` when the entity, its unit or its ``max`` attribute cannot be
+    read; the caller then keeps its configured ceiling.
+    """
+    if not entity_id:
+        return None
+    scale_to_watts = _native_power_scale(hass, entity_id)
+    if scale_to_watts is None:
+        return None
+    attrs = getattr(hass.states.get(entity_id), "attributes", None)
+    if not isinstance(attrs, Mapping):
+        return None
+    try:
+        bound = float(attrs.get("max"))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(bound) or bound < 0:
+        return None
+    return bound * scale_to_watts
+
+
 def prepare_power_setpoint(
     hass,
     entity_id: str,

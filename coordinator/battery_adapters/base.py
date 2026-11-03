@@ -23,6 +23,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from ..charger_types import BatteryIntent, ExportIntent
+from ..power_control import entity_max_watts
 from ...utils.select_option import listed_option
 
 _LOGGER = logging.getLogger(__name__)
@@ -115,6 +116,27 @@ async def async_release_batteries_on_unload(coordinator) -> dict:
         except Exception as e:  # noqa: BLE001
             outcome[bid] = f"release failed (non-blocking): {e}"
     return outcome
+
+
+class _OwnCeiling:
+    """(#1301) The configured maximum, capped at what this pack's limit
+    control accepts. Two packs of different size share one setting; the
+    smaller one refused the bigger value and was never returned to normal.
+    Reads the entity each time; no entity or no ``max`` keeps the setting."""
+
+    def __set_name__(self, owner, name) -> None:
+        self._raw = f"{name}_raw"
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        raw = getattr(obj, self._raw, 0.0)
+        own = entity_max_watts(getattr(obj, "_hass", None),
+                               getattr(obj, "_discharge_control_entity", ""))
+        return raw if own is None else min(raw, own)
+
+    def __set__(self, obj, value) -> None:
+        setattr(obj, self._raw, value)
 
 
 class BatteryControlAdapter(ABC):
@@ -390,6 +412,8 @@ class BatteryControlAdapter(ABC):
         """(#1066) The gap is only an error while a limit is asked for."""
         if self._last_error == self.NO_DISCHARGE_LIMIT_ERROR:
             self._last_error = None
+
+    _max_discharge_w = _OwnCeiling()
 
     def __init__(self, hass, config: dict) -> None:
         self._hass = hass

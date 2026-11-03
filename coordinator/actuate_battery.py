@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from . import reason_codes as RC
 from .charger_types import BatteryIntent, rewrite
 from .decision_log import log_of, record_battery
-from .power_control import prepare_power_setpoint
+from .power_control import entity_max_watts, prepare_power_setpoint
 from ..utils.log_gate import log_on_change
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -678,7 +678,11 @@ async def restore_discharge_limit_on_startup(
         entities.extend(e for e in per_battery if e)
 
     for control_entity in dict.fromkeys(entities):
-        prepared = prepare_power_setpoint(hass, control_entity, max_discharge)
+        # (#1301) A pack whose control stops below the configured maximum
+        # refused that value and kept its stale limit; ask for its own top.
+        own_max = entity_max_watts(hass, control_entity)
+        target = max_discharge if own_max is None else min(max_discharge, own_max)
+        prepared = prepare_power_setpoint(hass, control_entity, target)
         if prepared is None:
             continue
 
