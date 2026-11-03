@@ -248,7 +248,7 @@ On a solar install a second voter runs first: solar production has no sign ambig
 
 **If SEM locked the wrong sign before 2.1** (you upgraded from a version that voted on stale cycles): the lock is persisted, so tap **Reset sign detection** once (Control tab → Advanced → Grid Sign). Detection re-runs with the corrected voter; if you had set the **Grid sign flip** switch as a workaround, turn it off afterwards so auto-detection is in charge again.
 
-**HomeWizard P1 meter:** SEM takes the sign from the meter model on every read, also right after a restart. The **Grid sign flip** switch still works.
+**HomeWizard P1 and other known meters:** SEM takes the sign from the meter model on every read, also right after a restart and when the meter's integration loads after SEM. The **Grid sign flip** switch still works.
 
 **After a restart:** SEM takes your grid meter as soon as its integration loads. Before 2.3, it could read another sensor for the first 5 minutes.
 
