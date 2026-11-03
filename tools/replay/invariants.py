@@ -148,7 +148,7 @@ def no_writes(run: DayRun, base: Optional[DayRun] = None) -> Result:
     if not n:
         return Result("no_writes", "exact", True, "neither tree would command anything")
     diff = [{"i": i, "branch": a, "base": b}
-            for i, (a, b) in enumerate(zip(mine, theirs)) if a != b]
+            for i, (a, b) in enumerate(zip(mine, theirs, strict=False)) if a != b]
     diff += [{"i": i, "branch": a, "base": None} for i, a in enumerate(mine) if i >= len(theirs)]
     diff += [{"i": i, "branch": None, "base": b} for i, b in enumerate(theirs) if i >= len(mine)]
     if diff:
