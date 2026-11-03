@@ -682,7 +682,7 @@ Each mode promise is tested: `tests/test_docs_contracts_battery.py`.
 
 With one battery, SEM makes one `select.sem_battery_mode` and one `number.sem_battery_reserve_soc` instead. A battery that the Energy Dashboard lists as two sensors (charge and discharge) counts as one battery. Two such batteries get their own controls too. When you move from the shared controls to one per battery, each battery starts on the shared mode and reserve, and the shared controls go away. Update any automation that set them. The controls you see are the ones SEM uses. A reserve you never set is 20 %.
 
-The discharge *rate* is not per-battery: **`number.sem_battery_max_discharge_power`** (default 5000 W) caps it for the whole fleet.
+The discharge *rate* is not per-battery: **`number.sem_battery_max_discharge_power`** (default 5000 W) caps it for the whole fleet. If one battery's limit cannot go that high, SEM sets that battery to its own highest value.
 
 Each battery can have its own discharge limit entity. With two or more batteries, Config tab → Battery shows one field per battery. Leave a field empty and SEM uses the shared entity above it. When batteries share one entity, the lowest limit wins, unless one of them sells.
 
