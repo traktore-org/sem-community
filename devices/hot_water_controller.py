@@ -12,7 +12,7 @@ Includes mandatory Legionella prevention cycle:
 - Auto-adjusts hold duration based on target temperature
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from homeassistant.core import HomeAssistant
@@ -30,6 +30,9 @@ DEFAULT_HOT_WATER_POWER = 2000    # Typical immersion heater power
 DEFAULT_LEGIONELLA_TARGET = 65.0  # Disinfection temperature
 DEFAULT_LEGIONELLA_INTERVAL_HOURS = 72  # Max hours between cycles
 DEFAULT_LEGIONELLA_MIN_TEMP = 60.0  # Absolute minimum allowed
+# (#1102) A run that has not reached its target after this long ends: a 300 l
+# tank heats 40 → 65 °C on 3 kW in about 3 h, so 6 h means it cannot.
+LEGIONELLA_MAX_RUN_HOURS = 6.0
 
 # Hold duration by target temperature (higher = shorter hold)
 LEGIONELLA_HOLD_MINUTES = {
@@ -117,6 +120,10 @@ class HotWaterController(SwitchDevice):
         self._last_legionella_time: Optional[datetime] = None
         self._legionella_cycle_active: bool = False
         self._legionella_hold_start: Optional[datetime] = None
+        # (#1102) when the running cycle started, and until when a cycle that
+        # could not finish waits before it is tried again
+        self._legionella_started_at: Optional[datetime] = None
+        self._legionella_blocked_until: Optional[datetime] = None
 
         # #594 — vacation mode. Both set each cycle by the coordinator.
         # While ``vacation`` is True there is no comfort heating (no solar-
@@ -243,7 +250,27 @@ class HotWaterController(SwitchDevice):
     @property
     def legionella_overdue(self) -> bool:
         """True if Legionella prevention cycle is overdue."""
+        if self._legionella_blocked_until is not None and dt_util.now() < self._legionella_blocked_until:
+            return False
         return self.hours_since_legionella > self.legionella_interval_hours
+
+    async def _end_unreachable_legionella(self, path: str, why: str) -> str:
+        """(#1102) End a cycle that cannot reach its target. It is NOT a
+        disinfection: ``_last_legionella_time`` stays, and the next try waits
+        one full interval, so the run cannot switch the tank on again and
+        again on grid power."""
+        self._legionella_cycle_active = False
+        self._legionella_hold_start = None
+        self._legionella_started_at = None
+        self._legionella_blocked_until = dt_util.now() + timedelta(
+            hours=self.legionella_interval_hours)
+        await self.deactivate()
+        _LOGGER.warning(
+            "Legionella cycle for %s ended without reaching %.0f°C: %s. "
+            "Next try in %.0f h.", self.name, self.legionella_target_temp, why,
+            self.legionella_interval_hours)
+        self._last_legionella_path = path
+        return f"legionella_{path}"
 
     @property
     def legionella_hold_minutes(self) -> int:
@@ -649,6 +676,8 @@ class HotWaterController(SwitchDevice):
                     # Cycle complete
                     self._legionella_cycle_active = False
                     self._legionella_hold_start = None
+                    self._legionella_started_at = None
+                    self._legionella_blocked_until = None
                     self._last_legionella_time = dt_util.now()
                     await self.deactivate()
                     _LOGGER.info("Legionella prevention cycle completed at %.0f°C", temp)
@@ -657,6 +686,18 @@ class HotWaterController(SwitchDevice):
                 self._last_legionella_path = "hold_in_progress"
                 return "legionella_holding"
             else:
+                # (#1102) Your own stop applies during the run (#1062). When it
+                # fires below the target, the run can never finish; before
+                # this it stayed open and switched the tank back on, sun or
+                # not, every time it cooled below your stop.
+                if super(ComfortBandMixin, self).stop_condition_met:
+                    return await self._end_unreachable_legionella(
+                        "blocked_by_stop",
+                        f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it")
+                started = self._legionella_started_at
+                if started is not None and (dt_util.now() - started) > timedelta(hours=LEGIONELLA_MAX_RUN_HOURS):
+                    return await self._end_unreachable_legionella(
+                        "timed_out", f"still below it after {LEGIONELLA_MAX_RUN_HOURS:g} h")
                 # Still heating towards target
                 self._last_legionella_path = "heating_to_target"
                 return "legionella_heating"
@@ -675,8 +716,16 @@ class HotWaterController(SwitchDevice):
                 self.legionella_interval_hours,
                 self.legionella_target_temp,
             )
+            # (#1102) your stop already met: the run could not get further
+            if super(ComfortBandMixin, self).stop_condition_met:
+                self._legionella_started_at = dt_util.now()
+                self._legionella_cycle_active = True
+                return await self._end_unreachable_legionella(
+                    "blocked_by_stop",
+                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is already met")
             self._legionella_cycle_active = True
             self._legionella_hold_start = None
+            self._legionella_started_at = dt_util.now()
             # Force activate regardless of solar surplus
             await self.activate(self.rated_power)
             self._last_legionella_path = "overdue_start"

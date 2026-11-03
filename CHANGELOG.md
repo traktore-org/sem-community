@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A Legionella run that your own stop keeps below its target now ends** (#1102). Before, it heated again on grid power whenever the tank cooled.
+
 # [2.3.0-beta.4] — 03.11.2026
 
 - 🐛 **After a restart, a grid meter is taken the moment its integration loads, not 5 minutes later** (#1296).
