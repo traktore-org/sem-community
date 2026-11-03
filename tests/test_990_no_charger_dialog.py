@@ -20,9 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import voluptuous as vol
-import voluptuous_serialize
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import config_validation as cv
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.solar_energy_management.config_flow import (
@@ -30,6 +28,9 @@ from custom_components.solar_energy_management.config_flow import (
     SolarEnergyManagementConfigFlow,
 )
 from custom_components.solar_energy_management.const import DOMAIN
+from custom_components.solar_energy_management.tests.schema_fields import (
+    field_list,
+)
 
 
 def _installed_data(**extra) -> dict:
@@ -57,8 +58,7 @@ def _browser_submit(result: dict, typed: dict | None = None) -> dict:
     entered on top; empty values are not sent; a required field left empty
     blocks the submit ("nothing happens").
     """
-    fields = voluptuous_serialize.convert(
-        result["data_schema"], custom_serializer=cv.custom_serializer)
+    fields = field_list(result["data_schema"])
     typed = typed or {}
     data = {}
     for field in fields:

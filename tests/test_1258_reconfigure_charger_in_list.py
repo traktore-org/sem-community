@@ -10,12 +10,11 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-import voluptuous_serialize
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import config_validation as cv
 
 from custom_components.solar_energy_management.utils.translate import get_text
 
+from .schema_fields import field_list
 from .test_990_no_charger_dialog import _browser_submit, _entry, _installed_data
 
 NOTE_KEY = "flow_charger_in_configure"
@@ -26,8 +25,7 @@ LISTED = {"id": "wb1", "name": "Garage", "ev_connected_sensor": "binary_sensor.a
 
 
 def _names(form):
-    return {f["name"]: f for f in voluptuous_serialize.convert(
-        form["data_schema"], custom_serializer=cv.custom_serializer)}
+    return {f["name"]: f for f in field_list(form["data_schema"])}
 
 
 async def _form(hass, data):
