@@ -23,6 +23,9 @@ from .charger_adapters.status_enum import (
     classify_charger_status,
     is_cable_present,
 )
+from .grid_sign import (
+    GridSignDecision, GridSignEvidence, grid_sign_decision, lock_base,
+)
 from .sign_audit import CounterCorrelationAudit, SplitSensorExclusivityAudit
 from .units import (
     energy_state_to_kwh,
@@ -1176,20 +1179,20 @@ class SensorReader:
         # entirely and the raw read is negated. Required for Enphase /
         # other installs where the energy-counter heuristic can't
         # stabilise.
+        # (#1303) ONE decision: ``grid_sign_decision`` in ``grid_sign.py``
+        # says which rule wins, in a written order. The detectors only learn.
         manual_grid_invert = bool(self._raw_config.get("grid_sign_invert", False))
-        if manual_grid_invert:
-            self._negate_total(readings, "grid")
-            readings.calculate_derived()
-        else:
+        if not manual_grid_invert:
             # Auto-detect grid sign convention using Energy Dashboard counters.
             # SEM convention: negative = import, positive = export.
             # Compares power sensor sign against import/export energy counter
             # changes to determine if negation is needed.
-            needs_negate = self._detect_grid_sign(readings)
-
-            if needs_negate:
-                self._negate_total(readings, "grid")
-                readings.calculate_derived()
+            self._detect_grid_sign(readings)
+        decision = self.grid_sign_decision()
+        if decision.base_negate:
+            self._negate_total(readings, "grid")
+            readings.calculate_derived()
+        if not manual_grid_invert:
 
             # #589 — observe-only post-lock contradiction check for the
             # auto/counter/solar/restored lock.  Runs only when the lock is
@@ -1217,7 +1220,7 @@ class SensorReader:
         # fixed by declaration and has no lock to correct: on .175 exactly
         # that inverted a synthetic pair (export 2000 → −2000) under a flip
         # tapped months earlier against `sensor.power_meter_wirkleistung`.
-        if self.user_flip_applies():
+        if decision.flip:
             self._negate_total(readings, "grid")
             readings.calculate_derived()
 
@@ -1464,6 +1467,28 @@ class SensorReader:
         """
         return bool(self._raw_config.get("grid_sign_invert", False)
                     or self.user_flip_applies())
+
+    def grid_sign_evidence(self) -> GridSignEvidence:
+        """(#1303) The snapshot ``grid_sign_decision`` decides from. The two
+        flip reads keep their one-time log lines."""
+        return GridSignEvidence(
+            option_invert=bool(self._raw_config.get("grid_sign_invert", False)),
+            read_is_pair=self.grid_read_is_pair(),
+            model_fixed=self.grid_sign_fixed(),
+            lock_detected=bool(self._grid_sign_detected),
+            lock_inverted=bool(self._grid_sign_inverted),
+            flip_bound_here=self._flip_bound_here(),
+            flip_on_old_lock=self._flip_on_an_old_lock(),
+        )
+
+    def grid_sign_decision(self) -> GridSignDecision:
+        """(#1303) What the read applies this cycle, and why. The one place."""
+        return grid_sign_decision(self.grid_sign_evidence())
+
+    def _lock_base_negate(self) -> bool:
+        """(#1303) The detectors' answer with the option left aside: what
+        ``_detect_grid_sign`` returns once it has learned."""
+        return lock_base(self.grid_sign_evidence())[0]
 
     def grid_sign_diagnostics(self) -> dict:
         """Build a #461 grid-sign support payload.
@@ -2541,7 +2566,7 @@ class SensorReader:
         model now sets the sign (``_flip_on_an_old_lock``).
         """
         applies = self._flip_bound_here()
-        if applies and self._flip_on_an_old_lock():
+        if applies and not self.grid_sign_decision().flip:
             if not self._stale_flip_said:
                 self._stale_flip_said = True
                 _LOGGER.warning(
@@ -2653,7 +2678,7 @@ class SensorReader:
                     "grid sign: %s is a pair (export minus import) — the "
                     "learned negation does not apply to it (#1215)",
                     self._grid_source_key)
-            return False
+            return self._lock_base_negate()
 
         # (#1294) A meter whose model fixes its sign (a P1 meter) takes it on
         # every read. The seed below ran only while nothing was locked, so a
@@ -2676,7 +2701,7 @@ class SensorReader:
                 )
             self._grid_sign_inverted = fixed
             self._grid_sign_detected = True
-            return fixed
+            return self._lock_base_negate()
 
         # Deterministic brand seed first (#461): a known meter integration
         # locks the sign immediately. Solar can still override it below.
@@ -2693,7 +2718,7 @@ class SensorReader:
             # No Energy Dashboard → trust the sensor. #476 item 5: a
             # restored/locked sign still applies (constructor default
             # False keeps the no-lock behaviour unchanged).
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # Sum across the counter LISTS when present (#485 H4): Dutch
         # dual-tariff DSMR meters split each direction into tarief 1 +
@@ -2717,7 +2742,7 @@ class SensorReader:
             # counters disappearing (e.g. Energy Dashboard reconfigured
             # after the lock was learned). Constructor default is False,
             # so the no-lock behaviour is unchanged.
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # Startup warm-up (#487 follow-up): no votes while HA's
         # recorder is still replaying counter states — keep baselines
@@ -2728,17 +2753,17 @@ class SensorReader:
             if iv is not None and ev is not None:
                 self._grid_import_baseline = iv
                 self._grid_export_baseline = ev
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # Need meaningful power to detect (ignore noise)
         power = readings.grid_power
         if abs(power) < 100:
-            return self._grid_sign_inverted  # Keep last known state
+            return self._lock_base_negate()  # Keep last known state
 
         import_val = self._sum_counter_states(import_entities)
         export_val = self._sum_counter_states(export_entities)
         if import_val is None or export_val is None:
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # First call: store baselines, don't correct yet
         if self._grid_import_baseline is None:
@@ -2747,7 +2772,7 @@ class SensorReader:
             # #476 item 5: honour a restored lock even on the very
             # first baseline call (counters can sit unknown for the
             # whole warmup). Default False = pre-#476 behaviour.
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         deltas = self._counter_deltas(
             self._grid_import_baseline, self._grid_export_baseline,
@@ -2764,7 +2789,7 @@ class SensorReader:
                 "Grid energy counter reset detected — re-baselined, "
                 "skipping sign vote",
             )
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
         import_delta, export_delta = deltas
 
         # Determine convention from correlation:
@@ -2781,7 +2806,7 @@ class SensorReader:
             detected = power < 0  # If power negative during export → negate
 
         if detected is None:
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # Accumulate magnitude-weighted sign-of-correlation evidence
         # (#461). Each clear single-direction cycle adds |power| toward
@@ -2829,7 +2854,7 @@ class SensorReader:
                     import_entities, export_entities,
                 )
 
-        return self._grid_sign_inverted
+        return self._lock_base_negate()
 
     def _detect_battery_sign(self, readings: PowerReadings) -> bool:
         """Detect if battery power needs negation using Energy Dashboard counters.

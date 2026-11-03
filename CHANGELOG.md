@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **One list in code now says which grid-sign rule wins** (#1303). Ten rules, same readings; each pair that can disagree has a test.
+
 - 🐛 **Observer mode now holds hot-water heating back too** (#1297). The Legionella run called the tank's service directly.
 - 🔧 **CI now also tests Home Assistant 2026.10, the version real installs run** (#1298). Three checks instead of two.
 - 🔧 **The replay gate now compares what a branch would command with develop** (#1299). Before, it could not fail.
