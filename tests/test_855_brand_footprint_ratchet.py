@@ -40,6 +40,8 @@ from __future__ import annotations
 import json
 import pathlib
 
+from .ratchet_guard import assert_not_loosened
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
@@ -60,8 +62,8 @@ def _load_counter():
 
 count_brands = _load_counter()
 TARGET = ROOT / "devices" / "base.py"
-BASELINE = json.loads(
-    (ROOT / "tests" / "brand_footprint_baseline.json").read_text())
+BASELINE_PATH = ROOT / "tests" / "brand_footprint_baseline.json"
+BASELINE = json.loads(BASELINE_PATH.read_text())
 
 
 def _counts() -> dict[str, int]:
@@ -83,6 +85,8 @@ def test_no_brand_appears_in_the_generic_layer_for_the_first_time():
 
 
 def test_the_brand_footprint_never_grows():
+    # (#1304) the baseline itself may not have been loosened quietly
+    assert_not_loosened(BASELINE_PATH, lambda d: d["total"], "brand footprint")
     counts = _counts()
     grew = {b: (BASELINE["per_brand"].get(b, 0), n)
             for b, n in counts.items() if n > BASELINE["per_brand"].get(b, 0)}

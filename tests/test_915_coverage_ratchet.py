@@ -20,8 +20,11 @@ import pathlib
 
 import pytest
 
+from .ratchet_guard import assert_not_loosened
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-BASELINE = json.loads((ROOT / "tests" / "roster_coverage_baseline.json").read_text())
+BASELINE_PATH = ROOT / "tests" / "roster_coverage_baseline.json"
+BASELINE = json.loads(BASELINE_PATH.read_text())
 
 
 def _load(name: str, relpath: str):
@@ -48,6 +51,9 @@ class TestTheRatchet:
             len(v) for v in roster.ROLE_VOCAB.values())
 
     def test_the_unnamed_count_matches_the_roster(self):
+        # (#1304) the gap may not have been widened quietly
+        assert_not_loosened(BASELINE_PATH, lambda d: d["unnamed_over_floor"],
+                            "unnamed brands over the floor")
         floor = BASELINE["install_floor"]
         live = sum(1 for row in _gap() if row[2] >= floor)
         assert live == BASELINE["unnamed_over_floor"], (

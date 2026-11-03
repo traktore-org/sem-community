@@ -28,6 +28,8 @@ import pytest
 
 from .causal_claims import ANNOTATION, claims
 
+from .ratchet_guard import assert_not_loosened
+
 BASELINE = Path(__file__).parent / "causal_claim_baseline.json"
 
 
@@ -62,6 +64,8 @@ class TestTheLedgerShrinks:
         assert total <= base, (
             f"unproven causal claims rose {base} -> {total}. "
             "The ledger only shrinks.")
+        # (#1304) the ledger file itself may not have been loosened quietly
+        assert_not_loosened(BASELINE, lambda d: d["total"], "causal claims")
 
     def test_the_ratchet_is_measuring_something(self):
         """A ratchet over an empty set holds forever and means nothing —

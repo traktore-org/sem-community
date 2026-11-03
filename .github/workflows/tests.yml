@@ -75,6 +75,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # (#1304) the ratchet guard compares baselines with develop and the newest tag
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5

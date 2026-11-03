@@ -28,6 +28,8 @@ import json
 import re
 from pathlib import Path
 
+from .ratchet_guard import assert_not_loosened
+
 TESTS = Path(__file__).resolve().parent
 BASELINE = TESTS / "source_string_guard_baseline.json"
 
@@ -71,6 +73,8 @@ class TestTheLedgerShrinks:
         assert total <= baseline["total"], (
             f"source-string guards rose {baseline['total']} -> {total}. "
             "The ledger only shrinks.")
+        # (#1304) the ledger file itself may not have been loosened quietly
+        assert_not_loosened(BASELINE, lambda d: d["total"], "source-string guards")
 
     def test_the_ratchet_is_measuring_something(self):
         """A ratchet over an empty set holds forever and means nothing —

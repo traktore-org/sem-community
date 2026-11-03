@@ -17,6 +17,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+from .ratchet_guard import assert_not_loosened
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -29,8 +31,8 @@ def _audit():
 
 
 AUDIT = _audit()
-BASELINE = json.loads(
-    (ROOT / "tests" / "brand_footprint_layers_baseline.json").read_text())["per_file"]
+BASELINE_PATH = ROOT / "tests" / "brand_footprint_layers_baseline.json"
+BASELINE = json.loads(BASELINE_PATH.read_text())["per_file"]
 
 
 def test_no_generic_file_starts_naming_a_brand():
@@ -41,6 +43,8 @@ def test_no_generic_file_starts_naming_a_brand():
 
 
 def test_no_generic_file_names_more_brands():
+    # (#1304) the baseline itself may not have been loosened quietly
+    assert_not_loosened(BASELINE_PATH, lambda d: d["total"], "brand layers")
     grew = {f: (BASELINE[f], n) for f, n in AUDIT.count_layers(ROOT).items()
             if f in BASELINE and n > BASELINE[f]}
     assert not grew, (
