@@ -164,7 +164,9 @@ class TestTheRule:
         current-controlled heater (out under #872's type rule) is in."""
         wallbox = _booked(_ccd("wallbox"), HIS_EV_KWH)
         heater = _booked(_ccd("heater"), 1.2)
-        totals = home_member_totals([wallbox, heater], [wallbox])
+        totals = home_member_totals(
+            [wallbox, heater], [wallbox],
+            {"wallbox": HIS_EV_KWH, "heater": 1.2})
         assert totals == {"heater": pytest.approx(1.2)}
 
 

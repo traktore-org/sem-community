@@ -197,6 +197,13 @@ COMFORT_SPLIT_OUT = "comfort_out_block"
 # measurement (#755 contract 1 — an estimate may never train anything).
 CONTROLLED_LOADS_CATEGORY = "controlled_loads"
 CONTROLLED_LOADS_EST_CATEGORY = "controlled_loads_est"
+# (#1302) The same mirror, one row per device: ``controlled_loads:{id}_{day}``.
+# The rows sum to the mirror, so a check that names devices against the home
+# row reads the home row's day. The device's own day total rolls at sunrise.
+CONTROLLED_LOADS_DEVICE_PREFIX = "controlled_loads:"
+# (#1302) The part of a device row whose step began before the day: a
+# whole-kWh counter's first step after midnight may be the evening's use.
+CONTROLLED_LOADS_UNSURE_PREFIX = "controlled_loads_unsure:"
 
 # (#773) How many sealed days of baseload history are kept for the drift
 # check. Two weeks spans an occupancy cycle (weekday/weekend) twice.
@@ -5418,7 +5425,8 @@ class EnergyCalculator:
     # ── (#773) the residual: home minus everything SEM can see ──────────
 
     def accumulate_controlled_load(
-        self, increment_kwh: float, calendar_day: date, *, estimated: bool
+        self, increment_kwh: float, calendar_day: date, *, estimated: bool,
+        device_id: str, unsure_kwh: float = 0.0,
     ) -> None:
         """Book one cycle's device kWh into the MIDNIGHT-keyed mirror.
 
@@ -5433,6 +5441,12 @@ class EnergyCalculator:
         the mirror (the subtraction stays displayable); the estimated slice
         is tracked BESIDE it, and any estimated kWh in the day makes the
         day's baseload unmeasured (#755 contract 1).
+
+        (#1302) ``device_id``: the same kWh again on the device's own row of
+        the mirror (``controlled_loads_by_device``), so the rows always sum
+        to the mirror. ``unsure_kwh``: the part that may be from before
+        ``calendar_day`` (a step that began before it, or nobody knows when);
+        it is noted beside the row (``sure_only``).
         """
         if not increment_kwh:
             return
@@ -5440,12 +5454,53 @@ class EnergyCalculator:
         self._daily_accumulators[daily_key] = (
             self._daily_accumulators.get(daily_key, 0.0) + float(increment_kwh)
         )
+        dev_key = f"{CONTROLLED_LOADS_DEVICE_PREFIX}{device_id}_{calendar_day}"
+        self._daily_accumulators[dev_key] = (
+            self._daily_accumulators.get(dev_key, 0.0) + float(increment_kwh)
+        )
+        unsure = min(float(increment_kwh), float(unsure_kwh or 0.0))
+        if unsure > 0:
+            unsure_key = (
+                f"{CONTROLLED_LOADS_UNSURE_PREFIX}{device_id}_{calendar_day}")
+            self._daily_accumulators[unsure_key] = (
+                self._daily_accumulators.get(unsure_key, 0.0) + unsure
+            )
         if estimated:
             est_key = f"{CONTROLLED_LOADS_EST_CATEGORY}_{calendar_day}"
             self._daily_accumulators[est_key] = (
                 self._daily_accumulators.get(est_key, 0.0)
                 + float(increment_kwh)
             )
+
+    def controlled_loads_by_device(
+        self, calendar_day: date, *, sure_only: bool = False,
+    ) -> Dict[str, float]:
+        """(#1302) Each device's kWh in the mirror for ``calendar_day``.
+
+        Since local MIDNIGHT, like the home row. A device's own day total
+        (``daily_energy_kwh``) rolls at SUNRISE (#620): from midnight to
+        sunrise it still holds yesterday's daylight use, against a home row
+        that started again at 0.
+
+        ``sure_only``: less the steps that began before the day, so every
+        kWh left was used inside it — what a check may hold against the
+        home row.
+        """
+        suffix = f"_{calendar_day}"
+
+        def _rows(prefix: str) -> Dict[str, float]:
+            return {
+                k[len(prefix):-len(suffix)]: float(v)
+                for k, v in self._daily_accumulators.items()
+                if k.startswith(prefix) and k.endswith(suffix)
+            }
+
+        rows = _rows(CONTROLLED_LOADS_DEVICE_PREFIX)
+        if sure_only:
+            unsure = _rows(CONTROLLED_LOADS_UNSURE_PREFIX)
+            rows = {did: max(0.0, kwh - unsure.get(did, 0.0))
+                    for did, kwh in rows.items()}
+        return rows
 
     @property
     def baseload_history(self) -> list:
@@ -5496,10 +5551,12 @@ class EnergyCalculator:
 
         The per-device day totals ride along so a later breach can name its
         suspect: the term whose own day-over-day move explains the step.
-        They are the device-ledger (sunrise-keyed) rows for ``day`` — offset
-        from the midnight mirror by the small hours, which is fine for
-        naming a mover and would be wrong for arithmetic; the arithmetic
-        uses the mirror.
+
+        (#1302) They are the mirror's own device rows for ``day`` — the
+        home row's day — when those rows sum to the mirror, and the row says
+        so (``devices_midnight``). Otherwise (a day that began before the
+        rows existed) they are the device-ledger rows, which roll at
+        sunrise: sealed at midnight they lack the day's small hours.
         """
         day_str = str(day)
         if any(r.get("date") == day_str for r in self._baseload_history):
@@ -5511,14 +5568,19 @@ class EnergyCalculator:
             f"{CONTROLLED_LOADS_CATEGORY}_{day}", 0.0)
         estimated = self._daily_accumulators.get(
             f"{CONTROLLED_LOADS_EST_CATEGORY}_{day}", 0.0)
-        prefix = DEVICE_KEY_PREFIX
-        suffix = f"_{day}"
-        devices = {
-            k[len(prefix):-len(suffix)]: round(v, 3)
-            for k, v in self._daily_accumulators.items()
-            if k.startswith(prefix) and k.endswith(suffix)
-            and _SPLIT_SEP not in k
-        }
+        midnight = self.controlled_loads_by_device(day)
+        devices_midnight = abs(sum(midnight.values()) - controlled) <= 0.001
+        if devices_midnight:
+            devices = {did: round(v, 3) for did, v in midnight.items()}
+        else:
+            prefix = DEVICE_KEY_PREFIX
+            suffix = f"_{day}"
+            devices = {
+                k[len(prefix):-len(suffix)]: round(v, 3)
+                for k, v in self._daily_accumulators.items()
+                if k.startswith(prefix) and k.endswith(suffix)
+                and _SPLIT_SEP not in k
+            }
         self._baseload_history.append({
             "date": day_str,
             "baseload_kwh": round(home - controlled, 3),
@@ -5533,6 +5595,7 @@ class EnergyCalculator:
             # — and most houses').
             "estimated_kwh": round(estimated, 3),
             "devices": devices,
+            "devices_midnight": devices_midnight,
             # (#1044) True when the whole day was booked with SEM's own
             # chargers left out of the mirror. The upgrade day is not: its
             # morning may hold a charger booked under the old rule.

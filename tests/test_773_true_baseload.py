@@ -95,8 +95,8 @@ class TestTheBaseloadIsASubtraction773:
     def test_home_minus_controlled_loads(self) -> None:
         calc = _calc()
         calc._daily_accumulators[f"home_{TODAY}"] = 12.0
-        calc.accumulate_controlled_load(3.0, TODAY, estimated=False)
-        calc.accumulate_controlled_load(1.5, TODAY, estimated=False)
+        calc.accumulate_controlled_load(3.0, TODAY, estimated=False, device_id="pool")
+        calc.accumulate_controlled_load(1.5, TODAY, estimated=False, device_id="pool")
         b = calc.get_true_baseload(TODAY)
         assert b["today_kwh"] == pytest.approx(7.5)
         assert b["controlled_today_kwh"] == pytest.approx(4.5)
@@ -107,7 +107,7 @@ class TestTheBaseloadIsASubtraction773:
         there is nothing to subtract from, and publishing 0 − controlled
         would report the house as a negative-consumption fault."""
         calc = _calc()
-        calc.accumulate_controlled_load(3.0, TODAY, estimated=False)
+        calc.accumulate_controlled_load(3.0, TODAY, estimated=False, device_id="pool")
         assert calc.get_true_baseload(TODAY)["today_kwh"] is None
 
     def test_an_estimated_subtrahend_displays_but_is_not_measured(self) -> None:
@@ -116,8 +116,8 @@ class TestTheBaseloadIsASubtraction773:
         ``measured`` says what it is."""
         calc = _calc()
         calc._daily_accumulators[f"home_{TODAY}"] = 12.0
-        calc.accumulate_controlled_load(3.0, TODAY, estimated=False)
-        calc.accumulate_controlled_load(2.0, TODAY, estimated=True)
+        calc.accumulate_controlled_load(3.0, TODAY, estimated=False, device_id="pool")
+        calc.accumulate_controlled_load(2.0, TODAY, estimated=True, device_id="pool")
         b = calc.get_true_baseload(TODAY)
         assert b["today_kwh"] == pytest.approx(7.0)
         assert b["estimated_today_kwh"] == pytest.approx(2.0)
@@ -129,12 +129,12 @@ class TestTheBaseloadIsASubtraction773:
         fault this sensor exists to expose."""
         calc = _calc()
         calc._daily_accumulators[f"home_{TODAY}"] = 2.0
-        calc.accumulate_controlled_load(5.0, TODAY, estimated=False)
+        calc.accumulate_controlled_load(5.0, TODAY, estimated=False, device_id="pool")
         assert calc.get_true_baseload(TODAY)["today_kwh"] == pytest.approx(-3.0)
 
     def test_the_mirror_is_midnight_keyed_and_survives_a_restart(self) -> None:
         calc = _calc()
-        calc.accumulate_controlled_load(3.0, TODAY, estimated=False)
+        calc.accumulate_controlled_load(3.0, TODAY, estimated=False, device_id="pool")
         fresh = _calc()
         fresh.restore_state(calc.get_state())
         fresh._daily_accumulators[f"home_{TODAY}"] = 10.0
@@ -151,7 +151,7 @@ class TestTheDaySealsIntoHistory773:
         calc = _calc()
         yesterday = TODAY - timedelta(days=1)
         calc._daily_accumulators[f"home_{yesterday}"] = 10.0
-        calc.accumulate_controlled_load(4.0, yesterday, estimated=False)
+        calc.accumulate_controlled_load(4.0, yesterday, estimated=False, device_id="pool")
         calc._check_rollover(TODAY, calc._month_key(TODAY), str(TODAY.year))
         assert len(calc.baseload_history) == 1
         sealed = calc.baseload_history[-1]
@@ -164,7 +164,7 @@ class TestTheDaySealsIntoHistory773:
         a zero here would poison every later median."""
         calc = _calc()
         yesterday = TODAY - timedelta(days=1)
-        calc.accumulate_controlled_load(4.0, yesterday, estimated=False)
+        calc.accumulate_controlled_load(4.0, yesterday, estimated=False, device_id="pool")
         calc._check_rollover(TODAY, calc._month_key(TODAY), str(TODAY.year))
         assert len(calc.baseload_history) == 0
 
@@ -172,7 +172,7 @@ class TestTheDaySealsIntoHistory773:
         calc = _calc()
         yesterday = TODAY - timedelta(days=1)
         calc._daily_accumulators[f"home_{yesterday}"] = 10.0
-        calc.accumulate_controlled_load(4.0, yesterday, estimated=True)
+        calc.accumulate_controlled_load(4.0, yesterday, estimated=True, device_id="pool")
         calc._check_rollover(TODAY, calc._month_key(TODAY), str(TODAY.year))
         assert calc.baseload_history[-1]["measured"] is False
 
@@ -180,7 +180,7 @@ class TestTheDaySealsIntoHistory773:
         calc = _calc()
         yesterday = TODAY - timedelta(days=1)
         calc._daily_accumulators[f"home_{yesterday}"] = 10.0
-        calc.accumulate_controlled_load(4.0, yesterday, estimated=False)
+        calc.accumulate_controlled_load(4.0, yesterday, estimated=False, device_id="pool")
         calc._check_rollover(TODAY, calc._month_key(TODAY), str(TODAY.year))
         fresh = _calc()
         fresh.restore_state(calc.get_state())
@@ -191,7 +191,7 @@ class TestTheDaySealsIntoHistory773:
         calc = _calc()
         yesterday = TODAY - timedelta(days=1)
         calc._daily_accumulators[f"home_{yesterday}"] = 10.0
-        calc.accumulate_controlled_load(4.0, yesterday, estimated=False)
+        calc.accumulate_controlled_load(4.0, yesterday, estimated=False, device_id="pool")
         calc._check_rollover(TODAY, calc._month_key(TODAY), str(TODAY.year))
         calc._daily_accumulators[f"home_{yesterday}"] = 10.0
         calc._check_rollover(TODAY, calc._month_key(TODAY), str(TODAY.year))
@@ -353,8 +353,8 @@ class TestABoundedEstimateStillCounts773:
         calc = _calc()
         yesterday = TODAY - timedelta(days=1)
         calc._daily_accumulators[f"home_{yesterday}"] = 10.0
-        calc.accumulate_controlled_load(4.0, yesterday, estimated=False)
-        calc.accumulate_controlled_load(0.25, yesterday, estimated=True)
+        calc.accumulate_controlled_load(4.0, yesterday, estimated=False, device_id="pool")
+        calc.accumulate_controlled_load(0.25, yesterday, estimated=True, device_id="pool")
         calc._check_rollover(TODAY, calc._month_key(TODAY), str(TODAY.year))
         sealed = calc.baseload_history[-1]
         assert sealed["estimated_kwh"] == pytest.approx(0.25)

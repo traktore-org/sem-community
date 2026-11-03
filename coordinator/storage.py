@@ -461,6 +461,7 @@ class SEMStorage:
         self, device_id: str, accumulated_sec: float, meter_day: str,
         accumulated_kwh: float = 0.0,
         counter_baseline_kwh: Optional[float] = None,
+        counter_moved_at: Optional[str] = None,
     ) -> None:
         """Persist a device's daily runtime and daily energy.
 
@@ -471,7 +472,8 @@ class SEMStorage:
         ``counter_baseline_kwh`` is the last reading of the device's own energy
         counter. Restoring it is what lets a same-day restart book the energy
         the meter recorded while HA was down instead of re-baselining and
-        losing it.
+        losing it. ``counter_moved_at`` (#1302): when SEM last saw that
+        counter move up, as an ISO time — where the next step begins.
         """
         if "device_runtimes" not in self._daily_data:
             self._daily_data["device_runtimes"] = {}
@@ -479,6 +481,7 @@ class SEMStorage:
             "accumulated_sec": accumulated_sec,
             "accumulated_kwh": accumulated_kwh,
             "counter_baseline_kwh": counter_baseline_kwh,
+            "counter_moved_at": counter_moved_at,
             "meter_day": meter_day,
         }
 
