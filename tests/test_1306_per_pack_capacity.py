@@ -221,11 +221,26 @@ class TestTheSchedulerIsToldTheFleet:
         s.set_fleet_capacity_kwh(10.0)
         assert s._config.battery_usable_capacity_kwh == pytest.approx(9.5)
 
-    def test_a_set_usable_share_is_kept(self):
-        s = BatteryChargeScheduler(MagicMock(), SchedulerConfig(
-            battery_capacity_kwh=10.0, battery_usable_capacity_kwh=8.0))
+    def test_a_set_usable_share_is_kept_as_given(self):
+        s = BatteryChargeScheduler(MagicMock(), SchedulerConfig.from_config(
+            {"battery_capacity_kwh": 10.0, "battery_usable_capacity_kwh": 8.0}))
         s.set_fleet_capacity_kwh(15.0)
-        assert s._config.battery_usable_capacity_kwh == pytest.approx(12.0)
+        assert s._config.battery_usable_capacity_kwh == pytest.approx(8.0)
+
+    def test_setup_saved_capacity_without_a_usable_share_follows_it(self):
+        # the setup flow saves a capacity for every install and never the
+        # usable share: a 14 kWh pack planned on 9.5 kWh before
+        cfg = SchedulerConfig.from_config({"battery_capacity_kwh": 14.0})
+        assert cfg.battery_usable_capacity_kwh == pytest.approx(13.3)
+        assert cfg.usable_capacity_explicit is False
+        s = BatteryChargeScheduler(MagicMock(), cfg)
+        s.set_fleet_capacity_kwh(14.0)
+        assert s._config.battery_usable_capacity_kwh == pytest.approx(13.3)
+
+    def test_no_capacity_in_config_keeps_the_old_default(self):
+        cfg = SchedulerConfig.from_config({})
+        assert cfg.battery_capacity_kwh == 10.0
+        assert cfg.battery_usable_capacity_kwh == pytest.approx(9.5)
 
     def test_zero_is_ignored(self):
         s = BatteryChargeScheduler(MagicMock(), SchedulerConfig())

@@ -124,6 +124,9 @@ class SchedulerConfig:
     # Battery parameters
     battery_capacity_kwh: float = 10.0
     battery_usable_capacity_kwh: float = 9.5  # Accounting for min SOC
+    # (#1306) True only when the user set the usable share themselves; setup
+    # never writes it, so an unset one follows the nameplate at 95 %.
+    usable_capacity_explicit: bool = False
     battery_min_soc: float = 5.0  # Don't plan below this
     battery_max_charge_power_w: float = 5000.0
     roundtrip_efficiency: float = 0.92  # Round-trip (charge + discharge losses)
@@ -200,7 +203,11 @@ class SchedulerConfig:
         return cls(
             enabled=config.get("battery_charge_scheduler_enabled", False),
             battery_capacity_kwh=config.get("battery_capacity_kwh", 10.0),
-            battery_usable_capacity_kwh=config.get("battery_usable_capacity_kwh", 9.5),
+            battery_usable_capacity_kwh=(
+                float(config["battery_usable_capacity_kwh"])
+                if config.get("battery_usable_capacity_kwh")
+                else float(config.get("battery_capacity_kwh") or 10.0) * 0.95),
+            usable_capacity_explicit=bool(config.get("battery_usable_capacity_kwh")),
             battery_min_soc=config.get("battery_min_soc", 5.0),
             battery_max_charge_power_w=config.get("battery_max_charge_power_w", 5000.0),
             roundtrip_efficiency=config.get("battery_roundtrip_efficiency", 0.92),
@@ -310,18 +317,17 @@ class BatteryChargeScheduler:
         return self._price_fingerprint is not None
 
     def set_fleet_capacity_kwh(self, capacity_kwh: float) -> None:
-        """(#1306) The fleet's nameplate for this cycle. The usable share
-        keeps its ratio to the nameplate (0.95 when nothing set one): the
-        setup never wrote ``battery_usable_capacity_kwh``, so every install
-        planned its night charge on 9.5 kWh whatever its battery size."""
+        """(#1306) The fleet's nameplate for this cycle. An unset usable
+        share follows it at 95 %: setup never wrote
+        ``battery_usable_capacity_kwh``, so every install planned its night
+        charge on 9.5 kWh whatever its battery size. A share the user set
+        is kept as given."""
         cap = float(capacity_kwh or 0.0)
         if cap <= 0:
             return
-        old_cap = float(self._config.battery_capacity_kwh or 0.0)
-        old_usable = float(self._config.battery_usable_capacity_kwh or 0.0)
-        share = (old_usable / old_cap) if old_cap > 0 and old_usable > 0 else 0.95
         self._config.battery_capacity_kwh = cap
-        self._config.battery_usable_capacity_kwh = cap * min(share, 1.0)
+        if not self._config.usable_capacity_explicit:
+            self._config.battery_usable_capacity_kwh = cap * 0.95
 
     def evaluate(
         self,
