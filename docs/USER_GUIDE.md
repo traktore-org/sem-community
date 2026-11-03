@@ -2144,6 +2144,8 @@ SEM skips:
 - Device shedding commands
 - Hot-water heating, also the Legionella run
 
+When you turn it off, SEM can start a load right away. A stop it held back does not start the load's minimum off time.
+
 Turn it on or off on the dashboard **Configuration** tab (`switch.sem_observer_mode`). The **Configure** button no longer asks for it.
 
 ---
