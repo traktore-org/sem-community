@@ -90,7 +90,9 @@ jobs:
           if [ -n "${{ matrix.phacc }}" ]; then
             pip install "pytest-homeassistant-custom-component==${{ matrix.phacc }}"
           fi
-          python -c "import homeassistant.const as c; print('homeassistant', c.__version__)"
+          # From /tmp: at the repo root SEM's select.py shadows the stdlib
+          # select and the import goes circular (CI red on 03.11, #1298).
+          (cd /tmp && python -c "import homeassistant.const as c; print('homeassistant', c.__version__)")
 
       - name: Set up importable package structure
         run: |
