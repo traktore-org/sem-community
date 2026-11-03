@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.4] — 03.11.2026
+
 - 🐛 **After a restart, a grid meter is taken the moment its integration loads, not 5 minutes later** (#1296).
 - 🐛 **A stop that observer mode never sent no longer holds the next real start** (#1305). The relay clocks learn only from sent commands.
 
