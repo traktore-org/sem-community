@@ -53,6 +53,11 @@ CHARGER_PATH = [
     # that believes it is only watching. It has none today; scanning it
     # keeps that true.
     ROOT / "coordinator" / "charger_reconciler.py",
+    # (#1297) The Legionella check runs every cycle from the coordinator with
+    # no observer branch above it, so the hot-water writes must go through
+    # the seam themselves. A water_heater or climate tank was heated on a
+    # rig that believed it was only watching.
+    ROOT / "devices" / "hot_water_controller.py",
 ]
 
 # The opt-out, spelled like the codebase's other one (`# FLEET-READ:`): a

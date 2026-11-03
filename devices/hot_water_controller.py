@@ -512,18 +512,15 @@ class HotWaterController(SwitchDevice):
         """Activate via water_heater domain."""
         try:
             target = self._active_target_temp()
-            await self.hass.services.async_call(
+            await self.send(
                 "water_heater", "set_temperature",
                 {"entity_id": self.entity_id, "temperature": target},
-                blocking=True,
-            )
+                why="hot water heating")
             # Try turn_on if supported
             try:
-                await self.hass.services.async_call(
+                await self.send(
                     "water_heater", "turn_on",
-                    {"entity_id": self.entity_id},
-                    blocking=True,
-                )
+                    {"entity_id": self.entity_id}, why="hot water heating")
             except Exception:
                 pass  # Not all water_heater entities support turn_on
             self._status.state = DeviceState.ACTIVE
@@ -537,19 +534,16 @@ class HotWaterController(SwitchDevice):
     async def _deactivate_water_heater(self) -> None:
         """Deactivate via water_heater domain."""
         try:
-            await self.hass.services.async_call(
+            await self.send(
                 "water_heater", "turn_off",
-                {"entity_id": self.entity_id},
-                blocking=True,
-            )
+                {"entity_id": self.entity_id}, why="hot water off")
         except Exception:
             # Not all support turn_off — set low temp instead
             try:
-                await self.hass.services.async_call(
+                await self.send(
                     "water_heater", "set_temperature",
                     {"entity_id": self.entity_id, "temperature": self.min_temperature},
-                    blocking=True,
-                )
+                    why="hot water off")
             except Exception as e:
                 _LOGGER.error("Failed to deactivate water_heater: %s", e)
         self._status.state = DeviceState.IDLE
@@ -559,16 +553,14 @@ class HotWaterController(SwitchDevice):
         """Activate via climate domain."""
         try:
             target = self._active_target_temp()
-            await self.hass.services.async_call(
+            await self.send(
                 "climate", "set_temperature",
                 {"entity_id": self.entity_id, "temperature": target},
-                blocking=True,
-            )
-            await self.hass.services.async_call(
+                why="hot water heating")
+            await self.send(
                 "climate", "set_hvac_mode",
                 {"entity_id": self.entity_id, "hvac_mode": "heat"},
-                blocking=True,
-            )
+                why="hot water heating")
             self._status.state = DeviceState.ACTIVE
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
@@ -580,11 +572,10 @@ class HotWaterController(SwitchDevice):
     async def _deactivate_climate(self) -> None:
         """Deactivate via climate domain."""
         try:
-            await self.hass.services.async_call(
+            await self.send(
                 "climate", "set_hvac_mode",
                 {"entity_id": self.entity_id, "hvac_mode": "off"},
-                blocking=True,
-            )
+                why="hot water off")
         except Exception as e:
             _LOGGER.error("Failed to deactivate climate for hot water: %s", e)
         self._status.state = DeviceState.IDLE
