@@ -305,8 +305,13 @@ def test_a_published_beta_is_not_a_draft_to_purge():
     assert window.drafts_to_purge(feed, "2026-11-03T18:00:00Z") == []
 
 
-def test_retire_deletes_and_never_drafts():
+def test_retire_deletes_and_never_drafts(monkeypatch):
     """The owner's HACS reads drafts first; a retire must not make one."""
-    import inspect
-    src = inspect.getsource(window.retire)
-    assert '"delete"' in src and "--draft" not in src
+    calls = []
+    monkeypatch.setattr(window, "release_by_tag",
+                        lambda tag: {"tag_name": tag, "prerelease": True})
+    monkeypatch.setattr(window, "_gh", lambda *a: calls.append(a) or "")
+    monkeypatch.setattr(window, "repo", lambda: "o/r")
+    window.retire("v2.3.0-beta.1")
+    assert calls == [("release", "delete", "v2.3.0-beta.1", "-R", "o/r", "--yes")]
+    assert not any("--draft" in str(a) for c in calls for a in c)
