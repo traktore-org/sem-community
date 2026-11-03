@@ -39,6 +39,7 @@ from ..ha_energy_reader import (
 )
 from ..utils.log_gate import log_on_change
 from ..utils.own_entity import is_sem_entity
+from ..consts.role_lexicon import role_for
 from ..consts.core import (
     EV_POWER_BLINK_HOLD_CYCLES,
     EV_POWER_BLINK_MIN_W,
@@ -70,6 +71,38 @@ _CYCLES_UNSET = object()  # cache sentinel distinct from a None result
 # comparable answers (#638 finding #3).
 _SOC_NAME_KEYWORDS = ("soc", "state_of_charge", "batterieladung",
                       "battery_level", "charge_level")
+
+_CAPACITY_KEYWORDS = (
+    "akkukapazit", "rated_capacity", "battery_capacity",
+    "rated_energy", "nennkapazit", "usable_capacity",
+)
+
+
+def _capacity_kwh_of_state(state) -> Optional[float]:
+    """A battery's nameplate kWh read off one sensor state, or None when the
+    state is dark, a SOC percentage, or outside 1-200 kWh (#84, #250, #641)."""
+    if state is None or state.state in ("unknown", "unavailable", None):
+        return None
+    unit = normalize_unit(state)
+    dc = state.attributes.get("device_class")
+    # "Battery Capacity" on SolaX (and others) is the SOC percentage, not
+    # rated energy: an 80 % SOC read as 80 kWh (#250).
+    if dc == "battery" or unit in ("%", "percent"):
+        return None
+    try:
+        value = finite_float(state.state)
+    except (ValueError, TypeError):
+        return None
+    if value <= 0:
+        return None
+    # #641 — the unit half goes through units.py (an MWh-labelled counter
+    # converts too). The > 500 magnitude rule is ONLY for an UNLABELLED
+    # value; after a unit conversion it would halve a 600 kWh bank twice.
+    value = energy_state_to_kwh(state, default=value)
+    if not unit and value > 500:
+        value /= 1000  # unlabelled Wh → kWh
+    return value if 1 <= value <= 200 else None
+
 
 # #743 — export-limit entity autodetection. The curtailment probe's
 # physics signature is brand-agnostic; brands that PUBLISH their export
@@ -473,6 +506,9 @@ class SensorReader:
         # (live-caught on TEST, #638 finding #3). Identity must not depend on
         # readability. Also spares a full state scan every cycle.
         self._soc_entity_by_power: Dict[str, str] = {}
+        # (#1306) A pack's own capacity sensor, found once on the device of
+        # its power sensor; ``None`` is remembered too, like the fleet detect.
+        self._capacity_entity_by_power: Dict[str, Optional[str]] = {}
         # v1.7.0 / #312: per-PV-string sensors discovered at config-
         # flow time. Empty dict in single-string setups (no discovery
         # hit), populated by ``set_pv_strings`` from
@@ -3561,6 +3597,7 @@ class SensorReader:
                 readings.batteries[bid] = BatteryPower(
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=entity,
                     power_read=raw_w is not None,
+                    capacity_kwh=self._unit_capacity_kwh(entity),   # (#1306)
                 )
             # #553 — two-sensor pair units, bids continue after the combined
             # ones. net = charge(to) − discharge(from); the user-declared
@@ -3592,6 +3629,7 @@ class SensorReader:
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=p_to,
                     # (#1167) one dark side is half a number
                     power_read=raw_to is not None and raw_from is not None,
+                    capacity_kwh=self._unit_capacity_kwh(p_to),     # (#1306)
                 )
 
         # Fleet scalar precedence: a real ≥2 per-battery breakdown owns the fleet
@@ -7581,11 +7619,7 @@ class SensorReader:
         if not battery_entity:
             return None
 
-        # Search all sensors for capacity keywords
-        capacity_keywords = [
-            "akkukapazit", "rated_capacity", "battery_capacity",
-            "rated_energy", "nennkapazit", "usable_capacity",
-        ]
+        capacity_keywords = _CAPACITY_KEYWORDS
         try:
             registry = er.async_get(self.hass)
         except Exception:  # noqa: BLE001 — the predicate asks again
@@ -7601,35 +7635,54 @@ class SensorReader:
             # size. Read here, a saved size came back as a found battery.
             if is_sem_entity(self.hass, eid, registry):
                 continue
-            unit = normalize_unit(state)
-            dc = state.attributes.get("device_class")
-            # Skip SOC sensors: "Battery Capacity" matches the keyword above but on
-            # SolaX (and others) it is the SOC percentage, not rated energy. A 80%
-            # SOC would otherwise be misread as 80 kWh of rated capacity (#250).
-            if dc == "battery" or unit in ("%", "percent"):
-                continue
-            try:
-                value = finite_float(state.state)
-                if value <= 0:
-                    continue
-                # #641 — the unit half goes through units.py (so an MWh-labelled
-                # counter converts too). The ``> 500`` magnitude heuristic
-                # applies ONLY to an UNLABELLED counter, which is the case it
-                # was written for: running it after a unit conversion would
-                # divide a labelled 600 kWh bank twice.
-                value = energy_state_to_kwh(state, default=value)
-                if not unit and value > 500:
-                    value /= 1000  # unlabelled Wh → kWh
-                if 1 <= value <= 200:  # Sanity: 1-200 kWh
-                    _LOGGER.info(
-                        "Auto-detected battery capacity: %s = %.1f kWh",
-                        eid, value,
-                    )
-                    return value
-            except (ValueError, TypeError):
-                continue
+            value = _capacity_kwh_of_state(state)
+            if value is not None:
+                _LOGGER.info(
+                    "Auto-detected battery capacity: %s = %.1f kWh",
+                    eid, value,
+                )
+                return value
 
         return None
+
+    def _auto_detect_unit_capacity(self, power_entity: str) -> Optional[str]:
+        """(#1306) The capacity sensor on the same device as one pack's
+        power sensor, or None. The fleet detect above takes the first
+        capacity-looking sensor in the whole house, which for two packs is
+        one pack's size. The answer sticks, found or not, like the fleet's.
+        """
+        if not power_entity or "." not in power_entity:
+            return None
+        if power_entity in self._capacity_entity_by_power:
+            return self._capacity_entity_by_power[power_entity]
+        found = None
+        try:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(power_entity)
+            if entry is not None and entry.device_id:
+                for e in er.async_entries_for_device(registry, entry.device_id):
+                    if e.domain != "sensor":
+                        continue
+                    key = e.translation_key or e.entity_id.split(".", 1)[1]
+                    looks = (role_for("sensor", key) == "battery_capacity_spec"
+                             or any(kw in e.entity_id.lower()
+                                    for kw in _CAPACITY_KEYWORDS))
+                    if not looks:
+                        continue
+                    if _capacity_kwh_of_state(self.hass.states.get(e.entity_id)) is not None:
+                        found = e.entity_id
+                        break
+        except Exception:  # noqa: BLE001 — no registry is "none found"
+            found = None
+        self._capacity_entity_by_power[power_entity] = found
+        return found
+
+    def _unit_capacity_kwh(self, power_entity: str) -> float:
+        """(#1306) One pack's own nameplate kWh, 0.0 when it has none."""
+        eid = self._auto_detect_unit_capacity(power_entity)
+        if not eid:
+            return 0.0
+        return _capacity_kwh_of_state(self.hass.states.get(eid)) or 0.0
 
     def sensors_ready(self) -> bool:
         """Check if required sensors are available.

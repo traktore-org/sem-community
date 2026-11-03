@@ -309,6 +309,20 @@ class BatteryChargeScheduler:
         """
         return self._price_fingerprint is not None
 
+    def set_fleet_capacity_kwh(self, capacity_kwh: float) -> None:
+        """(#1306) The fleet's nameplate for this cycle. The usable share
+        keeps its ratio to the nameplate (0.95 when nothing set one): the
+        setup never wrote ``battery_usable_capacity_kwh``, so every install
+        planned its night charge on 9.5 kWh whatever its battery size."""
+        cap = float(capacity_kwh or 0.0)
+        if cap <= 0:
+            return
+        old_cap = float(self._config.battery_capacity_kwh or 0.0)
+        old_usable = float(self._config.battery_usable_capacity_kwh or 0.0)
+        share = (old_usable / old_cap) if old_cap > 0 and old_usable > 0 else 0.95
+        self._config.battery_capacity_kwh = cap
+        self._config.battery_usable_capacity_kwh = cap * min(share, 1.0)
+
     def evaluate(
         self,
         current_soc: float,
