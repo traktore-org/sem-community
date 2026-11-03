@@ -598,6 +598,9 @@ class SensorReader:
         # #461 brand-lookup tier — attempt the deterministic platform seed
         # exactly once (the grid sensor / registry is stable for a session).
         self._brand_seed_done: bool = False
+        # (#1300) monotonic time of a seed's first could-not-ask, by "grid"
+        # or battery bid: the seed asks again until the dark grace has passed.
+        self._seed_first_miss: Dict[str, float] = {}
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
         # #487 follow-up (live PROD flip 2026-06-11): during HA's
@@ -2114,6 +2117,7 @@ class SensorReader:
         self._grid_sign_evidence = 0.0
         self._grid_sign_total_mag = 0.0
         self._brand_seed_done = False
+        self._seed_first_miss.pop("grid", None)
 
     def reset_sign_state(self) -> None:
         """Forget all sign-detection locks and re-learn from scratch.
@@ -2140,6 +2144,7 @@ class SensorReader:
         # Re-arm the brand seed so a known-brand install re-locks its
         # deterministic sign on the next cycle after a reset.
         self._brand_seed_done = False
+        self._seed_first_miss.clear()
         self._grid_import_baseline = None
         self._grid_export_baseline = None
         self._battery_sign_inverted.clear()
@@ -2236,12 +2241,17 @@ class SensorReader:
         if self._brand_seed_done or self._grid_sign_detected:
             self._brand_seed_done = True
             return
-        self._brand_seed_done = True
 
         entity_id = self._grid_seed_entity()
         if not entity_id:
-            return
+            return                      # nothing picked yet: ask next cycle
         platform, needs_negate = self._grid_brand_seed(entity_id)
+        if platform is None and self._seed_still_asking("grid"):
+            return
+        # Answered: a known brand (yes), an unknown one or a model the
+        # table does not fix (no), or no owner after the grace (gave up).
+        self._brand_seed_done = True
+        self._seed_first_miss.pop("grid", None)
         if needs_negate is None:
             return
 
@@ -2283,9 +2293,14 @@ class SensorReader:
         if self._battery_brand_seed_done.get(bid) or self._battery_sign_detected.get(bid):
             self._battery_brand_seed_done[bid] = True
             return
-        self._battery_brand_seed_done[bid] = True
 
         platform = self._battery_brand(bid, power_entity)
+        if (platform is None and power_entity
+                and self._owner_platform(power_entity) is None
+                and self._seed_still_asking(bid)):
+            return
+        self._battery_brand_seed_done[bid] = True
+        self._seed_first_miss.pop(bid, None)
         if platform is None:
             return
 
@@ -2300,6 +2315,28 @@ class SensorReader:
             "negating (opposite convention)" if self._battery_sign_inverted[bid]
             else "no correction (SEM convention)",
         )
+
+    def _owner_platform(self, entity_id: str) -> Optional[str]:
+        """The integration that owns ``entity_id``, or None when no platform
+        has added it yet (registry and source map both silent)."""
+        try:
+            platform = self._entity_owner(entity_id)[0]
+        except Exception:  # noqa: BLE001 — _entity_owner guards itself
+            return None
+        return platform if isinstance(platform, str) else None
+
+    def _seed_still_asking(self, key: str) -> bool:
+        """(#1300, #925) No owner for the sensor is could-not-ask, not an
+        answer: the seed asks again next cycle until SENSOR_DARK_READ_GRACE_S
+        has passed since its first miss. True while it keeps asking."""
+        now = self._now_monotonic()
+        first = self._seed_first_miss.setdefault(key, now)
+        if now - first <= SENSOR_DARK_READ_GRACE_S:
+            return True
+        _LOGGER.debug(
+            "%s sign seed: no integration owns the sensor after %d s — "
+            "left to the detectors", key, SENSOR_DARK_READ_GRACE_S)
+        return False
 
     def _battery_brand(self, bid: str, power_entity: Optional[str]) -> Optional[str]:
         """(#588) The integration of a battery power sensor when the brand
