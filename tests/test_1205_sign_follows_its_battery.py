@@ -502,37 +502,70 @@ def test_a_split_pair_audit_is_about_its_two_sensors():
 NOT_MOVED = {
     # the record of which sensor each id is about: rebuilt by the move
     "_battery_lock_sensors": "the move's own record",
+    # a pair audit restarts when another pair stands at its id (its own
+    # sensors are its record, #1205 at the audit); seen is per read
+    "_split_pair_audits": "restarted by its own sensors",
+    "_split_pair_seen": "rebuilt each read",
 }
 
 
 def _bid_keyed_attributes():
+    """Every ``self._*`` store SensorReader reads or writes by a battery id.
+
+    The id is ``bid``, ``fleet``, ``old`` or ``_FLEET_BID`` — and (#1300) any
+    parameter a method receives one of those under: ``_seed_still_asking(bid)``
+    keeps its store by ``key``, and a scan that read only the names above
+    and only ``_battery*`` attributes walked past it.
+    """
     tree = ast.parse((ROOT / "coordinator" / "sensor_reader.py").read_text())
     cls = next(n for n in tree.body
                if isinstance(n, ast.ClassDef) and n.name == "SensorReader")
-    ids = {"bid", "fleet", "old"}
-    found = set()
+    base_ids = {"bid", "fleet"}
+    methods = {n.name: n for n in cls.body
+               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
-    def is_id(node):
+    def is_id(node, ids):
         return (isinstance(node, ast.Name) and node.id in ids) or (
             isinstance(node, ast.Attribute) and node.attr == "_FLEET_BID")
 
     def own(node):
         return (isinstance(node, ast.Attribute)
                 and isinstance(node.value, ast.Name) and node.value.id == "self"
-                and node.attr.startswith("_battery"))
+                and node.attr.startswith("_"))
 
-    for node in ast.walk(cls):
-        if isinstance(node, ast.Subscript) and own(node.value) and is_id(node.slice):
-            found.add(node.value.attr)
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                and own(node.func.value) and node.args and is_id(node.args[0])
-                and node.func.attr in ("get", "setdefault", "pop", "add",
-                                       "discard")):
-            found.add(node.func.value.attr)
-        if (isinstance(node, ast.Compare) and len(node.ops) == 1
-                and isinstance(node.ops[0], (ast.In, ast.NotIn))
-                and is_id(node.left) and own(node.comparators[0])):
-            found.add(node.comparators[0].attr)
+    # which parameter of which method is handed a battery id, one level deep
+    ids_of = {name: set(base_ids) for name in methods}
+    ids_of["_signs_follow_their_battery"].add("old")   # the move's loop variable
+    for fn in methods.values():
+        for node in ast.walk(fn):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "self"
+                    and node.func.attr in methods):
+                continue
+            params = [a.arg for a in methods[node.func.attr].args.args[1:]]
+            for i, arg in enumerate(node.args):
+                if i < len(params) and is_id(arg, ids_of[fn.name]):
+                    ids_of[node.func.attr].add(params[i])
+            for kw in node.keywords:
+                if kw.arg in params and is_id(kw.value, ids_of[fn.name]):
+                    ids_of[node.func.attr].add(kw.arg)
+
+    found = set()
+    for name, fn in methods.items():
+        ids = ids_of[name]
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Subscript) and own(node.value) and is_id(node.slice, ids):
+                found.add(node.value.attr)
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and own(node.func.value) and node.args and is_id(node.args[0], ids)
+                    and node.func.attr in ("get", "setdefault", "pop", "add",
+                                           "discard")):
+                found.add(node.func.value.attr)
+            if (isinstance(node, ast.Compare) and len(node.ops) == 1
+                    and isinstance(node.ops[0], (ast.In, ast.NotIn))
+                    and is_id(node.left, ids) and own(node.comparators[0])):
+                found.add(node.comparators[0].attr)
     return found
 
 
