@@ -92,6 +92,11 @@ DECLARED_AUTHORITIES = {
                      "per-charger buckets; a restart across midnight finds "
                      "yesterday's date and rolls on the first cycle, so "
                      "yesterday's kWh are not carried into today"),
+    ("coordinator/coordinator.py", "home-member rows day (#1302)"):
+        ("calendar", "n/a — names the home row's own day to read the "
+                     "controlled-loads mirror rows of that day, every cycle; "
+                     "the rows are saved with the daily accumulators, so a "
+                     "restart keeps them"),
     ("coordinator/coordinator.py", "tariff diagnostics"):
         ("calendar", "n/a — filters today's price points for a diagnostic "
                      "count, recomputed every cycle"),

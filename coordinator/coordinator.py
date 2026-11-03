@@ -197,6 +197,39 @@ def _f_or_none(value):
     except (TypeError, ValueError):
         return None
 
+
+def _iso_or_none(value) -> Optional[str]:
+    """A time as ISO text for the store, or None."""
+    return value.isoformat() if isinstance(value, datetime) else None
+
+
+def _kwh_before_day(device, increment: float, now: datetime) -> float:
+    """(#1302) How much of a device's kWh this cycle may be from before
+    local midnight: the step reaches back ``last_cycle_energy_window_s``
+    (a whole-kWh counter's first step of the day is partly the evening).
+    At most twice the device's rating for the part of the step before
+    midnight, a day at most (any load's #782 bound, ``_MAX_PLAUSIBLE_LOAD_W``, when it has
+    none), so a lifetime counter read as a day is not hidden by it — not
+    even after an idle evening. Only the check reads this; no meter reading
+    is refused. Window not known: the whole step."""
+    from ..devices.base import _MAX_PLAUSIBLE_LOAD_W
+
+    kwh = max(0.0, float(increment or 0.0))
+    window = getattr(device, "last_cycle_energy_window_s", None)
+    if isinstance(window, bool) or not isinstance(window, (int, float)):
+        return kwh
+    start = now - timedelta(seconds=float(window))
+    # A day at most: a seasonal load's last move can be months back.
+    before_s = min(
+        86_400.0,
+        (dt_util.start_of_local_day(now) - start).total_seconds())
+    rated = getattr(device, "rated_power", None)
+    watts = _MAX_PLAUSIBLE_LOAD_W
+    if (isinstance(rated, (int, float)) and not isinstance(rated, bool)
+            and rated > 0):
+        watts = min(watts, 2.0 * float(rated))
+    return min(kwh, max(0.0, before_s) * watts / 3_600_000.0)
+
 # (#638 finding #3) How long the energy plan shadow waits for every battery
 # unit to report before planning on the ones that do. Long enough that a
 # boot warm-up (seconds) always wins the wait, short enough that a failed
@@ -5720,9 +5753,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # install charging a car reported a permanent double-count
                 # that no amount of looking could resolve. One helper, so the
                 # rule lives beside the check that depends on it.
+                # (#1302) …each since local midnight, the home row's day
+                # (the device's own day total rolls at sunrise), and only
+                # the kWh sure to be that day's.
                 per_device_daily=home_member_totals(
                     self._surplus_controller._devices.values(),
-                    chargers_outside_home(sem_ev_chargers(self), power)),
+                    chargers_outside_home(sem_ev_chargers(self), power),
+                    self._energy_calculator.controlled_loads_by_device(
+                        dt_util.now().date(), sure_only=True)
+                    if self._energy_calculator else {}),
                 # (#979) …and where each member's number came from. A bucket
                 # alone names the symptom; its source sensor and raw reading
                 # name the fault, and the violation is usually gone by the
@@ -17081,6 +17120,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 baseline = data.get("counter_baseline_kwh")
                 if baseline is not None:
                     device._energy_counter_last_kwh = float(baseline)
+                    # (#1302) …and when SEM last saw it move up: where the
+                    # next step begins. A store from before has none.
+                    moved = data.get("counter_moved_at")
+                    if isinstance(moved, str):
+                        at = datetime.fromisoformat(moved)
+                        if at.tzinfo is None:   # the device's own clock
+                            device._energy_counter_moved_at = at
         except (AttributeError, TypeError, ValueError) as e:
             _LOGGER.debug("Failed to restore daily energy for %s: %s",
                           getattr(device, "device_id", "?"), e)
@@ -17134,6 +17180,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 increment, now.date(),
                 estimated=not getattr(
                     device, "daily_energy_is_measured", False),
+                device_id=str(device.device_id),
+                unsure_kwh=_kwh_before_day(device, increment, now),
             )
 
     def _stage_device_tariffs(self) -> None:
@@ -17246,6 +17294,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 device._daily_runtime_meter_day.isoformat(),
                 accumulated_kwh=getattr(device, "_daily_energy_kwh", 0.0),
                 counter_baseline_kwh=getattr(device, "_energy_counter_last_kwh", None),
+                counter_moved_at=_iso_or_none(
+                    getattr(device, "_energy_counter_moved_at", None)),
             )
 
     def get_ed_config_detail(self) -> Optional[Dict[str, Any]]:

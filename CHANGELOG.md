@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The home-loads health check no longer warns every night after midnight** (#1302). It now counts device kWh from midnight, as it counts the house.
+
 # [2.3.0-beta.4] — 03.11.2026
 
 - 🐛 **After a restart, a grid meter is taken the moment its integration loads, not 5 minutes later** (#1296).

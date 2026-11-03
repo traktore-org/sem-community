@@ -66,7 +66,9 @@ def _members(devices):
     )
     chargers = [d for d in devices
                 if getattr(d, "device_type", None) is DeviceType.CURRENT_CONTROL]
-    return home_member_totals(devices, chargers)
+    # (#1302) the kWh since midnight, as the mirror rows hand them over
+    rows = {d.device_id: d.daily_energy_kwh for d in devices}
+    return home_member_totals(devices, chargers, rows)
 
 
 class TestTheEvIsNotAMemberOfHome:

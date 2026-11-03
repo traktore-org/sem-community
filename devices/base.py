@@ -375,6 +375,14 @@ class ControllableDevice(ABC):
         # "how much today"; the ledger needs "how much just now" to file it
         # under a period and a mode. Never persisted — it describes one cycle.
         self._last_cycle_energy_kwh: float = 0.0
+        # (#1302) How far back this cycle's kWh can reach, in seconds: the
+        # cycle for a power or rated booking, the counter's own step for a
+        # counter. None: not known (no move of the counter on record).
+        self._last_cycle_energy_window_s: Optional[float] = None
+        # (#1302) Has this run read the counter yet, and when SEM last saw
+        # its value move up (stored with the baseline).
+        self._energy_counter_read_in_run: bool = False
+        self._energy_counter_moved_at: Optional[datetime] = None
 
         # (#620) Battery use, two tiers gated by the existing Buffer + Reserve
         # SoC. Tier 1 (``battery_assist_enabled``) = the "Solar + battery" mode:
@@ -637,9 +645,16 @@ class ControllableDevice(ABC):
         # this at 0.0 — and a nothing is not a zero measurement, which is why
         # the blind seconds are counted separately.
         self._last_cycle_energy_kwh = 0.0
+        self._last_cycle_energy_window_s = elapsed_s
 
         if self.hass and self.energy_entity_id:
+            read_before = self._energy_counter_read_in_run
             self._accrue_from_counter(elapsed_s)
+            if self._last_cycle_energy_kwh > 0:
+                # (#1302) The counter moved up now. At a first read it moved
+                # at some time SEM did not see.
+                self._energy_counter_moved_at = (
+                    datetime.now() if read_before else None)
             return
         if self.hass and self.power_entity_id:
             self._accrue_from_power(elapsed_s)
@@ -690,6 +705,21 @@ class ControllableDevice(ABC):
         if self._energy_counter_last_at is not None:
             _w = (now - self._energy_counter_last_at).total_seconds()
             window_s = _w if _w > 0 else None
+        # (#1302) How far back THIS step reaches: to the counter's last move
+        # UP that SEM saw — a whole-kWh counter's first step after midnight is
+        # partly the evening before. The time is stored with the baseline, so
+        # a restart keeps it. With no move on record, a step at the first
+        # read of a run is the cycle's (booked now: a lifetime counter read as
+        # a day shows there), and a later one reaches back to a move nobody
+        # saw: unknown. A move is a step that booked energy (a drop and its
+        # recovery are none) — see ``_accrue_daily_energy``.
+        moved = self._energy_counter_moved_at
+        if moved is not None:
+            _m = (now - moved).total_seconds()
+            self._last_cycle_energy_window_s = _m if _m > 0 else None
+        elif self._energy_counter_read_in_run:
+            self._last_cycle_energy_window_s = None
+        self._energy_counter_read_in_run = True
         if last is None or kwh != last:
             self._energy_counter_last_at = now
         if last is None:
@@ -828,6 +858,11 @@ class ControllableDevice(ABC):
         the device names one — an attribution bucket.
         """
         return self._last_cycle_energy_kwh
+
+    @property
+    def last_cycle_energy_window_s(self) -> Optional[float]:
+        """(#1302) Seconds back THIS cycle's kWh can reach; None: unknown."""
+        return self._last_cycle_energy_window_s
 
     @property
     def energy_split_label(self) -> Optional[str]:

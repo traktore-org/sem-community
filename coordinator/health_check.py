@@ -91,7 +91,7 @@ def home_members(devices, chargers) -> list:
     return [d for d in (devices or ()) if id(d) not in outside]
 
 
-def home_member_totals(devices, chargers) -> dict:
+def home_member_totals(devices, chargers, day_rows) -> dict:
     """(#872) The controlled loads that are genuinely members of the HOME row.
 
     EV chargers are not — see ``home_members``, which decides it. Counting a
@@ -105,13 +105,25 @@ def home_member_totals(devices, chargers) -> dict:
 
     Chargers are checked against the EV day instead, which is the row they
     are actually members of.
+
+    (#1302) Each member's kWh comes from ``day_rows`` — its row of the
+    midnight-keyed controlled-loads mirror (``controlled_loads_by_device``)
+    — not from ``daily_energy_kwh``, which rolls at SUNRISE (#620). From
+    midnight to sunrise that total still held yesterday's daylight use,
+    against a home row that started again at 0: every winter night with a
+    heat pump read as a double count (RienduPre: 5.12 kWh of members against
+    a 0.03 kWh home row, just after midnight). The rows are the sure part
+    (``sure_only``): a whole-kWh counter's first step after midnight may be
+    the evening's use, so it is left out. A member with no row has booked
+    nothing since midnight.
     """
+    rows = day_rows or {}
     out = {}
     for dev in home_members(devices, chargers):
         device_id = getattr(dev, "device_id", None)
         if not device_id:
             continue
-        out[device_id] = float(getattr(dev, "daily_energy_kwh", 0.0) or 0.0)
+        out[device_id] = float(rows.get(str(device_id), 0.0) or 0.0)
     return out
 
 
@@ -446,6 +458,10 @@ class HealthCheck:
         fleet_total: float,
         live_ids: Optional[Iterable[str]] = None,
         member_evidence: Optional[Mapping[str, str]] = None,
+        cause: str = (
+            "One physical quantity is counted twice (a renamed or removed "
+            "id whose bucket is still published)."
+        ),
     ) -> Optional[str]:
         """(#771) One breakdown against the fleet row it decomposes.
 
@@ -503,8 +519,7 @@ class HealthCheck:
         return (
             f"{label}: members sum to {total:.2f}kWh against a fleet total of "
             f"{fleet:.2f}kWh — {excess:.2f}kWh over the {tolerance:.2f}kWh "
-            f"band. One physical quantity is counted twice (a renamed or "
-            f"removed id whose bucket is still published). Members: {listed}"
+            f"band. {cause} Members: {listed}"
         )
 
     def check_ledger_partitions(
@@ -593,10 +608,11 @@ class HealthCheck:
         #    state, and only over-count fires: Σ(devices) > home is the
         #    energy-domain shape of a NEGATIVE baseload — a draw counted
         #    twice or a sign error, never a house. The members are the live
-        #    device objects' own day totals (sunrise-keyed, which only makes
-        #    the check more conservative against the midnight home row), so
-        #    a removed device drops out by construction and no live-id set
-        #    is needed.
+        #    devices' kWh since local midnight, less any step that began
+        #    before it (#1302: their own day totals roll at sunrise, so from
+        #    midnight to sunrise they held all of yesterday's daylight use
+        #    against a home row that had started again at 0), so a removed
+        #    device drops out by construction and no live-id set is needed.
         v = self._reconcile_partition(
             "Controlled loads vs home residual",
             per_device_daily or {},
@@ -607,6 +623,13 @@ class HealthCheck:
             # itself from the fleet reading, so there is no third-party sensor
             # to name and nothing is invented for them.
             member_evidence=per_device_evidence,
+            # (#1302) Its members are live devices, so no removed id can
+            # hold a bucket here.
+            cause=(
+                "A device's energy is counted twice, or a device meter reads "
+                "more than reached the house (a lifetime counter read as a "
+                "day, a sign error)."
+            ),
         )
         if v:
             violations.append(v)
@@ -701,22 +724,30 @@ class HealthCheck:
         # over the reference days. ``home`` is a term like any device — a
         # step that arrives through the home row means a METERED row (or
         # the balance) moved, not a device.
-        def _term_median(key_fn) -> float:
-            vals = sorted(key_fn(r) for r in reference)
+        def _term_median(rows, key_fn) -> float:
+            vals = sorted(key_fn(r) for r in rows)
             return vals[len(vals) // 2]
 
         movers: dict[str, float] = {
             "home": float(latest.get("home_kwh", 0.0) or 0.0)
-            - _term_median(lambda r: float(r.get("home_kwh", 0.0) or 0.0)),
+            - _term_median(
+                reference, lambda r: float(r.get("home_kwh", 0.0) or 0.0)),
         }
-        device_ids = set(latest.get("devices") or {})
-        for r in reference:
+        # (#1302) A device term is judged only against days sealed on the
+        # same day as the newest one: a row sealed from the sunrise-keyed
+        # device ledger lacks the small hours a midnight row holds, and the
+        # difference would read as a move.
+        basis = bool(latest.get("devices_midnight"))
+        same = [r for r in reference
+                if bool(r.get("devices_midnight")) == basis]
+        device_ids = set(latest.get("devices") or {}) if same else set()
+        for r in same:
             device_ids |= set(r.get("devices") or {})
         for did in device_ids - chargers:
             movers[did] = float(
                 (latest.get("devices") or {}).get(did, 0.0) or 0.0
             ) - _term_median(
-                lambda r, d=did: float(
+                same, lambda r, d=did: float(
                     (r.get("devices") or {}).get(d, 0.0) or 0.0)
             )
         suspect, moved = max(movers.items(), key=lambda kv: abs(kv[1]))

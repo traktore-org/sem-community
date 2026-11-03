@@ -241,7 +241,8 @@ class TestADoubleCountNamesItsSource:
             _energy_counter_last_kwh=1906.0, daily_energy_blind_s=0.0)]
         msg = HealthCheck().check_ledger_partitions(
             EnergyTotals(daily_home=1.81),
-            per_device_daily=home_member_totals(devices, ()),
+            per_device_daily=home_member_totals(
+                devices, (), {d.device_id: d.daily_energy_kwh for d in devices}),
             per_device_evidence=home_member_evidence(devices),
         )[0]
         assert "heat_pump=1906.00kWh" in msg
@@ -255,7 +256,8 @@ class TestADoubleCountNamesItsSource:
             _energy_counter_last_kwh=1906.0, daily_energy_blind_s=0.0)]
         msg = HealthCheck().check_ledger_partitions(
             EnergyTotals(daily_home=1.81),
-            per_device_daily=home_member_totals(devices, ()),
+            per_device_daily=home_member_totals(
+                devices, (), {d.device_id: d.daily_energy_kwh for d in devices}),
         )[0]
         assert "heat_pump=1906.00kWh" in msg
         assert "sensor.heat_pump_total_energy" not in msg
