@@ -342,6 +342,15 @@ class ChargerReconciler:
         self._failsafe_settled_since_disable: bool = False
         self._last_disable_issued_at: float = 0.0
         self._last_disable_at: float = float("-inf")
+        # (#1305) Whether this cycle's commands LEAVE. Under observer mode
+        # (and an external yield) the device's ``send`` withholds every
+        # write, so a decided stop opened no relay and a decided start
+        # closed none: the belief and the dwell clocks below record SEM's
+        # own commands and must not learn from commands that never left.
+        # The decision table still runs in full, so the observer surface
+        # shows what SEM WOULD do; ``_would_closed`` keeps that answer.
+        self._sending: bool = True
+        self._would_closed: Optional[bool] = None
         # (#940) The contactor's anti-cycle clocks — when SEM last MOVED the
         # relay, closed and open. ``-inf`` = never, so a fresh reconciler
         # holds nothing (and a restart therefore costs one free operation;
@@ -440,6 +449,9 @@ class ChargerReconciler:
 
         A re-assert of a command already in force moved no relay, so it is
         not an event and must not re-arm the floor (bug class 73)."""
+        if not self._sending:
+            self._would_closed = closed           # (#1305) a would, not a fact
+            return
         if self._contactor_closed is closed:
             return
         self._contactor_closed = closed
@@ -479,6 +491,8 @@ class ChargerReconciler:
         return {
             "surface": self._contactor_surface,
             "closed": self._contactor_closed,
+            # (#1305) the last relay move observer mode WOULD have made
+            "would_close": self._would_closed,
             "holding": self._anticycle_hold_kind or None,
             "remaining_s": round(remaining, 1),
             "min_on_s": CONTACTOR_MIN_ON_S,
@@ -510,8 +524,9 @@ class ChargerReconciler:
         if now - self._last_disable_at < STOP_REASSERT_DWELL_S:
             return [Action(ActionKind.NONE)]
         self._clear_anticycle_hold()
-        self._last_disable_at = now
-        self._last_disable_issued_at = now          # (#823) gap anchor
+        if self._sending:                           # (#1305) only a sent stop
+            self._last_disable_at = now
+            self._last_disable_issued_at = now      # (#823) gap anchor
         self._note_contactor(False, now)            # (#940) anti-cycle clock
         return [Action(ActionKind.DISABLE)]
 
@@ -575,13 +590,19 @@ class ChargerReconciler:
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float, *,
-                  safety_stop: bool = False) -> List[Action]:
+                  safety_stop: bool = False,
+                  sending: bool = True) -> List[Action]:
         """Pure decision table (spec rows 1-8, first match wins).
 
         ``safety_stop`` (#940) — this cycle's stop is a SAFETY stop (a peak
         emergency, a VPP export pause), so the contactor's minimum-ON floor
         yields to it. Defaults False: a caller that does not say is asking
-        for an ordinary stop, and an ordinary stop waits."""
+        for an ordinary stop, and an ordinary stop waits.
+
+        ``sending`` (#1305) — False when the device withholds every write
+        (observer mode, external yield): the table still decides, the
+        belief and the dwell clocks learn nothing."""
+        self._sending = bool(sending)
         # (#940) The floor applies only to a relay surface; latched per
         # cycle so every row below (and ``_gated_disable``) reads one
         # answer from one place.
@@ -637,10 +658,11 @@ class ChargerReconciler:
                 self._released_stop_issued = True
                 self._enable_attempts = 0
                 self._enable_gave_up_at = 0.0
-                self._last_disable_at = now
-                self._last_disable_issued_at = now
-                self._released_stop_at = now                   # (#1009) gap anchor
-                self._failsafe_settled_since_disable = False
+                if self._sending:                   # (#1305) only a sent stop
+                    self._last_disable_at = now
+                    self._last_disable_issued_at = now
+                    self._released_stop_at = now               # (#1009) gap anchor
+                    self._failsafe_settled_since_disable = False
                 self._note_contactor(False, now)     # (#940) anti-cycle clock
                 return [Action(ActionKind.DISABLE)]
             self._released_stop_issued = True
@@ -944,6 +966,7 @@ class ChargerReconciler:
             desired, amps, observed, now,
             # (#940) a peak emergency / VPP pause bypasses the min-ON floor
             safety_stop=bool(decision.safety_stop),
+            sending=commands_leave(adapter),
         )
 
         # #548 actuation observability — record desired + actions + whether a
@@ -1376,6 +1399,15 @@ class ChargerReconciler:
 # ─────────────────────────────────────────────────────────────────
 # Task 3 — effectful layer
 # ─────────────────────────────────────────────────────────────────
+
+def commands_leave(adapter) -> bool:
+    """(#1305) False when the device's ``send`` withholds every write —
+    observer mode or an external yield — so nothing the reconciler decides
+    this cycle reaches the box."""
+    dev = getattr(adapter, "_device", None)
+    return not (getattr(dev, "observer_mode", False) is True
+                or getattr(dev, "external_yield", False) is True)
+
 
 def observe(adapter, power) -> ObservedState:
     """Read the observed state from the adapter (brand-agnostic)."""
