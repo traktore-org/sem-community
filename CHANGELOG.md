@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A stop that observer mode never sent no longer holds the next real start** (#1305). The relay clocks learn only from sent commands.
+
 - 🐛 **Observer mode now holds hot-water heating back too** (#1297). The Legionella run called the tank's service directly.
 - 🔧 **CI now also tests Home Assistant 2026.10, the version real installs run** (#1298). Three checks instead of two.
 - 🔧 **The replay gate now compares what a branch would command with develop** (#1299). Before, it could not fail.
