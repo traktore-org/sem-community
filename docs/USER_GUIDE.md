@@ -204,7 +204,7 @@ reaches the supported-hardware list after someone confirms it on real hardware.
 | `battery_auto_start_soc` | 90% | Above: start EV even without surplus |
 | `battery_assist_max_power` | 4500W | Maximum battery discharge for EV (1000-10000W) |
 | `battery_assist_min_surplus` | 1200W | **Solar Gate (v1.7.3)** — battery only assists above this real solar surplus (0-5000W) |
-| `battery_capacity_kwh` | — | Total battery capacity (5-100 kWh) |
+| `battery_capacity_kwh` | — | Total battery capacity (5-100 kWh). With two or more batteries SEM reads each pack's own capacity sensor; a pack without one gets its share of this total, split by how much each pack can discharge. |
 | `battery_discharge_protection_enabled` | true | Protect battery during night charging |
 | `battery_max_discharge_power` | 5000W | Maximum battery discharge rate (500-10000W) |
 | `battery_discharge_control_entity` | — | Number entity to control inverter discharge limit |

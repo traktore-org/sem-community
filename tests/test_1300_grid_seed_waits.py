@@ -147,3 +147,20 @@ class TestTheBatterySeedWaits:
             r._seed_battery_sign_from_platform("b1", "sensor.goodwe_battery")
         assert r._battery_brand_seed_done["b1"] is True
         assert "b1" not in r._battery_sign_inverted
+
+
+class TestTheSeedClockFollowsItsBattery:
+    """A seed's first-miss clock is kept by battery id, which is a place in
+    the Energy Dashboard list (#1205). When the battery in front is removed,
+    the clock moves with its battery; the grid's own clock stays."""
+
+    def test_the_clock_moves_with_the_battery_and_the_grid_clock_stays(self):
+        from .test_1205_sign_follows_its_battery import _ed
+        r = SensorReader(MagicMock(), {})
+        r._battery_lock_sensors = {"b1": "sensor.a_power", "b2": "sensor.b_power"}
+        r._seed_first_miss = {"grid": 1.0, "b1": 2.0, "b2": 3.0}
+        r._signs_follow_their_battery(_ed(["b"]), None)
+        assert r._seed_first_miss == {"grid": 1.0, "b1": 3.0}
+
+    def test_the_clock_is_in_the_list_of_records_that_move(self):
+        assert "_seed_first_miss" in SensorReader._BID_STATE

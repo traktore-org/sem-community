@@ -23,6 +23,9 @@ from .charger_adapters.status_enum import (
     classify_charger_status,
     is_cable_present,
 )
+from .grid_sign import (
+    GridSignDecision, GridSignEvidence, grid_sign_decision, lock_base,
+)
 from .sign_audit import CounterCorrelationAudit, SplitSensorExclusivityAudit
 from .units import (
     energy_state_to_kwh,
@@ -39,6 +42,7 @@ from ..ha_energy_reader import (
 )
 from ..utils.log_gate import log_on_change
 from ..utils.own_entity import is_sem_entity
+from ..consts.role_lexicon import role_for
 from ..consts.core import (
     EV_POWER_BLINK_HOLD_CYCLES,
     EV_POWER_BLINK_MIN_W,
@@ -70,6 +74,38 @@ _CYCLES_UNSET = object()  # cache sentinel distinct from a None result
 # comparable answers (#638 finding #3).
 _SOC_NAME_KEYWORDS = ("soc", "state_of_charge", "batterieladung",
                       "battery_level", "charge_level")
+
+_CAPACITY_KEYWORDS = (
+    "akkukapazit", "rated_capacity", "battery_capacity",
+    "rated_energy", "nennkapazit", "usable_capacity",
+)
+
+
+def _capacity_kwh_of_state(state) -> Optional[float]:
+    """A battery's nameplate kWh read off one sensor state, or None when the
+    state is dark, a SOC percentage, or outside 1-200 kWh (#84, #250, #641)."""
+    if state is None or state.state in ("unknown", "unavailable", None):
+        return None
+    unit = normalize_unit(state)
+    dc = state.attributes.get("device_class")
+    # "Battery Capacity" on SolaX (and others) is the SOC percentage, not
+    # rated energy: an 80 % SOC read as 80 kWh (#250).
+    if dc == "battery" or unit in ("%", "percent"):
+        return None
+    try:
+        value = finite_float(state.state)
+    except (ValueError, TypeError):
+        return None
+    if value <= 0:
+        return None
+    # #641 — the unit half goes through units.py (an MWh-labelled counter
+    # converts too). The > 500 magnitude rule is ONLY for an UNLABELLED
+    # value; after a unit conversion it would halve a 600 kWh bank twice.
+    value = energy_state_to_kwh(state, default=value)
+    if not unit and value > 500:
+        value /= 1000  # unlabelled Wh → kWh
+    return value if 1 <= value <= 200 else None
+
 
 # #743 — export-limit entity autodetection. The curtailment probe's
 # physics signature is brand-agnostic; brands that PUBLISH their export
@@ -473,6 +509,9 @@ class SensorReader:
         # (live-caught on TEST, #638 finding #3). Identity must not depend on
         # readability. Also spares a full state scan every cycle.
         self._soc_entity_by_power: Dict[str, str] = {}
+        # (#1306) A pack's own capacity sensor, found once on the device of
+        # its power sensor; ``None`` is remembered too, like the fleet detect.
+        self._capacity_entity_by_power: Dict[str, Optional[str]] = {}
         # v1.7.0 / #312: per-PV-string sensors discovered at config-
         # flow time. Empty dict in single-string setups (no discovery
         # hit), populated by ``set_pv_strings`` from
@@ -776,6 +815,12 @@ class SensorReader:
         # confidence: "same-device" picks are permanently cached; "any-device" picks
         # are re-evaluated each cycle so a late-loading DSMR meter wins once it shows
         # up. See issue #166 startup race.
+        # (#1296) A declared grid row HA has only RESTORED is could-not-ask
+        # while its integration may still load: the declared tier asks again
+        # every cycle until SENSOR_DARK_READ_GRACE_S has passed since the
+        # first such row, and the 30-cycle rescan clock does not run meanwhile.
+        self._declared_rows_waiting: bool = False
+        self._declared_wait_since: Optional[float] = None
         self._split_grid_discovery: dict[str, Any] = {
             "import": None,
             "export": None,
@@ -1176,20 +1221,20 @@ class SensorReader:
         # entirely and the raw read is negated. Required for Enphase /
         # other installs where the energy-counter heuristic can't
         # stabilise.
+        # (#1303) ONE decision: ``grid_sign_decision`` in ``grid_sign.py``
+        # says which rule wins, in a written order. The detectors only learn.
         manual_grid_invert = bool(self._raw_config.get("grid_sign_invert", False))
-        if manual_grid_invert:
-            self._negate_total(readings, "grid")
-            readings.calculate_derived()
-        else:
+        if not manual_grid_invert:
             # Auto-detect grid sign convention using Energy Dashboard counters.
             # SEM convention: negative = import, positive = export.
             # Compares power sensor sign against import/export energy counter
             # changes to determine if negation is needed.
-            needs_negate = self._detect_grid_sign(readings)
-
-            if needs_negate:
-                self._negate_total(readings, "grid")
-                readings.calculate_derived()
+            self._detect_grid_sign(readings)
+        decision = self.grid_sign_decision()
+        if decision.base_negate:
+            self._negate_total(readings, "grid")
+            readings.calculate_derived()
+        if not manual_grid_invert:
 
             # #589 — observe-only post-lock contradiction check for the
             # auto/counter/solar/restored lock.  Runs only when the lock is
@@ -1217,7 +1262,7 @@ class SensorReader:
         # fixed by declaration and has no lock to correct: on .175 exactly
         # that inverted a synthetic pair (export 2000 → −2000) under a flip
         # tapped months earlier against `sensor.power_meter_wirkleistung`.
-        if self.user_flip_applies():
+        if decision.flip:
             self._negate_total(readings, "grid")
             readings.calculate_derived()
 
@@ -1464,6 +1509,28 @@ class SensorReader:
         """
         return bool(self._raw_config.get("grid_sign_invert", False)
                     or self.user_flip_applies())
+
+    def grid_sign_evidence(self) -> GridSignEvidence:
+        """(#1303) The snapshot ``grid_sign_decision`` decides from. The two
+        flip reads keep their one-time log lines."""
+        return GridSignEvidence(
+            option_invert=bool(self._raw_config.get("grid_sign_invert", False)),
+            read_is_pair=self.grid_read_is_pair(),
+            model_fixed=self.grid_sign_fixed(),
+            lock_detected=bool(self._grid_sign_detected),
+            lock_inverted=bool(self._grid_sign_inverted),
+            flip_bound_here=self._flip_bound_here(),
+            flip_on_old_lock=self._flip_on_an_old_lock(),
+        )
+
+    def grid_sign_decision(self) -> GridSignDecision:
+        """(#1303) What the read applies this cycle, and why. The one place."""
+        return grid_sign_decision(self.grid_sign_evidence())
+
+    def _lock_base_negate(self) -> bool:
+        """(#1303) The detectors' answer with the option left aside: what
+        ``_detect_grid_sign`` returns once it has learned."""
+        return lock_base(self.grid_sign_evidence())[0]
 
     def grid_sign_diagnostics(self) -> dict:
         """Build a #461 grid-sign support payload.
@@ -1934,6 +2001,7 @@ class SensorReader:
         "_battery_charge_baseline", "_battery_discharge_baseline",
         "_battery_brand_seed_done", "_battery_sign_audits",
         "_battery_locks_to_check", "_battery_sign_kept",
+        "_seed_first_miss",                     # (#1300) a seed's first miss
     )
 
     def _signs_follow_their_battery(self, ed, alone_from: Optional[str]) -> None:
@@ -2541,7 +2609,7 @@ class SensorReader:
         model now sets the sign (``_flip_on_an_old_lock``).
         """
         applies = self._flip_bound_here()
-        if applies and self._flip_on_an_old_lock():
+        if applies and not self.grid_sign_decision().flip:
             if not self._stale_flip_said:
                 self._stale_flip_said = True
                 _LOGGER.warning(
@@ -2653,7 +2721,7 @@ class SensorReader:
                     "grid sign: %s is a pair (export minus import) — the "
                     "learned negation does not apply to it (#1215)",
                     self._grid_source_key)
-            return False
+            return self._lock_base_negate()
 
         # (#1294) A meter whose model fixes its sign (a P1 meter) takes it on
         # every read. The seed below ran only while nothing was locked, so a
@@ -2676,7 +2744,7 @@ class SensorReader:
                 )
             self._grid_sign_inverted = fixed
             self._grid_sign_detected = True
-            return fixed
+            return self._lock_base_negate()
 
         # Deterministic brand seed first (#461): a known meter integration
         # locks the sign immediately. Solar can still override it below.
@@ -2693,7 +2761,7 @@ class SensorReader:
             # No Energy Dashboard → trust the sensor. #476 item 5: a
             # restored/locked sign still applies (constructor default
             # False keeps the no-lock behaviour unchanged).
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # Sum across the counter LISTS when present (#485 H4): Dutch
         # dual-tariff DSMR meters split each direction into tarief 1 +
@@ -2717,7 +2785,7 @@ class SensorReader:
             # counters disappearing (e.g. Energy Dashboard reconfigured
             # after the lock was learned). Constructor default is False,
             # so the no-lock behaviour is unchanged.
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # Startup warm-up (#487 follow-up): no votes while HA's
         # recorder is still replaying counter states — keep baselines
@@ -2728,17 +2796,17 @@ class SensorReader:
             if iv is not None and ev is not None:
                 self._grid_import_baseline = iv
                 self._grid_export_baseline = ev
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # Need meaningful power to detect (ignore noise)
         power = readings.grid_power
         if abs(power) < 100:
-            return self._grid_sign_inverted  # Keep last known state
+            return self._lock_base_negate()  # Keep last known state
 
         import_val = self._sum_counter_states(import_entities)
         export_val = self._sum_counter_states(export_entities)
         if import_val is None or export_val is None:
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # First call: store baselines, don't correct yet
         if self._grid_import_baseline is None:
@@ -2747,7 +2815,7 @@ class SensorReader:
             # #476 item 5: honour a restored lock even on the very
             # first baseline call (counters can sit unknown for the
             # whole warmup). Default False = pre-#476 behaviour.
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         deltas = self._counter_deltas(
             self._grid_import_baseline, self._grid_export_baseline,
@@ -2764,7 +2832,7 @@ class SensorReader:
                 "Grid energy counter reset detected — re-baselined, "
                 "skipping sign vote",
             )
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
         import_delta, export_delta = deltas
 
         # Determine convention from correlation:
@@ -2781,7 +2849,7 @@ class SensorReader:
             detected = power < 0  # If power negative during export → negate
 
         if detected is None:
-            return self._grid_sign_inverted
+            return self._lock_base_negate()
 
         # Accumulate magnitude-weighted sign-of-correlation evidence
         # (#461). Each clear single-direction cycle adds |power| toward
@@ -2829,7 +2897,7 @@ class SensorReader:
                     import_entities, export_entities,
                 )
 
-        return self._grid_sign_inverted
+        return self._lock_base_negate()
 
     def _detect_battery_sign(self, readings: PowerReadings) -> bool:
         """Detect if battery power needs negation using Energy Dashboard counters.
@@ -3554,6 +3622,7 @@ class SensorReader:
                 readings.batteries[bid] = BatteryPower(
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=entity,
                     power_read=raw_w is not None,
+                    capacity_kwh=self._unit_capacity_kwh(entity),   # (#1306)
                 )
             # #553 — two-sensor pair units, bids continue after the combined
             # ones. net = charge(to) − discharge(from); the user-declared
@@ -3585,6 +3654,7 @@ class SensorReader:
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=p_to,
                     # (#1167) one dark side is half a number
                     power_read=raw_to is not None and raw_from is not None,
+                    capacity_kwh=self._unit_capacity_kwh(p_to),     # (#1306)
                 )
 
         # Fleet scalar precedence: a real ≥2 per-battery breakdown owns the fleet
@@ -4767,6 +4837,8 @@ class SensorReader:
         """
         if not disc.get("import") and not disc.get("export"):
             return True  # nothing held → scan every cycle (#166)
+        if self._declared_rows_waiting:
+            return True  # (#1296) a declared row may still be loading
         if not disc.get("import") or not disc.get("export"):
             # One side held, other missing (#485 H2): keep looking for
             # the late-loading side, but at ~1-min cadence — systems
@@ -4866,6 +4938,7 @@ class SensorReader:
             return None, None
 
         wanted = {"grid_import_power": None, "grid_export_power": None}
+        self._declared_rows_waiting = False
         # (#1240) The counters' UNIT, not only their device: DSMR Reader's
         # sensors have no device, and its pair and counters come from one
         # config entry. ``registry_unit`` is the card's answer too.
@@ -4892,6 +4965,8 @@ class SensorReader:
                 if _matches(entry, body["keys"], body["exact_only"]) is None:
                     continue
                 if not self._declared_row_readable(entry):
+                    if self._restored_row_still_loading(entry):
+                        self._declared_rows_waiting = True
                     continue
                 # A declared entity on the grid counter's own device outranks
                 # a declared entity elsewhere — same brand, two inverters.
@@ -4909,6 +4984,25 @@ class SensorReader:
         return (imp[1] if imp else None,
                 exp[1] if exp else None,
                 on_grid_device)
+
+    def _restored_row_still_loading(self, entry) -> bool:
+        """(#1296, #925) A row HA restored at start is could-not-ask, not a
+        dead row, until SENSOR_DARK_READ_GRACE_S has passed since the first
+        such row was seen. True while the declared tier should ask again."""
+        if getattr(entry, "disabled_by", None) is not None:
+            return False
+        attrs = getattr(self.hass.states.get(entry.entity_id), "attributes", None)
+        if not (isinstance(attrs, Mapping) and attrs.get("restored") is True):
+            return False
+        now = float(self._now_monotonic())
+        if self._declared_wait_since is None:
+            self._declared_wait_since = now
+        if now - self._declared_wait_since <= SENSOR_DARK_READ_GRACE_S:
+            return True
+        _LOGGER.debug(
+            "Declared grid row %s is still restored after %d s — treated as "
+            "a dead row (#1296)", entry.entity_id, SENSOR_DARK_READ_GRACE_S)
+        return False
 
     def _declared_row_readable(self, entry) -> bool:
         """(#1189 review) A row SEM can never read is not a meter: a disabled
@@ -5107,6 +5201,7 @@ class SensorReader:
         self._forget_split_grid_picks(self._split_grid_discovery,
                                       keep=(None, None), outage=False)
         _ri.clear_split_grid_guessed(self.hass)
+        self._declared_wait_since = None       # (#1296) a fresh start asks again
         self._split_grid_discovery = {
             "import": None,
             "export": None,
@@ -7549,11 +7644,7 @@ class SensorReader:
         if not battery_entity:
             return None
 
-        # Search all sensors for capacity keywords
-        capacity_keywords = [
-            "akkukapazit", "rated_capacity", "battery_capacity",
-            "rated_energy", "nennkapazit", "usable_capacity",
-        ]
+        capacity_keywords = _CAPACITY_KEYWORDS
         try:
             registry = er.async_get(self.hass)
         except Exception:  # noqa: BLE001 — the predicate asks again
@@ -7569,35 +7660,54 @@ class SensorReader:
             # size. Read here, a saved size came back as a found battery.
             if is_sem_entity(self.hass, eid, registry):
                 continue
-            unit = normalize_unit(state)
-            dc = state.attributes.get("device_class")
-            # Skip SOC sensors: "Battery Capacity" matches the keyword above but on
-            # SolaX (and others) it is the SOC percentage, not rated energy. A 80%
-            # SOC would otherwise be misread as 80 kWh of rated capacity (#250).
-            if dc == "battery" or unit in ("%", "percent"):
-                continue
-            try:
-                value = finite_float(state.state)
-                if value <= 0:
-                    continue
-                # #641 — the unit half goes through units.py (so an MWh-labelled
-                # counter converts too). The ``> 500`` magnitude heuristic
-                # applies ONLY to an UNLABELLED counter, which is the case it
-                # was written for: running it after a unit conversion would
-                # divide a labelled 600 kWh bank twice.
-                value = energy_state_to_kwh(state, default=value)
-                if not unit and value > 500:
-                    value /= 1000  # unlabelled Wh → kWh
-                if 1 <= value <= 200:  # Sanity: 1-200 kWh
-                    _LOGGER.info(
-                        "Auto-detected battery capacity: %s = %.1f kWh",
-                        eid, value,
-                    )
-                    return value
-            except (ValueError, TypeError):
-                continue
+            value = _capacity_kwh_of_state(state)
+            if value is not None:
+                _LOGGER.info(
+                    "Auto-detected battery capacity: %s = %.1f kWh",
+                    eid, value,
+                )
+                return value
 
         return None
+
+    def _auto_detect_unit_capacity(self, power_entity: str) -> Optional[str]:
+        """(#1306) The capacity sensor on the same device as one pack's
+        power sensor, or None. The fleet detect above takes the first
+        capacity-looking sensor in the whole house, which for two packs is
+        one pack's size. The answer sticks, found or not, like the fleet's.
+        """
+        if not power_entity or "." not in power_entity:
+            return None
+        if power_entity in self._capacity_entity_by_power:
+            return self._capacity_entity_by_power[power_entity]
+        found = None
+        try:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(power_entity)
+            if entry is not None and entry.device_id:
+                for e in er.async_entries_for_device(registry, entry.device_id):
+                    if e.domain != "sensor":
+                        continue
+                    key = e.translation_key or e.entity_id.split(".", 1)[1]
+                    looks = (role_for("sensor", key) == "battery_capacity_spec"
+                             or any(kw in e.entity_id.lower()
+                                    for kw in _CAPACITY_KEYWORDS))
+                    if not looks:
+                        continue
+                    if _capacity_kwh_of_state(self.hass.states.get(e.entity_id)) is not None:
+                        found = e.entity_id
+                        break
+        except Exception:  # noqa: BLE001 — no registry is "none found"
+            found = None
+        self._capacity_entity_by_power[power_entity] = found
+        return found
+
+    def _unit_capacity_kwh(self, power_entity: str) -> float:
+        """(#1306) One pack's own nameplate kWh, 0.0 when it has none."""
+        eid = self._auto_detect_unit_capacity(power_entity)
+        if not eid:
+            return 0.0
+        return _capacity_kwh_of_state(self.hass.states.get(eid)) or 0.0
 
     def sensors_ready(self) -> bool:
         """Check if required sensors are available.

@@ -34,6 +34,8 @@ from pathlib import Path
 
 import pytest
 
+from .ratchet_guard import assert_not_loosened
+
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "tests" / "option_surface_baseline.json"
 
@@ -101,6 +103,8 @@ def test_the_total_never_grows():
     base = _baseline()["total"]
     assert live <= base, (
         f"the option surface grew from {base} to {live}. {REGEN}")
+    # (#1304) and the baseline itself may not have been loosened quietly
+    assert_not_loosened(BASELINE, lambda d: d["total"], "option surface")
 
 
 def test_the_baseline_matches_what_the_audit_reports():
