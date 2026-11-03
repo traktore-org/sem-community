@@ -29,6 +29,12 @@ homeassistant>=2023.9.0
 # Pinned exactly, per rung. Bump deliberately — and update the `->` note, which
 # tests/test_787_ha_version_matrix.py reads.
 pytest-homeassistant-custom-component==0.13.316; python_version < "3.14"  # -> homeassistant 2026.2.3 (the hacs.json floor)
-pytest-homeassistant-custom-component==0.13.356; python_version >= "3.14"  # -> homeassistant 2026.8.2 (what HA-PROD runs)
+pytest-homeassistant-custom-component==0.13.356; python_version >= "3.14"  # -> homeassistant 2026.8.2 (the 3.14 default: local venvs)
+# (#1298) The rung that tests what HA-PROD runs shares Python 3.14 with the
+# one above, so no marker can select it. tests.yml carries this pin as
+# `matrix.phacc` and installs it on top of the line above. Declared here so
+# the mapping stays in one place; tests/test_787_ha_version_matrix.py reads
+# `# rung:` lines the same way it reads the pins.
+# rung: pytest-homeassistant-custom-component==0.13.375  # -> homeassistant 2026.10.4 (what HA-PROD runs)
 
 hypothesis>=6.0.0

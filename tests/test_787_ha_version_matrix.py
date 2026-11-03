@@ -11,7 +11,14 @@ matrix — chose the HA.
 Python floor, so the interpreter *is* the HA selector:
 
     0.13.316  (py3.13+)  ->  homeassistant 2026.2.3   <- the hacs.json floor
-    0.13.356  (py3.14+)  ->  homeassistant 2026.8.2   <- what HA-PROD runs
+    0.13.356  (py3.14+)  ->  homeassistant 2026.8.2   <- the 3.14 marker pin
+    0.13.375  (matrix)   ->  homeassistant 2026.10.4  <- what HA-PROD runs
+
+(#1298) The third rung shares Python 3.14 with the second, so the marker
+cannot select it: the workflow matrix carries the pin as ``phacc`` and
+installs it on top. The matrix is therefore keyed by HA (``ha:``) with the
+Python and the optional pin in ``include:``; a ``# rung:`` line in the
+requirements file says which HA that pin brings.
 
 (#836) A third pin, 0.13.205 -> HA 2025.1.4, was dropped together with the
 2025.1 floor: no SEM user has ever reported an HA below 2026.4, so that rung
@@ -45,23 +52,46 @@ HACS = REPO / "hacs.json"
 PHACC = "pytest-homeassistant-custom-component"
 
 
-def _matrix_python_versions() -> list[str]:
-    """The ``python-version`` list from the Tests workflow.
+_LEG = re.compile(
+    r'-\s*ha:\s*"(?P<ha>[^"]+)"\s*\n\s*python-version:\s*"(?P<py>[^"]+)"'
+    r'(?:\s*\n\s*phacc:\s*"(?P<phacc>[^"]+)")?'
+)
+
+
+def _matrix_legs() -> list[tuple[str, str, str | None]]:
+    """The test matrix legs of the Tests workflow: ``(ha, python, phacc)``.
 
     Parsed with a regex rather than a YAML loader: the workflow is full of
-    ``${{ }}`` expressions and this only needs one line. The assertion
-    below that the list is non-empty is what catches a parse that drifted.
+    ``${{ }}`` expressions and this only needs the first ``include:`` block.
+    The assertion that the list is non-empty is what catches a parse that
+    drifted.
     """
     text = WORKFLOW.read_text(encoding="utf-8")
-    m = re.search(r"python-version:\s*\[([^\]]+)\]", text)
-    assert m, f"no `python-version: [...]` matrix found in {WORKFLOW.name}"
-    return re.findall(r'"([^"]+)"', m.group(1))
+    m = re.search(r'ha:\s*\[([^\]]+)\]', text)
+    assert m, f"no `ha: [...]` matrix found in {WORKFLOW.name}"
+    labels = re.findall(r'"([^"]+)"', m.group(1))
+    block = text[m.end():]
+    block = block[:block.find("steps:")]
+    legs = [(g["ha"], g["py"], g["phacc"]) for g in
+            (mm.groupdict() for mm in _LEG.finditer(block))]
+    assert legs, f"no `include:` legs after the `ha:` matrix in {WORKFLOW.name}"
+    assert [ha for ha, _, _ in legs] == labels, (
+        f"the `ha:` list {labels} and the `include:` legs "
+        f"{[ha for ha, _, _ in legs]} disagree in {WORKFLOW.name}"
+    )
+    return legs
+
+
+def _matrix_python_versions() -> list[str]:
+    return [py for _, py, _ in _matrix_legs()]
 
 
 def _declared_pins() -> list[tuple[str, tuple[int, ...], str, str]]:
     """Every phacc pin in requirements_test.txt, with its marker and HA.
 
     Returns ``(version, python_floor, marker_op, ha_version)`` per line.
+    ``# rung:`` lines (pins the workflow matrix carries, #1298) are read by
+    ``_rung_pins`` instead.
     The HA version is read from a trailing ``# -> homeassistant X.Y.Z``
     comment on the same line — the pin and the thing it actually selects
     have to be written down together or the next reader learns nothing.
@@ -90,8 +120,26 @@ def _declared_pins() -> list[tuple[str, tuple[int, ...], str, str]]:
     return out
 
 
-def _ha_for(python_version: str) -> str | None:
-    """Which HA a given matrix leg installs, per the declared markers."""
+def _rung_pins() -> dict[str, str]:
+    """``# rung: <phacc>==X  # -> homeassistant Y`` lines: pin -> HA."""
+    out = {}
+    for raw in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line.startswith("# rung:"):
+            continue
+        ver = re.search(rf"{re.escape(PHACC)}==([\d.]+)", line)
+        ha = re.search(r"->\s*homeassistant\s+([\d.]+)", line)
+        assert ver and ha, (
+            f"a `# rung:` line must name the pin and its HA: {raw}"
+        )
+        out[ver.group(1)] = ha.group(1)
+    return out
+
+
+def _ha_for(python_version: str, phacc: str | None = None) -> str | None:
+    """Which HA a given matrix leg installs: its own pin, or the marker."""
+    if phacc is not None:
+        return _rung_pins().get(phacc)
     py = tuple(int(p) for p in python_version.split("."))
     for _ver, floor, op, ha in _declared_pins():
         if op == ">=" and py >= floor:
@@ -105,18 +153,43 @@ def _ha_for(python_version: str) -> str | None:
 
 def test_every_matrix_leg_has_a_pin_that_applies_to_it():
     """A leg with no matching marker installs an unpinned HA."""
-    unpinned = [v for v in _matrix_python_versions() if _ha_for(v) is None]
+    unpinned = [ha for ha, py, phacc in _matrix_legs()
+                if _ha_for(py, phacc) is None]
     assert not unpinned, (
-        "These CI matrix legs have no phacc pin whose python_version marker "
-        f"matches, so pip picks the HA for them: {unpinned}. Add a pin in "
+        "These CI matrix legs have no phacc pin that applies to them — no "
+        "python_version marker matches and no `# rung:` line declares their "
+        f"`phacc` — so pip picks the HA for them: {unpinned}. Add a pin in "
         f"{REQUIREMENTS.name}."
+    )
+
+
+def test_1298_every_leg_is_labelled_by_the_ha_it_installs():
+    """The check name is the HA version. A leg labelled 2026.10 that installs
+    2026.8 is the #787 blind spot with a better name."""
+    wrong = [(ha, _ha_for(py, phacc)) for ha, py, phacc in _matrix_legs()
+             if _ha_for(py, phacc) is not None
+             and not _ha_for(py, phacc).startswith(ha + ".")]
+    assert not wrong, (
+        f"matrix legs whose `ha:` label is not the HA they install: {wrong}"
+    )
+
+
+def test_1298_the_version_prod_runs_is_a_rung():
+    """CLAUDE.md names the HA on PROD; the newest rung must be that line.
+    (No live read here — the test must not reach the dev box.)"""
+    covered = {_ha_for(py, phacc) for _, py, phacc in _matrix_legs()} - {None}
+    newest = max(covered, key=lambda v: tuple(int(p) for p in v.split(".")))
+    assert newest.startswith("2026.10."), (
+        f"the newest HA under test is {newest}; HA-PROD runs 2026.10.x. "
+        "Bump the `phacc` of the PROD rung (and its `# rung:` line) when "
+        "PROD moves."
     )
 
 
 def test_the_matrix_varies_home_assistant_not_only_python():
     """The #787 bug itself: two legs, one HA, nineteen months unnoticed."""
     versions = _matrix_python_versions()
-    covered = {_ha_for(v) for v in versions} - {None}
+    covered = {_ha_for(py, phacc) for _, py, phacc in _matrix_legs()} - {None}
     assert len(covered) > 1, (
         f"The CI matrix runs {versions} but every leg installs the same Home "
         f"Assistant ({covered}). Varying the interpreter against a fixed HA "
@@ -128,7 +201,7 @@ def test_the_matrix_varies_home_assistant_not_only_python():
 def test_the_supported_floor_is_a_version_we_actually_test():
     """`hacs.json` is a promise. Test the version it promises."""
     floor = json.loads(HACS.read_text(encoding="utf-8"))["homeassistant"]
-    covered = {_ha_for(v) for v in _matrix_python_versions()} - {None}
+    covered = {_ha_for(py, phacc) for _, py, phacc in _matrix_legs()} - {None}
 
     def parts(v):
         return tuple(int(p) for p in v.split("."))
@@ -152,9 +225,9 @@ def test_the_newest_tested_ha_is_not_a_year_behind():
     year behind the newest phacc pin we have declared, which is the
     slope #787 was filed about.
     """
-    pins = _declared_pins()
-    newest_declared = max(tuple(int(p) for p in ha.split(".")) for *_, ha in pins)
-    covered = {_ha_for(v) for v in _matrix_python_versions()} - {None}
+    declared = [ha for *_, ha in _declared_pins()] + list(_rung_pins().values())
+    newest_declared = max(tuple(int(p) for p in ha.split(".")) for ha in declared)
+    covered = {_ha_for(py, phacc) for _, py, phacc in _matrix_legs()} - {None}
     if not covered:
         pytest.skip("covered by test_every_matrix_leg_has_a_pin_that_applies_to_it")
     newest_tested = max(tuple(int(p) for p in c.split(".")) for c in covered)

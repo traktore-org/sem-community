@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **CI now also tests Home Assistant 2026.10, the version real installs run** (#1298). Three checks instead of two.
+
 # [2.3.0-beta.3] — 02.11.2026
 
 - 🐛 **An empty home battery no longer has its discharge limit moved up while a car charges** (#1179). Each move was a write that did nothing.

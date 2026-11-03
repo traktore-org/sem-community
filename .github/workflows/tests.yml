@@ -25,15 +25,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: HA ${{ matrix.ha }} part ${{ matrix.part }}/4
-    # The matrix is an HA matrix wearing a Python label (#787). Each rung
-    # installs a different pytest-homeassistant-custom-component pin — see
-    # tests/requirements_test.txt — so this list reads:
-    #   3.13 -> HA 2026.2.3  (the hacs.json floor)  -> check "test HA 2026.2"
-    #   3.14 -> HA 2026.8.2  (what HA-PROD runs)     -> check "test HA 2026.8"
+    # The matrix IS an HA matrix (#787, #1298). Each rung installs one
+    # pytest-homeassistant-custom-component pin — see
+    # tests/requirements_test.txt — and the list reads:
+    #   HA 2026.2.3  on 3.13 (the hacs.json floor)   -> check "test HA 2026.2"
+    #   HA 2026.8.2  on 3.14 (the 3.14 marker pin)    -> check "test HA 2026.8"
+    #   HA 2026.10.4 on 3.14 (what HA-PROD runs)      -> check "test HA 2026.10"
     # (28.09.2026) The check is NAMED by the HA version, not the Python: "3.13"
     # kept reading as a Python rung to drop, when it is really the old-HA test.
     # The Python is only how each HA is reached. The 2026.2 rung is bumped to a
     # newer HA when one arrives; until then it holds the declared floor.
+    # (#1298) Two rungs share Python 3.14, so a python_version marker cannot
+    # tell them apart: the PROD rung carries its pin here as `phacc` and the
+    # install step puts it on top of the requirements file.
     # (#836) The 3.12 -> HA 2025.1.4 rung was removed with the 2025.1 floor:
     # no SEM user has ever reported an HA below 2026.4, so it verified a
     # version nobody runs.
@@ -57,14 +61,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13", "3.14"]
+        ha: ["2026.2", "2026.8", "2026.10"]
         # Keep in step with `--splits` below and PARTS in test-gate.
         part: [1, 2, 3, 4]
         include:
-          - python-version: "3.13"
-            ha: "2026.2"
-          - python-version: "3.14"
-            ha: "2026.8"
+          - ha: "2026.2"
+            python-version: "3.13"
+          - ha: "2026.8"
+            python-version: "3.14"
+          - ha: "2026.10"
+            python-version: "3.14"
+            phacc: "0.13.375"
 
     steps:
       - uses: actions/checkout@v4
@@ -80,6 +87,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r tests/requirements_test.txt
+          if [ -n "${{ matrix.phacc }}" ]; then
+            pip install "pytest-homeassistant-custom-component==${{ matrix.phacc }}"
+          fi
+          python -c "import homeassistant.const as c; print('homeassistant', c.__version__)"
 
       - name: Set up importable package structure
         run: |
@@ -112,12 +123,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-data-py${{ matrix.python-version }}-part${{ matrix.part }}
+          name: coverage-data-ha${{ matrix.ha }}-part${{ matrix.part }}
           path: /tmp/ha-config/.coverage.part${{ matrix.part }}
           include-hidden-files: true
           if-no-files-found: ignore
 
-  # (#1266) The two required checks. Green only when every part of that HA
+  # (#1266) The three required checks. Green only when every part of that HA
   # rung succeeded. It must run even when a part failed or was cancelled:
   # GitHub counts a SKIPPED required check as passed, so a gate that is
   # skipped on failure would let a red suite merge. Hence `if: always()` and
@@ -133,7 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ha: ["2026.2", "2026.8"]
+        ha: ["2026.2", "2026.8", "2026.10"]
     steps:
       - name: Every part of HA ${{ matrix.ha }} passed
         env:
@@ -153,14 +164,21 @@ jobs:
   # Informational only: not a required check, and it never fails the board
   # for a missing file — the test parts are what decide.
   coverage:
-    name: coverage py${{ matrix.python-version }}
+    name: coverage HA ${{ matrix.ha }}
     needs: test
     if: always()
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13", "3.14"]
+        ha: ["2026.2", "2026.8", "2026.10"]
+        include:
+          - ha: "2026.2"
+            python-version: "3.13"
+          - ha: "2026.8"
+            python-version: "3.14"
+          - ha: "2026.10"
+            python-version: "3.14"
     steps:
       - uses: actions/checkout@v4
 
@@ -176,7 +194,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: coverage-data-py${{ matrix.python-version }}-part*
+          pattern: coverage-data-ha${{ matrix.ha }}-part*
           path: /tmp/ha-config
           merge-multiple: true
 
@@ -193,7 +211,7 @@ jobs:
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-py${{ matrix.python-version }}
+          name: coverage-ha${{ matrix.ha }}
           path: coverage.xml
           if-no-files-found: ignore
 
