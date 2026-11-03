@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **The replay gate now compares what a branch would command with develop** (#1299). Before, it could not fail.
+
 # [2.3.0-beta.3] — 02.11.2026
 
 - 🐛 **An empty home battery no longer has its discharge limit moved up while a car charges** (#1179). Each move was a write that did nothing.

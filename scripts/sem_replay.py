@@ -9,6 +9,14 @@ asked); each check says pass/fail per day; a branch is refused when an
 ``exact`` check fails, or a ``relative`` check shows it worse than the
 base, on any day that is not a gap day. Exit code 1 = refused.
 
+Checks: ``forecast_overshoot`` (the plan's corrected solar never above the
+raw forecast before noon), ``home_spike`` (no one-cycle home spike the base
+did not show), ``no_writes`` (#1299: the real pure deciders run on every
+cycle; the branch would command the car and the battery exactly as the
+base, and nothing is really sent), ``cost_identity`` (modelled, never
+blocks). The last line says on how many days the command comparison had
+anything to compare.
+
 The replay code itself always comes from THIS tree (it is laid over each
 tree under test), so a branch older than the tool can still be replayed.
 Offline, read-only, one day in memory at a time.
@@ -115,10 +123,13 @@ def main() -> int:
         return DayRun(date=d["date"], tags=d["tags"], writes=d["writes"], notes=d["notes"],
                       home=[(t, s, None, False) for t, s in d["home"]],
                       forecast=[tuple(x) for x in d["forecast"]],
-                      cost=tuple(d["cost"]) if d.get("cost") else None)
+                      cost=tuple(d["cost"]) if d.get("cost") else None,
+                      commands=d.get("commands"),
+                      decision_error=d.get("decision_error", ""))
 
     report = {"branch": str(a.branch), "base": str(a.base), "days": [], "refused": False}
     lines = []
+    with_commands = 0
     for day in sorted(branch):
         b = _run(branch[day])
         bb = _run(base[day]) if day in base else None
@@ -141,11 +152,14 @@ def main() -> int:
             "base": {k: r.as_dict() for k, r in (base_res or {}).items()},
             "blocking": [r.name for r in block]})
         report["refused"] |= bool(block)
+        with_commands += bool(res["no_writes"].evidence_n) if "no_writes" in res else 0
         mark = "REFUSED" if block else "ok"
         lines.append(f"{day} [{','.join(b.tags) or '-'}] {mark}: " +
                      "; ".join(_mark(k, r) for k, r in res.items()))
     print("\n".join(lines))
-    print(f"\n{len(branch)} days — {'REFUSED' if report['refused'] else 'all checks pass'}")
+    report["days_with_command_evidence"] = with_commands
+    print(f"\n{len(branch)} days — {'REFUSED' if report['refused'] else 'all checks pass'}; "
+          f"would-send commands compared on {with_commands} of {len(branch)} days")
     if a.report:
         a.report.expanduser().write_text(json.dumps(report, indent=1))
     return 1 if report["refused"] else 0

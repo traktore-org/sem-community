@@ -52,6 +52,13 @@ class DayRun:
     forecast: List[Tuple[float, float, float, float]] = field(default_factory=list)
     #: service calls the replayed code tried to make (must stay 0)
     writes: int = 0
+    #: (#1299) what the pure deciders WOULD have commanded, one row per
+    #: change: ``[epoch_s, who, intent, value...]``; None = this tree has
+    #: no decision roster (older than the check)
+    commands: Optional[List[list]] = None
+    #: (#1299) the deciders exist in this tree but raised: the gate fails,
+    #: it never reads a broken decider as "nothing to compare"
+    decision_error: str = ""
     notes: List[str] = field(default_factory=list)
     #: (net cost priced every 10 s, the same day re-priced hourly by the
     #: simulation model); None = no price recorded or no model in the tree
@@ -164,4 +171,22 @@ def replay_day(day: RecordedDay, *, home_window: Optional[Tuple[float, float]] =
     replay_home(day, run, home_window)
     replay_forecast(day, run)
     replay_cost(day, run)
+    replay_decisions(day, run)
     return run
+
+
+def replay_decisions(day: RecordedDay, run: DayRun) -> None:
+    """(#1299) The would-send roster from the real pure deciders. A tree
+    without them (older than the check) is noted, never failed."""
+    try:
+        from .commands import replay_commands
+    except ImportError as err:           # pragma: no cover — older tree
+        run.notes.append(f"decisions: no replay module in this tree — {err}")
+        return
+    try:
+        run.commands = replay_commands(day, _daylight(day))
+    except ImportError as err:
+        run.notes.append(f"decisions: no deciders in this tree — {err}")
+    except Exception as err:  # noqa: BLE001 — a decider that raises is a finding
+        run.decision_error = f"{type(err).__name__}: {err}"
+        run.notes.append(f"decisions: raised — {run.decision_error}")
