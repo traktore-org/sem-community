@@ -1940,6 +1940,7 @@ class SensorReader:
         "_battery_charge_baseline", "_battery_discharge_baseline",
         "_battery_brand_seed_done", "_battery_sign_audits",
         "_battery_locks_to_check", "_battery_sign_kept",
+        "_seed_first_miss",                     # (#1300) a seed's first miss
     )
 
     def _signs_follow_their_battery(self, ed, alone_from: Optional[str]) -> None:
