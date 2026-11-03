@@ -167,12 +167,16 @@ The CI matrix lists Python versions, but it is really a **Home Assistant**
 matrix: `pytest-homeassistant-custom-component` pins exactly one HA per
 release and each release has a Python floor, so the interpreter picks the HA.
 
-| CI leg | phacc pin | Home Assistant | Blocking? |
+| CI check | phacc pin | Home Assistant | Blocking? |
 |---|---|---|---|
-| Python 3.13 | `0.13.316` | 2026.2.3 — the `hacs.json` floor | yes |
-| Python 3.14 | `0.13.356` | 2026.8.2 — what HA-PROD runs | yes |
+| test HA 2026.2 (Python 3.13) | `0.13.316` | 2026.2.3 — the `hacs.json` floor | yes |
+| test HA 2026.8 (Python 3.14) | `0.13.356` | 2026.8.2 — the 3.14 marker pin | yes |
+| test HA 2026.10 (Python 3.14) | `0.13.375` | 2026.10.4 — what HA-PROD runs | yes |
 
-Both rungs block. There is no `continue-on-error` anywhere in the matrix and
+Two checks share Python 3.14, so a marker cannot pick the third pin: the
+workflow matrix carries it as `phacc` and installs it on top (#1298).
+
+All three rungs block. There is no `continue-on-error` anywhere in the matrix and
 there must not be again (#835): the 3.13 rung spent its entire life marked
 advisory and never passed once, invisibly, because a rung that cannot fail the
 board is a rung nobody reads.

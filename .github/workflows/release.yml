@@ -9,17 +9,26 @@ permissions:
 
 jobs:
   validate:
-    name: Validate before release
+    name: Validate before release (HA ${{ matrix.ha }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # (#836) The ladder, same as tests.yml: 3.13 -> HA 2026.2.3 (the
-        # hacs.json floor) and 3.14 -> HA 2026.8.2 (what PROD runs). 3.12 was
-        # removed with the 2025.1 floor — the phacc pins now require >= 3.13,
-        # so a 3.12 leg cannot resolve its dependencies at all. It failed on
-        # the v2.0.0-beta.16 release, which is how this was found:
-        # tests.yml was swept and this file was not.
-        python-version: ["3.13", "3.14"]
+        # (#836) The ladder, same as tests.yml: HA 2026.2.3 on 3.13 (the
+        # hacs.json floor), HA 2026.8.2 on 3.14, HA 2026.10.4 on 3.14 (what
+        # PROD runs, #1298 — pinned by `phacc`, the marker cannot tell two
+        # 3.14 rungs apart). 3.12 was removed with the 2025.1 floor — the
+        # phacc pins now require >= 3.13, so a 3.12 leg cannot resolve its
+        # dependencies at all. It failed on the v2.0.0-beta.16 release, which
+        # is how this was found: tests.yml was swept and this file was not.
+        ha: ["2026.2", "2026.8", "2026.10"]
+        include:
+          - ha: "2026.2"
+            python-version: "3.13"
+          - ha: "2026.8"
+            python-version: "3.14"
+          - ha: "2026.10"
+            python-version: "3.14"
+            phacc: "0.13.375"
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +41,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r tests/requirements_test.txt
+          if [ -n "${{ matrix.phacc }}" ]; then
+            pip install "pytest-homeassistant-custom-component==${{ matrix.phacc }}"
+          fi
 
       - name: Set up importable package structure
         run: |
