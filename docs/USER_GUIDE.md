@@ -2142,6 +2142,7 @@ SEM skips:
 - All charger service calls
 - Battery discharge limit changes
 - Device shedding commands
+- Hot-water heating, also the Legionella run
 
 Turn it on or off on the dashboard **Configuration** tab (`switch.sem_observer_mode`). The **Configure** button no longer asks for it.
 
