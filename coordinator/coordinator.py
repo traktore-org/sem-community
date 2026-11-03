@@ -454,6 +454,19 @@ def _price_changed(old_price, new_price) -> bool:
 BATTERY_DETECT_RETRY_S: float = 60.0
 
 
+def _fleet_capacity_of(coordinator, power) -> float:
+    """(#1306) The fleet's kWh for a plan: the coordinator's fleet accessor
+    when it has one and answers a number, else its one-number size — a
+    test double without the accessor plans as before."""
+    fn = getattr(coordinator, "fleet_battery_capacity_kwh", None)
+    if callable(fn):
+        try:
+            return float(fn(power) or 0.0)
+        except (TypeError, ValueError):
+            pass
+    return float(getattr(coordinator, "battery_capacity_kwh", 0.0) or 0.0)
+
+
 def battery_unseen(coordinator) -> bool:
     """(#1063 round 2) No battery SEM can see — the one question every
     battery surface asks: the pack size, the plan, the tomorrow preview,
@@ -1991,6 +2004,48 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if self._detected_battery_capacity_kwh > 0:
             return self._detected_battery_capacity_kwh
         return float(DEFAULT_BATTERY_CAPACITY_KWH)
+
+    def fleet_battery_capacity_kwh(self, power=None) -> float:
+        """(#1306) The fleet's nameplate: with two or more packs read this
+        cycle, the sum of their own capacities (own sensor, else their
+        share of the setting — ``_unit_capacity_kwh``); one pack or none
+        read is ``battery_capacity_kwh`` exactly as before."""
+        units = getattr(power, "batteries", None) or {}
+        if len(units) < 2:
+            return float(self.battery_capacity_kwh or 0.0)
+        total = 0.0
+        for bid in units:
+            total += self._unit_capacity_kwh(bid, power)
+        return total if total > 0 else float(self.battery_capacity_kwh or 0.0)
+
+    def _unit_capacity_kwh(self, battery_id: str, power=None) -> float:
+        """(#1306) One pack's kWh: its own capacity sensor when it has one;
+        else the configured total, minus what the other packs declare,
+        split among the undeclared packs by their discharge ceilings (a
+        pack that can give 5 kW is taken for twice one that can give 2.5)."""
+        units = getattr(power, "batteries", None) or {}
+        bp = units.get(battery_id)
+        own = float(getattr(bp, "capacity_kwh", 0.0) or 0.0)
+        if own > 0:
+            return own
+        total = float(self.battery_capacity_kwh or 0.0)
+        declared = sum(float(getattr(u, "capacity_kwh", 0.0) or 0.0)
+                       for u in units.values())
+        remainder = max(0.0, total - declared)
+        undeclared = [b for b, u in units.items()
+                      if float(getattr(u, "capacity_kwh", 0.0) or 0.0) <= 0] or [battery_id]
+        adapters = getattr(self, "_battery_adapters", None) or {}
+
+        def _ceiling(b):
+            ad = adapters.get(b)
+            w = float(getattr(ad, "_max_discharge_w", 0.0) or 0.0) if ad is not None else 0.0
+            return w if w > 0 else None
+
+        weights = {b: _ceiling(b) for b in undeclared}
+        if any(w is None for w in weights.values()):
+            weights = {b: 1.0 for b in undeclared}
+        share = weights.get(battery_id, 1.0) / sum(weights.values())
+        return remainder * share
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -10140,10 +10195,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     battery_id=battery_id,
                     last_known_soc=float(bp.soc_pct or 0.0),
                     last_known_w=float(bp.power_w or 0.0),
-                    capacity_kwh=float(
-                        bp.capacity_kwh
-                        or self.config.get("battery_capacity_kwh", 0.0)
-                    ),
+                    # (#1306) its own nameplate, else its share of the fleet
+                    capacity_kwh=self._unit_capacity_kwh(battery_id, power),
                     # (#932) "populated → it reported this cycle" was false:
                     # a HELD reading is populated too. Per-unit flag when the
                     # reading carries one, else the fleet's — never a bare
@@ -10598,6 +10651,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # neither an EV estimate nor the tariff's cheap hours — the
         # provider is still handed over for the price fingerprint that
         # drives its replan trigger.
+        _set_cap = getattr(scheduler, "set_fleet_capacity_kwh", None)
+        if callable(_set_cap):
+            _set_cap(_fleet_capacity_of(self, power))   # (#1306)
         scheduler.evaluate(
             current_soc=power.battery_soc,
             forecast_tomorrow_kwh=forecast_tomorrow,
@@ -12039,8 +12095,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # coordinator attribute, not a config key (a parallel source
             # is how the clone's battery row went missing while its
             # arbitrage line happily said /15.0).
-            cap_kwh2 = float(getattr(
-                self, "battery_capacity_kwh", 0.0) or 0.0)
+            cap_kwh2 = _fleet_capacity_of(self, power)
             _stash = getattr(self, "_energy_plan_shadow", None)
             _sl = (_stash.get("slots") if isinstance(_stash, dict)
                    else None) or []
@@ -12651,7 +12706,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # must not produce one — not even the "nothing needs the night"
             # answer, which is just as final as a full ledger.
             soc = getattr(power, "battery_soc", None) if power is not None else None
-            cap_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
+            cap_kwh = _fleet_capacity_of(self, power)
             # Power readiness is the SECOND warm-up dimension (finding #2,
             # PROD night 1): at the first refresh the SOC sensor read
             # unavailable → None → the ledger put a 77%-full battery at
