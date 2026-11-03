@@ -22,7 +22,6 @@ import pytest
 from custom_components.solar_energy_management.consts.core import (
     SENSOR_DARK_READ_GRACE_S,
 )
-from custom_components.solar_energy_management.coordinator import sensor_reader as sr_mod
 from custom_components.solar_energy_management.tests.test_1189_dsmr_any_language import (
     _METER,
     _Meter,
