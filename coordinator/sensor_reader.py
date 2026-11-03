@@ -776,6 +776,12 @@ class SensorReader:
         # confidence: "same-device" picks are permanently cached; "any-device" picks
         # are re-evaluated each cycle so a late-loading DSMR meter wins once it shows
         # up. See issue #166 startup race.
+        # (#1296) A declared grid row HA has only RESTORED is could-not-ask
+        # while its integration may still load: the declared tier asks again
+        # every cycle until SENSOR_DARK_READ_GRACE_S has passed since the
+        # first such row, and the 30-cycle rescan clock does not run meanwhile.
+        self._declared_rows_waiting: bool = False
+        self._declared_wait_since: Optional[float] = None
         self._split_grid_discovery: dict[str, Any] = {
             "import": None,
             "export": None,
@@ -4767,6 +4773,8 @@ class SensorReader:
         """
         if not disc.get("import") and not disc.get("export"):
             return True  # nothing held → scan every cycle (#166)
+        if self._declared_rows_waiting:
+            return True  # (#1296) a declared row may still be loading
         if not disc.get("import") or not disc.get("export"):
             # One side held, other missing (#485 H2): keep looking for
             # the late-loading side, but at ~1-min cadence — systems
@@ -4866,6 +4874,7 @@ class SensorReader:
             return None, None
 
         wanted = {"grid_import_power": None, "grid_export_power": None}
+        self._declared_rows_waiting = False
         # (#1240) The counters' UNIT, not only their device: DSMR Reader's
         # sensors have no device, and its pair and counters come from one
         # config entry. ``registry_unit`` is the card's answer too.
@@ -4892,6 +4901,8 @@ class SensorReader:
                 if _matches(entry, body["keys"], body["exact_only"]) is None:
                     continue
                 if not self._declared_row_readable(entry):
+                    if self._restored_row_still_loading(entry):
+                        self._declared_rows_waiting = True
                     continue
                 # A declared entity on the grid counter's own device outranks
                 # a declared entity elsewhere — same brand, two inverters.
@@ -4909,6 +4920,25 @@ class SensorReader:
         return (imp[1] if imp else None,
                 exp[1] if exp else None,
                 on_grid_device)
+
+    def _restored_row_still_loading(self, entry) -> bool:
+        """(#1296, #925) A row HA restored at start is could-not-ask, not a
+        dead row, until SENSOR_DARK_READ_GRACE_S has passed since the first
+        such row was seen. True while the declared tier should ask again."""
+        if getattr(entry, "disabled_by", None) is not None:
+            return False
+        attrs = getattr(self.hass.states.get(entry.entity_id), "attributes", None)
+        if not (isinstance(attrs, Mapping) and attrs.get("restored") is True):
+            return False
+        now = float(self._now_monotonic())
+        if self._declared_wait_since is None:
+            self._declared_wait_since = now
+        if now - self._declared_wait_since <= SENSOR_DARK_READ_GRACE_S:
+            return True
+        _LOGGER.debug(
+            "Declared grid row %s is still restored after %d s — treated as "
+            "a dead row (#1296)", entry.entity_id, SENSOR_DARK_READ_GRACE_S)
+        return False
 
     def _declared_row_readable(self, entry) -> bool:
         """(#1189 review) A row SEM can never read is not a meter: a disabled
@@ -5107,6 +5137,7 @@ class SensorReader:
         self._forget_split_grid_picks(self._split_grid_discovery,
                                       keep=(None, None), outage=False)
         _ri.clear_split_grid_guessed(self.hass)
+        self._declared_wait_since = None       # (#1296) a fresh start asks again
         self._split_grid_discovery = {
             "import": None,
             "export": None,
