@@ -38,10 +38,13 @@ class Result:
     ok: bool
     detail: str = ""
     evidence: List[dict] = field(default_factory=list)
+    #: (#1299) how much the check had to look at; 0 = it compared nothing
+    evidence_n: int = 0
 
     def as_dict(self) -> dict:
         return {"name": self.name, "kind": self.kind, "ok": self.ok,
-                "detail": self.detail, "evidence": self.evidence[:10]}
+                "detail": self.detail, "evidence": self.evidence[:10],
+                "evidence_n": self.evidence_n}
 
 
 def forecast_overshoot(run: DayRun) -> Result:
@@ -122,9 +125,39 @@ def cost_identity(run: DayRun) -> Result:
                   [] if ok else [{"fine": round(fine, 4), "hourly": round(coarse, 4)}])
 
 
-def no_writes(run: DayRun) -> Result:
-    """Replay never writes: the replayed code made no service call."""
-    return Result("no_writes", "exact", run.writes == 0, f"{run.writes} service calls")
+def no_writes(run: DayRun, base: Optional[DayRun] = None) -> Result:
+    """(#1299) The branch WOULD command the car and the battery exactly as
+    the base does: same rows, same order, none added, none dropped. A real
+    service call during replay still fails on its own. A day on which
+    neither tree would command anything has ``evidence_n`` 0 and says so."""
+    if run.writes:
+        return Result("no_writes", "exact", False, f"{run.writes} service calls")
+    if run.decision_error:
+        return Result("no_writes", "exact", False,
+                      f"a decider raised during replay: {run.decision_error}",
+                      [{"error": run.decision_error}], evidence_n=1)
+    mine = run.commands
+    if mine is None:
+        return Result("no_writes", "exact", True, "no decision roster in this tree")
+    if base is None or base.commands is None:
+        return Result("no_writes", "exact", True,
+                      f"{len(mine)} would-send rows (no base roster to compare)",
+                      evidence_n=len(mine))
+    theirs = base.commands
+    n = max(len(mine), len(theirs))
+    if not n:
+        return Result("no_writes", "exact", True, "neither tree would command anything")
+    diff = [{"i": i, "branch": a, "base": b}
+            for i, (a, b) in enumerate(zip(mine, theirs, strict=False)) if a != b]
+    diff += [{"i": i, "branch": a, "base": None} for i, a in enumerate(mine) if i >= len(theirs)]
+    diff += [{"i": i, "branch": None, "base": b} for i, b in enumerate(theirs) if i >= len(mine)]
+    if diff:
+        first = diff[0]
+        detail = (f"{len(diff)} of {n} would-send rows differ; first at row {first['i']}: "
+                  f"branch {first['branch']} vs base {first['base']}")
+    else:
+        detail = f"{n} would-send rows, same as base"
+    return Result("no_writes", "exact", not diff, detail, diff, evidence_n=n)
 
 
 DEFAULT = ("forecast_overshoot", "home_spike", "no_writes", "cost_identity")
@@ -139,7 +172,7 @@ def check(run: DayRun, base: Optional[DayRun] = None,
         elif n == "home_spike":
             out[n] = home_spike_regression(run, base)
         elif n == "no_writes":
-            out[n] = no_writes(run)
+            out[n] = no_writes(run, base)
         elif n == "cost_identity":
             out[n] = cost_identity(run)
         else:

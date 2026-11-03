@@ -54,6 +54,14 @@ Production code from the tree under test, inputs and clock from the day
 |---|---|---|
 | Shown home | `SEMCoordinator._hold_shown_home` (#1047, #1105) | every 10 s |
 | The plan's rest-of-day solar | `ForecastTracker.update` + `corrected_remaining_kwh` (#1068, #1104) | every 5 min |
+| What SEM would command | `decide_battery(view)` and the charger's `decide(view)` (#1299) | every 10 s |
+
+The command replay builds its views with SEM's defaults: one battery of
+10 kWh, one 3-phase car in "Min + solar" mode that counts as plugged in
+while it draws more than 100 W. The corpus records readings, not the
+install's settings, so this is the same inputs through both trees, not
+what PROD sent that day. A battery limit is kept in 100 W steps, so the
+roster lists decisions, not every watt the house moved.
 
 ## Checks
 
@@ -61,14 +69,16 @@ Production code from the tree under test, inputs and clock from the day
 |---|---|---|
 | `forecast_overshoot` | exact | before noon, corrected remaining solar is above the provider's raw remainder |
 | `home_spike` | relative | the branch shows a one-cycle home spike develop did not show |
-| `no_writes` | exact | the replayed code made a service call |
+| `no_writes` | exact | the branch would command the car or the battery differently from develop (a row changed, added or dropped), a decider raised, or the replayed code made a real service call |
 
 | `cost_identity` | modelled | the day re-priced hourly by the Simulation tab's model is more than 0.01 off its 10-s cost |
 
 Only `exact` and `relative` checks block, and only on a non-gap day. An
 exact check that fails on develop too is **inherited** — reported, never
 blamed on the branch. A check that cannot fail is a bug: each one has a
-test that makes it fail on a real recorded fault.
+test that makes it fail on a real recorded fault. A day on which neither
+tree would command anything counts as no evidence; the last line of the
+run says on how many days the commands were really compared.
 
 ## The Simulation tab's model
 
@@ -87,9 +97,9 @@ without the model (develop before #1083) skips it.
   house would have answered differently; replay does not model that answer
   (no counterfactual yet). So it proves what a branch **computes** from real
   inputs, not what the house would have done.
-- Only the paths in the table above are replayed today. EV, battery and
-  load decisions are not — they need the forecast and tariff the scenario
-  harness still stubs, and the counterfactual.
+- Only the paths in the table above are replayed today. Load decisions
+  are not; the EV and battery decisions run with default settings and no
+  tariff, so a branch that changes only a tariff path shows no difference.
 - The forecast tracker starts each replayed day with no history: its
   long-run correction factor is 1.0, where an install has its own. The
   intraday part — what #1068 and #1104 change — is the same code either way.

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **Observer mode now holds hot-water heating back too** (#1297). The Legionella run called the tank's service directly.
 - 🔧 **CI now also tests Home Assistant 2026.10, the version real installs run** (#1298). Three checks instead of two.
+- 🔧 **The replay gate now compares what a branch would command with develop** (#1299). Before, it could not fail.
 
 # [2.3.0-beta.3] — 02.11.2026
 
