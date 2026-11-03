@@ -15,18 +15,19 @@ The rule kept here: **the newest full release must sit inside the first
 go back to draft until it sits at index ``KEEP``, which leaves ``PAGE - KEEP``
 spare slots for the betas still to come.
 
-A draft keeps its tag and its release notes, and
-``gh release edit <tag> --draft=false`` puts one back. It does NOT keep its
-download: GitHub serves a draft's assets only to people with write access, so
-anyone pinned to a retired beta must move to a live one. That is the price of
-the plain install working at all.
+A retired beta's RELEASE is deleted; its git tag stays, and its notes live
+in CHANGELOG.md. (Until 03.11.2026 a retired beta went back to draft. A token
+with write access sees drafts and GitHub lists them first, so the owner's own
+HACS, which logs in as the owner, read a page of 30 drafts and saw no new
+version at all. ``--purge-drafts`` removes those old drafts.) Anyone pinned to
+a retired beta must move to a live one.
 
 Only a pre-release is ever touched. A full release is never touched.
 
 Usage::
 
     python3 scripts/hacs_release_window.py --check
-    python3 scripts/hacs_release_window.py --retire [--dry-run]
+    python3 scripts/hacs_release_window.py --retire [--purge-drafts] [--dry-run]
 """
 from __future__ import annotations
 
@@ -148,15 +149,40 @@ def release_by_tag(tag: str) -> dict | None:
 
 
 def retire(tag: str) -> str:
-    """Send one release back to draft, after reading it again to be sure it
-    is still a pre-release."""
+    """Delete one beta's release (the tag stays), after reading it again to
+    be sure it is still a pre-release."""
     release = release_by_tag(tag)
     if release is None:
         return f"{tag} is already retired"
     if not release.get("prerelease"):
         raise SystemExit(f"refusing to retire {tag}: it is a full release")
-    _gh("release", "edit", tag, "-R", repo(), "--draft=true")
-    return f"retired {tag} — tag and notes kept, its zip is no longer public"
+    _gh("release", "delete", tag, "-R", repo(), "--yes")
+    return f"retired {tag} — release deleted, tag kept"
+
+
+#: A draft younger than this may be a release still being made; leave it.
+DRAFT_MIN_AGE_DAYS = 2
+
+
+def drafts_to_purge(releases: list[dict], now: str) -> list[dict]:
+    """Old pre-release drafts: what the earlier retire left behind. A draft
+    full release, or a fresh draft, is never touched."""
+    from datetime import datetime, timedelta
+    cutoff = datetime.fromisoformat(now.replace("Z", "+00:00")) - timedelta(days=DRAFT_MIN_AGE_DAYS)
+    out = []
+    for r in releases:
+        if not (r.get("draft") and r.get("prerelease")):
+            continue
+        made = r.get("created_at") or ""
+        if made and datetime.fromisoformat(made.replace("Z", "+00:00")) < cutoff:
+            out.append(r)
+    return out[:MAX_PER_RUN]
+
+
+def purge_draft(release: dict) -> str:
+    """Delete one draft by its id: a draft has no public tag route."""
+    _gh("api", "-X", "DELETE", f"repos/{repo()}/releases/{release['id']}")
+    return f"deleted draft {release.get('tag_name') or release['id']} — tag kept"
 
 
 def _say(line: str) -> None:
@@ -179,15 +205,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true",
                         help="fail when HACS can see no version to install")
     parser.add_argument("--retire", action="store_true",
-                        help="draft the oldest betas until the window fits")
+                        help="delete the oldest betas' releases until the window fits")
+    parser.add_argument("--purge-drafts", action="store_true",
+                        help="delete old pre-release drafts (tags stay)")
     parser.add_argument("--dry-run", action="store_true",
-                        help="with --retire: say what it would do")
+                        help="with --retire/--purge-drafts: say what it would do")
     args = parser.parse_args(argv)
-    if not (args.check or args.retire):
-        parser.error("pass --check or --retire")
+    if not (args.check or args.retire or args.purge_drafts):
+        parser.error("pass --check, --retire or --purge-drafts")
 
     releases = fetch_releases()
     _say(_where(releases))
+
+    if args.purge_drafts:
+        from datetime import datetime, timezone
+        old = drafts_to_purge(releases, datetime.now(timezone.utc).isoformat())
+        if not old:
+            _say("No old drafts.")
+        for r in old:
+            _say(f"would delete draft {r.get('tag_name')}" if args.dry_run else purge_draft(r))
+        if old and not args.dry_run:
+            releases = fetch_releases()
 
     if args.retire:
         tags = to_retire(releases)

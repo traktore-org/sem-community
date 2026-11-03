@@ -53,4 +53,4 @@ jobs:
       - name: Retire the oldest betas standing above the full release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/hacs_release_window.py --retire
+        run: python3 scripts/hacs_release_window.py --retire --purge-drafts

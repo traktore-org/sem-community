@@ -164,9 +164,7 @@ class _Fake:
 
     def retire(self, tag):
         self.retired.append(tag)
-        for release in self.feed:
-            if release["tag_name"] == tag:
-                release["draft"] = True
+        self.feed[:] = [r for r in self.feed if r["tag_name"] != tag]
         return f"retired {tag}"
 
 
@@ -275,3 +273,40 @@ def test_the_window_matters_because_of_zip_release():
     hacs = json.loads((ROOT / "hacs.json").read_text())
     assert hacs["zip_release"] is True
     assert hacs["filename"] == "solar_energy_management.zip"
+
+
+# --- the owner's view: old drafts are purged, fresh ones and full ones kept --
+
+def _draft(name, created, prerelease=True):
+    return {"tag_name": name, "id": hash(name) & 0xFFFF, "draft": True,
+            "prerelease": prerelease, "created_at": created}
+
+
+def test_old_beta_drafts_are_purged():
+    feed = [_draft("v2.1.0-beta.30", "2026-09-18T17:17:00Z"),
+            _draft("v2.2.0-beta.19", "2026-10-15T19:46:00Z")]
+    out = window.drafts_to_purge(feed, "2026-11-03T18:00:00Z")
+    assert [r["tag_name"] for r in out] == ["v2.1.0-beta.30", "v2.2.0-beta.19"]
+
+
+def test_a_fresh_draft_is_left_alone():
+    feed = [_draft("v2.3.0-beta.5", "2026-11-03T17:30:00Z")]
+    assert window.drafts_to_purge(feed, "2026-11-03T18:00:00Z") == []
+
+
+def test_a_draft_full_release_is_never_purged():
+    feed = [_draft("v2.3.0", "2026-10-01T00:00:00Z", prerelease=False)]
+    assert window.drafts_to_purge(feed, "2026-11-03T18:00:00Z") == []
+
+
+def test_a_published_beta_is_not_a_draft_to_purge():
+    feed = [{"tag_name": "v2.3.0-beta.4", "id": 1, "draft": False,
+             "prerelease": True, "created_at": "2026-10-01T00:00:00Z"}]
+    assert window.drafts_to_purge(feed, "2026-11-03T18:00:00Z") == []
+
+
+def test_retire_deletes_and_never_drafts():
+    """The owner's HACS reads drafts first; a retire must not make one."""
+    import inspect
+    src = inspect.getsource(window.retire)
+    assert '"delete"' in src and "--draft" not in src
