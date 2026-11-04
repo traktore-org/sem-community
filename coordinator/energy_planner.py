@@ -82,7 +82,13 @@ class LedgerSlot:
     start: datetime
     end: datetime
     price: Optional[float]
+    # May a cheap-only demand run here? True on a cheap tariff hour AND on
+    # a sun-surplus day hour (the sun is free), so it is the PACKER's word.
     level_cheap: bool = False
+    # (#1310) The tariff's own word for this hour, sun or not. The card's
+    # cheap band and Assist read this one: a sunny peak hour painted as
+    # "cheap hours" made a peak tariff look cheap (class 47).
+    tariff_cheap: bool = False
     home_w: float = 0.0
     # (#1085 Part A) grid CO2 intensity, kg/kWh; None = no reading/forecast
     # for this slot. Carried, never derived from price — the two signals

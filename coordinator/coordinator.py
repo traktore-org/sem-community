@@ -12848,7 +12848,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # needs a real end.
                     "end": s.end.isoformat(),
                     "price": s.price,
-                    "cheap": bool(s.level_cheap),
+                    # (#1310) the tariff's word, not the packer's: a sun
+                    # slot is cheap for the packer at any tariff.
+                    "cheap": bool(s.tariff_cheap),
+                    **({"sun": True} if s.cap_override_w is not None
+                       else {}),
                     "home_w": round(s.home_w, 1),
                     "soc_kwh": round(s.soc_kwh, 2),
                     "home_grid_w": round(s.home_grid_w, 1),
@@ -13055,10 +13059,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     co2 = _co2_at(t)
                 except Exception:  # noqa: BLE001 — no reading, honestly
                     co2 = None
+                cheap = bool(_cheap_at(t))
                 slots.append(LedgerSlot(
                     start=t, end=end,
                     price=_price_at(t),
-                    level_cheap=_cheap_at(t),
+                    level_cheap=cheap, tariff_cheap=cheap,
                     home_w=_home_at(t),
                     co2=co2,
                 ))

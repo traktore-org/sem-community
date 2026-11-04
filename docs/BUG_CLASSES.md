@@ -2433,7 +2433,20 @@ legacy-only row reaches exactly the verdict the old expression produced (the mig
 move a decision), plus a pin that the diagnostics row carries capability, mode, opt-out and verdict.
 **Sweep question:** for any boolean on a device row, ask "which single question does this answer?"
 If the honest answer needs an "and", it is two fields.
-Refs #780 #779 #650.
+**Second catch (#1310):** `LedgerSlot.level_cheap` answers "may a cheap-only demand run here?" —
+True on a cheap tariff hour AND on a sun-surplus day hour (`day_ledger.build_day_slots`). The plan
+rows published it as `cheap`, so the Energy Plan card's "cheap hours" band, its slot tip and the
+Assist "good time to charge?" answer called a sunny PEAK hour cheap. @matekogon's calendar (peak
+06–13 and 15–22) showed 11:00 as cheap, with the battery block the sun filled there.
+**Closure:** `LedgerSlot.tariff_cheap` holds the tariff's own word on every slot (day surplus, day
+deficit, night). The rows publish it as `cheap` and mark a sun slot `sun`; the tomorrow preview's
+`cheap_windows` read it (the old filter dropped every sunny cheap hour); Assist says "the sun should
+cover it" for a sun slot. The packer still reads `level_cheap`, unchanged.
+**Guard:** `tests/test_1310_sun_hour_is_not_cheap.py` — the real calendar through the real accessors,
+both words per slot kind, the packer still using the sun, tomorrow's windows, the real stamped plan
+rows and entity, and the three Assist answers. Reverting the row or the preview to `level_cheap`
+fails five tests.
+Refs #780 #779 #650 #1310.
 
 ### 48. A removed host API called past its removal, its failure swallowed as a benign case — GUARDED
 **Symptom:** a feature that has always worked goes dead for users on a *newer Home Assistant* than

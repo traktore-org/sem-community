@@ -241,13 +241,19 @@ class GoodToChargeNowIntent(intent.IntentHandler):
         from homeassistant.util import dt as dt_util
         now_iso = dt_util.now().isoformat()
         cheap = None
+        sun = False
         for s in slot_rows:
             if isinstance(s, dict) and s.get("start") and s.get("end") \
                     and s["start"] <= now_iso < s["end"]:
                 cheap = s.get("cheap")
+                # (#1310) a sun slot is a good hour at any tariff; "cheap"
+                # is the tariff's own word and stays false at its peak
+                sun = s.get("sun") is True
                 break
         if cheap is None:
             response.async_set_speech("I don't have a plan for right now.")
+        elif sun:
+            response.async_set_speech("Yes, the sun should cover it now.")
         elif cheap:
             response.async_set_speech("Yes, this is a cheap hour.")
         else:

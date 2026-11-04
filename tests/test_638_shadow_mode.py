@@ -938,14 +938,17 @@ class TestTheDayPartOfTheHorizon:
     def test_surplus_hours_are_priced_at_what_the_sun_is_worth(
             self, freeze_targets, monkeypatch):
         """20 kWh remaining after 14:00 over a 400 W house: early afternoon
-        is deep surplus, capped and marked cheap — and priced at the feed-in
+        is deep surplus, capped and marked as sun — and priced at the feed-in
         revenue it costs to consume it (#755), not at zero. Zero made solar
         win by fiat; the export rate makes it win on the numbers, and lets a
-        genuinely cheaper night hour beat it."""
+        genuinely cheaper night hour beat it. (#1310) ``cheap`` on the row is
+        the tariff's word, and this tariff has no level: a sun hour is not
+        drawn as a cheap hour."""
         plan = self._stamp_at(monkeypatch, 14, self._day_fake())
         by_hour = {s["start"][11:13]: s for s in plan["slots"]}
         assert by_hour["15"]["price"] == pytest.approx(0.075)
-        assert by_hour["15"]["cheap"] is True
+        assert by_hour["15"]["sun"] is True
+        assert by_hour["15"]["cheap"] is False
         # and the night is still the provider's curve, not the sun's
         assert by_hour["23"]["price"] == 0.28
 
