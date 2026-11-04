@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The Energy Plan card no longer shows a sunny peak hour as a cheap hour** (#1310). The cheap band follows your tariff only.
+
 # [2.3.0-beta.5] — 04.11.2026
 
 - 🐛 **A Legionella run that your own stop keeps below its target now ends** (#1102). Before, it heated again on grid power whenever the tank cooled.
