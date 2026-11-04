@@ -489,6 +489,8 @@ The minimum temperature for the Legionella prevention cycle. Range: 60-80°C. Th
 
 SEM tracks when the water last reached the Legionella target temperature. If the configured interval expires without reaching that temperature, SEM forces a heating cycle. The disinfection interval is configurable in the integration options flow (default 72 hours, range 24-168 hours) but is not exposed on the dashboard — it rarely needs changing.
 
+If your own *Stop when ≥* sensor ends the run before the tank reaches the Legionella target, or the tank is still below it after 6 hours, the run ends and does not count. SEM tries again one full interval later. To let the run finish, set your stop above the Legionella target.
+
 ### Important: Legionella cycle cannot be disabled
 
 The Legionella prevention cycle is a safety requirement mandated by building codes. It cannot be turned off. You can adjust the interval and the target temperature (minimum 60°C) in the integration options, but the cycle itself is always active when hot water control is enabled. This protects against dangerous Legionella bacteria growth in stored hot water.
