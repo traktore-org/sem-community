@@ -102,7 +102,7 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 | `number.sem_charger_<id>_daily_ev_target` / `_max` | *At least X kWh* floor / *Up to* ceiling (kWh target); both **0–200** — floor 0 = no overnight charge |
 | `number.sem_charger_<id>_target_soc` / `_max` | *Minimum SoC* floor / *Up to* ceiling (% target); both **0–100 %** (#680) — floor 0 = no overnight charge |
 | *(picker)* `ev_start_stop_entity` | The `switch`/`button` SEM uses to open the contactor — set on the config card or the Add/Edit-charger dialog (#627). Without it, a `number.*`-only charger may be un-stoppable |
-| `time.sem_charger_<id>_target_time` | *Charge by* deadline (earlier than window end = forcing) |
+| `time.sem_charger_<id>_target_time` | *Charge by* deadline (earlier than window end = forcing; later than window end = the night still ends at the window's end, #1308) |
 | `number.sem_charger_<id>_minimum_current` / `_maximum_current` | The current **range** SEM may offer — floor (most cars need ≥ 6 A) and ceiling (**6–80 A**, #746). Both on the Config tab's charger block; see below |
 | `sensor.sem_charging_strategy` | The live reason string — every decision explains itself here |
 
@@ -217,6 +217,8 @@ Every 10 s during the night window, for each charger:
 
 2. Compute deadline_amps = ceil( remaining_kWh / hours_left / watts_per_amp )
                           clamped to [Min current, Max current].
+   hours_left runs to the Charge by time, or to the window's end when the car
+   leaves after it but before the next night opens (#1308).
 
 3. Compute effective_rate = Max current            if forcing deadline (deadline earlier than window end)
                             peak_managed_amps      otherwise   ← peak-aware (#274/C1)

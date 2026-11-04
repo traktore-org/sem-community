@@ -6540,7 +6540,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # planner and the reactive layer both charge on.
                             from .ev_control import amps_from_headroom
                             from .ev_night_targets import build_night_target_map
-                            from .ev_tariff_planner import affordable_start
+                            from .ev_tariff_planner import (
+                                affordable_start, window_charge_end)
                             from .today_plan import ev_preview_inputs
                             _need = float(build_night_target_map(self, energy).get(_cid) or 0.0)
                             if _need > 0.1:
@@ -6570,9 +6571,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 if (self._tariff_optimized_for(_pcfg) and _lvl is not None
                                         and _night_start and _ev_deadline_dt
                                         and _ev_rate_kw > 0):
+                                    # (#1308) only the hours that night can
+                                    # charge in, as the night plan counts them
                                     _afford = affordable_start(
-                                        _night_start, _ev_deadline_dt, _ev_remaining,
-                                        _ev_rate_kw, _lvl)
+                                        _night_start,
+                                        window_charge_end(
+                                            _ev_deadline_dt, _night_start,
+                                            _night_end_dt),
+                                        _ev_remaining, _ev_rate_kw, _lvl)
                                     if _afford is not None and _afford > _night_start:
                                         _ev_wait_preview = True
                                         _ev_next_cheap_preview = _afford

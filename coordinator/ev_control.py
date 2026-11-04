@@ -330,6 +330,12 @@ class EVControlMixin:
             night_end = self.time_manager.get_night_end_time()
         except (ValueError, AttributeError):
             night_end = DEFAULT_EV_TARGET_TIME
+        # (#1308) Where the next night opens: a departure before it is
+        # charged for until tonight's end only.
+        try:
+            night_start = self.time_manager.get_night_window()[0]
+        except (ValueError, AttributeError, TypeError, IndexError):
+            night_start = None
         try:
             window_h = self.time_manager.get_night_window_hours()
         except (ValueError, AttributeError):
@@ -380,6 +386,7 @@ class EVControlMixin:
             watts_per_amp=watts_per_amp,
             target_time=target_time,
             night_end=night_end,
+            night_start=night_start,
             tariff_optimized=tariff_optimized,
             peak_managed_amps=peak_managed_amps,
             # (#967) the tariff's own classification, so an UNCOVERED night in
@@ -511,7 +518,8 @@ class EVControlMixin:
             await nm.notify_ev_deadline_unreachable(
                 remaining_kwh=plan.remaining_kwh,
                 hours_left=plan.hours_to_deadline or 0.0,
-                deadline=plan.deadline_dt.strftime("%H:%M"),
+                # (#1308) when charging stops, the moment the hours count to
+                deadline=(plan.charge_end_dt or plan.deadline_dt).strftime("%H:%M"),
                 charger_name=name,
                 flag_key=flag_key,
             )

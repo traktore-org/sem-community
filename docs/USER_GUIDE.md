@@ -1246,6 +1246,10 @@ notification instead of silently missing it.
 
 A deadline at/after the night-window end (the default) changes nothing — night charging stays
 gentle and peak-managed exactly as before. Only an explicit earlier deadline forces current.
+Night charging still ends at the window's end (sunrise or *Night latest end*, whichever is
+first). With *Charge by* 08:15 and the night ending at 07:00, SEM plans the night to 07:00,
+and at night the EV card warns when the target cannot be reached by then. After 07:00 the day
+rules apply (#1308). The same holds for the default 07:00 on a summer night that ends at sunrise.
 
 **Departure from a calendar.** *(#1087)* In the charger's options, pick a
 **Departure calendar**. Its next timed event replaces the weekday departure
