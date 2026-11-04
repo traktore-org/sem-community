@@ -125,6 +125,12 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 co2 = float(c) if c is not None else None
             except Exception:  # noqa: BLE001 — no reading, honestly
                 co2 = None
+        # (#1310) Asked for every slot: a surplus slot is cheap for the
+        # packer, but the tariff may still be at its peak.
+        try:
+            tariff_cheap = bool(level_cheap_at(t))
+        except Exception:  # noqa: BLE001 — no level is not cheap
+            tariff_cheap = False
         if surplus_w >= surplus_margin_w:
             slots.append(LedgerSlot(
                 start=t, end=slot_end,
@@ -133,7 +139,7 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 # cannot prefer another sink over a cost it cannot see. ``or 0.0``
                 # still handles an absent rate, the only case the clamp covered.
                 price=rate_at(t),
-                level_cheap=True, home_w=0.0,
+                level_cheap=True, tariff_cheap=tariff_cheap, home_w=0.0,
                 cap_override_w=surplus_w,
                 solar_w=solar_w, home_gross_w=home_w,
                 co2=co2,
@@ -145,13 +151,10 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 price = float(p) if p is not None else None
             except Exception:  # noqa: BLE001 — unpriced, honestly
                 price = None
-            try:
-                cheap = bool(level_cheap_at(t))
-            except Exception:  # noqa: BLE001 — no level is not cheap
-                cheap = False
             slots.append(LedgerSlot(
                 start=t, end=slot_end,
-                price=price, level_cheap=cheap,
+                price=price, level_cheap=tariff_cheap,
+                tariff_cheap=tariff_cheap,
                 home_w=max(0.0, home_w - solar_w),
                 solar_w=solar_w, home_gross_w=home_w,
                 co2=co2,
@@ -211,9 +214,10 @@ def tomorrow_preview(*, day_start, day_end, day_kwh, sunrise, sunset,
         "prices": "final" if p is not None else "preliminary",
         "surplus_windows": _merge_windows(
             [s for s in slots if s.cap_override_w is not None]),
+        # (#1310) The tariff's word: a sunny cheap hour is still cheap, and
+        # a sunny peak hour is not.
         "cheap_windows": _merge_windows(
-            [s for s in slots
-             if s.cap_override_w is None and s.level_cheap]),
+            [s for s in slots if s.tariff_cheap]),
         "night_open": day_end.isoformat(),
         "stamps_at": stamps_at.isoformat(),
     }
