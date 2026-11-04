@@ -2440,8 +2440,8 @@ Assist "good time to charge?" answer called a sunny PEAK hour cheap. @matekogon'
 06–13 and 15–22) showed 11:00 as cheap, with the battery block the sun filled there.
 **Closure:** `LedgerSlot.tariff_cheap` holds the tariff's own word on every slot (day surplus, day
 deficit, night). The rows publish it as `cheap` and mark a sun slot `sun`; the tomorrow preview's
-`cheap_windows` read it (the old filter dropped every sunny cheap hour); Assist says "the sun should
-cover it" for a sun slot. The packer still reads `level_cheap`, unchanged.
+`cheap_windows` read it (the old filter dropped every sunny cheap hour); Assist says "the plan expects
+spare solar" for a sun slot. The packer still reads `level_cheap`, unchanged.
 **Guard:** `tests/test_1310_sun_hour_is_not_cheap.py` — the real calendar through the real accessors,
 both words per slot kind, the packer still using the sun, tomorrow's windows, the real stamped plan
 rows and entity, and the three Assist answers. Reverting the row or the preview to `level_cheap`

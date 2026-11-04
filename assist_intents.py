@@ -253,7 +253,7 @@ class GoodToChargeNowIntent(intent.IntentHandler):
         if cheap is None:
             response.async_set_speech("I don't have a plan for right now.")
         elif sun:
-            response.async_set_speech("Yes, the sun should cover it now.")
+            response.async_set_speech("Yes, the plan expects spare solar now.")
         elif cheap:
             response.async_set_speech("Yes, this is a cheap hour.")
         else:

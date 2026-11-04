@@ -267,8 +267,7 @@ async def _ask(hass, row):
 async def test_a_sun_hour_at_peak_is_a_good_hour(hass):
     from homeassistant.util import dt as dt_util
     said = await _ask(hass, _row(dt_util.now(), cheap=False, sun=True))
-    assert said.startswith("Yes") and "sun" in said
-    assert "cheap" not in said
+    assert said == "Yes, the plan expects spare solar now."
 
 
 async def test_a_peak_hour_without_sun_is_not(hass):
