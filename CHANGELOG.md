@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **A Legionella run that your own stop keeps below its target now ends** (#1102). Before, it heated again on grid power whenever the tank cooled.
 - 🐛 **The home-loads health check no longer warns every night after midnight** (#1302). It now counts device kWh from midnight, as it counts the house.
+- 🐛 **The night plan now ends when night charging ends, also with a later Charge by time** (#1308). The card warns when the car will fall short.
 
 # [2.3.0-beta.4] — 03.11.2026
 
