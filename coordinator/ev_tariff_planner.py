@@ -43,7 +43,9 @@ class NightChargePlan:
             current — caller should warn the user.
         next_cheap_start: Start of the next cheap window (for the card / status).
         deadline_dt: Resolved deadline as an absolute datetime.
-        hours_to_deadline: Hours from ``now`` to the deadline (>= 0).
+        charge_end_dt: The last moment tonight can charge toward it
+            (:func:`night_charge_end`).
+        hours_to_deadline: Hours from ``now`` to ``charge_end_dt`` (>= 0).
         reason: Short human-readable explanation (logging / status).
     """
 
@@ -59,6 +61,10 @@ class NightChargePlan:
     should_warn_unreachable: bool = False
     next_cheap_start: Optional[datetime] = None
     deadline_dt: Optional[datetime] = None
+    # (#1308) When this night's charging toward ``deadline_dt`` stops: the
+    # departure, or the night window's end when the car leaves in the day
+    # after it. ``hours_to_deadline`` counts to this moment.
+    charge_end_dt: Optional[datetime] = None
     hours_to_deadline: Optional[float] = None
     remaining_kwh: float = 0.0
     reason: str = ""
@@ -91,6 +97,48 @@ def resolve_deadline(now: datetime, target_time: Optional[str]) -> Optional[date
     if candidate <= now:
         candidate += timedelta(days=1)
     return candidate
+
+
+def night_charge_end(departure: Optional[datetime],
+                     window_end: Optional[datetime],
+                     next_window_start: Optional[datetime]) -> Optional[datetime]:
+    """(#1308) The last moment a night can charge toward ``departure``.
+
+    Night charging stops at the window's end — sunrise or *Night latest
+    end*, whichever comes first. After it the day rules apply: spare sun,
+    and in Solar + cheapest hours a cheap hour at the minimum current. The
+    night plan does not count on those, so a car that leaves in that day
+    is planned for what the night gives by the window's end. Sizing the
+    current, judging "reachable" or picking a cheap start against the
+    departure itself counted hours with no night charge: @Elmardus's 80 %
+    by 08:15 read as on track all night, and charging stopped at 07:00 with
+    15.7 kWh still owed. The joint plan (``min(deadline, night_end)``) and
+    ``_night_deliverable_kwh`` already stop at the window's end.
+
+    A departure after the NEXT window opens keeps its own time: another
+    night charges before the car leaves. Without that start (None), the
+    window's end is used.
+    """
+    if departure is None or window_end is None or departure <= window_end:
+        return departure or window_end
+    if next_window_start is not None and departure > next_window_start:
+        return departure
+    return window_end
+
+
+def window_charge_end(departure: Optional[datetime],
+                      window_start: Optional[datetime],
+                      window_end: Optional[datetime]) -> Optional[datetime]:
+    """(#1308) :func:`night_charge_end` for the window that opens at
+    ``window_start`` — the day preview's night. ``window_end`` may be the
+    end of the night before (a preview made at night); the end that follows
+    the start is used, and the next window opens a day after this one."""
+    if window_start is None or window_end is None:
+        return night_charge_end(departure, window_end, None)
+    while window_end <= window_start:
+        window_end = window_end + timedelta(days=1)
+    return night_charge_end(departure, window_end,
+                            window_start + timedelta(days=1))
 
 
 def _hours_between(start: datetime, end: datetime) -> float:
@@ -205,6 +253,7 @@ def plan_night_charge(
     peak_managed_amps: Optional[int] = None,
     level_at=None,
     deadline_at: Optional[datetime] = None,
+    night_start: Optional[str] = None,
 ) -> NightChargePlan:
     """Decide this cycle's night-charging action for one charger.
 
@@ -219,6 +268,9 @@ def plan_night_charge(
             day away, which an ``HH:MM`` resolved from now cannot say.
         night_end: ``HH:MM`` night-window end, used as the deadline when no
             explicit ``target_time`` is set.
+        night_start: ``HH:MM`` night-window start (#1308): tells a departure
+            in the day after tonight (charging ends at ``night_end``) from
+            one after the next night opens.
         tariff_optimized: Whether the user opted into tariff-timed
             charging. Post-retirement (#638 one-gate C3) it gates ONLY the
             unreachable warning: the WHEN comes from the joint plan's
@@ -242,6 +294,12 @@ def plan_night_charge(
     night_end_dt = resolve_deadline(now, night_end)
     deadline = explicit_deadline or night_end_dt
     plan.deadline_dt = deadline
+    # (#1308) Every hour below is an hour this night can charge in. The
+    # next window opens after THIS window's end, wherever ``now`` is.
+    charge_end = night_charge_end(
+        deadline, night_end_dt,
+        resolve_deadline(night_end_dt or now, night_start))
+    plan.charge_end_dt = charge_end
 
     # A deadline only *forces* current (overriding the gentle ramp / peak limit)
     # and warns when the user set one TIGHTER than the night-window end. A
@@ -261,8 +319,8 @@ def plan_night_charge(
         return plan
 
     hours_left = None
-    if deadline is not None:
-        hours_left = max(0.0, _hours_between(now, deadline))
+    if charge_end is not None:
+        hours_left = max(0.0, _hours_between(now, charge_end))
         plan.hours_to_deadline = round(hours_left, 2)
 
     # Effective charge rate (#274/C1). A forcing deadline overrides the peak
@@ -326,17 +384,17 @@ def plan_night_charge(
     # charge will actually run. Seniority mirrors ``ev_overlay``: a forcing
     # deadline or an unreachable floor is never held back, and the overlay
     # still wins whenever the gate covers the car.
-    if (tariff_optimized and level_at is not None and deadline is not None
+    if (tariff_optimized and level_at is not None and charge_end is not None
             and plan.reachable and not plan.deadline_active):
         start = affordable_start(
-            now, deadline, remaining_to_min_kwh, effective_rate_kw, level_at)
+            now, charge_end, remaining_to_min_kwh, effective_rate_kw, level_at)
         if start is not None and start > now and _is_expensive(level_at(now)):
             plan.should_wait_for_cheap = True
             plan.next_cheap_start = start
             plan.reason = (
                 "cheap-hours mode: holding through an expensive hour — "
                 f"{remaining_to_min_kwh:.1f} kWh still lands by "
-                f"{deadline:%H:%M} from {start:%H:%M}")
+                f"{charge_end:%H:%M} from {start:%H:%M}")
 
     # Only warn the user when they opted into deadline/tariff behaviour (#274/C1):
     # a plain default-deadline night charge that simply can't finish within the
