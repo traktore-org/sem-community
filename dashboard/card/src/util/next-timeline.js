@@ -106,8 +106,14 @@ export function laneModel(o) {
     // One lane per charger and per load, blocks by demand id.
     const demands = Array.isArray(a.demands) ? a.demands : [];
     const noteOf = (id) => demands.find(d => d.id === id) || {};
-    const laneFor = (prefix, list, labelKey, color) => {
+    // A charger keeps its lane even when nothing is planned (the user looks
+    // for the car); a load without a block is left out, and a load list
+    // that also names the chargers or the battery does not list them twice.
+    const chargerIds = new Set((o.chargers || []).map((c) => String(c.id)));
+    const laneFor = (prefix, list, labelKey, color, keepEmpty) => {
         for (const it of (list || [])) {
+            const itId = String(it.id);
+            if (prefix === 'load' && (chargerIds.has(itId) || itId.startsWith('battery'))) continue;
             const lane = { id: `${prefix}:${it.id}`, labelKey, label: it.name || it.id, color, blocks: [] };
             for (const b of (Array.isArray(a.blocks) ? a.blocks : [])) {
                 if (b.id !== lane.id) continue;
@@ -119,11 +125,11 @@ export function laneModel(o) {
                     reasonKey: prefix === 'ev' ? 'next_reason_ev_block' : 'next_reason_load_block',
                     params: { kw: ((Number(b.power_w) || 0) / 1000).toFixed(1), status: d.status || '', note: d.note || '' } });
             }
-            lanes.push(lane);
+            if (keepEmpty || lane.blocks.length) lanes.push(lane);
         }
     };
-    laneFor('ev', o.chargers, 'next_lane_car', LANE_COLORS.ev);
-    laneFor('load', o.loads, 'next_lane_load', LANE_COLORS.load);
+    laneFor('ev', o.chargers, 'next_lane_car', LANE_COLORS.ev, true);
+    laneFor('load', o.loads, 'next_lane_load', LANE_COLORS.load, false);
 
     const notScheduled = Array.isArray(a.not_scheduled) ? a.not_scheduled : [];
     return { start, end, hours, ticks, sun, price, lanes, notScheduled, why: a.why || '', fits: a.fits, cost: a.total_cost, computedAt: a.computed_at || '' };

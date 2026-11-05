@@ -103,3 +103,22 @@ test('freshness reads last_updated and treats unavailable as off', () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].state, 'ok');
 });
+
+test('a load without a block gets no lane; chargers and the battery are never listed as loads', () => {
+    const now = new Date(2026, 10, 5, 20, 55);
+    const iso = (h, m = 0) => new Date(2026, 10, 5 + Math.floor(h / 24), h % 24, m).toISOString();
+    const plan = {
+        computed_at: iso(20, 30), fits: true, takeover: iso(18, 29), slots: [],
+        blocks: [{ id: 'load:boiler', start: iso(23), end: iso(24), power_w: 2000 }],
+        demands: [{ id: 'load:boiler', status: 'fits' }],
+    };
+    const m = laneModel({ now, plan,
+        chargers: [{ id: 'ev_charger', name: 'Car' }],
+        loads: [{ id: 'boiler', name: 'Boiler' }, { id: 'pump', name: 'Pump' }, { id: 'ev_charger', name: 'Car' }, { id: 'battery:primary', name: 'Home battery' }],
+        nightStart: '17:31', nightEnd: '07:11' });
+    const ids = m.lanes.map(l => l.id);
+    assert.ok(ids.includes('ev:ev_charger'), 'the charger keeps its lane while idle');
+    assert.ok(ids.includes('load:boiler'), 'a planned load has a lane');
+    assert.ok(!ids.includes('load:pump'), 'an unplanned load has none');
+    assert.ok(!ids.includes('load:ev_charger') && !ids.includes('load:battery:primary'), 'no duplicates');
+});
