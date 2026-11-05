@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Stromexporttarif"
       },
-      "night_earliest_start": {
-        "name": "Nacht Frühester Start"
+      "night_start_offset_min": {
+        "name": "Nachtstart-Versatz"
       },
       "night_latest_end": {
         "name": "Nacht Spätestes Ende"

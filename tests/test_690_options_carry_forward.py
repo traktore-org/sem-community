@@ -70,7 +70,7 @@ def test_service_and_entity_keys_are_not_owned():
         "vacation_mode",             # switch
         "cheap_price_threshold",
         "expensive_price_threshold",
-        "night_earliest_start",
+        "night_start_offset_min",
         "night_latest_end",
         "ev_enable_delay_seconds",
         "ev_disable_delay_seconds",

@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Exportpris el"
       },
-      "night_earliest_start": {
-        "name": "Natt tidigaste start"
+      "night_start_offset_min": {
+        "name": "Natt start förskjutning"
       },
       "night_latest_end": {
         "name": "Natt senaste slut"

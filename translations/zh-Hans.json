@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "上网电价费率"
       },
-      "night_earliest_start": {
-        "name": "夜间最早开始时间"
+      "night_start_offset_min": {
+        "name": "夜间开始偏移"
       },
       "night_latest_end": {
         "name": "夜间最晚结束时间"

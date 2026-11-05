@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Tarif export energie"
       },
-      "night_earliest_start": {
-        "name": "Cea mai devreme pornire de noapte"
+      "night_start_offset_min": {
+        "name": "Decalaj început de noapte"
       },
       "night_latest_end": {
         "name": "Cea mai târzie încheiere de noapte"

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Night charging starts at sunset plus an offset you set (default 30 min), not 20:30** (#1318). The forecast night-target option is gone.
 - ✨ **Finish by departure: a car can keep charging after the night ends until its Charge by time** (#1308). Per charger, off by default.
 - ⚠️ **SEM now needs Home Assistant 2026.8 or newer** (#1313). Update Home Assistant first; older versions get no new SEM releases in HACS.
 - 🐛 **The Energy Plan card no longer shows a sunny peak hour as a cheap hour** (#1310). The cheap band follows your tariff only.

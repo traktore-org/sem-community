@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Sazba za dodávku do sítě"
       },
-      "night_earliest_start": {
-        "name": "Nejdřívější začátek noci"
+      "night_start_offset_min": {
+        "name": "Posun začátku noci"
       },
       "night_latest_end": {
         "name": "Nejpozdější konec noci"

@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Stawka eksportu energii"
       },
-      "night_earliest_start": {
-        "name": "Najwcześniejszy start nocy"
+      "night_start_offset_min": {
+        "name": "Przesunięcie początku nocy"
       },
       "night_latest_end": {
         "name": "Najpóźniejszy koniec nocy"

@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Electricity Export Rate"
       },
-      "night_earliest_start": {
-        "name": "Night Earliest Start"
+      "night_start_offset_min": {
+        "name": "Night start offset"
       },
       "night_latest_end": {
         "name": "Night Latest End"

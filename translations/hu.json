@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Villamos energia betáplálási ára"
       },
-      "night_earliest_start": {
-        "name": "Éjszakai legkorábbi kezdés"
+      "night_start_offset_min": {
+        "name": "Éjszakai kezdés eltolása"
       },
       "night_latest_end": {
         "name": "Éjszakai legkésőbbi befejezés"

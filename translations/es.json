@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Tarifa Exportación Electricidad"
       },
-      "night_earliest_start": {
-        "name": "Inicio Noche Más Temprano"
+      "night_start_offset_min": {
+        "name": "Desfase inicio de noche"
       },
       "night_latest_end": {
         "name": "Fin Noche Más Tarde"

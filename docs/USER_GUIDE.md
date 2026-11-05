@@ -1077,8 +1077,10 @@ unasked — pick **Solar only** and leave its "At least" floor at 0. The floor i
 what carries the intent: a global default is not an opt-in, so only a floor set
 on the charger itself puts a `Solar only` charger into the night lane.
 
-Night charging starts when night mode activates (after sunset + 10 minutes, or
-20:30, whichever comes first).
+Night charging starts when night mode activates: at sunset plus the offset you
+set in **Night start offset** (0–400 minutes, default 30), in every season. It
+ends at sunrise or at **Night Latest End** (default 07:00), whichever comes
+first. Without a sun reading the start falls back to 20:30.
 
 ### How it works
 

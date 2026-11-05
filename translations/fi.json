@@ -1723,8 +1723,8 @@
       "electricity_export_rate": {
         "name": "Sähkön vientihinta"
       },
-      "night_earliest_start": {
-        "name": "Yöjakson aikaisin alku"
+      "night_start_offset_min": {
+        "name": "Yöjakson alun siirto"
       },
       "night_latest_end": {
         "name": "Yöjakson myöhäisin loppu"
