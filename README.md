@@ -53,8 +53,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Consumption/solar predictor** — learns hourly patterns (weekday/weekend), predicts next-hour power and daily consumption
 - **Push notifications** — battery full, daily summary, forecast alerts, EV charging events (with Android channels and action buttons)
 - **Brand icons** — native HA 2026.3+ brand support (no submission to home-assistant/brands needed)
-- **EV Intelligence** — detects BMS charge tapering, estimates SOC without car API, learns daily consumption per weekday, temperature-corrected predictions, smart night charge skip
-- **Smart night charging** — in the `Min + Solar` and `Solar + cheapest hours` modes, automatically skips or reduces night charges when SOC is sufficient, with solar forecast credit, daily SOC decay, and 3-skip safety net
+- **EV Intelligence** — detects BMS charge tapering, estimates SOC without car API, learns daily consumption per weekday, temperature-corrected predictions
 - **EV battery health** — tracks capacity degradation from partial charge sessions over months
 - **Hardware compatibility test suite** — 150+ automated tests covering all supported hardware — every inverter + charger combination verified in CI
 - **Transparent auto-detection (#814)** — the dashboard **Configuration → Detected hardware** section shows every device SEM found with the evidence for each role, and names *near-misses* (a brand almost supported) instead of silently detecting nothing. The full support matrix with an honest per-brand status is generated and CI-guarded: [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md)
@@ -361,7 +360,7 @@ SEM creates 70+ sensors organized by category:
 
 ## EV Intelligence
 
-SEM learns your EV's charging behavior and makes smart decisions about when to charge. Implicit in the `Min + Solar` and `Solar + cheapest hours` Charge modes (v1.6.3); was the standalone `smart_night_charging` switch in v1.6.x.
+SEM learns your EV's charging behavior. Since #1318 nothing it learns changes the night target: that is your *At least* floor minus what the car got today.
 
 **How it works:**
 
@@ -373,9 +372,7 @@ SEM learns your EV's charging behavior and makes smart decisions about when to c
 
 4. **Temperature correction** — Adjusts consumption predictions for seasonal variation: winter (-5°C) = +72% consumption, summer (30°C) = +9%. Based on Recurrent Auto fleet data (30,000+ vehicles).
 
-5. **Smart night charge skip** — If estimated SOC is sufficient for tomorrow's predicted consumption (with 30% safety margin and solar forecast credit), SEM skips the night charge. Max 3 consecutive skips as safety net.
-
-6. **Session-based anchoring** — Works from day one without needing a full charge. First charge session bootstraps the SOC estimate. Taper detection and car API override with more accurate values when available.
+5. **Session-based anchoring** — Works from day one without needing a full charge. First charge session bootstraps the SOC estimate. Taper detection and car API override with more accurate values when available.
 
 **Sensors:** `ev_estimated_soc`, `ev_taper_trend`, `ev_nights_until_charge`, `ev_charge_needed`, `ev_predicted_daily_consumption`, `ev_battery_health`, and more.
 

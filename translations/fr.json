@@ -221,7 +221,6 @@
           "electricity_off_peak_rate": "Electricity NT rate (per kWh)",
           "demand_charge_rate": "Demand charge rate (CHF/kW/month)",
           "observer_mode": "Observer mode (read-only — no hardware control)",
-          "smart_night_charging": "Forecast-driven night charging reduction",
           "battery_discharge_control_entity": "Entité de contrôle de décharge batterie (optionnel)",
           "hot_water_solar_target": "Cible de chauffage solaire de l'eau chaude (°C)",
           "legionella_target_temp": "Cible de désinfection légionelle (°C)",
@@ -251,7 +250,6 @@
           "electricity_export_rate": "Tarif de rachat payé par le fournisseur (CHF/kWh).",
           "demand_charge_rate": "Tarif mensuel de puissance souscrite par kW de pointe (CHF/kW/mois). Réglez sur 0 si votre contrat ne comporte pas de tarif de puissance souscrite.",
           "observer_mode": "Lorsque cette option est ACTIVÉE, SEM surveille et calcule tout mais n'envoie jamais d'appel de service au matériel. À utiliser sur une instance HA de test/préproduction reproduisant une installation de production.",
-          "smart_night_charging": "Lorsque cette option est ACTIVÉE, SEM saute ou réduit intelligemment la charge nocturne en fonction du SOC estimé du VE, de la prévision solaire, d'une prédiction de consommation ajustée à la température et des habitudes de conduite apprises.",
           "battery_discharge_control_entity": "Entité Number qui contrôle la limite de puissance de décharge de l'onduleur (par ex. number.batteries_maximale_entladeleistung sur Huawei). Détectée automatiquement à l'installation ; remplacez-la ici si nécessaire.",
           "diagram_style": "Choisissez le diagramme système à utiliser sur l'onglet Accueil. 'SEM' utilise le diagramme animé intégré. 'K-Flow' utilise la carte K-Flow HACS (à installer séparément).",
           "hot_water_solar_target": "Température cible (°C) pour le chauffage de l'eau chaude assisté par le solaire. SEM booste le ballon lorsqu'un surplus est disponible.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Garantir au moins (kWh)",
           "observer_mode": "Mode observation (lecture seule, pas de contrôle matériel)",
-          "smart_night_charging": "Réduire l'objectif nocturne selon la prévision de demain",
           "minimum_solar_power": "Puissance solaire minimale pour démarrer la charge VE (W)",
           "curtailment_probe_enabled": "Sonde d'écrêtage (récolter le solaire limité)",
           "export_limit_entity": "Entité de limite d'export (optionnel)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM complète depuis le réseau la nuit pour que la voiture ait au moins cela au matin. C'est un plancher, pas une limite — le soleil peut ajouter plus. 0 = ne jamais utiliser le réseau.",
           "observer_mode": "Lorsque cette option est ACTIVÉE, SEM surveille tout mais n'envoie jamais de commandes au matériel.",
-          "smart_night_charging": "Lorsque cette option est ACTIVÉE, SEM réduit l'objectif de charge nocturne lorsque la prévision solaire de demain est suffisante.",
           "minimum_solar_power": "Surplus solaire minimal (W) requis avant que SEM ne démarre la charge solaire du VE.",
           "curtailment_probe_enabled": "Quand l'onduleur limite l'export réseau (p. ex. prix négatifs), la production se cale sur la consommation et le solaire réel reste invisible. Opt-in : SEM démarre brièvement le VE au courant minimal et ne poursuit que si la production suit.",
           "export_limit_entity": "L'entité de limite d'export de l'onduleur (auto-détectée pour Huawei, GoodWe, SolaX, Victron, etc. si vide). Affine la détection et évite les sondes inutiles."

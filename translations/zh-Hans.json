@@ -220,7 +220,6 @@
           "electricity_export_rate": "电网上网/馈电电价 (每 kWh)",
           "demand_charge_rate": "基本电费/需量电价 (CHF/kW/月)",
           "observer_mode": "观察者模式 (只读)",
-          "smart_night_charging": "智能夜间充电",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "ev_target_soc": "达到此值视为充满 (%)",
@@ -252,7 +251,6 @@
           "electricity_export_rate": "电力公司支付的上网/馈电电价 (CHF/kWh)。",
           "demand_charge_rate": "每月每 kW 峰值功率的需量电费 (CHF/kW/月)。如果您的合同中没有需量电费，请设置为 0。",
           "observer_mode": "启用后，SEM 会监控并计算所有内容，但绝不会向硬件发送服务调用。适用于镜像正式环境的测试/预发 HA 实例。",
-          "smart_night_charging": "启用时，SEM 会根据估算的电动汽车 SOC、太阳能发电预测、经温度调整的耗电量预测以及学习到的驾驶习惯，智能地跳过或减少夜间充电。",
           "battery_discharge_control_entity": "控制逆变器最大放电功率限制的数字实体（例如华为上的 number.batteries_maximale_entladeleistung）。安装时会自动检测；如果需要，可在此处覆盖。",
           "diagram_style": "选择在主页标签页上使用哪种系统图卡片。“SEM”使用内置的动态图。“K-Flow”使用 K-Flow HACS 卡片（必须单独安装）。修改后需要重新运行 generate_dashboard。",
           "hot_water_solar_target": "太阳能辅助热水加热的目标温度 (°C)。当有富余电量时，SEM 会提高锅炉的加热目标。",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "至少保证 (kWh)",
           "observer_mode": "观察者模式（只读，无硬件控制）",
-          "smart_night_charging": "根据明天的天气预测减少夜间目标量",
           "minimum_solar_power": "启动电动汽车充电的最低太阳能功率 (W)",
           "curtailment_probe_enabled": "限发探测(利用被限制的光伏)",
           "export_limit_entity": "输出限制实体(可选)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
           "observer_mode": "启用时，SEM 将监控所有数据，但绝不向硬件发送指令。",
-          "smart_night_charging": "启用时，当明天的太阳能发电量预测充足时，SEM 将减少夜间充电目标量。",
           "minimum_solar_power": "SEM 启动太阳能电动汽车充电所需的最低富余太阳能功率 (W)。",
           "curtailment_probe_enabled": "当逆变器限制并网输出(如负电价时),发电量被钳制在消耗水平,真实的光伏潜力不可见。选择启用后:SEM 以最小电流短暂启动电动车充电,仅当发电量随之上升时才继续。",
           "export_limit_entity": "逆变器的输出限制实体(留空时对华为、GoodWe、SolaX、Victron 等自动检测)。可提高检测精度并避免不必要的探测。"

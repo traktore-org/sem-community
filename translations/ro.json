@@ -219,7 +219,6 @@
           "electricity_export_rate": "Tarif export energie (per kWh)",
           "demand_charge_rate": "Tarif pentru putere contractată (CHF/kW/lună)",
           "observer_mode": "Mod observator (doar citire)",
-          "smart_night_charging": "Încărcare inteligentă pe timp de noapte",
           "vehicle_soc_entity": "SOC baterie vehicul",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
           "ev_target_soc": "Consideră plin la (%)",
@@ -251,7 +250,6 @@
           "electricity_export_rate": "Tariful de injecție plătit de furnizor (CHF/kWh).",
           "demand_charge_rate": "Taxa lunară de putere per kW de vârf (CHF/kW/lună). Setați 0 dacă în contractul dumneavoastră nu există o taxă de putere.",
           "observer_mode": "Când este ACTIV, SEM monitorizează și calculează totul, dar nu trimite niciodată un apel de serviciu către hardware. Folosiți-l pe un HA de test/staging care oglindește o instalare de producție.",
-          "smart_night_charging": "Când este ACTIVĂ, SEM omite sau reduce inteligent încărcarea de noapte pe baza SOC-ului estimat al VE, a prognozei solare, a predicției de consum ajustate cu temperatura și a tiparelor de condus învățate.",
           "battery_discharge_control_entity": "Entitatea Number care controlează limita de putere de descărcare a invertorului (de ex. number.batteries_maximale_entladeleistung la Huawei). Detectată automat la instalare; suprascrieți-o aici dacă este nevoie.",
           "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat).",
           "hot_water_solar_target": "Temperatura țintă (°C) pentru încălzirea apei calde asistată solar. SEM stimulează boilerul atunci când există surplus.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Garantează cel puțin (kWh)",
           "observer_mode": "Mod observator (doar citire, fără control hardware)",
-          "smart_night_charging": "Reduce ținta de noapte în funcție de prognoza de mâine",
           "minimum_solar_power": "Putere solară minimă pentru a începe încărcarea EV (W)",
           "curtailment_probe_enabled": "Sondă de limitare (valorifică solarul limitat)",
           "export_limit_entity": "Entitatea limitei de export (opțional)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM completează din rețea peste noapte ca mașina să aibă cel puțin atât dimineața. Este un prag minim, nu o limită — soarele poate adăuga mai mult. 0 = nu folosi niciodată rețeaua.",
           "observer_mode": "Când este ACTIV, SEM monitorizează totul, dar nu trimite niciodată comenzi către hardware.",
-          "smart_night_charging": "Când este ACTIVĂ, SEM reduce ținta de încărcare de noapte atunci când prognoza solară de mâine este suficientă.",
           "minimum_solar_power": "Puterea solară minimă de surplus (W) necesară înainte ca SEM să înceapă încărcarea solară a VE.",
           "curtailment_probe_enabled": "Când invertorul limitează exportul în rețea (de ex. la prețuri negative), producția se fixează pe consum, iar solarul real rămâne invizibil. Opt-in: SEM pornește scurt EV-ul la curent minim și continuă doar dacă producția crește.",
           "export_limit_entity": "Entitatea limitei de export a invertorului (autodetectată pentru Huawei, GoodWe, SolaX, Victron și altele dacă e goală). Rafinează detecția și previne sondele inutile."

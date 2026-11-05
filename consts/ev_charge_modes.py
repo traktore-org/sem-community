@@ -52,9 +52,6 @@ MODE_NIGHT_ALLOWED: frozenset[str] = frozenset({
 MODE_USES_TARIFF: frozenset[str] = frozenset({
     "solar_plus_cheap",
 })
-MODE_USES_SMART_NIGHT: frozenset[str] = frozenset({
-    "solar_plus_cheap", "min_plus_solar",
-})
 MODE_TO_LEGACY_CHARGING_MODE: dict[str, str] = {
     "solar_only":       "auto",
     "solar_plus_battery": "pv",   # (#885) literally the legacy mode it restores

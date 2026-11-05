@@ -220,7 +220,6 @@
           "electricity_export_rate": "Elektriciteit terugleververgoeding (per kWh)",
           "demand_charge_rate": "Capaciteitstarief (CHF/kW/maand)",
           "observer_mode": "Observatiemodus (alleen-lezen)",
-          "smart_night_charging": "Slimme nachtelijke laadreductie",
           "vehicle_soc_entity": "Voertuig batterij SOC",
           "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
           "ev_target_soc": "Beschouw als vol bij (%)",
@@ -252,7 +251,6 @@
           "electricity_export_rate": "Terugleververgoeding van de energieleverancier (Euro/kWh).",
           "demand_charge_rate": "Maandelijkse capaciteitstarief per kW piekvermogen (Euro/kW/maand). Zet op 0 als dit niet van toepassing is.",
           "observer_mode": "Indien AAN, monitort en berekent SEM alles, maar stuurt geen commando's naar hardware. Te gebruiken in een test-/acceptatieomgeving.",
-          "smart_night_charging": "Indien AAN, slaat SEM nachtelijk laden slim over of vermindert dit op basis van geschatte EV SOC, zonneverwachting, temperatuurgecorrigeerde verbruiksvoorspelling en geleerde rijpatronen.",
           "battery_discharge_control_entity": "Nummer-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig.",
           "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren).",
           "hot_water_solar_target": "Doeltemperatuur (°C) voor zonnegenereerde warmwaterverwarming. SEM activeert de ketel wanneer er overschot beschikbaar is.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Minimaal garanderen (kWh)",
           "observer_mode": "Observatiemodus (alleen lezen, geen hardwarebesturing)",
-          "smart_night_charging": "Nachtdoel verlagen op basis van voorspelling van morgen",
           "minimum_solar_power": "Minimaal zonnevermogen om EV-laden te starten (W)",
           "curtailment_probe_enabled": "Curtailment-sonde (begrensde zonne-energie benutten)",
           "export_limit_entity": "Exportlimiet-entiteit (optioneel)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
           "observer_mode": "Wanneer AAN, bewaakt SEM alles maar stuurt nooit opdrachten naar hardware.",
-          "smart_night_charging": "Wanneer AAN, verlaagt SEM het nachtlaaddoel wanneer de zonne-energieprognose voor morgen voldoende is.",
           "minimum_solar_power": "Minimaal zonne-energieoverschot (W) dat vereist is voordat SEM begint met zonneladen voor de EV.",
           "curtailment_probe_enabled": "Als de omvormer de netexport begrenst (bijv. bij negatieve prijzen), wordt de productie op het verbruik vastgezet en blijft echte zonne-energie onzichtbaar. Opt-in: SEM start de EV kort op minimale stroom en laadt alleen door als de productie meestijgt.",
           "export_limit_entity": "De exportlimiet-entiteit van je omvormer (automatisch gedetecteerd voor Huawei, GoodWe, SolaX, Victron e.a. indien leeg). Verscherpt de detectie en voorkomt onnodige sondes."

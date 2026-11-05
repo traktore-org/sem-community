@@ -219,7 +219,6 @@
           "electricity_export_rate": "Eksportpris strøm (per kWh)",
           "demand_charge_rate": "Effekttariffsats (CHF/kW/måned)",
           "observer_mode": "Observatørmodus (skrivebeskyttet)",
-          "smart_night_charging": "Smart nattlading",
           "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
           "ev_target_soc": "Regn som full ved (%)",
@@ -251,7 +250,6 @@
           "electricity_export_rate": "Innmatingspris betalt av nettselskapet (CHF/kWh).",
           "demand_charge_rate": "Månedlig effektledd per kW topplast (CHF/kW/måned). Sett til 0 hvis avtalen din ikke har effektledd.",
           "observer_mode": "Når denne er PÅ, overvåker og beregner SEM alt, men sender aldri et tjenestekall til maskinvaren. Brukes på en test-/staging-HA som speiler en produksjonsinstallasjon.",
-          "smart_night_charging": "Når denne er PÅ, hopper SEM intelligent over eller reduserer nattladingen basert på estimert SOC på elbilen, solprognose, temperaturjustert forbruksprognose og innlærte kjøremønstre.",
           "battery_discharge_control_entity": "Number-entitet som styrer inverterens grense for utladeeffekt (f.eks. number.batteries_maximale_entladeleistung på Huawei). Oppdages automatisk ved installasjon; overstyr her ved behov.",
           "diagram_style": "Velg systemdiagram på Hjem-fanen. 'SEM' bruker det innebygde animerte diagrammet. 'K-Flow' bruker K-Flow HACS-kortet (må installeres separat).",
           "hot_water_solar_target": "Måltemperatur (°C) for solstøttet varmtvannsoppvarming. SEM booster berederen når det er overskudd tilgjengelig.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Garanter minst (kWh)",
           "observer_mode": "Observatørmodus (skrivebeskyttet, ingen maskinvarestyring)",
-          "smart_night_charging": "Reduser nattmålet basert på morgendagens prognose",
           "minimum_solar_power": "Minimum soleffekt for å starte EV-lading (W)",
           "curtailment_probe_enabled": "Begrensningssonde (høst begrenset solenergi)",
           "export_limit_entity": "Eksportgrense-entitet (valgfritt)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM fyller på fra nettet om natten så bilen har minst dette om morgenen. Dette er en bunngrense, ikke en grense — sola kan legge til mer. 0 = bruk aldri nettet.",
           "observer_mode": "Når denne er PÅ, overvåker SEM alt, men sender aldri kommandoer til maskinvaren.",
-          "smart_night_charging": "Når denne er PÅ, reduserer SEM målet for nattlading når morgendagens solprognose er tilstrekkelig.",
           "minimum_solar_power": "Minste soloverskudd (W) som kreves før SEM starter sollading av elbilen.",
           "curtailment_probe_enabled": "Når inverteren begrenser netteksporten (f.eks. ved negative priser), låses produksjonen til forbruket og reell solenergi forblir usynlig. Valgfritt: SEM starter bilen kort på minimumsstrøm og fortsetter bare hvis produksjonen følger etter.",
           "export_limit_entity": "Inverterens eksportgrense-entitet (autodetekteres for Huawei, GoodWe, SolaX, Victron m.fl. hvis tom). Skjerper deteksjonen og hindrer unødvendige sonder."

@@ -219,7 +219,6 @@
           "electricity_export_rate": "Sazba za dodávku do sítě (za kWh)",
           "demand_charge_rate": "Sazba za rezervovaný příkon (CHF/kW/měsíc)",
           "observer_mode": "Režim pozorovatele (pouze čtení)",
-          "smart_night_charging": "Chytré noční nabíjení",
           "vehicle_soc_entity": "SOC baterie vozidla",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
           "ev_target_soc": "Považovat za plné při (%)",
@@ -251,7 +250,6 @@
           "electricity_export_rate": "Výkupní sazba placená distributorem (CHF/kWh).",
           "demand_charge_rate": "Měsíční poplatek za rezervovaný příkon na kW špičky (CHF/kW/měsíc). Nastavte 0, pokud vaše smlouva takový poplatek nemá.",
           "observer_mode": "Je-li ZAPNUTO, SEM vše sleduje a počítá, ale nikdy neodešle volání služby do hardwaru. Použijte na testovacím/přípravném HA, který zrcadlí produkční instalaci.",
-          "smart_night_charging": "Je-li ZAPNUTO, SEM inteligentně přeskočí nebo omezí noční nabíjení podle odhadovaného SOC vozu, solární předpovědi, predikce spotřeby upravené podle teploty a naučených jízdních návyků.",
           "battery_discharge_control_entity": "Entita Number, která řídí limit vybíjecího výkonu měniče (např. number.batteries_maximale_entladeleistung u Huawei). Při instalaci se zjistí automaticky; zde ji můžete v případě potřeby přepsat.",
           "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť).",
           "hot_water_solar_target": "Cílová teplota (°C) pro ohřev teplé vody podporovaný sluncem. SEM přitopí bojler, když je k dispozici přebytek.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Zaručit alespoň (kWh)",
           "observer_mode": "Režim pozorovatele (pouze čtení)",
-          "smart_night_charging": "Snížit noční cíl na základě předpovědi",
           "minimum_solar_power": "Minimální solární výkon pro nabíjení (W)",
           "curtailment_probe_enabled": "Sonda omezení (využít omezenou solární energii)",
           "export_limit_entity": "Entita limitu exportu (volitelné)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM v noci dobíjí ze sítě, aby auto mělo ráno alespoň tolik. Je to spodní mez, ne limit — slunce může přidat víc. 0 = nikdy nepoužívat síť.",
           "observer_mode": "Je-li ZAPNUTO, SEM vše sleduje, ale nikdy neposílá příkazy do hardwaru.",
-          "smart_night_charging": "Je-li ZAPNUTO, SEM sníží cíl nočního nabíjení, pokud je zítřejší solární předpověď dostatečná.",
           "minimum_solar_power": "Minimální přebytečný solární výkon (W) potřebný k tomu, aby SEM zahájil solární nabíjení EV.",
           "curtailment_probe_enabled": "Když střídač omezí export do sítě (např. při záporných cenách), výroba se zasekne na spotřebě a skutečná solární energie zůstane neviditelná. Volitelné: SEM krátce spustí nabíjení EV minimálním proudem a pokračuje, jen pokud výroba stoupá.",
           "export_limit_entity": "Entita limitu exportu střídače (automaticky detekována pro Huawei, GoodWe, SolaX, Victron a další, pokud je prázdná). Zpřesňuje detekci a brání zbytečným sondám."

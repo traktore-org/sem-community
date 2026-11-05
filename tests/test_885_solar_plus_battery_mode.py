@@ -24,7 +24,6 @@ from custom_components.solar_energy_management.consts.ev_charge_modes import (
     EV_CHARGE_MODES,
     MODE_NIGHT_ALLOWED,
     MODE_TO_LEGACY_CHARGING_MODE,
-    MODE_USES_SMART_NIGHT,
     MODE_USES_TARIFF,
     mode_allows_night_charging,
 )
@@ -83,9 +82,9 @@ class TestTheModeIsRegisteredEverywhere:
         assert MODE_TO_LEGACY_CHARGING_MODE["solar_plus_battery"] == "pv"
 
     def test_it_joins_none_of_the_night_predicates(self):
-        """A day-solar mode: no night lane, no tariff, no smart night —
-        exactly solar_only's memberships."""
-        for group in (MODE_NIGHT_ALLOWED, MODE_USES_TARIFF, MODE_USES_SMART_NIGHT):
+        """A day-solar mode: no night lane, no tariff — exactly
+        solar_only's memberships."""
+        for group in (MODE_NIGHT_ALLOWED, MODE_USES_TARIFF):
             assert "solar_plus_battery" not in group
 
 
