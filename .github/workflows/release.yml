@@ -13,17 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # (#836) The ladder, same as tests.yml: HA 2026.2.3 on 3.13 (the
-        # hacs.json floor), HA 2026.8.2 on 3.14, HA 2026.10.4 on 3.14 (what
-        # PROD runs, #1298 — pinned by `phacc`, the marker cannot tell two
-        # 3.14 rungs apart). 3.12 was removed with the 2025.1 floor — the
-        # phacc pins now require >= 3.13, so a 3.12 leg cannot resolve its
-        # dependencies at all. It failed on the v2.0.0-beta.16 release, which
-        # is how this was found: tests.yml was swept and this file was not.
-        ha: ["2026.2", "2026.8", "2026.10"]
+        # (#836) The ladder, same as tests.yml: HA 2026.8.2 on 3.14 (the
+        # hacs.json floor, #1313) and HA 2026.10.4 on 3.14 (pinned by
+        # `phacc`, #1298 — the marker cannot tell two 3.14 rungs apart).
+        # A leg tests.yml dropped must go here too: a 3.12 leg left behind
+        # failed the v2.0.0-beta.16 release.
+        ha: ["2026.8", "2026.10"]
         include:
-          - ha: "2026.2"
-            python-version: "3.13"
           - ha: "2026.8"
             python-version: "3.14"
           - ha: "2026.10"

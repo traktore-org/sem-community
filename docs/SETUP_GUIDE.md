@@ -95,7 +95,7 @@ detected* section for the three cases.
 
 ### Home Assistant version
 
-SEM requires **Home Assistant 2026.2.0 or newer**. Check your version at
+SEM requires **Home Assistant 2026.8.0 or newer**. Check your version at
 **Settings > System > About**.
 
 ### HACS
@@ -156,7 +156,7 @@ night charging and battery charge scheduling.
 
 ### Checklist
 
-- [ ] HA 2026.2.0 or newer
+- [ ] HA 2026.8.0 or newer
 - [ ] HACS installed (on Home Assistant 2026.11 or newer it is built in as Marketplace)
 - [ ] Energy Dashboard configured (solar + grid sensors at minimum)
 - [ ] Battery sensors visible in HA (optional)

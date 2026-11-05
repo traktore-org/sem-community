@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ⚠️ **SEM now needs Home Assistant 2026.8 or newer** (#1313). Update Home Assistant first; older versions get no new SEM releases in HACS.
 - 🐛 **The Energy Plan card no longer shows a sunny peak hour as a cheap hour** (#1310). The cheap band follows your tariff only.
 
 # [2.3.0-beta.5] — 04.11.2026

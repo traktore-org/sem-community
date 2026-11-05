@@ -79,7 +79,7 @@ passing every static check (guarded by `tests/test_card_template_lint.py`).
 ### Testing
 
 Run from a replica of the CI layout, **not** from the repo root — a repo-root `select.py`
-shadows the stdlib `select` module, and Python 3.13+ is required (the HA 2026.2 floor):
+shadows the stdlib `select` module, and Python 3.14+ is required (the HA 2026.8 floor):
 
 ```bash
 rsync -a --delete --exclude=.git --exclude=node_modules ./ /tmp/ha-config/custom_components/solar_energy_management/

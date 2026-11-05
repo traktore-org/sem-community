@@ -28,45 +28,34 @@ jobs:
     # The matrix IS an HA matrix (#787, #1298). Each rung installs one
     # pytest-homeassistant-custom-component pin — see
     # tests/requirements_test.txt — and the list reads:
-    #   HA 2026.2.3  on 3.13 (the hacs.json floor)   -> check "test HA 2026.2"
-    #   HA 2026.8.2  on 3.14 (the 3.14 marker pin)    -> check "test HA 2026.8"
-    #   HA 2026.10.4 on 3.14 (what HA-PROD runs)      -> check "test HA 2026.10"
+    #   HA 2026.8.2  on 3.14 (the hacs.json floor)    -> check "test HA 2026.8"
+    #   HA 2026.10.4 on 3.14 (`phacc` pin)            -> check "test HA 2026.10"
+    # (#1313) The 3.13 -> HA 2026.2.3 rung went with the 2026.2 floor.
     # (28.09.2026) The check is NAMED by the HA version, not the Python: "3.13"
     # kept reading as a Python rung to drop, when it is really the old-HA test.
-    # The Python is only how each HA is reached. The 2026.2 rung is bumped to a
-    # newer HA when one arrives; until then it holds the declared floor.
-    # (#1298) Two rungs share Python 3.14, so a python_version marker cannot
-    # tell them apart: the PROD rung carries its pin here as `phacc` and the
-    # install step puts it on top of the requirements file.
+    # The Python is only how each HA is reached. The floor rung holds the
+    # version hacs.json declares.
+    # (#1298) Rungs share Python 3.14, so a python_version marker cannot
+    # tell them apart: each newer rung carries its pin here as `phacc` and
+    # the install step puts it on top of the requirements file.
     # (#836) The 3.12 -> HA 2025.1.4 rung was removed with the 2025.1 floor:
     # no SEM user has ever reported an HA below 2026.4, so it verified a
     # version nobody runs.
     # Nineteen months of API drift went unverified because both legs used to
     # install the same HA and nothing in the file said which one.
     #
-    # The two added rungs were non-blocking on purpose while the drift they
-    # surfaced was triaged. Both flips are now done, and ALL THREE RUNGS
-    # BLOCK — which is the actual close-out of #787.
-    #   (#791) 3.14/HA 2026.8.2 — what PROD runs — blocking as of the
-    #          frame-helper shim + label_entities oracle fix.
-    #   (#835) 3.13/HA 2026.2.3 — blocking as of the event-loop fixture
-    #          override in tests/conftest.py. Its "5,935 errors" were one
-    #          upstream line, not 5,935 broken tests: phacc 0.13.316's
-    #          enable_event_loop_debug is sync, and pytest-asyncio 1.3.0
-    #          leaves no current loop behind, so every sync test after the
-    #          first async one raised at setup.
+    # Added rungs were once non-blocking while the drift they surfaced was
+    # triaged (#791, #835). EVERY RUNG BLOCKS now — the close-out of #787.
     # Do not reintroduce a continue-on-error exemption here. A rung that
     # cannot fail the board is a rung nobody reads — 3.13 was green-lit as
     # "advisory" and then never passed once, invisibly, for its whole life.
     strategy:
       fail-fast: false
       matrix:
-        ha: ["2026.2", "2026.8", "2026.10"]
+        ha: ["2026.8", "2026.10"]
         # Keep in step with `--splits` below and PARTS in test-gate.
         part: [1, 2, 3, 4]
         include:
-          - ha: "2026.2"
-            python-version: "3.13"
           - ha: "2026.8"
             python-version: "3.14"
           - ha: "2026.10"
@@ -132,7 +121,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
 
-  # (#1266) The three required checks. Green only when every part of that HA
+  # (#1266) The required checks, one per rung. Green only when every part of that HA
   # rung succeeded. It must run even when a part failed or was cancelled:
   # GitHub counts a SKIPPED required check as passed, so a gate that is
   # skipped on failure would let a red suite merge. Hence `if: always()` and
@@ -148,7 +137,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ha: ["2026.2", "2026.8", "2026.10"]
+        ha: ["2026.8", "2026.10"]
     steps:
       - name: Every part of HA ${{ matrix.ha }} passed
         env:
@@ -175,10 +164,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ha: ["2026.2", "2026.8", "2026.10"]
+        ha: ["2026.8", "2026.10"]
         include:
-          - ha: "2026.2"
-            python-version: "3.13"
           - ha: "2026.8"
             python-version: "3.14"
           - ha: "2026.10"

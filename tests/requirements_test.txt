@@ -20,21 +20,15 @@ homeassistant>=2023.9.0
 # install and file, that is absence, not sampling. The rung was proving a
 # version nobody runs.
 #
-# 2026.2 is also the ceiling for this mechanism: it is the LAST HA that runs on
-# Python 3.13. Everything from 2026.4 up needs 3.14, so a higher floor makes
-# every rung 3.14 and the interpreter can no longer select the HA — that would
-# mean re-cutting the matrix around the phacc version instead. Deliberate
-# choice, not an accident of the next bump.
+# (#1313) The 3.13 -> HA 2026.2.3 rung is gone too: the floor is 2026.8. Every
+# HA from 2026.4 up needs Python 3.14, so the interpreter no longer selects
+# the HA. The line below is the floor rung (and what local venvs install);
+# every newer rung is a `# rung:` line that tests.yml carries as
+# `matrix.phacc` and installs on top of it.
 #
 # Pinned exactly, per rung. Bump deliberately — and update the `->` note, which
 # tests/test_787_ha_version_matrix.py reads.
-pytest-homeassistant-custom-component==0.13.316; python_version < "3.14"  # -> homeassistant 2026.2.3 (the hacs.json floor)
-pytest-homeassistant-custom-component==0.13.356; python_version >= "3.14"  # -> homeassistant 2026.8.2 (the 3.14 default: local venvs)
-# (#1298) The rung that tests what HA-PROD runs shares Python 3.14 with the
-# one above, so no marker can select it. tests.yml carries this pin as
-# `matrix.phacc` and installs it on top of the line above. Declared here so
-# the mapping stays in one place; tests/test_787_ha_version_matrix.py reads
-# `# rung:` lines the same way it reads the pins.
-# rung: pytest-homeassistant-custom-component==0.13.375  # -> homeassistant 2026.10.4 (what HA-PROD runs)
+pytest-homeassistant-custom-component==0.13.356; python_version >= "3.14"  # -> homeassistant 2026.8.2 (the hacs.json floor)
+# rung: pytest-homeassistant-custom-component==0.13.375  # -> homeassistant 2026.10.4
 
 hypothesis>=6.0.0

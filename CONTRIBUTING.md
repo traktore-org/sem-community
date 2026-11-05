@@ -163,31 +163,27 @@ rsync -av --delete --exclude='__pycache__' --exclude='.git' \
 
 ## Which Home Assistant the suite runs against
 
-The CI matrix lists Python versions, but it is really a **Home Assistant**
-matrix: `pytest-homeassistant-custom-component` pins exactly one HA per
-release and each release has a Python floor, so the interpreter picks the HA.
+The CI matrix is a **Home Assistant** matrix: `pytest-homeassistant-custom-component`
+(phacc) pins exactly one HA per release, so the phacc pin picks the HA.
 
 | CI check | phacc pin | Home Assistant | Blocking? |
 |---|---|---|---|
-| test HA 2026.2 (Python 3.13) | `0.13.316` | 2026.2.3 — the `hacs.json` floor | yes |
-| test HA 2026.8 (Python 3.14) | `0.13.356` | 2026.8.2 — the 3.14 marker pin | yes |
-| test HA 2026.10 (Python 3.14) | `0.13.375` | 2026.10.4 — what HA-PROD runs | yes |
+| test HA 2026.8 (Python 3.14) | `0.13.356` | 2026.8.2 — the `hacs.json` floor | yes |
+| test HA 2026.10 (Python 3.14) | `0.13.375` | 2026.10.4 | yes |
 
-Two checks share Python 3.14, so a marker cannot pick the third pin: the
-workflow matrix carries it as `phacc` and installs it on top (#1298).
+Both checks run Python 3.14, so a marker cannot pick the pin: the floor rung
+installs the marker pin from `tests/requirements_test.txt`, and each newer rung
+carries its own pin as `phacc` in the workflow matrix (#1298). HA-PROD runs
+2026.11; that rung comes when a phacc release supports it (#1313).
 
-All three rungs block. There is no `continue-on-error` anywhere in the matrix and
-there must not be again (#835): the 3.13 rung spent its entire life marked
+Every rung blocks. There is no `continue-on-error` anywhere in the matrix and
+there must not be again (#835): a rung once spent its entire life marked
 advisory and never passed once, invisibly, because a rung that cannot fail the
 board is a rung nobody reads.
 
-A third rung — Python 3.12 → HA 2025.1.4 — was removed in #836 together with
-the 2025.1 floor it verified. Of 62 issues stating an HA version the oldest
-ever reported is 2026.4.3, and none is on 2025.x; since the old floor let such
-users install and file, that is absence rather than sampling. Note that 2026.2
-is the **last HA that runs on Python 3.13** — raising the floor further makes
-every rung 3.14, at which point the interpreter can no longer select the HA and
-the matrix has to be re-cut around the phacc version.
+Older rungs went with the floor they verified: Python 3.12 → HA 2025.1.4 in
+#836 (of 62 issues stating an HA version, the oldest was 2026.4.3), and Python
+3.13 → HA 2026.2.3 in #1313, when the floor rose to 2026.8.
 
 Until #787 this was two legs both installing 2025.1.4, and nothing said so:
 every test was green against an HA nineteen months older than the one users

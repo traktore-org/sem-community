@@ -10,19 +10,19 @@ matrix — chose the HA.
 ``phacc`` pins exactly one HA version per release and each release has a
 Python floor, so the interpreter *is* the HA selector:
 
-    0.13.316  (py3.13+)  ->  homeassistant 2026.2.3   <- the hacs.json floor
-    0.13.356  (py3.14+)  ->  homeassistant 2026.8.2   <- the 3.14 marker pin
-    0.13.375  (matrix)   ->  homeassistant 2026.10.4  <- what HA-PROD runs
+    0.13.356  (py3.14+)  ->  homeassistant 2026.8.2   <- the hacs.json floor
+    0.13.375  (matrix)   ->  homeassistant 2026.10.4
 
-(#1298) The third rung shares Python 3.14 with the second, so the marker
-cannot select it: the workflow matrix carries the pin as ``phacc`` and
-installs it on top. The matrix is therefore keyed by HA (``ha:``) with the
+(#1298) Newer rungs share Python 3.14 with the floor, so the marker cannot
+select them: the workflow matrix carries each pin as ``phacc`` and installs
+it on top. The matrix is therefore keyed by HA (``ha:``) with the
 Python and the optional pin in ``include:``; a ``# rung:`` line in the
 requirements file says which HA that pin brings.
 
 (#836) A third pin, 0.13.205 -> HA 2025.1.4, was dropped together with the
 2025.1 floor: no SEM user has ever reported an HA below 2026.4, so that rung
-verified a version nobody runs.
+verified a version nobody runs. (#1313) The 0.13.316 -> HA 2026.2.3 rung on
+Python 3.13 went the same way when the floor rose to 2026.8.
 
 This file pins the shape, not the numbers. It fails when a matrix leg has
 no pin that applies to it (the leg would silently resolve to whatever pip
@@ -175,12 +175,14 @@ def test_1298_every_leg_is_labelled_by_the_ha_it_installs():
 
 
 def test_1298_the_version_prod_runs_is_a_rung():
-    """CLAUDE.md names the HA on PROD; the newest rung must be that line.
-    (No live read here — the test must not reach the dev box.)"""
+    """The newest rung follows the HA on PROD. (No live read here — the test
+    must not reach the dev box.) PROD runs 2026.11 since 04.11, but no phacc
+    release supports it yet; #1313 adds that rung and moves this line."""
     covered = {_ha_for(py, phacc) for _, py, phacc in _matrix_legs()} - {None}
     newest = max(covered, key=lambda v: tuple(int(p) for p in v.split(".")))
     assert newest.startswith("2026.10."), (
-        f"the newest HA under test is {newest}; HA-PROD runs 2026.10.x. "
+        f"the newest HA under test is {newest}; expected 2026.10.x until a "
+        "phacc release supports 2026.11 (#1313). "
         "Bump the `phacc` of the PROD rung (and its `# rung:` line) when "
         "PROD moves."
     )
@@ -206,9 +208,9 @@ def test_the_supported_floor_is_a_version_we_actually_test():
     def parts(v):
         return tuple(int(p) for p in v.split("."))
 
-    # A pin of 2026.2.3 satisfies a declared floor of 2026.2.0: same release
-    # line, patch-level ahead. A floor of 2026.7 with nothing tested above
-    # 2026.2 does not.
+    # A pin of 2026.8.2 satisfies a declared floor of 2026.8.0: same release
+    # line, patch-level ahead. A floor of 2026.7 with nothing tested at
+    # 2026.7 does not.
     assert any(parts(c)[:2] == parts(floor)[:2] and parts(c) >= parts(floor)
                for c in covered), (
         f"hacs.json promises Home Assistant {floor} but CI tests {sorted(covered)}. "
@@ -267,7 +269,7 @@ def test_836_every_workflow_runs_the_same_ladder():
     from pathlib import Path
 
     wf_dir = Path(__file__).resolve().parent.parent / ".github" / "workflows"
-    supported = {"3.13", "3.14"}
+    supported = {"3.14"}
     offenders = {}
     for wf in sorted(wf_dir.glob("*.yml")):
         text = wf.read_text()
@@ -284,7 +286,7 @@ def test_836_every_workflow_runs_the_same_ladder():
     assert not offenders, (
         f"workflow(s) name a Python the dependency pins cannot satisfy: "
         f"{ {k: sorted(v) for k, v in offenders.items()} }. "
-        "tests/requirements_test.txt requires >= 3.13 since #836 — a leg on "
+        "tests/requirements_test.txt requires >= 3.14 since #1313 — a leg on "
         "anything older fails at pip install, not at a test (#844)."
     )
 
