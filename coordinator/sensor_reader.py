@@ -6460,7 +6460,7 @@ class SensorReader:
         """(#1316) A solar entity that gives no number at night is an inverter
         asleep: the caller reads 0 W, and this books it as a read.
 
-        RienduPre's Growatt (Grott over MQTT) now goes ``unavailable`` at dusk
+        RienduPre's inverter (over MQTT) now goes ``unavailable`` at dusk
         instead of freezing on its last value (#1065). Each night it was a
         dark read: ``inputs_degraded`` was True from dusk to dawn, so the
         battery's car clamp and its release were held all night (#818), and
