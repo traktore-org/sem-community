@@ -320,9 +320,10 @@ class TestEverySolarReadPath:
 _DOORS = ("_read_solar_power", "_read_pv_string_source")
 
 
-def _unasked_reads(src: str) -> list:
+def _unasked_reads(src: str, seen: list | None = None) -> list:
     """Each ``_read_sensor`` call in a door whose entity was not first given
-    to ``_no_number_asleep`` (same expression, earlier line)."""
+    to ``_no_number_asleep`` (same expression, earlier line). ``seen`` gets
+    every read the walk found."""
     out = []
     for fn in ast.walk(ast.parse(textwrap.dedent(src))):
         if not isinstance(fn, ast.FunctionDef):
@@ -338,6 +339,8 @@ def _unasked_reads(src: str) -> list:
                 asked.append(key)
             elif call.func.attr == "_read_sensor":
                 reads.append(key)
+        if seen is not None:
+            seen.extend(reads)
         for arg, line in reads:
             if not any(a == arg and al <= line for a, al in asked):
                 out.append((fn.name, line))
@@ -349,9 +352,10 @@ class TestTheDoorsAskFirst:
         """A new read in a door that skips the question would bring the dark
         night back for that path."""
         for door in _DOORS:
+            seen = []
             src = inspect.getsource(getattr(SensorReader, door))
-            assert "_read_sensor(" in src, door           # vacuity
-            assert not _unasked_reads(src), door
+            assert not _unasked_reads(src, seen), door
+            assert seen, door                             # vacuity
 
     def test_the_check_catches_a_read_that_skips_it(self):
         src = """
