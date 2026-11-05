@@ -659,55 +659,6 @@ class TestH1_PerChargerDailyEvUsedForKwhTarget:
 
 
 # ---------------------------------------------------------------------------
-# H2 — per-charger forecast night-target reduction
-# ---------------------------------------------------------------------------
-
-
-class TestH2_ForecastNightTargetPerCharger:
-    """Source-level lint: the multi-charger loop body applies
-    ``_calculate_forecast_night_target`` per-charger when its mode
-    uses smart-night. Pre-fix only the primary charger's view ran
-    this reduction — secondary chargers ignored the "tomorrow is sunny
-    → skip tonight" decision and night-charged unconditionally.
-    """
-
-    def test_per_charger_loop_calls_forecast_night_target(self) -> None:
-        from pathlib import Path
-        coord = (Path(__file__).parent.parent / "coordinator"
-                 / "coordinator.py").read_text()
-
-        # Count call sites of _calculate_forecast_night_target. Pre-fix:
-        # 1 (primary view only). Post-fix: at least 2 (primary +
-        # per-charger loop).
-        n_calls = coord.count("_calculate_forecast_night_target(")
-        # The method definition site doesn't have the trailing `(` count
-        # the same way — but the call sites we expect are at the primary
-        # build + the per-charger loop. The method's own def line is
-        # ``def _calculate_forecast_night_target(``; subtract that 1.
-        n_def = coord.count("def _calculate_forecast_night_target(")
-        n_call_sites = n_calls - n_def
-        assert n_call_sites >= 2, (
-            f"H2 regression — _calculate_forecast_night_target has "
-            f"{n_call_sites} call site(s). Want at least 2 (primary view "
-            f"+ per-charger loop). Secondary chargers ignore the "
-            f"forecast night-target reduction."
-        )
-
-    def test_per_charger_loop_gates_on_mode_uses_smart_night(self) -> None:
-        from pathlib import Path
-        coord = (Path(__file__).parent.parent / "coordinator"
-                 / "coordinator.py").read_text()
-        # The per-charger forecast call must be gated on
-        # ``self._mode_uses_smart_night(charger_cfg)`` — not the fleet
-        # ``_smart_night_charging_enabled()`` which would over-apply
-        # the reduction to chargers whose mode doesn't use smart-night.
-        assert "_mode_uses_smart_night(charger_cfg)" in coord, (
-            "H2 regression — per-charger forecast call missing the "
-            "per-charger ``_mode_uses_smart_night(charger_cfg)`` gate."
-        )
-
-
-# ---------------------------------------------------------------------------
 # Bonus — sanity guard that the umbrella file structure is intact
 # ---------------------------------------------------------------------------
 

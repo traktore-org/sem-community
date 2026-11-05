@@ -1751,9 +1751,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     #   off               → all OFF, mode≈off
     #
     # The legacy switch entities (`switch.sem_charger_<id>_night_charging`,
-    # `_smart_night_charging`, `_tariff_optimized`) stay registered for
-    # automation backward-compatibility but no longer drive behaviour.
-    # Phase C removes them entirely after a v1.7.x soak.
+    # `_tariff_optimized`) stayed registered for automation
+    # backward-compatibility; the forecast night-target switch and its
+    # mode-derived twin went with #1318 (a no-op since #440).
     # ─────────────────────────────────────────────────────────────────
 
     def _mode_allows_night_charging(self, charger_cfg: dict) -> bool:
@@ -1784,17 +1784,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         from ..consts.ev_charge_modes import MODE_USES_TARIFF
         return self._effective_charge_mode_for(charger_cfg) in MODE_USES_TARIFF
 
-    def _mode_uses_smart_night(self, charger_cfg: dict) -> bool:
-        """Does this charger's mode use forecast-aware night sizing?
-
-        ON implicitly for ``solar_plus_cheap`` and ``min_plus_solar``
-        (Q3 decision: forecast-aware is strictly better than dumb; no
-        value in user disablement). N/A elsewhere. Replaces the legacy
-        ``switch.sem_charger_<id>_smart_night_charging``.
-        """
-        from ..consts.ev_charge_modes import MODE_USES_SMART_NIGHT
-        return self._effective_charge_mode_for(charger_cfg) in MODE_USES_SMART_NIGHT
-
     # ``_legacy_charging_mode_for`` belongs to Phase C — it's the helper
     # that the strategy-machine rewrite will introduce alongside the
     # call site that uses it. Adding it here in Phase B as orphaned
@@ -1802,23 +1791,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # Phase B forgot to wire it. The mapping constants
     # (``MODE_TO_LEGACY_CHARGING_MODE``) live in
     # ``consts/ev_charge_modes.py`` so Phase C just imports them.
-
-    def _smart_night_charging_enabled(self) -> bool:
-        """True if smart (forecast-aware) night charging is on for any charger.
-
-        Post-#277 Phase B: derives from ``charge_mode`` per charger, not
-        from the legacy ``switch.sem_charger_<id>_smart_night_charging``.
-        The switch entity stays registered for automation backward-compat
-        but no longer drives this answer.
-        """
-        chargers = self.config.get("ev_chargers") or []
-        if not chargers:
-            # Pre-EV installs: no chargers, nothing to enable.
-            return False
-        return any(
-            self._mode_uses_smart_night(c) for c in chargers
-            if isinstance(c, dict)
-        )
 
     def _sweep_unconfigured_charger_state(self) -> List[str]:
         """(#1054 round 3) Drop per-charger state of chargers that are no
@@ -4817,26 +4789,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         charging_context.soc_limit_active = per_target_reached
                         charging_context.daily_target_reached = per_target_reached
                         charging_context.remaining_ev_energy = per_remaining
-                        # #351 H2 — apply the forecast-aware night-target
-                        # reduction to THIS charger too (the primary path
-                        # does this at the equivalent line in
-                        # ``_build_charging_context``). Pre-fix only the
-                        # primary charger saw the "tomorrow is sunny → skip
-                        # tonight" reduction; secondary chargers in
-                        # min_plus_solar / solar_plus_cheap mode then
-                        # night-charged unconditionally.
-                        per_night_floor = per_remaining_floor
-                        if (
-                            self.time_manager.is_night_mode()
-                            and self._mode_uses_smart_night(charger_cfg)
-                        ):
-                            per_night_floor = self._calculate_forecast_night_target(
-                                per_remaining_floor, energy, charger_cfg,
-                            )
                         charging_context.night_target_kwh = (
                             per_charger_target
                             if per_charger_target is not None
-                            else per_night_floor
+                            else per_remaining_floor
                         )
 
                         # Per-charger deadline + tariff plan (#246/#247): recompute
@@ -15039,14 +14995,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # already had access via the cached ChargingContext; this
         # brings the primary to parity.
         night_target = operational_night_target(self._ev_devices, remaining_floor)
-        if (
-            self._ev_devices
-            and self.time_manager.is_night_mode()
-            and self._smart_night_charging_enabled()
-        ):
-            night_target = self._calculate_forecast_night_target(
-                remaining_floor, energy, _primary_cfg,
-            )
         night_plan = None
         deadline_amps = 0
         deadline_active = False

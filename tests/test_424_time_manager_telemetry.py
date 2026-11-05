@@ -180,7 +180,7 @@ def test_night_window_path_post_midnight_in_night():
 
 
 def test_night_hours_path_crosses_midnight():
-    """Default window starts at sunset+10 (or 20:30 fallback) and ends
+    """Default window starts at sunset + 30 min (or 20:30 fallback) and ends
     at sunrise (or 07:00 fallback) — crosses midnight."""
     tm = _make()
     hours = tm.get_night_window_hours()
@@ -360,7 +360,8 @@ def test_a_night_that_has_ended_today_cannot_reopen():
 
 def test_the_evening_window_still_opens_the_next_night():
     """The latch must not outlive its day: the same TimeManager that saw
-    this morning's end must open tonight's night at 20:37."""
+    this morning's end must open tonight's night at 20:57 (sunset 20:27 +
+    the default 30 min offset, #1318)."""
     hass = MagicMock()
     sun = MagicMock()
     sun.state = "below_horizon"
@@ -375,7 +376,7 @@ def test_the_evening_window_still_opens_the_next_night():
                                             tzinfo=dt_util.DEFAULT_TIME_ZONE)):
         tm.is_night_mode()                      # morning: latch set
     with patch.object(dt_util, "now",
-                      return_value=datetime(2026, 8, 21, 20, 40, 0,
+                      return_value=datetime(2026, 8, 21, 21, 0, 0,
                                             tzinfo=dt_util.DEFAULT_TIME_ZONE)):
         assert tm.is_night_mode() is True
     # …and after midnight the new night continues

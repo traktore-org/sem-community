@@ -219,7 +219,6 @@
           "electricity_export_rate": "Sähkön vientihinta (per kWh)",
           "demand_charge_rate": "Tehomaksun hinta (CHF/kW/kk)",
           "observer_mode": "Tarkkailutila (vain luku)",
-          "smart_night_charging": "Älykäs yölataus",
           "vehicle_soc_entity": "Ajoneuvon akun SOC",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "ev_target_soc": "Katso täydeksi kohdassa (%)",
@@ -251,7 +250,6 @@
           "electricity_export_rate": "Verkkoyhtiön maksama syöttötariffi (CHF/kWh).",
           "demand_charge_rate": "Kuukausittainen tehomaksu huipputehon kilowattia kohti (CHF/kW/kk). Aseta arvoon 0, jos sopimuksessasi ei ole tehomaksua.",
           "observer_mode": "Kun tämä on PÄÄLLÄ, SEM seuraa ja laskee kaiken, mutta ei koskaan lähetä palvelukutsua laitteistolle. Käytä testi- tai staging-HA:ssa, joka jäljittelee tuotantoasennusta.",
-          "smart_night_charging": "Kun tämä on PÄÄLLÄ, SEM ohittaa tai pienentää yölatausta älykkäästi arvioidun sähköauton SOC:n, aurinkoennusteen, lämpötilakorjatun kulutusennusteen ja opittujen ajotottumusten perusteella.",
           "battery_discharge_control_entity": "Number-entiteetti, joka ohjaa invertterin purkutehon rajaa (esim. number.batteries_maximale_entladeleistung Huaweilla). Tunnistetaan automaattisesti asennuksessa; ohita tässä tarvittaessa.",
           "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen).",
           "hot_water_solar_target": "Tavoitelämpötila (°C) auringolla avustetulle käyttöveden lämmitykselle. SEM boostaa varaajaa, kun ylijäämää on saatavilla.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Takaa vähintään (kWh)",
           "observer_mode": "Tarkkailutila (vain luku, ei laitteiston ohjausta)",
-          "smart_night_charging": "Pienennä yötavoitetta huomisen ennusteen perusteella",
           "minimum_solar_power": "Vähimmäisaurinkoteho sähköauton latauksen käynnistämiseen (W)",
           "curtailment_probe_enabled": "Rajoitusanturi (hyödynnä rajoitettu aurinkoenergia)",
           "export_limit_entity": "Vientirajaentiteetti (valinnainen)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM täydentää verkosta yöllä, jotta autossa on aamulla vähintään tämä. Tämä on alaraja, ei rajoitus — aurinko voi lisätä enemmän. 0 = älä koskaan käytä verkkoa.",
           "observer_mode": "Kun tämä on PÄÄLLÄ, SEM seuraa kaikkea, mutta ei koskaan lähetä komentoja laitteistolle.",
-          "smart_night_charging": "Kun tämä on PÄÄLLÄ, SEM pienentää yölatauksen tavoitetta, kun huomisen aurinkoennuste on riittävä.",
           "minimum_solar_power": "Vähimmäisaurinkoylijäämä (W), joka vaaditaan ennen kuin SEM aloittaa sähköauton aurinkolatauksen.",
           "curtailment_probe_enabled": "Kun invertteri rajoittaa verkkovientiä (esim. negatiivisilla hinnoilla), tuotanto lukittuu kulutukseen ja todellinen aurinkoenergia jää näkymättömäksi. Valinnainen: SEM käynnistää auton hetkeksi miniminvirralla ja jatkaa vain, jos tuotanto seuraa.",
           "export_limit_entity": "Invertterin vientirajaentiteetti (tunnistetaan automaattisesti Huawei, GoodWe, SolaX, Victron ym., jos tyhjä). Tarkentaa tunnistusta ja estää turhat anturit."
@@ -1723,8 +1719,8 @@
       "electricity_export_rate": {
         "name": "Sähkön vientihinta"
       },
-      "night_earliest_start": {
-        "name": "Yöjakson aikaisin alku"
+      "night_start_offset_min": {
+        "name": "Yöjakson alun siirto"
       },
       "night_latest_end": {
         "name": "Yöjakson myöhäisin loppu"

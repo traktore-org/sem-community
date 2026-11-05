@@ -21,14 +21,13 @@ DID switch:
   1. ``_mode_allows_night_charging`` matches the legacy
      per-charger night-switch state for every (mode, switch) combo
      a migrated install can produce.
-  2. ``_mode_uses_smart_night`` matches the legacy smart-night-
-     switch state for every supported mode.
+  2. (the smart-night twin went with #1318 — a no-op since #440.)
   3. The runtime resolver (``effective_charge_mode_for``) and the
      migration (``_derive_charge_mode``) agree on every legacy
      combination — same property Phase A pinned, re-asserted here
      after the ``pv/auto + tariff`` derivation fix.
 """
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -46,10 +45,8 @@ from custom_components.solar_energy_management.consts.ev_charge_modes import (
     DEFAULT_EV_CHARGE_MODE,
     EV_CHARGE_MODES,
     MODE_NIGHT_ALLOWED,
-    MODE_USES_SMART_NIGHT,
     MODE_USES_TARIFF,
 )
-from custom_components.solar_energy_management.coordinator import SEMCoordinator
 from custom_components.solar_energy_management.coordinator.charging_control import (
     ChargingStateMachine,
 )
@@ -115,16 +112,6 @@ class TestModeAllowsNightCharging:
 class TestModeUsesSmartNight:
     """Smart night (forecast-aware sizing) is implicit ON only for
     the two night-charging modes where it actually changes behaviour."""
-
-    @pytest.mark.parametrize("mode,expected", [
-        ("solar_only",        False),
-        ("solar_plus_cheap",  True),
-        ("min_plus_solar",    True),
-        ("always_max",        False),
-        ("off",               False),
-    ])
-    def test_mode_uses_smart_night(self, mode, expected):
-        assert (mode in MODE_USES_SMART_NIGHT) is expected
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -260,60 +247,6 @@ class TestNightGateFromMode:
             time_manager=MagicMock(),
         )
         assert sm._read_night_enabled_raw() is False
-
-
-# ──────────────────────────────────────────────────────────────────────
-# SEMCoordinator._smart_night_charging_enabled — mode-driven
-# ──────────────────────────────────────────────────────────────────────
-
-class TestSmartNightFromMode:
-    def _build_coord(self, chargers, **switches):
-        with patch.object(SEMCoordinator, "__init__", return_value=None):
-            coord = SEMCoordinator.__new__(SEMCoordinator)
-        coord.hass = _hass_with_switches(**switches)
-        coord.config = {"ev_chargers": chargers}
-        return coord
-
-    def test_solar_only_disables_smart(self):
-        coord = self._build_coord([
-            {"id": "ev_charger", "charge_mode": "solar_only"},
-        ])
-        assert coord._smart_night_charging_enabled() is False
-
-    def test_min_plus_solar_enables_smart(self):
-        coord = self._build_coord([
-            {"id": "ev_charger", "charge_mode": "min_plus_solar"},
-        ])
-        assert coord._smart_night_charging_enabled() is True
-
-    def test_solar_plus_cheap_enables_smart(self):
-        coord = self._build_coord([
-            {"id": "ev_charger", "charge_mode": "solar_plus_cheap"},
-        ])
-        assert coord._smart_night_charging_enabled() is True
-
-    def test_always_max_disables_smart(self):
-        """always_max blasts max regardless — forecast-aware sizing
-        is N/A."""
-        coord = self._build_coord([
-            {"id": "ev_charger", "charge_mode": "always_max"},
-        ])
-        assert coord._smart_night_charging_enabled() is False
-
-    def test_any_charger_enables_globally(self):
-        """Same OR-across-chargers semantic as the night gate."""
-        coord = self._build_coord([
-            {"id": "a", "charge_mode": "solar_only"},
-            {"id": "b", "charge_mode": "min_plus_solar"},
-        ])
-        assert coord._smart_night_charging_enabled() is True
-
-    def test_no_chargers_returns_false(self):
-        """Pre-EV setup: nothing to enable. Pre-Phase-B the helper
-        consulted a global switch that was never created — now an
-        unambiguous False."""
-        coord = self._build_coord([])
-        assert coord._smart_night_charging_enabled() is False
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -506,13 +439,11 @@ class TestModeNameSourceOfTruth:
     correctly."""
 
     def test_constants_cover_every_mode(self):
-        """Sanity: the union of the three predicates is a strict
+        """Sanity: the union of the two predicates is a strict
         subset of the full mode set (``solar_only`` and ``off`` opt
-        out of everything; ``always_max`` opts out of smart and
-        tariff)."""
+        out of everything; ``always_max`` opts out of tariff)."""
         modes = set(EV_CHARGE_MODES.keys())
         assert MODE_NIGHT_ALLOWED.issubset(modes)
-        assert MODE_USES_SMART_NIGHT.issubset(modes)
         assert MODE_USES_TARIFF.issubset(modes)
 
     def test_default_is_known_mode(self):
@@ -522,7 +453,3 @@ class TestModeNameSourceOfTruth:
         """Tariff windows only make sense when night charging is
         permitted. The two sets must be properly ordered."""
         assert MODE_USES_TARIFF.issubset(MODE_NIGHT_ALLOWED)
-
-    def test_smart_subset_of_night(self):
-        """Smart sizing only applies to night-charging modes."""
-        assert MODE_USES_SMART_NIGHT.issubset(MODE_NIGHT_ALLOWED)

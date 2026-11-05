@@ -341,11 +341,6 @@ tested; once proven, the day plan will use it.
 | `observer_mode` | **true** | Read-only mode — SEM watches and decides but sends nothing. A new install observes first; turn it off when you are ready to let SEM act. |
 | `daily_home_consumption_estimate` | 18 kWh | Fallback for first 7 days of month |
 
-Smart night charging is no longer a switch. Since v1.6.3 it is implied by the
-Charge mode: the `Solar + cheapest hours` and `Min + Solar` modes run the full
-EV-intelligence check (EV SOC, solar forecast, temperature, learned driving
-patterns) before committing to an overnight charge.
-
 ---
 
 ## Multiple heat pumps and climate units (#685)
@@ -501,7 +496,7 @@ The Legionella prevention cycle is a safety requirement mandated by building cod
 
 SEM supports five EV charging modes (v1.7.3), selectable per charger via **`select.sem_charger_<id>_charge_mode`** on the Control tab or the EV card:
 
-> **Need the full picture?** [docs/EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md) is the canonical reference covering all 6 user controls (mode + Overnight grid + Cheapest hours + Smart night + Charge by + Min/Max), their priority cascade, and every interaction scenario including worked examples.
+> **Need the full picture?** [docs/EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md) is the canonical reference covering all 5 user controls (mode + Overnight grid + Cheapest hours + Charge by + Min/Max), their priority cascade, and every interaction scenario including worked examples.
 
 ### Solar Only (`solar_only`)
 
@@ -1053,8 +1048,8 @@ Do not confuse Solar Gate with **Min solar power** (the config floor below which
 > `switch.sem_night_charging` and per-charger `…_night_charging` toggles were
 > removed in v1.6.3 (#277) — one selector now carries the whole intent. Set it
 > per charger with **`select.sem_charger_<id>_charge_mode`**, on the EV tab.
-> The same goes for `switch.sem_smart_night_charging`: the intelligence it
-> switched on is now implied by the mode (see *Smart night charging* below).
+> The old `switch.sem_smart_night_charging` is gone too (#1318): the night
+> target is your *At least* floor minus what the car got today, nothing else.
 
 > **Not seeing `Solar + cheapest hours` in the list?** That mode is hidden
 > unless a **dynamic tariff** is configured (Configuration tab → Tariff →
@@ -1077,8 +1072,10 @@ unasked — pick **Solar only** and leave its "At least" floor at 0. The floor i
 what carries the intent: a global default is not an opt-in, so only a floor set
 on the charger itself puts a `Solar only` charger into the night lane.
 
-Night charging starts when night mode activates (after sunset + 10 minutes, or
-20:30, whichever comes first).
+Night charging starts when night mode activates: at sunset plus the offset you
+set in **Night start offset** (0–400 minutes, default 30), in every season. It
+ends at sunrise or at **Night Latest End** (default 07:00), whichever comes
+first. Without a sun reading the start falls back to 20:30.
 
 ### How it works
 
@@ -1090,20 +1087,6 @@ Night charging starts when night mode activates (after sunset + 10 minutes, or
 ### Daily target tracking
 
 The daily EV target uses **sunrise-based reset** — the counter resets at sunrise, not midnight. This means a night charging session from 22:00 to 06:00 stays in a single daily bucket.
-
-### Smart night charging
-
-In the **`Solar + cheapest hours`** and **`Min + Solar`** modes, SEM runs the
-full EV Intelligence system before committing to an overnight charge. (This was
-the `switch.sem_smart_night_charging` toggle until v1.6.3; it is now implied by
-the mode.)
-
-- **SOC-based skip** — if the estimated EV SOC covers tomorrow's predicted consumption (with 30% safety margin), SEM skips the night charge entirely
-- **Solar forecast credit** — 30% of tomorrow's forecast is credited, reducing required SOC further
-- **Temperature correction** — consumption predictions adjust for seasonal variation (winter = higher consumption)
-- **Daily SOC decay** — accounts for ~0.5% overnight parasitic drain
-- **Safety net** — maximum 3 consecutive skips to prevent under-charging
-- **Fallback** — when EV Intelligence data is insufficient, SEM falls back to forecast-based reduction (weekday: conservative, weekend: aggressive)
 
 ### EV Charge Target Type (v1.7.3 — kWh vs Vehicle SOC %)
 

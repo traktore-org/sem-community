@@ -219,7 +219,6 @@
           "electricity_export_rate": "Tariffa di esportazione elettricità (per kWh)",
           "demand_charge_rate": "Tariffa potenza impegnata (CHF/kW/mese)",
           "observer_mode": "Modalità osservatore (sola lettura)",
-          "smart_night_charging": "Forecast Night Reduction",
           "vehicle_soc_entity": "SOC batteria veicolo",
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
           "ev_target_soc": "Considera pieno al (%)",
@@ -251,7 +250,6 @@
           "electricity_export_rate": "Tariffa di immissione pagata dal fornitore (CHF/kWh).",
           "demand_charge_rate": "Costo mensile della potenza impegnata per kW di picco (CHF/kW/mese). Imposta 0 se il tuo contratto non prevede costi di potenza impegnata.",
           "observer_mode": "Se ATTIVA, SEM monitora e calcola tutto ma non invia mai una chiamata di servizio all'hardware. Da usare su un HA di test/staging che replica un'installazione di produzione.",
-          "smart_night_charging": "Se ATTIVA, SEM salta o riduce in modo intelligente la carica notturna in base al SOC stimato del VE, alla previsione solare, alla previsione di consumo corretta per la temperatura e alle abitudini di guida apprese.",
           "battery_discharge_control_entity": "Entità Number che controlla il limite di potenza di scarica dell'inverter (es. number.batteries_maximale_entladeleistung su Huawei). Rilevata automaticamente all'installazione; sovrascrivila qui se necessario.",
           "diagram_style": "Scegli quale diagramma di sistema usare nella scheda Home. 'SEM' usa il diagramma animato integrato. 'K-Flow' usa la scheda K-Flow HACS (da installare separatamente).",
           "hot_water_solar_target": "Temperatura obiettivo (°C) per il riscaldamento dell'acqua calda assistito dal solare. SEM attiva il boiler quando è disponibile un'eccedenza.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Garantire almeno (kWh)",
           "observer_mode": "Modalità osservatore (solo lettura, nessun controllo hardware)",
-          "smart_night_charging": "Ridurre obiettivo notturno in base alla previsione di domani",
           "minimum_solar_power": "Potenza solare minima per avviare la carica VE (W)",
           "curtailment_probe_enabled": "Sonda di limitazione (raccogliere il solare limitato)",
           "export_limit_entity": "Entità limite di esportazione (opzionale)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM ricarica dalla rete di notte perché l'auto abbia almeno questo al mattino. È un minimo, non un limite — il sole può aggiungere altro. 0 = non usare mai la rete.",
           "observer_mode": "Se ATTIVA, SEM monitora tutto ma non invia mai comandi all'hardware.",
-          "smart_night_charging": "Se ATTIVA, SEM riduce l'obiettivo di carica notturna quando la previsione solare di domani è sufficiente.",
           "minimum_solar_power": "Potenza solare in eccedenza minima (W) richiesta prima che SEM avvii la carica solare del VE.",
           "curtailment_probe_enabled": "Quando l'inverter limita l'export in rete (es. prezzi negativi), la produzione si blocca sul consumo e il solare reale resta invisibile. Opt-in: SEM avvia brevemente l'EV alla corrente minima e continua solo se la produzione segue.",
           "export_limit_entity": "L'entità del limite di esportazione dell'inverter (autorilevata per Huawei, GoodWe, SolaX, Victron e altri se vuota). Affina il rilevamento ed evita sonde inutili."
@@ -1723,8 +1719,8 @@
       "electricity_export_rate": {
         "name": "Tariffa Esportazione Elettricità"
       },
-      "night_earliest_start": {
-        "name": "Inizio Notte Più Presto"
+      "night_start_offset_min": {
+        "name": "Ritardo inizio notte"
       },
       "night_latest_end": {
         "name": "Fine Notte Più Tardi"

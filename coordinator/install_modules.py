@@ -526,7 +526,7 @@ CORE_BY_DECISION: Mapping[tuple[str, str], str] = {
     ("number", "regulation_offset"): "the grid-balance offset SEM regulates every load to",
     ("number", "system_size_kwp"): "the input that makes the per-kWp rows exist — must stay to be set",
     ("number", "system_investment_cost"): "the input that makes the ROI rows exist — must stay to be set",
-    ("number", "night_earliest_start"): "the night window bounds EV night charging and the battery plan",
+    ("number", "night_start_offset_min"): "the night window bounds EV night charging and the battery plan",
     ("number", "night_latest_end"): "the night window bounds EV night charging and the battery plan",
     ("switch", "observer_mode"): "hands-off mode applies to every command SEM could send",
     ("switch", "vacation_mode"): "vacation lowers every target on every install",

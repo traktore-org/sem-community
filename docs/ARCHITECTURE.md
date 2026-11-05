@@ -807,7 +807,7 @@ The `battery_scheduler_state` sensor has a `schedule` attribute containing the f
 The coordinator owns all EV control (`ev.managed_externally = True`). The EV is never managed by the SurplusController due to unique requirements (session lifecycle, minimum 4140W cliff, charger-specific service calls).
 
 ### Night Charging
-- Starts at 10A when night mode activates (after sunset+10min / 20:30)
+- Starts at 10A when night mode activates (sunset + the user's night start offset, default 30 min; #1318)
 - Dynamic peak-managed current each cycle (+-2A ramp, min 8A floor)
 - W/A ratio calculated from actual readings (fallback 475 W/A)
 - Stall detection with 120s cooldown re-enables charger
