@@ -934,7 +934,12 @@ class SensorReader:
 
         (#1186) ``allow_none``: None when it gave no number, for a unit the
         total holds on its own.
+
+        (#1316) …and an inverter that goes unavailable at night reads 0 W
+        too, not dark. See ``_no_number_asleep``.
         """
+        if self._no_number_asleep(entity_id, "solar"):
+            return 0.0
         value = self._read_sensor(entity_id, "solar", allow_none=allow_none)
         if value and self._asleep_at_night((entity_id,), value):
             return 0.0
@@ -966,17 +971,28 @@ class SensorReader:
         (``_read_solar_power``) — so when the strings ARE the Energy-Dashboard
         sources, string and total say the same. A V+I pair is asleep only
         when BOTH halves have gone quiet.
+
+        (#1316) A string, or one half of a pair, that gives no number at
+        night reads 0 W, the same rule as the total (``_no_number_asleep``).
         """
         if isinstance(source, tuple):
             v_entity, i_entity = source
-            v = self._read_sensor(v_entity, f"pv_{slot}_voltage", allow_none=True)
-            i = self._read_sensor(i_entity, f"pv_{slot}_current", allow_none=True)
+            v_asleep = self._no_number_asleep(v_entity, f"pv_{slot}_voltage")
+            i_asleep = self._no_number_asleep(i_entity, f"pv_{slot}_current")
+            v = None if v_asleep else self._read_sensor(
+                v_entity, f"pv_{slot}_voltage", allow_none=True)
+            i = None if i_asleep else self._read_sensor(
+                i_entity, f"pv_{slot}_current", allow_none=True)
+            if v_asleep or i_asleep:
+                return 0.0               # not 0 V × −0.1 A = −0.0
             if v is None or i is None:
                 return None              # half a pair is no number
             watts = float(v) * float(i)
             entities = (v_entity, i_entity)
         else:
             # Direct power entity — keep the legacy fast path.
+            if self._no_number_asleep(source, f"pv_{slot}"):
+                return 0.0
             watts = self._read_sensor(source, f"pv_{slot}", allow_none=True)
             if watts is None:
                 return None
@@ -6363,16 +6379,7 @@ class SensorReader:
             )
             # (HA Repairs) Reset the outage clock.
             self._sensor_unavailable_since.pop(entity_id, None)
-        # (HA Repairs) Clear the Repair we filed for this outage — or
-        # (#933) one a predecessor filed: the Repair is persistent and our
-        # sets are not, so the first live read of this reader's life
-        # clears it once, as a recovery does.
-        if (entity_id in self._sensor_repair_raised
-                or entity_id not in self._sensor_repair_reconciled):
-            self._sensor_repair_raised.discard(entity_id)
-            self._sensor_repair_reconciled.add(entity_id)
-            from . import repair_issues as _ri
-            _ri.clear_sensor_unavailable(self.hass, entity_id)
+        self._clear_unavailable_repair(entity_id)
 
         # W3 — observe-only frozen-sensor detection (does NOT alter value).
         # Wrapped so the audit can NEVER break the read.
@@ -6381,6 +6388,19 @@ class SensorReader:
         except Exception:  # noqa: BLE001 — freshness must never break a read
             pass
         return value
+
+    def _clear_unavailable_repair(self, entity_id: str) -> None:
+        """(HA Repairs) Clear the Repair we filed for this outage — or (#933)
+        one a predecessor filed: the Repair is persistent and our sets are
+        not, so the first read of this reader's life clears it once, as a
+        recovery does. (#1316) A read is a live number or an inverter asleep
+        at night (``_no_number_asleep``)."""
+        if (entity_id in self._sensor_repair_raised
+                or entity_id not in self._sensor_repair_reconciled):
+            self._sensor_repair_raised.discard(entity_id)
+            self._sensor_repair_reconciled.add(entity_id)
+            from . import repair_issues as _ri
+            _ri.clear_sensor_unavailable(self.hass, entity_id)
 
     # (#851) A solar reading at or below this (W) counts as "producing
     # nothing". Generous enough for an inverter idling on standby draw,
@@ -6425,11 +6445,57 @@ class SensorReader:
         """
         if value is None or abs(float(value)) > self._SOLAR_ASLEEP_W:
             return False
+        return self._sun_down()
+
+    def _sun_down(self) -> bool:
+        """(#851/#1065/#1316) The one night rule of the solar reads: ``sun.sun``
+        says below the horizon. No sun entity is never night."""
         try:
             sun = self.hass.states.get("sun.sun")
         except Exception:  # noqa: BLE001 — never break a read over the sun
             return False
         return sun is not None and getattr(sun, "state", None) == "below_horizon"
+
+    def _no_number_asleep(self, entity_id, name: str) -> bool:
+        """(#1316) A solar entity that gives no number at night is an inverter
+        asleep: the caller reads 0 W, and this books it as a read.
+
+        RienduPre's inverter (over MQTT) now goes ``unavailable`` at dusk
+        instead of freezing on its last value (#1065). Each night it was a
+        dark read: ``inputs_degraded`` was True from dusk to dawn, so the
+        battery's car clamp and its release were held all night (#818), and
+        the night was booked as solar downtime (#1022). At night SEM knows
+        what solar is: nothing. So the read is 0 W and not dark. It is a read
+        for the Repairs too: no outage clock, not counted as an unavailable
+        sensor, and a Repair filed before dusk is cleared. If the inverter
+        is still dark after sunrise, the clock starts then.
+
+        Only with the sun down, and only for an entity HA has (a missing
+        entity is a setup fault, not sleep). In daylight a dark read stays
+        dark: what solar is then is not known. A real dark read just after
+        dusk still shows: #988 calls a 0 W dark when the balance says solar
+        was there. Never raises.
+        """
+        try:
+            if not entity_id:
+                return False
+            state = self.hass.states.get(entity_id)
+            if state is None or power_state_to_watts(state) is not None:
+                return False
+            if not self._sun_down():
+                return False
+        except Exception:  # noqa: BLE001 — never break a read over this
+            return False
+        _note_read(self, entity_id)      # (#1140) its Repairs have an owner
+        if name in _DEGRADABLE_POWER_INPUTS:
+            self._input_reads[name] = self._input_reads.get(name, 0) + 1
+        self._sensor_unavailable.discard(entity_id)
+        self._sensor_unavailable_since.pop(entity_id, None)
+        self._clear_unavailable_repair(entity_id)
+        log_on_change(_LOGGER, f"avail:{entity_id}", logging.DEBUG,
+                      f"Sensor {entity_id} ({name}) gives no number with the "
+                      f"sun down — inverter asleep, reads 0 W (#1316)")
+        return True
 
     def _asleep_at_night(self, entity_ids, watts: float | None) -> bool:
         """(#1065) Is this solar reading an inverter asleep at night? Then its

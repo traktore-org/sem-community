@@ -120,9 +120,10 @@ DECLARED: dict[str, str] = {
         "(_unsourced_reconciled, a set per source, #1188), also when the "
         "source is found only after the first cycle; the Repair is "
         "non-persistent, so a restart drops it anyway",
-    "coordinator/sensor_reader.py::SensorReader._read_sensor":
-        "the first live read of each reader lifetime clears once "
-        "(_sensor_repair_reconciled, #933)",
+    "coordinator/sensor_reader.py::SensorReader._clear_unavailable_repair":
+        "the first read of each reader lifetime clears once — a live number, "
+        "or (#1316) an inverter asleep at night (_sensor_repair_reconciled, "
+        "#933)",
     "devices/base.py::CurrentControlDevice._drain_enable_episode":
         "NOT a first-of-lifetime clear, on purpose (#945): the issue id is "
         "shared with the write side (#462) and an unblocked enable switch is "
