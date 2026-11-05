@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import CoreState
@@ -32,6 +32,9 @@ from custom_components.solar_energy_management.coordinator import (
 )
 from custom_components.solar_energy_management.coordinator.active_phase_guard import (
     update_active_phase_guard,
+)
+from custom_components.solar_energy_management.coordinator import (
+    notifications,
 )
 from custom_components.solar_energy_management.coordinator.notifications import (
     NotificationManager,
@@ -55,8 +58,9 @@ class _Home:
     """The reporter's home: grid_only, three phases, 23 A, DSMR power and
     voltage per phase. ``amps`` per phase, or None for "not loaded yet"."""
 
-    def __init__(self, *, enforcing: bool = False):
+    def __init__(self, *, enforcing: bool = False, **extra):
         self.amps = {1: None, 2: None, 3: None}
+        self.voltage_unit = "V"
         config = {
             "phase_guard_enabled": True,
             "phase_guard_enforcement_enabled": enforcing,
@@ -72,6 +76,7 @@ class _Home:
                 f"sensor.electricity_meter_energieverbruik_fase_l{phase}")
             config[f"phase_guard_grid_l{phase}_voltage_entity"] = (
                 f"sensor.electricity_meter_spanning_fase_l{phase}")
+        config.update(extra)
         hass = MagicMock()
         hass.state = CoreState.starting
         hass.states.get = MagicMock(side_effect=self._get)
@@ -89,7 +94,7 @@ class _Home:
             if entity_id.endswith(f"energieverbruik_fase_l{phase}"):
                 return _reading(amps * 230.0, "W")
             if entity_id.endswith(f"spanning_fase_l{phase}"):
-                return _reading(230.0, "V")
+                return _reading(230.0, self.voltage_unit)
         return None
 
     async def cycle(self, now: float) -> dict:
@@ -234,6 +239,114 @@ async def test_enforcing_block_names_the_phase_over_the_limit():
     assert "grid L2 25.0 A" in home.sent[0]
 
 
+@pytest.mark.asyncio
+async def test_the_wait_lasts_until_every_phase_has_a_reading():
+    """DSMR power and voltage arrive at different times: a first reading
+    of some phases does not end the wait."""
+    home = _Home()
+    home.hass.state = CoreState.running
+    await home.cycle(now=0.0)
+    home.amps = {1: 1.0, 2: None, 3: 4.0}
+    await home.cycle(now=60.0)
+    await home.cycle(now=HOLD - 1.0)
+    assert home.sent == []
+    await home.cycle(now=HOLD)
+    assert home.events == ["phase_guard_observer_no_reading"]
+    assert "grid L2 sensor" in home.sent[0]
+
+
+@pytest.mark.asyncio
+async def test_enforcing_wait_runs_out_into_the_blocked_notice():
+    home = _Home(enforcing=True)
+    home.hass.state = CoreState.running
+    await home.cycle(now=0.0)
+    await home.cycle(now=HOLD - 1.0)
+    assert home.sent == []
+    await home.cycle(now=HOLD)
+    assert home.events == ["phase_guard_blocked"]
+    assert "grid L1 sensor" in home.sent[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("enforcing", [False, True])
+async def test_a_config_error_is_reported_at_once(enforcing):
+    """Only "no reading yet" waits. Current entities for two of three
+    phases is a config error: waiting does not mend it."""
+    home = _Home(
+        enforcing=enforcing,
+        phase_guard_grid_l1_current_entity="sensor.l1_current",
+        phase_guard_grid_l2_current_entity="sensor.l2_current",
+    )
+    snapshot = await home.cycle(now=0.0)  # HA still starting
+    assert snapshot["stop_reason"] == "invalid_configuration"  # premise
+    assert len(home.sent) == 1
+    assert "invalid_configuration" in home.sent[0]
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_unit_is_reported_at_once():
+    home = _Home()
+    home.voltage_unit = "kV"
+    home.amps = {1: 1.0, 2: 8.0, 3: 4.0}
+    snapshot = await home.cycle(now=0.0)  # HA still starting
+    assert "grid:l1:invalid_unit" in snapshot["stop_reason"]  # premise
+    assert home.events == ["phase_guard_observer_no_reading"]
+
+
+@pytest.mark.asyncio
+async def test_a_rewritten_stop_reason_still_shows_the_overload():
+    """The enforcer puts its own config error in the stop reason; the
+    phase entries still say which phase is over the limit."""
+    home = _Home(enforcing=True, phase_guard_recovery_cycles=0)
+    home.hass.state = CoreState.running
+    home.amps = {1: None, 2: 25.0, 3: 4.0}
+    snapshot = await home.cycle(now=0.0)
+    assert snapshot["stop_reason"] == "invalid_enforcement_configuration"
+    assert home.events == ["phase_guard_blocked"]
+    assert "grid L2 25.0 A" in home.sent[0]
+
+
+@pytest.mark.asyncio
+async def test_a_reading_lost_during_an_overload_sends_no_second_notice():
+    home = _Home()
+    home.hass.state = CoreState.running
+    home.amps = {1: 1.0, 2: 25.0, 3: 4.0}
+    await home.cycle(now=0.0)
+    home.amps = {1: None, 2: 8.0, 3: 4.0}
+    await home.cycle(now=10.0)
+    home.amps = {1: 1.0, 2: 25.0, 3: 4.0}
+    await home.cycle(now=20.0)
+    assert home.events == ["phase_guard_observer_warning"]
+    home.amps = {1: 1.0, 2: 8.0, 3: 4.0}
+    await home.cycle(now=30.0)
+    assert home.events == [
+        "phase_guard_observer_warning", "phase_guard_recovered"]
+    assert "safe levels" in home.sent[-1]
+
+
+@pytest.mark.asyncio
+async def test_readings_back_after_a_missing_reading_says_back_not_safe():
+    home = _Home()
+    home.hass.state = CoreState.running
+    home.amps = {1: 1.0, 2: 8.0, 3: 4.0}
+    await home.cycle(now=0.0)
+    home.amps[3] = None
+    await home.cycle(now=10.0)
+    home.amps[3] = 4.0
+    await home.cycle(now=20.0)
+    assert home.sent[-1] == "Phase readings are back and within the limit."
+
+
+def test_the_wait_uses_the_monotonic_clock_by_default():
+    manager = NotificationManager(MagicMock(), {})
+    manager.hass.state = CoreState.running
+    with patch.object(notifications.time, "monotonic",
+                      side_effect=[500.0, 500.0 + HOLD - 1.0, 500.0 + HOLD]):
+        assert manager._phase_guard_meter_loading(None) is True
+        assert manager._phase_guard_meter_loading(None) is True
+        assert manager._phase_guard_meter_loading(None) is False
+
+
 def test_every_language_says_missing_apart_from_exceeded():
     tables = json.loads(
         (_ROOT / "dashboard" / "translations.json").read_text(encoding="utf-8"))
@@ -244,3 +357,6 @@ def test_every_language_says_missing_apart_from_exceeded():
         assert missing, lang
         assert missing != exceeded, lang
         assert "{location}" in missing and "{reason}" in missing, lang
+        back = table.get("notif_phase_guard_readings_back_observer")
+        assert back, lang
+        assert back != table.get("notif_phase_guard_recovered_observer"), lang

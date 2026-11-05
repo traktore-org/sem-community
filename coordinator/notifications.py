@@ -22,6 +22,7 @@ from typing import Dict, Any, Optional
 from homeassistant.core import CoreState, HomeAssistant
 
 from . import repair_issues as _ri
+from .dual_phase_guard import NO_READING_YET
 from ..const import (
     DOMAIN,
     ChargingState,
@@ -61,14 +62,46 @@ _HINT_DEFAULTS = {
 }
 
 
-def _over_limit_parts(reason: str) -> list:
-    """(#1315) The ``lane:phase:over_limit`` parts of a phase-guard stop
-    reason: the phases measured over their limit."""
-    return [
-        part
-        for part in (piece.strip() for piece in reason.split(","))
-        if part.endswith(":over_limit")
+_GUARD_LANES = ("grid", "inverter")
+_GUARD_PHASES = ("l1", "l2", "l3")
+
+
+def _reason_parts(reason: str) -> list:
+    return [piece.strip() for piece in reason.split(",")]
+
+
+def _over_limit_parts(snapshot: Dict[str, Any], reason: str) -> list:
+    """(#1315) ``lane:phase:over_limit`` for every phase measured over its
+    limit. Read from the phase entries, which the enforcer never rewrites,
+    and from the stop reason."""
+    parts = [
+        f"{lane}:{phase}:over_limit"
+        for lane in _GUARD_LANES
+        if isinstance(snapshot.get(lane), dict)
+        for phase in _GUARD_PHASES
+        if isinstance(snapshot[lane].get(phase), dict)
+        and snapshot[lane][phase].get("reason") == "over_limit"
     ]
+    parts += [
+        part for part in _reason_parts(reason)
+        if part.endswith(":over_limit") and part not in parts
+    ]
+    return parts
+
+
+def _no_reading_yet(reason: str) -> bool:
+    """(#1315) True when every part of the stop reason is a phase with no
+    reading yet. A config error or a bad value is a fault, not a wait."""
+    for part in _reason_parts(reason):
+        bits = part.split(":", 2)
+        if (
+            len(bits) != 3
+            or bits[0] not in _GUARD_LANES
+            or bits[1] not in _GUARD_PHASES
+            or bits[2] not in NO_READING_YET
+        ):
+            return False
+    return True
 
 
 class NotificationManager:
@@ -506,7 +539,7 @@ class NotificationManager:
         unsafe = not bool(snapshot.get("safe")) or not data_fresh
         read_only = bool(snapshot.get("read_only", False))
         reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
-        over = _over_limit_parts(reason)
+        over = _over_limit_parts(snapshot, reason)
         # (#1315) Nothing was measured over the limit: a reading is missing.
         no_reading = unsafe and not data_fresh and not over
         if data_fresh:
@@ -514,6 +547,7 @@ class NotificationManager:
         elif (
             no_reading
             and not self._phase_guard_had_reading
+            and _no_reading_yet(reason)
             and self._phase_guard_meter_loading(now)
         ):
             # (#1315, class 86) After a restart the meter's integration is
@@ -524,10 +558,17 @@ class NotificationManager:
         if unsafe:
             if not read_only:
                 state = "phase_guard_blocked"
-            elif no_reading:
-                state = "phase_guard_observer_no_reading"
-            else:
+            elif not no_reading:
                 state = "phase_guard_observer_warning"
+            elif (
+                self._last_phase_guard_alert_state
+                == "phase_guard_observer_warning"
+            ):
+                # (#1315) A phase over the limit is still the open incident
+                # when a reading then goes missing: no second notice.
+                return
+            else:
+                state = "phase_guard_observer_no_reading"
         elif self._last_phase_guard_alert_state == "phase_guard_blocked" and not bool(
             snapshot.get("control_authorized", True)
         ):
@@ -583,7 +624,13 @@ class NotificationManager:
             )
             event_state = state
         else:
-            if read_only:
+            if read_only and previous == "phase_guard_observer_no_reading":
+                message = get_text(
+                    self.hass,
+                    "notif_phase_guard_readings_back_observer",
+                    "Phase readings are back and within the limit.",
+                )
+            elif read_only:
                 message = get_text(
                     self.hass,
                     "notif_phase_guard_recovered_observer",
