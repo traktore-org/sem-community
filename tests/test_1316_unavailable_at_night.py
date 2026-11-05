@@ -26,6 +26,10 @@ driven for real:
 """
 from __future__ import annotations
 
+import ast
+import inspect
+import math
+import textwrap
 from unittest.mock import MagicMock
 
 import pytest
@@ -38,6 +42,9 @@ from custom_components.solar_energy_management.coordinator.actuate_battery impor
 )
 from custom_components.solar_energy_management.coordinator.charger_types import (
     BatteryIntent,
+)
+from custom_components.solar_energy_management.coordinator.sensor_reader import (
+    SensorReader,
 )
 from custom_components.solar_energy_management.coordinator.types import SEMData
 from custom_components.solar_energy_management.ha_energy_reader import (
@@ -68,6 +75,11 @@ def _night(pv_state="unavailable", sun="below_horizon", extra=None):
     return reader, table
 
 
+def _clears(cleared, entity_id) -> int:
+    """Clears of one entity's Repair (the live grid meter clears its own)."""
+    return sum(1 for c in cleared.call_args_list if c.args[1:] == (entity_id,))
+
+
 def _clock(monkeypatch, start=1000.0):
     """The outage clock in ``_read_sensor`` reads ``time.monotonic``."""
     import time as _time
@@ -90,11 +102,6 @@ class TestTheReportersNight:
         assert "solar" not in p.dark_inputs
         assert SEMData(power=p).to_dict()["solar_power"] == 0.0
 
-    def test_the_grid_meter_is_still_read(self):
-        reader, _ = _night()
-        p = reader.read_power()
-        assert p.grid_power != 0.0, "the live meter is untouched"
-
     def test_no_outage_clock_no_repair_no_unavailable_count(self, monkeypatch):
         now = _clock(monkeypatch)
         raised = MagicMock()
@@ -107,6 +114,37 @@ class TestTheReportersNight:
         assert PV not in reader._sensor_unavailable, (
             "sem_diag_sensors_unavailable counts this set")
         assert PV not in reader._sensor_unavailable_since
+        assert PV in reader._entities_read, "(#1140) its Repairs have an owner"
+
+    def test_a_repair_filed_before_dusk_is_cleared(self, monkeypatch):
+        """The inverter went dark 10 min before sunset: the Repair was filed
+        in daylight. Asleep at night is not a fault, so it is cleared — and
+        the count and the Repair say the same thing."""
+        now = _clock(monkeypatch)
+        raised, cleared = MagicMock(), MagicMock()
+        monkeypatch.setattr(ri, "raise_sensor_unavailable", raised)
+        monkeypatch.setattr(ri, "clear_sensor_unavailable", cleared)
+        reader, table = _night(sun="above_horizon")
+        reader._sensor_repair_reconciled.add(PV)    # a live read earlier today
+        reader.read_power()
+        now[0] += ri.UNAVAILABLE_REPAIR_THRESHOLD_S
+        reader.read_power()
+        raised.assert_called_once()
+        table["sun.sun"] = _sun("below_horizon")
+        reader.read_power()
+        assert _clears(cleared, PV) == 1
+        assert PV not in reader._sensor_repair_raised
+        reader.read_power()
+        assert _clears(cleared, PV) == 1            # once, not every cycle
+
+    def test_a_repair_from_before_a_restart_is_cleared(self, monkeypatch):
+        """(#933) The Repair is persistent: the first asleep read of a new
+        reader clears one an older version filed last night."""
+        cleared = MagicMock()
+        monkeypatch.setattr(ri, "clear_sensor_unavailable", cleared)
+        reader, _ = _night()
+        reader.read_power()
+        assert _clears(cleared, PV) == 1
 
     def test_no_solar_downtime_at_night(self, monkeypatch):
         now = _clock(monkeypatch)
@@ -167,6 +205,11 @@ class TestTheTwinsKeepTodaysRule:
         assert p.inputs_degraded is True
         assert reader._sensor_unavailable_since[PV] == now[0]
         raised.assert_not_called()
+        # In daylight a report that never comes is the fault the Repair is
+        # for (the #1065 W3 rule): still dark past the threshold, it files.
+        now[0] += ri.UNAVAILABLE_REPAIR_THRESHOLD_S
+        reader.read_power()
+        raised.assert_called_once()
 
     def test_the_inverter_waking_reads_its_value(self):
         reader, table = _night()
@@ -251,6 +294,14 @@ class TestEverySolarReadPath:
                              ie: _state(i, FRESH_S, unit="A")})
         assert reader._read_pv_string_source("pv1", (ve, ie)) == 0.0
 
+    def test_a_pair_with_a_negative_live_half_reads_plus_0_w(self):
+        """0 V × −0.1 A is −0.0: shown as "-0 W". Asleep is 0 W."""
+        ve, ie = "sensor.inv_pv_1_voltage", "sensor.inv_pv_1_current"
+        reader, _ = _reader({ve: _state("unavailable", FRESH_S, unit="V"),
+                             ie: _state(-0.1, FRESH_S, unit="A")})
+        got = reader._read_pv_string_source("pv1", (ve, ie))
+        assert got == 0.0 and math.copysign(1.0, got) == 1.0
+
     def test_voltage_times_current_pair_in_daylight_stays_dark(self):
         ve, ie = "sensor.inv_pv_1_voltage", "sensor.inv_pv_1_current"
         reader, _ = _reader({ve: _state("unavailable", FRESH_S, unit="V"),
@@ -262,3 +313,53 @@ class TestEverySolarReadPath:
         reader, _ = _reader({PV: _state("unavailable", FRESH_S)},
                             sun="above_horizon")
         assert reader._read_pv_string_source("pv1", PV) is None
+
+
+# ── The two doors ask first ───────────────────────────────────────────────
+
+_DOORS = ("_read_solar_power", "_read_pv_string_source")
+
+
+def _unasked_reads(src: str) -> list:
+    """Each ``_read_sensor`` call in a door whose entity was not first given
+    to ``_no_number_asleep`` (same expression, earlier line)."""
+    out = []
+    for fn in ast.walk(ast.parse(textwrap.dedent(src))):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        asked = []
+        reads = []
+        for call in ast.walk(fn):
+            if not (isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute) and call.args):
+                continue
+            key = (ast.dump(call.args[0]), call.lineno)
+            if call.func.attr == "_no_number_asleep":
+                asked.append(key)
+            elif call.func.attr == "_read_sensor":
+                reads.append(key)
+        for arg, line in reads:
+            if not any(a == arg and al <= line for a, al in asked):
+                out.append((fn.name, line))
+    return out
+
+
+class TestTheDoorsAskFirst:
+    def test_every_read_in_both_doors_asks_first(self):
+        """A new read in a door that skips the question would bring the dark
+        night back for that path."""
+        for door in _DOORS:
+            src = inspect.getsource(getattr(SensorReader, door))
+            assert "_read_sensor(" in src, door           # vacuity
+            assert not _unasked_reads(src), door
+
+    def test_the_check_catches_a_read_that_skips_it(self):
+        src = """
+            def d(self, a, b):
+                if self._no_number_asleep(a, "solar"):
+                    return 0.0
+                x = self._read_sensor(a, "solar")
+                y = self._read_sensor(b, "solar")
+                return x + y
+        """
+        assert [line for _, line in _unasked_reads(src)] == [6]
