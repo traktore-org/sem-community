@@ -325,6 +325,56 @@ async def test_a_reading_lost_during_an_overload_sends_no_second_notice():
 
 
 @pytest.mark.asyncio
+async def test_a_meter_lost_for_good_after_an_overload_is_reported():
+    """The overload notice may not hide a guard gone blind: a reading
+    missing for the whole wait gets its own notice."""
+    home = _Home()
+    home.hass.state = CoreState.running
+    home.amps = {1: 1.0, 2: 25.0, 3: 4.0}
+    await home.cycle(now=0.0)
+    home.amps = {1: None, 2: 8.0, 3: 4.0}
+    await home.cycle(now=10.0)
+    await home.cycle(now=10.0 + HOLD - 1.0)
+    assert home.events == ["phase_guard_observer_warning"]
+    await home.cycle(now=10.0 + HOLD)
+    assert home.events == [
+        "phase_guard_observer_warning", "phase_guard_observer_no_reading"]
+
+
+@pytest.mark.asyncio
+async def test_a_reading_seen_while_notices_were_off_ends_the_wait():
+    home = _Home(phase_guard_notifications_enabled=False)
+    home.hass.state = CoreState.running
+    home.amps = {1: 1.0, 2: 8.0, 3: 4.0}
+    await home.cycle(now=0.0)
+    home.coord.config["phase_guard_notifications_enabled"] = True
+    home.amps[1] = None
+    await home.cycle(now=10.0)
+    assert home.events == ["phase_guard_observer_no_reading"]
+
+
+@pytest.mark.asyncio
+async def test_switching_to_enforcing_says_armed_only_once_armed():
+    home = _Home()
+    home.hass.state = CoreState.running
+    home.amps = {1: 1.0, 2: 8.0, 3: 4.0}
+    await home.cycle(now=0.0)
+    home.amps[3] = None
+    await home.cycle(now=10.0)
+    home.coord.config["phase_guard_enforcement_enabled"] = True
+    home.amps[3] = 4.0
+    snapshot = await home.cycle(now=20.0)
+    assert snapshot["control_authorized"] is False  # premise: recovery hold
+    assert home.events == ["phase_guard_observer_no_reading"]
+    for step in range(3, 7):
+        snapshot = await home.cycle(now=10.0 * step)
+    assert snapshot["control_authorized"] is True
+    assert home.events == [
+        "phase_guard_observer_no_reading", "phase_guard_recovered"]
+    assert "armed" in home.sent[-1]
+
+
+@pytest.mark.asyncio
 async def test_readings_back_after_a_missing_reading_says_back_not_safe():
     home = _Home()
     home.hass.state = CoreState.running

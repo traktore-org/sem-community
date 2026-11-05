@@ -146,6 +146,7 @@ class NotificationManager:
         # since when it has waited for the meter to load.
         self._phase_guard_had_reading: bool = False
         self._phase_guard_wait_since: Optional[float] = None
+        self._phase_guard_lost_since: Optional[float] = None
 
     # ──────────────────────────────────────────────────────────────────
     # v1.6.8-compat shims for flap-suppression fields. Reads/writes
@@ -525,6 +526,9 @@ class NotificationManager:
         now: Optional[float] = None,
     ) -> None:
         """Alert once on a phase-guard incident and once after safe re-arming."""
+        if isinstance(snapshot, dict) and snapshot.get("data_fresh"):
+            # (#1315) Counted while notices are off too: the meter has loaded.
+            self._phase_guard_had_reading = True
         if not enabled or not self.config.get(
             "phase_guard_notifications_enabled", True
         ):
@@ -542,9 +546,9 @@ class NotificationManager:
         over = _over_limit_parts(snapshot, reason)
         # (#1315) Nothing was measured over the limit: a reading is missing.
         no_reading = unsafe and not data_fresh and not over
-        if data_fresh:
-            self._phase_guard_had_reading = True
-        elif (
+        if not no_reading:
+            self._phase_guard_lost_since = None
+        if (
             no_reading
             and not self._phase_guard_had_reading
             and _no_reading_yet(reason)
@@ -563,17 +567,20 @@ class NotificationManager:
             elif (
                 self._last_phase_guard_alert_state
                 == "phase_guard_observer_warning"
+                and self._phase_guard_lost_for(now)
+                < _ri.UNAVAILABLE_REPAIR_THRESHOLD_S
             ):
-                # (#1315) A phase over the limit is still the open incident
-                # when a reading then goes missing: no second notice.
+                # (#1315) The overload notice stays the open one while a
+                # reading drops out for a short time, so a sensor that flaps
+                # during an overload sends no notice each cycle.
                 return
             else:
                 state = "phase_guard_observer_no_reading"
-        elif self._last_phase_guard_alert_state == "phase_guard_blocked" and not bool(
-            snapshot.get("control_authorized", True)
-        ):
+        elif not read_only and not bool(snapshot.get("control_authorized", True)):
             # Keep an enforcing incident open throughout the recovery hold. The
-            # recovery notification means the active gate is actually armed again.
+            # recovery notification means the active gate is actually armed
+            # again — also after an observer notice, when enforcing was then
+            # switched on (#1315 review).
             return
         else:
             state = "phase_guard_normal"
@@ -662,6 +669,13 @@ class NotificationManager:
                 channel=_CHANNEL_ALERTS,
                 group="sem_alerts",
             )
+
+    def _phase_guard_lost_for(self, now: Optional[float]) -> float:
+        """(#1315) Seconds a reading has been missing during an overload."""
+        now = time.monotonic() if now is None else now
+        if self._phase_guard_lost_since is None:
+            self._phase_guard_lost_since = now
+        return now - self._phase_guard_lost_since
 
     def _phase_guard_meter_loading(self, now: Optional[float]) -> bool:
         """(#1315, class 86) True while the phase meter may still be loading:
