@@ -509,6 +509,9 @@ see what SEM intends to do tonight. See
 Hover a price slot to see its time and price. If your grid CO₂ sensor has a
 forecast, the slot also shows its CO₂ in g/kWh.
 
+The cheap band marks only the hours your tariff calls cheap. A sunny hour at
+peak price is not marked cheap, even when SEM plans to use its sun.
+
 #### sem-ev-progress-card
 
 **SEM EV Progress** · *EV tab*

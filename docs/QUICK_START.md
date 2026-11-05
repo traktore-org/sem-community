@@ -12,17 +12,21 @@ Get Solar Energy Management (SEM) running in your Home Assistant in about 10 min
 
 Complete these before installing SEM:
 
-**1. Home Assistant Energy Dashboard configured (recommended)**
+**1. Home Assistant 2026.8 or newer**
+
+Check your version under **Settings > System > About**. On an older version, update Home Assistant first. HACS offers no new SEM releases for it.
+
+**2. Home Assistant Energy Dashboard configured (recommended)**
 
 Since 2.1 this is no longer required: if the Energy Dashboard is empty, SEM asks the energy integrations you run what they create and offers those sensors for you to confirm.
 
 Go to **Settings > Dashboards > Energy**. You must have at least a solar production sensor and a grid sensor set up. SEM reads all sensor configuration from here automatically.
 
-**2. HACS installed**
+**3. HACS installed**
 
 SEM is distributed through HACS. If you have not installed HACS, follow the [HACS installation guide](https://hacs.xyz/docs/use/download/download/) first. On Home Assistant 2026.11 or newer, HACS is built in as **Settings → Marketplace**, so there is nothing to install.
 
-**3. No EV charger? That is fine**
+**4. No EV charger? That is fine**
 
 EV charger setup is optional. SEM works as a monitoring and battery management system without one.
 
