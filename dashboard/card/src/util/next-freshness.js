@@ -20,10 +20,14 @@ export function ageSeconds(stateObj, nowMs = Date.now()) {
     return Number.isFinite(t) ? Math.max(0, (nowMs - t) / 1000) : null;
 }
 
-export function freshness(stateObj, nowMs = Date.now(), { okS = 120, oldS = 1800 } = {}) {
+export function freshness(stateObj, nowMs = Date.now(), { okS = null, oldS = null } = {}) {
     if (!stateObj) return 'missing';
     const s = stateObj.state;
     if (s === 'unavailable' || s === 'unknown' || s === undefined || s === null) return 'off';
+    // last_updated moves only when the VALUE changes: a solar sensor reads 0
+    // all night and is still alive. Age judges only rows that declare a
+    // limit (a forecast or a price that stopped arriving).
+    if (okS === null || oldS === null) return 'ok';
     const age = ageSeconds(stateObj, nowMs);
     if (age === null) return 'off';
     if (age <= okS) return 'ok';
@@ -45,7 +49,7 @@ export function sourceRows(states, nowMs = Date.now()) {
     for (const r of SOURCE_ROWS) {
         const st = states?.[r.entity];
         if (!st) continue;
-        const state = freshness(st, nowMs, { okS: r.okS || 120, oldS: r.oldS || 1800 });
+        const state = freshness(st, nowMs, { okS: r.okS ?? null, oldS: r.oldS ?? null });
         rows.push({ key: r.key, entity: r.entity, state, age: ageSeconds(st, nowMs), value: st.state });
     }
     return rows;

@@ -90,8 +90,11 @@ test('freshness reads last_updated and treats unavailable as off', () => {
     const now = Date.parse('2026-11-05T20:00:00Z');
     const at = (s) => new Date(now - s * 1000).toISOString();
     assert.equal(freshness({ state: '12', last_updated: at(5) }, now), 'ok');
-    assert.equal(freshness({ state: '12', last_updated: at(600) }, now), 'old');
-    assert.equal(freshness({ state: '12', last_updated: at(9000) }, now), 'off');
+    // an unchanged value is still alive: no age rule without a declared limit
+    assert.equal(freshness({ state: '0', last_updated: at(9000) }, now), 'ok');
+    const lim = { okS: 120, oldS: 1800 };
+    assert.equal(freshness({ state: '12', last_updated: at(600) }, now, lim), 'old');
+    assert.equal(freshness({ state: '12', last_updated: at(9000) }, now, lim), 'off');
     assert.equal(freshness({ state: 'unavailable', last_updated: at(1) }, now), 'off');
     assert.equal(freshness(undefined, now), 'missing');
     assert.equal(ageLabel(12), '12 s');

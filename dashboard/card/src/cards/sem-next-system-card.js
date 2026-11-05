@@ -34,10 +34,19 @@ class SEMNextSystemCard extends SEMNextBase {
         if (!rows.length) return nothing;
         const cls = { ok: '', old: 'warn', off: 'bad', missing: 'off' };
         return html`<div class="sec"><h3>${this._t('next_sources')}</h3><div class="list">
+            ${this._inputsDegraded() ? html`<div class="item"><i class="warn"></i>
+                <div>${this._t('next_inputs_degraded')}<span>${this._name('sensor.sem_diag_inputs_degraded')}</span></div><b></b></div>` : nothing}
             ${rows.map((r) => html`<div class="item"><i class="${cls[r.state] || ''}"></i>
                 <div>${this._t(r.key)}<span>${this._name(r.entity)}${r.age === null ? '' : ' · ' + ageLabel(r.age)}</span></div>
                 <b>${this._t('next_fresh_' + r.state)}</b></div>`)}
         </div></div>`;
+    }
+
+    // SEM's own verdict on its inputs (a frozen value, a source asleep by
+    // day) — it knows the night rules the plain age check cannot.
+    _inputsDegraded() {
+        const s = String(this._str('sensor.sem_diag_inputs_degraded') || '').toLowerCase();
+        return s === 'true' || s === 'on';
     }
 
     _refused() {
@@ -99,10 +108,10 @@ class SEMNextSystemCard extends SEMNextBase {
     render() {
         if (!this._hass) return nothing;
         const rows = sourceRows(this._hass.states, Date.now());
-        const bad = rows.filter((r) => r.state !== 'ok');
+        const bad = rows.filter((r) => r.state !== 'ok').length + (this._inputsDegraded() ? 1 : 0);
         const plan = this._attrs('sensor.sem_energy_plan');
         const age = plan.computed_at ? Math.round((Date.now() - Date.parse(plan.computed_at)) / 60000) : null;
-        const main = bad.length ? this._tf('next_sys_lead_bad', { n: bad.length }) : this._t('next_sys_lead_ok');
+        const main = bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok');
         const ver = this._str('sensor.sem_diag_version');
         const sub = [age !== null && Number.isFinite(age) ? this._tf('next_plan_age', { min: age }) : '',
                      this._observer() ? this._t('next_observer_on') : this._t('next_observer_off'),

@@ -7,11 +7,11 @@
  * the hass setter re-renders when one of their states changes.
  */
 
-import { SEMLitBase, html, css, nothing } from './sem-lit-base.js';
+import { SEMLitBase, html, css, svg, nothing } from './sem-lit-base.js';
 import { readNumber } from '../util/missing-value.js';
 import { fill } from '../util/next-lead.js';
 
-export { html, css, nothing };
+export { html, css, svg, nothing };
 
 export const NEXT_COLORS = {
     solar: '#ff9800', grid: '#488fc2', export: '#8353d1',

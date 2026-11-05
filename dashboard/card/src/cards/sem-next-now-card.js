@@ -10,7 +10,7 @@
  *   type: custom:sem-next-now-card
  */
 
-import { SEMNextBase, html, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { SEMNextBase, html, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { nowLead } from '../util/next-lead.js';
 
@@ -94,11 +94,11 @@ class SEMNextNowCard extends SEMNextBase {
         const evR = this._powerW('sensor.sem_ev_power');
         const solar = solarR ?? 0, grid = gridR ?? 0, batt = battR ?? 0, home = homeR ?? 0, ev = evR ?? 0;
         const soc = this._num('sensor.sem_battery_soc');
-        const node = (x, y, label, value, color, dim) => html`
+        const node = (x, y, label, value, color, dim) => svg`
             <circle cx="${x}" cy="${y}" r="26" fill="var(--card-background-color)" stroke="${color}" stroke-width="2.5" opacity="${dim ? 0.45 : 1}"></circle>
             <text x="${x}" y="${y - 4}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--primary-text-color)">${label}</text>
             <text x="${x}" y="${y + 11}" text-anchor="middle" font-size="11" fill="var(--secondary-text-color)">${value}</text>`;
-        const arrow = (d, color, on) => on ? html`<path d="${d}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" marker-end="url(#nxarr)"></path>` : nothing;
+        const arrow = (d, color, on) => on ? svg`<path d="${d}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" marker-end="url(#nxarr)"></path>` : nothing;
         const kw = (w) => w === null ? '—' : `${(Math.abs(w) / 1000).toFixed(1)} kW`;
         return html`
             <svg viewBox="0 0 360 170" width="100%" role="img" aria-label="${this._t('next_power_now')}">

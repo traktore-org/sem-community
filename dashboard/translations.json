@@ -2201,7 +2201,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Vytvořit",
     "next_link_creating": "Creating…",
-    "next_link_open": "Otevřít"
+    "next_link_open": "Otevřít",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4405,7 +4406,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Opret",
     "next_link_creating": "Creating…",
-    "next_link_open": "Åbn"
+    "next_link_open": "Åbn",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6609,7 +6611,8 @@
     "next_link_sub": "Ein neues Dashboard: fünf Bildschirme nach Ihrer Frage. Das klassische bleibt.",
     "next_link_create": "Erstellen",
     "next_link_creating": "Wird erstellt…",
-    "next_link_open": "Öffnen"
+    "next_link_open": "Öffnen",
+    "next_inputs_degraded": "SEM meldet gestörte Messwerte"
   },
   "en": {
     "% of limit": "% of limit",
@@ -8813,7 +8816,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Create",
     "next_link_creating": "Creating…",
-    "next_link_open": "Open"
+    "next_link_open": "Open",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "es": {
     "% of limit": "% del límite",
@@ -11017,7 +11021,8 @@
     "next_link_sub": "Un panel nuevo: cinco pantallas según tu pregunta. El clásico se queda.",
     "next_link_create": "Crear",
     "next_link_creating": "Creando…",
-    "next_link_open": "Abrir"
+    "next_link_open": "Abrir",
+    "next_inputs_degraded": "SEM informa de entradas degradadas"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13221,7 +13226,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Luo",
     "next_link_creating": "Creating…",
-    "next_link_open": "Avaa"
+    "next_link_open": "Avaa",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15425,7 +15431,8 @@
     "next_link_sub": "Un nouveau tableau de bord : cinq écrans selon votre question. Le classique reste.",
     "next_link_create": "Créer",
     "next_link_creating": "Création…",
-    "next_link_open": "Ouvrir"
+    "next_link_open": "Ouvrir",
+    "next_inputs_degraded": "SEM signale des mesures dégradées"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17629,7 +17636,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Létrehozás",
     "next_link_creating": "Creating…",
-    "next_link_open": "Megnyitás"
+    "next_link_open": "Megnyitás",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "it": {
     "% of limit": "% del limite",
@@ -19833,7 +19841,8 @@
     "next_link_sub": "Una nuova dashboard: cinque schermate per la tua domanda. La classica resta.",
     "next_link_create": "Crea",
     "next_link_creating": "Creazione…",
-    "next_link_open": "Apri"
+    "next_link_open": "Apri",
+    "next_inputs_degraded": "SEM segnala ingressi degradati"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -22037,7 +22046,8 @@
     "next_link_sub": "Een nieuw dashboard: vijf schermen naar uw vraag. Het klassieke blijft.",
     "next_link_create": "Aanmaken",
     "next_link_creating": "Bezig…",
-    "next_link_open": "Openen"
+    "next_link_open": "Openen",
+    "next_inputs_degraded": "SEM meldt verstoorde meetwaarden"
   },
   "no": {
     "% of limit": "% av grense",
@@ -24241,7 +24251,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Opprett",
     "next_link_creating": "Creating…",
-    "next_link_open": "Åpne"
+    "next_link_open": "Åpne",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26445,7 +26456,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Utwórz",
     "next_link_creating": "Creating…",
-    "next_link_open": "Otwórz"
+    "next_link_open": "Otwórz",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28649,7 +28661,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Criar",
     "next_link_creating": "Creating…",
-    "next_link_open": "Abrir"
+    "next_link_open": "Abrir",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30853,7 +30866,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Creează",
     "next_link_creating": "Creating…",
-    "next_link_open": "Deschide"
+    "next_link_open": "Deschide",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -33057,7 +33071,8 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "Skapa",
     "next_link_creating": "Creating…",
-    "next_link_open": "Öppna"
+    "next_link_open": "Öppna",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -35261,6 +35276,7 @@
     "next_link_sub": "A new dashboard: five screens by the question you have. The classic one stays.",
     "next_link_create": "创建",
     "next_link_creating": "Creating…",
-    "next_link_open": "打开"
+    "next_link_open": "打开",
+    "next_inputs_degraded": "SEM reports degraded inputs"
   }
 }

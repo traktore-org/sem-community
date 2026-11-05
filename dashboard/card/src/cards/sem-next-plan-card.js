@@ -10,7 +10,7 @@
  *   type: custom:sem-next-plan-card
  */
 
-import { SEMNextBase, html, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { SEMNextBase, html, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, kwhOf } from '../util/next-lead.js';
 import { laneModel, LANE_COLORS } from '../util/next-timeline.js';
@@ -58,7 +58,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const x = (f) => L + f * (W - L - 8);
         let r = 0;
         const parts = [];
-        const laneLabel = (label, i) => html`<text x="4" y="${TOP + i * ROW + ROW * 0.64}" font-size="11" font-weight="600" fill="var(--secondary-text-color)">${label}</text>
+        const laneLabel = (label, i) => svg`<text x="4" y="${TOP + i * ROW + ROW * 0.64}" font-size="11" font-weight="600" fill="var(--secondary-text-color)">${label}</text>
             <line x1="${L}" y1="${TOP + (i + 1) * ROW}" x2="${W - 8}" y2="${TOP + (i + 1) * ROW}" stroke="var(--divider-color)"></line>`;
         // Sun lane: a bell over the daylight span.
         parts.push(laneLabel(this._t('next_lane_sun'), r));
@@ -70,8 +70,8 @@ class SEMNextPlanCard extends SEMNextBase {
                 const y = TOP + r * ROW + ROW * 0.9 - Math.sin(Math.PI * f) * ROW * 0.78;
                 pts.push(`${x(fx).toFixed(1)},${y.toFixed(1)}`);
             }
-            parts.push(html`<polygon points="${x(m.sun.x0)},${TOP + r * ROW + ROW * 0.9} ${pts.join(' ')} ${x(m.sun.x1)},${TOP + r * ROW + ROW * 0.9}" fill="${C.solar}" opacity="0.35" stroke="${C.solar}" stroke-width="1.5" stroke-dasharray="4 3"></polygon>`);
-            if (Number.isFinite(m.sun.kwh)) parts.push(html`<text x="${x((m.sun.x0 + m.sun.x1) / 2)}" y="${TOP + r * ROW + ROW * 0.45}" font-size="10" font-weight="600" text-anchor="middle" fill="var(--primary-text-color)">${this._fmt(m.sun.kwh, 1)} kWh</text>`);
+            parts.push(svg`<polygon points="${x(m.sun.x0)},${TOP + r * ROW + ROW * 0.9} ${pts.join(' ')} ${x(m.sun.x1)},${TOP + r * ROW + ROW * 0.9}" fill="${C.solar}" opacity="0.35" stroke="${C.solar}" stroke-width="1.5" stroke-dasharray="4 3"></polygon>`);
+            if (Number.isFinite(m.sun.kwh)) parts.push(svg`<text x="${x((m.sun.x0 + m.sun.x1) / 2)}" y="${TOP + r * ROW + ROW * 0.45}" font-size="10" font-weight="600" text-anchor="middle" fill="var(--primary-text-color)">${this._fmt(m.sun.kwh, 1)} kWh</text>`);
         }
         r++;
         if (m.price) {
@@ -79,7 +79,7 @@ class SEMNextPlanCard extends SEMNextBase {
             const max = Math.max(...m.price.map((p) => p.price), 0.01);
             for (const p of m.price) {
                 const h = Math.max(3, (ROW - 8) * (p.price / max));
-                parts.push(html`<rect x="${x(p.x0) + 0.5}" y="${TOP + r * ROW + ROW - 4 - h}" width="${Math.max(1, x(p.x1) - x(p.x0) - 1)}" height="${h}" fill="${p.cheap ? C.good : LANE_COLORS.price}" opacity="0.8"></rect>`);
+                parts.push(svg`<rect x="${x(p.x0) + 0.5}" y="${TOP + r * ROW + ROW - 4 - h}" width="${Math.max(1, x(p.x1) - x(p.x0) - 1)}" height="${h}" fill="${p.cheap ? C.good : LANE_COLORS.price}" opacity="0.8"></rect>`);
             }
             r++;
         }
@@ -88,14 +88,14 @@ class SEMNextPlanCard extends SEMNextBase {
             lane.blocks.forEach((b, bi) => {
                 const key = `${li}:${bi}`;
                 const picked = this._picked === key;
-                parts.push(html`<rect x="${x(b.x0) + 1}" y="${TOP + r * ROW + 5}" width="${Math.max(2, x(b.x1) - x(b.x0) - 2)}" height="${ROW - 10}" rx="6"
+                parts.push(svg`<rect x="${x(b.x0) + 1}" y="${TOP + r * ROW + 5}" width="${Math.max(2, x(b.x1) - x(b.x0) - 2)}" height="${ROW - 10}" rx="6"
                     fill="${b.color || lane.color}" opacity="${this._picked && !picked ? 0.5 : 0.9}"
                     stroke="${b.dashed ? 'var(--primary-text-color)' : 'none'}" stroke-width="1" stroke-dasharray="${b.dashed ? '3 3' : ''}"
                     style="cursor:pointer" @click=${() => this._pick(key, lane, b)}></rect>`);
             });
             r++;
         });
-        const ticks = m.ticks.map((t) => html`<line x1="${x(t.x)}" y1="${TOP - 6}" x2="${x(t.x)}" y2="${TOP + rows * ROW}" stroke="var(--divider-color)"></line>
+        const ticks = m.ticks.map((t) => svg`<line x1="${x(t.x)}" y1="${TOP - 6}" x2="${x(t.x)}" y2="${TOP + rows * ROW}" stroke="var(--divider-color)"></line>
             <text x="${x(t.x)}" y="${TOP + rows * ROW + 14}" font-size="10" text-anchor="middle" fill="var(--secondary-text-color)">${t.label}</text>`);
         return html`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${this._t('next_timeline')}">
             ${ticks}${parts}
