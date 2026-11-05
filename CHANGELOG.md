@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **A restart no longer sends you a false "phase limit exceeded" notice while your meter starts** (#1315). A missing reading now says unavailable, not exceeded.
-- 🐛 **Solar now reads 0 W at night when your inverter goes unavailable** (#1316). Before, it counted as a missing reading and held battery changes all night.
+- 🐛 **Solar now reads 0 W at night when your inverter goes unavailable** (#1316). Before, it counted as missing and held battery changes all night.
 - ✨ **Night charging starts at sunset plus an offset you set (default 30 min), not 20:30** (#1318). The forecast night-target option is gone.
 
 # [2.3.0-beta.6] — 05.11.2026
