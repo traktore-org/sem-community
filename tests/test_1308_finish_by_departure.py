@@ -196,6 +196,16 @@ def test_the_gap_is_shut_when_another_night_comes_first():
     assert EVControlMixin._departure_gap_for(_Host(_tm()), CFG, noon) is False
 
 
+def test_the_gap_is_shut_when_the_night_window_cannot_be_read():
+    """Without a window there is no proof that no night comes first."""
+    tm = _tm()
+    tm.get_night_window.side_effect = ValueError("no window")
+    assert EVControlMixin._departure_gap_for(_Host(tm), CFG, AFTER_NIGHT) is False
+    tm = _tm()
+    tm.get_night_window.return_value = ("", "")
+    assert EVControlMixin._departure_gap_for(_Host(tm), CFG, AFTER_NIGHT) is False
+
+
 def test_the_gap_is_shut_for_a_mode_that_never_grids():
     assert EVControlMixin._departure_gap_for(
         _Host(_tm(), night_on=False), CFG, AFTER_NIGHT) is False

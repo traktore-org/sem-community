@@ -297,7 +297,9 @@ class EVControlMixin:
             night_start = None
         from .ev_tariff_planner import resolve_deadline
         next_open = resolve_deadline(now, night_start) if night_start else None
-        return next_open is None or departure <= next_open
+        # No window to compare with: shut. A grid charge at day price needs
+        # the proof that no night comes first.
+        return next_open is not None and departure <= next_open
 
     def _compute_night_plan(
         self, charger_cfg: dict, remaining_to_min_kwh: float, energy: Any = None,
