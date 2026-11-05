@@ -463,7 +463,8 @@
           "ev_phase_switch_entity": "Encja przełączania faz (opcjonalnie)",
           "ev_phase_switch_value_1p": "Przełączanie faz: wartość dla 1 fazy (opcjonalnie)",
           "ev_phase_switch_value_3p": "Przełączanie faz: wartość dla 3 faz (opcjonalnie)",
-          "ev_phase_switching_enabled": "Przełączanie faz"
+          "ev_phase_switching_enabled": "Przełączanie faz",
+          "finish_by_departure": "Dokończ przed odjazdem"
         },
         "data_description": {
           "charger_name": "Przyjazna nazwa tej ładowarki wyświetlana na pulpicie.",
@@ -494,7 +495,8 @@
           "ev_phase_switch_entity": "Select/number/switch przełączający ładowarkę między ładowaniem 1- i 3-fazowym (go-e 'psm', KEBA serii X, openWB). Na razie SEM tylko obserwuje i weryfikuje — automatyczne przełączanie pojawi się w późniejszej wersji.",
           "ev_phase_switch_value_1p": "Co zapisać do encji przełączania dla ładowania 1-fazowego — nazwa opcji selecta, wartość number lub on/off. Wymagane dla encji select; domyślnie number 1, switch off.",
           "ev_phase_switch_value_3p": "Co zapisać do encji przełączania dla ładowania 3-fazowego — nazwa opcji selecta, wartość number lub on/off. Wymagane dla encji select; domyślnie number 3, switch on.",
-          "ev_phase_switching_enabled": "Domyślnie wyłączone, dopóki trwa przebudowa modelu 1/3 faz (u niektórych marek pauzowało ładowarki, które już się nie wznawiały). Włącz, aby przetestować na swojej ładowarce."
+          "ev_phase_switching_enabled": "Domyślnie wyłączone, dopóki trwa przebudowa modelu 1/3 faz (u niektórych marek pauzowało ładowarki, które już się nie wznawiały). Włącz, aby przetestować na swojej ładowarce.",
+          "finish_by_departure": "Domyślnie wyłączone. Włączone: SEM ładuje dalej po końcu nocy do godziny „Naładuj do”, z sieci po cenie dziennej, prądem, który akurat wystarcza."
         }
       },
       "ev_charger_add": {
@@ -529,7 +531,8 @@
           "ev_phase_switch_entity": "Encja przełączania faz (opcjonalnie)",
           "ev_phase_switch_value_1p": "Przełączanie faz: wartość dla 1 fazy (opcjonalnie)",
           "ev_phase_switch_value_3p": "Przełączanie faz: wartość dla 3 faz (opcjonalnie)",
-          "ev_phase_switching_enabled": "Przełączanie faz"
+          "ev_phase_switching_enabled": "Przełączanie faz",
+          "finish_by_departure": "Dokończ przed odjazdem"
         },
         "data_description": {
           "charger_name": "Przyjazna nazwa tej ładowarki wyświetlana na pulpicie.",
@@ -559,7 +562,8 @@
           "ev_phase_switch_entity": "Select/number/switch przełączający ładowarkę między ładowaniem 1- i 3-fazowym (go-e 'psm', KEBA serii X, openWB). Na razie SEM tylko obserwuje i weryfikuje — automatyczne przełączanie pojawi się w późniejszej wersji.",
           "ev_phase_switch_value_1p": "Co zapisać do encji przełączania dla ładowania 1-fazowego — nazwa opcji selecta, wartość number lub on/off. Wymagane dla encji select; domyślnie number 1, switch off.",
           "ev_phase_switch_value_3p": "Co zapisać do encji przełączania dla ładowania 3-fazowego — nazwa opcji selecta, wartość number lub on/off. Wymagane dla encji select; domyślnie number 3, switch on.",
-          "ev_phase_switching_enabled": "Domyślnie wyłączone, dopóki trwa przebudowa modelu 1/3 faz (u niektórych marek pauzowało ładowarki, które już się nie wznawiały). Włącz, aby przetestować na swojej ładowarce."
+          "ev_phase_switching_enabled": "Domyślnie wyłączone, dopóki trwa przebudowa modelu 1/3 faz (u niektórych marek pauzowało ładowarki, które już się nie wznawiały). Włącz, aby przetestować na swojej ładowarce.",
+          "finish_by_departure": "Domyślnie wyłączone. Włączone: SEM ładuje dalej po końcu nocy do godziny „Naładuj do”, z sieci po cenie dziennej, prądem, który akurat wystarcza."
         }
       },
       "pv_naming": {

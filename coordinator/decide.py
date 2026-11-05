@@ -1415,6 +1415,24 @@ def clamp_to_peak_slot(result, view):
     return result
 
 
+def _departure_floor(result: ChargerDecision, view: ChargerView) -> ChargerDecision:
+    """(#1308) *Finish by departure*: after the night end, a set Charge by
+    still wins. The coordinator made ``deadline_amps`` by day only in that
+    gap (``departure_floor``), sized to just make the departure; the shared
+    top-up decision charges at it from the grid. The sun keeps the offer
+    when it gives at least the floor. Off, the flag is never set and the
+    day is what it was. ``off`` and ``always_max`` have nothing to add."""
+    if (not view.departure_floor or view.fleet.is_night
+            or view.deadline_amps <= 0 or view.power.car_absent
+            or view.mode in ("off", "always_max")
+            or view.target_kwh is None or view.target_kwh <= 0.1):
+        return result
+    if (result.intent is ChargerIntent.CHARGE_AT_AMPS
+            and result.commanded_amps >= view.deadline_amps):
+        return result
+    return night_top_up_decision(view, view.mode, phase="day (to departure)")
+
+
 def decide(view: ChargerView) -> ChargerDecision:
     """Compute the per-charger per-cycle decision.
 
@@ -1454,6 +1472,7 @@ def decide(view: ChargerView) -> ChargerDecision:
         )
         return _OFF.decide(view)
     result = strategy.decide(view)
+    result = _departure_floor(result, view)
     # Single source of truth for the stability bridge (#461): classify an
     # IDLE as transient (hold) vs structural (stop now) HERE, where the SoC /
     # surplus / tariff data lives, and stamp it on the decision. The bridge

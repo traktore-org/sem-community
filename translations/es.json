@@ -463,7 +463,8 @@
           "ev_phase_switch_entity": "Entidad de conmutación de fases (opcional)",
           "ev_phase_switch_value_1p": "Conmutación de fases: valor monofásico (opcional)",
           "ev_phase_switch_value_3p": "Conmutación de fases: valor trifásico (opcional)",
-          "ev_phase_switching_enabled": "Conmutación de fases"
+          "ev_phase_switching_enabled": "Conmutación de fases",
+          "finish_by_departure": "Terminar antes de la salida"
         },
         "data_description": {
           "charger_name": "Nombre descriptivo de este cargador que se muestra en el panel.",
@@ -494,7 +495,8 @@
           "ev_phase_switch_entity": "Select/number/switch que cambia el cargador entre carga mono y trifásica (go-e 'psm', KEBA serie X, openWB). Por ahora SEM solo observa y valida — la conmutación automática llegará en una versión posterior.",
           "ev_phase_switch_value_1p": "Qué se escribe en la entidad de conmutación para carga monofásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 1, switch por defecto off.",
           "ev_phase_switch_value_3p": "Qué se escribe en la entidad de conmutación para carga trifásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 3, switch por defecto on.",
-          "ev_phase_switching_enabled": "Desactivado de forma predeterminada mientras se revisa el modelo de 1/3 fases (pausaba cargadores que nunca se reanudaban en algunas marcas). Actívelo para probarlo en su cargador."
+          "ev_phase_switching_enabled": "Desactivado de forma predeterminada mientras se revisa el modelo de 1/3 fases (pausaba cargadores que nunca se reanudaban en algunas marcas). Actívelo para probarlo en su cargador.",
+          "finish_by_departure": "Desactivado por defecto. Activado: SEM sigue cargando tras el fin de la noche hasta la hora «Cargar antes de», desde la red a precio de día, con la corriente justa."
         }
       },
       "ev_charger_add": {
@@ -529,7 +531,8 @@
           "ev_phase_switch_entity": "Entidad de conmutación de fases (opcional)",
           "ev_phase_switch_value_1p": "Conmutación de fases: valor monofásico (opcional)",
           "ev_phase_switch_value_3p": "Conmutación de fases: valor trifásico (opcional)",
-          "ev_phase_switching_enabled": "Conmutación de fases"
+          "ev_phase_switching_enabled": "Conmutación de fases",
+          "finish_by_departure": "Terminar antes de la salida"
         },
         "data_description": {
           "charger_name": "Nombre descriptivo de este cargador que se muestra en el panel.",
@@ -559,7 +562,8 @@
           "ev_phase_switch_entity": "Select/number/switch que cambia el cargador entre carga mono y trifásica (go-e 'psm', KEBA serie X, openWB). Por ahora SEM solo observa y valida — la conmutación automática llegará en una versión posterior.",
           "ev_phase_switch_value_1p": "Qué se escribe en la entidad de conmutación para carga monofásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 1, switch por defecto off.",
           "ev_phase_switch_value_3p": "Qué se escribe en la entidad de conmutación para carga trifásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 3, switch por defecto on.",
-          "ev_phase_switching_enabled": "Desactivado de forma predeterminada mientras se revisa el modelo de 1/3 fases (pausaba cargadores que nunca se reanudaban en algunas marcas). Actívelo para probarlo en su cargador."
+          "ev_phase_switching_enabled": "Desactivado de forma predeterminada mientras se revisa el modelo de 1/3 fases (pausaba cargadores que nunca se reanudaban en algunas marcas). Actívelo para probarlo en su cargador.",
+          "finish_by_departure": "Desactivado por defecto. Activado: SEM sigue cargando tras el fin de la noche hasta la hora «Cargar antes de», desde la red a precio de día, con la corriente justa."
         }
       },
       "pv_naming": {

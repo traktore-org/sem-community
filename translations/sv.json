@@ -463,7 +463,8 @@
           "ev_phase_switch_entity": "Fasväxlingsentitet (valfritt)",
           "ev_phase_switch_value_1p": "Fasväxling: värde för 1-fas (valfritt)",
           "ev_phase_switch_value_3p": "Fasväxling: värde för 3-fas (valfritt)",
-          "ev_phase_switching_enabled": "Fasväxling"
+          "ev_phase_switching_enabled": "Fasväxling",
+          "finish_by_departure": "Klart före avresa"
         },
         "data_description": {
           "charger_name": "Visningsnamn för den här laddaren i instrumentpanelen.",
@@ -494,7 +495,8 @@
           "ev_phase_switch_entity": "Select/number/switch som växlar laddaren mellan 1- och 3-fasladdning (go-e 'psm', KEBA X-serien, openWB). SEM observerar och validerar tills vidare bara — automatisk växling kommer i en senare version.",
           "ev_phase_switch_value_1p": "Vad som skrivs till växlingsentiteten för 1-fasladdning — ett selects alternativnamn, ett numbers värde eller on/off. Krävs för select-entiteter; number-standard 1, switch-standard off.",
           "ev_phase_switch_value_3p": "Vad som skrivs till växlingsentiteten för 3-fasladdning — ett selects alternativnamn, ett numbers värde eller on/off. Krävs för select-entiteter; number-standard 3, switch-standard on.",
-          "ev_phase_switching_enabled": "Av som standard medan 1/3-fasmodellen omarbetas (den pausade laddare som aldrig återupptog laddningen på vissa märken). Slå på för att testa på din laddare."
+          "ev_phase_switching_enabled": "Av som standard medan 1/3-fasmodellen omarbetas (den pausade laddare som aldrig återupptog laddningen på vissa märken). Slå på för att testa på din laddare.",
+          "finish_by_departure": "Av som standard. På: SEM fortsätter ladda efter nattens slut fram till tiden 'Ladda senast', från nätet till dagpris, med den ström som precis räcker."
         }
       },
       "ev_charger_add": {
@@ -529,7 +531,8 @@
           "ev_phase_switch_entity": "Fasväxlingsentitet (valfritt)",
           "ev_phase_switch_value_1p": "Fasväxling: värde för 1-fas (valfritt)",
           "ev_phase_switch_value_3p": "Fasväxling: värde för 3-fas (valfritt)",
-          "ev_phase_switching_enabled": "Fasväxling"
+          "ev_phase_switching_enabled": "Fasväxling",
+          "finish_by_departure": "Klart före avresa"
         },
         "data_description": {
           "charger_name": "Visningsnamn för den här laddaren i instrumentpanelen.",
@@ -559,7 +562,8 @@
           "ev_phase_switch_entity": "Select/number/switch som växlar laddaren mellan 1- och 3-fasladdning (go-e 'psm', KEBA X-serien, openWB). SEM observerar och validerar tills vidare bara — automatisk växling kommer i en senare version.",
           "ev_phase_switch_value_1p": "Vad som skrivs till växlingsentiteten för 1-fasladdning — ett selects alternativnamn, ett numbers värde eller on/off. Krävs för select-entiteter; number-standard 1, switch-standard off.",
           "ev_phase_switch_value_3p": "Vad som skrivs till växlingsentiteten för 3-fasladdning — ett selects alternativnamn, ett numbers värde eller on/off. Krävs för select-entiteter; number-standard 3, switch-standard on.",
-          "ev_phase_switching_enabled": "Av som standard medan 1/3-fasmodellen omarbetas (den pausade laddare som aldrig återupptog laddningen på vissa märken). Slå på för att testa på din laddare."
+          "ev_phase_switching_enabled": "Av som standard medan 1/3-fasmodellen omarbetas (den pausade laddare som aldrig återupptog laddningen på vissa märken). Slå på för att testa på din laddare.",
+          "finish_by_departure": "Av som standard. På: SEM fortsätter ladda efter nattens slut fram till tiden 'Ladda senast', från nätet till dagpris, med den ström som precis räcker."
         }
       },
       "pv_naming": {

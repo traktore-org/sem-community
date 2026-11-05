@@ -270,8 +270,38 @@ class EVControlMixin:
         — the one resolver's answer (#1023)."""
         return departure_hhmm(charger_cfg, self.config)
 
+    def _departure_gap_for(self, charger_cfg: dict, now: Optional[datetime] = None) -> bool:
+        """(#1308) In the hours after the night end and before this charger's
+        departure, with *Finish by departure* on: the one time a plan is made
+        by day. Shut at night (the night path owns it), for a mode that never
+        grids, and when another night opens before the car leaves."""
+        cfg = charger_cfg or {}
+        if not cfg.get("finish_by_departure"):
+            return False
+        try:
+            if self.time_manager.is_night_mode():
+                return False
+        except (AttributeError, ValueError, TypeError):
+            return False
+        if not self._mode_allows_night_charging(cfg):
+            return False
+        now = now or dt_util.now()
+        departure = departure_for(
+            cfg, now, self.config,
+            calendar_next=_calendar_next_for(self, str(cfg.get("id") or "")))
+        if departure is None or departure <= now:
+            return False
+        try:
+            night_start = self.time_manager.get_night_window()[0]
+        except (ValueError, AttributeError, TypeError, IndexError):
+            night_start = None
+        from .ev_tariff_planner import resolve_deadline
+        next_open = resolve_deadline(now, night_start) if night_start else None
+        return next_open is None or departure <= next_open
+
     def _compute_night_plan(
         self, charger_cfg: dict, remaining_to_min_kwh: float, energy: Any = None,
+        *, night_over: bool = False,
     ) -> NightChargePlan:
         """Build the per-charger night charge plan (deadline + tariff) (#246/#247).
 
@@ -400,6 +430,10 @@ class EVControlMixin:
             deadline_at=departure_for(
                 cfg, now, self.config,
                 calendar_next=_calendar_next_for(self, str(cfg.get("id") or ""))),
+            # (#1308) the charger's own switch; ``night_over`` says the
+            # caller is in the gap after the night end.
+            finish_by_departure=bool(cfg.get("finish_by_departure", False)),
+            night_over=bool(night_over),
         )
         return plan
 

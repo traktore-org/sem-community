@@ -463,7 +463,8 @@
           "ev_phase_switch_entity": "Entidade de comutação de fases (opcional)",
           "ev_phase_switch_value_1p": "Comutação de fases: valor monofásico (opcional)",
           "ev_phase_switch_value_3p": "Comutação de fases: valor trifásico (opcional)",
-          "ev_phase_switching_enabled": "Comutação de fases"
+          "ev_phase_switching_enabled": "Comutação de fases",
+          "finish_by_departure": "Concluir até à partida"
         },
         "data_description": {
           "charger_name": "Nome amigável para este carregador, mostrado no painel.",
@@ -494,7 +495,8 @@
           "ev_phase_switch_entity": "Select/number/switch que alterna o carregador entre carga mono e trifásica (go-e 'psm', KEBA série X, openWB). Por enquanto o SEM apenas observa e valida — a comutação automática virá numa versão futura.",
           "ev_phase_switch_value_1p": "O que escrever na entidade de comutação para carga monofásica — nome de opção de um select, valor de um number, ou on/off. Obrigatório para entidades select; number padrão 1, switch padrão off.",
           "ev_phase_switch_value_3p": "O que escrever na entidade de comutação para carga trifásica — nome de opção de um select, valor de um number, ou on/off. Obrigatório para entidades select; number padrão 3, switch padrão on.",
-          "ev_phase_switching_enabled": "Desativado por predefinição enquanto o modelo de 1/3 fases é revisto (pausava carregadores que nunca retomavam nalgumas marcas). Ative para testar no seu carregador."
+          "ev_phase_switching_enabled": "Desativado por predefinição enquanto o modelo de 1/3 fases é revisto (pausava carregadores que nunca retomavam nalgumas marcas). Ative para testar no seu carregador.",
+          "finish_by_departure": "Desligado por predefinição. Ligado: o SEM continua a carregar após o fim da noite até à hora «Carregar até», da rede ao preço de dia, com a corrente mínima necessária."
         }
       },
       "ev_charger_add": {
@@ -529,7 +531,8 @@
           "ev_phase_switch_entity": "Entidade de comutação de fases (opcional)",
           "ev_phase_switch_value_1p": "Comutação de fases: valor monofásico (opcional)",
           "ev_phase_switch_value_3p": "Comutação de fases: valor trifásico (opcional)",
-          "ev_phase_switching_enabled": "Comutação de fases"
+          "ev_phase_switching_enabled": "Comutação de fases",
+          "finish_by_departure": "Concluir até à partida"
         },
         "data_description": {
           "charger_name": "Nome amigável para este carregador, mostrado no painel.",
@@ -559,7 +562,8 @@
           "ev_phase_switch_entity": "Select/number/switch que alterna o carregador entre carga mono e trifásica (go-e 'psm', KEBA série X, openWB). Por enquanto o SEM apenas observa e valida — a comutação automática virá numa versão futura.",
           "ev_phase_switch_value_1p": "O que escrever na entidade de comutação para carga monofásica — nome de opção de um select, valor de um number, ou on/off. Obrigatório para entidades select; number padrão 1, switch padrão off.",
           "ev_phase_switch_value_3p": "O que escrever na entidade de comutação para carga trifásica — nome de opção de um select, valor de um number, ou on/off. Obrigatório para entidades select; number padrão 3, switch padrão on.",
-          "ev_phase_switching_enabled": "Desativado por predefinição enquanto o modelo de 1/3 fases é revisto (pausava carregadores que nunca retomavam nalgumas marcas). Ative para testar no seu carregador."
+          "ev_phase_switching_enabled": "Desativado por predefinição enquanto o modelo de 1/3 fases é revisto (pausava carregadores que nunca retomavam nalgumas marcas). Ative para testar no seu carregador.",
+          "finish_by_departure": "Desligado por predefinição. Ligado: o SEM continua a carregar após o fim da noite até à hora «Carregar até», da rede ao preço de dia, com a corrente mínima necessária."
         }
       },
       "pv_naming": {

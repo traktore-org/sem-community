@@ -463,7 +463,8 @@
           "ev_phase_switch_entity": "Entité de commutation de phases (optionnel)",
           "ev_phase_switch_value_1p": "Commutation de phases : valeur monophasé (optionnel)",
           "ev_phase_switch_value_3p": "Commutation de phases : valeur triphasé (optionnel)",
-          "ev_phase_switching_enabled": "Commutation de phases"
+          "ev_phase_switching_enabled": "Commutation de phases",
+          "finish_by_departure": "Terminer avant le départ"
         },
         "data_description": {
           "charger_name": "Nom convivial de ce chargeur affiché dans le tableau de bord.",
@@ -494,7 +495,8 @@
           "ev_phase_switch_entity": "Select/number/switch qui fait passer la borne entre charge mono- et triphasée (go-e « psm », KEBA série X, openWB). SEM se contente pour l'instant d'observer et de valider — la commutation automatique viendra dans une version ultérieure.",
           "ev_phase_switch_value_1p": "Ce qui est écrit dans l'entité de commutation pour la charge monophasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 1, switch par défaut off.",
           "ev_phase_switch_value_3p": "Ce qui est écrit dans l'entité de commutation pour la charge triphasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 3, switch par défaut on.",
-          "ev_phase_switching_enabled": "Désactivé par défaut pendant la refonte du modèle 1/3 phases (cela mettait en pause des chargeurs qui ne reprenaient jamais sur certaines marques). Activez pour le tester sur votre chargeur."
+          "ev_phase_switching_enabled": "Désactivé par défaut pendant la refonte du modèle 1/3 phases (cela mettait en pause des chargeurs qui ne reprenaient jamais sur certaines marques). Activez pour le tester sur votre chargeur.",
+          "finish_by_departure": "Désactivé par défaut. Activé : SEM continue de charger après la fin de la nuit jusqu'à l'heure « Charger avant », depuis le réseau au tarif de jour, au courant juste suffisant."
         }
       },
       "ev_charger_add": {
@@ -529,7 +531,8 @@
           "ev_phase_switch_entity": "Entité de commutation de phases (optionnel)",
           "ev_phase_switch_value_1p": "Commutation de phases : valeur monophasé (optionnel)",
           "ev_phase_switch_value_3p": "Commutation de phases : valeur triphasé (optionnel)",
-          "ev_phase_switching_enabled": "Commutation de phases"
+          "ev_phase_switching_enabled": "Commutation de phases",
+          "finish_by_departure": "Terminer avant le départ"
         },
         "data_description": {
           "charger_name": "Nom convivial de ce chargeur affiché dans le tableau de bord.",
@@ -559,7 +562,8 @@
           "ev_phase_switch_entity": "Select/number/switch qui fait passer la borne entre charge mono- et triphasée (go-e « psm », KEBA série X, openWB). SEM se contente pour l'instant d'observer et de valider — la commutation automatique viendra dans une version ultérieure.",
           "ev_phase_switch_value_1p": "Ce qui est écrit dans l'entité de commutation pour la charge monophasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 1, switch par défaut off.",
           "ev_phase_switch_value_3p": "Ce qui est écrit dans l'entité de commutation pour la charge triphasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 3, switch par défaut on.",
-          "ev_phase_switching_enabled": "Désactivé par défaut pendant la refonte du modèle 1/3 phases (cela mettait en pause des chargeurs qui ne reprenaient jamais sur certaines marques). Activez pour le tester sur votre chargeur."
+          "ev_phase_switching_enabled": "Désactivé par défaut pendant la refonte du modèle 1/3 phases (cela mettait en pause des chargeurs qui ne reprenaient jamais sur certaines marques). Activez pour le tester sur votre chargeur.",
+          "finish_by_departure": "Désactivé par défaut. Activé : SEM continue de charger après la fin de la nuit jusqu'à l'heure « Charger avant », depuis le réseau au tarif de jour, au courant juste suffisant."
         }
       },
       "pv_naming": {

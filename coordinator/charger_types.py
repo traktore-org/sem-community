@@ -1193,6 +1193,9 @@ class ChargerView:
 
     deadline_amps: int = 0
     top_up_amps: int = 0  # (#630) peak-managed plain night top-up rate
+    # (#1308) ``deadline_amps`` is a departure floor made after the night
+    # end: *Finish by departure* keeps the car charging by day.
+    departure_floor: bool = False
     """The peak-aware required current to reach Min by the per-
     charger ``ev_target_time`` (#246). ``0`` when no deadline."""
 

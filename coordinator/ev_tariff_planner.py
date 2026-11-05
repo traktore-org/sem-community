@@ -65,6 +65,9 @@ class NightChargePlan:
     # departure, or the night window's end when the car leaves in the day
     # after it. ``hours_to_deadline`` counts to this moment.
     charge_end_dt: Optional[datetime] = None
+    # (#1308) *Finish by departure*, after the night end: the floor keeps
+    # charging to the departure, at day price, and nothing faster.
+    to_departure: bool = False
     hours_to_deadline: Optional[float] = None
     remaining_kwh: float = 0.0
     reason: str = ""
@@ -101,8 +104,12 @@ def resolve_deadline(now: datetime, target_time: Optional[str]) -> Optional[date
 
 def night_charge_end(departure: Optional[datetime],
                      window_end: Optional[datetime],
-                     next_window_start: Optional[datetime]) -> Optional[datetime]:
+                     next_window_start: Optional[datetime],
+                     finish_by_departure: bool = False) -> Optional[datetime]:
     """(#1308) The last moment a night can charge toward ``departure``.
+
+    With *Finish by departure* on, that is the departure itself: charging
+    goes on after the window's end at the deadline floor.
 
     Night charging stops at the window's end — sunrise or *Night latest
     end*, whichever comes first. After it the day rules apply: spare sun,
@@ -121,6 +128,8 @@ def night_charge_end(departure: Optional[datetime],
     """
     if departure is None or window_end is None or departure <= window_end:
         return departure or window_end
+    if finish_by_departure:
+        return departure
     if next_window_start is not None and departure > next_window_start:
         return departure
     return window_end
@@ -128,17 +137,18 @@ def night_charge_end(departure: Optional[datetime],
 
 def window_charge_end(departure: Optional[datetime],
                       window_start: Optional[datetime],
-                      window_end: Optional[datetime]) -> Optional[datetime]:
+                      window_end: Optional[datetime],
+                      finish_by_departure: bool = False) -> Optional[datetime]:
     """(#1308) :func:`night_charge_end` for the window that opens at
     ``window_start`` — the day preview's night. ``window_end`` may be the
     end of the night before (a preview made at night); the end that follows
     the start is used, and the next window opens a day after this one."""
     if window_start is None or window_end is None:
-        return night_charge_end(departure, window_end, None)
+        return night_charge_end(departure, window_end, None, finish_by_departure)
     while window_end <= window_start:
         window_end = window_end + timedelta(days=1)
     return night_charge_end(departure, window_end,
-                            window_start + timedelta(days=1))
+                            window_start + timedelta(days=1), finish_by_departure)
 
 
 def _hours_between(start: datetime, end: datetime) -> float:
@@ -254,6 +264,8 @@ def plan_night_charge(
     level_at=None,
     deadline_at: Optional[datetime] = None,
     night_start: Optional[str] = None,
+    finish_by_departure: bool = False,
+    night_over: bool = False,
 ) -> NightChargePlan:
     """Decide this cycle's night-charging action for one charger.
 
@@ -271,6 +283,13 @@ def plan_night_charge(
         night_start: ``HH:MM`` night-window start (#1308): tells a departure
             in the day after tonight (charging ends at ``night_end``) from
             one after the next night opens.
+        finish_by_departure: (#1308) the charger's *Finish by departure*
+            switch. On, the hours count to the departure itself, not to the
+            night's end: charging goes on after it.
+        night_over: (#1308) the caller is in the hours after the night end
+            and before the departure. With the switch on, the deadline then
+            FORCES the floor that just makes the departure, and there is no
+            faster top-up rate: every amp is bought at day price.
         tariff_optimized: Whether the user opted into tariff-timed
             charging. Post-retirement (#638 one-gate C3) it gates ONLY the
             unreachable warning: the WHEN comes from the joint plan's
@@ -298,8 +317,11 @@ def plan_night_charge(
     # next window opens after THIS window's end, wherever ``now`` is.
     charge_end = night_charge_end(
         deadline, night_end_dt,
-        resolve_deadline(night_end_dt or now, night_start))
+        resolve_deadline(night_end_dt or now, night_start),
+        finish_by_departure)
     plan.charge_end_dt = charge_end
+    plan.to_departure = bool(
+        finish_by_departure and night_over and explicit_deadline is not None)
 
     # A deadline only *forces* current (overriding the gentle ramp / peak limit)
     # and warns when the user set one TIGHTER than the night-window end. A
@@ -311,7 +333,7 @@ def plan_night_charge(
         explicit_deadline is not None
         and night_end_dt is not None
         and explicit_deadline < night_end_dt - timedelta(minutes=5)
-    )
+    ) or plan.to_departure
 
     # Nothing owed → no deadline pressure, no tariff wait.
     if remaining_to_min_kwh <= 0.1:
@@ -336,6 +358,8 @@ def plan_night_charge(
     # (#630) the plain top-up charges at the peak-managed headroom rate when
     # known; without peak info keep the legacy Min-floor creep (0 = unset).
     plan.top_up_amps = pm_amps if peak_managed_amps is not None else 0
+    if plan.to_departure:
+        plan.top_up_amps = 0
     effective_rate_kw = max_rate_kw if is_forcing else peak_rate_kw
 
     # --- Deadline scaling (#246) ---------------------------------------------
@@ -343,7 +367,8 @@ def plan_night_charge(
         required_w = remaining_to_min_kwh * 1000.0 / hours_left
         required_amps = math.ceil(required_w / watts_per_amp)
         plan.deadline_amps = max(min_amps, min(max_amps, required_amps))
-        plan.deadline_active = is_forcing and required_amps > min_amps
+        plan.deadline_active = (
+            (is_forcing and required_amps > min_amps) or plan.to_departure)
         # Reachable at the rate we'll ACTUALLY charge: max when forcing (peak
         # overridden), peak-managed otherwise. Computed on both paths now so a
         # peak-limited window that can't deliver Min surfaces a warning instead
@@ -402,5 +427,6 @@ def plan_night_charge(
     plan.should_warn_unreachable = (not plan.reachable) and (is_forcing or tariff_optimized)
 
     if not plan.reason:
-        plan.reason = "night charging"
+        plan.reason = ("finishing by departure after the night end"
+                       if plan.to_departure else "night charging")
     return plan
