@@ -40,14 +40,19 @@ def test_no_forecast_night_target_path_remains():
     removed it and the mode-derived smart-night switch with it. The night
     target is the user's remaining floor, read straight from the counters —
     no method may stand between the two again."""
-    from pathlib import Path
-    root = Path(__file__).parent.parent
-    for rel in ("coordinator/coordinator.py", "coordinator/ev_control.py",
-                "consts/ev_charge_modes.py"):
-        src = (root / rel).read_text()
-        for name in ("_calculate_forecast_night_target", "_mode_uses_smart_night",
-                     "_smart_night_charging_enabled", "MODE_USES_SMART_NIGHT"):
-            assert name not in src, f"{rel} still names {name}"
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    from custom_components.solar_energy_management.coordinator.ev_control import (
+        EVControlMixin,
+    )
+    from custom_components.solar_energy_management.consts import ev_charge_modes
+
+    for name in ("_calculate_forecast_night_target", "_mode_uses_smart_night",
+                 "_smart_night_charging_enabled"):
+        assert not hasattr(SEMCoordinator, name), f"coordinator still has {name}"
+        assert not hasattr(EVControlMixin, name), f"ev_control still has {name}"
+    assert not hasattr(ev_charge_modes, "MODE_USES_SMART_NIGHT")
 
 
 # ──────────────────────────────────────────────

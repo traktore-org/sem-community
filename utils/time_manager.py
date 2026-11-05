@@ -77,10 +77,11 @@ class TimeManager:
         return max(0, min(400, offset))
 
     def _sunset_datetime(self):
-        """Today's sunset as a local datetime, or None when the sun
-        integration does not answer. ``next_setting`` means tomorrow's
-        sunset once today's has passed; it is rolled back a day then, the
-        same correction ``get_sunrise_datetime`` applies to ``next_rising``.
+        """The next sunset as a local datetime, or None when the sun
+        integration does not answer. After today's sunset this is
+        tomorrow's; the callers only read its clock time, which is the
+        same within a minute, so no day correction (and no day-boundary
+        read, #645) is needed here.
         """
         try:
             sun_state = self.hass.states.get("sun.sun")
@@ -90,10 +91,7 @@ class TimeManager:
                     if isinstance(next_setting, str):
                         next_setting = datetime.fromisoformat(
                             next_setting.replace('Z', '+00:00'))
-                    sunset = dt_util.as_local(next_setting)
-                    if sunset.date() > dt_util.now().date():
-                        sunset = sunset - timedelta(days=1)
-                    return sunset
+                    return dt_util.as_local(next_setting)
         except Exception as e:  # noqa: BLE001 — unreadable sun = no reading
             _LOGGER.debug(f"Could not get sunset datetime: {e}")
         return None
