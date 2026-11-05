@@ -463,7 +463,8 @@
           "ev_phase_switch_entity": "Faseomschakelings-entiteit (optioneel)",
           "ev_phase_switch_value_1p": "Faseomschakeling: waarde voor 1-fase (optioneel)",
           "ev_phase_switch_value_3p": "Faseomschakeling: waarde voor 3-fase (optioneel)",
-          "ev_phase_switching_enabled": "Faseomschakeling"
+          "ev_phase_switching_enabled": "Faseomschakeling",
+          "finish_by_departure": "Afmaken vóór vertrek"
         },
         "data_description": {
           "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
@@ -494,7 +495,8 @@
           "ev_phase_switch_entity": "Select/number/switch die de lader tussen 1- en 3-fasig laden omschakelt (go-e 'psm', KEBA X-serie, openWB). SEM observeert en valideert voorlopig alleen — automatisch omschakelen volgt in een latere release.",
           "ev_phase_switch_value_1p": "Wat voor 1-fasig laden naar de omschakel-entiteit wordt geschreven — een select-optienaam, een getal of on/off. Vereist voor select-entiteiten; number-standaard is 1, switch-standaard off.",
           "ev_phase_switch_value_3p": "Wat voor 3-fasig laden naar de omschakel-entiteit wordt geschreven — een select-optienaam, een getal of on/off. Vereist voor select-entiteiten; number-standaard is 3, switch-standaard on.",
-          "ev_phase_switching_enabled": "Standaard uit terwijl het 1/3-fasemodel wordt herzien (bij sommige merken pauzeerde dit laders die niet meer hervatten). Zet aan om het op jouw lader te testen."
+          "ev_phase_switching_enabled": "Standaard uit terwijl het 1/3-fasemodel wordt herzien (bij sommige merken pauzeerde dit laders die niet meer hervatten). Zet aan om het op jouw lader te testen.",
+          "finish_by_departure": "Standaard uit. Aan: SEM laadt na het einde van de nacht door tot de tijd 'Opladen vóór', van het net tegen dagtarief, met de stroom die net genoeg is."
         }
       },
       "ev_charger_add": {
@@ -529,7 +531,8 @@
           "ev_phase_switch_entity": "Faseomschakelings-entiteit (optioneel)",
           "ev_phase_switch_value_1p": "Faseomschakeling: waarde voor 1-fase (optioneel)",
           "ev_phase_switch_value_3p": "Faseomschakeling: waarde voor 3-fase (optioneel)",
-          "ev_phase_switching_enabled": "Faseomschakeling"
+          "ev_phase_switching_enabled": "Faseomschakeling",
+          "finish_by_departure": "Afmaken vóór vertrek"
         },
         "data_description": {
           "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
@@ -559,7 +562,8 @@
           "ev_phase_switch_entity": "Select/number/switch die de lader tussen 1- en 3-fasig laden omschakelt (go-e 'psm', KEBA X-serie, openWB). SEM observeert en valideert voorlopig alleen — automatisch omschakelen volgt in een latere release.",
           "ev_phase_switch_value_1p": "Wat voor 1-fasig laden naar de omschakel-entiteit wordt geschreven — een select-optienaam, een getal of on/off. Vereist voor select-entiteiten; number-standaard is 1, switch-standaard off.",
           "ev_phase_switch_value_3p": "Wat voor 3-fasig laden naar de omschakel-entiteit wordt geschreven — een select-optienaam, een getal of on/off. Vereist voor select-entiteiten; number-standaard is 3, switch-standaard on.",
-          "ev_phase_switching_enabled": "Standaard uit terwijl het 1/3-fasemodel wordt herzien (bij sommige merken pauzeerde dit laders die niet meer hervatten). Zet aan om het op jouw lader te testen."
+          "ev_phase_switching_enabled": "Standaard uit terwijl het 1/3-fasemodel wordt herzien (bij sommige merken pauzeerde dit laders die niet meer hervatten). Zet aan om het op jouw lader te testen.",
+          "finish_by_departure": "Standaard uit. Aan: SEM laadt na het einde van de nacht door tot de tijd 'Opladen vóór', van het net tegen dagtarief, met de stroom die net genoeg is."
         }
       },
       "pv_naming": {

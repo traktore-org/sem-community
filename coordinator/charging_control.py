@@ -145,6 +145,8 @@ class ChargingContext:
     night_deadline_active: bool = False
     night_tariff_wait: bool = False
     night_deadline_reachable: bool = True
+    # (#1308) the floor above was made by day, to finish by the departure.
+    night_departure_floor: bool = False
 
 
 class ChargingStateMachine:

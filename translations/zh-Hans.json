@@ -463,7 +463,8 @@
           "ev_phase_switch_entity": "相位切换实体（可选）",
           "ev_phase_switch_value_1p": "相位切换：单相值（可选）",
           "ev_phase_switch_value_3p": "相位切换：三相值（可选）",
-          "ev_phase_switching_enabled": "相位切换"
+          "ev_phase_switching_enabled": "相位切换",
+          "finish_by_departure": "出发前充满"
         },
         "data_description": {
           "charger_name": "在看板中显示的充电桩友好名称。",
@@ -494,7 +495,8 @@
           "ev_phase_switch_entity": "在单相与三相充电之间切换充电桩的 select/number/switch 实体（go-e 'psm'、KEBA X 系列、openWB）。目前 SEM 仅观察和验证该实体——自动切换将在后续版本中提供。",
           "ev_phase_switch_value_1p": "单相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 1，switch 默认 off。",
           "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。",
-          "ev_phase_switching_enabled": "默认关闭，因为单/三相模型正在重做（它曾在部分品牌上暂停充电桩且无法恢复）。开启后可在您的充电桩上进行测试。"
+          "ev_phase_switching_enabled": "默认关闭，因为单/三相模型正在重做（它曾在部分品牌上暂停充电桩且无法恢复）。开启后可在您的充电桩上进行测试。",
+          "finish_by_departure": "默认关闭。开启后，夜间结束后 SEM 会继续从电网按白天电价充电，直到“充电截止”时间，电流刚好够用。"
         }
       },
       "ev_charger_add": {
@@ -529,7 +531,8 @@
           "ev_phase_switch_entity": "相位切换实体（可选）",
           "ev_phase_switch_value_1p": "相位切换：单相值（可选）",
           "ev_phase_switch_value_3p": "相位切换：三相值（可选）",
-          "ev_phase_switching_enabled": "相位切换"
+          "ev_phase_switching_enabled": "相位切换",
+          "finish_by_departure": "出发前充满"
         },
         "data_description": {
           "charger_name": "在看板中显示的充电桩友好名称。",
@@ -559,7 +562,8 @@
           "ev_phase_switch_entity": "在单相与三相充电之间切换充电桩的 select/number/switch 实体（go-e 'psm'、KEBA X 系列、openWB）。目前 SEM 仅观察和验证该实体——自动切换将在后续版本中提供。",
           "ev_phase_switch_value_1p": "单相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 1，switch 默认 off。",
           "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。",
-          "ev_phase_switching_enabled": "默认关闭，因为单/三相模型正在重做（它曾在部分品牌上暂停充电桩且无法恢复）。开启后可在您的充电桩上进行测试。"
+          "ev_phase_switching_enabled": "默认关闭，因为单/三相模型正在重做（它曾在部分品牌上暂停充电桩且无法恢复）。开启后可在您的充电桩上进行测试。",
+          "finish_by_departure": "默认关闭。开启后，夜间结束后 SEM 会继续从电网按白天电价充电，直到“充电截止”时间，电流刚好够用。"
         }
       },
       "pv_naming": {

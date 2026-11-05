@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 221,
+  "total": 222,
   "first_run_fields": 19,
   "first_run_steps": 5,
   "first_run_fields_best": 19,
@@ -103,6 +103,7 @@
     "feed_in_fee",
     "feed_in_fee_model",
     "feed_in_fee_tiers",
+    "finish_by_departure",
     "generate_dashboard_on_install",
     "grid_answer",
     "grid_co2_entity",

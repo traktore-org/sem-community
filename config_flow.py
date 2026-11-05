@@ -1732,6 +1732,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_phase_switch_value_1p",
     "ev_phase_switch_value_3p",
     "ev_phase_switching_enabled",
+    "finish_by_departure",
     "ev_start_stop_entity",
     "ev_surplus_priority",
     "ev_target_soc",
@@ -2387,6 +2388,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "ev_phase_switching_enabled",
                     default=False,
                 ): selector.BooleanSelector(),
+                # (#1308) after the night end, keep charging to the departure
+                vol.Optional(
+                    "finish_by_departure",
+                    default=False,
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "ev_phase_switch_value_1p",
                     description={"suggested_value": suggestions.get("ev_phase_switch_value_1p")},
@@ -2602,6 +2608,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_phase_switching_enabled",
                     default=bool(charger.get("ev_phase_switching_enabled", False)),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "finish_by_departure",
+                    default=bool(charger.get("finish_by_departure", False)),
                 ): selector.BooleanSelector(),
                 vol.Optional(
                     "ev_phase_switch_value_1p",

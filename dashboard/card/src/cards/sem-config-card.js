@@ -1116,6 +1116,10 @@ class SEMConfigCard extends SEMLitBase {
                             ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, 'config_help_ev_daily_target')}
                             ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, 'config_help_ev_daily_target_max')}
                         </div>`}
+                    ${/* (#1308) after the night end, a set Charge by still
+                          wins: keep charging to the departure at day price. */ ''}
+                    ${this._renderToggleNested(idx, cid, 'finish_by_departure', 'config_finish_by_departure',
+                        opts, 'config_help_finish_by_departure')}
                     ${/* Capacity moved down here when Max Amps took its slot
                           (#746) — it belongs with the other car properties
                           anyway, and the current range now reads as a pair. */ ''}

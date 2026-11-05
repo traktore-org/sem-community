@@ -8357,6 +8357,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             ${this._renderStepper(`number.sem_charger_${a}_daily_ev_target_max`,"config_ev_daily_target_max",e,"config_help_ev_daily_target_max")}
                         </div>`}
                     ${""}
+                    ${this._renderToggleNested(r,a,"finish_by_departure","config_finish_by_departure",t,"config_help_finish_by_departure")}
+                    ${""}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${a}_ev_battery_capacity_kwh`,"capacity_kwh",e,"tile_help_capacity")}
                         ${this._renderStepper(`number.sem_charger_${a}_ev_kwh_per_100km`,"config_ev_kwh_per_100km",e,"config_help_ev_kwh_per_100km")}

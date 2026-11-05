@@ -463,7 +463,8 @@
           "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)",
           "ev_phase_switch_value_1p": "Fázisváltás: 1 fázisú érték (opcionális)",
           "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)",
-          "ev_phase_switching_enabled": "Fázisváltás"
+          "ev_phase_switching_enabled": "Fázisváltás",
+          "finish_by_departure": "Indulásig befejezni"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -494,7 +495,8 @@
           "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik.",
           "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
           "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on.",
-          "ev_phase_switching_enabled": "Alapértelmezetten kikapcsolva, amíg az 1/3 fázisú modellt átdolgozzák (egyes márkáknál olyan töltőket szüneteltetett, amelyek sosem indultak újra). Kapcsolja be a töltőjén való teszteléshez."
+          "ev_phase_switching_enabled": "Alapértelmezetten kikapcsolva, amíg az 1/3 fázisú modellt átdolgozzák (egyes márkáknál olyan töltőket szüneteltetett, amelyek sosem indultak újra). Kapcsolja be a töltőjén való teszteléshez.",
+          "finish_by_departure": "Alapértelmezés szerint ki. Be: a SEM az éjszaka vége után is tölt a „Töltés eddig” időpontig, a hálózatról nappali áron, az éppen elegendő árammal."
         }
       },
       "ev_charger_add": {
@@ -529,7 +531,8 @@
           "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)",
           "ev_phase_switch_value_1p": "Fázisváltás: 1 fázisú érték (opcionális)",
           "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)",
-          "ev_phase_switching_enabled": "Fázisváltás"
+          "ev_phase_switching_enabled": "Fázisváltás",
+          "finish_by_departure": "Indulásig befejezni"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -559,7 +562,8 @@
           "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik.",
           "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
           "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on.",
-          "ev_phase_switching_enabled": "Alapértelmezetten kikapcsolva, amíg az 1/3 fázisú modellt átdolgozzák (egyes márkáknál olyan töltőket szüneteltetett, amelyek sosem indultak újra). Kapcsolja be a töltőjén való teszteléshez."
+          "ev_phase_switching_enabled": "Alapértelmezetten kikapcsolva, amíg az 1/3 fázisú modellt átdolgozzák (egyes márkáknál olyan töltőket szüneteltetett, amelyek sosem indultak újra). Kapcsolja be a töltőjén való teszteléshez.",
+          "finish_by_departure": "Alapértelmezés szerint ki. Be: a SEM az éjszaka vége után is tölt a „Töltés eddig” időpontig, a hálózatról nappali áron, az éppen elegendő árammal."
         }
       },
       "pv_naming": {

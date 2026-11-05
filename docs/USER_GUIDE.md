@@ -1253,6 +1253,12 @@ first). With *Charge by* 08:15 and the night ending at 07:00, SEM plans the nigh
 and at night the EV card warns when the target cannot be reached by then. After 07:00 the day
 rules apply (#1308). The same holds for the default 07:00 on a summer night that ends at sunrise.
 
+If the car must be full by its *Charge by* time even so, turn on **Finish by departure** for the
+charger (Config tab → the charger, or the Edit-charger dialog). SEM then keeps charging after the
+night end until the *Charge by* time, from the grid at day price, at the current that just makes
+it and nothing faster. The sun still wins when it offers more. A departure that another night
+can charge for is left to that night. Off by default.
+
 **Departure from a calendar.** *(#1087)* In the charger's options, pick a
 **Departure calendar**. Its next timed event replaces the weekday departure
 while it is still ahead, and the EV card names the event. An all-day event is
