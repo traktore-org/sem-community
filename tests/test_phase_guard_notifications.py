@@ -120,6 +120,9 @@ async def test_stale_sensor_alert_names_failed_phase_not_another_hot_phase():
     stale["grid"]["l1"]["current_a"] = 15.9
     stale["grid"]["l2"]["current_a"] = None
 
+    # (#1315) A sensor that goes stale after a full reading alerts at once;
+    # before the first full reading the notice waits for the meter to load.
+    await manager.notify_phase_guard_transition(_snapshot(safe=True))
     await manager.notify_phase_guard_transition(stale)
 
     message = manager._send_mobile_notification.await_args.args[0]

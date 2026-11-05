@@ -19,8 +19,9 @@ import logging
 import time
 from typing import Dict, Any, Optional
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CoreState, HomeAssistant
 
+from . import repair_issues as _ri
 from ..const import (
     DOMAIN,
     ChargingState,
@@ -58,6 +59,16 @@ _HINT_DEFAULTS = {
         " · {ev} kWh into the car · {cost:.2f} {currency}."),
     "hint_msg_weekly_co2": "Your solar avoided {co2} kg of CO₂ this week.",
 }
+
+
+def _over_limit_parts(reason: str) -> list:
+    """(#1315) The ``lane:phase:over_limit`` parts of a phase-guard stop
+    reason: the phases measured over their limit."""
+    return [
+        part
+        for part in (piece.strip() for piece in reason.split(","))
+        if part.endswith(":over_limit")
+    ]
 
 
 class NotificationManager:
@@ -98,6 +109,10 @@ class NotificationManager:
         # Independent from EV connection state: the phase guard watches the
         # electrical installation even when every charger is idle or disabled.
         self._last_phase_guard_alert_state: Optional[str] = None
+        # (#1315) Whether the guard has had a full reading since start, and
+        # since when it has waited for the meter to load.
+        self._phase_guard_had_reading: bool = False
+        self._phase_guard_wait_since: Optional[float] = None
 
     # ──────────────────────────────────────────────────────────────────
     # v1.6.8-compat shims for flap-suppression fields. Reads/writes
@@ -473,7 +488,8 @@ class NotificationManager:
         return messages
 
     async def notify_phase_guard_transition(
-        self, snapshot: Dict[str, Any], *, enabled: bool = True
+        self, snapshot: Dict[str, Any], *, enabled: bool = True,
+        now: Optional[float] = None,
     ) -> None:
         """Alert once on a phase-guard incident and once after safe re-arming."""
         if not enabled or not self.config.get(
@@ -486,16 +502,32 @@ class NotificationManager:
         if not isinstance(snapshot, dict):
             return
 
-        unsafe = not bool(snapshot.get("safe")) or not bool(
-            snapshot.get("data_fresh")
-        )
+        data_fresh = bool(snapshot.get("data_fresh"))
+        unsafe = not bool(snapshot.get("safe")) or not data_fresh
         read_only = bool(snapshot.get("read_only", False))
+        reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
+        over = _over_limit_parts(reason)
+        # (#1315) Nothing was measured over the limit: a reading is missing.
+        no_reading = unsafe and not data_fresh and not over
+        if data_fresh:
+            self._phase_guard_had_reading = True
+        elif (
+            no_reading
+            and not self._phase_guard_had_reading
+            and self._phase_guard_meter_loading(now)
+        ):
+            # (#1315, class 86) After a restart the meter's integration is
+            # still loading, so every phase reads missing. That is not an
+            # incident. The guard still holds the chargers; only the notice
+            # waits.
+            return
         if unsafe:
-            state = (
-                "phase_guard_observer_warning"
-                if read_only
-                else "phase_guard_blocked"
-            )
+            if not read_only:
+                state = "phase_guard_blocked"
+            elif no_reading:
+                state = "phase_guard_observer_no_reading"
+            else:
+                state = "phase_guard_observer_warning"
         elif self._last_phase_guard_alert_state == "phase_guard_blocked" and not bool(
             snapshot.get("control_authorized", True)
         ):
@@ -516,9 +548,12 @@ class NotificationManager:
 
         from ..utils.translate import get_text
 
+        # (#1315) Name the phase that is over the limit, not the first one
+        # in the reason.
+        location = self._phase_guard_alert_location(
+            snapshot, over[0] if over else reason
+        )
         if state == "phase_guard_blocked":
-            reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
-            location = self._phase_guard_alert_location(snapshot, reason)
             message = get_text(
                 self.hass,
                 "notif_phase_guard_blocked",
@@ -527,9 +562,17 @@ class NotificationManager:
                 reason=reason,
             )
             event_state = state
+        elif state == "phase_guard_observer_no_reading":
+            message = get_text(
+                self.hass,
+                "notif_phase_guard_observer_no_reading",
+                "Phase reading unavailable in Observer Mode at {location} "
+                "({reason}) — no action was taken.",
+                location=location,
+                reason=reason,
+            )
+            event_state = state
         elif state == "phase_guard_observer_warning":
-            reason = str(snapshot.get("stop_reason") or "unsafe phase reading")
-            location = self._phase_guard_alert_location(snapshot, reason)
             message = get_text(
                 self.hass,
                 "notif_phase_guard_observer_warning",
@@ -572,6 +615,17 @@ class NotificationManager:
                 channel=_CHANNEL_ALERTS,
                 group="sem_alerts",
             )
+
+    def _phase_guard_meter_loading(self, now: Optional[float]) -> bool:
+        """(#1315, class 86) True while the phase meter may still be loading:
+        until Home Assistant runs, then UNAVAILABLE_REPAIR_THRESHOLD_S more."""
+        if getattr(self.hass, "state", None) is not CoreState.running:
+            self._phase_guard_wait_since = None
+            return True
+        now = time.monotonic() if now is None else now
+        if self._phase_guard_wait_since is None:
+            self._phase_guard_wait_since = now
+        return now - self._phase_guard_wait_since < _ri.UNAVAILABLE_REPAIR_THRESHOLD_S
 
     @classmethod
     def _phase_guard_alert_location(
