@@ -10,7 +10,7 @@
  *   type: custom:sem-next-plan-card
  */
 
-import { SEMNextBase, html, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, kwhOf } from '../util/next-lead.js';
 import { laneModel, LANE_COLORS } from '../util/next-timeline.js';
@@ -21,7 +21,14 @@ const W = 720, L = 54, ROW = 30, TOP = 24, BOTTOM = 20;
 
 class SEMNextPlanCard extends SEMNextBase {
     static get properties() { return { _picked: { state: true }, _confirm: { state: true } }; }
-    static get styles() { return nextCss; }
+    // A 24 h axis in 380 px is unreadable: on a phone the timeline keeps
+    // its width and scrolls sideways instead of shrinking its labels.
+    static get styles() {
+        return [nextCss, css`
+            .tl { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .tl svg { display: block; min-width: 640px; }
+        `];
+    }
 
     constructor() {
         super();
@@ -97,11 +104,11 @@ class SEMNextPlanCard extends SEMNextBase {
         });
         const ticks = m.ticks.map((t) => svg`<line x1="${x(t.x)}" y1="${TOP - 6}" x2="${x(t.x)}" y2="${TOP + rows * ROW}" stroke="var(--divider-color)"></line>
             <text x="${x(t.x)}" y="${TOP + rows * ROW + 14}" font-size="10" text-anchor="middle" fill="var(--secondary-text-color)">${t.label}</text>`);
-        return html`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${this._t('next_timeline')}">
+        return html`<div class="tl"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${this._t('next_timeline')}">
             ${ticks}${parts}
             <line x1="${x(0)}" y1="${TOP - 10}" x2="${x(0)}" y2="${TOP + rows * ROW}" stroke="${C.accent}" stroke-width="2"></line>
             <text x="${x(0) + 4}" y="${TOP - 12}" font-size="10" font-weight="700" fill="${C.accent}">${this._t('next_now_marker')}</text>
-        </svg>`;
+        </svg></div>`;
     }
 
     _pick(key, lane, b) {
