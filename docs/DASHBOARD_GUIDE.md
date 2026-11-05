@@ -753,6 +753,63 @@ Live clock, current conditions, and colour-coded temperature forecast bars.
 > generated before the rename keep rendering. It is deliberately absent from
 > the card picker. Re-run `generate_dashboard` to move to the current name.
 
+#### sem-next-link-card
+
+**SEM Next link** · *System tab*
+
+One row: create the SEM Next dashboard beside the classic one, or open it
+when it exists (`/sem-next/now`). The classic dashboard is never changed.
+Calls `solar_energy_management.generate_dashboard` with `template: next`.
+
+#### sem-next-now-card
+
+**SEM Next · Now** · *SEM Next, Now screen*
+
+Opens with one line in words: what SEM does right now and why. Then the
+power flow (solar, grid, battery, house, car), the reasons per device from
+`sensor.sem_charging_strategy` and the battery sensors, today's totals
+against the forecast, money, and what comes next from the plan. A sensor
+that is out leaves its row out; nothing is invented.
+
+#### sem-next-plan-card
+
+**SEM Next · Plan** · *SEM Next, Plan screen*
+
+The next 24 hours as one timeline from `sensor.sem_energy_plan`: the sun,
+the price when it moves, the grid, the battery, one lane per charger and
+load. Tap a block for its reason. Below: why this plan (the plan's own
+words and each demand's status), the expected grid energy and cost, and
+one change you can make now: *Charge now* sets a charger to Always (max)
+after a confirm step; *Back to plan* restores the mode it had.
+
+#### sem-next-devices-card
+
+**SEM Next · Devices** · *SEM Next, Devices screen*
+
+One card shape for every device: status · mode · targets · today · next ·
+one change. Chargers from their per-charger entities (mode, At least, Up
+to, Charge by, pause), the battery (mode, buffer, may feed the car), and
+every load the load manager knows (switch, priority, rating). Controls
+bind to the real entities and are off in observer mode.
+
+#### sem-next-insights-card
+
+**SEM Next · Insights** · *SEM Next, Insights screen*
+
+One period selector (today, month, year) for everything: where the energy
+came from as bars per source, what it cost and saved, and a Replay tab that
+holds the simulation card.
+
+#### sem-next-system-card
+
+**SEM Next · System** · *SEM Next, System screen*
+
+Health first: every source with how fresh it is, what SEM refused (or, in
+observer mode, what it would do), then the settings grouped by question
+(*When may the car buy grid power*, *What the battery may do*, *Limits*)
+with the real controls, and a link to the classic Configuration tab for the
+rest.
+
 ### System Diagram Style
 
 SEM includes a built-in illustrated system diagram on the Home tab. Users who prefer the K-Flow card can switch via config options:
