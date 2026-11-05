@@ -4609,8 +4609,20 @@ async def _async_register_services(
     # Dashboard generation service
     async def async_generate_dashboard_service(call) -> None:
         """Generate and install the SEM dashboard with all assets."""
+        from .features.dashboard_generator import (
+            NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
+        )
+        template = call.data.get("template", "classic")
         dashboard_title = call.data.get("dashboard_title", "Solar Energy Management")
         dashboard_path = call.data.get("dashboard_path", "sem-dashboard")
+        # (#1321) SEM Next lives beside the classic dashboard: with the
+        # default title/path it lands at /sem-next, never over /sem-dashboard.
+        if template == "next":
+            if dashboard_path == "sem-dashboard":
+                dashboard_path = NEXT_DASHBOARD_PATH
+            if dashboard_title == "Solar Energy Management":
+                dashboard_title = NEXT_DASHBOARD_TITLE
+        dashboard_icon = NEXT_DASHBOARD_ICON if template == "next" else "mdi:solar-power"
 
         try:
             from .dashboard_generator import DashboardGenerator
@@ -4849,6 +4861,7 @@ async def _async_register_services(
             dashboard_config = await generator.generate_dashboard(
                 dashboard_title=dashboard_title,
                 dashboard_path=dashboard_path,
+                template=template,
             )
 
             if not dashboard_config:
@@ -4906,7 +4919,7 @@ async def _async_register_services(
                 if item.get("id") == dashboard_path:
                     item["mode"] = "storage"
                     item["title"] = dashboard_title
-                    item["icon"] = "mdi:solar-power"
+                    item["icon"] = dashboard_icon
                     item["show_in_sidebar"] = True
                     item["require_admin"] = False
                     dashboard_exists = True
@@ -4917,7 +4930,7 @@ async def _async_register_services(
                     "id": dashboard_path,
                     "mode": "storage",
                     "title": dashboard_title,
-                    "icon": "mdi:solar-power",
+                    "icon": dashboard_icon,
                     "show_in_sidebar": True,
                     "require_admin": False,
                     "url_path": dashboard_path,
@@ -4990,6 +5003,7 @@ async def _async_register_services(
             schema=vol.Schema({
                 vol.Optional("dashboard_title", default="Solar Energy Management"): cv.string,
                 vol.Optional("dashboard_path", default="sem-dashboard"): cv.string,
+                vol.Optional("template", default="classic"): vol.In(["classic", "next"]),
             }),
         )
         _LOGGER.debug("Registered service: %s.generate_dashboard", DOMAIN)

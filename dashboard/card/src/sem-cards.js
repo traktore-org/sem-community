@@ -28,6 +28,14 @@ import './cards/sem-battery-zones-card.js';
 import './cards/sem-costs-card.js';
 import './cards/sem-costs-detail-card.js';
 import './cards/sem-charger-status-card.js';
+
+// SEM Next (#1321) — the second dashboard, five screens by question
+import './cards/sem-next-link-card.js';
+import './cards/sem-next-now-card.js';
+import './cards/sem-next-plan-card.js';
+import './cards/sem-next-devices-card.js';
+import './cards/sem-next-insights-card.js';
+import './cards/sem-next-system-card.js';
 import './cards/sem-ev-status-card.js';
 import './cards/sem-home-status-card.js';
 import './cards/sem-price-card.js';

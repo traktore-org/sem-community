@@ -165,6 +165,14 @@ const ALLOWED_OUT = {
     'sem-grid-card': [],
     'sem-home-status-card': [],
     'sem-load-priority-card': [],
+    // (#1321) the SEM Next screens: counts ride inside translated lines
+    // ("{n} devices"), which the stub localizer leaves as bare keys.
+    'sem-next-devices-card': [],
+    'sem-next-insights-card': [],
+    'sem-next-link-card': [],
+    'sem-next-now-card': [],
+    'sem-next-plan-card': [],
+    'sem-next-system-card': [],
     'sem-onboarding-banner': [],
     'sem-period-selector-card': [],
     'sem-price-card': [],

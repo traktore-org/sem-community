@@ -24,6 +24,17 @@ generate_dashboard:
       example: "sem-dashboard"
       selector:
         text:
+    template:
+      name: Template
+      description: "classic = the nine-tab dashboard; next = SEM Next, five screens by question, created at /sem-next beside the classic one"
+      required: false
+      default: "classic"
+      example: "next"
+      selector:
+        select:
+          options:
+            - "classic"
+            - "next"
 
 sync_priorities_from_dashboard:
   name: Sync Priorities from Dashboard
