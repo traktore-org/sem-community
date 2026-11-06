@@ -415,6 +415,8 @@ minute); a breaker that trips faster than that is not something SEM can
 outrun. Evaluating the guard on every sensor change is not part of this
 release.
 
+**After a restart.** While your meter starts up, its phase readings are missing. SEM still holds the chargers, but sends no notice until Home Assistant has run for 5 minutes. If a reading is still missing then, you get a notice. When SEM only watches, it says the reading is unavailable, not that a phase is over.
+
 **SG-Ready state 1 stays the operator's relay.** SEM never commands the grid
 operator's block state of a heat pump (SG-Ready state 1, *EVU-Sperre*). The
 phase guard switches loads the way load management always has — never
