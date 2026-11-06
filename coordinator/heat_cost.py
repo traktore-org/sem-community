@@ -7,7 +7,23 @@ even at the same electricity price. Pure, hass-free, mirrors
 """
 from __future__ import annotations
 
-from typing import Optional
+from datetime import datetime
+from typing import Any, Optional
+
+
+def heat_pump_price(own_tariff: Any, house_provider: Any,
+                    now: datetime) -> Optional[float]:
+    """The heat pump's own tariff at ``now``, else the house import rate;
+    ``None`` when neither gives a real number."""
+    if own_tariff is not None:
+        price = own_tariff.price_at(now)
+    elif house_provider is not None and hasattr(house_provider, "get_current_import_rate"):
+        price = house_provider.get_current_import_rate()
+    else:
+        return None
+    if isinstance(price, bool) or not isinstance(price, (int, float)):
+        return None
+    return float(price)
 
 
 def cost_of_heat(price: Optional[float], cop: Optional[float]) -> Optional[float]:

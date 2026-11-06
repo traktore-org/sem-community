@@ -7845,6 +7845,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # else the house's; never invents a price when neither can say.
         _hp_cop = (float(getattr(hp_controller, "cop", 3.0) or 3.0)
                   if hp_controller is not None else None)
+        from .heat_cost import heat_pump_price as _heat_pump_price_fn
         _hp_price = None
         if hp_controller is not None:
             try:
@@ -7853,8 +7854,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "device_tariffs", None)
                 _hp_tariff = (_dtariffs.plan_tariff(hp_controller)
                              if _dtariffs is not None else None)
-                if _hp_tariff is not None:
-                    _hp_price = _hp_tariff.price_at(dt_util.now())
+                _hp_price = _heat_pump_price_fn(
+                    _hp_tariff, getattr(self, "_tariff_provider", None),
+                    dt_util.now())
             except Exception:  # noqa: BLE001 — a missing price is no price
                 _hp_price = None
         from .heat_cost import cost_of_heat as _cost_of_heat_fn
