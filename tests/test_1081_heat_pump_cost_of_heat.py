@@ -2,12 +2,14 @@
 comfort band wired onto it via ``ComfortBandMixin``."""
 from __future__ import annotations
 
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.heat_cost import (
     cost_of_heat,
+    heat_pump_price,
 )
 from custom_components.solar_energy_management.devices.base import (
     ComfortBandMixin,
@@ -106,3 +108,35 @@ def test_fallback_reading_is_the_pumps_own_temperature():
     hp.hass.states.get.return_value = MagicMock(
         state="19.5", attributes={"unit_of_measurement": "°C"})
     assert hp._comfort_fallback_reading() == 19.5
+
+
+# ── heat_pump_price() — own tariff first, else the house's ──────────────
+_NOW = datetime(2026, 11, 6, 18, 0)
+
+
+class _House:
+    def get_current_import_rate(self):
+        return 0.42
+
+
+def test_own_tariff_wins_over_the_house():
+    own = MagicMock()
+    own.price_at.return_value = 0.18
+    assert heat_pump_price(own, _House(), _NOW) == 0.18
+    own.price_at.assert_called_once_with(_NOW)
+
+
+def test_no_own_tariff_uses_the_house_rate():
+    # A heat pump without its own tariff got no cost of heat at all.
+    assert heat_pump_price(None, _House(), _NOW) == 0.42
+    assert cost_of_heat(heat_pump_price(None, _House(), _NOW), 3.0) == pytest.approx(0.14)
+
+
+def test_no_tariff_anywhere_is_no_price():
+    assert heat_pump_price(None, None, _NOW) is None
+    assert heat_pump_price(None, object(), _NOW) is None
+
+
+def test_a_non_number_rate_is_no_price():
+    house = MagicMock()  # a MagicMock rate is not a price
+    assert heat_pump_price(None, house, _NOW) is None
