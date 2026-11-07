@@ -445,7 +445,12 @@ class SEMNextNowCard extends SEMNextBase {
         const strat = this._hass?.states['sensor.sem_charging_strategy'];
         if (strat && strat.state && strat.state !== 'unavailable' && strat.state !== 'unknown') {
             const reason = String(strat.attributes?.reason || strat.state);
-            const [head, ...rest] = reason.split(/\s[—–-]\s|\[/);
+            let [head, ...rest] = reason.split(/\s[—–-]\s|\[/);
+            // "min_plus_solar night: waiting…" opens with the mode's code; say the mode's name.
+            head = head.replace(/^([a-z_]+)(?=\s+(?:night|day)?:)/, (code) => {
+                const label = this._t('charge_mode_' + code);
+                return label && label !== 'charge_mode_' + code ? label : code;
+            });
             const evW = this._powerW('sensor.sem_ev_power');
             rows.push(this._row('mdi:car-electric', head.trim(), evW === null ? '' : this._kw(evW), rest.join(' ').replace(/\]$/, '').trim(), { color: C.ev }));
         }

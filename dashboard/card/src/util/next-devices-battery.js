@@ -78,8 +78,15 @@ export function batteryBody(card, row) {
     const ids = { priority: 'number.sem_battery_priority_soc', buffer: 'number.sem_battery_buffer_soc',
         auto: 'number.sem_battery_auto_start_soc', tonight: 'sensor.sem_battery_dynamic_floor_pct' };
     const z = zonesModel({ soc, priority: num(ids.priority), buffer: num(ids.buffer), autoStart: num(ids.auto), floor: num(ids.tonight) });
-    const zones = z.marks.length || z.cur !== null ? html`<div class="zones" style="--z1:${z.z1}%;--z2:${z.z2}%">
-        ${z.marks.map((m) => html`<span class="z" style="left:${m.pct}%">${t('next_zone_' + m.key)} ${m.value}</span>`)}
+    // Two marks closer than 14 % would overprint: the second goes under the bar.
+    let lastPct = -99, lastLo = false, anyLo = false;
+    const marks = z.marks.map((m) => {
+        const lo = (m.pct - lastPct) < 14 && !lastLo;
+        lastPct = m.pct; lastLo = lo; anyLo = anyLo || lo;
+        return { ...m, lo };
+    });
+    const zones = z.marks.length || z.cur !== null ? html`<div class="zones ${anyLo ? 'two' : ''}" style="--z1:${z.z1}%;--z2:${z.z2}%">
+        ${marks.map((m) => html`<span class="z ${m.lo ? 'lo' : ''}" style="left:${m.pct}%">${t('next_zone_' + m.key)} ${m.value}</span>`)}
         ${z.cur === null ? nothing : html`<span class="cur" style="left:${z.cur}%"></span>`}</div>` : nothing;
     const v = (id, text) => card._val(text, () => card._moreInfo(id));
     const parts = [];

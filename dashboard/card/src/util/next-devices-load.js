@@ -130,7 +130,7 @@ export function loadBody(card, row) {
     const cNum = (key, val) => numVal(key, val ? val + ' ' + tUnit : '—', { value: val || null, step: 0.5, unit: tUnit, onCommit: (v) => send(key, String(v)) });
     rows.push(card._row('mdi:thermometer', t('next_comfort'), displayTemp(card, row.comfort && row.comfort.reading_c) || '—',
         card._sentence(t('next_keep_limit_pre'), { target: cNum('comfort_target', target), limit: cNum('comfort_limit', limit), offset: cNum('comfort_offset', offset) }),
-        { more: kind !== 'heat_pump' && !engaged }));
+        { more: !engaged && !(row.comfort && row.comfort.reading_c != null) }));
     if (kind === 'heat_pump') {
         rows.push(card._row('mdi:cash-multiple', t('next_device_tariff'), card._has('sensor.sem_heat_pump_cost_of_heat') ? card._money(card._num('sensor.sem_heat_pump_cost_of_heat')) : '—', t('device_tariff_heat_pump'), { more: true }));
         const offId = 'number.sem_heat_pump_boost_offset';

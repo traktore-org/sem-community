@@ -346,7 +346,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const rows = [];
         const strings = semDiscoverPVStrings(this._hass, S);
         if (strings.length >= 2) {
-            rows.push(this._row('mdi:view-module', this._t('next_strings'), strings.map((s) => `${s.name} ${s.energyKwh === null ? '—' : this._fmt(s.energyKwh, 1)}`).join(' · '), 'kWh',
+            rows.push(this._row('mdi:view-module', this._tf('next_strings', { n: strings.length }), strings.map((s) => `${s.name} ${s.energyKwh === null ? '—' : this._fmt(s.energyKwh, 1)}`).join(' · '), 'kWh',
                 { onClick: () => this._moreInfo(strings[0].entityId) }));
         }
         const health = this._str(S + 'pv_health');

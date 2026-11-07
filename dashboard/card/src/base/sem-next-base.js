@@ -18,6 +18,7 @@ import { SEMLitBase, html, css, svg, nothing } from './sem-lit-base.js';
 import { readNumber } from '../util/missing-value.js';
 import { fill } from '../util/next-lead.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
+import { priceLevelKey, isAbsence } from '../util/price-level.js';
 
 export { html, css, svg, nothing };
 
@@ -176,6 +177,8 @@ export const nextCss = css`
     .target .flag::after { content: ""; position: absolute; left: 50%; top: 14px; height: 30px; border-left: 1.5px dashed var(--n-fg3); }
     .zones { position: relative; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--n-bad) 0 var(--z1, 20%), var(--n-warn) var(--z1, 20%) var(--z2, 50%), var(--n-card2) var(--z2, 50%) 100%); opacity: .9; margin: 14px 0 4px; }
     .zones .z { position: absolute; top: -16px; transform: translateX(-50%); font-size: 10px; color: var(--n-fg3); white-space: nowrap; }
+    .zones .z.lo { top: 12px; }
+    .zones.two { margin-bottom: 18px; }
     .zones .cur { position: absolute; top: -4px; width: 4px; height: 18px; border-radius: 2px; background: var(--n-fg); transform: translateX(-50%); }
     .reorder .dev .body { display: none; }
     .reorder .dev { padding: 8px 12px; }
@@ -365,12 +368,12 @@ export class SEMNextBase extends SEMLitBase {
         const soc = this._num('sensor.sem_battery_soc');
         const rate = this._num('sensor.sem_tariff_current_import_rate');
         const level = this._str('sensor.sem_tariff_price_level');
-        const flat = !level || level === 'flat';
+        const flat = !level || isAbsence(level);
         return html`
             <header class="hdr">
                 <div class="brand">${this._icon('mdi:white-balance-sunny')}<span>SEM</span></div>
                 ${soc === null ? nothing : html`<span class="chip" role="button" tabindex="0" @click=${() => this._moreInfo('sensor.sem_battery_soc')}>${this._icon('mdi:battery-medium')}${Math.round(soc)} %</span>`}
-                ${rate === null || flat ? nothing : html`<span class="chip" role="button" tabindex="0" @click=${() => this._moreInfo('sensor.sem_tariff_current_import_rate')}>${this._icon('mdi:cash')}${this._fmt(rate, 2)} <span class="dim">· ${this._t('next_level_' + level) || level}</span></span>`}
+                ${rate === null || flat ? nothing : html`<span class="chip" role="button" tabindex="0" @click=${() => this._moreInfo('sensor.sem_tariff_current_import_rate')}>${this._icon('mdi:cash')}${this._fmt(rate, 2)} <span class="dim">· ${this._t(priceLevelKey(level))}</span></span>`}
                 <span class="chip ${obs ? 'obs' : ''}"><span class="dot"></span>${obs ? this._t('next_pill_observing') : this._t('next_pill_live')}</span>
                 <button type="button" class="switch" aria-pressed="${this._all}" @click=${() => this._toggleAll()}><i></i>${this._t('next_all_settings')}</button>
             </header>`;
