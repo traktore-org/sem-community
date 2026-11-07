@@ -410,8 +410,8 @@ More in [Tariff models](TARIFF_MODELS.md#a-tariff-per-device-812).
 ### What a kWh of heat costs (#1081)
 
 The sensor *Heat Pump Cost of Heat* divides the price of the power the pump
-uses by its COP, so it shows what one kWh of heat costs right now. It needs
-the pump's own tariff (above); without one the sensor stays empty. Pre-heat
+uses by its COP, so it shows what one kWh of heat costs right now. It uses
+the pump's own tariff (above); without one, it uses your house price. Pre-heat
 timing can use it.
 
 ### How much did SG-Ready actually shift? (#769)
