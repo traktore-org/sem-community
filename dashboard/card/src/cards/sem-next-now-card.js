@@ -254,7 +254,7 @@ class SEMNextNowCard extends SEMNextBase {
         let stats = null;
         try { stats = await this._hass.callWS(msg); }
         catch (e1) {
-            try { stats = await this._hass.callWS({ ...msg, type: 'history/statistics_during_period' }); }
+            try { stats = await this._hass.callWS({ ...msg, type: 'history/statistics_during_period', units: msg.units }); }
             catch (e2) { stats = null; }
         }
         if (!stats || typeof stats !== 'object') return;

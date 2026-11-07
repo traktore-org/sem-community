@@ -768,50 +768,75 @@ Calls `solar_energy_management.generate_dashboard` with `template: next`.
 
 **SEM Next · Now** · *SEM Next, Now screen*
 
-Opens with one line in words: what SEM does right now and why. Then the
-power flow (solar, grid, battery, house, car), the reasons per device from
-`sensor.sem_charging_strategy` and the battery sensors, today's totals
-against the forecast, money, and what comes next from the plan. A sensor
-that is out leaves its row out; nothing is invented.
+Opens with one line in words: what SEM does right now, the next planned
+block and tonight's battery floor. Then the power bar (sources above, sinks
+below; tap it for every number, tap a row for its history), today's totals
+with hourly sparklines and the self-use and own-supply rings, the Today
+list from `sensor.sem_charging_state` (solar peak, price windows, night,
+car and battery ETAs), why each device does what it does, money with the
+price now and the next cheap window, and the signals: tip, best surplus
+window, peak, CO2, score, weather. Plan ›, Decisions › and Insights › open
+the other screens. A sensor that is out leaves its row out.
 
 #### sem-next-plan-card
 
 **SEM Next · Plan** · *SEM Next, Plan screen*
 
-The next 24 hours as one timeline from `sensor.sem_energy_plan`: the sun,
-the price when it moves, the grid, the battery, one lane per charger and
-load. Tap a block for its reason. Below: why this plan (the plan's own
-words and each demand's status), the expected grid energy and cost, and
-one change you can make now: *Charge now* sets a charger to Always (max)
-after a confirm step; *Back to plan* restores the mode it had.
+Today or tomorrow as one strip from `sensor.sem_energy_plan`: hourly price
+bars with the cheap and the expensive band, the sun forecast as a curve,
+and the plan's blocks on three lanes (car, battery, loads); solid runs,
+dashed is planned. Tap a block for its reason. *Show timeline per device*
+opens one lane per charger and load. **Per device**: one row each with
+*Skip*, *Move* (minutes) and *Start now* (`plan_override`, one night),
+*Back to plan* (`plan_override_clear`), *Charge now* (Always max, confirm
+step) and the battery's *Sell*. **Expected**: grid cost, sun tomorrow with
+its trust, arbitrage advice, the actuation switch, *Replan*. **Decisions
+today**: the decision log with a device filter and an *Earlier* fold.
 
 #### sem-next-devices-card
 
 **SEM Next · Devices** · *SEM Next, Devices screen*
 
-One card shape for every device: status · mode · targets · today · next ·
-one change. Chargers from their per-charger entities (mode, At least, Up
-to, Charge by, pause), the battery (mode, buffer, may feed the car), and
-every load the load manager knows (switch, priority, rating). Controls
-bind to the real entities and are off in observer mode.
+One list, one order: every charger, the battery and every load as one card
+(rank · name · state pill · live kW · ⚙ configure), sorted by priority.
+*Reorder* moves cards by drag or ▲▼; *Done* writes the order. Above the
+list: surplus, active devices, the 15-min peak with its limit (tap to
+change, or unlimited), slot budget, month peak and what SEM can shed.
+Charger: Off / Smart / Always, target bar, charge-by, departures, pause,
+battery boost, phases, set-once values, this month, lifetime. Battery:
+mode, zone bar, Tonight, charge pacing, sell window, per-battery mode,
+evidence and health. Load: Off / Peak only / Solar only / Solar + battery,
+goal, min run / pause, Requires, phase, comfort, tariff, may-switch.
+Every row needs its entity; controls are off in observer mode.
 
 #### sem-next-insights-card
 
 **SEM Next · Insights** · *SEM Next, Insights screen*
 
-One period selector (today, month, year) for everything: where the energy
-came from as bars per source, what it cost and saved, and a Replay tab that
-holds the simulation card.
+One period for every chart: Today, Yesterday, Week, Month, Year; today's bar
+is highlighted. Seven tabs: Energy (house by source, where the energy went,
+solar yields, strings, PV health, self-use and own-supply rings, CO₂),
+Power (24 h curves), Battery (power and charge), Car (kWh per charger,
+sessions by month with the .xlsx download, progress and lifetime), Money
+(bought vs saved, payback, car economics, demand charge, tariff), Forecast
+(actual vs expected sun, accuracy) and Replay (the simulation card). Tap or
+arrow across a chart to read one bucket. Charts are hand-drawn SVG fed by
+the recorder; a missing entity leaves its series or row out.
 
 #### sem-next-system-card
 
 **SEM Next · System** · *SEM Next, System screen*
 
-Health first: every source with how fresh it is, what SEM refused (or, in
-observer mode, what it would do), then the settings grouped by question
-(*When may the car buy grid power*, *What the battery may do*, *Limits*)
-with the real controls, and a link to the classic Configuration tab for the
-rest.
+Health first: a tile per source with its age (solar, grid, battery, car,
+prices, forecast, each load), the setup check with the grid and battery
+signs, the hardware, what is unavailable, the version; buttons Copy
+diagnostics, Diagnose (copies the report) and Observer on/off behind a
+confirm step. Then what SEM held back. Then seven settings groups written
+as sentences (How I pay · What SEM may do · Battery rules · Chargers · Heat
+pump and hot water · What SEM reads · Notifications and more): tap a value,
+change it, and apply every change at once from the bar at the bottom. The
+"N more" line opens with All settings. Adding or detecting a charger,
+entity pickers and PV strings stay on the classic Configuration tab.
 
 ### System Diagram Style
 
