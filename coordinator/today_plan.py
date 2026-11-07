@@ -416,9 +416,12 @@ def compose_today_plan(
             last_end = max(we for _ws, we, _late in windows)
             if now < last_end < horizon:
                 # The plan's own promise — not a rate estimate.
+                # (#1321) The label reads "Min reached ({kwh} kWh)": without
+                # the value the cards printed the placeholder itself.
                 rows.append(PlanRow(
                     when=last_end, kind=KIND_EV_MIN_REACHED,
                     label="plan_ev_min_reached",
+                    values={"kwh": f"{ev_min_remaining_kwh:.1f}"},
                 ))
         # (#742) waiting + a window is the honest display signal
         # REGARDLESS of who produced it: the legacy tariff mode
