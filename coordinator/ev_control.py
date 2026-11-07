@@ -511,8 +511,7 @@ class EVControlMixin:
         Reuses the learned hourly consumption pattern (ConsumptionPredictor) when
         it's trained — averaging the first ``window_hours`` of its 24h forecast,
         which are the night hours — then falls back to the rolling monthly-average
-        daily home / 24h, then the config estimate. Same sources
-        ``_calculate_forecast_night_target`` already uses; pulled out so the
+        daily home / 24h, then the config estimate. Pulled out so the
         peak-aware night plan (#274/C1) sizes the charge rate from real data.
         """
         now = dt_util.now()
@@ -880,34 +879,6 @@ class EVControlMixin:
             self._ev_reenable_attempts = 0
             self._ev_charge_refused = False
         return False
-
-    def _calculate_forecast_night_target(
-        self, remaining_kwh: float, energy: Any, charger_cfg: dict | None = None,
-    ) -> float:
-        """Night-charge target = the user's Min slider minus what's already
-        been delivered today. No EV-intelligence override, no solar-forecast
-        reduction (#440).
-
-        Per the v1.7.1-beta.4 truth model, only the user's sliders (Min/Max),
-        the charge mode, and — for ``%`` target type — the real vehicle SOC
-        determine charging. Estimated SOC, predicted daily consumption,
-        consecutive-skip counters and tomorrow's forecast are diagnostic
-        signals only; they do not override the user's stated mode.
-
-        The function is kept as a thin method for call-site stability — the
-        previous body shipped two override paths (SOC-based skip at lines
-        847-885 of the pre-#440 file, solar-forecast-based reduction at
-        lines 887-929) that violated the principle. Both are gone.
-
-        Args:
-            remaining_kwh: User's Min target minus today's delivered kWh.
-            energy: unused — kept for call-site signature stability.
-            charger_cfg: unused — kept for call-site signature stability.
-
-        Returns:
-            ``max(0, remaining_kwh)``.
-        """
-        return max(0.0, float(remaining_kwh))
 
     async def _police_opted_out_charger(
         self, cid: str, ev_dev, charger_cfg: dict, power,

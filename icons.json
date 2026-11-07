@@ -340,9 +340,6 @@
       },
       "observer_mode": {
         "default": "mdi:eye-outline"
-      },
-      "smart_night_charging": {
-        "default": "mdi:weather-night-partly-cloudy"
       }
     },
     "number": {

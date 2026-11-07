@@ -2643,6 +2643,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     except Exception as exc:  # noqa: BLE001
         _LOGGER.debug("Set-default button cleanup skipped: %s", exc)
 
+    # (#1318) The night window now opens at sunset plus an offset; the
+    # "earliest start" number is gone, and so is the forecast night-target
+    # switch (a no-op since #440). Idempotent: only installs that still
+    # hold the old registry rows see a removal.
+    try:
+        from homeassistant.helpers import entity_registry as er
+        registry = er.async_get(hass)
+        _retired = (("number", "night_earliest_start"),
+                    ("switch", "smart_night_charging"))
+        for ent in list(er.async_entries_for_config_entry(registry, entry.entry_id)):
+            uid = ent.unique_id or ""
+            if any(ent.domain == dom and uid.endswith(suffix)
+                   for dom, suffix in _retired):
+                _LOGGER.info("Removing retired entity %s (#1318)", ent.entity_id)
+                registry.async_remove(ent.entity_id)
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.debug("Retired night entity cleanup skipped: %s", exc)
+
     # (#638) Carry the kill-switch across the planner's rename. Idempotent;
     # only fires on installs that still hold the pre-rename registry entry.
     try:

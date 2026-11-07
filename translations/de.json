@@ -225,7 +225,6 @@
           "electricity_off_peak_rate": "Electricity NT rate (per kWh)",
           "demand_charge_rate": "Demand charge rate (CHF/kW/month)",
           "observer_mode": "Observer mode (read-only — no hardware control)",
-          "smart_night_charging": "Forecast-driven night charging reduction",
           "battery_discharge_control_entity": "Steuerentität für Batterieentladung (optional)",
           "hot_water_solar_target": "Warmwasser Solar-Heizziel (°C)",
           "legionella_target_temp": "Legionellen-Desinfektionsziel (°C)",
@@ -252,7 +251,6 @@
           "electricity_export_rate": "Einspeisevergütung des Energieversorgers (CHF/kWh).",
           "demand_charge_rate": "Monatlicher Leistungspreis pro kW Spitzenlast (CHF/kW/Monat). Auf 0 setzen, wenn Ihr Vertrag keinen Leistungspreis hat.",
           "observer_mode": "Wenn EIN, überwacht und berechnet SEM alles, sendet aber nie einen Dienstaufruf an die Hardware. Auf einem Test-/Staging-HA verwenden, das eine Produktivinstallation spiegelt.",
-          "smart_night_charging": "Wenn EIN, überspringt oder reduziert SEM das Nachtladen intelligent auf Basis des geschätzten EV-SOC, der Solarprognose, einer temperaturkorrigierten Verbrauchsvorhersage und gelernter Fahrmuster.",
           "battery_discharge_control_entity": "Number-Entität, die das Entladeleistungs-Limit des Wechselrichters steuert (z. B. number.batteries_maximale_entladeleistung bei Huawei). Wird bei der Installation automatisch erkannt; hier bei Bedarf überschreiben.",
           "diagram_style": "Wählen Sie das Systemdiagramm für den Haus-Tab. 'SEM' verwendet das integrierte animierte Diagramm. 'K-Flow' verwendet die K-Flow HACS-Karte (muss separat installiert werden).",
           "hot_water_solar_target": "Zieltemperatur (°C) für die solarunterstützte Warmwasserbereitung. SEM heizt den Boiler auf, wenn Überschuss verfügbar ist.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Mindestens garantieren (kWh)",
           "observer_mode": "Beobachtermodus (nur lesen, keine Hardwaresteuerung)",
-          "smart_night_charging": "Nachtziel basierend auf Prognose von morgen reduzieren",
           "minimum_solar_power": "Minimale Solarleistung zum Starten der EV-Ladung (W)",
           "curtailment_probe_enabled": "Abregelungs-Sonde (begrenzte Solarenergie nutzen)",
           "export_limit_entity": "Einspeiselimit-Entität (optional)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM lädt nachts aus dem Netz nach, damit das Auto am Morgen mindestens so viel hat. Das ist eine Untergrenze, kein Limit — Sonne kann mehr hinzufügen. 0 = niemals das Netz nutzen.",
           "observer_mode": "Wenn EIN, überwacht SEM alles, sendet aber nie Befehle an die Hardware.",
-          "smart_night_charging": "Wenn EIN, reduziert SEM das Nacht-Ladeziel, wenn die Solarprognose für morgen ausreichend ist.",
           "minimum_solar_power": "Mindest-Solarüberschuss (W), der erforderlich ist, bevor SEM mit dem solaren EV-Laden beginnt.",
           "curtailment_probe_enabled": "Wenn der Wechselrichter die Netzeinspeisung begrenzt (z. B. bei negativen Preisen), wird die Produktion auf den Verbrauch geklemmt und echte Solarenergie bleibt unsichtbar. Opt-in: SEM startet das E-Auto kurz mit Minimalstrom und lädt nur weiter, wenn die Produktion nachzieht.",
           "export_limit_entity": "Die Einspeiselimit-Entität des Wechselrichters (bei Huawei, GoodWe, SolaX, Victron u. a. automatisch erkannt, wenn leer). Schärft die Erkennung und verhindert unnötige Sonden."
@@ -1723,8 +1719,8 @@
       "electricity_export_rate": {
         "name": "Stromexporttarif"
       },
-      "night_earliest_start": {
-        "name": "Nacht Frühester Start"
+      "night_start_offset_min": {
+        "name": "Nachtstart-Versatz"
       },
       "night_latest_end": {
         "name": "Nacht Spätestes Ende"

@@ -219,7 +219,6 @@
           "electricity_export_rate": "Villamos energia betáplálási ára (kWh-ként)",
           "demand_charge_rate": "Teljesítménydíj (CHF/kW/hó)",
           "observer_mode": "Megfigyelő mód (csak olvasás)",
-          "smart_night_charging": "Intelligens éjszakai töltés",
           "vehicle_soc_entity": "Jármű akkumulátor SOC",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
           "ev_target_soc": "Tekintsd tele ennél (%)",
@@ -251,7 +250,6 @@
           "electricity_export_rate": "A szolgáltató által fizetett betáplálási ár (CHF/kWh).",
           "demand_charge_rate": "Havi teljesítménydíj a csúcs kW-jára vetítve (CHF/kW/hó). Állítsa 0-ra, ha a szerződése nem tartalmaz teljesítménydíjat.",
           "observer_mode": "Bekapcsolva a SEM mindent figyel és számol, de soha nem küld szolgáltatáshívást a hardvernek. Éles telepítést tükröző teszt/staging HA-n használja.",
-          "smart_night_charging": "Bekapcsolva a SEM intelligensen kihagyja vagy csökkenti az éjszakai töltést a becsült EV-SOC, a napelemes előrejelzés, a hőmérséklettel korrigált fogyasztásbecslés és a megtanult vezetési szokások alapján.",
           "battery_discharge_control_entity": "Number entitás, amely az inverter kisütési teljesítménykorlátját vezérli (pl. number.batteries_maximale_entladeleistung Huawei esetén). Telepítéskor automatikusan felismerve; szükség esetén itt írható felül.",
           "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő).",
           "hot_water_solar_target": "Célhőmérséklet (°C) a napenergiával támogatott melegvíz-fűtéshez. A SEM megemeli a bojlert, amikor többlet áll rendelkezésre.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Legalább ennyit garantálj (kWh)",
           "observer_mode": "Megfigyelő mód (csak olvasás, nincs hardvervezérlés)",
-          "smart_night_charging": "Éjszakai cél csökkentése a holnapi előrejelzés alapján",
           "minimum_solar_power": "Minimális napenergia-teljesítmény az EV-töltés indításához (W)",
           "curtailment_probe_enabled": "Korlátozás-szonda (korlátozott napenergia hasznosítása)",
           "export_limit_entity": "Exportkorlát-entitás (opcionális)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "A SEM éjjel a hálózatról tölt, hogy reggelre az autóban legalább ennyi legyen. Ez alsó határ, nem korlát — a nap többet is adhat. 0 = soha ne használja a hálózatot.",
           "observer_mode": "Bekapcsolva a SEM mindent figyel, de soha nem küld parancsot a hardvernek.",
-          "smart_night_charging": "Bekapcsolva a SEM csökkenti az éjszakai töltési célt, ha a holnapi napelemes előrejelzés elegendő.",
           "minimum_solar_power": "A minimális napenergia-többlet (W), amely szükséges ahhoz, hogy a SEM elindítsa a napelemes EV-töltést.",
           "curtailment_probe_enabled": "Ha az inverter korlátozza a hálózati exportot (pl. negatív áraknál), a termelés a fogyasztáshoz tapad és a valós napenergia láthatatlan marad. Opcionális: a SEM rövid időre minimális árammal indítja az EV-t, és csak akkor folytatja, ha a termelés követi.",
           "export_limit_entity": "Az inverter exportkorlát-entitása (üresen hagyva automatikusan felismert Huawei, GoodWe, SolaX, Victron stb. esetén). Pontosítja az észlelést és megelőzi a felesleges szondákat."
@@ -1723,8 +1719,8 @@
       "electricity_export_rate": {
         "name": "Villamos energia betáplálási ára"
       },
-      "night_earliest_start": {
-        "name": "Éjszakai legkorábbi kezdés"
+      "night_start_offset_min": {
+        "name": "Éjszakai kezdés eltolása"
       },
       "night_latest_end": {
         "name": "Éjszakai legkésőbbi befejezés"

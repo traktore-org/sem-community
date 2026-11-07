@@ -219,7 +219,6 @@
           "electricity_export_rate": "Stawka eksportu energii (za kWh)",
           "demand_charge_rate": "Stawka opłaty mocowej (CHF/kW/miesiąc)",
           "observer_mode": "Tryb obserwatora (tylko odczyt)",
-          "smart_night_charging": "Inteligentne ładowanie nocne",
           "vehicle_soc_entity": "SOC akumulatora pojazdu",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "ev_target_soc": "Uznaj za pełny przy (%)",
@@ -251,7 +250,6 @@
           "electricity_export_rate": "Stawka za oddanie energii do sieci wypłacana przez operatora (CHF/kWh).",
           "demand_charge_rate": "Miesięczna opłata mocowa za kW szczytu (CHF/kW/miesiąc). Ustaw 0, jeśli Twoja umowa nie przewiduje opłaty mocowej.",
           "observer_mode": "Gdy WŁĄCZONE, SEM wszystko monitoruje i wylicza, ale nigdy nie wysyła wywołania usługi do sprzętu. Stosuj na testowej/stagingowej instancji HA odzwierciedlającej instalację produkcyjną.",
-          "smart_night_charging": "Gdy WŁĄCZONE, SEM inteligentnie pomija lub ogranicza ładowanie nocne na podstawie szacowanego SOC pojazdu, prognozy słonecznej, przewidywanego zużycia skorygowanego o temperaturę oraz wyuczonych wzorców jazdy.",
           "battery_discharge_control_entity": "Encja Number sterująca limitem mocy rozładowania falownika (np. number.batteries_maximale_entladeleistung w Huawei). Wykrywana automatycznie przy instalacji; w razie potrzeby nadpisz tutaj.",
           "diagram_style": "Wybierz styl diagramu systemowego na karcie Strona główna. 'SEM' używa wbudowanego animowanego diagramu. 'K-Flow' używa karty K-Flow HACS (wymaga osobnej instalacji).",
           "hot_water_solar_target": "Docelowa temperatura (°C) dla podgrzewania ciepłej wody wspieranego słońcem. SEM podbija bojler, gdy dostępna jest nadwyżka.",
@@ -280,7 +278,6 @@
         "data": {
           "daily_ev_target": "Zagwarantuj co najmniej (kWh)",
           "observer_mode": "Tryb obserwatora (tylko odczyt, bez sterowania sprzętem)",
-          "smart_night_charging": "Zmniejsz cel nocny na podstawie prognozy na jutro",
           "minimum_solar_power": "Minimalna moc solarna do startu ładowania EV (W)",
           "curtailment_probe_enabled": "Sonda ograniczenia (wykorzystaj ograniczone słońce)",
           "export_limit_entity": "Encja limitu eksportu (opcjonalnie)"
@@ -288,7 +285,6 @@
         "data_description": {
           "daily_ev_target": "SEM doładowuje z sieci w nocy, aby rano samochód miał co najmniej tyle. To dolna granica, nie limit — słońce może dodać więcej. 0 = nigdy nie używaj sieci.",
           "observer_mode": "Gdy WŁĄCZONE, SEM wszystko monitoruje, ale nigdy nie wysyła poleceń do sprzętu.",
-          "smart_night_charging": "Gdy WŁĄCZONE, SEM zmniejsza cel ładowania nocnego, jeśli jutrzejsza prognoza słoneczna jest wystarczająca.",
           "minimum_solar_power": "Minimalna nadwyżka mocy solarnej (W) wymagana, zanim SEM rozpocznie ładowanie EV ze słońca.",
           "curtailment_probe_enabled": "Gdy falownik ogranicza eksport do sieci (np. przy cenach ujemnych), produkcja zatrzymuje się na poziomie zużycia, a realna energia słoneczna pozostaje niewidoczna. Opt-in: SEM na chwilę uruchamia ładowanie EV minimalnym prądem i kontynuuje tylko, gdy produkcja rośnie.",
           "export_limit_entity": "Encja limitu eksportu falownika (wykrywana automatycznie dla Huawei, GoodWe, SolaX, Victron i innych, gdy pusta). Zaostrza detekcję i zapobiega zbędnym sondom."
@@ -1723,8 +1719,8 @@
       "electricity_export_rate": {
         "name": "Stawka eksportu energii"
       },
-      "night_earliest_start": {
-        "name": "Najwcześniejszy start nocy"
+      "night_start_offset_min": {
+        "name": "Przesunięcie początku nocy"
       },
       "night_latest_end": {
         "name": "Najpóźniejszy koniec nocy"

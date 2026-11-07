@@ -239,7 +239,7 @@ DEFAULT_SESSION_LIMIT: Final = 10  # kWh per session during hysteresis
 # ============================================
 # TIME SCHEDULES
 # ============================================
-DEFAULT_NIGHT_EARLIEST_START: Final = 20.5  # 20:30 — floor: night mode never starts before this (hours as float)
+DEFAULT_NIGHT_START_OFFSET_MIN: Final = 30  # minutes after sunset the night window opens (0..400)
 DEFAULT_NIGHT_LATEST_END: Final = 7.0      # 07:00 — ceiling: night mode always ends by this (hours as float)
 DEFAULT_DAILY_RESET: Final = "00:00"
 DEFAULT_DAILY_ENERGY_OFFSET: Final = "07:00"  # Daily energy reset time (handles night charging across midnight)

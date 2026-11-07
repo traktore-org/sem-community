@@ -212,7 +212,7 @@ class TestTheNightWindowLiesInsideTheGate:
 
     Both subsystems read the same ``sun.sun``. ``get_night_window`` clamps::
 
-        night_start = max(sunset + 10min, earliest_start)   # after sunset
+        night_start = sunset + night_start_offset_min       # after sunset (#1318)
         night_end   = min(sunrise, latest_end)              # at/before sunrise
 
     so the whole night-charging window sits strictly inside the period where
@@ -257,14 +257,15 @@ class TestTheNightWindowLiesInsideTheGate:
         # ...and never starts before the gate closes.
         assert night_start > sunset_hhmm, f"{label}: charge starts before the gate"
 
-    def test_an_absurd_earliest_start_cannot_open_a_daylight_window(self):
-        """``max()`` is load-bearing: a midday floor still yields a dark start."""
+    def test_a_zero_offset_opens_the_window_at_sunset_not_before(self):
+        """(#1318) The smallest offset the user can set still starts at
+        sunset itself — the window can never open in daylight."""
         night_start, night_end = self._window(
             "2026-07-26T03:51:00+00:00",
             "2026-07-26T19:08:00+00:00",
-            night_earliest_start=12.0,  # user asks for noon
+            night_start_offset_min=0,
         )
-        assert night_start == "19:18"  # sunset + 10, not 12:00
+        assert night_start == "19:08"  # sunset, not earlier
         assert night_end <= "03:51"
 
 

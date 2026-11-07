@@ -947,6 +947,8 @@ The battery, grid and solar on/off sensors show **unknown**, not Off, once
 their power sensor has been out for 3 minutes. A power sensor that reports
 text such as "none" or "nan" counts as out, not as 0 W.
 
+Many inverters go unavailable after dark. With the sun down, a solar sensor that gives no number reads 0 W. It raises no notice and does not hold your battery. In daylight it still counts as out.
+
 ## A sensor stopped updating (stale)
 
 The sensor exists and has a state, but it has not changed for far longer than

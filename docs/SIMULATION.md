@@ -198,18 +198,19 @@ is missing, the flag is not reaching setup — report it.
 Waiting for the real evening is not a simulation. SEM's day/night clock is
 *derived*, so it can be held:
 
-- **Night start** is `max(sunset + 10 min, night_earliest_start)`; sunset is
+- **Night start** is `sunset + night_start_offset_min` (#1318); sunset is
   read from `sun.sun` (`next_setting` / `next_rising` and the state).
 - **Hold `sun.sun`** by posting its state and attributes every 0.5 s (the sun
   integration republishes within seconds; slower holds flap) with
-  `next_setting` a few minutes in the past, and set the night-floor number
-  (`number.sem_night_earliest_start`) to the evening you want. SEM now
-  believes the evening is minutes away: the forecast-spend block
-  `[night_start − 15 min, night_start)` opens, night top-up sizing runs,
-  pacing lands the pack "at day's end" — all as WOULD decisions.
-- **The floor's minimum is 18:00**, so the evening cannot be pulled earlier
-  than 17:45 local; the day side (pacing, spendable budget, the peak slot
-  guard) simulates at any hour.
+  `next_setting` a few minutes in the past, and set the offset number
+  (`number.sem_night_start_offset_min`) so that sunset + offset is the
+  evening you want. SEM now believes the evening is minutes away: the
+  forecast-spend block `[night_start − 15 min, night_start)` opens, night
+  top-up sizing runs, pacing lands the pack "at day's end" — all as WOULD
+  decisions.
+- **The offset's maximum is 400 minutes**, so the fake evening can sit up to
+  ~6.5 h after the held sunset; the day side (pacing, spendable budget, the
+  peak slot guard) simulates at any hour.
 - **Release before the fake night begins**, and restore the floor. A held
   night start that is allowed to arrive opens a real battery-night record in
   the recorder (#800) — data the learner will later trust.

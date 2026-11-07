@@ -94,7 +94,7 @@ async def test_number_drops_the_battery_and_its_legacy_unique_id(hass):
     keys = await _run(number, hass, entry)
     assert "battery_capacity" not in keys
     assert "hot_water_solar_target" not in keys
-    assert "night_earliest_start" in keys
+    assert "night_start_offset_min" in keys
     # The legacy map used to keep this unique_id valid unconditionally.
     assert not _exists(hass, "number", f"{entry.entry_id}_battery_capacity_kwh")
 

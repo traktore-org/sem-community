@@ -96,10 +96,10 @@ class TestDualStateMachine:
 
     def test_summer_late_sunset_handling(self, time_manager):
         """Test that summer late sunsets are handled correctly."""
-        # Summer scenario: sunset at 21:20 + 10min = 21:30 start
+        # Summer scenario: sunset 21:00 + the 30 min offset = 21:30 start
         with patch('homeassistant.util.dt.now') as mock_now, \
              patch.object(time_manager, 'get_sunrise_time', return_value="05:30"), \
-             patch.object(time_manager, 'get_sunset_plus_10_time', return_value="21:30"):
+             patch.object(time_manager, 'get_night_start_time', return_value="21:30"):
 
             # 21:00 - should still be day mode (before 21:30)
             mock_now.return_value = datetime(2025, 7, 15, 21, 0, 0)
@@ -110,18 +110,18 @@ class TestDualStateMachine:
             assert time_manager.is_night_mode() is True
 
     def test_winter_early_sunset_handling(self, time_manager):
-        """Test that winter early sunsets use minimum 20:30 start."""
-        # Winter scenario: sunset at 16:45 + 10min = 16:55, but minimum is 20:30
+        """(#1318) A winter sunset opens the night early — no 20:30 floor."""
+        # Winter scenario: sunset 16:45 + the 30 min offset = 17:15 start
         with patch('homeassistant.util.dt.now') as mock_now, \
              patch.object(time_manager, 'get_sunrise_time', return_value="08:00"), \
-             patch.object(time_manager, 'get_sunset_plus_10_time', return_value="16:55"):
+             patch.object(time_manager, 'get_night_start_time', return_value="17:15"):
 
-            # 17:00 - should still be day mode (before 20:30 minimum)
+            # 17:00 - still day (before the offset has run out)
             mock_now.return_value = datetime(2025, 12, 15, 17, 0, 0)
             assert time_manager.is_night_mode() is False
 
-            # 20:35 - should be night mode
-            mock_now.return_value = datetime(2025, 12, 15, 20, 35, 0)
+            # 17:20 - night, hours before the old 20:30 floor
+            mock_now.return_value = datetime(2025, 12, 15, 17, 20, 0)
             assert time_manager.is_night_mode() is True
 
     def test_night_charging_active_state(self, state_machine, mock_hass, mock_time_night):

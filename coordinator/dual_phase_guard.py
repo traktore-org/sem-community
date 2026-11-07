@@ -16,6 +16,14 @@ from .units import is_power_unit, power_state_to_watts
 
 _BAD_STATES = {STATE_UNKNOWN, STATE_UNAVAILABLE, "none", "None", ""}
 
+#: (#1315) The read errors that mean "no reading yet": the entity is not in
+#: the state machine, or it has not reported. After a restart every phase
+#: reads like this until the meter's integration has loaded. Any other error
+#: (a wrong unit, a bad number, a config error) is a fault, not a wait.
+NO_READING_YET = frozenset(
+    {"missing", "unavailable", "unknown", "none", "", "stale", "missing_timestamp"}
+)
+
 
 def _read_number(
     states,

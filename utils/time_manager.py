@@ -4,7 +4,8 @@ This module handles all time-related calculations including sunrise/sunset,
 night mode detection, night end time, and meter day calculations.
 
 Key methods:
-- is_night_mode(): sunset+10 (or 20:30) until sunrise (or 07:00)
+- is_night_mode(): sunset + user offset (default 30 min; 20:30 without a sun
+  reading) until sunrise (or 07:00)
 - get_night_end_time(): min(sunrise, 07:00) — used by latest-start planning
 - get_current_meter_day_sunrise_based(): daily bucket boundary for energy tracking
 """
@@ -25,7 +26,7 @@ class TimeManager:
 
     Handles:
     - Sunrise/sunset times from Home Assistant sun integration
-    - Night mode detection (sunset-based with configurable floor/ceiling)
+    - Night mode detection (sunset plus a user offset, with a morning ceiling)
     - Night window duration and sufficiency checks
     - Sunrise-based meter day calculations for daily energy tracking
     """
@@ -62,17 +63,59 @@ class TimeManager:
         # exactly that minute), but the sequence is unambiguous.
         self._night_ended_on = None
 
-    def _get_night_earliest_start(self) -> str:
-        """Get the floor for night start as HH:MM.
+    def _get_night_start_offset_min(self) -> int:
+        """Minutes after sunset the night window opens (#1318).
 
-        Reads from config `night_earliest_start` (float hours, e.g., 20.5 = 20:30).
-        Default: 20:30.
+        Reads config ``night_start_offset_min`` (0..400, default 30).
         """
-        from ..consts.core import DEFAULT_NIGHT_EARLIEST_START
-        hours = self._config.get("night_earliest_start", DEFAULT_NIGHT_EARLIEST_START)
-        h = int(hours)
-        m = int((hours - h) * 60)
-        return f"{h:02d}:{m:02d}"
+        from ..consts.core import DEFAULT_NIGHT_START_OFFSET_MIN
+        try:
+            offset = int(float(self._config.get(
+                "night_start_offset_min", DEFAULT_NIGHT_START_OFFSET_MIN)))
+        except (TypeError, ValueError):
+            offset = DEFAULT_NIGHT_START_OFFSET_MIN
+        return max(0, min(400, offset))
+
+    def _sunset_datetime(self):
+        """The next sunset as a local datetime, or None when the sun
+        integration does not answer. After today's sunset this is
+        tomorrow's; the callers only read its clock time, which is the
+        same within a minute, so no day correction (and no day-boundary
+        read, #645) is needed here.
+        """
+        try:
+            sun_state = self.hass.states.get("sun.sun")
+            if sun_state and sun_state.attributes:
+                next_setting = sun_state.attributes.get("next_setting")
+                if next_setting:
+                    if isinstance(next_setting, str):
+                        next_setting = datetime.fromisoformat(
+                            next_setting.replace('Z', '+00:00'))
+                    return dt_util.as_local(next_setting)
+        except Exception as e:  # noqa: BLE001 — unreadable sun = no reading
+            _LOGGER.debug(f"Could not get sunset datetime: {e}")
+        return None
+
+    def get_night_start_time(self) -> str:
+        """The night window's start as HH:MM (#1318): sunset plus the user's
+        offset, in every season. A start that would pass midnight is held
+        at 23:59 — the window is compared as HH:MM strings, so a start on
+        the next day would read as the night's end.
+
+        Records the source on ``self._last_sunset_source`` (#424):
+        ``sun_integration`` / ``fallback_default``. Without a sun reading
+        the start is "20:30", the old fixed floor, so a missing sun
+        integration never opens the night at noon.
+        """
+        sunset = self._sunset_datetime()
+        if sunset is None:
+            self._last_sunset_source = "fallback_default"
+            return "20:30"
+        self._last_sunset_source = "sun_integration"
+        start = sunset + timedelta(minutes=self._get_night_start_offset_min())
+        if start.date() > sunset.date():
+            return "23:59"
+        return start.strftime("%H:%M")
 
     def _get_night_latest_end(self) -> str:
         """Get the ceiling for night end as HH:MM.
@@ -90,11 +133,13 @@ class TimeManager:
         """Determine if we're in night mode based on sunrise/sunset.
 
         Night mode is defined as:
-        - From max(sunset+10, earliest_start) until min(sunrise, latest_end)
+        - From sunset + ``night_start_offset_min`` (default 30, #1318)
+          until min(sunrise, latest_end)
 
-        The earliest_start floor (default 20:30) prevents night mode during
-        daytime. The latest_end ceiling (default 07:00) stops night charging
-        even if sunrise is later in winter.
+        The start follows the sun in every season; a fixed 20:30 floor used
+        to hold the winter start back by hours. The latest_end ceiling
+        (default 07:00) stops night charging even if sunrise is later in
+        winter.
 
         Records the branch on ``self._last_night_window_path`` (#424):
         ``pre_midnight_in_night`` / ``post_midnight_in_night`` /
@@ -173,11 +218,9 @@ class TimeManager:
             (night_start, night_end) tuple of HH:MM strings
         """
         sunrise = self.get_sunrise_time()
-        sunset_plus_10 = self.get_sunset_plus_10_time()
-        earliest_start = self._get_night_earliest_start()
         latest_end = self._get_night_latest_end()
 
-        night_start = max(sunset_plus_10, earliest_start)
+        night_start = self.get_night_start_time()
         night_end = min(sunrise, latest_end)
         return night_start, night_end
 

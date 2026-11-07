@@ -328,11 +328,11 @@ NUMBER_TYPES = [
     # system_install_year removed — auto-detected from recorder statistics
     # Night charging schedule
     NumberEntityDescription(
-        key="night_earliest_start",
-        native_unit_of_measurement="h",
-        native_min_value=18.0,
-        native_max_value=23.0,
-        native_step=0.5,
+        key="night_start_offset_min",
+        native_unit_of_measurement="min",
+        native_min_value=0,
+        native_max_value=400,
+        native_step=5,
         mode=NumberMode.SLIDER,
     ),
     NumberEntityDescription(
@@ -754,7 +754,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "battery_buffer_soc": 70,
             "battery_auto_start_soc": 90,
             "battery_capacity": DEFAULT_BATTERY_CAPACITY_KWH,
-            "night_earliest_start": 20.5,
+            "night_start_offset_min": 30,
             "night_latest_end": 7.0,
             "battery_max_discharge_power": 5000,
         }

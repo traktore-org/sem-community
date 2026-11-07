@@ -11,12 +11,9 @@ established for v1.7.1-beta.4:
 
 These tests pin the post-#440 behaviour:
 
-1. ``_calculate_forecast_night_target`` is a pure pass-through of the
-   user's remaining-kWh delta — no taper-detector reads, no forecast
-   reads.
-2. The previously-overriding inputs (high ``estimated_soc``, predicted
-   daily consumption, consecutive-skip count, tomorrow's forecast) do
-   NOT change the function's output.
+1. No forecast night-target path remains at all (#1318 removed the
+   pass-through and the mode-derived smart-night switch).
+2. (folded into 1.)
 3. The skip-decision API surface is gone: ``calculate_nights_until_charge``,
    ``record_skip``, ``reset_skips``, ``_consecutive_skips``,
    ``notify_ev_charge_skip``, ``notify_ev_charge_recommended``.
@@ -26,7 +23,6 @@ These tests pin the post-#440 behaviour:
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock
 
 
 from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
@@ -34,96 +30,29 @@ from custom_components.solar_energy_management.coordinator.ev_taper_detector imp
 )
 
 
-# ──────────────────────────────────────────────
-# 1. The pass-through contract
-# ──────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────
+# 1. No reduction path exists at all (#1318)
+# ───────────────────────────────────────────────────────────────────
 
 
-class _MockCoord:
-    """Minimal mock matching the surface ``_calculate_forecast_night_target``
-    touches. Used to drive the bound method directly."""
-
-    def __init__(self, *, ev_taper=None, predictor=None, forecast=None,
-                 cycle_vehicle_soc=None, config=None):
-        from custom_components.solar_energy_management.coordinator.ev_control import (
-            EVControlMixin,
-        )
-        self.config = config or {}
-        self._ev_taper_detector = ev_taper
-        self._predictor = predictor
-        self._forecast_reader = MagicMock()
-        self._forecast_reader.read_forecast = MagicMock(return_value=forecast)
-        self._cycle_vehicle_soc = cycle_vehicle_soc
-        # Bind the real method.
-        self._calculate_forecast_night_target = (
-            EVControlMixin._calculate_forecast_night_target.__get__(self)
-        )
-
-
-def _fake_energy(monthly_home=0.0, monthly_battery_charge=0.0):
-    e = MagicMock()
-    e.monthly_home = monthly_home
-    e.monthly_battery_charge = monthly_battery_charge
-    return e
-
-
-def test_passthrough_with_high_estimated_soc():
-    """SOC = 100 % via anchored taper → night target unchanged."""
-    taper = EVTaperDetector({"ev_battery_capacity_kwh": 40})
-    taper._soc_anchored = True
-    taper._estimated_soc = 100.0
-    taper._last_full_timestamp = "2026-06-06T12:00:00"
-    coord = _MockCoord(ev_taper=taper)
-    out = coord._calculate_forecast_night_target(12.0, _fake_energy())
-    assert out == 12.0, (
-        f"night target {out} != input 12.0 — taper-detector override "
-        "may have crept back in (see #440)."
+def test_no_forecast_night_target_path_remains():
+    """#440 made ``_calculate_forecast_night_target`` a pass-through; #1318
+    removed it and the mode-derived smart-night switch with it. The night
+    target is the user's remaining floor, read straight from the counters —
+    no method may stand between the two again."""
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
     )
+    from custom_components.solar_energy_management.coordinator.ev_control import (
+        EVControlMixin,
+    )
+    from custom_components.solar_energy_management.consts import ev_charge_modes
 
-
-def test_passthrough_with_high_predicted_daily():
-    """Predicted daily consumption = 0 (means car already has range) →
-    night target still unchanged."""
-    taper = EVTaperDetector({"ev_battery_capacity_kwh": 40})
-    taper._soc_anchored = True
-    taper._estimated_soc = 95.0
-    predictor = MagicMock()
-    predictor.predict_ev_consumption_tomorrow = MagicMock(return_value=0.0)
-    coord = _MockCoord(ev_taper=taper, predictor=predictor)
-    out = coord._calculate_forecast_night_target(8.0, _fake_energy())
-    assert out == 8.0
-
-
-def test_passthrough_with_strong_solar_forecast():
-    """Tomorrow's forecast = 50 kWh — previously would have reduced the
-    night target; post-#440 the user's delta is honoured verbatim."""
-    forecast = MagicMock()
-    forecast.available = True
-    forecast.forecast_tomorrow_kwh = 50.0
-    coord = _MockCoord(forecast=forecast)
-    out = coord._calculate_forecast_night_target(14.0, _fake_energy(monthly_home=150.0))
-    assert out == 14.0
-
-
-def test_passthrough_with_real_vehicle_soc_at_target():
-    """Real vehicle SOC > target — still no override. Mode controls
-    whether to charge; ``%`` target gating happens at the slider/mode
-    layer, not here."""
-    taper = EVTaperDetector({"ev_battery_capacity_kwh": 40, "ev_target_soc": 80})
-    coord = _MockCoord(ev_taper=taper, cycle_vehicle_soc=92.0)
-    out = coord._calculate_forecast_night_target(10.0, _fake_energy())
-    assert out == 10.0
-
-
-def test_passthrough_negative_input_clamped_to_zero():
-    """Defensive: a stale negative ``remaining_kwh`` is clamped to 0."""
-    coord = _MockCoord()
-    assert coord._calculate_forecast_night_target(-3.5, _fake_energy()) == 0.0
-
-
-def test_passthrough_zero_input_returns_zero():
-    coord = _MockCoord()
-    assert coord._calculate_forecast_night_target(0.0, _fake_energy()) == 0.0
+    for name in ("_calculate_forecast_night_target", "_mode_uses_smart_night",
+                 "_smart_night_charging_enabled"):
+        assert not hasattr(SEMCoordinator, name), f"coordinator still has {name}"
+        assert not hasattr(EVControlMixin, name), f"ev_control still has {name}"
+    assert not hasattr(ev_charge_modes, "MODE_USES_SMART_NIGHT")
 
 
 # ──────────────────────────────────────────────

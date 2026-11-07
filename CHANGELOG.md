@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - ✨ **SEM Next**: a second dashboard with five screens by question, created on request; the classic one stays (#1321).
+- 🐛 **The heat pump's cost of heat now shows a value without its own tariff** (#1081). It uses your house price.
+
+# [2.3.0-beta.7] — 06.11.2026
+
+- 🐛 **A restart no longer sends you a false "phase limit exceeded" notice while your meter starts** (#1315). A missing reading now says unavailable, not exceeded.
+- 🐛 **Solar now reads 0 W at night when your inverter goes unavailable** (#1316). Before, it counted as missing and held battery changes all night.
+- ✨ **Night charging starts at sunset plus an offset you set (default 30 min), not 20:30** (#1318). The forecast night-target option is gone.
 
 # [2.3.0-beta.6] — 05.11.2026
 
