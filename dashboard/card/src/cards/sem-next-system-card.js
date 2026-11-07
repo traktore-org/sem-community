@@ -1,137 +1,505 @@
 /**
  * SEM Next · System (#1321)
  *
- * Health first: is every source fresh, is the plan current, what did SEM
- * refuse and why. Then the settings that answer a question, with the
- * real controls, and a link to the classic Configuration tab for the rest.
+ * Health first: how fresh every source is, the setup check, the hardware,
+ * what is unavailable, the version, with Copy diagnostics, Diagnose and
+ * the observer switch (behind a confirm step: the test rigs share real
+ * hardware). Then what SEM held back. Then the settings as seven sentences;
+ * tap a value, it becomes a control; changes wait in a pending map and go
+ * out together from the sticky Apply bar: entities directly, options in
+ * one set_option call. The classic Configuration tab keeps what a sentence
+ * cannot carry (adding or detecting a charger, entity pickers, PV strings,
+ * the detected-hardware report).
  *
  * Config:
  *   type: custom:sem-next-system-card
  */
 
-import { SEMNextBase, html, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
-import { sourceRows, ageLabel, SOURCE_ROWS } from '../util/next-freshness.js';
+import { sourceRows, ageLabel, ageSeconds, freshness, SOURCE_ROWS } from '../util/next-freshness.js';
 import { plainReason, deviceName } from '../util/why-rows.js';
+import { MISSING } from '../util/missing-value.js';
+import { groups, applyPlan, pendingKey, slotText, setupItems, loadSources, unavailableCount,
+         reserveIds, pvStrings } from '../util/next-settings.js';
 
-const IDS = ['sensor.sem_diag_version', 'sensor.sem_energy_plan', 'sensor.sem_target_peak_limit',
-             'number.sem_night_start_offset_min', 'number.sem_night_earliest_start', 'number.sem_night_latest_end',
-             'select.sem_battery_mode', 'number.sem_battery_buffer_soc', 'number.sem_battery_priority_soc',
-             'number.sem_battery_assist_min_surplus', 'switch.sem_battery_may_assist_ev', 'switch.sem_energy_plan_actuation',
-             ...SOURCE_ROWS.map((r) => r.entity)];
+const CLASSIC_CONFIG = '/sem-dashboard/config';
+
+const DIAG_IDS = ['sensor.sem_diag_version', 'sensor.sem_diag_grid_mode', 'sensor.sem_diag_grid_sign',
+                  'sensor.sem_diag_battery_sign', 'sensor.sem_diag_charger_count', 'sensor.sem_diag_charger_control',
+                  'sensor.sem_diag_battery_capacity', 'sensor.sem_diag_update_interval', 'sensor.sem_diag_sensors_unavailable',
+                  'sensor.sem_diag_inputs_degraded', 'sensor.sem_diag_ed_config', 'sensor.sem_energy_plan',
+                  'sensor.sem_charging_state', 'sensor.sem_controllable_devices_count', 'sensor.sem_tariff_provider',
+                  'binary_sensor.sem_heat_pump_registered', 'binary_sensor.sem_hot_water_registered',
+                  'sensor.sem_hot_water_temperature_safety_path', 'sensor.sem_hot_water_activation_path'];
+
+// Every entity a sentence can bind to (the per-charger, per-battery and
+// per-load ids are added in _watchIds).
+const SETTING_IDS = ['number.sem_electricity_import_rate', 'number.sem_electricity_export_rate', 'number.sem_demand_charge_rate',
+                     'number.sem_cheap_price_threshold', 'number.sem_expensive_price_threshold',
+                     'switch.sem_export_guard_enabled', 'number.sem_export_guard_engage_s', 'number.sem_export_guard_release_s',
+                     'switch.sem_export_guard_override_external',
+                     'number.sem_battery_priority_soc', 'number.sem_battery_buffer_soc', 'number.sem_battery_auto_start_soc',
+                     'switch.sem_forecast_spending_enabled', 'switch.sem_battery_charge_pacing_enabled',
+                     'switch.sem_battery_may_export', 'switch.sem_battery_may_assist_ev',
+                     'number.sem_battery_max_discharge_power', 'number.sem_battery_morning_drain_floor_soc',
+                     'switch.sem_battery_house_sink_enabled', 'number.sem_battery_assist_max_power',
+                     'number.sem_battery_assist_min_surplus', 'number.sem_ev_enable_delay_seconds',
+                     'number.sem_ev_disable_delay_seconds', 'number.sem_heat_pump_boost_offset',
+                     'number.sem_hot_water_solar_target', 'number.sem_legionella_target_temp',
+                     'number.sem_legionella_interval_hours', 'number.sem_system_size_kwp', 'select.sem_hints',
+                     'number.sem_update_interval', 'switch.sem_ev_morning_window_enabled',
+                     'number.sem_ev_morning_window_hours', 'number.sem_night_start_offset_min',
+                     'number.sem_night_latest_end', 'switch.sem_vacation_mode', 'switch.sem_simulation_tab',
+                     'number.sem_minimum_solar_power', 'number.sem_regulation_offset'];
+
+const CHARGER_SUFFIXES = ['ev_phases', 'minimum_current', 'maximum_current', 'ev_battery_capacity_kwh', 'ev_kwh_per_100km'];
+
+const FRESH_LOOK = {
+    next_src_solar: { icon: 'mdi:white-balance-sunny', color: C.solar },
+    next_src_grid: { icon: 'mdi:transmission-tower', color: C.grid },
+    next_src_battery: { icon: 'mdi:battery-charging', color: C.battery_out },
+    next_src_car: { icon: 'mdi:car-electric', color: C.ev },
+    next_src_forecast: { icon: 'mdi:weather-sunny', color: C.solar },
+    next_src_price: { icon: 'mdi:cash', color: C.fg2 },
+};
+
+const cardCss = css`
+    .val.dirty { color: var(--n-accent); text-decoration-color: var(--n-accent); text-decoration-style: solid; }
+    .sent .edit { display: inline-flex; align-items: center; gap: 4px; vertical-align: baseline; }
+    .sent input, .sent select, .help input, .help select { font-size: 13px; padding: 2px 6px; max-width: 130px; min-height: 28px; }
+    .sent .ro { font-weight: 500; color: var(--n-fg); }
+    .fresh .tile .xs.warn { color: var(--n-warn); }
+    .fresh .tile .xs.bad { color: var(--n-bad); }
+    .msg { font-size: 12px; color: var(--n-fg2); margin-top: 8px; }
+    .confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+    .ct .lnk.ic { padding: 2px 4px; }
+    .ct .lnk.ic ha-icon { color: var(--n-fg3); }
+`;
 
 class SEMNextSystemCard extends SEMNextBase {
-    static get styles() { return nextCss; }
+    static get styles() { return [nextCss, cardCss]; }
+
+    static get properties() {
+        return {
+            ...super.properties,
+            _pending: { state: true },
+            _editing: { state: true },
+            _options: { state: true },
+            _applying: { state: true },
+            _confirmObs: { state: true },
+            _msg: { state: true },
+            _diagBusy: { state: true },
+        };
+    }
+
+    constructor() {
+        super();
+        this._pending = {};
+        this._editing = '';
+        this._options = null;
+        this._entryId = '';
+        this._applying = false;
+        this._confirmObs = false;
+        this._msg = '';
+        this._msgTimer = null;
+        this._diagBusy = false;
+        this._optionsAsked = false;
+    }
+
+    set hass(hass) {
+        super.hass = hass;
+        if (hass && !this._optionsAsked) {
+            this._optionsAsked = true;
+            this._loadOptions();
+        }
+    }
+    get hass() { return this._hass; }
+
+    disconnectedCallback() {
+        if (this._msgTimer) { clearTimeout(this._msgTimer); this._msgTimer = null; }
+        super.disconnectedCallback();
+    }
 
     _watchIds() {
+        const states = this._hass?.states || {};
         const per = [];
-        for (const cid of this._chargers) per.push(`time.sem_charger_${cid}_target_time`, `number.sem_charger_${cid}_daily_ev_target`);
-        return [...super._watchIds(), ...IDS, ...per];
+        for (const cid of this._chargers) for (const s of CHARGER_SUFFIXES) per.push(`number.sem_charger_${cid}_${s}`);
+        return [...super._watchIds(), ...DIAG_IDS, ...SETTING_IDS, ...per, ...reserveIds(states),
+                ...SOURCE_ROWS.map((r) => r.entity), ...loadSources(states).map((l) => l.entity)];
     }
 
-    _sources() {
-        const rows = sourceRows(this._hass.states, Date.now());
-        if (!rows.length) return nothing;
-        const cls = { ok: '', old: 'warn', off: 'bad', missing: 'off' };
-        return html`<div class="sec"><h3>${this._t('next_sources')}</h3><div class="list">
-            ${this._inputsDegraded() ? html`<div class="item"><i class="warn"></i>
-                <div>${this._t('next_inputs_degraded')}<span>${this._name('sensor.sem_diag_inputs_degraded')}</span></div><b></b></div>` : nothing}
-            ${rows.map((r) => html`<div class="item"><i class="${cls[r.state] || ''}"></i>
-                <div>${this._t(r.key)}<span>${this._name(r.entity)}${r.age === null ? '' : ' · ' + ageLabel(r.age)}</span></div>
-                <b>${this._t('next_fresh_' + r.state)}</b></div>`)}
-        </div></div>`;
+    updated(changed) {
+        super.updated(changed);
+        if (changed.has('_editing') && this._editing) {
+            const el = this.renderRoot?.querySelector('.edit input, .edit select');
+            if (el) { el.focus(); if (el.select) el.select(); }
+        }
     }
 
-    // SEM's own verdict on its inputs (a frozen value, a source asleep by
-    // day) — it knows the night rules the plain age check cannot.
+    // ── options (the integration's own dict, for the slots no entity carries) ──
+
+    async _loadOptions() {
+        if (!this._hass) return;
+        try {
+            const resp = await this._hass.callService('solar_energy_management', 'get_config', {},
+                undefined, undefined, true);
+            const cfg = resp?.response?.config;
+            if (cfg && typeof cfg === 'object') this._options = cfg;
+            if (resp?.response?.entry_id) this._entryId = resp.response.entry_id;
+        } catch (err) {
+            console.warn('[sem-next-system-card] get_config failed', err);
+        }
+    }
+
+    _say(text, ms = 2500) {
+        this._msg = text;
+        if (this._msgTimer) clearTimeout(this._msgTimer);
+        this._msgTimer = setTimeout(() => { this._msgTimer = null; this._msg = ''; }, ms);
+    }
+
+    // ── health ──
+
     _inputsDegraded() {
         const s = String(this._str('sensor.sem_diag_inputs_degraded') || '').toLowerCase();
         return s === 'true' || s === 'on';
     }
 
+    /** [{key, name, entity, state, age, icon, color}] for the tiles and the lead. */
+    _freshRows() {
+        const states = this._hass.states;
+        const now = Date.now();
+        const rows = sourceRows(states, now).map((r) => ({ ...r, name: this._t(r.key), ...FRESH_LOOK[r.key] }));
+        for (const l of loadSources(states)) {
+            const e = states[l.entity];
+            rows.push({ key: l.id, name: l.name, entity: l.entity, state: freshness(e, now), age: ageSeconds(e, now),
+                        icon: 'mdi:power-plug', color: C.home });
+        }
+        return rows;
+    }
+
+    _freshTiles(rows) {
+        return html`<div class="fresh">${rows.map((r) => {
+            const cls = r.state === 'ok' ? 'dim' : (r.state === 'old' ? 'warn' : 'bad');
+            const txt = r.state === 'ok' || r.state === 'old' ? (ageLabel(r.age) || this._t('next_fresh_ok')) : this._t('next_fresh_' + r.state);
+            return html`<div class="tile" style="--c:${r.color}" role="button" tabindex="0" @click=${() => this._moreInfo(r.entity)}>
+                ${this._icon(r.icon)}<div><div class="sm" style="font-weight:500">${r.name}</div><div class="xs ${cls}">${txt}</div></div></div>`;
+        })}</div>`;
+    }
+
+    _setupRow() {
+        const items = setupItems(this._hass.states, this._options);
+        const counted = items.filter((i) => !i.optional);
+        const done = counted.filter((i) => i.done).length;
+        const value = done === counted.length ? this._t('config_setup_done')
+            : this._tf('config_setup_progress', { done, total: counted.length });
+        const grid = this._valLabel('diag_grid_sign');
+        const batt = this._valLabel('diag_battery_sign');
+        const sub = [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : ''].filter(Boolean).join(' · ');
+        return this._row('mdi:check-decagram', this._t('next_setup_check'), value, sub, { onClick: () => this._go(CLASSIC_CONFIG) });
+    }
+
+    _hardwareRow() {
+        const count = this._str('sensor.sem_diag_charger_count');
+        const control = this._valLabel('diag_charger_control');
+        const cap = this._num('sensor.sem_diag_battery_capacity');
+        const gridMode = this._valLabel('diag_grid_mode');
+        const report = this._attrs('sensor.sem_diag_charger_control').detection_report || null;
+        const unmapped = report ? (report.near_misses || []).length : null;
+        const strings = pvStrings(this._hass.states).length;
+        const value = [count !== '' ? this._tf('next_chargers_n', { n: count }) : '', control ? `(${control})` : ''].filter(Boolean).join(' ') || MISSING;
+        const sub = [
+            strings ? this._tf('next_strings', { n: strings }) : '',
+            cap !== null && cap > 0 ? this._tf('next_batt_cap', { kwh: cap.toFixed(1) }) : '',
+            gridMode ? `${this._t('next_grid_mode')} ${gridMode}` : '',
+            unmapped !== null ? this._tf('next_unmapped', { n: unmapped }) : '',
+        ].filter(Boolean).join(' · ');
+        return this._row('mdi:radar', this._t('next_hardware'), value, sub, { onClick: () => this._go(CLASSIC_CONFIG) });
+    }
+
+    _unavailableRow() {
+        const { n, m } = unavailableCount(this._hass.states);
+        const value = n === null ? MISSING : this._tf('next_n_of_m', { n, m });
+        const sub = this._inputsDegraded() ? this._t('next_inputs_degraded') : '';
+        return this._row('mdi:lan-disconnect', this._t('next_unavailable'), value, sub,
+                         { onClick: () => this._moreInfo('sensor.sem_diag_sensors_unavailable') });
+    }
+
+    _versionRow() {
+        const ver = this._str('sensor.sem_diag_version');
+        const ha = this._hass.config?.version || '';
+        const every = this._num('number.sem_update_interval') ?? this._num('sensor.sem_diag_update_interval');
+        const sub = [ha ? `HA ${ha}` : '', every !== null ? this._tf('next_every_s', { s: Math.round(every) }) : ''].filter(Boolean).join(' · ');
+        return this._row('mdi:new-box', this._t('version'), ver || MISSING, sub, { onClick: () => this._moreInfo('sensor.sem_diag_version') });
+    }
+
+    _observerButton() {
+        const obs = this._obs();
+        if (this._confirmObs) {
+            return html`<span class="confirm">${this._t(obs ? 'next_obs_confirm_off' : 'next_obs_confirm_on')}
+                ${this._btn(this._t('next_yes'), () => { this._confirmObs = false; this._toggleSwitch('switch.sem_observer_mode'); }, { small: true, primary: true })}
+                ${this._btn(this._t('next_cancel'), () => { this._confirmObs = false; }, { small: true, ghost: true })}</span>`;
+        }
+        return this._btn(html`${this._t('next_observer')}: ${obs ? this._t('on') : this._t('off')} · <span class="val">${this._t(obs ? 'next_turn_off' : 'next_turn_on')}</span>`,
+                         () => { this._confirmObs = true; }, { small: true, icon: 'mdi:eye-outline' });
+    }
+
+    _health(rows) {
+        return this._sec(this._t('next_health'), html`
+            ${this._freshTiles(rows)}
+            <div class="rows" style="margin-top:8px">${this._setupRow()}${this._hardwareRow()}${this._unavailableRow()}${this._versionRow()}</div>
+            <div class="btns" style="margin-top:10px">
+                ${this._btn(this._t('copy_diagnostics'), () => this._copyDiagnostics(), { small: true, icon: 'mdi:content-copy' })}
+                ${this._btn(this._t('config_diagnose'), () => this._diagnose('all'), { small: true, icon: 'mdi:stethoscope', disabled: this._diagBusy })}
+                ${this._observerButton()}
+            </div>
+            ${this._msg ? html`<div class="msg" role="status">${this._msg}</div>` : nothing}`, { cls: 'span2' });
+    }
+
     _refused() {
         const attrs = this._attrs('switch.sem_observer_mode');
-        const obs = this._observer();
+        const obs = this._obs();
         const withheld = Object.values(attrs.withheld_commands || {});
         const would = Object.values(attrs.would_decisions || {}).filter((d) => d && d.action && d.action !== 'idle');
         const rows = obs ? would : withheld;
         const t = (k) => this._t(k);
-        return html`<div class="sec"><h3>${obs ? this._t('next_would_do') : this._t('next_refused')}</h3>
-            ${rows.length ? html`<div class="list">${rows.slice(0, 8).map((r) => html`<div class="item"><i class="warn"></i>
-                <div>${deviceName(r, t)}${r.action ? ` · ${r.action}` : ''}<span>${plainReason(r, t) || r.reason || ''}</span></div>
-                <b class="num">${Number.isFinite(Number(r.power_w)) ? this._fmtKw(Number(r.power_w)) + ' kW' : ''}</b></div>`)}</div>`
-            : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`}
-        </div>`;
+        const body = rows.length
+            ? html`<div class="rows">${rows.slice(0, 8).map((r) => this._row('mdi:hand-back-left-outline',
+                `${deviceName(r, t)}${r.action ? ' · ' + r.action : ''}`,
+                Number.isFinite(Number(r.power_w)) ? this._kw(Number(r.power_w)) : '',
+                plainReason(r, t) || r.reason || ''))}</div>`
+            : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;
+        return this._sec(obs ? this._t('next_would_do') : this._t('next_held_back'), body);
     }
 
-    _numRow(id, labelKey, unit, step = 1) {
-        if (!this._hass.states[id]) return nothing;
-        const a = this._attrs(id);
-        return html`<dt>${this._t(labelKey)}</dt><dd><input type="number" .value=${String(this._num(id) ?? '')} min="${a.min ?? 0}" max="${a.max ?? 1000}" step="${a.step ?? step}" @change=${(e) => this._setNumber(id, Number(e.target.value))}> ${unit}</dd>`;
+    // ── settings as sentences ──
+
+    _ctx() {
+        const services = this._hass.services || {};
+        const notifyServices = [];
+        for (const n of Object.keys(services.notify || {})) notifyServices.push({ value: n, label: 'notify.' + n });
+        for (const n of Object.keys(services.rest_command || {})) notifyServices.push({ value: n, label: 'rest_command.' + n });
+        return {
+            options: this._options,
+            currency: this._currency(),
+            chargers: this._chargers.map((cid) => ({ cid, name: this._chargerName(cid) })),
+            labels: {
+                control: this._valLabel('diag_charger_control'),
+                provider: this._valLabel('tariff_provider') || this._str('sensor.sem_tariff_provider'),
+                gridSign: this._valLabel('diag_grid_sign'),
+                battSign: this._valLabel('diag_battery_sign'),
+            },
+            notifyServices,
+        };
     }
 
-    _settings() {
-        const offset = this._hass.states['number.sem_night_start_offset_min'] ? 'number.sem_night_start_offset_min' : null;
-        const earliest = !offset && this._hass.states['number.sem_night_earliest_start'] ? 'number.sem_night_earliest_start' : null;
-        const modeId = this._hass.states['select.sem_battery_mode'] ? 'select.sem_battery_mode' : null;
-        const assistId = this._hass.states['switch.sem_battery_may_assist_ev'] ? 'switch.sem_battery_may_assist_ev' : null;
-        const actId = this._hass.states['switch.sem_energy_plan_actuation'] ? 'switch.sem_energy_plan_actuation' : null;
-        const peak = this._num('sensor.sem_target_peak_limit');
-        return html`
-            <div class="sec"><h3>${this._t('next_q_car_grid')}</h3><dl class="kv">
-                ${offset ? this._numRow(offset, 'next_night_offset', 'min', 5) : nothing}
-                ${earliest ? this._numRow(earliest, 'next_night_earliest', 'h', 0.5) : nothing}
-                ${this._numRow('number.sem_night_latest_end', 'next_night_end', 'h', 0.5)}
-                ${this._chargers.map((cid) => {
-                    const timeId = this._chargerEntity('time', cid, 'target_time');
-                    const targetId = this._chargerEntity('number', cid, 'daily_ev_target');
-                    return html`
-                        ${timeId ? html`<dt>${this._chargerName(cid)} · ${this._t('next_charge_by')}</dt><dd><input type="time" .value=${(this._str(timeId) || '').slice(0, 5)} @change=${(e) => this._hass.callService('time', 'set_value', { entity_id: timeId, time: e.target.value + ':00' })}></dd>` : nothing}
-                        ${targetId ? this._numRow(targetId, 'next_at_least', 'kWh', 0.5) : nothing}`;
-                })}
-            </dl><div class="hint">${this._t('next_q_car_grid_hint')}</div></div>
-            <div class="sec"><h3>${this._t('next_q_battery')}</h3><dl class="kv">
-                ${modeId ? html`<dt>${this._t('next_mode')}</dt><dd><select @change=${(e) => this._selectOption(modeId, e.target.value)}>
-                    ${(this._attrs(modeId).options || []).map((o) => html`<option value="${o}" ?selected=${o === this._str(modeId)}>${this._t('battery_mode_' + o) || o}</option>`)}</select></dd>` : nothing}
-                ${this._numRow('number.sem_battery_buffer_soc', 'next_buffer', '%')}
-                ${this._numRow('number.sem_battery_priority_soc', 'next_priority_soc', '%')}
-                ${this._numRow('number.sem_battery_assist_min_surplus', 'next_solar_gate', 'W', 50)}
-                ${assistId ? html`<dt>${this._t('next_may_feed_car')}</dt><dd><label class="toggle"><input type="checkbox" .checked=${this._str(assistId) === 'on'} @change=${() => this._toggleSwitch(assistId)}></label></dd>` : nothing}
-            </dl></div>
-            <div class="sec"><h3>${this._t('next_q_limits')}</h3><dl class="kv">
-                ${peak !== null ? html`<dt>${this._t('next_peak_limit')}</dt><dd class="num">${this._fmt(peak, 1)} kW</dd>` : nothing}
-                ${actId ? html`<dt>${this._t('next_plan_acts')}</dt><dd><label class="toggle"><input type="checkbox" .checked=${this._str(actId) === 'on'} @change=${() => this._toggleSwitch(actId)}></label></dd>` : nothing}
-                <dt>${this._t('next_observer')}</dt><dd>${this._observer() ? this._t('next_yes') : this._t('next_no')}</dd>
-            </dl><a class="btn" href="/sem-dashboard/config">${this._t('next_all_settings')}</a></div>`;
+    _part(p) {
+        if (typeof p === 'string') return p;
+        if (!p || typeof p !== 'object') return '';
+        if (p.ro) return html`<span class="ro">${p.value}</span>`;
+        if (p.kind === 'action') return this._val(this._t(p.labelKey), () => this._action(p.action), { disabled: this._obs() });
+        return this._slot(p);
     }
+
+    _slot(slot) {
+        const key = pendingKey(slot);
+        const pend = this._pending[key];
+        const value = pend ? pend.value : slot.value;
+        const dis = this._obs();
+        const t = (k) => this._t(k);
+        if (slot.kind === 'switch') {
+            return html`<button type="button" class="val ${pend ? 'dirty' : ''}" ?disabled=${dis} role="switch" aria-checked="${!!value}"
+                @click=${() => this._stage(slot, !value)}>${slotText(slot, t, value)}</button>`;
+        }
+        if (this._editing === key && !dis) return this._editor(slot, value);
+        return html`<button type="button" class="val ${pend ? 'dirty' : ''}" ?disabled=${dis}
+            @click=${() => { this._editing = key; }}>${slotText(slot, t, value)}</button>`;
+    }
+
+    _editor(slot, value) {
+        const close = () => { if (this._editing === pendingKey(slot)) this._editing = ''; };
+        const keys = (e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.target.blur(); } };
+        const t = (k) => this._t(k);
+        if (slot.kind === 'select') {
+            return html`<span class="edit"><select @change=${(e) => { this._stage(slot, e.target.value); close(); }} @blur=${close} @keydown=${keys}>
+                ${(slot.options || []).map((o) => html`<option value="${o.value}" ?selected=${String(o.value) === String(value)}>${o.labelKey ? t(o.labelKey) : (o.label ?? o.value)}</option>`)}
+            </select></span>`;
+        }
+        if (slot.kind === 'number') {
+            return html`<span class="edit"><input type="number" .value=${String(value ?? '')}
+                min="${slot.min ?? nothing}" max="${slot.max ?? nothing}" step="${slot.step || 1}"
+                @input=${(e) => this._stage(slot, e.target.value)} @blur=${close} @keydown=${keys}>${slot.unit ? html` ${slot.unit}` : nothing}</span>`;
+        }
+        return html`<span class="edit"><input type="text" .value=${String(value ?? '')}
+            @input=${(e) => this._stage(slot, e.target.value)} @blur=${close} @keydown=${keys}></span>`;
+    }
+
+    _stage(slot, raw) {
+        const key = pendingKey(slot);
+        if (!key) return;
+        let v = raw;
+        if (slot.kind === 'number') { v = Number(raw); if (raw === '' || !Number.isFinite(v)) return; }
+        if (slot.kind === 'switch') v = !!raw;
+        const same = slot.kind === 'number' ? Number(slot.value) === v : String(slot.value) === String(v);
+        const p = { ...this._pending };
+        if (same) delete p[key]; else p[key] = { slot, value: v };
+        this._pending = p;
+    }
+
+    _group(g) {
+        const n = g.count || 0;
+        const extra = html`<button type="button" class="lnk ic" aria-label="${this._t('config_diagnose')}" title="${this._t('config_diagnose')}"
+            ?disabled=${this._diagBusy} @click=${() => this._diagnose(g.diagnoseSection)}>${this._icon('mdi:stethoscope', 's')}</button>`;
+        return this._sec(this._t(g.titleKey), html`
+            <p class="sent">${g.sentence.map((p) => this._part(p))}</p>
+            ${g.key === 'chargers' ? html`<p class="help">${this._link(this._t('next_ch_add'), () => this._go(CLASSIC_CONFIG))}</p>` : nothing}
+            ${n ? html`<p class="help"><span data-more>${g.more.map((p) => this._part(p))}</span><span class="app-not-all">${this._tf('config_more_in_all', { n })}</span></p>` : nothing}`,
+            { cls: 'group', extra });
+    }
+
+    // ── apply ──
+
+    _applyBar() {
+        const n = Object.keys(this._pending).length;
+        if (!n && !this._applying) return nothing;
+        const plan = applyPlan(this._pending, this._hass.states);
+        const text = this._applying ? this._t('config_applying')
+            : this._tf('next_changes_waiting', { n }) + (plan.reload ? ' · ' + this._t('next_reloads') : '');
+        return html`<div class="apply"><span>${text}</span>
+            ${this._btn(this._t('config_discard'), () => this._discard(), { ghost: true, disabled: this._applying })}
+            ${this._btn(this._t('config_apply'), () => this._apply(), { primary: true, disabled: this._applying })}</div>`;
+    }
+
+    _discard() { this._pending = {}; this._editing = ''; }
+
+    async _apply() {
+        if (this._applying || !Object.keys(this._pending).length || !this._hass) return;
+        this._applying = true;
+        this._editing = '';
+        const plan = applyPlan(this._pending, this._hass.states);
+        try {
+            for (const w of plan.entityWrites) await this._hass.callService(w.domain, w.service, w.data);
+            if (Object.keys(plan.options).length) {
+                await this._hass.callService('solar_energy_management', 'set_option',
+                    { options: plan.options, ...(this._entryId ? { entry_id: this._entryId } : {}) });
+            }
+            this._pending = {};
+            this._say(this._t('config_saved'));
+            await this._loadOptions();
+        } catch (err) {
+            console.error('[sem-next-system-card] apply failed', err);
+            this._say(err?.message || this._t('next_apply_failed'), 6000);
+        } finally {
+            this._applying = false;
+        }
+    }
+
+    // ── one-shot actions ──
+
+    async _action(name) {
+        if (!this._hass || this._obs()) return;
+        try {
+            if (name === 'flip_grid_sign' || name === 'flip_battery_sign') {
+                const res = await this._hass.callService('solar_energy_management', name, {}, undefined, false, true);
+                const payload = res && res.response ? res.response : res;
+                const ok = await this._writeClipboard(JSON.stringify(payload || {}, null, 2), true);
+                this._say(this._t(ok ? 'sign_flipped_copied' : 'sign_flipped'), 6000);
+            } else if (name === 'reset_sign_detection') {
+                await this._hass.callService('solar_energy_management', 'reset_sign_detection', {});
+                this._say(this._t('sign_relearn_started'), 4000);
+            } else if (name === 'purge_status_history') {
+                await this._hass.callService('solar_energy_management', 'purge_status_history', {});
+                this._say(this._t('next_done'));
+            }
+        } catch (err) {
+            console.error('[sem-next-system-card] action failed', name, err);
+            this._say(err?.message || this._t('next_apply_failed'), 6000);
+        }
+    }
+
+    async _diagnose(section) {
+        if (!this._hass || this._diagBusy) return;
+        this._diagBusy = true;
+        try {
+            const resp = await this._hass.callService('solar_energy_management', 'diagnose',
+                { section: section || 'all' }, undefined, undefined, true);
+            const payload = resp?.response || resp;
+            await this._writeClipboard(JSON.stringify(payload, null, 2));
+        } catch (err) {
+            console.error('[sem-next-system-card] diagnose failed', err);
+            this._say(err?.message || this._t('copy_failed'), 6000);
+        } finally {
+            this._diagBusy = false;
+        }
+    }
+
+    // The classic System card's text (sem-system-card.js): support reads SEM's own words.
+    _copyDiagnostics() {
+        const v = (id) => this._str(id) || '—';
+        const cap = this._num('sensor.sem_diag_battery_capacity');
+        const capStr = cap !== null && cap > 0 ? cap.toFixed(1) : '—';
+        const header = `SEM ${v('sensor.sem_diag_version')} | Grid: ${v('sensor.sem_diag_grid_mode')} | Chargers: ${v('sensor.sem_diag_charger_count')} (${v('sensor.sem_diag_charger_control')}) | Battery: ${capStr}kWh | Unavailable: ${this._str('sensor.sem_diag_sensors_unavailable') || MISSING}`;
+        const ed = this._attrs('sensor.sem_diag_ed_config').energy_dashboard;
+        let edBlock;
+        if (ed) {
+            const x = (y) => y || '—';
+            edBlock = `Solar:   pwr=${x(ed.solar?.power)} [${x(ed.solar?.power_source)}]  energy=${x(ed.solar?.energy)}\n`
+                + `Grid:    pwr=${x(ed.grid?.power)} [${x(ed.grid?.power_source)}]  imp=${x(ed.grid?.import_energy)}  exp=${x(ed.grid?.export_energy)}\n`
+                + `Battery: pwr=${x(ed.battery?.power)} [${x(ed.battery?.power_source)}]  chg=${x(ed.battery?.charge_energy)}  dis=${x(ed.battery?.discharge_energy)}`;
+        } else {
+            edBlock = `Config: ${v('sensor.sem_diag_ed_config')}`;
+        }
+        this._writeClipboard(`${header}\n${edBlock}`);
+    }
+
+    /** Modern clipboard first, the legacy textarea path on plain HTTP (#285). */
+    async _writeClipboard(text, quiet = false) {
+        const done = (ok) => { if (!quiet) this._say(this._t(ok ? 'copied' : 'copy_failed')); return ok; };
+        if (navigator?.clipboard?.writeText && window.isSecureContext !== false) {
+            try { await navigator.clipboard.writeText(text); return done(true); } catch (err) { /* fall through */ }
+        }
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0';
+            ta.style.width = '1px'; ta.style.height = '1px'; ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus(); ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return done(!!ok);
+        } catch (err) {
+            console.error('[sem-next-system-card] clipboard fallback threw', err);
+            return done(false);
+        }
+    }
+
+    // ── render ──
 
     render() {
         if (!this._hass) return nothing;
-        const rows = sourceRows(this._hass.states, Date.now());
+        const rows = this._freshRows();
         const bad = rows.filter((r) => r.state !== 'ok').length + (this._inputsDegraded() ? 1 : 0);
-        const plan = this._attrs('sensor.sem_energy_plan');
-        const age = plan.computed_at ? Math.round((Date.now() - Date.parse(plan.computed_at)) / 60000) : null;
-        const main = bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok');
-        const ver = this._str('sensor.sem_diag_version');
-        const sub = [age !== null && Number.isFinite(age) ? this._tf('next_plan_age', { min: age }) : '',
-                     this._observer() ? this._t('next_observer_on') : this._t('next_observer_off'),
-                     ver ? `SEM ${ver}` : ''].filter(Boolean).join(' · ');
-        return html`<ha-card><div class="wrap">
-            ${this._renderHead()}
-            ${this._renderLead(main, sub)}
-            <div class="grid2">
-                ${this._sources()}
+        const oldest = rows.filter((r) => r.age !== null && r.state !== 'missing').sort((a, b) => b.age - a.age)[0];
+        const main = (bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok'))
+            + (oldest && oldest.age >= 60 ? ' ' + this._tf('next_sys_lead_oldest', { name: oldest.name, age: ageLabel(oldest.age) }) : '');
+        const sub = this._obs() ? `${this._t('next_sys_sub')} ${this._t('next_observing_hint')}` : this._t('next_sys_sub');
+        const t = (k) => this._t(k);
+        const gs = groups(this._hass.states, t, this._ctx());
+        return this._frame({ main, sub }, html`<div class="grid">
+                ${this._health(rows)}
                 ${this._refused()}
-                ${this._settings()}
+                ${gs.map((g) => this._group(g))}
             </div>
-        </div></ha-card>`;
+            ${this._applyBar()}`);
     }
 }
 
 semDefineCard('sem-next-system-card', SEMNextSystemCard, {
     type: 'sem-next-system-card',
     name: 'SEM Next · System',
-    description: 'Health first: source freshness, what SEM refused, and the settings grouped by question',
+    description: 'Health first: source freshness, setup check, what SEM held back, and every setting as a sentence',
     documentationURL:
         'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-next-system-card',
     preview: true,
