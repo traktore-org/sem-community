@@ -65,7 +65,7 @@ const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0
 class SEMNextInsightsCard extends SEMNextBase {
     static get properties() {
         return { _period: { state: true }, _tab: { state: true }, _hist: { state: true }, _hover: { state: true },
-                 _w: { state: true }, _sess: { state: true }, _sessCid: { state: true } };
+                 _w: { state: true }, _sess: { state: true }, _sessCid: { state: true }, _showSankey: { state: true } };
     }
     static get styles() { return nextCss; }
 
@@ -306,9 +306,15 @@ class SEMNextInsightsCard extends SEMNextBase {
             ${this._sankey()}` : this._hint('next_no_flows');
         return this._sec(`${this._t('next_where_went')} · ${this._periodLabel()}`, body);
     }
-    /** The HACS sankey, only when its element is on the page and the period is today (its sensors are daily). */
+    /**
+     * The HACS sankey, only when its element is on the page and the period is
+     * today (its sensors are daily) — and only on request: mounted by default
+     * it redraws itself at zero width while HA takes the view down, which
+     * logs a hundred SVG errors on every tab change.
+     */
     _sankey() {
         if (this._period !== 'day' || typeof customElements === 'undefined' || !customElements.get('sankey-chart')) return nothing;
+        if (!this._showSankey) return html`<div style="margin-top:8px">${this._link(this._t('next_show_sankey'), () => { this._showSankey = true; })}</div>`;
         return html`<div style="margin-top:10px"><sankey-chart></sankey-chart></div>`;
     }
     _sankeyConfig() {
