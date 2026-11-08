@@ -40,7 +40,7 @@ export function nowLead(f) {
     const exporting = Number.isFinite(f.gridW) && f.gridW > IMPORT_W;
     const sun = Number.isFinite(f.solarW) && f.solarW > SUN_W;
     const batToHouse = Number.isFinite(f.batteryW) && f.batteryW < -IMPORT_W;
-    const houseKey = batToHouse ? 'next_lead_house_battery' : (importing ? 'next_lead_house_grid' : 'next_lead_house_sun');
+    const houseKey = batToHouse ? 'next_lead_house_battery' : (importing ? 'next_lead_house_grid' : 'next_bar_idle');
     const prefix = f.observer ? 'next_lead_observing' : (f.night ? 'next_lead_night' : 'next_lead_day');
     const blind = !Number.isFinite(f.solarW) && !Number.isFinite(f.gridW) && !Number.isFinite(f.batteryW);
 

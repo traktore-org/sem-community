@@ -12,7 +12,6 @@ const t = (k) => ({
     next_lead_car_grid_kw: 'Night. The car charges from the grid at {kw} kW, {kwh} kWh to go, done by {time}.',
     next_lead_house_battery: 'The house runs on the battery.',
     next_lead_house_grid: 'The house runs on the grid.',
-    next_lead_house_sun: 'The house runs on the sun.',
     next_src_battery: 'the battery',
     next_sub_battery_rests: 'Battery at {soc} %, below the floor of {floor} %.',
     next_sub_sun_at: 'Sun at {time}.',
@@ -147,4 +146,11 @@ test('updated time: the newest live power reading, not solar held at 0', () => {
     };
     assert.equal(newestUpdate(st), '2026-11-08T18:09:00.000Z');
     assert.equal(newestUpdate({}), null);
+});
+
+test('at night with nothing flowing the lead never says the sun', () => {
+    const r = nowLead({ night: true, observer: false, solarW: 0, gridW: -20, batteryW: -30, car: null, battery: null });
+    assert.equal(r.main.key, 'next_bar_idle');
+    const d = nowLead({ night: false, observer: false, solarW: 2500, gridW: 0, batteryW: 0, car: null, battery: null });
+    assert.equal(d.main.key, 'next_lead_sun_house');
 });
