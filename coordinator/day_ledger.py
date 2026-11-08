@@ -65,6 +65,7 @@ def expected_solar_kwh_between(t0: datetime, t1: datetime, *, day_kwh: float,
 def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                     sunrise: datetime, sunset: datetime,
                     home_w_at, price_at, level_cheap_at,
+                    rate_cheap_at=None,
                     surplus_margin_w: float = DEFAULT_SURPLUS_MARGIN_W,
                     export_rate=0.0,
                     co2_at=None,
@@ -76,6 +77,12 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
     / ``level_cheap_at(t)`` — the SAME tariff accessors the night slots
     are built from; a raising provider degrades to an honestly unpriced
     slot, exactly like the night path.
+
+    ``rate_cheap_at(t)`` (#1310) — is the hour at the tariff's cheap rate?
+    Fills ``LedgerSlot.tariff_cheap``, the word the card's band reads.
+    ``level_cheap_at`` is execution's word, which refuses a day that holds
+    one rate (#994). ``None`` = the same answer as ``level_cheap_at``
+    (``rate_cheap_fn`` gives ``None`` for a tariff with no rate word).
 
     ``export_rate`` (#755) — what a kWh earns if it leaves the property, and
     therefore what consuming it here costs. Pricing a surplus slot at zero
@@ -128,9 +135,16 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
         # (#1310) Asked for every slot: a surplus slot is cheap for the
         # packer, but the tariff may still be at its peak.
         try:
-            tariff_cheap = bool(level_cheap_at(t))
+            level_cheap = bool(level_cheap_at(t))
         except Exception:  # noqa: BLE001 — no level is not cheap
-            tariff_cheap = False
+            level_cheap = False
+        if rate_cheap_at is None:
+            tariff_cheap = level_cheap
+        else:
+            try:
+                tariff_cheap = bool(rate_cheap_at(t))
+            except Exception:  # noqa: BLE001 — no level is not cheap
+                tariff_cheap = False
         if surplus_w >= surplus_margin_w:
             slots.append(LedgerSlot(
                 start=t, end=slot_end,
@@ -153,7 +167,7 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 price = None
             slots.append(LedgerSlot(
                 start=t, end=slot_end,
-                price=price, level_cheap=tariff_cheap,
+                price=price, level_cheap=level_cheap,
                 tariff_cheap=tariff_cheap,
                 home_w=max(0.0, home_w - solar_w),
                 solar_w=solar_w, home_gross_w=home_w,
@@ -178,7 +192,7 @@ def _merge_windows(slots) -> list:
 
 def tomorrow_preview(*, day_start, day_end, day_kwh, sunrise, sunset,
                      home_w_at, price_at, level_cheap_at, stamps_at,
-                     export_rate=0.0) -> dict:
+                     export_rate=0.0, rate_cheap_at=None) -> dict:
     """(#638 consolidation / #722) The NEXT energy day's books, previewed.
 
     tintinz's Today|Tomorrow idea (#722), adopted onto the one data path:
@@ -198,6 +212,7 @@ def tomorrow_preview(*, day_start, day_end, day_kwh, sunrise, sunset,
         start=day_start, end=day_end, day_kwh=day_kwh,
         sunrise=sunrise, sunset=sunset, home_w_at=home_w_at,
         price_at=price_at, level_cheap_at=level_cheap_at,
+        rate_cheap_at=rate_cheap_at,
         # (#924) This surface reads WINDOWS, never a price — but a builder
         # that takes the rate and is not given it is how #755 was undone
         # on a sibling path. Carry it, so a future reader is right by
@@ -280,6 +295,31 @@ def tariff_cheap_at(prov, ts):
         # (#994) one vocabulary; an unknown level is never cheap.
         return is_cheap_name(lvl)
     return False
+
+
+def tariff_rate_cheap_at(prov, ts):
+    """(#1310) Is this hour at the tariff's cheap rate? What the plan card's
+    band, the tomorrow preview and Assist show. Execution's gates read
+    ``tariff_cheap_at``, which also refuses a day that holds one rate
+    (#994). A provider without the rate word answers with the gate's."""
+    if hasattr(prov, "get_rate_level_at"):
+        try:
+            lvl = prov.get_rate_level_at(ts)
+        except Exception:  # noqa: BLE001 — no level is not cheap
+            return False
+        return is_cheap_name(lvl)
+    return tariff_cheap_at(prov, ts)
+
+
+def rate_cheap_fn(prov):
+    """(#1310) A builder's ``rate_cheap_at`` for ``prov``, or ``None`` when
+    the tariff's rate word is its price level (a dynamic tariff): the slot
+    then reuses the gate's answer instead of asking the same level twice,
+    ~400 times on a 15-min curve."""
+    own = getattr(type(prov), "get_rate_level_at", None)
+    if own is None or getattr(own, "same_as_price_level", False):
+        return None
+    return lambda ts: tariff_rate_cheap_at(prov, ts)
 
 
 def provisional_soc_curve(ledger, *, capacity_kwh: float,
