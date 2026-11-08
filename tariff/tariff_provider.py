@@ -488,6 +488,19 @@ class TariffProvider(ABC):
         """
         return None
 
+    def get_rate_level_at(self, when: datetime) -> Optional[PriceLevel]:
+        """(#1310) Which of the tariff's own rates an hour is at, as a level.
+
+        The plan card's cheap band, the tomorrow preview and Assist read
+        this one. ``get_price_level_at`` also asks whether the hour's DAY
+        holds a dearer rate (#994), so a weekend at the off-peak rate has
+        no level there: execution must not hold the pack until Monday. On a
+        timeline that runs into Monday, that answer drew Monday 00:00 as
+        cheap and Sunday 22:00 not, at the same price. A dynamic tariff's
+        level is already the hour's own word, so the default is that.
+        """
+        return self.get_price_level_at(when)
+
 
 class StaticTariffProvider(TariffProvider):
     """Static HT/NT tariff rates.
@@ -580,6 +593,15 @@ class StaticTariffProvider(TariffProvider):
         # the same refusal when the two rates, or the day, offer nothing to
         # compare (#994).
         if not self._comparison_stands(when):
+            return None
+        return (PriceLevel.NORMAL if self._is_high_tariff(when)
+                else PriceLevel.CHEAP)
+
+    def get_rate_level_at(self, when: datetime) -> Optional[PriceLevel]:
+        # (#1310) The rate table, not the day: a Saturday is at the
+        # off-peak rate. No level when the two rates are equal, or when the
+        # peak window is empty and the peak rate never applies.
+        if not self._rates_differ() or self.peak_start >= self.peak_end:
             return None
         return (PriceLevel.NORMAL if self._is_high_tariff(when)
                 else PriceLevel.CHEAP)

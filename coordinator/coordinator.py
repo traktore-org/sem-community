@@ -12032,7 +12032,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             day_kwh = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
         except Exception:  # noqa: BLE001 — no forecast, dark preview
             day_kwh = 0.0
-        from .day_ledger import tariff_cheap_at, tariff_price_at
+        from .day_ledger import (tariff_cheap_at, tariff_price_at,
+                                 tariff_rate_cheap_at)
         prov = self._tariff_provider
         # (#820) tomorrow's hours, read off the weekday profile
         _home_at_day = self._day_home_w_at(day_start)
@@ -12042,6 +12043,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             home_w_at=_home_at_day,
             price_at=lambda ts: tariff_price_at(prov, ts),
             level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+            # (#1310) the cheap windows show the tariff's rate, not the
+            # gate that refuses a day with one rate
+            tariff_cheap_at=lambda ts: tariff_rate_cheap_at(prov, ts),
             stamps_at=stamps_at,
             export_rate=self._export_rate_at(),   # (#924)
         )
@@ -12140,6 +12144,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     home_w_at=self._day_home_w_at(day_start),   # (#820)
                     price_at=lambda ts: tariff_price_at(prov, ts),
                     level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+                    tariff_cheap_at=lambda ts: tariff_rate_cheap_at(prov, ts),
                     # (#924) These slots go to build_night_ledger and the
                     # REAL pack_night below — this is a packing site, and
                     # unpriced it preferred the sun by fiat while the
@@ -12947,10 +12952,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # day slots, the tomorrow preview) — a second copy is how a
             # parallel price path starts (day_ledger.tariff_price_at).
             from .day_ledger import (align_to_step, market_step_s,
-                                     tariff_cheap_at, tariff_price_at)
+                                     tariff_cheap_at, tariff_price_at,
+                                     tariff_rate_cheap_at)
             prov = self._tariff_provider
             _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
             _cheap_at = lambda ts: tariff_cheap_at(prov, ts)  # noqa: E731
+            # (#1310) The rows' ``cheap``: the tariff's rate, asked of its
+            # week. ``_cheap_at`` (the packer's) refuses a day with one rate,
+            # so a whole off-peak Sunday was not cheap beside Monday 00:00.
+            _rate_cheap_at = lambda ts: tariff_rate_cheap_at(prov, ts)  # noqa: E731
             _co2_at = lambda ts: self._co2_at(ts)  # noqa: E731
             # (Rien's shape, 08-08) slots follow the MARKET: 15-min where
             # the published curve is 15-min, hourly where there is no
@@ -13009,6 +13019,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     sunrise=sunrise, sunset=sunset,
                     home_w_at=_home_at,
                     price_at=_price_at, level_cheap_at=_cheap_at,
+                    tariff_cheap_at=_rate_cheap_at,
                     # (#755) The sun is not free — it costs the feed-in you
                     # forgo. At 0 the packer preferred solar by fiat and a
                     # night hour cheaper than the export rate could never
@@ -13030,11 +13041,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     co2 = _co2_at(t)
                 except Exception:  # noqa: BLE001 — no reading, honestly
                     co2 = None
-                cheap = bool(_cheap_at(t))
                 slots.append(LedgerSlot(
                     start=t, end=end,
                     price=_price_at(t),
-                    level_cheap=cheap, tariff_cheap=cheap,
+                    level_cheap=bool(_cheap_at(t)),
+                    tariff_cheap=bool(_rate_cheap_at(t)),
                     home_w=_home_at(t),
                     co2=co2,
                 ))

@@ -511,6 +511,9 @@ forecast, the slot also shows its CO₂ in g/kWh.
 
 The cheap band marks only the hours your tariff calls cheap. A sunny hour at
 peak price is not marked cheap, even when SEM plans to use its sun.
+A day with only your off-peak price, such as a weekend, is marked cheap all
+day. Loads set to run on cheap hours still wait for a day that has both
+prices.
 
 #### sem-ev-progress-card
 
