@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.9] — 08.11.2026
+
 - 🐛 **The Energy Plan card marks a day with only your off-peak price, like a weekend, as cheap** (#1310). Before, the band began at midnight.
 
 # [2.3.0-beta.8] — 07.11.2026
