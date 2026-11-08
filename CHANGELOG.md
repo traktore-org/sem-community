@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - ✨ **SEM Next**: a second dashboard, five screens — one power bar, the plan on the price strip, devices you can reorder, settings as sentences (#1321).
+
+# [2.3.0-beta.8] — 07.11.2026
+
 - 🐛 **The heat pump's cost of heat now shows a value without its own tariff** (#1081). It uses your house price.
 
 # [2.3.0-beta.7] — 06.11.2026
