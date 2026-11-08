@@ -23,7 +23,7 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -35,8 +35,15 @@ from custom_components.solar_energy_management.coordinator import energy_planner
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
 )
+from custom_components.solar_energy_management.coordinator.energy_planner import (
+    Demand,
+    LedgerSlot,
+    build_night_ledger,
+    pack_night,
+)
 from custom_components.solar_energy_management.coordinator.day_ledger import (
     build_day_slots,
+    rate_cheap_fn,
     tariff_cheap_at,
     tariff_price_at,
     tariff_rate_cheap_at,
@@ -248,6 +255,20 @@ class TestTheAccessors:
         assert tariff_rate_cheap_at(fake, SUN) is True
         assert tariff_rate_cheap_at(object(), SUN) is False
 
+    def test_the_builder_word_for_each_provider(self):
+        """Calendar and Static have their own word; a dynamic tariff, a
+        fake or a mock reuses the gate's answer (no second level read)."""
+        cal = rate_cheap_fn(_g12w())
+        assert cal is not None and cal(SUN.replace(hour=15)) is True
+        st = rate_cheap_fn(StaticTariffProvider(peak_rate=0.35,
+                                                off_peak_rate=0.22))
+        assert st is not None and st(SAT.replace(hour=12)) is True
+        dyn = DynamicTariffProvider.__new__(DynamicTariffProvider)
+        assert rate_cheap_fn(dyn) is None
+        assert rate_cheap_fn(MagicMock()) is None
+        assert rate_cheap_fn(SimpleNamespace(
+            get_price_level_at=lambda t: PriceLevel.CHEAP)) is None
+
 
 def _sunday_slots(**kw):
     p = _g12w()
@@ -257,7 +278,7 @@ def _sunday_slots(**kw):
         home_w_at=lambda t: 300.0,
         price_at=lambda ts: tariff_price_at(p, ts),
         level_cheap_at=lambda ts: tariff_cheap_at(p, ts),
-        tariff_cheap_at=lambda ts: tariff_rate_cheap_at(p, ts),
+        rate_cheap_at=rate_cheap_fn(p),
     )
     args.update(kw)
     return build_day_slots(**args)
@@ -281,14 +302,14 @@ class TestTheDaySlots:
                 assert s.level_cheap is False, s.start
 
     def test_without_the_rate_word_the_slot_has_one_word(self):
-        for s in _sunday_slots(tariff_cheap_at=None):
+        for s in _sunday_slots(rate_cheap_at=None):
             if s.cap_override_w is None:
                 assert s.tariff_cheap is s.level_cheap is False
 
     def test_a_raising_rate_word_leaves_the_gate_alone(self):
         def _boom(t):
             raise RuntimeError("no level")
-        for s in _sunday_slots(tariff_cheap_at=_boom):
+        for s in _sunday_slots(rate_cheap_at=_boom):
             assert s.tariff_cheap is False
             if s.cap_override_w is not None:
                 assert s.level_cheap is True
@@ -301,7 +322,7 @@ class TestTheDaySlots:
             sunset=SUN.replace(hour=17), home_w_at=lambda t: 300.0,
             price_at=lambda ts: tariff_price_at(p, ts),
             level_cheap_at=lambda ts: tariff_cheap_at(p, ts),
-            tariff_cheap_at=lambda ts: tariff_rate_cheap_at(p, ts),
+            rate_cheap_at=rate_cheap_fn(p),
             stamps_at=SUN.replace(hour=7))
         assert prev["cheap_windows"] == [{
             "start": SUN.replace(hour=7).isoformat(),
@@ -397,29 +418,169 @@ def _one_word_slots(source):
     return bad
 
 
+def _rate_names(tree):
+    """Names bound to ``rate_cheap_fn(...)`` in a module."""
+    out = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
+                and getattr(node.value.func, "id", None) == "rate_cheap_fn"):
+            out |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+    return out
+
+
+def _gate_fed_builders(source):
+    """Lines of ``build_day_slots`` / ``tomorrow_preview`` calls whose
+    ``rate_cheap_at`` is missing or is not the tariff's rate word."""
+    tree = ast.parse(source)
+    names = _rate_names(tree)
+    bad = []
+    for n in ("build_day_slots", "tomorrow_preview"):
+        for c in _calls(tree, n):
+            kw = {k.arg: k.value for k in c.keywords}
+            v = kw.get("rate_cheap_at")
+            ok = v is not None and (
+                (isinstance(v, ast.Call)
+                 and getattr(v.func, "id", None) == "rate_cheap_fn")
+                or (isinstance(v, ast.Name) and v.id in names))
+            if not ok:
+                bad.append(c.lineno)
+    return bad
+
+
+def _gate_fed_slots(source):
+    """``LedgerSlot(...)`` lines whose ``tariff_cheap`` reads no rate word."""
+    tree = ast.parse(source)
+    names = _rate_names(tree)
+    bad = []
+    for call in _calls(tree, "LedgerSlot"):
+        kw = {k.arg: k.value for k in call.keywords}
+        if "tariff_cheap" not in kw:
+            continue
+        used = {n.id for n in ast.walk(kw["tariff_cheap"])
+                if isinstance(n, ast.Name)}
+        if not used & names:
+            bad.append(call.lineno)
+    return bad
+
+
 class TestTheGuard:
 
-    PLANNER = ("coordinator/coordinator.py", "coordinator/day_ledger.py")
+    COORD = ROOT / "coordinator/coordinator.py"
 
     def test_every_published_builder_gets_the_rate_word(self):
-        tree = ast.parse((ROOT / "coordinator/coordinator.py").read_text())
-        calls = [c for n in ("build_day_slots", "tomorrow_preview")
-                 for c in _calls(tree, n)]
-        assert len(calls) >= 3
-        for c in calls:
-            assert "tariff_cheap_at" in {k.arg for k in c.keywords}, c.lineno
+        src = self.COORD.read_text()
+        assert len([c for n in ("build_day_slots", "tomorrow_preview")
+                    for c in _calls(ast.parse(src), n)]) >= 3
+        assert _gate_fed_builders(src) == []
+
+    def test_every_stamped_slot_gets_the_rate_word(self):
+        src = self.COORD.read_text()
+        assert list(_calls(ast.parse(src), "LedgerSlot"))
+        assert _gate_fed_slots(src) == []
 
     def test_no_slot_copies_the_gate_into_the_rate_word(self):
-        for rel in self.PLANNER:
+        for rel in ("coordinator/coordinator.py", "coordinator/day_ledger.py"):
             assert _one_word_slots((ROOT / rel).read_text()) == [], rel
 
-    def test_the_guard_catches_the_old_line(self):
+    def test_the_guards_catch_the_old_lines(self):
         old = textwrap.dedent("""
             cheap = bool(_cheap_at(t))
             LedgerSlot(start=t, end=end, level_cheap=cheap, tariff_cheap=cheap)
+            build_day_slots(level_cheap_at=_cheap_at)
+            tomorrow_preview(rate_cheap_at=lambda ts: tariff_cheap_at(prov, ts))
+            _rate = rate_cheap_fn(prov)
+            build_day_slots(rate_cheap_at=_rate)
         """)
         assert _one_word_slots(old) == [3]
+        assert _gate_fed_slots(old) == [3]
+        assert _gate_fed_builders(old) == [4, 5]
 
     def test_the_rows_publish_the_rate_word(self):
         src = inspect.getsource(SEMCoordinator._shadow_energy_plan)
         assert '"cheap": bool(s.tariff_cheap)' in src
+
+
+# ---------------------------------------------------------------------------
+# Tomorrow's view, through the coordinator
+# ---------------------------------------------------------------------------
+
+def test_saturday_previews_sunday_as_one_cheap_window(monkeypatch):
+    fake = _fake_self(devices=[_fake_load()])
+    fake.time_manager = _DayCapableTime()      # sunrise 06:00, night 21:00
+    fake._forecast_reader = SimpleNamespace(forecast_data=SimpleNamespace(
+        forecast_tomorrow_kwh=0.0))
+    fake._tariff_provider = _g12w()
+    tz = coord_mod.dt_util.DEFAULT_TIME_ZONE
+    fixed = datetime(2026, 11, 7, 10, 0, tzinfo=tz)
+    monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
+    p = SEMCoordinator._compose_tomorrow_preview(fake, power=_power())
+    assert p is not None
+    assert p["cheap_windows"] == [{
+        "start": datetime(2026, 11, 8, 6, 0, tzinfo=tz).isoformat(),
+        "end": datetime(2026, 11, 8, 21, 0, tzinfo=tz).isoformat()}]
+
+
+# ---------------------------------------------------------------------------
+# The packer's note agrees with the band
+# ---------------------------------------------------------------------------
+
+def _night(rows):
+    """``rows``: (start, hours, level_cheap, tariff_cheap)."""
+    slots = [LedgerSlot(start=t, end=t + timedelta(hours=h), price=0.6,
+                        level_cheap=lc, tariff_cheap=tc, home_w=0.0)
+             for t, h, lc, tc in rows]
+    return build_night_ledger(slots, soc_kwh=0.0, floor_kwh=0.0,
+                              max_discharge_w=0.0, peak_limit_w=8000.0)
+
+
+def _pack(ledger, deadline, **kw):
+    d = Demand(id="load:pool", kind="load", energy_kwh=4.0,
+               max_power_w=1000.0, min_power_w=1000.0, deadline=deadline,
+               needs_cheap_level=True, **kw)
+    plan = pack_night([d], ledger, floor_kwh=0.0, max_discharge_w=0.0,
+                      peak_limit_w=8000.0)
+    return plan.results[0]
+
+
+ONE_RATE_NOTE = "off-peak hours on a day with one price are not used"
+
+
+class TestTheNote:
+
+    def test_a_saturday_night_says_why_it_waits(self):
+        sat = SAT.replace(hour=21)
+        ledger = _night([(sat + timedelta(hours=k), 1, False, True)
+                         for k in range(10)])
+        r = _pack(ledger, sat + timedelta(hours=10))
+        assert r.status == "yields"
+        assert r.note == ONE_RATE_NOTE
+
+    def test_a_friday_night_says_why_it_stops_at_midnight(self):
+        fri = datetime(2026, 11, 6, 22)
+        ledger = _night([(fri + timedelta(hours=k), 1, k < 2, True)
+                         for k in range(9)])
+        r = _pack(ledger, fri + timedelta(hours=9))
+        assert r.status == "partial" and r.planned_kwh == pytest.approx(2.0)
+        assert r.note == ONE_RATE_NOTE
+
+    def test_a_night_with_no_cheap_hour_keeps_its_note(self):
+        mon = MON.replace(hour=21)
+        ledger = _night([(mon + timedelta(hours=k), 1, False, False)
+                         for k in range(3)])
+        r = _pack(ledger, mon + timedelta(hours=3))
+        assert r.note == "no cheap window tonight"
+
+    def test_hours_past_the_deadline_are_not_the_reason(self):
+        fri = datetime(2026, 11, 6, 22)
+        ledger = _night([(fri + timedelta(hours=k), 1, False, k >= 2)
+                         for k in range(4)])
+        r = _pack(ledger, fri + timedelta(hours=2))
+        assert r.note == "no cheap window tonight"
+
+    def test_a_load_on_its_own_tariff_is_not_told_about_the_house(self):
+        sat = SAT.replace(hour=21)
+        ledger = _night([(sat + timedelta(hours=k), 1, False, True)
+                         for k in range(3)])
+        own = SimpleNamespace(cheap_at=lambda t: False, price_at=lambda t: 0.6)
+        r = _pack(ledger, sat + timedelta(hours=3), tariff=own)
+        assert r.note != ONE_RATE_NOTE

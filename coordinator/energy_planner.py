@@ -489,6 +489,15 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 and d.source != "battery"):
             note = (f"{unpriced} slot(s) unpriced — replans when the "
                     f"day-ahead series lands")
+        elif (d.needs_cheap_level and d.tariff is None and need > 1e-9
+              and planned < need * FIT_EPS
+              and any(ledger[i].tariff_cheap and not ledger[i].level_cheap
+                      and (d.deadline is None or ledger[i].end <= d.deadline)
+                      for i in idx)):
+            # (#1310) The card's band shows the tariff's rate, so a day with
+            # only the off-peak price is cheap there. The gate refuses that
+            # day (#994): say so, or the note and the band disagree.
+            note = "off-peak hours on a day with one price are not used"
         elif d.needs_cheap_level and planned == 0 and need > 1e-9:
             if not any(_cheap(d, i) for i in idx):
                 note = "no cheap window tonight"

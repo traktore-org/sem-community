@@ -2453,15 +2453,20 @@ has no peak block, so on Sunday the card's band began at Monday 00:00 while Sund
 the same off-peak price. Two fields, one source, is still one word.
 **Closure:** `TariffProvider.get_rate_level_at(when)` — which of the tariff's own rates the hour is
 at, asked of the WEEK: Calendar (rules and Schedule helper) and Static override it; a dynamic tariff
-inherits its price level. `day_ledger.tariff_rate_cheap_at` fills `tariff_cheap` in
-`build_day_slots`, `tomorrow_preview` and the stamp's night loop; the packer and execution keep
-`tariff_cheap_at` and the day rule. No word for equal rates, a week with no peak, a holiday or an
-unreadable helper.
+inherits its price level. `day_ledger.rate_cheap_fn(prov)` hands `build_day_slots`,
+`tomorrow_preview` and the stamp's night loop a `rate_cheap_at` that fills `tariff_cheap` (`None`
+for a dynamic tariff: the slot reuses the gate's answer, no second level read). The packer and
+execution keep `tariff_cheap_at` and the day rule, so a cheap-hours load still waits for a day with
+both rates; its note now says so ("off-peak hours on a day with one price are not used") instead of
+"no cheap window tonight" beside a cheap band. No word for equal rates, a week with no peak, a
+holiday or an unreadable helper. The split is on purpose: the price-level sensor, the Calendar day
+strip and the EV card's next cheap window still answer for execution (flat on such a day).
 **Guard:** `tests/test_1310_one_rate_day_is_cheap.py` — both words from the real Calendar (rules
-and Schedule helper) and Static providers, the slots, tomorrow's window, the stamped Sunday plan
-(rows cheap, packer still waits for Monday), and AST checks: every `build_day_slots` /
-`tomorrow_preview` call in the coordinator passes `tariff_cheap_at`, and no `LedgerSlot(...)` gives
-both words the same expression (a probe proves it catches the old line).
+and Schedule helper) and Static providers, the slots, tomorrow's window through the coordinator,
+the stamped Sunday plan (rows cheap, packer still waits for Monday), the packer's note, and AST
+checks: every `build_day_slots` / `tomorrow_preview` call in the coordinator passes a
+`rate_cheap_at` bound to `rate_cheap_fn`, every stamped `LedgerSlot` reads it, and no
+`LedgerSlot(...)` gives both words the same expression (probes prove each catches the old line).
 Refs #780 #779 #650 #1310.
 
 ### 48. A removed host API called past its removal, its failure swallowed as a benign case — GUARDED

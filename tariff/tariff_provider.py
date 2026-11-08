@@ -501,6 +501,10 @@ class TariffProvider(ABC):
         """
         return self.get_price_level_at(when)
 
+    # (#1310) Marks the default: ``day_ledger.rate_cheap_fn`` then reuses the
+    # gate's answer per slot. An override does not carry it.
+    get_rate_level_at.same_as_price_level = True
+
 
 class StaticTariffProvider(TariffProvider):
     """Static HT/NT tariff rates.
