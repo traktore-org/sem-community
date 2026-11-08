@@ -4724,6 +4724,27 @@ class EnergyCalculator:
         upgrade would make the recorder count the day's kWh again."""
         return getattr(self, "_ev_rolled_at", None)
 
+    def calendar_day_totals(self) -> Optional[Dict[str, float]]:
+        """(#1324) Today's totals the flow split must add up to, or None.
+
+        Only while the home row is the meters' balance this cycle: then every
+        flowing term is counter-backed and sources equal sinks. The EV column
+        is the midnight mirror — the flows run on calendar days, not EV days.
+        """
+        today = self.booking_day
+        if today is None or "home" not in self._counter_backed:
+            return None
+        acc = self._daily_accumulators
+        return {
+            "solar": acc.get(f"solar_{today}", 0.0),
+            "grid_import": acc.get(f"grid_import_{today}", 0.0),
+            "battery_discharge": acc.get(f"battery_discharge_{today}", 0.0),
+            "home": acc.get(f"home_{today}", 0.0),
+            "ev": acc.get(f"{MIDNIGHT_EV_CATEGORY}_{today}", 0.0),
+            "battery_charge": acc.get(f"battery_charge_{today}", 0.0),
+            "grid_export": acc.get(f"grid_export_{today}", 0.0),
+        }
+
     def _get_daily(self, category: str, today: date) -> float:
         """Get daily accumulated energy."""
         key = f"{category}_{today}"

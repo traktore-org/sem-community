@@ -4343,6 +4343,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             energy_flows = self._flow_calculator.integrate_energy_flows(
                 book_flows, self.update_interval.total_seconds(),
             )
+            # (#1324) On a meter-backed day the split adds up to the meters.
+            # The integrator keeps its raw sums; only the published copy fits.
+            _day_totals = getattr(self._energy_calculator, "calendar_day_totals", None)
+            _day_totals = _day_totals() if callable(_day_totals) else None
+            if isinstance(_day_totals, dict):
+                from .flow_calculator import fit_flows_to_totals
+                energy_flows = fit_flows_to_totals(energy_flows, _day_totals)
 
             # Step 3: Calculate costs and performance. ``performance``
             # gets ``energy_flows`` so autarky uses the
