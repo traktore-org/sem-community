@@ -11,7 +11,7 @@
  * Not a dashboard card: registered with customElements.define only.
  */
 import { SEMNextBase, html, css, nothing, nextCss } from '../base/sem-next-base.js';
-import { setupItems } from '../util/next-settings.js';
+import { setupItems, CHARGER_ENTITY_FIELDS } from '../util/next-settings.js';
 import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
 import {
     chargerAddPlan, detectRowLabelKey, nearMissAction, proposalWrite, watchOnlyHelpKey, writeIsSaved,
@@ -298,6 +298,15 @@ class SEMNextSetupPanel extends SEMNextBase {
 
     // ── render ──
 
+    /** A detected role in words: the setting's own label, else its own key. */
+    _roleLabel(role) {
+        const f = CHARGER_ENTITY_FIELDS[role];
+        if (f && f.labelKey) return this._t(f.labelKey);
+        const k = 'next_role_' + role;
+        const v = this._t(k);
+        return v && v !== k ? v : role;
+    }
+
     render() {
         if (!this._hass) return nothing;
         const t = (k) => this._t(k);
@@ -378,7 +387,7 @@ class SEMNextSetupPanel extends SEMNextBase {
         if (m.nomatch.length) gaps.push(this._row('mdi:help-circle-outline', t('config_census_nomatch'), '', m.nomatch.join(', '), { cls: 'warn' }));
         const chargers = m.chargers.map((c) => this._sec(t('config_detect_charger') + ': ' + c.platform + (c.name ? ' · ' + c.name : ''), html`
             <div class="acts">${c.control ? this._pill(c.control) : nothing}${c.configured ? this._pill(t('config_detect_configured'), 'ok') : nothing}</div>
-            <div class="rows">${c.mapped.map((r) => this._row('', r.role, html`<span class="mono">${r.value}</span>`, r.kind))}</div>
+            <div class="rows">${c.mapped.map((r) => this._row('', this._roleLabel(r.role), html`<span class="mono">${r.value}</span>`, r.kind))}</div>
             ${c.unmapped.length ? html`<p class="help">${t('config_detect_unmapped')}: <span class="mono">${c.unmapped.join(', ')}</span></p>` : nothing}`));
         const misses = m.misses.map((x, mi) => this._sec('⚠ ' + x.name, html`
             <p class="help">${this._tf(x.labelKey, { roles: x.roles })}</p>

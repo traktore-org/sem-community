@@ -115,3 +115,14 @@ test('observer mode: adding and removing chargers sends nothing', async () => {
     await el._removeCharger('keba');
     assert.equal(calls.length, 0);
 });
+
+test('held-back calls: one row per withheld call, named by device and service', () => {
+    const el = makeCard([]);
+    el.hass.states['switch.sem_observer_mode'] = S('off', { withheld_commands: {
+        keba_1: [{ service: 'keba.set_current', data: { current: 8 } }, { service: 'keba.enable' }],
+        export_guard: [{ service: 'number.set_value', data: { value: 0 } }],
+    } });
+    const flat = (tpl) => JSON.stringify(tpl, (k, v) => (typeof v === 'function' ? undefined : v));
+    const out = flat(el._refused());
+    for (const want of ['keba.set_current', 'keba.enable', 'number.set_value', 'keba_1', 'export_guard']) assert.ok(out.includes(want), want);
+});

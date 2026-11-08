@@ -2688,7 +2688,15 @@
     "next_now_value": "nyní {v}",
     "next_own_thermometer": "Teploměr",
     "next_thermo_device": "vlastní zařízení",
-    "next_own_thermometer_sub": "Teplota, podle které se řídí pásmo pohodlí."
+    "next_own_thermometer_sub": "Teplota, podle které se řídí pásmo pohodlí.",
+    "next_role_ev_charging_sensor": "Senzor nabíjení",
+    "next_role_ev_current_sensor": "Senzor proudu",
+    "next_role_ev_session_energy_sensor": "Energie nabíjení",
+    "next_role_ev_total_energy_sensor": "Celková energie",
+    "next_role_ev_charger_service": "Služba proudu",
+    "next_role_ev_service_param_name": "Pole služby pro proud",
+    "next_role_ev_start_service": "Služba spuštění",
+    "next_role_ev_stop_service": "Služba zastavení"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5379,7 +5387,15 @@
     "next_now_value": "nu {v}",
     "next_own_thermometer": "Termometer",
     "next_thermo_device": "enhedens egen",
-    "next_own_thermometer_sub": "Temperaturen, komfortbåndet følger."
+    "next_own_thermometer_sub": "Temperaturen, komfortbåndet følger.",
+    "next_role_ev_charging_sensor": "Ladesensor",
+    "next_role_ev_current_sensor": "Strømsensor",
+    "next_role_ev_session_energy_sensor": "Energi for opladning",
+    "next_role_ev_total_energy_sensor": "Samlet energi",
+    "next_role_ev_charger_service": "Strømtjeneste",
+    "next_role_ev_service_param_name": "Tjenestefelt for strøm",
+    "next_role_ev_start_service": "Starttjeneste",
+    "next_role_ev_stop_service": "Stoptjeneste"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8070,7 +8086,15 @@
     "next_now_value": "jetzt {v}",
     "next_own_thermometer": "Thermometer",
     "next_thermo_device": "das eigene des Geräts",
-    "next_own_thermometer_sub": "Die Temperatur, der das Komfortband folgt."
+    "next_own_thermometer_sub": "Die Temperatur, der das Komfortband folgt.",
+    "next_role_ev_charging_sensor": "Lade-Sensor",
+    "next_role_ev_current_sensor": "Stromsensor",
+    "next_role_ev_session_energy_sensor": "Energie der Ladung",
+    "next_role_ev_total_energy_sensor": "Gesamtenergie",
+    "next_role_ev_charger_service": "Strom-Dienst",
+    "next_role_ev_service_param_name": "Dienst-Feld für Strom",
+    "next_role_ev_start_service": "Start-Dienst",
+    "next_role_ev_stop_service": "Stopp-Dienst"
   },
   "en": {
     "% of limit": "% of limit",
@@ -10761,7 +10785,15 @@
     "next_now_value": "now {v}",
     "next_own_thermometer": "Thermometer",
     "next_thermo_device": "the device's own",
-    "next_own_thermometer_sub": "The temperature the comfort band follows."
+    "next_own_thermometer_sub": "The temperature the comfort band follows.",
+    "next_role_ev_charging_sensor": "Charging sensor",
+    "next_role_ev_current_sensor": "Current sensor",
+    "next_role_ev_session_energy_sensor": "Session energy",
+    "next_role_ev_total_energy_sensor": "Total energy",
+    "next_role_ev_charger_service": "Current service",
+    "next_role_ev_service_param_name": "Service field for current",
+    "next_role_ev_start_service": "Start service",
+    "next_role_ev_stop_service": "Stop service"
   },
   "es": {
     "% of limit": "% del límite",
@@ -13452,7 +13484,15 @@
     "next_now_value": "ahora {v}",
     "next_own_thermometer": "Termómetro",
     "next_thermo_device": "el del propio dispositivo",
-    "next_own_thermometer_sub": "La temperatura que sigue la banda de confort."
+    "next_own_thermometer_sub": "La temperatura que sigue la banda de confort.",
+    "next_role_ev_charging_sensor": "Sensor de carga",
+    "next_role_ev_current_sensor": "Sensor de corriente",
+    "next_role_ev_session_energy_sensor": "Energía de la sesión",
+    "next_role_ev_total_energy_sensor": "Energía total",
+    "next_role_ev_charger_service": "Servicio de corriente",
+    "next_role_ev_service_param_name": "Campo del servicio para corriente",
+    "next_role_ev_start_service": "Servicio de inicio",
+    "next_role_ev_stop_service": "Servicio de parada"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -16143,7 +16183,15 @@
     "next_now_value": "nyt {v}",
     "next_own_thermometer": "Lämpömittari",
     "next_thermo_device": "laitteen oma",
-    "next_own_thermometer_sub": "Lämpötila, jota mukavuusalue seuraa."
+    "next_own_thermometer_sub": "Lämpötila, jota mukavuusalue seuraa.",
+    "next_role_ev_charging_sensor": "Lataustunnistin",
+    "next_role_ev_current_sensor": "Virtatunnistin",
+    "next_role_ev_session_energy_sensor": "Latauksen energia",
+    "next_role_ev_total_energy_sensor": "Kokonaisenergia",
+    "next_role_ev_charger_service": "Virtapalvelu",
+    "next_role_ev_service_param_name": "Palvelun kenttä virralle",
+    "next_role_ev_start_service": "Käynnistyspalvelu",
+    "next_role_ev_stop_service": "Pysäytyspalvelu"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -18834,7 +18882,15 @@
     "next_now_value": "maintenant {v}",
     "next_own_thermometer": "Thermomètre",
     "next_thermo_device": "celui de l’appareil",
-    "next_own_thermometer_sub": "La température que suit la plage de confort."
+    "next_own_thermometer_sub": "La température que suit la plage de confort.",
+    "next_role_ev_charging_sensor": "Capteur de charge",
+    "next_role_ev_current_sensor": "Capteur de courant",
+    "next_role_ev_session_energy_sensor": "Énergie de la session",
+    "next_role_ev_total_energy_sensor": "Énergie totale",
+    "next_role_ev_charger_service": "Service de courant",
+    "next_role_ev_service_param_name": "Champ du service pour le courant",
+    "next_role_ev_start_service": "Service de démarrage",
+    "next_role_ev_stop_service": "Service d’arrêt"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -21525,7 +21581,15 @@
     "next_now_value": "most {v}",
     "next_own_thermometer": "Hőmérő",
     "next_thermo_device": "az eszköz sajátja",
-    "next_own_thermometer_sub": "A hőmérséklet, amelyet a komfortsáv követ."
+    "next_own_thermometer_sub": "A hőmérséklet, amelyet a komfortsáv követ.",
+    "next_role_ev_charging_sensor": "Töltés érzékelő",
+    "next_role_ev_current_sensor": "Áramérzékelő",
+    "next_role_ev_session_energy_sensor": "Töltés energiája",
+    "next_role_ev_total_energy_sensor": "Összes energia",
+    "next_role_ev_charger_service": "Áram szolgáltatás",
+    "next_role_ev_service_param_name": "Szolgáltatás mező az áramhoz",
+    "next_role_ev_start_service": "Indító szolgáltatás",
+    "next_role_ev_stop_service": "Leállító szolgáltatás"
   },
   "it": {
     "% of limit": "% del limite",
@@ -24216,7 +24280,15 @@
     "next_now_value": "ora {v}",
     "next_own_thermometer": "Termometro",
     "next_thermo_device": "quello del dispositivo",
-    "next_own_thermometer_sub": "La temperatura che segue la fascia di comfort."
+    "next_own_thermometer_sub": "La temperatura che segue la fascia di comfort.",
+    "next_role_ev_charging_sensor": "Sensore di ricarica",
+    "next_role_ev_current_sensor": "Sensore di corrente",
+    "next_role_ev_session_energy_sensor": "Energia della sessione",
+    "next_role_ev_total_energy_sensor": "Energia totale",
+    "next_role_ev_charger_service": "Servizio corrente",
+    "next_role_ev_service_param_name": "Campo del servizio per la corrente",
+    "next_role_ev_start_service": "Servizio di avvio",
+    "next_role_ev_stop_service": "Servizio di arresto"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -26907,7 +26979,15 @@
     "next_now_value": "nu {v}",
     "next_own_thermometer": "Thermometer",
     "next_thermo_device": "die van het apparaat",
-    "next_own_thermometer_sub": "De temperatuur die de comfortband volgt."
+    "next_own_thermometer_sub": "De temperatuur die de comfortband volgt.",
+    "next_role_ev_charging_sensor": "Laadsensor",
+    "next_role_ev_current_sensor": "Stroomsensor",
+    "next_role_ev_session_energy_sensor": "Energie van de laadbeurt",
+    "next_role_ev_total_energy_sensor": "Totale energie",
+    "next_role_ev_charger_service": "Stroomdienst",
+    "next_role_ev_service_param_name": "Dienstveld voor stroom",
+    "next_role_ev_start_service": "Startdienst",
+    "next_role_ev_stop_service": "Stopdienst"
   },
   "no": {
     "% of limit": "% av grense",
@@ -29598,7 +29678,15 @@
     "next_now_value": "nå {v}",
     "next_own_thermometer": "Termometer",
     "next_thermo_device": "enhetens egen",
-    "next_own_thermometer_sub": "Temperaturen komfortbåndet følger."
+    "next_own_thermometer_sub": "Temperaturen komfortbåndet følger.",
+    "next_role_ev_charging_sensor": "Ladesensor",
+    "next_role_ev_current_sensor": "Strømsensor",
+    "next_role_ev_session_energy_sensor": "Energi for ladingen",
+    "next_role_ev_total_energy_sensor": "Total energi",
+    "next_role_ev_charger_service": "Strømtjeneste",
+    "next_role_ev_service_param_name": "Tjenestefelt for strøm",
+    "next_role_ev_start_service": "Starttjeneste",
+    "next_role_ev_stop_service": "Stopptjeneste"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -32289,7 +32377,15 @@
     "next_now_value": "teraz {v}",
     "next_own_thermometer": "Termometr",
     "next_thermo_device": "własny urządzenia",
-    "next_own_thermometer_sub": "Temperatura, za którą podąża pasmo komfortu."
+    "next_own_thermometer_sub": "Temperatura, za którą podąża pasmo komfortu.",
+    "next_role_ev_charging_sensor": "Czujnik ładowania",
+    "next_role_ev_current_sensor": "Czujnik prądu",
+    "next_role_ev_session_energy_sensor": "Energia sesji",
+    "next_role_ev_total_energy_sensor": "Energia całkowita",
+    "next_role_ev_charger_service": "Usługa prądu",
+    "next_role_ev_service_param_name": "Pole usługi dla prądu",
+    "next_role_ev_start_service": "Usługa startu",
+    "next_role_ev_stop_service": "Usługa zatrzymania"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -34980,7 +35076,15 @@
     "next_now_value": "agora {v}",
     "next_own_thermometer": "Termómetro",
     "next_thermo_device": "o do próprio dispositivo",
-    "next_own_thermometer_sub": "A temperatura que a faixa de conforto segue."
+    "next_own_thermometer_sub": "A temperatura que a faixa de conforto segue.",
+    "next_role_ev_charging_sensor": "Sensor de carga",
+    "next_role_ev_current_sensor": "Sensor de corrente",
+    "next_role_ev_session_energy_sensor": "Energia da sessão",
+    "next_role_ev_total_energy_sensor": "Energia total",
+    "next_role_ev_charger_service": "Serviço de corrente",
+    "next_role_ev_service_param_name": "Campo do serviço para corrente",
+    "next_role_ev_start_service": "Serviço de início",
+    "next_role_ev_stop_service": "Serviço de paragem"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -37671,7 +37775,15 @@
     "next_now_value": "acum {v}",
     "next_own_thermometer": "Termometru",
     "next_thermo_device": "al dispozitivului",
-    "next_own_thermometer_sub": "Temperatura pe care o urmează banda de confort."
+    "next_own_thermometer_sub": "Temperatura pe care o urmează banda de confort.",
+    "next_role_ev_charging_sensor": "Senzor de încărcare",
+    "next_role_ev_current_sensor": "Senzor de curent",
+    "next_role_ev_session_energy_sensor": "Energia sesiunii",
+    "next_role_ev_total_energy_sensor": "Energie totală",
+    "next_role_ev_charger_service": "Serviciu de curent",
+    "next_role_ev_service_param_name": "Câmp serviciu pentru curent",
+    "next_role_ev_start_service": "Serviciu de pornire",
+    "next_role_ev_stop_service": "Serviciu de oprire"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -40362,7 +40474,15 @@
     "next_now_value": "nu {v}",
     "next_own_thermometer": "Termometer",
     "next_thermo_device": "enhetens egen",
-    "next_own_thermometer_sub": "Temperaturen som komfortbandet följer."
+    "next_own_thermometer_sub": "Temperaturen som komfortbandet följer.",
+    "next_role_ev_charging_sensor": "Laddningssensor",
+    "next_role_ev_current_sensor": "Strömsensor",
+    "next_role_ev_session_energy_sensor": "Laddningens energi",
+    "next_role_ev_total_energy_sensor": "Total energi",
+    "next_role_ev_charger_service": "Strömtjänst",
+    "next_role_ev_service_param_name": "Tjänstfält för ström",
+    "next_role_ev_start_service": "Starttjänst",
+    "next_role_ev_stop_service": "Stopptjänst"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -43053,6 +43173,14 @@
     "next_now_value": "当前 {v}",
     "next_own_thermometer": "温度计",
     "next_thermo_device": "设备自带",
-    "next_own_thermometer_sub": "舒适区间所依据的温度。"
+    "next_own_thermometer_sub": "舒适区间所依据的温度。",
+    "next_role_ev_charging_sensor": "充电传感器",
+    "next_role_ev_current_sensor": "电流传感器",
+    "next_role_ev_session_energy_sensor": "本次充电电量",
+    "next_role_ev_total_energy_sensor": "总电量",
+    "next_role_ev_charger_service": "电流服务",
+    "next_role_ev_service_param_name": "电流服务字段",
+    "next_role_ev_start_service": "启动服务",
+    "next_role_ev_stop_service": "停止服务"
   }
 }

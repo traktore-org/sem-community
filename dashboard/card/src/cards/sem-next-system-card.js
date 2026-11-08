@@ -271,7 +271,12 @@ class SEMNextSystemCard extends SEMNextBase {
     _refused() {
         const attrs = this._attrs('switch.sem_observer_mode');
         const obs = this._obs();
-        const withheld = Object.values(attrs.withheld_commands || {});
+        // withheld_commands is { device_id: [ {service, data, …}, … ] } — one row per call.
+        const withheld = Object.entries(attrs.withheld_commands || {}).flatMap(([dev, cmds]) =>
+            (Array.isArray(cmds) ? cmds : [cmds]).filter((c) => c && typeof c === 'object').map((c) => ({
+                ...c, name: c.name || dev, device_id: c.device_id || dev,
+                action: c.action || c.service || '',
+            })));
         const would = Object.values(attrs.would_decisions || {}).filter((d) => d && d.action && d.action !== 'idle');
         const rows = obs ? would : withheld;
         const t = (k) => this._t(k);
