@@ -178,15 +178,13 @@ export function batteryBody(card, row) {
     const health = num('sensor.sem_battery_health_score'), cycles = num('sensor.sem_battery_cycles_estimated');
     const temp = num('sensor.sem_battery_temperature');
     const measured = num('sensor.sem_battery_measured_capacity_kwh'), nameplate = num('sensor.sem_diag_battery_capacity');
-    const drift = num('sensor.sem_battery_capacity_drift_pct');
-    if ([health, cycles, temp, measured, drift].some((x) => x !== null)) {
+    if ([health, cycles, temp, measured].some((x) => x !== null)) {
         const top = [];
         if (health !== null) top.push(Math.round(health) + ' %');
         if (cycles !== null) top.push(tf('next_cycles', { n: Math.round(cycles) }));
         const sub = [];
         if (temp !== null) sub.push(card._fmt(temp, 0) + ' ' + (card._unitOf('sensor.sem_battery_temperature') || '°C'));
         if (measured !== null) sub.push(nameplate ? tf('next_measured_of', { cap: card._fmt(measured, 1), nameplate: card._fmt(nameplate, 1) }) : card._kwh(measured));
-        if (drift !== null) sub.push(tf('next_drift', { pct: (drift > 0 ? '+' : '') + card._fmt(drift, 0) }));
         rows.push(card._row('mdi:heart-pulse', t('health'), top.join(' · ') || '—', sub.join(' · '), { more: true }));
     }
 
