@@ -26,9 +26,9 @@ generate_dashboard:
         text:
     template:
       name: Template
-      description: "classic = the nine-tab dashboard; next = SEM Next, five screens by question, created at /sem-next beside the classic one"
+      description: "next (default) = SEM Next, five screens by question, at /sem-next; classic = the old nine-tab dashboard at /sem-dashboard, kept for one release"
       required: false
-      default: "classic"
+      default: "next"
       example: "next"
       selector:
         select:

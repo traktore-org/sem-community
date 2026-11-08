@@ -4630,7 +4630,7 @@ async def _async_register_services(
         from .features.dashboard_generator import (
             NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
         )
-        template = call.data.get("template", "classic")
+        template = call.data.get("template", "next")
         dashboard_title = call.data.get("dashboard_title", "Solar Energy Management")
         dashboard_path = call.data.get("dashboard_path", "sem-dashboard")
         # (#1321) SEM Next lives beside the classic dashboard: with the
@@ -5021,7 +5021,7 @@ async def _async_register_services(
             schema=vol.Schema({
                 vol.Optional("dashboard_title", default="Solar Energy Management"): cv.string,
                 vol.Optional("dashboard_path", default="sem-dashboard"): cv.string,
-                vol.Optional("template", default="classic"): vol.In(["classic", "next"]),
+                vol.Optional("template", default="next"): vol.In(["classic", "next"]),
             }),
         )
         _LOGGER.debug("Registered service: %s.generate_dashboard", DOMAIN)
@@ -5907,11 +5907,10 @@ async def _async_install_card_assets(
         dashboard_generated = True
 
     # Method 2: Dashboard storage file (set by generate_dashboard service)
-    dashboard_storage = os.path.join(
-        hass.config.config_dir, ".storage", "lovelace.sem-dashboard"
-    )
-    if os.path.exists(dashboard_storage):
-        dashboard_generated = True
+    for _path in ("sem-dashboard", "sem-next"):
+        if os.path.exists(os.path.join(
+                hass.config.config_dir, ".storage", f"lovelace.{_path}")):
+            dashboard_generated = True
 
     if not dashboard_generated:
         _LOGGER.debug(

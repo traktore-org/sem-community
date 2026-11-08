@@ -119,6 +119,28 @@ def test_service_accepts_the_template_field():
         services = yaml.safe_load(f)
     field = services["generate_dashboard"]["fields"]["template"]
     assert field["selector"]["select"]["options"] == ["classic", "next"]
+    assert field["default"] == "next"          # SEM Next is the default dashboard
     with open(os.path.join(ROOT, "__init__.py"), encoding="utf-8") as f:
         src = f.read()
-    assert 'vol.Optional("template", default="classic"): vol.In(["classic", "next"])' in src
+    assert 'vol.Optional("template", default="next"): vol.In(["classic", "next"])' in src
+    assert 'template = call.data.get("template", "next")' in src
+
+
+@pytest.mark.unit
+def test_the_rebuild_switch_names_each_live_dashboard():
+    """The service defaults to SEM Next, so a live classic dashboard must be
+    rebuilt by name, never by the default."""
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+    from custom_components.solar_energy_management.switch import regenerate_dashboard
+
+    calls = []
+    hass = MagicMock()
+    hass.data = {"lovelace": SimpleNamespace(dashboards={"sem-dashboard": object(), "sem-next": object()})}
+    hass.services.async_call = AsyncMock(side_effect=lambda d, s, data, blocking=True: calls.append(data))
+    tasks = []
+    hass.async_create_task = lambda coro, name=None: tasks.append(coro)
+    regenerate_dashboard(hass)
+    asyncio.run(tasks[0])
+    assert calls == [{"template": "classic"}, {"template": "next"}]

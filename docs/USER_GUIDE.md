@@ -2133,10 +2133,11 @@ timeline), **Devices** (one card shape per charger, battery and load),
 **System** (source freshness, what SEM refused, settings by question).
 Every screen opens with one line in words.
 
-It is created on request and never replaces the classic dashboard: on the
-classic **System** tab press *Create* in the SEM Next row, or call
-`solar_energy_management.generate_dashboard` with `template: next`. It
-appears in the sidebar as **SEM Next** at `/sem-next/now`. In observer mode
+It is the default dashboard. A new install gets it, and
+`solar_energy_management.generate_dashboard` builds it unless you ask for
+`template: classic`. It appears in the sidebar as **SEM Next** at
+`/sem-next/now`. The classic dashboard stays where you have it for one more
+release; build it again with `template: classic`. In observer mode
 the screens are the same, greyed, and every line says what SEM *would* do.
 
 ## Observer Mode

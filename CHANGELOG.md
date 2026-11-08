@@ -13,10 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **SEM Next is the default dashboard** (#1321). New installs get it; the classic one stays for one release.
 - 🐛 **Energy flows add up to your meters** (#1324). A missed reading no longer shortens the split or shows export the meter never counted.
 - 🐛 **The night plan's cost now counts what the house buys after the battery runs out** (#1325). It showed empty before.
 - 🐛 **A load SEM never saw running says "not measured yet"** instead of a made-up 1 kW (#1326).
-- ✨ **SEM Next**: a second dashboard, five screens — one power bar, the plan on the price strip, devices you can reorder, settings as sentences (#1321).
+- ✨ **SEM Next**: a new dashboard, five screens — one power bar, the plan on the price strip, devices you can reorder, settings as sentences (#1321).
 
 # [2.3.0-beta.8] — 07.11.2026
 
