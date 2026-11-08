@@ -111,23 +111,67 @@ test('a full car shows its status only, no Skip or Start now', () => {
     assert.match(other, /next_start_now/);
 });
 
-test('legend lists Cheap and Expensive only when the strip has them', () => {
-    const el = makeCard();
-    const flat = text(el._legend({ bands: { cheap: [], expensive: [] } }));
-    assert.doesNotMatch(flat, /next_cheap|next_expensive/);
-    const tou = text(el._legend({ bands: { cheap: [{ x0: 0, x1: 0.2 }], expensive: [] } }));
-    assert.match(tou, /next_cheap/);
-    assert.doesNotMatch(tou, /next_expensive/);
+// ── the chart: sun, price and plan on one clock ──
+const HOUR = 3600e3;
+const isoAt = (ms) => new Date(ms).toISOString();
+function planAround(now) {
+    const h0 = Math.floor(now / HOUR) * HOUR;
+    const slots = [];
+    for (let i = -1; i < 6; i++) slots.push({ start: isoAt(h0 + i * HOUR), end: isoAt(h0 + (i + 1) * HOUR), price: 0.36, home_w: 600, home_grid_w: i >= 3 ? 500 : 0 });
+    return { slots, batt_runs: [[0, 3]], blocks: [{ id: 'ev:keba', start: isoAt(h0 + 2 * HOUR), end: isoAt(h0 + 4 * HOUR), power_w: 4000 }], computed_at: isoAt(now) };
+}
+
+test('flat tariff: one price said once, no made-up sun, every row labelled', () => {
+    const now = Date.now();
+    const el = makeCard({
+        'sensor.sem_energy_plan': S('idle', planAround(now)),
+        'sensor.sem_tariff_current_import_rate': S(0.36, { is_dynamic: false, price_level: 'flat', today_avg: 0.36, upcoming: [] }),
+        'sensor.sem_forecast_tomorrow_kwh': S(11.9), 'sensor.sem_forecast_today_kwh': S(29.3),
+    });
+    el._chargers = ['keba'];
+    el._fc = {}; el._stats = [];
+    const out = text(el._stripSec(el._plan()));
+    assert.match(out, /next_price_flat/);
+    assert.doesNotMatch(out, /next_price_avg|next_prices_later/);
+    assert.match(out, /next_chip_forecast_kwh/);          // a total, never a drawn bell
+    assert.match(out, /next_row_to_house/);
+    assert.match(out, /next_row_from_grid/);
+    assert.match(out, /next_range_next/);
+    assert.match(out, /next_now_marker/);
+    assert.doesNotMatch(out, /NaN|undefined/);
 });
 
-test('sun label: what the sun made after sunset, the forecast otherwise', () => {
-    const el = makeCard();
-    const real = Date.prototype.getHours;
-    Date.prototype.getHours = () => 20;
-    try {
-        assert.match(el._sunLabel({ day: 'today', sun: { kwh: 27 } }), /next_sun_made_kwh/);
-        assert.match(el._sunLabel({ day: 'tomorrow', sun: { kwh: 12 } }), /next_sun_forecast_kwh/);
-    } finally { Date.prototype.getHours = real; }
-    const day = makeCard({ 'sun.sun': S('above_horizon') });
-    assert.match(day._sunLabel({ day: 'today', sun: { kwh: 27 } }), /next_sun_forecast_kwh/);
+test('dynamic tariff: steps with min, max and average; unknown prices hatched; forecast drawn with its total', () => {
+    const now = Date.now();
+    const h0 = Math.floor(now / HOUR) * HOUR;
+    const upcoming = [];
+    for (let i = 0; i < 24; i++) upcoming.push({ t: isoAt(h0 + i * 900e3), price: i < 8 ? 0.21 : 0.41 });
+    const el = makeCard({
+        'sensor.sem_energy_plan': S('idle', planAround(now)),
+        'sensor.sem_tariff_current_import_rate': S(0.21, { is_dynamic: true, price_level: 'cheap', upcoming }),
+    });
+    el._chargers = ['keba'];
+    el._stats = [];
+    el._fc = { [isoAt(h0 + 12 * HOUR)]: 1500, [isoAt(h0 + 13 * HOUR)]: 2500 };
+    const out = text(el._stripSec(el._plan()));
+    assert.match(out, /next_price_avg/);
+    assert.match(out, /next_prices_later/);
+    assert.match(out, /4\.0 kWh/);                        // the sun total chip
+    assert.doesNotMatch(out, /next_price_flat|next_chip_forecast_kwh/);
+    el._hover = h0 + 30 * 60e3;
+    const tip = text(el._stripSec(el._plan()));
+    assert.match(tip, /next_tip_price/);
+});
+
+test('the range switch is remembered and clears a picked block', () => {
+    const el = makeCard({ 'sensor.sem_energy_plan': S('idle', planAround(Date.now())) });
+    const saved = [];
+    globalThis.localStorage = { getItem: () => null, setItem: (k, v) => saved.push([k, v]) };
+    el._picked = 'x';
+    const sec = el._stripSec(el._plan());
+    const seg = JSON.stringify(sec, (k, v) => (typeof v === 'function' ? '[fn]' : v));
+    assert.match(seg, /next_tomorrow/);
+    el._range = 'tomorrow';
+    assert.equal(el._range, 'tomorrow');
+    globalThis.localStorage = { getItem: () => null, setItem() {} };
 });

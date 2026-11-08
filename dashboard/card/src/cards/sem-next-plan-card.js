@@ -1,12 +1,11 @@
 /**
  * SEM Next · Plan (#1321)
  *
- * The chosen day as one strip: hourly price bars with the cheap and the
- * expensive band, the sun forecast as a curve, and the plan's blocks on
- * three lanes (car, battery, loads), all from sensor.sem_energy_plan. Tap
- * a block for its reason. Below: one row per device with the one-night
- * overrides, the expected numbers, and today's decisions from the log.
- * "Show timeline per device" opens the lane-per-device drawing.
+ * Sun, price and plan on one clock (Today / Next 24 h / Tomorrow): the sun
+ * as measured and as forecast, the price as a step line, the plan as one
+ * row per device. Hover or tap for the moment's numbers; tap a block for its
+ * reason. Below: one row per device with the one-night overrides, the
+ * expected numbers, and today's decisions from the log.
  *
  * Config:
  *   type: custom:sem-next-plan-card
@@ -22,8 +21,9 @@ export function knownNum(v) {
     const n = Number(v);
     return Number.isFinite(n) ? n : NaN;
 }
-import { laneModel, LANE_COLORS } from '../util/next-timeline.js';
-import { stripModel, smoothPath, minutesToPlanEnd, LANE_COUNT } from '../util/next-strip.js';
+import { laneModel } from '../util/next-timeline.js';
+import { minutesToPlanEnd } from '../util/next-strip.js';
+import { chartWindow, chartTicks, sunModel, priceModel, priceAt, planRows, focusBlock, runningAt, RANGES } from '../util/next-plan-chart.js';
 import {
     WHY_KINDS, changeLabel, deviceName, earlierKey, filterRecords, isToday, plainReason, rowTime, whyChips,
 } from '../util/why-rows.js';
@@ -36,16 +36,36 @@ const IDS = ['sensor.sem_energy_plan', 'sensor.sem_forecast_tomorrow_kwh', 'sens
              'sensor.sem_tariff_price_level', 'sensor.sem_controllable_devices_count', 'switch.sem_energy_plan_actuation',
              'sensor.sem_charging_state', 'number.sem_expensive_price_threshold', 'select.sem_battery_mode',
              'sensor.sem_battery_dynamic_floor_pct', 'sensor.sem_forecast_trust_d2'];
-// the per-device lanes fold
-const W = 720, L = 54, ROW = 30, TOP = 24, BOTTOM = 20;
 const SHOWN_ROWS = 6;
-const KIND_COLOR = { ev: C.ev, battery_in: C.battery_in, battery_out: C.battery_out, load: C.home };
-const KIND_ICON = { ev: 'mdi:car-electric', battery_in: 'mdi:battery-charging', battery_out: 'mdi:home-battery', load: 'mdi:power-plug' };
+const KIND_COLOR = { ev: C.ev, battery_in: C.battery_in, battery_out: C.battery_out, grid: C.grid, load: C.home };
+const KIND_ICON = { ev: 'mdi:car-electric', battery_in: 'mdi:battery-charging', battery_out: 'mdi:home-battery', grid: 'mdi:transmission-tower', load: 'mdi:power-plug' };
+export const WS_SOLAR_FORECAST = 'solar_energy_management/solar_forecast';
+const SUN_REFRESH_MS = 30 * 60e3, STATS_REFRESH_MS = 15 * 60e3;
+const RANGE_KEY = 'sem-next-plan-range';
+function readRange() {
+    try { const v = window.localStorage.getItem(RANGE_KEY); return RANGES.includes(v) ? v : 'next'; } catch (e) { return 'next'; }
+}
+function writeRange(v) {
+    try { window.localStorage.setItem(RANGE_KEY, v); } catch (e) { /* private window: nothing kept */ }
+}
+
+/** A smooth line through points (Catmull-Rom as cubic Béziers), never below the first/last y. */
+function smoothPath(pts) {
+    if (pts.length < 2) return '';
+    let d = `M${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+        const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = Math.min(Math.max(p1[1] + (p2[1] - p0[1]) / 6, Math.min(p1[1], p2[1]) - 6), Math.max(p1[1], p2[1]));
+        const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = Math.min(Math.max(p2[1] - (p3[1] - p1[1]) / 6, Math.min(p1[1], p2[1]) - 6), Math.max(p1[1], p2[1]));
+        d += ` C${c1x} ${c1y} ${c2x} ${c2y} ${p2[0]} ${p2[1]}`;
+    }
+    return d;
+}
 
 class SEMNextPlanCard extends SEMNextBase {
     static get properties() {
         return {
-            _picked: { state: true }, _confirm: { state: true }, _day: { state: true }, _lanes: { state: true },
+            _picked: { state: true }, _confirm: { state: true }, _range: { state: true }, _hover: { state: true }, _fc: { state: true }, _stats: { state: true },
             _w: { state: true }, _records: { state: true }, _chip: { state: true }, _fold: { state: true },
             _logError: { state: true },
         };
@@ -54,21 +74,37 @@ class SEMNextPlanCard extends SEMNextBase {
     // width and scroll sideways inside their own box instead of shrinking.
     static get styles() {
         return [nextCss, css`
-            .tl { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 8px; }
-            .tl svg { display: block; min-width: 640px; }
             .tm { width: 42px; flex: 0 0 auto; }
             .reason .t { min-width: 0; }
+            .pc { position: relative; margin-top: 4px; touch-action: pan-y; }
+            .pc svg { display: block; overflow: visible; }
+            .pc .lab { position: absolute; left: 0; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--n-fg2);
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transform: translateY(-50%); line-height: 1.1; }
+            .pc .lab ha-icon { --mdc-icon-size: 15px; flex: 0 0 auto; }
+            .pc .lab small { display: block; font-size: 9.5px; color: var(--n-fg3); }
+            .pc .lab span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+            .pc .lab ha-icon { color: var(--c); }
+            .pc .tip { position: absolute; z-index: 2; pointer-events: none; background: var(--n-card); border: 1px solid var(--n-line);
+                border-radius: 10px; padding: 7px 10px; font-size: 12px; line-height: 1.4; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+                min-width: 120px; max-width: 220px; }
+            .pc .tip b { font-variant-numeric: tabular-nums; }
+            .pc .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+            .pc .blk { cursor: pointer; }
         `];
     }
 
     constructor() {
         super();
-        this._picked = null;       // block key in the strip
-        this._pickedText = null;   // the lanes fold's picked block
+        this._picked = null;       // block key in the plan lane
+        this._hover = null;        // ms under the pointer, or null
+        this._fc = null;           // the hourly sun forecast { iso: Wh }; null = not read yet
+        this._stats = null;        // measured sun, [{ t, w }] per hour
+        this._priceStats = null;   // what the tariff read, [{ t, p }] per hour
+        this._sunTimer = null;
+        this._statTimer = null;
         this._confirm = null;      // charger id awaiting "Charge now" confirmation
         this._savedMode = {};      // charger id → mode before "Charge now"
-        this._day = 'today';
-        this._lanes = false;
+        this._range = readRange();
         this._w = 720;
         this._hostW = 0;
         this._ro = null;
@@ -99,17 +135,25 @@ class SEMNextPlanCard extends SEMNextBase {
         this._stopLog();
         this._loadLog();
         this._logTimer = setInterval(() => this._loadLog(), LOG_REFRESH_MS);
+        this._loadSun();
+        this._loadStats();
+        this._sunTimer = setInterval(() => this._loadSun(), SUN_REFRESH_MS);
+        this._statTimer = setInterval(() => this._loadStats(), STATS_REFRESH_MS);
     }
 
     disconnectedCallback() {
         if (this._ro) { this._ro.disconnect(); this._ro = null; }
         this._stopLog();
+        clearInterval(this._sunTimer); clearInterval(this._statTimer);
+        this._sunTimer = null; this._statTimer = null;
         super.disconnectedCallback();
     }
 
     set hass(hass) {
         super.hass = hass;
         if (hass && this._records === null) this._loadLog();
+        if (hass && this._fc === null) this._loadSun();
+        if (hass && this._stats === null) this._loadStats();
     }
     get hass() { return this._hass; }
 
@@ -135,6 +179,41 @@ class SEMNextPlanCard extends SEMNextBase {
             this._logError = true;
         } finally {
             this._loading = false;
+        }
+    }
+
+    // ── the sun: forecast by the hour, and what it made ──
+    async _loadSun() {
+        if (this._sunBusy || !this._hass?.callWS) return;
+        this._sunBusy = true;
+        try {
+            const r = await this._hass.callWS({ type: WS_SOLAR_FORECAST });
+            this._fc = r && typeof r.wh_hours === 'object' && r.wh_hours ? r.wh_hours : {};
+        } catch (_err) {
+            this._fc = {};
+        } finally {
+            this._sunBusy = false;
+        }
+    }
+
+    async _loadStats() {
+        if (this._statBusy || !this._hass?.callWS) return;
+        this._statBusy = true;
+        try {
+            const tz = this._hass.config?.time_zone;
+            const now = Date.now();
+            const from = Math.min(chartWindow(now, 'today', tz).start, chartWindow(now, 'next', tz).start);
+            const r = await this._hass.callWS({ type: 'recorder/statistics_during_period', start_time: new Date(from).toISOString(),
+                statistic_ids: ['sensor.sem_solar_power', 'sensor.sem_tariff_current_import_rate'], period: 'hour', types: ['mean'], units: { power: 'W' } });
+            const at = (x) => (typeof x.start === 'number' ? x.start : Date.parse(x.start));
+            const rows = Array.isArray(r?.['sensor.sem_solar_power']) ? r['sensor.sem_solar_power'] : [];
+            this._stats = rows.map((x) => ({ t: at(x), w: x.mean }));
+            const prices = Array.isArray(r?.['sensor.sem_tariff_current_import_rate']) ? r['sensor.sem_tariff_current_import_rate'] : [];
+            this._priceStats = prices.map((x) => ({ t: at(x), p: x.mean }));
+        } catch (_err) {
+            this._stats = [];
+        } finally {
+            this._statBusy = false;
         }
     }
 
@@ -164,39 +243,21 @@ class SEMNextPlanCard extends SEMNextBase {
         return times[0] || '';
     }
 
-    _strip(plan) {
-        const tomorrow = this._day === 'tomorrow';
-        return stripModel({
-            plan, day: this._day, now: new Date(),
-            nightStart: this._str('sensor.sem_night_start_time'), nightEnd: this._str('sensor.sem_night_end_time'),
-            forecastKwh: this._num(tomorrow ? 'sensor.sem_forecast_tomorrow_kwh' : 'sensor.sem_forecast_today_kwh'),
-            expensiveThreshold: this._num('number.sem_expensive_price_threshold'),
-            departure: this._departure(),
-        });
+    _rowLabel(r) {
+        if (r.kind === 'ev' || r.kind === 'load') return r.label || this._t(r.kind === 'ev' ? 'next_src_car' : 'next_lane_load');
+        return this._t({ battery_in: 'next_row_charge', battery_out: 'next_row_to_house', grid: 'next_row_from_grid' }[r.kind]);
     }
 
-    _selected(sm) {
-        return sm.blocks.find((b) => b.key === this._picked) || sm.blocks.find((b) => b.run) || sm.blocks[0] || null;
+    _rowName(r) {
+        if (r.kind === 'ev' || r.kind === 'load') return this._rowLabel(r);
+        return this._t({ battery_in: 'next_battery_charging', battery_out: 'next_battery_to_house', grid: 'next_house_from_grid' }[r.kind]);
     }
 
-    _blockName(b) {
-        if (b.kind === 'battery_in') return this._t('next_battery_charging');
-        if (b.kind === 'battery_out') return this._t('next_battery_to_house');
-        if (b.kind === 'ev') {
-            const cid = b.id.slice(3);
-            return this._chargers.includes(cid) ? this._chargerName(cid) : (b.label || this._t('next_src_car'));
-        }
-        const id = b.id.replace(/^load:/, '');
-        return this._devices()[id]?.name || b.label || this._t('next_lane_load');
-    }
-
-    _blockSpan(b) {
-        return `${this._hhmm(new Date(b.start))} – ${this._hhmm(new Date(b.end))}`;
-    }
-
-    _blockTitle(b) {
-        const kwh = b.kwh > 0.05 ? ` · ${this._kwh(b.kwh)}` : '';
-        return `${this._blockName(b)} · ${this._blockSpan(b)}${kwh}`;
+    /** The plan's why codes as sentences; the raw log text never shows. */
+    _whyCodes(plan) {
+        return (Array.isArray(plan?.why_codes) ? plan.why_codes : [])
+            .map((c) => { const k = 'energy_plan_whyc_' + c; const v = this._t(k); return v && v !== k ? v : ''; })
+            .filter(Boolean).join(' · ');
     }
 
     /** The not_scheduled entry's machine why, as a sentence. */
@@ -207,98 +268,226 @@ class SEMNextPlanCard extends SEMNextBase {
         return said && said !== key ? said : (n?.note || String(code));
     }
 
-    /** The plan's why codes as sentences; the raw log text never shows. */
-    _whyCodes(plan) {
-        return (Array.isArray(plan?.why_codes) ? plan.why_codes : [])
-            .map((c) => { const k = 'energy_plan_whyc_' + c; const v = this._t(k); return v && v !== k ? v : ''; })
-            .filter(Boolean).join(' · ');
-    }
-
-    _blockReason(b, plan) {
-        if (b.provisional) return this._t('next_provisional_reason');
-        const kw = this._fmt(b.powerW / 1000, 1);
-        if (b.kind === 'battery_in') return this._whyCodes(plan) || this._tf('next_reason_battery_charge', { kw });
-        if (b.kind === 'battery_out') return this._t('next_reason_battery_house');
+    _focusReason(fb, plan) {
+        if (fb.provisional) return this._t('next_provisional_reason');
+        const hours = (fb.e - fb.s) / 3.6e6;
+        const kw = this._fmt(hours > 0 ? fb.kwh / hours : 0, 1);
+        const kind = fb.row.kind;
+        if (kind === 'battery_in') return this._whyCodes(plan) || this._tf('next_reason_battery_charge', { kw });
+        if (kind === 'battery_out') return this._t('next_reason_battery_house');
+        if (kind === 'grid') return this._t('next_reason_house_grid');
         const demands = Array.isArray(plan.demands) ? plan.demands : [];
-        const d = demands.find((x) => x.id === b.id);
+        const d = demands.find((x) => x.id === fb.row.key);
         if (d?.note) return String(d.note);
         if (d?.status) return this._t('next_status_' + d.status);
-        return this._tf(b.kind === 'ev' ? 'next_reason_ev_block' : 'next_reason_load_block', { kw, status: '', note: '' }).replace(/\s+/g, ' ').trim();
+        return this._tf(kind === 'ev' ? 'next_reason_ev_block' : 'next_reason_load_block', { kw, status: '', note: '' }).replace(/\s+/g, ' ').trim();
     }
 
-    // ── the strip ──
-    _stripSvg(sm) {
-        const w = this._w || 720;
-        const H = 172, L0 = 8, R0 = 8, top = 14, bh = 66, by = top + bh, lanesY = by + 16, laneH = 11, axisY = H - 6;
-        const lanesH = LANE_COUNT * (laneH + 4);
-        const x = (f) => L0 + f * (w - L0 - R0);
+    _chartData(plan) {
+        const tz = this._hass?.config?.time_zone;
+        const now = Date.now();
+        const win = chartWindow(now, this._range, tz);
+        const sun = sunModel({ win, nowMs: now, actual: this._stats || [], forecast: this._fc || {} });
+        const tar = this._attrs('sensor.sem_tariff_current_import_rate');
+        const price = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, schedule: tar.schedule_today, past: this._priceStats || [],
+            isDynamic: tar.is_dynamic, level: tar.price_level || this._str('sensor.sem_tariff_price_level'), todayAvg: tar.today_avg });
+        const rows = planRows({ win, nowMs: now, plan, names: {
+            charger: (cid) => (this._chargers.includes(cid) ? this._chargerName(cid) : ''),
+            load: (id) => this._devices()[id]?.name || id,
+        } });
+        return { tz, now, win, sun, price, rows };
+    }
+
+    /** The visible day's forecast total, when no hourly forecast exists. */
+    _sunFallbackKwh(d) {
+        const tomorrow = this._range === 'tomorrow' || (this._range === 'next' && new Date(d.now).getHours() >= 12);
+        return this._num(tomorrow ? 'sensor.sem_forecast_tomorrow_kwh' : 'sensor.sem_forecast_today_kwh');
+    }
+
+    _svgChip(x, y, text, fill, fg, minX, maxX) {
+        const w = text.length * 6.2 + 14;
+        const cx = Math.max(minX, Math.min(maxX - w, x - w / 2));
+        return svg`<rect x="${cx}" y="${y}" width="${w}" height="18" rx="9" fill="${fill}"></rect>
+            <text x="${cx + w / 2}" y="${y + 12.5}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${fg}">${text}</text>`;
+    }
+
+    _chartLayout(d) {
+        const narrow = (this._w || 720) < 520;
+        const LBL = narrow ? 26 : 112;
+        const W = Math.max(160, (this._w || 720) - LBL);
+        // room on top for the now label (y 4–18) and the sun total chip (y 22–40)
+        const sun = [46, 94], price = [118, 168];
+        const planY = 190, rowH = 26;
+        const planEnd = planY + Math.max(1, d.rows.length) * rowH;
+        const axisY = planEnd + 16;
+        return { narrow, LBL, W, sun, price, planY, rowH, planEnd, axisY, H: axisY + 22 };
+    }
+
+    _chartSvg(d, plan) {
+        const lay = this._chartLayout(d);
+        const { W, sun: [sy0, sy1], price: [py0, py1], planY, rowH, planEnd, axisY, H } = lay;
+        const span = d.win.end - d.win.start;
+        const X = (ms) => Math.max(0, Math.min(W, (ms - d.win.start) / span * W));
+        const cur = this._currency();
         const parts = [];
-        for (const b of sm.bands.cheap) {
-            parts.push(svg`<rect x="${x(b.x0)}" y="${top - 4}" width="${x(b.x1) - x(b.x0)}" height="${bh + 8}" fill="${C.good}" opacity=".10" rx="4"></rect>`);
-        }
-        for (const b of sm.bands.expensive) {
-            parts.push(svg`<rect x="${x(b.x0)}" y="${top - 4}" width="${x(b.x1) - x(b.x0)}" height="${bh + 8}" fill="${C.bad}" opacity=".08" rx="4"></rect>`);
-        }
-        if (sm.sun) {
-            const pts = sm.sun.points.map(([f, v]) => [x(f), by - v * bh * 0.95]);
-            parts.push(svg`<path d="${smoothPath(pts)} L${x(sm.sun.x1)} ${by} L${x(sm.sun.x0)} ${by} Z" fill="${C.solar}" opacity=".14"></path>`);
-        }
-        if (sm.price) {
-            const { min, max } = sm.price;
-            for (const b of sm.bars) {
-                const h = max > min ? 6 + ((b.price - min) / (max - min)) * (bh - 10) : bh * 0.5;
-                parts.push(svg`<rect x="${x(b.x0) + 1}" y="${by - h}" width="${Math.max(1, x(b.x1) - x(b.x0) - 2)}" height="${h}" rx="2" fill="${C.fg3}" opacity="${b.past ? .25 : .5}">
-                    <title>${String(b.h).padStart(2, '0')}:00 · ${this._fmt(b.price, 2)} ${this._currency()}/kWh</title></rect>`);
+        const gid = 'pc' + Math.round(W);
+        parts.push(svg`<defs>
+            <linearGradient id="${gid}s" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${C.solar}" stop-opacity=".55"></stop><stop offset="1" stop-color="${C.solar}" stop-opacity=".04"></stop></linearGradient>
+            <linearGradient id="${gid}f" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${C.solar}" stop-opacity=".28"></stop><stop offset="1" stop-color="${C.solar}" stop-opacity=".02"></stop></linearGradient>
+            <linearGradient id="${gid}p" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${C.grid}" stop-opacity=".35"></stop><stop offset="1" stop-color="${C.grid}" stop-opacity="0"></stop></linearGradient>
+            <pattern id="${gid}h" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="var(--n-line)" stroke-width="3"></line></pattern>
+        </defs>`);
+        // sun lane
+        parts.push(svg`<line x1="0" x2="${W}" y1="${sy1}" y2="${sy1}" stroke="var(--n-line)"></line>`);
+        if (d.sun.points.length) {
+            const max = Math.max(...d.sun.points.map((p) => p.kw), 0.1) * 1.15;
+            const SY = (kw) => sy1 - (sy1 - sy0) * kw / max;
+            for (const actual of [true, false]) {
+                const pts = d.sun.points.filter((p) => p.actual === actual);
+                if (!pts.length) continue;
+                // runs of touching periods; each run a smooth curve through the midpoints
+                const runs = [];
+                for (const p of pts) {
+                    const last = runs[runs.length - 1];
+                    if (last && p.s - last[last.length - 1].e < 40 * 60e3) last.push(p); else runs.push([p]);
+                }
+                let line = '', area = '';
+                for (const run of runs) {
+                    const xy = [[X(run[0].s), SY(0)], ...run.map((p) => [X((p.s + p.e) / 2), SY(p.kw)]), [X(run[run.length - 1].e), SY(0)]];
+                    const curve = smoothPath(xy);
+                    line += (line ? ' ' : '') + curve;
+                    area += (area ? ' ' : '') + curve + ` L${xy[xy.length - 1][0]} ${sy1} L${xy[0][0]} ${sy1} Z`;
+                }
+                parts.push(svg`<path d="${area}" fill="url(#${gid}${actual ? 's' : 'f'})"></path>
+                    <path d="${line}" fill="none" stroke="${C.solar}" stroke-width="2" stroke-linejoin="round" stroke-dasharray="${actual ? nothing : '4 3'}"></path>`);
             }
-            parts.push(svg`<text x="${x(0)}" y="${top - 2}" font-size="10" fill="${C.fg3}">${this._tf('next_price_range', { max: this._fmt(max, 2), min: this._fmt(min, 2), cur: this._currency() })}</text>`);
+            const pk = d.sun.peak;
+            if (pk && d.sun.totalKwh > 0.05) parts.push(this._svgChip(X((pk.s + pk.e) / 2), sy0 - 24, `${this._fmt(d.sun.totalKwh, 1)} kWh`, C.solar, '#1b1204', 0, W));
+        } else {
+            const kwh = this._sunFallbackKwh(d);
+            const text = kwh !== null ? this._tf('next_chip_forecast_kwh', { kwh: this._fmt(kwh, 1) }) : this._t('next_sun_none');
+            parts.push(svg`<text x="${W / 2}" y="${(sy0 + sy1) / 2 + 4}" text-anchor="middle" font-size="11" fill="${C.fg3}">${text}</text>`);
         }
-        if (sm.sun) {
-            parts.push(svg`<text x="${x(1)}" y="${top - 2}" font-size="10" fill="${C.fg3}" text-anchor="end">${this._sunLabel(sm)}</text>`);
+        // price lane
+        parts.push(svg`<line x1="0" x2="${W}" y1="${py1}" y2="${py1}" stroke="var(--n-line)"></line>`);
+        const pm = d.price;
+        if (pm.flat && pm.price !== null) {
+            const y = (py0 + py1) / 2 + 6;
+            parts.push(svg`<rect x="0" y="${y}" width="${W}" height="${py1 - y}" fill="url(#${gid}p)"></rect>
+                <line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${C.grid}" stroke-width="2"></line>`);
+            parts.push(this._svgChip(W / 2, y - 26, this._tf('next_price_flat', { price: this._fmt(pm.price, 2), cur }), 'var(--n-fg)', 'var(--n-card)', 0, W));
+        } else if (pm.steps.length) {
+            const PY = (v) => py1 - (py1 - py0 - 4) * v / (pm.max * 1.12);
+            let line = '', area = '';
+            let prev = null;
+            for (const st of pm.steps) {
+                const x0 = X(st.s), x1 = X(st.e), y = PY(st.p);
+                if (!prev || prev.e !== st.s) { line += `${line ? ' ' : ''}M${x0} ${y}`; if (prev) area += ` L${X(prev.e)} ${py1} Z`; area += `${area ? ' ' : ''}M${x0} ${py1} L${x0} ${y}`; }
+                else line += ` L${x0} ${y}`;
+                line += ` L${x1} ${y}`; area += ` L${x0} ${y} L${x1} ${y}`;
+                prev = st;
+            }
+            area += ` L${X(prev.e)} ${py1} Z`;
+            parts.push(svg`<path d="${area}" fill="url(#${gid}p)"></path><path d="${line}" fill="none" stroke="${C.grid}" stroke-width="2" stroke-linejoin="round"></path>`);
+            const knownW = X(pm.steps[pm.steps.length - 1].e) - X(pm.steps[0].s);
+            if (pm.avg !== null && knownW > 140) {
+                const ay = PY(pm.avg);
+                const ax0 = X(pm.steps[0].s), ax1 = X(pm.steps[pm.steps.length - 1].e);
+                parts.push(svg`<line x1="${ax0}" x2="${ax1}" y1="${ay}" y2="${ay}" stroke="${C.fg3}" stroke-dasharray="3 4"></line>
+                    <text x="${ax1 - 2}" y="${ay - 4}" text-anchor="end" font-size="10" fill="${C.fg3}">${this._tf('next_price_avg', { price: this._fmt(pm.avg, 2) })}</text>`);
+            }
+            const lo = pm.steps.find((st) => st.p === pm.min), hi = pm.steps.find((st) => st.p === pm.max);
+            if (hi && knownW > 60) parts.push(this._svgChip(X((hi.s + hi.e) / 2), PY(hi.p) - 22, this._fmt(hi.p, 2), 'var(--n-fg)', 'var(--n-card)', 0, W));
+            if (lo && lo !== hi && knownW > 140) parts.push(this._svgChip(X((lo.s + lo.e) / 2), Math.min(py1 - 18, PY(lo.p) + 5), this._fmt(lo.p, 2), 'var(--n-fg)', 'var(--n-card)', 0, W));
+            for (const g of pm.gaps) {
+                const gx0 = X(g.s), gw = X(g.e) - gx0;
+                if (gw < 2) continue;
+                parts.push(svg`<rect x="${gx0}" y="${py0}" width="${gw}" height="${py1 - py0}" rx="6" fill="url(#${gid}h)"></rect>`);
+                if (gw > 96 && g.e > d.now) parts.push(svg`<text x="${gx0 + gw / 2}" y="${py1 - 10}" text-anchor="middle" font-size="10.5" fill="${C.fg3}">${this._t('next_prices_later')}</text>`);
+            }
+        } else {
+            parts.push(svg`<text x="${W / 2}" y="${(py0 + py1) / 2 + 4}" text-anchor="middle" font-size="11" fill="${C.fg3}">${this._t('next_prices_none')}</text>`);
         }
-        const picked = this._selected(sm);
-        for (const b of sm.blocks) {
-            const y = lanesY + b.lane * (laneH + 4);
-            const color = KIND_COLOR[b.kind] || C.home;
-            const on = !!picked && picked.key === b.key;
-            const go = (e) => { e.stopPropagation(); this._picked = b.key; };
-            parts.push(svg`<g class="blk" tabindex="0" role="button" aria-label="${this._blockTitle(b)}" @click=${go}
-                    @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } }}>
-                <rect x="${x(b.x0)}" y="${y}" width="${Math.max(6, x(b.x1) - x(b.x0))}" height="${laneH}" rx="4" fill="${color}"
-                    fill-opacity="${b.run ? 1 : .55}" stroke="${color}" stroke-width="${on ? 2 : 1}" stroke-dasharray="${b.run ? nothing : '3 2'}"></rect></g>`);
+        // plan lane
+        if (!d.rows.length) {
+            parts.push(svg`<text x="${W / 2}" y="${planY + rowH / 2 + 4}" text-anchor="middle" font-size="11" fill="${C.fg3}">${this._t('next_plan_nothing_window')}</text>`);
         }
-        for (const t of sm.ticks) {
-            parts.push(svg`<text x="${x(t.x)}" y="${axisY}" font-size="10" fill="${C.fg3}" text-anchor="${t.x === 0 ? 'start' : t.x === 1 ? 'end' : 'middle'}">${t.label}</text>`);
+        d.rows.forEach((r, i) => {
+            const y = planY + i * rowH;
+            const color = KIND_COLOR[r.kind] || C.home;
+            parts.push(svg`<line x1="0" x2="${W}" y1="${y + rowH / 2}" y2="${y + rowH / 2}" stroke="var(--n-line)"></line>`);
+            for (const b of r.blocks) {
+                const x0 = X(b.s), x1 = X(b.e), w = Math.max(3, x1 - x0 - 1.5);
+                const key = r.key + ':' + b.s;
+                const on = this._picked === key;
+                const title = `${this._rowName(r)} · ${this._hhmm(new Date(b.s))} – ${this._hhmm(new Date(b.e))}${b.kwh > 0.05 ? ' · ' + this._kwh(b.kwh) : ''}`;
+                const go = (e) => { e.stopPropagation(); this._picked = on ? null : key; };
+                parts.push(svg`<g class="blk" tabindex="0" role="button" aria-label="${title}" @click=${go}
+                        @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } }}>
+                    <rect x="${x0 + 0.75}" y="${y + 4}" width="${w}" height="${rowH - 8}" rx="${Math.min(7, w / 4)}" fill="${color}"
+                        fill-opacity="${b.provisional ? 0.45 : (b.past ? 0.35 : 1)}" stroke="${on ? 'var(--n-fg)' : (b.provisional ? color : 'none')}"
+                        stroke-width="${on ? 2 : 1}" stroke-dasharray="${b.provisional ? '3 2' : nothing}"><title>${title}</title></rect>
+                    ${b.kwh > 0.05 && w > 48 ? svg`<text x="${x0 + 0.75 + w / 2}" y="${y + rowH / 2 + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#10161c" pointer-events="none">${this._fmt(b.kwh, 1)} kWh</text>` : nothing}
+                </g>`);
+            }
+        });
+        // past mask, now line, axis
+        const nowIn = d.now >= d.win.start && d.now < d.win.end;
+        if (nowIn) {
+            const nx = X(d.now);
+            parts.push(svg`<rect x="0" y="${sy0 - 4}" width="${nx}" height="${planEnd - sy0 + 4}" fill="var(--n-card)" opacity=".42" pointer-events="none"></rect>`);
+            const right = nx > W - 70;
+            parts.push(svg`<line x1="${nx}" x2="${nx}" y1="10" y2="${planEnd}" stroke="${C.accent}" stroke-width="2" stroke-linecap="round" pointer-events="none"></line>
+                <circle cx="${nx}" cy="10" r="3.5" fill="${C.accent}"></circle>
+                <text x="${right ? nx - 6 : nx + 6}" y="13.5" text-anchor="${right ? 'end' : 'start'}" font-size="10.5" font-weight="700" fill="${C.accent}">${this._t('next_now_marker')} ${this._hhmm(new Date(d.now))}</text>`);
         }
-        if (sm.lines.now !== null) {
-            const nx = x(sm.lines.now), right = sm.lines.now > 0.85;
-            parts.push(svg`<line x1="${nx}" x2="${nx}" y1="${top - 6}" y2="${lanesY + lanesH}" stroke="${C.accent}" stroke-width="1.5"></line>
-                <text x="${right ? nx - 4 : nx + 4}" y="${top + 8}" font-size="10" fill="${C.accent}" font-weight="500" text-anchor="${right ? 'end' : 'start'}">${this._t('next_now_marker')}</text>`);
+        for (const tk of chartTicks(d.win, d.tz, lay.narrow ? 6 : 3)) {
+            const tx = X(tk.t);
+            const anchor = tx < 10 ? 'start' : tx > W - 10 ? 'end' : 'middle';
+            parts.push(svg`<line x1="${tx}" x2="${tx}" y1="${planEnd}" y2="${planEnd + 4}" stroke="var(--n-line)"></line>
+                <text x="${tx}" y="${axisY}" text-anchor="${anchor}" font-size="10" fill="${C.fg3}">${tk.label}</text>
+                ${tk.midnight ? svg`<text x="${tx}" y="${axisY + 13}" text-anchor="${anchor}" font-size="9.5" fill="${C.fg3}">${this._t(this._range === 'today' ? 'next_today' : 'next_tomorrow').toLowerCase()}</text>` : nothing}`);
         }
-        if (sm.lines.departure) {
-            const dx = x(sm.lines.departure.x), right = sm.lines.departure.x > 0.8;
-            parts.push(svg`<line x1="${dx}" x2="${dx}" y1="${top - 6}" y2="${lanesY + lanesH}" stroke="${C.fg2}" stroke-width="1.5" stroke-dasharray="3 3"></line>
-                <text x="${right ? dx - 4 : dx + 4}" y="${top + 8}" font-size="10" fill="${C.fg2}" font-weight="500" text-anchor="${right ? 'end' : 'start'}">${sm.lines.departure.label} ${this._t('next_car_ready')}</text>`);
+        // hover layer and crosshair
+        if (this._hover !== null && this._hover >= d.win.start && this._hover < d.win.end) {
+            const hx = X(this._hover);
+            parts.push(svg`<line x1="${hx}" x2="${hx}" y1="${sy0 - 6}" y2="${planEnd}" stroke="var(--n-fg)" stroke-width="1" opacity=".55" pointer-events="none"></line>`);
         }
-        return svg`<svg class="chart" viewBox="0 0 ${w} ${H}" width="${w}" height="${H}" role="img" aria-label="${this._t('next_price_and_plan')}">${parts}</svg>`;
+        const pick = (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+            return d.win.start + f * span;
+        };
+        parts.push(svg`<rect x="0" y="0" width="${W}" height="${planY - 4}" fill="transparent"
+            @pointermove=${(e) => { if (e.pointerType === 'mouse') this._hover = pick(e); }}
+            @pointerleave=${(e) => { if (e.pointerType === 'mouse') this._hover = null; }}
+            @click=${(e) => { const t = pick(e); this._hover = this._hover !== null && Math.abs(this._hover - t) < span / 48 ? null : t; }}></rect>`);
+        return { lay, svg: svg`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${this._t('next_price_and_plan')}">${parts}</svg>` };
     }
 
-    /** Today after sunset: what the sun made. Otherwise: the forecast, said as one. */
-    _sunLabel(sm) {
-        const made = this._num('sensor.sem_daily_solar_energy');
-        const down = this._str('sun.sun') === 'below_horizon' && new Date().getHours() >= 12;
-        if (sm.day !== 'tomorrow' && down && made !== null) return this._tf('next_sun_made_kwh', { kwh: this._fmt(made, 1) });
-        return this._tf('next_sun_forecast_kwh', { kwh: this._fmt(sm.sun.kwh, 1) });
+    _tooltip(d, lay) {
+        if (this._hover === null || this._hover < d.win.start || this._hover >= d.win.end) return nothing;
+        const t = this._hover;
+        const p = priceAt(d.price, t);
+        const sp = d.sun.points.find((x) => x.s <= t && t < x.e);
+        const runs = runningAt(d.rows, t);
+        const x = lay.LBL + (t - d.win.start) / (d.win.end - d.win.start) * lay.W;
+        const left = Math.max(0, Math.min(lay.LBL + lay.W - 200, x + 10));
+        return html`<div class="tip" style="left:${left}px;top:${lay.price[1] - 30}px">
+            <div><b>${this._hhmm(new Date(t))}</b></div>
+            ${p !== null ? html`<div>${this._tf('next_tip_price', { price: this._fmt(p, 3), cur: this._currency() })}</div>` : nothing}
+            ${sp ? html`<div>${this._tf(sp.actual ? 'next_tip_sun_made' : 'next_tip_sun_fc', { kwh: this._fmt(sp.kwh, 2) })}</div>` : nothing}
+            ${runs.map((r) => html`<div><i style="background:${KIND_COLOR[r.kind]}"></i>${this._rowName(r)}</div>`)}
+        </div>`;
     }
 
-    _legend(sm) {
-        const t = (k) => this._t(k);
-        const cheap = (sm?.bands?.cheap || []).length > 0;
-        const dear = (sm?.bands?.expensive || []).length > 0;
-        const item = (color, label, op = 1) => html`<span><i style="background:${color};opacity:${op}"></i>${label}</span>`;
-        return html`<div class="legend">
-            ${item(C.ev, t('next_src_car'))}${item(C.battery_in, t('next_battery_charging'))}${item(C.battery_out, t('next_battery_to_house'))}
-            ${item(C.home, t('next_loads'))}${item(C.solar, t('next_src_forecast'), .4)}${cheap ? item(C.good, t('next_cheap'), .3) : nothing}${dear ? item(C.bad, t('next_expensive'), .3) : nothing}
-            <span class="dim">${t('next_dashed_hint')}</span></div>`;
+    _labels(d, lay) {
+        const lab = (y, icon, color, text, sub = '') => html`<div class="lab" style="top:${y}px;width:${lay.LBL - 6}px;--c:${color}" title="${text}">
+            ${this._icon(icon)}${lay.narrow ? nothing : html`<span>${text}${sub ? html`<small>${sub}</small>` : nothing}</span>`}</div>`;
+        return html`
+            ${lab((lay.sun[0] + lay.sun[1]) / 2, 'mdi:white-balance-sunny', C.solar, this._t('next_lane_sun'))}
+            ${lab((lay.price[0] + lay.price[1]) / 2, 'mdi:cash', C.fg3, this._t('next_lane_price'), `${this._currency()}/kWh`)}
+            ${d.rows.map((r, i) => lab(lay.planY + i * lay.rowH + lay.rowH / 2, KIND_ICON[r.kind] || 'mdi:power-plug', KIND_COLOR[r.kind], this._rowLabel(r)))}`;
     }
 
     _stripPills(plan) {
@@ -307,7 +496,7 @@ class SEMNextPlanCard extends SEMNextBase {
         if (plan.fits === true) out.push(this._pill(t('next_fits_yes'), 'ok', { icon: 'mdi:check' }));
         else if (plan.fits === false) out.push(this._pill(t('next_fits_no'), 'warn'));
         if (plan.computed_at) out.push(this._pill(this._tf('next_made_at', { time: this._hhmm(plan.computed_at) })));
-        if (this._day === 'tomorrow') {
+        if (this._range === 'tomorrow') {
             const tmw = plan.tomorrow;
             const prices = tmw ? ' · ' + t(tmw.prices === 'final' ? 'next_prices_final' : 'next_prices_pending') : '';
             out.push(this._pill(t('next_pill_provisional') + prices));
@@ -317,95 +506,25 @@ class SEMNextPlanCard extends SEMNextBase {
         return out;
     }
 
-    _stripSec(plan, m) {
+    _stripSec(plan) {
         const t = (k) => this._t(k);
-        const sm = this._strip(plan);
-        const sel = this._selected(sm);
-        const hasStrip = sm.bars.length > 0 || sm.blocks.length > 0 || !!sm.sun;
-        const seg = this._seg([{ key: 'today', label: t('next_today') }, { key: 'tomorrow', label: t('next_tomorrow') }], this._day,
-            (k) => { this._day = k; this._picked = null; }, { small: true });
+        const d = this._chartData(plan);
+        const seg0 = () => this._seg([{ key: 'today', label: t('next_today') }, { key: 'next', label: t('next_range_next') }, { key: 'tomorrow', label: t('next_tomorrow') }],
+            this._range, (k) => { this._range = k; this._picked = null; this._hover = null; writeRange(k); }, { small: true });
+        // nothing to draw at all: say so, no empty clock
+        if (!d.sun.points.length && !d.price.steps.length && d.price.price === null && !d.rows.length && this._sunFallbackKwh(d) === null) {
+            return this._sec(t('next_price_and_plan'), html`<p class="help">${t('next_plan_none')}</p>`, { cls: 'span2', extra: seg0() });
+        }
+        const { lay, svg: chart } = this._chartSvg(d, plan);
+        const fb = focusBlock(d.rows, d.now, this._picked);
+        const seg = seg0();
         const body = html`
-            ${hasStrip ? html`<div class="strip">${this._stripSvg(sm)}</div>` : html`<p class="help">${t('next_plan_none')}</p>`}
-            ${hasStrip ? this._legend(sm) : nothing}
-            ${sel ? html`<div class="reason" style="--c:${KIND_COLOR[sel.kind] || C.home}">${this._icon(sel.run ? 'mdi:play-circle' : 'mdi:clock-outline')}
-                    <div class="t"><b>${this._blockName(sel)}</b> · ${this._blockSpan(sel)}${sel.kwh > 0.05 ? ' · ' + this._kwh(sel.kwh) : ''}
-                    <div class="sm muted">${this._blockReason(sel, plan)}</div></div></div>`
-                : (hasStrip ? html`<div class="reason">${this._icon('mdi:gesture-tap')}<div class="t"><b>${t('next_tap_block')}</b><div class="sm muted">${t('next_tap_block_sub')}</div></div></div>` : nothing)}
-            <div class="btns" style="margin-top:10px">
-                ${this._btn(t(this._lanes ? 'next_hide_lanes' : 'next_show_lanes'), () => { this._lanes = !this._lanes; }, { small: true, icon: 'mdi:chart-timeline' })}
-                ${this._stripPills(plan)}
-            </div>
-            ${this._lanes ? (m.computedAt ? html`${this._timeline(m)}
-                ${this._pickedText ? html`<div class="reason"><b>${this._pickedText.title}</b><span class="sm muted">${this._pickedText.text}</span></div>` : nothing}`
-                : html`<p class="help">${t('next_plan_none')}</p>`) : nothing}`;
+            <div class="pc" style="padding-left:${lay.LBL}px;height:${lay.H}px">${this._labels(d, lay)}${chart}${this._tooltip(d, lay)}</div>
+            ${fb ? html`<div class="reason" style="--c:${KIND_COLOR[fb.row.kind] || C.home}">${this._icon(fb.run ? 'mdi:play-circle' : 'mdi:clock-outline')}
+                    <div class="t"><b>${this._rowName(fb.row)}</b> · ${this._hhmm(new Date(fb.s))} – ${this._hhmm(new Date(fb.e))}${fb.kwh > 0.05 ? ' · ' + this._kwh(fb.kwh) : ''}
+                    <div class="sm muted">${this._focusReason(fb, plan)}</div></div></div>` : nothing}
+            <div class="btns" style="margin-top:10px">${this._stripPills(plan)}</div>`;
         return this._sec(t('next_price_and_plan'), body, { cls: 'span2', extra: seg });
-    }
-
-    // ── the per-device lanes fold (the one-tap-deeper view) ──
-    _timeline(m) {
-        const lanes = m.lanes;
-        const rows = 1 + (m.price ? 1 : 0) + lanes.length;
-        const H = TOP + rows * ROW + BOTTOM;
-        const x = (f) => L + f * (W - L - 8);
-        let r = 0;
-        const parts = [];
-        const laneLabel = (label, i) => svg`<text x="4" y="${TOP + i * ROW + ROW * 0.64}" font-size="11" font-weight="600" fill="${C.fg2}">${label}</text>
-            <line x1="${L}" y1="${TOP + (i + 1) * ROW}" x2="${W - 8}" y2="${TOP + (i + 1) * ROW}" stroke="var(--n-line)"></line>`;
-        // Sun lane: a bell over the daylight span.
-        parts.push(laneLabel(this._t('next_lane_sun'), r));
-        if (m.sun) {
-            const pts = [];
-            for (let i = 0; i <= 24; i++) {
-                const f = i / 24;
-                const fx = m.sun.x0 + (m.sun.x1 - m.sun.x0) * f;
-                const y = TOP + r * ROW + ROW * 0.9 - Math.sin(Math.PI * f) * ROW * 0.78;
-                pts.push(`${x(fx).toFixed(1)},${y.toFixed(1)}`);
-            }
-            parts.push(svg`<polygon points="${x(m.sun.x0)},${TOP + r * ROW + ROW * 0.9} ${pts.join(' ')} ${x(m.sun.x1)},${TOP + r * ROW + ROW * 0.9}" fill="${C.solar}" opacity="0.35" stroke="${C.solar}" stroke-width="1.5" stroke-dasharray="4 3"></polygon>`);
-            if (Number.isFinite(m.sun.kwh)) parts.push(svg`<text x="${x((m.sun.x0 + m.sun.x1) / 2)}" y="${TOP + r * ROW + ROW * 0.45}" font-size="10" font-weight="600" text-anchor="middle" fill="${C.fg}">${this._fmt(m.sun.kwh, 1)} kWh</text>`);
-        }
-        r++;
-        if (m.price) {
-            parts.push(laneLabel(this._t('next_lane_price'), r));
-            const max = Math.max(...m.price.map((p) => p.price), 0.01);
-            for (const p of m.price) {
-                const h = Math.max(3, (ROW - 8) * (p.price / max));
-                parts.push(svg`<rect x="${x(p.x0) + 0.5}" y="${TOP + r * ROW + ROW - 4 - h}" width="${Math.max(1, x(p.x1) - x(p.x0) - 1)}" height="${h}" fill="${p.cheap ? C.good : LANE_COLORS.price}" opacity="0.8"></rect>`);
-            }
-            r++;
-        }
-        lanes.forEach((lane, li) => {
-            parts.push(laneLabel(lane.label || this._t(lane.labelKey), r));
-            lane.blocks.forEach((b, bi) => {
-                const key = `${li}:${bi}`;
-                const picked = this._pickedText && this._pickedText.key === key;
-                parts.push(svg`<rect x="${x(b.x0) + 1}" y="${TOP + r * ROW + 5}" width="${Math.max(2, x(b.x1) - x(b.x0) - 2)}" height="${ROW - 10}" rx="6"
-                    fill="${b.color || lane.color}" opacity="${this._pickedText && !picked ? 0.5 : 0.9}"
-                    stroke="${b.dashed ? C.fg : 'none'}" stroke-width="1" stroke-dasharray="${b.dashed ? '3 3' : nothing}"
-                    style="cursor:pointer" @click=${() => this._pick(key, lane, b)}></rect>`);
-            });
-            r++;
-        });
-        const ticks = m.ticks.map((t) => svg`<line x1="${x(t.x)}" y1="${TOP - 6}" x2="${x(t.x)}" y2="${TOP + rows * ROW}" stroke="var(--n-line)"></line>
-            <text x="${x(t.x)}" y="${TOP + rows * ROW + 14}" font-size="10" text-anchor="middle" fill="${C.fg2}">${t.label}</text>`);
-        return html`<div class="tl"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${this._t('next_timeline')}">
-            ${ticks}${parts}
-            <line x1="${x(0)}" y1="${TOP - 10}" x2="${x(0)}" y2="${TOP + rows * ROW}" stroke="${C.accent}" stroke-width="2"></line>
-            <text x="${x(0) + 4}" y="${TOP - 12}" font-size="10" font-weight="700" fill="${C.accent}">${this._t('next_now_marker')}</text>
-        </svg></div>`;
-    }
-
-    _pick(key, lane, b) {
-        this._pickedText = this._pickedText && this._pickedText.key === key ? null
-            : { key, title: `${lane.label || this._t(lane.labelKey)} · ${this._span(b)}`, text: this._tf(b.reasonKey, b.params).replace(/\s+/g, ' ').trim() };
-        this.requestUpdate();
-    }
-
-    _span(b) {
-        const m = this._m;
-        if (!m) return '';
-        const at = (f) => this._hhmm(new Date(m.start + f * (m.end - m.start)));
-        return `${at(b.x0)} → ${at(b.x1)}`;
     }
 
     // ── per device ──
@@ -653,7 +772,7 @@ class SEMNextPlanCard extends SEMNextBase {
 
     // ── lead ──
     _lead(plan, m) {
-        if (this._day === 'tomorrow') {
+        if (this._range === 'tomorrow') {
             const sun = this._num('sensor.sem_forecast_tomorrow_kwh');
             const sunLine = sun !== null ? this._tf('next_plan_tmw_main', { sun: this._fmt(sun, 1) }) : '';
             const tmw = plan.tomorrow;
@@ -678,9 +797,8 @@ class SEMNextPlanCard extends SEMNextBase {
         const stamp = String(plan.computed_at || '');
         if (stamp !== this._localStamp) { this._local = {}; this._localStamp = stamp; }
         const m = this._model();
-        this._m = m;
         return this._frame(this._lead(plan, m), html`<div class="grid">
-            ${this._stripSec(plan, m)}
+            ${this._stripSec(plan)}
             ${this._deviceSec(plan)}
             ${this._expectedSec(plan, m)}
             ${this._decisionsSec()}
@@ -691,7 +809,7 @@ class SEMNextPlanCard extends SEMNextBase {
 semDefineCard('sem-next-plan-card', SEMNextPlanCard, {
     type: 'sem-next-plan-card',
     name: 'SEM · Plan',
-    description: 'The day as one strip: prices, sun, the plan per device, the one-night overrides and today\'s decisions',
+    description: 'Sun, price and plan on one clock, the plan per device, the one-night overrides and today\'s decisions',
     documentationURL:
         'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-next-plan-card',
     preview: true,
