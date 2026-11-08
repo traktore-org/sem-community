@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { nowLead, fill, planLead, kwhOf } from '../src/util/next-lead.js';
 import { laneModel, nextClock } from '../src/util/next-timeline.js';
-import { freshness, ageLabel, sourceRows } from '../src/util/next-freshness.js';
+import { freshness, ageLabel, sourceRows, newestUpdate } from '../src/util/next-freshness.js';
 
 const t = (k) => ({
     next_lead_car_grid: 'Night. The car charges from the grid at {amps} A, {kwh} kWh to go, done by {time}.',
@@ -121,4 +121,14 @@ test('a load without a block gets no lane; chargers and the battery are never li
     assert.ok(ids.includes('load:boiler'), 'a planned load has a lane');
     assert.ok(!ids.includes('load:pump'), 'an unplanned load has none');
     assert.ok(!ids.includes('load:ev_charger') && !ids.includes('load:battery:primary'), 'no duplicates');
+});
+
+test('updated time: the newest live power reading, not solar held at 0', () => {
+    const st = {
+        'sensor.sem_solar_power': { state: '0', last_updated: '2026-11-08T17:31:00Z' },
+        'sensor.sem_grid_power': { state: '-4200', last_updated: '2026-11-08T18:09:00Z' },
+        'sensor.sem_battery_power': { state: 'unavailable', last_updated: '2026-11-08T18:09:30Z' },
+    };
+    assert.equal(newestUpdate(st), '2026-11-08T18:09:00.000Z');
+    assert.equal(newestUpdate({}), null);
 });

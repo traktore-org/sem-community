@@ -35,6 +35,22 @@ export function freshness(stateObj, nowMs = Date.now(), { okS = null, oldS = nul
     return 'off';
 }
 
+export const POWER_ENTITIES = ['sensor.sem_solar_power', 'sensor.sem_grid_power', 'sensor.sem_battery_power',
+    'sensor.sem_home_consumption_power', 'sensor.sem_ev_power'];
+
+/** The newest last_updated among readings that answer. One reading that holds
+ *  its value (solar at 0 all night) does not make the others look old. */
+export function newestUpdate(states, ids = POWER_ENTITIES) {
+    let best = null;
+    for (const id of ids) {
+        const st = states?.[id];
+        if (!st || st.state === 'unavailable' || st.state === 'unknown') continue;
+        const t = Date.parse(st.last_updated || '');
+        if (Number.isFinite(t) && (best === null || t > best)) best = t;
+    }
+    return best === null ? null : new Date(best).toISOString();
+}
+
 /** Human age: 12 s · 4 min · 2 h. */
 export function ageLabel(seconds) {
     if (seconds === null || !Number.isFinite(seconds)) return '';

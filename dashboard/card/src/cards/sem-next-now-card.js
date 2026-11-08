@@ -21,6 +21,7 @@ import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
 import { splitStrategyReason } from '../util/next-strategy-reason.js';
 import { plainReason } from '../util/why-rows.js';
+import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
 
 const IDS = [
@@ -305,7 +306,7 @@ class SEMNextNowCard extends SEMNextBase {
     }
 
     _updatedPill() {
-        const lu = this._hass?.states['sensor.sem_solar_power']?.last_updated;
+        const lu = newestUpdate(this._hass?.states);
         const ago = this._ago(lu, this._tick);
         return ago ? this._pill(this._tf('next_updated_ago', { ago })) : nothing;
     }
