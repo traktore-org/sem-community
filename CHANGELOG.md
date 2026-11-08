@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **Energy flows add up to your meters** (#1324). A missed reading no longer shortens the split or shows export the meter never counted.
 - 🐛 **The night plan's cost now counts what the house buys after the battery runs out** (#1325). It showed empty before.
+- 🐛 **A load SEM never saw running says "not measured yet"** instead of a made-up 1 kW (#1326).
 - ✨ **SEM Next**: a second dashboard, five screens — one power bar, the plan on the price strip, devices you can reorder, settings as sentences (#1321).
 
 # [2.3.0-beta.8] — 07.11.2026

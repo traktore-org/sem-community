@@ -58,7 +58,8 @@ export function loadBody(card, row) {
     const live = row.powerEntity ? card._powerW(row.powerEntity) : null;
     const on = row.isOn || (live !== null && live > 10) || (measureOnly && live !== null);
     const powerText = on && live !== null ? card._kw(live)
-        : (row.rating > 0 ? html`<span class="dim">~${card._kw(row.rating)}</span>` : (live === null ? '—' : card._kw(live)));
+        : (row.rating > 0 ? (row.ratingMeasured ? html`<span class="dim">~${card._kw(row.rating)}</span>` : html`<span class="dim">${card._t('rating_not_measured')}</span>`)
+            : (live === null ? '—' : card._kw(live)));
     const minMin = parseFloat(g.daily_min_runtime_min) || 0, maxMin = parseFloat(g.daily_max_runtime_min) || 0;
     const today = row.progress ? Number(row.progress.runtime_today_min) : null;
     const todayText = today === null || !Number.isFinite(today) ? '—'

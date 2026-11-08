@@ -2663,7 +2663,8 @@
     "next_sun_made_kwh": "slunce dnes dalo {kwh} kWh",
     "next_lead_house_battery": "Dům běží na baterii.",
     "next_lead_house_grid": "Dům běží ze sítě.",
-    "next_lead_house_sun": "Dům běží na slunce."
+    "next_lead_house_sun": "Dům běží na slunce.",
+    "rating_not_measured": "zatím neměřeno"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5329,7 +5330,8 @@
     "next_sun_made_kwh": "solen gav {kwh} kWh i dag",
     "next_lead_house_battery": "Huset kører på batteriet.",
     "next_lead_house_grid": "Huset kører på nettet.",
-    "next_lead_house_sun": "Huset kører på solen."
+    "next_lead_house_sun": "Huset kører på solen.",
+    "rating_not_measured": "ikke målt endnu"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -7995,7 +7997,8 @@
     "next_sun_made_kwh": "Sonne lieferte heute {kwh} kWh",
     "next_lead_house_battery": "Das Haus läuft mit der Batterie.",
     "next_lead_house_grid": "Das Haus läuft mit dem Netz.",
-    "next_lead_house_sun": "Das Haus läuft mit der Sonne."
+    "next_lead_house_sun": "Das Haus läuft mit der Sonne.",
+    "rating_not_measured": "noch nicht gemessen"
   },
   "en": {
     "% of limit": "% of limit",
@@ -10661,7 +10664,8 @@
     "next_sun_made_kwh": "sun made {kwh} kWh today",
     "next_lead_house_battery": "The house runs on the battery.",
     "next_lead_house_grid": "The house runs on the grid.",
-    "next_lead_house_sun": "The house runs on the sun."
+    "next_lead_house_sun": "The house runs on the sun.",
+    "rating_not_measured": "not measured yet"
   },
   "es": {
     "% of limit": "% del límite",
@@ -13327,7 +13331,8 @@
     "next_sun_made_kwh": "el sol dio {kwh} kWh hoy",
     "next_lead_house_battery": "La casa funciona con la batería.",
     "next_lead_house_grid": "La casa funciona con la red.",
-    "next_lead_house_sun": "La casa funciona con el sol."
+    "next_lead_house_sun": "La casa funciona con el sol.",
+    "rating_not_measured": "aún sin medir"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -15993,7 +15998,8 @@
     "next_sun_made_kwh": "aurinko tuotti tänään {kwh} kWh",
     "next_lead_house_battery": "Talo toimii akulla.",
     "next_lead_house_grid": "Talo toimii verkkosähköllä.",
-    "next_lead_house_sun": "Talo toimii aurinkosähköllä."
+    "next_lead_house_sun": "Talo toimii aurinkosähköllä.",
+    "rating_not_measured": "ei vielä mitattu"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -18659,7 +18665,8 @@
     "next_sun_made_kwh": "le soleil a produit {kwh} kWh aujourd’hui",
     "next_lead_house_battery": "La maison fonctionne sur la batterie.",
     "next_lead_house_grid": "La maison fonctionne sur le réseau.",
-    "next_lead_house_sun": "La maison fonctionne au soleil."
+    "next_lead_house_sun": "La maison fonctionne au soleil.",
+    "rating_not_measured": "pas encore mesuré"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -21325,7 +21332,8 @@
     "next_sun_made_kwh": "a nap ma {kwh} kWh-t adott",
     "next_lead_house_battery": "A ház az akkumulátorról megy.",
     "next_lead_house_grid": "A ház a hálózatról megy.",
-    "next_lead_house_sun": "A ház napenergiáról megy."
+    "next_lead_house_sun": "A ház napenergiáról megy.",
+    "rating_not_measured": "még nincs mérve"
   },
   "it": {
     "% of limit": "% del limite",
@@ -23991,7 +23999,8 @@
     "next_sun_made_kwh": "il sole ha dato {kwh} kWh oggi",
     "next_lead_house_battery": "La casa va a batteria.",
     "next_lead_house_grid": "La casa va con la rete.",
-    "next_lead_house_sun": "La casa va a sole."
+    "next_lead_house_sun": "La casa va a sole.",
+    "rating_not_measured": "non ancora misurato"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -26657,7 +26666,8 @@
     "next_sun_made_kwh": "zon leverde vandaag {kwh} kWh",
     "next_lead_house_battery": "Het huis draait op de batterij.",
     "next_lead_house_grid": "Het huis draait op het net.",
-    "next_lead_house_sun": "Het huis draait op de zon."
+    "next_lead_house_sun": "Het huis draait op de zon.",
+    "rating_not_measured": "nog niet gemeten"
   },
   "no": {
     "% of limit": "% av grense",
@@ -29323,7 +29333,8 @@
     "next_sun_made_kwh": "solen ga {kwh} kWh i dag",
     "next_lead_house_battery": "Huset går på batteriet.",
     "next_lead_house_grid": "Huset går på nettet.",
-    "next_lead_house_sun": "Huset går på solen."
+    "next_lead_house_sun": "Huset går på solen.",
+    "rating_not_measured": "ikke målt ennå"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -31989,7 +32000,8 @@
     "next_sun_made_kwh": "słońce dało dziś {kwh} kWh",
     "next_lead_house_battery": "Dom działa na baterii.",
     "next_lead_house_grid": "Dom działa z sieci.",
-    "next_lead_house_sun": "Dom działa na słońcu."
+    "next_lead_house_sun": "Dom działa na słońcu.",
+    "rating_not_measured": "jeszcze nie zmierzono"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -34655,7 +34667,8 @@
     "next_sun_made_kwh": "o sol deu {kwh} kWh hoje",
     "next_lead_house_battery": "A casa funciona com a bateria.",
     "next_lead_house_grid": "A casa funciona com a rede.",
-    "next_lead_house_sun": "A casa funciona com o sol."
+    "next_lead_house_sun": "A casa funciona com o sol.",
+    "rating_not_measured": "ainda não medido"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -37321,7 +37334,8 @@
     "next_sun_made_kwh": "soarele a dat azi {kwh} kWh",
     "next_lead_house_battery": "Casa merge pe baterie.",
     "next_lead_house_grid": "Casa merge din rețea.",
-    "next_lead_house_sun": "Casa merge pe soare."
+    "next_lead_house_sun": "Casa merge pe soare.",
+    "rating_not_measured": "încă nemăsurat"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -39987,7 +40001,8 @@
     "next_sun_made_kwh": "solen gav {kwh} kWh i dag",
     "next_lead_house_battery": "Huset går på batteriet.",
     "next_lead_house_grid": "Huset går på nätet.",
-    "next_lead_house_sun": "Huset går på solen."
+    "next_lead_house_sun": "Huset går på solen.",
+    "rating_not_measured": "inte uppmätt än"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -42653,6 +42668,7 @@
     "next_sun_made_kwh": "今天太阳发电 {kwh} kWh",
     "next_lead_house_battery": "房子正在使用电池供电。",
     "next_lead_house_grid": "房子正在使用电网供电。",
-    "next_lead_house_sun": "房子正在使用太阳能供电。"
+    "next_lead_house_sun": "房子正在使用太阳能供电。",
+    "rating_not_measured": "尚未测量"
   }
 }
