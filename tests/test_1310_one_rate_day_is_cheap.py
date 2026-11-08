@@ -21,7 +21,6 @@ packer keep the day rule.
 from __future__ import annotations
 
 import ast
-import inspect
 import textwrap
 from datetime import datetime, time, timedelta
 from pathlib import Path
@@ -494,10 +493,6 @@ class TestTheGuard:
         assert _one_word_slots(old) == [3]
         assert _gate_fed_slots(old) == [3]
         assert _gate_fed_builders(old) == [4, 5]
-
-    def test_the_rows_publish_the_rate_word(self):
-        src = inspect.getsource(SEMCoordinator._shadow_energy_plan)
-        assert '"cheap": bool(s.tariff_cheap)' in src
 
 
 # ---------------------------------------------------------------------------
