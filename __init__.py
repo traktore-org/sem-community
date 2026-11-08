@@ -3440,6 +3440,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         # (#1084) the Why? card reads the decision log over this command
         from .decision_ws import async_register_websocket as _why_ws
         _why_ws(hass)
+        # (#1321) the Plan chart's hourly sun forecast
+        from .solar_forecast_ws import async_register_websocket as _sun_ws
+        _sun_ws(hass)
         # (#1174) the plain sentences the logbook names a decision with
         from .plain_reasons import async_load_plain_reasons
         await async_load_plain_reasons(hass)
