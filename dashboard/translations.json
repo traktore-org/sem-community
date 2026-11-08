@@ -2646,7 +2646,11 @@
     "next_zone_tonight": "dnes v noci",
     "next_chargers_n": "nabíječky: {n}",
     "next_show_sankey": "Zobrazit Sankey ›",
-    "next_bar_idle": "Právě neteče žádná energie."
+    "next_bar_idle": "Právě neteče žádná energie.",
+    "next_open_all": "Otevřít vše",
+    "next_fold_all": "Sbalit vše",
+    "next_open_device": "Zobrazit podrobnosti",
+    "next_fold_device": "Skrýt podrobnosti"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5295,7 +5299,11 @@
     "next_zone_tonight": "i nat",
     "next_chargers_n": "{n} lader(e)",
     "next_show_sankey": "Vis Sankey ›",
-    "next_bar_idle": "Der løber ingen strøm lige nu."
+    "next_bar_idle": "Der løber ingen strøm lige nu.",
+    "next_open_all": "Åbn alle",
+    "next_fold_all": "Fold alle sammen",
+    "next_open_device": "Vis detaljer",
+    "next_fold_device": "Skjul detaljer"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -7944,7 +7952,11 @@
     "next_zone_tonight": "heute Nacht",
     "next_chargers_n": "{n} Wallbox(en)",
     "next_show_sankey": "Sankey zeigen ›",
-    "next_bar_idle": "Gerade fliesst kein Strom."
+    "next_bar_idle": "Gerade fliesst kein Strom.",
+    "next_open_all": "Alle öffnen",
+    "next_fold_all": "Alle einklappen",
+    "next_open_device": "Details zeigen",
+    "next_fold_device": "Details ausblenden"
   },
   "en": {
     "% of limit": "% of limit",
@@ -10593,7 +10605,11 @@
     "next_zone_tonight": "tonight",
     "next_chargers_n": "{n} charger(s)",
     "next_show_sankey": "Show Sankey ›",
-    "next_bar_idle": "Nothing is flowing right now."
+    "next_bar_idle": "Nothing is flowing right now.",
+    "next_open_all": "Open all",
+    "next_fold_all": "Fold all",
+    "next_open_device": "Show details",
+    "next_fold_device": "Hide details"
   },
   "es": {
     "% of limit": "% del límite",
@@ -13242,7 +13258,11 @@
     "next_zone_tonight": "esta noche",
     "next_chargers_n": "{n} cargador(es)",
     "next_show_sankey": "Mostrar Sankey ›",
-    "next_bar_idle": "Ahora mismo no fluye energía."
+    "next_bar_idle": "Ahora mismo no fluye energía.",
+    "next_open_all": "Abrir todo",
+    "next_fold_all": "Plegar todo",
+    "next_open_device": "Mostrar detalles",
+    "next_fold_device": "Ocultar detalles"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -15891,7 +15911,11 @@
     "next_zone_tonight": "tänä yönä",
     "next_chargers_n": "{n} laturi(a)",
     "next_show_sankey": "Näytä Sankey ›",
-    "next_bar_idle": "Juuri nyt sähköä ei kulje."
+    "next_bar_idle": "Juuri nyt sähköä ei kulje.",
+    "next_open_all": "Avaa kaikki",
+    "next_fold_all": "Sulje kaikki",
+    "next_open_device": "Näytä tiedot",
+    "next_fold_device": "Piilota tiedot"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -18540,7 +18564,11 @@
     "next_zone_tonight": "cette nuit",
     "next_chargers_n": "{n} borne(s)",
     "next_show_sankey": "Afficher le Sankey ›",
-    "next_bar_idle": "Aucune énergie ne circule en ce moment."
+    "next_bar_idle": "Aucune énergie ne circule en ce moment.",
+    "next_open_all": "Tout ouvrir",
+    "next_fold_all": "Tout replier",
+    "next_open_device": "Afficher les détails",
+    "next_fold_device": "Masquer les détails"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -21189,7 +21217,11 @@
     "next_zone_tonight": "ma éjjel",
     "next_chargers_n": "{n} töltő",
     "next_show_sankey": "Sankey megjelenítése ›",
-    "next_bar_idle": "Most nem folyik energia."
+    "next_bar_idle": "Most nem folyik energia.",
+    "next_open_all": "Összes kinyitása",
+    "next_fold_all": "Összes becsukása",
+    "next_open_device": "Részletek mutatása",
+    "next_fold_device": "Részletek elrejtése"
   },
   "it": {
     "% of limit": "% del limite",
@@ -23838,7 +23870,11 @@
     "next_zone_tonight": "stanotte",
     "next_chargers_n": "{n} colonnina/e",
     "next_show_sankey": "Mostra Sankey ›",
-    "next_bar_idle": "Al momento non scorre energia."
+    "next_bar_idle": "Al momento non scorre energia.",
+    "next_open_all": "Apri tutto",
+    "next_fold_all": "Chiudi tutto",
+    "next_open_device": "Mostra dettagli",
+    "next_fold_device": "Nascondi dettagli"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -26487,7 +26523,11 @@
     "next_zone_tonight": "vannacht",
     "next_chargers_n": "{n} lader(s)",
     "next_show_sankey": "Sankey tonen ›",
-    "next_bar_idle": "Er stroomt nu geen energie."
+    "next_bar_idle": "Er stroomt nu geen energie.",
+    "next_open_all": "Alles openen",
+    "next_fold_all": "Alles inklappen",
+    "next_open_device": "Details tonen",
+    "next_fold_device": "Details verbergen"
   },
   "no": {
     "% of limit": "% av grense",
@@ -29136,7 +29176,11 @@
     "next_zone_tonight": "i natt",
     "next_chargers_n": "{n} lader(e)",
     "next_show_sankey": "Vis Sankey ›",
-    "next_bar_idle": "Det går ingen strøm akkurat nå."
+    "next_bar_idle": "Det går ingen strøm akkurat nå.",
+    "next_open_all": "Åpne alle",
+    "next_fold_all": "Fold sammen alle",
+    "next_open_device": "Vis detaljer",
+    "next_fold_device": "Skjul detaljer"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -31785,7 +31829,11 @@
     "next_zone_tonight": "tej nocy",
     "next_chargers_n": "ładowarki: {n}",
     "next_show_sankey": "Pokaż Sankey ›",
-    "next_bar_idle": "Teraz nie płynie energia."
+    "next_bar_idle": "Teraz nie płynie energia.",
+    "next_open_all": "Otwórz wszystko",
+    "next_fold_all": "Zwiń wszystko",
+    "next_open_device": "Pokaż szczegóły",
+    "next_fold_device": "Ukryj szczegóły"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -34434,7 +34482,11 @@
     "next_zone_tonight": "esta noite",
     "next_chargers_n": "{n} carregador(es)",
     "next_show_sankey": "Mostrar Sankey ›",
-    "next_bar_idle": "Neste momento não flui energia."
+    "next_bar_idle": "Neste momento não flui energia.",
+    "next_open_all": "Abrir tudo",
+    "next_fold_all": "Recolher tudo",
+    "next_open_device": "Mostrar detalhes",
+    "next_fold_device": "Ocultar detalhes"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -37083,7 +37135,11 @@
     "next_zone_tonight": "în această noapte",
     "next_chargers_n": "{n} încărcător(e)",
     "next_show_sankey": "Arată Sankey ›",
-    "next_bar_idle": "Acum nu circulă energie."
+    "next_bar_idle": "Acum nu circulă energie.",
+    "next_open_all": "Deschide tot",
+    "next_fold_all": "Restrânge tot",
+    "next_open_device": "Arată detaliile",
+    "next_fold_device": "Ascunde detaliile"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -39732,7 +39788,11 @@
     "next_zone_tonight": "i natt",
     "next_chargers_n": "{n} laddare",
     "next_show_sankey": "Visa Sankey ›",
-    "next_bar_idle": "Just nu flödar ingen ström."
+    "next_bar_idle": "Just nu flödar ingen ström.",
+    "next_open_all": "Öppna alla",
+    "next_fold_all": "Fäll ihop alla",
+    "next_open_device": "Visa detaljer",
+    "next_fold_device": "Dölj detaljer"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -42381,6 +42441,10 @@
     "next_zone_tonight": "今晚",
     "next_chargers_n": "{n} 个充电桩",
     "next_show_sankey": "显示 Sankey ›",
-    "next_bar_idle": "目前没有能量流动。"
+    "next_bar_idle": "目前没有能量流动。",
+    "next_open_all": "全部展开",
+    "next_fold_all": "全部收起",
+    "next_open_device": "显示详情",
+    "next_fold_device": "隐藏详情"
   }
 }

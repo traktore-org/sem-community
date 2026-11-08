@@ -258,6 +258,7 @@ function makeCard(st, extra = {}) {
 
 test('the card renders every device with its body, the surplus section and the lead', () => {
     const el = makeCard(states());
+    el._all = true;
     const out = text(el.render());
     assert.match(out, /next_dev_lead2/);
     assert.match(out, /next_surplus_peak/);
@@ -270,6 +271,30 @@ test('the card renders every device with its body, the surplus section and the l
     }
     assert.doesNotMatch(out, /undefined|NaN/);
     assert.equal(el._rowsNow().map((r) => r.id).join(','), 'load_device_keba,heat_pump,hot_water,battery');
+});
+
+test('loads start folded, chargers and the battery open; a tap and All settings open them', () => {
+    const el = makeCard(states());
+    const rows = el._rowsNow();
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    assert.equal(el._isOpen(byId.load_device_keba), true);
+    assert.equal(el._isOpen(byId.battery), true);
+    assert.equal(el._isOpen(byId.heat_pump), false);
+    let out = text(el.render());
+    assert.doesNotMatch(out, /help_mode_surplus/);
+    assert.match(out, /next_open_all/);
+    el._toggleOpen(byId.heat_pump);
+    assert.equal(el._isOpen(byId.heat_pump), true);
+    el._toggleOpen(byId.battery);
+    assert.equal(el._isOpen(byId.battery), false);
+    el._setAllOpen(rows, true);
+    assert.ok(rows.every((r) => el._isOpen(r)));
+    out = text(el.render());
+    assert.match(out, /help_mode_surplus/);
+    assert.match(out, /next_fold_all/);
+    el._setAllOpen(rows, false);
+    el._all = true;
+    assert.ok(rows.every((r) => el._isOpen(r)));
 });
 
 test('observer mode disables the controls and reorder writes the order on Done', async () => {

@@ -67,7 +67,23 @@ const CHARGER_ENTITIES = [
     ['number', 'ev_kwh_per_100km'], ['number', 'ev_phases'], ['button', 'pause_charging'], ['binary_sensor', 'connected'],
 ];
 
+const OPEN_KEY = 'sem-next-devices-open';
+function readOpen() {
+    try { const v = JSON.parse(window.localStorage.getItem(OPEN_KEY) || 'null'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; }
+}
+function writeOpen(map) {
+    try { window.localStorage.setItem(OPEN_KEY, JSON.stringify(map)); } catch (e) { /* private window: nothing kept */ }
+}
+
 const devicesCss = css`
+    .grid { align-items: start; grid-template-columns: minmax(0, 1fr); max-width: 980px; }
+    .dev.folded .body { display: none; }
+    .dev.folded .head { margin-bottom: 0; }
+    .dev .fold { border: 0; background: none; color: var(--n-fg3); cursor: pointer; padding: 4px; border-radius: 8px; display: inline-flex; }
+    .dev .fold ha-icon { transition: transform .15s; }
+    .dev:not(.folded) .fold ha-icon { transform: rotate(180deg); }
+    .reorder .dev .fold { display: none; }
+    .dev .name.tap { cursor: pointer; }
     .period button.pill { border: 0; cursor: pointer; }
     .grid.reorder { grid-template-columns: 1fr; }
     .dev.dragging { opacity: .95; z-index: 20; position: relative; box-shadow: 0 10px 26px rgba(0, 0, 0, .35); cursor: grabbing; }
@@ -88,13 +104,14 @@ const devicesCss = css`
 class SEMNextDevicesCard extends SEMNextBase {
     static get styles() { return [nextCss, devicesCss]; }
     static get properties() {
-        return { ...super.properties, _edit: { state: true }, _reorder: { state: true }, _tick: { state: true } };
+        return { ...super.properties, _edit: { state: true }, _reorder: { state: true }, _open: { state: true }, _tick: { state: true } };
     }
 
     constructor() {
         super();
         this._edit = null;
         this._reorder = false;
+        this._open = readOpen();
         this._tick = 0;
         this._work = null;      // the rows while reordering
         this._held = null;      // the order just written, until the sensor has it
@@ -342,6 +359,26 @@ class SEMNextDevicesCard extends SEMNextBase {
         } catch (err) { this._showError(err); }
     }
 
+    // ── fold ──
+    /** Chargers and batteries start open, loads folded; a tap is remembered. */
+    _isOpen(row) {
+        if (this._all) return true;
+        const v = this._open[row.id];
+        return v === undefined ? row.type !== 'load' : !!v;
+    }
+
+    _toggleOpen(row) {
+        this._open = { ...this._open, [row.id]: !this._isOpen(row) };
+        writeOpen(this._open);
+    }
+
+    _setAllOpen(rows, open) {
+        const next = { ...this._open };
+        for (const r of rows) next[r.id] = open;
+        this._open = next;
+        writeOpen(next);
+    }
+
     // ── reorder ──
     _toggleReorder() {
         if (this._reorder) {
@@ -575,14 +612,17 @@ class SEMNextDevicesCard extends SEMNextBase {
             : (w !== null && (row.type !== 'load' || w > 10 || row.isOn) ? this._kw(w)
                 : (row.rating > 0 ? html`<span class="dim">~${this._kw(row.rating)}</span>` : (w === null ? '' : this._kw(w))));
         const dis = this._obs();
-        const body = row.type === 'charger' ? chargerBody(this, row) : row.type === 'battery' ? batteryBody(this, row) : loadBody(this, row);
+        const open = !this._reorder && this._isOpen(row);
+        const body = !open ? nothing
+            : row.type === 'charger' ? chargerBody(this, row) : row.type === 'battery' ? batteryBody(this, row) : loadBody(this, row);
         const locked = (row.dependsOn || []).length > 0;
-        return html`<section class="card dev" data-id=${row.id} style="--c:${color}">
+        const toggle = () => { if (!this._reorder) this._toggleOpen(row); };
+        return html`<section class="card dev ${open ? '' : 'folded'}" data-id=${row.id} style="--c:${color}">
             <div class="head">
                 <span class="handle" title=${locked ? t('locked_under_parent') : t('drag_to_reorder')}
                     @pointerdown=${locked ? nothing : (e) => this._dragStart(e, row.id)}>${this._icon(locked ? 'mdi:subdirectory-arrow-right' : 'mdi:drag-vertical')}</span>
                 <span class="rank" title=${t('next_priority')}>${i + 1}</span>
-                <div class="name">${this._icon(row.icon)}<span>${row.name}</span>${this._pill(this._tf(pill.key, pill.params), pill.cls)}</div>
+                <div class="name tap" @click=${toggle}>${this._icon(row.icon)}<span>${row.name}</span>${this._pill(this._tf(pill.key, pill.params), pill.cls)}</div>
                 <span class="live muted sm">${liveText}</span>
                 ${row.type === 'load' && !row.lockedByOperator ? this._pill(t(verdictKey(row)), '', { icon: 'mdi:hand-back-left-outline' }) : nothing}
                 <div class="arrows">
@@ -590,8 +630,10 @@ class SEMNextDevicesCard extends SEMNextBase {
                     <button type="button" data-mv="1" aria-label=${t('move_down')} ?disabled=${locked || dis} @click=${() => this._move(row.id, 1)}>${this._icon('mdi:arrow-down')}</button>
                 </div>
                 ${row.type === 'load' ? html`<button type="button" class="gear" aria-label=${t('configure')} @click=${() => this._showConfigureModal(row.id, row.name)}>${this._icon('mdi:cog-outline')}</button>` : nothing}
+                <button type="button" class="fold" aria-expanded=${open ? 'true' : 'false'} aria-label=${t(open ? 'next_fold_device' : 'next_open_device')}
+                    @click=${toggle}>${this._icon('mdi:chevron-down')}</button>
             </div>
-            <div class="body">${body}</div></section>`;
+            ${open ? html`<div class="body">${body}</div>` : nothing}</section>`;
     }
 
     render() {
@@ -608,6 +650,10 @@ class SEMNextDevicesCard extends SEMNextBase {
             ${this._btn(this._reorder ? t('next_done_btn') : t('next_reorder'), () => this._toggleReorder(),
                 { primary: this._reorder, icon: this._reorder ? 'mdi:check' : 'mdi:swap-vertical', disabled: dis || n < 2 })}
             <button type="button" class="pill" @click=${() => this._go('/sem-dashboard/config')}>${this._icon('mdi:plus', 's')}${t('next_add_device')}</button>
+            ${!this._reorder && !this._all && n > 1 ? (() => {
+                const allOpen = rows.every((r) => this._isOpen(r));
+                return html`<button type="button" class="pill" @click=${() => this._setAllOpen(rows, !allOpen)}>${this._icon(allOpen ? 'mdi:unfold-less-horizontal' : 'mdi:unfold-more-horizontal', 's')}${t(allOpen ? 'next_fold_all' : 'next_open_all')}</button>`;
+            })() : nothing}
             ${this._reorder ? html`<span class="dim sm">${t('next_reorder_hint')}</span>` : nothing}
             ${dis ? html`<span class="dim sm">${t('next_observing_hint')}</span>` : nothing}
         </div>`;
