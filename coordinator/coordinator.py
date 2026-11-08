@@ -335,7 +335,9 @@ def plan_decision_core(plan) -> tuple:
             blocks, demands, whys,
             str(plan.get("takeover")),
             bool(plan.get("fits")),
-            round(float(plan.get("total_cost") or 0.0), 2),
+            # (#1325) the PLACED demands' cost is the decision; the house's
+            # own grid draw follows the trajectory (TRAJECTORY_KEYS).
+            round(float(plan.get("device_cost", plan.get("total_cost")) or 0.0), 2),
             str(plan.get("battery_fleet_partial")),
             arb_core,
             fsell_core,
@@ -375,7 +377,10 @@ def plan_day_remaining_kwh(owner) -> float:
 # (#1184) Never a key a plan gate acts on: ``forecast_sell`` sat here, so a
 # kept stamp sold at the new build's times. ``slots`` stays — a gate reads
 # only its span, and every build of one period ends it at the night end.
-TRAJECTORY_KEYS = ("slots", "self_consumption", "summary")
+TRAJECTORY_KEYS = ("slots", "self_consumption", "summary",
+                   # (#1325) the house's grid draw re-derives from the live
+                   # battery walk like ``slots``; the total follows it.
+                   "house_grid", "total_cost")
 
 
 def keep_decision_take_trajectory(prev: dict, fresh: dict, now_iso: str) -> dict:
@@ -12837,7 +12842,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     **({"batt": True} if s.home_batt_kwh > 1e-6 else {}),
                 } for s in rows]
 
-            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None):
+            def _cost_keys(ledger_slots, device_cost):
+                # (#1325) The night's cost is the placed demands PLUS what the
+                # house buys once the battery's walk is done. Unknown stays
+                # None with its reason, never 0.
+                from .energy_planner import house_grid_cost
+                house = house_grid_cost(ledger_slots)
+                total = (None if house["cost"] is None or device_cost is None
+                         else round(float(device_cost) + house["cost"], 4))
+                return {
+                    "total_cost": total,
+                    "device_cost": device_cost,
+                    "house_grid": house,
+                }
+
+            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None, ledger_slots=None):
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
                 # broken one; burned three placement bugs learning that).
@@ -12903,6 +12922,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
+                    **_cost_keys(ledger_slots, 0.0),
                 }
 
             # ── The Night Ledger (spec) ─────────────────────────────────
@@ -13186,7 +13206,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # any other demand — that branch used to be unreachable.)
                 self._energy_plan_shadow = _quiet_answer(
                     arb, fsell, _slot_rows(ledger),
-                    predict_self_consumption(ledger, []).as_dict())
+                    predict_self_consumption(ledger, []).as_dict(),
+                    ledger_slots=ledger)
                 return True
             plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
                               max_discharge_w=max_discharge_w,
@@ -13249,7 +13270,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._energy_plan_shadow = {
                 "computed_at": now.isoformat(),
                 "fits": plan.fits,
-                "total_cost": plan.total_cost,
+                **_cost_keys(ledger, plan.total_cost),
                 "takeover": (plan.takeover.isoformat()
                              if plan.takeover is not None else None),
                 "demands": rows,

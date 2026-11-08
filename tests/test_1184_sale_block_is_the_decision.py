@@ -54,6 +54,8 @@ BASE = {
     "replan_cause": "initial",
     "fits": True,
     "total_cost": 1.2,
+    # (#1325) new plans carry the placed demands' cost apart from the total
+    "device_cost": 1.2,
     "takeover": None,
     "battery_fleet_partial": None,
     "demands": [{"id": "ev:k", "status": "fits",
@@ -146,6 +148,9 @@ TRAJECTORY_CASES = {
               {**BASE["slots"][1], "soc_kwh": 0.5}],
     "self_consumption": {"share": 0.3},
     "summary": ["a grey afternoon"],
+    # (#1325) the house's own grid draw follows the battery walk
+    "house_grid": {"kwh": 2.3, "cost": 0.83, "reason": None},
+    "total_cost": 2.03,
 }
 
 
