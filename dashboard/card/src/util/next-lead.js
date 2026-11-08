@@ -40,7 +40,7 @@ export function nowLead(f) {
     const exporting = Number.isFinite(f.gridW) && f.gridW > IMPORT_W;
     const sun = Number.isFinite(f.solarW) && f.solarW > SUN_W;
     const batToHouse = Number.isFinite(f.batteryW) && f.batteryW < -IMPORT_W;
-    const source = { key: batToHouse ? 'next_src_battery' : (importing ? 'next_src_grid' : 'next_src_sun'), params: {} };
+    const houseKey = batToHouse ? 'next_lead_house_battery' : (importing ? 'next_lead_house_grid' : 'next_lead_house_sun');
     const prefix = f.observer ? 'next_lead_observing' : (f.night ? 'next_lead_night' : 'next_lead_day');
     const blind = !Number.isFinite(f.solarW) && !Number.isFinite(f.gridW) && !Number.isFinite(f.batteryW);
 
@@ -64,7 +64,7 @@ export function nowLead(f) {
     } else if (sun) {
         main = { key: 'next_lead_sun_house', params: {} };
     } else {
-        main = { key: 'next_lead_house_on', params: { source } };
+        main = { key: houseKey, params: {} };
     }
 
     let sub = null;

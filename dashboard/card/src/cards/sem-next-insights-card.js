@@ -203,7 +203,9 @@ class SEMNextInsightsCard extends SEMNextBase {
     _periodLabel() { return this._t((PERIOD_KEYS.find(([k]) => k === this._period) || PERIOD_KEYS[0])[1]); }
 
     _lead() {
-        const house = this._pt('house'), cost = this._pt('cost'), saved = this._pt('saved');
+        const house = this._pt('house'), cost = this._pt('cost');
+        const sunSaved = this._pt('saved'), battSaved = this._pt('batt_saved');
+        const saved = sunSaved === null && battSaved === null ? null : (sunSaved || 0) + (battSaved || 0);
         // One basis with the Shares ring: SEM's own-supply rate, which does not
         // count battery energy that came from the grid. It is a daily figure.
         const own = this._period === 'day' ? this._num(S + 'autarky_rate') : null;

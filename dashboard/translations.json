@@ -2031,7 +2031,6 @@
     "next_lead_sun_export": "Slunce pokrývá dům, {kw} kW jde do sítě.",
     "next_lead_sun_battery": "Slunce nejdřív nabíjí baterii, {soc} %.",
     "next_lead_sun_house": "Slunce pokrývá dům.",
-    "next_lead_house_on": "Dům běží na {source}.",
     "next_lead_unknown": "SEM teď nemá žádná data.",
     "next_src_battery": "Baterie",
     "next_src_grid": "Síť",
@@ -2661,7 +2660,10 @@
     "next_batt_below_floor": "nyní {soc} %, do rána potřebuje {floor} %, proto napájí jen dům",
     "next_batt_above_floor": "nyní {soc} %, nad {floor} % smí pomáhat i jiným",
     "next_sun_forecast_kwh": "předpověď slunce {kwh} kWh",
-    "next_sun_made_kwh": "slunce dnes dalo {kwh} kWh"
+    "next_sun_made_kwh": "slunce dnes dalo {kwh} kWh",
+    "next_lead_house_battery": "Dům běží na baterii.",
+    "next_lead_house_grid": "Dům běží ze sítě.",
+    "next_lead_house_sun": "Dům běží na slunce."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4695,7 +4697,6 @@
     "next_lead_sun_export": "Solen dækker huset, {kw} kW går til nettet.",
     "next_lead_sun_battery": "Solen lader først batteriet, {soc} %.",
     "next_lead_sun_house": "Solen dækker huset.",
-    "next_lead_house_on": "Huset kører på {source}.",
     "next_lead_unknown": "SEM har ingen målinger lige nu.",
     "next_src_battery": "Batteri",
     "next_src_grid": "Net",
@@ -5325,7 +5326,10 @@
     "next_batt_below_floor": "nu {soc} %, skal have {floor} % til morgen, så den forsyner kun huset",
     "next_batt_above_floor": "nu {soc} %, må hjælpe andre over {floor} %",
     "next_sun_forecast_kwh": "solprognose {kwh} kWh",
-    "next_sun_made_kwh": "solen gav {kwh} kWh i dag"
+    "next_sun_made_kwh": "solen gav {kwh} kWh i dag",
+    "next_lead_house_battery": "Huset kører på batteriet.",
+    "next_lead_house_grid": "Huset kører på nettet.",
+    "next_lead_house_sun": "Huset kører på solen."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -7359,7 +7363,6 @@
     "next_lead_sun_export": "Die Sonne deckt das Haus, {kw} kW gehen ins Netz.",
     "next_lead_sun_battery": "Die Sonne lädt zuerst die Batterie, {soc} %.",
     "next_lead_sun_house": "Die Sonne deckt das Haus.",
-    "next_lead_house_on": "Das Haus läuft über {source}.",
     "next_lead_unknown": "SEM hat gerade keine Messwerte.",
     "next_src_battery": "Batterie",
     "next_src_grid": "Netz",
@@ -7989,7 +7992,10 @@
     "next_batt_below_floor": "jetzt {soc} %, braucht {floor} % bis zum Morgen, versorgt daher nur das Haus",
     "next_batt_above_floor": "jetzt {soc} %, darf über {floor} % auch anderen helfen",
     "next_sun_forecast_kwh": "Sonnenprognose {kwh} kWh",
-    "next_sun_made_kwh": "Sonne lieferte heute {kwh} kWh"
+    "next_sun_made_kwh": "Sonne lieferte heute {kwh} kWh",
+    "next_lead_house_battery": "Das Haus läuft mit der Batterie.",
+    "next_lead_house_grid": "Das Haus läuft mit dem Netz.",
+    "next_lead_house_sun": "Das Haus läuft mit der Sonne."
   },
   "en": {
     "% of limit": "% of limit",
@@ -10023,7 +10029,6 @@
     "next_lead_sun_export": "The sun covers the house, {kw} kW go to the grid.",
     "next_lead_sun_battery": "The sun charges the battery first, {soc} %.",
     "next_lead_sun_house": "The sun covers the house.",
-    "next_lead_house_on": "The house runs on {source}.",
     "next_lead_unknown": "SEM has no readings right now.",
     "next_src_battery": "Battery",
     "next_src_grid": "Grid",
@@ -10653,7 +10658,10 @@
     "next_batt_below_floor": "now {soc} %, needs {floor} % by morning, so it powers only the house",
     "next_batt_above_floor": "now {soc} %, may help others above {floor} %",
     "next_sun_forecast_kwh": "sun forecast {kwh} kWh",
-    "next_sun_made_kwh": "sun made {kwh} kWh today"
+    "next_sun_made_kwh": "sun made {kwh} kWh today",
+    "next_lead_house_battery": "The house runs on the battery.",
+    "next_lead_house_grid": "The house runs on the grid.",
+    "next_lead_house_sun": "The house runs on the sun."
   },
   "es": {
     "% of limit": "% del límite",
@@ -12687,7 +12695,6 @@
     "next_lead_sun_export": "El sol cubre la casa, {kw} kW van a la red.",
     "next_lead_sun_battery": "El sol carga primero la batería, {soc} %.",
     "next_lead_sun_house": "El sol cubre la casa.",
-    "next_lead_house_on": "La casa funciona con {source}.",
     "next_lead_unknown": "SEM no tiene lecturas ahora mismo.",
     "next_src_battery": "Batería",
     "next_src_grid": "Red",
@@ -13317,7 +13324,10 @@
     "next_batt_below_floor": "ahora {soc} %, necesita {floor} % por la mañana, así que solo alimenta la casa",
     "next_batt_above_floor": "ahora {soc} %, puede ayudar a otros por encima de {floor} %",
     "next_sun_forecast_kwh": "previsión solar {kwh} kWh",
-    "next_sun_made_kwh": "el sol dio {kwh} kWh hoy"
+    "next_sun_made_kwh": "el sol dio {kwh} kWh hoy",
+    "next_lead_house_battery": "La casa funciona con la batería.",
+    "next_lead_house_grid": "La casa funciona con la red.",
+    "next_lead_house_sun": "La casa funciona con el sol."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -15351,7 +15361,6 @@
     "next_lead_sun_export": "Aurinko kattaa talon, {kw} kW menee verkkoon.",
     "next_lead_sun_battery": "Aurinko lataa ensin akkua, {soc} %.",
     "next_lead_sun_house": "Aurinko kattaa talon.",
-    "next_lead_house_on": "Talo käyttää: {source}.",
     "next_lead_unknown": "SEM:llä ei ole nyt lukemia.",
     "next_src_battery": "Akku",
     "next_src_grid": "Verkko",
@@ -15981,7 +15990,10 @@
     "next_batt_below_floor": "nyt {soc} %, tarvitsee {floor} % aamuun, joten se syöttää vain taloa",
     "next_batt_above_floor": "nyt {soc} %, voi auttaa muita yli {floor} %:n",
     "next_sun_forecast_kwh": "aurinkoennuste {kwh} kWh",
-    "next_sun_made_kwh": "aurinko tuotti tänään {kwh} kWh"
+    "next_sun_made_kwh": "aurinko tuotti tänään {kwh} kWh",
+    "next_lead_house_battery": "Talo toimii akulla.",
+    "next_lead_house_grid": "Talo toimii verkkosähköllä.",
+    "next_lead_house_sun": "Talo toimii aurinkosähköllä."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -18015,7 +18027,6 @@
     "next_lead_sun_export": "Le soleil couvre la maison, {kw} kW partent au réseau.",
     "next_lead_sun_battery": "Le soleil charge d'abord la batterie, {soc} %.",
     "next_lead_sun_house": "Le soleil couvre la maison.",
-    "next_lead_house_on": "La maison tourne sur {source}.",
     "next_lead_unknown": "SEM n'a pas de mesures pour l'instant.",
     "next_src_battery": "Batterie",
     "next_src_grid": "Réseau",
@@ -18645,7 +18656,10 @@
     "next_batt_below_floor": "{soc} % maintenant, il faut {floor} % au matin, donc elle n’alimente que la maison",
     "next_batt_above_floor": "{soc} % maintenant, peut aider d’autres au-dessus de {floor} %",
     "next_sun_forecast_kwh": "prévision solaire {kwh} kWh",
-    "next_sun_made_kwh": "le soleil a produit {kwh} kWh aujourd’hui"
+    "next_sun_made_kwh": "le soleil a produit {kwh} kWh aujourd’hui",
+    "next_lead_house_battery": "La maison fonctionne sur la batterie.",
+    "next_lead_house_grid": "La maison fonctionne sur le réseau.",
+    "next_lead_house_sun": "La maison fonctionne au soleil."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -20679,7 +20693,6 @@
     "next_lead_sun_export": "A nap fedezi a házat, {kw} kW megy a hálózatba.",
     "next_lead_sun_battery": "A nap először az akkut tölti, {soc} %.",
     "next_lead_sun_house": "A nap fedezi a házat.",
-    "next_lead_house_on": "A ház ebből működik: {source}.",
     "next_lead_unknown": "A SEM-nek most nincs adata.",
     "next_src_battery": "Akku",
     "next_src_grid": "Hálózat",
@@ -21309,7 +21322,10 @@
     "next_batt_below_floor": "most {soc} %, reggelre {floor} % kell, ezért csak a házat táplálja",
     "next_batt_above_floor": "most {soc} %, {floor} % felett másoknak is segíthet",
     "next_sun_forecast_kwh": "napelőrejelzés {kwh} kWh",
-    "next_sun_made_kwh": "a nap ma {kwh} kWh-t adott"
+    "next_sun_made_kwh": "a nap ma {kwh} kWh-t adott",
+    "next_lead_house_battery": "A ház az akkumulátorról megy.",
+    "next_lead_house_grid": "A ház a hálózatról megy.",
+    "next_lead_house_sun": "A ház napenergiáról megy."
   },
   "it": {
     "% of limit": "% del limite",
@@ -23343,7 +23359,6 @@
     "next_lead_sun_export": "Il sole copre la casa, {kw} kW vanno in rete.",
     "next_lead_sun_battery": "Il sole carica prima la batteria, {soc} %.",
     "next_lead_sun_house": "Il sole copre la casa.",
-    "next_lead_house_on": "La casa va a {source}.",
     "next_lead_unknown": "SEM non ha letture al momento.",
     "next_src_battery": "Batteria",
     "next_src_grid": "Rete",
@@ -23973,7 +23988,10 @@
     "next_batt_below_floor": "ora {soc} %, servono {floor} % entro il mattino, quindi alimenta solo la casa",
     "next_batt_above_floor": "ora {soc} %, sopra {floor} % può aiutare altri",
     "next_sun_forecast_kwh": "previsione sole {kwh} kWh",
-    "next_sun_made_kwh": "il sole ha dato {kwh} kWh oggi"
+    "next_sun_made_kwh": "il sole ha dato {kwh} kWh oggi",
+    "next_lead_house_battery": "La casa va a batteria.",
+    "next_lead_house_grid": "La casa va con la rete.",
+    "next_lead_house_sun": "La casa va a sole."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -26007,7 +26025,6 @@
     "next_lead_sun_export": "De zon dekt het huis, {kw} kW gaat naar het net.",
     "next_lead_sun_battery": "De zon laadt eerst de accu, {soc} %.",
     "next_lead_sun_house": "De zon dekt het huis.",
-    "next_lead_house_on": "Het huis draait op {source}.",
     "next_lead_unknown": "SEM heeft nu geen metingen.",
     "next_src_battery": "Accu",
     "next_src_grid": "Net",
@@ -26637,7 +26654,10 @@
     "next_batt_below_floor": "nu {soc} %, heeft {floor} % nodig tot de ochtend, dus voedt alleen het huis",
     "next_batt_above_floor": "nu {soc} %, mag boven {floor} % ook anderen helpen",
     "next_sun_forecast_kwh": "zonverwachting {kwh} kWh",
-    "next_sun_made_kwh": "zon leverde vandaag {kwh} kWh"
+    "next_sun_made_kwh": "zon leverde vandaag {kwh} kWh",
+    "next_lead_house_battery": "Het huis draait op de batterij.",
+    "next_lead_house_grid": "Het huis draait op het net.",
+    "next_lead_house_sun": "Het huis draait op de zon."
   },
   "no": {
     "% of limit": "% av grense",
@@ -28671,7 +28691,6 @@
     "next_lead_sun_export": "Solen dekker huset, {kw} kW går til nettet.",
     "next_lead_sun_battery": "Solen lader batteriet først, {soc} %.",
     "next_lead_sun_house": "Solen dekker huset.",
-    "next_lead_house_on": "Huset går på {source}.",
     "next_lead_unknown": "SEM har ingen målinger akkurat nå.",
     "next_src_battery": "Batteri",
     "next_src_grid": "Nett",
@@ -29301,7 +29320,10 @@
     "next_batt_below_floor": "nå {soc} %, trenger {floor} % til morgenen, så den forsyner bare huset",
     "next_batt_above_floor": "nå {soc} %, kan hjelpe andre over {floor} %",
     "next_sun_forecast_kwh": "solprognose {kwh} kWh",
-    "next_sun_made_kwh": "solen ga {kwh} kWh i dag"
+    "next_sun_made_kwh": "solen ga {kwh} kWh i dag",
+    "next_lead_house_battery": "Huset går på batteriet.",
+    "next_lead_house_grid": "Huset går på nettet.",
+    "next_lead_house_sun": "Huset går på solen."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -31335,7 +31357,6 @@
     "next_lead_sun_export": "Słońce zasila dom, {kw} kW trafia do sieci.",
     "next_lead_sun_battery": "Słońce najpierw ładuje baterię, {soc} %.",
     "next_lead_sun_house": "Słońce zasila dom.",
-    "next_lead_house_on": "Dom zasila: {source}.",
     "next_lead_unknown": "SEM nie ma teraz odczytów.",
     "next_src_battery": "Bateria",
     "next_src_grid": "Sieć",
@@ -31965,7 +31986,10 @@
     "next_batt_below_floor": "teraz {soc} %, do rana potrzebuje {floor} %, więc zasila tylko dom",
     "next_batt_above_floor": "teraz {soc} %, powyżej {floor} % może pomagać innym",
     "next_sun_forecast_kwh": "prognoza słońca {kwh} kWh",
-    "next_sun_made_kwh": "słońce dało dziś {kwh} kWh"
+    "next_sun_made_kwh": "słońce dało dziś {kwh} kWh",
+    "next_lead_house_battery": "Dom działa na baterii.",
+    "next_lead_house_grid": "Dom działa z sieci.",
+    "next_lead_house_sun": "Dom działa na słońcu."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -33999,7 +34023,6 @@
     "next_lead_sun_export": "O sol cobre a casa, {kw} kW vão para a rede.",
     "next_lead_sun_battery": "O sol carrega primeiro a bateria, {soc} %.",
     "next_lead_sun_house": "O sol cobre a casa.",
-    "next_lead_house_on": "A casa funciona com {source}.",
     "next_lead_unknown": "O SEM não tem leituras neste momento.",
     "next_src_battery": "Bateria",
     "next_src_grid": "Rede",
@@ -34629,7 +34652,10 @@
     "next_batt_below_floor": "agora {soc} %, precisa de {floor} % até de manhã, por isso só alimenta a casa",
     "next_batt_above_floor": "agora {soc} %, acima de {floor} % pode ajudar outros",
     "next_sun_forecast_kwh": "previsão solar {kwh} kWh",
-    "next_sun_made_kwh": "o sol deu {kwh} kWh hoje"
+    "next_sun_made_kwh": "o sol deu {kwh} kWh hoje",
+    "next_lead_house_battery": "A casa funciona com a bateria.",
+    "next_lead_house_grid": "A casa funciona com a rede.",
+    "next_lead_house_sun": "A casa funciona com o sol."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -36663,7 +36689,6 @@
     "next_lead_sun_export": "Soarele acoperă casa, {kw} kW merg în rețea.",
     "next_lead_sun_battery": "Soarele încarcă mai întâi bateria, {soc} %.",
     "next_lead_sun_house": "Soarele acoperă casa.",
-    "next_lead_house_on": "Casa funcționează pe {source}.",
     "next_lead_unknown": "SEM nu are citiri acum.",
     "next_src_battery": "Baterie",
     "next_src_grid": "Rețea",
@@ -37293,7 +37318,10 @@
     "next_batt_below_floor": "acum {soc} %, are nevoie de {floor} % până dimineață, deci alimentează doar casa",
     "next_batt_above_floor": "acum {soc} %, peste {floor} % poate ajuta și altele",
     "next_sun_forecast_kwh": "prognoză solară {kwh} kWh",
-    "next_sun_made_kwh": "soarele a dat azi {kwh} kWh"
+    "next_sun_made_kwh": "soarele a dat azi {kwh} kWh",
+    "next_lead_house_battery": "Casa merge pe baterie.",
+    "next_lead_house_grid": "Casa merge din rețea.",
+    "next_lead_house_sun": "Casa merge pe soare."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -39327,7 +39355,6 @@
     "next_lead_sun_export": "Solen täcker huset, {kw} kW går till nätet.",
     "next_lead_sun_battery": "Solen laddar först batteriet, {soc} %.",
     "next_lead_sun_house": "Solen täcker huset.",
-    "next_lead_house_on": "Huset drivs av {source}.",
     "next_lead_unknown": "SEM har inga värden just nu.",
     "next_src_battery": "Batteri",
     "next_src_grid": "Nät",
@@ -39957,7 +39984,10 @@
     "next_batt_below_floor": "nu {soc} %, behöver {floor} % till morgonen, så den driver bara huset",
     "next_batt_above_floor": "nu {soc} %, får hjälpa andra över {floor} %",
     "next_sun_forecast_kwh": "solprognos {kwh} kWh",
-    "next_sun_made_kwh": "solen gav {kwh} kWh i dag"
+    "next_sun_made_kwh": "solen gav {kwh} kWh i dag",
+    "next_lead_house_battery": "Huset går på batteriet.",
+    "next_lead_house_grid": "Huset går på nätet.",
+    "next_lead_house_sun": "Huset går på solen."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -41991,7 +42021,6 @@
     "next_lead_sun_export": "光伏满足家庭用电，{kw} kW 送入电网。",
     "next_lead_sun_battery": "光伏优先给电池充电，{soc} %。",
     "next_lead_sun_house": "光伏满足家庭用电。",
-    "next_lead_house_on": "家庭用电来自{source}。",
     "next_lead_unknown": "SEM 暂无读数。",
     "next_src_battery": "电池",
     "next_src_grid": "电网",
@@ -42621,6 +42650,9 @@
     "next_batt_below_floor": "当前 {soc} %，早上前需保留 {floor} %，因此只为房屋供电",
     "next_batt_above_floor": "当前 {soc} %，高于 {floor} % 时可供其他设备使用",
     "next_sun_forecast_kwh": "太阳预测 {kwh} kWh",
-    "next_sun_made_kwh": "今天太阳发电 {kwh} kWh"
+    "next_sun_made_kwh": "今天太阳发电 {kwh} kWh",
+    "next_lead_house_battery": "房子正在使用电池供电。",
+    "next_lead_house_grid": "房子正在使用电网供电。",
+    "next_lead_house_sun": "房子正在使用太阳能供电。"
   }
 }

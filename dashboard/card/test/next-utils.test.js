@@ -10,7 +10,9 @@ import { freshness, ageLabel, sourceRows, newestUpdate } from '../src/util/next-
 
 const t = (k) => ({
     next_lead_car_grid_kw: 'Night. The car charges from the grid at {kw} kW, {kwh} kWh to go, done by {time}.',
-    next_lead_house_on: 'The house runs on {source}.',
+    next_lead_house_battery: 'The house runs on the battery.',
+    next_lead_house_grid: 'The house runs on the grid.',
+    next_lead_house_sun: 'The house runs on the sun.',
     next_src_battery: 'the battery',
     next_sub_battery_rests: 'Battery at {soc} %, below the floor of {floor} %.',
     next_sub_sun_at: 'Sun at {time}.',
@@ -31,8 +33,7 @@ test('a night grid charge names the measured kW, kWh and the deadline', () => {
 test('observer mode changes the prefix, not the facts', () => {
     const r = nowLead({ night: true, observer: true, solarW: 0, gridW: -200, batteryW: 0, car: null, battery: null });
     assert.equal(r.prefix, 'next_lead_observing');
-    assert.equal(r.main.key, 'next_lead_house_on');
-    assert.equal(r.main.params.source.key, 'next_src_grid');
+    assert.equal(r.main.key, 'next_lead_house_grid');
 });
 
 test('the house source is translated, never printed as a key', () => {
