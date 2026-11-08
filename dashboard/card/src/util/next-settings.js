@@ -167,7 +167,7 @@ export function decimalsOf(step) {
 }
 
 function nameOf(states, id) {
-    const n = states && states[id] && states[id].attributes && states[id].attributes.friendly_name;
+    const n = states?.[id]?.attributes?.friendly_name;
     return n ? String(n) : String(id);
 }
 
