@@ -66,7 +66,10 @@ export function sourceRows(states, nowMs = Date.now()) {
         const st = states?.[r.entity];
         if (!st) continue;
         const state = freshness(st, nowMs, { okS: r.okS ?? null, oldS: r.oldS ?? null });
-        rows.push({ key: r.key, entity: r.entity, state, age: ageSeconds(st, nowMs), value: st.state });
+        // An age only where a limit makes it mean something: an unchanged
+        // power reading is alive, its last_updated is just its last change.
+        const aged = r.okS != null;
+        rows.push({ key: r.key, entity: r.entity, state, age: aged ? ageSeconds(st, nowMs) : null, value: st.state });
     }
     return rows;
 }

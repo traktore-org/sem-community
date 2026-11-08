@@ -520,8 +520,8 @@ export function groups(states, t, ctx = {}) {
         const grid = text((o && o.grid_power_sensor) || ed.grid?.power);
         const battery = hasBattery(states) ? text((o && o.battery_power_sensor) || ed.battery?.power) : null;
         const gridSign = text(labels.gridSign);
-        const flipGrid = action('flip_grid_sign', 'next_flip');
-        const flipBatt = action('flip_battery_sign', 'next_flip');
+        const flipGrid = action('flip_grid_sign', 'next_flip_sign');
+        const flipBatt = action('flip_battery_sign', 'next_flip_sign');
         const house = o && o.house_power_sensor ? text(o.house_power_sensor) : text(t('next_computed'));
         const sentence = clause([
             frag(t, 'next_reads_solar', { solar }),

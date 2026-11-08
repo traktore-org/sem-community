@@ -17,7 +17,7 @@
 
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
-import { sourceRows, ageLabel, ageSeconds, freshness, SOURCE_ROWS } from '../util/next-freshness.js';
+import { sourceRows, ageLabel, freshness, SOURCE_ROWS } from '../util/next-freshness.js';
 import { plainReason, deviceName } from '../util/why-rows.js';
 import { MISSING } from '../util/missing-value.js';
 import { groups, applyPlan, pendingKey, slotText, setupItems, loadSources, unavailableCount,
@@ -160,7 +160,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const rows = sourceRows(states, now).map((r) => ({ ...r, name: this._t(r.key), ...FRESH_LOOK[r.key] }));
         for (const l of loadSources(states)) {
             const e = states[l.entity];
-            rows.push({ key: l.id, name: l.name, entity: l.entity, state: freshness(e, now), age: ageSeconds(e, now),
+            rows.push({ key: l.id, name: l.name, entity: l.entity, state: freshness(e, now), age: null,
                         icon: 'mdi:power-plug', color: C.home });
         }
         return rows;
@@ -469,9 +469,7 @@ class SEMNextSystemCard extends SEMNextBase {
         if (!this._hass) return nothing;
         const rows = this._freshRows();
         const bad = rows.filter((r) => r.state !== 'ok').length + (this._inputsDegraded() ? 1 : 0);
-        const oldest = rows.filter((r) => r.age !== null && r.state !== 'missing').sort((a, b) => b.age - a.age)[0];
-        const main = (bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok'))
-            + (oldest && oldest.age >= 60 ? ' ' + this._tf('next_sys_lead_oldest', { name: oldest.name, age: ageLabel(oldest.age) }) : '');
+        const main = bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok');
         const sub = this._obs() ? `${this._t('next_sys_sub')} ${this._t('next_observing_hint')}` : this._t('next_sys_sub');
         const t = (k) => this._t(k);
         const gs = groups(this._hass.states, t, this._ctx());

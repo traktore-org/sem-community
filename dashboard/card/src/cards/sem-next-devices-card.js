@@ -26,7 +26,7 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, swap, priorityPayload, verdictKey, activeNames } from '../util/next-devices.js';
+import { deviceRows, statePill, swap, priorityPayload, verdictKey } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
@@ -59,7 +59,7 @@ const IDS = [
 ];
 const CHARGER_ENTITIES = [
     ['sensor', 'power'], ['sensor', 'commanded_current'], ['sensor', 'daily_energy'], ['sensor', 'session_energy'],
-    ['sensor', 'session_solar_share'], ['sensor', 'vehicle_soc'], ['sensor', 'estimated_soc'],
+    ['sensor', 'session_energy_external'], ['sensor', 'session_solar_share'], ['sensor', 'vehicle_soc'], ['sensor', 'estimated_soc'],
     ['sensor', 'flow_solar_to_ev_energy'], ['sensor', 'flow_grid_to_ev_energy'], ['sensor', 'flow_battery_to_ev_energy'],
     ['select', 'charge_mode'], ['select', 'ev_target_type'], ['select', 'phase_mode'], ['time', 'target_time'],
     ['number', 'daily_ev_target'], ['number', 'daily_ev_target_max'], ['number', 'target_soc'], ['number', 'target_soc_max'],
@@ -541,38 +541,45 @@ class SEMNextDevicesCard extends SEMNextBase {
     }
 
     // ── Surplus and peak ──
+    /** The peak sensors publish kW; the formatters take W. A sensor that says W stays W. */
+    _kwSensorW(id) {
+        const v = this._num(id);
+        if (v === null) return null;
+        return (this._unitOf(id) || '').toLowerCase() === 'w' ? v : v * 1000;
+    }
+
     _surplus(rows) {
         const t = (k) => this._t(k);
         const peakE = this._hass.states['sensor.sem_target_peak_limit'];
         const total = this._num('sensor.sem_surplus_total_w');
         const given = this._num('sensor.sem_surplus_allocated_w'), free = this._num('sensor.sem_surplus_unallocated_w');
         const active = this._num('sensor.sem_surplus_active_devices'), totalN = this._num('sensor.sem_surplus_total_devices');
-        const peak = this._num('sensor.sem_consecutive_peak_15min');
-        const limit = this._num('sensor.sem_target_peak_limit');
+        const peakW = this._kwSensorW('sensor.sem_consecutive_peak_15min');
+        const limitW = this._kwSensorW('sensor.sem_target_peak_limit');
+        const limit = limitW === null ? null : limitW / 1000;
         const uncapped = isUncapped(peakE);
-        const margin = this._num('sensor.sem_peak_margin');
+        const marginW = this._kwSensorW('sensor.sem_peak_margin');
         const tiles = [];
         if (total !== null) {
             tiles.push({ label: t('next_surplus'), value: this._fmtKw(total), unit: 'kW',
                 sub: given === null && free === null ? '' : this._tf('next_given_free', { given: this._fmtKw(given ?? 0), free: this._fmtKw(free ?? 0) }) });
         }
         if (active !== null || totalN !== null) {
-            const names = activeNames(rows);
             tiles.push({ label: t('next_active'), value: active === null ? '—' : Math.round(active), unit: totalN === null ? '' : this._tf('next_of_n', { n: Math.round(totalN) }),
-                sub: names.slice(0, 4).join(', ') });
+                sub: t('next_active_sub') });
         }
         if (peakE) {
-            tiles.push({ label: t('next_peak'), value: this._fmtKw(peak), unit: uncapped ? t('uncapped') : this._tf('next_of_kw', { kw: this._fmtKw(limit) }),
-                sub: uncapped || margin === null ? t('next_15min') : this._tf('next_15min_margin', { kw: this._fmtKw(margin) }) });
+            tiles.push({ label: t('next_peak'), value: this._fmtKw(peakW), unit: uncapped ? t('uncapped') : this._tf('next_of_kw', { kw: this._fmtKw(limitW) }),
+                sub: uncapped || marginW === null ? t('next_15min') : this._tf('next_15min_margin', { kw: this._fmtKw(marginW) }) });
         }
         if (!tiles.length) return nothing;
         const pctSensor = this._num('sensor.sem_current_vs_peak_percentage');
-        const pct = uncapped ? 0 : (pctSensor !== null ? pctSensor : (limit && peak !== null ? (peak / limit) * 100 : 0));
+        const pct = uncapped ? 0 : (pctSensor !== null ? pctSensor : (limitW && peakW !== null ? (peakW / limitW) * 100 : 0));
         const dis = this._obs();
         const parts = {};
         const sent = [];
         if (peakE) {
-            parts.limit = this._inline('peak', uncapped ? t('uncapped') : this._kw(limit), () => this._numEdit('peak', {
+            parts.limit = this._inline('peak', uncapped ? t('uncapped') : this._kw(limitW), () => this._numEdit('peak', {
                 value: limit, min: 1, max: 80, step: 0.5, unit: 'kW',
                 onCommit: (v) => this._svc('update_target_peak', { target_peak_limit: v, peak_limit_unlimited: false }) }));
             parts.unlimited = this._val(uncapped ? t('next_unlimited_on') : t('next_unlimited_off'),
@@ -581,9 +588,9 @@ class SEMNextDevicesCard extends SEMNextBase {
             const slot = uncapped ? null : slotStatus({ targetKw: limit, usedKwh: peakE.attributes?.peak_slot_used_kwh, allowedW: peakE.attributes?.peak_slot_allowed_w });
             if (slot) sent.push(this._tf('next_sent_slot', { used: slot.usedKwh.toFixed(2), budget: slot.budgetKwh.toFixed(2) }));
         }
-        const month = this._num('sensor.sem_monthly_consecutive_peak');
+        const month = this._kwSensorW('sensor.sem_monthly_consecutive_peak');
         if (month !== null) sent.push(this._tf('next_sent_month_peak', { kw: this._kw(month) }));
-        const shed = this._num('sensor.sem_available_load_reduction');
+        const shed = this._kwSensorW('sensor.sem_available_load_reduction');
         if (shed !== null) sent.push(this._tf('next_sent_can_shed', { kw: this._kw(shed), n: rows.filter((r) => r.type === 'load' && r.hasControlHandle && r.isControllable).length }));
         const status = this._valLabel('load_management_status');
         const recRaw = this._str('sensor.sem_load_management_recommendation');

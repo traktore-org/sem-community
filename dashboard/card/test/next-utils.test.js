@@ -9,19 +9,21 @@ import { laneModel, nextClock } from '../src/util/next-timeline.js';
 import { freshness, ageLabel, sourceRows, newestUpdate } from '../src/util/next-freshness.js';
 
 const t = (k) => ({
-    next_lead_car_grid: 'Night. The car charges from the grid at {amps} A, {kwh} kWh to go, done by {time}.',
+    next_lead_car_grid_kw: 'Night. The car charges from the grid at {kw} kW, {kwh} kWh to go, done by {time}.',
+    next_lead_house_on: 'The house runs on {source}.',
+    next_src_battery: 'the battery',
     next_sub_battery_rests: 'Battery at {soc} %, below the floor of {floor} %.',
     next_sub_sun_at: 'Sun at {time}.',
     next_sub_two: '{a} {b}',
 }[k] || k);
 
-test('a night grid charge names amps, kWh and the deadline', () => {
+test('a night grid charge names the measured kW, kWh and the deadline', () => {
     const r = nowLead({ night: true, observer: false, solarW: 0, gridW: -4461, batteryW: 0,
         car: { present: true, charging: true, powerW: 3120, amps: 8, remainingKwh: 6.8, targetTime: '07:00' },
         battery: { soc: 20, floorPct: 91.4 }, sunAt: '07:40' });
     assert.equal(r.prefix, 'next_lead_night');
     assert.equal(fill(t(r.main.key), r.main.params, t),
-        'Night. The car charges from the grid at 8 A, 6.8 kWh to go, done by 07:00.');
+        'Night. The car charges from the grid at 3.1 kW, 6.8 kWh to go, done by 07:00.');
     assert.equal(fill(t(r.sub.key), r.sub.params, t),
         'Battery at 20 %, below the floor of 91 %. Sun at 07:40.');
 });
@@ -30,7 +32,17 @@ test('observer mode changes the prefix, not the facts', () => {
     const r = nowLead({ night: true, observer: true, solarW: 0, gridW: -200, batteryW: 0, car: null, battery: null });
     assert.equal(r.prefix, 'next_lead_observing');
     assert.equal(r.main.key, 'next_lead_house_on');
-    assert.equal(r.main.params.source, 'next_src_grid');
+    assert.equal(r.main.params.source.key, 'next_src_grid');
+});
+
+test('the house source is translated, never printed as a key', () => {
+    const r = nowLead({ night: true, observer: false, solarW: 0, gridW: 0, batteryW: -900, car: null, battery: null });
+    assert.equal(fill(t(r.main.key), r.main.params, t), 'The house runs on the battery.');
+});
+
+test('a holding battery passes no floor, so the line names none', () => {
+    const r = nowLead({ night: true, observer: false, solarW: 0, gridW: 0, batteryW: 0, car: null, battery: { soc: 54, floorPct: null } });
+    assert.equal(r.sub.key, 'next_sub_battery_at');
 });
 
 test('a missing car or battery leaves the line without them', () => {
@@ -102,6 +114,9 @@ test('freshness reads last_updated and treats unavailable as off', () => {
     const rows = sourceRows({ 'sensor.sem_solar_power': { state: '0', last_updated: at(2) } }, now);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].state, 'ok');
+    assert.equal(rows[0].age, null);   // unchanged power reading: no age shown
+    const fc = sourceRows({ 'sensor.sem_forecast_today_kwh': { state: '20', last_updated: at(3) } }, now);
+    assert.ok(fc[0].age > 0);          // a forecast has a limit, so its age counts
 });
 
 test('a load without a block gets no lane; chargers and the battery are never listed as loads', () => {

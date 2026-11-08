@@ -27,7 +27,8 @@ function fmt0(v) {
  *   night: bool, observer: bool,
  *   solarW, gridW (SEM sign: negative = import), batteryW (negative = discharge),
  *   car: { present, charging, powerW, amps, remainingKwh, targetTime } | null,
- *   battery: { soc, floorPct, bufferPct } | null,
+ *   battery: { soc, floorPct, bufferPct } | null  (floorPct only while SEM spends
+ *            the battery: a holding floor limits the car, never the house),
  *   sunAt: 'HH:MM' | '', nightStart: 'HH:MM' | '',
  * }
  * Returns { main: {key, params}, sub: {key, params} | null }.
@@ -39,7 +40,7 @@ export function nowLead(f) {
     const exporting = Number.isFinite(f.gridW) && f.gridW > IMPORT_W;
     const sun = Number.isFinite(f.solarW) && f.solarW > SUN_W;
     const batToHouse = Number.isFinite(f.batteryW) && f.batteryW < -IMPORT_W;
-    const source = batToHouse ? 'next_src_battery' : (importing ? 'next_src_grid' : 'next_src_sun');
+    const source = { key: batToHouse ? 'next_src_battery' : (importing ? 'next_src_grid' : 'next_src_sun'), params: {} };
     const prefix = f.observer ? 'next_lead_observing' : (f.night ? 'next_lead_night' : 'next_lead_day');
     const blind = !Number.isFinite(f.solarW) && !Number.isFinite(f.gridW) && !Number.isFinite(f.batteryW);
 
@@ -48,8 +49,8 @@ export function nowLead(f) {
         main = { key: 'next_lead_unknown', params: {} };
     } else if (car && car.present && car.charging) {
         if (f.night || !sun) {
-            main = { key: 'next_lead_car_grid', params: {
-                amps: fmt0(car.amps), kwh: fmt1(car.remainingKwh), time: car.targetTime || '' } };
+            main = { key: 'next_lead_car_grid_kw', params: {
+                kw: fmt1(car.powerW / 1000), kwh: fmt1(car.remainingKwh), time: car.targetTime || '' } };
             if (!Number.isFinite(car.remainingKwh)) main = { key: 'next_lead_car_charging', params: { kw: fmt1(car.powerW / 1000) } };
         } else {
             main = { key: 'next_lead_car_sun', params: { kw: fmt1(car.powerW / 1000) } };

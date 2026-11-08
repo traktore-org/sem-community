@@ -17,6 +17,7 @@
 import { SEMLitBase, html, css, svg, nothing } from './sem-lit-base.js';
 import { readNumber } from '../util/missing-value.js';
 import { fill } from '../util/next-lead.js';
+import { hhmmIn } from '../util/next-time.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 
@@ -309,10 +310,7 @@ export class SEMNextBase extends SEMLitBase {
     _obs() { return this._observer(); }
     /** All settings on? Read `this._all` (a reactive property); flip it with `_toggleAll()`. */
     _toggleAll() { setAllSettings(!this._all); }
-    _clock() {
-        const d = new Date();
-        return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-    }
+    _clock() { return hhmmIn(new Date(), this._hass?.config?.time_zone); }
     _night() {
         const s = this._str('sensor.sem_night_start_time'), e = this._str('sensor.sem_night_end_time');
         if (!s || !e) return false;
@@ -358,7 +356,7 @@ export class SEMNextBase extends SEMLitBase {
         if (typeof x === 'string' && /^\d{1,2}:\d{2}/.test(x)) return x.slice(0, 5);
         const d = x instanceof Date ? x : new Date(Date.parse(x));
         if (!Number.isFinite(d.getTime())) return String(x);
-        return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        return hhmmIn(d, this._hass?.config?.time_zone);
     }
     /** 12 s · 4 min · 2 h */
     _ago(iso, nowMs = Date.now()) {

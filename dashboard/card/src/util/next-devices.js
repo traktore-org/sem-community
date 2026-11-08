@@ -290,8 +290,3 @@ export function weekdaySummary(byWeekday, fallback = '') {
     }
     return runs;
 }
-
-/** The names of the rows that draw right now. */
-export function activeNames(rows) {
-    return (rows || []).filter((r) => r.isOn).map((r) => r.name);
-}

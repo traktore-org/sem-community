@@ -30,7 +30,7 @@ const IDS = [
     'sensor.sem_charging_state', 'sensor.sem_energy_plan', 'sensor.sem_controllable_devices_count',
     'sensor.sem_battery_dynamic_floor_pct', 'number.sem_battery_buffer_soc', 'number.sem_battery_priority_soc',
     'switch.sem_battery_may_assist_ev', 'sensor.sem_consecutive_peak_15min', 'sensor.sem_target_peak_limit',
-    'sensor.sem_current_vs_peak_percentage', 'sensor.sem_peak_margin',
+    'sensor.sem_battery_spendable_kwh', 'sensor.sem_daily_battery_savings', 'sensor.sem_monthly_battery_savings',
     'sensor.sem_daily_solar_energy', 'sensor.sem_forecast_today_kwh', 'sensor.sem_forecast_remaining_today_kwh',
     'sensor.sem_daily_grid_import_energy', 'sensor.sem_daily_grid_export_energy', 'sensor.sem_daily_home_energy',
     'sensor.sem_daily_ev_energy', 'sensor.sem_daily_battery_charge_energy', 'sensor.sem_daily_battery_discharge_energy',
@@ -186,7 +186,7 @@ class SEMNextNowCard extends SEMNextBase {
             solarW: this._powerW('sensor.sem_solar_power'), gridW: this._powerW('sensor.sem_grid_power'),
             batteryW: this._powerW('sensor.sem_battery_power'),
             car: this._carFact(),
-            battery: soc === null ? null : { soc, floorPct: this._num('sensor.sem_battery_dynamic_floor_pct'),
+            battery: soc === null ? null : { soc, floorPct: this._spending() ? this._num('sensor.sem_battery_dynamic_floor_pct') : null,
                                              bufferPct: this._num('number.sem_battery_buffer_soc') },
             sunAt: this._str('sensor.sem_night_end_time'), nightStart: this._str('sensor.sem_night_start_time'),
         };
@@ -195,11 +195,18 @@ class SEMNextNowCard extends SEMNextBase {
         const parts = [];
         const b = this._nextBlock();
         if (b) parts.push(this._tf('next_sub_next_block', { who: b.who, time: b.time, kwh: b.kwh }));
-        const floor = this._num('sensor.sem_battery_dynamic_floor_pct');
+        const floor = this._spending() ? this._num('sensor.sem_battery_dynamic_floor_pct') : null;
         if (floor !== null) parts.push(this._tf('next_why_batt_floor_short', { floor: Math.round(floor) }));
+        else if (soc !== null && this._holding()) parts.push(this._t('next_batt_holds_house'));
         const sub = parts.length ? parts.join(' ') : (r.sub ? this._tf(r.sub.key, r.sub.params) : '');
         return { main, sub };
     }
+
+    /** Tonight's floor is a limit only while SEM spends the battery; while it holds,
+     *  the battery serves the house and lends nothing to the car. */
+    _spendPhase() { return String(this._attrs('sensor.sem_battery_spendable_kwh').phase || ''); }
+    _spending() { return this._spendPhase() === 'spending'; }
+    _holding() { return this._spendPhase() === 'holding'; }
 
     // ── plan and device readers ──
 
@@ -437,7 +444,7 @@ class SEMNextNowCard extends SEMNextBase {
             return t;
         };
         const body = rows.length
-            ? html`<div class="rows">${rows.map((r) => this._row(r.icon, this._tf(r.label, r.values),
+            ? html`<div class="rows">${rows.map((r) => this._row(r.icon, this._tf(r.label === 'plan_battery_empty' ? 'next_battery_reserve_reached' : r.label, r.values),
                 r.late ? html`<span class="late">${when(r)}</span>` : when(r),
                 r.detail ? this._tf(r.detail, r.values) : '', { color: C[r.color] || C.home }))}</div>`
             : html`<p class="help">${this._t('next_nothing_planned')}</p>`;
@@ -457,24 +464,26 @@ class SEMNextNowCard extends SEMNextBase {
             rows.push(this._row('mdi:car-electric', title, evW === null ? '' : this._kw(evW), this._all ? reason : (said || detail), { color: C.ev }));
         }
         const soc = this._num('sensor.sem_battery_soc');
-        const floor = this._num('sensor.sem_battery_dynamic_floor_pct');
+        const floor = this._spending() ? this._num('sensor.sem_battery_dynamic_floor_pct') : null;
+        const holding = this._holding();
         const prio = this._num('number.sem_battery_priority_soc');
         const batt = this._powerW('sensor.sem_battery_power');
         if (soc !== null) {
             const title = batt !== null && batt < -50 ? this._t('next_why_batt_house')
                 : (batt !== null && batt > 50 ? this._t('next_why_batt_charging') : this._t('next_why_batt_rest'));
             const parts = [];
-            if (floor !== null && soc < floor) parts.push(this._tf('next_why_batt_floor', { soc: Math.round(soc), floor: Math.round(floor) }));
+            if (holding) parts.push(this._t('next_batt_holds_house'));
+            else if (floor !== null && soc < floor) parts.push(this._tf('next_why_batt_floor', { soc: Math.round(soc), floor: Math.round(floor) }));
             else if (prio !== null) parts.push(this._tf(soc >= prio ? 'next_why_batt_above_prio' : 'next_why_batt_below_prio', { soc: Math.round(soc), prio: Math.round(prio) }));
             else parts.push(this._tf('next_sub_battery_at', { soc: Math.round(soc) }));
-            if (this._str('switch.sem_battery_may_assist_ev') === 'on' && !(floor !== null && soc < floor)) parts.push(this._t('next_why_batt_assist'));
+            if (!holding && this._str('switch.sem_battery_may_assist_ev') === 'on' && !(floor !== null && soc < floor)) parts.push(this._t('next_why_batt_assist'));
             rows.push(this._row('mdi:battery-charging', title, batt === null ? `${Math.round(soc)} %` : this._kw(Math.abs(batt)), parts.join(' '), { color: batt !== null && batt > 50 ? C.battery_in : C.battery_out }));
         }
         const peak = this._num('sensor.sem_consecutive_peak_15min');
         const limit = this._hass?.states['sensor.sem_target_peak_limit'];
         const grid = this._powerW('sensor.sem_grid_power');
         if (grid !== null) {
-            const title = grid < -50 ? this._tf('next_why_import', { kw: this._fmtKw(-grid) }) : (grid > 50 ? this._tf('next_why_export', { kw: this._fmtKw(grid) }) : this._t('next_why_grid_quiet'));
+            const title = grid < -50 ? this._t('next_grid_import') : (grid > 50 ? this._t('next_grid_export') : this._t('next_why_grid_quiet'));
             const text = peak === null ? '' : (limit && !isUncapped(limit) && Number.isFinite(parseFloat(limit.state))
                 ? this._tf('next_why_peak', { kw: this._fmt(peak, 1), limit: this._fmt(parseFloat(limit.state), 1) })
                 : this._tf('next_why_peak_nolimit', { kw: this._fmt(peak, 1) }));
@@ -502,8 +511,11 @@ class SEMNextNowCard extends SEMNextBase {
 
     /** Named apart from the base's _money(v) formatter, which the tiles use. */
     _moneySec() {
-        const cost = this._num('sensor.sem_daily_costs'), saved = this._num('sensor.sem_daily_savings');
-        const mcost = this._num('sensor.sem_monthly_costs'), msaved = this._num('sensor.sem_monthly_savings');
+        const both = (a, b) => (a === null && b === null ? null : (a || 0) + (b || 0));
+        const cost = this._num('sensor.sem_daily_costs');
+        const saved = both(this._num('sensor.sem_daily_savings'), this._num('sensor.sem_daily_battery_savings'));
+        const mcost = this._num('sensor.sem_monthly_costs');
+        const msaved = both(this._num('sensor.sem_monthly_savings'), this._num('sensor.sem_monthly_battery_savings'));
         const rateEntity = this._hass?.states['sensor.sem_tariff_current_import_rate'];
         const imp = this._num('sensor.sem_tariff_current_import_rate'), exp = this._num('sensor.sem_tariff_current_export_rate');
         const level = this._str('sensor.sem_tariff_price_level') || String(rateEntity?.attributes?.price_level || '');
@@ -540,15 +552,19 @@ class SEMNextNowCard extends SEMNextBase {
         const tip = this._str('sensor.sem_energy_tip');
         if (tip) rows.push(this._row('mdi:lightbulb-outline', this._t('next_tip'), '', tip, { onClick: () => this._moreInfo('sensor.sem_energy_tip') }));
         const win = this._str('sensor.sem_best_surplus_window');
-        if (win) {
-            const rem = this._num('sensor.sem_forecast_remaining_today_kwh');
+        const rem = this._num('sensor.sem_forecast_remaining_today_kwh');
+        // The window is today's: once no sun is left today it has passed.
+        if (win && !(rem !== null && rem < 0.05)) {
             rows.push(this._row('mdi:weather-sunset', this._t('next_best_surplus'), win, rem === null ? '' : this._tf('next_kwh_remaining', { kwh: this._fmt(rem, 1) }),
                 { color: C.solar, onClick: () => this._moreInfo('sensor.sem_best_surplus_window') }));
         }
         const peak = this._num('sensor.sem_consecutive_peak_15min');
         if (peak !== null) {
             const limit = this._hass?.states['sensor.sem_target_peak_limit'];
-            const pct = this._num('sensor.sem_current_vs_peak_percentage'), margin = this._num('sensor.sem_peak_margin');
+            // %, margin and "x of y" all on the 15-minute average.
+            const lim = limit && !isUncapped(limit) ? parseFloat(limit.state) : NaN;
+            const pct = Number.isFinite(lim) && lim > 0 ? peak / lim * 100 : null;
+            const margin = Number.isFinite(lim) ? Math.max(0, lim - peak) : null;
             const value = limit ? this._tf('next_of_limit', { kw: this._fmt(peak, 1), limit: peakLimitText(limit, this._t('uncapped')) }) : `${this._fmt(peak, 1)} kW`;
             const sub = (pct === null || isUncapped(limit)) ? '' : (margin === null ? this._pct(pct) : this._tf('next_pct_margin', { pct: Math.round(pct), kw: this._fmt(margin, 1) }));
             rows.push(this._row('mdi:speedometer', this._t('next_peak_quarter'), pct !== null && pct > 90 ? html`<span class="bad">${value}</span>` : value, sub,

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
     deviceRows, statePill, swap, priorityPayload, mergedMode, modeWrites,
     overnightSource, overnightWrites, verdictKey, goalPct, targetModel, zonesModel,
-    weekdaySummary, chargerIdOf, loadKind, activeNames,
+    weekdaySummary, chargerIdOf, loadKind,
 } from '../src/util/next-devices.js';
 
 const MAP = {
@@ -105,7 +105,6 @@ test('verdict, goal progress and the names that draw', () => {
     assert.equal(verdictKey(rows[2]), 'control_verdict_may_act');
     assert.equal(goalPct(rows[2].goals, rows[2].progress), 50);
     assert.equal(goalPct({}, { runtime_today_min: 10 }), null);
-    assert.deepEqual(activeNames(rows), ['Car']);
 });
 
 test('the target bar scales SOC to 100 and kWh to the larger of max and today', () => {
@@ -327,4 +326,54 @@ test('a missing entity leaves its row out', () => {
         assert.doesNotMatch(out, new RegExp(k), k);
     }
     assert.match(out, /next_surplus/);
+});
+
+test('peak sensors are kW: tile, limit and month peak are not divided again', () => {
+    const el = makeCard(states());
+    assert.equal(el._kwSensorW('sensor.sem_target_peak_limit'), 5000);
+    assert.equal(el._kwSensorW('sensor.sem_consecutive_peak_15min'), 3500);
+    const st = states();
+    st['sensor.sem_peak_margin'] = S(1500, { unit_of_measurement: 'W' });
+    assert.equal(makeCard(st)._kwSensorW('sensor.sem_peak_margin'), 1500);
+    el._all = true;
+    const out = text(el.render());
+    assert.match(out, /3\.5/);
+    assert.equal(el._kw(el._kwSensorW('sensor.sem_monthly_consecutive_peak')), '6.1 kW');
+});
+
+test('session energy: the charger counter first, SEM counter when it reads 0', () => {
+    const st = states();
+    st['sensor.sem_charger_keba_session_energy_external'] = S(9.1);
+    let el = makeCard(st); el._all = true;
+    assert.match(text(el.render()), /9\.1 kWh/);
+    st['sensor.sem_charger_keba_session_energy_external'] = S(0);
+    el = makeCard(st); el._all = true;
+    assert.match(text(el.render()), /8\.4 kWh/);
+});
+
+test('solar + battery with an at-least target says it may use the grid at night', () => {
+    const st = states();
+    st['select.sem_charger_keba_charge_mode'] = S('solar_plus_battery', { options: ['solar_only', 'solar_plus_battery', 'off'] });
+    let el = makeCard(st); el._all = true;
+    assert.match(text(el.render()), /next_floor_uses_grid/);
+    st['number.sem_charger_keba_target_soc'] = S(0, { min: 0, max: 100, step: 5 });
+    el = makeCard(st); el._all = true;
+    assert.doesNotMatch(text(el.render()), /next_floor_uses_grid/);
+});
+
+test('a load SEM can not switch is shown as measured only, without modes or permissions', () => {
+    const st = states();
+    st['sensor.sem_controllable_devices_count'].attributes.devices.meter = {
+        name: 'Meter only', priority: 5, control_mode: 'peak_only', is_on: true, has_control_handle: false, control: null,
+        power_entity: 'sensor.hp_power', goals: {}, progress: {},
+    };
+    const el = makeCard(st); el._all = true;
+    const row = el._rowsNow().find((r) => r.id === 'meter');
+    assert.equal(row.hasControlHandle, false);
+    const out = text(el.render());
+    assert.match(out, /next_measure_only/);
+    const body = out.slice(out.indexOf('Meter only'));
+    const end = body.indexOf('</section>');
+    const section = body.slice(0, end);
+    assert.doesNotMatch(section, /next_may_switch|next_min_run_pause|requires/);
 });

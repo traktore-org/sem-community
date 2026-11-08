@@ -204,11 +204,13 @@ class SEMNextInsightsCard extends SEMNextBase {
 
     _lead() {
         const house = this._pt('house'), cost = this._pt('cost'), saved = this._pt('saved');
-        const sun = this._live() ? (this._period === 'day' ? this._num(flowId('solar', 'home')) : null) : this._sum(flowId('solar', 'home'));
+        // One basis with the Shares ring: SEM's own-supply rate, which does not
+        // count battery energy that came from the grid. It is a daily figure.
+        const own = this._period === 'day' ? this._num(S + 'autarky_rate') : null;
         const cur = this._currency();
         const period = this._periodLabel();
-        if (house !== null && house > 0 && sun !== null && cost !== null) {
-            return this._tf('next_ins_lead', { period, pct: Math.round(Math.min(100, sun / house * 100)), cost: this._fmt(cost, 2), saved: this._fmt(saved ?? 0, 2), cur });
+        if (own !== null && cost !== null) {
+            return this._tf('next_ins_lead_own', { period, pct: Math.round(Math.max(0, Math.min(100, own))), cost: this._fmt(cost, 2), saved: this._fmt(saved ?? 0, 2), cur });
         }
         if (cost !== null) return this._tf('next_ins_lead_money', { period, cost: this._fmt(cost, 2), saved: this._fmt(saved ?? 0, 2), cur });
         const solar = this._pt('solar');
@@ -282,7 +284,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const sum = i >= 0 && i < b.n
             ? html`<div class="sumrow"><span><b>${this._hoverLabel(b)}</b></span>${this._legend(layers.map(([src, c, k]) => [c, this._t(k), this._kwh(this._series(flowId(src, 'home'))[i] || 0)]))}</div>`
             : html`<div class="sumrow"><span><b>${this._kwh(total)}</b> ${this._t('next_used')}</span>
-                ${this._legend(layers.map(([src, c, k]) => [c, this._t(k), total > 0 ? this._pct(this._sum(flowId(src, 'home')) / total * 100) : '—']))}</div>`;
+                ${this._legend(layers.map(([src, c, k]) => [c, this._t(k), this._kwh(this._sum(flowId(src, 'home')))]))}</div>`;
         const main = this._sec(`${this._t('next_house_by_source')} · ${this._periodLabel()}`,
             html`${layers.length ? this._stack(model, this._t('next_house_by_source')) : this._hint()}${model.empty ? nothing : sum}`, { cls: 'span2' });
         return html`${main}${this._flowsCard()}${this._solarCard()}${this._sharesCard()}`;
@@ -384,7 +386,8 @@ class SEMNextInsightsCard extends SEMNextBase {
             rows.push(this._row('mdi:leaf', this._t('next_co2_avoided'), co2d === null ? '—' : `${this._fmt(co2d, 1)} ${unit} ${this._t('next_today').toLowerCase()}`, sub, { onClick: () => this._moreInfo(S + 'daily_co2_avoided') }));
         }
         if (!tiles.length && !rows.length) return nothing;
-        return this._sec(this._t('next_shares'), html`${tiles.length ? html`<div class="tiles">${tiles}</div>` : nothing}${rows.length ? html`<div class="rows" style="margin-top:6px">${rows}</div>` : nothing}`);
+        const title = this._period === 'day' ? this._t('next_shares') : `${this._t('next_shares')} · ${this._t('next_today')}`;
+        return this._sec(title, html`${tiles.length ? html`<div class="tiles">${tiles}</div>` : nothing}${rows.length ? html`<div class="rows" style="margin-top:6px">${rows}</div>` : nothing}`);
     }
     _fmtT(kg, unit) { return unit === 'kg' && kg >= 1000 ? `${(kg / 1000).toFixed(1)} t` : `${Math.round(kg)} ${unit}`; }
 

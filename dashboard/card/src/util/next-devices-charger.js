@@ -93,8 +93,16 @@ export function chargerBody(card, row) {
         { small: true, disabled: dis }) : nothing;
     const buffer = card._num('number.sem_battery_buffer_soc');
     const priority = card._num('number.sem_battery_priority_soc');
-    const hint = mode ? tf('charge_mode_hint_' + mode + '_surplus', {
-        buffer: buffer === null ? '—' : Math.round(buffer), priority: priority === null ? '—' : Math.round(priority) }) : '';
+    const hintP = { buffer: buffer === null ? '—' : Math.round(buffer), priority: priority === null ? '—' : Math.round(priority) };
+    // Day and night: a mode that "never imports grid" by day may still charge from the grid at night.
+    const hintNight = mode ? tf('charge_mode_hint_' + mode + '_overnight', hintP) : '';
+    const floorType = (ent('select', 'ev_target_type') && card._str(ent('select', 'ev_target_type'))) || 'kwh';
+    const floorId = floorType === 'soc' ? ent('number', 'target_soc') : ent('number', 'daily_ev_target');
+    const floorVal = floorId ? card._num(floorId) : null;
+    const floorGrid = mode === 'solar_plus_battery' && floorVal !== null && floorVal > 0
+        ? tf('next_floor_uses_grid', { value: floorType === 'soc' ? Math.round(floorVal) + ' %' : card._kwh(floorVal) }) : '';
+    const hint = mode ? [tf('charge_mode_hint_' + mode + '_surplus', hintP),
+        floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? t('next_at_night') + ': ' + hintNight : '')].filter(Boolean).join(' ') : '';
     const nextCheap = mode === 'solar_plus_cheap' && cs.ev_next_cheap_window ? card._hhmm(cs.ev_next_cheap_window) : '';
     const pausedUntil = mode === 'off' && modeAttrs.paused_until ? card._hhmm(modeAttrs.paused_until) : '';
     const resumeMode = modeAttrs.pause_resume_mode ? (t('charge_mode_' + modeAttrs.pause_resume_mode) || modeAttrs.pause_resume_mode) : '';
@@ -105,7 +113,9 @@ export function chargerBody(card, row) {
     const phases = phaseCount(card, cid);
     const daily = card._num(S('daily_energy'));
     const sunToday = sunShareToday(card, cid);
-    const session = card._num(S('session_energy'));
+    // The charger's own counter runs plug-in to plug-out; SEM's ends when charging stops.
+    const sessionExt = card._num(S('session_energy_external'));
+    const session = sessionExt !== null && sessionExt > 0 ? sessionExt : card._num(S('session_energy'));
     const sessionSun = card._num(S('session_solar_share'));
     const stats1 = [
         [t('next_power'), card._kw(powerW), html`${amps === null ? '' : Math.round(amps) + ' A'}${phaseDots(phases)}${phases === null ? '' : ' ' + tf('next_n_ph', { n: phases })}`],

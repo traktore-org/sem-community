@@ -45,7 +45,9 @@ export function loadBody(card, row) {
     const send = (property, value) => card._dev(id, property, value);
     const kind = row.kind;
     const merged = row.mergedMode;
-    const solar = merged === 'solar_only' || merged === 'solar_battery';
+    // No switch or control mapped: SEM can only measure it, so no mode, goal or permission to offer.
+    const measureOnly = !row.hasControlHandle;
+    const solar = !measureOnly && (merged === 'solar_only' || merged === 'solar_battery');
 
     // ── mode ──
     const seg = card._seg(MODES.map((m) => ({ key: m.key, label: t(m.label) })), merged,
@@ -54,7 +56,7 @@ export function loadBody(card, row) {
 
     // ── stats ──
     const live = row.powerEntity ? card._powerW(row.powerEntity) : null;
-    const on = row.isOn || (live !== null && live > 10);
+    const on = row.isOn || (live !== null && live > 10) || (measureOnly && live !== null);
     const powerText = on && live !== null ? card._kw(live)
         : (row.rating > 0 ? html`<span class="dim">~${card._kw(row.rating)}</span>` : (live === null ? '—' : card._kw(live)));
     const minMin = parseFloat(g.daily_min_runtime_min) || 0, maxMin = parseFloat(g.daily_max_runtime_min) || 0;
@@ -106,6 +108,15 @@ export function loadBody(card, row) {
         rows.push(card._row('mdi:timer-outline', t('next_min_run_pause'),
             html`${anti('min_on_time_min', 'min_on_effective_min')} / ${anti('min_off_time_min', 'min_off_effective_min')} ${t('minutes_short')}`,
             t('next_anti_cycle_sub')));
+    }
+    if (measureOnly) {
+        const phaseOnly = card._inline('ph:' + id, phaseLabel(card, row.phase), () => card._selEdit('ph:' + id, {
+            value: row.phase, options: PHASES.map((p) => ({ key: p, label: phaseLabel(card, p) })), onCommit: (p) => send('phase', p) }));
+        rows.push(card._row('mdi:sine-wave', t('next_phase'), phaseOnly, t('next_phase_sub')));
+        return html`
+            <div class="modehelp">${t('next_measure_only')} ${card._val(t('configure'), () => card._showConfigureModal(id, row.name), { disabled: dis })}</div>
+            ${stats}
+            <div class="rows">${rows}</div>`;
     }
     const others = (card._rowsNow() || []).filter((r) => r.id !== id && r.type !== 'battery');
     const parent = row.dependsOn[0] || '';
