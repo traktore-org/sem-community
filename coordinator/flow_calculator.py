@@ -60,7 +60,20 @@ def fit_flows_to_totals(flows: EnergyFlows, totals: Dict[str, float]) -> EnergyF
     flow's factor, per-string solar is left as measured.
     """
     cells = {k: max(0.0, float(getattr(flows, a, 0.0) or 0.0)) for k, a in _FLOW_CELLS.items()}
-    target = {k: max(0.0, float(totals.get(k, 0.0) or 0.0)) for k in FLOW_ROWS + FLOW_COLS}
+
+    def _own(name: str) -> float:
+        axis = 0 if name in FLOW_ROWS else 1
+        return sum(v for k, v in cells.items() if k[axis] == name)
+
+    # A total given as None is not metered: it keeps the split's own sum.
+    # A house left as None is the balance, so sources and sinks still agree.
+    target = {
+        k: _own(k) if totals.get(k) is None else max(0.0, float(totals.get(k) or 0.0))
+        for k in FLOW_ROWS + FLOW_COLS
+    }
+    if totals.get("home") is None:
+        target["home"] = max(0.0, sum(target[r] for r in FLOW_ROWS)
+                             - sum(target[c] for c in FLOW_COLS if c != "home"))
     for _ in range(_FIT_ITERATIONS):
         for axis, names in ((0, FLOW_ROWS), (1, FLOW_COLS)):
             for name in names:

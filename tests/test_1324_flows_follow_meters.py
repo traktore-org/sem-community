@@ -110,8 +110,12 @@ def _calc(backed):
 
 
 @pytest.mark.unit
-def test_totals_only_when_home_is_the_meters_balance():
-    assert _calc({"grid_import", "grid_export"}).calendar_day_totals() is None
+def test_totals_follow_what_the_meters_back():
+    assert _calc(set()).calendar_day_totals() is None          # nothing metered: leave the split
+    partial = _calc({"grid_import", "grid_export"}).calendar_day_totals()
+    assert partial == {"solar": None, "home": None, "ev": None,
+                       "grid_import": 16.68, "grid_export": 0.06,
+                       "battery_charge": None, "battery_discharge": None}
     totals = _calc({"home", "grid_import"}).calendar_day_totals()
     assert totals == PROD_TOTALS  # the EV column is the midnight mirror, not the EV day
 
@@ -126,3 +130,54 @@ def test_coordinator_publishes_the_fitted_copy_right_after_integrating():
                  and getattr(n.func, "attr", "") == "integrate_energy_flows"]
     assert len(calls) == 1 and len(integrate) == 1
     assert 0 < calls[0].lineno - integrate[0].lineno < 12
+
+
+# ── (#1324) No solar counter: the meters that DO count still win ─────────
+# PROD 08.11 evening: grid and battery are counter-backed, solar is not
+# (no solar counter), so the home row is never "the meters' balance".
+# The split must still follow the four metered totals; solar keeps the
+# split's own sum and the house becomes the balance.
+
+def test_partial_meters_fit_grid_and_battery_and_balance_the_house():
+    from custom_components.solar_energy_management.coordinator.flow_calculator import (
+        fit_flows_to_totals,
+    )
+    from custom_components.solar_energy_management.coordinator.types import EnergyFlows
+
+    flows = EnergyFlows()
+    for attr, v in {
+        "solar_to_home": 4.41, "solar_to_battery": 8.31, "solar_to_grid": 0.08,
+        "grid_to_home": 1.74, "grid_to_ev": 5.61, "grid_to_battery": 7.27,
+        "battery_to_home": 8.72, "battery_to_ev": 0.41, "battery_to_grid": 0.17,
+    }.items():
+        setattr(flows, attr, v)
+    totals = {
+        "solar": None, "home": None, "ev": None,
+        "grid_import": 16.77, "grid_export": 0.07,
+        "battery_charge": 15.44, "battery_discharge": 11.85,
+    }
+    out = fit_flows_to_totals(flows, totals)
+
+    def row(*attrs):
+        return sum(getattr(out, a) for a in attrs)
+
+    assert abs(row("grid_to_home", "grid_to_ev", "grid_to_battery") - 16.77) < 0.05
+    assert abs(row("battery_to_home", "battery_to_ev", "battery_to_grid") - 11.85) < 0.05
+    assert abs(row("solar_to_battery", "grid_to_battery") - 15.44) < 0.05
+    assert abs(row("solar_to_grid", "battery_to_grid") - 0.07) < 0.05
+    assert out.battery_to_grid < 0.07          # the export the meter never saw is gone
+    house = row("solar_to_home", "grid_to_home", "battery_to_home")
+    assert house > 14.87 + 2.0                 # the dropouts no longer shorten the house
+
+
+def test_no_meter_backed_total_leaves_the_split_alone():
+    from custom_components.solar_energy_management.coordinator.flow_calculator import (
+        fit_flows_to_totals,
+    )
+    from custom_components.solar_energy_management.coordinator.types import EnergyFlows
+
+    flows = EnergyFlows()
+    flows.solar_to_home, flows.grid_to_home = 3.0, 2.0
+    out = fit_flows_to_totals(flows, {k: None for k in (
+        "solar", "grid_import", "battery_discharge", "home", "ev", "battery_charge", "grid_export")})
+    assert (out.solar_to_home, out.grid_to_home) == (3.0, 2.0)
