@@ -587,7 +587,8 @@ class SEMNextPlanCard extends SEMNextBase {
         const tiles = [];
         const cost = knownNum(plan.total_cost);
         if (Array.isArray(plan.blocks) && Number.isFinite(cost)) {
-            const gridKwh = kwhOf(plan.blocks, (id) => !String(id).startsWith('battery_out'));
+            const houseKwh = Number(plan.house_grid?.kwh);
+            const gridKwh = kwhOf(plan.blocks, (id) => !String(id).startsWith('battery_out')) + (Number.isFinite(houseKwh) ? houseKwh : 0);
             tiles.push({ label: t('next_grid_cost'), value: this._fmt(cost, 2), unit: this._currency(), sub: `${this._kwh(gridKwh)} · ${t('next_tonight')}` });
         }
         const sun = this._num('sensor.sem_forecast_tomorrow_kwh');
