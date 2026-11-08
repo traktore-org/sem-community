@@ -3424,6 +3424,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         elif self.entity_description.key == "charging_strategy":
             attrs.update({
                 "reason": self.coordinator.data.get("charging_strategy_reason"),
+                "reason_code": self.coordinator.data.get("charging_strategy_reason_code") or "",
+                "reason_params": self.coordinator.data.get("charging_strategy_reason_params") or {},
                 "charging_state": self.coordinator.data.get("charging_state"),
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "forecast_remaining_today_kwh": self.coordinator.data.get("forecast_remaining_today_kwh"),

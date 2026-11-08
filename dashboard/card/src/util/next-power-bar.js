@@ -3,11 +3,12 @@
  * where it goes, from the five SEM power readings.
  *
  * SEM signs: grid negative = import, battery negative = discharge. A null
- * reading is a missing entity and leaves its segment out; a zero reading
- * leaves it out too (the bar shows what flows, the list shows the rest).
+ * reading is a missing entity and leaves its segment out; a reading under
+ * NOISE_W leaves it out too (the bar shows what flows, the list shows the rest).
  *
  * powerBar({ solarW, gridW, batteryW, homeW, evW })
- *   → { sources: [{ key, w, share, label }], sinks: [...], total, inW, outW }
+ *   → { sources: [{ key, w, share, label }], sinks: [...], total, inW, outW, idle }
+ *   idle = readings exist but nothing flows above NOISE_W.
  *
  * share = the segment's part of its own lane; label = share ≥ LABEL_SHARE,
  * under which a segment is too thin to carry a number. total is the
@@ -15,6 +16,8 @@
  * with the grid sensor out).
  */
 export const LABEL_SHARE = 0.2;
+/** Under this a flow is meter noise: it would fill a bar with "0.0 kW" halves. */
+export const NOISE_W = 50;
 
 export const SOURCE_KEYS = ['solar', 'battery_out', 'grid_in'];
 export const SINK_KEYS = ['home', 'ev', 'battery_in', 'grid_out'];
@@ -27,7 +30,7 @@ function pos(v) { return Number.isFinite(v) && v > 0 ? v : 0; }
 function neg(v) { return Number.isFinite(v) && v < 0 ? -v : 0; }
 
 function lane(items) {
-    const kept = items.filter((it) => it.w > 0);
+    const kept = items.filter((it) => it.w >= NOISE_W);
     const sum = kept.reduce((a, it) => a + it.w, 0);
     return kept.map((it) => {
         const share = sum > 0 ? it.w / sum : 0;
@@ -51,5 +54,6 @@ export function powerBar(r = {}) {
     ]);
     const inW = sources.reduce((a, s) => a + s.w, 0);
     const outW = sinks.reduce((a, s) => a + s.w, 0);
-    return { sources, sinks, total: inW > 0 ? inW : outW, inW, outW };
+    const known = [solar, grid, batt, home, ev].some(Number.isFinite);
+    return { sources, sinks, total: inW > 0 ? inW : outW, inW, outW, idle: known && !sources.length && !sinks.length };
 }

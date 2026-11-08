@@ -2351,11 +2351,9 @@
     "next_sun_kwh": "slunce {kwh} kWh",
     "next_car_ready": "auto připraveno",
     "next_skip": "Přeskočit",
-    "next_move": "Posunout",
     "next_start_now": "Spustit hned",
     "next_run_anyway": "Přesto spustit",
     "next_sell": "Prodat",
-    "next_minutes": "minut",
     "next_ok": "OK",
     "next_less": "Méně",
     "next_on": "zap.",
@@ -2647,7 +2645,8 @@
     "next_zone_priority": "priorita",
     "next_zone_tonight": "dnes v noci",
     "next_chargers_n": "nabíječky: {n}",
-    "next_show_sankey": "Zobrazit Sankey ›"
+    "next_show_sankey": "Zobrazit Sankey ›",
+    "next_bar_idle": "Právě neteče žádná energie."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5001,11 +5000,9 @@
     "next_sun_kwh": "sol {kwh} kWh",
     "next_car_ready": "bil klar",
     "next_skip": "Spring over",
-    "next_move": "Flyt",
     "next_start_now": "Start nu",
     "next_run_anyway": "Kør alligevel",
     "next_sell": "Sælg",
-    "next_minutes": "minutter",
     "next_ok": "OK",
     "next_less": "Mindre",
     "next_on": "til",
@@ -5297,7 +5294,8 @@
     "next_zone_priority": "prioritet",
     "next_zone_tonight": "i nat",
     "next_chargers_n": "{n} lader(e)",
-    "next_show_sankey": "Vis Sankey ›"
+    "next_show_sankey": "Vis Sankey ›",
+    "next_bar_idle": "Der løber ingen strøm lige nu."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -7651,11 +7649,9 @@
     "next_sun_kwh": "Sonne {kwh} kWh",
     "next_car_ready": "Auto bereit",
     "next_skip": "Auslassen",
-    "next_move": "Verschieben",
     "next_start_now": "Jetzt starten",
     "next_run_anyway": "Trotzdem laufen",
     "next_sell": "Verkaufen",
-    "next_minutes": "Minuten",
     "next_ok": "OK",
     "next_less": "Weniger",
     "next_on": "an",
@@ -7947,7 +7943,8 @@
     "next_zone_priority": "Vorrang",
     "next_zone_tonight": "heute Nacht",
     "next_chargers_n": "{n} Wallbox(en)",
-    "next_show_sankey": "Sankey zeigen ›"
+    "next_show_sankey": "Sankey zeigen ›",
+    "next_bar_idle": "Gerade fliesst kein Strom."
   },
   "en": {
     "% of limit": "% of limit",
@@ -10301,11 +10298,9 @@
     "next_sun_kwh": "sun {kwh} kWh",
     "next_car_ready": "car ready",
     "next_skip": "Skip",
-    "next_move": "Move",
     "next_start_now": "Start now",
     "next_run_anyway": "Run anyway",
     "next_sell": "Sell",
-    "next_minutes": "minutes",
     "next_ok": "OK",
     "next_less": "Less",
     "next_on": "on",
@@ -10597,7 +10592,8 @@
     "next_zone_priority": "priority",
     "next_zone_tonight": "tonight",
     "next_chargers_n": "{n} charger(s)",
-    "next_show_sankey": "Show Sankey ›"
+    "next_show_sankey": "Show Sankey ›",
+    "next_bar_idle": "Nothing is flowing right now."
   },
   "es": {
     "% of limit": "% del límite",
@@ -12951,11 +12947,9 @@
     "next_sun_kwh": "sol {kwh} kWh",
     "next_car_ready": "coche listo",
     "next_skip": "Saltar",
-    "next_move": "Mover",
     "next_start_now": "Iniciar ahora",
     "next_run_anyway": "Ejecutar igual",
     "next_sell": "Vender",
-    "next_minutes": "minutos",
     "next_ok": "OK",
     "next_less": "Menos",
     "next_on": "activado",
@@ -13247,7 +13241,8 @@
     "next_zone_priority": "prioridad",
     "next_zone_tonight": "esta noche",
     "next_chargers_n": "{n} cargador(es)",
-    "next_show_sankey": "Mostrar Sankey ›"
+    "next_show_sankey": "Mostrar Sankey ›",
+    "next_bar_idle": "Ahora mismo no fluye energía."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -15601,11 +15596,9 @@
     "next_sun_kwh": "aurinko {kwh} kWh",
     "next_car_ready": "auto valmis",
     "next_skip": "Ohita",
-    "next_move": "Siirrä",
     "next_start_now": "Aloita nyt",
     "next_run_anyway": "Aja silti",
     "next_sell": "Myy",
-    "next_minutes": "minuuttia",
     "next_ok": "OK",
     "next_less": "Vähemmän",
     "next_on": "päällä",
@@ -15897,7 +15890,8 @@
     "next_zone_priority": "prioriteetti",
     "next_zone_tonight": "tänä yönä",
     "next_chargers_n": "{n} laturi(a)",
-    "next_show_sankey": "Näytä Sankey ›"
+    "next_show_sankey": "Näytä Sankey ›",
+    "next_bar_idle": "Juuri nyt sähköä ei kulje."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -18251,11 +18245,9 @@
     "next_sun_kwh": "soleil {kwh} kWh",
     "next_car_ready": "voiture prête",
     "next_skip": "Sauter",
-    "next_move": "Déplacer",
     "next_start_now": "Démarrer",
     "next_run_anyway": "Lancer quand même",
     "next_sell": "Vendre",
-    "next_minutes": "minutes",
     "next_ok": "OK",
     "next_less": "Moins",
     "next_on": "activé",
@@ -18547,7 +18539,8 @@
     "next_zone_priority": "priorité",
     "next_zone_tonight": "cette nuit",
     "next_chargers_n": "{n} borne(s)",
-    "next_show_sankey": "Afficher le Sankey ›"
+    "next_show_sankey": "Afficher le Sankey ›",
+    "next_bar_idle": "Aucune énergie ne circule en ce moment."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -20901,11 +20894,9 @@
     "next_sun_kwh": "nap {kwh} kWh",
     "next_car_ready": "autó kész",
     "next_skip": "Kihagy",
-    "next_move": "Áthelyez",
     "next_start_now": "Indítás most",
     "next_run_anyway": "Futtatás mégis",
     "next_sell": "Eladás",
-    "next_minutes": "perc",
     "next_ok": "OK",
     "next_less": "Kevesebb",
     "next_on": "be",
@@ -21197,7 +21188,8 @@
     "next_zone_priority": "prioritás",
     "next_zone_tonight": "ma éjjel",
     "next_chargers_n": "{n} töltő",
-    "next_show_sankey": "Sankey megjelenítése ›"
+    "next_show_sankey": "Sankey megjelenítése ›",
+    "next_bar_idle": "Most nem folyik energia."
   },
   "it": {
     "% of limit": "% del limite",
@@ -23551,11 +23543,9 @@
     "next_sun_kwh": "sole {kwh} kWh",
     "next_car_ready": "auto pronta",
     "next_skip": "Salta",
-    "next_move": "Sposta",
     "next_start_now": "Avvia ora",
     "next_run_anyway": "Avvia comunque",
     "next_sell": "Vendi",
-    "next_minutes": "minuti",
     "next_ok": "OK",
     "next_less": "Meno",
     "next_on": "attivo",
@@ -23847,7 +23837,8 @@
     "next_zone_priority": "priorità",
     "next_zone_tonight": "stanotte",
     "next_chargers_n": "{n} colonnina/e",
-    "next_show_sankey": "Mostra Sankey ›"
+    "next_show_sankey": "Mostra Sankey ›",
+    "next_bar_idle": "Al momento non scorre energia."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -26201,11 +26192,9 @@
     "next_sun_kwh": "zon {kwh} kWh",
     "next_car_ready": "auto klaar",
     "next_skip": "Overslaan",
-    "next_move": "Verplaatsen",
     "next_start_now": "Nu starten",
     "next_run_anyway": "Toch draaien",
     "next_sell": "Verkopen",
-    "next_minutes": "minuten",
     "next_ok": "OK",
     "next_less": "Minder",
     "next_on": "aan",
@@ -26497,7 +26486,8 @@
     "next_zone_priority": "voorrang",
     "next_zone_tonight": "vannacht",
     "next_chargers_n": "{n} lader(s)",
-    "next_show_sankey": "Sankey tonen ›"
+    "next_show_sankey": "Sankey tonen ›",
+    "next_bar_idle": "Er stroomt nu geen energie."
   },
   "no": {
     "% of limit": "% av grense",
@@ -28851,11 +28841,9 @@
     "next_sun_kwh": "sol {kwh} kWh",
     "next_car_ready": "bil klar",
     "next_skip": "Hopp over",
-    "next_move": "Flytt",
     "next_start_now": "Start nå",
     "next_run_anyway": "Kjør likevel",
     "next_sell": "Selg",
-    "next_minutes": "minutter",
     "next_ok": "OK",
     "next_less": "Mindre",
     "next_on": "på",
@@ -29147,7 +29135,8 @@
     "next_zone_priority": "prioritet",
     "next_zone_tonight": "i natt",
     "next_chargers_n": "{n} lader(e)",
-    "next_show_sankey": "Vis Sankey ›"
+    "next_show_sankey": "Vis Sankey ›",
+    "next_bar_idle": "Det går ingen strøm akkurat nå."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -31501,11 +31490,9 @@
     "next_sun_kwh": "słońce {kwh} kWh",
     "next_car_ready": "auto gotowe",
     "next_skip": "Pomiń",
-    "next_move": "Przesuń",
     "next_start_now": "Start teraz",
     "next_run_anyway": "Uruchom mimo to",
     "next_sell": "Sprzedaj",
-    "next_minutes": "minut",
     "next_ok": "OK",
     "next_less": "Mniej",
     "next_on": "wł.",
@@ -31797,7 +31784,8 @@
     "next_zone_priority": "priorytet",
     "next_zone_tonight": "tej nocy",
     "next_chargers_n": "ładowarki: {n}",
-    "next_show_sankey": "Pokaż Sankey ›"
+    "next_show_sankey": "Pokaż Sankey ›",
+    "next_bar_idle": "Teraz nie płynie energia."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -34151,11 +34139,9 @@
     "next_sun_kwh": "sol {kwh} kWh",
     "next_car_ready": "carro pronto",
     "next_skip": "Saltar",
-    "next_move": "Mover",
     "next_start_now": "Iniciar agora",
     "next_run_anyway": "Executar mesmo assim",
     "next_sell": "Vender",
-    "next_minutes": "minutos",
     "next_ok": "OK",
     "next_less": "Menos",
     "next_on": "ligado",
@@ -34447,7 +34433,8 @@
     "next_zone_priority": "prioridade",
     "next_zone_tonight": "esta noite",
     "next_chargers_n": "{n} carregador(es)",
-    "next_show_sankey": "Mostrar Sankey ›"
+    "next_show_sankey": "Mostrar Sankey ›",
+    "next_bar_idle": "Neste momento não flui energia."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -36801,11 +36788,9 @@
     "next_sun_kwh": "soare {kwh} kWh",
     "next_car_ready": "mașină gata",
     "next_skip": "Omite",
-    "next_move": "Mută",
     "next_start_now": "Pornește acum",
     "next_run_anyway": "Pornește oricum",
     "next_sell": "Vinde",
-    "next_minutes": "minute",
     "next_ok": "OK",
     "next_less": "Mai puțin",
     "next_on": "pornit",
@@ -37097,7 +37082,8 @@
     "next_zone_priority": "prioritate",
     "next_zone_tonight": "în această noapte",
     "next_chargers_n": "{n} încărcător(e)",
-    "next_show_sankey": "Arată Sankey ›"
+    "next_show_sankey": "Arată Sankey ›",
+    "next_bar_idle": "Acum nu circulă energie."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -39451,11 +39437,9 @@
     "next_sun_kwh": "sol {kwh} kWh",
     "next_car_ready": "bil klar",
     "next_skip": "Hoppa över",
-    "next_move": "Flytta",
     "next_start_now": "Starta nu",
     "next_run_anyway": "Kör ändå",
     "next_sell": "Sälj",
-    "next_minutes": "minuter",
     "next_ok": "OK",
     "next_less": "Mindre",
     "next_on": "på",
@@ -39747,7 +39731,8 @@
     "next_zone_priority": "prioritet",
     "next_zone_tonight": "i natt",
     "next_chargers_n": "{n} laddare",
-    "next_show_sankey": "Visa Sankey ›"
+    "next_show_sankey": "Visa Sankey ›",
+    "next_bar_idle": "Just nu flödar ingen ström."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -42101,11 +42086,9 @@
     "next_sun_kwh": "光伏 {kwh} kWh",
     "next_car_ready": "车辆就绪",
     "next_skip": "跳过",
-    "next_move": "推迟",
     "next_start_now": "立即开始",
     "next_run_anyway": "仍然运行",
     "next_sell": "售电",
-    "next_minutes": "分钟",
     "next_ok": "确定",
     "next_less": "更少",
     "next_on": "开",
@@ -42397,6 +42380,7 @@
     "next_zone_priority": "优先",
     "next_zone_tonight": "今晚",
     "next_chargers_n": "{n} 个充电桩",
-    "next_show_sankey": "显示 Sankey ›"
+    "next_show_sankey": "显示 Sankey ›",
+    "next_bar_idle": "目前没有能量流动。"
   }
 }

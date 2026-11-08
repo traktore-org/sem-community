@@ -214,10 +214,17 @@ export const nextCss = css`
     .fresh .tile { display: flex; align-items: center; gap: 8px; }
     .fresh .tile ha-icon { color: var(--c); }
     :host(.observe) .card { opacity: .92; }
+    .toast { position: fixed; left: 16px; right: 16px; margin: 0 auto; width: fit-content; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10;
+        max-width: 560px; box-sizing: border-box; display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-radius: 12px;
+        background: var(--n-card); color: var(--n-fg); border: 1px solid var(--n-line); border-left: 4px solid var(--n-ok);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, .25); font-size: 13px; line-height: 1.35; }
+    .toast.bad { border-left-color: var(--n-bad); }
+    .toast ha-icon { --mdc-icon-size: 18px; flex: none; color: var(--n-ok); }
+    .toast.bad ha-icon { color: var(--n-bad); }
 `;
 
 export class SEMNextBase extends SEMLitBase {
-    static get properties() { return { _all: { state: true } }; }
+    static get properties() { return { _all: { state: true }, _toastText: { state: true }, _toastBad: { state: true } }; }
 
     constructor() {
         super();
@@ -225,6 +232,8 @@ export class SEMNextBase extends SEMLitBase {
         this._key = '';
         this._chargers = [];
         this._all = getAllSettings();
+        this._toastText = '';
+        this._toastBad = false;
         this._onViewMode = (e) => { this._all = !!(e?.detail?.all ?? getAllSettings()); };
     }
 
@@ -235,6 +244,7 @@ export class SEMNextBase extends SEMLitBase {
 
     disconnectedCallback() {
         window.removeEventListener(VIEW_MODE_EVENT, this._onViewMode);
+        clearTimeout(this._toastTimer);
         super.disconnectedCallback();
     }
 
@@ -389,7 +399,35 @@ export class SEMNextBase extends SEMLitBase {
             ${this._renderHead()}
             ${lead ? this._renderLead(lead.main, lead.sub) : nothing}
             ${body}
-        </div></ha-card>`;
+        </div></ha-card>
+        ${this._toastText ? html`<div class="toast ${this._toastBad ? 'bad' : ''}" role=${this._toastBad ? 'alert' : 'status'}>
+            ${this._icon(this._toastBad ? 'mdi:alert-circle-outline' : 'mdi:check-circle-outline')}<span>${this._toastText}</span></div>` : nothing}`;
+    }
+
+    /** One message at the bottom of the screen, near any button the user pressed. */
+    _toast(text, bad = false, ms = bad ? 8000 : 2500) {
+        this._toastText = String(text || '');
+        this._toastBad = !!bad;
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => { this._toastText = ''; }, ms);
+    }
+
+    _failed(err) {
+        const msg = (err && err.message) ? String(err.message) : String(err || '');
+        this._toast(msg || this._t('next_apply_failed'), true);
+    }
+
+    /** true when Home Assistant accepted the call; a refusal is shown, never swallowed. */
+    async _callService(domain, service, data) {
+        if (!this._hass) return false;
+        try {
+            await this._hass.callService(domain, service, data, undefined, false);
+            return true;
+        } catch (err) {
+            console.error(`[SEM ${this.tagName}]`, domain + '.' + service, err);
+            this._failed(err);
+            return false;
+        }
     }
 
     _sec(title, body, o = {}) {

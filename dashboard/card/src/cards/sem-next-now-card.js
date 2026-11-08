@@ -19,6 +19,8 @@ import { powerBar } from '../util/next-power-bar.js';
 import { todayRows } from '../util/next-today-rows.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
+import { splitStrategyReason } from '../util/next-strategy-reason.js';
+import { plainReason } from '../util/why-rows.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
 
 const IDS = [
@@ -314,7 +316,8 @@ class SEMNextNowCard extends SEMNextBase {
             batteryW: this._powerW('sensor.sem_battery_power'), homeW: this._powerW('sensor.sem_home_consumption_power'),
             evW: this._powerW('sensor.sem_ev_power'),
         });
-        if (!bar.sources.length && !bar.sinks.length) return html`<p class="help">${this._t('next_lead_unknown')}</p>`;
+        if (!bar.sources.length && !bar.sinks.length && !bar.idle) return html`<p class="help">${this._t('next_lead_unknown')}</p>`;
+        if (bar.idle) return html`<p class="help">${this._t('next_bar_idle')}</p>${this._io ? this._ioList(bar) : nothing}`;
         const mk = (s) => html`<div class="mk" style="--c:${META[s.key].color};flex:${s.w} 1 0">${this._icon(META[s.key].icon)}${s.label ? html`<span>${this._kw(s.w)}</span>` : nothing}</div>`;
         const sg = (s) => html`<div class="sg ${META[s.key].dark ? 'dark' : ''}" style="flex:${s.w} 1 0;background:${META[s.key].color}">${s.label ? this._kw(s.w) : ''}</div>`;
         const toggle = () => { this._io = !this._io; writeLocal(IO_KEY, this._io ? '1' : '0'); };
@@ -445,14 +448,12 @@ class SEMNextNowCard extends SEMNextBase {
         const strat = this._hass?.states['sensor.sem_charging_strategy'];
         if (strat && strat.state && strat.state !== 'unavailable' && strat.state !== 'unknown') {
             const reason = String(strat.attributes?.reason || strat.state);
-            let [head, ...rest] = reason.split(/\s[—–-]\s|\[/);
-            // "min_plus_solar night: waiting…" opens with the mode's code; say the mode's name.
-            head = head.replace(/^([a-z_]+)(?=\s+(?:night|day)?:)/, (code) => {
-                const label = this._t('charge_mode_' + code);
-                return label && label !== 'charge_mode_' + code ? label : code;
-            });
+            const { mode, head, detail } = splitStrategyReason(reason);
+            const label = mode ? this._t('charge_mode_' + mode) : '';
+            const title = label && label !== 'charge_mode_' + mode ? label : head;
+            const said = plainReason({ reason_code: strat.attributes?.reason_code, params: strat.attributes?.reason_params }, (k) => this._t(k));
             const evW = this._powerW('sensor.sem_ev_power');
-            rows.push(this._row('mdi:car-electric', head.trim(), evW === null ? '' : this._kw(evW), rest.join(' ').replace(/\]$/, '').trim(), { color: C.ev }));
+            rows.push(this._row('mdi:car-electric', title, evW === null ? '' : this._kw(evW), this._all ? reason : (said || detail), { color: C.ev }));
         }
         const soc = this._num('sensor.sem_battery_soc');
         const floor = this._num('sensor.sem_battery_dynamic_floor_pct');

@@ -5155,6 +5155,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         if cid == _fleet_primary_cid:
                             charging_context.charging_strategy = decision.reason
                             charging_context.charging_strategy_reason = decision.reason
+                            charging_context.charging_strategy_reason_code = str(getattr(decision, "reason_code", "") or "")
+                            charging_context.charging_strategy_reason_params = dict(getattr(decision, "reason_params", None) or {})
                         # Reflect decision into the effective_state sensor
                         # (for dashboards that read sem_charging_state).
                         #
@@ -5634,6 +5636,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 charging_state=charging_state,
                 charging_strategy=charging_context.charging_strategy,
                 charging_strategy_reason=charging_context.charging_strategy_reason,
+                charging_strategy_reason_code=getattr(charging_context, "charging_strategy_reason_code", ""),
+                charging_strategy_reason_params=getattr(charging_context, "charging_strategy_reason_params", None) or {},
                 # Publish canonical budget (#282 unification, Phase B).
                 # The state machine and the actuator now read from the
                 # same EVBudget instance; publishing from it as well
@@ -13349,6 +13353,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "charging_strategy": _clamp_state(
                 charging_context.charging_strategy),
             "charging_strategy_reason": charging_context.charging_strategy_reason,
+            "charging_strategy_reason_code": getattr(charging_context, "charging_strategy_reason_code", ""),
+            "charging_strategy_reason_params": getattr(charging_context, "charging_strategy_reason_params", None) or {},
             "canonical_strategy": charging_context.canonical_strategy,
             "discharge_limit": discharge_limit,
             # (#631) the authoritative per-charger night remaining — what the

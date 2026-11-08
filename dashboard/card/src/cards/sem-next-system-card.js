@@ -71,7 +71,6 @@ const cardCss = css`
     .sent .ro { font-weight: 500; color: var(--n-fg); }
     .fresh .tile .xs.warn { color: var(--n-warn); }
     .fresh .tile .xs.bad { color: var(--n-bad); }
-    .msg { font-size: 12px; color: var(--n-fg2); margin-top: 8px; }
     .confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
     .ct .lnk.ic { padding: 2px 4px; }
     .ct .lnk.ic ha-icon { color: var(--n-fg3); }
@@ -88,7 +87,6 @@ class SEMNextSystemCard extends SEMNextBase {
             _options: { state: true },
             _applying: { state: true },
             _confirmObs: { state: true },
-            _msg: { state: true },
             _diagBusy: { state: true },
         };
     }
@@ -101,8 +99,6 @@ class SEMNextSystemCard extends SEMNextBase {
         this._entryId = '';
         this._applying = false;
         this._confirmObs = false;
-        this._msg = '';
-        this._msgTimer = null;
         this._diagBusy = false;
         this._optionsAsked = false;
     }
@@ -116,10 +112,6 @@ class SEMNextSystemCard extends SEMNextBase {
     }
     get hass() { return this._hass; }
 
-    disconnectedCallback() {
-        if (this._msgTimer) { clearTimeout(this._msgTimer); this._msgTimer = null; }
-        super.disconnectedCallback();
-    }
 
     _watchIds() {
         const states = this._hass?.states || {};
@@ -152,11 +144,7 @@ class SEMNextSystemCard extends SEMNextBase {
         }
     }
 
-    _say(text, ms = 2500) {
-        this._msg = text;
-        if (this._msgTimer) clearTimeout(this._msgTimer);
-        this._msgTimer = setTimeout(() => { this._msgTimer = null; this._msg = ''; }, ms);
-    }
+    _say(text, ms = 2500, bad = false) { this._toast(text, bad, ms); }
 
     // ── health ──
 
@@ -253,7 +241,7 @@ class SEMNextSystemCard extends SEMNextBase {
                 ${this._btn(this._t('config_diagnose'), () => this._diagnose('all'), { small: true, icon: 'mdi:stethoscope', disabled: this._diagBusy })}
                 ${this._observerButton()}
             </div>
-            ${this._msg ? html`<div class="msg" role="status">${this._msg}</div>` : nothing}`, { cls: 'span2' });
+`, { cls: 'span2' });
     }
 
     _refused() {
@@ -378,17 +366,17 @@ class SEMNextSystemCard extends SEMNextBase {
         this._editing = '';
         const plan = applyPlan(this._pending, this._hass.states);
         try {
-            for (const w of plan.entityWrites) await this._hass.callService(w.domain, w.service, w.data);
+            for (const w of plan.entityWrites) await this._hass.callService(w.domain, w.service, w.data, undefined, false);
             if (Object.keys(plan.options).length) {
                 await this._hass.callService('solar_energy_management', 'set_option',
-                    { options: plan.options, ...(this._entryId ? { entry_id: this._entryId } : {}) });
+                    { options: plan.options, ...(this._entryId ? { entry_id: this._entryId } : {}) }, undefined, false);
             }
             this._pending = {};
             this._say(this._t('config_saved'));
             await this._loadOptions();
         } catch (err) {
             console.error('[sem-next-system-card] apply failed', err);
-            this._say(err?.message || this._t('next_apply_failed'), 6000);
+            this._say(err?.message || this._t('next_apply_failed'), 8000, true);
         } finally {
             this._applying = false;
         }
@@ -405,15 +393,15 @@ class SEMNextSystemCard extends SEMNextBase {
                 const ok = await this._writeClipboard(JSON.stringify(payload || {}, null, 2), true);
                 this._say(this._t(ok ? 'sign_flipped_copied' : 'sign_flipped'), 6000);
             } else if (name === 'reset_sign_detection') {
-                await this._hass.callService('solar_energy_management', 'reset_sign_detection', {});
+                await this._hass.callService('solar_energy_management', 'reset_sign_detection', {}, undefined, false);
                 this._say(this._t('sign_relearn_started'), 4000);
             } else if (name === 'purge_status_history') {
-                await this._hass.callService('solar_energy_management', 'purge_status_history', {});
+                await this._hass.callService('solar_energy_management', 'purge_status_history', {}, undefined, false);
                 this._say(this._t('next_done'));
             }
         } catch (err) {
             console.error('[sem-next-system-card] action failed', name, err);
-            this._say(err?.message || this._t('next_apply_failed'), 6000);
+            this._say(err?.message || this._t('next_apply_failed'), 8000, true);
         }
     }
 
@@ -422,12 +410,12 @@ class SEMNextSystemCard extends SEMNextBase {
         this._diagBusy = true;
         try {
             const resp = await this._hass.callService('solar_energy_management', 'diagnose',
-                { section: section || 'all' }, undefined, undefined, true);
+                { section: section || 'all' }, undefined, false, true);
             const payload = resp?.response || resp;
             await this._writeClipboard(JSON.stringify(payload, null, 2));
         } catch (err) {
             console.error('[sem-next-system-card] diagnose failed', err);
-            this._say(err?.message || this._t('copy_failed'), 6000);
+            this._say(err?.message || this._t('copy_failed'), 8000, true);
         } finally {
             this._diagBusy = false;
         }
@@ -454,7 +442,7 @@ class SEMNextSystemCard extends SEMNextBase {
 
     /** Modern clipboard first, the legacy textarea path on plain HTTP (#285). */
     async _writeClipboard(text, quiet = false) {
-        const done = (ok) => { if (!quiet) this._say(this._t(ok ? 'copied' : 'copy_failed')); return ok; };
+        const done = (ok) => { if (!quiet) this._say(this._t(ok ? 'copied' : 'copy_failed'), ok ? 2500 : 8000, !ok); return ok; };
         if (navigator?.clipboard?.writeText && window.isSecureContext !== false) {
             try { await navigator.clipboard.writeText(text); return done(true); } catch (err) { /* fall through */ }
         }

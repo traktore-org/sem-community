@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from typing import Dict, Any, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from homeassistant.core import HomeAssistant
 
@@ -115,6 +115,10 @@ class ChargingContext:
     # Mode flags
     charging_strategy: str = "idle"
     charging_strategy_reason: str = ""
+    # (#1321) The primary charger's reason as a code + numbers, so a card
+    # can say it in the user's language. Recorded only; no decider reads it.
+    charging_strategy_reason_code: str = ""
+    charging_strategy_reason_params: Dict[str, Any] = field(default_factory=dict)
 
     # Canonical strategy (EVBudgetStrategy.value string) — the input the
     # canonical EV budget calc consumed in this cycle. Distinct from

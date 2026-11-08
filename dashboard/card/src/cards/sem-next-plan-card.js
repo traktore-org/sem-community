@@ -40,7 +40,7 @@ class SEMNextPlanCard extends SEMNextBase {
         return {
             _picked: { state: true }, _confirm: { state: true }, _day: { state: true }, _lanes: { state: true },
             _w: { state: true }, _records: { state: true }, _chip: { state: true }, _fold: { state: true },
-            _moveFor: { state: true }, _logError: { state: true },
+            _logError: { state: true },
         };
     }
     // A 24 h axis in 380 px is unreadable: the per-device lanes keep their
@@ -50,8 +50,6 @@ class SEMNextPlanCard extends SEMNextBase {
             .tl { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 8px; }
             .tl svg { display: block; min-width: 640px; }
             .tm { width: 42px; flex: 0 0 auto; }
-            .mv { display: inline-flex; align-items: center; gap: 6px; }
-            .mv input { width: 72px; }
             .reason .t { min-width: 0; }
         `];
     }
@@ -71,8 +69,6 @@ class SEMNextPlanCard extends SEMNextBase {
         this._records = null;      // null = not loaded yet
         this._chip = '';           // '' = all devices
         this._fold = false;
-        this._moveFor = null;      // device key with the Move input open
-        this._moveMin = 60;
         this._logError = false;
         this._loading = false;
         this._logTimer = null;
@@ -411,14 +407,6 @@ class SEMNextPlanCard extends SEMNextBase {
         return ov.until ? this._tf('next_override_until', { action: word, time: ov.until }) : word;
     }
 
-    _moveInput(deviceId, plan) {
-        const t = (k) => this._t(k);
-        return html`<span class="mv"><input type="number" min="1" max="1440" step="15" .value=${String(this._moveMin)} aria-label="${t('next_minutes')}"
-                @input=${(e) => { this._moveMin = Number(e.target.value) || 60; }}>${t('next_minutes')}</span>
-            ${this._btn(t('next_ok'), () => this._override(deviceId, 'move', this._moveMin, plan), { small: true, primary: true })}
-            ${this._btn(t('next_cancel'), () => { this._moveFor = null; }, { small: true })}`;
-    }
-
     _chargerRow(cid, plan, blocks, demands, notSched) {
         const t = (k) => this._t(k);
         const obs = this._obs();
@@ -444,11 +432,8 @@ class SEMNextPlanCard extends SEMNextBase {
             btns.push(this._btn(t('next_cancel'), () => { this._confirm = null; }, { small: true }));
         } else if (ov || forced) {
             btns.push(this._btn(t('next_back_to_plan'), () => this._backToPlan(cid, sel, !!ov), { small: true, disabled: obs }));
-        } else if (this._moveFor === id) {
-            btns.push(this._moveInput(cid, plan));
         } else {
             btns.push(this._btn(t('next_skip'), () => this._override(cid, 'skip', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
-            btns.push(this._btn(t('next_move'), () => { this._moveFor = id; }, { small: true, disabled: obs }));
             btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, primary: true, disabled: obs }));
             if (mode) btns.push(this._btn(t('next_charge_now'), () => { this._confirm = cid; }, { small: true, ghost: true, disabled: obs || mode === 'always_max' }));
         }
@@ -502,11 +487,8 @@ class SEMNextPlanCard extends SEMNextBase {
         const btns = [];
         if (ov) {
             btns.push(this._btn(t('next_back_to_plan'), () => this._overrideClear(key), { small: true, disabled: obs }));
-        } else if (this._moveFor === id) {
-            btns.push(this._moveInput(key, plan));
         } else if (win) {
             btns.push(this._btn(t('next_skip'), () => this._override(key, 'skip', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
-            btns.push(this._btn(t('next_move'), () => { this._moveFor = id; }, { small: true, disabled: obs }));
         } else {
             btns.push(this._btn(t('next_run_anyway'), () => this._override(key, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
         }
@@ -535,31 +517,32 @@ class SEMNextPlanCard extends SEMNextBase {
 
     async _override(deviceId, action, minutes, plan) {
         const mins = Math.max(1, Math.min(1440, Math.round(Number(minutes) || 60)));
-        await this._callService(DOMAIN, 'plan_override', { device_id: deviceId, action, minutes: mins });
+        if (!await this._callService(DOMAIN, 'plan_override', { device_id: deviceId, action, minutes: mins })) return;
         this._local = { ...this._local, [deviceId]: { action, until: this._hhmm(new Date(Date.now() + mins * 60e3)) } };
         this._localStamp = String(plan?.computed_at || '');
-        this._moveFor = null;
         this.requestUpdate();
     }
 
     async _overrideClear(deviceId) {
-        await this._callService(DOMAIN, 'plan_override_clear', { device_id: deviceId });
+        if (!await this._callService(DOMAIN, 'plan_override_clear', { device_id: deviceId })) return false;
         const { [deviceId]: _gone, ...rest } = this._local;
         this._local = rest;
         this.requestUpdate();
+        return true;
     }
 
     async _chargeNow(cid, sel, mode) {
-        this._savedMode = { ...this._savedMode, [cid]: mode };
         this._confirm = null;
-        await this._callService('select', 'select_option', { entity_id: sel, option: 'always_max' });
+        if (await this._callService('select', 'select_option', { entity_id: sel, option: 'always_max' })) {
+            this._savedMode = { ...this._savedMode, [cid]: mode };
+        }
     }
 
     async _backToPlan(cid, sel, hasOverride) {
-        if (hasOverride) await this._overrideClear(cid);
+        if (hasOverride && !await this._overrideClear(cid)) return;
         const prev = this._savedMode[cid];
         if (prev) {
-            await this._callService('select', 'select_option', { entity_id: sel, option: prev });
+            if (!await this._callService('select', 'select_option', { entity_id: sel, option: prev })) return;
             const { [cid]: _gone, ...rest } = this._savedMode;
             this._savedMode = rest;
         }

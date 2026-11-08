@@ -38,7 +38,8 @@ test('nothing flowing gives empty lanes and a zero total', () => {
     assert.deepEqual(b.sources, []);
     assert.deepEqual(b.sinks, []);
     assert.equal(b.total, 0);
-    assert.deepEqual(powerBar(), { sources: [], sinks: [], total: 0, inW: 0, outW: 0 });
+    assert.equal(b.idle, true);
+    assert.deepEqual(powerBar(), { sources: [], sinks: [], total: 0, inW: 0, outW: 0, idle: false });
 });
 
 test('the label threshold is one fifth of the lane', () => {
@@ -46,4 +47,23 @@ test('the label threshold is one fifth of the lane', () => {
     const grid = b.sources.find((s) => s.key === 'grid_in');
     assert.ok(Math.abs(grid.share - 0.2) < 1e-9);
     assert.equal(grid.label, 0.2 >= LABEL_SHARE);
+});
+
+test('meter noise is not a flow: a few watts leave the bar empty and idle', () => {
+    const b = powerBar({ solarW: 3, gridW: -5, batteryW: 0, homeW: 8, evW: 0 });
+    assert.equal(b.sources.length, 0);
+    assert.equal(b.sinks.length, 0);
+    assert.equal(b.idle, true);
+});
+
+test('no readings at all is unknown, not idle', () => {
+    const b = powerBar({});
+    assert.equal(b.idle, false);
+});
+
+test('a real flow next to noise keeps only the real flow', () => {
+    const b = powerBar({ solarW: 20, gridW: -600, batteryW: 0, homeW: 610, evW: 0 });
+    assert.deepEqual(b.sources.map((s) => s.key), ['grid_in']);
+    assert.deepEqual(b.sinks.map((s) => s.key), ['home']);
+    assert.equal(b.idle, false);
 });

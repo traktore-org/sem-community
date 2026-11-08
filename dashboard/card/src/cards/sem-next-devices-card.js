@@ -88,14 +88,13 @@ const devicesCss = css`
 class SEMNextDevicesCard extends SEMNextBase {
     static get styles() { return [nextCss, devicesCss]; }
     static get properties() {
-        return { ...super.properties, _edit: { state: true }, _reorder: { state: true }, _err: { state: true }, _tick: { state: true } };
+        return { ...super.properties, _edit: { state: true }, _reorder: { state: true }, _tick: { state: true } };
     }
 
     constructor() {
         super();
         this._edit = null;
         this._reorder = false;
-        this._err = '';
         this._tick = 0;
         this._work = null;      // the rows while reordering
         this._held = null;      // the order just written, until the sensor has it
@@ -138,7 +137,6 @@ class SEMNextDevicesCard extends SEMNextBase {
     disconnectedCallback() {
         super.disconnectedCallback();
         if (this._drag) this._dragEnd({ type: 'pointercancel' });
-        clearTimeout(this._errTimer);
     }
 
     updated(changed) {
@@ -218,18 +216,14 @@ class SEMNextDevicesCard extends SEMNextBase {
     // ── services ──
     _svc(service, data) {
         if (!this._hass) return Promise.resolve();
-        return this._hass.callService(DOMAIN, service, data).catch((err) => this._showError(err));
+        return this._hass.callService(DOMAIN, service, data, undefined, false).catch((err) => this._showError(err));
     }
 
     _dev(deviceId, property, value) {
         return this._svc('update_device_config', { device_id: deviceId, property, value });
     }
 
-    _showError(err) {
-        this._err = (err && err.message) ? String(err.message) : String(err || '');
-        clearTimeout(this._errTimer);
-        this._errTimer = setTimeout(() => { this._err = ''; }, 12000);
-    }
+    _showError(err) { this._failed(err); }
 
     _setTime(id, value) {
         if (!value) return;
@@ -619,7 +613,6 @@ class SEMNextDevicesCard extends SEMNextBase {
         </div>`;
         return this._frame({ main, sub }, html`
             ${toolbar}
-            ${this._err ? html`<div class="banner bad">${this._icon('mdi:alert-circle-outline')}<div class="sm">${this._err}</div></div>` : nothing}
             <div class="grid ${this._reorder ? 'reorder' : ''}">
                 ${this._surplus(rows)}
                 ${repeat(rows, (r) => r.id, (r, i) => this._shell(r, i))}
