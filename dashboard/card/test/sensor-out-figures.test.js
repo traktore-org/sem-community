@@ -172,6 +172,7 @@ const ALLOWED_OUT = {
     'sem-next-link-card': [],
     'sem-next-now-card': [],
     'sem-next-plan-card': [],
+    'sem-next-setup-panel': [],
     'sem-next-system-card': [],
     'sem-onboarding-banner': [],
     'sem-period-selector-card': [],

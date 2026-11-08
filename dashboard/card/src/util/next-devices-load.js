@@ -8,7 +8,7 @@
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
-import { goalPct, modeWrites, overnightSource, overnightWrites } from './next-devices.js';
+import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature } from './next-devices.js';
 
 const MODES = [
     { key: 'off', label: 'off', help: 'help_mode_off' },
@@ -130,6 +130,22 @@ export function loadBody(card, row) {
     const phaseVal = card._inline('ph:' + id, phaseLabel(card, row.phase), () => card._selEdit('ph:' + id, {
         value: row.phase, options: PHASES.map((p) => ({ key: p, label: phaseLabel(card, p) })), onCommit: (p) => send('phase', p) }));
     rows.push(card._row('mdi:sine-wave', t('next_phase'), phaseVal, t('next_phase_sub')));
+    // Stop condition: a sensor that ends the day's run once it reaches a value (water temperature, a car's %).
+    const stopEnt = g.stop_entity || '';
+    const stopPick = card._inline('stopent:' + id, stopEnt ? card._name(stopEnt) : t('action_none'), () => card._entEdit('stopent:' + id, {
+        value: stopEnt, domains: ['sensor', 'input_number', 'number'], onCommit: (v) => send('stop_entity', v) }));
+    const stopAt = stopEnt ? numVal('stopat', g.stop_at > 0 ? String(g.stop_at) + (card._unitOf(stopEnt) ? ' ' + card._unitOf(stopEnt) : '') : '—', {
+        value: g.stop_at || null, step: 1, onCommit: (v) => send('stop_at', String(v)) }) : '';
+    const stopNow = stopEnt && card._has(stopEnt) ? card._str(stopEnt) + (card._unitOf(stopEnt) ? ' ' + card._unitOf(stopEnt) : '') : '';
+    rows.push(card._row('mdi:flag-checkered', t('next_stop_when'), stopPick,
+        stopEnt ? html`${t('next_stop_at')} ${stopAt}${stopNow ? ' · ' + tf('next_now_value', { v: stopNow }) : ''}` : t('next_stop_when_sub'),
+        { more: !stopEnt }));
+    // Own thermometer for the comfort band; without one SEM reads the device's own temperature.
+    const thermo = g.comfort_entity || '';
+    rows.push(card._row('mdi:thermometer-lines', t('next_own_thermometer'),
+        card._inline('thermo:' + id, thermo ? card._name(thermo) : t('next_thermo_device'), () => card._entEdit('thermo:' + id, {
+            value: thermo, domains: ['sensor'], filter: isTemperature, onCommit: (v) => send('comfort_entity', v) })),
+        t('next_own_thermometer_sub'), { more: !thermo }));
     if (kind === 'hot_water' && card._has('number.sem_legionella_target_temp')) {
         const lid = 'number.sem_legionella_target_temp', iid = 'number.sem_legionella_interval_hours';
         rows.push(card._row('mdi:bacteria-outline', t('next_legionella'),

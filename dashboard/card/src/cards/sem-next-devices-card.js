@@ -26,7 +26,7 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, swap, priorityPayload, verdictKey } from '../util/next-devices.js';
+import { deviceRows, statePill, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
@@ -76,6 +76,12 @@ function writeOpen(map) {
 }
 
 const devicesCss = css`
+    .addform { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 6px; }
+    .addform label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--n-fg2); }
+    .addform input.txt { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--n-line); background: var(--n-card2); color: var(--n-fg); font: inherit; }
+    .addform .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .addform .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+    ha-entity-picker { display: block; }
     .grid { align-items: start; grid-template-columns: minmax(0, 1fr); max-width: 980px; }
     .dev.folded .body { display: none; }
     .dev.folded .head { margin-bottom: 0; }
@@ -104,7 +110,7 @@ const devicesCss = css`
 class SEMNextDevicesCard extends SEMNextBase {
     static get styles() { return [nextCss, devicesCss]; }
     static get properties() {
-        return { ...super.properties, _edit: { state: true }, _reorder: { state: true }, _open: { state: true }, _tick: { state: true } };
+        return { ...super.properties, _edit: { state: true }, _reorder: { state: true }, _open: { state: true }, _adding: { state: true }, _addForm: { state: true }, _addBusy: { state: true }, _tick: { state: true } };
     }
 
     constructor() {
@@ -112,6 +118,9 @@ class SEMNextDevicesCard extends SEMNextBase {
         this._edit = null;
         this._reorder = false;
         this._open = readOpen();
+        this._adding = false;
+        this._addForm = {};
+        this._addBusy = false;
         this._tick = 0;
         this._work = null;      // the rows while reordering
         this._held = null;      // the order just written, until the sensor has it
@@ -357,6 +366,91 @@ class SEMNextDevicesCard extends SEMNextBase {
             const res = await this._hass.callWS({ type: DOMAIN + '/session_history/xlsx', charger_id: cid });
             if (res?.base64) downloadBase64(res.filename || 'sem-sessions.xlsx', res.base64, XLSX_MIME);
         } catch (err) { this._showError(err); }
+    }
+
+    // ── add a device ──
+    async _toggleAdd() {
+        this._adding = !this._adding;
+        if (this._adding) {
+            this._addForm = {};
+            await this._ensureEntityPicker();
+            this.requestUpdate();
+        }
+    }
+
+    /** An entity field: HA's picker when it is loaded, else a text box with the matching ids to choose from. */
+    _entityField(value, domains, onChange, o = {}) {
+        if (customElements.get('ha-entity-picker')) {
+            return html`<ha-entity-picker .hass=${this._hass} .value=${value || ''} .includeDomains=${domains}
+                .entityFilter=${o.filter || undefined} .label=${o.label || ''} allow-custom-entity
+                @value-changed=${(e) => onChange(String(e.detail?.value || ''))}></ha-entity-picker>`;
+        }
+        const listId = 'ents-' + domains.join('-') + (o.filter ? '-f' : '');
+        const ids = entityOptions(this._hass?.states, domains, o.filter);
+        return html`<input class="txt" list=${listId} .value=${value || ''} placeholder=${o.label || ''}
+            @change=${(e) => onChange(e.target.value.trim())}>
+            <datalist id=${listId}>${ids.map((id) => html`<option value=${id}></option>`)}</datalist>`;
+    }
+
+    /** An inline entity editor: commits on choice, an empty choice clears, Cancel closes. */
+    _entEdit(key, { value, domains, filter, onCommit }) {
+        return html`${this._entityField(value, domains, (v) => { this._edit = null; onCommit(v); }, { filter })}
+            ${value ? this._btn(this._t('action_none'), () => { this._edit = null; onCommit(''); }, { small: true, ghost: true }) : nothing}
+            ${this._btn(this._t('next_cancel'), () => { this._edit = null; }, { small: true, ghost: true })}`;
+    }
+
+    _setAdd(field, value) { this._addForm = { ...this._addForm, [field]: value }; }
+
+    async _submitAdd(rows) {
+        const { data, error } = registerPayload(this._addForm, rows);
+        if (error) { this._toast(this._t(error), true); return; }
+        this._addBusy = true;
+        try {
+            await this._hass.callService(DOMAIN, 'register_surplus_device', data, undefined, false);
+            this._toast(this._tf('next_add_done', { name: data.name }));
+            this._adding = false;
+            this._addForm = {};
+        } catch (err) {
+            this._failed(err);
+        } finally {
+            this._addBusy = false;
+        }
+    }
+
+    _addSheet(rows) {
+        const t = (k) => this._t(k);
+        const dis = this._obs() || this._addBusy;
+        const f = this._addForm || {};
+        const loose = unmanagedLoads(rows);
+        const known = loose.length
+            ? html`<div class="rows">${loose.map((r) => {
+                const w = r.powerEntity ? this._powerW(r.powerEntity) : null;
+                return this._row('mdi:power-plug-outline', r.name,
+                    this._btn(t('next_add_control_it'), () => this._showConfigureModal(r.id, r.name), { small: true, disabled: this._obs() }),
+                    w === null ? t('next_add_measured_only') : this._kw(w) + ' · ' + t('next_add_measured_only'));
+            })}</div>`
+            : html`<p class="help">${t('next_add_none_loose')}</p>`;
+        const form = html`<div class="addform">
+            <label>${t('next_add_name')}<input class="txt" .value=${f.name || ''} @input=${(e) => this._setAdd('name', e.target.value)}></label>
+            <label>${t('next_add_switch')}${this._entityField(f.entity, SWITCH_DOMAINS, (v) => this._setAdd('entity', v))}</label>
+            <label>${t('next_add_power_sensor')}${this._entityField(f.power, ['sensor'], (v) => this._setAdd('power', v),
+                { filter: (st) => ['W', 'kW'].includes(st?.attributes?.unit_of_measurement) })}</label>
+            <div class="two">
+                <label>${t('next_add_rated')}<input class="txt" type="number" min="0" step="50" .value=${f.rated || ''} @input=${(e) => this._setAdd('rated', e.target.value)}></label>
+                <label>${t('next_priority')}<input class="txt" type="number" min="1" max="10" step="1" .value=${f.priority || ''}
+                    placeholder=${String(Math.min(10, rows.length + 1))} @input=${(e) => this._setAdd('priority', e.target.value)}></label>
+            </div>
+            <p class="help">${t('next_add_starts_off')}</p>
+            <div class="acts">
+                ${this._btn(t('next_cancel'), () => this._toggleAdd(), { ghost: true })}
+                ${this._btn(t('next_add_btn'), () => this._submitAdd(rows), { primary: true, icon: 'mdi:plus', disabled: dis })}
+            </div></div>`;
+        return this._sec(t('next_add_device'), html`
+            <p class="help">${t('next_add_energy_help')} ${this._link(t('next_add_open_energy'), () => this._go('/config/energy'))}</p>
+            <h4 class="sm muted">${t('next_add_measured_title')}</h4>
+            ${known}
+            <h4 class="sm muted">${t('next_add_new_title')}</h4>
+            ${form}`);
     }
 
     // ── fold ──
@@ -657,7 +751,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         const toolbar = html`<div class="period">
             ${this._btn(this._reorder ? t('next_done_btn') : t('next_reorder'), () => this._toggleReorder(),
                 { primary: this._reorder, icon: this._reorder ? 'mdi:check' : 'mdi:swap-vertical', disabled: dis || n < 2 })}
-            <button type="button" class="pill" @click=${() => this._go('/sem-dashboard/config')}>${this._icon('mdi:plus', 's')}${t('next_add_device')}</button>
+            <button type="button" class="pill" aria-expanded=${this._adding ? 'true' : 'false'} @click=${() => this._toggleAdd()}>${this._icon(this._adding ? 'mdi:close' : 'mdi:plus', 's')}${t(this._adding ? 'next_cancel' : 'next_add_device')}</button>
             ${!this._reorder && !this._all && n > 1 ? (() => {
                 const allOpen = rows.every((r) => this._isOpen(r));
                 return html`<button type="button" class="pill" @click=${() => this._setAllOpen(rows, !allOpen)}>${this._icon(allOpen ? 'mdi:unfold-less-horizontal' : 'mdi:unfold-more-horizontal', 's')}${t(allOpen ? 'next_fold_all' : 'next_open_all')}</button>`;
@@ -668,6 +762,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         return this._frame({ main, sub }, html`
             ${toolbar}
             <div class="grid ${this._reorder ? 'reorder' : ''}">
+                ${this._adding && !this._reorder ? this._addSheet(rows) : nothing}
                 ${this._surplus(rows)}
                 ${repeat(rows, (r) => r.id, (r, i) => this._shell(r, i))}
             </div>`);

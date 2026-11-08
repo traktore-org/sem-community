@@ -292,3 +292,60 @@ export function weekdaySummary(byWeekday, fallback = '') {
     }
     return runs;
 }
+
+// ── Add a device ──
+
+/** Domains SEM can switch: a switch device calls homeassistant.turn_on/off; climate has its own class. */
+export const SWITCH_DOMAINS = ['switch', 'input_boolean', 'light', 'fan', 'climate'];
+
+/** Loads SEM measures (from HA's Energy settings) but cannot switch yet. */
+export function unmanagedLoads(rows) {
+    return (rows || []).filter((r) => r && r.type === 'load' && !r.hasControlHandle);
+}
+
+/** A device id from a name, unique among the ids SEM already has. */
+export function newDeviceId(name, existingIds = []) {
+    const base = String(name || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'device';
+    const taken = new Set(existingIds);
+    if (!taken.has(base)) return base;
+    let n = 2;
+    while (taken.has(`${base}_${n}`)) n++;
+    return `${base}_${n}`;
+}
+
+/** Entity ids in these domains, sorted; an optional filter on the state object. */
+export function entityOptions(states, domains, filter = null) {
+    return Object.keys(states || {})
+        .filter((id) => domains.includes(id.split('.')[0]) && (!filter || filter(states[id])))
+        .sort();
+}
+
+/** A temperature reading: a sensor in °C or °F. */
+export function isTemperature(st) {
+    const u = st?.attributes?.unit_of_measurement;
+    return u === '°C' || u === '°F' || st?.attributes?.device_class === 'temperature';
+}
+
+/**
+ * register_surplus_device data from the form, or { error: key }. The device
+ * starts with control_mode off (the backend default): the user opts it in.
+ */
+export function registerPayload(form, rows = []) {
+    const name = String(form?.name || '').trim();
+    const entity = String(form?.entity || '').trim();
+    if (!name) return { error: 'next_add_need_name' };
+    if (!/^[a-z_]+\.[a-z0-9_]+$/.test(entity) || !SWITCH_DOMAINS.includes(entity.split('.')[0])) return { error: 'next_add_need_switch' };
+    const data = {
+        device_id: newDeviceId(name, (rows || []).map((r) => r.id)),
+        entity_id: entity,
+        name,
+        priority: Math.max(1, Math.min(10, Math.round(Number(form.priority) || Math.min(10, (rows || []).length + 1)))),
+    };
+    if (entity.startsWith('climate.')) data.device_type = 'climate';
+    const rated = Number(form.rated);
+    if (Number.isFinite(rated) && rated > 0) data.rated_power = rated;
+    const power = String(form.power || '').trim();
+    if (power) data.power_entity_id = power;
+    return { data };
+}

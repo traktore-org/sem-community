@@ -7,9 +7,10 @@
  * hardware). Then what SEM held back. Then the settings as seven sentences;
  * tap a value, it becomes a control; changes wait in a pending map and go
  * out together from the sticky Apply bar: entities directly, options in
- * one set_option call. The classic Configuration tab keeps what a sentence
- * cannot carry (adding or detecting a charger, entity pickers, PV strings,
- * the detected-hardware report).
+ * one set_option call. Entity fields use HA's own entity picker, filtered
+ * like the classic setup card's picker for the same option. Chargers are
+ * added and removed here; the setup check and the detected-hardware report
+ * open in place (`_setupPanel`), never on the classic dashboard.
  *
  * Config:
  *   type: custom:sem-next-system-card
@@ -17,13 +18,16 @@
 
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
+import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS } from '../util/next-freshness.js';
 import { plainReason, deviceName } from '../util/why-rows.js';
 import { MISSING } from '../util/missing-value.js';
 import { groups, applyPlan, pendingKey, slotText, setupItems, loadSources, unavailableCount,
-         reserveIds, pvStrings } from '../util/next-settings.js';
+         reserveIds, pvStrings, chargerSkeleton, FILTER_CLASSES } from '../util/next-settings.js';
+import { isPowerEntity, isCo2IntensityEntity, isOutdoorTemperatureCandidate } from '../util/detect-rows.js';
 
-const CLASSIC_CONFIG = '/sem-dashboard/config';
+const HA_SETTINGS = '/config/integrations/integration/solar_energy_management';
+const ENTITY_FILTERS = { power: isPowerEntity, co2_intensity: isCo2IntensityEntity, outdoor_temperature: isOutdoorTemperatureCandidate };
 
 const DIAG_IDS = ['sensor.sem_diag_version', 'sensor.sem_diag_grid_mode', 'sensor.sem_diag_grid_sign',
                   'sensor.sem_diag_battery_sign', 'sensor.sem_diag_charger_count', 'sensor.sem_diag_charger_control',
@@ -74,6 +78,9 @@ const cardCss = css`
     .confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
     .ct .lnk.ic { padding: 2px 4px; }
     .ct .lnk.ic ha-icon { color: var(--n-fg3); }
+    .sent .edit.pick, .help .edit.pick { display: inline-flex; min-width: min(320px, 100%); max-width: 100%; vertical-align: middle; }
+    .edit.pick ha-entity-picker { flex: 1; min-width: 0; }
+    .chlist { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
 `;
 
 class SEMNextSystemCard extends SEMNextBase {
@@ -88,6 +95,10 @@ class SEMNextSystemCard extends SEMNextBase {
             _applying: { state: true },
             _confirmObs: { state: true },
             _diagBusy: { state: true },
+            _panel: { state: true },
+            _chargerBusy: { state: true },
+            _confirmRemove: { state: true },
+            _pickerReady: { state: true },
         };
     }
 
@@ -101,6 +112,10 @@ class SEMNextSystemCard extends SEMNextBase {
         this._confirmObs = false;
         this._diagBusy = false;
         this._optionsAsked = false;
+        this._panel = '';
+        this._chargerBusy = false;
+        this._confirmRemove = '';
+        this._pickerReady = false;
     }
 
     set hass(hass) {
@@ -184,7 +199,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const grid = this._valLabel('diag_grid_sign');
         const batt = this._valLabel('diag_battery_sign');
         const sub = [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : ''].filter(Boolean).join(' · ');
-        return this._row('mdi:check-decagram', this._t('next_setup_check'), value, sub, { onClick: () => this._go(CLASSIC_CONFIG) });
+        return this._row('mdi:check-decagram', this._t('next_setup_check'), value, sub, { onClick: () => this._togglePanel('setup') });
     }
 
     _hardwareRow() {
@@ -202,7 +217,15 @@ class SEMNextSystemCard extends SEMNextBase {
             gridMode ? `${this._t('next_grid_mode')} ${gridMode}` : '',
             unmapped !== null ? this._tf('next_unmapped', { n: unmapped }) : '',
         ].filter(Boolean).join(' · ');
-        return this._row('mdi:radar', this._t('next_hardware'), value, sub, { onClick: () => this._go(CLASSIC_CONFIG) });
+        return this._row('mdi:radar', this._t('next_hardware'), value, sub, { onClick: () => this._togglePanel('hardware') });
+    }
+
+    _togglePanel(kind) { this._panel = this._panel === kind ? '' : kind; }
+
+    /** Mount point for the setup check ('setup') and the detected-hardware review ('hardware'). */
+    _setupPanel(kind) {
+        return html`<sem-next-setup-panel .hass=${this._hass} .kind=${kind === 'setup' ? 'check' : kind}
+            @sem-next-close=${() => { this._panel = ''; }}></sem-next-setup-panel>`;
     }
 
     _unavailableRow() {
@@ -235,10 +258,11 @@ class SEMNextSystemCard extends SEMNextBase {
     _health(rows) {
         return this._sec(this._t('next_health'), html`
             ${this._freshTiles(rows)}
-            <div class="rows" style="margin-top:8px">${this._setupRow()}${this._hardwareRow()}${this._unavailableRow()}${this._versionRow()}</div>
+            <div class="rows" style="margin-top:8px">${this._setupRow()}${this._panel === 'setup' ? this._setupPanel('setup') : nothing}${this._hardwareRow()}${this._panel === 'hardware' ? this._setupPanel('hardware') : nothing}${this._unavailableRow()}${this._versionRow()}</div>
             <div class="btns" style="margin-top:10px">
                 ${this._btn(this._t('copy_diagnostics'), () => this._copyDiagnostics(), { small: true, icon: 'mdi:content-copy' })}
                 ${this._btn(this._t('config_diagnose'), () => this._diagnose('all'), { small: true, icon: 'mdi:stethoscope', disabled: this._diagBusy })}
+                ${this._btn(this._t('config_open_ha_settings'), () => this._go(HA_SETTINGS), { small: true, icon: 'mdi:cog-outline' })}
                 ${this._observerButton()}
             </div>
 `, { cls: 'span2' });
@@ -270,7 +294,7 @@ class SEMNextSystemCard extends SEMNextBase {
         return {
             options: this._options,
             currency: this._currency(),
-            chargers: this._chargers.map((cid) => ({ cid, name: this._chargerName(cid) })),
+            chargers: this._chargerList(),
             labels: {
                 control: this._valLabel('diag_charger_control'),
                 provider: this._valLabel('tariff_provider') || this._str('sensor.sem_tariff_provider'),
@@ -279,6 +303,23 @@ class SEMNextSystemCard extends SEMNextBase {
             },
             notifyServices,
         };
+    }
+
+    /** Chargers from the options (a new one has no entities yet) and from SEM's entities. */
+    _chargerList() {
+        const out = [];
+        const seen = new Set();
+        for (const c of (this._options?.ev_chargers || [])) {
+            if (!c || !c.id || seen.has(c.id)) continue;
+            seen.add(c.id);
+            out.push({ cid: c.id, name: this._chargers.includes(c.id) ? this._chargerName(c.id) : (c.name || c.id) });
+        }
+        for (const cid of this._chargers) {
+            if (seen.has(cid)) continue;
+            seen.add(cid);
+            out.push({ cid, name: this._chargerName(cid) });
+        }
+        return out;
     }
 
     _part(p) {
@@ -297,17 +338,55 @@ class SEMNextSystemCard extends SEMNextBase {
         const t = (k) => this._t(k);
         if (slot.kind === 'switch') {
             return html`<button type="button" class="val ${pend ? 'dirty' : ''}" ?disabled=${dis} role="switch" aria-checked="${!!value}"
-                @click=${() => this._stage(slot, !value)}>${slotText(slot, t, value)}</button>`;
+                @click=${() => this._stage(slot, !value)}>${slotText(slot, t, value, this._hass.states)}</button>`;
         }
         if (this._editing === key && !dis) return this._editor(slot, value);
         return html`<button type="button" class="val ${pend ? 'dirty' : ''}" ?disabled=${dis}
-            @click=${() => { this._editing = key; }}>${slotText(slot, t, value)}</button>`;
+            @click=${() => this._edit(slot, key)}>${slotText(slot, t, value, this._hass.states)}</button>`;
+    }
+
+    _edit(slot, key) {
+        this._editing = key;
+        if (slot.kind === 'entity') this._ensureEntityPicker();
+    }
+
+    /** HA loads ha-entity-picker on demand; an entities card's editor pulls it in. */
+    async _ensureEntityPicker() {
+        if (customElements.get('ha-entity-picker')) { this._pickerReady = true; return; }
+        try {
+            const helpers = await window.loadCardHelpers?.();
+            if (helpers?.createCardElement) {
+                const el = await helpers.createCardElement({ type: 'entities', entities: [] });
+                await el.constructor?.getConfigElement?.();
+            }
+        } catch (e) { /* the text input stays */ }
+        this._pickerReady = !!customElements.get('ha-entity-picker');
+    }
+
+    _entityEditor(slot, value, close) {
+        const done = (v) => { this._stage(slot, v || ''); close(); };
+        const esc = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
+        if (!customElements.get('ha-entity-picker')) {
+            return html`<span class="edit pick"><input type="text" .value=${String(value ?? '')} placeholder="sensor.…"
+                @change=${(e) => done(e.target.value.trim())} @keydown=${(e) => { esc(e); if (e.key === 'Enter') { e.preventDefault(); done(e.target.value.trim()); } }}></span>`;
+        }
+        const dc = slot.deviceClass;
+        return html`<span class="edit pick" @keydown=${esc}><ha-entity-picker
+            .hass=${this._hass}
+            .value=${value || ''}
+            .includeDomains=${slot.domains || undefined}
+            .includeDeviceClasses=${dc && !FILTER_CLASSES.has(dc) ? [dc] : undefined}
+            .entityFilter=${dc ? ENTITY_FILTERS[dc] : undefined}
+            .allowCustomEntity=${false}
+            @value-changed=${(e) => done(e.detail?.value || '')}></ha-entity-picker>
+            ${this._btn(this._t('next_cancel'), close, { small: true, ghost: true })}</span>`;
     }
 
     _editor(slot, value) {
         const close = () => { if (this._editing === pendingKey(slot)) this._editing = ''; };
         const keys = (e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.target.blur(); } };
         const t = (k) => this._t(k);
+        if (slot.kind === 'entity') return this._entityEditor(slot, value, close);
         if (slot.kind === 'select') {
             return html`<span class="edit"><select @change=${(e) => { this._stage(slot, e.target.value); close(); }} @blur=${close} @keydown=${keys}>
                 ${(slot.options || []).map((o) => html`<option value="${o.value}" ?selected=${String(o.value) === String(value)}>${o.labelKey ? t(o.labelKey) : (o.label ?? o.value)}</option>`)}
@@ -318,7 +397,7 @@ class SEMNextSystemCard extends SEMNextBase {
                 min="${slot.min ?? nothing}" max="${slot.max ?? nothing}" step="${slot.step || 1}"
                 @input=${(e) => this._stage(slot, e.target.value)} @blur=${close} @keydown=${keys}>${slot.unit ? html` ${slot.unit}` : nothing}</span>`;
         }
-        return html`<span class="edit"><input type="text" .value=${String(value ?? '')}
+        return html`<span class="edit"><input type="text" .value=${String(value ?? '')} placeholder="${slot.placeholder || nothing}"
             @input=${(e) => this._stage(slot, e.target.value)} @blur=${close} @keydown=${keys}></span>`;
     }
 
@@ -340,9 +419,67 @@ class SEMNextSystemCard extends SEMNextBase {
             ?disabled=${this._diagBusy} @click=${() => this._diagnose(g.diagnoseSection)}>${this._icon('mdi:stethoscope', 's')}</button>`;
         return this._sec(this._t(g.titleKey), html`
             <p class="sent">${g.sentence.map((p) => this._part(p))}</p>
-            ${g.key === 'chargers' ? html`<p class="help">${this._link(this._t('next_ch_add'), () => this._go(CLASSIC_CONFIG))}</p>` : nothing}
+            ${g.key === 'chargers' ? this._chargerTools() : nothing}
             ${n ? html`<p class="help"><span data-more>${g.more.map((p) => this._part(p))}</span><span class="app-not-all">${this._tf('config_more_in_all', { n })}</span></p>` : nothing}`,
             { cls: 'group', extra });
+    }
+
+    // ── chargers: add and remove (classic _addCharger / _removeCharger) ──
+
+    _chargerTools() {
+        const dis = this._obs() || this._chargerBusy || this._applying || !this._options;
+        const list = this._chargerList();
+        const t = (k) => this._t(k);
+        const removeFor = (c) => (this._confirmRemove === c.cid
+            ? html`<span class="confirm">${t('config_ev_remove_confirm')} <b>${c.name}</b>
+                ${this._btn(t('next_yes'), () => this._removeCharger(c.cid), { small: true, primary: true, disabled: dis })}
+                ${this._btn(t('next_cancel'), () => { this._confirmRemove = ''; }, { small: true, ghost: true })}</span>`
+            : this._btn(t('config_ev_remove') + ' ' + c.name, () => { this._confirmRemove = c.cid; }, { small: true, ghost: true, icon: 'mdi:delete-outline', disabled: dis }));
+        return html`<div class="chlist">
+            ${this._btn(t('config_ev_add_charger'), () => this._addCharger(), { small: true, icon: 'mdi:plus', disabled: dis })}
+            ${list.length ? html`<span data-more>${list.map(removeFor)}</span>` : nothing}
+        </div>`;
+    }
+
+    async _setOptions(options) {
+        await this._hass.callService('solar_energy_management', 'set_option',
+            { options, ...(this._entryId ? { entry_id: this._entryId } : {}) }, undefined, false);
+    }
+
+    async _addCharger() {
+        if (this._chargerBusy || !this._options || this._obs()) return;
+        const charger = chargerSkeleton(this._options.ev_chargers, this._chargers, this._t('config_ev_new_charger'));
+        this._chargerBusy = true;
+        try {
+            // One skeleton: the backend merges ev_chargers by id, so the siblings stay.
+            await this._setOptions({ ev_chargers: [charger] });
+            await this._loadOptions();
+            this._say(this._t('config_saved'));
+        } catch (err) {
+            console.error('[sem-next-system-card] add charger failed', err);
+            this._say(err?.message || this._t('next_apply_failed'), 8000, true);
+        } finally {
+            this._chargerBusy = false;
+        }
+    }
+
+    async _removeCharger(cid) {
+        if (this._chargerBusy || !cid || this._obs()) return;
+        this._chargerBusy = true;
+        this._confirmRemove = '';
+        try {
+            await this._hass.callService('solar_energy_management', 'remove_charger', { charger_id: cid }, undefined, false);
+            const p = { ...this._pending };
+            for (const k of Object.keys(p)) if (k.startsWith(`opt:ev_chargers:${cid}:`)) delete p[k];
+            this._pending = p;
+            await this._loadOptions();
+            this._say(this._t('config_saved'));
+        } catch (err) {
+            console.error('[sem-next-system-card] remove charger failed', err);
+            this._say(err?.message || this._t('next_apply_failed'), 8000, true);
+        } finally {
+            this._chargerBusy = false;
+        }
     }
 
     // ── apply ──

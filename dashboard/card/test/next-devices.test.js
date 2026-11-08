@@ -9,6 +9,7 @@ import {
     deviceRows, statePill, swap, priorityPayload, mergedMode, modeWrites,
     overnightSource, overnightWrites, verdictKey, goalPct, targetModel, zonesModel,
     weekdaySummary, chargerIdOf, loadKind,
+    unmanagedLoads, newDeviceId, registerPayload, entityOptions, isTemperature,
 } from '../src/util/next-devices.js';
 
 const MAP = {
@@ -393,4 +394,60 @@ test('a load whose rating is the 1 kW placeholder says not measured, not ~1.0 kW
     assert.equal(makeCard(st)._rowsNow().find((r) => r.id === 'hot_water').ratingMeasured, true);
     delete devs.hot_water.rating_measured;
     assert.equal(makeCard(st)._rowsNow().find((r) => r.id === 'hot_water').ratingMeasured, true);
+});
+
+test('add a device: ids, payload and refusals', () => {
+    assert.equal(newDeviceId('Pool pump'), 'pool_pump');
+    assert.equal(newDeviceId('Heizkörper Büro', ['heizkorper_buro']), 'heizkorper_buro_2');
+    assert.equal(newDeviceId('  ***  '), 'device');
+    assert.deepEqual(registerPayload({ name: '', entity: 'switch.a' }), { error: 'next_add_need_name' });
+    assert.deepEqual(registerPayload({ name: 'A', entity: 'sensor.a' }), { error: 'next_add_need_switch' });
+    assert.deepEqual(registerPayload({ name: 'A', entity: 'switch' }), { error: 'next_add_need_switch' });
+    const { data } = registerPayload({ name: 'Pool pump', entity: 'switch.pool', rated: '1200', power: 'sensor.pool_w', priority: '14' }, [{ id: 'pool_pump' }]);
+    assert.deepEqual(data, { device_id: 'pool_pump_2', entity_id: 'switch.pool', name: 'Pool pump', priority: 10, rated_power: 1200, power_entity_id: 'sensor.pool_w' });
+    const c = registerPayload({ name: 'AC', entity: 'climate.office' }, [{ id: 'x' }, { id: 'y' }]).data;
+    assert.equal(c.device_type, 'climate');
+    assert.equal(c.priority, 3);
+    assert.equal('rated_power' in c, false);
+    assert.equal('control_mode' in c, false);
+});
+
+test('add a device: measured loads without a switch, entity lists, temperature filter', () => {
+    const rows = [{ id: 'a', type: 'load', hasControlHandle: false }, { id: 'b', type: 'load', hasControlHandle: true }, { id: 'c', type: 'charger', hasControlHandle: false }];
+    assert.deepEqual(unmanagedLoads(rows).map((r) => r.id), ['a']);
+    const st = { 'switch.b': {}, 'switch.a': {}, 'sensor.t': { attributes: { unit_of_measurement: '°C' } }, 'sensor.w': { attributes: { unit_of_measurement: 'W' } } };
+    assert.deepEqual(entityOptions(st, ['switch']), ['switch.a', 'switch.b']);
+    assert.deepEqual(entityOptions(st, ['sensor'], isTemperature), ['sensor.t']);
+});
+
+test('the add sheet registers the device and closes; a refusal shows', async () => {
+    const calls = [];
+    const el = makeCard(states(), { callService: async (d, s, data) => { calls.push([s, data]); } });
+    el._adding = true;
+    let out = text(el.render());
+    assert.match(out, /next_add_new_title/);
+    assert.match(out, /next_add_energy_help/);
+    el._addForm = { name: 'Pool', entity: 'switch.pool' };
+    await el._submitAdd(el._rowsNow());
+    assert.equal(calls[0][0], 'register_surplus_device');
+    assert.equal(calls[0][1].entity_id, 'switch.pool');
+    assert.equal(el._adding, false);
+    el._adding = true;
+    el._addForm = { name: 'Pool' };
+    await el._submitAdd(el._rowsNow());
+    assert.equal(calls.length, 1);
+    assert.equal(el._toastBad, true);
+    assert.equal(el._toastText, 'next_add_need_switch');
+});
+
+test('a load shows its stop sensor and thermometer pickers and writes them', () => {
+    const calls = [];
+    const el = makeCard(states(), { callService: async (d, s, data) => { calls.push([s, data]); return true; } });
+    el._all = true;
+    const out = text(el.render());
+    assert.match(out, /next_stop_when/);
+    assert.match(out, /next_own_thermometer/);
+    el._dev('heat_pump', 'stop_entity', 'sensor.boiler_temp');
+    el._dev('heat_pump', 'comfort_entity', '');
+    assert.deepEqual(calls.map((c) => c[1].property + '=' + c[1].value), ['stop_entity=sensor.boiler_temp', 'comfort_entity=']);
 });
