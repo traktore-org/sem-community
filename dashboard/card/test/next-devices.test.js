@@ -377,3 +377,20 @@ test('a load SEM can not switch is shown as measured only, without modes or perm
     const section = body.slice(0, end);
     assert.doesNotMatch(section, /next_may_switch|next_min_run_pause|requires/);
 });
+
+test('a load whose rating is the 1 kW placeholder says not measured, not ~1.0 kW (#1326)', () => {
+    const st = states();
+    const devs = st['sensor.sem_controllable_devices_count'].attributes.devices;
+    devs.hot_water.rating_measured = false;
+    devs.hot_water.power_rating = 1000;
+    const el = makeCard(st);
+    el._all = true;
+    const row = el._rowsNow().find((r) => r.id === 'hot_water');
+    assert.equal(row.ratingMeasured, false);
+    const out = text(el.render());
+    assert.match(out, /rating_not_measured/);
+    devs.hot_water.rating_measured = true;
+    assert.equal(makeCard(st)._rowsNow().find((r) => r.id === 'hot_water').ratingMeasured, true);
+    delete devs.hot_water.rating_measured;
+    assert.equal(makeCard(st)._rowsNow().find((r) => r.id === 'hot_water').ratingMeasured, true);
+});

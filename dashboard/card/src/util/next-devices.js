@@ -100,6 +100,8 @@ function rowFromMap(id, info) {
         icon: iconFor(i, kind),
         powerEntity: i.power_entity || '',
         rating: Number(i.power_rating) || 0,
+        // (#1326) false only when SEM says the rating is its 1 kW placeholder.
+        ratingMeasured: i.rating_measured !== false,
         isOn: !!i.is_on,
         isShed: !!i.is_shed,
         shedReason: i.shed_reason || null,

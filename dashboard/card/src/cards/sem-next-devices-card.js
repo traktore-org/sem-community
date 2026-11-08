@@ -617,7 +617,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         const liveText = row.type === 'battery' && w !== null
             ? (w < 0 ? '−' : '') + this._kw(Math.abs(w))
             : (w !== null && (row.type !== 'load' || w > 10 || row.isOn) ? this._kw(w)
-                : (row.rating > 0 ? html`<span class="dim">~${this._kw(row.rating)}</span>` : (w === null ? '' : this._kw(w))));
+                : (row.rating > 0 && row.ratingMeasured ? html`<span class="dim">~${this._kw(row.rating)}</span>`
+                    : (row.rating > 0 ? html`<span class="dim">${t('rating_not_measured')}</span>` : (w === null ? '' : this._kw(w)))));
         const dis = this._obs();
         const open = !this._reorder && this._isOpen(row);
         const body = !open ? nothing

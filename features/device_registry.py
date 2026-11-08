@@ -1874,6 +1874,7 @@ class UnifiedDeviceRegistry:
                 # device shows its rated power instead of a bare 0 W. Falls
                 # back to the live sensor when no device is registered yet.
                 "power_rating": self._rated_power_for(did, device.power_sensor),
+                "rating_measured": self._rating_measured_for(did),
                 "power_entity": device.power_sensor,
                 "energy_sensor": device.energy_sensor,
                 "switch_entity": device.control_entity,
@@ -1920,6 +1921,7 @@ class UnifiedDeviceRegistry:
                 # card forever, even once it had measured itself.
                 "power_rating": self._rated_power_for(
                     did, spec.get("power_entity_id")),
+                "rating_measured": self._rating_measured_for(did),
                 "power_entity": spec.get("power_entity_id"),
                 # the service accepts energy_entity_id (#600) — emit it
                 # instead of a hardcoded None, else registering a device that
@@ -2087,6 +2089,7 @@ class UnifiedDeviceRegistry:
             "is_controllable": True,
             "is_critical": False,
             "power_rating": round(float(getattr(dev, "rated_power", 0) or 0)),
+            "rating_measured": bool(getattr(dev, "rated_power_measured", True)),
             "power_entity": getattr(dev, "power_entity_id", None),
             # (#600) surface the companion energy counter if the controller has
             # one, so the card can show derived power for a power-sensor-less HP.
@@ -3097,6 +3100,18 @@ class UnifiedDeviceRegistry:
         if rated > 0:
             return rated
         return self._get_power_rating(power_sensor)
+
+    def _rating_measured_for(self, device_id: str) -> Optional[bool]:
+        """(#1326) Whether ``power_rating`` is a measurement or the 1 kW
+        placeholder an unmeasured switch load starts with. None when no live
+        device exists yet: the row then shows the sensor's own reading."""
+        sc = self._surplus_controller
+        live = sc.get_device(device_id) if sc is not None else None
+        if live is None:
+            return None
+        if float(getattr(live, "rated_power", 0) or 0) <= 0:
+            return None
+        return bool(getattr(live, "rated_power_measured", True))
 
     def _initial_rated_power(self, device_id: str, power_sensor: Optional[str]) -> float:
         """(#576) The rated power to hand a freshly-built device.
