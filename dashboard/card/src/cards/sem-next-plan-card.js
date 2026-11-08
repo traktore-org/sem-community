@@ -244,7 +244,13 @@ class SEMNextPlanCard extends SEMNextBase {
     }
 
     _rowLabel(r) {
-        if (r.kind === 'ev' || r.kind === 'load') return r.label || this._t(r.kind === 'ev' ? 'next_src_car' : 'next_lane_load');
+        if (r.kind === 'ev' && !r.label) {
+            // two unnamed cars must not read the same: number them in row order
+            const evs = (this._lastRows || []).filter((x) => x.kind === 'ev');
+            const i = evs.indexOf(r);
+            return evs.length > 1 && i >= 0 ? `${this._t('next_src_car')} ${i + 1}` : this._t('next_src_car');
+        }
+        if (r.kind === 'ev' || r.kind === 'load') return r.label || this._t('next_lane_load');
         return this._t({ battery_in: 'next_row_charge', battery_out: 'next_row_to_house', grid: 'next_row_from_grid' }[r.kind]);
     }
 
@@ -295,6 +301,7 @@ class SEMNextPlanCard extends SEMNextBase {
             charger: (cid) => (this._chargers.includes(cid) ? this._chargerName(cid) : ''),
             load: (id) => this._devices()[id]?.name || id,
         } });
+        this._lastRows = rows;
         return { tz, now, win, sun, price, rows };
     }
 
