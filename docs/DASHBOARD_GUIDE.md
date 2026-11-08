@@ -27,8 +27,9 @@ The dashboard is generated automatically on first install. If you need to regene
 
 1. Go to **Developer Tools** > **Services**
 2. Search for `solar_energy_management.generate_dashboard`
-3. Click **Call Service**. It builds **SEM Next**, the default, at `/sem-next`.
-   For the classic dashboard add `template: classic`.
+3. Click **Call Service**. It builds the default dashboard, **Solar Energy
+   Management**, at `/sem-next`. For the old one, **SEM Classic**, add
+   `template: classic`.
 4. The dashboard appears in the sidebar — hard-refresh your browser (Ctrl+Shift+R)
 
 ---
@@ -767,7 +768,7 @@ Calls `solar_energy_management.generate_dashboard` with `template: next`.
 
 #### sem-next-now-card
 
-**SEM Next · Now** · *SEM Next, Now screen*
+**SEM · Now** · *SEM Next, Now screen*
 
 Opens with one line in words: what SEM does right now, the next planned
 block and tonight's battery floor. Then the power bar (sources above, sinks
@@ -781,7 +782,7 @@ the other screens. A sensor that is out leaves its row out.
 
 #### sem-next-plan-card
 
-**SEM Next · Plan** · *SEM Next, Plan screen*
+**SEM · Plan** · *SEM Next, Plan screen*
 
 Today or tomorrow as one strip from `sensor.sem_energy_plan`: hourly price
 bars with the cheap and the expensive band, the sun forecast as a curve,
@@ -796,7 +797,7 @@ today**: the decision log with a device filter and an *Earlier* fold.
 
 #### sem-next-devices-card
 
-**SEM Next · Devices** · *SEM Next, Devices screen*
+**SEM · Devices** · *SEM Next, Devices screen*
 
 One list, one order: every charger, the battery and every load as one card
 (rank · name · state pill · live kW · ⚙ configure), sorted by priority.
@@ -812,7 +813,7 @@ Every row needs its entity; controls are off in observer mode.
 
 #### sem-next-insights-card
 
-**SEM Next · Insights** · *SEM Next, Insights screen*
+**SEM · Insights** · *SEM Next, Insights screen*
 
 One period for every chart: Today, Yesterday, Week, Month, Year; today's bar
 is highlighted. Seven tabs: Energy (house by source, where the energy went,
@@ -826,7 +827,7 @@ the recorder; a missing entity leaves its series or row out.
 
 #### sem-next-system-card
 
-**SEM Next · System** · *SEM Next, System screen*
+**SEM · System** · *SEM Next, System screen*
 
 Health first: a tile per source with its age (solar, grid, battery, car,
 prices, forecast, each load), the setup check with the grid and battery

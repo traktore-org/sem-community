@@ -72,10 +72,10 @@ class TestGeneratorNext:
     async def test_next_is_generated_at_its_own_path(self, mock_hass):
         gen = DashboardGenerator(mock_hass)
         config = await gen.generate_dashboard(
-            dashboard_title="SEM Next", dashboard_path="sem-next", template="next")
+            dashboard_title="Solar Energy Management", dashboard_path="sem-next", template="next")
         assert [v["path"] for v in config["views"]] == EXPECTED_PATHS
         assert config["path"] == "sem-next"
-        assert config["title"] == "SEM Next"
+        assert config["title"] == "Solar Energy Management"
         assert config["icon"] == NEXT_DASHBOARD_ICON
 
     @pytest.mark.asyncio
@@ -93,7 +93,7 @@ class TestGeneratorNext:
         }), encoding="utf-8")
 
         assert await gen.create_dashboard(
-            dashboard_title="SEM Next", dashboard_path="sem-next", template="next") == "sem-next"
+            dashboard_title="Solar Energy Management", dashboard_path="sem-next", template="next") == "sem-next"
 
         assert json.loads(classic.read_text(encoding="utf-8"))["data"]["config"]["views"] == ["classic"]
         saved = json.loads((storage / "lovelace.sem-next").read_text(encoding="utf-8"))
@@ -102,7 +102,7 @@ class TestGeneratorNext:
         by_path = {i["url_path"]: i for i in items}
         assert by_path["sem-dashboard"]["title"] == "Solar Energy Management"
         assert by_path["sem-dashboard"]["icon"] == "mdi:solar-power"
-        assert by_path["sem-next"]["title"] == "SEM Next"
+        assert by_path["sem-next"]["title"] == "Solar Energy Management"
         assert by_path["sem-next"]["icon"] == NEXT_DASHBOARD_ICON
 
     @pytest.mark.asyncio
@@ -144,3 +144,15 @@ def test_the_rebuild_switch_names_each_live_dashboard():
     regenerate_dashboard(hass)
     asyncio.run(tasks[0])
     assert calls == [{"template": "classic"}, {"template": "next"}]
+
+
+@pytest.mark.unit
+def test_the_default_takes_the_main_name_and_the_old_one_is_classic():
+    from custom_components.solar_energy_management.features.dashboard_generator import (
+        CLASSIC_DASHBOARD_TITLE, NEXT_DASHBOARD_TITLE,
+    )
+    assert NEXT_DASHBOARD_TITLE == "Solar Energy Management"
+    assert CLASSIC_DASHBOARD_TITLE == "SEM Classic"
+    with open(os.path.join(ROOT, "__init__.py"), encoding="utf-8") as f:
+        src = f.read()
+    assert "dashboard_title = CLASSIC_DASHBOARD_TITLE" in src

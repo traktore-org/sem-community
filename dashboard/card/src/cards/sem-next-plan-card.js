@@ -690,7 +690,7 @@ class SEMNextPlanCard extends SEMNextBase {
 
 semDefineCard('sem-next-plan-card', SEMNextPlanCard, {
     type: 'sem-next-plan-card',
-    name: 'SEM Next · Plan',
+    name: 'SEM · Plan',
     description: 'The day as one strip: prices, sun, the plan per device, the one-night overrides and today\'s decisions',
     documentationURL:
         'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-next-plan-card',

@@ -626,7 +626,7 @@ class SEMNextSystemCard extends SEMNextBase {
 
 semDefineCard('sem-next-system-card', SEMNextSystemCard, {
     type: 'sem-next-system-card',
-    name: 'SEM Next · System',
+    name: 'SEM · System',
     description: 'Health first: source freshness, setup check, what SEM held back, and every setting as a sentence',
     documentationURL:
         'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-next-system-card',

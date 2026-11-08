@@ -16,7 +16,9 @@ _LOGGER = logging.getLogger(__name__)
 # mdi:solar-power so the two are told apart at a glance.
 NEXT_DASHBOARD_ICON = "mdi:view-dashboard-variant-outline"
 NEXT_DASHBOARD_PATH = "sem-next"
-NEXT_DASHBOARD_TITLE = "SEM Next"
+NEXT_DASHBOARD_TITLE = "Solar Energy Management"
+# (#1321) the classic dashboard, kept for one release beside the default
+CLASSIC_DASHBOARD_TITLE = "SEM Classic"
 
 
 class DashboardGenerator:

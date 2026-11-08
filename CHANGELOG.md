@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- ✨ **SEM Next is the default dashboard** (#1321). New installs get it; the classic one stays for one release.
+- ✨ **The new dashboard is the default, named Solar Energy Management** (#1321). The old one is now SEM Classic, kept for one release.
 - 🐛 **Energy flows add up to your meters** (#1324). A missed reading no longer shortens the split or shows export the meter never counted.
 - 🐛 **The night plan's cost now counts what the house buys after the battery runs out** (#1325). It showed empty before.
 - 🐛 **A load SEM never saw running says "not measured yet"** instead of a made-up 1 kW (#1326).

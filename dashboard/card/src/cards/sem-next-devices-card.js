@@ -773,7 +773,7 @@ class SEMNextDevicesCard extends SEMNextBase {
 
 semDefineCard('sem-next-devices-card', SEMNextDevicesCard, {
     type: 'sem-next-devices-card',
-    name: 'SEM Next · Devices',
+    name: 'SEM · Devices',
     description: 'Every charger, battery and load in one card shape: status, mode, targets, today, next, one change',
     documentationURL:
         'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-next-devices-card',

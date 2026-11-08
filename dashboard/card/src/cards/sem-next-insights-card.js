@@ -680,7 +680,7 @@ class SEMNextInsightsCard extends SEMNextBase {
 
 semDefineCard('sem-next-insights-card', SEMNextInsightsCard, {
     type: 'sem-next-insights-card',
-    name: 'SEM Next · Insights',
+    name: 'SEM · Insights',
     description: 'One period for every chart: energy by source, power, battery, car, money, forecast, and a replay tab',
     documentationURL:
         'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-next-insights-card',

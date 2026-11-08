@@ -621,7 +621,7 @@ class SEMNextNowCard extends SEMNextBase {
 
 semDefineCard('sem-next-now-card', SEMNextNowCard, {
     type: 'sem-next-now-card',
-    name: 'SEM Next · Now',
+    name: 'SEM · Now',
     description: 'What SEM does right now and why: power bar, today, reasons, money, signals',
     documentationURL:
         'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-next-now-card',

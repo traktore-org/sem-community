@@ -4628,7 +4628,7 @@ async def _async_register_services(
     async def async_generate_dashboard_service(call) -> None:
         """Generate and install the SEM dashboard with all assets."""
         from .features.dashboard_generator import (
-            NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
+            CLASSIC_DASHBOARD_TITLE, NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
         )
         template = call.data.get("template", "next")
         dashboard_title = call.data.get("dashboard_title", "Solar Energy Management")
@@ -4640,6 +4640,9 @@ async def _async_register_services(
                 dashboard_path = NEXT_DASHBOARD_PATH
             if dashboard_title == "Solar Energy Management":
                 dashboard_title = NEXT_DASHBOARD_TITLE
+        elif dashboard_title == "Solar Energy Management":
+            # the main name belongs to the default dashboard now
+            dashboard_title = CLASSIC_DASHBOARD_TITLE
         dashboard_icon = NEXT_DASHBOARD_ICON if template == "next" else "mdi:solar-power"
 
         try:
