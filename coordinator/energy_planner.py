@@ -499,7 +499,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             demand_id=d.id, status=status, planned_kwh=round(planned, 3),
             needed_kwh=round(need, 3), est_cost=round(cost, 4), note=note))
 
-    takeover = next((s.start for s in ledger if s.home_grid_w > _W_EPS), None)
+    takeover = takeover_of(ledger)
     allocations.sort(key=lambda a: (a.start, a.demand_id))
     return EnergyPlan(
         allocations=tuple(allocations),
@@ -508,6 +508,45 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         fits=all(r.status == "fits" for r in results),
         takeover=takeover,
     )
+
+
+def takeover_of(ledger):
+    """The first slot whose house draw lands on the meter (the battery is done)."""
+    return next((s.start for s in (ledger or []) if s.home_grid_w > _W_EPS), None)
+
+
+def house_grid_cost(ledger) -> dict:
+    """(#1325) What the house itself buys from the grid over the ledger.
+
+    The packer prices only the demands it places. When the battery's walk
+    ends before the night does, the house's own meter draw (``home_grid_w``)
+    is a cost too, and leaving it out made the night look free. Reporting
+    only: no decider reads this.
+
+    Returns ``{"kwh", "cost", "reason"}``. ``cost`` is None when a slot the
+    house draws in has no price (``reason`` "unpriced") or there is no
+    ledger at all (``reason`` "no_ledger"); 0 kWh is a real answer.
+    """
+    rows = list(ledger or [])
+    if not rows:
+        return {"kwh": None, "cost": None, "reason": "no_ledger"}
+    kwh = 0.0
+    cost = 0.0
+    unpriced = False
+    for s in rows:
+        e = max(0.0, float(s.home_grid_w or 0.0)) * s.hours / 1000.0
+        if e <= 1e-6:
+            continue
+        kwh += e
+        if s.price is None:
+            unpriced = True
+        else:
+            cost += e * float(s.price)
+    return {
+        "kwh": round(kwh, 2),
+        "cost": None if unpriced else round(cost, 4),
+        "reason": "unpriced" if unpriced else None,
+    }
 
 
 # (#758) ``PriceSlot`` + ``plan_overnight`` lived here as a "compat" flat-slot

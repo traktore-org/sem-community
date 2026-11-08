@@ -204,6 +204,10 @@ def _energy_plan_attrs(
         "computed_at": plan.get("computed_at"),
         "fits": plan.get("fits"),
         "total_cost": plan.get("total_cost"),
+        # (#1325) the parts of total_cost: placed demands and the house's
+        # own grid draw (kwh, cost, reason when the cost is unknown).
+        "device_cost": plan.get("device_cost"),
+        "house_grid": plan.get("house_grid"),
         "takeover": plan.get("takeover"),
         "demands": plan.get("demands") or [],
         "slots": [{
