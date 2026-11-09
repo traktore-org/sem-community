@@ -2018,7 +2018,11 @@
     "buffer_word": "Rezerva",
     "self_word": "vlastní",
     "solar_word": "solár",
-    "flow_charger_in_configure": "Vaše nabíječka EV se nastavuje v části Konfigurovat (Nastavení → Zařízení a služby → Solar Energy Management → Konfigurovat), ne zde."
+    "flow_charger_in_configure": "Vaše nabíječka EV se nastavuje v části Konfigurovat (Nastavení → Zařízení a služby → Solar Energy Management → Konfigurovat), ne zde.",
+    "why_reason_comfort_floor": "Je příliš chladno, proto topí hned, až na udržovanou teplotu.",
+    "why_reason_comfort_goal": "Je pod udržovanou teplotou, proto topí v plánovaném čase.",
+    "why_reason_legionella": "Je čas na ohřev proti legionele, proto topí na teplotu proti legionele.",
+    "energy_plan_why_band_leads": "Rozhoduje jeho teploměr, proto denní doba chodu nic nežádá."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4039,7 +4043,11 @@
     "buffer_word": "Buffer",
     "self_word": "egen",
     "solar_word": "sol",
-    "flow_charger_in_configure": "Din EV-lader indstilles under Konfigurer (Indstillinger → Enheder og tjenester → Solar Energy Management → Konfigurer), ikke her."
+    "flow_charger_in_configure": "Din EV-lader indstilles under Konfigurer (Indstillinger → Enheder og tjenester → Solar Energy Management → Konfigurer), ikke her.",
+    "why_reason_comfort_floor": "Det er for koldt, så den varmer nu, op til sin holdetemperatur.",
+    "why_reason_comfort_goal": "Den er under sin holdetemperatur, så den varmer i det planlagte tidsrum.",
+    "why_reason_legionella": "Legionella-opvarmningen er forfalden, så den varmer til legionella-temperaturen.",
+    "energy_plan_why_band_leads": "Dens termometer bestemmer, så den daglige køretid beder ikke om noget."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6060,7 +6068,11 @@
     "buffer_word": "Puffer",
     "self_word": "eigen",
     "solar_word": "solar",
-    "flow_charger_in_configure": "Deine E-Auto-Ladestation stellst du unter Konfigurieren ein (Einstellungen → Geräte & Dienste → Solar Energy Management → Konfigurieren), nicht hier."
+    "flow_charger_in_configure": "Deine E-Auto-Ladestation stellst du unter Konfigurieren ein (Einstellungen → Geräte & Dienste → Solar Energy Management → Konfigurieren), nicht hier.",
+    "why_reason_comfort_floor": "Es ist zu kalt, darum heizt es jetzt, bis zur Halte-Temperatur.",
+    "why_reason_comfort_goal": "Es liegt unter der Halte-Temperatur, darum heizt es in der geplanten Zeit.",
+    "why_reason_legionella": "Die Legionellen-Aufheizung ist fällig, darum heizt es auf die Legionellen-Temperatur.",
+    "energy_plan_why_band_leads": "Sein Thermometer entscheidet, darum verlangt die tägliche Laufzeit nichts."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8081,7 +8093,11 @@
     "buffer_word": "Buffer",
     "self_word": "self",
     "solar_word": "solar",
-    "flow_charger_in_configure": "Your EV charger is set up under Configure (Settings → Devices & services → Solar Energy Management → Configure), not here."
+    "flow_charger_in_configure": "Your EV charger is set up under Configure (Settings → Devices & services → Solar Energy Management → Configure), not here.",
+    "why_reason_comfort_floor": "It is too cold, so it heats now, up to its keep-at temperature.",
+    "why_reason_comfort_goal": "It is below its keep-at temperature, so it heats in the planned time.",
+    "why_reason_legionella": "Its Legionella heat-up is due, so it heats to the Legionella temperature.",
+    "energy_plan_why_band_leads": "Its thermometer leads, so its daily run time asks nothing."
   },
   "es": {
     "% of limit": "% del límite",
@@ -10102,7 +10118,11 @@
     "buffer_word": "Reserva",
     "self_word": "propio",
     "solar_word": "solar",
-    "flow_charger_in_configure": "Tu cargador de VE se configura en Configurar (Ajustes → Dispositivos y servicios → Solar Energy Management → Configurar), no aquí."
+    "flow_charger_in_configure": "Tu cargador de VE se configura en Configurar (Ajustes → Dispositivos y servicios → Solar Energy Management → Configurar), no aquí.",
+    "why_reason_comfort_floor": "Hace demasiado frío, así que calienta ya, hasta su temperatura a mantener.",
+    "why_reason_comfort_goal": "Está por debajo de su temperatura a mantener, así que calienta en el horario planificado.",
+    "why_reason_legionella": "Toca el calentamiento antilegionela, así que calienta a la temperatura antilegionela.",
+    "energy_plan_why_band_leads": "Manda su termómetro, así que su tiempo diario de marcha no pide nada."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -12123,7 +12143,11 @@
     "buffer_word": "Puskuri",
     "self_word": "oma",
     "solar_word": "aurinko",
-    "flow_charger_in_configure": "Sähköauton laturi asetetaan kohdassa Määritä (Asetukset → Laitteet ja palvelut → Solar Energy Management → Määritä), ei täällä."
+    "flow_charger_in_configure": "Sähköauton laturi asetetaan kohdassa Määritä (Asetukset → Laitteet ja palvelut → Solar Energy Management → Määritä), ei täällä.",
+    "why_reason_comfort_floor": "On liian kylmä, joten se lämmittää nyt ylläpitolämpötilaan asti.",
+    "why_reason_comfort_goal": "Se on alle ylläpitolämpötilan, joten se lämmittää suunniteltuna aikana.",
+    "why_reason_legionella": "Legionellalämmitys on vuorossa, joten se lämmittää legionellalämpötilaan.",
+    "energy_plan_why_band_leads": "Sen lämpömittari päättää, joten päivittäinen käyntiaika ei pyydä mitään."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -14144,7 +14168,11 @@
     "buffer_word": "Tampon",
     "self_word": "autonome",
     "solar_word": "solaire",
-    "flow_charger_in_configure": "Ta borne de recharge VE se règle sous Configurer (Paramètres → Appareils et services → Solar Energy Management → Configurer), pas ici."
+    "flow_charger_in_configure": "Ta borne de recharge VE se règle sous Configurer (Paramètres → Appareils et services → Solar Energy Management → Configurer), pas ici.",
+    "why_reason_comfort_floor": "Il fait trop froid, il chauffe donc maintenant, jusqu’à sa température à maintenir.",
+    "why_reason_comfort_goal": "Il est sous sa température à maintenir, il chauffe donc à l’heure prévue.",
+    "why_reason_legionella": "Le chauffage anti-légionelle est dû, il chauffe donc à la température anti-légionelle.",
+    "energy_plan_why_band_leads": "Son thermomètre décide, son temps de marche quotidien ne demande donc rien."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -16165,7 +16193,11 @@
     "buffer_word": "Puffer",
     "self_word": "saját",
     "solar_word": "napenergia",
-    "flow_charger_in_configure": "Az elektromos autó töltőjét a Beállítás menüben állíthatod (Beállítások → Eszközök és szolgáltatások → Solar Energy Management → Beállítás), nem itt."
+    "flow_charger_in_configure": "Az elektromos autó töltőjét a Beállítás menüben állíthatod (Beállítások → Eszközök és szolgáltatások → Solar Energy Management → Beállítás), nem itt.",
+    "why_reason_comfort_floor": "Túl hideg van, ezért most fűt, a tartandó hőmérsékletig.",
+    "why_reason_comfort_goal": "A tartandó hőmérséklet alatt van, ezért a tervezett időben fűt.",
+    "why_reason_legionella": "Esedékes a legionella elleni felfűtés, ezért a legionella-hőmérsékletre fűt.",
+    "energy_plan_why_band_leads": "A hőmérője dönt, ezért a napi üzemidő nem kér semmit."
   },
   "it": {
     "% of limit": "% del limite",
@@ -18186,7 +18218,11 @@
     "buffer_word": "Buffer",
     "self_word": "autonomo",
     "solar_word": "solare",
-    "flow_charger_in_configure": "Il tuo caricatore EV si imposta in Configura (Impostazioni → Dispositivi e servizi → Solar Energy Management → Configura), non qui."
+    "flow_charger_in_configure": "Il tuo caricatore EV si imposta in Configura (Impostazioni → Dispositivi e servizi → Solar Energy Management → Configura), non qui.",
+    "why_reason_comfort_floor": "Fa troppo freddo, quindi scalda ora, fino alla temperatura da mantenere.",
+    "why_reason_comfort_goal": "È sotto la temperatura da mantenere, quindi scalda nell’orario pianificato.",
+    "why_reason_legionella": "È ora del riscaldamento antilegionella, quindi scalda alla temperatura antilegionella.",
+    "energy_plan_why_band_leads": "Decide il suo termometro, quindi il tempo di funzionamento giornaliero non chiede nulla."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -20207,7 +20243,11 @@
     "buffer_word": "Buffer",
     "self_word": "eigen",
     "solar_word": "zon",
-    "flow_charger_in_configure": "Je EV-lader stel je in onder Configureren (Instellingen → Apparaten en diensten → Solar Energy Management → Configureren), niet hier."
+    "flow_charger_in_configure": "Je EV-lader stel je in onder Configureren (Instellingen → Apparaten en diensten → Solar Energy Management → Configureren), niet hier.",
+    "why_reason_comfort_floor": "Het is te koud, dus het verwarmt nu, tot de vasthoudtemperatuur.",
+    "why_reason_comfort_goal": "Het is onder de vasthoudtemperatuur, dus het verwarmt in de geplande tijd.",
+    "why_reason_legionella": "De legionella-opwarming is aan de beurt, dus het verwarmt tot de legionellatemperatuur.",
+    "energy_plan_why_band_leads": "Zijn thermometer beslist, dus de dagelijkse looptijd vraagt niets."
   },
   "no": {
     "% of limit": "% av grense",
@@ -22228,7 +22268,11 @@
     "buffer_word": "Buffer",
     "self_word": "egen",
     "solar_word": "sol",
-    "flow_charger_in_configure": "EV-laderen din stilles inn under Konfigurer (Innstillinger → Enheter og tjenester → Solar Energy Management → Konfigurer), ikke her."
+    "flow_charger_in_configure": "EV-laderen din stilles inn under Konfigurer (Innstillinger → Enheter og tjenester → Solar Energy Management → Konfigurer), ikke her.",
+    "why_reason_comfort_floor": "Det er for kaldt, så den varmer nå, opp til holdetemperaturen.",
+    "why_reason_comfort_goal": "Den er under holdetemperaturen, så den varmer i den planlagte tiden.",
+    "why_reason_legionella": "Legionella-oppvarmingen er forfalt, så den varmer til legionellatemperaturen.",
+    "energy_plan_why_band_leads": "Termometeret bestemmer, så den daglige driftstiden ber ikke om noe."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -24249,7 +24293,11 @@
     "buffer_word": "Bufor",
     "self_word": "własne",
     "solar_word": "solar",
-    "flow_charger_in_configure": "Ładowarkę EV ustawisz w sekcji Konfiguruj (Ustawienia → Urządzenia i usługi → Solar Energy Management → Konfiguruj), nie tutaj."
+    "flow_charger_in_configure": "Ładowarkę EV ustawisz w sekcji Konfiguruj (Ustawienia → Urządzenia i usługi → Solar Energy Management → Konfiguruj), nie tutaj.",
+    "why_reason_comfort_floor": "Jest za zimno, więc grzeje teraz, do temperatury utrzymania.",
+    "why_reason_comfort_goal": "Jest poniżej temperatury utrzymania, więc grzeje w zaplanowanym czasie.",
+    "why_reason_legionella": "Pora na grzanie przeciw legionelli, więc grzeje do temperatury przeciw legionelli.",
+    "energy_plan_why_band_leads": "Decyduje jego termometr, więc dzienny czas pracy niczego nie wymaga."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -26270,7 +26318,11 @@
     "buffer_word": "Reserva",
     "self_word": "próprio",
     "solar_word": "solar",
-    "flow_charger_in_configure": "O seu carregador de VE é configurado em Configurar (Definições → Dispositivos e serviços → Solar Energy Management → Configurar), não aqui."
+    "flow_charger_in_configure": "O seu carregador de VE é configurado em Configurar (Definições → Dispositivos e serviços → Solar Energy Management → Configurar), não aqui.",
+    "why_reason_comfort_floor": "Está demasiado frio, por isso aquece já, até à temperatura a manter.",
+    "why_reason_comfort_goal": "Está abaixo da temperatura a manter, por isso aquece no horário planeado.",
+    "why_reason_legionella": "O aquecimento antilegionela está na hora, por isso aquece à temperatura antilegionela.",
+    "energy_plan_why_band_leads": "Manda o seu termómetro, por isso o tempo diário de funcionamento não pede nada."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -28291,7 +28343,11 @@
     "buffer_word": "Tampon",
     "self_word": "propriu",
     "solar_word": "solar",
-    "flow_charger_in_configure": "Încărcătorul tău EV se setează la Configurare (Setări → Dispozitive și servicii → Solar Energy Management → Configurare), nu aici."
+    "flow_charger_in_configure": "Încărcătorul tău EV se setează la Configurare (Setări → Dispozitive și servicii → Solar Energy Management → Configurare), nu aici.",
+    "why_reason_comfort_floor": "Este prea rece, așa că încălzește acum, până la temperatura de menținut.",
+    "why_reason_comfort_goal": "Este sub temperatura de menținut, așa că încălzește în timpul planificat.",
+    "why_reason_legionella": "Este timpul încălzirii anti-Legionella, așa că încălzește la temperatura anti-Legionella.",
+    "energy_plan_why_band_leads": "Decide termometrul său, așa că timpul zilnic de funcționare nu cere nimic."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -30312,7 +30368,11 @@
     "buffer_word": "Buffert",
     "self_word": "egen",
     "solar_word": "sol",
-    "flow_charger_in_configure": "Din elbilsladdare ställs in under Konfigurera (Inställningar → Enheter och tjänster → Solar Energy Management → Konfigurera), inte här."
+    "flow_charger_in_configure": "Din elbilsladdare ställs in under Konfigurera (Inställningar → Enheter och tjänster → Solar Energy Management → Konfigurera), inte här.",
+    "why_reason_comfort_floor": "Det är för kallt, så den värmer nu, upp till hålltemperaturen.",
+    "why_reason_comfort_goal": "Den är under hålltemperaturen, så den värmer under den planerade tiden.",
+    "why_reason_legionella": "Legionellauppvärmningen är dags, så den värmer till legionellatemperaturen.",
+    "energy_plan_why_band_leads": "Dess termometer bestämmer, så den dagliga drifttiden ber inte om något."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -32333,6 +32393,10 @@
     "buffer_word": "缓冲",
     "self_word": "自给",
     "solar_word": "太阳能",
-    "flow_charger_in_configure": "电动车充电桩请在“配置”中设置（设置 → 设备与服务 → Solar Energy Management → 配置），不在此处。"
+    "flow_charger_in_configure": "电动车充电桩请在“配置”中设置（设置 → 设备与服务 → Solar Energy Management → 配置），不在此处。",
+    "why_reason_comfort_floor": "温度过低，所以现在加热，直到保持温度。",
+    "why_reason_comfort_goal": "低于保持温度，所以在计划时间内加热。",
+    "why_reason_legionella": "该进行军团菌加热了，所以加热到军团菌温度。",
+    "energy_plan_why_band_leads": "由温度计决定，所以每日运行时间不再要求任何电量。"
   }
 }

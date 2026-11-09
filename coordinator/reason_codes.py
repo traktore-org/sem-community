@@ -117,6 +117,10 @@ LOAD_DAILY_MAX = "daily_max"
 LOAD_STOP_CONDITION = "stop_condition"
 LOAD_PLAN_WAIT = "plan_wait"
 LOAD_NO_SOURCE = "no_source"
+# (#1102) the heater ladder: each rung names itself
+LOAD_COMFORT_FLOOR = "comfort_floor"
+LOAD_COMFORT_GOAL = "comfort_goal"
+LOAD_LEGIONELLA = "legionella"
 
 # ── the grid export limit (#1090) ────────────────────────────────────
 EXPORT_NEGATIVE_PRICE = "export_negative_price"

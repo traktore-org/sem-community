@@ -165,6 +165,11 @@ def _comfort_dev(*, willing=True, active=False):
     dev.battery_eligible_overnight = False
     dev.top_up_policy = "solar_only"
     dev.comfort_state = "willing" if willing else "forced"
+    # (#1102) the ladder reads the band itself: a willing tank below Keep at,
+    # a forced one past its limit
+    dev._comfort_reading = MagicMock(return_value=45.0 if willing else 34.0)
+    dev._comfort_thresholds_c = MagicMock(return_value=(50.0, 5.0, 36.0))
+    dev._comfort_direction = MagicMock(return_value="heat")
     return dev
 
 
@@ -191,17 +196,17 @@ class TestComfortBankingRunsInItsBlock:
             _comfort_dev(), remaining_surplus_w=0.0, is_night=False, plan=v)
         assert intent.on is False
 
-    def test_a_forced_room_stays_reactive(self):
-        """Forced = has_runtime_deficit territory — the existing paths own
-        it; the comfort clause must not double-drive it."""
+    def test_a_forced_room_is_the_floor_rung_not_the_banking_clause(self):
+        """(#1102) Forced = too cold. It used to wait for the user's paid
+        deficit sources (and on a solar-only boiler never ran). The heater
+        ladder's floor rung now runs it at once — not as plan banking."""
+        from custom_components.solar_energy_management.coordinator import reason_codes as RC
         v = PlanVerdict(in_block=True, comfort_in_block=True,
                         reason="comfort block open")
         dev = _comfort_dev(willing=False)
         intent = compute_load_intent(
             dev, remaining_surplus_w=0.0, is_night=False, plan=v)
-        # no deficit + no surplus + forced (not willing) → the comfort
-        # clause must not fire; nothing else runs it here either.
-        assert intent.on is False
+        assert intent.on is True and intent.code == RC.LOAD_COMFORT_FLOOR
 
     def test_peak_freeze_still_blocks_the_banking_start(self):
         v = PlanVerdict(in_block=True, comfort_in_block=True,

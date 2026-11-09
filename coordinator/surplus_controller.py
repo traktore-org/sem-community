@@ -663,11 +663,36 @@ class LoadIntent:
     them (``_batt_overnight_forced == source == 'tier2_battery'`` etc.)."""
     on: bool
     power_w: float
-    source: Optional[str]   # 'solar'|'tier1_battery'|'tier2_battery'|'cheap_grid'|None
+    source: Optional[str]   # 'solar'|'tier1_battery'|'tier2_battery'|'cheap_grid'|'comfort_floor'|None
     reason: str
     #: (#1174) the reason as a stable code (``reason_codes``); empty = the
     #: source names it. Recorded only, left out of equality.
     code: str = field(default="", compare=False)
+
+
+def _heater_band(device: "ControllableDevice"):
+    """(#1102) A load's thermometer band as ``(state, below_keep_at)``, or
+    None for a load without an engaged band (no fields, no reading, a
+    misconfigured band). ``below_keep_at`` is in the band's own direction:
+    a heater below its target, a cooler above it."""
+    state = getattr(device, "comfort_state", None)
+    if state not in ("forced", "willing", "banked"):
+        return None
+    read = getattr(device, "_comfort_reading", None)
+    thresholds = getattr(device, "_comfort_thresholds_c", None)
+    direction = getattr(device, "_comfort_direction", None)
+    if not (callable(read) and callable(thresholds) and callable(direction)):
+        return None
+    try:
+        temp = read()
+        target = float(thresholds()[0])
+        cooling = direction() == "cool"
+    except Exception:  # noqa: BLE001 — an unreadable band is no band
+        return None
+    if not isinstance(temp, (int, float)):
+        return None
+    below = float(temp) > target if cooling else float(temp) < target
+    return state, below
 
 
 def compute_load_intent(
@@ -775,8 +800,14 @@ def compute_load_intent(
                           RC.LOAD_STOP_CONDITION)
     # 3a. (#1121) The device's own run (Legionella) needs no sun: kept as
     #     it is, never re-tuned. Only a shed (clause 2) or its own end stops it.
-    if active and getattr(device, "runs_without_surplus", False) is True:
-        return LoadIntent(True, held, None, "own run — ends at its own target")
+    #     (#1102) It also STARTS here: while the three layers lead, the
+    #     hot-water device only says the run is due and no longer switches.
+    if getattr(device, "runs_without_surplus", False) is True:
+        if active:
+            return LoadIntent(True, held, None, "Legionella run — ends at its own target",
+                              RC.LOAD_LEGIONELLA)
+        return LoadIntent(True, float(getattr(device, "rated_power", 0.0) or 0.0), None,
+                          "Legionella run due", RC.LOAD_LEGIONELLA)
 
     # 3b. A ScheduleDevice past its deadline is a hard commitment — force it on
     #     regardless of surplus or peak posture (matches the old deadline pass,
@@ -790,7 +821,13 @@ def compute_load_intent(
     rated = float(getattr(device, "rated_power", 0.0) or 0.0)
     threshold = float(getattr(device, "min_power_threshold", rated) or rated)
     can_start = active or not peak_freeze
-    deficit = bool(getattr(device, "has_runtime_deficit", False))
+    band = _heater_band(device)
+    # (#1102) With a thermometer band the band leads: the daily run time
+    # asks nothing (a hot tank was heated again for its minutes), and the
+    # band's own "too cold" is the floor rung below — not a deficit that
+    # waits for the user's paid sources.
+    deficit = (band is None
+               and bool(getattr(device, "has_runtime_deficit", False)))
     # (#1156) A fresh start has nothing to measure yet and claims the
     # rating; an already-running device with a power sensor claims what
     # it actually draws, so a self-throttled load (its own thermostat,
@@ -814,6 +851,17 @@ def compute_load_intent(
     if not active:
         start_bar = threshold + max(
             0.0, float(getattr(device, "start_reserve_w", 0.0) or 0.0))
+    # (#1102) Too cold: at or past the limit it heats NOW on any tariff, and
+    # a run the floor started goes on to Keep at, not just past the limit.
+    # Peak shed (clause 2) and the operator's lock (1b) still outrank it.
+    if band is not None and can_start and (
+            band[0] == "forced"
+            or (active and band[1]
+                and getattr(device, "_comfort_floor_run", False) is True)):
+        src = "solar" if effective >= threshold else "comfort_floor"
+        return LoadIntent(True, claim, src, "too cold — heats to its keep-at temperature",
+                          RC.LOAD_COMFORT_FLOOR)
+
     if effective >= start_bar and can_start:
         battery_assisted = tier1_headroom_w > 0 and remaining_surplus_w < threshold
         src = "tier1_battery" if battery_assisted else "solar"
@@ -825,11 +873,14 @@ def compute_load_intent(
     # free surplus). Forced rooms never land here: forcing lives on the
     # deficit paths, and a forced room's comfort_state is not "willing".
     # (#1102) Its COMFORT block — the runtime block is the deficit
-    # clauses' to serve, under their own source, price and daylight terms.
-    if (plan.comfort_in_block and can_start
-            and getattr(device, "comfort_state", "") == "willing"):
+    # clauses' to serve, under their own source, price and daylight terms —
+    # and Keep at is the goal there: it heats up to Keep at; Extra above it
+    # is for the sun only.
+    if (plan.comfort_in_block and can_start and band is not None
+            and band[0] == "willing" and band[1]):
         return LoadIntent(True, claim, "cheap_grid",
-                          plan.reason or "joint plan: comfort banking block open")
+                          plan.reason or "joint plan: heats to its keep-at temperature",
+                          RC.LOAD_COMFORT_GOAL)
 
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire
@@ -1337,6 +1388,11 @@ class SurplusController:
         # passes. Default OFF — the passes stay authoritative until a parity
         # corpus + a real-hardware soak prove the new path identical.
         self._use_desired_state: bool = False
+        # (#1102) The three layers run beside the passes on every real cycle
+        # and record where they differ (dry: no device or controller state
+        # changes). Read by the load-management sensor and diagnostics.
+        from .engine_shadow import EngineShadow
+        self.engine_shadow = EngineShadow()
         # (#638 G4) per-cycle window verdicts from the joint energy plan:
         # device_id → True (inside its planned block) / False (planned
         # elsewhere tonight — don't start now). Absent = the plan has no say.
@@ -1570,12 +1626,28 @@ class SurplusController:
 
     def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,
                          battery_priority, price_level,
-                         peak_freeze, peak_shed, peak_shed_all):
+                         peak_freeze, peak_shed, peak_shed_all, dry=False):
         """(desired-state, phase 3) The management-layer decision for the whole
         load set: the priority walk → one ``LoadIntent`` per device. Pure of
         actuation (``reconcile_load`` applies them); the shared cycle context
         (``self._batt_*`` / ``self._tier1_budget_left``) is already stamped by
-        ``update()``. This is what REPLACES the 7 imperative passes."""
+        ``update()``. This is what REPLACES the 7 imperative passes.
+
+        ``dry=True`` (#1102): the same walk, then every device and the
+        controller are put back exactly as they were — the layer-1 Off branch
+        and the layer-2 battery bookkeeping write state, and the passes that
+        run next must not see it."""
+        if dry:
+            from .engine_shadow import restore, snapshot
+            saved = snapshot(self, list(self._devices.values()))
+            try:
+                return self._desired_intents(
+                    devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+                    battery_priority=battery_priority, price_level=price_level,
+                    peak_freeze=peak_freeze, peak_shed=peak_shed,
+                    peak_shed_all=peak_shed_all, dry=False)
+            finally:
+                restore(saved)
         soc_above = (self._batt_soc is not None
                      and self._batt_soc > self._batt_reserve_soc)
 
@@ -1617,6 +1689,10 @@ class SurplusController:
                 # cycle; absent from the dict = the plan has no say.
                 plan=self._plan_windows.get(device.device_id) or NO_OPINION)
             intents[device.device_id] = intent
+            # (#1102) remember a run the floor started, so it goes on to
+            # Keep at (a dry shadow walk puts this back afterwards)
+            device._comfort_floor_run = bool(
+                intent.on and intent.code == RC.LOAD_COMFORT_FLOOR)
             # solar/tier1-driven loads consume surplus for lower-priority ones
             if intent.on and intent.source in ("solar", "tier1_battery"):
                 if intent.source == "tier1_battery":
@@ -1887,6 +1963,22 @@ class SurplusController:
                 distributable=distributable, available_power_w=available_power_w,
                 observer=observer,
             )
+
+        # (#1102) The three layers decide the same cycle, dry, before the
+        # passes touch anything; compared with what the passes did below.
+        _shadow_devices = devices
+        _shadow_intents = None
+        _shadow_was_on: dict = {}
+        try:
+            _shadow_was_on = {d.device_id: bool(d.is_active) for d in devices}
+            _shadow_intents = self._desired_intents(
+                devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+                battery_priority=battery_priority, price_level=price_level,
+                peak_freeze=peak_freeze, peak_shed=peak_shed,
+                peak_shed_all=peak_shed_all, dry=True)
+        except Exception:  # noqa: BLE001 — the comparison never costs a cycle
+            _LOGGER.debug("Load engine shadow skipped", exc_info=True)
+            _shadow_intents = None
 
         # (#1021) A load behind the grid operator's relay, relay on: the
         # relay cuts it, so the imperative passes leave it alone — no
@@ -2644,6 +2736,14 @@ class SurplusController:
         # battery-forced with no SOC gate (HIGH-2) to hit a per-device
         # deadline. solar_only (the switch-load default) never grid-forces;
         # cheap_hours devices still top up via the off-peak pass above.
+
+        # (#1102) What the passes did, against what the three layers decided.
+        if _shadow_intents is not None:
+            try:
+                self.engine_shadow.compare(_shadow_intents, _shadow_devices,
+                                           was_on=_shadow_was_on)
+            except Exception:  # noqa: BLE001 — recording only
+                _LOGGER.debug("Load engine comparison skipped", exc_info=True)
 
         # Build allocation data
         total_allocated = sum(a.actual_consumption_watts for a in allocations)

@@ -635,6 +635,21 @@ def _control_device_says_not_now(hass, entity_id: str) -> bool:
         return False
 
 
+
+def _ladder_leads(coord) -> bool:
+    """(#1102) The heater ladder lives in layer 1 of the three-layer load
+    engine. It leads where that engine switches (observer mode, and every
+    install once the layers take over). Until then the old engine's plan
+    inputs stay exactly as they were."""
+    sc = getattr(coord, "_surplus_controller", None)
+    return (getattr(sc, "_use_desired_state", False) is True
+            or getattr(coord, "_observer_mode", False) is True)
+
+
+def _band_engaged(dev) -> bool:
+    """(#1102) The load has a working thermometer band."""
+    return getattr(dev, "comfort_state", None) in ("forced", "willing", "banked")
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -6039,6 +6054,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # (#1021) the grid operator's relay — the Control tab's banner
             result.update(self._shed_signal_payload())
+            # (#1102) where the two load engines differ — summary + full log
+            result.update(self._engine_shadow_payload())
 
             # Add night window sensors
             try:
@@ -7922,7 +7939,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # advances the hold-timer and fires completion correctly.
             if hasattr(hw_controller, "check_legionella_cycle"):
                 try:
-                    await hw_controller.check_legionella_cycle()
+                    # (#1102) where the ladder leads, layer 1 switches the run
+                    await hw_controller.check_legionella_cycle(
+                        switch=not _ladder_leads(self))
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
             try:
@@ -11185,6 +11204,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             lm.set_operator_cap(sig.cap_kw if sig.active else None)
         return sig
 
+    def _engine_shadow_payload(self) -> dict:
+        """(#1102) The load engines' comparison: a small summary for the
+        load-management sensor, the full change log for diagnostics."""
+        shadow = getattr(getattr(self, "_surplus_controller", None), "engine_shadow", None)
+        summary = getattr(shadow, "summary", None)
+        records = getattr(shadow, "records", None)
+        if not callable(summary) or not callable(records):
+            return {}
+        try:
+            s, r = summary(), records()
+        except Exception:  # noqa: BLE001 — recording never breaks a cycle
+            return {}
+        if not isinstance(s, dict) or not isinstance(r, list):
+            return {}
+        return {"engine_shadow": s, "engine_shadow_records": r}
+
     def _shed_signal_payload(self) -> dict:
         """(#1021) The relay for the cards and diagnostics."""
         sig = getattr(self, "_shed_signal", None)
@@ -11452,6 +11487,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             try:
                 if not getattr(dev, "has_runtime_deficit", False):
                     continue
+                if _ladder_leads(self) and _band_engaged(dev):
+                    continue  # (#1102) the collector leaves it out too
                 if getattr(dev, "locked_by_operator", False) is True:
                     continue  # (#1021) the collector leaves it out too
                 if not (_sem_may_switch(dev) and _night_may_serve(dev)):
@@ -12612,6 +12649,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if not getattr(dev, "has_runtime_deficit", False):
                         _left_out(dev, "no_runtime_need")
                         continue
+                    # (#1102) a heater with a thermometer band: the band
+                    # leads, its run time asks nothing (layer 1 mirrors it)
+                    if _ladder_leads(self) and _band_engaged(dev):
+                        _left_out(dev, "band_leads")
+                        continue
                     # (#760, N1) The intent's HARD STOP outranks the deficit:
                     # a banked comfort band (room already past target+offset)
                     # sets ``stop_condition_met`` and clause 3 kills the run
@@ -12678,7 +12720,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
                         continue
                     _ask_fn = getattr(dev, "comfort_plan_demand", None)
-                    ask = _ask_fn(now) if callable(_ask_fn) else None
+                    # (#1102) where the ladder leads, Keep at is a goal
+                    ask = ((_ask_fn(now, goal=True) if _ladder_leads(self)
+                            else _ask_fn(now)) if callable(_ask_fn) else None)
                     if not ask:
                         continue
                     rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
