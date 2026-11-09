@@ -347,7 +347,11 @@ def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
     if not covered:
         return None
     if any(g.in_block for g in covered):
+        # (#1102) which block is open stays readable: only the comfort
+        # block may start a banking run.
         return PlanVerdict(in_block=True,
+                           comfort_in_block=bool(comfort_gate.covered
+                                                 and comfort_gate.in_block),
                            reason="joint energy plan: in planned block")
     holds = []
     if load_gate.covered:
