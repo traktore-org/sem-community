@@ -91,6 +91,7 @@ class TestTheCollectorMergesBothDemands:
         w = _windows(_win_self(gates), [_win_dev()])
         assert "heizband" in w
         assert w["heizband"].in_block is True
+        assert w["heizband"].comfort_in_block is True
 
     def test_either_block_open_is_a_run_verdict(self):
         gates = {
@@ -101,7 +102,22 @@ class TestTheCollectorMergesBothDemands:
         }
         w = _windows(_win_self(gates), [_win_dev()])
         assert w["heizband"].in_block is True
+        assert w["heizband"].comfort_in_block is True
         assert w["heizband"].hold is False
+
+    def test_the_runtime_block_is_not_the_comfort_block(self):
+        """(#1102) Only the comfort block may start a banking run: the
+        runtime block lifts the hold and says which block it is."""
+        gates = {
+            "load:heizband": PlanGate(covered=True, in_block=True,
+                                      block_power_w=1000.0),
+            "comfort:heizband": PlanGate(covered=True, in_block=False,
+                                         remaining_kwh=1.0, remaining_h=1.0),
+        }
+        w = _windows(_win_self(gates), [_win_dev()])
+        assert w["heizband"].in_block is True
+        assert w["heizband"].hold is False
+        assert w["heizband"].comfort_in_block is False
 
     def test_a_hold_needs_every_covered_demand_to_hold(self):
         """The load's verdict fails open (deficit undeliverable) — comfort
@@ -155,7 +171,8 @@ def _comfort_dev(*, willing=True, active=False):
 @pytest.mark.unit
 class TestComfortBankingRunsInItsBlock:
     def test_willing_plus_in_block_runs_from_cheap_grid(self):
-        v = PlanVerdict(in_block=True, reason="comfort block open")
+        v = PlanVerdict(in_block=True, comfort_in_block=True,
+                        reason="comfort block open")
         intent = compute_load_intent(
             _comfort_dev(), remaining_surplus_w=0.0, is_night=False, plan=v)
         assert intent.on is True
@@ -167,10 +184,18 @@ class TestComfortBankingRunsInItsBlock:
             plan=NO_OPINION)
         assert intent.on is False
 
+    def test_willing_in_the_runtime_block_does_not_bank(self):
+        """(#1102) The runtime block is not a banking block."""
+        v = PlanVerdict(in_block=True, reason="runtime block open")
+        intent = compute_load_intent(
+            _comfort_dev(), remaining_surplus_w=0.0, is_night=False, plan=v)
+        assert intent.on is False
+
     def test_a_forced_room_stays_reactive(self):
         """Forced = has_runtime_deficit territory — the existing paths own
         it; the comfort clause must not double-drive it."""
-        v = PlanVerdict(in_block=True, reason="comfort block open")
+        v = PlanVerdict(in_block=True, comfort_in_block=True,
+                        reason="comfort block open")
         dev = _comfort_dev(willing=False)
         intent = compute_load_intent(
             dev, remaining_surplus_w=0.0, is_night=False, plan=v)
@@ -179,7 +204,8 @@ class TestComfortBankingRunsInItsBlock:
         assert intent.on is False
 
     def test_peak_freeze_still_blocks_the_banking_start(self):
-        v = PlanVerdict(in_block=True, reason="comfort block open")
+        v = PlanVerdict(in_block=True, comfort_in_block=True,
+                        reason="comfort block open")
         intent = compute_load_intent(
             _comfort_dev(), remaining_surplus_w=0.0, is_night=False,
             peak_freeze=True, plan=v)
@@ -206,4 +232,4 @@ class TestTheLegacySurfacesAreGone:
         )
         src = inspect.getsource(SurplusController)
         assert src.count('comfort_state') >= 1
-        assert "in_block" in src
+        assert "comfort_in_block" in src

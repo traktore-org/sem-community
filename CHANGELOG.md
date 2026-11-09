@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A boiler with a comfort band now waits for the sun before it buys its daily minimum from the grid** (#1102). It ran at noon.
+- 🐛 **The "Why did SEM act?" card now gives the real reason a load stopped** (#1102). A full tank read "It ran long enough today".
+
 # [2.3.0-beta.9] — 08.11.2026
 
 - 🐛 **The Energy Plan card marks a day with only your off-peak price, like a weekend, as cheap** (#1310). Before, the band began at midnight.
