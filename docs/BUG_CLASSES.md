@@ -2490,8 +2490,9 @@ twin, the four stop codes, and an AST check that `surplus_controller.py` never r
 passes `comfort_block_open`, read from `comfort_in_block`, at every daylight-wait call.
 **Left open (#1330):** the banking pass does not read "Finish overnight via" or the live price, and
 the force expiry does, so a band on the default "Off" turns on and off through its comfort block
-(which side is right is a choice); the plan can place a "Grid" load's daily minimum by day, where
-the passes now wait for the sun. #1331: the Why? card's "Surplus" is the car's budget on every row.
+(which side is right is a choice, still open); the plan placing a "Grid" load's daily minimum by
+day is fixed (class 181, second catch). #1331: the Why? card's "Surplus" is the car's budget on every
+row.
 Refs #780 #779 #650 #1310 #1102.
 
 ### 48. A removed host API called past its removal, its failure swallowed as a benign case — GUARDED
@@ -6856,4 +6857,26 @@ Refs #1295 #1294 #563 #551 #1043.
 **Guard:** `tests/test_1308_night_charge_end.py` — the reporter's night is unreachable by 07:00 and warns; 30 kWh gets a floor that delivers it by 07:00; the cheap-hour hold starts at 00:00, not 06:14; the default on a June night plans to sunrise, on a winter night is unchanged; a plan made before the window opens stops at its end; the day preview cuts 08:15 to 07:00 by day and by night; a departure at or before the window's end is unchanged, an earlier one still forces; a departure after the next window opens keeps its time; the real `_compute_night_plan` stops at 07:00; the notification names 07:00; every `affordable_start` call in the package takes its end from one of the two helpers. Switching the end off fails 12 tests; finding the next window from now fails one.
 **Sweep question:** when a plan counts hours toward a time, can the thing it plans act in every one of those hours?
 **Left open:** (1) Charging on past the window's end until the departure is a design question, not a fix (decision open, 04.11.2026). In Min + Solar the day floor gate (`_night_deliverable_kwh`) is where it would land: between the night's end and a departure the same morning it counts tonight's hours, which come after the car leaves. (2) A departure after the next window opens (an evening departure, a calendar event days away): the night plan still counts every hour to the departure, day hours too, so "reachable" can be too kind; the joint plan packs it all into tonight (`min(deadline, night_end)`). Counting only night hours over several nights needs a model of future windows (#1309). (3) `ev_deadline_hours` and the notification event's `deadline` now name the window's end; the card reads neither.
-Refs #1308 #1309 #246 #967 #1023 #501.
+**Second catch (#1330, 09.11.2026):** hours the plan books where the source will not start. A
+"Grid" load's daily minimum ("Finish overnight via: Grid") is bought by day only once the sun is out
+of time: the #953 wait holds while `sunset + 10 min - max(now, sunrise)` still covers the run time
+owed. The joint plan did not know it. Every plan made by day (one per energy day, from sunrise) put
+the load in its cheapest cheap slot, a midday low tariff too, and the Energy Plan card showed a run
+at 13:00 that SEM never did.
+**Where it lives:** `coordinator/coordinator.py` `_shadow_energy_plan`, the load demand (**fixed**:
+`Demand.not_before` from `surplus_controller.grid_top_up_waits_until`, `sunset - deficit`, read
+through `_daylight_frame`, the same sun reader `_daylight_remaining_s_now` uses; clamped to the day
+part's end, `_plan_day_end`, which the slot builder reads too). `coordinator/energy_planner.py`
+`pack_night` (**fixed**: no slot starting before `not_before`, in the slot-wise, one-block and late
+paths; the "no cheap window" and #1310 notes count only those hours). Mirrored: no measured sunset,
+a forced band and a night plan add no limit, as the live wait does.
+**Guard:** `tests/test_1330_plan_waits_for_the_sun.py` — the issue's day, the oracle (every planned
+block's start, fed to the real `_daylight_remaining_s_now` and `grid_top_up_defers_to_sun`, may start;
+60 stamp/owed/tariff cases), the cutoff against the live gate minute by minute, the packer paths, and
+AST checks that every load `Demand` passes `not_before` and both sides read `_daylight_frame`. With
+the limit off, 27 tests fail.
+**Left open:** (1) a battery-run load ("Finish overnight via: Battery") also gets blocks by day,
+where execution runs it only at night (#633). Moving it to the night is not safe yet: the day part's
+battery path has no sun refill, so the night would read empty. (2) The battery pre-charge demand has
+the same shape (#1311). (3) The comfort banking flap of #1330 (class 47, above) needs a choice.
+Refs #1308 #1309 #246 #967 #1023 #501 #1330 #953 #1311.

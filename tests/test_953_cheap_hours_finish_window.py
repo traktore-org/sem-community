@@ -600,11 +600,12 @@ class TestSourceGuards:
         else:
             raise AssertionError(
                 "the surplus update() is not handed daylight_remaining_s (#953)")
-        # and that helper reads the SAME sun authority is_night_mode does
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) \
-                    and node.name == "_daylight_remaining_s_now":
-                assert "get_sunset_plus_10_time" in _calls(node)
-                break
-        else:
-            raise AssertionError("_daylight_remaining_s_now not found")
+        # and that helper reads the SAME sun authority is_night_mode does —
+        # (#1330) through ``_daylight_frame``, the one reader the plan's
+        # copy of the wait reads too
+        funcs = {n.name: n for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef)}
+        assert "_daylight_remaining_s_now" in funcs, \
+            "_daylight_remaining_s_now not found"
+        assert "_daylight_frame" in _calls(funcs["_daylight_remaining_s_now"])
+        assert "get_sunset_plus_10_time" in _calls(funcs["_daylight_frame"])

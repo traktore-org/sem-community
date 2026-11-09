@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
@@ -618,6 +618,34 @@ def grid_top_up_defers_to_sun(
         daylight_remaining_s=daylight_remaining_s,
         is_night=is_night,
     )
+
+
+def grid_top_up_waits_until(
+    device: "ControllableDevice",
+    *,
+    sunrise: "Optional[datetime]",
+    sunset: datetime,
+) -> "Optional[datetime]":
+    """(#1330) Until when does this device's grid top-up wait for the sun?
+
+    The planner's copy of :func:`grid_top_up_defers_to_sun`, asked of a
+    later hour. A day hour ``t`` waits while ``sunset - max(t, sunrise)``
+    still covers the deficit, so every start up to ``sunset - deficit``
+    waits. ``None``: nothing waits (no deficit, a forced band, or a day
+    shorter than the deficit). ``sunset`` is the same sunset + 10 min the
+    live wait reads. A start AT the returned time waits one more cycle; the
+    plan counts that hour as usable. Not for a comfort block: that run does
+    not wait.
+    """
+    if getattr(device, "comfort_state", "") == "forced":
+        return None
+    deficit_s = float(getattr(device, "remaining_daily_runtime_sec", 0.0) or 0.0)
+    if deficit_s <= 0.0:
+        return None
+    cutoff = sunset - timedelta(seconds=deficit_s)
+    if sunrise is not None and sunrise > cutoff:
+        return None
+    return cutoff
 
 
 def price_damped_pool(distributable: float, price_level: str) -> float:

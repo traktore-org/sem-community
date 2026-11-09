@@ -68,6 +68,10 @@ class Demand:
     min_gap_s: int = 0
     contiguous: bool = False
     late_s: int = 0
+    #: (#1330) No slot starting before this is used: execution does not start
+    #: the source there (a load's grid finish waits while the sun still has
+    #: time). None = every slot to the deadline, exactly as before.
+    not_before: Optional[datetime] = None
     #: (#812) The device's own tariff (``device_tariff.PlanTariff``): its
     #: price and cheap level per slot, read in place of the house's. None =
     #: the house tariff, exactly as before.
@@ -285,12 +289,19 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         return sorted((i for i in idx if _price(d, i) is not None),
                       key=lambda i: (_price(d, i), ledger[i].start))
 
-    def _eligible(d, i):
+    def _in_time(d, i):
         s = ledger[i]
         if d.deadline is not None and s.end > d.deadline:
             return False
+        # (#1330) the hours its source can start in
+        return d.not_before is None or s.start >= d.not_before
+
+    def _eligible(d, i):
+        if not _in_time(d, i):
+            return False
         if d.needs_cheap_level and not _cheap(d, i):
             return False
+        s = ledger[i]
         prev = last_block_end.get(d.id)
         if (prev is not None and d.min_gap_s > 0 and s.start > prev
                 and (s.start - prev).total_seconds() < d.min_gap_s):
@@ -364,6 +375,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     break
                 s = ledger[i]
                 lo, hi = max(s.start, window), min(s.end, d.deadline)
+                if d.not_before is not None:
+                    lo = max(lo, d.not_before)          # (#1330)
                 span_h = (hi - lo).total_seconds() / 3600.0
                 if span_h <= 0:
                     continue
@@ -492,14 +505,13 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         elif (d.needs_cheap_level and d.tariff is None and need > 1e-9
               and planned < need * FIT_EPS
               and any(ledger[i].tariff_cheap and not ledger[i].level_cheap
-                      and (d.deadline is None or ledger[i].end <= d.deadline)
-                      for i in idx)):
+                      and _in_time(d, i) for i in idx)):
             # (#1310) The card's band shows the tariff's rate, so a day with
             # only the off-peak price is cheap there. The gate refuses that
             # day (#994): say so, or the note and the band disagree.
             note = "off-peak hours on a day with one price are not used"
         elif d.needs_cheap_level and planned == 0 and need > 1e-9:
-            if not any(_cheap(d, i) for i in idx):
+            if not any(_cheap(d, i) and _in_time(d, i) for i in idx):
                 note = "no cheap window tonight"
         note = "; ".join(n for n in (block_note, note) if n)
         status = ("fits" if planned >= need * FIT_EPS or need <= 1e-9

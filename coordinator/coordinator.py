@@ -650,6 +650,34 @@ def _band_engaged(dev) -> bool:
     """(#1102) The load has a working thermometer band."""
     return getattr(dev, "comfort_state", None) in ("forced", "willing", "banked")
 
+
+def _daylight_frame(time_manager, now):
+    """(#953/#1330) Today's ``(sunrise, sunset + 10 min)``, as the grid
+    top-up's daylight wait reads them, or None when the sun integration did
+    not give the sunset (the 20:30 fallback is not a reading). One reader
+    for the live wait and the plan that copies it."""
+    hhmm = time_manager.get_sunset_plus_10_time()
+    if getattr(time_manager, "_last_sunset_source", None) != "sun_integration":
+        return None
+    h, m = (int(x) for x in hhmm.split(":"))
+    sunset = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    return time_manager.get_sunrise_datetime(), sunset
+
+
+def _plan_day_end(time_manager, now, night_end):
+    """(#1330) Where the plan's day part ends: tonight's night window start,
+    or None when the plan is made inside the night (no day part). The slot
+    builder and the load demands read this one value."""
+    from .ev_tariff_planner import resolve_deadline
+    try:
+        night_start_s, _ = time_manager.get_night_window()
+        day_end = resolve_deadline(now, night_start_s)
+    except Exception:  # noqa: BLE001 — no window → night-only shape
+        return None
+    if day_end is not None and day_end < night_end:
+        return day_end
+    return None
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -9147,14 +9175,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         try:
             now = dt_util.now()
-            hhmm = self.time_manager.get_sunset_plus_10_time()
-            if getattr(self.time_manager, "_last_sunset_source",
-                       None) != "sun_integration":
+            frame = _daylight_frame(self.time_manager, now)
+            if frame is None:
                 return None            # fabricated default, not a reading
-            h, m = (int(x) for x in hhmm.split(":"))
-            sunset = now.replace(hour=h, minute=m, second=0, microsecond=0)
+            sunrise, sunset = frame
             start = now
-            sunrise = self.time_manager.get_sunrise_datetime()
             if sunrise is not None and sunrise > start:
                 start = sunrise
             return max(0.0, (sunset - start).total_seconds())
@@ -12478,6 +12503,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001 — window end is best-effort
                 night_end_s = None
             night_end = resolve_deadline(now, night_end_s) or (now + _td(hours=8))
+            # (#1330) The day part's end, read once: the slots below and
+            # the load demands' daylight wait both stop there.
+            plan_day_end = _plan_day_end(
+                getattr(self, "time_manager", None), now, night_end)
 
             demands = []
             # Display names per demand id, for the card (#638 G3c). Kept OUT
@@ -12602,6 +12631,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             loads_seen = 0
             loads_eligible = 0
             from ..devices.base import DeviceControlMode as _DCM
+            from .surplus_controller import grid_top_up_waits_until
+            # (#1330) By day, execution buys a load's grid finish only once
+            # the sun is out of time (#953). A block the plan puts before
+            # that is a run the card shows and SEM does not do.
+            # A battery-run load (night only, #633) is not moved here: the
+            # day part's battery path has no sun refill, so its night would
+            # read empty.
+            try:
+                _sun = _daylight_frame(self.time_manager, now)
+            except Exception:  # noqa: BLE001 — no sun frame: the wait is off too
+                _sun = None
+
+            def _load_not_before(dev, tier2):
+                if plan_day_end is None or tier2 or _sun is None:
+                    return None            # no day hours, or no wait to copy
+                waits = grid_top_up_waits_until(
+                    dev, sunrise=_sun[0], sunset=_sun[1])
+                return None if waits is None else min(waits, plan_day_end)
+
             # (#638 C7) Every load the collector leaves out owes the user a
             # why — the EV side has said so since C7 while the load side
             # skipped in five places silently, and "why isn't my heater in
@@ -12688,6 +12736,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         energy_kwh=rated * deficit_h / 1000.0,
                         max_power_w=rated, min_power_w=rated,
                         deadline=night_end,
+                        # (#1330) the hours execution lets this source start
+                        not_before=_load_not_before(dev, tier2),
                         # 1 = highest in BOTH the one list and the packer —
                         # no negation (see the EV demand above).
                         priority=int(getattr(dev, "priority", 0) or 0),
@@ -13028,14 +13078,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # forecast); with no forecast the day degrades to plain
             # priced slots — the horizon still spans, nothing free is
             # invented. Absent only when stamped inside the night.
-            day_end = None
-            try:
-                _ns_s, _ = self.time_manager.get_night_window()
-                _de = resolve_deadline(now, _ns_s)
-                if _de is not None and _de < night_end:
-                    day_end = _de
-            except Exception:  # noqa: BLE001 — no window → night-only shape
-                day_end = None
+            day_end = plan_day_end
             if day_end is not None and t < day_end:
                 day_kwh = 0.0
                 sunrise = sunset = now
