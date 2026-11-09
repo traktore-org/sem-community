@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **SEM Next**: a new dashboard, five screens — one power bar, the plan on the price strip, devices you can reorder, settings as sentences (#1321).
 - ✨ **Heaters with a thermometer follow one order** (#1102): your stop, Legionella, too cold now, Keep at in planned hours, sun. Run time steps back.
 - 🔧 **SEM checks its new load engine against the current one every cycle** and records where they differ (#1102). Nothing switches differently yet.
+- 🐛 **A boiler with a comfort band now waits for the sun before it buys its daily minimum from the grid** (#1102). It ran at noon.
+- 🐛 **The "Why did SEM act?" card now gives the real reason a load stopped** (#1102). A full tank read "It ran long enough today".
 
 # [2.3.0-beta.9] — 08.11.2026
 

@@ -142,7 +142,7 @@ async def test_d1_comfort_banking_is_cut_by_the_old_force_expiry():
     boiler._comfort_reading = lambda: 45.0
     boiler._comfort_thresholds_c = lambda: (50.0, 5.0, 36.0)
     boiler._comfort_direction = lambda: "heat"
-    block = {"boiler": PlanVerdict(in_block=True, reason="planned block")}
+    block = {"boiler": PlanVerdict(in_block=True, comfort_in_block=True, reason="planned block")}
     await sc.update(available_power_w=0.0, price_level="normal", plan_windows=block)
     assert boiler.calls == [("on", 3000)]          # banking pass started it
     boiler._can_act = False                        # the minimum off time after a stop
