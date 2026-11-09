@@ -652,11 +652,36 @@ class LoadIntent:
     them (``_batt_overnight_forced == source == 'tier2_battery'`` etc.)."""
     on: bool
     power_w: float
-    source: Optional[str]   # 'solar'|'tier1_battery'|'tier2_battery'|'cheap_grid'|None
+    source: Optional[str]   # 'solar'|'tier1_battery'|'tier2_battery'|'cheap_grid'|'comfort_floor'|None
     reason: str
     #: (#1174) the reason as a stable code (``reason_codes``); empty = the
     #: source names it. Recorded only, left out of equality.
     code: str = field(default="", compare=False)
+
+
+def _heater_band(device: "ControllableDevice"):
+    """(#1102) A load's thermometer band as ``(state, below_keep_at)``, or
+    None for a load without an engaged band (no fields, no reading, a
+    misconfigured band). ``below_keep_at`` is in the band's own direction:
+    a heater below its target, a cooler above it."""
+    state = getattr(device, "comfort_state", None)
+    if state not in ("forced", "willing", "banked"):
+        return None
+    read = getattr(device, "_comfort_reading", None)
+    thresholds = getattr(device, "_comfort_thresholds_c", None)
+    direction = getattr(device, "_comfort_direction", None)
+    if not (callable(read) and callable(thresholds) and callable(direction)):
+        return None
+    try:
+        temp = read()
+        target = float(thresholds()[0])
+        cooling = direction() == "cool"
+    except Exception:  # noqa: BLE001 — an unreadable band is no band
+        return None
+    if not isinstance(temp, (int, float)):
+        return None
+    below = float(temp) > target if cooling else float(temp) < target
+    return state, below
 
 
 def compute_load_intent(
@@ -763,8 +788,14 @@ def compute_load_intent(
                           RC.LOAD_STOP_CONDITION)
     # 3a. (#1121) The device's own run (Legionella) needs no sun: kept as
     #     it is, never re-tuned. Only a shed (clause 2) or its own end stops it.
-    if active and getattr(device, "runs_without_surplus", False) is True:
-        return LoadIntent(True, held, None, "own run — ends at its own target")
+    #     (#1102) It also STARTS here: while the three layers lead, the
+    #     hot-water device only says the run is due and no longer switches.
+    if getattr(device, "runs_without_surplus", False) is True:
+        if active:
+            return LoadIntent(True, held, None, "Legionella run — ends at its own target",
+                              RC.LOAD_LEGIONELLA)
+        return LoadIntent(True, float(getattr(device, "rated_power", 0.0) or 0.0), None,
+                          "Legionella run due", RC.LOAD_LEGIONELLA)
 
     # 3b. A ScheduleDevice past its deadline is a hard commitment — force it on
     #     regardless of surplus or peak posture (matches the old deadline pass,
@@ -778,7 +809,13 @@ def compute_load_intent(
     rated = float(getattr(device, "rated_power", 0.0) or 0.0)
     threshold = float(getattr(device, "min_power_threshold", rated) or rated)
     can_start = active or not peak_freeze
-    deficit = bool(getattr(device, "has_runtime_deficit", False))
+    band = _heater_band(device)
+    # (#1102) With a thermometer band the band leads: the daily run time
+    # asks nothing (a hot tank was heated again for its minutes), and the
+    # band's own "too cold" is the floor rung below — not a deficit that
+    # waits for the user's paid sources.
+    deficit = (band is None
+               and bool(getattr(device, "has_runtime_deficit", False)))
     # (#1156) A fresh start has nothing to measure yet and claims the
     # rating; an already-running device with a power sensor claims what
     # it actually draws, so a self-throttled load (its own thermostat,
@@ -802,6 +839,17 @@ def compute_load_intent(
     if not active:
         start_bar = threshold + max(
             0.0, float(getattr(device, "start_reserve_w", 0.0) or 0.0))
+    # (#1102) Too cold: at or past the limit it heats NOW on any tariff, and
+    # a run the floor started goes on to Keep at, not just past the limit.
+    # Peak shed (clause 2) and the operator's lock (1b) still outrank it.
+    if band is not None and can_start and (
+            band[0] == "forced"
+            or (active and band[1]
+                and getattr(device, "_comfort_floor_run", False) is True)):
+        src = "solar" if effective >= threshold else "comfort_floor"
+        return LoadIntent(True, claim, src, "too cold — heats to its keep-at temperature",
+                          RC.LOAD_COMFORT_FLOOR)
+
     if effective >= start_bar and can_start:
         battery_assisted = tier1_headroom_w > 0 and remaining_surplus_w < threshold
         src = "tier1_battery" if battery_assisted else "solar"
@@ -812,10 +860,13 @@ def compute_load_intent(
     # reactive run reason at all (a willing room otherwise only rides
     # free surplus). Forced rooms never land here: forcing lives on the
     # deficit paths, and a forced room's comfort_state is not "willing".
-    if (plan.in_block and can_start
-            and getattr(device, "comfort_state", "") == "willing"):
+    # (#1102) Keep at is a goal: inside its planned block it heats up to
+    # Keep at — Extra above it is for the sun only.
+    if (plan.in_block and can_start and band is not None
+            and band[0] == "willing" and band[1]):
         return LoadIntent(True, claim, "cheap_grid",
-                          plan.reason or "joint plan: comfort banking block open")
+                          plan.reason or "joint plan: heats to its keep-at temperature",
+                          RC.LOAD_COMFORT_GOAL)
 
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire
@@ -1624,6 +1675,10 @@ class SurplusController:
                 # cycle; absent from the dict = the plan has no say.
                 plan=self._plan_windows.get(device.device_id) or NO_OPINION)
             intents[device.device_id] = intent
+            # (#1102) remember a run the floor started, so it goes on to
+            # Keep at (a dry shadow walk puts this back afterwards)
+            device._comfort_floor_run = bool(
+                intent.on and intent.code == RC.LOAD_COMFORT_FLOOR)
             # solar/tier1-driven loads consume surplus for lower-priority ones
             if intent.on and intent.source in ("solar", "tier1_battery"):
                 if intent.source == "tier1_battery":

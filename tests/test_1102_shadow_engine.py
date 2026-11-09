@@ -137,6 +137,11 @@ async def test_d1_comfort_banking_is_cut_by_the_old_force_expiry():
     boiler = _LogDev("boiler", 1, min_power=3000, rated_power=3000,
                      top_up_policy="solar_only", comfort_state="willing")
     sc.register_device(boiler)
+    # (#1102) the heater ladder plans only up to Keep at: the tank reads 45 °C
+    # against Keep at 50, so the planned block is a real goal
+    boiler._comfort_reading = lambda: 45.0
+    boiler._comfort_thresholds_c = lambda: (50.0, 5.0, 36.0)
+    boiler._comfort_direction = lambda: "heat"
     block = {"boiler": PlanVerdict(in_block=True, reason="planned block")}
     await sc.update(available_power_w=0.0, price_level="normal", plan_windows=block)
     assert boiler.calls == [("on", 3000)]          # banking pass started it
