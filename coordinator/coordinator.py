@@ -12721,7 +12721,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         continue
                     _ask_fn = getattr(dev, "comfort_plan_demand", None)
                     # (#1102) where the ladder leads, Keep at is a goal
-                    ask = ((_ask_fn(now, goal=True) if _ladder_leads(self)
+                    _goal = _ladder_leads(self)
+                    ask = ((_ask_fn(now, goal=True) if _goal
                             else _ask_fn(now)) if callable(_ask_fn) else None)
                     if not ask:
                         continue
@@ -12742,6 +12743,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         min_run_s=int(getattr(dev, "min_on_seconds", 0) or 0),
                         min_gap_s=int(getattr(dev, "min_off_seconds", 0) or 0),
                         tariff=_plan_tariff(dev),     # (#812)
+                        # (#1102) a goal is placed even with no price published
+                        unpriced_ok=bool(_goal),
                     ))
                 except Exception:  # noqa: BLE001 — one bad band won't kill the plan
                     continue
@@ -13247,8 +13250,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 if d.kind == "ev"), 2)
             _LOGGER.info(
                 "ENERGY-PLAN (%s #638): %d demand(s), %d slot(s), "
-                "est cost %.2f, fits=%s | EV %.1f kWh (per-charger map)",
-                tag, len(demands), len(slots), plan.total_cost, plan.fits,
+                "est cost %s, fits=%s | EV %.1f kWh (per-charger map)",
+                tag, len(demands), len(slots),
+                "unknown" if plan.total_cost is None else f"{plan.total_cost:.2f}", plan.fits,
                 real_ev,
             )
             if cap_kwh <= 0:
@@ -13290,7 +13294,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "status": r.status,
                 "planned_kwh": round(r.planned_kwh, 2),
                 "needed_kwh": round(r.needed_kwh, 2),
-                "est_cost": round(r.est_cost, 2),
+                "est_cost": (round(r.est_cost, 2) if r.est_cost is not None else None),
                 "note": r.note or None,
             } for r in plan.results]
             # The ledger itself — the card's hour axis and battery
