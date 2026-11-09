@@ -672,10 +672,10 @@ def _plan_day_end(time_manager, now, night_end):
     try:
         night_start_s, _ = time_manager.get_night_window()
         day_end = resolve_deadline(now, night_start_s)
+        if day_end is not None and day_end < night_end:
+            return day_end
     except Exception:  # noqa: BLE001 — no window → night-only shape
-        return None
-    if day_end is not None and day_end < night_end:
-        return day_end
+        pass
     return None
 
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
@@ -12643,7 +12643,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001 — no sun frame: the wait is off too
                 _sun = None
 
-            def _load_not_before(dev, tier2):
+            def _load_sun_wait(dev, tier2):
                 if plan_day_end is None or tier2 or _sun is None:
                     return None            # no day hours, or no wait to copy
                 waits = grid_top_up_waits_until(
@@ -12736,8 +12736,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         energy_kwh=rated * deficit_h / 1000.0,
                         max_power_w=rated, min_power_w=rated,
                         deadline=night_end,
-                        # (#1330) the hours execution lets this source start
-                        not_before=_load_not_before(dev, tier2),
+                        # (#1330) the grid waits while the sun has time
+                        sun_waits_until=_load_sun_wait(dev, tier2),
                         # 1 = highest in BOTH the one list and the packer —
                         # no negation (see the EV demand above).
                         priority=int(getattr(dev, "priority", 0) or 0),

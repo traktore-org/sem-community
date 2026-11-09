@@ -6864,19 +6864,26 @@ owed. The joint plan did not know it. Every plan made by day (one per energy day
 the load in its cheapest cheap slot, a midday low tariff too, and the Energy Plan card showed a run
 at 13:00 that SEM never did.
 **Where it lives:** `coordinator/coordinator.py` `_shadow_energy_plan`, the load demand (**fixed**:
-`Demand.not_before` from `surplus_controller.grid_top_up_waits_until`, `sunset - deficit`, read
+`Demand.sun_waits_until` from `surplus_controller.grid_top_up_waits_until`, `sunset - deficit`, read
 through `_daylight_frame`, the same sun reader `_daylight_remaining_s_now` uses; clamped to the day
 part's end, `_plan_day_end`, which the slot builder reads too). `coordinator/energy_planner.py`
-`pack_night` (**fixed**: no slot starting before `not_before`, in the slot-wise, one-block and late
-paths; the "no cheap window" and #1310 notes count only those hours). Mirrored: no measured sunset,
-a forced band and a night plan add no limit, as the live wait does.
+`pack_night` (**fixed**: a priced slot is used only from the end of the wait, and the slot that holds
+it from that minute, in the slot-wise, one-block and late paths; a sun slot never waits, the sun runs
+the load there; the note says "waits for the sun until HH:MM" instead of "no cheap window" beside a
+cheap band). Mirrored: no measured sunset, a forced band and a plan made in the night add no wait, as
+the live gate does.
 **Guard:** `tests/test_1330_plan_waits_for_the_sun.py` — the issue's day, the oracle (every planned
-block's start, fed to the real `_daylight_remaining_s_now` and `grid_top_up_defers_to_sun`, may start;
-60 stamp/owed/tariff cases), the cutoff against the live gate minute by minute, the packer paths, and
-AST checks that every load `Demand` passes `not_before` and both sides read `_daylight_frame`. With
-the limit off, 27 tests fail.
+grid block, one cycle in, fed to the real `_daylight_remaining_s_now` and `grid_top_up_defers_to_sun`,
+may start; 216 stamp/owed/tariff/sun cases), sun hours stay open, the hour that holds the end of the
+wait, a plan made after midnight, the cutoff against the live gate minute by minute, the packer paths,
+and AST checks that every load `Demand` passes `sun_waits_until` and both sides read `_daylight_frame`.
+With the wait off, 71 tests fail; with the sun slots waiting, 2; without the clip, 2; without the night
+clamp, 1.
 **Left open:** (1) a battery-run load ("Finish overnight via: Battery") also gets blocks by day,
 where execution runs it only at night (#633). Moving it to the night is not safe yet: the day part's
 battery path has no sun refill, so the night would read empty. (2) The battery pre-charge demand has
-the same shape (#1311). (3) The comfort banking flap of #1330 (class 47, above) needs a choice.
+the same shape (#1311); an EV floor's day blocks too (#856, #939). (3) The re-plan check holds neither
+the sun reading nor a band turning forced, so such a change waits for the next re-plan. (4) The
+tomorrow preview packs load asks into any cheap hour (a curve, no blocks on the card). (5) The comfort
+banking flap of #1330 (class 47, above) needs a choice.
 Refs #1308 #1309 #246 #967 #1023 #501 #1330 #953 #1311.

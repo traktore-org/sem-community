@@ -7,9 +7,10 @@ owed. The joint plan did not know that rule. A plan made by day (every plan
 from sunrise on) put the load in the cheapest cheap hour, a midday low tariff
 too, and the Energy Plan card showed a run there that SEM never did.
 
-Now the load demand carries ``not_before``: the time the live wait ends,
+Now the load demand carries ``sun_waits_until``: the time the live wait ends,
 ``sunset - deficit``, from the same sun reader (``_daylight_frame``). The
-packer uses no slot that starts before it.
+packer uses a priced slot only from that time on. A sun slot stays open:
+the sun runs the load there, with no wait (review finding).
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from custom_components.solar_energy_management.coordinator import coordinator as coord_mod
+from custom_components.solar_energy_management.coordinator import ev_night_targets
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
 )
@@ -102,11 +104,15 @@ def _grid_load(owed_h=2.0, *, state="", tier2=False):
     )
 
 
-def _plan_at(monkeypatch, hour, dev, *, tariff=None, tm=None):
+def _plan_at(monkeypatch, hour, dev, *, tariff=None, tm=None, sun_kwh=None,
+             day=29):
     fake = _fake_self(devices=[dev])
     fake.time_manager = tm or _SunTime()
     fake._tariff_provider = tariff or _MiddayAndNightCheap()
-    fixed = _t(hour)
+    if sun_kwh is not None:
+        fake._forecast_reader = SimpleNamespace(forecast_data=SimpleNamespace(
+            forecast_remaining_today_kwh=sun_kwh))
+    fixed = _t(hour, day=day)
     monkeypatch.setattr(coord_mod.dt_util, "now", lambda *a, **k: fixed)
     SEMCoordinator._shadow_energy_plan(
         fake, _scheduler(0.0), energy=MagicMock(), power=_power())
@@ -126,6 +132,19 @@ def _load_starts(plan):
 
 def _summary(plan, did="load:pool"):
     return next(ln for ln in plan["summary"] if ln.startswith(did))
+
+
+def _sun_hours(plan):
+    """Start hours ("HH:00") of the plan's sun slots."""
+    return {s["start"][11:16] for s in plan["slots"] if s.get("sun")}
+
+
+class _CheapFiveToSeven:
+    def get_price_at(self, t):
+        return 0.10 if t.hour in (17, 18) else 0.28
+
+    def get_price_level_at(self, t):
+        return "cheap" if t.hour in (17, 18) else "normal"
 
 
 class TestTheDayPlanWaitsForTheSun:
@@ -148,15 +167,48 @@ class TestTheDayPlanWaitsForTheSun:
         starts = _load_starts(plan)
         assert starts and set(starts) <= {"18:00", "19:00"}, starts
 
-    def test_only_a_midday_cheap_hour_says_no_cheap_window(
+    def test_only_a_midday_cheap_hour_says_it_waits_for_the_sun(
             self, freeze_targets, monkeypatch):
         """Execution never buys at noon here, so the plan books nothing and
-        its note says why — not "fits" with a block that does not run."""
+        its note says why — not "fits" with a block that does not run, and
+        not "no cheap window" beside a cheap band on the card."""
         _, plan = _plan_at(monkeypatch, 9, _grid_load(),
                            tariff=_MiddayCheapOnly())
         assert _load_starts(plan) == []
         line = _summary(plan)
-        assert "YIELDS" in line and "no cheap window tonight" in line
+        assert "YIELDS" in line and "waits for the sun until 18:10" in line
+
+    def test_the_hour_that_holds_the_end_of_the_wait_is_used_from_it(
+            self, freeze_targets, monkeypatch):
+        """2.5 h owed: the wait ends at 17:40, inside the cheap 17:00 hour.
+        Execution starts at 17:40, so the plan's block does too. No car:
+        it would take the 17:00 headroom first."""
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {})
+        _, plan = _plan_at(monkeypatch, 9, _grid_load(2.5),
+                           tariff=_CheapFiveToSeven())
+        starts = _load_starts(plan)
+        assert starts and starts[0] == "17:40", starts
+        assert all(s >= "17:40" for s in starts), starts
+
+    def test_sun_hours_stay_open(self, freeze_targets, monkeypatch):
+        """A sunny day: the sun runs the load by day with no wait (the solar
+        clause), so the plan keeps it in the sun hours."""
+        _, plan = _plan_at(monkeypatch, 9, _grid_load(), sun_kwh=25.0)
+        sun = _sun_hours(plan)
+        starts = _load_starts(plan)
+        assert sun, "the forecast must give sun slots"
+        assert starts and all(s in sun for s in starts), (starts, sun)
+
+    def test_a_plan_made_after_midnight_is_unchanged(self, freeze_targets,
+                                                    monkeypatch):
+        """At 01:00 "today's" sunset is 20:10 the coming evening. The plan
+        has no day part, so no wait applies to its night slots."""
+        _, plan = _plan_at(monkeypatch, 1, _grid_load(), day=30)
+        _, no_wait = _plan_at(monkeypatch, 1, _grid_load(), day=30,
+                              tm=_FallbackSunTime())
+        assert _load_starts(plan)
+        assert _load_starts(plan) == _load_starts(no_wait)
 
     def test_no_measured_sunset_no_wait(self, freeze_targets, monkeypatch):
         """Execution does not wait on a sunset nobody measured (#953), so
@@ -185,19 +237,28 @@ class TestEveryBlockIsOneExecutionWouldStart:
     the coordinator's real daylight reader — lets the grid start."""
 
     @pytest.mark.parametrize("hour", [7, 9, 12, 15, 17, 19])
-    @pytest.mark.parametrize("owed_h", [0.5, 1.0, 2.0, 3.0, 5.0])
-    @pytest.mark.parametrize("tariff", [_MiddayAndNightCheap, _EveningCheap])
+    @pytest.mark.parametrize("owed_h", [0.5, 1.0, 2.0, 2.5, 3.0, 5.0])
+    @pytest.mark.parametrize("tariff", [_MiddayAndNightCheap, _EveningCheap,
+                                        _CheapFiveToSeven])
+    @pytest.mark.parametrize("sun_kwh", [None, 6.0])
     def test_no_block_where_the_wait_holds(self, freeze_targets, monkeypatch,
-                                           hour, owed_h, tariff):
+                                           hour, owed_h, tariff, sun_kwh):
         dev = _grid_load(owed_h)
-        fake, plan = _plan_at(monkeypatch, hour, dev, tariff=tariff())
+        fake, plan = _plan_at(monkeypatch, hour, dev, tariff=tariff(),
+                              sun_kwh=sun_kwh)
         stamp = _t(hour)
+        sun = _sun_hours(plan)
         for hhmm in _load_starts(plan):
+            if hhmm in sun:
+                continue            # the sun runs it there, no wait
             h, m = (int(x) for x in hhmm.split(":"))
             start = stamp.replace(hour=h, minute=m)
             if start < stamp:
                 start += timedelta(days=1)
             night = start >= _t(21)
+            # one cycle in: at the very end of the wait the live gate still
+            # holds, and starts on its next cycle
+            start += timedelta(seconds=30)
             monkeypatch.setattr(coord_mod.dt_util, "now",
                                 lambda *a, _s=start, **k: _s)
             daylight = SEMCoordinator._daylight_remaining_s_now(fake)
@@ -241,7 +302,7 @@ class TestTheWaitEndsWhereTheLiveGateSaysSo:
 
 
 class TestThePacker:
-    """``Demand.not_before`` in the pure packer."""
+    """``Demand.sun_waits_until`` in the pure packer."""
 
     def _night(self):
         start = _t(10)
@@ -261,30 +322,56 @@ class TestThePacker:
         return Demand(**args)
 
     def test_no_slot_before_it(self):
-        plan = pack_night([self._demand(not_before=_t(13))], self._night())
+        plan = pack_night([self._demand(sun_waits_until=_t(13))], self._night())
         assert [a.start.hour for a in plan.allocations] == [13, 14]
+
+    def test_the_slot_that_holds_it_is_used_from_it(self):
+        plan = pack_night([self._demand(sun_waits_until=_t(13, 30))],
+                          self._night())
+        starts = [a.start for a in plan.allocations]
+        assert starts[0] == _t(13, 30), starts
+        assert all(s >= _t(13, 30) for s in starts)
+        assert plan.results[0].status == "fits"
+
+    def test_a_sun_slot_does_not_wait(self):
+        ledger = self._night()
+        ledger[0].cap_override_w = 2000.0      # a sun slot, as build_day_slots
+        plan = pack_night([self._demand(sun_waits_until=_t(15))], ledger)
+        assert _t(10) in [a.start for a in plan.allocations]
 
     def test_none_is_the_old_shape(self):
         plan = pack_night([self._demand()], self._night())
         assert [a.start.hour for a in plan.allocations] == [10, 11]
 
     def test_one_block_respects_it(self):
-        plan = pack_night([self._demand(not_before=_t(14), contiguous=True)],
+        plan = pack_night([self._demand(sun_waits_until=_t(14), contiguous=True)],
                           self._night())
         assert [a.start.hour for a in plan.allocations] == [14, 15]
+
+    def test_one_block_is_not_split_by_it(self):
+        """A sun slot before a priced slot that holds the end of the wait is
+        not back-to-back with what follows: the block cannot join them."""
+        ledger = self._night()
+        ledger[2].cap_override_w = 2000.0      # 12:00 is sun
+        plan = pack_night([self._demand(sun_waits_until=_t(13, 30),
+                                        contiguous=True, energy_kwh=1.6)],
+                          ledger)
+        a = sorted(plan.allocations, key=lambda x: x.start)
+        for x, y in zip(a, a[1:], strict=False):
+            assert x.end == y.start, a
 
     def test_the_late_part_respects_it(self):
         d = self._demand(kind="ev", needs_cheap_level=False,
                          deadline=_t(16), late_s=3 * 3600,
-                         not_before=_t(14, 30), energy_kwh=0.8)
+                         sun_waits_until=_t(14, 30), energy_kwh=0.8)
         plan = pack_night([d], self._night())
         assert plan.allocations
         assert all(a.start >= _t(14, 30) for a in plan.allocations)
 
-    def test_the_note_counts_only_hours_it_may_use(self):
-        plan = pack_night([self._demand(not_before=_t(17))], self._night())
+    def test_the_note_says_it_waits_for_the_sun(self):
+        plan = pack_night([self._demand(sun_waits_until=_t(17))], self._night())
         assert plan.results[0].status == "yields"
-        assert plan.results[0].note == "no cheap window tonight"
+        assert plan.results[0].note == "waits for the sun until 17:00"
 
 
 class TestOneReader:
@@ -305,8 +392,8 @@ class TestOneReader:
             if kinds != ["load"]:
                 continue
             found += 1
-            assert any(k.arg == "not_before" for k in node.keywords), \
-                "a load Demand without not_before (#1330)"
+            assert any(k.arg == "sun_waits_until" for k in node.keywords), \
+                "a load Demand without sun_waits_until (#1330)"
         assert found >= 1
 
     def test_the_plan_and_the_live_wait_share_the_sun_reader(self):
