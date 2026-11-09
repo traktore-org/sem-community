@@ -77,6 +77,11 @@ class Demand:
     #: price and cheap level per slot, read in place of the house's. None =
     #: the house tariff, exactly as before.
     tariff: Any = field(default=None, compare=False)
+    #: (#1102) A Keep-at goal is a promise, not opportunism: with no price
+    #: published it may still use unpriced slots — after every priced one,
+    #: sun slots first, then the hours closest to its deadline. Its cost is
+    #: then unknown (None), never 0.
+    unpriced_ok: bool = False
 
 
 @dataclass
@@ -220,7 +225,8 @@ class EnergyPlan:
         for r in self.results:
             if r.status == "fits":
                 out.append(f"{r.demand_id}: fits — {r.planned_kwh:.1f} kWh "
-                           f"planned, est {r.est_cost:.2f}"
+                           + (f"planned, est {r.est_cost:.2f}" if r.est_cost is not None
+                              else "planned, cost unknown")
                            + (f" ({r.note})" if r.note else ""))
             else:
                 gap = r.needed_kwh - r.planned_kwh
@@ -286,9 +292,17 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
     def _order(d):
         """Grid demands walk the cheapest slots first — by their own price."""
         if d.tariff is None:
-            return by_price
-        return sorted((i for i in idx if _price(d, i) is not None),
-                      key=lambda i: (_price(d, i), ledger[i].start))
+            priced = list(by_price)
+        else:
+            priced = sorted((i for i in idx if _price(d, i) is not None),
+                            key=lambda i: (_price(d, i), ledger[i].start))
+        if not d.unpriced_ok:
+            return priced
+        # (#1102) then the unpriced slots: sun first, else nearest the deadline
+        rest = [i for i in idx if _price(d, i) is None]
+        rest.sort(key=lambda i: (getattr(ledger[i], "cap_override_w", None) is None,
+                                 -ledger[i].start.timestamp()))
+        return priced + rest
 
     def _begin(d, i):
         """(#1330) Where a run of ``d`` may start in slot ``i``: the slot
@@ -320,7 +334,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
     def _eligible(d, i):
         if not _in_time(d, i):
             return False
-        if d.needs_cheap_level and not _cheap(d, i):
+        if (d.needs_cheap_level and not _cheap(d, i)
+                and not (d.unpriced_ok and _price(d, i) is None)):
             return False
         start = _begin(d, i)
         prev = last_block_end.get(d.id)
@@ -383,6 +398,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         need = max(0.0, float(d.energy_kwh))
         planned = 0.0
         cost = 0.0
+        cost_known = True               # (#1102) false once an unpriced slot is used
         note = ""
         block_note = ""
         if (d.late_s > 0 and d.deadline is not None
@@ -498,7 +514,10 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             if run_h <= 0:
                 continue
             end = begin + timedelta(hours=run_h)
-            price = 0.0 if d.source == "battery" else float(_price(d, i))
+            _p = 0.0 if d.source == "battery" else _price(d, i)
+            price = None if _p is None else float(_p)   # (#1102) unpriced: unknown
+            if price is None:
+                cost_known = False
             e_kwh = power / 1000.0 * run_h
             if d.source == "battery":
                 s.batt_out_kwh += e_kwh
@@ -512,14 +531,15 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 s.grid_committed_w += power   # survives trajectory re-walks
                 s.headroom_w -= power
                 why = (f"{d.id}: {power:.0f} W {begin:%H:%M}–{end:%H:%M} "
-                       f"@ {price:.3f} (slot #{own_rank[i]} cheapest, "
-                       f"headroom left {s.headroom_w:.0f} W)")
+                       + (f"@ {price:.3f} (slot #{own_rank[i]} cheapest, "
+                          if price is not None else "unpriced (no price published, ")
+                       + f"headroom left {s.headroom_w:.0f} W)")
             allocations.append(Allocation(
                 demand_id=d.id, start=begin, end=end, power_w=power,
                 price=price, reason=why))
             last_block_end[d.id] = end
             planned += e_kwh
-            cost += e_kwh * price
+            cost += e_kwh * (price or 0.0)
         if (need > 1e-9 and planned < need * FIT_EPS and unpriced
                 and d.source != "battery"):
             note = (f"{unpriced} slot(s) unpriced — replans when the "
@@ -541,19 +561,24 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     for i in idx)
                 note = (f"waits for the sun until {d.sun_waits_until:%H:%M}"
                         if waited else "no cheap window tonight")
+        if not cost_known:
+            note = "; ".join(n for n in (note, "placed in hours with no price yet — cost unknown") if n)
         note = "; ".join(n for n in (block_note, note) if n)
         status = ("fits" if planned >= need * FIT_EPS or need <= 1e-9
                   else "partial" if planned > 0 else "yields")
         results.append(DemandResult(
             demand_id=d.id, status=status, planned_kwh=round(planned, 3),
-            needed_kwh=round(need, 3), est_cost=round(cost, 4), note=note))
+            needed_kwh=round(need, 3),
+            est_cost=round(cost, 4) if cost_known else None, note=note))
 
     takeover = next((s.start for s in ledger if s.home_grid_w > _W_EPS), None)
     allocations.sort(key=lambda a: (a.start, a.demand_id))
     return EnergyPlan(
         allocations=tuple(allocations),
         results=tuple(results),
-        total_cost=round(sum(a.energy_kwh * a.price for a in allocations), 4),
+        # (#1102) one unpriced block makes the night's cost unknown, never 0
+        total_cost=(None if any(a.price is None for a in allocations)
+                    else round(sum(a.energy_kwh * a.price for a in allocations), 4)),
         fits=all(r.status == "fits" for r in results),
         takeover=takeover,
     )

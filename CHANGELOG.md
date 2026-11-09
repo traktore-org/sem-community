@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.10] — 09.11.2026
+
 - ✨ **Heaters with a thermometer follow one order** (#1102): your stop, Legionella, too cold now, Keep at in planned hours, sun. Run time steps back.
 - 🔧 **SEM checks its new load engine against the current one every cycle** and records where they differ (#1102). Nothing switches differently yet.
 - 🐛 **A boiler with a comfort band now waits for the sun before it buys its daily minimum from the grid** (#1102). It ran at noon.
