@@ -101,11 +101,11 @@ class TestTooCold:
 @pytest.mark.unit
 class TestKeepAtIsAGoal:
     def test_below_keep_at_heats_in_its_planned_block(self):
-        it = _intent(_boiler(45.0), plan=PlanVerdict(in_block=True))
+        it = _intent(_boiler(45.0), plan=PlanVerdict(in_block=True, comfort_in_block=True))
         assert it.on and it.source == "cheap_grid" and it.code == RC.LOAD_COMFORT_GOAL
 
     def test_at_or_above_keep_at_the_plan_starts_nothing(self):
-        it = _intent(_boiler(52.0), plan=PlanVerdict(in_block=True))
+        it = _intent(_boiler(52.0), plan=PlanVerdict(in_block=True, comfort_in_block=True))
         assert not it.on
 
     def test_too_cold_outranks_waiting_for_the_plan(self):
