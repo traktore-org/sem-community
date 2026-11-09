@@ -40,6 +40,8 @@ MERGE_SOURCES = {
     # (#812) per-device cost keys (daily_tariff_cost_<id> …) — dynamic, one
     # per own-tariff device, never in to_dict
     "_device_tariff_books()": "coordinator/coordinator.py",
+    # (#1102) the load engines' comparison — engine_shadow(_records), not in to_dict
+    "_engine_shadow_payload()": "coordinator/coordinator.py",
 }
 
 #: Keys knowingly published twice. Each MUST round/format identically at both
