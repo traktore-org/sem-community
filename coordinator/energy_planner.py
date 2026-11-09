@@ -555,3 +555,18 @@ def house_grid_cost(ledger) -> dict:
 # so those tests were proving things about a night that cannot happen (every
 # slot cheap, no house load, an infinite battery, no peak limit). The adapter
 # is now ``tests/synthetic_night.py``, where its assumptions are stated.
+
+
+def keep_sun_only(allocations, sun_starts, sun_only_ids):
+    """(#1321) A charger whose mode never takes grid power by day (solar
+    only, solar + battery) keeps only its blocks in sun slots. Returns the
+    kept allocations and the ids left with nothing, so the preview can say
+    "not enough sun" instead of drawing a grid charge the mode never makes.
+    """
+    kept, placed = [], set()
+    for a in allocations:
+        if a.demand_id in sun_only_ids and a.start not in sun_starts:
+            continue
+        kept.append(a)
+        placed.add(a.demand_id)
+    return kept, [d for d in sun_only_ids if d not in placed]

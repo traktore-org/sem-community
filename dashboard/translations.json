@@ -2708,7 +2708,8 @@
     "next_range_next": "Příštích 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "slunce vyrobilo {kwh} kWh",
-    "next_tip_sun_fc": "předpověď slunce {kwh} kWh"
+    "next_tip_sun_fc": "předpověď slunce {kwh} kWh",
+    "next_tmrw_no_sun_car": "Zítra: málo slunce pro auto"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5419,7 +5420,8 @@
     "next_range_next": "Næste 24 t",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "sol lavede {kwh} kWh",
-    "next_tip_sun_fc": "solprognose {kwh} kWh"
+    "next_tip_sun_fc": "solprognose {kwh} kWh",
+    "next_tmrw_no_sun_car": "I morgen: for lidt sol til bilen"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8130,7 +8132,8 @@
     "next_range_next": "Nächste 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "Sonne erzeugte {kwh} kWh",
-    "next_tip_sun_fc": "Sonnenprognose {kwh} kWh"
+    "next_tip_sun_fc": "Sonnenprognose {kwh} kWh",
+    "next_tmrw_no_sun_car": "Morgen: zu wenig Sonne für das Auto"
   },
   "en": {
     "% of limit": "% of limit",
@@ -10841,7 +10844,8 @@
     "next_range_next": "Next 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "sun made {kwh} kWh",
-    "next_tip_sun_fc": "sun forecast {kwh} kWh"
+    "next_tip_sun_fc": "sun forecast {kwh} kWh",
+    "next_tmrw_no_sun_car": "Tomorrow: too little sun for the car"
   },
   "es": {
     "% of limit": "% del límite",
@@ -13552,7 +13556,8 @@
     "next_range_next": "Próximas 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "el sol produjo {kwh} kWh",
-    "next_tip_sun_fc": "previsión solar {kwh} kWh"
+    "next_tip_sun_fc": "previsión solar {kwh} kWh",
+    "next_tmrw_no_sun_car": "Mañana: poco sol para el coche"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -16263,7 +16268,8 @@
     "next_range_next": "Seuraavat 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "aurinko tuotti {kwh} kWh",
-    "next_tip_sun_fc": "aurinkoennuste {kwh} kWh"
+    "next_tip_sun_fc": "aurinkoennuste {kwh} kWh",
+    "next_tmrw_no_sun_car": "Huomenna: liian vähän aurinkoa autolle"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -18974,7 +18980,8 @@
     "next_range_next": "Prochaines 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "soleil produit {kwh} kWh",
-    "next_tip_sun_fc": "prévision solaire {kwh} kWh"
+    "next_tip_sun_fc": "prévision solaire {kwh} kWh",
+    "next_tmrw_no_sun_car": "Demain : trop peu de soleil pour la voiture"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -21685,7 +21692,8 @@
     "next_range_next": "Következő 24 óra",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "a nap {kwh} kWh-t termelt",
-    "next_tip_sun_fc": "napelőrejelzés {kwh} kWh"
+    "next_tip_sun_fc": "napelőrejelzés {kwh} kWh",
+    "next_tmrw_no_sun_car": "Holnap: kevés a nap az autóhoz"
   },
   "it": {
     "% of limit": "% del limite",
@@ -24396,7 +24404,8 @@
     "next_range_next": "Prossime 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "sole prodotto {kwh} kWh",
-    "next_tip_sun_fc": "previsione solare {kwh} kWh"
+    "next_tip_sun_fc": "previsione solare {kwh} kWh",
+    "next_tmrw_no_sun_car": "Domani: troppo poco sole per l’auto"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -27107,7 +27116,8 @@
     "next_range_next": "Komende 24 u",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "zon maakte {kwh} kWh",
-    "next_tip_sun_fc": "zonverwachting {kwh} kWh"
+    "next_tip_sun_fc": "zonverwachting {kwh} kWh",
+    "next_tmrw_no_sun_car": "Morgen: te weinig zon voor de auto"
   },
   "no": {
     "% of limit": "% av grense",
@@ -29818,7 +29828,8 @@
     "next_range_next": "Neste 24 t",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "solen laget {kwh} kWh",
-    "next_tip_sun_fc": "solprognose {kwh} kWh"
+    "next_tip_sun_fc": "solprognose {kwh} kWh",
+    "next_tmrw_no_sun_car": "I morgen: for lite sol til bilen"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -32529,7 +32540,8 @@
     "next_range_next": "Następne 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "słońce dało {kwh} kWh",
-    "next_tip_sun_fc": "prognoza słońca {kwh} kWh"
+    "next_tip_sun_fc": "prognoza słońca {kwh} kWh",
+    "next_tmrw_no_sun_car": "Jutro: za mało słońca dla auta"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -35240,7 +35252,8 @@
     "next_range_next": "Próximas 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "sol produziu {kwh} kWh",
-    "next_tip_sun_fc": "previsão solar {kwh} kWh"
+    "next_tip_sun_fc": "previsão solar {kwh} kWh",
+    "next_tmrw_no_sun_car": "Amanhã: pouco sol para o carro"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -37951,7 +37964,8 @@
     "next_range_next": "Următoarele 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "soarele a produs {kwh} kWh",
-    "next_tip_sun_fc": "prognoză solară {kwh} kWh"
+    "next_tip_sun_fc": "prognoză solară {kwh} kWh",
+    "next_tmrw_no_sun_car": "Mâine: prea puțin soare pentru mașină"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -40662,7 +40676,8 @@
     "next_range_next": "Nästa 24 h",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "solen gav {kwh} kWh",
-    "next_tip_sun_fc": "solprognos {kwh} kWh"
+    "next_tip_sun_fc": "solprognos {kwh} kWh",
+    "next_tmrw_no_sun_car": "I morgon: för lite sol för bilen"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -43373,6 +43388,7 @@
     "next_range_next": "未来24小时",
     "next_tip_price": "{price} {cur}/kWh",
     "next_tip_sun_made": "太阳发电 {kwh} kWh",
-    "next_tip_sun_fc": "太阳预测 {kwh} kWh"
+    "next_tip_sun_fc": "太阳预测 {kwh} kWh",
+    "next_tmrw_no_sun_car": "明天：阳光不足以给汽车充电"
   }
 }

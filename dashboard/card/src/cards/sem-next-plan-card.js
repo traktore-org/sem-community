@@ -503,6 +503,8 @@ class SEMNextPlanCard extends SEMNextBase {
         if (plan.fits === true) out.push(this._pill(t('next_fits_yes'), 'ok', { icon: 'mdi:check' }));
         else if (plan.fits === false) out.push(this._pill(t('next_fits_no'), 'warn'));
         if (plan.computed_at) out.push(this._pill(this._tf('next_made_at', { time: this._hhmm(plan.computed_at) })));
+        const noSun = plan?.tomorrow?.provisional?.not_enough_sun;
+        if (Array.isArray(noSun) && noSun.length) out.push(this._pill(t('next_tmrw_no_sun_car'), 'warn', { icon: 'mdi:weather-cloudy' }));
         if (this._range === 'tomorrow') {
             const tmw = plan.tomorrow;
             const prices = tmw ? ' · ' + t(tmw.prices === 'final' ? 'next_prices_final' : 'next_prices_pending') : '';

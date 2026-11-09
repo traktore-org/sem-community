@@ -12104,10 +12104,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                  or 0)
                     if _tgt <= 0.05:
                         continue
+                    # (#1321) the charger's own mode decides: off asks
+                    # nothing, a full car takes nothing, and a sun-only
+                    # mode never charges from the grid by day.
+                    from ..consts.ev_charge_modes import effective_charge_mode_for
+                    try:
+                        _mode = effective_charge_mode_for(self.hass, self.config, _cfg)
+                    except Exception:  # noqa: BLE001 — unknown mode: the old grid ask
+                        _mode = None
+                    if _mode == "off":
+                        continue
+                    _cid = str(_cfg.get("id") or "")
+                    try:
+                        if _cid and self._plan_car_full(_cid, power) is True:
+                            continue
+                    except Exception:  # noqa: BLE001 — unknown fullness: keep the ask
+                        pass
                     asks.append({
                         "kind": "ev",
                         "label": charger_own_name(_cfg),  # (#1053)
                         "kwh": round(_tgt, 2),
+                        "sun_only": _mode in ("solar_only", "solar_plus_battery"),
                     })
                 except Exception:  # noqa: BLE001
                     continue
@@ -12199,6 +12216,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 plan2 = pack_night(
                     demands2, ledger2, floor_kwh=_floor2,
                     max_discharge_w=_md_w, peak_limit_w=_peak_w)
+                from .energy_planner import keep_sun_only
+                _sun_starts = {s.start for s in slots2
+                               if getattr(s, "cap_override_w", None) is not None}
+                _sun_only = [f"{a['kind']}:{i}" for i, a in enumerate(asks)
+                             if a.get("sun_only")]
+                _allocs2, _no_sun = keep_sun_only(
+                    plan2.allocations, _sun_starts, _sun_only)
                 curve = provisional_soc_curve(
                     ledger2, capacity_kwh=cap_kwh2,
                     max_charge_w=float(self.config.get(
@@ -12212,7 +12236,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # back-to-back windows into runs (the #638 G3c lesson:
                 # group by id first, neighbours in the list never merge).
                 _by_id = {}
-                for a in plan2.allocations:
+                for a in _allocs2:
                     _by_id.setdefault(a.demand_id, []).append(a)
                 _blocks2 = []
                 for _did, _rows in _by_id.items():
@@ -12231,8 +12255,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 preview["provisional"] = {
                     "soc_start": round(soc_seed, 2),
                     "soc_curve": curve,
-                    "fits": plan2.fits,
+                    "fits": plan2.fits and not _no_sun,
                     "blocks": _blocks2,
+                    # (#1321) asks the sun cannot carry in their mode
+                    "not_enough_sun": [{"id": d, "label": labels2.get(d)}
+                                       for d in _no_sun],
                 }
         except Exception:  # noqa: BLE001 — provisional is additive, never fatal
             preview["provisional"] = None
