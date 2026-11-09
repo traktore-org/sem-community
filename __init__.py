@@ -3375,6 +3375,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             "Load management features will be unavailable."
         )
 
+    # (#1102) Heat pump and hot water register AFTER the registry's restore
+    # above, so their day's runtime was skipped and a restart or a settings
+    # change reset it to 0. Restore again now that every load exists; a
+    # device already filled is left alone.
+    try:
+        coordinator._restore_device_runtimes()
+    except Exception as err:  # noqa: BLE001 — a lost restore never stops setup
+        _LOGGER.debug("Late runtime restore skipped: %s", err)
+
     # (#935) Every charger is built by now, so take back any park a previous
     # lifetime left on the hardware — the reconciler cannot re-derive it
     # (PARK_OFF fires on an edge; an already-empty box at boot is not one).
