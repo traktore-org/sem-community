@@ -742,6 +742,9 @@ Why did SEM act? One row per command SEM changed on a device: the time, the
 device, its old and new command, the reason as a short sentence in your
 language, and the numbers SEM decided on (sun, battery level, prices,
 surplus). Hold the pointer on the sentence to see SEM's own reason text.
+When a load stops, the row says why: it ran long enough today, it reached its
+longest run time for today, its planned time ended, or its stop condition was
+met.
 Rows SEM did not send
 because observer mode is on say *test mode: not sent*. Tap a device chip to
 see only its rows. *Everyday* shows the newest four; the rest open from the
