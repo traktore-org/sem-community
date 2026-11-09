@@ -54,6 +54,7 @@ from custom_components.solar_energy_management.coordinator.surplus_controller im
     solar_bounded_surplus,
     sun_can_still_finish,
 )
+from custom_components.solar_energy_management.coordinator.plan_verdict import PlanVerdict
 from custom_components.solar_energy_management.devices.base import DeviceControlMode
 
 _SC = Path(__file__).resolve().parent.parent / "coordinator" / "surplus_controller.py"
@@ -201,7 +202,8 @@ def _load(device_id="pump", priority=1, min_power=731, *,
 
 
 async def _run(sc, *, cycles=1, daylight_remaining_s, is_night,
-               price_level="cheap", solar_w=78.0, export_w=0.0):
+               price_level="cheap", solar_w=78.0, export_w=0.0,
+               plan_windows=None):
     """The reporter's readings through the coordinator's own surplus line."""
     for _ in range(cycles):
         surplus = solar_bounded_surplus(
@@ -211,7 +213,8 @@ async def _run(sc, *, cycles=1, daylight_remaining_s, is_night,
         await sc.update(
             surplus, price_level=price_level, reclaim_w=0.0,
             battery_priority=100, battery_soc=81.0, battery_reserve_soc=10.0,
-            is_night=is_night, daylight_remaining_s=daylight_remaining_s)
+            is_night=is_night, daylight_remaining_s=daylight_remaining_s,
+            plan_windows=plan_windows)
 
 
 @pytest.mark.unit
@@ -369,6 +372,14 @@ class TestComfortIsExempt:
         # The finish window must not cut a run the joint plan created.
         assert not grid_top_up_defers_to_sun(
             self._dev("willing"), daylight_remaining_s=DAYLIGHT_AT_0752,
+            is_night=False, comfort_block_open=True)
+
+    def test_a_willing_band_without_its_block_still_waits(self):
+        # (#1102) A tank sits in its willing band most of the day. The
+        # state alone is not a banking run: its daily minimum waits for
+        # the sun like any other load's.
+        assert grid_top_up_defers_to_sun(
+            self._dev("willing"), daylight_remaining_s=DAYLIGHT_AT_0752,
             is_night=False)
 
     def test_a_plain_runtime_floor_still_waits(self):
@@ -391,7 +402,10 @@ class TestComfortIsExempt:
         dev.needs_offpeak_activation = False
         dev.get_current_consumption = MagicMock(return_value=731.0)
         sc.register_device(dev)
-        await _run(sc, daylight_remaining_s=DAYLIGHT_AT_0752, is_night=False)
+        # (#1102) a banking run lives in its comfort block
+        await _run(sc, daylight_remaining_s=DAYLIGHT_AT_0752, is_night=False,
+                   plan_windows={dev.device_id: PlanVerdict(
+                       in_block=True, comfort_in_block=True)})
         assert not dev.deactivate.called
         assert dev._offpeak_forced is True
 

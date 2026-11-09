@@ -2467,7 +2467,32 @@ the stamped Sunday plan (rows cheap, packer still waits for Monday), the packer'
 checks: every `build_day_slots` / `tomorrow_preview` call in the coordinator passes a
 `rate_cheap_at` bound to `rate_cheap_fn`, every stamped `LedgerSlot` reads it, and no
 `LedgerSlot(...)` gives both words the same expression (probes prove each catches the old line).
-Refs #780 #779 #650 #1310.
+**Fourth catch (#1102 round 3, 09.11.2026):** two words, each read as "a banking run". (1)
+`PlanVerdict.in_block` said yes when the device's runtime block was open as well as its comfort
+block (`merge_load_gates`); the comfort-banking pass and its desired-state clause read it as the
+comfort block. (2) `grid_top_up_defers_to_sun` spared every `willing` band from the #953 daylight
+wait, but a tank is willing most of the day. @lostcontrol's hot water (1 h a day, finished from the
+grid, a midday low tariff) was started at 12:00 on 1.7 kW of sun with five hours of daylight left,
+as "planned block"; 30 min later, its band full, the expiry twin ended it with "daylight can still
+finish the target". A third reader of the same mix: `_offpeak_forced` marks a banking run and a
+minimum-run top-up alike, so with the minimum met the floor clause ended a banking run after its
+minimum run and the banking pass started it again after the minimum pause.
+**Closure:** `PlanVerdict.comfort_in_block`, set from the comfort gate only. The banking pass and
+clause read it; the daylight wait spares a `willing` band only with `comfort_block_open`, passed at
+all three call sites (intent, cheap-hours start, force expiry), so the daylight wait reads the same
+terms at start and stop; the floor clause spares a willing band's GRID run in its open comfort
+block (a battery run past the floor still ends, #688). Same run: each goal-gate
+stop records its own reason code (`daily_max`, `plan_closed`, `target_met`, `stop_condition`) —
+one code for four printed "It ran long enough today" for a tank that had reached its temperature.
+**Guard:** `tests/test_1102_runtime_block_is_not_banking.py` — the reporter's noon through the real
+passes (runtime block, no plan, end of day, night, comfort block, expiry, floor), the desired-state
+twin, the four stop codes, and an AST check that `surplus_controller.py` never reads `in_block` and
+passes `comfort_block_open`, read from `comfort_in_block`, at every daylight-wait call.
+**Left open (#1330):** the banking pass does not read "Finish overnight via" or the live price, and
+the force expiry does, so a band on the default "Off" turns on and off through its comfort block
+(which side is right is a choice); the plan can place a "Grid" load's daily minimum by day, where
+the passes now wait for the sun. #1331: the Why? card's "Surplus" is the car's budget on every row.
+Refs #780 #779 #650 #1310 #1102.
 
 ### 48. A removed host API called past its removal, its failure swallowed as a benign case — GUARDED
 **Symptom:** a feature that has always worked goes dead for users on a *newer Home Assistant* than

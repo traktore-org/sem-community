@@ -58,10 +58,15 @@ class PlanVerdict:
 
     in_block: bool = False
     # (#638 one-gate C5) The RUN half of the verdict: one of this
-    # device's planned blocks is open right now. For most loads this is
-    # advisory (their reactive run reasons stand on their own); for a
-    # WILLING comfort band it is the one sanctioned place the plan
-    # CREATES a run — banking has no reactive run reason at all.
+    # device's planned blocks is open right now — its runtime block OR
+    # its comfort block. Advisory: it lifts the hold, it starts nothing.
+
+    comfort_in_block: bool = False
+    # (#1102) The device's COMFORT banking block is open right now — the
+    # one sanctioned place the plan CREATES a run (banking has no reactive
+    # run reason at all). Its own field because ``in_block`` also says yes
+    # for the runtime block: read as "banking", that block started the
+    # daily minimum from the grid at noon, past the daylight wait.
 
 
 NO_OPINION = PlanVerdict()

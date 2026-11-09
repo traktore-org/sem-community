@@ -586,21 +586,32 @@ def grid_top_up_defers_to_sun(
     *,
     daylight_remaining_s: "Optional[float]",
     is_night: bool,
+    comfort_block_open: bool = False,
 ) -> bool:
     """(#953) Does THIS device's cheap-hours grid top-up wait for the sun?
 
     :func:`sun_can_still_finish` on the device's own runtime deficit, with
-    one exemption: a load whose COMFORT band is speaking is not waiting for
-    anything. ``ComfortBandMixin`` makes a breached band read as a runtime
-    deficit (``forced``) and the #638-C5 joint plan creates banking runs
-    (``willing``) — both carrying ``_offpeak_forced`` — but neither is the
-    daily runtime floor, and neither is something the afternoon sun can
-    "finish": a cold room is about NOW, and a banking block belongs to the
-    plan that placed it. Mirrors ``ComfortBandMixin.daily_targets_met``,
-    which for the same reason refuses to let a met floor stand the paid
-    sources down while the band is forced.
+    two exemptions where the COMFORT band is speaking. ``ComfortBandMixin``
+    makes a breached band read as a runtime deficit (``forced``) — a cold
+    room is about NOW. And the #638-C5 joint plan creates banking runs in
+    a ``willing`` band's comfort block — that block belongs to the plan
+    that placed it. Neither is the daily runtime floor. Mirrors
+    ``ComfortBandMixin.daily_targets_met``, which for the same reason
+    refuses to let a met floor stand the paid sources down while the band
+    is forced.
+
+    (#1102) ``willing`` alone is NOT the banking run. A tank sits in its
+    willing band most of the day, so exempting the state exempted every
+    band device: the daily minimum was bought from the grid in the first
+    cheap hour after sunrise (noon on a midday low tariff, 1.7 kW of sun,
+    four hours of daylight left), then this same wait ended it once the
+    band was full. The banking exemption needs ``comfort_block_open`` —
+    the plan's comfort block, ``PlanVerdict.comfort_in_block``.
     """
-    if getattr(device, "comfort_state", "") in ("willing", "forced"):
+    state = getattr(device, "comfort_state", "")
+    if state == "forced":
+        return False
+    if comfort_block_open and state == "willing":
         return False
     return sun_can_still_finish(
         float(getattr(device, "remaining_daily_runtime_sec", 0.0) or 0.0),
@@ -697,7 +708,8 @@ def compute_load_intent(
     # runs, carry a sticky marker and need the twin in the force-expiry
     # pass — class 17.
     sun_still_has_time = grid_top_up_defers_to_sun(
-        device, daylight_remaining_s=daylight_remaining_s, is_night=is_night)
+        device, daylight_remaining_s=daylight_remaining_s, is_night=is_night,
+        comfort_block_open=plan.comfort_in_block)
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
     #    still SHEDS it under peak risk.
@@ -812,7 +824,9 @@ def compute_load_intent(
     # reactive run reason at all (a willing room otherwise only rides
     # free surplus). Forced rooms never land here: forcing lives on the
     # deficit paths, and a forced room's comfort_state is not "willing".
-    if (plan.in_block and can_start
+    # (#1102) Its COMFORT block — the runtime block is the deficit
+    # clauses' to serve, under their own source, price and daylight terms.
+    if (plan.comfort_in_block and can_start
             and getattr(device, "comfort_state", "") == "willing"):
         return LoadIntent(True, claim, "cheap_grid",
                           plan.reason or "joint plan: comfort banking block open")
@@ -1934,7 +1948,11 @@ class SurplusController:
                 elif grid_top_up_defers_to_sun(
                         device,
                         daylight_remaining_s=self._daylight_remaining_s,
-                        is_night=self._is_night_cycle):
+                        is_night=self._is_night_cycle,
+                        # (#1102) a banking run lives in its comfort block
+                        comfort_block_open=getattr(
+                            self._plan_windows.get(device.device_id),
+                            "comfort_in_block", False)):
                     # (#953) The grid top-up is a FINISH source. A run that
                     # legitimately started inside the overnight window must
                     # not ride into a morning that can still deliver the
@@ -2033,12 +2051,17 @@ class SurplusController:
             # from the deficit LIFO and nothing else would ever stop it.
             if device.control_mode == DeviceControlMode.SURPLUS:
                 done_reason = None
+                # (#1102) each stop says its own cause on the Why? card —
+                # one code for all four printed "It ran long enough today"
+                # for a tank that had reached its temperature.
+                done_code = RC.LOAD_TARGET_MET
                 if device.daily_max_runtime_reached:
                     # (#620) the hard cap must STOP a running device, not just
                     # block re-activation — otherwise a load already on when it
                     # crosses the cap keeps running past it (caught live on the
                     # Heizband PROD test). The cap overrides the min deficit.
                     done_reason = "daily max runtime cap reached"
+                    done_code = RC.LOAD_DAILY_MAX
                 elif ((_pv := self._plan_windows.get(device.device_id)) is not None
                         and getattr(_pv, "hold", False)
                         and (device._offpeak_forced
@@ -2052,9 +2075,24 @@ class SurplusController:
                     # desired-state path is a stop that never happens.
                     done_reason = getattr(_pv, "reason", "") or \
                         "joint energy plan: window closed"
+                    done_code = RC.LOAD_PLAN_CLOSED
                 elif (device.daily_targets_met
                         and (device._offpeak_forced
-                             or getattr(device, "_batt_overnight_forced", False))):
+                             or getattr(device, "_batt_overnight_forced", False))
+                        # (#1102) a banking run in its comfort block is not
+                        # the floor's run: ending it here after its minimum
+                        # run, while the banking pass starts it again after
+                        # the minimum pause, cycles the load through the block.
+                        # Grid runs only — banking never runs on the battery,
+                        # so a battery run past the floor still ends here.
+                        and not (device._offpeak_forced
+                                 and not getattr(device,
+                                                 "_batt_overnight_forced", False)
+                                 and getattr(self._plan_windows.get(
+                                     device.device_id),
+                                     "comfort_in_block", False)
+                                 and getattr(device, "comfort_state", "")
+                                 == "willing")):
                     # (#688) The floor ends the PAID run, not the load. A
                     # Tier-2 / cheap-grid device is EXEMPT from the deficit
                     # LIFO (it runs without surplus by design), so nothing else
@@ -2073,10 +2111,11 @@ class SurplusController:
                         f"{device.stop_at:g})" if device.stop_entity
                         else "stop condition met (target reached)"
                     )
+                    done_code = RC.LOAD_STOP_CONDITION
                 if done_reason:
                     if device.is_active and device.can_deactivate():
                         if await _deactivate_owned(
-                                device, reason_code=RC.LOAD_TARGET_MET, text=done_reason):
+                                device, reason_code=done_code, text=done_reason):
                             device._offpeak_forced = False
                             device._offpeak_forced_date = None
                             # (#620) done-for-the-day also ends any Tier-2
@@ -2418,8 +2457,12 @@ class SurplusController:
                     continue
                 if getattr(device, "comfort_state", "") != "willing":
                     continue
+                # (#1102) the COMFORT block. ``in_block`` is also true in
+                # the runtime block, and starting that here skipped the
+                # cheap-hours pass's terms (daylight wait, source, price,
+                # billing slot).
                 _pv = self._plan_windows.get(device.device_id)
-                if _pv is None or not getattr(_pv, "in_block", False):
+                if _pv is None or not getattr(_pv, "comfort_in_block", False):
                     continue
                 if not device.can_activate():
                     continue
@@ -2470,10 +2513,14 @@ class SurplusController:
                     # overnight promise is untouched. Below
                     # needs_offpeak_activation deliberately: a load the
                     # sun is already carrying is not "deferred".
+                    # (#1102) The same terms as the force-expiry twin, so a
+                    # start here is not ended there one minimum run later.
                     if grid_top_up_defers_to_sun(
                             device,
                             daylight_remaining_s=self._daylight_remaining_s,
-                            is_night=self._is_night_cycle):
+                            is_night=self._is_night_cycle,
+                            comfort_block_open=getattr(
+                                _pv, "comfort_in_block", False)):
                         log_on_change(
                             _LOGGER, f"finishwindow:{device.device_id}",
                             logging.INFO,
