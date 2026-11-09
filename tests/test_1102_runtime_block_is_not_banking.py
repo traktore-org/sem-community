@@ -333,6 +333,23 @@ class TestTheFloorDoesNotCutABankingRun:
                      plan=_verdict(comfort_open=True))
         assert not boiler.deactivate.called
 
+    async def test_a_battery_run_in_the_block_still_ends(self, mock_hass, notes):
+        # Banking never runs on the battery: a Tier-2 run past its minimum
+        # is the floor's to end, comfort block or not (#688, class 18).
+        sc = SurplusController(mock_hass, regulation_offset=0)
+        boiler = _running(_boiler(deficit_s=0.0))
+        boiler._offpeak_forced = False
+        boiler._offpeak_forced_date = None
+        boiler._batt_overnight_forced = True
+        boiler._batt_overnight_forced_date = boiler._daily_runtime_meter_day
+        boiler.battery_eligible_overnight = True
+        boiler.daily_targets_met = True
+        sc.register_device(boiler)
+        await _cycle(sc, daylight_s=12 * H, is_night=True, solar_w=0.0,
+                     plan=_verdict(comfort_open=True))
+        boiler.deactivate.assert_awaited()
+        assert [n[1] for n in notes if not n[0]] == [RC.LOAD_TARGET_MET]
+
     async def test_outside_its_block_the_floor_still_ends_it(self, mock_hass, notes):
         sc = SurplusController(mock_hass, regulation_offset=0)
         boiler = _running(_boiler(deficit_s=0.0))
@@ -382,3 +399,10 @@ class TestTheControllerReadsOneWordPerQuestion:
         missing = [c.lineno for c in calls
                    if "comfort_block_open" not in {k.arg for k in c.keywords}]
         assert missing == [], f"no comfort_block_open at {missing}"
+        # …and each one reads the plan's comfort block, not a constant
+        src = _SC.read_text(encoding="utf-8")
+        constant = [c.lineno for c in calls for k in c.keywords
+                    if k.arg == "comfort_block_open"
+                    and "comfort_in_block" not in ast.get_source_segment(
+                        src, k.value)]
+        assert constant == [], f"comfort_block_open not read at {constant}"

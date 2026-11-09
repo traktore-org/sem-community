@@ -2083,9 +2083,14 @@ class SurplusController:
                         # the floor's run: ending it here after its minimum
                         # run, while the banking pass starts it again after
                         # the minimum pause, cycles the load through the block.
-                        and not (getattr(self._plan_windows.get(
-                                         device.device_id),
-                                         "comfort_in_block", False)
+                        # Grid runs only — banking never runs on the battery,
+                        # so a battery run past the floor still ends here.
+                        and not (device._offpeak_forced
+                                 and not getattr(device,
+                                                 "_batt_overnight_forced", False)
+                                 and getattr(self._plan_windows.get(
+                                     device.device_id),
+                                     "comfort_in_block", False)
                                  and getattr(device, "comfort_state", "")
                                  == "willing")):
                     # (#688) The floor ends the PAID run, not the load. A
