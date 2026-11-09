@@ -518,6 +518,25 @@ class CalendarTariffProvider(TariffProvider):
         return (PriceLevel.NORMAL if self._is_high_tariff(when)
                 else PriceLevel.CHEAP)
 
+    def _ht_occurs_in_week(self, when: datetime) -> bool:
+        """(#1310) Can a peak hour come on any day of the week from ``when``?
+
+        The same question ``_ht_can_occur`` asks of one day, asked of seven.
+        """
+        return any(self._ht_can_occur(when + timedelta(days=d))
+                   for d in range(7))
+
+    def get_rate_level_at(self, when: datetime) -> "PriceLevel | None":
+        # (#1310) Asked of the week, not of the day. A weekend with no peak
+        # block is all at the off-peak rate, the same rate as Monday 03:00.
+        # ``get_price_level_at`` refuses that day on purpose (#994), and the
+        # plan card drew Monday 00:00 as cheap and Sunday 22:00 not.
+        if not (self._rates_differ() and self._known_at(when)
+                and self._ht_occurs_in_week(when)):
+            return None
+        return (PriceLevel.NORMAL if self._is_high_tariff(when)
+                else PriceLevel.CHEAP)
+
     def get_tariff_data(self) -> TariffData:
         now = dt_util.now()
         is_ht = self._is_high_tariff(now)

@@ -7085,6 +7085,8 @@ async def _async_register_phase_services(
         "state_decision_path", "process_path", "action_path", "last_error",
         "shed_path", "shed_need_w", "shed_sheddable_w", "shed_futile",
         "uncontrolled_w",
+        # (#1102) the load engines' comparison: summary + full change log
+        "engine_shadow", "engine_shadow_records",
     }
     # Forecast
     _DIAGNOSE_FORECAST_OPTION = {

@@ -3689,6 +3689,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "shed_signal_state", "shed_signal_active",
                 "shed_signal_cap_kw", "shed_signal_since",
                 "shed_signal_locked",
+                # (#1102) where the two load engines differ (≤ 2 KB summary)
+                "engine_shadow",
             ):
                 attrs[key] = self.coordinator.data.get(key)
             # Add device list details for dashboard table

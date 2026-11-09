@@ -6055,6 +6055,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # (#1021) the grid operator's relay — the Control tab's banner
             result.update(self._shed_signal_payload())
+            # (#1102) where the two load engines differ — summary + full log
+            result.update(self._engine_shadow_payload())
 
             # Add night window sensors
             try:
@@ -11201,6 +11203,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             lm.set_operator_cap(sig.cap_kw if sig.active else None)
         return sig
 
+    def _engine_shadow_payload(self) -> dict:
+        """(#1102) The load engines' comparison: a small summary for the
+        load-management sensor, the full change log for diagnostics."""
+        shadow = getattr(getattr(self, "_surplus_controller", None), "engine_shadow", None)
+        summary = getattr(shadow, "summary", None)
+        records = getattr(shadow, "records", None)
+        if not callable(summary) or not callable(records):
+            return {}
+        try:
+            s, r = summary(), records()
+        except Exception:  # noqa: BLE001 — recording never breaks a cycle
+            return {}
+        if not isinstance(s, dict) or not isinstance(r, list):
+            return {}
+        return {"engine_shadow": s, "engine_shadow_records": r}
+
     def _shed_signal_payload(self) -> dict:
         """(#1021) The relay for the cards and diagnostics."""
         sig = getattr(self, "_shed_signal", None)
@@ -12048,7 +12066,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             day_kwh = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
         except Exception:  # noqa: BLE001 — no forecast, dark preview
             day_kwh = 0.0
-        from .day_ledger import tariff_cheap_at, tariff_price_at
+        from .day_ledger import rate_cheap_fn, tariff_cheap_at, tariff_price_at
         prov = self._tariff_provider
         # (#820) tomorrow's hours, read off the weekday profile
         _home_at_day = self._day_home_w_at(day_start)
@@ -12058,6 +12076,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             home_w_at=_home_at_day,
             price_at=lambda ts: tariff_price_at(prov, ts),
             level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+            # (#1310) the cheap windows show the tariff's rate, not the
+            # gate that refuses a day with one rate
+            rate_cheap_at=rate_cheap_fn(prov),
             stamps_at=stamps_at,
             export_rate=self._export_rate_at(),   # (#924)
         )
@@ -12173,6 +12194,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     home_w_at=self._day_home_w_at(day_start),   # (#820)
                     price_at=lambda ts: tariff_price_at(prov, ts),
                     level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+                    rate_cheap_at=rate_cheap_fn(prov),
                     # (#924) These slots go to build_night_ledger and the
                     # REAL pack_night below — this is a packing site, and
                     # unpriced it preferred the sun by fiat while the
@@ -13001,14 +13023,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # has no data (the fingerprint replan re-derives later); the
             # level comes from the shared get_price_level_at accessor so the
             # plan packs exactly what execution's cheap-gate would fire on.
-            # ONE pair of accessors for EVERY planner surface (night slots,
+            # ONE set of accessors for EVERY planner surface (night slots,
             # day slots, the tomorrow preview) — a second copy is how a
             # parallel price path starts (day_ledger.tariff_price_at).
             from .day_ledger import (align_to_step, market_step_s,
-                                     tariff_cheap_at, tariff_price_at)
+                                     rate_cheap_fn, tariff_cheap_at,
+                                     tariff_price_at)
             prov = self._tariff_provider
             _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
             _cheap_at = lambda ts: tariff_cheap_at(prov, ts)  # noqa: E731
+            # (#1310) The rows' ``cheap``: the tariff's rate, asked of its
+            # week. ``_cheap_at`` (the packer's) refuses a day with one rate,
+            # so a whole off-peak Sunday was not cheap beside Monday 00:00.
+            _rate_cheap_at = rate_cheap_fn(prov)
             _co2_at = lambda ts: self._co2_at(ts)  # noqa: E731
             # (Rien's shape, 08-08) slots follow the MARKET: 15-min where
             # the published curve is 15-min, hourly where there is no
@@ -13067,6 +13094,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     sunrise=sunrise, sunset=sunset,
                     home_w_at=_home_at,
                     price_at=_price_at, level_cheap_at=_cheap_at,
+                    rate_cheap_at=_rate_cheap_at,
                     # (#755) The sun is not free — it costs the feed-in you
                     # forgo. At 0 the packer preferred solar by fiat and a
                     # night hour cheaper than the export rate could never
@@ -13088,11 +13116,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     co2 = _co2_at(t)
                 except Exception:  # noqa: BLE001 — no reading, honestly
                     co2 = None
-                cheap = bool(_cheap_at(t))
+                gate_cheap = bool(_cheap_at(t))
                 slots.append(LedgerSlot(
                     start=t, end=end,
                     price=_price_at(t),
-                    level_cheap=cheap, tariff_cheap=cheap,
+                    level_cheap=gate_cheap,
+                    tariff_cheap=(gate_cheap if _rate_cheap_at is None
+                                  else bool(_rate_cheap_at(t))),
                     home_w=_home_at(t),
                     co2=co2,
                 ))
