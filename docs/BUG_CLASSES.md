@@ -2479,14 +2479,19 @@ minimum-run top-up alike, so with the minimum met the floor clause ended a banki
 minimum run and the banking pass started it again after the minimum pause.
 **Closure:** `PlanVerdict.comfort_in_block`, set from the comfort gate only. The banking pass and
 clause read it; the daylight wait spares a `willing` band only with `comfort_block_open`, passed at
-all three call sites (intent, cheap-hours start, force expiry), so start and stop read the same
-terms; the floor clause spares a willing band in its open comfort block. Same run: each goal-gate
+all three call sites (intent, cheap-hours start, force expiry), so the daylight wait reads the same
+terms at start and stop; the floor clause spares a willing band's GRID run in its open comfort
+block (a battery run past the floor still ends, #688). Same run: each goal-gate
 stop records its own reason code (`daily_max`, `plan_closed`, `target_met`, `stop_condition`) —
 one code for four printed "It ran long enough today" for a tank that had reached its temperature.
 **Guard:** `tests/test_1102_runtime_block_is_not_banking.py` — the reporter's noon through the real
 passes (runtime block, no plan, end of day, night, comfort block, expiry, floor), the desired-state
 twin, the four stop codes, and an AST check that `surplus_controller.py` never reads `in_block` and
-passes `comfort_block_open` at every daylight-wait call.
+passes `comfort_block_open`, read from `comfort_in_block`, at every daylight-wait call.
+**Left open (#1330):** the banking pass does not read "Finish overnight via" or the live price, and
+the force expiry does, so a band on the default "Off" turns on and off through its comfort block
+(which side is right is a choice); the plan can place a "Grid" load's daily minimum by day, where
+the passes now wait for the sun. #1331: the Why? card's "Surplus" is the car's budget on every row.
 Refs #780 #779 #650 #1310 #1102.
 
 ### 48. A removed host API called past its removal, its failure swallowed as a benign case — GUARDED
