@@ -87,6 +87,13 @@ class _SunTime(_DayCapableTime):
         return _t(6)
 
 
+class _EarlyNightSunTime(_SunTime):
+    """A night window set to open at 19:00, before sunset + 10 min."""
+
+    def get_night_window(self):
+        return ("19:00", "07:00")
+
+
 class _FallbackSunTime(_SunTime):
     """The sun integration did not answer: 20:10 is the made-up default."""
 
@@ -199,6 +206,24 @@ class TestTheDayPlanWaitsForTheSun:
         starts = _load_starts(plan)
         assert sun, "the forecast must give sun slots"
         assert starts and all(s in sun for s in starts), (starts, sun)
+
+    def test_the_night_window_ends_the_wait(self, freeze_targets,
+                                            monkeypatch):
+        """Night from 19:00, 30 min owed: the live wait would end at 19:40,
+        but at night execution does not wait at all. The 19:00 hour is a
+        night hour and is used whole."""
+        class _CheapSeven:
+            def get_price_at(self, t):
+                return 0.05 if t.hour == 19 else 0.28
+
+            def get_price_level_at(self, t):
+                return "cheap" if t.hour == 19 else "normal"
+
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {})
+        _, plan = _plan_at(monkeypatch, 9, _grid_load(0.5),
+                           tariff=_CheapSeven(), tm=_EarlyNightSunTime())
+        assert _load_starts(plan) == ["19:00"]
 
     def test_a_plan_made_after_midnight_is_unchanged(self, freeze_targets,
                                                     monkeypatch):
@@ -328,10 +353,39 @@ class TestThePacker:
     def test_the_slot_that_holds_it_is_used_from_it(self):
         plan = pack_night([self._demand(sun_waits_until=_t(13, 30))],
                           self._night())
-        starts = [a.start for a in plan.allocations]
-        assert starts[0] == _t(13, 30), starts
-        assert all(s >= _t(13, 30) for s in starts)
+        allocs = sorted(plan.allocations, key=lambda a: a.start)
+        assert allocs[0].start == _t(13, 30), allocs
+        assert allocs[0].end == _t(14), "the cut block ends with its hour"
+        for a in allocs:
+            hour_end = a.start.replace(minute=0, second=0, microsecond=0) \
+                + timedelta(hours=1)
+            assert a.end <= hour_end, a
+        assert sum(a.energy_kwh for a in allocs) == pytest.approx(1.6)
         assert plan.results[0].status == "fits"
+
+    def test_a_cut_hour_shorter_than_the_minimum_run_is_not_used(self):
+        """Ends of the wait at 13:50, a 30 min minimum run: the load would
+        run on past 14:00. The plan uses a later hour instead."""
+        plan = pack_night([self._demand(sun_waits_until=_t(13, 50),
+                                        min_run_s=1800, energy_kwh=0.4)],
+                          self._night())
+        assert [a.start for a in plan.allocations] == [_t(14)]
+
+    def test_the_minimum_gap_counts_from_where_the_block_starts(self):
+        """A sun block ends at 13:00; the wait ends at 13:20 inside the
+        13:00 hour. 20 min after a stop is inside a 30 min minimum pause,
+        so the next block starts at 14:00, not 13:20."""
+        ledger = self._night()
+        for s_ in ledger:
+            s_.price = 0.10
+        ledger[2].price = 0.0
+        ledger[2].cap_override_w = 2000.0      # 12:00 is sun
+        plan = pack_night([self._demand(sun_waits_until=_t(13, 20),
+                                        min_gap_s=1800, energy_kwh=1.6)],
+                          ledger)
+        starts = sorted(a.start for a in plan.allocations)
+        assert starts[0] == _t(12)
+        assert not any(_t(13) <= x < _t(14) for x in starts), starts
 
     def test_a_sun_slot_does_not_wait(self):
         ledger = self._night()

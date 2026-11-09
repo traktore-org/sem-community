@@ -308,7 +308,14 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         s = ledger[i]
         if d.deadline is not None and s.end > d.deadline:
             return False
-        return _begin(d, i) < s.end
+        begin = _begin(d, i)
+        if begin >= s.end:
+            return False
+        # A cut slot shorter than the minimum run is not used: the load
+        # would run past it at the next price. The plan holds it for a
+        # later block instead, and execution follows that hold.
+        return not (begin > s.start and d.min_run_s > 0
+                    and (s.end - begin).total_seconds() < d.min_run_s)
 
     def _eligible(d, i):
         if not _in_time(d, i):
@@ -364,7 +371,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 short = d.min_run_s / 3600.0 - sum(r for _, _, r in cells)
                 if short > 0:
                     b, power, run_h = cells[-1]
-                    grown = min(ledger[b].hours, run_h + short)
+                    grown = min(_hours(d, b), run_h + short)
                     run_cost += (power / 1000.0 * (grown - run_h)
                                  * float(_price(d, b)))
                     cells[-1] = (b, power, grown)
@@ -526,7 +533,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             # day (#994): say so, or the note and the band disagree.
             note = "off-peak hours on a day with one price are not used"
         elif d.needs_cheap_level and planned == 0 and need > 1e-9:
-            if not any(_cheap(d, i) and _in_time(d, i) for i in idx):
+            if not any(_cheap(d, i) and (d.sun_waits_until is None
+                                         or _in_time(d, i)) for i in idx):
                 # (#1330) a cheap hour the card shows, left for the sun
                 waited = d.sun_waits_until is not None and any(
                     _cheap(d, i) and ledger[i].start < d.sun_waits_until

@@ -6868,17 +6868,18 @@ at 13:00 that SEM never did.
 through `_daylight_frame`, the same sun reader `_daylight_remaining_s_now` uses; clamped to the day
 part's end, `_plan_day_end`, which the slot builder reads too). `coordinator/energy_planner.py`
 `pack_night` (**fixed**: a priced slot is used only from the end of the wait, and the slot that holds
-it from that minute, in the slot-wise, one-block and late paths; a sun slot never waits, the sun runs
-the load there; the note says "waits for the sun until HH:MM" instead of "no cheap window" beside a
+it from that minute, in the slot-wise, one-block and late paths, the minimum pause counted from there;
+a cut slot shorter than the minimum run is not used, the plan holds the load for a later block; a sun
+slot never waits, the sun runs the load there; the note says "waits for the sun until HH:MM" instead of "no cheap window" beside a
 cheap band). Mirrored: no measured sunset, a forced band and a plan made in the night add no wait, as
 the live gate does.
 **Guard:** `tests/test_1330_plan_waits_for_the_sun.py` — the issue's day, the oracle (every planned
 grid block, one cycle in, fed to the real `_daylight_remaining_s_now` and `grid_top_up_defers_to_sun`,
 may start; 216 stamp/owed/tariff/sun cases), sun hours stay open, the hour that holds the end of the
-wait, a plan made after midnight, the cutoff against the live gate minute by minute, the packer paths,
-and AST checks that every load `Demand` passes `sun_waits_until` and both sides read `_daylight_frame`.
-With the wait off, 71 tests fail; with the sun slots waiting, 2; without the clip, 2; without the night
-clamp, 1.
+wait, a night window that opens first, a plan made after midnight, the cutoff against the live gate
+minute by minute, the packer paths (cut slot, minimum run, minimum pause, one block, late part), and
+AST checks that every load `Demand` passes `sun_waits_until` and both sides read `_daylight_frame`.
+With the wait off, 71 tests fail; each of eight smaller breaks fails 1 or 2.
 **Left open:** (1) a battery-run load ("Finish overnight via: Battery") also gets blocks by day,
 where execution runs it only at night (#633). Moving it to the night is not safe yet: the day part's
 battery path has no sun refill, so the night would read empty. (2) The battery pre-charge demand has
