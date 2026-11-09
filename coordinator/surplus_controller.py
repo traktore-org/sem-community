@@ -1323,6 +1323,11 @@ class SurplusController:
         # passes. Default OFF — the passes stay authoritative until a parity
         # corpus + a real-hardware soak prove the new path identical.
         self._use_desired_state: bool = False
+        # (#1102) The three layers run beside the passes on every real cycle
+        # and record where they differ (dry: no device or controller state
+        # changes). Read by the load-management sensor and diagnostics.
+        from .engine_shadow import EngineShadow
+        self.engine_shadow = EngineShadow()
         # (#638 G4) per-cycle window verdicts from the joint energy plan:
         # device_id → True (inside its planned block) / False (planned
         # elsewhere tonight — don't start now). Absent = the plan has no say.
@@ -1556,12 +1561,28 @@ class SurplusController:
 
     def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,
                          battery_priority, price_level,
-                         peak_freeze, peak_shed, peak_shed_all):
+                         peak_freeze, peak_shed, peak_shed_all, dry=False):
         """(desired-state, phase 3) The management-layer decision for the whole
         load set: the priority walk → one ``LoadIntent`` per device. Pure of
         actuation (``reconcile_load`` applies them); the shared cycle context
         (``self._batt_*`` / ``self._tier1_budget_left``) is already stamped by
-        ``update()``. This is what REPLACES the 7 imperative passes."""
+        ``update()``. This is what REPLACES the 7 imperative passes.
+
+        ``dry=True`` (#1102): the same walk, then every device and the
+        controller are put back exactly as they were — the layer-1 Off branch
+        and the layer-2 battery bookkeeping write state, and the passes that
+        run next must not see it."""
+        if dry:
+            from .engine_shadow import restore, snapshot
+            saved = snapshot(self, list(self._devices.values()))
+            try:
+                return self._desired_intents(
+                    devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+                    battery_priority=battery_priority, price_level=price_level,
+                    peak_freeze=peak_freeze, peak_shed=peak_shed,
+                    peak_shed_all=peak_shed_all, dry=False)
+            finally:
+                restore(saved)
         soc_above = (self._batt_soc is not None
                      and self._batt_soc > self._batt_reserve_soc)
 
@@ -1873,6 +1894,22 @@ class SurplusController:
                 distributable=distributable, available_power_w=available_power_w,
                 observer=observer,
             )
+
+        # (#1102) The three layers decide the same cycle, dry, before the
+        # passes touch anything; compared with what the passes did below.
+        _shadow_devices = devices
+        _shadow_intents = None
+        _shadow_was_on: dict = {}
+        try:
+            _shadow_was_on = {d.device_id: bool(d.is_active) for d in devices}
+            _shadow_intents = self._desired_intents(
+                devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+                battery_priority=battery_priority, price_level=price_level,
+                peak_freeze=peak_freeze, peak_shed=peak_shed,
+                peak_shed_all=peak_shed_all, dry=True)
+        except Exception:  # noqa: BLE001 — the comparison never costs a cycle
+            _LOGGER.debug("Load engine shadow skipped", exc_info=True)
+            _shadow_intents = None
 
         # (#1021) A load behind the grid operator's relay, relay on: the
         # relay cuts it, so the imperative passes leave it alone — no
@@ -2597,6 +2634,14 @@ class SurplusController:
         # battery-forced with no SOC gate (HIGH-2) to hit a per-device
         # deadline. solar_only (the switch-load default) never grid-forces;
         # cheap_hours devices still top up via the off-peak pass above.
+
+        # (#1102) What the passes did, against what the three layers decided.
+        if _shadow_intents is not None:
+            try:
+                self.engine_shadow.compare(_shadow_intents, _shadow_devices,
+                                           was_on=_shadow_was_on)
+            except Exception:  # noqa: BLE001 — recording only
+                _LOGGER.debug("Load engine comparison skipped", exc_info=True)
 
         # Build allocation data
         total_allocated = sum(a.actual_consumption_watts for a in allocations)

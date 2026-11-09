@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **SEM checks its new load engine against the current one every cycle** and records where they differ (#1102). Nothing switches differently yet.
+
 # [2.3.0-beta.9] — 08.11.2026
 
 - 🐛 **The Energy Plan card marks a day with only your off-peak price, like a weekend, as cheap** (#1310). Before, the band began at midnight.
