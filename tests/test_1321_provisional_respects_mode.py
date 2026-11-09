@@ -54,10 +54,9 @@ def test_prod_day_too_little_sun_for_the_car_gives_no_block():
 
 @pytest.mark.unit
 def test_the_preview_asks_by_mode_and_drops_a_full_car():
-    import inspect
-    from custom_components.solar_energy_management.coordinator import coordinator as mod
-    src = inspect.getsource(mod)
-    assert 'if _mode == "off":' in src
-    assert "self._plan_car_full(_cid, power) is True" in src
-    assert '"sun_only": _mode in ("solar_only", "solar_plus_battery")' in src
-    assert "keep_sun_only(" in src and '"not_enough_sun"' in src
+    from .ast_contracts import calls
+    from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+    fn = SEMCoordinator._compose_tomorrow_preview
+    assert calls(fn, "effective_charge_mode_for")   # the charger's own mode decides
+    assert calls(fn, "_plan_car_full")              # a full car asks nothing
+    assert calls(fn, "keep_sun_only")               # sun-only modes keep sun slots only
