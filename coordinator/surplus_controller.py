@@ -695,6 +695,21 @@ def _heater_band(device: "ControllableDevice"):
     return state, below
 
 
+#: (#1102) A device's own run (Legionella): SEM-driven, never re-tuned.
+OWN_RUN_SOURCE = "legionella"
+
+
+def _heater_claim(device: "ControllableDevice", active: bool, held: float) -> float:
+    """(#1102) What a heater rung expects to draw: the measured draw while it
+    runs and a power reading exists, else its rating. A tank without a power
+    sensor of its own reports a stored figure, not a measurement — the floor
+    rung claimed 1000 W for a 3000 W boiler on .175."""
+    rated = float(getattr(device, "rated_power", 0.0) or 0.0)
+    if active and getattr(device, "power_entity_id", None) and held > 0:
+        return float(held)
+    return rated
+
+
 def compute_load_intent(
     device: "ControllableDevice",
     *,
@@ -804,9 +819,10 @@ def compute_load_intent(
     #     hot-water device only says the run is due and no longer switches.
     if getattr(device, "runs_without_surplus", False) is True:
         if active:
-            return LoadIntent(True, held, None, "Legionella run — ends at its own target",
+            return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
+                              "Legionella run — ends at its own target",
                               RC.LOAD_LEGIONELLA)
-        return LoadIntent(True, float(getattr(device, "rated_power", 0.0) or 0.0), None,
+        return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
                           "Legionella run due", RC.LOAD_LEGIONELLA)
 
     # 3b. A ScheduleDevice past its deadline is a hard commitment — force it on
@@ -859,7 +875,8 @@ def compute_load_intent(
             or (active and band[1]
                 and getattr(device, "_comfort_floor_run", False) is True)):
         src = "solar" if effective >= threshold else "comfort_floor"
-        return LoadIntent(True, claim, src, "too cold — heats to its keep-at temperature",
+        return LoadIntent(True, _heater_claim(device, active, held), src,
+                          "too cold — heats to its keep-at temperature",
                           RC.LOAD_COMFORT_FLOOR)
 
     if effective >= start_bar and can_start:
@@ -878,7 +895,7 @@ def compute_load_intent(
     # is for the sun only.
     if (plan.comfort_in_block and can_start and band is not None
             and band[0] == "willing" and band[1]):
-        return LoadIntent(True, claim, "cheap_grid",
+        return LoadIntent(True, _heater_claim(device, active, held), "cheap_grid",
                           plan.reason or "joint plan: heats to its keep-at temperature",
                           RC.LOAD_COMFORT_GOAL)
 
@@ -980,7 +997,7 @@ def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
     # (#1084) The decision log's load seam under observer: the same command
     # the WOULD line below names, flagged as observed. A hold sends nothing.
     _log = getattr(controller, "decision_log", None)
-    if intent.on and (not active or intent.source is not None):
+    if intent.on and (not active or intent.source not in (None, OWN_RUN_SOURCE)):
         from .decision_log import record_load
         record_load(_log, device, on=True, watts=intent.power_w,
                     reason_code=intent.code or intent.source or RC.LOAD_START,
@@ -1003,7 +1020,7 @@ def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
     elif not intent.on and active:
         log_on_change(_LOGGER, _key, logging.INFO,
                       "OBSERVER · WOULD DEACTIVATE %s — %s", name, intent.reason)
-    elif intent.on and active and intent.source is not None:
+    elif intent.on and active and intent.source not in (None, OWN_RUN_SOURCE):
         log_on_change(_LOGGER, _key, logging.INFO,
                       "OBSERVER · WOULD ADJUST %s → %.0fW [source=%s] — %s",
                       name, intent.power_w, intent.source, intent.reason)
@@ -1120,7 +1137,7 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
     if intent.on and active:
         # source is None ⇒ "not SEM-driven" (off / peak-only kept as observed):
         # never actuate it — SEM only re-tunes loads it is actually driving.
-        if intent.source is None:
+        if intent.source is None or intent.source == OWN_RUN_SOURCE:
             return device.get_current_consumption()
         consumed = await _adjust_owned(
             device, intent.power_w,
@@ -1326,7 +1343,7 @@ class SurplusController:
             action = "activate"
         elif not intent.on and active:
             action = "deactivate"
-        elif intent.on and active and intent.source is not None:
+        elif intent.on and active and intent.source not in (None, OWN_RUN_SOURCE):
             action = "adjust"
         else:
             action = "hold"
@@ -1339,6 +1356,8 @@ class SurplusController:
             source=intent.source,
             reason=intent.reason,
             kind="load",
+            # (#1102) the rung, as a stable code — not only its source
+            reason_code=str(getattr(intent, "code", "") or "") or None,
         )
 
     def __init__(
