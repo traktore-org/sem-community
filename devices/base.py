@@ -1669,8 +1669,17 @@ class ComfortBandMixin:
             while b and b[0][0] < cutoff:
                 b.popleft()
 
-    def comfort_plan_demand(self, now):
+    #: (#1102) One hour at the rating when no heating rate is learned yet —
+    #: the run stops at Keep at by itself, so too much is never bought.
+    COMFORT_GOAL_FALLBACK_H = 1.0
+
+    def comfort_plan_demand(self, now, goal: bool = False):
         """The band's plannable ask: ``{"energy_kwh", "deadline"}`` or None.
+
+        (#1102) ``goal=True`` (the heater ladder leads): Keep at is a goal.
+        Below it the band asks for the energy to reach it — by the plan's
+        own deadline (the night's end) — whatever the drift model says;
+        the run stops at Keep at, so Extra stays for the sun.
 
         'The room hits the limit at T (free-running drift), banking back
         to target costs E kWh (learned active rate)' — the deadline-shaped
@@ -1684,6 +1693,8 @@ class ComfortBandMixin:
         from ..coordinator.comfort_drift import (
             banking_energy_kwh, learn_drift, time_to_limit,
         )
+        if goal:
+            return self._comfort_goal_demand(banking_energy_kwh, learn_drift)
         off = learn_drift(list(getattr(self, "_comfort_off_samples", None)
                                or ()))
         if off is None:
@@ -1712,6 +1723,32 @@ class ComfortBandMixin:
             return None
         return {"energy_kwh": kwh, "deadline": deadline}
 
+
+    def _comfort_goal_demand(self, banking_energy_kwh, learn_drift):
+        """(#1102) Energy to reach Keep at, or None when already there."""
+        temp = self._comfort_reading()
+        if temp is None:
+            return None
+        direction = self._comfort_direction()
+        target_c, _offset_c, _limit_c = self._comfort_thresholds_c()
+        below = temp > target_c if direction == "cool" else temp < target_c
+        if not below:
+            return None
+        rated = float(getattr(self, "rated_power", 0.0) or 0.0)
+        if rated <= 0:
+            return None
+        on = learn_drift(list(getattr(self, "_comfort_on_samples", None) or ()))
+        kwh = None
+        if on is not None:
+            kwh = banking_energy_kwh(
+                current_c=temp, target_c=target_c, direction=direction,
+                offset_c=0.0, active_rate_c_per_h=on.rate_c_per_h,
+                rated_power_w=rated)
+        if kwh is None:
+            kwh = rated / 1000.0 * self.COMFORT_GOAL_FALLBACK_H
+        if not kwh:
+            return None
+        return {"energy_kwh": kwh, "deadline": None}
     # The band speaks through the three generic properties every surplus
     # pass already reads — no new controller clauses; peak shed,
     # anti-cycling, priority and LIFO apply to comfort runs unchanged.

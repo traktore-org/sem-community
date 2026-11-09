@@ -254,7 +254,7 @@ class HotWaterController(SwitchDevice):
             return False
         return self.hours_since_legionella > self.legionella_interval_hours
 
-    async def _end_unreachable_legionella(self, path: str, why: str) -> str:
+    async def _end_unreachable_legionella(self, path: str, why: str, switch: bool = True) -> str:
         """(#1102) End a cycle that cannot reach its target. It is NOT a
         disinfection: ``_last_legionella_time`` stays, and the next try waits
         one full interval, so the run cannot switch the tank on again and
@@ -264,7 +264,8 @@ class HotWaterController(SwitchDevice):
         self._legionella_started_at = None
         self._legionella_blocked_until = dt_util.now() + timedelta(
             hours=self.legionella_interval_hours)
-        await self.deactivate()
+        if switch:
+            await self.deactivate()
         _LOGGER.warning(
             "Legionella cycle for %s ended without reaching %.0f°C: %s. "
             "Next try in %.0f h.", self.name, self.legionella_target_temp, why,
@@ -610,10 +611,15 @@ class HotWaterController(SwitchDevice):
 
     # ─── Legionella Prevention ───────────────────────────────
 
-    async def check_legionella_cycle(self) -> Optional[str]:
+    async def check_legionella_cycle(self, switch: bool = True) -> Optional[str]:
         """Check and execute Legionella prevention cycle.
 
         Called every coordinator cycle. Returns a status message or None.
+
+        (#1102) ``switch=False`` where the three-layer load engine leads: this
+        keeps the run's state (due, hold, end, timestamps) and layer 1 starts
+        and stops the heater from ``runs_without_surplus`` — one place that
+        switches, with the run's reason code.
 
         Logic:
         1. If tank naturally reached ≥60°C → record timestamp, no forced cycle
@@ -649,7 +655,8 @@ class HotWaterController(SwitchDevice):
             if self._legionella_cycle_active:
                 self._legionella_cycle_active = False
                 self._legionella_hold_start = None
-                await self.deactivate()
+                if switch:
+                    await self.deactivate()
                 _LOGGER.info(
                     "Legionella cycle aborted: vacation mode active — "
                     "will re-run when vacation ends"
@@ -679,7 +686,8 @@ class HotWaterController(SwitchDevice):
                     self._legionella_started_at = None
                     self._legionella_blocked_until = None
                     self._last_legionella_time = dt_util.now()
-                    await self.deactivate()
+                    if switch:
+                        await self.deactivate()
                     _LOGGER.info("Legionella prevention cycle completed at %.0f°C", temp)
                     self._last_legionella_path = "hold_complete"
                     return "legionella_complete"
@@ -693,11 +701,13 @@ class HotWaterController(SwitchDevice):
                 if super(ComfortBandMixin, self).stop_condition_met:
                     return await self._end_unreachable_legionella(
                         "blocked_by_stop",
-                        f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it")
+                        f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it",
+                        switch=switch)
                 started = self._legionella_started_at
                 if started is not None and (dt_util.now() - started) > timedelta(hours=LEGIONELLA_MAX_RUN_HOURS):
                     return await self._end_unreachable_legionella(
-                        "timed_out", f"still below it after {LEGIONELLA_MAX_RUN_HOURS:g} h")
+                        "timed_out", f"still below it after {LEGIONELLA_MAX_RUN_HOURS:g} h",
+                        switch=switch)
                 # Still heating towards target
                 self._last_legionella_path = "heating_to_target"
                 return "legionella_heating"
@@ -722,12 +732,15 @@ class HotWaterController(SwitchDevice):
                 self._legionella_cycle_active = True
                 return await self._end_unreachable_legionella(
                     "blocked_by_stop",
-                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is already met")
+                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is already met",
+                    switch=switch)
             self._legionella_cycle_active = True
             self._legionella_hold_start = None
             self._legionella_started_at = dt_util.now()
-            # Force activate regardless of solar surplus
-            await self.activate(self.rated_power)
+            # Force activate regardless of solar surplus (layer 1 does it
+            # where the three layers lead)
+            if switch:
+                await self.activate(self.rated_power)
             self._last_legionella_path = "overdue_start"
             return "legionella_started"
 
