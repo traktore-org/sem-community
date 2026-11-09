@@ -482,9 +482,9 @@ class SEMNextPlanCard extends SEMNextBase {
         const left = Math.max(0, Math.min(lay.LBL + lay.W - 200, x + 10));
         return html`<div class="tip" style="left:${left}px;top:${lay.price[1] - 30}px">
             <div><b>${this._hhmm(new Date(t))}</b></div>
-            ${p !== null ? html`<div>${this._tf('next_tip_price', { price: this._fmt(p, 3), cur: this._currency() })}</div>` : nothing}
-            ${sp ? html`<div>${this._tf(sp.actual ? 'next_tip_sun_made' : 'next_tip_sun_fc', { kwh: this._fmt(sp.kwh, 2) })}</div>` : nothing}
-            ${runs.map((r) => html`<div><i style="background:${KIND_COLOR[r.kind]}"></i>${this._rowName(r)}</div>`)}
+            <div>${p !== null ? this._tf('next_tip_price', { price: this._fmt(p, 3), cur: this._currency() }) : this._t('next_tip_price_unknown')}</div>
+            <div>${sp && sp.kwh > 0.005 ? this._tf(sp.actual ? 'next_tip_sun_made' : 'next_tip_sun_fc', { kwh: this._fmt(sp.kwh, 2) }) : this._t('next_tip_no_sun')}</div>
+            ${runs.length ? runs.map((r) => html`<div><i style="background:${KIND_COLOR[r.kind]}"></i>${this._rowName(r)}</div>`) : html`<div class="dim">${this._t('next_tip_nothing_runs')}</div>`}
         </div>`;
     }
 

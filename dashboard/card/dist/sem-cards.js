@@ -3662,9 +3662,9 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             @pointerleave=${e=>{"mouse"===e.pointerType&&(this._hover=null)}}
             @click=${e=>{const t=v(e);this._hover=null!==this._hover&&Math.abs(this._hover-t)<h/48?null:t}}></rect>`),{lay:s,svg:H`<svg viewBox="0 0 ${i} ${p}" width="${i}" height="${p}" role="img" aria-label="${this._t("next_price_and_plan")}">${m}</svg>`}}_tooltip(e,t){if(null===this._hover||this._hover<e.win.start||this._hover>=e.win.end)return G;const s=this._hover,i=function(e,t){if(!e)return null;if(e.flat)return e.price;const s=e.steps.find(e=>e.s<=t&&t<e.e);return s?s.p:null}(e.price,s),r=e.sun.points.find(e=>e.s<=s&&s<e.e),a=(n=e.rows,o=s,n.filter(e=>e.blocks.some(e=>e.s<=o&&o<e.e)));var n,o;const l=t.LBL+(s-e.win.start)/(e.win.end-e.win.start)*t.W,c=Math.max(0,Math.min(t.LBL+t.W-200,l+10));return j`<div class="tip" style="left:${c}px;top:${t.price[1]-30}px">
             <div><b>${this._hhmm(new Date(s))}</b></div>
-            ${null!==i?j`<div>${this._tf("next_tip_price",{price:this._fmt(i,3),cur:this._currency()})}</div>`:G}
-            ${r?j`<div>${this._tf(r.actual?"next_tip_sun_made":"next_tip_sun_fc",{kwh:this._fmt(r.kwh,2)})}</div>`:G}
-            ${a.map(e=>j`<div><i style="background:${ii[e.kind]}"></i>${this._rowName(e)}</div>`)}
+            <div>${null!==i?this._tf("next_tip_price",{price:this._fmt(i,3),cur:this._currency()}):this._t("next_tip_price_unknown")}</div>
+            <div>${r&&r.kwh>.005?this._tf(r.actual?"next_tip_sun_made":"next_tip_sun_fc",{kwh:this._fmt(r.kwh,2)}):this._t("next_tip_no_sun")}</div>
+            ${a.length?a.map(e=>j`<div><i style="background:${ii[e.kind]}"></i>${this._rowName(e)}</div>`):j`<div class="dim">${this._t("next_tip_nothing_runs")}</div>`}
         </div>`}_labels(e,t){const s=(e,s,i,r,a="")=>j`<div class="lab" style="top:${e}px;width:${t.LBL-6}px;--c:${i}" title="${r}">
             ${this._icon(s)}${t.narrow?G:j`<span>${r}${a?j`<small>${a}</small>`:G}</span>`}</div>`;return j`
             ${s((t.sun[0]+t.sun[1])/2,"mdi:white-balance-sunny",Qt.solar,this._t("next_lane_sun"))}
