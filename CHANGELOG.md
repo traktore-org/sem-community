@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Inverters with a grid-charge switch and limits in percent can now be charged and limited by SEM** (#1158), such as KSTAR via ha-solarman.
+- ✨ **Phase switching now works on chargers that take one current per phase, such as Easee** (#1015). Off by default, like all phase switching.
+- ✨ **A heat pump can step down when power is short** (#1323): on expensive grid power or near the peak limit. Off by default.
+- ✨ **A climate unit can pick heat or cool from the outdoor forecast** (#1323): add it with HVAC mode `by_forecast`.
+- ✨ **New switch: keep the battery for the peak limit** (#970). The house buys up to your limit; the battery covers the rest. Off by default.
 - 🐛 **The "Why did SEM act?" card no longer shows the car's budget as Surplus** (#1331). A car row says Budget, the others show spare sun.
 - 🐛 **The Energy Plan card shows a battery grid charge only at night, and only when SEM will do it** (#1311). It showed day blocks too.
 - 🐛 **A car that leaves after tonight now gets a plan sized on tonight's hours only** (#1309). Day hours no longer count as charge time.
@@ -21,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A load SEM started on sun now stops when solar production ends, even when its power sensor reads 0 W** (#1335).
 - 🐛 **A planned comfort block now runs through without switching the load on and off** (#1334), also with Grid set to Off.
 - 📝 **The load card's Comfort hint now says how Keep at is reached**: in the planned hour from any source, sun may go further (#1334).
+- 🐛 **EG4 Web Monitor: solar power is found and grid import reads right from the start** (#810). The charge-start SOC is no longer the target.
 
 # [2.3.0-beta.11] — 10.11.2026
 

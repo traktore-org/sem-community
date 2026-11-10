@@ -44,12 +44,16 @@ def _registry(entities):
 @pytest.mark.unit
 class TestItNamesTheGap:
     def test_an_unknown_energy_domain_is_named_from_the_roster(self):
+        # EG4 is a known inverter since #810; the gap it stood for is still
+        # the case under test, so take it out of the known set here
         ents = [
             _ent("sensor.eg4_battery_power", "eg4_web_monitor",
                  device_class="power"),
             _ent("sensor.eg4_soc", "eg4_web_monitor", device_class="battery"),
         ]
-        census = hd.build_integration_census(registry=_registry(ents))
+        known = hd.KNOWN_INVERTER_DOMAINS - {"eg4_web_monitor"}
+        with patch.object(hd, "KNOWN_INVERTER_DOMAINS", known):
+            census = hd.build_integration_census(registry=_registry(ents))
         assert census["unknown_energy_domains"] == ["eg4_web_monitor"]
         named = census["unknown_energy_domains_named"]
         assert named and named[0]["domain"] == "eg4_web_monitor"

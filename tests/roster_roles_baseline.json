@@ -129,6 +129,9 @@
       ],
       "grid_power": [
         "grid_power"
+      ],
+      "solar_power": [
+        "pv_total_power"
       ]
     },
     "enphase_ev": {
@@ -209,6 +212,9 @@
       ],
       "grid_power": [
         "grid_power"
+      ],
+      "solar_power": [
+        "pv_total_power"
       ]
     },
     "growatt_server": {
@@ -468,6 +474,22 @@
     "solarfocus": {
       "solar_power": [
         "pv_power"
+      ]
+    },
+    "solarman": {
+      "battery_discharge_limit": [
+        "battery_discharging_power"
+      ],
+      "battery_force_charge": [
+        "battery_grid_charging"
+      ],
+      "battery_strategy": [
+        "battery_operation_mode",
+        "energy_pattern",
+        "work_mode"
+      ],
+      "battery_target_soc": [
+        "battery_grid_max_charge"
       ]
     },
     "solis_cloud_control": {

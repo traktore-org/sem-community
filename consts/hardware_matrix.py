@@ -182,7 +182,12 @@ INVERTERS = [
      "discharge_control": False, "status": "implemented", "evidence": ""},
     {"brand": "KSTAR", "domains": ['solarman'],
      "integration": "ha-solarman (KSTAR YAML profiles)", "pattern": "ED",
-     "discharge_control": False, "status": "implemented", "evidence": ""},
+     # (#1158) the hybrid profile names a discharge limit in percent of
+     # the rating, a grid-charge switch and the level a grid charge stops
+     # at; SEM binds them through the generic adapter. Not confirmed live.
+     "discharge_control": "declared", "status": "implemented",
+     "evidence": "#1158 (Mikail701) KKT Kolbe HKW10NVP3, stock "
+                 "kstar_hybrid profile — the entity list, no live write yet"},
     {"brand": "Sessy (battery)", "domains": ['sessy'],
      "integration": "sessy", "pattern": "ED",
      "discharge_control": True, "status": "tested-live",

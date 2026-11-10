@@ -2034,6 +2034,14 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
         return 0.0
 
 
+#: (#1323) ``hvac_mode`` value: SEM picks heat or cool from the outdoor
+#: outlook. Not an HA climate mode — HA's own ``auto`` stays the unit's.
+HVAC_BY_FORECAST = "by_forecast"
+#: Every mode a climate unit may be given (the service's list, in one place).
+CLIMATE_HVAC_MODES = ("cool", "heat", "heat_cool", "dry", "fan_only", "auto",
+                      HVAC_BY_FORECAST)
+
+
 class ClimateDevice(ComfortBandMixin, ControllableDevice):
     """On/off surplus control for a ``climate.*`` entity (#569).
 
@@ -2085,6 +2093,13 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
             energy_entity_id=energy_entity_id,
         )
         self.rated_power = rated_power
+        # (#1323) ``by_forecast``: SEM picks heat or cool itself, from the
+        # outdoor outlook the coordinator stamps each cycle. ``hvac_mode``
+        # (the property below) is then the mode in force; every other
+        # value is the user's fixed mode, exactly as before.
+        self._season_mode: Optional[str] = None
+        self._season_since: Optional[datetime] = None
+        self.outdoor_outlook_c: Optional[float] = None
         self.hvac_mode = hvac_mode or "cool"
         self.target_temperature = target_temperature
         # (#644) unified anti-cycle knobs (see SwitchDevice)
@@ -2128,7 +2143,135 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
     def min_off_seconds(self, value) -> None:
         self._min_off_configured = int(value)
 
+    # ── (#1323) heat or cool by the outdoor outlook ────────────────────
+    #: Outlook (°C, the mean of the next day) under which the unit heats and
+    #: over which it cools. Between the two nothing changes: the dead band.
+    SEASON_HEAT_BELOW_C = 15.0
+    SEASON_COOL_ABOVE_C = 22.0
+    #: A change of season waits a day — unless the outlook is past the
+    #: other threshold by this much, which is a clear flip.
+    SEASON_MIN_DWELL_S = 86400.0
+    SEASON_CLEAR_MARGIN_C = 3.0
+
+    @property
+    def hvac_mode(self) -> str:
+        """The mode SEM sets when it turns the unit on. With ``by_forecast``
+        it is the season in force, or ``by_forecast`` itself while no
+        season is known (the unit then waits, unless it is too cold)."""
+        if self._hvac_setting == HVAC_BY_FORECAST:
+            if self._season_mode is not None:
+                return self._season_mode
+            # No season known and no outlook to pick one from. A house that
+            # is too cold is heated all the same; anything else waits.
+            return "heat" if self.comfort_state == "forced" else HVAC_BY_FORECAST
+        return self._hvac_setting
+
+    @hvac_mode.setter
+    def hvac_mode(self, value) -> None:
+        self._hvac_setting = str(value or "cool")
+
+    @property
+    def hvac_setting(self) -> str:
+        """What the user picked: a fixed mode, or ``by_forecast``."""
+        return self._hvac_setting
+
+    def update_season(self, outlook_c: Optional[float],
+                      now: Optional[datetime] = None) -> Optional[str]:
+        """Pick heat or cool from the outdoor outlook. Returns the season
+        in force (None: none decided yet). Pure of any write — the device
+        only reports its mode; layer 3 sends it with the next start.
+
+        Not ``by_forecast``: nothing happens. No outlook: the season in
+        force stays. The first reading decides by the middle of the dead
+        band. After that the season changes only past the other threshold,
+        only while the unit is off, and only after a day in the present
+        one — or at once when the outlook is clearly past it.
+        """
+        self.outdoor_outlook_c = outlook_c
+        if self._hvac_setting != HVAC_BY_FORECAST:
+            return None
+        if outlook_c is None:
+            return self._season_mode
+        now = now or datetime.now()
+        if self._season_mode is None:
+            middle = (self.SEASON_HEAT_BELOW_C + self.SEASON_COOL_ABOVE_C) / 2.0
+            # a unit already heating a too-cold house stays in that mode
+            self._season_mode = ("heat" if outlook_c < middle or self.is_active
+                                 else "cool")
+            self._season_since = now
+            return self._season_mode
+        if self._season_mode == "heat":
+            want, past = "cool", outlook_c - self.SEASON_COOL_ABOVE_C
+        else:
+            want, past = "heat", self.SEASON_HEAT_BELOW_C - outlook_c
+        if past <= 0.0 or self.is_active:
+            return self._season_mode
+        dwelt = (self._season_since is None
+                 or (now - self._season_since).total_seconds()
+                 >= self.SEASON_MIN_DWELL_S)
+        if dwelt or past >= self.SEASON_CLEAR_MARGIN_C:
+            _LOGGER.info("%s: outdoor outlook %.1f °C — now %s",
+                         self.name, outlook_c, want)
+            self._season_mode = want
+            self._season_since = now
+        return self._season_mode
+
+    @property
+    def start_refusal(self) -> Optional[str]:
+        """(#1323) ``by_forecast`` with no outlook ever read: SEM does not
+        guess a season, so layer 1 does not start the unit."""
+        if (self._hvac_setting == HVAC_BY_FORECAST and self._season_mode is None
+                and self.comfort_state != "forced"):
+            # its own reason: no thermometer is broken, the season is not
+            # known yet. Too cold is never refused — the floor heats.
+            return "season"
+        return None
+
+    def season_memo(self) -> Optional[Dict[str, Any]]:
+        """(#1323) The season in force and when it began, to store — or None."""
+        if self._hvac_setting != HVAC_BY_FORECAST or self._season_mode is None:
+            return None
+        return {"mode": self._season_mode,
+                "since": self._season_since.isoformat()
+                if self._season_since is not None else None}
+
+    def restore_season(self, memo) -> bool:
+        """(#1323) Take up the stored season after a restart or a rebuild,
+        so the dead band and the day's dwell go on where they were. Only
+        while no season is in force; a bad memo is no memo."""
+        if (self._hvac_setting != HVAC_BY_FORECAST or self._season_mode is not None
+                or not isinstance(memo, dict)
+                or memo.get("mode") not in ("heat", "cool")):
+            return False
+        self._season_mode = memo["mode"]
+        try:
+            self._season_since = datetime.fromisoformat(str(memo.get("since")))
+        except (TypeError, ValueError):
+            self._season_since = None
+        return True
+
+    @property
+    def comfort_limit(self) -> float:
+        """The band's limit. (#1323) With ``by_forecast`` the typed limit
+        is mirrored to the side the season in force defends (below the
+        target when heating, above it when cooling), so one band serves
+        the whole year."""
+        raw = float(getattr(self, "_comfort_limit_set", 0.0) or 0.0)
+        target = float(getattr(self, "comfort_target", 0.0) or 0.0)
+        if raw and target and self._hvac_setting == HVAC_BY_FORECAST:
+            # no season yet reads as heating: "too cold" must still be seen
+            gap = abs(raw - target)
+            return target + gap if self._season_mode == "cool" else target - gap
+        return raw
+
+    @comfort_limit.setter
+    def comfort_limit(self, value) -> None:
+        self._comfort_limit_set = float(value or 0.0)
+
     def _comfort_direction(self) -> str:
+        if self._hvac_setting == HVAC_BY_FORECAST:
+            # the season itself, not ``hvac_mode``: that one asks the band
+            return "cool" if self._season_mode == "cool" else "heat"
         return "cool" if self.hvac_mode == "cool" else "heat"
 
     def _comfort_anchor_c(self):
@@ -2222,6 +2365,10 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
             if elapsed < self.min_off_seconds:
                 return 0.0
 
+        if self.hvac_mode == HVAC_BY_FORECAST:
+            # (#1323) no season decided yet: nothing to send
+            return 0.0
+
         # Set the mode first. If THIS fails the unit never turned on — report
         # ERROR and bail.
         try:
@@ -2301,6 +2448,9 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         d = super().to_dict()
         d.update({
             "hvac_mode": self.hvac_mode,
+            # (#1323) what the user picked, and the outlook the season reads
+            "hvac_setting": self.hvac_setting,
+            "outdoor_outlook_c": self.outdoor_outlook_c,
             "target_temperature": self.target_temperature,
         })
         return d
@@ -2417,6 +2567,20 @@ class CurrentControlDevice(ControllableDevice):
         # e.g. a service that takes the box's own name in a name field.
         # Set from the ``ev_charger_service_data`` the crawler offered.
         self.service_extra_data: Dict[str, Any] = {}
+        # (#1015) Phases set by one current per phase. Wired by the builder
+        # (``wire_phase_service``) when the charger's integration offers such
+        # a service; ``phase_target`` is the phase choice the sequencer made
+        # (None = never asked, so the plain current service is used and
+        # nothing changes for this charger).
+        self.phase_service: Optional[str] = None
+        self.phase_fields: tuple = ()
+        self.phase_readback_entity: Optional[str] = None
+        self.phase_target: Optional[int] = None
+        self._phase_written: Optional[int] = None
+        # The charger's OWN limit caps the per-phase one. True only while SEM
+        # knows it stands at the maximum; any stop or plain write clears it,
+        # and the next per-phase write restores it.
+        self._own_limit_lifted: bool = False
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
         self.global_services: bool = True  # True = services don't need entity_id (KEBA-style)
         # Start/stop control — per-integration (#82)
@@ -2692,7 +2856,18 @@ class CurrentControlDevice(ControllableDevice):
     def _zero_amps_would_lock(self) -> bool:
         """(#976) A 0 A write here parks a limit the charge point keeps —
         it is not a pause. Unset means unknown → treated as a pause."""
-        return bool(getattr(self, "zero_amps_parks_a_limit", False))
+        if bool(getattr(self, "zero_amps_parks_a_limit", False)):
+            return True
+        # (#1015) Phases set by one current per phase: the charger's own
+        # limit caps the per-phase one, so 0 A parked there outlives the
+        # stop — the next start sets only the per-phase limit and the car
+        # gets nothing. The stop is the charger's own stop.
+        return self._phases_by_current()
+
+    def _phases_by_current(self) -> bool:
+        """The per-phase service is this charger's current control now."""
+        return (isinstance(getattr(self, "phase_service", None), str)
+                and getattr(self, "phase_target", None) in (1, 3))
 
     def can_stop_charging(self) -> bool:
         """Whether SEM has ANY mechanism that can actually open the contactor.
@@ -2793,6 +2968,8 @@ class CurrentControlDevice(ControllableDevice):
         self._status.allocated_power_w = 0.0
         self._current_setpoint = 0.0
         self._last_write_at = 0.0  # #392: reset heartbeat tracker on full stop
+        # (#1015) after any stop the next start restores the charger's limit
+        self._own_limit_lifted = False
 
     async def adjust_power(self, available_watts: float) -> float:
         if not self.is_active:
@@ -2874,6 +3051,87 @@ class CurrentControlDevice(ControllableDevice):
                     pass
         return eff
 
+    # ── (#1015) phases set by one current per phase ─────────────────────
+
+    def _phase_shape_pending(self) -> bool:
+        """A phase choice was made that the wire has not seen yet."""
+        return (bool(self.phase_service) and self.phase_target in (1, 3)
+                and self._phase_written != self.phase_target)
+
+    def _phase_command(self, current: float):
+        """(domain, service, data) for ``current`` on the chosen phases, or
+        None when this charger does not set phases by current, no choice was
+        made yet, or ``current`` is a stop (a stop is never three zeros —
+        a limit a box keeps would lock it, #976)."""
+        if not self.phase_service or self.phase_target not in (1, 3):
+            return None
+        from ..coordinator.ev_phases import phase_currents
+        amps = phase_currents(current, self.phase_target)
+        if amps is None or len(self.phase_fields) != 3:
+            return None
+        domain, service = str(self.phase_service).split(".", 1)
+        data = dict(zip(self.phase_fields, amps, strict=True))
+        if self.service_device_id:
+            data["device_id"] = self.service_device_id
+        return domain, service, data
+
+    async def _send_phase_shape(self, current: float) -> bool:
+        """Send the per-phase currents through the one seam."""
+        cmd = self._phase_command(current)
+        if cmd is None:
+            return False
+        # The shape FIRST: it is the tighter limit. Only once it stands is
+        # the charger's own limit raised to the maximum — never the other
+        # way round, and never alone: a shape that was withheld or failed
+        # leaves the charger's own limit exactly as it was.
+        sent = await self.send(*cmd, why=f"{self.phase_target}-phase by current")
+        if not sent:
+            return False
+        self._phase_written = self.phase_target
+        if not self._own_limit_lifted and self.charger_service:
+            # The charger's own limit was SEM's control before, and a stop
+            # or anything else may have lowered it since. It caps the
+            # per-phase limit, so it is restored whenever SEM cannot be sure.
+            domain, service = self.charger_service.split(".", 1)
+            lift = {**(self.service_extra_data or {}),
+                    self.service_param_name: float(round(self.max_current))}
+            if self.service_device_id:
+                lift["device_id"] = self.service_device_id
+            self._own_limit_lifted = bool(await self.send(
+                domain, service, lift,
+                why="restore the charger limit — phases by current"))
+        return True
+
+    async def switch_phases(self, phases: int) -> bool:
+        """(#1015) Put the charger on ``phases`` (1 or 3) by per-phase
+        currents. True when the command went to hardware; False when it was
+        withheld (observer mode) or this charger cannot do it. The amps are
+        the minimum: the sequencer switches with the charge stopped, and the
+        next current command carries the same shape at its own value."""
+        if not self.phase_service or phases not in (1, 3):
+            return False
+        self.phase_target = int(phases)
+        amps = float(round(self.min_current))
+        sent = await self._send_phase_shape(amps)
+        if sent:
+            # a real current write: the next command is compared with it
+            self._current_setpoint = amps
+            self._last_write_at = time.monotonic()
+        return sent
+
+    def phase_readback(self) -> Optional[int]:
+        """Phases the box reports it took (1 or 3), or None when that cannot
+        be read. None is "could not read", never "not switched"."""
+        if not self.phase_readback_entity:
+            return None
+        st = self.hass.states.get(self.phase_readback_entity)
+        if st is None:
+            return None
+        from ..consts.role_lexicon import PHASE_READBACK_ATTR_ENDINGS
+        from ..coordinator.ev_phases import phases_from_readback
+        return phases_from_readback(getattr(st, "attributes", None),
+                                    PHASE_READBACK_ATTR_ENDINGS)
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)
@@ -2905,6 +3163,8 @@ class CurrentControlDevice(ControllableDevice):
             abs(current - self._current_setpoint) < 1.0
             and self.is_active
             and (now - self._last_write_at) < self.watchdog_refresh_interval_s
+            # (#1015) the same amps on another phase count is a new command
+            and not self._phase_shape_pending()
         ):
             return self._status.current_consumption_w
 
@@ -2934,6 +3194,9 @@ class CurrentControlDevice(ControllableDevice):
         # accepted — a lockout, not a pause (a charge point was left that way
         # on 18.09). The builder marks such entities; the stop is the
         # start/stop switch, and a 0 A write never leaves here.
+        if current <= 0 and self._phases_by_current():
+            # (#1015) not a write at all: the charger's own stop ends it
+            return self._status.current_consumption_w
         if current <= 0 and self._zero_amps_would_lock():
             if not getattr(self, "_zero_refused_logged", False):
                 self._zero_refused_logged = True
@@ -2978,6 +3241,10 @@ class CurrentControlDevice(ControllableDevice):
                 # Amps exposed as a select: options are amp strings.
                 target = self.current_entity_id or self.charger_service_entity_id
                 await self.send("select", "select_option", {"entity_id": target, "option": str(int(current))})
+            elif self._phase_command(current) is not None:
+                # (#1015) one current per phase: the phase choice and the
+                # amps are ONE write. Never for a stop — see _phase_command.
+                await self._send_phase_shape(current)
             elif self.charger_service:
                 # Service-based control — param name varies per integration (#82)
                 domain, service = self.charger_service.split(".", 1)
@@ -2989,6 +3256,9 @@ class CurrentControlDevice(ControllableDevice):
                 # Pass entity_id only if service requires it (non-global services)
                 elif self.charger_service_entity_id and not self.global_services:
                     service_data["entity_id"] = self.charger_service_entity_id
+                # (#1015) the charger's own limit is no longer known to stand
+                # at the maximum
+                self._own_limit_lifted = False
                 await self.send(domain, service, service_data)
             elif self.current_entity_id:
                 # Number entity control
@@ -3985,6 +4255,8 @@ class CurrentControlDevice(ControllableDevice):
         explicit ``keba.disable`` call (v1.6.3 PROD soak regression).
         """
         stop_method = None
+        # (#1015) after any stop the next start restores the charger's limit
+        self._own_limit_lifted = False
         try:
             if self.stop_service:
                 domain, service = self.stop_service.split(".", 1)

@@ -581,6 +581,7 @@
           "heat_pump_relay1_entity": "Przekaźnik SG-Ready 1 (opcjonalna encja switch)",
           "heat_pump_relay2_entity": "Przekaźnik SG-Ready 2 (opcjonalna encja switch)",
           "heat_pump_invert_sg_ready": "Odwróć styki SG-Ready (dla okablowania NC)",
+          "heat_pump_step_down": "Ogranicz, gdy brakuje energii",
           "heat_pump_climate_entity": "Encja climate do podbicia nastawy (opcjonalna)",
           "heat_pump_power_sensor": "Czujnik mocy (opcjonalny)",
           "heat_pump_boost_offset": "Podbicie temperatury (°C)",
@@ -601,6 +602,7 @@
           "heat_pump_relay1_entity": "Encja switch przekaźnika SG-Ready 1 (sygnał normalnej pracy). Ustaw razem z przekaźnikiem 2, aby używać protokołu SG-Ready.",
           "heat_pump_relay2_entity": "Encja switch przekaźnika SG-Ready 2 (sygnał podbicia nadwyżką). Ustaw razem z przekaźnikiem 1, aby używać protokołu SG-Ready.",
           "heat_pump_invert_sg_ready": "Włącz tylko wtedy, gdy styki SG-Ready Twojej pompy ciepła są okablowane jako normalnie zwarte (NC). SEM steruje standardową tabelą prawdy SG-Ready; jeśli podbicie blokuje pompę (i odwrotnie), włącz tę opcję, aby odwrócić oba przekaźniki.",
+          "heat_pump_step_down": "Gdy dom kupuje energię z sieci w drogiej godzinie albo zbliża się do limitu mocy, SEM obniża nastawę lub wysyła sygnał blokady SG-Ready. Potrzebny jest zakres komfortu (Utrzymuj na i Uruchom po przekroczeniu); SEM nigdy nie schodzi poniżej niego.",
           "heat_pump_climate_entity": "Encja climate używana do podniesienia nastawy podczas nadwyżki słonecznej. Wystarcza samodzielnie w trybie tylko climate (przekaźniki nie są potrzebne).",
           "heat_pump_power_sensor": "Opcjonalny czujnik (W) raportujący bieżące zużycie mocy pompy ciepła.",
           "heat_pump_boost_offset": "Stopnie Celsjusza dodawane do normalnej nastawy podczas podbicia nadwyżką słoneczną.",
@@ -757,6 +759,7 @@
           "heat_pump_relay1_entity": "Przekaźnik 1 SG-Ready",
           "heat_pump_relay2_entity": "Przekaźnik 2 SG-Ready",
           "heat_pump_invert_sg_ready": "Odwróć przekaźniki SG-Ready (okablowanie NC)",
+          "heat_pump_step_down": "Ogranicz, gdy brakuje energii",
           "heat_pump_climate_entity": "Encja Climate",
           "heat_pump_power_sensor": "Czujnik mocy",
           "heat_pump_energy_sensor": "Czujnik energii",
@@ -1633,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Dom jako odbiorca baterii"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Zachowaj baterię na limit mocy"
+      },
       "ev_morning_window_enabled": {
         "name": "Poranne okno EV"
       },
@@ -2181,6 +2187,13 @@
       "options": {
         "none": "nie znaleziono",
         "why_guessed": "Twój panel Energia nie ma czujnika mocy sieci, więc SEM zgadł jeden."
+      }
+    },
+    "heat_pump_step_down": {
+      "options": {
+        "off": "Wyłączone",
+        "setpoint": "Obniż nastawę",
+        "block": "Wyślij sygnał blokady"
       }
     }
   }

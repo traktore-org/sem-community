@@ -23,7 +23,10 @@ LIVE_CONFIG = {"hot_water_minimum_temperature", "hot_water_legionella_target",
                # takes effect the next day without a reload. Backed by a
                # per-cycle read in coordinator.py, which the consumer test
                # below verifies.
-               "status_retention_days"}
+               "status_retention_days",
+               # (#1323) The coordinator pushes each heat pump row's value
+               # onto its device on every runtime refresh.
+               "heat_pump_step_down"}
 # Reload IS the correct behaviour: consumed at construction only (#462 —
 # live-applying these would silently not reach the constructed consumer).
 STRUCTURAL_RELOAD = {"tariff_mode", "tariff_classification_mode",

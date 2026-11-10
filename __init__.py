@@ -42,6 +42,7 @@ from .const import (
     MAX_PEAK_LIMIT_KW,
 )
 from .consts.core import DEFAULT_LOAD_MANAGEMENT_ENABLED
+from .devices.base import CLIMATE_HVAC_MODES
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS, NO_GRID_SOURCE
 from .utils.select_option import listed_option
 from .utils.own_entity import is_sem_entity  # (#1103)
@@ -794,6 +795,18 @@ def _seed_legionella_time(coordinator, hw_device) -> None:
         hw_device.record_legionella_cycle(ts or dt_util.now())
     except (ValueError, TypeError):
         hw_device.record_legionella_cycle(dt_util.now())
+
+
+def _seed_step_down(coordinator, hp_device) -> None:
+    """(#1323) Re-own a heat pump's step-down across a reload or restart."""
+    try:
+        storage = getattr(coordinator, "_storage", None)
+        memo = (storage.get_step_down_state() if storage else {}).get(
+            str(hp_device.device_id))
+        if memo:
+            hp_device.restore_step_down(memo)
+    except Exception:  # noqa: BLE001 — a missing memo never costs a setup
+        _LOGGER.debug("step-down restore skipped", exc_info=True)
 
 
 def persist_global_option(hass, entry, coordinator, key: str, value) -> None:
@@ -1879,6 +1892,7 @@ def _heat_pump_rows(full_config: dict) -> list[dict]:
             "heat_pump_boost_offset", "heat_pump_max_setpoint",
             "heat_pump_force_on_threshold", "heat_pump_cop",
             "heat_pump_invert_sg_ready",
+            "heat_pump_step_down",   # (#1323)
             "heat_pump_sg_ready_service", "heat_pump_sg_ready_service_data",
             "heat_pump_sg_ready_state_entity",
             "heat_pump_relay1_on_value", "heat_pump_relay1_off_value",
@@ -3122,6 +3136,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             # flag, the OCPP charge-control switch adoption).
             from .hardware_detection import wire_current_entity
             wire_current_entity(hass, ev_device, charger_id, ev_current_entity)
+            # (#1015) one current per phase through a service of the
+            # charger's own integration — found live, never named
+            from .hardware_detection import wire_phase_service
+            wire_phase_service(hass, ev_device, charger_id)
             if _cfg("ev_charge_mode_entity"):
                 ev_device.charge_mode_entity = _cfg("ev_charge_mode_entity")
                 ev_device.charge_mode_start = _cfg("ev_charge_mode_start")
@@ -3253,7 +3271,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             _cl = _row.get("heat_pump_climate_entity")
             _svc = (_row.get("heat_pump_sg_ready_service") or "").strip()
             from .config_flow import _parse_service_data
-            from .devices.heat_pump_controller import HeatPumpController
+            from .devices.heat_pump_controller import HeatPumpController, STEP_DOWN_OFF
             _svc_data = _parse_service_data(
                 _row.get("heat_pump_sg_ready_service_data")) or {}
             hp_extra = HeatPumpController(
@@ -3280,7 +3298,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 relay1_off_value=_row.get("heat_pump_relay1_off_value"),
                 relay2_on_value=_row.get("heat_pump_relay2_on_value"),
                 relay2_off_value=_row.get("heat_pump_relay2_off_value"),
+                step_down=_row.get("heat_pump_step_down") or STEP_DOWN_OFF,
             )
+            # (#1323) …and a step-down SEM left: re-owned from its stored
+            # memo, so the next cycle takes it back unless its cause stands.
+            _seed_step_down(coordinator, hp_extra)
             # (#914) A reload or an HA restart leaves the relays as SEM had
             # them (#656) — re-own a boost SEM left on, so the next stop path
             # returns the pump to NORMAL. A relay still loading is decided on
@@ -5380,6 +5402,8 @@ async def _async_register_services(
             "phase",
             # (#1021) behind the grid operator's relay
             "behind_operator_relay",
+            # (#1323) a climate unit's mode
+            "hvac_mode",
             # (#812) the load's own tariff and meter
             "tariff_rate", "tariff_entity", "tariff_meter",
         ):
@@ -5544,6 +5568,8 @@ async def _async_register_services(
                     "phase",
                     # (#1021) behind the grid operator's relay
                     "behind_operator_relay",
+                    # (#1323) a climate unit's mode
+                    "hvac_mode",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -6082,7 +6108,9 @@ async def _async_register_phase_services(
                 ["switch", "climate"]
             ),
             vol.Optional("hvac_mode", default="cool"): vol.In(
-                ["cool", "heat", "heat_cool", "dry", "fan_only", "auto"]
+                # (#1323) by_forecast: SEM picks heat or cool from the
+                # outdoor outlook ("auto" is the unit's own HA mode)
+                list(CLIMATE_HVAC_MODES)
             ),
             vol.Optional("target_temperature"): vol.Coerce(float),
             # (#559) goal engine — grounded core (runtime target + policy)

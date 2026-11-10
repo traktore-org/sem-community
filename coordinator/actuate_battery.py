@@ -680,9 +680,13 @@ async def restore_discharge_limit_on_startup(
     for control_entity in dict.fromkeys(entities):
         # (#1301) A pack whose control stops below the configured maximum
         # refused that value and kept its stale limit; ask for its own top.
-        own_max = entity_max_watts(hass, control_entity)
+        # (#1158) a limit in percent is read with the same base the
+        # adapter writes it with: the configured maximum is its 100 %
+        own_max = entity_max_watts(hass, control_entity,
+                                   percent_of_w=max_discharge)
         target = max_discharge if own_max is None else min(max_discharge, own_max)
-        prepared = prepare_power_setpoint(hass, control_entity, target)
+        prepared = prepare_power_setpoint(hass, control_entity, target,
+                                          percent_of_w=max_discharge)
         if prepared is None:
             continue
 

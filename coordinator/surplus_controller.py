@@ -700,12 +700,19 @@ class LoadIntent:
     #: (#1335) Layer 3 lets go of an ADOPTED claim (mode Off): ownership and
     #: force markers are cleared with no write. Layer 1 only says so.
     release: bool = field(default=False, compare=False)
+    #: (#1323) The load is to be stepped DOWN — below its normal state, not
+    #: merely off: a lower setpoint or the "blocked" signal. Layer 1 only
+    #: says so; layer 3 sends it and takes it back when no intent asks.
+    step_down: bool = False
 
 
 #: (#1335) Sources that buy the run (grid, battery) or need no sun (the
 #: comfort floor): a run on them holds its power and is never re-tuned to
 #: the sun's pool, and the walk lets it take only the sun that is left.
 PAID_SOURCES = ("cheap_grid", "tier2_battery", "comfort_floor")
+
+#: (#1323) The decision log's verb for a load held below its normal state.
+STEP_DOWN_VERB = "step_down"
 
 
 def _expected_draw(device, command_w: float, *, fallback: float) -> float:
@@ -830,6 +837,8 @@ def compute_load_intent(
     plan: "PlanVerdict" = NO_OPINION,
     grid_start_fits: bool = True,
     shed_code: str = RC.LOAD_PEAK_SHED,
+    price_is_expensive: bool = False,
+    buying_w: float = 0.0,
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
 
@@ -956,6 +965,12 @@ def compute_load_intent(
             return LoadIntent(False, 0.0, None,
                               "temperature sensor reads nothing — not started",
                               RC.LOAD_NO_READING)
+        if refusal == "season":
+            # (#1323) heat or cool by the forecast, and no outdoor reading
+            # yet. A unit that is too cold never says this: it heats.
+            return LoadIntent(False, 0.0, None,
+                              "no outdoor reading yet — heat or cool not picked",
+                              RC.LOAD_NO_SEASON)
         return LoadIntent(False, 0.0, None, "at its target temperature",
                           RC.LOAD_AT_TARGET)
     # 3d. (#594/#1335) Away: no comfort heating. A run stops; the optional
@@ -990,6 +1005,30 @@ def compute_load_intent(
             and not _phase_held(device)):
         _rated = _num(getattr(device, "rated_power", 0.0))
         return LoadIntent(True, _rated, "solar", "deadline force", RC.LOAD_DEADLINE)
+
+    # 3e. (#1323) A shortfall: the load steps DOWN. Only a load that can
+    #     (``step_down_ready`` — the user switched it on, and its comfort
+    #     band reads inside its range, so "too cold" below still leads), and
+    #     only one that is not running: a run is ended by its own reasons
+    #     above and in layer 2, never by this. Two causes, both already known
+    #     to the walk: the peak limit is near (``peak_freeze``, the load
+    #     manager's own state), or the house buys grid power in an expensive
+    #     hour. Stepping down lowers that import, so a load already stepped
+    #     down stays so while the hour is expensive and no sun is left over —
+    #     the cause is the expensive hour without sun, not the meter reading
+    #     its own effect.
+    if not active and getattr(device, "step_down_ready", False) is True:
+        if peak_freeze:
+            return LoadIntent(False, 0.0, None,
+                              "peak limit near — stepped down",
+                              RC.LOAD_STEP_DOWN_PEAK, step_down=True)
+        stepped = getattr(device, "is_stepped_down", False) is True
+        if price_is_expensive and (
+                float(buying_w) > DEFAULT_MIN_SURPLUS_CHANGE
+                or (stepped and float(remaining_surplus_w) <= 0.0)):
+            return LoadIntent(False, 0.0, None,
+                              "expensive grid power — stepped down",
+                              RC.LOAD_STEP_DOWN_PRICE, step_down=True)
 
     # 4. A source can power it. peak_freeze blocks *new* starts but keeps a
     #    running load on (only an explicit shed removes it, clause 2).
@@ -1229,6 +1268,18 @@ def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
         record_load(_log, device, on=False,
                     reason_code=intent.code or RC.LOAD_STOP,
                     text=intent.reason, observer=True)
+    # (#1323) the step-down SEM would send, or take back — the same two
+    # commands layer 3 sends for real, flagged as observed
+    stepped = getattr(device, "is_stepped_down", False) is True
+    if intent.step_down and not stepped and not active:
+        from .decision_log import record_load
+        record_load(_log, device, on=False, reason_code=intent.code,
+                    text=intent.reason, observer=True, verb=STEP_DOWN_VERB)
+    elif stepped and not intent.step_down and not intent.on:
+        from .decision_log import record_load
+        record_load(_log, device, on=False,
+                    reason_code=RC.LOAD_STEP_DOWN_END,
+                    text="step-down released", observer=True)
     observed = device.get_current_consumption() if active else 0.0
     name = getattr(device, "name", None) or getattr(device, "device_id", "?")
     # (#762) transition-gated: a WOULD that has not changed is not news —
@@ -1246,13 +1297,19 @@ def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
         log_on_change(_LOGGER, _key, logging.INFO,
                       "OBSERVER · WOULD ADJUST %s → %.0fW [source=%s] — %s",
                       name, intent.power_w, intent.source, intent.reason)
+    elif intent.step_down and not stepped:
+        log_on_change(_LOGGER, _key, logging.INFO,
+                      "OBSERVER · WOULD STEP DOWN %s — %s", name, intent.reason)
+    elif stepped and not intent.step_down:
+        log_on_change(_LOGGER, _key, logging.INFO,
+                      "OBSERVER · WOULD RELEASE STEP-DOWN %s", name)
     # else: idle, or on-but-not-SEM-driven (source is None) → no command to log.
     return observed
 
 
 def _note_load(device, *, on: bool, watts: Optional[float] = None,
                reason_code: str = "", text: str = "",
-               observer: bool = False) -> None:
+               observer: bool = False, verb: Optional[str] = None) -> None:
     """(#1084) Hand a load command to the decision log, if one is wired.
 
     The module-level choke points below take a device, not the controller;
@@ -1262,7 +1319,7 @@ def _note_load(device, *, on: bool, watts: Optional[float] = None,
     _log = getattr(getattr(device, "_controller", None), "decision_log", None)
     record_load(_log, device, on=on,
                 watts=watts, reason_code=reason_code, text=text,
-                observer=observer)
+                observer=observer, verb=verb)
 
 
 async def _activate_owned(device: "ControllableDevice", watts: float,
@@ -1315,6 +1372,26 @@ async def _deactivate_owned(device: "ControllableDevice",
     return True
 
 
+def _step_down_must_end(device) -> bool:
+    """(#1323) Is a stepped-down load out of SEM's hands, so its step-down
+    ends whatever the minimum hold says? Mode Off or peak-only, disabled,
+    behind the operator's relay, the house is away, or it is too cold."""
+    return (getattr(device, "control_mode", DeviceControlMode.SURPLUS)
+            != DeviceControlMode.SURPLUS
+            or getattr(device, "is_enabled", True) is False
+            or getattr(device, "locked_by_operator", False) is True
+            or getattr(device, "vacation", False) is True
+            # too cold: the comfort floor leads, whatever the peak says
+            or getattr(device, "comfort_state", "") == "forced")
+
+
+async def _release_step_down(device) -> None:
+    """(#1323) Take a step-down back and note it. Layer 3's own helper."""
+    if await device.release_step_down():
+        _note_load(device, on=False, reason_code=RC.LOAD_STEP_DOWN_END,
+                   text="step-down released")
+
+
 async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
                          *, observer: bool = False, controller=None) -> float:
     """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
@@ -1340,6 +1417,24 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         device._sem_owned = False
         _clear_source_markers(device)
 
+    # (#1323) Step-down: sent and taken back here, nowhere else.
+    stepped = getattr(device, "is_stepped_down", False) is True
+    if stepped and not intent.step_down:
+        # No intent asks for it any more. The minimum hold is against a
+        # cause that flickers; anything that wants the load (a run, "too
+        # cold") or takes it out of SEM's hands ends the step-down at once.
+        # A start that can go out this cycle REPLACES the step-down: the
+        # start writes the final state, so the contacts move once, not
+        # twice. If it does not take, the release follows below.
+        starting = intent.on and not active and device.can_activate()
+        if not starting and (intent.on or _step_down_must_end(device)
+                             or device.can_release_step_down()):
+            await _release_step_down(device)
+    elif intent.step_down and not stepped and not active:
+        if device.can_step_down() and await device.step_down():
+            _note_load(device, on=False, reason_code=intent.code,
+                       text=intent.reason, verb=STEP_DOWN_VERB)
+
     command = intent.power_w if intent.command_w is None else intent.command_w
     if intent.on and not active:
         if not device.can_activate():
@@ -1351,6 +1446,9 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         if consumed > 0:
             device.reset_surplus_timer()
             _apply_source_markers(device, intent)
+        elif getattr(device, "is_stepped_down", False) is True:
+            # (#1323) the start did not take: the step-down still ends
+            await _release_step_down(device)
         return consumed
 
     if not intent.on and active:
@@ -1488,6 +1586,14 @@ async def deactivate_devices(devices, reason: str = "teardown") -> int:
     )
     stopped = 0
     for device in devices:
+        if getattr(device, "is_stepped_down", False) is True:
+            # (#1323) a step-down is SEM's own command: taken back, so a
+            # pump is not left blocked by an integration that is gone
+            try:
+                await device.release_step_down()
+            except Exception:  # noqa: BLE001 — the rest must still be released
+                _LOGGER.warning("Could not release the step-down of %s (%s)",
+                                getattr(device, "name", "?"), reason, exc_info=True)
         if not getattr(device, "is_active", False):
             continue
         # (#908) SEM only releases what SEM commanded. An adopted / external /
@@ -1598,6 +1704,11 @@ class SurplusController:
             action = "deactivate"
         elif intent.on and active and intent.source not in (None, OWN_RUN_SOURCE):
             action = "adjust"
+        elif (getattr(intent, "step_down", False)
+              and getattr(device, "is_stepped_down", False) is not True):
+            # (#1323) a standing step-down is re-published every cycle:
+            # the roster is swept, so a state SEM would hold must say so
+            action = "step_down"
         else:
             action = "hold"
         did = str(getattr(device, "device_id", "") or "")
@@ -1953,7 +2064,13 @@ class SurplusController:
                 # cycle; absent from the dict = the plan has no say.
                 plan=self._plan_windows.get(did) or NO_OPINION,
                 # (#864) a grid start must fit the billing slot
-                grid_start_fits=self._grid_start_fits(device))
+                grid_start_fits=self._grid_start_fits(device),
+                # (#1323) the step-down's two facts: this load's price level
+                # and what the house buys now (0 when the meter is unread)
+                price_is_expensive=is_expensive_name(
+                    device_price_level(device, price_level)),
+                buying_w=(max(0.0, float(getattr(self, "_grid_import_w", 0.0) or 0.0))
+                          if getattr(self, "_grid_import_known", True) else 0.0))
             intents[did] = intent
             spend[did] = debit = self._walk_debit(
                 device, intent, remaining=remaining, now=now)
@@ -2367,7 +2484,9 @@ class SurplusController:
         devices += sorted(
             (d for d in self._devices.values()
              if not d.is_enabled and not d.managed_externally
-             and d.is_active and sem_started(d)),
+             and ((d.is_active and sem_started(d))
+                  # (#1323) …or it is stepped down: layer 3 takes that back
+                  or getattr(d, "is_stepped_down", False) is True)),
             key=lambda d: d.priority)
         # (#576) The home battery sits at ``battery_priority`` in this walk.
         # ``reclaim_w`` (the power that would charge it) is offered at the TOP;

@@ -51,10 +51,11 @@ class SGReadyState(IntEnum):
 # are wired normally-closed (NC) instead of normally-open use the per-pump
 # ``invert_sg_ready`` toggle, which flips both contacts.
 SG_READY_RELAY_MAP = {
-    # SEM never COMMANDS state 1 — it has no ripple-control/Sperrzeiten
-    # surface (#664, decided rather than built). The row stays because the
-    # table is the SG-Ready standard's truth table, which the SETUP_GUIDE
-    # wiring check is verified against (#655/#523).
+    # SEM has no ripple-control/Sperrzeiten surface (#664, decided rather
+    # than built). State 1 is commanded in ONE case: the step-down the user
+    # switched on (#1323, ``step_down_action == "block"``), and only through
+    # layer 3. The table is the SG-Ready standard's truth table, which the
+    # SETUP_GUIDE wiring check is verified against (#655/#523).
     SGReadyState.BLOCKED:  (True,  False),  # 1:0
     SGReadyState.NORMAL:   (False, False),  # 0:0
     SGReadyState.BOOST:    (False, True),   # 0:1
@@ -82,6 +83,20 @@ class HeatPumpStatus:
     target_temperature: Optional[float] = None
     is_solar_boosted: bool = False
     boost_start_time: Optional[datetime] = None
+
+
+#: (#1323) What a step-down sends: nothing (the default), a lower climate
+#: setpoint, or the SG-Ready "blocked" signal.
+STEP_DOWN_OFF = "off"
+STEP_DOWN_SETPOINT = "setpoint"
+STEP_DOWN_BLOCK = "block"
+STEP_DOWN_ACTIONS = (STEP_DOWN_OFF, STEP_DOWN_SETPOINT, STEP_DOWN_BLOCK)
+
+
+def step_down_action(value) -> str:
+    """The stored option as one of ``STEP_DOWN_ACTIONS``; anything else is off."""
+    v = str(value or "").strip().lower()
+    return v if v in STEP_DOWN_ACTIONS else STEP_DOWN_OFF
 
 
 class HeatPumpController(ComfortBandMixin, SetpointDevice):
@@ -132,6 +147,7 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         relay2_on_value: Optional[str] = None,
         relay2_off_value: Optional[str] = None,
         cop: float = 3.0,
+        step_down: str = STEP_DOWN_OFF,
     ):
         super().__init__(
             hass=hass,
@@ -189,6 +205,25 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         # SG-Ready NORMAL (state 2), so the pump's own frost/safety logic is
         # untouched.
         self.vacation: bool = False
+
+        # (#1323) Step down in a shortfall — off unless the user picks an
+        # action. Layer 1 decides (``compute_load_intent``), layer 3 switches
+        # (``reconcile_load``); these fields are only what the device knows:
+        # whether it is stepped down, since when, and the setpoint to put back.
+        self.step_down_action = step_down_action(step_down)
+        self._stepped_down: bool = False
+        self._stepped_down_at: Optional[datetime] = None
+        self._step_released_at: Optional[datetime] = None
+        self._step_restore_setpoint: Optional[float] = None
+        #: the lowered target SEM wrote — how a restart knows the setpoint
+        #: is still SEM's and not one the user set meanwhile
+        self._step_down_target: Optional[float] = None
+        #: a step-down lasts at least this long, and the next one waits this
+        #: long after a release — one billing slot, so the compressor is not
+        #: cycled by a price or a peak that flickers
+        self.step_down_min_hold_s: float = 900.0
+        self.step_down_min_gap_s: float = 900.0
+        self._last_step_down_path: str = "uninitialized"
 
         # (#914) One restart adoption per lifetime, decided on the first
         # READABLE observation of the SG-Ready surface — see adopt_if_running.
@@ -322,6 +357,13 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             # Also boost temperature setpoint if climate entity configured
             await super().activate(available_watts)
 
+        if self._stepped_down:
+            # (#1323) a boost replaces the step-down: the contacts and the
+            # setpoint were just written for the run
+            self._stepped_down = False
+            self._step_released_at = datetime.now()
+            self._step_restore_setpoint = None
+            self._step_down_target = None
         self._status.state = DeviceState.ACTIVE
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
@@ -387,6 +429,215 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         self._hp_status.is_solar_boosted = False
 
         _LOGGER.info("Heat pump returned to normal operation")
+
+    # ─── step down in a shortfall (#1323) ───────────────────────────────
+
+    @property
+    def is_stepped_down(self) -> bool:
+        return self._stepped_down
+
+    def _has_sg_surface(self) -> bool:
+        return bool(self.sg_ready_service
+                    or (self.relay1_entity_id and self.relay2_entity_id))
+
+    def _live_setpoint(self) -> Optional[float]:
+        """The climate entity's own target, in the unit it shows — or None."""
+        if not (self.hass and self.climate_entity_id):
+            return None
+        st = self.hass.states.get(self.climate_entity_id)
+        try:
+            return float((getattr(st, "attributes", None) or {}).get("temperature"))
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def step_down_ready(self) -> bool:
+        """May layer 1 ask for a step-down? Read-only; it writes nothing.
+
+        Yes only when the user picked an action, the pump has the surface
+        for it, nobody is away, and the comfort band reads INSIDE its range:
+        ``willing`` or ``banked``. ``forced`` is too cold (the floor leads)
+        and ``disengaged`` is no band or no reading — SEM does not hold a
+        pump back blind. A pump already stepped down stays ready while the
+        band allows it, whatever its setpoint now reads.
+        """
+        if self.step_down_action == STEP_DOWN_OFF or self.vacation:
+            return False
+        if self.step_down_action == STEP_DOWN_BLOCK:
+            if not self._has_sg_surface():
+                return False
+        elif not self.climate_entity_id or (
+                not self._stepped_down and self._live_setpoint() is None):
+            return False
+        return self.comfort_state in ("willing", "banked")
+
+    def can_step_down(self, now: Optional[datetime] = None) -> bool:
+        """Layer 3's anti-cycle for a new step-down: not while it runs, and
+        not within the gap after the last release."""
+        if self.is_active or self._stepped_down:
+            return False
+        if self._step_released_at is None:
+            return True
+        now = now or datetime.now()
+        return (now - self._step_released_at).total_seconds() >= self.step_down_min_gap_s
+
+    def can_release_step_down(self, now: Optional[datetime] = None) -> bool:
+        """Layer 3's anti-cycle for a release: the minimum hold has passed."""
+        if self._stepped_down_at is None:
+            return True
+        now = now or datetime.now()
+        return (now - self._stepped_down_at).total_seconds() >= self.step_down_min_hold_s
+
+    def _step_down_setpoint(self, live: float) -> float:
+        """The lowered target: the live setpoint less the boost offset,
+        never under the device's own minimum."""
+        return max(float(self.min_setpoint), float(live) - abs(float(self.boost_offset)))
+
+    async def step_down(self) -> bool:
+        """Send the step-down. Called by layer 3 only. True when it went out.
+
+        ``block``: the SG-Ready "blocked" signal. ``setpoint``: the climate
+        target lowered by the boost offset; the target it replaces is kept
+        to put back. Both go through the device seam, so observer mode and a
+        yield hold them back — then nothing moved and nothing is believed.
+        """
+        if self.step_down_action == STEP_DOWN_BLOCK:
+            ok = await self._set_sg_ready_state(SGReadyState.BLOCKED)
+            self._last_step_down_path = (
+                "block" if ok else
+                "withheld" if self._last_relay_path == "withheld" else "block_failed")
+            if not ok:
+                return False
+        elif self.step_down_action == STEP_DOWN_SETPOINT:
+            live = self._live_setpoint()
+            if live is None or not self.climate_entity_id:
+                self._last_step_down_path = "no_setpoint"
+                return False
+            target = self._step_down_setpoint(live)
+            if target >= live:
+                self._last_step_down_path = "at_minimum"
+                return False
+            try:
+                sent = await self.send(
+                    "climate", "set_temperature",
+                    {"entity_id": self.climate_entity_id, "temperature": target},
+                    why="step down")
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.error("%s: step-down setpoint write failed: %s", self.name, e)
+                self._last_step_down_path = "setpoint_failed"
+                return False
+            if not sent:
+                self._last_step_down_path = "withheld"
+                return False
+            self._step_restore_setpoint = live
+            self._step_down_target = target
+            self._last_step_down_path = "setpoint"
+        else:
+            return False
+        self._stepped_down = True
+        self._stepped_down_at = datetime.now()
+        _LOGGER.info("%s: stepped down (%s)", self.name, self._last_step_down_path)
+        return True
+
+    async def release_step_down(self) -> bool:
+        """Undo the step-down. Called by layer 3 (and the teardown) only."""
+        if not self._stepped_down:
+            return True
+        if self._hp_status.sg_ready_state == SGReadyState.BLOCKED:
+            ok = await self._set_sg_ready_state(SGReadyState.NORMAL)
+            if not ok:
+                self._last_step_down_path = (
+                    "release_withheld" if self._last_relay_path == "withheld"
+                    else "release_failed")
+                return False
+        if self._step_restore_setpoint is not None and self.climate_entity_id:
+            try:
+                sent = await self.send(
+                    "climate", "set_temperature",
+                    {"entity_id": self.climate_entity_id,
+                     "temperature": self._step_restore_setpoint},
+                    why="step down released")
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.error("%s: step-down release write failed: %s", self.name, e)
+                self._last_step_down_path = "release_failed"
+                return False
+            if not sent:
+                self._last_step_down_path = "release_withheld"
+                return False
+        self._stepped_down = False
+        self._step_restore_setpoint = None
+        self._step_down_target = None
+        self._step_released_at = datetime.now()
+        self._last_step_down_path = "released"
+        _LOGGER.info("%s: step-down released", self.name)
+        return True
+
+    def step_down_memo(self) -> Optional[Dict[str, Any]]:
+        """What a restart must know to undo a step-down, or None."""
+        if not self._stepped_down:
+            return None
+        return {"action": (STEP_DOWN_SETPOINT
+                           if self._step_restore_setpoint is not None
+                           else STEP_DOWN_BLOCK),
+                "restore": self._step_restore_setpoint,
+                "target": self._step_down_target}
+
+    def restore_step_down(self, memo) -> bool:
+        """(#1323) Re-own a step-down SEM left across a reload or a restart.
+
+        HA leaves the pump as SEM had it (#656), so a stepped-down pump
+        would stay blocked, or at its lowered setpoint, with nobody left to
+        release it. The stored memo says SEM did it; the hold is taken as
+        served, so the next cycle releases it unless the cause still stands.
+
+        The memo alone is not believed — it may be older than the pump's
+        state (a crash between a release and the save). A ``block`` counts
+        only while the contacts still read blocked; a ``setpoint`` only
+        while the climate target still reads the lowered value SEM wrote,
+        within one setpoint step. Anything else is the user's by now: the
+        memo is dropped and nothing is written. This holds with the option
+        switched off meanwhile too — what is still SEM's is re-owned, so
+        layer 3 puts it back; what is not is left alone.
+        """
+        if not isinstance(memo, dict) or self._stepped_down:
+            return False
+        action = step_down_action(memo.get("action"))
+        if action == STEP_DOWN_BLOCK:
+            readable, observed = self._read_sg_ready_state()
+            if readable and observed is not None and observed != SGReadyState.BLOCKED:
+                return False
+            self._hp_status.sg_ready_state = SGReadyState.BLOCKED
+        elif action == STEP_DOWN_SETPOINT:
+            try:
+                restore = float(memo.get("restore"))
+            except (TypeError, ValueError):
+                return False
+            try:
+                target = float(memo.get("target"))
+            except (TypeError, ValueError):
+                target = self._step_down_setpoint(restore)   # an older memo
+            live = self._live_setpoint()
+            if live is None or abs(live - target) > self._setpoint_step():
+                self._last_step_down_path = "memo_stale"
+                return False
+            self._step_restore_setpoint = restore
+            self._step_down_target = target
+        else:
+            return False
+        self._stepped_down = True
+        self._stepped_down_at = None
+        self._last_step_down_path = "restored"
+        return True
+
+    def _setpoint_step(self) -> float:
+        """The climate entity's own setpoint step (0.5 when it names none)."""
+        st = self.hass.states.get(self.climate_entity_id) if (
+            self.hass and self.climate_entity_id) else None
+        try:
+            step = float((getattr(st, "attributes", None) or {}).get("target_temp_step"))
+        except (TypeError, ValueError):
+            step = 0.0
+        return step if step > 0 else 0.5
 
     def _relays_for(self, state: SGReadyState) -> tuple[bool, bool]:
         """(relay1_on, relay2_on) for an SG-Ready state, applying the
@@ -545,7 +796,8 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         pump ran its boost through the night.
 
         Adopted only in BOOST / FORCE_ON, the states SEM commands on surplus:
-        NORMAL is nothing of SEM's, BLOCKED SEM never writes (#664). Decided
+        NORMAL is nothing of SEM's; BLOCKED is SEM's only as a step-down,
+        which ``restore_step_down`` re-owns from its stored memo (#1323). Decided
         once per lifetime, on the first readable observation.
         """
         if not self.hass or not self._boot_adoption_window_open():
@@ -723,6 +975,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
     def to_dict(self) -> Dict[str, Any]:
         d = super().to_dict()
         d.update({
+            "stepped_down": self._stepped_down,
+            "step_down_action": self.step_down_action,
+            "step_down_path": self._last_step_down_path,
             "sg_ready_state": self._hp_status.sg_ready_state.name,
             "sg_ready_value": self._hp_status.sg_ready_state.value,
             "is_solar_boosted": self._hp_status.is_solar_boosted,

@@ -233,7 +233,7 @@ Some EV chargers have limitations that prevent full SEM control:
 
 - **Tesla Wall Connector** — monitoring-only. The Wall Connector does not expose a power sensor or current control entity in Home Assistant. SEM can read voltage/current but cannot control charging.
 - **Myenergi Zappi** — the Zappi has built-in solar diversion logic that conflicts with external surplus control. SEM can monitor the Zappi but cannot control charging current — the Zappi manages surplus charging internally.
-- **KSTAR inverters** — no dedicated HA integration exists. Use [ha-solarman](https://github.com/davidrapan/ha-solarman) with KSTAR YAML profiles for inverter/battery support.
+- **KSTAR inverters** — no dedicated HA integration exists. Use [ha-solarman](https://github.com/davidrapan/ha-solarman) with KSTAR YAML profiles for inverter/battery support. Grid charging uses the profile's grid-charge switch. **The charge window and the work mode stay yours:** SEM never sets them, so keep the window open (the default is all day). A discharge limit in percent counts against **Maximum battery discharge power**. That setting must be the inverter's real maximum: set lower, SEM writes a higher limit than it means to; SEM cannot read the rating from the inverter. A percent control that starts at 1 % cannot block discharge: SEM then reduces it to that minimum (100 W on a 10 kW inverter) and says so. **The charge-power limit in percent is not handled:** SEM cannot slow a grid charge on these inverters. An inverter with numbered charge programs (Deye and similar) is not offered these controls; it keeps the program-group setup.
 - **Easee** — the power sensor is disabled by default in the HA Easee integration. It must be manually enabled in **Settings > Devices > Easee** before SEM can detect and configure the charger.
 ## EV 1↔3-phase switching is off by default
 
@@ -395,11 +395,13 @@ different models is not supported yet. With `direction_select` SEM writes
 the direction first and the watts only once the select reads it back, so a
 change of direction lands one cycle later by design.
 
-## The house sink is all-or-nothing (#970 open)
+## Keeping the battery for the peak limit moves in steps (#970)
 
-When the battery is held, the grid pays for the whole house; when it is
-open, the battery does. A rate in between — grid up to the peak limit,
-battery for the rest — is not built.
+The discharge limit moves in 250 W steps, so with *Keep the battery for the
+peak limit* on, the pack may give up to one step more than the house needs.
+A battery that follows a new limit more than about 90 seconds late can
+still end a quarter hour over the limit after a large late load step.
+Without a solar forecast the hold ends at *Buffer SOC* alone.
 
 ## Controls follow what the house can use (2.2, #996)
 

@@ -581,6 +581,7 @@
           "heat_pump_relay1_entity": "SG-Ready relä 1 (valfri switch-entitet)",
           "heat_pump_relay2_entity": "SG-Ready relä 2 (valfri switch-entitet)",
           "heat_pump_invert_sg_ready": "Invertera SG-Ready-kontakter (för NC-koppling)",
+          "heat_pump_step_down": "Dra ner när elen är knapp",
           "heat_pump_climate_entity": "Klimatentitet för börvärdesboost (valfri)",
           "heat_pump_power_sensor": "Effektsensor (valfri)",
           "heat_pump_boost_offset": "Temperaturboost-offset (°C)",
@@ -601,6 +602,7 @@
           "heat_pump_relay1_entity": "Switch-entitet för SG-Ready-relä 1 (signal för normaldrift). Ange tillsammans med relä 2 för SG-Ready-protokollet.",
           "heat_pump_relay2_entity": "Switch-entitet för SG-Ready-relä 2 (signal för överskottsboost). Ange tillsammans med relä 1 för SG-Ready-protokollet.",
           "heat_pump_invert_sg_ready": "Aktivera endast om värmepumpens SG-Ready-kontakter är kopplade som normalt slutna (NC). SEM följer standardsanningstabellen för SG-Ready; om boost blockerar pumpen (och tvärtom) slår du på detta för att vända båda reläerna.",
+          "heat_pump_step_down": "När huset köper nätel under en dyr timme, eller närmar sig din effektgräns, sänker SEM börvärdet eller skickar SG-Ready-spärrsignalen. Det kräver ett komfortband (Håll på och Kör nu förbi); SEM drar aldrig ner under det.",
           "heat_pump_climate_entity": "Klimatentitet som används för att höja börvärdet vid solöverskott. Räcker på egen hand för läget endast klimat (inga reläer behövs).",
           "heat_pump_power_sensor": "Valfri sensor (W) som rapporterar värmepumpens aktuella effektförbrukning.",
           "heat_pump_boost_offset": "Antal grader Celsius som läggs till det normala börvärdet under en boost med solöverskott.",
@@ -757,6 +759,7 @@
           "heat_pump_relay1_entity": "SG-Ready relä 1",
           "heat_pump_relay2_entity": "SG-Ready relä 2",
           "heat_pump_invert_sg_ready": "Invertera SG-Ready-reläer (NC-koppling)",
+          "heat_pump_step_down": "Dra ner när elen är knapp",
           "heat_pump_climate_entity": "Klimatentitet",
           "heat_pump_power_sensor": "Effektsensor",
           "heat_pump_energy_sensor": "Energisensor",
@@ -1633,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Huset som batterisänka"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Spara batteriet till effektgränsen"
+      },
       "ev_morning_window_enabled": {
         "name": "Morgonfönster för elbilen"
       },
@@ -2181,6 +2187,13 @@
       "options": {
         "none": "hittades inte",
         "why_guessed": "Din Energi-instrumentpanel har ingen sensor för näteffekt, så SEM gissade en."
+      }
+    },
+    "heat_pump_step_down": {
+      "options": {
+        "off": "Av",
+        "setpoint": "Sänk börvärdet",
+        "block": "Skicka spärrsignalen"
       }
     }
   }

@@ -121,6 +121,12 @@ SWITCH_TYPES = [
         entity_category=EntityCategory.CONFIG,
         icon="mdi:home-lightning-bolt-outline",
     ),
+    # (#970) Keep the battery for the peak limit. Default OFF; persisted.
+    SwitchEntityDescription(
+        key="battery_peak_hold_enabled",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:battery-lock",
+    ),
     SwitchEntityDescription(
         key="ev_morning_window_enabled",
         entity_category=EntityCategory.CONFIG,

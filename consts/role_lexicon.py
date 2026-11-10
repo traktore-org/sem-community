@@ -49,8 +49,12 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
     # ── battery control ────────────────────────────────────────────────
     "battery_discharge_limit": {
         "platform": "number",
+        # (#1158) ``battery_discharging_power`` as a NUMBER is the limit an
+        # inverter without watt registers offers, in percent of its rating
+        # (a reading of that name is a sensor, and never matches here).
         "any": (r"max.*discharg.*power", r"discharg.*power.*(limit|max)",
-                r"storage_maximum_discharging", r"discharge_power_limit"),
+                r"storage_maximum_discharging", r"discharge_power_limit",
+                r"^battery_discharging_power$"),
         # a current register is amperes: writing watts into it is the #749
         # bug this project already shipped once
         "not": (r"current", r"soc", r"percent", r"cutoff", r"voltage"),
@@ -90,8 +94,12 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         # charge target with a one-click accept. Huawei's capacity-control
         # family is a peak-shaving feature, not a target; there is no brand
         # whose target SOC is named only by those two words.
+        # (#1158) ``grid_max_charge`` is the level a grid charge stops at on
+        # an inverter that has a grid-charge switch and no program groups:
+        # the target of exactly the charge that switch starts.
         "any": (r"(target|charge|end).*(?:^|_)soc(?:_|$)",
-                r"(?:^|_)soc(?:_|$).*(limit|target)"),
+                r"(?:^|_)soc(?:_|$).*(limit|target)",
+                r"(?:^|_)grid_max_charge$"),
         # (#810, @Azlinon on real EG4 hardware) A declared key is not
         # automatically a key SEM may WRITE. He named three that look like a
         # target SOC and are not: ``system_charge_soc_limit`` is the global
@@ -108,6 +116,9 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
                 # a smart-load threshold decides when a SECOND load runs,
                 # not how full the pack should be
                 r"smart_load", r"generator", r"grid_peak",
+                # (#810) a START threshold says when AC charging begins, not
+                # how full the pack may get
+                r"(?:^|_)start(?:_|$)",
                 # A protection FLOOR is not a target, and confusing the two
                 # is not a near miss — it inverts the knob. Write "charge to
                 # 80" into "never discharge below" and the pack stops
@@ -158,6 +169,12 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         "platform": "switch",
         "any": (r"force.*charg", r"forcible.*charg", r"quick_charge",
                 r"ac_charge(_enable)?$"),
+        # (#1158) A ``grid_charging`` switch is two different things. In
+        # the stick-logger profiles it charges the pack from the grid while
+        # it is on, up to ``grid_max_charge``. Elsewhere the same words are
+        # a permission ("the battery MAY charge from the grid"), which
+        # starts nothing — so the word counts for that one integration.
+        "brand_any": {"solarman": (r"^battery_grid_charging$",)},
         "not": (r"discharg",),
     },
     # ── EV charger control ────────────────────────────────────────────
@@ -241,8 +258,11 @@ READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
     "solar_power": {
         "platform": "sensor",
         "any": (r"^(pv|solar|input)_power$", r"^power_pv", r"pv_active_power",
-                r"^solar_generation", r"^inverter_input_power$"),
-        "not": (r"total", r"today", r"daily", r"yesterday", r"month",
+                r"^solar_generation", r"^inverter_input_power$",
+                # the sum of all strings, named "total" (#810, EG4)
+                r"^(pv|solar)_total_power$", r"^total_(pv|solar)_power$"),
+        "not": (r"^(?!(pv|solar)_total_power$|total_(pv|solar)_power$).*total",
+                r"today", r"daily", r"yesterday", r"month",
                 r"forecast", r"string", r"pv\d", r"mppt"),
     },
     "grid_power": {
@@ -575,6 +595,18 @@ PER_CHARGER_ROLES: Final[frozenset] = frozenset({
     "ev_current_control", "ev_charge_mode",
 })
 
+#: (#1158) The key of a PROGRAM GROUP: the numbered charge programs some
+#: inverters are driven through. Integrations and profiles name them
+#: ``program_1_soc``, ``prog2_time``, ``slice_1_time``, ``time_point_1``
+#: or ``timeslot_1``. On such an inverter the grid-charge switch is a
+#: permission the programs use, not a command, and SEM drives it through
+#: the program-group adapter. So a role read from a device profile is
+#: offered only to an install that has no entity of this shape: what the
+#: install has decides, never the name of a brand or a profile. A numbered
+#: timed-charge WINDOW (``timed_charge_1_start``) is not a program group.
+PROGRAM_GROUP_KEY: Final[str] = (
+    r"(?:^|_)(?:prog(?:ram)?|slice|time_?point|time_?slot)_?\d+(?:_|$)")
+
 #: Roles SEM names and WATCHES but must never write (#845). A proposal here
 #: carries no button, and says so — the name is the value: the Config card
 #: can tell a Victron owner "this is your ESS mode; SEM reads it, you set it".
@@ -593,12 +625,15 @@ READ_ONLY_CONTROL_ROLES: Final[frozenset] = frozenset({"battery_charge_end_soc"}
 #: (switches, selects).
 UNIT_CLASSES: Final[Dict[str, frozenset]] = {
     "power": frozenset({"W", "kW"}),
+    # (#1158) a limit in percent of the pack's rating: SEM converts its
+    # watts with the maximum discharge power the user has set
+    "power_or_percent": frozenset({"W", "kW", "%"}),
     "percent": frozenset({"%"}),
     "current": frozenset({"A"}),
 }
 ROLE_EXPECTED_UNIT: Final[Dict[str, str]] = {
     "battery_charge_limit": "power",
-    "battery_discharge_limit": "power",
+    "battery_discharge_limit": "power_or_percent",
     "battery_target_soc": "percent",
     "battery_charge_end_soc": "percent",       # (#1166)
     "battery_power": "power",
@@ -733,6 +768,22 @@ SELECT_PHASE_OPTIONS: Final[tuple] = ("1", "3")
 #: ``available_current`` sets the current an installation may use (Zaptec's
 #: ``limit_current``). The rule set never names a service.
 SERVICE_PHASE_FIELDS: Final[tuple] = ("current_p1", "current_p2", "current_p3")
+#: (#1015) A per-phase service SEM may WRITE in the control loop is the one
+#: whose limit is temporary. One that sets a stored maximum or the limit a
+#: box falls back to offline is a setting that outlives the session — the
+#: #976 lesson (a kept 0 A is a lockout, not a pause). Read off the name.
+SERVICE_PHASE_NOT: Final[tuple] = (r"(?:^|_)max(?:_|$)", r"offline", r"fallback",
+                                   r"failsafe")
+#: (#1015) The read-back of that service: a sensor of the same device that
+#: reports the limit it took, one value per phase in its ATTRIBUTES (keys
+#: ending p1 / p2 / p3). 0 on a phase means that phase is off.
+PHASE_READBACK_RULE: Final[dict] = {
+    "platform": "sensor",
+    "any": (r"(?:^|_)dynamic_circuit_limit$", r"(?:^|_)circuit_dynamic_limit$",
+            r"(?:^|_)phase_currents?_limit$"),
+    "not": (r"max", r"offline"),
+}
+PHASE_READBACK_ATTR_ENDINGS: Final[tuple] = ("p1", "p2", "p3")
 SERVICE_SITE_CURRENT_FIELDS: Final[tuple] = ("available_current",)
 
 

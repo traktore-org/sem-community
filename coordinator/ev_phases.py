@@ -139,3 +139,53 @@ def validate_phase_switch_entity(
     if domain not in PHASE_SWITCH_DOMAINS:
         return entity_id, False
     return entity_id, bool(entity_exists(entity_id))
+
+
+# ── (#1015) Phases set by one current per phase ─────────────────────────
+#
+# Some chargers have no phase switch to name. They take one current PER
+# PHASE through a service, and a phase at 0 A is off. The phase choice and
+# the current are then ONE command: 1-phase at N A is (N, 0, 0), 3-phase is
+# (N, N, N). Pure: the caller owns the call, behind the device's one seam.
+
+def phase_currents(amps: float, phases: int) -> Optional[Tuple[int, int, int]]:
+    """The three per-phase currents for ``amps`` on ``phases`` (1 or 3).
+
+    None for anything else — and for a current that is not positive: a stop
+    is never (0, 0, 0) on this path. A limit a box keeps would lock it
+    (#976); the stop stays the charger's own stop.
+    """
+    try:
+        a = int(round(float(amps)))
+    except (TypeError, ValueError):
+        return None
+    if a <= 0 or phases not in (1, 3):
+        return None
+    return (a, a, a) if phases == 3 else (a, 0, 0)
+
+
+def phases_from_readback(attributes, endings=("p1", "p2", "p3")) -> Optional[int]:
+    """Phases the box says it took, from a per-phase read-back's attributes.
+
+    1 or 3 when it can be read; None when it cannot (no attributes, a value
+    that is not a number, two phases on, all off). None is "could not read",
+    never "not switched" — the caller compares a number, not an absence.
+    """
+    if not isinstance(attributes, dict):
+        return None
+    values = []
+    for end in endings:
+        hit = [v for k, v in attributes.items()
+               if str(k).lower().endswith(str(end).lower())]
+        if len(hit) != 1:
+            return None
+        try:
+            values.append(float(hit[0]))
+        except (TypeError, ValueError):
+            return None
+    on = sum(1 for v in values if v > 0)
+    if on == 3:
+        return 3
+    if on == 1 and values[0] > 0:
+        return 1
+    return None

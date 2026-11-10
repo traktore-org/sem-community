@@ -55,7 +55,9 @@ class TestSEMSwitches:
                         "assist_write_intents_enabled",
                         # arc #921 — four switches, all default OFF, after the permissions
                         "export_guard_enabled", "export_guard_override_external",
-                        "battery_house_sink_enabled", "ev_morning_window_enabled",
+                        "battery_house_sink_enabled",
+                        # #970 — keep the battery for the peak limit, default OFF
+                        "battery_peak_hold_enabled", "ev_morning_window_enabled",
                         # #1083 — the Simulation tab, default OFF
                         "simulation_tab"]
 

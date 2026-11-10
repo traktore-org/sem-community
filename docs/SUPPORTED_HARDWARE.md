@@ -30,7 +30,7 @@
 | Fox ESS | `foxess` | ED | — | 🧩 implemented | — |
 | GivEnergy | `givenergy_local` | ED | — | 🧩 implemented | — |
 | Kostal Plenticore | `kostal_plenticore` | B | yes | 🧩 implemented | — |
-| KSTAR | `ha-solarman (KSTAR YAML profiles)` | ED | — | 🧩 implemented | — |
+| KSTAR | `ha-solarman (KSTAR YAML profiles)` | ED | declared, unconfirmed | 🧩 implemented | #1158 (Mikail701) KKT Kolbe HKW10NVP3, stock kstar_hybrid profile — the entity list, no live write yet |
 | RCT Power | `rct_power` | ED | — | 🧩 implemented | — |
 | Senec | `senec` | ED | — | 🧩 implemented | — |
 | Sofar | `ha-solarman` | ED | yes | 🧩 implemented | — |

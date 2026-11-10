@@ -581,6 +581,7 @@
           "heat_pump_relay1_entity": "SG-Ready-rele 1 (valinnainen switch-entiteetti)",
           "heat_pump_relay2_entity": "SG-Ready-rele 2 (valinnainen switch-entiteetti)",
           "heat_pump_invert_sg_ready": "Käännä SG-Ready-koskettimet (NC-kytkentä)",
+          "heat_pump_step_down": "Vähennä, kun sähköä on niukasti",
           "heat_pump_climate_entity": "Ilmastointientiteetti asetusarvon boostiin (valinnainen)",
           "heat_pump_power_sensor": "Tehoanturi (valinnainen)",
           "heat_pump_boost_offset": "Lämpötilan boost-poikkeama (°C)",
@@ -601,6 +602,7 @@
           "heat_pump_relay1_entity": "Switch-entiteetti SG-Ready-releelle 1 (normaalikäytön signaali). Aseta yhdessä releen 2 kanssa SG-Ready-protokollaa varten.",
           "heat_pump_relay2_entity": "Switch-entiteetti SG-Ready-releelle 2 (ylijäämäboostin signaali). Aseta yhdessä releen 1 kanssa SG-Ready-protokollaa varten.",
           "heat_pump_invert_sg_ready": "Ota käyttöön vain, jos lämpöpumppusi SG-Ready-koskettimet on kytketty normaalisti suljettuina (NC). SEM noudattaa SG-Readyn vakiototuustaulukkoa; jos boost estää pumpun (ja päinvastoin), kytke tämä päälle kääntääksesi molemmat releet.",
+          "heat_pump_step_down": "Kun talo ostaa verkkosähköä kalliina tuntina tai lähestyy tehorajaasi, SEM laskee asetusarvoa tai lähettää SG-Ready-estosignaalin. Tähän tarvitaan mukavuusalue (Pidä lämpötilassa ja Käy heti rajan yli); SEM ei koskaan vähennä sen alle.",
           "heat_pump_climate_entity": "Ilmastointientiteetti, jolla asetusarvoa nostetaan aurinkoylijäämän aikana. Riittää yksinään pelkän ilmastoinnin tilaan (releitä ei tarvita).",
           "heat_pump_power_sensor": "Valinnainen anturi (W), joka raportoi lämpöpumpun nykyisen tehonkulutuksen.",
           "heat_pump_boost_offset": "Celsiusasteet, jotka lisätään normaaliin asetusarvoon aurinkoylijäämän boostin aikana.",
@@ -757,6 +759,7 @@
           "heat_pump_relay1_entity": "SG-Ready-rele 1",
           "heat_pump_relay2_entity": "SG-Ready-rele 2",
           "heat_pump_invert_sg_ready": "Käännä SG-Ready-releet (NC-kytkentä)",
+          "heat_pump_step_down": "Vähennä, kun sähköä on niukasti",
           "heat_pump_climate_entity": "Ilmastointientiteetti",
           "heat_pump_power_sensor": "Tehoanturi",
           "heat_pump_energy_sensor": "Energia-anturi",
@@ -1633,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Talo akun kohteena"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Säästä akku tehorajaa varten"
+      },
       "ev_morning_window_enabled": {
         "name": "Aamuikkuna sähköautolle"
       },
@@ -2181,6 +2187,13 @@
       "options": {
         "none": "ei löytynyt",
         "why_guessed": "Energia-kojelaudallasi ei ole verkkotehon anturia, joten SEM arvasi yhden."
+      }
+    },
+    "heat_pump_step_down": {
+      "options": {
+        "off": "Pois",
+        "setpoint": "Laske asetusarvoa",
+        "block": "Lähetä estosignaali"
       }
     }
   }

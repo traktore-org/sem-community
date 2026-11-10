@@ -1814,7 +1814,7 @@ KNOWN_INVERTER_DOMAINS = frozenset({
     "growatt_server", "growatt", "enphase_envoy", "powerwall", "tesla",
     "kostal_plenticore", "sonnen", "sonnenbatterie", "victron",
     "victron_gx", "deye", "solarman", "sun2000", "saj_modbus",
-    "solis", "solis_modbus",
+    "solis", "solis_modbus", "eg4_web_monitor",
 })
 
 #: Domains that are infrastructure, never hardware brands.
@@ -2048,11 +2048,67 @@ class _ServiceNames(set):
         return self.fields.get(name, default)
 
 
+def _has_program_groups(dev_entities, program_entities=(),
+                        program_platform: bool = False) -> bool:
+    """(#1158) Is this device driven through program groups?
+
+    Yes when SEM is already set up that way: the battery platform is the
+    program-group one (``program_platform``), or one of these entities is a
+    control the config names for it (``program_entities`` — the same list
+    the adapter choice reads, ``battery_adapters._deye_control_entities``).
+
+    Yes also when an entity here is SHAPED like a program group
+    (``PROGRAM_GROUP_KEY``), for an install not set up yet. This only ever
+    WITHHOLDS an offer, so it reads every name the entity has — its
+    translation key, its unique id, the name the integration gave it and
+    its entity id: an integration may carry the key in any one of them.
+    """
+    if program_platform:
+        return True
+    named = {str(e) for e in (program_entities or ()) if e}
+    try:
+        from .consts import role_lexicon as _lex
+        pattern = re.compile(_lex.PROGRAM_GROUP_KEY, re.I)
+    except Exception:  # noqa: BLE001
+        pattern = None
+    for e in dev_entities:
+        eid = str(getattr(e, "entity_id", "") or "")
+        if eid and eid in named:
+            return True
+        if pattern is None:
+            continue
+        words = [getattr(e, "translation_key", None),
+                 getattr(e, "unique_id", None),
+                 getattr(e, "original_name", None),
+                 eid.split(".", 1)[-1]]
+        for w in words:
+            if not isinstance(w, str) or not w:
+                continue
+            if pattern.search(re.sub(r"[^a-z0-9]+", "_", w.lower())):
+                return True
+    return False
+
+
+def _profile_key_hit(entry, keys, platform: str) -> Optional[str]:
+    """(#1158) A profile integration builds its unique id from the entry,
+    the key and the PLATFORM (``<entry>_<key>_<platform>``), and may set no
+    translation key. Only for a role read from a profile, only at a ``_``
+    boundary, only with the role's own platform as the last segment."""
+    uid = str(getattr(entry, "unique_id", "") or "")
+    for k in keys:
+        tail = f"{k}_{platform}"
+        if uid == tail or uid.endswith("_" + tail):
+            return k
+    return None
+
+
 def propose_roles_from_roster(dev_entities, domain: str, *,
                               state_of=None,
                               strategy_values=None,
                               services_of=None,
-                              device_ident=None) -> Dict[str, Any]:
+                              device_ident=None,
+                              program_entities=(),
+                              program_platform: bool = False) -> Dict[str, Any]:
     """(#915) Role proposals for ONE device, as an INTERSECTION.
 
     The roster says what an integration calls things; ``dev_entities`` is
@@ -2074,7 +2130,13 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
     if not vocab:
         return {}
     out: Dict[str, Any] = {}
+    programs = _has_program_groups(dev_entities, program_entities,
+                                   program_platform)
     for role, body in vocab.items():
+        if body.get("profile") and programs:
+            # (#1158) a role read from a device profile, on an install
+            # that is driven through program groups: not this family's
+            continue
         keys = tuple(body.get("keys", ()))
         want_domain = str(body.get("platform") or "")
         if want_domain == "service":
@@ -2147,6 +2209,8 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
                 continue
             hit = _entry_matches_declared(
                 entry, keys, body.get("exact_only", ()))
+            if not hit and body.get("profile") and want_domain:
+                hit = _profile_key_hit(entry, keys, want_domain)
             if hit:
                 matches.append((keys.index(hit), eid, hit))
         if not matches:
@@ -2540,7 +2604,11 @@ def _service_field_roles(domain: str, services: Dict[str, list]) -> Dict[str, An
     out: Dict[str, Any] = {}
     for name in sorted(services or {}):
         fields = list((services or {}).get(name) or [])
-        if all(f in fields for f in lex.SERVICE_PHASE_FIELDS):
+        # (#1015) never a stored maximum or an offline fallback: SEM writes
+        # this service every cycle, and a limit a box keeps is a lockout
+        if (all(f in fields for f in lex.SERVICE_PHASE_FIELDS)
+                and not any(re.search(p, name, re.I)
+                            for p in lex.SERVICE_PHASE_NOT)):
             out.setdefault("phase_service", {"service": f"{domain}.{name}",
                                              "fields": fields})
         cur = [f for f in fields if f in lex.SERVICE_SITE_CURRENT_FIELDS]
@@ -2895,7 +2963,8 @@ def _role_action(role: str) -> Dict[str, Any]:
 def propose_for_installed(registry, *, limit_per_domain: int = 8,
                           configured_entities=None, state_of=None,
                           strategy_values=None, services_of=None,
-                          device_ident_of=None) -> list:
+                          device_ident_of=None, program_entities=(),
+                          program_platform: bool = False) -> list:
     """(#915) Every INSTALLED integration the roster has vocabulary for, with
     the controls it declares matched against this box's own entities.
 
@@ -2932,6 +3001,8 @@ def propose_for_installed(registry, *, limit_per_domain: int = 8,
         roles = {r: b for r, b in propose_roles_from_roster(
                      ents[:400], dom, state_of=state_of,
                      strategy_values=strategy_values,
+                     program_entities=program_entities,
+                     program_platform=program_platform,
                      services_of=services_of,
                      device_ident=(device_ident_of(ents[:400], dom)
                                    if device_ident_of else None)).items()
@@ -3827,7 +3898,9 @@ def redact_box_names(obj: Any, *, stand_ins: Optional[Dict[str, str]] = None,
 def build_detection_report(hass: Optional[HomeAssistant] = None,
                            registry=None, configured_entities=None,
                            strategy_values=None,
-                           configured_chargers=None) -> Dict[str, Any]:
+                           configured_chargers=None,
+                           program_entities=(),
+                           program_platform: bool = False) -> Dict[str, Any]:
     """(#814 Pillar B) Detection that shows its work.
 
     (#1054 follow-up) ``configured_chargers`` — the charger dicts SEM
@@ -4246,7 +4319,9 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
             registry, configured_entities=configured_entities,
             state_of=_state_of, strategy_values=strategy_values,
             services_of=_services_of(hass),
-            device_ident_of=_device_ident_of(hass))
+            device_ident_of=_device_ident_of(hass),
+            program_entities=program_entities,
+            program_platform=program_platform)
         # (#915) whether proposals were judged against live states, so the
         # coordinator can rebuild an unjudged (boot-time) report once HA is up
         report["judged"] = bool(_state_of is not None)
@@ -6109,3 +6184,130 @@ def wire_current_entity(hass, device, charger_id: str, current_entity_id) -> Non
             "Charger '%s': OCPP current number %s with no charge-control "
             "switch found — SEM cannot stop this charger; set "
             "ev_start_stop_entity (#976)", charger_id, current_entity_id)
+
+
+def phase_readback_entity(dev_entities) -> Optional[str]:
+    """(#1015) The sensor on this device that reports the per-phase limit it
+    took — the read-back of a per-phase service. None when it has none."""
+    from .consts import role_lexicon as lex
+    return _first_hit(dev_entities, lex.PHASE_READBACK_RULE)
+
+
+def wire_phase_service(hass, device, charger_id: str, *, services_of=None) -> bool:
+    """(#1015) Phases set by one current per phase, applied to a charger
+    device — the ONE producer, as ``wire_current_entity`` is for the current
+    entity. True when the capability is wired.
+
+    A charger with no phase switch to name may still take one current per
+    phase through a service of its own integration (R6: read by its fields,
+    never by a name). Found live: the service must be registered NOW, and a
+    service keyed by ``device_id`` needs this box's registry id — the one the
+    current service already uses. Unknown (no hass, services not up yet) is
+    not "no": nothing is wired and the caller may ask again.
+    """
+    from .consts import role_lexicon as lex
+    service = str(getattr(device, "charger_service", "") or "")
+    domain = service.split(".", 1)[0] if "." in service else ""
+    if not domain or domain in ("number", "input_number", "select"):
+        return False
+    of = services_of if services_of is not None else _services_of(hass)
+    live = of(domain) if of else None
+    if not live:
+        return False
+    role = _service_field_roles(domain, live).get("phase_service")
+    if not role:
+        return False
+    fields = list(role.get("fields") or ())
+    device_id = getattr(device, "service_device_id", None)
+    if "device_id" in fields and not device_id:
+        _LOGGER.info(
+            "Charger '%s': %s sets one current per phase, but it is keyed by "
+            "a device and this charger has none saved; phase switching by "
+            "current is not wired (#1015)", charger_id, role["service"])
+        return False
+    # A stop on this path may not be 0 A: the charger's own limit caps the
+    # per-phase one, and 0 A parked there locks the next start out. So the
+    # charger needs a stop of its own (a stop service, a charge mode, a
+    # start/stop switch) — the same list ``stop_session`` walks.
+    surfaces = getattr(device, "_discrete_contactor_surfaces", None)
+    try:
+        can_open = bool(surfaces()[0]) if callable(surfaces) else False
+    except Exception:  # noqa: BLE001 — unknown is not a capability
+        can_open = False
+    if not can_open:
+        _LOGGER.info(
+            "Charger '%s': %s sets one current per phase, but this charger "
+            "has no stop of its own; a 0 A stop would lock it, so phase "
+            "switching by current is not wired (#1015)",
+            charger_id, role["service"])
+        return False
+    readback = None
+    if device_id:
+        try:
+            from homeassistant.helpers import entity_registry as er
+            readback = phase_readback_entity(
+                er.async_entries_for_device(er.async_get(hass), str(device_id)))
+        except Exception:  # noqa: BLE001 — no read-back is "could not read"
+            readback = None
+    device.phase_service = role["service"]
+    device.phase_fields = tuple(lex.SERVICE_PHASE_FIELDS)
+    device.phase_readback_entity = readback
+    _LOGGER.info(
+        "Charger '%s': phases can be set through %s (one current per phase); "
+        "read-back %s (#1015)", charger_id, role["service"],
+        readback or "none — the measured draw decides")
+    return True
+
+
+def phase_circuit_key(hass, device) -> Optional[str]:
+    """(#1015) Which circuit this charger is on, as the install says it:
+    an attribute named for the circuit's id on one of the device's own
+    entities. None when nothing says — an unknown, never "its own circuit"."""
+    device_id = getattr(device, "service_device_id", None)
+    if not device_id or hass is None:
+        return None
+    try:
+        from homeassistant.helpers import entity_registry as er
+        entries = er.async_entries_for_device(er.async_get(hass), str(device_id))
+    except Exception:  # noqa: BLE001
+        return None
+    for e in sorted(entries, key=lambda x: str(x.entity_id)):
+        st = hass.states.get(str(e.entity_id))
+        for key, value in (getattr(st, "attributes", None) or {}).items():
+            norm = re.sub(r"[^a-z0-9]", "", str(key).lower())
+            if norm.endswith("circuitid") and value not in (None, "", "unknown"):
+                return str(value)
+    return None
+
+
+def shared_phase_circuit(hass, device, others) -> Optional[str]:
+    """(#1015) Why this charger may NOT set its phases by current, or None.
+
+    The per-phase limit is the whole circuit's. With a second SEM charger
+    on the same circuit, this one's (N, 0, 0) throttles that one, and that
+    one's (N, N, N) undoes this one. Two chargers of the same integration
+    share a circuit unless the install says they do not: both name their
+    circuit and the names differ. Unknown counts as shared.
+    """
+    service = getattr(device, "phase_service", None)
+    if not isinstance(service, str) or "." not in service:
+        return None
+    domain = service.split(".", 1)[0]
+    mine = None
+    for other in others:
+        if other is device:
+            continue
+        other_service = getattr(other, "charger_service", None)
+        other_phase = getattr(other, "phase_service", None)
+        same = any(isinstance(sv, str) and sv.split(".", 1)[0] == domain
+                   for sv in (other_service, other_phase))
+        if not same:
+            continue
+        if mine is None:
+            mine = phase_circuit_key(hass, device) or ""
+        theirs = phase_circuit_key(hass, other) or ""
+        if mine and theirs and mine != theirs:
+            continue
+        return (f"another charger ({getattr(other, 'name', 'charger')}) is "
+                f"on the same circuit; {service} limits the whole circuit")
+    return None

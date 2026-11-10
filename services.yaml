@@ -214,7 +214,7 @@ register_surplus_device:
             - climate
     hvac_mode:
       name: HVAC Mode (climate only)
-      description: For a climate device, the hvac_mode to set when SEM turns it ON (cool for an AC, heat/heat_cool for heating). Ignored for switch devices.
+      description: For a climate device, the hvac_mode to set when SEM turns it ON (cool for an AC, heat/heat_cool for heating; by_forecast lets SEM pick heat or cool from the outdoor forecast). Ignored for switch devices.
       required: false
       default: cool
       selector:
@@ -226,6 +226,7 @@ register_surplus_device:
             - dry
             - fan_only
             - auto
+            - by_forecast
     target_temperature:
       name: Target Temperature (climate only)
       description: For a climate device, the comfort target temperature to set when SEM turns it ON. Leave empty to keep the unit's current setpoint. Ignored for switch devices.

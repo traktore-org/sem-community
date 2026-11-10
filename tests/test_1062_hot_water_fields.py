@@ -363,11 +363,7 @@ _DISPLAY_FUNCS = {"to_dict", "__init__", "__repr__"}
 
 # A constructor value with no decision reader, kept on purpose. Each needs a
 # reason; "it is shown somewhere" is not one.
-_ALLOWED = {
-    # No setting writes it: every SetpointDevice is built with the default,
-    # and nothing on any screen claims a minimum setpoint does anything.
-    "min_setpoint": "constructor default only — no surface promises it",
-}
+_ALLOWED: dict = {}
 
 
 def _device_settings() -> dict:

@@ -278,6 +278,12 @@ def _hacs_entries(sources: Dict[str, Any]) -> Iterable[dict]:
         print(f"  skipped {skipped} malformed HACS rows", file=sys.stderr)
 
 
+def _downloads(entry: dict) -> int:
+    """A HACS row's download count, 0 when it has none or it is not a number."""
+    n = entry.get("downloads")
+    return int(n) if isinstance(n, (int, float)) and not isinstance(n, bool) else 0
+
+
 def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
     """Every integration that looks energy-shaped by NAME (signal 1), from
     both HACS and core. The keyword filter is deliberately generous: signal 2
@@ -299,8 +305,15 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
         prev = rows.get(dom)
         row = {"name": str(name)[:60], "repo": entry.get("full_name"),
                "origin": "hacs", "installs": counts.get(dom, 0),
-               "stars": entry.get("stargazers_count") or 0, "blurb": blob[:300]}
-        if prev is None or row["stars"] > prev.get("stars", 0):
+               "stars": entry.get("stargazers_count") or 0, "blurb": blob[:300],
+               "downloads": _downloads(entry)}
+        # (#1158) Two repos may claim one domain (a successor that took
+        # over). The one people download wins, stars decide a tie: stars
+        # are kept by a repo nobody installs any more, and the roster read
+        # an abandoned repo's vocabulary for a domain whose 50 000
+        # downloads go to its successor.
+        if prev is None or ((row["downloads"], row["stars"])
+                            > (prev.get("downloads", 0), prev.get("stars", 0))):
             rows[dom] = row
 
     # (#915) A name is a weak classifier: "Anker Solix" says nothing about
@@ -523,6 +536,126 @@ _MAX_OPTIONS = 24
 _MAX_OPTION_LEN = 60
 
 
+#: (#1158) Integrations that name their entities in DEVICE PROFILES: one
+#: YAML file per device family in a folder beside the code, each item with a
+#: ``name`` and a ``platform``. The entity's translation key is the slug of
+#: that name, so a profile declares a vocabulary exactly as strings.json
+#: does — and until this it was invisible: a hybrid inverter's grid-charge
+#: switch and percent limits existed in 50 000 installs and in no roster.
+PROFILE_DIRS: Tuple[str, ...] = ("inverter_definitions",)
+
+#: Only what SEM could WRITE is read from a profile. Its sensors stay with
+#: the read path that already places them; pooling the sensors of thirty
+#: device families under one domain would offer one family's meter to
+#: another's owner.
+PROFILE_PLATFORMS: Tuple[str, ...] = ("number", "select", "switch", "time")
+
+_MAX_PROFILES = 80
+
+
+def _slug(name: str) -> str:
+    """Home Assistant's slug of an entity name, for plain ASCII names."""
+    return re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_")
+
+
+def mine_profile(text: str) -> Dict[str, Dict[str, dict]]:
+    """(#1158) The controls ONE device profile declares, per platform, keyed
+    by the slug of each item's name. A select's lookup values are its
+    options. A broken file is nothing, not a crash."""
+    try:
+        import yaml
+        data = yaml.safe_load(text)
+    except Exception:  # noqa: BLE001
+        return {}
+    groups = data.get("parameters") if isinstance(data, dict) else None
+    if not isinstance(groups, list):
+        return {}
+    out: Dict[str, Dict[str, dict]] = {}
+    for group in groups:
+        items = group.get("items") if isinstance(group, dict) else None
+        for item in items if isinstance(items, list) else ():
+            if not isinstance(item, dict):
+                continue
+            plat = item.get("platform")
+            if plat not in PROFILE_PLATFORMS:
+                continue
+            key = item.get("translation_key") or _slug(item.get("name") or "")
+            if not isinstance(key, str) or not re.fullmatch(r"[a-z0-9_]{3,80}", key):
+                continue
+            opts: tuple = ()
+            if plat == "select" and isinstance(item.get("lookup"), list):
+                opts = tuple(str(row.get("value")) for row in item["lookup"]
+                             if isinstance(row, dict)
+                             and isinstance(row.get("value"), str))
+            out.setdefault(plat, {}).setdefault(
+                key, {"options": opts, "profile": True})
+    return out
+
+
+def _get_listing(url: str, key: str, *, offline: bool) -> Optional[list]:
+    """A GitHub folder listing, cached. Only an answer is remembered: a
+    listing (200) or "no such folder" (404). A rate limit or a network
+    error is asked again on the next run — remembered, it would hide a
+    brand's profiles for good."""
+    path = _cache_path(key)
+    if path.exists():
+        try:
+            data = json.loads(path.read_bytes() or b"[]")
+        except ValueError:
+            data = []
+        return data if isinstance(data, list) else []
+    if offline:
+        return None
+    headers = {"User-Agent": UA, "Accept": "application/vnd.github+json"}
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        with urllib.request.urlopen(
+                urllib.request.Request(url, headers=headers), timeout=45) as r:
+            raw = r.read()
+    except urllib.error.HTTPError as err:
+        if err.code != 404:
+            return None
+        raw = b"[]"
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    names = sorted(str(row.get("name")) for row in data
+                   if isinstance(row, dict) and row.get("type") == "file"
+                   ) if isinstance(data, list) else []
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(names))
+    return names
+
+
+def _mine_profiles(repo: str, domain: str, origin: str, *,
+                   offline: bool) -> Dict[str, Dict[str, dict]]:
+    """(#1158) Every profile in the repo's profile folder, pooled."""
+    if origin == "core" or not repo:
+        return {}
+    out: Dict[str, Dict[str, dict]] = {}
+    for folder in PROFILE_DIRS:
+        base = f"custom_components/{domain}/{folder}"
+        names = _get_listing(
+            f"https://api.github.com/repos/{repo}/contents/{base}",
+            f"dir_{domain}_{_url_key(repo + base)}", offline=offline)
+        for name in (names or ())[:_MAX_PROFILES]:
+            if not name.endswith((".yaml", ".yml")):
+                continue
+            url = f"https://raw.githubusercontent.com/{repo}/HEAD/{base}/{name}"
+            raw = _get(url, f"prof_{domain}_{_url_key(url)}", offline=offline)
+            if not raw:
+                continue
+            for plat, keys in mine_profile(raw.decode("utf-8", "replace")).items():
+                for key, body in keys.items():
+                    out.setdefault(plat, {}).setdefault(key, body)
+    return out
+
+
 def mine_vocabulary(repo: str, domain: str, origin: str, *,
                     offline: bool) -> Dict[str, Dict[str, dict]]:
     """(06.09 audit) The raw miner, bounded: a declared key longer than
@@ -544,8 +677,18 @@ def mine_vocabulary(repo: str, domain: str, origin: str, *,
                 entry["fields"] = tuple(body["fields"])[:_MAX_OPTIONS]
             if body.get("target"):
                 entry["target"] = str(body["target"])[:20]
+            if body.get("profile"):
+                entry["profile"] = True          # (#1158) where it was read
             out.setdefault(plat, {})[key] = entry
     return out
+
+
+def _wants_profiles(vocab: Dict[str, Dict[str, dict]]) -> bool:
+    """(#1158) Is the profile folder worth asking for? Only for an
+    integration whose strings and sources declared no control at all: one
+    that already names its numbers, selects and switches does not keep them
+    in profiles, and the question costs a rate-limited API call each."""
+    return not any(vocab.get(p) for p in ("number", "select", "switch"))
 
 
 def _mine_vocabulary_raw(repo: str, domain: str, origin: str, *,
@@ -553,6 +696,13 @@ def _mine_vocabulary_raw(repo: str, domain: str, origin: str, *,
     """Entities (below) plus, beside them, the services the integration
     declares (#956) — additive, never instead: ABL has both."""
     out = _mine_entity_vocabulary_raw(repo, domain, origin, offline=offline)
+    # (#1158) …and the controls its device profiles name — additive too: a
+    # key strings.json already declares keeps its options.
+    if _wants_profiles(out):
+        for plat, keys in _mine_profiles(repo, domain, origin,
+                                         offline=offline).items():
+            for key, body in keys.items():
+                out.setdefault(plat, {}).setdefault(key, body)
     for url in _service_urls(repo, domain, origin):
         raw = _get(url, f"svc_{domain}_{_url_key(url)}", offline=offline)
         if not raw:
@@ -835,6 +985,8 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
                     "target": body.get("target"),
                 }
             slot["keys"].append(key)
+            if not body.get("profile"):
+                slot["declared"] = True
             for opt in body.get("options") or ():
                 if opt not in slot["options"]:
                     slot["options"].append(opt)
@@ -887,6 +1039,12 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
                 "options": tuple(v["options"])}
         if exact_only:
             body["exact_only"] = exact_only
+        if not v.get("declared"):
+            # (#1158) Every key of this role was read from a device
+            # profile. One domain then speaks for many device families, so
+            # the install decides which family it is: see the lexicon's
+            # PROGRAM_GROUP_KEY.
+            body["profile"] = True
         if v.get("services"):
             # (#956) what each service takes: its fields and whether it
             # targets an entity — the runtime decides from these whether
