@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 224,
+  "total": 223,
   "first_run_fields": 19,
   "first_run_steps": 5,
   "first_run_fields_best": 19,
@@ -226,7 +226,6 @@
     "battery_house_sink_enabled",
     "battery_may_assist_ev",
     "battery_may_export",
-    "battery_peak_hold_enabled",
     "energy_plan_actuation",
     "ev_absorb_grid_fill",
     "ev_morning_window_enabled",
