@@ -6,7 +6,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-await import('lit');
+import { register } from 'node:module';
+
+const FAKE_LIT = `
+export class LitElement {
+    constructor() { this.style = {}; this.classList = { toggle() {} }; this.renderRoot = { querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, appendChild() {} }; }
+    connectedCallback() {}
+    disconnectedCallback() {}
+    requestUpdate() { this.__updates = (this.__updates || 0) + 1; }
+    updated() {}
+    getRootNode() { return {}; }
+    get updateComplete() { return Promise.resolve(true); }
+}
+export const html = (strings, ...values) => ({ tpl: true, strings: [...strings], values });
+export const css = () => '', svg = html;
+export const nothing = Symbol('nothing');
+export const repeat = (items, key, fn) => Array.from(items).map((it, i) => fn(it, i));
+`;
+const LOADER = `
+const FAKE = ${JSON.stringify('data:text/javascript,' + encodeURIComponent(FAKE_LIT))};
+export async function resolve(specifier, context, next) {
+    if (specifier === 'lit' || specifier.startsWith('lit/')) return { url: FAKE, shortCircuit: true };
+    return next(specifier, context);
+}`;
+register('data:text/javascript,' + encodeURIComponent(LOADER));
 globalThis.window ??= globalThis;
 globalThis.document = { addEventListener() {}, removeEventListener() {}, documentElement: {}, head: { appendChild() {} }, createElement: () => ({}) };
 globalThis.addEventListener = () => {};
