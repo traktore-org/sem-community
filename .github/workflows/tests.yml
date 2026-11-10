@@ -12,7 +12,7 @@ on:
     branches: [develop, main, "release/**"]
 
 jobs:
-  # (#1266) Each HA rung is split into 4 parts that run side by side, each
+  # (#1266) Each HA rung is split into 8 parts that run side by side, each
   # with one pytest worker per CPU. One rung took 1:40-2:00 when the suite
   # ran one test at a time. The part jobs are NOT the required checks: the
   # `test-gate` job below reports "test HA <version>", the names branch
@@ -24,7 +24,7 @@ jobs:
   # then sort the keys and round to 2 decimals (keeps git diffs small).
   test:
     runs-on: ubuntu-latest
-    name: HA ${{ matrix.ha }} part ${{ matrix.part }}/4
+    name: HA ${{ matrix.ha }} part ${{ matrix.part }}/8
     # The matrix IS an HA matrix (#787, #1298). Each rung installs one
     # pytest-homeassistant-custom-component pin — see
     # tests/requirements_test.txt — and the list reads:
@@ -54,13 +54,16 @@ jobs:
       matrix:
         ha: ["2026.8", "2026.10"]
         # Keep in step with `--splits` below and PARTS in test-gate.
-        part: [1, 2, 3, 4]
+        part: [1, 2, 3, 4, 5, 6, 7, 8]
         include:
           - ha: "2026.8"
             python-version: "3.14"
           - ha: "2026.10"
             python-version: "3.14"
             phacc: "0.13.375"
+            # Coverage is measured on ONE rung: the same code runs on both,
+            # and measuring it slows every part down.
+            cov: "--cov=custom_components.solar_energy_management --cov-report="
 
     steps:
       - uses: actions/checkout@v4
@@ -92,19 +95,18 @@ jobs:
           mkdir -p /tmp/ha-config/custom_components
           cp -r $GITHUB_WORKSPACE /tmp/ha-config/custom_components/solar_energy_management
 
-      - name: Run tests with coverage (part ${{ matrix.part }} of 4)
+      - name: Run tests (part ${{ matrix.part }} of 8)
         working-directory: /tmp/ha-config
         env:
           PYTHONPATH: /tmp/ha-config
         run: |
           python -m pytest custom_components/solar_energy_management/tests/ \
-            -n auto --splits 4 --group ${{ matrix.part }} \
+            -n auto --splits 8 --group ${{ matrix.part }} \
             --durations-path custom_components/solar_energy_management/tests/.test_durations \
-            --cov=custom_components.solar_energy_management \
-            --cov-report= \
+            ${{ matrix.cov }} \
             -q --tb=short -rfE
 
-      # Each part measured a quarter of the suite; the coverage job adds
+      # Each part measured an eighth of the suite; the coverage job adds
       # them up. Hidden files are skipped by upload-artifact unless asked.
       - name: Keep this part's coverage data
         if: always()
@@ -142,7 +144,7 @@ jobs:
       - name: Every part of HA ${{ matrix.ha }} passed
         env:
           GH_TOKEN: ${{ github.token }}
-          PARTS: 4
+          PARTS: 8
         run: |
           gh api --paginate \
             "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100" \
@@ -164,10 +166,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ha: ["2026.8", "2026.10"]
+        ha: ["2026.10"]
         include:
-          - ha: "2026.8"
-            python-version: "3.14"
           - ha: "2026.10"
             python-version: "3.14"
     steps:
