@@ -726,6 +726,27 @@ def _heater_band(device: "ControllableDevice"):
 #: (#1102) A device's own run (Legionella): SEM-driven, never re-tuned.
 OWN_RUN_SOURCE = "legionella"
 
+#: (#1321) The user's one-off "run now" (``plan_override`` force). SEM-driven:
+#: SEM started it, so SEM stops it once the override ends.
+OVERRIDE_SOURCE = "override"
+
+#: (#1321) The one-off actions a load acts on; ``cap``/``move`` stay inert.
+LOAD_OVERRIDE_ACTIONS = ("skip", "force")
+
+
+def override_may_force(device: "ControllableDevice") -> bool:
+    """(#1321) May a ``force`` override run this load at all? Not while the
+    device is on vacation (a heat pump or a tank SEM must not encourage),
+    not past its daily cap, not once its own stop condition is met. The
+    old passes must ask this same predicate when they learn the override."""
+    if getattr(device, "vacation", False) is True:
+        return False
+    if getattr(device, "daily_max_runtime_reached", False) is True:
+        return False
+    if getattr(device, "stop_condition_met", False) is True:
+        return False
+    return True
+
 
 def _heater_claim(device: "ControllableDevice", active: bool, held: float) -> float:
     """(#1102) What a heater rung expects to draw: the measured draw while it
@@ -750,6 +771,7 @@ def compute_load_intent(
     is_night: bool = True,
     daylight_remaining_s: "Optional[float]" = None,
     plan: "PlanVerdict" = NO_OPINION,
+    override: Optional[str] = None,
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
 
@@ -758,6 +780,8 @@ def compute_load_intent(
     surplus left for THIS device after higher-priority loads (the caller's
     priority walk fills it); the battery/grid clauses don't consume it.
     Everything else is read off ``device`` so it works on a real device or a mock.
+    ``override`` (#1321) is the load's active one-off action (``skip`` /
+    ``force``), or None.
     """
     mode = getattr(device, "control_mode", DeviceControlMode.SURPLUS)
     active = bool(getattr(device, "is_active", False))
@@ -852,6 +876,24 @@ def compute_load_intent(
                               RC.LOAD_LEGIONELLA)
         return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
                           "Legionella run due", RC.LOAD_LEGIONELLA)
+
+    # 3c. (#1321) The user's one-off, for the minutes they chose: ``skip``
+    #     keeps it off, ``force`` runs it with or without sun. Only in
+    #     Smart (surplus) mode — Off and Peak-only returned above, so a
+    #     standing opt-out outranks a one-off, as for chargers and batteries.
+    #     Everything above still wins: the operator's lock (1b), the peak
+    #     shed (2 — a forced load CAN be shed by a peak), the daily cap and
+    #     the device's own stop (3) and its own run (3a). A force does not
+    #     START under a peak warning (``peak_freeze``), nor on vacation.
+    #     When the override ends this clause is simply not taken: the walk
+    #     below decides again, and with no sun it stops the run SEM started.
+    if override == "skip":
+        return LoadIntent(False, 0.0, None, "paused by you for now",
+                          RC.LOAD_OVERRIDE_STOP)
+    if (override == "force" and override_may_force(device)
+            and (active or not peak_freeze)):
+        return LoadIntent(True, _heater_claim(device, active, held), OVERRIDE_SOURCE,
+                          "run now — set by you", RC.LOAD_OVERRIDE_RUN)
 
     # 3b. A ScheduleDevice past its deadline is a hard commitment — force it on
     #     regardless of surplus or peak posture (matches the old deadline pass,
@@ -1435,6 +1477,9 @@ class SurplusController:
         # passes. Default OFF — the passes stay authoritative until a parity
         # corpus + a real-hardware soak prove the new path identical.
         self._use_desired_state: bool = False
+        # (#1321) this cycle's one-off overrides on loads, stamped by update():
+        # device_id → {"action", "until"}. Empty = nothing set (the common case).
+        self._load_overrides: Dict[str, Dict[str, Any]] = {}
         # (#1102) The three layers run beside the passes on every real cycle
         # and record where they differ (dry: no device or controller state
         # changes). Read by the load-management sensor and diagnostics.
@@ -1671,6 +1716,23 @@ class SurplusController:
             if d.is_active and getattr(d, "_offpeak_forced", False)
         )
 
+    def _override_action(self, device) -> Optional[str]:
+        """(#1321) This load's active one-off action (``skip``/``force``),
+        or None. Only a Smart-mode (surplus) load acts on one; in any other
+        mode the override is held but read as nothing."""
+        rec = self._load_overrides.get(getattr(device, "device_id", None))
+        action = rec.get("action") if isinstance(rec, dict) else None
+        if action not in LOAD_OVERRIDE_ACTIONS:
+            return None
+        if getattr(device, "control_mode", None) != DeviceControlMode.SURPLUS:
+            return None
+        return action
+
+    def load_override_status(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """(#1321) ``{"action", "until"}`` for the device map, or None."""
+        rec = self._load_overrides.get(device_id)
+        return dict(rec) if isinstance(rec, dict) else None
+
     def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,
                          battery_priority, price_level,
                          peak_freeze, peak_shed, peak_shed_all, dry=False):
@@ -1734,7 +1796,9 @@ class SurplusController:
                 is_shed_target=device.device_id in shed, soc_above_reserve=soc_above,
                 # (#638 G4) the joint plan's per-device window verdict this
                 # cycle; absent from the dict = the plan has no say.
-                plan=self._plan_windows.get(device.device_id) or NO_OPINION)
+                plan=self._plan_windows.get(device.device_id) or NO_OPINION,
+                # (#1321) the user's one-off on this load, if any
+                override=self._override_action(device))
             intents[device.device_id] = intent
             # (#1102) remember a run the floor started, so it goes on to
             # Keep at (a dry shadow walk puts this back afterwards)
@@ -1833,6 +1897,9 @@ class SurplusController:
         # TimeManager. None = no sun data; the cheap-hours grid top-up then
         # keeps its pre-#953 behaviour (unknown is not a claim about the sun).
         daylight_remaining_s: Optional[float] = None,
+        # (#1321) device_id → {"action", "until"}: the active one-off
+        # overrides. None/empty = none set → behaviour unchanged.
+        load_overrides: Optional[dict] = None,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -1904,6 +1971,10 @@ class SurplusController:
         # (#638 G4) stamp this cycle's joint-plan window verdicts for the
         # intent path AND the imperative passes below.
         self._plan_windows = dict(plan_windows or {})
+        # (#1321) this cycle's one-off overrides, read by layer 1 (clause 3c)
+        self._load_overrides = {
+            str(k): dict(v) for k, v in (load_overrides or {}).items()
+            if isinstance(v, dict)}
         # (#766) Belief follows the switch, every cycle — the per-cycle twin
         # of adopt_if_running. Without it, a switch turned ON outside SEM's
         # own activate() (an external actuator, a user, a box self-start)

@@ -151,6 +151,9 @@ TRAJECTORY_CASES = {
     # (#1325) the house's own grid draw follows the battery walk
     "house_grid": {"kwh": 2.3, "cost": 0.83, "reason": None},
     "total_cost": 2.03,
+    # (#1321) both follow total_cost: reporting only, no gate reads them
+    "cost_if_now": 2.93,
+    "saved": 0.9,
 }
 
 

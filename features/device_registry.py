@@ -1978,6 +1978,20 @@ class UnifiedDeviceRegistry:
         # slot, not a standalone ``heat_pump_priority`` / ``hot_water_priority``
         # knob. No separate emit path needed (a parallel one was dead code).
 
+        # (#1321) a load's active one-off ("run now" / "not now") and its
+        # end, so the card can say "Boost until 14:30" and offer Back.
+        # Absent = none. The surplus walk holds what it acts on this cycle.
+        _status = getattr(self._surplus_controller, "load_override_status", None)
+        if callable(_status):
+            for did, row in result.items():
+                try:
+                    ov = _status(did)
+                except Exception:  # noqa: BLE001 — a row never fails the map
+                    ov = None
+                if isinstance(ov, dict):
+                    row["override"] = {"action": ov.get("action"),
+                                       "until": ov.get("until")}
+
         # (#576) the home battery — a draggable sink in the same priority list.
         # Loads ABOVE it reclaim the power that would charge the battery; loads
         # BELOW it yield. It's a passive device (no on/off, no mode): its only

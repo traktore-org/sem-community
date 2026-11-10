@@ -4,11 +4,13 @@
  * the rows Goal · Min run / pause · Requires · Phase · Legionella ·
  * Comfort · Device tariff · SEM may switch it. Every write is one
  * update_device_config call (the properties the backend accepts).
+ * (#1321) Up top: Normal · Smart · Boost. Boost is a one-off plan_override
+ * force for 30/60/120 min; the four-way mode sits under All settings.
  */
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
-import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature } from './next-devices.js';
+import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, simpleMode } from './next-devices.js';
 
 const MODES = [
     { key: 'off', label: 'off', help: 'help_mode_off' },
@@ -17,6 +19,48 @@ const MODES = [
     { key: 'solar_battery', label: 'mode_solar_battery', help: 'battery_overnight_hint' },
 ];
 const PHASES = ['unknown', 'L1', 'L2', 'L3', '3ph'];
+const DOMAIN = 'solar_energy_management';
+const BOOST_MINUTES = [30, 60, 120];
+
+/** (#1321) Normal / Smart / Boost, and while a one-off runs: until when, and Back. */
+function simpleControl(card, row, dis) {
+    const t = (k) => card._t(k);
+    const tf = (k, p) => card._tf(k, p);
+    const id = row.id;
+    const cur = simpleMode(row);
+    const smart = row.mergedMode === 'solar_only' || row.mergedMode === 'solar_battery';
+    card._boostMins = card._boostMins || {};
+    const mins = card._boostMins[id] || 60;
+    const pick = async (key) => {
+        if (key === cur) return;
+        if (key === 'boost') {
+            await card._callService(DOMAIN, 'plan_override', { device_id: id, action: 'force', minutes: mins });
+            return;
+        }
+        // leaving Boost first ends the one-off, then sets the mode
+        if (row.override && !await card._callService(DOMAIN, 'plan_override_clear', { device_id: id })) return;
+        if (key === 'normal') { for (const w of modeWrites(row, 'off')) card._dev(id, w.property, w.value); }
+        if (key === 'smart' && !smart) { for (const w of modeWrites(row, 'solar_only')) card._dev(id, w.property, w.value); }
+    };
+    const seg = card._seg([
+        { key: 'normal', label: t('next_mode_normal') },
+        { key: 'smart', label: t('next_smart') },
+        { key: 'boost', label: t('boost'), disabled: !smart && cur !== 'boost' },
+    ], cur, pick, { disabled: dis });
+    let line = nothing;
+    if (row.override) {
+        const back = card._val(t('next_back'), () => card._callService(DOMAIN, 'plan_override_clear', { device_id: id }), { disabled: dis });
+        const key = row.override.action === 'skip' ? 'next_load_paused_until' : 'next_boost_until';
+        line = html`<div class="modehelp">${tf(key, { time: row.override.until || '—' })} · ${back}</div>`;
+    } else if (smart) {
+        const minSeg = card._seg(BOOST_MINUTES.map((m) => ({ key: m, label: tf('next_n_min', { n: m }) })), mins,
+            (m) => { card._boostMins = { ...card._boostMins, [id]: m }; card.requestUpdate(); }, { disabled: dis, small: true });
+        line = html`<div class="modehelp">${t('next_boost_for')} ${minSeg}</div>`;
+    } else {
+        line = html`<div class="modehelp">${t(cur === 'normal' ? 'help_mode_off' : 'next_boost_needs_smart')}</div>`;
+    }
+    return html`${seg}${line}`;
+}
 
 function hours(min) {
     const h = (Number(min) || 0) / 60;
@@ -49,9 +93,10 @@ export function loadBody(card, row) {
     const measureOnly = !row.hasControlHandle;
     const solar = !measureOnly && (merged === 'solar_only' || merged === 'solar_battery');
 
-    // ── mode ──
+    // ── mode ── (#1321) Normal / Smart / Boost on top; the four-way mode under All settings
+    const simple = measureOnly ? nothing : simpleControl(card, row, dis);
     const seg = card._seg(MODES.map((m) => ({ key: m.key, label: t(m.label) })), merged,
-        (key) => { for (const w of modeWrites(row, key)) send(w.property, w.value); }, { disabled: dis });
+        (key) => { for (const w of modeWrites(row, key)) send(w.property, w.value); }, { disabled: dis, small: true });
     const helpKey = (MODES.find((m) => m.key === merged) || {}).help;
 
     // ── stats ──
@@ -90,6 +135,9 @@ export function loadBody(card, row) {
 
     // ── rows ──
     const rows = [];
+    if (!measureOnly) {
+        rows.push(card._row('mdi:tune-variant', t('next_mode_all'), seg, helpKey ? t(helpKey) : '', { more: true }));
+    }
     const numVal = (key, text, o) => card._inline(key + ':' + id, text, () => card._numEdit(key + ':' + id, o));
     if (solar) {
         const minVal = numVal('min_h', minMin > 0 ? hours(minMin) + ' h' : t('no_target'), {
@@ -178,8 +226,7 @@ export function loadBody(card, row) {
         { more: true }));
 
     return html`
-        ${seg}
-        ${helpKey ? html`<div class="modehelp">${t(helpKey)}</div>` : nothing}
+        ${simple}
         ${stats}
         ${pct === null ? nothing : html`<div style="margin:6px 0 10px">${card._track(pct, 'var(--c)')}</div>`}
         <div class="rows">${rows}</div>`;

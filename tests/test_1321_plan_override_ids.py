@@ -1,7 +1,7 @@
-"""#1321 — plan_override names a charger or a battery, nothing else.
+"""#1321 — plan_override names a charger, a battery or a load, nothing else.
 
-A load id was stored and did nothing: no decider reads a load's override,
-and the dashboard showed the button press as done.
+An unknown id was stored and did nothing, and the dashboard showed the
+button press as done. Loads act since #1321 (tests/test_1321_load_override.py).
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+from custom_components.solar_energy_management.devices.base import DeviceControlMode
 
 
 def _coord():
@@ -17,20 +18,22 @@ def _coord():
         _known_battery_ids={"b1", "b2"},
         _plan_overrides={},
         _storage=MagicMock(),
+        _surplus_controller=SimpleNamespace(_devices={
+            "boiler": SimpleNamespace(control_mode=DeviceControlMode.SURPLUS)}),
     )
 
 
-@pytest.mark.parametrize("device_id", ["keba", "b2", "primary"])
+@pytest.mark.parametrize("device_id", ["keba", "b2", "primary", "boiler"])
 def test_a_charger_or_a_battery_is_taken(device_id):
     c = _coord()
     SEMCoordinator.set_plan_override(c, device_id, "skip", 60)
     assert device_id in c._plan_overrides
 
 
-@pytest.mark.parametrize("device_id", ["load:boiler", "boiler", "ev:keba", ""])
+@pytest.mark.parametrize("device_id", ["load:boiler", "heater", "ev:keba", ""])
 def test_any_other_id_is_refused_and_nothing_is_stored(device_id):
     c = _coord()
-    with pytest.raises(ValueError, match="not a charger or a battery"):
+    with pytest.raises(ValueError, match="not a charger, a battery or a load"):
         SEMCoordinator.set_plan_override(c, device_id, "force", 60)
     assert c._plan_overrides == {}
     c._storage.set_plan_overrides.assert_not_called()

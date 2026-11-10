@@ -121,6 +121,9 @@ LOAD_NO_SOURCE = "no_source"
 LOAD_COMFORT_FLOOR = "comfort_floor"
 LOAD_COMFORT_GOAL = "comfort_goal"
 LOAD_LEGIONELLA = "legionella"
+# (#1321) the user's one-off on a load: run now / not now
+LOAD_OVERRIDE_RUN = "load_override_run"
+LOAD_OVERRIDE_STOP = "load_override_stop"
 
 # ── the grid export limit (#1090) ────────────────────────────────────
 EXPORT_NEGATIVE_PRICE = "export_negative_price"

@@ -451,3 +451,23 @@ test('a load shows its stop sensor and thermometer pickers and writes them', () 
     el._dev('heat_pump', 'comfort_entity', '');
     assert.deepEqual(calls.map((c) => c[1].property + '=' + c[1].value), ['stop_entity=sensor.boiler_temp', 'comfort_entity=']);
 });
+
+// (#1321) Normal / Smart / Boost: Boost is the active one-off, not a mode.
+test('the simple control reads the mode and the active one-off', async () => {
+    const { simpleMode } = await import('../src/util/next-devices.js');
+    const rows = deviceRows({
+        a: { name: 'A', control_mode: 'off' },
+        b: { name: 'B', control_mode: 'surplus' },
+        c: { name: 'C', control_mode: 'surplus', override: { action: 'force', until: '14:30' } },
+        d: { name: 'D', control_mode: 'peak_only' },
+        e: { name: 'E', control_mode: 'surplus', override: { action: 'skip', until: '15:00' } },
+    });
+    const by = Object.fromEntries(rows.map((r) => [r.id, r]));
+    assert.equal(simpleMode(by.a), 'normal');
+    assert.equal(simpleMode(by.b), 'smart');
+    assert.equal(simpleMode(by.c), 'boost');
+    assert.deepEqual(by.c.override, { action: 'force', until: '14:30' });
+    assert.equal(simpleMode(by.d), '');
+    assert.equal(simpleMode(by.e), 'smart');
+    assert.equal(by.b.override, null);
+});

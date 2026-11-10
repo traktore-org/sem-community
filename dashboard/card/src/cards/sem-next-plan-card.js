@@ -274,11 +274,32 @@ class SEMNextPlanCard extends SEMNextBase {
         return said && said !== key ? said : (n?.note || String(code));
     }
 
+    /** (#1321) The planner's own why for the tapped block, in words; '' when none. */
+    _blockWhy(fb, plan) {
+        const blocks = Array.isArray(plan?.blocks) ? plan.blocks : [];
+        const b = blocks.filter((x) => x && x.reason && Date.parse(x.start) < fb.e && Date.parse(x.end) > fb.s
+            && (x.id === fb.row.key || (fb.row.kind === 'battery_in' && String(x.id || '').includes('battery'))))
+            .sort((p, q) => Date.parse(p.start) - Date.parse(q.start))[0];
+        if (!b) return '';
+        const key = 'next_reason_' + b.reason;
+        const text = this._t(key);
+        if (!text || text === key) return '';
+        const p = b.reason_params || {};
+        const time = p.deadline ? this._hhmm(p.deadline) : '';
+        if (text.includes('{time}') && !time) return '';
+        const said = this._tf(key, { time });
+        const price = Number(p.price);
+        return p.price !== undefined && p.price !== null && Number.isFinite(price)
+            ? `${said} · ${this._tf('next_tip_price', { price: this._fmt(price, 3), cur: this._currency() })}` : said;
+    }
+
     _focusReason(fb, plan) {
         if (fb.provisional) return this._t('next_provisional_reason');
         const hours = (fb.e - fb.s) / 3.6e6;
         const kw = this._fmt(hours > 0 ? fb.kwh / hours : 0, 1);
         const kind = fb.row.kind;
+        const why = kind === 'ev' || kind === 'load' || kind === 'battery_in' ? this._blockWhy(fb, plan) : '';
+        if (why) return why;
         if (kind === 'battery_in') return this._whyCodes(plan) || this._tf('next_reason_battery_charge', { kw });
         if (kind === 'battery_out') return this._t('next_reason_battery_house');
         if (kind === 'grid') return this._t('next_reason_house_grid');
@@ -715,6 +736,11 @@ class SEMNextPlanCard extends SEMNextBase {
             const houseKwh = Number(plan.house_grid?.kwh);
             const gridKwh = kwhOf(plan.blocks, (id) => !String(id).startsWith('battery_out')) + (Number.isFinite(houseKwh) ? houseKwh : 0);
             tiles.push({ label: t('next_grid_cost'), value: this._fmt(cost, 2), unit: this._currency(), sub: `${this._kwh(gridKwh)} · ${t('next_tonight')}` });
+        }
+        // (#1321) what waiting for the planned hours saves; no field, no tile
+        const saved = knownNum(plan.saved);
+        if (Number.isFinite(saved)) {
+            tiles.push({ label: t('next_saved_by_plan'), value: this._fmt(saved, 2), unit: this._currency(), sub: t('next_vs_now'), valueColor: C.good });
         }
         const sun = this._num('sensor.sem_forecast_tomorrow_kwh');
         if (sun !== null) {

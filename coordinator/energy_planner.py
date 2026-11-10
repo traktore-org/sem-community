@@ -28,6 +28,22 @@ from typing import Any, Optional
 FIT_EPS = 0.999          # "fits" = this share of the need; the plan wait accepts the same (#1289)
 _W_EPS = 1.0              # grants below 1 W are noise
 
+#: (#1321) Why the packer put a block where it did — one code per branch of
+#: ``pack_night`` that places energy. The card turns each into words
+#: (``next_reason_<code>``).
+#:   top_up_late     — the late part, charged right before the deadline
+#:   one_block       — the cheapest run of back-to-back hours (contiguous)
+#:   solar           — a sun slot: the surplus runs it
+#:   cheap_hours     — a cheap-level hour, the only kind this load may use
+#:   cheapest_hours  — among the cheapest priced hours
+#:   before_deadline — the cheapest hours that still end by the deadline;
+#:                     a cheaper hour lies after it
+#:   no_price_yet    — an hour with no price published (Keep-at goals)
+#:   from_battery    — drawn from the home battery, not the grid
+REASON_CODES = ("top_up_late", "one_block", "solar", "cheap_hours",
+                "cheapest_hours", "before_deadline", "no_price_yet",
+                "from_battery")
+
 
 # ---------------------------------------------------------------------------
 # Inputs
@@ -194,6 +210,10 @@ class Allocation:
     reason: str
     #: (#1023) the top-up before departure — the card hatches it
     late: bool = False
+    #: (#1321) machine reason (one of ``REASON_CODES``) and its numbers
+    #: (``price``, ``deadline`` as ISO time) — the card's words for ``reason``
+    code: str = ""
+    params: Any = field(default=None, compare=False)
 
     @property
     def energy_kwh(self) -> float:
@@ -218,6 +238,9 @@ class EnergyPlan:
     total_cost: float
     fits: bool
     takeover: Optional[datetime] = None   # first slot home hits the meter
+    #: (#1321) What the same grid energy would cost bought from the first
+    #: slot on, at full power — see ``_cost_if_now``. None = unknown.
+    cost_if_now: Optional[float] = None
 
     def summary_lines(self) -> list:
         """The 22:00 answer, one line per demand."""
@@ -273,6 +296,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
 
     allocations = []
     results = []
+    late_unpriced = False           # (#1321) a top-up booked an unpriced hour at 0
     last_block_end = {}             # demand id -> datetime of its last block
 
     def _price(d, i):
@@ -358,6 +382,21 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         power = min(grant, max(float(d.min_power_w), want / h * 1000.0))
         return power, min(h, want / (power / 1000.0))
 
+    def _why(d, i, code, price):
+        """(#1321) The reason code for a grid block of ``d`` in slot ``i``:
+        a sun slot says solar; a price pick says before_deadline when a
+        cheaper priced hour lies past the deadline, else ``code``."""
+        if ledger[i].cap_override_w is not None:
+            return {"code": "solar", "params": {}}
+        params = {"price": round(float(price), 4)}
+        if d.deadline is not None:
+            params["deadline"] = d.deadline.isoformat()
+            if code == "cheapest_hours" and any(
+                    _price(d, j) is not None and _price(d, j) < price
+                    and ledger[j].end > d.deadline for j in idx):
+                code = "before_deadline"
+        return {"code": code, "params": params}
+
     def _cheapest_run(d, need):
         """(#1023) The cheapest run of back-to-back priced, eligible slots
         that covers ``need`` within headroom: ``[(i, power_w, run_h)]``, or
@@ -423,6 +462,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     run_h = min(span_h, max(run_h, d.min_run_s / 3600.0))
                 begin = hi - timedelta(hours=run_h)
                 _p = _price(d, i)
+                if _p is None:
+                    late_unpriced = True
                 price = 0.0 if _p is None else float(_p)
                 s.grid_committed_w += power
                 s.headroom_w -= power
@@ -431,7 +472,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     price=price,
                     reason=(f"{d.id}: {power:.0f} W {begin:%H:%M}–{hi:%H:%M} "
                             f"@ {price:.3f} (late charge before departure)"),
-                    late=True))
+                    late=True, code="top_up_late",
+                    params={"deadline": d.deadline.isoformat()}))
                 last_block_end[d.id] = max(last_block_end.get(d.id, hi), hi)
                 planned += power / 1000.0 * run_h
                 cost += power / 1000.0 * run_h * price
@@ -455,7 +497,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                         price=price,
                         reason=(f"{d.id}: {power:.0f} W {begin:%H:%M}–"
                                 f"{end:%H:%M} @ {price:.3f} (one block, "
-                                f"headroom left {s.headroom_w:.0f} W)")))
+                                f"headroom left {s.headroom_w:.0f} W)"),
+                        **_why(d, i, "one_block", price)))
                     last_block_end[d.id] = max(
                         last_block_end.get(d.id, end), end)
                     planned += power / 1000.0 * run_h
@@ -534,9 +577,17 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                        + (f"@ {price:.3f} (slot #{own_rank[i]} cheapest, "
                           if price is not None else "unpriced (no price published, ")
                        + f"headroom left {s.headroom_w:.0f} W)")
+            if d.source == "battery":
+                code = {"code": "from_battery", "params": {}}
+            elif price is None:
+                code = {"code": "no_price_yet", "params": {}}
+            elif d.needs_cheap_level and _cheap(d, i):
+                code = _why(d, i, "cheap_hours", price)
+            else:
+                code = _why(d, i, "cheapest_hours", price)
             allocations.append(Allocation(
                 demand_id=d.id, start=begin, end=end, power_w=power,
-                price=price, reason=why))
+                price=price, reason=why, **code))
             last_block_end[d.id] = end
             planned += e_kwh
             cost += e_kwh * (price or 0.0)
@@ -573,15 +624,85 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
 
     takeover = takeover_of(ledger)
     allocations.sort(key=lambda a: (a.start, a.demand_id))
+    total = (None if any(a.price is None for a in allocations)
+             else round(sum(a.energy_kwh * a.price for a in allocations), 4))
+    if_now = (None if total is None or late_unpriced
+              else _cost_if_now(demands, allocations, ledger, _price))
     return EnergyPlan(
         allocations=tuple(allocations),
         results=tuple(results),
         # (#1102) one unpriced block makes the night's cost unknown, never 0
-        total_cost=(None if any(a.price is None for a in allocations)
-                    else round(sum(a.energy_kwh * a.price for a in allocations), 4)),
+        total_cost=total,
         fits=all(r.status == "fits" for r in results),
         takeover=takeover,
+        cost_if_now=if_now,
     )
+
+
+def plan_savings(total_cost, device_if_now, house_cost, has_grid_blocks) -> dict:
+    """(#1321) ``{"cost_if_now", "saved"}`` for the published plan.
+
+    ``cost_if_now`` = the plan's grid energy bought from the first slot on at
+    full power (``_cost_if_now``) plus the house's own grid draw, which is
+    the same either way. ``saved`` = cost_if_now − total_cost: what waiting
+    for the planned hours saves on the devices. Rounded to 2 decimals; a
+    difference under half a cent is 0. Both None (the sensor leaves them
+    out) when a price is unknown or the plan buys nothing from the grid.
+    """
+    if (not has_grid_blocks or total_cost is None or device_if_now is None
+            or house_cost is None):
+        return {"cost_if_now": None, "saved": None}
+    if_now = round(float(device_if_now) + float(house_cost), 2)
+    saved = round(if_now - float(total_cost), 2)
+    if abs(saved) < 0.005:
+        saved = 0.0
+    return {"cost_if_now": if_now, "saved": saved}
+
+
+def _cost_if_now(demands, allocations, ledger, price_of):
+    """(#1321) The cost of the plan's grid energy bought NOW instead.
+
+    What it compares: for every grid demand, the kWh the plan placed for it,
+    run from the first ledger slot onward at the device's full power — what
+    the device does with no plan, plugged in and started at once — priced at
+    each slot's import price (the demand's own tariff when it has one). On a
+    flat tariff this equals the plan's cost. Headroom and anti-cycle limits
+    are ignored on this side: it is the "no plan" baseline, not a second
+    plan. Battery-source blocks cost 0 on both sides and are left out.
+
+    None when a slot it would use has no price, or the ledger ends before
+    the energy is bought.
+    """
+    by_id = {d.id: d for d in demands}
+    placed = {}
+    for a in allocations:
+        d = by_id.get(a.demand_id)
+        if d is None or d.source == "battery":
+            continue
+        placed[a.demand_id] = placed.get(a.demand_id, 0.0) + a.energy_kwh
+    cost = 0.0
+    for did, kwh in placed.items():
+        d = by_id[did]
+        power_kw = float(d.max_power_w) / 1000.0
+        if kwh <= 1e-9:
+            continue
+        if not power_kw > 0 or power_kw == float("inf"):
+            return None
+        left = kwh
+        for i, s in enumerate(ledger):
+            if left <= 1e-9:
+                break
+            take = min(left, power_kw * s.hours)
+            if take <= 0:
+                continue
+            p = price_of(d, i)
+            if p is None:
+                return None
+            cost += take * float(p)
+            left -= take
+        if left > 1e-6:
+            return None
+    return round(cost, 4)
 
 
 def takeover_of(ledger):
