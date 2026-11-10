@@ -1797,13 +1797,14 @@ class LoadManagementCoordinator:
 
     def _withheld(self, device_id: str, what: str, target: Any,
                   data: Optional[dict] = None) -> bool:
-        """(#1335) The withhold half of the seam: observer mode, or a load
-        another party steers (``external_yield``), sends nothing — and says
-        what it held back, as ``ControllableDevice.send`` does."""
+        """(#1335) The withhold half of the seam: observer mode sends nothing
+        — and says what it held back, as ``ControllableDevice.send`` does.
+        A peak shed still reaches a load another party steers
+        (``external_yield``), as it always did: the fuse comes first."""
         info = self._devices.get(device_id) or {}
-        if not (self._observer_mode or info.get("external_yield") is True):
+        if not self._observer_mode:
             return False
-        why = "observer" if self._observer_mode else "yield"
+        why = "observer"
         self.withheld_commands.append(
             {"device_id": device_id, "service": what,
              "data": dict(data or {}) or {"entity_id": target}, "why": why})
@@ -1818,12 +1819,12 @@ class LoadManagementCoordinator:
                     data: dict) -> bool:
         """(#1335) THE one place the load manager writes to a load (peak-only
         and unregistered loads; surplus loads are the load engine's, #649).
-        Observer mode and a yield withhold the write here, for every caller —
+        Observer mode withholds the write here, for every caller —
         the peak shed, the phase guard, a restore. True = it went out."""
         if self._withheld(device_id, f"{domain}.{service}", None, data):
             return False
-        # OBSERVER-GATED: ``_withheld`` above returned for observer mode and
-        # a yield — this is the seam, the same shape as ``send()``.
+        # OBSERVER-GATED: ``_withheld`` above returned for observer mode —
+        # this is the seam, the same shape as ``send()``.
         await self.hass.services.async_call(domain, service, dict(data), blocking=True)
         return True
 

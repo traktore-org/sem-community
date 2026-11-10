@@ -325,12 +325,15 @@ class TestTheLoadManagerWritesThroughItsSeam:
         assert lm.withheld_commands[-1]["service"] == "switch.turn_off"
         assert lm.withheld_commands[-1]["why"] == "observer"
 
-    async def test_a_load_another_party_steers_is_not_written(self, lm):
+    async def test_a_yield_does_not_hold_a_shed_back(self, lm):
+        """(review) Only observer mode withholds here. A load another party
+        steers is still shed when a phase or the peak is over its limit, as
+        before #1335."""
         _house(lm)
         lm._devices["pool"]["external_yield"] = True
-        await lm.process_phase_guard({"L3": 7.0}, may_restore=False)
-        assert "switch.pool_heat_pump" not in _switched_off(lm)
-        assert lm.withheld_commands[-1]["why"] == "yield"
+        verdict = await lm.process_phase_guard({"L3": 7.0}, may_restore=False)
+        assert verdict["thrown"] == ["pool"]
+        assert lm.withheld_commands == []
 
     async def test_observer_off_still_sheds(self, lm):
         _house(lm)
