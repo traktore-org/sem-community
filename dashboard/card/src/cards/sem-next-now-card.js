@@ -348,17 +348,17 @@ class SEMNextNowCard extends SEMNextBase {
         const list = [];
         for (const [id, d] of Object.entries(devices)) {
             if (!d || d.device_type === 'battery' || d.device_type === 'ev_charger') continue;
-            let w = d.power_entity ? this._powerW(d.power_entity) : null;
-            if (w === null && d.is_on && Number.isFinite(Number(d.current_power))) w = Number(d.current_power);
-            if (w === null || w < 1) continue;
-            list.push({ id, name: d.name || id, w, entity: d.power_entity || null });
+            // Same read as the classic Home tab: the load's own power entity, else the figure SEM holds.
+            const pe = d.power_entity && this._has(d.power_entity) ? d.power_entity : null;
+            const w = pe ? this._powerW(pe) : (Number(d.current_power) || 0);
+            list.push({ id, name: d.name || id, w, entity: pe });
         }
-        list.sort((a, b) => b.w - a.w);
+        list.sort((a, b) => (b.w ?? -1) - (a.w ?? -1));
         const top = list.slice(0, 3);
-        if (!top.length) return html`<p class="help" style="margin:4px 0 8px">${this._t('next_top_none')}</p>`;
+        if (!top.length) return html`<p class="help" style="margin:4px 0 8px">${this._t('next_no_loads')}</p>`;
         return html`<div style="margin:0 0 6px 12px;border-left:2px solid ${C.home};padding-left:8px">
             <div class="lbl" style="margin-top:6px">${this._t('next_top_title')}</div>
-            ${top.map((d, i) => this._row('mdi:numeric-' + (i + 1) + '-circle-outline', d.name, this._kw(d.w), '',
+            ${top.map((d, i) => this._row('mdi:numeric-' + (i + 1) + '-circle-outline', d.name, d.w === null ? '—' : this._kw(d.w), '',
                 { color: C.home, onClick: d.entity ? () => this._moreInfo(d.entity) : null }))}</div>`;
     }
 
