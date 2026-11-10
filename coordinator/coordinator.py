@@ -7587,6 +7587,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#953) how long the FREE window still has to run — the
                 # "finish" gate on the cheap-hours grid top-up.
                 daylight_remaining_s=self._daylight_remaining_s_now(),
+                # (#1335) solar production itself, for the no-sun stop. A
+                # dark solar sensor reads 0.0, so its flag travels with it:
+                # no reading is not night.
+                solar_w=(None if getattr(
+                    power, "solar_power_unavailable", False) is True
+                    else getattr(power, "solar_power", None)),
                 # (#871, arc #921) the loads absorb before anything is clipped
                 grid_closed=bool(getattr(
                     (getattr(self, "_sink_verdicts", None) or {}).get("grid_export"),

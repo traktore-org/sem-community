@@ -38,6 +38,9 @@ DEFAULT_MIN_SURPLUS_CHANGE = 100  # Watts - suppress adjustments below this
 # (#1102) Import the loads' pool ignores — a zero-export inverter's own grid
 # setpoint (Victron ESS +50 W) plus meter noise. See solar_bounded_surplus.
 IMPORT_DEADBAND_W = 100.0
+# (#1335) Solar production at or under this is no sun: night, or an inverter
+# in standby. Read from the solar power reading itself, never from the pool.
+NO_SUN_W = 50.0
 
 
 @dataclass(frozen=True)
@@ -864,7 +867,8 @@ def compute_load_intent(
         if active and sem_started(device):
             return LoadIntent(False, 0.0, None,
                               "disabled — ending SEM-started run",
-                              RC.LOAD_MODE_OFF)
+                              RC.LOAD_DISABLED)
+        # AS-OBSERVED: disabled and not SEM's run — left exactly as it is
         return LoadIntent(active, held, None, "disabled — not managed")
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
@@ -884,18 +888,22 @@ def compute_load_intent(
             # under Surplus so goal gates could stop it). Opt-out
             # releases the claim with ZERO writes - the load stays
             # exactly as it is (hoyte). (#1335) Layer 3 releases it.
+            # AS-OBSERVED: adopted load under Off — released, never switched
             return LoadIntent(active, held, None, "off — monitor only",
                               release=True)
+        # AS-OBSERVED: mode Off is monitoring — the user's load as it is
         return LoadIntent(active, held, None, "off — monitor only")
     # 1b. (#1021) Behind the grid operator's relay and the relay is on: the
     #     relay cuts the power, so SEM keeps its hands off — no write in
     #     either direction, nothing counted, and the reason says who holds it.
     if getattr(device, "locked_by_operator", False) is True:
+        # AS-OBSERVED: the operator's relay holds it — no write either way
         return LoadIntent(active, 0.0, None, "locked by the grid operator")
     if mode == DeviceControlMode.PEAK_ONLY:
         # This controller never proactively sheds peak_only loads — the load
         # manager owns their peak shedding via shed_priority. Matches the old
         # peak-shed pass, which skipped non-SURPLUS devices (ruflo M1).
+        # AS-OBSERVED: peak-only is the user's; the load manager sheds it
         return LoadIntent(active, held, None, "peak_only — user-managed")
 
     # --- SURPLUS mode below ---
@@ -1346,9 +1354,9 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         return consumed
 
     if not intent.on and active:
-        if intent.code == RC.LOAD_MODE_OFF:
-            # (class-17 sibling / #644 / #1335) The user's own Off beats the
-            # minimum run: a deliberate command beats flicker protection.
+        if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED):
+            # (class-17 sibling / #644 / #1335) The user's own Off (or
+            # disabling the load) beats the minimum run: a deliberate command beats flicker protection.
             # The anti-cycle rule lives here, so its one exception does too
             # (the device's own deactivate gates on the unified clock).
             device._last_activated = None
@@ -1647,6 +1655,9 @@ class SurplusController:
         self._tier1_budget_left: float = 0.0
         # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
         self._surplus_samples: List[float] = []
+        # (#1335) the last three solar production readings (None = no
+        # reading that cycle), for the no-sun stop
+        self._solar_samples: List[Optional[float]] = []
         # (#638 G4) per-cycle window verdicts from the joint energy plan:
         # device_id → True (inside its planned block) / False (planned
         # elsewhere tonight — don't start now). Absent = the plan has no say.
@@ -1968,26 +1979,50 @@ class SurplusController:
                     continue
                 remaining += self._stop_short(device, intents, spend)
 
-        # (#1335) No sun at all: the pool the walk began with is empty (the
-        # sun is down, or the house takes all of it). A load running on the
-        # sun alone has no reason left to run and stops — whatever it draws
-        # right now. The 100 W band above is against flapping while there IS
-        # sun; it kept a load under 100 W, and a switch whose power sensor
-        # reads 0 W, on through the night. A load with another reason (a
-        # paid run, the comfort floor, an own run, the battery's Tier-1
-        # share, its minimum run) is not touched; with sun in the pool
-        # nothing changes — a boiler idling on its thermostat at noon stays.
-        if float(remaining_surplus) <= 0.0:
+        # (#1335) No sun at all: SOLAR PRODUCTION itself reads next to
+        # nothing (``_no_sun``: two of the last three readings, and a live
+        # reading now) — not the pool, which is the surplus less the export
+        # margin and reads 0 at noon whenever the house takes the sun or the
+        # inverter does not export. A load SEM started on the sun alone has
+        # no reason left to run and stops, whatever it draws right now. The
+        # 100 W band above is against flapping while there IS sun; alone it
+        # kept a switch whose power sensor reads 0 W on through the night.
+        # Not touched: a load the user switched on (the band rule above is
+        # all it gets, as before), a paid run, the comfort floor, an own
+        # run, the battery's Tier-1 share, a minimum run. With any sun, or
+        # with no solar reading, nothing changes.
+        if self._no_sun():
             for device in reversed(devices):
                 did = device.device_id
                 intent = intents[did]
-                if not (device.is_active and intent.source == "solar"
+                if (not device.is_active and intent.on
+                        and intent.source == "solar"
+                        and self._sun_run(device, intent)):
+                    # …and nothing starts on a pool that is only the
+                    # smoothing's memory of the day (the pool lags the sun
+                    # by a few cycles; the stop above would be undone).
+                    intents[did] = LoadIntent(
+                        False, 0.0, None, "no sun left", RC.LOAD_NO_SOURCE)
+                    continue
+                if not (device.is_active and sem_started(device)
+                        and intent.source == "solar"
                         and self._sun_run(device, intent)):
                     continue
                 if device.can_deactivate() is False:
                     continue
                 self._stop_short(device, intents, spend, reason="no sun left")
         return intents
+
+    def _no_sun(self) -> bool:
+        """(#1335) Is solar production itself gone? True when the reading is
+        live this cycle and at least two of the last three cycles read
+        ``NO_SUN_W`` or less (the surplus filter's own two-of-three rule: one
+        dropout is not dusk). No reading, or fewer than three cycles: False —
+        unknown is not night."""
+        samples = getattr(self, "_solar_samples", None) or []
+        if len(samples) < 3 or samples[-1] is None:
+            return False
+        return sum(1 for w in samples if w is not None and w <= NO_SUN_W) >= 2
 
     def _stop_short(self, device, intents, spend, *,
                     reason: str = "not enough sun") -> float:
@@ -2174,6 +2209,10 @@ class SurplusController:
         # TimeManager. None = no sun data; the cheap-hours grid top-up then
         # keeps its pre-#953 behaviour (unknown is not a claim about the sun).
         daylight_remaining_s: Optional[float] = None,
+        # (#1335) Solar production right now, W. None = no live reading
+        # (the default, and a dark solar sensor): the no-sun stop never
+        # fires on it.
+        solar_w: Optional[float] = None,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -2283,6 +2322,10 @@ class SurplusController:
         # values seen in ≥2 of the last 3 cycles, so one bad sample never
         # reaches the EMA at all. Real trends (2+ consistent cycles) pass with
         # one cycle of extra latency, which the EMA's own inertia already dwarfs.
+        self._solar_samples.append(
+            float(solar_w) if isinstance(solar_w, (int, float))
+            and not isinstance(solar_w, bool) else None)
+        del self._solar_samples[:-3]
         self._surplus_samples.append(available_power_w)
         if len(self._surplus_samples) > 3:
             self._surplus_samples.pop(0)

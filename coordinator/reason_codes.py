@@ -125,6 +125,7 @@ LOAD_LEGIONELLA = "legionella"
 LOAD_LEGIONELLA_END = "legionella_end"
 LOAD_AT_TARGET = "at_target"
 LOAD_NO_READING = "no_reading"
+LOAD_DISABLED = "disabled"
 
 # ── the grid export limit (#1090) ────────────────────────────────────
 EXPORT_NEGATIVE_PRICE = "export_negative_price"

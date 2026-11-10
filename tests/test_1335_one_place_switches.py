@@ -399,37 +399,63 @@ class TestARealWattSetpoint:
 
 
 # ── review round: stops say their own cause; no sun means off ──────────────
-from unittest.mock import MagicMock  # noqa: E402
 
 from custom_components.solar_energy_management.devices.base import (  # noqa: E402
     DeviceState,
     SwitchDevice,
 )
-from custom_components.solar_energy_management.tests.test_desired_state import (  # noqa: E402
-    _PDev,
-)
+
+
+#: A ``LoadIntent`` whose on/off is not a literal leaves the load as it is
+#: observed. Each such line says so with this marker and its reason.
+_AS_OBSERVED = "# AS-OBSERVED:"
+
+
+def _intent_codes(src: str):
+    """(on codes, off codes, unmarked non-literal lines) of every
+    ``LoadIntent(...)`` in ``src``."""
+    import ast
+    lines = src.splitlines()
+    on, off, unmarked = set(), set(), []
+    for node in ast.walk(ast.parse(src)):
+        if not (isinstance(node, ast.Call)
+                and getattr(node.func, "id", "") == "LoadIntent" and node.args):
+            continue
+        first = node.args[0]
+        code = node.args[4] if len(node.args) > 4 else next(
+            (k.value for k in node.keywords if k.arg == "code"), None)
+        if not (isinstance(first, ast.Constant) and isinstance(first.value, bool)):
+            # the call's own lines, or the comment line right above it
+            span = lines[max(0, node.lineno - 2):node.end_lineno]
+            if code is not None or not any(_AS_OBSERVED in ln for ln in span):
+                unmarked.append(node.lineno)
+            continue
+        if isinstance(code, ast.Attribute):
+            (on if first.value else off).add(code.attr)
+    return on, off, unmarked
 
 
 def test_no_code_serves_both_a_start_and_a_stop():
     """A stop logged with a start's sentence read "it heats to the
-    Legionella temperature" for a turn-off."""
-    import ast
+    Legionella temperature" for a turn-off. An intent whose on/off is not
+    a literal cannot be sorted: it must carry no code and say why."""
     import pathlib
     src = (pathlib.Path(__file__).resolve().parent.parent
            / "coordinator" / "surplus_controller.py").read_text()
-    on, off = set(), set()
-    for node in ast.walk(ast.parse(src)):
-        if not (isinstance(node, ast.Call)
-                and getattr(node.func, "id", "") == "LoadIntent"
-                and node.args and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, bool)):
-            continue
-        code = node.args[4] if len(node.args) > 4 else next(
-            (k.value for k in node.keywords if k.arg == "code"), None)
-        if isinstance(code, ast.Attribute):
-            (on if node.args[0].value else off).add(code.attr)
+    on, off, unmarked = _intent_codes(src)
     assert on and off
     assert not (on & off), f"one code for a start and a stop: {on & off}"
+    assert not unmarked, (
+        f"LoadIntent(<not a literal>, …) at {unmarked}: give it True/False, "
+        f"or no code and a '{_AS_OBSERVED} <reason>' comment")
+
+
+def test_the_scan_sees_an_unmarked_or_coded_non_literal():
+    bad = "x = LoadIntent(active, 0.0, None, 'r', RC.LOAD_STOP)\n"
+    assert _intent_codes(bad)[2] == [1]
+    assert _intent_codes("x = LoadIntent(active, 0.0, None, 'r')\n")[2] == [1]
+    ok = "# AS-OBSERVED: left as it is\nx = LoadIntent(active, 0.0, None, 'r')\n"
+    assert _intent_codes(ok)[2] == []
 
 
 @pytest.mark.asyncio
@@ -475,7 +501,7 @@ class TestADisabledLoadSemStartedIsStillStopped:
         await sc.update(3000.0)
         assert not dev.is_active and len(hass.calls("turn_off", "switch.pump")) == 1
         last = sc.decision_log.records()[-1]
-        assert (last["new"], last["reason_code"]) == ("off", RC.LOAD_MODE_OFF)
+        assert (last["new"], last["reason_code"]) == ("off", RC.LOAD_DISABLED)
         await sc.update(3000.0)             # and never visited again
         assert not hass.calls("turn_on", "switch.pump")[1:]
 
@@ -516,77 +542,132 @@ class TestADisabledLoadSemStartedIsStillStopped:
         assert not hass.calls("turn_off", "switch.pump")
 
 
-async def _small(**kw):
-    sc = SurplusController(MagicMock())
-    sc.regulation_offset = 0.0
-    d = _PDev("a", 1, **kw)
-    sc.register_device(d)
-    return sc, d
+# The real path: the default 50 W export margin, the median-of-3 and the
+# smoothing, and the pool the coordinator builds (clamped at 0 and at the
+# sun). ``solar_w`` is the solar production reading.
+NOON_SUN_W = 4000.0
+
+
+def _pool(export_w, draw_w, solar_w):
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        solar_bounded_surplus,
+    )
+    return solar_bounded_surplus(
+        grid_export_w=export_w, active_draw_w=draw_w,
+        solar_w=0.0 if solar_w is None else solar_w, grid_import_w=0.0)
+
+
+async def _sun_load(*, by_sem: bool):
+    """A switch with a power sensor, running at noon: started by SEM on
+    surplus, or switched on by the user in Solar mode (adopted)."""
+    hass = _Hass()
+    hass.set("sensor.pump_w", "0", unit_of_measurement="W")
+    dev = _switch(hass, power_entity_id="sensor.pump_w")
+    dev.min_on_seconds = dev.min_off_seconds = 0
+    sc = SurplusController(hass)
+    assert sc.regulation_offset == 50          # the production default
+    sc.register_device(dev)
+    if by_sem:
+        for _ in range(3):
+            await sc.update(_pool(3000.0, 0.0, NOON_SUN_W), solar_w=NOON_SUN_W)
+        assert dev.is_active and dev._sem_commanded
+    else:
+        hass.set("switch.pump", "on")
+        await sc.update(_pool(0.0, 0.0, NOON_SUN_W), solar_w=NOON_SUN_W)
+        assert dev.is_active and dev._sem_owned and not dev._sem_commanded
+    _past_min_run(dev)
+    hass.services.async_call.reset_mock()
+    return hass, sc, dev
+
+
+async def _cycles(sc, n, *, export_w, solar_w, draw_w=0.0, **kw):
+    for _ in range(n):
+        await sc.update(_pool(export_w, draw_w, solar_w), solar_w=solar_w, **kw)
 
 
 @pytest.mark.asyncio
-class TestNoSunMeansOff:
+class TestNoSunMeansNoSolarProduction:
 
-    @pytest.mark.parametrize("reading", ["0", "unavailable", "1500"])
-    async def test_a_boiler_whose_power_sensor_reads_zero_stops_at_night(self, reading):
-        hass = _Hass()
-        hass.set("switch.boiler", "off")
-        hass.set("sensor.t", "40")
-        hass.set("sensor.p", "0", unit_of_measurement="W")
-        dev = HotWaterController(
-            hass=hass, entity_id="switch.boiler", temperature_entity_id="sensor.t",
-            solar_target_temp=55.0, rated_power=2000.0, power_entity_id="sensor.p")
-        dev._last_legionella_time = datetime.now().astimezone()
-        dev.min_on_seconds = dev.min_off_seconds = 0
-        sc = SurplusController(hass)
-        sc.regulation_offset = 0.0
-        sc.register_device(dev)
-        for _ in range(4):
-            await sc.update(5000.0)
+    async def test_noon_the_house_takes_the_sun_an_idle_boiler_stays(self):
+        """Export 30 W: the pool is under the 50 W margin, the sun is up."""
+        hass, sc, dev = await _sun_load(by_sem=True)
+        await _cycles(sc, 30, export_w=30.0, solar_w=NOON_SUN_W)
+        assert dev.is_active and not hass.calls("turn_off", "switch.pump")
+
+    async def test_noon_on_a_zero_export_inverter_it_stays(self):
+        hass, sc, dev = await _sun_load(by_sem=True)
+        await _cycles(sc, 30, export_w=0.0, solar_w=NOON_SUN_W)
+        assert dev.is_active and not hass.calls("turn_off", "switch.pump")
+
+    @pytest.mark.parametrize("draw", [0.0, 60.0, 90.0])
+    async def test_dusk_a_load_sem_started_stops(self, draw):
+        hass, sc, dev = await _sun_load(by_sem=True)
+        hass.set("sensor.pump_w", str(draw), unit_of_measurement="W")
+        await _cycles(sc, 3, export_w=0.0, solar_w=0.0, draw_w=draw)
+        assert not dev.is_active, "still on with no solar production"
+        await _cycles(sc, 10, export_w=0.0, solar_w=0.0)
+        assert not dev.is_active, "started again on the smoothed pool"
+        assert len(hass.calls("turn_off", "switch.pump")) == 1
+        assert not hass.calls("turn_on", "switch.pump")
+        last = sc.decision_log.records()[-1]
+        assert (last["new"], last["reason_code"]) == ("off", RC.LOAD_SURPLUS_SHORT)
+
+    async def test_one_dark_reading_is_not_dusk(self):
+        hass, sc, dev = await _sun_load(by_sem=True)
+        await _cycles(sc, 1, export_w=0.0, solar_w=0.0)
+        await _cycles(sc, 5, export_w=0.0, solar_w=NOON_SUN_W)
         assert dev.is_active
-        _past_min_run(dev)
-        hass.set("sensor.p", reading, unit_of_measurement="W")
-        for _ in range(15):
-            await sc.update(-200.0, is_night=True)
-        assert not dev.is_active
 
-    @pytest.mark.parametrize("draw", [60.0, 90.0, 120.0, 800.0])
-    async def test_a_small_load_stops_with_no_sun(self, draw):
-        sc, d = await _small(is_active=True, draw=draw, min_power=50.0, rated_power=draw)
-        await sc.update(0.0)
-        assert not d.is_active
+    @pytest.mark.parametrize("draw", [0.0, 40.0])
+    async def test_dusk_a_load_the_user_switched_on_keeps_the_old_rule(self, draw):
+        """Only the more-than-100-W-short stop, as before #1335."""
+        hass, sc, dev = await _sun_load(by_sem=False)
+        hass.set("sensor.pump_w", str(draw), unit_of_measurement="W")
+        await _cycles(sc, 10, export_w=0.0, solar_w=0.0, draw_w=draw)
+        assert dev.is_active and not hass.calls("turn_off", "switch.pump")
 
-    async def test_a_boiler_idling_on_its_thermostat_at_noon_stays(self):
-        """0 W on its sensor, sun in the pool: it costs the sun nothing and
-        is left on, so its thermostat can take over — no flapping."""
-        sc, d = await _small(is_active=True, draw=0.0, min_power=800.0, rated_power=2000.0)
-        for _ in range(10):
-            await sc.update(3000.0)
-        assert d.is_active
+    async def test_no_solar_reading_is_not_night(self):
+        hass, sc, dev = await _sun_load(by_sem=True)
+        await _cycles(sc, 10, export_w=0.0, solar_w=None)
+        assert dev.is_active and not hass.calls("turn_off", "switch.pump")
 
-    async def test_inside_the_band_with_sun_it_stays(self):
-        sc, d = await _small(is_active=True, draw=800.0, min_power=800.0)
-        for _ in range(10):
-            await sc.update(750.0)          # 50 W short, sun in the pool
-        assert d.is_active
+    async def test_a_reading_lost_at_dusk_holds_until_it_is_back(self):
+        hass, sc, dev = await _sun_load(by_sem=True)
+        await _cycles(sc, 2, export_w=0.0, solar_w=0.0)
+        await _cycles(sc, 1, export_w=0.0, solar_w=None)
+        assert dev.is_active, "stopped on a cycle with no reading"
+
+    async def test_observer_mode_withholds_the_stop(self):
+        hass, sc, dev = await _sun_load(by_sem=True)
+        await _cycles(sc, 5, export_w=0.0, solar_w=0.0, observer=True)
+        assert dev.is_active
+        hass.services.async_call.assert_not_awaited()
+        assert sc.observer_decisions["pump"]["action"] == "deactivate"
 
     async def test_the_minimum_run_still_holds(self):
-        sc, d = await _small(is_active=True, draw=60.0, min_power=50.0,
-                             can_deactivate=False)
-        await sc.update(0.0)
-        assert d.is_active
-        d._can_deact = True
-        await sc.update(0.0)
-        assert not d.is_active
+        hass, sc, dev = await _sun_load(by_sem=True)
+        dev.min_on_seconds = 600
+        dev._last_activated = datetime.now()
+        await _cycles(sc, 5, export_w=0.0, solar_w=0.0)
+        assert dev.is_active
 
-    async def test_a_paid_run_and_a_battery_share_are_reasons_to_run(self):
-        sc, d = await _small(is_active=True, draw=60.0, min_power=50.0,
-                             _offpeak_forced=True, has_runtime_deficit=True,
-                             top_up_policy="cheap_hours")
-        await sc.update(0.0, price_level="cheap")
-        assert d.is_active
-        sc, d = await _small(is_active=True, draw=60.0, min_power=50.0,
-                             battery_assist_enabled=True)
-        await sc.update(0.0, battery_soc=90, battery_buffer_soc=70,
-                        battery_assist_budget_w=3000.0)
-        assert d.is_active
+    async def test_a_paid_run_is_a_reason_to_run_at_night(self):
+        hass, sc, dev = await _sun_load(by_sem=True)
+        dev.daily_min_runtime_sec = 3600
+        dev.top_up_policy = "cheap_hours"
+        await _cycles(sc, 5, export_w=0.0, solar_w=0.0, price_level="cheap")
+        assert dev.is_active and dev._offpeak_forced
+
+    async def test_the_coordinator_hands_over_solar_with_its_dark_flag(self):
+        """A dark solar sensor reads 0.0 — it must arrive as no reading."""
+        import ast
+        import pathlib
+        tree = ast.parse((pathlib.Path(__file__).resolve().parent.parent
+                          / "coordinator" / "coordinator.py").read_text())
+        kws = [k for n in ast.walk(tree) if isinstance(n, ast.Call)
+               and getattr(n.func, "attr", "") == "update"
+               for k in n.keywords if k.arg == "solar_w"]
+        assert len(kws) == 1
+        names = {getattr(a, "value", None) for a in ast.walk(kws[0].value)
+                 if isinstance(a, ast.Constant)}
+        assert {"solar_power_unavailable", "solar_power"} <= names
