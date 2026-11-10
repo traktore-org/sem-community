@@ -2026,6 +2026,7 @@
     "why_reason_legionella_end": "Ohřev proti legionele skončil, takže se vypíná.",
     "why_reason_at_target": "Má svou cílovou teplotu, takže zůstává vypnuté.",
     "why_reason_no_reading": "Jeho teplotní čidlo nic nehlásí, takže zůstává vypnuté.",
+    "why_reason_disabled": "Je zakázané, takže SEM ukončí běh, který spustil.",
     "energy_plan_why_band_leads": "Rozhoduje jeho teploměr, proto denní doba chodu nic nežádá."
   },
   "da": {
@@ -4055,6 +4056,7 @@
     "why_reason_legionella_end": "Legionella-opvarmningen er færdig, så den slukker.",
     "why_reason_at_target": "Den har nået sin måltemperatur, så den forbliver slukket.",
     "why_reason_no_reading": "Dens temperaturføler viser ingenting, så den forbliver slukket.",
+    "why_reason_disabled": "Den er deaktiveret, så SEM afslutter den kørsel, det startede.",
     "energy_plan_why_band_leads": "Dens termometer bestemmer, så den daglige køretid beder ikke om noget."
   },
   "de": {
@@ -6084,6 +6086,7 @@
     "why_reason_legionella_end": "Die Legionellen-Aufheizung ist vorbei, darum schaltet es aus.",
     "why_reason_at_target": "Es hat seine Zieltemperatur, darum bleibt es aus.",
     "why_reason_no_reading": "Sein Temperaturfühler liefert keinen Wert, darum bleibt es aus.",
+    "why_reason_disabled": "Es ist deaktiviert, darum beendet SEM den Lauf, den es gestartet hat.",
     "energy_plan_why_band_leads": "Sein Thermometer entscheidet, darum verlangt die tägliche Laufzeit nichts."
   },
   "en": {
@@ -8113,6 +8116,7 @@
     "why_reason_legionella_end": "Its Legionella heat-up is over, so it turns off.",
     "why_reason_at_target": "It is at its target temperature, so it stays off.",
     "why_reason_no_reading": "Its temperature sensor reads nothing, so it stays off.",
+    "why_reason_disabled": "It is disabled, so SEM ends the run it started.",
     "energy_plan_why_band_leads": "Its thermometer leads, so its daily run time asks nothing."
   },
   "es": {
@@ -10142,6 +10146,7 @@
     "why_reason_legionella_end": "El calentamiento antilegionela ha terminado, así que se apaga.",
     "why_reason_at_target": "Está a su temperatura objetivo, así que sigue apagado.",
     "why_reason_no_reading": "Su sensor de temperatura no da ninguna lectura, así que sigue apagado.",
+    "why_reason_disabled": "Está desactivado, así que SEM termina la marcha que inició.",
     "energy_plan_why_band_leads": "Manda su termómetro, así que su tiempo diario de marcha no pide nada."
   },
   "fi": {
@@ -12171,6 +12176,7 @@
     "why_reason_legionella_end": "Legionellalämmitys on ohi, joten se sammuu.",
     "why_reason_at_target": "Se on tavoitelämpötilassaan, joten se pysyy pois päältä.",
     "why_reason_no_reading": "Sen lämpötila-anturi ei anna lukemaa, joten se pysyy pois päältä.",
+    "why_reason_disabled": "Se on poistettu käytöstä, joten SEM lopettaa käynnistämänsä ajon.",
     "energy_plan_why_band_leads": "Sen lämpömittari päättää, joten päivittäinen käyntiaika ei pyydä mitään."
   },
   "fr": {
@@ -14200,6 +14206,7 @@
     "why_reason_legionella_end": "Le chauffage anti-légionelle est terminé, il s'éteint.",
     "why_reason_at_target": "Il est à sa température cible, il reste éteint.",
     "why_reason_no_reading": "Sa sonde de température ne donne aucune valeur, il reste éteint.",
+    "why_reason_disabled": "Il est désactivé, SEM arrête donc la marche qu'il a lancée.",
     "energy_plan_why_band_leads": "Son thermomètre décide, son temps de marche quotidien ne demande donc rien."
   },
   "hu": {
@@ -16229,6 +16236,7 @@
     "why_reason_legionella_end": "A legionella elleni felfűtés véget ért, ezért kikapcsol.",
     "why_reason_at_target": "Elérte a célhőmérsékletét, ezért kikapcsolva marad.",
     "why_reason_no_reading": "A hőmérséklet-érzékelője nem ad értéket, ezért kikapcsolva marad.",
+    "why_reason_disabled": "Le van tiltva, ezért a SEM leállítja az általa indított futást.",
     "energy_plan_why_band_leads": "A hőmérője dönt, ezért a napi üzemidő nem kér semmit."
   },
   "it": {
@@ -18258,6 +18266,7 @@
     "why_reason_legionella_end": "Il riscaldamento antilegionella è finito, quindi si spegne.",
     "why_reason_at_target": "È alla sua temperatura obiettivo, quindi resta spento.",
     "why_reason_no_reading": "Il suo sensore di temperatura non dà alcun valore, quindi resta spento.",
+    "why_reason_disabled": "È disattivato, quindi SEM termina il ciclo che ha avviato.",
     "energy_plan_why_band_leads": "Decide il suo termometro, quindi il tempo di funzionamento giornaliero non chiede nulla."
   },
   "nl": {
@@ -20287,6 +20296,7 @@
     "why_reason_legionella_end": "De legionella-opwarming is klaar, dus het gaat uit.",
     "why_reason_at_target": "Het is op zijn doeltemperatuur, dus het blijft uit.",
     "why_reason_no_reading": "De temperatuursensor geeft geen waarde, dus het blijft uit.",
+    "why_reason_disabled": "Het is uitgeschakeld, dus SEM beëindigt de run die het startte.",
     "energy_plan_why_band_leads": "Zijn thermometer beslist, dus de dagelijkse looptijd vraagt niets."
   },
   "no": {
@@ -22316,6 +22326,7 @@
     "why_reason_legionella_end": "Legionella-oppvarmingen er ferdig, så den slås av.",
     "why_reason_at_target": "Den har nådd måltemperaturen, så den forblir av.",
     "why_reason_no_reading": "Temperaturføleren gir ingen verdi, så den forblir av.",
+    "why_reason_disabled": "Den er deaktivert, så SEM avslutter kjøringen det startet.",
     "energy_plan_why_band_leads": "Termometeret bestemmer, så den daglige driftstiden ber ikke om noe."
   },
   "pl": {
@@ -24345,6 +24356,7 @@
     "why_reason_legionella_end": "Grzanie przeciw legionelli się skończyło, więc się wyłącza.",
     "why_reason_at_target": "Ma swoją temperaturę docelową, więc pozostaje wyłączony.",
     "why_reason_no_reading": "Jego czujnik temperatury nic nie pokazuje, więc pozostaje wyłączony.",
+    "why_reason_disabled": "Jest wyłączony z obsługi, więc SEM kończy pracę, którą uruchomił.",
     "energy_plan_why_band_leads": "Decyduje jego termometr, więc dzienny czas pracy niczego nie wymaga."
   },
   "pt": {
@@ -26374,6 +26386,7 @@
     "why_reason_legionella_end": "O aquecimento antilegionela terminou, por isso desliga-se.",
     "why_reason_at_target": "Está à sua temperatura alvo, por isso fica desligado.",
     "why_reason_no_reading": "O seu sensor de temperatura não dá leitura, por isso fica desligado.",
+    "why_reason_disabled": "Está desativado, por isso o SEM termina o funcionamento que iniciou.",
     "energy_plan_why_band_leads": "Manda o seu termómetro, por isso o tempo diário de funcionamento não pede nada."
   },
   "ro": {
@@ -28403,6 +28416,7 @@
     "why_reason_legionella_end": "Încălzirea anti-Legionella s-a încheiat, deci se oprește.",
     "why_reason_at_target": "Este la temperatura țintă, deci rămâne oprit.",
     "why_reason_no_reading": "Senzorul lui de temperatură nu dă nicio valoare, deci rămâne oprit.",
+    "why_reason_disabled": "Este dezactivat, deci SEM încheie rularea pe care a pornit-o.",
     "energy_plan_why_band_leads": "Decide termometrul său, așa că timpul zilnic de funcționare nu cere nimic."
   },
   "sv": {
@@ -30432,6 +30446,7 @@
     "why_reason_legionella_end": "Legionellauppvärmningen är klar, så den stängs av.",
     "why_reason_at_target": "Den har nått sin måltemperatur, så den förblir avstängd.",
     "why_reason_no_reading": "Dess temperaturgivare ger inget värde, så den förblir avstängd.",
+    "why_reason_disabled": "Den är inaktiverad, så SEM avslutar körningen det startade.",
     "energy_plan_why_band_leads": "Dess termometer bestämmer, så den dagliga drifttiden ber inte om något."
   },
   "zh": {
@@ -32461,6 +32476,7 @@
     "why_reason_legionella_end": "军团菌加热已结束，所以关闭。",
     "why_reason_at_target": "它已达到目标温度，所以保持关闭。",
     "why_reason_no_reading": "它的温度传感器没有读数，所以保持关闭。",
+    "why_reason_disabled": "它已被停用，所以 SEM 结束它启动的运行。",
     "energy_plan_why_band_leads": "由温度计决定，所以每日运行时间不再要求任何电量。"
   }
 }
