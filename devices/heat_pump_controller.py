@@ -298,6 +298,11 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             self._last_activation_path = "boost"
 
         relay_ok = await self._set_sg_ready_state(target_state)
+        if not relay_ok and self._last_relay_path == "withheld":
+            # (#1335) observer / yield: the seam held the write back. Not a
+            # failure — nothing moved, so nothing is claimed.
+            self._last_activation_path += "+withheld"
+            return 0.0
         if not relay_ok:
             # #508 C3: a relay write failed — the pump is NOT in the
             # requested SG-Ready state. Do not mark ACTIVE and do not
@@ -347,13 +352,25 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         reverted either way: the two surfaces fail independently.
         """
         relay_ok = await self._set_sg_ready_state(SGReadyState.NORMAL)
-        self._last_deactivation_path = "normal" if relay_ok else "relay_failed"
+        withheld = not relay_ok and self._last_relay_path == "withheld"
+        self._last_deactivation_path = (
+            "normal" if relay_ok else "withheld" if withheld else "relay_failed")
 
         # Restore normal temperature
         if self.climate_entity_id:
+            was = self._status.state
             await super().deactivate()
             self._last_deactivation_path += "+climate"
+            if not relay_ok:
+                # (#1335) the contacts did not move: the pump still boosts,
+                # whatever the setpoint did — keep the belief
+                self._status.state = was
 
+        if withheld:
+            # (#1335) observer / yield held the write back: the pump did
+            # not move, so SEM's belief does not either.
+            _LOGGER.debug("%s: return to NORMAL withheld by the seam", self.name)
+            return
         if not relay_ok:
             _LOGGER.error(
                 "%s: could not return the SG-Ready contacts to NORMAL (%s) — "
@@ -418,19 +435,19 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                 return None
         return (svc_domain, service, {"entity_id": entity_id, key: value})
 
-    async def _write_contact(self, idx: int, entity_id: str, on: bool) -> None:
+    async def _write_contact(self, idx: int, entity_id: str, on: bool) -> bool:
         """Drive one SG-Ready contact. Raises on failure, so the callers'
-        existing per-relay error handling (and the I3 restore) is unchanged."""
+        existing per-relay error handling (and the I3 restore) is unchanged.
+
+        (#1335) Through the device seam ``send()``, like every other load:
+        observer mode and a yield withhold it here, whoever the caller is
+        (Mode Off, teardown). Returns False when the write was withheld."""
         call = self._contact_service(idx, entity_id, on)
         if call is None:
             raise ValueError(f"SG-Ready contact {idx} is not configured to be writable")
         domain, service, payload = call
-        # OBSERVER-GATED: via layer 3 — this device is actuated only through
-        # reconcile_load, whose observer branch (_reconcile_load_observe)
-        # returns before any device method runs. Nothing IN this file checks
-        # observer_mode, so moving heat-pump control off the reconcile_load
-        # path loses the gate — do not call this from anywhere else.
-        await self.hass.services.async_call(domain, service, payload, blocking=True)
+        return await self.send(domain, service, payload,
+                               why=f"SG-Ready contact {idx}")
 
     def _contact_is_on(self, idx: int, entity_id: str, raw: str) -> Optional[bool]:
         """Read one contact's boolean back off its own state, or None when
@@ -603,17 +620,15 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                 return v
             data = {k: _render(v) for k, v in self.sg_ready_service_data.items()}
             try:
-            # OBSERVER-GATED: via layer 3 — this device is actuated only
-            # through reconcile_load, whose observer branch
-            # (_reconcile_load_observe) returns before any device method
-            # runs. Nothing IN this file checks observer_mode, so moving
-            # heat-pump control off the reconcile_load path loses the
-            # gate — do not call this from anywhere else.
-                await self.hass.services.async_call(
-                    domain, service, data, blocking=True)
+                # (#1335) through the device seam: observer/yield withhold it
+                sent = await self.send(domain, service, data,
+                                       why=f"SG-Ready state {int(state)}")
             except Exception as e:  # noqa: BLE001
                 _LOGGER.error("SG-Ready service call failed: %s", e)
                 self._last_relay_path = "service_failed"
+                return False
+            if not sent:
+                self._last_relay_path = "withheld"
                 return False
             self._last_relay_path = "service"
             if self.sg_ready_state_entity:
@@ -639,7 +654,10 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
 
         if self.relay1_entity_id:
             try:
-                await self._write_contact(1, self.relay1_entity_id, relay1_on)
+                if not await self._write_contact(1, self.relay1_entity_id, relay1_on):
+                    # (#1335) withheld (observer / yield): nothing moved
+                    self._last_relay_path = "withheld"
+                    return False
                 relay1_called = True
             except Exception as e:
                 _LOGGER.error("Failed to set SG-Ready relay 1: %s", e)
@@ -648,7 +666,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
 
         if self.relay2_entity_id:
             try:
-                await self._write_contact(2, self.relay2_entity_id, relay2_on)
+                if not await self._write_contact(2, self.relay2_entity_id, relay2_on):
+                    self._last_relay_path = "withheld"
+                    return False
                 if relay1_called:
                     self._last_relay_path = "both_relays"
                 else:

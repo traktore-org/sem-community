@@ -1,13 +1,11 @@
 """#847 on the dispatch path PROD actually runs (2.1 coverage-audit finding 1).
 
-`SurplusController._use_desired_state` is hardcoded False, so every real
-install takes the LEGACY imperative path through `update()` — not the
-`compute_load_intent`/`reconcile_load` path the #847 test files drive. The
-legacy path carries its own copy of the commanded/adopted split (the
-force-expiry pass), and until this file nothing proved it: the one test that
-reaches `update()` uses a bare MagicMock, where
-`getattr(device, "_sem_commanded", False)` auto-vivifies TRUTHY — it cannot
-tell a commanded load from an adopted one at all.
+(#1335) Every install runs the three layers through ``update()``:
+``_desired_intents`` → ``reconcile_load``. These tests drive ``update()``
+itself, so they pin the path that ships — once the imperative passes, now
+the one engine. The one test that reached ``update()`` before used a bare
+MagicMock, where ``getattr(device, "_sem_commanded", False)`` auto-vivifies
+TRUTHY — it cannot tell a commanded load from an adopted one at all.
 
 These doubles carry real booleans. What must hold, per #847:
 
@@ -87,10 +85,6 @@ def _device(*, owned: bool, commanded: bool, active: bool = True):
 class TestModeOffOnTheLivePath:
     async def test_commanded_load_is_stopped_exactly_once(self, mock_hass):
         sc = SurplusController(mock_hass)
-        assert sc._use_desired_state is False, (
-            "this file exists to test the LEGACY path; if the default "
-            "flipped, re-point these tests at whichever path is live"
-        )
         d = _device(owned=True, commanded=True)
         sc.register_device(d)
         await sc.update(0.0)

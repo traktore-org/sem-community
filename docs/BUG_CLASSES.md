@@ -589,12 +589,15 @@ by construction (spec: `docs/superpowers/specs/2026-07-22-desired-state-surplus-
 family test enumerating EVERY stop gate (cap / target-met / stop-sensor / overnight-off /
 grid-off / reserve / peak) and asserting each deactivates a *running* load. Add a new gate →
 add a row, or CI fails. Refs #559 #620.
-**Built (not yet default):** the `desired_state` path — `compute_load_intent` (layer 1) +
-`_desired_intents` (layer 2) + `reconcile_load` (layer 3, the single actuator) — is implemented
-and is now the path **observer mode always runs** (HA-TEST). In it, OFF *is* the intent, so a
-gate stops a running load by construction; markers derive from `intent.source` (closes #18).
-Full closure = flip `_use_desired_state` for PROD actuation and delete the 7 imperative passes
-(gated on the 2 LIFO parity xfails in `test_desired_state.py`).
+**Closed for loads (#1335):** the `desired_state` path — `compute_load_intent` (layer 1) +
+`_desired_intents` (layer 2) + `reconcile_load` (layer 3, the single actuator) — is what every
+install runs; the 7 imperative passes and `_use_desired_state` are deleted. OFF *is* the
+intent, so a gate stops a running load by construction; markers derive from `intent.source`
+(closes #18). Before the passes went, both engines ran the same multi-cycle inputs and agreed
+on on/off, draw, markers and reason for every behaviour difference D1–D10 of the engine map
+(`tests/test_desired_state.py::_D_SCENARIOS` keeps one scenario per item). The Legionella
+check, the vacation edge and the Mode-Off handler no longer switch: their reasons are layer-1
+clauses. A new reason a load stops = a new clause in `compute_load_intent`, nothing else.
 **Instance 5 — a *second* way to be un-stoppable: the gate was threaded into both spots, but
 the load didn't look like SEM's.** Both release paths (`compute_load_intent` clause 1 and the
 imperative force-expiry pass) are gated on `_sem_owned`, the flag that separates "SEM turned
@@ -4613,8 +4616,9 @@ the clamp in every arm (surplus, spend consent, window, boost, protection switch
 `SurplusController.update()` walk (the ungated pass is shown to START the pump first, so the pass
 is not vacuous), the overnight promise and the short-winter-day tail both still topping up, the
 class-17 stop twin ending a night run at dawn, a monotonicity sweep pinning that the gate cannot
-flap, desired-state parity on `compute_load_intent`, and AST guards that BOTH halves of the
-imperative pass and the intent path call `sun_can_still_finish` and that the coordinator feeds it
+flap, desired-state parity on `compute_load_intent`, and AST guards that layer 1
+(`compute_load_intent`, the one place since #1335) reads the finish window through
+`grid_top_up_defers_to_sun` and that the coordinator feeds it
 from the same sun authority `is_night_mode` uses. **Open residual (a product call, not a sweep):** the window is
 about TIME, never about energy. A user whose only cheap window is midday (a Tibber/Amber negative
 midday block) on an overcast day is now deferred through that window — the daylight is long enough

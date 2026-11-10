@@ -129,14 +129,13 @@ def test_an_earlier_departure_still_forces():
     assert plan.deadline_active is True
 
 
-def test_a_departure_after_the_next_night_opens_keeps_its_time():
-    """Saturday 23:00, the calendar says Monday 10:00: Sunday night charges
-    too, so the departure is not cut to Sunday 07:00."""
+def test_a_departure_after_the_next_night_opens_counts_tonight_only():
+    """Saturday 23:00, the calendar says Monday 10:00: only tonight's hours
+    count, so the end is cut to Sunday 07:00 (#1309)."""
     sat = datetime(2026, 11, 7, 23, 0, tzinfo=AMS)
     monday = datetime(2026, 11, 9, 10, 0, tzinfo=AMS)
     plan = _reporter_plan(now=sat, deadline_at=monday, need=20.0)
-    assert plan.charge_end_dt == monday
-    # How many of those hours are night hours is left open (BUG_CLASSES 181).
+    assert plan.charge_end_dt == datetime(2026, 11, 8, 7, 0, tzinfo=AMS)
 
 
 def test_a_departure_the_day_after_the_night_stops_at_its_end():
@@ -192,9 +191,9 @@ def test_the_day_preview_counts_the_same_night(now_h, want):
     start = datetime(2026, 11, 3, 20, 30, tzinfo=AMS)
     end = NIGHT_END if now_h == 14 else NIGHT_END - timedelta(days=1)
     assert window_charge_end(DEPARTURE, start, end) == want
-    # a departure after the next window opens keeps its time
+    # a departure after the next window opens is cut to this night (#1309)
     later = start + timedelta(days=1, hours=1)
-    assert window_charge_end(later, start, end) == later
+    assert window_charge_end(later, start, end) == NIGHT_END
     # nothing known: the departure
     assert window_charge_end(DEPARTURE, None, None) == DEPARTURE
 
@@ -206,7 +205,7 @@ def test_the_day_preview_counts_the_same_night(now_h, want):
      NIGHT_END - timedelta(hours=1)),
     (DEPARTURE, NIGHT_END, None, NIGHT_END),
     (DEPARTURE, NIGHT_END, DEPARTURE, NIGHT_END),
-    (DEPARTURE, NIGHT_END, DEPARTURE - timedelta(minutes=1), DEPARTURE),
+    (DEPARTURE, NIGHT_END, DEPARTURE - timedelta(minutes=1), NIGHT_END),  # #1309
 ])
 def test_night_charge_end(dep, end, nxt, want):
     assert night_charge_end(dep, end, nxt) == want

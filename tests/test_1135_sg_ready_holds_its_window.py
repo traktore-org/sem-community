@@ -130,7 +130,10 @@ class TestEveryStopHoldsTheRun:
         hass = _Hass()
         sc, hp = await self._cheap_run(hass)
         _age(hp, on_s=120)
-        await sc.update(-3000.0, price_level="expensive")
+        # (#1335) the sun gone too (the smoothing lets the cloud in): a
+        # paid run whose terms ended rides on as a sun run while it can
+        for _ in range(6):
+            await sc.update(-3000.0, price_level="expensive")
         assert hp.is_active, "a cheap-hours end stopped the compressor 2 min in"
         assert hp.sg_ready_state is not SGReadyState.NORMAL
 
@@ -138,7 +141,8 @@ class TestEveryStopHoldsTheRun:
         hass = _Hass()
         sc, hp = await self._cheap_run(hass)
         _age(hp, on_s=700)
-        await sc.update(-3000.0, price_level="expensive")
+        for _ in range(6):
+            await sc.update(-3000.0, price_level="expensive")
         assert not hp.is_active
         assert hp.sg_ready_state is SGReadyState.NORMAL
 
@@ -159,5 +163,9 @@ class TestEveryStopHoldsTheRun:
         reg._save_storage = _save
         await reg.update_device_control_mode("heat_pump", "off")
         assert hp.control_mode is DeviceControlMode.OFF
+        # (#1335) the handler sets the mode; the refresh it asks for runs the
+        # engine, whose layer 3 lets the user's Off beat the 10 min run
+        assert hp.is_active
+        await sc.update(6000.0)
         assert not hp.is_active
         assert hp.sg_ready_state is SGReadyState.NORMAL

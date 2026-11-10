@@ -12,12 +12,12 @@ One override per device at a time; setting a new one replaces the old.
 today, by battery, charger and load alike, each riding the EXISTING road
 (``_decide_battery``'s ``mode == "off"/"force_charge"``, the same
 ``ChargerIntent.DISABLE``/``CHARGE_MAX`` #580's VPP pause and boost already
-use; for a load (#1321) one precedence clause, 3c, in
+use; for a load (#1321) one precedence clause, 3e, in
 ``compute_load_intent``) — no new actuation path. A load acts on one only in
 Smart (surplus) mode, and the peak shed, the daily cap, the device's own
-stop, its own run (Legionella) and vacation still win. NOTE: today the load
-clause switches only where the three layers act (observer mode, or
-``_use_desired_state``); the old passes do not read it yet. ``cap`` and ``move``
+stop, its own run (Legionella) and vacation still win. Since #1335 the
+three layers are the only load engine, so the load clause acts on every
+install (observer mode withholds it). ``cap`` and ``move``
 are accepted and stored (so a later part never needs a storage migration)
 but no decider reads them yet; they stay inert until a part that needs them
 (``cap`` wants an amps-clamp path; ``move`` wants #1087's calendar data).

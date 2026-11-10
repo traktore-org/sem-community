@@ -244,6 +244,9 @@ class PowerReadings:
     #: that was fine. The reader knows the names; now they travel.
     dark_inputs: tuple = ()
     solar_power_unavailable: bool = False
+    # (#1335) was there a solar reading at all? An install with no solar
+    # sensor reads 0.0 with nothing dark, which is not night.
+    solar_power_read: bool = True
     #: (#1022) minutes every solar read came back dark today — the PV
     #: health sensor's downtime figure. Adds up in the reader, resets at
     #: midnight.

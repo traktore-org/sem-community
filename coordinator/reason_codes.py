@@ -124,6 +124,11 @@ LOAD_LEGIONELLA = "legionella"
 # (#1321) the user's one-off on a load: run now / not now
 LOAD_OVERRIDE_RUN = "load_override_run"
 LOAD_OVERRIDE_STOP = "load_override_stop"
+# (#1335) a stop or a no-start says its own cause, never a start's sentence
+LOAD_LEGIONELLA_END = "legionella_end"
+LOAD_AT_TARGET = "at_target"
+LOAD_NO_READING = "no_reading"
+LOAD_DISABLED = "disabled"
 
 # ── the grid export limit (#1090) ────────────────────────────────────
 EXPORT_NEGATIVE_PRICE = "export_negative_price"

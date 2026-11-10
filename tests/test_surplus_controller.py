@@ -499,6 +499,11 @@ class TestScheduleDeviceBudgetLeak:
         sched._offpeak_forced = False
         sched.needs_offpeak_activation = False
         sched.remaining_daily_runtime_sec = 0
+        # (#1335) real booleans: a spec'd MagicMock reads every flag as True
+        sched.daily_max_runtime_reached = False
+        sched.stop_condition_met = False
+        sched.daily_targets_met = False
+        sched.has_runtime_deficit = False
 
         sc.register_device(sched)
 

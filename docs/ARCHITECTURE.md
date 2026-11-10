@@ -424,8 +424,23 @@ tests, and the anti-cycle all come for free.
 ```
 
 - **Layers 1 + 2 never touch hardware** — they read the live sensors and emit
-  intents. On HA-TEST (shared real hardware, observer mode) they run *for real*
-  against live data.
+  intents. Every install switches its loads with these three layers (#1335:
+  the seven imperative passes they replaced are gone). On HA-TEST (shared
+  real hardware, observer mode) they run *for real* against live data.
+- **Layer 1 writes no device state.** A release (Mode Off on an adopted load)
+  rides the intent (`release=True`); the force markers and the comfort-floor
+  memory are derived from the intent by layer 3. Layer 2 keeps only the
+  Tier-1 battery bookkeeping (#885).
+- **Layer 2 owns the whole-set rules:** the priority walk (each load books
+  what it is expected to draw — a watt setpoint what it is sent, a running
+  load its measured draw; a paid or own run only the sun that is left), the
+  reclaim hand-back, peak and phase sheds, and the deficit stop — once the
+  walk is more than 100 W short, sun loads stop from the lowest priority up,
+  with what requires them.
+- **A device never switches itself.** The Legionella check only keeps the
+  run's state; layer 1 starts it (`runs_without_surplus`) and stops it
+  (`own_run_ending`). Vacation, a tank at its target and a dead temperature
+  sensor are layer-1 reasons, so `activate()` never refuses in silence.
 - **Layer 3 is the single seam.** `reconcile_load(device, intent, observer=)`
   is the *only* function that flips a load. Observer mode is one branch inside
   it: log the command it would send (`WOULD ACTIVATE …`), actuate nothing. There
@@ -447,6 +462,14 @@ never spread across them:
 | a new whole-set rule (a new shed policy, a fairness split) | **layer 2** — `_desired_intents` walk | mutate device state mid-walk |
 | a new actuation target (a new device kind, a dimmer) | **layer 3** — one new branch in `reconcile_load` | add a second actuation site |
 | observer/dry-run behaviour for the above | nothing — it's already free at the seam | re-add a parallel read-only path |
+
+Two writes sit outside `reconcile_load`, both on purpose and both behind the
+same seam: the teardown (`deactivate_devices` — it must work with no
+controller left, reads the same ownership rule `sem_started`), and the load
+manager's shed/restore of peak-only and unregistered loads (one `_send` that
+withholds for observer mode and a yield, like `ControllableDevice.send()`).
+Every device write — the heat pump's SG-Ready contacts included — goes through
+`send()`, so observer mode holds whatever the caller.
 
 Rule of thumb: **if a change needs to touch both a decision and an `activate()`
 call, it's docking at the wrong layer.** Decisions produce intents; only

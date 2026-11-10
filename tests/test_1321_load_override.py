@@ -1,10 +1,9 @@
 """#1321 — a load's one-off override: Boost (force) and pause (skip).
 
-The decision is ONE clause in ``compute_load_intent`` (3c), fed by
-``_override_action``. Proven here on the three-layer path
-(``_use_desired_state=True``) and in observer mode. The old passes, which
-switch loads with observer off, do not read it yet: that lands on its own
-branch.
+The decision is ONE clause in ``compute_load_intent`` (3e), fed by
+``_override_action``. Since #1335 the three layers are the only load
+engine, so the clause acts on every install: ``reconcile_load`` switches
+the load, and observer mode withholds it.
 """
 import logging
 from datetime import datetime, timedelta, timezone
@@ -28,7 +27,7 @@ SKIP = {"boiler": {"action": "skip", "until": "14:30"}}
 
 
 class _Load:
-    """A switched load that behaves under both engines and counts writes."""
+    """A switched load that counts writes."""
 
     def __init__(self, device_id="boiler", **kw):
         self.device_id = device_id
@@ -103,9 +102,8 @@ class _Load:
         return self.get_current_consumption()
 
 
-def _sc(dev, desired=False):
+def _sc(dev, desired=True):
     sc = SurplusController(MagicMock())
-    sc._use_desired_state = desired
     sc.register_device(dev)
     return sc
 
@@ -143,7 +141,7 @@ async def test_a_pause_stops_a_running_load(desired):
 @pytest.mark.asyncio
 async def test_observer_sends_nothing(caplog):
     dev = _Load()
-    sc = _sc(dev, desired=False)
+    sc = _sc(dev)
     with caplog.at_level(logging.INFO):
         await sc.update(available_power_w=0.0, observer=True, load_overrides=FORCE)
     assert dev.activations == 0 and not dev.is_active
@@ -222,7 +220,7 @@ async def test_when_the_force_ends_the_load_returns_to_its_mode(desired):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("desired", [False, True], ids=["passes", "layers"])
+@BOTH
 @pytest.mark.parametrize("sun,active", [(0.0, False), (5000.0, False), (5000.0, True), (0.0, True)])
 async def test_no_override_changes_nothing(desired, sun, active):
     a, b = _Load(is_active=active), _Load(is_active=active)
@@ -230,6 +228,108 @@ async def test_no_override_changes_nothing(desired, sun, active):
     await _sc(b, desired).update(available_power_w=sun, load_overrides={})
     assert (a.is_active, a.activations, a.deactivations) == \
         (b.is_active, b.activations, b.deactivations)
+
+
+# ── Boost acts in production, through layer 3 (#1335) ─────────────────────
+from custom_components.solar_energy_management.devices.base import (  # noqa: E402
+    SwitchDevice,
+)
+from custom_components.solar_energy_management.tests.test_1062_hot_water_fields import (  # noqa: E402
+    _Hass,
+)
+
+ZRH = ZoneInfo("Europe/Zurich")
+T0 = datetime(2026, 11, 10, 21, 0, tzinfo=ZRH)       # night
+
+
+def _real_boiler(observer=False):
+    hass = _Hass()
+    hass.set("switch.boiler", "off")
+    dev = SwitchDevice(hass=hass, device_id="boiler", name="Boiler",
+                       rated_power=2000.0, entity_id="switch.boiler")
+    dev.control_mode = DeviceControlMode.SURPLUS       # Smart
+    dev.observer_mode = observer
+    sc = SurplusController(hass)
+    assert sc.regulation_offset == 50                  # the production default
+    sc.register_device(dev)
+    return hass, sc, dev
+
+
+def _payloads(overrides, now):
+    """What the coordinator hands ``update()``: active overrides only."""
+    p = po.status_payload(overrides, "boiler", now)
+    return {"boiler": p} if p else {}
+
+
+async def _night(sc, overrides, now, **kw):
+    await sc.update(0.0, solar_w=0.0, is_night=True,
+                    load_overrides=_payloads(overrides, now), **kw)
+
+
+@pytest.mark.asyncio
+async def test_boost_switches_a_smart_load_on_stays_on_at_night_and_stops_at_until():
+    hass, sc, dev = _real_boiler()
+    ovs = po.set_override({}, "boiler", "force", T0 + timedelta(minutes=30), T0)
+
+    await _night(sc, ovs, T0)
+    assert dev.is_active and dev._sem_commanded        # layer 3 switched it
+    assert len(hass.calls("turn_on")) == 1
+    rows = [r for r in sc.decision_log.records() if r["device_id"] == "boiler"]
+    assert (rows[-1]["new"], rows[-1]["reason_code"]) == ("on", RC.LOAD_OVERRIDE_RUN)
+
+    # solar 0 all night: neither "no sun" nor the deficit stop touches it
+    for minute in range(1, 30):
+        await _night(sc, ovs, T0 + timedelta(minutes=minute))
+    assert dev.is_active and not hass.calls("turn_off")
+    assert len(hass.calls("turn_on")) == 1
+
+    # ``until`` passes: the override is no longer handed over
+    dev._last_activated = datetime.now() - timedelta(hours=1)   # past min run
+    late = T0 + timedelta(minutes=31)
+    assert _payloads(ovs, late) == {}
+    for _ in range(3):
+        await _night(sc, ovs, late)
+    assert not dev.is_active and len(hass.calls("turn_off")) == 1
+    await _night(sc, ovs, late)
+    assert len(hass.calls("turn_on")) == 1             # and it stays off
+
+
+@pytest.mark.asyncio
+async def test_boost_is_withheld_in_observer_mode():
+    hass, sc, dev = _real_boiler(observer=True)
+    ovs = po.set_override({}, "boiler", "force", T0 + timedelta(minutes=30), T0)
+    for minute in range(3):
+        await _night(sc, ovs, T0 + timedelta(minutes=minute), observer=True)
+    hass.services.async_call.assert_not_awaited()
+    assert not dev.is_active
+    would = sc.observer_decisions["boiler"]
+    assert (would["action"], would["source"]) == ("activate", OVERRIDE_SOURCE)
+
+
+@pytest.mark.asyncio
+async def test_a_pause_waits_for_the_minimum_run():
+    """``skip`` is an ordinary stop: only Mode Off beats the minimum run."""
+    hass, sc, dev = _real_boiler()
+    for _ in range(3):
+        await sc.update(5000.0, solar_w=6000.0)
+    assert dev.is_active and dev.can_deactivate() is False
+    await sc.update(5000.0, solar_w=6000.0, load_overrides=SKIP)
+    assert dev.is_active and not hass.calls("turn_off")
+    dev._last_activated = datetime.now() - timedelta(hours=1)
+    await sc.update(5000.0, solar_w=6000.0, load_overrides=SKIP)
+    assert not dev.is_active
+
+
+@pytest.mark.asyncio
+async def test_a_boosted_load_is_not_the_deficit_stops_to_end():
+    """Two loads, the pool far short: the sun load goes, the Boost stays."""
+    boost, sun = _Load("boiler", priority=2, is_active=True), _Load("pump", priority=1, is_active=True)
+    sc = SurplusController(MagicMock())
+    sc.register_device(boost)
+    sc.register_device(sun)
+    for _ in range(3):
+        await sc.update(available_power_w=0.0, solar_w=3000.0, load_overrides=FORCE)
+    assert boost.is_active and not sun.is_active
 
 
 def test_the_clause_names_itself():

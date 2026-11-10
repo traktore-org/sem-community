@@ -172,6 +172,22 @@ class PowerSetpointDevice(ControllableDevice):
             value = round(value / step) * step
         return max(low, min(value, high))
 
+    def expected_draw_w(self, watts: float) -> Optional[float]:
+        """(#1335) The watts this load will draw when sent ``watts``: the
+        value its entity accepts (bounds, step, unit). The load walk books
+        this, so a heater sent less than its rating is booked what it takes
+        — not its rating, which would read as a shortfall and stop it. None
+        = the entity does not read as a power setpoint (nothing is written)."""
+        if not self.entity_id:
+            return None
+        scale = self.scale_to_watts()
+        if scale is None:
+            return None
+        try:
+            return self._clamp(float(watts) / scale, scale) * scale
+        except (TypeError, ValueError):
+            return None
+
     async def _write(self, watts: float) -> float:
         """Write the setpoint and record it. Returns the WATTS it represents."""
         if not self.entity_id:

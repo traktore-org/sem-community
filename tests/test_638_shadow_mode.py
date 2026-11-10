@@ -985,7 +985,7 @@ class TestTheDayPartOfTheHorizon:
 
 def _comfort_dev(did="ac1", kwh=1.5, deadline_h=3):
     """A device whose band asks for a planned banking run."""
-    def _ask(now):
+    def _ask(now, goal=False):   # (#1335) the plan always asks for Keep at
         return {"energy_kwh": kwh,
                 "deadline": now + timedelta(hours=deadline_h)}
     return SimpleNamespace(
@@ -1025,7 +1025,7 @@ class TestComfortDemandsJoinThePlan:
 
     def test_a_raising_ask_is_no_demand(self, freeze_targets):
         dev = _comfort_dev()
-        def _boom(now):
+        def _boom(now, goal=False):
             raise RuntimeError("no model")
         dev.comfort_plan_demand = _boom
         fake = _fake_self(devices=[dev])

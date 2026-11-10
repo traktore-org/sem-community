@@ -1209,6 +1209,8 @@ class SensorReader:
         readings.dark_inputs = tuple(sorted(
             n for n, c in self._input_dark.items() if c))
         readings.solar_power_unavailable = self._all_dark("solar")
+        # (#1335) no solar sensor reads 0.0 with nothing dark
+        readings.solar_power_read = self._input_reads.get("solar", 0) > 0
         # (#1022) this cycle's verdict feeds the next accrual; publish the
         # minutes so far today.
         self._last_solar_dark = bool(readings.solar_power_unavailable)
@@ -1396,6 +1398,8 @@ class SensorReader:
         readings.dark_inputs = tuple(sorted(
             n for n, c in self._input_dark.items() if c))
         readings.solar_power_unavailable = self._all_dark("solar")
+        # (#1335) no solar sensor reads 0.0 with nothing dark
+        readings.solar_power_read = self._input_reads.get("solar", 0) > 0
         # (#1186) …and what each dark unit adds back to the shown total —
         # last, when every unit's watts and every input's sign are final.
         self._hold_dark_units(readings)

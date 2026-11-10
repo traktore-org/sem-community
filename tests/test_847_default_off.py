@@ -145,6 +145,13 @@ def test_opt_out_releases_an_adopted_load_without_a_write():
     intent = compute_load_intent(d, remaining_surplus_w=0.0)
     assert intent.on is True                    # stays exactly as it is
     assert intent.reason == "off — monitor only"
+    assert intent.release is True               # (#1335) layer 1 only says so
+    assert d._sem_owned is True                 # …and writes nothing
+    import asyncio
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        reconcile_load,
+    )
+    asyncio.run(reconcile_load(d, intent))      # layer 3 lets go
     assert d._sem_owned is False                # claim released
     assert d._offpeak_forced is False           # markers cleared
     assert d._batt_overnight_forced is False
