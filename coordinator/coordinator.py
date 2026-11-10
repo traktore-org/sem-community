@@ -3956,6 +3956,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return True
         return False
 
+    @staticmethod
+    def _refresh_step_down(sc, cfg) -> None:
+        """(#1323) Push each heat pump row's ``heat_pump_step_down`` onto
+        its controller. Off for a row that does not name an action."""
+        from ..devices.heat_pump_controller import step_down_action
+        rows = [{"id": "heat_pump",
+                 "heat_pump_step_down": (cfg or {}).get("heat_pump_step_down")}]
+        # an additional unit's id, as the setup names it (#685/#990)
+        rows += [{**r, "id": r.get("id") or f"heat_pump_{i + 2}"}
+                 for i, r in enumerate((cfg or {}).get("heat_pumps") or [])
+                 if isinstance(r, dict)]
+        for row in rows:
+            dev = sc.get_device(str(row["id"]))
+            if dev is not None and hasattr(dev, "step_down_action"):
+                dev.step_down_action = step_down_action(
+                    row.get("heat_pump_step_down"))
+
     def _step_down_memos(self) -> Dict[str, Any]:
         """(#1323) ``{device_id: memo}`` for every load stepped down now."""
         out: Dict[str, Any] = {}
@@ -17594,10 +17611,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         cfg.get("heat_pump_force_on_threshold", 5000)
                     )
                     hp.invert_sg_ready = bool(cfg.get("heat_pump_invert_sg_ready", False))
-                    # (#1323) step down in a shortfall: off unless picked
-                    from ..devices.heat_pump_controller import step_down_action
-                    hp.step_down_action = step_down_action(
-                        cfg.get("heat_pump_step_down"))
                     hp.cop = float(cfg.get("heat_pump_cop", 3.0) or 3.0)
                     # #602/#576 — priority is the DRAG-LIST position now (resolved
                     # by refresh_direct_device_overrides), NOT a standalone knob.
@@ -17605,6 +17618,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # cycle, killing the drag position.)
                 except (TypeError, ValueError):
                     pass
+
+            # (#1323) Step down in a shortfall — EVERY heat pump reads its
+            # own row here, the first one included: the same rows the setup
+            # builds the controllers from, so no unit waits for a reload.
+            # class-qualified: the refresh tests drive this with a duck-typed host
+            SEMCoordinator._refresh_step_down(sc, cfg)
 
             # Hot water — push targets/interval only; the legionella timer
             # state (hours_since_legionella, _legionella_cycle_active) is

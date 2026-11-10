@@ -54,3 +54,21 @@ export function antiCycleValue(raw, bounds) {
     const v = bounds ? Math.min(bounds.max, Math.max(bounds.min, n)) : n;
     return v < 1 ? null : v;
 }
+
+/** (#1323) The translation key of each HVAC mode the editor offers. */
+export const HVAC_MODE_LABELS = {
+    heat: 'comfort_hvac_heat',
+    cool: 'comfort_hvac_cool',
+    by_forecast: 'comfort_hvac_by_forecast',
+};
+
+/**
+ * (#1323) The modes the load editor's select lists: heat, cool, by forecast,
+ * and the unit's present mode when it is another one (dry, auto, ...), so
+ * opening the editor never changes what the unit was given.
+ */
+export function hvacModeOptions(current) {
+    const base = Object.keys(HVAC_MODE_LABELS);
+    const cur = String(current || '');
+    return cur && !base.includes(cur) ? [...base, cur] : base;
+}

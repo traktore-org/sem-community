@@ -429,7 +429,9 @@ only shows that it would step down. The **Why?** card names the cause.
 
 ### Heat or cool by the outdoor forecast (#1323)
 
-A climate unit added with `hvac_mode: by_forecast` picks its season itself.
+A climate unit set to **By outdoor forecast** picks its season itself. Pick it
+in the load's editor on the Load Priority card (*Heats or cools*), or add the
+unit with `hvac_mode: by_forecast`.
 SEM reads the mean outdoor temperature of the next day (the same forecast it
 already uses, else your outdoor sensor):
 

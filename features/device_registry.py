@@ -37,6 +37,7 @@ from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 # unaliased so a structural test can see the call.
 from .device_axes import user_hands_off
 from ..devices.base import (
+    CLIMATE_HVAC_MODES,
     CurrentControlDevice,
     SwitchDevice,
     surplus_device_from_spec,
@@ -594,6 +595,8 @@ class UnifiedDeviceRegistry:
         "phase",
         # (#1021) wiring: this load sits behind the grid operator's relay
         "behind_operator_relay",
+        # (#1323) a climate unit's mode: heat, cool, or by the forecast
+        "hvac_mode",
         # (#812) the load's own tariff: a fixed rate or a price entity, and
         # its own meter. None set = the house tariff.
         "tariff_rate", "tariff_entity", "tariff_meter",
@@ -668,6 +671,13 @@ class UnifiedDeviceRegistry:
             for _sk in ("schedule_entity", "schedule_mode"):
                 if _sk in goals:
                     setattr(device, _sk, str(goals.get(_sk) or ""))
+        # (#1323) a climate unit's mode, key-present-only: the goal overrides
+        # the mode the unit was registered with. A value HA's climate does
+        # not know is ignored, and a switch load has no mode to set.
+        if "hvac_mode" in goals and hasattr(device, "hvac_setting"):
+            _mode = str(goals.get("hvac_mode") or "").strip().lower()
+            if _mode in CLIMATE_HVAC_MODES:
+                device.hvac_mode = _mode
         if "comfort_entity" in goals:
             device.comfort_entity = str(goals.get("comfort_entity", "") or "")
         for _ck in ("comfort_target", "comfort_offset", "comfort_limit"):
@@ -2473,6 +2483,10 @@ class UnifiedDeviceRegistry:
                 # (#812) the load's own tariff — what the LIVE device holds,
                 # so a heat pump's config-seeded tariff shows here too
                 **_tariff_payload(live, goals),
+                # (#1323) a climate unit's mode — what the user picked, not
+                # the season in force. Absent on a load that has no mode.
+                **({"hvac_mode": str(live.hvac_setting)}
+                   if hasattr(live, "hvac_setting") else {}),
                 # (#705) the comfort band — pre-fill for the editor.
                 "comfort_entity": goals.get("comfort_entity", ""),
                 "comfort_target": goals.get("comfort_target", 0),
