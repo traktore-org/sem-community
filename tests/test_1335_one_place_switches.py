@@ -337,3 +337,62 @@ class TestTheLoadManagerWritesThroughItsSeam:
         verdict = await lm.process_phase_guard({"L3": 7.0}, may_restore=False)
         assert verdict["thrown"] == ["pool"]
         assert lm.withheld_commands == []
+
+
+# ── a real watt setpoint: booked what it is sent, not its rating ───────────
+from custom_components.solar_energy_management.devices.power_setpoint import (  # noqa: E402
+    PowerSetpointDevice,
+)
+from custom_components.solar_energy_management.tests.test_1102_import_counts_against_loads import (  # noqa: E402
+    ENTITY as _HEATER,
+    _Hass as _NumberHass,
+)
+
+
+def _heater(hass):
+    heater = PowerSetpointDevice(
+        hass=hass, device_id="heater", name="Heater",
+        rated_power=9000.0, min_power_threshold=500.0, entity_id=_HEATER)
+    heater.control_mode = DeviceControlMode.SURPLUS
+    heater.min_on_seconds = heater.min_off_seconds = 0
+    return heater
+
+
+@pytest.mark.asyncio
+class TestARealWattSetpoint:
+
+    async def test_it_starts_at_the_free_power_below_its_rating(self):
+        """9 kW rated, 1.5 kW free: booking the rating read as a 7.5 kW
+        shortfall and cancelled the start."""
+        hass = _NumberHass(0.0)
+        heater = _heater(hass)
+        sc = SurplusController(hass)
+        sc.regulation_offset = 0.0
+        sc.register_device(heater)
+        await sc.update(1500.0)
+        assert heater.is_active
+        assert hass.value == pytest.approx(1500.0)
+
+    async def test_it_ramps_down_with_the_sun_instead_of_stopping(self):
+        hass = _NumberHass(3000.0)
+        heater = _heater(hass)
+        heater.adopt_if_running()
+        sc = SurplusController(hass)
+        sc.regulation_offset = 0.0
+        sc.register_device(heater)
+        for _ in range(8):                 # the smoothing lets the cloud in
+            await sc.update(1200.0)
+        assert heater.is_active, "stopped instead of following the sun down"
+        assert hass.value == pytest.approx(1200.0, abs=30.0)
+
+    async def test_no_sun_at_all_still_stops_it(self):
+        hass = _NumberHass(3000.0)
+        heater = _heater(hass)
+        heater.adopt_if_running()
+        sc = SurplusController(hass)
+        sc.regulation_offset = 0.0
+        sc.register_device(heater)
+        for _ in range(12):
+            await sc.update(0.0)
+        assert not heater.is_active
+        assert hass.value == 0.0
