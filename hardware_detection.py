@@ -2048,25 +2048,67 @@ class _ServiceNames(set):
         return self.fields.get(name, default)
 
 
-def _has_program_groups(dev_entities) -> bool:
-    """(#1158) Does this install have a program-group entity? Read from the
-    entities' own words (translation key, unique id), never the entity id."""
+def _has_program_groups(dev_entities, program_entities=(),
+                        program_platform: bool = False) -> bool:
+    """(#1158) Is this device driven through program groups?
+
+    Yes when SEM is already set up that way: the battery platform is the
+    program-group one (``program_platform``), or one of these entities is a
+    control the config names for it (``program_entities`` — the same list
+    the adapter choice reads, ``battery_adapters._deye_control_entities``).
+
+    Yes also when an entity here is SHAPED like a program group
+    (``PROGRAM_GROUP_KEY``), for an install not set up yet. This only ever
+    WITHHOLDS an offer, so it reads every name the entity has — its
+    translation key, its unique id, the name the integration gave it and
+    its entity id: an integration may carry the key in any one of them.
+    """
+    if program_platform:
+        return True
+    named = {str(e) for e in (program_entities or ()) if e}
     try:
         from .consts import role_lexicon as _lex
         pattern = re.compile(_lex.PROGRAM_GROUP_KEY, re.I)
     except Exception:  # noqa: BLE001
-        return False
-    return any(pattern.search(w) for e in dev_entities
-               for w in (getattr(e, "translation_key", None),
-                         getattr(e, "unique_id", None))
-               if isinstance(w, str) and w)
+        pattern = None
+    for e in dev_entities:
+        eid = str(getattr(e, "entity_id", "") or "")
+        if eid and eid in named:
+            return True
+        if pattern is None:
+            continue
+        words = [getattr(e, "translation_key", None),
+                 getattr(e, "unique_id", None),
+                 getattr(e, "original_name", None),
+                 eid.split(".", 1)[-1]]
+        for w in words:
+            if not isinstance(w, str) or not w:
+                continue
+            if pattern.search(re.sub(r"[^a-z0-9]+", "_", w.lower())):
+                return True
+    return False
+
+
+def _profile_key_hit(entry, keys, platform: str) -> Optional[str]:
+    """(#1158) A profile integration builds its unique id from the entry,
+    the key and the PLATFORM (``<entry>_<key>_<platform>``), and may set no
+    translation key. Only for a role read from a profile, only at a ``_``
+    boundary, only with the role's own platform as the last segment."""
+    uid = str(getattr(entry, "unique_id", "") or "")
+    for k in keys:
+        tail = f"{k}_{platform}"
+        if uid == tail or uid.endswith("_" + tail):
+            return k
+    return None
 
 
 def propose_roles_from_roster(dev_entities, domain: str, *,
                               state_of=None,
                               strategy_values=None,
                               services_of=None,
-                              device_ident=None) -> Dict[str, Any]:
+                              device_ident=None,
+                              program_entities=(),
+                              program_platform: bool = False) -> Dict[str, Any]:
     """(#915) Role proposals for ONE device, as an INTERSECTION.
 
     The roster says what an integration calls things; ``dev_entities`` is
@@ -2088,7 +2130,8 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
     if not vocab:
         return {}
     out: Dict[str, Any] = {}
-    programs = _has_program_groups(dev_entities)
+    programs = _has_program_groups(dev_entities, program_entities,
+                                   program_platform)
     for role, body in vocab.items():
         if body.get("profile") and programs:
             # (#1158) a role read from a device profile, on an install
@@ -2166,6 +2209,8 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
                 continue
             hit = _entry_matches_declared(
                 entry, keys, body.get("exact_only", ()))
+            if not hit and body.get("profile") and want_domain:
+                hit = _profile_key_hit(entry, keys, want_domain)
             if hit:
                 matches.append((keys.index(hit), eid, hit))
         if not matches:
@@ -2914,7 +2959,8 @@ def _role_action(role: str) -> Dict[str, Any]:
 def propose_for_installed(registry, *, limit_per_domain: int = 8,
                           configured_entities=None, state_of=None,
                           strategy_values=None, services_of=None,
-                          device_ident_of=None) -> list:
+                          device_ident_of=None, program_entities=(),
+                          program_platform: bool = False) -> list:
     """(#915) Every INSTALLED integration the roster has vocabulary for, with
     the controls it declares matched against this box's own entities.
 
@@ -2951,6 +2997,8 @@ def propose_for_installed(registry, *, limit_per_domain: int = 8,
         roles = {r: b for r, b in propose_roles_from_roster(
                      ents[:400], dom, state_of=state_of,
                      strategy_values=strategy_values,
+                     program_entities=program_entities,
+                     program_platform=program_platform,
                      services_of=services_of,
                      device_ident=(device_ident_of(ents[:400], dom)
                                    if device_ident_of else None)).items()
@@ -3846,7 +3894,9 @@ def redact_box_names(obj: Any, *, stand_ins: Optional[Dict[str, str]] = None,
 def build_detection_report(hass: Optional[HomeAssistant] = None,
                            registry=None, configured_entities=None,
                            strategy_values=None,
-                           configured_chargers=None) -> Dict[str, Any]:
+                           configured_chargers=None,
+                           program_entities=(),
+                           program_platform: bool = False) -> Dict[str, Any]:
     """(#814 Pillar B) Detection that shows its work.
 
     (#1054 follow-up) ``configured_chargers`` — the charger dicts SEM
@@ -4265,7 +4315,9 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
             registry, configured_entities=configured_entities,
             state_of=_state_of, strategy_values=strategy_values,
             services_of=_services_of(hass),
-            device_ident_of=_device_ident_of(hass))
+            device_ident_of=_device_ident_of(hass),
+            program_entities=program_entities,
+            program_platform=program_platform)
         # (#915) whether proposals were judged against live states, so the
         # coordinator can rebuild an unjudged (boot-time) report once HA is up
         report["judged"] = bool(_state_of is not None)

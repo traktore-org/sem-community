@@ -422,8 +422,33 @@ class BatteryControlAdapter(ABC):
     def _clear_no_limit_error(self) -> None:
         """(#1066) The gap is only an error while a limit is asked for."""
         if self._last_error in (self.NO_DISCHARGE_LIMIT_ERROR,
-                                self.NO_PERCENT_BASE_ERROR):
+                                self.NO_PERCENT_BASE_ERROR,
+                                self._limit_floor_said):
             self._last_error = None
+        self._limit_floor_w = None
+
+    #: (#1158) The least the discharge limit can be on this control, in W,
+    #: while SEM asks for less — ``None`` when the limit in force is the one
+    #: asked for. The discharge-limit sensor shows it; ``last_error`` says it.
+    _limit_floor_w: "Optional[float]" = None
+    _limit_floor_said: "Optional[str]" = None
+
+    def _note_limit_floor(self, asked_w: float, sent_w: float) -> None:
+        """(#1158) Say when the control could not go as low as asked."""
+        if sent_w - float(asked_w) < 1.0:
+            if self._last_error == self._limit_floor_said:
+                self._last_error = None
+            self._limit_floor_w = None
+            return
+        entity = getattr(self, "_discharge_control_entity", "")
+        text = (f"{entity} cannot go below {sent_w:.0f} W — discharge is "
+                f"reduced to {sent_w:.0f} W, not blocked "
+                f"(asked for {float(asked_w):.0f} W)")
+        if self._limit_floor_w != sent_w:
+            _LOGGER.warning("Battery: %s (#1158)", text)
+        self._limit_floor_w = sent_w
+        self._limit_floor_said = text
+        self._last_error = text
 
     #: (#1158) what ``last_error`` says when the discharge limit takes
     #: percent and SEM does not know what 100 % is.

@@ -653,10 +653,15 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             percent_of_w=self._percent_base_w,
         )
         if ok:
-            self._last_discharge_limit_w = watts
+            sent_w = (prepared.value * prepared.scale_to_watts
+                      if prepared is not None else watts)
+            # (#1158) The limit IN FORCE is what the control was sent, not
+            # what was asked: a 1–100 % control asked for 0 W still lets
+            # 1 % through. Recorded and said as that — the pack is held
+            # down to N W, it is not kept out.
+            self._last_discharge_limit_w = sent_w
+            self._note_limit_floor(watts, sent_w)
             if wrote:
                 # only a write that went OUT is judged; the same-value skip
                 # is not a write and must not re-arm the grace (06.09 audit)
-                sent_w = (prepared.value * prepared.scale_to_watts
-                          if prepared is not None else watts)
                 self._note_pending_write(self._discharge_control_entity, sent_w)
