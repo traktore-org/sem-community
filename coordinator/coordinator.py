@@ -47,6 +47,7 @@ from .external_control import (
 
 from ..consts.core import CAPABILITY_MISS_CONFIRM_READS, CAPABILITY_MISS_HOLD_S
 from ..consts.core import CONF_INTRADAY_FORECAST, DEFAULT_INTRADAY_FORECAST
+from ..consts.core import DEFAULT_BATTERY_BUFFER_SOC
 from ..consts.core import (CONF_CO2_LIVE_INTENSITY, CONF_GRID_CO2_ENTITY,
                            DEFAULT_CO2_LIVE_INTENSITY)
 from ..consts.core import (CONF_OUTDOOR_TEMPERATURE_ENTITY,
@@ -9247,6 +9248,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         floor = float(self.config.get("battery_morning_drain_floor_soc", 50.0) or 50.0)
         return float(remaining) >= cap * (1.0 - floor / 100.0)
 
+    def _sun_refills_whole_pack(self) -> bool:
+        """(#970) Does the coming sun refill the pack from its reserve? The
+        larger of what is left today and tomorrow's forecast against the
+        usable capacity. An unread forecast (0.0) is False: the hold stays."""
+        _fd = getattr(getattr(self, "_forecast_reader", None), "forecast_data", None)
+        cap = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
+        if _fd is None or cap <= 0:
+            return False
+        try:
+            coming = max(
+                float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0),
+                float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0))
+            reserve = float(reserve_soc_of(self.config))
+        except (TypeError, ValueError):
+            return False
+        return coming > 0.0 and coming >= cap * (1.0 - reserve / 100.0)
+
+    @staticmethod
+    def _peak_hold_pack_soc(power):
+        """(#970) The pack's level this cycle, or None when it was not read."""
+        if (getattr(power, "battery_soc_unavailable", False)
+                or getattr(power, "battery_soc_known", True) is False):
+            return None
+        soc = getattr(power, "battery_soc", None)
+        try:
+            return None if soc is None else float(soc)
+        except (TypeError, ValueError):
+            return None
+
     def _pacing_horizon_end(self):
         """(#926) Sunset+10 today as a datetime — the pacer's own horizon."""
         try:
@@ -14803,7 +14833,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 morning_hours=float(self.config.get("ev_morning_window_hours", 2.0) or 2.0),
                 forecast_refills_pack=self._forecast_refills_pack(),
                 pacing_horizon_end=self._pacing_horizon_end(),
+                # (#970) keep the battery for the peak limit — own switch
+                peak_hold_enabled=bool(self.config.get("battery_peak_hold_enabled", False)),
+                peak_limit_set=self._slot_ceiling_kw() is not None,
+                pack_soc=self._peak_hold_pack_soc(power),
+                peak_hold_release_soc=float(
+                    self.config.get("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC)
+                    or DEFAULT_BATTERY_BUFFER_SOC),
+                sun_refills_pack=self._sun_refills_whole_pack(),
+                peak_hold_released=bool(getattr(self, "_peak_hold_released", False)),
             )
+            from .sink_verdicts import peak_hold_state
+            self._peak_hold_released = peak_hold_state(_verdicts.get("house")) == "released"
         except Exception:  # noqa: BLE001 — a verdict bug must not kill a cycle
             _LOGGER.warning("sink verdicts FAILED this cycle — every sink reads "
                             "OPEN until it recovers (arc #921)", exc_info=True)

@@ -1636,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Haus als Batterie-Senke"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Batterie für das Leistungslimit aufsparen"
+      },
       "ev_morning_window_enabled": {
         "name": "Morgen-Fenster für das E-Auto"
       },

@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 from . import reason_codes as RC
 from .charger_types import BatteryDecision, BatteryIntent, rewrite
 from .peak_guard import cover_for_peak_w
+from .sink_verdicts import peak_hold_state as _peak_hold_state
 from ..consts.battery_modes import arbitrage_allowed_for_mode, reserve_soc_of
 from ..consts.battery_permissions import effective_permissions, may_assist_ev
 
@@ -1028,8 +1029,17 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
     # covers at least what the meter is not allowed to buy. The verdict still
     # says WHEN; this is the floor under its HOW MUCH, and it is the same slot
     # budget the EV and the cheap-hours loads are already sized against.
+    # (#970) The same hold, by its own switch: kept for the peak limit on any
+    # tariff. It is one more WHEN for the branch below — the floor, the blind
+    # release and the reserve are the ones the cheap-hour hold has. It stands
+    # aside while a car charges: what the pack may give a car, and what it
+    # may not, is the clamp below's to say (it takes the same peak floor).
     _blind_release = None
-    if _house_v is not None and getattr(_house_v, "state", "") == "held":
+    _peak_hold = _peak_hold_state(_house_v) == "held"
+    _held = _house_v is not None and getattr(_house_v, "state", "") == "held"
+    if _held and _peak_hold and bool(getattr(view, "ev_charging", False)):
+        _held = False
+    if _held:
         _f = view.fleet
         _allowed = getattr(_f, "peak_slot_allowed_w", None)
         _n = max(1, int(getattr(_f, "battery_count", 1) or 1))
@@ -1067,8 +1077,10 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
             )
         else:
             _cover_w = peak_cover_floor_w(view, 0.0, _n)
-            _why = f"house sink held — {getattr(_house_v, 'reason', '')}"
-            _code = RC.BATTERY_HOUSE_HELD
+            _why = (f"peak hold — {getattr(_house_v, 'reason', '')}"
+                    if _peak_hold else
+                    f"house sink held — {getattr(_house_v, 'reason', '')}")
+            _code = RC.BATTERY_PEAK_HOLD if _peak_hold else RC.BATTERY_HOUSE_HELD
             _stop = reserve_stops_peak_cover(view)
             if _stop is not None and cover_for_peak_w(
                     _allowed, max(0.0, float(view.home_consumption_w or 0.0)),
@@ -1083,7 +1095,8 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
                     f"rest of this quarter hour, so the pack covers "
                     f"{_cover_w:.0f} W"
                 )
-                _code = RC.BATTERY_HOUSE_HELD_PEAK
+                _code = (RC.BATTERY_PEAK_HOLD_COVER if _peak_hold
+                         else RC.BATTERY_HOUSE_HELD_PEAK)
             return BatteryDecision(
                 battery_id=rt.battery_id, intent=BatteryIntent.LIMIT_DISCHARGE,
                 discharge_limit_w=_cover_w,

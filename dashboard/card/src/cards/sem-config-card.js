@@ -272,6 +272,7 @@ const WATCHED = [
     // arc #921
     'switch.sem_export_guard_enabled', 'switch.sem_export_guard_override_external',
     'switch.sem_battery_house_sink_enabled', 'switch.sem_ev_morning_window_enabled',
+    'switch.sem_battery_peak_hold_enabled',
     'number.sem_export_guard_engage_s', 'number.sem_export_guard_release_s',
     'number.sem_ev_morning_window_hours', 'number.sem_battery_morning_drain_floor_soc',
     'number.sem_cheap_price_threshold', 'number.sem_expensive_price_threshold',
@@ -2911,6 +2912,7 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderStepper('number.sem_export_guard_release_s', 'export_guard_release_s', T, 'config_help_export_guard_release_s')}
             ${this._renderToggle('switch.sem_export_guard_override_external', 'export_guard_override', T, 'config_help_export_guard_override')}
             ${this._renderToggle('switch.sem_battery_house_sink_enabled', 'battery_house_sink', T, 'config_help_battery_house_sink')}
+            ${this._renderToggle('switch.sem_battery_peak_hold_enabled', 'battery_peak_hold', T, 'config_help_battery_peak_hold')}
             ${this._renderToggle('switch.sem_ev_morning_window_enabled', 'ev_morning_window', T, 'config_help_ev_morning_window')}
             ${this._renderStepper('number.sem_ev_morning_window_hours', 'ev_morning_window_hours', T, 'config_help_ev_morning_window_hours')}
             ${this._renderStepper('number.sem_battery_morning_drain_floor_soc', 'battery_morning_drain_floor_soc', T, 'config_help_battery_morning_drain_floor_soc')}

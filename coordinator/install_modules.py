@@ -377,6 +377,7 @@ ENTITY_MODULES: Mapping[tuple[str, str], frozenset[Module]] = _table(
     _rows("switch", _B, (
         "battery_may_export",
         "battery_house_sink_enabled",   # arc #921 (#879)
+        "battery_peak_hold_enabled",    # (#970)
     )),
     # (#996) Spending and pacing plan the battery against the forecast:
     # ``battery_spendable_kwh`` is the forecast budget, pacing runs only

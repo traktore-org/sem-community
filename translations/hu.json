@@ -1636,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Ház mint akkumulátor-nyelő"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Akkumulátor megtartása a teljesítménykorláthoz"
+      },
       "ev_morning_window_enabled": {
         "name": "Reggeli EV-ablak"
       },

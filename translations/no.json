@@ -1636,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Huset som batterisluk"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Spar batteriet til effektgrensen"
+      },
       "ev_morning_window_enabled": {
         "name": "Morgenvindu for elbilen"
       },

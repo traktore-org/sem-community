@@ -1636,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Casa como destino da bateria"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Guardar a bateria para o limite de potência"
+      },
       "ev_morning_window_enabled": {
         "name": "Janela matinal do VE"
       },
