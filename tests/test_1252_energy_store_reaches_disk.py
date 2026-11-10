@@ -67,3 +67,32 @@ def test_the_data_written_is_the_energy_data():
     st._energy_data["finished_ev_sessions"] = [{"kwh": 7.5}]
     asyncio.run(st.async_save_energy_throttled())
     assert saved[0]["finished_ev_sessions"] == [{"kwh": 7.5}]
+
+
+def test_the_first_save_is_written_on_a_host_that_just_booted():
+    """``time.monotonic()`` counts from boot. With uptime under the interval
+    the first save was refused — the minutes a record most needs to survive
+    an unclean reboot. A fast CI machine showed it (#1266)."""
+    st, saved = _storage()
+    st._energy_data["finished_ev_sessions"] = [{"kwh": 1.0}]
+    with patch("custom_components.solar_energy_management.coordinator.storage"
+               ".time.monotonic", return_value=5.0):
+        asyncio.run(st.async_save_energy_throttled())
+        asyncio.run(st.async_save_energy_throttled())
+    assert len(saved) == 1
+
+
+def test_the_first_daily_save_is_written_on_a_host_that_just_booted():
+    st, _ = _storage()
+    written = []
+
+    async def _save(data):
+        written.append(data)
+
+    st._daily_store.async_save = _save
+    with patch("custom_components.solar_energy_management.coordinator.storage"
+               ".time.monotonic", return_value=5.0):
+        asyncio.run(st.async_save_daily_throttled())
+        asyncio.run(st.async_save_daily_throttled())
+    assert len(written) == 1
+
