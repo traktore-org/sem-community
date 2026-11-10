@@ -116,24 +116,42 @@ PEAK_HOLD_RELEASE_BAND_SOC: float = 10.0
 
 def peak_hold_state(verdict: Any) -> str:
     """(#970) What the peak hold said in this house verdict: ``held``,
-    ``released``, ``dear_hour``, ``unread``, ``no_limit`` — or ``""`` when
+    ``released``, ``dear_hour``, ``unread``, ``no_limit``, ``no_reading`` —
+    or ``""`` when
     the verdict is not the peak hold's."""
     params = getattr(verdict, "reason_params", None)
     return str(params.get("peak_hold", "")) if isinstance(params, dict) else ""
 
 
-def peak_hold_verdict(*, level: str, peak_limit_set: bool,
-                      pack_soc: Optional[float], release_soc: float,
+def peak_hold_target_w(verdict: Any) -> Optional[float]:
+    """(#970) The import level a HELD peak hold aims at, or ``None``."""
+    params = getattr(verdict, "reason_params", None)
+    try:
+        return float(params["target_w"]) if isinstance(params, dict) else None
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def peak_hold_verdict(*, level: str, target_w: Optional[float],
+                      allowance_known: bool, pack_soc: Optional[float], release_soc: float,
                       sun_refills_pack: Optional[bool], released: bool) -> SinkVerdict:
     """(#970) The house verdict while "keep the battery for the peak limit"
     is on. HELD only on what was read: no limit, an unread level, a dear
     hour, or a high pack the sun refills each leave the house OPEN.
     ``sun_refills_pack`` is three-state: ``None`` is "no forecast", and a
     pack above its buffer is then let go on its level alone."""
-    if not peak_limit_set:
+    if target_w is None or float(target_w) <= 0.0:
         return SinkVerdict("house", OPEN,
                            "no peak limit set — nothing to hold the import at",
                            reason_params={"peak_hold": "no_limit"})
+    if not allowance_known:
+        # The slot's budget was not computed this cycle. A hold with no
+        # budget under it would cover nothing and let the house buy without
+        # a bound — so it does not hold.
+        return SinkVerdict("house", OPEN,
+                           "this quarter hour's import budget is not known — "
+                           "not holding without it",
+                           reason_params={"peak_hold": "no_reading"})
     if is_expensive_name(level):
         return SinkVerdict("house", OPEN,
                            f"{level} hour — the pack may cover the house",
@@ -157,9 +175,11 @@ def peak_hold_verdict(*, level: str, peak_limit_set: bool,
             "— the pack covers the house",
             reason_params={"peak_hold": "released"})
     return SinkVerdict("house", HELD,
-                       "kept for the peak limit — the house buys up to it",
+                       "kept for the peak limit — the house buys up to "
+                       f"{float(target_w):.0f} W",
                        reason_code=RC.BATTERY_PEAK_HOLD,
-                       reason_params={"peak_hold": "held"})
+                       reason_params={"peak_hold": "held",
+                                      "target_w": float(target_w)})
 
 
 def sink_verdicts(*, now: datetime, tariff_level: Optional[str], upcoming,
@@ -172,7 +192,8 @@ def sink_verdicts(*, now: datetime, tariff_level: Optional[str], upcoming,
                   export_threshold: float = DEFAULT_EXPORT_VALUE_THRESHOLD,
                   export_at: Optional[Callable[[datetime], Any]] = None,
                   peak_hold_enabled: bool = False,
-                  peak_limit_set: bool = False,
+                  peak_hold_target_w: Optional[float] = None,
+                  peak_allowance_known: bool = False,
                   pack_soc: Optional[float] = None,
                   peak_hold_release_soc: float = 75.0,
                   sun_refills_pack: Optional[bool] = False,
@@ -249,7 +270,8 @@ def sink_verdicts(*, now: datetime, tariff_level: Optional[str], upcoming,
     # most there) and to an unread level, and lets go once the pack is high
     # and the coming sun refills it — a full pack could not take that sun.
     _peak = (peak_hold_verdict(
-        level=level, peak_limit_set=peak_limit_set, pack_soc=pack_soc,
+        level=level, target_w=peak_hold_target_w,
+        allowance_known=peak_allowance_known, pack_soc=pack_soc,
         release_soc=peak_hold_release_soc, sun_refills_pack=sun_refills_pack,
         released=peak_hold_released) if peak_hold_enabled else None)
     if house_sink_enabled and is_cheap_name(level):

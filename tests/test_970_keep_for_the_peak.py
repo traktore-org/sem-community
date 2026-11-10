@@ -48,6 +48,7 @@ from custom_components.solar_energy_management.coordinator.sink_verdicts import 
     PEAK_HOLD_RELEASE_BAND_SOC,
     SinkVerdict,
     peak_hold_state,
+    peak_hold_target_w,
     sink_verdicts,
 )
 from custom_components.solar_energy_management.persisted_flags import (
@@ -59,6 +60,8 @@ from .ast_contracts import calls
 NOW = datetime(2026, 11, 10, 13, 0)
 LIMIT_KW = 2.5
 MAX_W = 5000.0
+#: what the hold aims at: under the limit, as the coordinator hands it over
+TARGET_W = 2250.0
 
 
 def _house(**kw):
@@ -73,7 +76,8 @@ def _house(**kw):
 
 
 def _on(**kw):
-    base = dict(peak_hold_enabled=True, peak_limit_set=True, pack_soc=60.0,
+    base = dict(peak_hold_enabled=True, peak_hold_target_w=TARGET_W,
+                peak_allowance_known=True, pack_soc=60.0,
                 peak_hold_release_soc=75.0, sun_refills_pack=False)
     base.update(kw)
     return _house(**base)
@@ -93,7 +97,8 @@ class TestTheSwitchIsOffByDefault:
         they say."""
         before = _house(tariff_level=level, house_sink_enabled=sink)
         after = _house(tariff_level=level, house_sink_enabled=sink,
-                       peak_hold_enabled=False, peak_limit_set=True,
+                       peak_hold_enabled=False, peak_hold_target_w=TARGET_W,
+                       peak_allowance_known=True,
                        pack_soc=10.0, sun_refills_pack=True,
                        peak_hold_released=True)
         assert (after.state, after.reason) == (before.state, before.reason)
@@ -108,8 +113,18 @@ class TestWhenItHolds:
         assert v.reason_code == RC.BATTERY_PEAK_HOLD
 
     def test_no_limit_is_nothing_to_hold_at(self):
-        v = _on(peak_limit_set=False)
+        v = _on(peak_hold_target_w=None)
         assert v.state == OPEN and peak_hold_state(v) == "no_limit"
+
+    def test_a_slot_budget_nobody_computed_does_not_hold(self):
+        """Review 1: the allowance is None when its computation failed. A
+        hold then covers nothing and the house buys without a bound."""
+        v = _on(peak_allowance_known=False)
+        assert v.state == OPEN and peak_hold_state(v) == "no_reading"
+
+    def test_the_held_verdict_carries_the_level_it_aims_at(self):
+        assert peak_hold_target_w(_on()) == TARGET_W
+        assert peak_hold_target_w(SinkVerdict("house", HELD, "cheap hour")) is None
 
     def test_a_dear_hour_gets_the_pack(self):
         v = _on(tariff_level="expensive")
@@ -187,15 +202,39 @@ def _view(*, home_w=5000.0, solar_w=2000.0, allowed_w=2500.0, soc=80.0,
 
 
 class TestHisExample:
-    def test_house_5_sun_2_limit_2_5_the_pack_gives_half_a_kilowatt(self):
+    def test_house_5_sun_2_limit_2_5_the_pack_gives_the_rest(self):
+        """His 0.5 kW, plus the room the hold keeps under the limit: the
+        meter buys 2.25 kW, the pack 0.75 kW."""
         d = decide_battery(_view())
         assert d.intent is BatteryIntent.LIMIT_DISCHARGE
-        assert d.discharge_limit_w == pytest.approx(500.0)
+        assert d.discharge_limit_w == pytest.approx(750.0)
         assert d.reason_code == RC.BATTERY_PEAK_HOLD_COVER
         assert d.reason.startswith("peak hold")
 
+    def test_a_fresh_slot_may_not_buy_three_times_the_limit(self):
+        """Review 2: the slot allowance alone lets a fresh slot buy up to
+        3× the limit. The hold aims at its own level from the first cycle."""
+        d = decide_battery(_view(home_w=9000.0, solar_w=0.0, allowed_w=7500.0,
+                                 max_w=9000.0))
+        assert d.discharge_limit_w == pytest.approx(9000.0 - TARGET_W)
+
+    def test_a_slot_already_behind_asks_for_more_than_the_level(self):
+        d = decide_battery(_view(home_w=5000.0, solar_w=0.0, allowed_w=1000.0))
+        assert d.discharge_limit_w == pytest.approx(4000.0)
+
+    def test_no_slot_budget_is_no_hold(self):
+        """Review 1, at the decider: limit set, allowance None, house 9 kW,
+        SOC 90 % — the pack covers the house as with the switch off."""
+        d = decide_battery(_view(home_w=9000.0, solar_w=0.0, allowed_w=None,
+                                 soc=90.0, max_w=9000.0))
+        off = decide_battery(_view(home_w=9000.0, solar_w=0.0, allowed_w=None,
+                                   soc=90.0, max_w=9000.0, verdict=None))
+        assert (d.intent, d.discharge_limit_w) == (off.intent, off.discharge_limit_w)
+        assert not (d.intent is BatteryIntent.LIMIT_DISCHARGE
+                    and d.discharge_limit_w < 9000.0)
+
     def test_a_house_under_the_limit_keeps_the_whole_pack(self):
-        d = decide_battery(_view(home_w=3000.0))
+        d = decide_battery(_view(home_w=4000.0))
         assert d.intent is BatteryIntent.LIMIT_DISCHARGE
         assert d.discharge_limit_w == pytest.approx(0.0)
         assert d.reason_code == RC.BATTERY_PEAK_HOLD
@@ -308,30 +347,211 @@ async def test_a_quarter_hour_stays_under_the_limit_without_a_write_storm():
     assert len(adapter.writes) <= 12, adapter.writes
 
 
+class _SlowPack:
+    """A pack that follows a new discharge limit only ``lag_s`` later."""
+
+    def __init__(self, lag_s):
+        self.lag_s, self._due = lag_s, []
+        self.giving_w = 0.0
+
+    def told(self, t, limit_w):
+        if not self._due or self._due[-1][1] != limit_w:
+            self._due.append((t + self.lag_s, limit_w))
+
+    def at(self, t):
+        while self._due and self._due[0][0] <= t:
+            self.giving_w = self._due.pop(0)[1]
+        return self.giving_w
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lag_s", [60, 90])
+async def test_a_slow_pack_and_a_late_load_step_stay_under_the_limit(lag_s):
+    """Review 2: 2 kW all slot, then 6 kW for the last four minutes, on a
+    pack that follows a new limit a minute or more late. Aimed at the slot
+    allowance the pack was asked too late; aimed under the limit from the
+    first cycle, the room banked early pays for the lag."""
+    adapter, tracker, pack = _Adapter(), PeakSlotTracker(), _SlowPack(lag_s)
+    import_w = 0.0
+    for t in range(0, 900, 10):
+        tracker.update(NOW + timedelta(seconds=t), import_w)
+        allowed = slot_allowed_import_w(LIMIT_KW, tracker.imported_kwh,
+                                        tracker.elapsed_s, blind=tracker.blind)
+        home = 6000.0 if t >= 660 else 2000.0
+        d = decide_battery(_view(home_w=home, solar_w=0.0, allowed_w=allowed,
+                                 max_w=9000.0))
+        await actuate_battery(d, adapter)
+        pack.told(t, adapter.last_discharge_limit_w or 0.0)
+        import_w = home - min(home, pack.at(t))
+    tracker.update(NOW + timedelta(seconds=899), import_w)
+    assert tracker.imported_kwh <= LIMIT_KW * 0.25, (
+        f"slot average {tracker.imported_kwh * 4:.2f} kW over {LIMIT_KW} kW")
+
+
 @pytest.mark.asyncio
 async def test_observer_mode_sends_nothing_and_says_what_it_would():
-    adapter = _Adapter()
-    said = []
-    controller = SimpleNamespace(
-        publish_observer_decision=lambda **kw: said.append(kw))
+    """Through the real observer surface: the controller every family
+    publishes its would-decisions on."""
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        SurplusController,
+    )
+    from custom_components.solar_energy_management.tests.test_1062_hot_water_fields import (
+        _Hass,
+    )
+    adapter, controller = _Adapter(), SurplusController(_Hass())
     await actuate_battery(decide_battery(_view()), adapter, observer=True,
                           controller=controller)
-    assert adapter.writes == []
-    assert said and said[0]["action"] == "limit_discharge"
-    assert said[0]["power_w"] == pytest.approx(500.0)
-    assert said[0]["reason"].startswith("peak hold")
+    assert adapter.writes == [] and adapter.last_discharge_limit_w is None
+    would = controller.observer_decisions["battery:b1"]
+    assert would["kind"] == "battery" and would["action"] == "limit_discharge"
+    assert would["power_w"] == pytest.approx(750.0)
+    assert would["reason"].startswith("peak hold")
 
 
 # ── the wiring ───────────────────────────────────────────────────────
 
-def test_the_coordinator_asks_with_what_it_already_reads():
+def test_the_coordinator_asks_through_one_place():
     from custom_components.solar_energy_management.coordinator.coordinator import (
         SEMCoordinator,
     )
-    fn = SEMCoordinator._build_fleet_cycle_state
-    assert calls(fn, "_slot_ceiling_kw")          # the limit in force
+    assert calls(SEMCoordinator._build_fleet_cycle_state, "_peak_hold_inputs")
+    assert calls(SEMCoordinator._build_fleet_cycle_state, "_note_peak_hold")
+    fn = SEMCoordinator._peak_hold_inputs
+    assert calls(fn, "_peak_hold_target_w")       # the limit in force
     assert calls(fn, "_sun_refills_whole_pack")   # the forecast
     assert calls(fn, "_peak_hold_pack_soc")       # the level, or unread
+
+
+class _Store:
+    def __init__(self, released=False):
+        self.released, self.saves = released, 0
+
+    def get_peak_hold_released(self):
+        return self.released
+
+    def set_peak_hold_released(self, released):
+        self.released, self.saves = released, self.saves + 1
+
+
+def _cycle_coord(config, *, allowed_w=2500.0, limit_kw=LIMIT_KW, store=None,
+                 warning_kw=None, boom=False):
+    """The coordinator's own peak-hold methods on the few things they read."""
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+
+    def _refill():
+        if boom:
+            raise RuntimeError("read with the switch off")
+        return False
+
+    c = SimpleNamespace(
+        config=config, _peak_slot_allowed_w=allowed_w, _storage=store,
+        _slot_ceiling_kw=lambda: limit_kw, _sun_refills_whole_pack=_refill,
+        _load_manager=(SimpleNamespace(_effective_levels=lambda: (warning_kw, 9.0))
+                       if warning_kw else None),
+        _peak_hold_pack_soc=SEMCoordinator._peak_hold_pack_soc,
+        _PEAK_HOLD_TARGET_RATIO=SEMCoordinator._PEAK_HOLD_TARGET_RATIO)
+    for name in ("_peak_hold_inputs", "_peak_hold_target_w",
+                 "_peak_hold_was_released", "_note_peak_hold"):
+        setattr(c, name, getattr(SEMCoordinator, name).__get__(c))
+    return c
+
+
+def _decide_from(c, *, soc=60.0, home_w=5000.0, level="flat"):
+    """Config key → verdict → decision, the way a cycle runs it."""
+    power = SimpleNamespace(battery_soc=soc, battery_soc_unavailable=False)
+    v = _house(tariff_level=level, **c._peak_hold_inputs(power))
+    c._note_peak_hold(v)
+    return v, decide_battery(_view(home_w=home_w, solar_w=2000.0, soc=soc,
+                                   allowed_w=c._peak_slot_allowed_w, verdict=v))
+
+
+class TestFromTheConfigKeyToTheDecision:
+    @pytest.mark.parametrize("config", [{}, {"battery_peak_hold_enabled": False}])
+    def test_absent_and_off_read_nothing_and_decide_as_before(self, config):
+        """Review 4: off, nothing is read — not even something that raises."""
+        c = _cycle_coord(config, boom=True)
+        assert c._peak_hold_inputs(SimpleNamespace()) == {}
+        v, d = _decide_from(c)
+        plain = decide_battery(_view(verdict=_house()))
+        assert peak_hold_state(v) == ""
+        assert (d.intent, d.discharge_limit_w, d.reason) == (
+            plain.intent, plain.discharge_limit_w, plain.reason)
+
+    def test_on_it_holds_at_the_level_under_the_limit(self):
+        c = _cycle_coord({"battery_peak_hold_enabled": True})
+        v, d = _decide_from(c)
+        assert peak_hold_state(v) == "held"
+        assert peak_hold_target_w(v) == pytest.approx(2250.0)   # 2.5 kW × 4.5/5
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == pytest.approx(750.0)
+
+    def test_the_load_managers_warning_level_is_the_level(self):
+        c = _cycle_coord({"battery_peak_hold_enabled": True}, warning_kw=2.0)
+        assert c._peak_hold_target_w() == pytest.approx(2000.0)
+        c = _cycle_coord({"battery_peak_hold_enabled": True}, warning_kw=3.0)
+        assert c._peak_hold_target_w() == pytest.approx(2250.0)  # not above the limit
+
+    def test_on_with_no_slot_budget_it_does_not_hold(self):
+        c = _cycle_coord({"battery_peak_hold_enabled": True}, allowed_w=None)
+        v, d = _decide_from(c, home_w=9000.0, soc=90.0)
+        assert peak_hold_state(v) == "no_reading"
+        assert not d.reason.startswith("peak hold")
+
+    def test_on_with_no_limit_it_does_not_hold(self):
+        c = _cycle_coord({"battery_peak_hold_enabled": True}, limit_kw=None,
+                         allowed_w=None)
+        assert peak_hold_state(_decide_from(c)[0]) == "no_limit"
+
+
+class TestLetGoIsRemembered:
+    """Review 3: buffer 70 (the default), a pack at 65 % inside the gap."""
+
+    CFG = {"battery_peak_hold_enabled": True}
+
+    def _c(self, store):
+        c = _cycle_coord(self.CFG, store=store)
+        c._sun_refills_whole_pack = lambda: True
+        return c
+
+    def test_a_dear_hour_does_not_forget_it(self):
+        c = self._c(_Store())
+        assert peak_hold_state(_decide_from(c, soc=72.0)[0]) == "released"
+        assert peak_hold_state(_decide_from(c, soc=65.0, level="expensive")[0]) == "dear_hour"
+        assert peak_hold_state(_decide_from(c, soc=65.0)[0]) == "released"
+
+    def test_a_level_nobody_read_does_not_forget_it(self):
+        c = self._c(_Store())
+        _decide_from(c, soc=72.0)
+        c._peak_hold_pack_soc = lambda power: None
+        assert peak_hold_state(_decide_from(c)[0]) == "unread"
+        c._peak_hold_pack_soc = lambda power: 65.0
+        assert peak_hold_state(_decide_from(c)[0]) == "released"
+
+    def test_a_restart_does_not_forget_it(self):
+        store = _Store()
+        _decide_from(self._c(store), soc=72.0)
+        assert store.released is True and store.saves == 1
+        after_restart = self._c(store)
+        assert peak_hold_state(_decide_from(after_restart, soc=65.0)[0]) == "released"
+        assert store.saves == 1, "saved again with nothing new to say"
+
+    def test_under_the_gap_it_holds_again_and_says_so_to_the_store(self):
+        store = _Store(released=True)
+        c = self._c(store)
+        assert peak_hold_state(_decide_from(c, soc=59.0)[0]) == "held"
+        assert store.released is False
+
+
+def test_the_store_keeps_it_with_the_other_battery_state():
+    from custom_components.solar_energy_management.coordinator.storage import (
+        SEMStorage,
+    )
+    s = SimpleNamespace(_energy_data={})
+    assert SEMStorage.get_peak_hold_released(s) is False
+    SEMStorage.set_peak_hold_released(s, True)
+    assert SEMStorage.get_peak_hold_released(s) is True
 
 
 def _coord(*, remaining, tomorrow, home_w, cap=10.0, available=True,

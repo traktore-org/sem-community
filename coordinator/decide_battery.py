@@ -32,12 +32,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from . import reason_codes as RC
 from .charger_types import BatteryDecision, BatteryIntent, rewrite
 from .peak_guard import cover_for_peak_w
-from .sink_verdicts import peak_hold_state as _peak_hold_state
+from .sink_verdicts import (
+    peak_hold_state as _peak_hold_state,
+    peak_hold_target_w as _peak_hold_target_w,
+)
 from ..consts.battery_modes import arbitrage_allowed_for_mode, reserve_soc_of
 from ..consts.battery_permissions import effective_permissions, may_assist_ev
 
@@ -549,7 +552,8 @@ def _stall_step(prev, now_s: float, soc, stall_read: bool, *, moves: float):
             now_s - since_s >= MANUAL_CHARGE_STALL_S)
 
 
-def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int) -> float:
+def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int,
+                       *, ceiling_w: Optional[float] = None) -> float:
     """Raise a per-battery discharge limit to what the meter may not buy (#1003).
 
     Every LIMIT_DISCHARGE below hands part of the house's draw to the grid on
@@ -575,6 +579,13 @@ def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int) -> float:
     allowed_w = getattr(f, "peak_slot_allowed_w", None)
     if allowed_w is None or not house_load_is_measured(f):
         return float(limit_w)
+    if ceiling_w is not None:
+        # (#970) A hold that aims at the limit: the meter may buy the slot's
+        # allowance, but never more than this level. The allowance alone
+        # lets a fresh slot buy up to three times the limit and asks the
+        # pack only once the slot is behind — too late for a pack that
+        # follows a new limit slowly.
+        allowed_w = min(float(allowed_w), max(0.0, float(ceiling_w)))
     if reserve_stops_peak_cover(view) is not None:
         return float(limit_w)
     house_w = max(0.0, float(view.home_consumption_w or 0.0))
@@ -1039,6 +1050,14 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
     _held = _house_v is not None and getattr(_house_v, "state", "") == "held"
     if _held and _peak_hold and bool(getattr(view, "ev_charging", False)):
         _held = False
+    # (#970 review) …and it needs this cycle's slot budget. Without one the
+    # cover below is 0 W, and a 0 W limit with nothing under it lets the
+    # house buy without a bound. No reading, no hold: the pack covers the
+    # house as it does with the switch off.
+    if _held and _peak_hold and getattr(
+            view.fleet, "peak_slot_allowed_w", None) is None:
+        _held = False
+    _ceiling = _peak_hold_target_w(_house_v) if _peak_hold else None
     if _held:
         _f = view.fleet
         _allowed = getattr(_f, "peak_slot_allowed_w", None)
@@ -1076,7 +1095,9 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
                 reason_code=RC.BATTERY_HOUSE_BLIND,
             )
         else:
-            _cover_w = peak_cover_floor_w(view, 0.0, _n)
+            _cover_w = peak_cover_floor_w(view, 0.0, _n, ceiling_w=_ceiling)
+            if _ceiling is not None:
+                _allowed = min(float(_allowed), max(0.0, float(_ceiling)))
             _why = (f"peak hold — {getattr(_house_v, 'reason', '')}"
                     if _peak_hold else
                     f"house sink held — {getattr(_house_v, 'reason', '')}")

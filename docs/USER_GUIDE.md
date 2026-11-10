@@ -1674,7 +1674,10 @@ Everything below is **off by default** and lives on the Config tab under
 - **Keep the battery for the peak limit** (#970, off by default) — for a
   tariff that bills your highest 15 minutes. The house buys from the grid
   up to the peak limit and the pack covers only what is above it, on any
-  tariff, flat ones too. It needs a peak limit. It ends, and the pack
+  tariff, flat ones too. It needs a peak limit, and aims a little under
+  it (your peak warning level), so a battery that reacts late still keeps
+  the 15 minutes under the limit. If this quarter hour's budget cannot be
+  computed, it does not hold. It ends, and the pack
   covers the house as usual, when the pack is at or above *Buffer SOC*
   and the coming sun (what is left today or tomorrow's forecast) can
   refill the pack from its reserve; it returns once the pack is 10 points

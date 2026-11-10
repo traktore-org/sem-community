@@ -47,7 +47,9 @@ from .external_control import (
 
 from ..consts.core import CAPABILITY_MISS_CONFIRM_READS, CAPABILITY_MISS_HOLD_S
 from ..consts.core import CONF_INTRADAY_FORECAST, DEFAULT_INTRADAY_FORECAST
-from ..consts.core import DEFAULT_BATTERY_BUFFER_SOC
+from ..consts.core import (DEFAULT_BATTERY_BUFFER_SOC,
+                           DEFAULT_TARGET_PEAK_LIMIT,
+                           DEFAULT_WARNING_PEAK_LEVEL)
 from ..consts.core import (CONF_CO2_LIVE_INTENSITY, CONF_GRID_CO2_ENTITY,
                            DEFAULT_CO2_LIVE_INTENSITY)
 from ..consts.core import (CONF_OUTDOOR_TEMPERATURE_ENTITY,
@@ -9191,6 +9193,78 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         floor = float(self.config.get("battery_morning_drain_floor_soc", 50.0) or 50.0)
         return float(remaining) >= cap * (1.0 - floor / 100.0)
 
+    #: (#970) The hold aims this far under the limit when no load manager
+    #: names a warning level — the ratio its own defaults keep.
+    _PEAK_HOLD_TARGET_RATIO = DEFAULT_WARNING_PEAK_LEVEL / DEFAULT_TARGET_PEAK_LIMIT
+
+    def _peak_hold_inputs(self, power) -> dict:
+        """(#970) What the house verdict needs for the peak hold — ``{}``
+        while the switch is off, so an install that never turned it on reads
+        nothing and can fail on nothing here."""
+        if not bool(self.config.get("battery_peak_hold_enabled", False)):
+            return {}
+        return {
+            "peak_hold_enabled": True,
+            "peak_hold_target_w": self._peak_hold_target_w(),
+            "peak_allowance_known": getattr(
+                self, "_peak_slot_allowed_w", None) is not None,
+            "pack_soc": self._peak_hold_pack_soc(power),
+            "peak_hold_release_soc": float(
+                self.config.get("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC)
+                or DEFAULT_BATTERY_BUFFER_SOC),
+            "sun_refills_pack": self._sun_refills_whole_pack(),
+            "peak_hold_released": self._peak_hold_was_released(),
+        }
+
+    def _peak_hold_target_w(self) -> Optional[float]:
+        """(#970) The import level the hold aims at: the load manager's
+        warning level — the level SEM already treats as "near the limit" —
+        or the same share of the limit when nothing names one. ``None``
+        without a limit. Under the limit on purpose: the room banked early
+        in the slot pays for a pack that follows a new limit late."""
+        limit_kw = self._slot_ceiling_kw()
+        if limit_kw is None or limit_kw <= 0:
+            return None
+        target_kw = float(limit_kw) * self._PEAK_HOLD_TARGET_RATIO
+        lm = getattr(self, "_load_manager", None)
+        if lm is not None:
+            try:
+                warning_kw = float(lm._effective_levels()[0])
+                if 0.0 < warning_kw < float(limit_kw):
+                    target_kw = warning_kw
+            except Exception:  # noqa: BLE001 — no level, the ratio stands
+                pass
+        return target_kw * 1000.0
+
+    def _peak_hold_was_released(self) -> bool:
+        """(#970) Did the hold last let go? Kept across a restart."""
+        if getattr(self, "_peak_hold_released", None) is None:
+            _store = getattr(self, "_storage", None)
+            try:
+                self._peak_hold_released = bool(
+                    _store.get_peak_hold_released()) if _store else False
+            except Exception:  # noqa: BLE001 — unread is "not released"
+                self._peak_hold_released = False
+        return bool(self._peak_hold_released)
+
+    def _note_peak_hold(self, verdict) -> None:
+        """(#970) Remember whether the hold let go. Only a cycle that judged
+        the level moves it: a dear hour, an unread level or a missing budget
+        say nothing about it, so a pack inside the return gap stays let go."""
+        from .sink_verdicts import peak_hold_state
+        state = peak_hold_state(verdict)
+        if state not in ("held", "released"):
+            return
+        released = state == "released"
+        if released != bool(getattr(self, "_peak_hold_released", False)):
+            self._peak_hold_released = released
+            _store = getattr(self, "_storage", None)
+            if _store is not None:
+                try:
+                    _store.set_peak_hold_released(released)
+                except Exception:  # noqa: BLE001 — a save must not end a cycle
+                    pass
+
     def _sun_refills_whole_pack(self) -> Optional[bool]:
         """(#970) Does the coming sun refill the pack from its reserve, after
         the house has taken its share? ``None``: no forecast to ask.
@@ -14800,18 +14874,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 morning_hours=float(self.config.get("ev_morning_window_hours", 2.0) or 2.0),
                 forecast_refills_pack=self._forecast_refills_pack(),
                 pacing_horizon_end=self._pacing_horizon_end(),
-                # (#970) keep the battery for the peak limit — own switch
-                peak_hold_enabled=bool(self.config.get("battery_peak_hold_enabled", False)),
-                peak_limit_set=self._slot_ceiling_kw() is not None,
-                pack_soc=self._peak_hold_pack_soc(power),
-                peak_hold_release_soc=float(
-                    self.config.get("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC)
-                    or DEFAULT_BATTERY_BUFFER_SOC),
-                sun_refills_pack=self._sun_refills_whole_pack(),
-                peak_hold_released=bool(getattr(self, "_peak_hold_released", False)),
+                # (#970) keep the battery for the peak limit — own switch;
+                # nothing is read for it while the switch is off
+                **self._peak_hold_inputs(power),
             )
-            from .sink_verdicts import peak_hold_state
-            self._peak_hold_released = peak_hold_state(_verdicts.get("house")) == "released"
+            self._note_peak_hold(_verdicts.get("house"))
         except Exception:  # noqa: BLE001 — a verdict bug must not kill a cycle
             _LOGGER.warning("sink verdicts FAILED this cycle — every sink reads "
                             "OPEN until it recovers (arc #921)", exc_info=True)
