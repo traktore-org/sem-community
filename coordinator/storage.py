@@ -207,7 +207,11 @@ class SEMStorage:
         # State tracking
         self._loaded = False
         self._shutdown_listener: Optional[Callable] = None
-        self._last_daily_save_ts: float = 0.0  # monotonic, for the throttle
+        # monotonic, for the throttles. "Never saved" is minus infinity, not
+        # 0: time.monotonic() counts from the host's boot, so 0 read as "saved
+        # at boot" and refused every save in the first minutes of uptime.
+        self._last_daily_save_ts: float = float("-inf")
+        self._last_energy_save_ts: float = float("-inf")
         self._closed = False   # (#1209) set by async_close on unload
 
     @property
@@ -927,7 +931,7 @@ class SEMStorage:
         ``async_save_daily_throttled``: a real write, bounded.
         """
         now = time.monotonic()
-        if now - getattr(self, "_last_energy_save_ts", 0.0) < ENERGY_SAVE_INTERVAL:
+        if now - self._last_energy_save_ts < ENERGY_SAVE_INTERVAL:
             return
         self._last_energy_save_ts = now
         await self.async_save_energy_now()
