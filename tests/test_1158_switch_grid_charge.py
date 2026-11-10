@@ -246,6 +246,17 @@ def _ent(entity_id, key):
         original_device_class=None, disabled_by=None, config_entry_id="e1")
 
 
+def _bare(entity_id, key):
+    """The same entity when the integration sets no translation key: the
+    unique id is ``<entry>_<key>_<platform>`` and nothing else names it."""
+    platform = entity_id.split(".", 1)[0]
+    return SimpleNamespace(
+        entity_id=entity_id, platform=DOMAIN, device_id="inv1",
+        translation_key=None, unique_id=f"01hx_{key}_{platform}",
+        original_name=None, original_device_class=None, disabled_by=None,
+        config_entry_id="e1")
+
+
 FIXTURE_ENTITIES = [
     _ent(SWITCH, "battery_grid_charging"),
     _ent(TARGET, "battery_grid_max_charge"),
@@ -349,16 +360,31 @@ class TestTheInstallIsOfferedItsThreeControls:
 
 # ───────────────── program groups: the switch keeps its old meaning ───────
 
-DEYE_SHAPED = [
-    # the same integration, another device family: numbered charge programs
-    _ent("switch.deye_battery_grid_charging", "battery_grid_charging"),
-    _ent("number.deye_program_1_soc", "program_1_soc"),
-    _ent("number.deye_program_1_power", "program_1_power"),
-    _ent("time.deye_program_1_time", "program_1_time"),
-    _ent("select.deye_work_mode", "work_mode"),
-    _ent("number.deye_battery_grid_max_charge", "battery_grid_max_charge"),
-    _ent("number.deye_battery_discharging_power", "battery_discharging_power"),
-]
+def _program_install(naming, *, bare=True):
+    """The same integration, another device family: the grid-charge switch
+    and percent numbers beside numbered charge programs, named the way
+    integrations and profiles name them."""
+    make = _bare if bare else _ent
+    names = {
+        "program": ("program_1_soc", "program_1_power", "program_1_time"),
+        "prog": ("prog1_capacity", "prog1_power", "prog1_time"),
+        "slice": ("slice_1_soc", "slice_1_charge", "slice_1_time"),
+        "time_point": ("time_point_1_soc", "time_point_1_power", "time_point_1"),
+        "timeslot": ("timeslot_1_soc", "timeslot_1_power", "timeslot_1"),
+    }[naming]
+    return [
+        make("switch.inv_battery_grid_charging", "battery_grid_charging"),
+        make("number.inv_battery_grid_max_charge", "battery_grid_max_charge"),
+        make("number.inv_battery_discharging_power", "battery_discharging_power"),
+        make("select.inv_work_mode", "work_mode"),
+        make(f"number.inv_{names[0]}", names[0]),
+        make(f"number.inv_{names[1]}", names[1]),
+        make(f"time.inv_{names[2]}", names[2]),
+    ]
+
+
+DEYE_SHAPED = _program_install("program", bare=False)
+NAMINGS = ("program", "prog", "slice", "time_point", "timeslot")
 
 
 def _base_roster_vocab():
@@ -384,6 +410,98 @@ class TestAnInstallWithProgramGroupsSeesNothingNew:
             DEYE_SHAPED, DOMAIN, state_of=hass.states.get)
         assert props == {}
 
+    @pytest.mark.parametrize("naming", NAMINGS)
+    @pytest.mark.parametrize("bare", [True, False])
+    def test_however_the_groups_are_named(self, naming, bare):
+        """The real entity shape too: no translation key, the key only in
+        the unique id."""
+        props = hd.propose_roles_from_roster(
+            _program_install(naming, bare=bare), DOMAIN,
+            state_of=_Hass().states.get)
+        assert props == {}, naming
+
+    @pytest.mark.parametrize("naming", NAMINGS)
+    def test_a_key_carried_only_by_the_entity_id_or_its_name(self, naming):
+        for field in ("entity_id", "original_name"):
+            ents = []
+            for e in _program_install(naming):
+                key = e.unique_id[len("01hx_"):].rsplit("_", 1)[0]
+                opaque = SimpleNamespace(**{**vars(e), "unique_id": "a1b2c3"})
+                if field == "original_name":
+                    opaque.original_name = key.replace("_", " ").title()
+                    opaque.entity_id = (e.entity_id.split(".")[0]
+                                        + ".x" + str(len(ents)))
+                ents.append(opaque)
+            assert hd._has_program_groups(ents), (naming, field)
+
+    def test_an_install_set_up_for_program_groups_needs_no_shape(self):
+        """The one detector: what the config already names as its program
+        controls, or the platform it is pinned to — the list the adapter
+        choice reads."""
+        from custom_components.solar_energy_management.coordinator.battery_adapters import (
+            program_group_setup,
+        )
+        ents = [_ent(SWITCH, "battery_grid_charging"),
+                _ent(TARGET, "battery_grid_max_charge"),
+                _ent(LIMIT, "battery_discharging_power"),
+                _ent("select.inverter_charge_a", "charge_a")]
+        hass = _Hass()
+        assert hd.propose_roles_from_roster(ents, DOMAIN,
+                                            state_of=hass.states.get)
+        named, pinned = program_group_setup({"deye_program_groups": [
+            {"charge": "select.inverter_charge_a", "soc": "number.other"}]})
+        assert "select.inverter_charge_a" in named and pinned is False
+        assert hd.propose_roles_from_roster(
+            ents, DOMAIN, state_of=hass.states.get,
+            program_entities=named) == {}
+        named, pinned = program_group_setup({"battery_charge_platform": "Deye"})
+        assert named == () and pinned is True
+        assert hd.propose_roles_from_roster(
+            ents, DOMAIN, state_of=hass.states.get,
+            program_platform=pinned) == {}
+        assert program_group_setup({}) == ((), False)
+        assert program_group_setup(None) == ((), False)
+
+    def test_the_coordinator_hands_the_report_that_answer(self):
+        from .ast_contracts import calls
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        assert calls(SEMCoordinator.refresh_detection_report,
+                     "program_group_setup")
+
+    def test_a_numbered_charge_window_is_not_a_program_group(self):
+        """The fixture inverter itself has timed-charge windows 1 and 2."""
+        ents = FIXTURE_ENTITIES + [
+            _bare("time.inverter_timed_charge_1_start", "timed_charge_1_start"),
+            _bare("time.inverter_timed_discharge_2_end", "timed_discharge_2_end")]
+        assert not hd._has_program_groups(ents)
+        assert "battery_force_charge" in hd.propose_roles_from_roster(
+            ents, DOMAIN, state_of=_Hass().states.get)
+
+    def test_the_proposals_appear_without_a_translation_key_too(self):
+        ents = [_bare(SWITCH, "battery_grid_charging"),
+                _bare(TARGET, "battery_grid_max_charge"),
+                _bare(LIMIT, "battery_discharging_power")]
+        props = hd.propose_roles_from_roster(ents, DOMAIN,
+                                             state_of=_Hass().states.get)
+        assert props["battery_force_charge"]["entity"] == SWITCH
+        assert props["battery_target_soc"]["entity"] == TARGET
+        assert props["battery_discharge_limit"]["entity"] == LIMIT
+
+    def test_the_platform_tail_counts_only_for_a_profile_role(self):
+        """``<key>_<platform>`` is how a profile integration builds its
+        unique id. For a role declared in strings it stays no match."""
+        e = SimpleNamespace(
+            entity_id="number.eg4_x", platform="eg4_web_monitor", device_id="d",
+            translation_key=None, unique_id="x_ac_charge_soc_limit_number",
+            original_device_class=None, disabled_by=None, config_entry_id="e")
+        assert hd.propose_roles_from_roster([e], "eg4_web_monitor") == {}
+        # …and never across platforms
+        wrong = _bare("number.inverter_grid_charging", "battery_grid_charging")
+        assert "battery_force_charge" not in hd.propose_roles_from_roster(
+            [wrong], DOMAIN, state_of=_Hass().states.get)
+
     def test_without_program_groups_the_proposals_appear(self):
         props = _proposals(_Hass())
         assert {"battery_force_charge", "battery_target_soc",
@@ -393,18 +511,26 @@ class TestAnInstallWithProgramGroupsSeesNothingNew:
         ("program_1_soc", True), ("program_6_power", True),
         ("prog2_time", True), ("prog_3_capacity", True),
         ("01hx_program_4_soc_number", True),
+        ("slice_1_time", True), ("deye_slice_6_charge", True),
+        ("time_point_1", True), ("timepoint_3_soc", True),
+        ("timeslot_1", True), ("time_slot_2_power", True),
         ("battery_grid_charging", False), ("program_soc", False),
+        ("timed_discharge_2_end", False), ("slice_time", False),
         ("programmable_mode", False), ("progress_1_done", False),
         ("timed_charge_1_start", False)])
     def test_what_a_program_group_key_is(self, key, hit):
         import re
         assert bool(re.search(lex.PROGRAM_GROUP_KEY, key, re.I)) is hit
 
-    def test_it_is_read_from_the_entitys_own_words_not_its_id(self):
+    def test_the_gate_reads_every_name_because_it_only_withholds(self):
+        """A role is matched on the integration's own words, never on the
+        entity id. The gate is the other way round: a wrong yes costs an
+        offer, a wrong no offers a permission switch as a command."""
         renamed = [_ent(SWITCH, "battery_grid_charging"),
                    _ent("number.program_1_soc", "battery_low_soc")]
-        assert not hd._has_program_groups(renamed)
+        assert hd._has_program_groups(renamed)
         assert hd._has_program_groups(DEYE_SHAPED)
+        assert not hd._has_program_groups(FIXTURE_ENTITIES)
 
     def test_a_role_declared_in_strings_is_never_withheld(self):
         """Only profile-read roles ask the question: a brand that declares
@@ -508,6 +634,47 @@ class TestTheGenericAdapterDrivesIt:
         await actuate_battery(_limit(0.0), adapter)
         assert hass.sent("set_value", LIMIT) == [
             {"entity_id": LIMIT, "value": 1.0}]
+
+    async def test_one_percent_is_not_called_zero(self):
+        """1 % of 10 kW is 100 W the pack may still give. The limit in
+        force is recorded and published as that, and the status says the
+        pack is held down, not kept out."""
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            active_discharge_limit,
+        )
+        hass = _Hass()
+        adapter = _adapter(hass)
+        await actuate_battery(_limit(0.0), adapter)
+        assert adapter.last_discharge_limit_w == 100.0
+        assert active_discharge_limit({"b1": adapter}) == 100.0
+        assert adapter._limit_floor_w == 100.0
+        assert "cannot go below 100 W" in adapter.last_error
+        assert "reduced to 100 W, not blocked" in adapter.last_error
+        assert adapter.verify_pending_write() is True
+        # a second cycle writes nothing more and still says it
+        await actuate_battery(_limit(0.0), adapter)
+        assert len(hass.sent("set_value", LIMIT)) == 1
+        assert "not blocked" in adapter.last_error
+
+    async def test_a_limit_the_control_can_say_carries_no_such_note(self):
+        hass = _Hass()
+        adapter = _adapter(hass)
+        await actuate_battery(_limit(0.0), adapter)
+        await adapter.command_limit_discharge(2500.0)
+        assert adapter.last_error is None and adapter._limit_floor_w is None
+        assert adapter.last_discharge_limit_w == 2500.0
+        await actuate_battery(_limit(0.0), adapter)
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.NORMAL), adapter)
+        assert adapter.last_error is None and adapter._limit_floor_w is None
+
+    async def test_a_watt_control_that_takes_zero_records_zero(self):
+        hass = _Hass()
+        hass._states[LIMIT] = SimpleNamespace(state="5000", attributes={
+            "unit_of_measurement": "W", "min": 0, "max": 10000})
+        adapter = _adapter(hass)
+        await actuate_battery(_limit(0.0), adapter)
+        assert adapter.last_discharge_limit_w == 0.0
         assert adapter.last_error is None
 
     async def test_a_percent_is_never_rounded_up(self):

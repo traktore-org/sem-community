@@ -14135,9 +14135,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _chargers = [{"id": "ev_charger", **{
                     k: v for k, v in _cfg.items()
                     if k.startswith("ev_") and isinstance(v, str) and v}}]
+            # (#1158) an install SEM drives through program groups keeps
+            # that setup: the same list the adapter choice reads
+            from .battery_adapters import program_group_setup
+            _prog_entities, _prog_platform = program_group_setup(_cfg)
             self._detection_report = build_detection_report(
                 self.hass, configured_entities=self._configured_entity_ids(),
-                strategy_values=_sv, configured_chargers=_chargers)
+                strategy_values=_sv, configured_chargers=_chargers,
+                program_entities=_prog_entities,
+                program_platform=_prog_platform)
         except Exception:  # noqa: BLE001 — evidence must never cost setup
             _LOGGER.debug("detection report skipped", exc_info=True)
             self._detection_report = None

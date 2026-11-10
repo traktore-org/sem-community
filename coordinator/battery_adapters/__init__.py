@@ -144,6 +144,16 @@ def _deye_control_entities(config: dict) -> tuple:
     return tuple(dict.fromkeys(found))
 
 
+def program_group_setup(config: dict) -> tuple:
+    """(#1158) How this install is set up for program groups, for the
+    roster: ``(the control entities the config names, is the platform
+    pinned to it)``. The one place that knows; the adapter choice above
+    and the proposals read the same answer."""
+    config = config or {}
+    pinned = str(config.get("battery_charge_platform") or "").lower() == "deye"
+    return _deye_control_entities(config), pinned
+
+
 def _own_deye_battery(hass, config: dict) -> bool:
     """(#1273) Is this battery the one the Deye controls belong to?
 
@@ -276,4 +286,5 @@ __all__ = [
     "GenericBatteryAdapter",
     "adapter_for",
     "auto_brand",
+    "program_group_setup",
 ]
