@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🔧 **Heaters with a thermometer and Keep at now join the shared plan on every install** (#1335). Cheap hours for the car and battery can shift.
 - 🐛 **A load SEM started on sun now stops when solar production ends, even when its power sensor reads 0 W** (#1335).
 - 🐛 **A planned comfort block now runs through without switching the load on and off** (#1334), also with Grid set to Off.
+- 📝 **The load card's Comfort hint now says how Keep at is reached**: in the planned hour from any source, sun may go further (#1334).
 - 🐛 **The Energy Plan card shows a load's daily grid run when SEM starts it** (#1330). It showed a midday run SEM never did.
 
 # [2.3.0-beta.10] — 09.11.2026
