@@ -728,6 +728,48 @@ class TestKSTARCombined:
         assert power.battery_charge_power == 1000
         assert power.home_consumption_power == 3000  # 6000 - 2000 - 1000
 
+    @pytest.mark.asyncio
+    async def test_kstar_grid_charge_and_percent_limit_control(self):
+        """(#1158) The control side, end to end: the hybrid profile's own
+        entities → roles → the option each one fills → the generic adapter →
+        the switch, the charge level and a discharge limit in percent."""
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            actuate_battery,
+        )
+        from custom_components.solar_energy_management.coordinator.battery_adapters import (
+            adapter_for,
+        )
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            BatteryDecision,
+            BatteryIntent,
+        )
+        from custom_components.solar_energy_management.tests import (
+            test_1158_switch_grid_charge as kstar,
+        )
+
+        hass = kstar._Hass()
+        adapter = adapter_for(hass, kstar._accepted_config(hass))
+        assert adapter.supports_forced_charge
+
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.FORCE_CHARGE, target_soc=90.0,
+            charge_power_w=3000.0, duration_min=120), adapter)
+        assert hass.read(kstar.SWITCH) == "on"
+        assert float(hass.read(kstar.TARGET)) == 90.0
+
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.STOP_FORCE_CHARGE), adapter)
+        assert hass.read(kstar.SWITCH) == "off"
+
+        # the car charges at night: keep the pack out of it (100 % = 10 kW)
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.LIMIT_DISCHARGE,
+            discharge_limit_w=0.0), adapter)
+        assert float(hass.read(kstar.LIMIT)) == 1.0     # the register's least
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.NORMAL), adapter)
+        assert float(hass.read(kstar.LIMIT)) == 100.0
+
 
 # ════════════════════════════════════════════
 # Sessy: Battery-only with external P1 meter

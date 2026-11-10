@@ -344,7 +344,7 @@ SEM creates 70+ sensors organized by category:
 
 **EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA. Since 2.1 SEM also proposes a charger from the integration's own words when it does not know the brand (#915) — and says when a service needs wiring by hand.
 
-> **Note:** KSTAR inverters are supported via the [ha-solarman](https://github.com/davidrapan/ha-solarman) integration with KSTAR YAML profiles, not via a dedicated KSTAR integration.
+> **Note:** KSTAR inverters are supported via the [ha-solarman](https://github.com/davidrapan/ha-solarman) integration with KSTAR YAML profiles, not via a dedicated KSTAR integration. Since 2.3 SEM also offers the hybrid profile's grid-charge switch, charge level and discharge limit (in percent) on the Config card; accept them and SEM can charge the battery from the grid and keep it out of the car. Not yet confirmed on real hardware.
 
 > **Note:** Fronius and SMA core integrations are read-only for battery control. Battery discharge protection requires the Modbus variant (e.g., `fronius_modbus`) or works without discharge limiting.
 

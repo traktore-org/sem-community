@@ -470,6 +470,22 @@
         "pv_power"
       ]
     },
+    "solarman": {
+      "battery_discharge_limit": [
+        "battery_discharging_power"
+      ],
+      "battery_force_charge": [
+        "battery_grid_charging"
+      ],
+      "battery_strategy": [
+        "battery_operation_mode",
+        "energy_pattern",
+        "work_mode"
+      ],
+      "battery_target_soc": [
+        "battery_grid_max_charge"
+      ]
+    },
     "solis_cloud_control": {
       "battery_charge_end_soc": [
         "battery_max_charge_soc"

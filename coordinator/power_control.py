@@ -39,13 +39,38 @@ def _looks_like_current(entity_id: str) -> bool:
     return "current" in name or "ampere" in name or name.endswith("_amps")
 
 
+def _percent_base(percent_of_w) -> float | None:
+    """The watts that 100 % stands for, or ``None`` when not known."""
+    try:
+        base = float(percent_of_w)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return base if math.isfinite(base) and base > 0 else None
+
+
+def is_percent_control(hass, entity_id: str) -> bool:
+    """(#1158) Does this control take percent of the pack's rating?"""
+    try:
+        state = hass.states.get(entity_id) if entity_id else None
+    except Exception:  # noqa: BLE001
+        return False
+    return state is not None and normalize_unit(state) == "%"
+
+
 def _native_power_scale(
     hass,
     entity_id: str,
     *,
     require_explicit_unit: bool = False,
+    percent_of_w: float | None = None,
 ) -> float | None:
-    """Return native-unit-to-watts scale, or ``None`` when unsafe."""
+    """Return native-unit-to-watts scale, or ``None`` when unsafe.
+
+    (#1158) A control in percent is a power control only for a caller that
+    knows what 100 % is (``percent_of_w``, the pack's maximum power): one
+    percent is then a hundredth of it. Without that it stays refused — a
+    percent written as watts is the wrong number by a factor of the rating.
+    """
     state = hass.states.get(entity_id)
     if state is None:
         return None
@@ -62,6 +87,17 @@ def _native_power_scale(
         return None if _looks_like_current(entity_id) else 1.0
 
     unit = normalize_unit(state)
+    if unit == "%":
+        base = _percent_base(percent_of_w)
+        if base is None:
+            log_on_change(
+                _LOGGER, f"power_control:{entity_id}", logging.WARNING,
+                "Battery power control %s rejected: it takes percent, and "
+                "the power that 100 %% stands for is not known here",
+                entity_id,
+            )
+            return None
+        return base / 100.0
     if unit:
         if not is_battery_control_power_unit(state):
             log_on_change(
@@ -92,12 +128,14 @@ def native_power_scale(
     entity_id: str,
     *,
     require_explicit_unit: bool = False,
+    percent_of_w: float | None = None,
 ) -> float | None:
     """Public face of :func:`_native_power_scale` (#749): the forcible-
     discharge setpoint write shares the ONE validation rule with the
     discharge-limit path instead of growing a second, laxer one."""
     return _native_power_scale(
-        hass, entity_id, require_explicit_unit=require_explicit_unit)
+        hass, entity_id, require_explicit_unit=require_explicit_unit,
+        percent_of_w=percent_of_w)
 
 
 def clamp_to_entity_range(
@@ -173,7 +211,8 @@ def is_valid_power_control_entity(
     ) is not None
 
 
-def entity_max_watts(hass, entity_id: str) -> float | None:
+def entity_max_watts(hass, entity_id: str, *,
+                     percent_of_w: float | None = None) -> float | None:
     """The highest value the control entity accepts, in watts.
 
     ``None`` when the entity, its unit or its ``max`` attribute cannot be
@@ -181,7 +220,10 @@ def entity_max_watts(hass, entity_id: str) -> float | None:
     """
     if not entity_id:
         return None
-    scale_to_watts = _native_power_scale(hass, entity_id)
+    if percent_of_w is None and is_percent_control(hass, entity_id):
+        return None      # (#1158) no base here: the caller keeps its ceiling
+    scale_to_watts = _native_power_scale(
+        hass, entity_id, percent_of_w=percent_of_w)
     if scale_to_watts is None:
         return None
     attrs = getattr(hass.states.get(entity_id), "attributes", None)
@@ -202,12 +244,21 @@ def prepare_power_setpoint(
     watts: float,
     *,
     require_explicit_unit: bool = False,
+    percent_of_w: float | None = None,
 ) -> PreparedPowerSetpoint | None:
-    """Validate and convert a watt request to the entity's native unit."""
+    """Validate and convert a watt request to the entity's native unit.
+
+    (#1158) A percent control takes whole steps inside its own range, and
+    that range often starts above zero (1–100 %). The request is fitted to
+    it — rounded down to the step, never below the entity's minimum —
+    because "as little as this control can say" is the honest answer to a
+    0 W limit there, and a refused write would leave the old limit in force.
+    """
     scale_to_watts = _native_power_scale(
         hass,
         entity_id,
         require_explicit_unit=require_explicit_unit,
+        percent_of_w=percent_of_w,
     )
     if scale_to_watts is None:
         return None
@@ -217,6 +268,14 @@ def prepare_power_setpoint(
         return None
     try:
         current_value = finite_float(state.state)
+        if normalize_unit(state) == "%":
+            attrs_pct = getattr(state, "attributes", None)
+            if isinstance(attrs_pct, Mapping) and not isinstance(
+                    attrs_pct.get("step"), (int, float)):
+                attrs_pct = {**attrs_pct, "step": 1.0}
+            watts = clamp_to_entity_range(
+                attrs_pct, max(0.0, float(watts)), scale_to_watts,
+                round_down_to_step=True)
         native_value = float(watts) / scale_to_watts
     except (TypeError, ValueError, OverflowError):
         log_on_change(
@@ -294,6 +353,7 @@ async def async_write_power_setpoint_verbose(
     *,
     context: str,
     force: bool = False,
+    percent_of_w: float | None = None,
 ) -> tuple:
     """Validate, convert, and write a watt setpoint.
 
@@ -308,7 +368,8 @@ async def async_write_power_setpoint_verbose(
     another value last: the entity can still show the value from before
     that write until the integration next reads it (#1175).
     """
-    prepared = prepare_power_setpoint(hass, entity_id, watts)
+    prepared = prepare_power_setpoint(
+        hass, entity_id, watts, percent_of_w=percent_of_w)
     if prepared is None:
         return False, False
     # (#900) Idempotency for EVERY writer, not one adapter (#538 had it on
@@ -346,8 +407,10 @@ async def async_write_power_setpoint(
     *,
     context: str,
     force: bool = False,
+    percent_of_w: float | None = None,
 ) -> bool:
     """Validate, convert, and write a watt setpoint. Return success."""
     ok, _wrote = await async_write_power_setpoint_verbose(
-        hass, entity_id, watts, context=context, force=force)
+        hass, entity_id, watts, context=context, force=force,
+        percent_of_w=percent_of_w)
     return ok
