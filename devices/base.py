@@ -2157,9 +2157,13 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
     def hvac_mode(self) -> str:
         """The mode SEM sets when it turns the unit on. With ``by_forecast``
         it is the season in force, or ``by_forecast`` itself while no
-        outlook has ever been read (the unit is then not started)."""
+        season is known (the unit then waits, unless it is too cold)."""
         if self._hvac_setting == HVAC_BY_FORECAST:
-            return self._season_mode or HVAC_BY_FORECAST
+            if self._season_mode is not None:
+                return self._season_mode
+            # No season known and no outlook to pick one from. A house that
+            # is too cold is heated all the same; anything else waits.
+            return "heat" if self.comfort_state == "forced" else HVAC_BY_FORECAST
         return self._hvac_setting
 
     @hvac_mode.setter
@@ -2191,7 +2195,9 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         now = now or datetime.now()
         if self._season_mode is None:
             middle = (self.SEASON_HEAT_BELOW_C + self.SEASON_COOL_ABOVE_C) / 2.0
-            self._season_mode = "heat" if outlook_c < middle else "cool"
+            # a unit already heating a too-cold house stays in that mode
+            self._season_mode = ("heat" if outlook_c < middle or self.is_active
+                                 else "cool")
             self._season_since = now
             return self._season_mode
         if self._season_mode == "heat":
@@ -2214,9 +2220,35 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
     def start_refusal(self) -> Optional[str]:
         """(#1323) ``by_forecast`` with no outlook ever read: SEM does not
         guess a season, so layer 1 does not start the unit."""
-        if self._hvac_setting == HVAC_BY_FORECAST and self._season_mode is None:
-            return "sensor"
+        if (self._hvac_setting == HVAC_BY_FORECAST and self._season_mode is None
+                and self.comfort_state != "forced"):
+            # its own reason: no thermometer is broken, the season is not
+            # known yet. Too cold is never refused — the floor heats.
+            return "season"
         return None
+
+    def season_memo(self) -> Optional[Dict[str, Any]]:
+        """(#1323) The season in force and when it began, to store — or None."""
+        if self._hvac_setting != HVAC_BY_FORECAST or self._season_mode is None:
+            return None
+        return {"mode": self._season_mode,
+                "since": self._season_since.isoformat()
+                if self._season_since is not None else None}
+
+    def restore_season(self, memo) -> bool:
+        """(#1323) Take up the stored season after a restart or a rebuild,
+        so the dead band and the day's dwell go on where they were. Only
+        while no season is in force; a bad memo is no memo."""
+        if (self._hvac_setting != HVAC_BY_FORECAST or self._season_mode is not None
+                or not isinstance(memo, dict)
+                or memo.get("mode") not in ("heat", "cool")):
+            return False
+        self._season_mode = memo["mode"]
+        try:
+            self._season_since = datetime.fromisoformat(str(memo.get("since")))
+        except (TypeError, ValueError):
+            self._season_since = None
+        return True
 
     @property
     def comfort_limit(self) -> float:
@@ -2226,8 +2258,8 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         the whole year."""
         raw = float(getattr(self, "_comfort_limit_set", 0.0) or 0.0)
         target = float(getattr(self, "comfort_target", 0.0) or 0.0)
-        if (raw and target and self._hvac_setting == HVAC_BY_FORECAST
-                and self._season_mode is not None):
+        if raw and target and self._hvac_setting == HVAC_BY_FORECAST:
+            # no season yet reads as heating: "too cold" must still be seen
             gap = abs(raw - target)
             return target + gap if self._season_mode == "cool" else target - gap
         return raw
@@ -2237,6 +2269,9 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         self._comfort_limit_set = float(value or 0.0)
 
     def _comfort_direction(self) -> str:
+        if self._hvac_setting == HVAC_BY_FORECAST:
+            # the season itself, not ``hvac_mode``: that one asks the band
+            return "cool" if self._season_mode == "cool" else "heat"
         return "cool" if self.hvac_mode == "cool" else "heat"
 
     def _comfort_anchor_c(self):

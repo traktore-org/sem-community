@@ -965,6 +965,12 @@ def compute_load_intent(
             return LoadIntent(False, 0.0, None,
                               "temperature sensor reads nothing — not started",
                               RC.LOAD_NO_READING)
+        if refusal == "season":
+            # (#1323) heat or cool by the forecast, and no outdoor reading
+            # yet. A unit that is too cold never says this: it heats.
+            return LoadIntent(False, 0.0, None,
+                              "no outdoor reading yet — heat or cool not picked",
+                              RC.LOAD_NO_SEASON)
         return LoadIntent(False, 0.0, None, "at its target temperature",
                           RC.LOAD_AT_TARGET)
     # 3d. (#594/#1335) Away: no comfort heating. A run stops; the optional
@@ -1379,6 +1385,13 @@ def _step_down_must_end(device) -> bool:
             or getattr(device, "comfort_state", "") == "forced")
 
 
+async def _release_step_down(device) -> None:
+    """(#1323) Take a step-down back and note it. Layer 3's own helper."""
+    if await device.release_step_down():
+        _note_load(device, on=False, reason_code=RC.LOAD_STEP_DOWN_END,
+                   text="step-down released")
+
+
 async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
                          *, observer: bool = False, controller=None) -> float:
     """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
@@ -1410,11 +1423,13 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         # No intent asks for it any more. The minimum hold is against a
         # cause that flickers; anything that wants the load (a run, "too
         # cold") or takes it out of SEM's hands ends the step-down at once.
-        if (intent.on or _step_down_must_end(device)
-                or device.can_release_step_down()):
-            if await device.release_step_down():
-                _note_load(device, on=False, reason_code=RC.LOAD_STEP_DOWN_END,
-                           text="step-down released")
+        # A start that can go out this cycle REPLACES the step-down: the
+        # start writes the final state, so the contacts move once, not
+        # twice. If it does not take, the release follows below.
+        starting = intent.on and not active and device.can_activate()
+        if not starting and (intent.on or _step_down_must_end(device)
+                             or device.can_release_step_down()):
+            await _release_step_down(device)
     elif intent.step_down and not stepped and not active:
         if device.can_step_down() and await device.step_down():
             _note_load(device, on=False, reason_code=intent.code,
@@ -1431,6 +1446,9 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         if consumed > 0:
             device.reset_surplus_timer()
             _apply_source_markers(device, intent)
+        elif getattr(device, "is_stepped_down", False) is True:
+            # (#1323) the start did not take: the step-down still ends
+            await _release_step_down(device)
         return consumed
 
     if not intent.on and active:

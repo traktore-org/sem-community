@@ -3992,8 +3992,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         measures now, else None. No new source and no new reader."""
         now = dt_util.now()
         ahead = now + timedelta(hours=self._OUTLOOK_HOURS)
-        temps = [t for start, t, _kind in (getattr(self, "_temp_forecast", None) or [])
-                 if now - timedelta(hours=1) <= start <= ahead]
+        temps = []
+        for start, t, kind in (getattr(self, "_temp_forecast", None) or []):
+            if kind == "hourly":
+                if now - timedelta(hours=1) <= start <= ahead:
+                    temps.append(t)
+            elif kind == "daily":
+                # a day's row is the mean of its high and low (#1082): it
+                # counts when its day overlaps the next 24 h
+                if start <= ahead and start + timedelta(days=1) > now:
+                    temps.append(t)
+            # ``daily_high``: a day given by its high alone would read too
+            # warm and lean every unit towards cooling — not used
         if temps:
             return sum(temps) / len(temps)
         return self._outdoor_temperature_or_none()
@@ -4006,8 +4016,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if not units:
             return
         outlook = self._outdoor_outlook_c()
+        stored = None
         for dev in units:
+            if getattr(dev, "_season_mode", None) is None:
+                # a fresh unit (restart, rebuild): take up its stored season
+                # first, so the dead band and the dwell go on
+                if stored is None:
+                    storage = getattr(self, "_storage", None)
+                    try:
+                        stored = storage.get_season_state() if storage else {}
+                    except Exception:  # noqa: BLE001 — no store is no memo
+                        stored = {}
+                dev.restore_season(stored.get(str(dev.device_id)))
             dev.update_season(outlook)
+
+    def _season_memos(self) -> Dict[str, Any]:
+        """(#1323) ``{device_id: memo}`` for every unit with a season."""
+        out: Dict[str, Any] = {}
+        for did, dev in (getattr(self._surplus_controller, "_devices", {}) or {}).items():
+            memo_fn = getattr(dev, "season_memo", None)
+            memo = memo_fn() if callable(memo_fn) else None
+            if isinstance(memo, dict):
+                out[str(did)] = memo
+        return out
 
     async def _apply_vacation_mode(self) -> bool:
         """Set the per-cycle vacation flag on the comfort-heating controllers
@@ -5871,6 +5902,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # know to take it back
                 try:
                     self._storage.set_step_down_state(self._step_down_memos())
+                except (AttributeError, TypeError, ValueError):
+                    pass
+                # (#1323) …and each unit's season, merged over what is
+                # stored: a unit not built yet keeps its stored season
+                try:
+                    self._storage.set_season_state({
+                        **self._storage.get_season_state(),
+                        **self._season_memos()})
                 except (AttributeError, TypeError, ValueError):
                     pass
                 # Persist the legionella timestamp (#508 I2).
@@ -16959,6 +16998,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     hi = r.get("temperature")
                     lo = r.get("templow")
                     t = float(hi) if lo is None or kind == "hourly" else (float(hi) + float(lo)) / 2
+                    # (#1323) a day known by its high alone is marked: the
+                    # hour lookup still uses it, the outlook does not
+                    row_kind = ("daily_high" if kind == "daily" and lo is None
+                                else kind)
                 except (TypeError, ValueError):
                     continue
                 if start is None:
@@ -16968,7 +17011,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     SimpleNamespace(state=t, attributes={"unit_of_measurement": unit}))
                 if t is None:
                     continue
-                out.append((start, t, kind))
+                out.append((start, t, row_kind))
             if out:
                 self._temp_forecast = sorted(out, key=lambda x: x[0])
                 return

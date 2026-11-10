@@ -776,6 +776,16 @@ class SEMStorage:
     def set_step_down_state(self, state: Dict[str, Any]) -> None:
         self._energy_data["step_down_state"] = dict(state or {})
 
+    # (#1323) A climate unit that picks heat or cool itself: the season in
+    # force and when it began, by device id — so a restart keeps the dead
+    # band and the day's dwell instead of deciding anew.
+    def get_season_state(self) -> Dict[str, Any]:
+        value = self._energy_data.get("season_state")
+        return dict(value) if isinstance(value, dict) else {}
+
+    def set_season_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["season_state"] = dict(state or {})
+
     # Day-rollover decay bookkeeping (#645) — the date the virtual-SOC daily
     # decay LAST RAN, as an ISO date string. Distinct from the coordinator's
     # in-memory ``_tracker_date`` (which only owns the hour-bucket arrays):
