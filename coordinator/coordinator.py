@@ -12750,6 +12750,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (Grid-sourced: charging the battery draws through the meter.)
             dec = getattr(scheduler, "decision", None)
             deficit = float(getattr(dec, "deficit_kwh", 0.0) or 0.0)
+            # (#1311) SEM grid-charges the battery only when the scheduler
+            # says so: "not profitable", "not needed" and "target reached"
+            # carry a deficit but no charge.
+            from .battery_charge_scheduler import SchedulerState as _SS
+            if getattr(dec, "state", None) in (
+                    _SS.NOT_PROFITABLE, _SS.NOT_NEEDED, _SS.TARGET_REACHED):
+                deficit = 0.0
             if deficit > 0.1:
                 try:
                     # The battery's drag-set slot in the ONE list (#576).
@@ -12763,6 +12770,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "battery_max_charge_power_w", 5000.0)),
                     priority=batt_prio,
                     source="grid",
+                    # (#1311) A grid charge runs at night only: a priced day
+                    # hour is closed to it, a sun hour stays open (the sun
+                    # fills the pack). Cheap day hours are #1073.
+                    sun_waits_until=plan_day_end,
                 ))
 
             # ── Readiness, before anything gets stamped ─────────────────

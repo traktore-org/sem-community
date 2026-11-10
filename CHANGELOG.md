@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The Energy Plan card shows a battery grid charge only at night, and only when SEM will do it** (#1311). It showed day blocks too.
 - 🐛 **A car that leaves after tonight now gets a plan sized on tonight's hours only** (#1309). Day hours no longer count as charge time.
 - 🐛 **Loads now switch in one place, so Mode Off and shutdown also stop a Legionella run** (#1335). Observer mode holds the heat pump too.
 - 🔧 **Heaters with a thermometer and Keep at now join the shared plan on every install** (#1335). Cheap hours for the car and battery can shift.
