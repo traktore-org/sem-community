@@ -843,8 +843,12 @@ def compute_load_intent(
                           RC.LOAD_STOP_CONDITION)
     # 3a. (#1121) The device's own run (Legionella) needs no sun: kept as
     #     it is, never re-tuned. Only a shed (clause 2) or its own end stops it.
-    #     (#1102) It also STARTS here: while the three layers lead, the
-    #     hot-water device only says the run is due and no longer switches.
+    #     (#1102/#1335) It STARTS and ENDS here too: the hot-water device only
+    #     says the run is due or over and never switches itself, so the run
+    #     is SEM's own command (Mode Off and teardown stop it).
+    if active and getattr(device, "own_run_ending", False) is True:
+        return LoadIntent(False, 0.0, None,
+                          "Legionella run over", RC.LOAD_LEGIONELLA)
     if getattr(device, "runs_without_surplus", False) is True:
         if active:
             return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
@@ -1165,7 +1169,15 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
     if intent.on and active:
         # source is None ⇒ "not SEM-driven" (off / peak-only kept as observed):
         # never actuate it — SEM only re-tunes loads it is actually driving.
-        if intent.source is None or intent.source == OWN_RUN_SOURCE:
+        if intent.source is None:
+            return device.get_current_consumption()
+        if intent.source == OWN_RUN_SOURCE:
+            # (#1335) never re-tuned — but a tank that holds a setpoint for
+            # another target (the run began while it heated on sun) gets
+            # the run's own target written once.
+            if getattr(device, "target_stale", False) is True:
+                await device.adjust_power(intent.power_w)
+            _apply_source_markers(device, intent)
             return device.get_current_consumption()
         consumed = await _adjust_owned(
             device, intent.power_w,
@@ -2032,6 +2044,21 @@ class SurplusController:
         # start, no stop, no runtime judged. The intent path above says why.
         devices = [d for d in devices
                    if not (getattr(d, "locked_by_operator", False) is True)]
+
+        # (#1335) A device's own run (Legionella) is started and ended by
+        # layer 1 and switched by ``reconcile_load`` — in this engine too, so
+        # the run is SEM's own command here as well (ownership, anti-cycle,
+        # the decision log). A shed still wins: the peak pass below has it.
+        for device in devices:
+            if not (getattr(device, "runs_without_surplus", False) is True
+                    or getattr(device, "own_run_ending", False) is True):
+                continue
+            _own = compute_load_intent(
+                device, remaining_surplus_w=0.0, peak_freeze=peak_freeze,
+                is_shed_target=bool(peak_shed or _phase_shed(device)),
+                plan=self._plan_windows.get(device.device_id) or NO_OPINION)
+            if _own.code == RC.LOAD_LEGIONELLA:
+                await reconcile_load(device, _own, controller=self)
 
         # Force expiry: a cheap-hours force ends with its reason (#559 review) —
         # the tariff left the cheap window, OR the day rolled over (the deficit

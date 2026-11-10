@@ -52,6 +52,7 @@ async def _overdue_run_started(hass, dev):
     hass.set("switch.boiler", "off")
     hass.set("sensor.boiler_temp", "45.0")
     assert await dev.check_legionella_cycle() == "legionella_started"
+    await sc.update(-3000.0)          # (#1335) the engine starts the run
     assert dev.is_active
     _past_min_times(dev)
     return sc
@@ -63,10 +64,11 @@ class TestTheReportersBoiler:
     async def test_the_run_ends_when_your_stop_fires_below_the_target(self):
         hass = _Hass()
         dev = _boiler(hass)
-        await _overdue_run_started(hass, dev)
+        sc = await _overdue_run_started(hass, dev)
         hass.set("sensor.boiler_temp", "53.2")
         assert await dev.check_legionella_cycle() == "legionella_blocked_by_stop"
         assert not dev._legionella_cycle_active
+        await sc.update(-3000.0)          # (#1335) the engine stops it
         assert not dev.is_active
 
     async def test_it_is_not_switched_on_again_on_grid_power_when_it_cools(self):

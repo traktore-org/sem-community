@@ -3991,8 +3991,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ``min_temperature`` via ``_active_target_temp``) — but on the
             # rising edge deactivate once so the entity's written setpoint
             # drops from the solar/comfort target to the minimum on the next
-            # (gated) activation. Legionella-in-flight is aborted by
-            # ``check_legionella_cycle`` itself.
+            # (gated) activation. Legionella-in-flight is ended by
+            # ``check_legionella_cycle`` and stopped by layer 1 (#1335).
             dump_allowed = (
                 dev_id == "hot_water"
                 and dev.vacation_dhw_surplus
@@ -7967,9 +7967,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # advances the hold-timer and fires completion correctly.
             if hasattr(hw_controller, "check_legionella_cycle"):
                 try:
-                    # (#1102) where the ladder leads, layer 1 switches the run
-                    await hw_controller.check_legionella_cycle(
-                        switch=not _ladder_leads(self))
+                    # (#1335) state only — layer 1 switches the run
+                    await hw_controller.check_legionella_cycle()
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
             try:

@@ -240,11 +240,15 @@ class TestLegionellaVacation:
         assert hw._legionella_cycle_active is False
         assert hw._legionella_hold_start is None
         assert hw._last_legionella_path == "vacation_aborted"
-        # deactivate() went through the water_heater turn_off path
-        assert any(
-            c.args[1] == "turn_off"
-            for c in hass.services.async_call.call_args_list
+        # (#1335) the check never switches; it asks the engine to stop the
+        # tank once, through the one place that switches loads
+        hass.services.async_call.assert_not_called()
+        assert hw.own_run_ending is True
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            compute_load_intent,
         )
+        intent = compute_load_intent(hw, remaining_surplus_w=0.0)
+        assert intent.on is False
 
     @pytest.mark.asyncio
     async def test_run_on_return(self):
@@ -264,7 +268,15 @@ class TestLegionellaVacation:
         assert result == "legionella_started"
         assert hw._legionella_cycle_active is True
         assert hw._last_legionella_path == "overdue_start"
-        # Forced activation targeted the legionella temperature.
+        # (#1335) the engine starts the due run; it targets the legionella
+        # temperature.
+        hass.services.async_call.assert_not_called()
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            SurplusController,
+        )
+        sc = SurplusController(hass)
+        sc.register_device(hw)
+        await sc.update(-3000.0)
         temps = [
             c.args[2]["temperature"]
             for c in hass.services.async_call.call_args_list

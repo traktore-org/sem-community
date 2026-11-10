@@ -162,13 +162,26 @@ class TestLegionellaInLayerOne:
         it = _intent(dev)
         assert it.on and it.code == RC.LOAD_LEGIONELLA
 
-    def test_where_the_ladder_leads_the_cycle_does_not_switch(self):
+    def test_the_cycle_never_switches(self):
+        """(#1335) The check keeps the run's state only, everywhere."""
         dev = self._hw(45.0)
         dev.activate = AsyncMock(return_value=3000.0)
         dev.deactivate = AsyncMock()
-        assert asyncio.run(dev.check_legionella_cycle(switch=False)) == "legionella_started"
+        assert asyncio.run(dev.check_legionella_cycle()) == "legionella_started"
         assert dev._legionella_cycle_active is True
         dev.activate.assert_not_called()
+
+    def test_a_finished_run_is_stopped_by_layer_one(self):
+        dev = self._hw(70.0, active=True)
+        dev.deactivate = AsyncMock()
+        dev._legionella_cycle_active = True
+        from datetime import timedelta
+        from homeassistant.util import dt as dt_util
+        dev._legionella_hold_start = dt_util.now() - timedelta(hours=1)
+        assert asyncio.run(dev.check_legionella_cycle()) == "legionella_complete"
+        dev.deactivate.assert_not_called()
+        assert dev.own_run_ending is True
+        assert not _intent(dev).on
 
 
 @pytest.mark.unit
