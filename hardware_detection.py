@@ -6154,6 +6154,22 @@ def wire_phase_service(hass, device, charger_id: str, *, services_of=None) -> bo
             "a device and this charger has none saved; phase switching by "
             "current is not wired (#1015)", charger_id, role["service"])
         return False
+    # A stop on this path may not be 0 A: the charger's own limit caps the
+    # per-phase one, and 0 A parked there locks the next start out. So the
+    # charger needs a stop of its own (a stop service, a charge mode, a
+    # start/stop switch) — the same list ``stop_session`` walks.
+    surfaces = getattr(device, "_discrete_contactor_surfaces", None)
+    try:
+        can_open = bool(surfaces()[0]) if callable(surfaces) else False
+    except Exception:  # noqa: BLE001 — unknown is not a capability
+        can_open = False
+    if not can_open:
+        _LOGGER.info(
+            "Charger '%s': %s sets one current per phase, but this charger "
+            "has no stop of its own; a 0 A stop would lock it, so phase "
+            "switching by current is not wired (#1015)",
+            charger_id, role["service"])
+        return False
     readback = None
     if device_id:
         try:
@@ -6170,3 +6186,57 @@ def wire_phase_service(hass, device, charger_id: str, *, services_of=None) -> bo
         "read-back %s (#1015)", charger_id, role["service"],
         readback or "none — the measured draw decides")
     return True
+
+
+def phase_circuit_key(hass, device) -> Optional[str]:
+    """(#1015) Which circuit this charger is on, as the install says it:
+    an attribute named for the circuit's id on one of the device's own
+    entities. None when nothing says — an unknown, never "its own circuit"."""
+    device_id = getattr(device, "service_device_id", None)
+    if not device_id or hass is None:
+        return None
+    try:
+        from homeassistant.helpers import entity_registry as er
+        entries = er.async_entries_for_device(er.async_get(hass), str(device_id))
+    except Exception:  # noqa: BLE001
+        return None
+    for e in sorted(entries, key=lambda x: str(x.entity_id)):
+        st = hass.states.get(str(e.entity_id))
+        for key, value in (getattr(st, "attributes", None) or {}).items():
+            norm = re.sub(r"[^a-z0-9]", "", str(key).lower())
+            if norm.endswith("circuitid") and value not in (None, "", "unknown"):
+                return str(value)
+    return None
+
+
+def shared_phase_circuit(hass, device, others) -> Optional[str]:
+    """(#1015) Why this charger may NOT set its phases by current, or None.
+
+    The per-phase limit is the whole circuit's. With a second SEM charger
+    on the same circuit, this one's (N, 0, 0) throttles that one, and that
+    one's (N, N, N) undoes this one. Two chargers of the same integration
+    share a circuit unless the install says they do not: both name their
+    circuit and the names differ. Unknown counts as shared.
+    """
+    service = getattr(device, "phase_service", None)
+    if not isinstance(service, str) or "." not in service:
+        return None
+    domain = service.split(".", 1)[0]
+    mine = None
+    for other in others:
+        if other is device:
+            continue
+        other_service = getattr(other, "charger_service", None)
+        other_phase = getattr(other, "phase_service", None)
+        same = any(isinstance(sv, str) and sv.split(".", 1)[0] == domain
+                   for sv in (other_service, other_phase))
+        if not same:
+            continue
+        if mine is None:
+            mine = phase_circuit_key(hass, device) or ""
+        theirs = phase_circuit_key(hass, other) or ""
+        if mine and theirs and mine != theirs:
+            continue
+        return (f"another charger ({getattr(other, 'name', 'charger')}) is "
+                f"on the same circuit; {service} limits the whole circuit")
+    return None
