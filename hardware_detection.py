@@ -2540,7 +2540,11 @@ def _service_field_roles(domain: str, services: Dict[str, list]) -> Dict[str, An
     out: Dict[str, Any] = {}
     for name in sorted(services or {}):
         fields = list((services or {}).get(name) or [])
-        if all(f in fields for f in lex.SERVICE_PHASE_FIELDS):
+        # (#1015) never a stored maximum or an offline fallback: SEM writes
+        # this service every cycle, and a limit a box keeps is a lockout
+        if (all(f in fields for f in lex.SERVICE_PHASE_FIELDS)
+                and not any(re.search(p, name, re.I)
+                            for p in lex.SERVICE_PHASE_NOT)):
             out.setdefault("phase_service", {"service": f"{domain}.{name}",
                                              "fields": fields})
         cur = [f for f in fields if f in lex.SERVICE_SITE_CURRENT_FIELDS]
@@ -6109,3 +6113,60 @@ def wire_current_entity(hass, device, charger_id: str, current_entity_id) -> Non
             "Charger '%s': OCPP current number %s with no charge-control "
             "switch found — SEM cannot stop this charger; set "
             "ev_start_stop_entity (#976)", charger_id, current_entity_id)
+
+
+def phase_readback_entity(dev_entities) -> Optional[str]:
+    """(#1015) The sensor on this device that reports the per-phase limit it
+    took — the read-back of a per-phase service. None when it has none."""
+    from .consts import role_lexicon as lex
+    return _first_hit(dev_entities, lex.PHASE_READBACK_RULE)
+
+
+def wire_phase_service(hass, device, charger_id: str, *, services_of=None) -> bool:
+    """(#1015) Phases set by one current per phase, applied to a charger
+    device — the ONE producer, as ``wire_current_entity`` is for the current
+    entity. True when the capability is wired.
+
+    A charger with no phase switch to name may still take one current per
+    phase through a service of its own integration (R6: read by its fields,
+    never by a name). Found live: the service must be registered NOW, and a
+    service keyed by ``device_id`` needs this box's registry id — the one the
+    current service already uses. Unknown (no hass, services not up yet) is
+    not "no": nothing is wired and the caller may ask again.
+    """
+    from .consts import role_lexicon as lex
+    service = str(getattr(device, "charger_service", "") or "")
+    domain = service.split(".", 1)[0] if "." in service else ""
+    if not domain or domain in ("number", "input_number", "select"):
+        return False
+    of = services_of if services_of is not None else _services_of(hass)
+    live = of(domain) if of else None
+    if not live:
+        return False
+    role = _service_field_roles(domain, live).get("phase_service")
+    if not role:
+        return False
+    fields = list(role.get("fields") or ())
+    device_id = getattr(device, "service_device_id", None)
+    if "device_id" in fields and not device_id:
+        _LOGGER.info(
+            "Charger '%s': %s sets one current per phase, but it is keyed by "
+            "a device and this charger has none saved; phase switching by "
+            "current is not wired (#1015)", charger_id, role["service"])
+        return False
+    readback = None
+    if device_id:
+        try:
+            from homeassistant.helpers import entity_registry as er
+            readback = phase_readback_entity(
+                er.async_entries_for_device(er.async_get(hass), str(device_id)))
+        except Exception:  # noqa: BLE001 — no read-back is "could not read"
+            readback = None
+    device.phase_service = role["service"]
+    device.phase_fields = tuple(lex.SERVICE_PHASE_FIELDS)
+    device.phase_readback_entity = readback
+    _LOGGER.info(
+        "Charger '%s': phases can be set through %s (one current per phase); "
+        "read-back %s (#1015)", charger_id, role["service"],
+        readback or "none — the measured draw decides")
+    return True

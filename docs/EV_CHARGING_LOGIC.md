@@ -410,6 +410,18 @@ three layers — observation, manual control, and automatic switching:
   own option names (they are the device's vocabulary — SEM never guesses);
   a `number` defaults to `1`/`3` and a `switch` to `off`/`on`, both
   overridable (go‑e's `psm` number uses `2` for 3‑phase).
+* **…or one current per phase (#1015).** Some chargers have no phase
+  switch. They take one current per phase through a service, and a phase at
+  0 A is off (an Easee: its circuit's dynamic limit). SEM finds such a
+  service by itself — nothing to name. With **Phase switching** on, the
+  phase choice and the current are one command: 1‑phase at 10 A is
+  10 / 0 / 0, 3‑phase is 10 / 10 / 10. A stop is never 0 / 0 / 0; the
+  charger's own stop is used. SEM only uses the temporary limit, never a
+  stored maximum or an offline limit. If the charger has a sensor that
+  reports the limit per phase, SEM reads it to check the switch took; on an
+  Easee that sensor ("Dynamic circuit limit") is off by default — switch it
+  on for the check, or SEM judges by the measured power. The limit is the
+  whole circuit's: two chargers on one circuit share it.
 * **Manual switching** — naming the capability creates
   `select.sem_charger_<id>_phase_mode` (**Auto / 1‑phase / 3‑phase**).
   Choosing 1 or 3 runs the one safe sequence SEM ever switches with:

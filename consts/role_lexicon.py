@@ -733,6 +733,22 @@ SELECT_PHASE_OPTIONS: Final[tuple] = ("1", "3")
 #: ``available_current`` sets the current an installation may use (Zaptec's
 #: ``limit_current``). The rule set never names a service.
 SERVICE_PHASE_FIELDS: Final[tuple] = ("current_p1", "current_p2", "current_p3")
+#: (#1015) A per-phase service SEM may WRITE in the control loop is the one
+#: whose limit is temporary. One that sets a stored maximum or the limit a
+#: box falls back to offline is a setting that outlives the session — the
+#: #976 lesson (a kept 0 A is a lockout, not a pause). Read off the name.
+SERVICE_PHASE_NOT: Final[tuple] = (r"(?:^|_)max(?:_|$)", r"offline", r"fallback",
+                                   r"failsafe")
+#: (#1015) The read-back of that service: a sensor of the same device that
+#: reports the limit it took, one value per phase in its ATTRIBUTES (keys
+#: ending p1 / p2 / p3). 0 on a phase means that phase is off.
+PHASE_READBACK_RULE: Final[dict] = {
+    "platform": "sensor",
+    "any": (r"(?:^|_)dynamic_circuit_limit$", r"(?:^|_)circuit_dynamic_limit$",
+            r"(?:^|_)phase_currents?_limit$"),
+    "not": (r"max", r"offline"),
+}
+PHASE_READBACK_ATTR_ENDINGS: Final[tuple] = ("p1", "p2", "p3")
 SERVICE_SITE_CURRENT_FIELDS: Final[tuple] = ("available_current",)
 
 

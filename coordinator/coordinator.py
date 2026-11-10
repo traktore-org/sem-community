@@ -5127,6 +5127,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # cannot pay for this quarter hour.
                             peak_allowed_w=getattr(
                                 view.fleet, "peak_slot_allowed_w", None),
+                            # (#1015) the device that can set its phases by
+                            # one current per phase, when it can
+                            device=getattr(adapter, "_device", None),
                         )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
@@ -5986,6 +5989,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _per_charger_cfg.get("ev_phase_switch_entity"),
                     lambda eid: self.hass.states.get(eid) is not None,
                 )
+                # (#1015) no entity, but phases set by one current per phase:
+                # the service is the capability, and it is shown as such
+                _ps_service = getattr(ev_dev, "phase_service", None)
+                if _ps_entity is None and isinstance(_ps_service, str):
+                    _ps_entity, _ps_valid = _ps_service, True
                 result[f"charger_{cid}_phase_switch_entity"] = _ps_entity
                 result[f"charger_{cid}_phase_switch_valid"] = _ps_valid
                 # (#824) The entities SEM COMMANDS, checked the same way.
