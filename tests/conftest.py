@@ -600,6 +600,44 @@ def sem_real_hass(hass, enable_custom_integrations):
     return hass
 
 
+@pytest.fixture(autouse=True)
+def _rediscovery_does_not_wait_35_real_seconds(request, monkeypatch):
+    """(#1266) The delayed device re-discovery sleeps 35 REAL seconds.
+
+    ``async_block_till_done`` waits for that task, so every real-HA setup
+    cost 35 s — 94 % of the suite's time. The order is what a test may
+    depend on, not the seconds: the re-discovery runs once the entry's
+    setup has finished, as it did after the sleep. A test that is about
+    the wait itself opts out with ``@pytest.mark.real_rediscovery_wait``.
+    """
+    if request.node.get_closest_marker("real_rediscovery_wait"):
+        return
+    import asyncio
+
+    from homeassistant.config_entries import ConfigEntryState
+
+    from custom_components.solar_energy_management.const import DOMAIN
+    from custom_components.solar_energy_management.features import (
+        device_registry as _dr,
+    )
+
+    async def _until_setup_is_done(self):
+        for _ in range(2000):                      # 10 s at most
+            try:
+                busy = any(
+                    e.state is ConfigEntryState.SETUP_IN_PROGRESS
+                    for e in self.hass.config_entries.async_entries(DOMAIN))
+            except Exception:  # noqa: BLE001 — a mocked hass has no entries
+                busy = False
+            if not busy:
+                break
+            await asyncio.sleep(0.005)
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(_dr.UnifiedDeviceRegistry, "_rediscovery_wait",
+                        _until_setup_is_done)
+
+
 # phacc's ``async_test_home_assistant`` sets this zone on every real ``hass``.
 _HA_TEST_TIME_ZONE = "US/Pacific"
 

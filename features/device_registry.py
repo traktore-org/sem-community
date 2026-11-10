@@ -58,6 +58,10 @@ from ..coordinator.units import finite_float
 #: SwitchDevice, so SEM turned the AC-THOR fully on and wrote no value.
 _LOGGER = logging.getLogger(__name__)
 
+#: Seconds the delayed re-discovery waits after start, so other
+#: integrations' entities exist by then.
+REDISCOVERY_DELAY_S = 35
+
 STORAGE_VERSION = 1
 STORAGE_KEY = "sem_device_mappings"
 #: (#1253) a copy of the two keys older builds drop when they rewrite the
@@ -561,11 +565,19 @@ class UnifiedDeviceRegistry:
 
         # Schedule delayed re-discovery after entities are fully loaded
         async def _delayed_rediscovery():
-            await asyncio.sleep(35)
+            await self._rediscovery_wait()
             _LOGGER.info("Running delayed device re-discovery...")
             await self.async_refresh_devices()
 
         self.hass.async_create_task(_delayed_rediscovery())
+
+    async def _rediscovery_wait(self) -> None:
+        """How long the delayed re-discovery waits for entities to load.
+
+        Its own method so a test can let the wait end when setup is done,
+        not 35 real seconds later (#1266).
+        """
+        await asyncio.sleep(REDISCOVERY_DELAY_S)
 
     # (#559) goal properties settable via update_device_config / register.
     # Grounded core after the beta.19 freeze: runtime target + top-up policy
