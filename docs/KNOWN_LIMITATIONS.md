@@ -397,8 +397,10 @@ change of direction lands one cycle later by design.
 
 ## Keeping the battery for the peak limit moves in steps (#970)
 
-The discharge limit moves in 750 W steps, so with *Keep the battery for the
+The discharge limit moves in 250 W steps, so with *Keep the battery for the
 peak limit* on, the pack may give up to one step more than the house needs.
+A battery that follows a new limit more than about 90 seconds late can
+still end a quarter hour over the limit after a large late load step.
 Without a solar forecast the hold ends at *Buffer SOC* alone.
 
 ## Controls follow what the house can use (2.2, #996)

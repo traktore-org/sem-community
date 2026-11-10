@@ -671,6 +671,14 @@ class SEMStorage:
     def set_battery_night_state(self, state: Dict[str, Any]) -> None:
         self._energy_data["battery_nights"] = dict(state)
 
+    # (#970) Whether the peak hold last let go — its return gap must outlive
+    # a restart, or a pack inside the gap is held again at every boot.
+    def get_peak_hold_released(self) -> bool:
+        return bool(self._energy_data.get("peak_hold_released", False))
+
+    def set_peak_hold_released(self, released: bool) -> None:
+        self._energy_data["peak_hold_released"] = bool(released)
+
     # (#778) The forecast ledger — "on day D we said D+h would make X; D+h made
     # Y", per horizon. Durable for the same reason as the night records: it is a
     # training set that takes a season to build, and losing it at boot would be
