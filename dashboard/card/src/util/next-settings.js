@@ -739,7 +739,7 @@ export function groups(states, t, ctx = {}) {
     {
         const hpOn = st(states, 'binary_sensor.sem_heat_pump_registered')?.state === 'on';
         const hpSet = hpOn || !!(o && (o.heat_pump_relay1_entity || o.heat_pump_climate_entity));
-        const hwSet = !!(o && o.hot_water_entity) || st(states, 'binary_sensor.sem_hot_water_registered')?.state === 'on';
+        const hwSet = !!(o && o.hot_water_entity);
         const e = (k) => [ENTITY_FIELDS[k].labelKey, optEntity(o, k)];
         const hpRate = optNum(o, 'heat_pump_tariff_rate', { min: 0, max: 10000, step: 0.001, unit: perKwh, default: 0 });
         const hpRateSet = hpRate && hpRate.value > 0 ? hpRate : null;
@@ -762,8 +762,6 @@ export function groups(states, t, ctx = {}) {
                                            hours: numSlot(states, 'number.sem_legionella_interval_hours') }),
         ]) : [];
         const sentence = hpSet || hwSet ? join(hp, hw) : [t('next_heat_none')];
-        const safety = st(states, 'sensor.sem_hot_water_temperature_safety_path');
-        const activation = st(states, 'sensor.sem_hot_water_activation_path');
         const climateIn = hpSet && !!(o && o.heat_pump_climate_entity);
         const relay1In = hpSet && !climateIn;
         const relay2In = relay1In && !!(o && o.heat_pump_relay2_entity);
@@ -772,8 +770,6 @@ export function groups(states, t, ctx = {}) {
             [`config_hp_relay${n}_off`, optTextPh(o, `heat_pump_relay${n}_off_value`, '000000000000')],
         ] : []);
         const m = more(t, [
-            ['next_more_safety_path', alive(safety) && safety.state !== 'uninitialized' ? text(safety.state) : null],
-            ['next_more_activation', alive(activation) && activation.state !== 'uninitialized' ? text(activation.state) : null],
             relay1In ? null : e('heat_pump_relay1_entity'),
             ...contactValues(1),
             relay2In ? null : e('heat_pump_relay2_entity'),

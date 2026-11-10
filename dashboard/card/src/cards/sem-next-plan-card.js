@@ -37,6 +37,7 @@ const IDS = ['sensor.sem_energy_plan', 'sensor.sem_forecast_tomorrow_kwh', 'sens
              'sensor.sem_charging_state', 'number.sem_expensive_price_threshold', 'select.sem_battery_mode',
              'sensor.sem_battery_dynamic_floor_pct', 'sensor.sem_forecast_trust_d2'];
 const SHOWN_ROWS = 6;
+const CHARGE_NOW_MINUTES = 120;   // how long "Charge now" holds before the plan takes over
 const KIND_COLOR = { ev: C.ev, battery_in: C.battery_in, battery_out: C.battery_out, grid: C.grid, load: C.home };
 const KIND_ICON = { ev: 'mdi:car-electric', battery_in: 'mdi:battery-charging', battery_out: 'mdi:home-battery', grid: 'mdi:transmission-tower', load: 'mdi:power-plug' };
 export const WS_SOLAR_FORECAST = 'solar_energy_management/solar_forecast';
@@ -103,7 +104,6 @@ class SEMNextPlanCard extends SEMNextBase {
         this._sunTimer = null;
         this._statTimer = null;
         this._confirm = null;      // charger id awaiting "Charge now" confirmation
-        this._savedMode = {};      // charger id → mode before "Charge now"
         this._range = readRange();
         this._w = 720;
         this._hostW = 0;
@@ -598,16 +598,15 @@ class SEMNextPlanCard extends SEMNextBase {
         if (mode) bits.push(this._tf('next_mode_now', { mode: t('charge_mode_' + mode) || mode }));
         const ov = this._overrideOf(cid);
         if (ov) bits.push(this._overrideText(ov));
-        const forced = mode === 'always_max' && !!this._savedMode[cid];
         const btns = [];
         const full = (ns?.why || ns?.reason) === 'car_full';
-        if (full && !ov && !forced) {
+        if (full && !ov) {
             // a full car has nothing to skip or start
         } else if (this._confirm === cid) {
-            btns.push(this._btn(t('next_confirm'), () => this._chargeNow(cid, sel, mode), { small: true, primary: true, disabled: obs }));
+            btns.push(this._btn(t('next_confirm'), () => this._chargeNow(cid, plan), { small: true, primary: true, disabled: obs }));
             btns.push(this._btn(t('next_cancel'), () => { this._confirm = null; }, { small: true }));
-        } else if (ov || forced) {
-            btns.push(this._btn(t('next_back_to_plan'), () => this._backToPlan(cid, sel, !!ov), { small: true, disabled: obs }));
+        } else if (ov) {
+            btns.push(this._btn(t('next_back_to_plan'), () => this._overrideClear(cid), { small: true, disabled: obs }));
         } else {
             btns.push(this._btn(t('next_skip'), () => this._override(cid, 'skip', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
             btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, primary: true, disabled: obs }));
@@ -708,22 +707,12 @@ class SEMNextPlanCard extends SEMNextBase {
         return true;
     }
 
-    async _chargeNow(cid, sel, mode) {
+    // "Charge now" is the backend's own one-off force: it runs the charger
+    // at full power for a set time, then lets go by itself. Nothing is stored
+    // in the browser and the charge mode select is left alone.
+    async _chargeNow(cid, plan) {
         this._confirm = null;
-        if (await this._callService('select', 'select_option', { entity_id: sel, option: 'always_max' })) {
-            this._savedMode = { ...this._savedMode, [cid]: mode };
-        }
-    }
-
-    async _backToPlan(cid, sel, hasOverride) {
-        if (hasOverride && !await this._overrideClear(cid)) return;
-        const prev = this._savedMode[cid];
-        if (prev) {
-            if (!await this._callService('select', 'select_option', { entity_id: sel, option: prev })) return;
-            const { [cid]: _gone, ...rest } = this._savedMode;
-            this._savedMode = rest;
-        }
-        this.requestUpdate();
+        await this._override(cid, 'force', CHARGE_NOW_MINUTES, plan);
     }
 
     // ── expected ──

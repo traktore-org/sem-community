@@ -360,12 +360,24 @@ def test_until_is_on_the_local_clock():
 
 # ── set_plan_override takes a load id ─────────────────────────────────
 
+def _real_charger():
+    """A charger the way setup registers it: a current-control device the
+    per-charger loop owns (``managed_externally``)."""
+    from custom_components.solar_energy_management.devices.base import CurrentControlDevice
+    dev = CurrentControlDevice(hass=MagicMock(), device_id="ev_box",
+                               name="Box", min_current=6.0, max_current=32.0,
+                               phases=3)
+    dev.managed_externally = True
+    return dev
+
+
 def _coord(mode=DeviceControlMode.SURPLUS):
     sc = SimpleNamespace(_devices={"boiler": _Load(control_mode=mode),
-                                   "ev_box": SimpleNamespace(is_ev=True)})
+                                   "ev_box": _real_charger()})
     return SimpleNamespace(
         config={"ev_chargers": [{"id": "keba"}]},
         _known_battery_ids={"b1"},
+        _battery_ids_read=True,
         _plan_overrides={},
         _storage=MagicMock(),
         _surplus_controller=sc,
@@ -400,3 +412,14 @@ def test_a_load_outside_smart_mode_is_refused(mode):
     with pytest.raises(ValueError, match="Smart mode"):
         SEMCoordinator.set_plan_override(c, "boiler", "force", 60)
     assert c._plan_overrides == {}
+
+
+def test_a_real_charger_or_battery_is_never_a_load():
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        _override_load, _override_load_ids,
+    )
+    c = _coord()
+    c._surplus_controller._devices["b1"] = _Load(device_id="b1")
+    assert _override_load_ids(c) == {"boiler"}
+    assert _override_load(c, "ev_box") is None
+    assert _override_load(c, "b1") is None

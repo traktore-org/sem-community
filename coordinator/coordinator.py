@@ -647,11 +647,13 @@ def _control_device_says_not_now(hass, entity_id: str) -> bool:
 def _override_load_ids(coord) -> set:
     """(#1321) The load ids a one-off override may name: the surplus walk's
     own devices (the ids of the device map), never a charger it hands to
-    the per-charger loop."""
+    the per-charger loop (``managed_externally``) nor a battery id."""
     sc = getattr(coord, "_surplus_controller", None)
     devs = getattr(sc, "_devices", None) or {}
+    batteries = set(getattr(coord, "_known_battery_ids", set()) or set())
     return {str(did) for did, d in devs.items()
-            if not getattr(d, "is_ev", False)}
+            if not getattr(d, "managed_externally", False)
+            and str(did) not in batteries and str(did) != "primary"}
 
 
 def _override_load(coord, device_id: str):
@@ -1045,6 +1047,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self._plan_overrides: Dict[str, Any] = {}
         # (#1321) The battery ids of the last cycle: what plan_override may name.
         self._known_battery_ids: set = set()
+        self._battery_ids_read = False
         # (#1087) a charger's departure-calendar's next event, cached —
         # departure_for stays sync/hass-free; this is the only async
         # reader, throttled, mirrors tariff/calendar_provider.py's hook.
@@ -10321,6 +10324,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # _per_battery_config (single→multi bleed fix).
         _bat_count = len(battery_items)
         self._known_battery_ids = {bid for bid, _rt in battery_items}
+        self._battery_ids_read = True
         # (#1124) …and which cached adapters are batteries THIS cycle: a
         # synthetic "primary" from the first cycles stays in the cache once
         # b1/b2 exist, and its frozen write ledger is no battery's answer.
@@ -10901,8 +10905,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if getattr(load, "control_mode", None) != _DCM.SURPLUS:
                 raise ValueError(
                     f"{device_id!r} acts on an override only in Smart mode")
-        # Before the first cycle the battery ids are not read yet: take the id.
-        elif device_id not in known and batteries:
+        # Before the first cycle has read the battery ids, take the id.
+        elif device_id not in known and getattr(self, "_battery_ids_read", False):
             raise ValueError(
                 f"not a charger, a battery or a load: {device_id!r} "
                 f"(one of {sorted(known | _override_load_ids(self))})")

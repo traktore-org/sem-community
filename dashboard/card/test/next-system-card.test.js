@@ -126,3 +126,11 @@ test('held-back calls: one row per withheld call, named by device and service', 
     const out = flat(el._refused());
     for (const want of ['keba.set_current', 'keba.enable', 'number.set_value', 'keba_1', 'export_guard']) assert.ok(out.includes(want), want);
 });
+
+test('the card reads no hot water entity that nothing creates (#1321)', async () => {
+    const { readFileSync } = await import('node:fs');
+    for (const f of ['../src/cards/sem-next-system-card.js', '../src/util/next-settings.js']) {
+        const src = readFileSync(new URL(f, import.meta.url), 'utf8');
+        assert.doesNotMatch(src, /sem_hot_water_(registered|activation_path|temperature_safety_path)/, f);
+    }
+});

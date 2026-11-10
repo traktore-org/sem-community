@@ -111,6 +111,26 @@ test('a full car shows its status only, no Skip or Start now', () => {
     assert.match(other, /next_start_now/);
 });
 
+test('Charge now is the backend force override: no mode flip, Back to plan clears it', async () => {
+    const el = makeCard();
+    const calls = [];
+    el.hass.callService = async (d, s, data) => { calls.push([d, s, data]); };
+    el._confirm = 'keba';
+    await el._chargeNow('keba', {});
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].slice(0, 2), ['solar_energy_management', 'plan_override']);
+    assert.deepEqual(calls[0][2], { device_id: 'keba', action: 'force', minutes: 120 });
+    assert.equal(el._confirm, null);
+    assert.ok(!calls.some((c) => c[0] === 'select'), 'the charge mode is not touched');
+    // the override shows, so Back to plan shows; after a reload it comes from the backend
+    el.hass.states['sensor.sem_energy_plan'] = S('x', { plan_overrides: { keba: { action: 'force', until: '23:00' } } });
+    const out = text(el._chargerRow('keba', {}, [], [], []));
+    assert.match(out, /next_back_to_plan/);
+    calls.length = 0;
+    await el._overrideClear('keba');
+    assert.deepEqual(calls[0], ['solar_energy_management', 'plan_override_clear', { device_id: 'keba' }]);
+});
+
 // ── the chart: sun, price and plan on one clock ──
 const HOUR = 3600e3;
 const isoAt = (ms) => new Date(ms).toISOString();

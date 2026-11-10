@@ -4485,9 +4485,12 @@ async def _async_register_services(
     async def async_plan_override_service(call) -> None:
         """(#1085 Part B) One-off: this device only, for this many
         minutes — then it's gone, even across a restart."""
-        coordinator.set_plan_override(
-            call.data["device_id"], call.data["action"],
-            call.data["minutes"], call.data.get("value"))
+        try:
+            coordinator.set_plan_override(
+                call.data["device_id"], call.data["action"],
+                call.data["minutes"], call.data.get("value"))
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
         await coordinator.async_request_refresh()
 
     async def async_plan_override_clear_service(call) -> None:

@@ -34,8 +34,7 @@ const DIAG_IDS = ['sensor.sem_diag_version', 'sensor.sem_diag_grid_mode', 'senso
                   'sensor.sem_diag_battery_capacity', 'sensor.sem_diag_update_interval', 'sensor.sem_diag_sensors_unavailable',
                   'sensor.sem_diag_inputs_degraded', 'sensor.sem_diag_ed_config', 'sensor.sem_energy_plan',
                   'sensor.sem_charging_state', 'sensor.sem_controllable_devices_count', 'sensor.sem_tariff_provider',
-                  'binary_sensor.sem_heat_pump_registered', 'binary_sensor.sem_hot_water_registered',
-                  'sensor.sem_hot_water_temperature_safety_path', 'sensor.sem_hot_water_activation_path'];
+                  'binary_sensor.sem_heat_pump_registered'];
 
 // Every entity a sentence can bind to (the per-charger, per-battery and
 // per-load ids are added in _watchIds).
