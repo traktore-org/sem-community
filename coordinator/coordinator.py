@@ -11069,6 +11069,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         for k in ("over", "thrown", "latched", "shed", "path")
                         if k in verdict}
             elif lm is not None:
+                # (#1335) the guard off still restores what it held: the
+                # load manager is told about observer mode on this branch too
+                lm._observer_mode = self._observer_mode
                 verdict = await lm.process_phase_guard({}, may_restore=True)
         except Exception:  # noqa: BLE001 — never costs a cycle; logged
             _LOGGER.warning("Phase guard load shed failed", exc_info=True)

@@ -2022,6 +2022,9 @@
     "why_reason_comfort_floor": "Je příliš chladno, proto topí hned, až na udržovanou teplotu.",
     "why_reason_comfort_goal": "Je pod udržovanou teplotou, proto topí v plánovaném čase.",
     "why_reason_legionella": "Je čas na ohřev proti legionele, proto topí na teplotu proti legionele.",
+    "why_reason_legionella_end": "Ohřev proti legionele skončil, takže se vypíná.",
+    "why_reason_at_target": "Má svou cílovou teplotu, takže zůstává vypnuté.",
+    "why_reason_no_reading": "Jeho teplotní čidlo nic nehlásí, takže zůstává vypnuté.",
     "energy_plan_why_band_leads": "Rozhoduje jeho teploměr, proto denní doba chodu nic nežádá."
   },
   "da": {
@@ -4047,6 +4050,9 @@
     "why_reason_comfort_floor": "Det er for koldt, så den varmer nu, op til sin holdetemperatur.",
     "why_reason_comfort_goal": "Den er under sin holdetemperatur, så den varmer i det planlagte tidsrum.",
     "why_reason_legionella": "Legionella-opvarmningen er forfalden, så den varmer til legionella-temperaturen.",
+    "why_reason_legionella_end": "Legionella-opvarmningen er færdig, så den slukker.",
+    "why_reason_at_target": "Den har nået sin måltemperatur, så den forbliver slukket.",
+    "why_reason_no_reading": "Dens temperaturføler viser ingenting, så den forbliver slukket.",
     "energy_plan_why_band_leads": "Dens termometer bestemmer, så den daglige køretid beder ikke om noget."
   },
   "de": {
@@ -6072,6 +6078,9 @@
     "why_reason_comfort_floor": "Es ist zu kalt, darum heizt es jetzt, bis zur Halte-Temperatur.",
     "why_reason_comfort_goal": "Es liegt unter der Halte-Temperatur, darum heizt es in der geplanten Zeit.",
     "why_reason_legionella": "Die Legionellen-Aufheizung ist fällig, darum heizt es auf die Legionellen-Temperatur.",
+    "why_reason_legionella_end": "Die Legionellen-Aufheizung ist vorbei, darum schaltet es aus.",
+    "why_reason_at_target": "Es hat seine Zieltemperatur, darum bleibt es aus.",
+    "why_reason_no_reading": "Sein Temperaturfühler liefert keinen Wert, darum bleibt es aus.",
     "energy_plan_why_band_leads": "Sein Thermometer entscheidet, darum verlangt die tägliche Laufzeit nichts."
   },
   "en": {
@@ -8097,6 +8106,9 @@
     "why_reason_comfort_floor": "It is too cold, so it heats now, up to its keep-at temperature.",
     "why_reason_comfort_goal": "It is below its keep-at temperature, so it heats in the planned time.",
     "why_reason_legionella": "Its Legionella heat-up is due, so it heats to the Legionella temperature.",
+    "why_reason_legionella_end": "Its Legionella heat-up is over, so it turns off.",
+    "why_reason_at_target": "It is at its target temperature, so it stays off.",
+    "why_reason_no_reading": "Its temperature sensor reads nothing, so it stays off.",
     "energy_plan_why_band_leads": "Its thermometer leads, so its daily run time asks nothing."
   },
   "es": {
@@ -10122,6 +10134,9 @@
     "why_reason_comfort_floor": "Hace demasiado frío, así que calienta ya, hasta su temperatura a mantener.",
     "why_reason_comfort_goal": "Está por debajo de su temperatura a mantener, así que calienta en el horario planificado.",
     "why_reason_legionella": "Toca el calentamiento antilegionela, así que calienta a la temperatura antilegionela.",
+    "why_reason_legionella_end": "El calentamiento antilegionela ha terminado, así que se apaga.",
+    "why_reason_at_target": "Está a su temperatura objetivo, así que sigue apagado.",
+    "why_reason_no_reading": "Su sensor de temperatura no da ninguna lectura, así que sigue apagado.",
     "energy_plan_why_band_leads": "Manda su termómetro, así que su tiempo diario de marcha no pide nada."
   },
   "fi": {
@@ -12147,6 +12162,9 @@
     "why_reason_comfort_floor": "On liian kylmä, joten se lämmittää nyt ylläpitolämpötilaan asti.",
     "why_reason_comfort_goal": "Se on alle ylläpitolämpötilan, joten se lämmittää suunniteltuna aikana.",
     "why_reason_legionella": "Legionellalämmitys on vuorossa, joten se lämmittää legionellalämpötilaan.",
+    "why_reason_legionella_end": "Legionellalämmitys on ohi, joten se sammuu.",
+    "why_reason_at_target": "Se on tavoitelämpötilassaan, joten se pysyy pois päältä.",
+    "why_reason_no_reading": "Sen lämpötila-anturi ei anna lukemaa, joten se pysyy pois päältä.",
     "energy_plan_why_band_leads": "Sen lämpömittari päättää, joten päivittäinen käyntiaika ei pyydä mitään."
   },
   "fr": {
@@ -14172,6 +14190,9 @@
     "why_reason_comfort_floor": "Il fait trop froid, il chauffe donc maintenant, jusqu’à sa température à maintenir.",
     "why_reason_comfort_goal": "Il est sous sa température à maintenir, il chauffe donc à l’heure prévue.",
     "why_reason_legionella": "Le chauffage anti-légionelle est dû, il chauffe donc à la température anti-légionelle.",
+    "why_reason_legionella_end": "Le chauffage anti-légionelle est terminé, il s'éteint.",
+    "why_reason_at_target": "Il est à sa température cible, il reste éteint.",
+    "why_reason_no_reading": "Sa sonde de température ne donne aucune valeur, il reste éteint.",
     "energy_plan_why_band_leads": "Son thermomètre décide, son temps de marche quotidien ne demande donc rien."
   },
   "hu": {
@@ -16197,6 +16218,9 @@
     "why_reason_comfort_floor": "Túl hideg van, ezért most fűt, a tartandó hőmérsékletig.",
     "why_reason_comfort_goal": "A tartandó hőmérséklet alatt van, ezért a tervezett időben fűt.",
     "why_reason_legionella": "Esedékes a legionella elleni felfűtés, ezért a legionella-hőmérsékletre fűt.",
+    "why_reason_legionella_end": "A legionella elleni felfűtés véget ért, ezért kikapcsol.",
+    "why_reason_at_target": "Elérte a célhőmérsékletét, ezért kikapcsolva marad.",
+    "why_reason_no_reading": "A hőmérséklet-érzékelője nem ad értéket, ezért kikapcsolva marad.",
     "energy_plan_why_band_leads": "A hőmérője dönt, ezért a napi üzemidő nem kér semmit."
   },
   "it": {
@@ -18222,6 +18246,9 @@
     "why_reason_comfort_floor": "Fa troppo freddo, quindi scalda ora, fino alla temperatura da mantenere.",
     "why_reason_comfort_goal": "È sotto la temperatura da mantenere, quindi scalda nell’orario pianificato.",
     "why_reason_legionella": "È ora del riscaldamento antilegionella, quindi scalda alla temperatura antilegionella.",
+    "why_reason_legionella_end": "Il riscaldamento antilegionella è finito, quindi si spegne.",
+    "why_reason_at_target": "È alla sua temperatura obiettivo, quindi resta spento.",
+    "why_reason_no_reading": "Il suo sensore di temperatura non dà alcun valore, quindi resta spento.",
     "energy_plan_why_band_leads": "Decide il suo termometro, quindi il tempo di funzionamento giornaliero non chiede nulla."
   },
   "nl": {
@@ -20247,6 +20274,9 @@
     "why_reason_comfort_floor": "Het is te koud, dus het verwarmt nu, tot de vasthoudtemperatuur.",
     "why_reason_comfort_goal": "Het is onder de vasthoudtemperatuur, dus het verwarmt in de geplande tijd.",
     "why_reason_legionella": "De legionella-opwarming is aan de beurt, dus het verwarmt tot de legionellatemperatuur.",
+    "why_reason_legionella_end": "De legionella-opwarming is klaar, dus het gaat uit.",
+    "why_reason_at_target": "Het is op zijn doeltemperatuur, dus het blijft uit.",
+    "why_reason_no_reading": "De temperatuursensor geeft geen waarde, dus het blijft uit.",
     "energy_plan_why_band_leads": "Zijn thermometer beslist, dus de dagelijkse looptijd vraagt niets."
   },
   "no": {
@@ -22272,6 +22302,9 @@
     "why_reason_comfort_floor": "Det er for kaldt, så den varmer nå, opp til holdetemperaturen.",
     "why_reason_comfort_goal": "Den er under holdetemperaturen, så den varmer i den planlagte tiden.",
     "why_reason_legionella": "Legionella-oppvarmingen er forfalt, så den varmer til legionellatemperaturen.",
+    "why_reason_legionella_end": "Legionella-oppvarmingen er ferdig, så den slås av.",
+    "why_reason_at_target": "Den har nådd måltemperaturen, så den forblir av.",
+    "why_reason_no_reading": "Temperaturføleren gir ingen verdi, så den forblir av.",
     "energy_plan_why_band_leads": "Termometeret bestemmer, så den daglige driftstiden ber ikke om noe."
   },
   "pl": {
@@ -24297,6 +24330,9 @@
     "why_reason_comfort_floor": "Jest za zimno, więc grzeje teraz, do temperatury utrzymania.",
     "why_reason_comfort_goal": "Jest poniżej temperatury utrzymania, więc grzeje w zaplanowanym czasie.",
     "why_reason_legionella": "Pora na grzanie przeciw legionelli, więc grzeje do temperatury przeciw legionelli.",
+    "why_reason_legionella_end": "Grzanie przeciw legionelli się skończyło, więc się wyłącza.",
+    "why_reason_at_target": "Ma swoją temperaturę docelową, więc pozostaje wyłączony.",
+    "why_reason_no_reading": "Jego czujnik temperatury nic nie pokazuje, więc pozostaje wyłączony.",
     "energy_plan_why_band_leads": "Decyduje jego termometr, więc dzienny czas pracy niczego nie wymaga."
   },
   "pt": {
@@ -26322,6 +26358,9 @@
     "why_reason_comfort_floor": "Está demasiado frio, por isso aquece já, até à temperatura a manter.",
     "why_reason_comfort_goal": "Está abaixo da temperatura a manter, por isso aquece no horário planeado.",
     "why_reason_legionella": "O aquecimento antilegionela está na hora, por isso aquece à temperatura antilegionela.",
+    "why_reason_legionella_end": "O aquecimento antilegionela terminou, por isso desliga-se.",
+    "why_reason_at_target": "Está à sua temperatura alvo, por isso fica desligado.",
+    "why_reason_no_reading": "O seu sensor de temperatura não dá leitura, por isso fica desligado.",
     "energy_plan_why_band_leads": "Manda o seu termómetro, por isso o tempo diário de funcionamento não pede nada."
   },
   "ro": {
@@ -28347,6 +28386,9 @@
     "why_reason_comfort_floor": "Este prea rece, așa că încălzește acum, până la temperatura de menținut.",
     "why_reason_comfort_goal": "Este sub temperatura de menținut, așa că încălzește în timpul planificat.",
     "why_reason_legionella": "Este timpul încălzirii anti-Legionella, așa că încălzește la temperatura anti-Legionella.",
+    "why_reason_legionella_end": "Încălzirea anti-Legionella s-a încheiat, deci se oprește.",
+    "why_reason_at_target": "Este la temperatura țintă, deci rămâne oprit.",
+    "why_reason_no_reading": "Senzorul lui de temperatură nu dă nicio valoare, deci rămâne oprit.",
     "energy_plan_why_band_leads": "Decide termometrul său, așa că timpul zilnic de funcționare nu cere nimic."
   },
   "sv": {
@@ -30372,6 +30414,9 @@
     "why_reason_comfort_floor": "Det är för kallt, så den värmer nu, upp till hålltemperaturen.",
     "why_reason_comfort_goal": "Den är under hålltemperaturen, så den värmer under den planerade tiden.",
     "why_reason_legionella": "Legionellauppvärmningen är dags, så den värmer till legionellatemperaturen.",
+    "why_reason_legionella_end": "Legionellauppvärmningen är klar, så den stängs av.",
+    "why_reason_at_target": "Den har nått sin måltemperatur, så den förblir avstängd.",
+    "why_reason_no_reading": "Dess temperaturgivare ger inget värde, så den förblir avstängd.",
     "energy_plan_why_band_leads": "Dess termometer bestämmer, så den dagliga drifttiden ber inte om något."
   },
   "zh": {
@@ -32397,6 +32442,9 @@
     "why_reason_comfort_floor": "温度过低，所以现在加热，直到保持温度。",
     "why_reason_comfort_goal": "低于保持温度，所以在计划时间内加热。",
     "why_reason_legionella": "该进行军团菌加热了，所以加热到军团菌温度。",
+    "why_reason_legionella_end": "军团菌加热已结束，所以关闭。",
+    "why_reason_at_target": "它已达到目标温度，所以保持关闭。",
+    "why_reason_no_reading": "它的温度传感器没有读数，所以保持关闭。",
     "energy_plan_why_band_leads": "由温度计决定，所以每日运行时间不再要求任何电量。"
   }
 }

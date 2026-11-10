@@ -241,7 +241,7 @@ class TestARefusedStartIsSaid:
         hass = _Hass()
         dev = self._tank(hass, 56.0)
         it = compute_load_intent(dev, remaining_surplus_w=5000.0)
-        assert not it.on and it.code == RC.LOAD_STOP_CONDITION
+        assert not it.on and it.code == RC.LOAD_AT_TARGET
         assert "target" in it.reason
 
     async def test_a_dead_sensor_is_not_heated_blind(self):
@@ -396,3 +396,197 @@ class TestARealWattSetpoint:
             await sc.update(0.0)
         assert not heater.is_active
         assert hass.value == 0.0
+
+
+# ── review round: stops say their own cause; no sun means off ──────────────
+from unittest.mock import MagicMock  # noqa: E402
+
+from custom_components.solar_energy_management.devices.base import (  # noqa: E402
+    DeviceState,
+    SwitchDevice,
+)
+from custom_components.solar_energy_management.tests.test_desired_state import (  # noqa: E402
+    _PDev,
+)
+
+
+def test_no_code_serves_both_a_start_and_a_stop():
+    """A stop logged with a start's sentence read "it heats to the
+    Legionella temperature" for a turn-off."""
+    import ast
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "coordinator" / "surplus_controller.py").read_text()
+    on, off = set(), set()
+    for node in ast.walk(ast.parse(src)):
+        if not (isinstance(node, ast.Call)
+                and getattr(node.func, "id", "") == "LoadIntent"
+                and node.args and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, bool)):
+            continue
+        code = node.args[4] if len(node.args) > 4 else next(
+            (k.value for k in node.keywords if k.arg == "code"), None)
+        if isinstance(code, ast.Attribute):
+            (on if node.args[0].value else off).add(code.attr)
+    assert on and off
+    assert not (on & off), f"one code for a start and a stop: {on & off}"
+
+
+@pytest.mark.asyncio
+async def test_the_end_of_a_legionella_run_says_it_is_over():
+    hass = _Hass()
+    sc, dev = await _legionella_started(hass)
+    hass.set("sensor.boiler_temp", str(dev.legionella_target_temp + 1))
+    await dev.check_legionella_cycle()
+    dev._legionella_hold_start -= timedelta(hours=1)
+    await dev.check_legionella_cycle()
+    await sc.update(-3000.0)
+    last = [r for r in sc.decision_log.records() if r["device_id"] == dev.device_id][-1]
+    assert (last["new"], last["reason_code"]) == ("off", RC.LOAD_LEGIONELLA_END)
+
+
+def test_a_refused_start_names_its_cause():
+    hass = _Hass()
+    tank = TestARefusedStartIsSaid()._tank(hass, 56.0)
+    assert compute_load_intent(tank, remaining_surplus_w=5000.0).code == RC.LOAD_AT_TARGET
+    hass.set("sensor.boiler_temp", "unavailable")
+    assert compute_load_intent(tank, remaining_surplus_w=5000.0).code == RC.LOAD_NO_READING
+
+
+def _switch(hass, **kw):
+    dev = SwitchDevice(hass=hass, device_id="pump", name="Pump",
+                       rated_power=800.0, entity_id="switch.pump", **kw)
+    dev.control_mode = DeviceControlMode.SURPLUS
+    hass.set("switch.pump", "off")
+    return dev
+
+
+@pytest.mark.asyncio
+class TestADisabledLoadSemStartedIsStillStopped:
+
+    async def test_it_is_stopped_once_through_layer_three(self):
+        hass = _Hass()
+        dev = _switch(hass)
+        sc = SurplusController(hass)
+        sc.register_device(dev)
+        await sc.update(3000.0)
+        assert dev.is_active and dev._sem_commanded
+        dev.disable()                       # inside its minimum run
+        await sc.update(3000.0)
+        assert not dev.is_active and len(hass.calls("turn_off", "switch.pump")) == 1
+        last = sc.decision_log.records()[-1]
+        assert (last["new"], last["reason_code"]) == ("off", RC.LOAD_MODE_OFF)
+        await sc.update(3000.0)             # and never visited again
+        assert not hass.calls("turn_on", "switch.pump")[1:]
+
+    async def test_disabled_and_then_set_off_too(self):
+        hass = _Hass()
+        dev = _switch(hass)
+        sc = SurplusController(hass)
+        sc.register_device(dev)
+        await sc.update(3000.0)
+        dev.disable()
+        dev.control_mode = DeviceControlMode.OFF
+        await sc.update(3000.0)
+        assert not dev.is_active
+
+    async def test_a_disabled_load_the_user_runs_is_left_alone(self):
+        hass = _Hass()
+        dev = _switch(hass)
+        sc = SurplusController(hass)
+        sc.register_device(dev)
+        hass.set("switch.pump", "on")
+        dev._status.state = DeviceState.ACTIVE      # running, never SEM's
+        dev.disable()
+        await sc.update(0.0)
+        assert dev.is_active and not hass.calls("turn_off", "switch.pump")
+
+    async def test_an_externally_managed_device_stays_untouched(self):
+        """The EV chargers: their whole lifecycle is ev_control's, whoever
+        started them."""
+        hass = _Hass()
+        dev = _switch(hass)
+        sc = SurplusController(hass)
+        sc.register_device(dev)
+        await _activate_owned(dev, 800.0)
+        dev.managed_externally = True
+        dev.control_mode = DeviceControlMode.OFF
+        await sc.update(0.0)
+        assert dev.is_active and dev._sem_owned
+        assert not hass.calls("turn_off", "switch.pump")
+
+
+async def _small(**kw):
+    sc = SurplusController(MagicMock())
+    sc.regulation_offset = 0.0
+    d = _PDev("a", 1, **kw)
+    sc.register_device(d)
+    return sc, d
+
+
+@pytest.mark.asyncio
+class TestNoSunMeansOff:
+
+    @pytest.mark.parametrize("reading", ["0", "unavailable", "1500"])
+    async def test_a_boiler_whose_power_sensor_reads_zero_stops_at_night(self, reading):
+        hass = _Hass()
+        hass.set("switch.boiler", "off")
+        hass.set("sensor.t", "40")
+        hass.set("sensor.p", "0", unit_of_measurement="W")
+        dev = HotWaterController(
+            hass=hass, entity_id="switch.boiler", temperature_entity_id="sensor.t",
+            solar_target_temp=55.0, rated_power=2000.0, power_entity_id="sensor.p")
+        dev._last_legionella_time = datetime.now().astimezone()
+        dev.min_on_seconds = dev.min_off_seconds = 0
+        sc = SurplusController(hass)
+        sc.regulation_offset = 0.0
+        sc.register_device(dev)
+        for _ in range(4):
+            await sc.update(5000.0)
+        assert dev.is_active
+        _past_min_run(dev)
+        hass.set("sensor.p", reading, unit_of_measurement="W")
+        for _ in range(15):
+            await sc.update(-200.0, is_night=True)
+        assert not dev.is_active
+
+    @pytest.mark.parametrize("draw", [60.0, 90.0, 120.0, 800.0])
+    async def test_a_small_load_stops_with_no_sun(self, draw):
+        sc, d = await _small(is_active=True, draw=draw, min_power=50.0, rated_power=draw)
+        await sc.update(0.0)
+        assert not d.is_active
+
+    async def test_a_boiler_idling_on_its_thermostat_at_noon_stays(self):
+        """0 W on its sensor, sun in the pool: it costs the sun nothing and
+        is left on, so its thermostat can take over — no flapping."""
+        sc, d = await _small(is_active=True, draw=0.0, min_power=800.0, rated_power=2000.0)
+        for _ in range(10):
+            await sc.update(3000.0)
+        assert d.is_active
+
+    async def test_inside_the_band_with_sun_it_stays(self):
+        sc, d = await _small(is_active=True, draw=800.0, min_power=800.0)
+        for _ in range(10):
+            await sc.update(750.0)          # 50 W short, sun in the pool
+        assert d.is_active
+
+    async def test_the_minimum_run_still_holds(self):
+        sc, d = await _small(is_active=True, draw=60.0, min_power=50.0,
+                             can_deactivate=False)
+        await sc.update(0.0)
+        assert d.is_active
+        d._can_deact = True
+        await sc.update(0.0)
+        assert not d.is_active
+
+    async def test_a_paid_run_and_a_battery_share_are_reasons_to_run(self):
+        sc, d = await _small(is_active=True, draw=60.0, min_power=50.0,
+                             _offpeak_forced=True, has_runtime_deficit=True,
+                             top_up_policy="cheap_hours")
+        await sc.update(0.0, price_level="cheap")
+        assert d.is_active
+        sc, d = await _small(is_active=True, draw=60.0, min_power=50.0,
+                             battery_assist_enabled=True)
+        await sc.update(0.0, battery_soc=90, battery_buffer_soc=70,
+                        battery_assist_budget_w=3000.0)
+        assert d.is_active

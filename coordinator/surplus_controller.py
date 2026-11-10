@@ -832,7 +832,8 @@ def compute_load_intent(
 
     Layer 1: one ordered decision (first match wins) — every reason a load
     turns on or off docks here (#1335: the 7 imperative passes it replaced
-    are gone). ``remaining_surplus_w`` is the solar
+    are gone). It writes no control state (ownership, markers, timers);
+    the device getters it reads keep their own diagnostic caches. ``remaining_surplus_w`` is the solar
     surplus left for THIS device after higher-priority loads (the caller's
     priority walk fills it); the battery/grid clauses don't consume it.
     Everything else is read off ``device`` so it works on a real device or a mock.
@@ -855,6 +856,16 @@ def compute_load_intent(
     sun_still_has_time = grid_top_up_defers_to_sun(
         device, daylight_remaining_s=daylight_remaining_s, is_night=is_night,
         comfort_block_open=plan.comfort_in_block)
+
+    # 0. (#1335) Disabled: SEM no longer manages it. A run SEM started is
+    #    ended once — nothing else would ever stop it; any other is left
+    #    exactly as it is.
+    if getattr(device, "is_enabled", True) is False:
+        if active and sem_started(device):
+            return LoadIntent(False, 0.0, None,
+                              "disabled — ending SEM-started run",
+                              RC.LOAD_MODE_OFF)
+        return LoadIntent(active, held, None, "disabled — not managed")
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
     #    still SHEDS it under peak risk.
@@ -908,6 +919,13 @@ def compute_load_intent(
                           plan.reason or "joint energy plan: window closed",
                           RC.LOAD_PLAN_CLOSED)
 
+    # 2c. (#1335) The device's own run (Legionella) is over: the stop says
+    #     so. Ahead of the done gates — a tank just disinfected is above its
+    #     normal target too, and "stop condition met" is not why it stops.
+    if active and getattr(device, "own_run_ending", False) is True:
+        return LoadIntent(False, 0.0, None,
+                          "Legionella run over", RC.LOAD_LEGIONELLA_END)
+
     # 3. Done for the day — the hard stops (cap overrides the deficit).
     #    (#688) The daily MINIMUM is deliberately NOT one of them. It is a
     #    floor, not a stop: reaching it ends the PAID sources (clause 4), but
@@ -929,9 +947,9 @@ def compute_load_intent(
         if refusal == "sensor":
             return LoadIntent(False, 0.0, None,
                               "temperature sensor reads nothing — not started",
-                              RC.LOAD_STOP_CONDITION)
+                              RC.LOAD_NO_READING)
         return LoadIntent(False, 0.0, None, "at its target temperature",
-                          RC.LOAD_STOP_CONDITION)
+                          RC.LOAD_AT_TARGET)
     # 3d. (#594/#1335) Away: no comfort heating. A run stops; the optional
     #     hot-water dump may still take free sun (capped at the minimum
     #     temperature by the device's own target), nothing paid.
@@ -945,12 +963,9 @@ def compute_load_intent(
 
     # 3a. (#1121) The device's own run (Legionella) needs no sun: kept as
     #     it is, never re-tuned. Only a shed (clause 2) or its own end stops it.
-    #     (#1102/#1335) It STARTS and ENDS here too: the hot-water device only
-    #     says the run is due or over and never switches itself, so the run
-    #     is SEM's own command (Mode Off and teardown stop it).
-    if active and getattr(device, "own_run_ending", False) is True:
-        return LoadIntent(False, 0.0, None,
-                          "Legionella run over", RC.LOAD_LEGIONELLA)
+    #     (#1102/#1335) It STARTS here too (and ends at 2c): the hot-water
+    #     device only says the run is due or over and never switches itself,
+    #     so the run is SEM's own command (Mode Off and teardown stop it).
     if getattr(device, "runs_without_surplus", False) is True:
         if active:
             return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
@@ -1951,22 +1966,48 @@ class SurplusController:
                 charged = spend.get(did, 0.0)
                 if charged <= 0.0:
                     continue
-                intents[did] = LoadIntent(False, 0.0, None, "not enough sun",
-                                          RC.LOAD_SURPLUS_SHORT)
-                remaining += charged
-                # (#122, D6) what requires it stops with it
-                name = getattr(device, "name", did)
-                for dep in self.get_dependents(did):
-                    dep_intent = intents.get(dep.device_id)
-                    if (dep_intent is None or not dep_intent.on
-                            or dep_intent.source is None
-                            or not dep.is_active
-                            or dep.can_deactivate() is False):
-                        continue
-                    intents[dep.device_id] = LoadIntent(
-                        False, 0.0, None, f"{name} stopped", RC.LOAD_DEPENDENCY)
-                    remaining += spend.get(dep.device_id, 0.0)
+                remaining += self._stop_short(device, intents, spend)
+
+        # (#1335) No sun at all: the pool the walk began with is empty (the
+        # sun is down, or the house takes all of it). A load running on the
+        # sun alone has no reason left to run and stops — whatever it draws
+        # right now. The 100 W band above is against flapping while there IS
+        # sun; it kept a load under 100 W, and a switch whose power sensor
+        # reads 0 W, on through the night. A load with another reason (a
+        # paid run, the comfort floor, an own run, the battery's Tier-1
+        # share, its minimum run) is not touched; with sun in the pool
+        # nothing changes — a boiler idling on its thermostat at noon stays.
+        if float(remaining_surplus) <= 0.0:
+            for device in reversed(devices):
+                did = device.device_id
+                intent = intents[did]
+                if not (device.is_active and intent.source == "solar"
+                        and self._sun_run(device, intent)):
+                    continue
+                if device.can_deactivate() is False:
+                    continue
+                self._stop_short(device, intents, spend, reason="no sun left")
         return intents
+
+    def _stop_short(self, device, intents, spend, *,
+                    reason: str = "not enough sun") -> float:
+        """(#1335) Turn one sun load's intent off for a short pool, with
+        what requires it (#122, D6). Returns the watts the walk gets back."""
+        did = device.device_id
+        intents[did] = LoadIntent(False, 0.0, None, reason, RC.LOAD_SURPLUS_SHORT)
+        freed = float(spend.get(did, 0.0))
+        name = getattr(device, "name", did)
+        for dep in self.get_dependents(did):
+            dep_intent = intents.get(dep.device_id)
+            if (dep_intent is None or not dep_intent.on
+                    or dep_intent.source is None
+                    or not dep.is_active
+                    or dep.can_deactivate() is False):
+                continue
+            intents[dep.device_id] = LoadIntent(
+                False, 0.0, None, f"{name} stopped", RC.LOAD_DEPENDENCY)
+            freed += float(spend.get(dep.device_id, 0.0))
+        return freed
 
     @staticmethod
     def _sun_run(device, intent: "LoadIntent") -> bool:
@@ -2073,6 +2114,7 @@ class SurplusController:
             # Off is the user's, a relay-locked load the operator's: neither
             # is SEM's to allocate (the old passes left both out too)
             if (device.control_mode == DeviceControlMode.OFF
+                    or getattr(device, "is_enabled", True) is False
                     or getattr(device, "locked_by_operator", False) is True):
                 continue
             allocations.append(SurplusAllocation(
@@ -2271,6 +2313,15 @@ class SurplusController:
             distributable = self._apply_price_adjustment(distributable, price_level)
 
         devices = self.get_devices_sorted()
+        # (#1335) …plus a load that was disabled while a run SEM started is
+        # still going: layer 1 ends that run once. Without it nothing would
+        # ever visit the load again. Externally managed devices (the EV
+        # chargers) are never added: their whole lifecycle is ev_control's.
+        devices += sorted(
+            (d for d in self._devices.values()
+             if not d.is_enabled and not d.managed_externally
+             and d.is_active and sem_started(d)),
+            key=lambda d: d.priority)
         # (#576) The home battery sits at ``battery_priority`` in this walk.
         # ``reclaim_w`` (the power that would charge it) is offered at the TOP;
         # when the walk crosses the battery's slot it is handed back to the

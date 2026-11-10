@@ -4616,8 +4616,9 @@ the clamp in every arm (surplus, spend consent, window, boost, protection switch
 `SurplusController.update()` walk (the ungated pass is shown to START the pump first, so the pass
 is not vacuous), the overnight promise and the short-winter-day tail both still topping up, the
 class-17 stop twin ending a night run at dawn, a monotonicity sweep pinning that the gate cannot
-flap, desired-state parity on `compute_load_intent`, and AST guards that BOTH halves of the
-imperative pass and the intent path call `sun_can_still_finish` and that the coordinator feeds it
+flap, desired-state parity on `compute_load_intent`, and AST guards that layer 1
+(`compute_load_intent`, the one place since #1335) reads the finish window through
+`grid_top_up_defers_to_sun` and that the coordinator feeds it
 from the same sun authority `is_night_mode` uses. **Open residual (a product call, not a sweep):** the window is
 about TIME, never about energy. A user whose only cheap window is midday (a Tibber/Amber negative
 midday block) on an overcast day is now deferred through that window — the daylight is long enough
