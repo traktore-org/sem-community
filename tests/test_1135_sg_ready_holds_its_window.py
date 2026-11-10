@@ -159,5 +159,9 @@ class TestEveryStopHoldsTheRun:
         reg._save_storage = _save
         await reg.update_device_control_mode("heat_pump", "off")
         assert hp.control_mode is DeviceControlMode.OFF
+        # (#1335) the handler sets the mode; the refresh it asks for runs the
+        # engine, whose layer 3 lets the user's Off beat the 10 min run
+        assert hp.is_active
+        await sc.update(6000.0)
         assert not hp.is_active
         assert hp.sg_ready_state is SGReadyState.NORMAL

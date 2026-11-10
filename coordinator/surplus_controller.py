@@ -701,6 +701,9 @@ class LoadIntent:
     #: walk books). A switch ignores it; a watt setpoint follows it. None =
     #: send ``power_w``.
     command_w: Optional[float] = field(default=None, compare=False)
+    #: (#1335) Layer 3 lets go of an ADOPTED claim (mode Off): ownership and
+    #: force markers are cleared with no write. Layer 1 only says so.
+    release: bool = field(default=False, compare=False)
 
 
 #: (#1335) Sources that buy the run (grid, battery) or need no sun (the
@@ -858,10 +861,9 @@ def compute_load_intent(
             # (#847) ADOPTED only (user/externally started, claimed
             # under Surplus so goal gates could stop it). Opt-out
             # releases the claim with ZERO writes - the load stays
-            # exactly as it is (hoyte).
-            device._sem_owned = False
-            device._offpeak_forced = False
-            device._batt_overnight_forced = False
+            # exactly as it is (hoyte). (#1335) Layer 3 releases it.
+            return LoadIntent(active, held, None, "off — monitor only",
+                              release=True)
         return LoadIntent(active, held, None, "off — monitor only")
     # 1b. (#1021) Behind the grid operator's relay and the relay is on: the
     #     relay cuts the power, so SEM keeps its hands off — no write in
@@ -907,6 +909,29 @@ def compute_load_intent(
     if getattr(device, "stop_condition_met", False):
         return LoadIntent(False, 0.0, None, "stop condition met",
                           RC.LOAD_STOP_CONDITION)
+    # 3c. (#1335) What the device's own start would refuse is decided here,
+    #     where it can say so: a tank at its target, or a temperature sensor
+    #     that is set up but reads nothing (SEM does not heat blind). Starts
+    #     only — a run already going is left to its thermostat, as before.
+    refusal = getattr(device, "start_refusal", None)
+    if isinstance(refusal, str) and not active:
+        if refusal == "sensor":
+            return LoadIntent(False, 0.0, None,
+                              "temperature sensor reads nothing — not started",
+                              RC.LOAD_STOP_CONDITION)
+        return LoadIntent(False, 0.0, None, "at its target temperature",
+                          RC.LOAD_STOP_CONDITION)
+    # 3d. (#594/#1335) Away: no comfort heating. A run stops; the optional
+    #     hot-water dump may still take free sun (capped at the minimum
+    #     temperature by the device's own target), nothing paid.
+    sun_only = False
+    if getattr(device, "vacation", False) is True:
+        if getattr(device, "vacation_dhw_surplus", False) is not True:
+            return LoadIntent(False, 0.0, None,
+                              "comfort heating paused while away",
+                              RC.LOAD_VACATION)
+        sun_only = True
+
     # 3a. (#1121) The device's own run (Legionella) needs no sun: kept as
     #     it is, never re-tuned. Only a shed (clause 2) or its own end stops it.
     #     (#1102/#1335) It STARTS and ENDS here too: the hot-water device only
@@ -944,6 +969,9 @@ def compute_load_intent(
     # waits for the user's paid sources.
     deficit = (band is None
                and bool(getattr(device, "has_runtime_deficit", False)))
+    if sun_only:
+        # (#594) the vacation dump: free sun only — no band, no paid source
+        band, deficit, tier1_headroom_w = None, False, 0.0
     # (#1335) A run on a paid source (the markers layer 3 derived from the
     # source it was started on) keeps its source while that source's own
     # terms hold; the sun does not relabel it.
@@ -1268,6 +1296,12 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         return _reconcile_load_observe(device, intent, active,
                                        controller=controller)
 
+    if intent.release:
+        # (#847/#1335) mode Off on an ADOPTED load: let go of the claim with
+        # no write — the load stays exactly as the user has it.
+        device._sem_owned = False
+        _clear_source_markers(device)
+
     command = intent.power_w if intent.command_w is None else intent.command_w
     if intent.on and not active:
         if not device.can_activate():
@@ -1282,7 +1316,16 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         return consumed
 
     if not intent.on and active:
-        if not device.can_deactivate():
+        if intent.code == RC.LOAD_MODE_OFF:
+            # (class-17 sibling / #644 / #1335) The user's own Off beats the
+            # minimum run: a deliberate command beats flicker protection.
+            # The anti-cycle rule lives here, so its one exception does too
+            # (the device's own deactivate gates on the unified clock).
+            device._last_activated = None
+            _st = getattr(device, "_status", None)
+            if _st is not None and hasattr(_st, "last_activated"):
+                _st.last_activated = None
+        elif not device.can_deactivate():
             return device.get_current_consumption()   # anti-flicker holds it on
         if await _deactivate_owned(device,
                                    reason_code=intent.code or RC.LOAD_STOP,
@@ -2319,10 +2362,12 @@ class SurplusController:
             # (the activation pass just skips OFF devices; nothing else stops
             # them). A user-turned-on load (not _sem_owned) stays untouched:
             # Off means SEM keeps its hands off the user's own choices.
+            _user_off = False
             if (device.control_mode == DeviceControlMode.OFF
                     and getattr(device, "_sem_owned", False)):
                 if getattr(device, "_sem_commanded", False):
                     reason = "mode off — ending SEM-started run"
+                    _user_off = True   # (#1335) the user's Off beats min_on
                 else:
                     # (#847) adopted, not SEM-started: release the
                     # claim without a write - Off means hands off.
@@ -2421,8 +2466,14 @@ class SurplusController:
                 # (#1135) the minimum run holds here as on every other stop
                 # pass — this one trusted the device to hold it itself, and a
                 # heat pump's SG-Ready stand-down does not.
-                if device.can_deactivate() and await _deactivate_owned(
-                        device, reason_code=RC.LOAD_OVERNIGHT_END, text=reason):
+                if _user_off:
+                    device._last_activated = None
+                    if getattr(device, "_status", None) is not None:
+                        device._status.last_activated = None
+                if (_user_off or device.can_deactivate()) and await _deactivate_owned(
+                        device,
+                        reason_code=RC.LOAD_MODE_OFF if _user_off else RC.LOAD_OVERNIGHT_END,
+                        text=reason):
                     device._offpeak_forced = False
                     device._offpeak_forced_date = None
                     device._batt_overnight_forced = False
@@ -2471,7 +2522,13 @@ class SurplusController:
                 # one code for all four printed "It ran long enough today"
                 # for a tank that had reached its temperature.
                 done_code = RC.LOAD_TARGET_MET
-                if device.daily_max_runtime_reached:
+                if (getattr(device, "vacation", False) is True
+                        and getattr(device, "vacation_dhw_surplus", False) is not True):
+                    # (#594/#1335) away: no comfort heating — the stop the
+                    # vacation edge handler used to make, every cycle
+                    done_reason = "comfort heating paused while away"
+                    done_code = RC.LOAD_VACATION
+                elif device.daily_max_runtime_reached:
                     # (#620) the hard cap must STOP a running device, not just
                     # block re-activation — otherwise a load already on when it
                     # crosses the cap keeps running past it (caught live on the

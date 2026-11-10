@@ -427,6 +427,19 @@ class HotWaterController(SwitchDevice):
         return False
 
     @property
+    def start_refusal(self) -> Optional[str]:
+        """(#1335) Why ``activate`` would refuse a start right now: ``"sensor"``
+        (a temperature sensor is set up but reads nothing — fail-safe) or
+        ``"at_target"`` (the tank is at the active target). None = it may
+        start. Layer 1 reads this and says so, so a start is never refused
+        in silence; ``activate`` keeps the same check as a backstop."""
+        if self.is_temperature_safe():
+            return None
+        if self._last_temperature_safety_path == "configured_sensor_broken":
+            return "sensor"
+        return "at_target"
+
+    @property
     def runs_without_surplus(self) -> bool:
         """(#1121) A Legionella run heats to its target sun or not;
         ``check_legionella_cycle`` ends it."""

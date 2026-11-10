@@ -564,7 +564,8 @@ class TestSensorAttributes:
 
 
 class TestVacationStop:
-    """The vacation stop goes through the logged stop choke point."""
+    """The vacation stop goes through the logged stop choke point
+    (#1335: layer 1 decides it, ``reconcile_load`` makes it)."""
 
     async def test_vacation_stop_records_once(self):
         from custom_components.solar_energy_management.coordinator.coordinator import (
@@ -583,12 +584,21 @@ class TestVacationStop:
         hp.device_id, hp.name = "heat_pump", "Heat pump"
         hp._active = True
         hp._controller = sc
+        hp.can_deactivate = lambda: True
+        hp.reset_surplus_timer = lambda: None
         c = _Coord()
         c.config, c._observer_mode = {}, False
         c._vacation_switch_on, c._vacation_active = True, False
         c._surplus_controller = SimpleNamespace(_devices={"heat_pump": hp})
         await c._apply_vacation_mode()
-        await c._apply_vacation_mode()          # already off: nothing new
+        assert hp.is_active                     # (#1335) the flag only…
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            compute_load_intent, reconcile_load,
+        )
+        intent = compute_load_intent(hp, remaining_surplus_w=5000.0)
+        await reconcile_load(hp, intent)        # …layer 1 stops it, layer 3 logs
+        await c._apply_vacation_mode()
+        await reconcile_load(hp, compute_load_intent(hp, remaining_surplus_w=5000.0))
         assert not hp.is_active
         rows = sc.decision_log.records()
         assert [(r["device_id"], r["new"], r["reason_code"]) for r in rows] == [

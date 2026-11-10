@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 from custom_components.solar_energy_management.features.device_registry import (
     UnifiedDeviceRegistry,
 )
-from custom_components.solar_energy_management.devices.base import DeviceControlMode
+from custom_components.solar_energy_management.devices.base import DeviceState, DeviceControlMode
 from custom_components.solar_energy_management.coordinator.surplus_availability import (
     SurplusAvailability,
     SUSTAIN_ON_SECONDS,
@@ -312,12 +312,22 @@ async def test_mode_off_transition_releases_running_load(registry):
     await registry.async_register_service_device(dict(SPEC))
     device = registry._surplus_controller.get_device("kia_socket")
     device.observed_on = MagicMock(return_value=True)     # entity is ON
+    device._status.state = DeviceState.ACTIVE
     device._sem_owned = True                               # SEM started it
     device._sem_commanded = True                           # (#847) by command
     device._offpeak_forced = True                          # stale marker
-    device.deactivate = AsyncMock()
+
+    async def _off():
+        device._status.state = DeviceState.IDLE
+    device.deactivate = AsyncMock(side_effect=_off)
     await registry.update_device_control_mode("kia_socket", "off")
-    device.deactivate.assert_awaited()
+    # (#1335) the handler sets the mode only; the engine stops the load
+    device.deactivate.assert_not_awaited()
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        compute_load_intent, reconcile_load,
+    )
+    await reconcile_load(device, compute_load_intent(device, remaining_surplus_w=0.0))
+    device.deactivate.assert_awaited_once()
     assert device._offpeak_forced is False
     assert device._sem_owned is False
 
@@ -330,11 +340,17 @@ async def test_mode_off_releases_adopted_load_without_a_write(registry):
     await registry.async_register_service_device(dict(SPEC))
     device = registry._surplus_controller.get_device("kia_socket")
     device.observed_on = MagicMock(return_value=True)
+    device._status.state = DeviceState.ACTIVE
     device._sem_owned = True
     device._sem_commanded = False                          # adopted, not commanded
     device._offpeak_forced = True
     device.deactivate = AsyncMock()
     await registry.update_device_control_mode("kia_socket", "off")
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        compute_load_intent, reconcile_load,
+    )
+    # (#1335) the engine: layer 1 says release, layer 3 lets go
+    await reconcile_load(device, compute_load_intent(device, remaining_surplus_w=0.0))
     device.deactivate.assert_not_awaited()
     assert device._sem_owned is False
     assert device._offpeak_forced is False

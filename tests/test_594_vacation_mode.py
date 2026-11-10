@@ -418,13 +418,26 @@ class TestApplyVacationMode:
         c = _FakeCoordinator(
             hass, devices={"heat_pump": hp, "hot_water": hw},
         )
+        hass.services.async_call.reset_mock()
         result = await c._apply_vacation_mode()
         assert result is True
         assert c._vacation_active is True
         assert hp.vacation is True and hw.vacation is True
+        # (#1335) the handler only sets the flags; layer 1 stops the runs
+        hass.services.async_call.assert_not_called()
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            SurplusController,
+        )
+        sc = SurplusController(hass)
+        for dev in (hp, hw):
+            dev._last_activated = None       # past the minimum run
+            sc.register_device(dev)
+        await sc.update(6000.0)              # full sun: away still means off
         assert not hp.is_active, "active heat pump must be deactivated once"
         assert not hw.is_active, "active boiler must be deactivated once"
         assert hp._hp_status.sg_ready_state == SGReadyState.NORMAL
+        await sc.update(6000.0)
+        assert not hp.is_active and not hw.is_active, "and stays off while away"
 
     @pytest.mark.asyncio
     async def test_dump_config_propagated_and_dump_survives_steady_state(self):

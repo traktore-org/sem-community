@@ -3964,7 +3964,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     async def _apply_vacation_mode(self) -> bool:
         """Set the per-cycle vacation flag on the comfort-heating controllers
-        and deactivate them cleanly on the vacation transition (#594).
+        (#594). (#1335) Layer 1 stops their comfort runs from the flag.
 
         Runs BEFORE ``SurplusController.update`` so this cycle's activation
         pass already sees the gate. SEM only stops ENCOURAGING: deactivation
@@ -3972,7 +3972,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         boiler to its own thermostat — frost/safety logic is untouched. EV /
         battery / load-priority devices are deliberately not touched.
         """
-        was_active = self._vacation_active
         vacation = self._compute_vacation_active()
         self._vacation_active = vacation
         devices = getattr(self._surplus_controller, "_devices", {})
@@ -3985,38 +3984,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 dev.vacation_dhw_surplus = bool(
                     self.config.get("vacation_dhw_surplus", False)
                 )
-            if not vacation or self._observer_mode or not dev.is_active:
-                continue
-            # The hot-water surplus dump may stay active (it re-targets
-            # ``min_temperature`` via ``_active_target_temp``) — but on the
-            # rising edge deactivate once so the entity's written setpoint
-            # drops from the solar/comfort target to the minimum on the next
-            # (gated) activation. Legionella-in-flight is ended by
-            # ``check_legionella_cycle`` and stopped by layer 1 (#1335).
-            dump_allowed = (
-                dev_id == "hot_water"
-                and dev.vacation_dhw_surplus
-                and not getattr(dev, "_legionella_cycle_active", False)
-            )
-            if dump_allowed and was_active:
-                continue
-            try:
-                # (#1084) through the logged stop choke point — the same
-                # deactivate + record_deactivated it did by hand, plus the
-                # decision log's row
-                from . import reason_codes as RC
-                from .surplus_controller import _deactivate_owned
-                if await _deactivate_owned(
-                        dev, reason_code=RC.LOAD_VACATION,
-                        text="comfort heating paused while away"):
-                    _LOGGER.info(
-                        "Vacation mode: deactivated %s (comfort heating "
-                        "suspended while away)", dev.name,
-                    )
-            except Exception as e:  # noqa: BLE001 — never break the cycle
-                _LOGGER.warning(
-                    "Vacation deactivation of %s failed: %s", dev_id, e,
-                )
+            # (#1335) Nothing is switched here. Layer 1 reads ``vacation``
+            # every cycle: a comfort run stops through ``reconcile_load``
+            # (anti-cycle, observer and the decision log apply), and the
+            # optional hot-water dump keeps only free sun, re-targeted to
+            # the minimum temperature by the tank itself (``target_stale``).
+            # A missed edge (a restart while away) can no longer leave a
+            # SEM-started run going.
         return vacation
 
     async def _async_update_data(self) -> Dict[str, Any]:
