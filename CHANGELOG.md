@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.11] — 10.11.2026
+
 - 🐛 **The Energy Plan card shows a load's daily grid run when SEM starts it** (#1330). It showed a midday run SEM never did.
 
 # [2.3.0-beta.10] — 09.11.2026
