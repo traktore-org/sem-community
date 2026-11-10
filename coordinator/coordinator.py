@@ -10881,10 +10881,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         from . import plan_override as _po
         # (#1321) Only a charger or a battery acts on an override. Any other
         # id was stored and did nothing, and the caller read it as done.
-        known = {str(c.get("id")) for c in (self.config.get("ev_chargers") or [])
-                 if isinstance(c, dict) and c.get("id")}
-        known |= set(getattr(self, "_known_battery_ids", set()) or set()) | {"primary"}
-        if device_id not in known:
+        # Charger ids by the per-charger loop's own rule: the entry's id, else
+        # ``ev_charger_<index>``; one box set up with flat keys is ``ev_charger``.
+        chargers = [c for c in (self.config.get("ev_chargers") or []) if isinstance(c, dict)]
+        known = {str(c.get("id") or f"ev_charger_{i}") for i, c in enumerate(chargers)}
+        if not chargers:
+            known.add("ev_charger")
+        batteries = set(getattr(self, "_known_battery_ids", set()) or set())
+        known |= batteries | {"primary"}
+        # Before the first cycle the battery ids are not read yet: take the id.
+        if device_id not in known and batteries:
             raise ValueError(
                 f"not a charger or a battery: {device_id!r} (one of {sorted(known)})")
         now = dt_util.utcnow()

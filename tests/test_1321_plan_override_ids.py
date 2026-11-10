@@ -34,3 +34,20 @@ def test_any_other_id_is_refused_and_nothing_is_stored(device_id):
         SEMCoordinator.set_plan_override(c, device_id, "force", 60)
     assert c._plan_overrides == {}
     c._storage.set_plan_overrides.assert_not_called()
+
+
+def test_a_charger_without_an_id_and_a_flat_key_charger_are_taken():
+    c = _coord()
+    c.config = {"ev_chargers": [{"name": "box"}]}
+    SEMCoordinator.set_plan_override(c, "ev_charger_0", "skip", 60)
+    c = _coord()
+    c.config = {}
+    SEMCoordinator.set_plan_override(c, "ev_charger", "force", 60)
+    assert "ev_charger" in c._plan_overrides
+
+
+def test_before_the_first_cycle_a_battery_id_is_taken():
+    c = _coord()
+    c._known_battery_ids = set()
+    SEMCoordinator.set_plan_override(c, "b3", "force", 60)
+    assert "b3" in c._plan_overrides
