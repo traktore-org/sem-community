@@ -9422,6 +9422,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     @staticmethod
     def _peak_hold_pack_soc(power):
         """(#970) The pack's level this cycle, or None when it was not read."""
+        # DARK-SOC: action — an unread level means no hold this cycle; the stored let-go state is kept
         if (getattr(power, "battery_soc_unavailable", False)
                 or getattr(power, "battery_soc_known", True) is False):
             return None

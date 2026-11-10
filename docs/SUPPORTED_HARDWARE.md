@@ -112,9 +112,6 @@ looks for these roles:
 - **A charge-mode select** — a select that can stop and can charge (for
   example Fast / Eco / Stopped) is the charge mode, whatever it is called.
 - **A phase select** — a select with 1 and 3 is suggested as the phase switch.
-- **One current per phase** — a service that takes a current for each of
-  the three phases can switch between 1 and 3 phases (Easee). Used only
-  with phase switching on.
 - **A car's own charge control** — a car integration's charging-amps number
   and charge switch (Tesla Fleet, Teslemetry, Tessie).
 - **A charger that only reports** — driven through the one car that has

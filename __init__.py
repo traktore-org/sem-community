@@ -3271,7 +3271,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             _cl = _row.get("heat_pump_climate_entity")
             _svc = (_row.get("heat_pump_sg_ready_service") or "").strip()
             from .config_flow import _parse_service_data
-            from .devices.heat_pump_controller import HeatPumpController
+            from .devices.heat_pump_controller import HeatPumpController, STEP_DOWN_OFF
             _svc_data = _parse_service_data(
                 _row.get("heat_pump_sg_ready_service_data")) or {}
             hp_extra = HeatPumpController(
@@ -3298,7 +3298,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 relay1_off_value=_row.get("heat_pump_relay1_off_value"),
                 relay2_on_value=_row.get("heat_pump_relay2_on_value"),
                 relay2_off_value=_row.get("heat_pump_relay2_off_value"),
-                step_down=_row.get("heat_pump_step_down") or "off",
+                step_down=_row.get("heat_pump_step_down") or STEP_DOWN_OFF,
             )
             # (#1323) …and a step-down SEM left: re-owned from its stored
             # memo, so the next cycle takes it back unless its cause stands.
