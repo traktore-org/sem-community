@@ -12438,7 +12438,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 Demand, LedgerSlot, build_night_ledger, pack_night,
             )
             from .ev_night_targets import build_night_target_map
-            from .ev_tariff_planner import resolve_deadline
+            from .ev_tariff_planner import (
+                night_charge_end, resolve_deadline)
 
             now = dt_util.now()
             # (#638 G4) the log tag is the honest mode of THIS stamp: while
@@ -12547,7 +12548,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         or DEFAULT_MAX_CHARGING_CURRENT)),
                     min_power_w=self._ev_watts_for_amps(
                         cid, cfg, float(cfg.get("ev_min_current") or 6)),
-                    deadline=min(deadline, night_end) if deadline else night_end,
+                    deadline=night_charge_end(deadline, night_end, None),
                     # The one list counts 1 = HIGHEST (get_devices_sorted)
                     # and the packer packs LOWEST first — the directions
                     # already agree. The old negation REVERSED the list:

@@ -122,15 +122,15 @@ def night_charge_end(departure: Optional[datetime],
     15.7 kWh still owed. The joint plan (``min(deadline, night_end)``) and
     ``_night_deliverable_kwh`` already stop at the window's end.
 
-    A departure after the NEXT window opens keeps its own time: another
-    night charges before the car leaves. Without that start (None), the
-    window's end is used.
+    A departure after the NEXT window opens is planned the same way (#1309):
+    only tonight's hours count, so the end is ``min(departure, window_end)``
+    — the rule of the joint plan. Future nights are not known (sunrise moves
+    them), and the day hours before them are no charge time.
+    ``next_window_start`` is kept for callers and no longer read.
     """
     if departure is None or window_end is None or departure <= window_end:
         return departure or window_end
     if finish_by_departure:
-        return departure
-    if next_window_start is not None and departure > next_window_start:
         return departure
     return window_end
 
