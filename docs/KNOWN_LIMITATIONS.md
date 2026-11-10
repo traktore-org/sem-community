@@ -395,12 +395,11 @@ different models is not supported yet. With `direction_select` SEM writes
 the direction first and the watts only once the select reads it back, so a
 change of direction lands one cycle later by design.
 
-## Keeping the battery for the peak limit needs a forecast to end (#970)
+## Keeping the battery for the peak limit moves in steps (#970)
 
-*Keep the battery for the peak limit* lets go only when the pack is high
-and the forecast says the coming sun refills it. Without a solar forecast
-it holds until you switch it off. The discharge limit moves in 750 W
-steps, so the pack may give up to one step more than the house needs.
+The discharge limit moves in 750 W steps, so with *Keep the battery for the
+peak limit* on, the pack may give up to one step more than the house needs.
+Without a solar forecast the hold ends at *Buffer SOC* alone.
 
 ## Controls follow what the house can use (2.2, #996)
 

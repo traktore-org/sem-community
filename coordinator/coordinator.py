@@ -9191,22 +9191,46 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         floor = float(self.config.get("battery_morning_drain_floor_soc", 50.0) or 50.0)
         return float(remaining) >= cap * (1.0 - floor / 100.0)
 
-    def _sun_refills_whole_pack(self) -> bool:
-        """(#970) Does the coming sun refill the pack from its reserve? The
-        larger of what is left today and tomorrow's forecast against the
-        usable capacity. An unread forecast (0.0) is False: the hold stays."""
-        _fd = getattr(getattr(self, "_forecast_reader", None), "forecast_data", None)
+    def _sun_refills_whole_pack(self) -> Optional[bool]:
+        """(#970) Does the coming sun refill the pack from its reserve, after
+        the house has taken its share? ``None``: no forecast to ask.
+
+        The better of what is left of today and tomorrow, each less the
+        house's expected draw over those sun hours — the same hourly profile
+        the day ledgers price their surplus against (``_day_home_w_at``).
+        A forecast that only covers the house refills nothing. A forecast
+        that reads 0, or a day with no sun frame, is False: the hold stays."""
+        reader = getattr(self, "_forecast_reader", None)
+        _fd = getattr(reader, "forecast_data", None)
+        if reader is None or _fd is None or getattr(reader, "available", False) is not True:
+            return None
         cap = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
-        if _fd is None or cap <= 0:
+        sunrise, sunset = self._pacing_day_start(), self._pacing_horizon_end()
+        if cap <= 0 or sunrise is None or sunset is None or sunset <= sunrise:
             return False
         try:
-            coming = max(
-                float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0),
-                float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0))
-            reserve = float(reserve_soc_of(self.config))
-        except (TypeError, ValueError):
+            now = dt_util.now()
+            left = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
+            tomorrow = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
+            need = cap * (1.0 - float(reserve_soc_of(self.config)) / 100.0)
+            day = timedelta(days=1)
+            nets = [tomorrow - self._house_kwh_between(sunrise + day, sunset + day)]
+            if now < sunset:
+                nets.append(left - self._house_kwh_between(max(now, sunrise), sunset))
+        except Exception:  # noqa: BLE001 — an estimate that fails refills nothing
             return False
-        return coming > 0.0 and coming >= cap * (1.0 - reserve / 100.0)
+        return max(nets) >= need
+
+    def _house_kwh_between(self, start, end) -> float:
+        """(#970) What the house is expected to draw between two times, from
+        the day ledgers' own hourly profile (``_day_home_w_at``)."""
+        home_at = self._day_home_w_at(start)
+        kwh, t = 0.0, start
+        while t < end:
+            step = min(timedelta(hours=1), end - t)
+            kwh += max(0.0, float(home_at(t))) * step.total_seconds() / 3_600_000.0
+            t += step
+        return kwh
 
     @staticmethod
     def _peak_hold_pack_soc(power):

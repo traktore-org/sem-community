@@ -124,10 +124,12 @@ def peak_hold_state(verdict: Any) -> str:
 
 def peak_hold_verdict(*, level: str, peak_limit_set: bool,
                       pack_soc: Optional[float], release_soc: float,
-                      sun_refills_pack: bool, released: bool) -> SinkVerdict:
+                      sun_refills_pack: Optional[bool], released: bool) -> SinkVerdict:
     """(#970) The house verdict while "keep the battery for the peak limit"
     is on. HELD only on what was read: no limit, an unread level, a dear
-    hour, or a high pack the sun refills each leave the house OPEN."""
+    hour, or a high pack the sun refills each leave the house OPEN.
+    ``sun_refills_pack`` is three-state: ``None`` is "no forecast", and a
+    pack above its buffer is then let go on its level alone."""
     if not peak_limit_set:
         return SinkVerdict("house", OPEN,
                            "no peak limit set — nothing to hold the import at",
@@ -141,7 +143,14 @@ def peak_hold_verdict(*, level: str, peak_limit_set: bool,
                            "battery level not read — not holding on a guess",
                            reason_params={"peak_hold": "unread"})
     mark = float(release_soc) - (PEAK_HOLD_RELEASE_BAND_SOC if released else 0.0)
-    if sun_refills_pack and float(pack_soc) >= mark:
+    if float(pack_soc) >= mark and sun_refills_pack is None:
+        # No forecast to wait for: a pack above its buffer is spendable.
+        return SinkVerdict(
+            "house", OPEN,
+            f"battery at {float(pack_soc):.0f}%, above its buffer, and no "
+            "solar forecast to wait for — the pack covers the house",
+            reason_params={"peak_hold": "released"})
+    if float(pack_soc) >= mark and sun_refills_pack is True:
         return SinkVerdict(
             "house", OPEN,
             f"battery at {float(pack_soc):.0f}% and the coming sun refills it "
@@ -166,7 +175,7 @@ def sink_verdicts(*, now: datetime, tariff_level: Optional[str], upcoming,
                   peak_limit_set: bool = False,
                   pack_soc: Optional[float] = None,
                   peak_hold_release_soc: float = 75.0,
-                  sun_refills_pack: bool = False,
+                  sun_refills_pack: Optional[bool] = False,
                   peak_hold_released: bool = False,
                   ) -> Dict[str, SinkVerdict]:
     """One verdict per sink. Unknown is OPEN, never CLOSED.

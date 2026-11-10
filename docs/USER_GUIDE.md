@@ -1680,7 +1680,8 @@ Everything below is **off by default** and lives on the Config tab under
   refill the pack from its reserve; it returns once the pack is 10 points
   under that level. It stands aside in an expensive hour, while a car
   charges, when the pack's level cannot be read, and for a forced charge.
-  Without a forecast it never ends by itself.
+  The sun counts only after the house's expected daytime use is taken off.
+  Without a solar forecast it ends at *Buffer SOC* alone.
 - **Morning EV window** — before the configured departure, empty the pack
   into the car down to the *Morning drain floor*, only when today's forecast
   refills the pack.
