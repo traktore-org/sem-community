@@ -513,6 +513,7 @@ class SEMNextSystemCard extends SEMNextBase {
                 await this._hass.callService('solar_energy_management', 'set_option',
                     { options: plan.options, ...(this._entryId ? { entry_id: this._entryId } : {}) }, undefined, false);
             }
+            for (const edit of plan.listEdits || []) await this._setOptions(edit);
             this._pending = {};
             this._say(this._t('config_saved'));
             await this._loadOptions();

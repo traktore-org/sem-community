@@ -473,7 +473,9 @@ class SEMNextNowCard extends SEMNextBase {
         };
         const body = rows.length
             ? html`<div class="rows">${rows.map((r) => this._row(r.icon, this._tf(r.label === 'plan_battery_empty' ? 'next_battery_reserve_reached' : r.label, r.values),
-                r.late ? html`<span class="late">${when(r)}</span>` : when(r),
+                // A window with an end reads "17:26 – 19:05": a gap in the night gives a second
+                // start row, which looked like a repeat without its end.
+                r.late ? html`<span class="late">${when(r)}</span>` : (r.until ? `${when(r)} – ${this._hhmm(new Date(r.until))}` : when(r)),
                 r.detail ? this._tf(r.detail, r.values) : '', { color: C[r.color] || C.home }))}</div>`
             : html`<p class="help">${this._t('next_nothing_planned')}</p>`;
         return this._sec(this._t('next_today'), body, { extra: this._link(this._t('next_plan_link'), () => this._go('/sem-next/plan')) });

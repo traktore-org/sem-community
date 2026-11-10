@@ -644,13 +644,10 @@ class SEMNextPlanCard extends SEMNextBase {
         const ov = this._overrideOf(key);
         if (ov) bits.push(this._overrideText(ov));
         const btns = [];
-        if (ov) {
-            btns.push(this._btn(t('next_back_to_plan'), () => this._overrideClear(key), { small: true, disabled: obs }));
-        } else if (win) {
-            btns.push(this._btn(t('next_skip'), () => this._override(key, 'skip', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
-        } else {
-            btns.push(this._btn(t('next_run_anyway'), () => this._override(key, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
-        }
+        // A load takes no one-off override: SEM acts on one only for a
+        // charger or the battery (the service refuses any other id). A
+        // stored one from before can still be cleared.
+        if (ov) btns.push(this._btn(t('next_back_to_plan'), () => this._overrideClear(key), { small: true, disabled: obs }));
         const rest = win ? `${win}${kwh > 0.05 ? ' · ' + this._kwh(kwh) : ''}` : t('next_not_scheduled');
         return this._devRow('mdi:power-plug', C.home, name, rest, bits.join(' · '), btns);
     }

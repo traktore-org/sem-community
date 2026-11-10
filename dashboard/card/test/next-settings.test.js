@@ -217,7 +217,7 @@ test('applyPlan: a per-charger key becomes an ev_chargers entry with its id, and
     assert.equal(plan.options.heat_pump_rated_power, 3200);
     assert.equal(plan.reload, true);
     assert.ok(STRUCTURAL_KEYS.has('heat_pump_rated_power'));
-    assert.deepEqual(applyPlan({}, {}), { entityWrites: [], options: {}, reload: false });
+    assert.deepEqual(applyPlan({}, {}), { entityWrites: [], options: {}, listEdits: [], reload: false });
 });
 
 test('setup check, load tiles, unavailable count and reserve ids read real ids only', () => {
@@ -233,4 +233,36 @@ test('setup check, load tiles, unavailable count and reserve ids read real ids o
     assert.equal(u.n, 2);
     assert.ok(u.m >= 20);
     assert.deepEqual(reserveIds(states), ['number.sem_battery_b1_reserve_soc', 'number.sem_battery_b2_reserve_soc']);
+});
+
+// (#523, #1204) Two batteries: one picker row per battery and list, and an
+// edit sends only that battery's slot with the order it was read in.
+test('per-battery entity rows send one slot with the battery order', async () => {
+    const { groups, applyPlan, pendingKey, BATTERY_LISTS } = await import('../src/util/next-settings.js');
+    const states = {
+        'sensor.sem_battery_soc': { state: '50', attributes: {} },
+        'sensor.sem_battery_power': { state: '0', attributes: {} },
+        'sensor.sem_battery_b1_power': { state: '0', attributes: {} },
+        'sensor.sem_battery_b2_power': { state: '0', attributes: {} },
+    };
+    const options = { battery_slot_units: ['u1', 'u2'], battery_discharge_control_entities: ['number.limit_1', null] };
+    const g = groups(states, (k) => k, { options }).find((x) => x.key === 'battery');
+    const slots = g.more.filter((p) => p && typeof p === 'object' && Number.isInteger(p.listIdx));
+    assert.equal(slots.length, BATTERY_LISTS.length * 2);
+    const first = slots.find((s) => s.option === 'battery_discharge_control_entities' && s.listIdx === 0);
+    assert.equal(first.value, 'number.limit_1');
+    const second = slots.find((s) => s.option === 'battery_discharge_control_entities' && s.listIdx === 1);
+    assert.notEqual(pendingKey(first), pendingKey(second));
+    const plan = applyPlan({ [pendingKey(second)]: { slot: second, value: 'number.limit_2' } }, states);
+    assert.deepEqual(plan.listEdits, [{ battery_discharge_control_entities: { slot: 1, value: 'number.limit_2', battery_slot_units: ['u1', 'u2'] } }]);
+    assert.deepEqual(plan.options, {});
+    assert.equal(plan.reload, true);
+});
+
+test('one battery shows no per-battery rows', async () => {
+    const { groups } = await import('../src/util/next-settings.js');
+    const states = { 'sensor.sem_battery_soc': { state: '50', attributes: {} }, 'sensor.sem_battery_power': { state: '0', attributes: {} },
+                     'sensor.sem_battery_b1_power': { state: '0', attributes: {} } };
+    const g = groups(states, (k) => k, { options: { battery_slot_units: ['u1'] } }).find((x) => x.key === 'battery');
+    assert.equal(g.more.filter((p) => p && typeof p === 'object' && Number.isInteger(p.listIdx)).length, 0);
 });

@@ -117,6 +117,48 @@ function optEntity(opts, key, f = ENTITY_FIELDS[key] || {}) {
              fallback: f.fallback || '', emptyKey: f.emptyKey || null };
 }
 
+/**
+ * (#523, #1204) One battery's entry of a per-battery list option — the
+ * classic card's "B1", "B2" rows. Slot N is battery bN's; the edit carries
+ * the battery order this copy was read in (`battery_slot_units`), so SEM puts
+ * the value on that battery's slot today and keeps every other slot.
+ */
+function batteryListSlot(o, listKey, idx, f) {
+    if (!o) return null;
+    const lst = Array.isArray(o[listKey]) ? o[listKey] : [];
+    return { option: listKey, listIdx: idx, kind: 'entity', value: lst[idx] ? String(lst[idx]) : '',
+             domains: arr(f.domain), deviceClass: null, fallback: '', emptyKey: null,
+             units: Array.isArray(o.battery_slot_units) ? [...o.battery_slot_units] : null };
+}
+
+/** Batteries SEM reads one by one (sensor.sem_battery_bN_power), as the classic card counts them. */
+export function batteryCount(states) {
+    const s = new Set();
+    for (const id of Object.keys(states || {})) {
+        const m = /^sensor\.sem_battery_(b\d+)_power$/.exec(id);
+        if (m) s.add(m[1]);
+    }
+    return s.size;
+}
+
+// The per-battery list options, each with the single option it stands in for.
+export const BATTERY_LISTS = [
+    ['battery_discharge_control_entities', { domain: 'number', labelKey: 'config_batt_discharge_entity' }],
+    ['battery_charge_end_soc_entities', { domain: ['number', 'sensor', 'input_number'], labelKey: 'config_batt_charge_end_entity' }],
+    ['battery_force_discharge_entities', { domain: ['number', 'input_number'], labelKey: 'config_force_discharge_entity' }],
+    ['battery_strategy_entities', { domain: ['select', 'input_select'], labelKey: 'config_strategy_entity' }],
+];
+
+/** One row per battery and list, labelled "<field> — B1". */
+function batteryListItems(o, n, t) {
+    if (!o || n < 2) return [];
+    const out = [];
+    for (const [key, f] of BATTERY_LISTS) {
+        for (let i = 0; i < n; i++) out.push([{ raw: `${t(f.labelKey)} — B${i + 1}` }, batteryListSlot(o, key, i, f)]);
+    }
+    return out;
+}
+
 /** A per-charger key inside `ev_chargers`, merged by id on the backend. */
 function chargerSlot(opts, cid, key, kind, extra = {}) {
     if (!opts) return null;
@@ -152,6 +194,7 @@ export function pendingKey(slot) {
     if (slot.id) return slot.id;
     if (slot.option === 'ev_chargers' && slot.charger) return `opt:ev_chargers:${slot.charger}:${slot.key}`;
     if (slot.option === 'pv_string_names' && slot.pv) return `opt:pv_string_names:${slot.pv}`;
+    if (slot.option && Number.isInteger(slot.listIdx)) return `opt:${slot.option}:${slot.listIdx}`;
     if (slot.option) return `opt:${slot.option}`;
     if (slot.action) return `act:${slot.action}`;
     return '';
@@ -434,7 +477,7 @@ export function unavailableCount(states) {
 }
 
 /** How SEM reaches the battery (classic Battery zones + Tariff "battery control"). */
-function batteryWiring(o, cur) {
+function batteryWiring(o, cur, n = 0) {
     if (!o) return [];
     const e = (k) => [ENTITY_FIELDS[k].labelKey, optEntity(o, k)];
     const ext = optSelect(o, 'battery_external_control_mode', EXT_MODES, 'none');
@@ -446,7 +489,7 @@ function batteryWiring(o, cur) {
         ['config_ext_ctrl_mode', ext],
     ];
     if (ext && ext.value !== 'none') items.push(e('battery_external_control_indicator'));
-    items.push(e('battery_force_discharge_control_entity'), e('battery_strategy_control_entity'));
+    if (n < 2) items.push(e('battery_force_discharge_control_entity'), e('battery_strategy_control_entity'));
     if (o.battery_strategy_control_entity) {
         items.push(
             ['config_strategy_val_active', optTextPh(o, 'battery_strategy_active_value', 'api')],
@@ -627,7 +670,8 @@ export function groups(states, t, ctx = {}) {
             ['next_more_assist_max', numSlot(states, 'number.sem_battery_assist_max_power')],
             ['next_more_solar_gate', numSlot(states, 'number.sem_battery_assist_min_surplus')],
             ['next_more_protection', optSwitch(o, 'battery_discharge_protection_enabled', true)],
-            ...batteryWiring(o, cur),
+            ...batteryWiring(o, cur, batteryCount(states)),
+            ...batteryListItems(o, batteryCount(states), t),
             ['next_more_scheduler', optSwitch(o, 'battery_charge_scheduler_enabled', false)],
             ...(o && o.battery_charge_scheduler_enabled ? batteryScheduler(o, cur) : []),
         ]);
@@ -839,6 +883,7 @@ export function applyPlan(pending, states) {
     const chargers = {};
     let pvNames = null;
     let reload = false;
+    const listEdits = [];
     for (const item of Object.values(pending || {})) {
         const slot = item && item.slot;
         if (!slot) continue;
@@ -863,6 +908,11 @@ export function applyPlan(pending, states) {
             const v = String(value ?? '').trim();
             if (v) pvNames[slot.pv] = v; else delete pvNames[slot.pv];
             reload = true;
+        } else if (slot.option && Number.isInteger(slot.listIdx)) {
+            // One set_option call per slot: the backend takes one slot of a list at a time.
+            listEdits.push({ [slot.option]: { slot: slot.listIdx, value: value ? String(value) : null,
+                                              battery_slot_units: slot.units || null } });
+            reload = true;
         } else if (slot.option === 'ev_chargers' && slot.charger) {
             if (!chargers[slot.charger]) chargers[slot.charger] = { id: slot.charger };
             chargers[slot.charger][slot.key] = value;
@@ -874,5 +924,5 @@ export function applyPlan(pending, states) {
     }
     if (Object.keys(chargers).length) options.ev_chargers = Object.values(chargers);
     if (pvNames) options.pv_string_names = pvNames;
-    return { entityWrites, options, reload };
+    return { entityWrites, options, listEdits, reload };
 }

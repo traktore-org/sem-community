@@ -1029,6 +1029,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1085 Part B) one-off per-device overrides; restored from
         # storage on the first cycle, see ``_async_update_data``.
         self._plan_overrides: Dict[str, Any] = {}
+        # (#1321) The battery ids of the last cycle: what plan_override may name.
+        self._known_battery_ids: set = set()
         # (#1087) a charger's departure-calendar's next event, cached —
         # departure_for stays sync/hass-free; this is the only async
         # reader, throttled, mirrors tariff/calendar_provider.py's hook.
@@ -10318,6 +10320,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # #531: live battery count gates the global-mode fall-through in
         # _per_battery_config (single→multi bleed fix).
         _bat_count = len(battery_items)
+        self._known_battery_ids = {bid for bid, _rt in battery_items}
         # (#1124) …and which cached adapters are batteries THIS cycle: a
         # synthetic "primary" from the first cycles stays in the cache once
         # b1/b2 exist, and its frozen write ledger is no battery's answer.
@@ -10876,6 +10879,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         device. Raises ``ValueError`` on a bad action (the schema already
         rejects one, this is belt-and-suspenders) or ``minutes`` outside 1 to 1440."""
         from . import plan_override as _po
+        # (#1321) Only a charger or a battery acts on an override. Any other
+        # id was stored and did nothing, and the caller read it as done.
+        known = {str(c.get("id")) for c in (self.config.get("ev_chargers") or [])
+                 if isinstance(c, dict) and c.get("id")}
+        known |= set(getattr(self, "_known_battery_ids", set()) or set()) | {"primary"}
+        if device_id not in known:
+            raise ValueError(
+                f"not a charger or a battery: {device_id!r} (one of {sorted(known)})")
         now = dt_util.utcnow()
         self._plan_overrides = _po.set_override(
             self._plan_overrides, device_id, action,
