@@ -136,6 +136,21 @@ class TestWhenItLetsGo:
     def test_a_low_pack_is_kept_even_with_sun_coming(self):
         assert _on(pack_soc=74.0, sun_refills_pack=True).state == HELD
 
+    def test_no_forecast_lets_go_at_the_buffer_alone(self):
+        """Without a forecast nothing says the sun refills it — and nothing
+        ever would. A pack above its buffer is spendable."""
+        v = _on(pack_soc=75.0, sun_refills_pack=None)
+        assert v.state == OPEN and peak_hold_state(v) == "released"
+        assert "no solar forecast" in v.reason
+        assert _on(pack_soc=74.0, sun_refills_pack=None).state == HELD
+
+    def test_no_forecast_returns_with_the_same_gap(self):
+        low = 75.0 - PEAK_HOLD_RELEASE_BAND_SOC
+        assert _on(pack_soc=low, sun_refills_pack=None,
+                   peak_hold_released=True).state == OPEN
+        assert _on(pack_soc=low - 1.0, sun_refills_pack=None,
+                   peak_hold_released=True).state == HELD
+
     def test_once_let_go_it_stays_so_for_a_band(self):
         low = 75.0 - PEAK_HOLD_RELEASE_BAND_SOC
         assert _on(pack_soc=low, sun_refills_pack=True,
@@ -319,25 +334,92 @@ def test_the_coordinator_asks_with_what_it_already_reads():
     assert calls(fn, "_peak_hold_pack_soc")       # the level, or unread
 
 
-def test_the_refill_reads_no_forecast_as_no():
+def _coord(*, remaining, tomorrow, home_w, cap=10.0, available=True,
+           now_h=13, reader=True):
+    """Just what ``_sun_refills_whole_pack`` reads: the forecast, the sun
+    frame (08:00–17:00) and the day ledgers' house profile."""
     from custom_components.solar_energy_management.coordinator.coordinator import (
         SEMCoordinator,
     )
-
-    def _c(remaining, tomorrow, cap=10.0):
-        return SimpleNamespace(
-            _forecast_reader=SimpleNamespace(forecast_data=SimpleNamespace(
+    day = NOW.replace(hour=0, minute=0)
+    c = SimpleNamespace(
+        _forecast_reader=(SimpleNamespace(
+            available=available,
+            forecast_data=SimpleNamespace(
                 forecast_remaining_today_kwh=remaining,
-                forecast_tomorrow_kwh=tomorrow)),
-            battery_capacity_kwh=cap, config={"battery_reserve_soc": 20.0})
+                forecast_tomorrow_kwh=tomorrow)) if reader else None),
+        battery_capacity_kwh=cap, config={"battery_reserve_soc": 20.0},
+        _pacing_day_start=lambda: day.replace(hour=8),
+        _pacing_horizon_end=lambda: day.replace(hour=17),
+        _day_home_w_at=lambda start: (lambda t: home_w),
+    )
+    c._house_kwh_between = lambda a, b: SEMCoordinator._house_kwh_between(c, a, b)
+    return SEMCoordinator, c, day.replace(hour=now_h)
 
-    f = SEMCoordinator._sun_refills_whole_pack
-    assert f(_c(0.0, 0.0)) is False
-    assert f(_c(0.0, 7.9)) is False
-    assert f(_c(0.0, 8.0)) is True
-    assert f(_c(9.0, 0.0)) is True
-    assert f(_c(9.0, 9.0, cap=0.0)) is False
+
+class TestWhatTheComingSunLeavesForThePack:
+    """10 kWh pack, 20 % reserve: 8 kWh to refill. Nine sun hours a day."""
+
+    def _ask(self, monkeypatch, **kw):
+        cls, c, now = _coord(**kw)
+        import custom_components.solar_energy_management.coordinator.coordinator as mod
+        monkeypatch.setattr(mod.dt_util, "now", lambda: now)
+        return cls._sun_refills_whole_pack(c)
+
+    def test_no_forecast_is_not_a_no(self, monkeypatch):
+        assert self._ask(monkeypatch, remaining=0, tomorrow=0, home_w=500,
+                         reader=False) is None
+        assert self._ask(monkeypatch, remaining=9, tomorrow=9, home_w=0,
+                         available=False) is None
+
+    def test_a_forecast_that_reads_nothing_refills_nothing(self, monkeypatch):
+        assert self._ask(monkeypatch, remaining=0.0, tomorrow=0.0,
+                         home_w=0.0) is False
+
+    def test_a_forecast_that_only_covers_the_house_keeps_holding(self, monkeypatch):
+        """9 kWh tomorrow against a 1 kW house over nine sun hours: nothing
+        is left for the pack — the raw forecast alone would have said yes."""
+        assert self._ask(monkeypatch, remaining=0.0, tomorrow=9.0,
+                         home_w=1000.0) is False
+        v = _on(pack_soc=90.0, sun_refills_pack=False)
+        assert v.state == HELD
+
+    def test_what_is_left_after_the_house_must_fill_the_pack(self, monkeypatch):
+        # tomorrow: 9 h × 0.5 kW = 4.5 kWh for the house
+        assert self._ask(monkeypatch, remaining=0.0, tomorrow=12.4,
+                         home_w=500.0) is False
+        assert self._ask(monkeypatch, remaining=0.0, tomorrow=12.5,
+                         home_w=500.0) is True
+
+    def test_todays_rest_counts_from_now(self, monkeypatch):
+        # 13:00 → 17:00: 4 h × 0.5 kW = 2 kWh for the house
+        assert self._ask(monkeypatch, remaining=10.0, tomorrow=0.0,
+                         home_w=500.0) is True
+        assert self._ask(monkeypatch, remaining=9.9, tomorrow=0.0,
+                         home_w=500.0) is False
+
+    def test_after_sunset_only_tomorrow_counts(self, monkeypatch):
+        assert self._ask(monkeypatch, remaining=30.0, tomorrow=0.0,
+                         home_w=500.0, now_h=19) is False
+
+    def test_no_pack_size_refills_nothing(self, monkeypatch):
+        assert self._ask(monkeypatch, remaining=30.0, tomorrow=30.0,
+                         home_w=0.0, cap=0.0) is False
+
+
+def test_the_level_is_none_when_it_was_not_read():
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
     assert SEMCoordinator._peak_hold_pack_soc(
         SimpleNamespace(battery_soc=55.0, battery_soc_unavailable=True)) is None
     assert SEMCoordinator._peak_hold_pack_soc(
         SimpleNamespace(battery_soc=55.0, battery_soc_unavailable=False)) == 55.0
+
+
+def test_the_refill_asks_the_day_ledgers_house_profile():
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    assert calls(SEMCoordinator._sun_refills_whole_pack, "_house_kwh_between")
+    assert calls(SEMCoordinator._house_kwh_between, "_day_home_w_at")
