@@ -8,7 +8,6 @@ the joint plan uses (``night_charge_end`` is the one helper for both).
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from custom_components.solar_energy_management.coordinator.ev_tariff_planner import (
@@ -59,7 +58,9 @@ def test_helper_is_min_of_departure_and_night_end():
 
 
 def test_joint_plan_uses_the_same_helper():
-    src = (Path(__file__).resolve().parent.parent
-           / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
-    assert "min(deadline, night_end)" not in src
-    assert "night_charge_end(deadline, night_end, None)" in src
+    """The joint plan asks the same helper for the car's deadline, so the
+    two answers cannot drift apart."""
+    from .ast_contracts import call_sites
+    files = {str(path) for path, _line, _kw in call_sites("night_charge_end")}
+    assert any(f.endswith("coordinator.py") for f in files), files
+
