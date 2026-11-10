@@ -3070,7 +3070,7 @@ class CurrentControlDevice(ControllableDevice):
         if amps is None or len(self.phase_fields) != 3:
             return None
         domain, service = str(self.phase_service).split(".", 1)
-        data = dict(zip(self.phase_fields, amps))
+        data = dict(zip(self.phase_fields, amps, strict=True))
         if self.service_device_id:
             data["device_id"] = self.service_device_id
         return domain, service, data
