@@ -581,6 +581,7 @@
           "heat_pump_relay1_entity": "SG-Ready Relais 1 (optionale Switch-Entität)",
           "heat_pump_relay2_entity": "SG-Ready Relais 2 (optionale Switch-Entität)",
           "heat_pump_invert_sg_ready": "SG-Ready-Kontakte invertieren (für NC-Verdrahtung)",
+          "heat_pump_step_down": "Bei knappem Strom zurückfahren",
           "heat_pump_climate_entity": "Climate-Entität für Setpoint-Boost (optional)",
           "heat_pump_power_sensor": "Leistungssensor (optional)",
           "heat_pump_boost_offset": "Temperatur-Boost-Offset (°C)",
@@ -601,6 +602,7 @@
           "heat_pump_relay1_entity": "Switch-Entität für SG-Ready-Relais 1 (Signal für Normalbetrieb). Zusammen mit Relais 2 setzen, um das SG-Ready-Protokoll zu nutzen.",
           "heat_pump_relay2_entity": "Switch-Entität für SG-Ready-Relais 2 (Signal für Überschuss-Boost). Zusammen mit Relais 1 setzen, um das SG-Ready-Protokoll zu nutzen.",
           "heat_pump_invert_sg_ready": "Nur aktivieren, wenn die SG-Ready-Kontakte deiner Wärmepumpe als Öffner (NC) verdrahtet sind. SEM verwendet die Standard-SG-Ready-Wahrheitstabelle; wenn der Boost die Pumpe blockiert (und umgekehrt), aktiviere dies, um beide Relais umzudrehen.",
+          "heat_pump_step_down": "Kauft das Haus in einer teuren Stunde Netzstrom oder nähert es sich Ihrer Leistungsgrenze, senkt SEM den Sollwert oder sendet das SG-Ready-Sperrsignal. Dafür braucht es ein Komfortband (Halten auf und Jetzt laufen ab); darunter fährt SEM nie zurück.",
           "heat_pump_climate_entity": "Climate-Entität, über die der Setpoint bei Solarüberschuss angehoben wird. Für den climate-only Modus allein ausreichend (keine Relais nötig).",
           "heat_pump_power_sensor": "Optionaler Sensor (W), der den aktuellen Stromverbrauch der Wärmepumpe meldet.",
           "heat_pump_boost_offset": "Grad Celsius, die während eines Solarüberschuss-Boosts auf den normalen Setpoint addiert werden.",
@@ -757,6 +759,7 @@
           "heat_pump_relay1_entity": "SG-Ready-Relais 1",
           "heat_pump_relay2_entity": "SG-Ready-Relais 2",
           "heat_pump_invert_sg_ready": "SG-Ready-Relais invertieren (NC-Verdrahtung)",
+          "heat_pump_step_down": "Bei knappem Strom zurückfahren",
           "heat_pump_climate_entity": "Climate-Entität",
           "heat_pump_power_sensor": "Leistungssensor",
           "heat_pump_energy_sensor": "Energiesensor",
@@ -1633,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Haus als Batterie-Senke"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Batterie für das Leistungslimit aufsparen"
+      },
       "ev_morning_window_enabled": {
         "name": "Morgen-Fenster für das E-Auto"
       },
@@ -2181,6 +2187,13 @@
       "options": {
         "none": "nicht gefunden",
         "why_guessed": "Dein Energie-Dashboard hat keinen Sensor für die Netzleistung, also hat SEM einen geraten."
+      }
+    },
+    "heat_pump_step_down": {
+      "options": {
+        "off": "Aus",
+        "setpoint": "Sollwert senken",
+        "block": "Sperrsignal senden"
       }
     }
   }

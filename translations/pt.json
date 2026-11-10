@@ -581,6 +581,7 @@
           "heat_pump_relay1_entity": "Relé 1 SG-Ready (entidade switch opcional)",
           "heat_pump_relay2_entity": "Relé 2 SG-Ready (entidade switch opcional)",
           "heat_pump_invert_sg_ready": "Inverter contactos SG-Ready (para cablagem NF)",
+          "heat_pump_step_down": "Reduzir quando falta energia",
           "heat_pump_climate_entity": "Entidade climate para boost de setpoint (opcional)",
           "heat_pump_power_sensor": "Sensor de potência (opcional)",
           "heat_pump_boost_offset": "Offset de boost de temperatura (°C)",
@@ -601,6 +602,7 @@
           "heat_pump_relay1_entity": "Entidade switch do relé 1 SG-Ready (sinal de funcionamento normal). Defina em conjunto com o relé 2 para o protocolo SG-Ready.",
           "heat_pump_relay2_entity": "Entidade switch do relé 2 SG-Ready (sinal de boost por excedente). Defina em conjunto com o relé 1 para o protocolo SG-Ready.",
           "heat_pump_invert_sg_ready": "Ative apenas se os contactos SG-Ready da sua bomba de calor estiverem cablados como normalmente fechados (NF). O SEM aplica a tabela de verdade padrão do SG-Ready; se o boost bloquear a bomba (e vice-versa), ative esta opção para inverter ambos os relés.",
+          "heat_pump_step_down": "Quando a casa compra energia da rede numa hora cara, ou se aproxima do limite de potência, o SEM baixa o setpoint ou envia o sinal de bloqueio SG-Ready. Precisa de uma faixa de conforto (Manter em e Funcionar a partir de); o SEM nunca desce abaixo dela.",
           "heat_pump_climate_entity": "Entidade climate usada para subir o setpoint durante o excedente solar. É suficiente por si só para o modo apenas-climate (não são necessários relés).",
           "heat_pump_power_sensor": "Sensor opcional (W) que reporta o consumo atual da bomba de calor.",
           "heat_pump_boost_offset": "Graus Celsius adicionados ao setpoint normal durante um boost por excedente solar.",
@@ -757,6 +759,7 @@
           "heat_pump_relay1_entity": "Relé 1 SG-Ready",
           "heat_pump_relay2_entity": "Relé 2 SG-Ready",
           "heat_pump_invert_sg_ready": "Inverter relés SG-Ready (cablagem NC)",
+          "heat_pump_step_down": "Reduzir quando falta energia",
           "heat_pump_climate_entity": "Entidade climate",
           "heat_pump_power_sensor": "Sensor de potência",
           "heat_pump_energy_sensor": "Sensor de energia",
@@ -1633,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Casa como destino da bateria"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Guardar a bateria para o limite de potência"
+      },
       "ev_morning_window_enabled": {
         "name": "Janela matinal do VE"
       },
@@ -2181,6 +2187,13 @@
       "options": {
         "none": "não encontrado",
         "why_guessed": "O seu painel de Energia não tem sensor de potência da rede, por isso o SEM adivinhou um."
+      }
+    },
+    "heat_pump_step_down": {
+      "options": {
+        "off": "Desligado",
+        "setpoint": "Baixar o setpoint",
+        "block": "Enviar o sinal de bloqueio"
       }
     }
   }

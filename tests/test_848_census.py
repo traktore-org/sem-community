@@ -16,6 +16,9 @@ knows, and the two gaps become report lines instead of silent misses:
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import patch
+
+from custom_components.solar_energy_management import hardware_detection as hd
 
 
 def _ent(eid, platform, device_class=None, device_id=None, disabled=False,
@@ -77,7 +80,11 @@ class TestTheTwoGapLines:
             _ent("sensor.flexboss_battery_soc", "eg4_web_monitor", device_class="battery", device_id="x"),
             _ent("number.flexboss_charge_limit", "eg4_web_monitor", device_class="current", device_id="x"),
         ]
-        c = _census(KEBA + eg4)
+        # EG4 is a known inverter since #810; take it out of the set to keep
+        # the case: a domain SEM has no row for
+        known = hd.KNOWN_INVERTER_DOMAINS - {"eg4_web_monitor"}
+        with patch.object(hd, "KNOWN_INVERTER_DOMAINS", known):
+            c = _census(KEBA + eg4)
         assert c["unknown_energy_domains"] == ["eg4_web_monitor"]
 
     def test_a_lighting_integration_is_not_energy_noise(self):

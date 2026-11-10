@@ -747,6 +747,8 @@ surplus). Hold the pointer on the sentence to see SEM's own reason text.
 When a load stops, the row says why: it ran long enough today, it reached its
 longest run time for today, its planned time ended, or its stop condition was
 met.
+A heat pump SEM turned down says whether grid power was expensive or the
+house was near its power limit, and a later row says when that ended.
 Rows SEM did not send
 because observer mode is on say *test mode: not sent*. Tap a device chip to
 see only its rows. *Everyday* shows the newest four; the rest open from the

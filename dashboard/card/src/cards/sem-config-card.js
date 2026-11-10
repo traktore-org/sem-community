@@ -272,6 +272,7 @@ const WATCHED = [
     // arc #921
     'switch.sem_export_guard_enabled', 'switch.sem_export_guard_override_external',
     'switch.sem_battery_house_sink_enabled', 'switch.sem_ev_morning_window_enabled',
+    'switch.sem_battery_peak_hold_enabled',
     'number.sem_export_guard_engage_s', 'number.sem_export_guard_release_s',
     'number.sem_ev_morning_window_hours', 'number.sem_battery_morning_drain_floor_soc',
     'number.sem_cheap_price_threshold', 'number.sem_expensive_price_threshold',
@@ -1880,6 +1881,12 @@ class SEMConfigCard extends SEMLitBase {
                       construction (structural). Was only on the native flow. */ ''}
                 ${this._renderOptionToggle('heat_pump_invert_sg_ready', 'config_hp_invert_sg_ready',
                     opts, 'config_help_hp_invert_sg_ready', false)}
+                ${/* #1323: step down in a shortfall. Off unless picked; read
+                      each cycle, so it saves without a reload. */ ''}
+                ${this._renderOptionSelect('heat_pump_step_down', 'config_hp_step_down',
+                    ['off', 'setpoint', 'block'].map(v => (
+                        { value: v, label: this._t('config_hp_step_down_' + v) })),
+                    opts, 'config_help_hp_step_down', 'off')}
                 ${this._renderPicker('heat_pump_climate_entity', 'config_hp_climate', 'climate',
                     null, opts, 'config_help_hp_climate')}
                 ${this._renderPicker('heat_pump_power_sensor', 'config_hp_power_sensor', 'sensor',
@@ -2905,6 +2912,7 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderStepper('number.sem_export_guard_release_s', 'export_guard_release_s', T, 'config_help_export_guard_release_s')}
             ${this._renderToggle('switch.sem_export_guard_override_external', 'export_guard_override', T, 'config_help_export_guard_override')}
             ${this._renderToggle('switch.sem_battery_house_sink_enabled', 'battery_house_sink', T, 'config_help_battery_house_sink')}
+            ${this._renderToggle('switch.sem_battery_peak_hold_enabled', 'battery_peak_hold', T, 'config_help_battery_peak_hold')}
             ${this._renderToggle('switch.sem_ev_morning_window_enabled', 'ev_morning_window', T, 'config_help_ev_morning_window')}
             ${this._renderStepper('number.sem_ev_morning_window_hours', 'ev_morning_window_hours', T, 'config_help_ev_morning_window_hours')}
             ${this._renderStepper('number.sem_battery_morning_drain_floor_soc', 'battery_morning_drain_floor_soc', T, 'config_help_battery_morning_drain_floor_soc')}

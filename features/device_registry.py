@@ -37,6 +37,7 @@ from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 # unaliased so a structural test can see the call.
 from .device_axes import user_hands_off
 from ..devices.base import (
+    CLIMATE_HVAC_MODES,
     CurrentControlDevice,
     SwitchDevice,
     surplus_device_from_spec,
@@ -57,6 +58,10 @@ from ..coordinator.units import finite_float
 #: The reporter configured "Control type: Number entity" and got a
 #: SwitchDevice, so SEM turned the AC-THOR fully on and wrote no value.
 _LOGGER = logging.getLogger(__name__)
+
+#: Seconds the delayed re-discovery waits after start, so other
+#: integrations' entities exist by then.
+REDISCOVERY_DELAY_S = 35
 
 STORAGE_VERSION = 1
 STORAGE_KEY = "sem_device_mappings"
@@ -561,11 +566,19 @@ class UnifiedDeviceRegistry:
 
         # Schedule delayed re-discovery after entities are fully loaded
         async def _delayed_rediscovery():
-            await asyncio.sleep(35)
+            await self._rediscovery_wait()
             _LOGGER.info("Running delayed device re-discovery...")
             await self.async_refresh_devices()
 
         self.hass.async_create_task(_delayed_rediscovery())
+
+    async def _rediscovery_wait(self) -> None:
+        """How long the delayed re-discovery waits for entities to load.
+
+        Its own method so a test can let the wait end when setup is done,
+        not 35 real seconds later (#1266).
+        """
+        await asyncio.sleep(REDISCOVERY_DELAY_S)
 
     # (#559) goal properties settable via update_device_config / register.
     # Grounded core after the beta.19 freeze: runtime target + top-up policy
@@ -594,6 +607,8 @@ class UnifiedDeviceRegistry:
         "phase",
         # (#1021) wiring: this load sits behind the grid operator's relay
         "behind_operator_relay",
+        # (#1323) a climate unit's mode: heat, cool, or by the forecast
+        "hvac_mode",
         # (#812) the load's own tariff: a fixed rate or a price entity, and
         # its own meter. None set = the house tariff.
         "tariff_rate", "tariff_entity", "tariff_meter",
@@ -668,6 +683,13 @@ class UnifiedDeviceRegistry:
             for _sk in ("schedule_entity", "schedule_mode"):
                 if _sk in goals:
                     setattr(device, _sk, str(goals.get(_sk) or ""))
+        # (#1323) a climate unit's mode, key-present-only: the goal overrides
+        # the mode the unit was registered with. A value HA's climate does
+        # not know is ignored, and a switch load has no mode to set.
+        if "hvac_mode" in goals and hasattr(device, "hvac_setting"):
+            _mode = str(goals.get("hvac_mode") or "").strip().lower()
+            if _mode in CLIMATE_HVAC_MODES:
+                device.hvac_mode = _mode
         if "comfort_entity" in goals:
             device.comfort_entity = str(goals.get("comfort_entity", "") or "")
         for _ck in ("comfort_target", "comfort_offset", "comfort_limit"):
@@ -2490,6 +2512,10 @@ class UnifiedDeviceRegistry:
                 # (#812) the load's own tariff — what the LIVE device holds,
                 # so a heat pump's config-seeded tariff shows here too
                 **_tariff_payload(live, goals),
+                # (#1323) a climate unit's mode — what the user picked, not
+                # the season in force. Absent on a load that has no mode.
+                **({"hvac_mode": str(live.hvac_setting)}
+                   if hasattr(live, "hvac_setting") else {}),
                 # (#705) the comfort band — pre-fill for the editor.
                 "comfort_entity": goals.get("comfort_entity", ""),
                 "comfort_target": goals.get("comfort_target", 0),

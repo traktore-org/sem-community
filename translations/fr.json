@@ -581,6 +581,7 @@
           "heat_pump_relay1_entity": "Relais SG-Ready 1 (entité switch, optionnel)",
           "heat_pump_relay2_entity": "Relais SG-Ready 2 (entité switch, optionnel)",
           "heat_pump_invert_sg_ready": "Inverser les contacts SG-Ready (câblage NF)",
+          "heat_pump_step_down": "Réduire quand le courant manque",
           "heat_pump_climate_entity": "Entité climate pour le boost de consigne (optionnel)",
           "heat_pump_power_sensor": "Capteur de puissance (optionnel)",
           "heat_pump_boost_offset": "Décalage de boost de température (°C)",
@@ -601,6 +602,7 @@
           "heat_pump_relay1_entity": "Entité switch du relais SG-Ready 1 (signal de fonctionnement normal). À renseigner avec le relais 2 pour utiliser le protocole SG-Ready.",
           "heat_pump_relay2_entity": "Entité switch du relais SG-Ready 2 (signal de boost sur surplus). À renseigner avec le relais 1 pour utiliser le protocole SG-Ready.",
           "heat_pump_invert_sg_ready": "À activer uniquement si les contacts SG-Ready de votre pompe à chaleur sont câblés normalement fermés (NF). SEM applique la table de vérité SG-Ready standard ; si le boost bloque la pompe (et inversement), activez cette option pour inverser les deux relais.",
+          "heat_pump_step_down": "Quand la maison achète du courant du réseau pendant une heure chère, ou approche de votre limite de puissance, SEM baisse la consigne ou envoie le signal de blocage SG-Ready. Il faut une plage de confort (Maintenir à et Démarrer au-delà de) ; SEM ne descend jamais en dessous.",
           "heat_pump_climate_entity": "Entité climate utilisée pour relever la consigne pendant un surplus solaire. Suffisante à elle seule pour le mode climate seul (aucun relais requis).",
           "heat_pump_power_sensor": "Capteur optionnel (W) indiquant la consommation actuelle de la pompe à chaleur.",
           "heat_pump_boost_offset": "Degrés Celsius ajoutés à la consigne normale pendant un boost sur surplus solaire.",
@@ -757,6 +759,7 @@
           "heat_pump_relay1_entity": "Relais 1 SG-Ready",
           "heat_pump_relay2_entity": "Relais 2 SG-Ready",
           "heat_pump_invert_sg_ready": "Inverser les contacts SG-Ready (câblage NF)",
+          "heat_pump_step_down": "Réduire quand le courant manque",
           "heat_pump_climate_entity": "Entité climate",
           "heat_pump_power_sensor": "Capteur de puissance",
           "heat_pump_energy_sensor": "Capteur d'énergie",
@@ -1633,6 +1636,9 @@
       "battery_house_sink_enabled": {
         "name": "Maison comme puits de batterie"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Garder la batterie pour la limite de puissance"
+      },
       "ev_morning_window_enabled": {
         "name": "Fenêtre matinale VE"
       },
@@ -2181,6 +2187,13 @@
       "options": {
         "none": "non trouvé",
         "why_guessed": "Votre tableau de bord Énergie n'a pas de capteur de puissance réseau, SEM en a donc deviné un."
+      }
+    },
+    "heat_pump_step_down": {
+      "options": {
+        "off": "Désactivé",
+        "setpoint": "Baisser la consigne",
+        "block": "Envoyer le signal de blocage"
       }
     }
   }

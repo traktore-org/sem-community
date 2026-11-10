@@ -407,6 +407,44 @@ tariff.
 Other loads get the same fields in their goals on the Load Priority card.
 More in [Tariff models](TARIFF_MODELS.md#a-tariff-per-device-812).
 
+### Step down when power is short (#1323)
+
+SEM can also turn the heat pump **down**. It is off until you pick an action
+under **Configuration → Heat Pump → Step down when power is short**:
+
+- **Lower the setpoint**: the climate entity's target goes down by the boost
+  offset, never under the unit's minimum. SEM puts the old target back.
+- **Send the blocked signal**: the SG-Ready contacts (or service) are set to
+  state 1.
+
+It steps down in two cases: the house buys grid power in an **expensive**
+hour, or it is **near your peak limit**. It needs a comfort band on the heat
+pump (*Keep at* and *Run now past*) and a thermometer. Below *Run now past*
+the pump is never held back, and a pump that gets too cold is released at
+once. Away mode, Mode Off and removing SEM also release it.
+
+A step-down lasts at least 15 minutes, and the next one waits 15 minutes, so
+a price that flickers does not cycle the compressor. In observer mode SEM
+only shows that it would step down. The **Why?** card names the cause.
+
+### Heat or cool by the outdoor forecast (#1323)
+
+A climate unit set to **By outdoor forecast** picks its season itself. Pick it
+in the load's editor on the Load Priority card (*Heats or cools*), or add the
+unit with `hvac_mode: by_forecast`.
+SEM reads the mean outdoor temperature of the next day (the same forecast it
+already uses, else your outdoor sensor):
+
+- under 15 °C it heats, over 22 °C it cools, in between nothing changes;
+- a change waits a day, unless the outlook is 3 °C past the other side;
+- it never changes while the unit runs;
+- the season is kept over a restart. With no outdoor reading SEM keeps the
+  last season. If it never had one it waits, but a room that is too cold is
+  still heated.
+
+One comfort band serves both seasons: SEM puts *Run now past* on the side
+the season needs. `auto` stays the unit's own Home Assistant mode.
+
 ### What a kWh of heat costs (#1081)
 
 The sensor *Heat Pump Cost of Heat* divides the price of the power the pump
@@ -1671,6 +1709,20 @@ Everything below is **off by default** and lives on the Config tab under
   the hold keeps the whole pack. On a cycle whose house load SEM cannot
   measure (a dark grid sensor), it does not hold at all — nothing would show
   the slot is safe — and the pack covers the house as before.
+- **Keep the battery for the peak limit** (#970, off by default) — for a
+  tariff that bills your highest 15 minutes. The house buys from the grid
+  up to the peak limit and the pack covers only what is above it, on any
+  tariff, flat ones too. It needs a peak limit, and aims a little under
+  it (your peak warning level), so a battery that reacts late still keeps
+  the 15 minutes under the limit. If this quarter hour's budget cannot be
+  computed, it does not hold. It ends, and the pack
+  covers the house as usual, when the pack is at or above *Buffer SOC*
+  and the coming sun (what is left today or tomorrow's forecast) can
+  refill the pack from its reserve; it returns once the pack is 10 points
+  under that level. It stands aside in an expensive hour, while a car
+  charges, when the pack's level cannot be read, and for a forced charge.
+  The sun counts only after the house's expected daytime use is taken off.
+  Without a solar forecast it ends at *Buffer SOC* alone.
 - **Morning EV window** — before the configured departure, empty the pack
   into the car down to the *Morning drain floor*, only when today's forecast
   refills the pack.

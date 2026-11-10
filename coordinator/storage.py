@@ -207,7 +207,11 @@ class SEMStorage:
         # State tracking
         self._loaded = False
         self._shutdown_listener: Optional[Callable] = None
-        self._last_daily_save_ts: float = 0.0  # monotonic, for the throttle
+        # monotonic, for the throttles. "Never saved" is minus infinity, not
+        # 0: time.monotonic() counts from the host's boot, so 0 read as "saved
+        # at boot" and refused every save in the first minutes of uptime.
+        self._last_daily_save_ts: float = float("-inf")
+        self._last_energy_save_ts: float = float("-inf")
         self._closed = False   # (#1209) set by async_close on unload
 
     @property
@@ -671,6 +675,14 @@ class SEMStorage:
     def set_battery_night_state(self, state: Dict[str, Any]) -> None:
         self._energy_data["battery_nights"] = dict(state)
 
+    # (#970) Whether the peak hold last let go — its return gap must outlive
+    # a restart, or a pack inside the gap is held again at every boot.
+    def get_peak_hold_released(self) -> bool:
+        return bool(self._energy_data.get("peak_hold_released", False))
+
+    def set_peak_hold_released(self, released: bool) -> None:
+        self._energy_data["peak_hold_released"] = bool(released)
+
     # (#778) The forecast ledger — "on day D we said D+h would make X; D+h made
     # Y", per horizon. Durable for the same reason as the night records: it is a
     # training set that takes a season to build, and losing it at boot would be
@@ -766,6 +778,25 @@ class SEMStorage:
         """Persist the last-legionella ISO timestamp."""
         if iso_ts:
             self._energy_data["legionella_last_time"] = iso_ts
+
+    # (#1323) A heat pump SEM stepped down: what a restart needs to take it
+    # back (the action, and the setpoint to restore), by device id.
+    def get_step_down_state(self) -> Dict[str, Any]:
+        value = self._energy_data.get("step_down_state")
+        return dict(value) if isinstance(value, dict) else {}
+
+    def set_step_down_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["step_down_state"] = dict(state or {})
+
+    # (#1323) A climate unit that picks heat or cool itself: the season in
+    # force and when it began, by device id — so a restart keeps the dead
+    # band and the day's dwell instead of deciding anew.
+    def get_season_state(self) -> Dict[str, Any]:
+        value = self._energy_data.get("season_state")
+        return dict(value) if isinstance(value, dict) else {}
+
+    def set_season_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["season_state"] = dict(state or {})
 
     # Day-rollover decay bookkeeping (#645) — the date the virtual-SOC daily
     # decay LAST RAN, as an ISO date string. Distinct from the coordinator's
@@ -900,7 +931,7 @@ class SEMStorage:
         ``async_save_daily_throttled``: a real write, bounded.
         """
         now = time.monotonic()
-        if now - getattr(self, "_last_energy_save_ts", 0.0) < ENERGY_SAVE_INTERVAL:
+        if now - self._last_energy_save_ts < ENERGY_SAVE_INTERVAL:
             return
         self._last_energy_save_ts = now
         await self.async_save_energy_now()

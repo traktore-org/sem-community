@@ -728,6 +728,48 @@ class TestKSTARCombined:
         assert power.battery_charge_power == 1000
         assert power.home_consumption_power == 3000  # 6000 - 2000 - 1000
 
+    @pytest.mark.asyncio
+    async def test_kstar_grid_charge_and_percent_limit_control(self):
+        """(#1158) The control side, end to end: the hybrid profile's own
+        entities → roles → the option each one fills → the generic adapter →
+        the switch, the charge level and a discharge limit in percent."""
+        from custom_components.solar_energy_management.coordinator.actuate_battery import (
+            actuate_battery,
+        )
+        from custom_components.solar_energy_management.coordinator.battery_adapters import (
+            adapter_for,
+        )
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            BatteryDecision,
+            BatteryIntent,
+        )
+        from custom_components.solar_energy_management.tests import (
+            test_1158_switch_grid_charge as kstar,
+        )
+
+        hass = kstar._Hass()
+        adapter = adapter_for(hass, kstar._accepted_config(hass))
+        assert adapter.supports_forced_charge
+
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.FORCE_CHARGE, target_soc=90.0,
+            charge_power_w=3000.0, duration_min=120), adapter)
+        assert hass.read(kstar.SWITCH) == "on"
+        assert float(hass.read(kstar.TARGET)) == 90.0
+
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.STOP_FORCE_CHARGE), adapter)
+        assert hass.read(kstar.SWITCH) == "off"
+
+        # the car charges at night: keep the pack out of it (100 % = 10 kW)
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.LIMIT_DISCHARGE,
+            discharge_limit_w=0.0), adapter)
+        assert float(hass.read(kstar.LIMIT)) == 1.0     # the register's least
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.NORMAL), adapter)
+        assert float(hass.read(kstar.LIMIT)) == 100.0
+
 
 # ════════════════════════════════════════════
 # Sessy: Battery-only with external P1 meter
@@ -2702,3 +2744,75 @@ class TestTeslaPowerwallCombined:
         assert power.grid_export_power == 3000
         assert power.battery_charge_power == 2000
         assert power.home_consumption_power == 3000   # 8000 - 3000 - 2000
+
+
+# ════════════════════════════════════════════
+# EG4 Web Monitor (#810): grid +=import, battery +=charge (Pattern D)
+# ════════════════════════════════════════════
+
+class TestEG4WebMonitorPipeline:
+    """The entity ids, units and signs of a real eg4_web_monitor install.
+
+    The integration computes grid_power as power_to_user − power_to_grid, so
+    a positive reading is IMPORT. Its battery_power is positive while
+    charging. Read through a plain Grid power pick, no Energy Dashboard.
+    """
+
+    SOLAR = "sensor.flexboss21_pv_total_power"
+    GRID = "sensor.flexboss21_grid_power"
+    BATT = "sensor.flexboss21_battery_power"
+    SOC = "sensor.flexboss21_state_of_charge"
+
+    def _first_read(self, solar, grid, battery, soc=60):
+        hass = MagicMock()
+        states = {
+            self.SOLAR: _state(solar, device_class="power"),
+            self.GRID: _state(grid, device_class="power"),
+            self.BATT: _state(battery, device_class="power"),
+            self.SOC: _state(soc, unit="%", device_class="battery"),
+        }
+        reader = _make_reader_with_states(
+            hass, states, None,
+            {"solar_production_sensor": self.SOLAR,
+             "grid_power_sensor": self.GRID,
+             "battery_power_sensor": self.BATT,
+             "battery_soc_sensor": self.SOC})
+        reader._entity_owner = lambda _eid: ("eg4_web_monitor", None)
+        power = reader.read_power()
+        power.calculate_derived()
+        return power
+
+    def test_importing_at_night_reads_import_on_the_first_cycle(self):
+        power = self._first_read(solar=0, grid=1500, battery=0)
+        assert power.grid_import_power == 1500
+        assert power.grid_export_power == 0
+        assert power.home_consumption_power == 1500
+
+    def test_exporting_reads_export(self):
+        # +4000 W of sun, 2500 W leaves: the integration says −2500
+        power = self._first_read(solar=4000, grid=-2500, battery=0)
+        assert power.grid_export_power == 2500
+        assert power.home_consumption_power == 1500
+
+    def test_charging_the_pack_from_the_sun_closes_the_balance(self):
+        power = self._first_read(solar=4000, grid=500, battery=2000)
+        assert power.battery_charge_power == 2000
+        assert power.grid_import_power == 500
+        assert power.home_consumption_power == 4000 + 500 - 2000
+
+    def test_discharging_evening_closes_the_balance(self):
+        power = self._first_read(solar=0, grid=0, battery=-1500)
+        assert power.battery_discharge_power == 1500
+        assert power.home_consumption_power == 1500
+
+    def test_without_the_seed_the_first_cycle_reads_it_backwards(self, monkeypatch):
+        """The control: unseeded, +1500 W import is SEM's export until the
+        solar swings have voted — the reason the seed exists."""
+        from custom_components.solar_energy_management.coordinator import (
+            sensor_reader as sr,
+        )
+        table = dict(sr.PLATFORM_GRID_SIGN_INVERT)
+        table.pop("eg4_web_monitor")
+        monkeypatch.setattr(sr, "PLATFORM_GRID_SIGN_INVERT", table)
+        power = self._first_read(solar=0, grid=1500, battery=0)
+        assert power.grid_export_power == 1500

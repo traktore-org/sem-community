@@ -14,7 +14,10 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from '../util/load-sections.js';
+import {
+    antiCyclePlaceholder, antiCycleBounds, antiCycleValue,
+    HVAC_MODE_LABELS, hvacModeOptions,
+} from '../util/load-sections.js';
 import { shedReasonKey } from '../util/shed-reason.js';
 import { importKw, slotStatus } from '../util/peak-slot.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -1246,6 +1249,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 <div class="cs-mark" style="left:${pct(target)}%;background:#4db6ac" title="target"></div>
                 <div class="cs-mark" style="left:${pct(limit)}%;background:#ffc107" title="limit"></div>
                 ${read != null ? html`<div class="cs-read" style="left:${pct(read)}%" title="${this._displayTemp(readC)}">\u25B2</div>` : nothing}
+            </div>` : nothing}
+            ${g.hvac_mode ? html`
+            <div class="ge-row" title="${this._t('comfort_hvac_hint')}">
+                <span class="ge-label">${this._t('comfort_hvac_mode')}</span>
+                <span class="ge-ctl">
+                    <select class="mode-select" data-goal="hvac_mode" data-device="${device.id}"
+                            @click=${(e) => e.stopPropagation()}>
+                        ${hvacModeOptions(g.hvac_mode).map(m => html`
+                            <option value="${m}" ?selected="${g.hvac_mode === m}">${
+                                HVAC_MODE_LABELS[m] ? this._t(HVAC_MODE_LABELS[m]) : m}</option>`)}
+                    </select>
+                </span>
             </div>` : nothing}
             <div class="ge-row">
                 <span class="ge-label">${this._t('comfort_keep_at')}</span>

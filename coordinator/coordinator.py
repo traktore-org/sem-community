@@ -47,6 +47,9 @@ from .external_control import (
 
 from ..consts.core import CAPABILITY_MISS_CONFIRM_READS, CAPABILITY_MISS_HOLD_S
 from ..consts.core import CONF_INTRADAY_FORECAST, DEFAULT_INTRADAY_FORECAST
+from ..consts.core import (DEFAULT_BATTERY_BUFFER_SOC,
+                           DEFAULT_TARGET_PEAK_LIMIT,
+                           DEFAULT_WARNING_PEAK_LEVEL)
 from ..consts.core import (CONF_CO2_LIVE_INTENSITY, CONF_GRID_CO2_ENTITY,
                            DEFAULT_CO2_LIVE_INTENSITY)
 from ..consts.core import (CONF_OUTDOOR_TEMPERATURE_ENTITY,
@@ -3986,6 +3989,90 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return True
         return False
 
+    @staticmethod
+    def _refresh_step_down(sc, cfg) -> None:
+        """(#1323) Push each heat pump row's ``heat_pump_step_down`` onto
+        its controller. Off for a row that does not name an action."""
+        from ..devices.heat_pump_controller import step_down_action
+        rows = [{"id": "heat_pump",
+                 "heat_pump_step_down": (cfg or {}).get("heat_pump_step_down")}]
+        # an additional unit's id, as the setup names it (#685/#990)
+        rows += [{**r, "id": r.get("id") or f"heat_pump_{i + 2}"}
+                 for i, r in enumerate((cfg or {}).get("heat_pumps") or [])
+                 if isinstance(r, dict)]
+        for row in rows:
+            dev = sc.get_device(str(row["id"]))
+            if dev is not None and hasattr(dev, "step_down_action"):
+                dev.step_down_action = step_down_action(
+                    row.get("heat_pump_step_down"))
+
+    def _step_down_memos(self) -> Dict[str, Any]:
+        """(#1323) ``{device_id: memo}`` for every load stepped down now."""
+        out: Dict[str, Any] = {}
+        for did, dev in (getattr(self._surplus_controller, "_devices", {}) or {}).items():
+            memo_fn = getattr(dev, "step_down_memo", None)
+            memo = memo_fn() if callable(memo_fn) else None
+            if isinstance(memo, dict):
+                out[str(did)] = memo
+        return out
+
+    #: (#1323) the outlook is the mean over this many hours ahead
+    _OUTLOOK_HOURS = 24
+
+    def _outdoor_outlook_c(self) -> Optional[float]:
+        """(#1323) The outdoor outlook in °C: the mean of the temperature
+        forecast SEM already reads (#1082) over the next day, else what it
+        measures now, else None. No new source and no new reader."""
+        now = dt_util.now()
+        ahead = now + timedelta(hours=self._OUTLOOK_HOURS)
+        temps = []
+        for start, t, kind in (getattr(self, "_temp_forecast", None) or []):
+            if kind == "hourly":
+                if now - timedelta(hours=1) <= start <= ahead:
+                    temps.append(t)
+            elif kind == "daily":
+                # a day's row is the mean of its high and low (#1082): it
+                # counts when its day overlaps the next 24 h
+                if start <= ahead and start + timedelta(days=1) > now:
+                    temps.append(t)
+            # ``daily_high``: a day given by its high alone would read too
+            # warm and lean every unit towards cooling — not used
+        if temps:
+            return sum(temps) / len(temps)
+        return self._outdoor_temperature_or_none()
+
+    def _stamp_outdoor_outlook(self) -> None:
+        """(#1323) Hand the outlook to every unit that picks its season."""
+        units = [d for d in (getattr(self._surplus_controller, "_devices", {}) or {}).values()
+                 if callable(getattr(d, "update_season", None))
+                 and getattr(d, "hvac_setting", "") == "by_forecast"]
+        if not units:
+            return
+        outlook = self._outdoor_outlook_c()
+        stored = None
+        for dev in units:
+            if getattr(dev, "_season_mode", None) is None:
+                # a fresh unit (restart, rebuild): take up its stored season
+                # first, so the dead band and the dwell go on
+                if stored is None:
+                    storage = getattr(self, "_storage", None)
+                    try:
+                        stored = storage.get_season_state() if storage else {}
+                    except Exception:  # noqa: BLE001 — no store is no memo
+                        stored = {}
+                dev.restore_season(stored.get(str(dev.device_id)))
+            dev.update_season(outlook)
+
+    def _season_memos(self) -> Dict[str, Any]:
+        """(#1323) ``{device_id: memo}`` for every unit with a season."""
+        out: Dict[str, Any] = {}
+        for did, dev in (getattr(self._surplus_controller, "_devices", {}) or {}).items():
+            memo_fn = getattr(dev, "season_memo", None)
+            memo = memo_fn() if callable(memo_fn) else None
+            if isinstance(memo, dict):
+                out[str(did)] = memo
+        return out
+
     async def _apply_vacation_mode(self) -> bool:
         """Set the per-cycle vacation flag on the comfort-heating controllers
         (#594). (#1335) Layer 1 stops their comfort runs from the flag.
@@ -5164,6 +5251,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # cannot pay for this quarter hour.
                             peak_allowed_w=getattr(
                                 view.fleet, "peak_slot_allowed_w", None),
+                            # (#1015) the device that can set its phases by
+                            # one current per phase, when it can
+                            device=getattr(adapter, "_device", None),
                         )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
@@ -5855,6 +5945,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 basis = self._sensor_reader.export_battery_basis()
                 if basis is not None:
                     self._storage.set_battery_sign_basis(basis)
+                # (#1323) a stepped-down heat pump: what a restart must
+                # know to take it back
+                try:
+                    self._storage.set_step_down_state(self._step_down_memos())
+                except (AttributeError, TypeError, ValueError):
+                    pass
+                # (#1323) …and each unit's season, merged over what is
+                # stored: a unit not built yet keeps its stored season
+                try:
+                    self._storage.set_season_state({
+                        **self._storage.get_season_state(),
+                        **self._season_memos()})
+                except (AttributeError, TypeError, ValueError):
+                    pass
                 # Persist the legionella timestamp (#508 I2).
                 _hw = self._surplus_controller._devices.get("hot_water") \
                     if hasattr(self, "_surplus_controller") else None
@@ -6027,6 +6131,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _per_charger_cfg.get("ev_phase_switch_entity"),
                     lambda eid: self.hass.states.get(eid) is not None,
                 )
+                # (#1015) no entity, but phases set by one current per phase:
+                # the service is the capability, and it is shown as such
+                _ps_service = getattr(ev_dev, "phase_service", None)
+                if _ps_entity is None and isinstance(_ps_service, str):
+                    _ps_entity, _ps_valid = _ps_service, True
                 result[f"charger_{cid}_phase_switch_entity"] = _ps_entity
                 result[f"charger_{cid}_phase_switch_valid"] = _ps_valid
                 # (#824) The entities SEM COMMANDS, checked the same way.
@@ -7391,6 +7500,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             await self._apply_vacation_mode()
         except Exception as e:  # noqa: BLE001 — never break the cycle
             _LOGGER.debug("Vacation mode apply failed: %s", e)
+        # (#1323) …and the outdoor outlook, for a unit that picks heat or
+        # cool itself. A stamp like the vacation flag: the device reports
+        # its mode to layer 1, nothing is switched here.
+        try:
+            self._stamp_outdoor_outlook()
+        except Exception as e:  # noqa: BLE001 — never break the cycle
+            _LOGGER.debug("Outdoor outlook stamp failed: %s", e)
 
         # Surplus controller (Phase 0.2)
         surplus_data = SurplusControlData()
@@ -9233,6 +9349,132 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return False
         floor = float(self.config.get("battery_morning_drain_floor_soc", 50.0) or 50.0)
         return float(remaining) >= cap * (1.0 - floor / 100.0)
+
+    #: (#970) The hold aims this far under the limit when no load manager
+    #: names a warning level — the ratio its own defaults keep.
+    _PEAK_HOLD_TARGET_RATIO = DEFAULT_WARNING_PEAK_LEVEL / DEFAULT_TARGET_PEAK_LIMIT
+
+    def _peak_hold_inputs(self, power) -> dict:
+        """(#970) What the house verdict needs for the peak hold — ``{}``
+        while the switch is off, so an install that never turned it on reads
+        nothing and can fail on nothing here."""
+        if not bool(self.config.get("battery_peak_hold_enabled", False)):
+            return {}
+        return {
+            "peak_hold_enabled": True,
+            "peak_hold_target_w": self._peak_hold_target_w(),
+            "peak_allowance_known": getattr(
+                self, "_peak_slot_allowed_w", None) is not None,
+            "pack_soc": self._peak_hold_pack_soc(power),
+            "peak_hold_release_soc": float(
+                self.config.get("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC)
+                or DEFAULT_BATTERY_BUFFER_SOC),
+            "sun_refills_pack": self._sun_refills_whole_pack(),
+            "peak_hold_released": self._peak_hold_was_released(),
+        }
+
+    def _peak_hold_target_w(self) -> Optional[float]:
+        """(#970) The import level the hold aims at: the load manager's
+        warning level — the level SEM already treats as "near the limit" —
+        or the same share of the limit when nothing names one. ``None``
+        without a limit. Under the limit on purpose: the room banked early
+        in the slot pays for a pack that follows a new limit late."""
+        limit_kw = self._slot_ceiling_kw()
+        if limit_kw is None or limit_kw <= 0:
+            return None
+        target_kw = float(limit_kw) * self._PEAK_HOLD_TARGET_RATIO
+        lm = getattr(self, "_load_manager", None)
+        if lm is not None:
+            try:
+                warning_kw = float(lm._effective_levels()[0])
+                if 0.0 < warning_kw < float(limit_kw):
+                    target_kw = warning_kw
+            except Exception:  # noqa: BLE001 — no level, the ratio stands
+                pass
+        return target_kw * 1000.0
+
+    def _peak_hold_was_released(self) -> bool:
+        """(#970) Did the hold last let go? Kept across a restart."""
+        if getattr(self, "_peak_hold_released", None) is None:
+            _store = getattr(self, "_storage", None)
+            try:
+                self._peak_hold_released = bool(
+                    _store.get_peak_hold_released()) if _store else False
+            except Exception:  # noqa: BLE001 — unread is "not released"
+                self._peak_hold_released = False
+        return bool(self._peak_hold_released)
+
+    def _note_peak_hold(self, verdict) -> None:
+        """(#970) Remember whether the hold let go. Only a cycle that judged
+        the level moves it: a dear hour, an unread level or a missing budget
+        say nothing about it, so a pack inside the return gap stays let go."""
+        from .sink_verdicts import peak_hold_state
+        state = peak_hold_state(verdict)
+        if state not in ("held", "released"):
+            return
+        released = state == "released"
+        if released != bool(getattr(self, "_peak_hold_released", False)):
+            self._peak_hold_released = released
+            _store = getattr(self, "_storage", None)
+            if _store is not None:
+                try:
+                    _store.set_peak_hold_released(released)
+                except Exception:  # noqa: BLE001 — a save must not end a cycle
+                    pass
+
+    def _sun_refills_whole_pack(self) -> Optional[bool]:
+        """(#970) Does the coming sun refill the pack from its reserve, after
+        the house has taken its share? ``None``: no forecast to ask.
+
+        The better of what is left of today and tomorrow, each less the
+        house's expected draw over those sun hours — the same hourly profile
+        the day ledgers price their surplus against (``_day_home_w_at``).
+        A forecast that only covers the house refills nothing. A forecast
+        that reads 0, or a day with no sun frame, is False: the hold stays."""
+        reader = getattr(self, "_forecast_reader", None)
+        _fd = getattr(reader, "forecast_data", None)
+        if reader is None or _fd is None or getattr(reader, "available", False) is not True:
+            return None
+        cap = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
+        sunrise, sunset = self._pacing_day_start(), self._pacing_horizon_end()
+        if cap <= 0 or sunrise is None or sunset is None or sunset <= sunrise:
+            return False
+        try:
+            now = dt_util.now()
+            left = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
+            tomorrow = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
+            need = cap * (1.0 - float(reserve_soc_of(self.config)) / 100.0)
+            day = timedelta(days=1)
+            nets = [tomorrow - self._house_kwh_between(sunrise + day, sunset + day)]
+            if now < sunset:
+                nets.append(left - self._house_kwh_between(max(now, sunrise), sunset))
+        except Exception:  # noqa: BLE001 — an estimate that fails refills nothing
+            return False
+        return max(nets) >= need
+
+    def _house_kwh_between(self, start, end) -> float:
+        """(#970) What the house is expected to draw between two times, from
+        the day ledgers' own hourly profile (``_day_home_w_at``)."""
+        home_at = self._day_home_w_at(start)
+        kwh, t = 0.0, start
+        while t < end:
+            step = min(timedelta(hours=1), end - t)
+            kwh += max(0.0, float(home_at(t))) * step.total_seconds() / 3_600_000.0
+            t += step
+        return kwh
+
+    @staticmethod
+    def _peak_hold_pack_soc(power):
+        """(#970) The pack's level this cycle, or None when it was not read."""
+        # DARK-SOC: action — an unread level means no hold this cycle; the stored let-go state is kept
+        if (getattr(power, "battery_soc_unavailable", False)
+                or getattr(power, "battery_soc_known", True) is False):
+            return None
+        soc = getattr(power, "battery_soc", None)
+        try:
+            return None if soc is None else float(soc)
+        except (TypeError, ValueError):
+            return None
 
     def _pacing_horizon_end(self):
         """(#926) Sunset+10 today as a datetime — the pacer's own horizon."""
@@ -14044,9 +14286,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _chargers = [{"id": "ev_charger", **{
                     k: v for k, v in _cfg.items()
                     if k.startswith("ev_") and isinstance(v, str) and v}}]
+            # (#1158) an install SEM drives through program groups keeps
+            # that setup: the same list the adapter choice reads
+            from .battery_adapters import program_group_setup
+            _prog_entities, _prog_platform = program_group_setup(_cfg)
             self._detection_report = build_detection_report(
                 self.hass, configured_entities=self._configured_entity_ids(),
-                strategy_values=_sv, configured_chargers=_chargers)
+                strategy_values=_sv, configured_chargers=_chargers,
+                program_entities=_prog_entities,
+                program_platform=_prog_platform)
         except Exception:  # noqa: BLE001 — evidence must never cost setup
             _LOGGER.debug("detection report skipped", exc_info=True)
             self._detection_report = None
@@ -14896,7 +15144,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 morning_hours=float(self.config.get("ev_morning_window_hours", 2.0) or 2.0),
                 forecast_refills_pack=self._forecast_refills_pack(),
                 pacing_horizon_end=self._pacing_horizon_end(),
+                # (#970) keep the battery for the peak limit — own switch;
+                # nothing is read for it while the switch is off
+                **self._peak_hold_inputs(power),
             )
+            self._note_peak_hold(_verdicts.get("house"))
         except Exception:  # noqa: BLE001 — a verdict bug must not kill a cycle
             _LOGGER.warning("sink verdicts FAILED this cycle — every sink reads "
                             "OPEN until it recovers (arc #921)", exc_info=True)
@@ -17043,6 +17295,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     hi = r.get("temperature")
                     lo = r.get("templow")
                     t = float(hi) if lo is None or kind == "hourly" else (float(hi) + float(lo)) / 2
+                    # (#1323) a day known by its high alone is marked: the
+                    # hour lookup still uses it, the outlook does not
+                    row_kind = ("daily_high" if kind == "daily" and lo is None
+                                else kind)
                 except (TypeError, ValueError):
                     continue
                 if start is None:
@@ -17052,7 +17308,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     SimpleNamespace(state=t, attributes={"unit_of_measurement": unit}))
                 if t is None:
                     continue
-                out.append((start, t, kind))
+                out.append((start, t, row_kind))
             if out:
                 self._temp_forecast = sorted(out, key=lambda x: x[0])
                 return
@@ -17702,6 +17958,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # cycle, killing the drag position.)
                 except (TypeError, ValueError):
                     pass
+
+            # (#1323) Step down in a shortfall — EVERY heat pump reads its
+            # own row here, the first one included: the same rows the setup
+            # builds the controllers from, so no unit waits for a reload.
+            # class-qualified: the refresh tests drive this with a duck-typed host
+            SEMCoordinator._refresh_step_down(sc, cfg)
 
             # Hot water — push targets/interval only; the legionella timer
             # state (hours_since_legionella, _legionella_cycle_active) is

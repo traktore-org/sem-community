@@ -1,4 +1,5 @@
 """Common fixtures for Solar Energy Management tests."""
+import weakref
 import sys
 from pathlib import Path
 
@@ -598,6 +599,77 @@ def sem_real_hass(hass, enable_custom_integrations):
             # ... drive the integration and assert ...
     """
     return hass
+
+
+_REDISCOVERY_WAITERS: "weakref.WeakSet" = weakref.WeakSet()
+
+
+@pytest.fixture(autouse=True)
+def _rediscovery_does_not_wait_35_real_seconds(request, monkeypatch):
+    """(#1266) The delayed device re-discovery sleeps 35 REAL seconds.
+
+    ``async_block_till_done`` waits for that task, so every real-HA setup
+    cost 35 s — 94 % of the suite's time. What a test may depend on is the
+    ORDER those 35 s produced, not the seconds:
+
+    1. the entry's setup finishes,
+    2. every timer due within the delay fires (the coordinator's first
+       scheduled refresh at 30 s, a store's delayed save) and its work ends,
+    3. the re-discovery runs.
+
+    The stand-in keeps that order on the test clock. A test that is about
+    the wait itself opts out with ``@pytest.mark.real_rediscovery_wait``.
+    """
+    if request.node.get_closest_marker("real_rediscovery_wait"):
+        return
+    import asyncio
+    from datetime import timedelta
+
+    from homeassistant.config_entries import ConfigEntryState
+    from homeassistant.core import HomeAssistant
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.solar_energy_management.const import DOMAIN
+    from custom_components.solar_energy_management.features import (
+        device_registry as _dr,
+    )
+
+    async def _until_the_delay_has_played_out(self):
+        hass = self.hass
+        me = asyncio.current_task()
+        _REDISCOVERY_WAITERS.add(me)
+        # 1. the entry's setup finishes (10 s at most)
+        for _ in range(2000):
+            try:
+                busy = any(
+                    e.state is ConfigEntryState.SETUP_IN_PROGRESS
+                    for e in hass.config_entries.async_entries(DOMAIN))
+            except Exception:  # noqa: BLE001 — a mocked hass has no entries
+                busy = False
+            if not busy:
+                break
+            await asyncio.sleep(0.005)
+        await asyncio.sleep(0)
+        if not isinstance(hass, HomeAssistant):
+            return
+        # 2. the timers of the delay fire, and what they start ends (5 s at most)
+        from pytest_homeassistant_custom_component.common import (
+            async_fire_time_changed,
+        )
+        background = set(hass._background_tasks)
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=_dr.REDISCOVERY_DELAY_S))
+        for _ in range(1000):
+            await asyncio.sleep(0.005)
+            started = [t for t in set(hass._background_tasks) - background
+                       if not t.done()]
+            others = [t for t in list(hass._tasks)
+                      if t not in _REDISCOVERY_WAITERS and not t.done()]
+            if not started and not others:
+                break
+
+    monkeypatch.setattr(_dr.UnifiedDeviceRegistry, "_rediscovery_wait",
+                        _until_the_delay_has_played_out)
 
 
 # phacc's ``async_test_home_assistant`` sets this zone on every real ``hass``.
