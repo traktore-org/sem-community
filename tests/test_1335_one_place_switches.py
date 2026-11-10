@@ -626,6 +626,17 @@ class TestNoSunMeansNoSolarProduction:
         await _cycles(sc, 10, export_w=0.0, solar_w=0.0, draw_w=draw)
         assert dev.is_active and not hass.calls("turn_off", "switch.pump")
 
+    async def test_the_sun_coming_back_ends_no_sun_at_once(self):
+        """(review) Two dark cycles and then 800 W is a dropout: the reading
+        of THIS cycle decides, the two behind it only confirm."""
+        hass, sc, dev = await _sun_load(by_sem=True)
+        for back, verdict in (([30.0, 30.0, 800.0], False),
+                              ([800.0, 30.0, 30.0], True),
+                              ([30.0, 800.0, 30.0], True)):
+            sc._solar_samples.clear()
+            sc._solar_samples.extend(back)
+            assert sc._no_sun() is verdict, back
+
     async def test_no_solar_reading_is_not_night(self):
         hass, sc, dev = await _sun_load(by_sem=True)
         await _cycles(sc, 10, export_w=0.0, solar_w=None)
@@ -670,4 +681,19 @@ class TestNoSunMeansNoSolarProduction:
         assert len(kws) == 1
         names = {getattr(a, "value", None) for a in ast.walk(kws[0].value)
                  if isinstance(a, ast.Constant)}
-        assert {"solar_power_unavailable", "solar_power"} <= names
+        assert {"solar_power_unavailable", "solar_power_read",
+                "solar_power"} <= names
+
+    async def test_an_install_with_no_solar_sensor_has_no_reading(self):
+        """(review) No solar sensor reads 0.0 with nothing dark. That is not
+        night: sun-only loads must not be held off for ever."""
+        from custom_components.solar_energy_management.tests.test_1164_force_charge_stall import (
+            _reader, _state,
+        )
+        p = _reader({"sensor.soc": _state(95, "%")},
+                    {"battery_soc_sensor": "sensor.soc"}).read_power()
+        assert p.solar_power == 0.0 and p.solar_power_unavailable is False
+        assert p.solar_power_read is False
+        p = _reader({"sensor.pv": _state(0, "W")},
+                    {"solar_production_sensor": "sensor.pv"}).read_power()
+        assert p.solar_power_read is True

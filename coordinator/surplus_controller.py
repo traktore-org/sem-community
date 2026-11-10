@@ -2022,6 +2022,10 @@ class SurplusController:
         samples = getattr(self, "_solar_samples", None) or []
         if len(samples) < 3 or samples[-1] is None:
             return False
+        if samples[-1] > NO_SUN_W:
+            # the sun is back this cycle: two dark cycles behind it are a
+            # dropout, not dusk
+            return False
         return sum(1 for w in samples if w is not None and w <= NO_SUN_W) >= 2
 
     def _stop_short(self, device, intents, spend, *,
