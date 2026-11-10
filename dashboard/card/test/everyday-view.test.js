@@ -172,9 +172,10 @@ test('All settings still shows every row', () => {
     // (#1079) +2 for "Steered by another party": the battery's and the
     // charger's mode select (the indicator picker shows only when a mode is set).
     // (#1308) +1 for the charger's Finish by departure toggle.
+    // (#1323) +1 for the heat pump's Step down when power is short.
     const everyday = renderTab(card()).total;
     const { per, total } = renderTab(card({ advanced: true }));
-    assert.equal(total, 111, `All settings drew ${total} rows`);
+    assert.equal(total, 112, `All settings drew ${total} rows`);
     assert.ok(per.battery_zones >= 9, 'battery knobs and pickers');
     assert.ok(per.ev_chargers >= 15, 'every per-charger row');
     assert.ok(total > everyday * 5);

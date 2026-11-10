@@ -1880,6 +1880,12 @@ class SEMConfigCard extends SEMLitBase {
                       construction (structural). Was only on the native flow. */ ''}
                 ${this._renderOptionToggle('heat_pump_invert_sg_ready', 'config_hp_invert_sg_ready',
                     opts, 'config_help_hp_invert_sg_ready', false)}
+                ${/* #1323: step down in a shortfall. Off unless picked; read
+                      each cycle, so it saves without a reload. */ ''}
+                ${this._renderOptionSelect('heat_pump_step_down', 'config_hp_step_down',
+                    ['off', 'setpoint', 'block'].map(v => (
+                        { value: v, label: this._t('config_hp_step_down_' + v) })),
+                    opts, 'config_help_hp_step_down', 'off')}
                 ${this._renderPicker('heat_pump_climate_entity', 'config_hp_climate', 'climate',
                     null, opts, 'config_help_hp_climate')}
                 ${this._renderPicker('heat_pump_power_sensor', 'config_hp_power_sensor', 'sensor',

@@ -581,6 +581,7 @@
           "heat_pump_relay1_entity": "SG-Ready relé 1 (opcionális switch entitás)",
           "heat_pump_relay2_entity": "SG-Ready relé 2 (opcionális switch entitás)",
           "heat_pump_invert_sg_ready": "SG-Ready érintkezők invertálása (NC bekötéshez)",
+          "heat_pump_step_down": "Visszavétel, ha kevés az áram",
           "heat_pump_climate_entity": "Climate entitás a célhőmérséklet emeléséhez (opcionális)",
           "heat_pump_power_sensor": "Teljesítmény-érzékelő (opcionális)",
           "heat_pump_boost_offset": "Hőmérséklet-emelés (°C)",
@@ -601,6 +602,7 @@
           "heat_pump_relay1_entity": "Switch entitás az SG-Ready 1-es reléhez (normál üzem jelzése). Az SG-Ready protokollhoz a 2-es relével együtt állítsa be.",
           "heat_pump_relay2_entity": "Switch entitás az SG-Ready 2-es reléhez (többlet-emelés jelzése). Az SG-Ready protokollhoz az 1-es relével együtt állítsa be.",
           "heat_pump_invert_sg_ready": "Csak akkor engedélyezze, ha hőszivattyúja SG-Ready érintkezői alapesetben zárt (NC) bekötésűek. A SEM a szabványos SG-Ready igazságtáblát vezérli; ha az emelés blokkolja a szivattyút (és fordítva), kapcsolja be ezt mindkét relé megfordításához.",
+          "heat_pump_step_down": "Ha a ház drága órában vásárol hálózati áramot, vagy közelít a teljesítménykorláthoz, a SEM csökkenti az alapjelet vagy elküldi az SG-Ready tiltójelet. Ehhez komfortsáv kell (Tartás és Azonnali futás e határon túl); a SEM soha nem megy alá.",
           "heat_pump_climate_entity": "A napelemes többlet idején a célhőmérséklet emelésére használt climate entitás. Önmagában elegendő a csak climate módhoz (relék nem szükségesek).",
           "heat_pump_power_sensor": "Opcionális érzékelő (W), amely a hőszivattyú aktuális teljesítményfelvételét jelenti.",
           "heat_pump_boost_offset": "A normál célhőmérséklethez hozzáadott Celsius-fok a napelemes többlettel történő emelés alatt.",
@@ -757,6 +759,7 @@
           "heat_pump_relay1_entity": "SG-Ready 1. relé",
           "heat_pump_relay2_entity": "SG-Ready 2. relé",
           "heat_pump_invert_sg_ready": "SG-Ready relék invertálása (NC bekötés)",
+          "heat_pump_step_down": "Visszavétel, ha kevés az áram",
           "heat_pump_climate_entity": "Climate entitás",
           "heat_pump_power_sensor": "Teljesítmény szenzor",
           "heat_pump_energy_sensor": "Energiaszenzor",
@@ -2181,6 +2184,13 @@
       "options": {
         "none": "nem található",
         "why_guessed": "Az Energia irányítópultodon nincs hálózati teljesítmény érzékelő, ezért a SEM kitalált egyet."
+      }
+    },
+    "heat_pump_step_down": {
+      "options": {
+        "off": "Ki",
+        "setpoint": "Alapjel csökkentése",
+        "block": "Tiltójel küldése"
       }
     }
   }

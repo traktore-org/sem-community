@@ -126,6 +126,11 @@ LOAD_LEGIONELLA_END = "legionella_end"
 LOAD_AT_TARGET = "at_target"
 LOAD_NO_READING = "no_reading"
 LOAD_DISABLED = "disabled"
+# (#1323) a heat pump stepped down for a shortfall: grid power bought in an
+# expensive hour, or the peak limit near
+LOAD_STEP_DOWN_PRICE = "step_down_price"
+LOAD_STEP_DOWN_PEAK = "step_down_peak"
+LOAD_STEP_DOWN_END = "step_down_end"
 
 # ── the grid export limit (#1090) ────────────────────────────────────
 EXPORT_NEGATIVE_PRICE = "export_negative_price"

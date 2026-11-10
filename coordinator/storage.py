@@ -767,6 +767,15 @@ class SEMStorage:
         if iso_ts:
             self._energy_data["legionella_last_time"] = iso_ts
 
+    # (#1323) A heat pump SEM stepped down: what a restart needs to take it
+    # back (the action, and the setpoint to restore), by device id.
+    def get_step_down_state(self) -> Dict[str, Any]:
+        value = self._energy_data.get("step_down_state")
+        return dict(value) if isinstance(value, dict) else {}
+
+    def set_step_down_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["step_down_state"] = dict(state or {})
+
     # Day-rollover decay bookkeeping (#645) — the date the virtual-SOC daily
     # decay LAST RAN, as an ISO date string. Distinct from the coordinator's
     # in-memory ``_tracker_date`` (which only owns the hour-bucket arrays):
