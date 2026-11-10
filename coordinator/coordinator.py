@@ -10883,8 +10883,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # id was stored and did nothing, and the caller read it as done.
         # Charger ids by the per-charger loop's own rule: the entry's id, else
         # ``ev_charger_<index>``; one box set up with flat keys is ``ev_charger``.
-        chargers = [c for c in (self.config.get("ev_chargers") or []) if isinstance(c, dict)]
-        known = {str(c.get("id") or f"ev_charger_{i}") for i, c in enumerate(chargers)}
+        raw = self.config.get("ev_chargers") or []
+        chargers = [c for c in raw if isinstance(c, dict)]
+        known = {str(c.get("id") or f"ev_charger_{i}") for i, c in enumerate(raw) if isinstance(c, dict)}
         if not chargers:
             known.add("ev_charger")
         batteries = set(getattr(self, "_known_battery_ids", set()) or set())
