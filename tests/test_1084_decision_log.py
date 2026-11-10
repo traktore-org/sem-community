@@ -169,9 +169,9 @@ class TestTheRecord:
         log.set_inputs({"import_price": 0.31234567, "export_rate": None,
                         "price_level": "cheap", "soc": 54.26, "junk": object()})
         rec = log.record(device_id=CHARGER, kind=KIND_CHARGER, verb="charge",
-                         value=8, inputs={"surplus_w": 4321.04}, now=T0)
+                         value=8, inputs={"budget_w": 4321.04}, now=T0)
         assert rec.inputs == {"import_price": 0.3123, "price_level": "cheap",
-                              "soc": 54.3, "surplus_w": 4321.0}
+                              "soc": 54.3, "budget_w": 4321.0}
         log.set_inputs(None)
         assert log.record(device_id=CHARGER, kind=KIND_CHARGER, verb="idle",
                           now=T0).inputs == {}

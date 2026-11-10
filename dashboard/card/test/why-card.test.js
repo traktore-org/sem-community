@@ -58,7 +58,7 @@ const WORDS = {
     why_earlier_today: 'Earlier today ({n})', why_earlier: 'Earlier ({n})',
     why_empty: 'No changes yet.', why_kind_charger: 'Wallbox', why_kind_battery: 'Battery',
     why_kind_load: 'Device', why_in_import: 'Import', why_in_export: 'Export',
-    why_in_surplus: 'Surplus', why_in_target: 'Target', why_verb_off: 'off',
+    why_in_surplus: 'Surplus', why_in_budget: 'Budget', why_in_target: 'Target', why_verb_off: 'off',
     why_verb_on: 'on', why_verb_stop: 'stop', why_verb_normal: 'auto',
     why_verb_limit_discharge: 'limit discharge',
 };
@@ -141,6 +141,9 @@ test('inputs: sun and SOC with icons, prices and surplus in words', () => {
     assert.ok(chips[0].icon && chips[1].icon && !chips[2].icon);
     assert.deepEqual(rows.inputChips({ surplus_w: 1400, export_rate: -0.02 }, t).map((c) => c.text),
         ['Export -0.02/kWh', 'Surplus 1.4 kW']);
+    // (#1331) the car's budget is its own chip, never "Surplus"
+    assert.deepEqual(rows.inputChips({ budget_w: 4100 }, t).map((c) => c.text),
+        ['Budget 4.1 kW']);
     assert.deepEqual(rows.inputChips(null, t), []);
 });
 

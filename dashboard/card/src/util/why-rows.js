@@ -124,6 +124,7 @@ export function inputChips(inputs, t, currency = '') {
     if (_num(i.import_price) !== null) out.push({ text: `${t('why_in_import')} ${price(i.import_price)}` });
     if (_num(i.export_rate) !== null) out.push({ text: `${t('why_in_export')} ${price(i.export_rate)}` });
     if (_num(i.surplus_w) !== null) out.push({ text: `${t('why_in_surplus')} ${formatWatts(i.surplus_w)}` });
+    if (_num(i.budget_w) !== null) out.push({ text: `${t('why_in_budget')} ${formatWatts(i.budget_w)}` });
     if (_num(i.target_soc) !== null) out.push({ text: `${t('why_in_target')} ${Math.round(i.target_soc)} %` });
     else if (_num(i.target_kwh) !== null && i.target_kwh > 0) out.push({ text: `${t('why_in_target')} ${i.target_kwh.toFixed(1)} kWh` });
     return out;

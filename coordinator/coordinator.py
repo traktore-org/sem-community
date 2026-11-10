@@ -838,7 +838,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 inputs["soc"] = getattr(power, "battery_soc", None)
             # (#1084) the Why? card shows the sun SEM decided on
             inputs["solar_w"] = getattr(power, "solar_power", None)
-            inputs["surplus_w"] = getattr(charging_context, "available_power", None)
+            # (#1331) two figures: the car's budget (charger rows) and the
+            # spare sun (the rest) — last cycle's, refreshed once this
+            # cycle's is computed (``set_input`` in the loads step)
+            inputs["budget_w"] = getattr(charging_context, "available_power", None)
+            inputs["surplus_w"] = getattr(self, "_loads_true_surplus_w", None)
             inputs["target_kwh"] = getattr(charging_context, "night_target_kwh", None)
         except Exception:  # noqa: BLE001 — the log never costs a cycle
             _LOGGER.debug("decision inputs incomplete", exc_info=True)
@@ -7460,6 +7464,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ev_draw_w=ev_draw_w,
                 battery_discharge_w=loads_discharge_w,
             )
+            # (#1331) the Why card's "Surplus" for loads, battery and export
+            self._loads_true_surplus_w = true_surplus_w
+            _dlog = getattr(self._surplus_controller, "decision_log", None)
+            if _dlog is not None:
+                _dlog.set_input("surplus_w", true_surplus_w)
             # (#1102) …and the reclaim takes off only the import this side
             # could not, so a running load does not pay it twice.
             absorbed_w = import_absorbed_by_loads_w(

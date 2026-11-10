@@ -64,7 +64,7 @@ RESTING_VERBS = frozenset({"idle", "off", "normal", "release", "disable",
 _TEXT_MAX = 120
 _NAME_MAX = 60
 _INPUT_KEYS = ("import_price", "export_rate", "price_level", "soc",
-               "solar_w", "surplus_w", "target_kwh", "target_soc")
+               "solar_w", "surplus_w", "budget_w", "target_kwh", "target_soc")
 
 
 def _clean_inputs(inputs: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -84,6 +84,13 @@ def _clean_inputs(inputs: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         else:
             out[key] = str(val)[:32]
     return out
+
+
+def _own_figure(kind: str, inputs: Dict[str, Any]) -> None:
+    """(#1331) A charger row keeps the car's budget (``budget_w``), every
+    other row the spare sun (``surplus_w``). They are two figures: at night
+    the car's budget is grid room, and no row may call it surplus."""
+    inputs.pop("surplus_w" if kind == KIND_CHARGER else "budget_w", None)
 
 
 def _clean_params(params: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -160,6 +167,12 @@ class DecisionLog:
         into every record this cycle writes."""
         self._inputs = _clean_inputs(inputs)
 
+    def set_input(self, key: str, value: Any) -> None:
+        """(#1331) Refresh one input later in the cycle, for the rows after."""
+        self._inputs.update(_clean_inputs({key: value}))
+        if value is None:
+            self._inputs.pop(key, None)
+
     def set_names(self, names: Optional[Mapping[str, str]]) -> None:
         """Display names by ``"<kind>:<device_id>"`` — stamped by the
         coordinator for devices whose seam knows only an id (batteries).
@@ -218,6 +231,7 @@ class DecisionLog:
                 now = dt_util.now()
             merged = dict(self._inputs)
             merged.update(_clean_inputs(inputs))
+            _own_figure(kind, merged)
             rec = DecisionRecord(
                 time=now,
                 device_id=device_id,
