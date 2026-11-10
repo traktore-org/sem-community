@@ -15,7 +15,7 @@ surplus distribution system.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -1179,7 +1179,7 @@ def compute_load_intent(
         # priority ones first once the pool runs more than 100 W short, so a
         # higher-priority load never loses first.
         return LoadIntent(True, sun_claim, sun_src,
-                          f"{sun_src}: running on {effective:.0f}W",
+                          f"{sun_src}: running on {max(0.0, effective):.0f}W",
                           command_w=sun_command)
 
     # 5. No source → off. When a plan hold is what suppressed the paid
@@ -2041,9 +2041,11 @@ class SurplusController:
                 did = device.device_id
                 if not self._sun_run(device, intents[did]):
                     continue
-                if device.is_active and device.can_deactivate() is False:
-                    continue
                 charged = spend.get(did, 0.0)
+                if device.is_active and device.can_deactivate() is False:
+                    if charged > 0.0:
+                        self._say_min_run_holds(device, intents)
+                    continue
                 if charged <= 0.0:
                     continue
                 remaining += self._stop_short(device, intents, spend)
@@ -2078,9 +2080,22 @@ class SurplusController:
                         and self._sun_run(device, intent)):
                     continue
                 if device.can_deactivate() is False:
+                    self._say_min_run_holds(device, intents)
                     continue
                 self._stop_short(device, intents, spend, reason="no sun left")
         return intents
+
+    @staticmethod
+    def _say_min_run_holds(device, intents) -> None:
+        """(#1335) A stop for a short pool is due, and the load's minimum
+        run time holds it on. The intent stays ON with the same power,
+        source and command — the walk's books do not change — but it says
+        so: "solar: running on 0W" read as running on sun with no sun."""
+        did = device.device_id
+        intents[did] = replace(
+            intents[did],
+            reason="minimum run time holds it — not enough sun",
+            code=RC.LOAD_MIN_RUN_HOLD)
 
     def _no_sun(self) -> bool:
         """(#1335) Is solar production itself gone? True when the reading is

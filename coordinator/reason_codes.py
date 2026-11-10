@@ -129,6 +129,8 @@ LOAD_LEGIONELLA_END = "legionella_end"
 LOAD_AT_TARGET = "at_target"
 LOAD_NO_READING = "no_reading"
 LOAD_DISABLED = "disabled"
+# (#1335) on only: a stop for a short pool is due, the minimum run holds it
+LOAD_MIN_RUN_HOLD = "min_run_hold"
 
 # ── the grid export limit (#1090) ────────────────────────────────────
 EXPORT_NEGATIVE_PRICE = "export_negative_price"

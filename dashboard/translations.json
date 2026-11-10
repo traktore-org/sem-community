@@ -2750,7 +2750,8 @@
     "why_reason_legionella_end": "Ohřev proti legionele skončil, takže se vypíná.",
     "why_reason_at_target": "Má svou cílovou teplotu, takže zůstává vypnuté.",
     "why_reason_no_reading": "Jeho teplotní čidlo nic nehlásí, takže zůstává vypnuté.",
-    "why_reason_disabled": "Je zakázané, takže SEM ukončí běh, který spustil."
+    "why_reason_disabled": "Je zakázané, takže SEM ukončí běh, který spustil.",
+    "why_reason_min_run_hold": "Volného slunce není dost, ale minimální doba chodu ho drží zapnuté."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5503,7 +5504,8 @@
     "why_reason_legionella_end": "Legionella-opvarmningen er færdig, så den slukker.",
     "why_reason_at_target": "Den har nået sin måltemperatur, så den forbliver slukket.",
     "why_reason_no_reading": "Dens temperaturføler viser ingenting, så den forbliver slukket.",
-    "why_reason_disabled": "Den er deaktiveret, så SEM afslutter den kørsel, det startede."
+    "why_reason_disabled": "Den er deaktiveret, så SEM afslutter den kørsel, det startede.",
+    "why_reason_min_run_hold": "Der er ikke nok ledig sol, men dens minimale køretid holder den tændt."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8256,7 +8258,8 @@
     "why_reason_legionella_end": "Die Legionellen-Aufheizung ist vorbei, darum schaltet es aus.",
     "why_reason_at_target": "Es hat seine Zieltemperatur, darum bleibt es aus.",
     "why_reason_no_reading": "Sein Temperaturfühler liefert keinen Wert, darum bleibt es aus.",
-    "why_reason_disabled": "Es ist deaktiviert, darum beendet SEM den Lauf, den es gestartet hat."
+    "why_reason_disabled": "Es ist deaktiviert, darum beendet SEM den Lauf, den es gestartet hat.",
+    "why_reason_min_run_hold": "Es gibt nicht genug freie Sonne, aber die Mindestlaufzeit hält es an."
   },
   "en": {
     "% of limit": "% of limit",
@@ -11009,7 +11012,8 @@
     "why_reason_legionella_end": "Its Legionella heat-up is over, so it turns off.",
     "why_reason_at_target": "It is at its target temperature, so it stays off.",
     "why_reason_no_reading": "Its temperature sensor reads nothing, so it stays off.",
-    "why_reason_disabled": "It is disabled, so SEM ends the run it started."
+    "why_reason_disabled": "It is disabled, so SEM ends the run it started.",
+    "why_reason_min_run_hold": "There is not enough spare sun, but its minimum run time keeps it on."
   },
   "es": {
     "% of limit": "% del límite",
@@ -13762,7 +13766,8 @@
     "why_reason_legionella_end": "El calentamiento antilegionela ha terminado, así que se apaga.",
     "why_reason_at_target": "Está a su temperatura objetivo, así que sigue apagado.",
     "why_reason_no_reading": "Su sensor de temperatura no da ninguna lectura, así que sigue apagado.",
-    "why_reason_disabled": "Está desactivado, así que SEM termina la marcha que inició."
+    "why_reason_disabled": "Está desactivado, así que SEM termina la marcha que inició.",
+    "why_reason_min_run_hold": "No hay suficiente sol sobrante, pero su tiempo mínimo de marcha lo mantiene encendido."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -16515,7 +16520,8 @@
     "why_reason_legionella_end": "Legionellalämmitys on ohi, joten se sammuu.",
     "why_reason_at_target": "Se on tavoitelämpötilassaan, joten se pysyy pois päältä.",
     "why_reason_no_reading": "Sen lämpötila-anturi ei anna lukemaa, joten se pysyy pois päältä.",
-    "why_reason_disabled": "Se on poistettu käytöstä, joten SEM lopettaa käynnistämänsä ajon."
+    "why_reason_disabled": "Se on poistettu käytöstä, joten SEM lopettaa käynnistämänsä ajon.",
+    "why_reason_min_run_hold": "Vapaata aurinkoa ei ole tarpeeksi, mutta vähimmäiskäyntiaika pitää sen päällä."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -19268,7 +19274,8 @@
     "why_reason_legionella_end": "Le chauffage anti-légionelle est terminé, il s'éteint.",
     "why_reason_at_target": "Il est à sa température cible, il reste éteint.",
     "why_reason_no_reading": "Sa sonde de température ne donne aucune valeur, il reste éteint.",
-    "why_reason_disabled": "Il est désactivé, SEM arrête donc la marche qu'il a lancée."
+    "why_reason_disabled": "Il est désactivé, SEM arrête donc la marche qu'il a lancée.",
+    "why_reason_min_run_hold": "Il n'y a pas assez de soleil disponible, mais sa durée minimale de marche le garde allumé."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -22021,7 +22028,8 @@
     "why_reason_legionella_end": "A legionella elleni felfűtés véget ért, ezért kikapcsol.",
     "why_reason_at_target": "Elérte a célhőmérsékletét, ezért kikapcsolva marad.",
     "why_reason_no_reading": "A hőmérséklet-érzékelője nem ad értéket, ezért kikapcsolva marad.",
-    "why_reason_disabled": "Le van tiltva, ezért a SEM leállítja az általa indított futást."
+    "why_reason_disabled": "Le van tiltva, ezért a SEM leállítja az általa indított futást.",
+    "why_reason_min_run_hold": "Nincs elég szabad napenergia, de a minimális futási ideje bekapcsolva tartja."
   },
   "it": {
     "% of limit": "% del limite",
@@ -24774,7 +24782,8 @@
     "why_reason_legionella_end": "Il riscaldamento antilegionella è finito, quindi si spegne.",
     "why_reason_at_target": "È alla sua temperatura obiettivo, quindi resta spento.",
     "why_reason_no_reading": "Il suo sensore di temperatura non dà alcun valore, quindi resta spento.",
-    "why_reason_disabled": "È disattivato, quindi SEM termina il ciclo che ha avviato."
+    "why_reason_disabled": "È disattivato, quindi SEM termina il ciclo che ha avviato.",
+    "why_reason_min_run_hold": "Non c'è abbastanza sole disponibile, ma il suo tempo minimo di funzionamento lo tiene acceso."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -27527,7 +27536,8 @@
     "why_reason_legionella_end": "De legionella-opwarming is klaar, dus het gaat uit.",
     "why_reason_at_target": "Het is op zijn doeltemperatuur, dus het blijft uit.",
     "why_reason_no_reading": "De temperatuursensor geeft geen waarde, dus het blijft uit.",
-    "why_reason_disabled": "Het is uitgeschakeld, dus SEM beëindigt de run die het startte."
+    "why_reason_disabled": "Het is uitgeschakeld, dus SEM beëindigt de run die het startte.",
+    "why_reason_min_run_hold": "Er is niet genoeg vrije zon, maar de minimale looptijd houdt het aan."
   },
   "no": {
     "% of limit": "% av grense",
@@ -30280,7 +30290,8 @@
     "why_reason_legionella_end": "Legionella-oppvarmingen er ferdig, så den slås av.",
     "why_reason_at_target": "Den har nådd måltemperaturen, så den forblir av.",
     "why_reason_no_reading": "Temperaturføleren gir ingen verdi, så den forblir av.",
-    "why_reason_disabled": "Den er deaktivert, så SEM avslutter kjøringen det startet."
+    "why_reason_disabled": "Den er deaktivert, så SEM avslutter kjøringen det startet.",
+    "why_reason_min_run_hold": "Det er ikke nok ledig sol, men minste kjøretid holder den på."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -33033,7 +33044,8 @@
     "why_reason_legionella_end": "Grzanie przeciw legionelli się skończyło, więc się wyłącza.",
     "why_reason_at_target": "Ma swoją temperaturę docelową, więc pozostaje wyłączony.",
     "why_reason_no_reading": "Jego czujnik temperatury nic nie pokazuje, więc pozostaje wyłączony.",
-    "why_reason_disabled": "Jest wyłączony z obsługi, więc SEM kończy pracę, którą uruchomił."
+    "why_reason_disabled": "Jest wyłączony z obsługi, więc SEM kończy pracę, którą uruchomił.",
+    "why_reason_min_run_hold": "Wolnego słońca jest za mało, ale minimalny czas pracy utrzymuje go włączonym."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -35786,7 +35798,8 @@
     "why_reason_legionella_end": "O aquecimento antilegionela terminou, por isso desliga-se.",
     "why_reason_at_target": "Está à sua temperatura alvo, por isso fica desligado.",
     "why_reason_no_reading": "O seu sensor de temperatura não dá leitura, por isso fica desligado.",
-    "why_reason_disabled": "Está desativado, por isso o SEM termina o funcionamento que iniciou."
+    "why_reason_disabled": "Está desativado, por isso o SEM termina o funcionamento que iniciou.",
+    "why_reason_min_run_hold": "Não há sol livre suficiente, mas o seu tempo mínimo de funcionamento mantém-no ligado."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -38539,7 +38552,8 @@
     "why_reason_legionella_end": "Încălzirea anti-Legionella s-a încheiat, deci se oprește.",
     "why_reason_at_target": "Este la temperatura țintă, deci rămâne oprit.",
     "why_reason_no_reading": "Senzorul lui de temperatură nu dă nicio valoare, deci rămâne oprit.",
-    "why_reason_disabled": "Este dezactivat, deci SEM încheie rularea pe care a pornit-o."
+    "why_reason_disabled": "Este dezactivat, deci SEM încheie rularea pe care a pornit-o.",
+    "why_reason_min_run_hold": "Nu este destul soare liber, dar timpul lui minim de funcționare îl ține pornit."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -41292,7 +41306,8 @@
     "why_reason_legionella_end": "Legionellauppvärmningen är klar, så den stängs av.",
     "why_reason_at_target": "Den har nått sin måltemperatur, så den förblir avstängd.",
     "why_reason_no_reading": "Dess temperaturgivare ger inget värde, så den förblir avstängd.",
-    "why_reason_disabled": "Den är inaktiverad, så SEM avslutar körningen det startade."
+    "why_reason_disabled": "Den är inaktiverad, så SEM avslutar körningen det startade.",
+    "why_reason_min_run_hold": "Det finns inte tillräckligt med ledig sol, men dess minsta körtid håller den på."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -44045,6 +44060,7 @@
     "why_reason_legionella_end": "军团菌加热已结束，所以关闭。",
     "why_reason_at_target": "它已达到目标温度，所以保持关闭。",
     "why_reason_no_reading": "它的温度传感器没有读数，所以保持关闭。",
-    "why_reason_disabled": "它已被停用，所以 SEM 结束它启动的运行。"
+    "why_reason_disabled": "它已被停用，所以 SEM 结束它启动的运行。",
+    "why_reason_min_run_hold": "空余的太阳能不够，但它的最短运行时间让它保持开启。"
   }
 }
