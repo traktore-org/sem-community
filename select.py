@@ -198,7 +198,12 @@ async def async_setup_entry(
             # 2.0 unless ev_phase_switching_enabled is set. One gate, both
             # halves: a knob that switches while the actuation is dormant
             # looks applied and does nothing (#462).
-            if (charger_cfg.get("ev_phase_switch_entity")
+            # (#1015) …or whose phases are set by one current per phase —
+            # the capability the builder wired on the charger device.
+            _by_current = isinstance(getattr(
+                (getattr(coordinator, "_ev_devices", None) or {}).get(cid),
+                "phase_service", None), str)
+            if ((charger_cfg.get("ev_phase_switch_entity") or _by_current)
                     and charger_cfg.get("ev_phase_switching_enabled", False)):
                 pm_key = f"charger_{cid}_phase_mode"
                 per_charger_keys.add(pm_key)

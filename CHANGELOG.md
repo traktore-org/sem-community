@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - ✨ **Inverters with a grid-charge switch and limits in percent can now be charged and limited by SEM** (#1158), such as KSTAR via ha-solarman.
+- ✨ **Phase switching now works on chargers that take one current per phase, such as Easee** (#1015). Off by default, like all phase switching.
 - 🐛 **The "Why did SEM act?" card no longer shows the car's budget as Surplus** (#1331). A car row says Budget, the others show spare sun.
 - 🐛 **The Energy Plan card shows a battery grid charge only at night, and only when SEM will do it** (#1311). It showed day blocks too.
 - 🐛 **A car that leaves after tonight now gets a plan sized on tonight's hours only** (#1309). Day hours no longer count as charge time.

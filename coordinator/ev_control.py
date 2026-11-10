@@ -209,6 +209,33 @@ def _finished_session_record(host: Any) -> dict:
     }
 
 
+def _phase_by_current_ready(host, cid: str, device, now: float) -> bool:
+    """(#1015) Can this charger's phases be set by one current per phase?
+
+    The builder wires it when the service is there at start-up; an
+    integration that loads after SEM is asked again here, at most once a
+    minute, through the same one producer. Never true for a device that
+    was not wired: no capability, no switching.
+    """
+    if device is None:
+        return False
+    if isinstance(getattr(device, "phase_service", None), str):
+        return True
+    asked = getattr(host, "_phase_wire_asked", None)
+    if asked is None:
+        asked = host._phase_wire_asked = {}
+    last = asked.get(cid)
+    if last is not None and now - last < 60.0:
+        return False
+    asked[cid] = now
+    from ..hardware_detection import wire_phase_service
+    try:
+        return bool(wire_phase_service(host.hass, device, cid)) and \
+            isinstance(getattr(device, "phase_service", None), str)
+    except Exception:  # noqa: BLE001 — unknown is not a capability
+        return False
+
+
 class EVControlMixin:
     """EV control methods for SEMCoordinator.
 
@@ -985,7 +1012,8 @@ class EVControlMixin:
     async def _phase_switch_tick(self, cid: str, charger_cfg: dict,
                                  decision, cp, now: float,
                                  setpoint_a: int = 0,
-                                 peak_allowed_w=None):
+                                 peak_allowed_w=None,
+                                 device=None):
         """(#804 Phase B/C) One cycle of the phase model for this charger.
 
         Returns the decision, replaced with IDLE while the sequencer holds
@@ -996,8 +1024,16 @@ class EVControlMixin:
         actuation: observer mode logs the WOULD and touches nothing.
         """
         entity = charger_cfg.get("ev_phase_switch_entity")
+        # (#1015) No entity to name, but the charger takes one current per
+        # phase through a service: the same verb, written by the device.
+        # Asked only once the switch below is on — off means untouched.
+        by_current = False
         if not entity:
-            return decision
+            if not charger_cfg.get("ev_phase_switching_enabled", False):
+                return decision
+            by_current = _phase_by_current_ready(self, cid, device, now)
+            if not by_current:
+                return decision
         # (#804, 25.08) DORMANT in 2.0 unless explicitly woken. Real testing
         # found the shipped model harmful on two of the three brands that
         # tried it: a Wattpilot latches into a paused force-state that a
@@ -1028,7 +1064,7 @@ class EVControlMixin:
         _, valid = validate_phase_switch_entity(
             entity, lambda e: self.hass.states.get(e) is not None)
         v1, v3, values_ready = resolve_switch_values(entity, charger_cfg)
-        ready = bool(valid) and values_ready
+        ready = by_current or (bool(valid) and values_ready)
 
         if getattr(self, "_phase_sequencers", None) is None:
             self._phase_sequencers = {}
@@ -1088,11 +1124,24 @@ class EVControlMixin:
             self._phase_contradictions = {}
         contra = self._phase_contradictions.setdefault(
             cid, {"target": None, "count": 0, "last_asserted": None})
+        # (#1015) The box's own answer, where it has one: 1 or 3 it took,
+        # None when that cannot be read (then the measured draw decides).
+        readback = device.phase_readback() if by_current else None
         if contra["last_asserted"] is not None and believed is not None \
                 and seq_idle and believed != contra["last_asserted"]:
             # a switch completed asserting X, measurement now says != X
             contra["count"] += 1
             contra["last_asserted"] = None
+        elif contra["last_asserted"] is not None and readback is not None \
+                and seq_idle and readback != contra["last_asserted"]:
+            # (#1015) the box reports another phase count than SEM set
+            _LOGGER.info(
+                "#1015 %s: set to %sp, the charger reports %sp — not switched",
+                cid, contra["last_asserted"], readback)
+            contra["count"] += 1
+            contra["last_asserted"] = None
+            self._phase_believed[cid] = readback
+            believed = readback
         mode_val = str(charger_cfg.get("phase_mode") or "auto")
         if mode_val in ("1", "3"):
             desired = int(mode_val)
@@ -1148,7 +1197,16 @@ class EVControlMixin:
             contra["target"] = desired
             contra["count"] = PHASE_NOT_TAKING_AFTER
 
-        if r.issue_switch is not None:
+        if r.issue_switch is not None and by_current:
+            # (#1015) The device's own write: its one seam withholds and
+            # records in observer mode, so nothing is called from here.
+            planner.note_switched(now)
+            sent = await device.switch_phases(r.issue_switch)
+            _LOGGER.info(
+                "#1015 %s: %s to %sp by one current per phase via %s",
+                cid, "switching" if sent else "WOULD switch (withheld)",
+                r.issue_switch, device.phase_service)
+        elif r.issue_switch is not None:
             value = v1 if r.issue_switch == 1 else v3
             cmd = phase_switch_command(entity, value, self.hass)
             if cmd is not None:

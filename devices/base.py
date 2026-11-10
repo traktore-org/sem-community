@@ -2417,6 +2417,16 @@ class CurrentControlDevice(ControllableDevice):
         # e.g. a service that takes the box's own name in a name field.
         # Set from the ``ev_charger_service_data`` the crawler offered.
         self.service_extra_data: Dict[str, Any] = {}
+        # (#1015) Phases set by one current per phase. Wired by the builder
+        # (``wire_phase_service``) when the charger's integration offers such
+        # a service; ``phase_target`` is the phase choice the sequencer made
+        # (None = never asked, so the plain current service is used and
+        # nothing changes for this charger).
+        self.phase_service: Optional[str] = None
+        self.phase_fields: tuple = ()
+        self.phase_readback_entity: Optional[str] = None
+        self.phase_target: Optional[int] = None
+        self._phase_written: Optional[int] = None
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
         self.global_services: bool = True  # True = services don't need entity_id (KEBA-style)
         # Start/stop control — per-integration (#82)
@@ -2874,6 +2884,81 @@ class CurrentControlDevice(ControllableDevice):
                     pass
         return eff
 
+    # ── (#1015) phases set by one current per phase ─────────────────────
+
+    def _phase_shape_pending(self) -> bool:
+        """A phase choice was made that the wire has not seen yet."""
+        return (bool(self.phase_service) and self.phase_target in (1, 3)
+                and self._phase_written != self.phase_target)
+
+    def _phase_command(self, current: float):
+        """(domain, service, data) for ``current`` on the chosen phases, or
+        None when this charger does not set phases by current, no choice was
+        made yet, or ``current`` is a stop (a stop is never three zeros —
+        a limit a box keeps would lock it, #976)."""
+        if not self.phase_service or self.phase_target not in (1, 3):
+            return None
+        from ..coordinator.ev_phases import phase_currents
+        amps = phase_currents(current, self.phase_target)
+        if amps is None or len(self.phase_fields) != 3:
+            return None
+        domain, service = str(self.phase_service).split(".", 1)
+        data = dict(zip(self.phase_fields, amps))
+        if self.service_device_id:
+            data["device_id"] = self.service_device_id
+        return domain, service, data
+
+    async def _send_phase_shape(self, current: float) -> bool:
+        """Send the per-phase currents through the one seam."""
+        cmd = self._phase_command(current)
+        if cmd is None:
+            return False
+        if self._phase_written is None and self.charger_service:
+            # First use of the per-phase limit: the charger's own limit was
+            # SEM's until now and would cap the new one. Lift it once to the
+            # configured maximum — the per-phase limit is the control from here.
+            domain, service = self.charger_service.split(".", 1)
+            lift = {**(self.service_extra_data or {}),
+                    self.service_param_name: float(round(self.max_current))}
+            if self.service_device_id:
+                lift["device_id"] = self.service_device_id
+            await self.send(domain, service, lift,
+                            why="lift the charger limit — phases by current")
+        sent = await self.send(*cmd, why=f"{self.phase_target}-phase by current")
+        if sent:
+            self._phase_written = self.phase_target
+        return bool(sent)
+
+    async def switch_phases(self, phases: int) -> bool:
+        """(#1015) Put the charger on ``phases`` (1 or 3) by per-phase
+        currents. True when the command went to hardware; False when it was
+        withheld (observer mode) or this charger cannot do it. The amps are
+        the minimum: the sequencer switches with the charge stopped, and the
+        next current command carries the same shape at its own value."""
+        if not self.phase_service or phases not in (1, 3):
+            return False
+        self.phase_target = int(phases)
+        amps = float(round(self.min_current))
+        sent = await self._send_phase_shape(amps)
+        if sent:
+            # a real current write: the next command is compared with it
+            self._current_setpoint = amps
+            self._last_write_at = time.monotonic()
+        return sent
+
+    def phase_readback(self) -> Optional[int]:
+        """Phases the box reports it took (1 or 3), or None when that cannot
+        be read. None is "could not read", never "not switched"."""
+        if not self.phase_readback_entity:
+            return None
+        st = self.hass.states.get(self.phase_readback_entity)
+        if st is None:
+            return None
+        from ..consts.role_lexicon import PHASE_READBACK_ATTR_ENDINGS
+        from ..coordinator.ev_phases import phases_from_readback
+        return phases_from_readback(getattr(st, "attributes", None),
+                                    PHASE_READBACK_ATTR_ENDINGS)
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)
@@ -2905,6 +2990,8 @@ class CurrentControlDevice(ControllableDevice):
             abs(current - self._current_setpoint) < 1.0
             and self.is_active
             and (now - self._last_write_at) < self.watchdog_refresh_interval_s
+            # (#1015) the same amps on another phase count is a new command
+            and not self._phase_shape_pending()
         ):
             return self._status.current_consumption_w
 
@@ -2978,6 +3065,10 @@ class CurrentControlDevice(ControllableDevice):
                 # Amps exposed as a select: options are amp strings.
                 target = self.current_entity_id or self.charger_service_entity_id
                 await self.send("select", "select_option", {"entity_id": target, "option": str(int(current))})
+            elif self._phase_command(current) is not None:
+                # (#1015) one current per phase: the phase choice and the
+                # amps are ONE write. Never for a stop — see _phase_command.
+                await self._send_phase_shape(current)
             elif self.charger_service:
                 # Service-based control — param name varies per integration (#82)
                 domain, service = self.charger_service.split(".", 1)

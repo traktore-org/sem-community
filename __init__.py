@@ -3122,6 +3122,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             # flag, the OCPP charge-control switch adoption).
             from .hardware_detection import wire_current_entity
             wire_current_entity(hass, ev_device, charger_id, ev_current_entity)
+            # (#1015) one current per phase through a service of the
+            # charger's own integration — found live, never named
+            from .hardware_detection import wire_phase_service
+            wire_phase_service(hass, ev_device, charger_id)
             if _cfg("ev_charge_mode_entity"):
                 ev_device.charge_mode_entity = _cfg("ev_charge_mode_entity")
                 ev_device.charge_mode_start = _cfg("ev_charge_mode_start")
