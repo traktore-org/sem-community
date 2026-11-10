@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **The night plan's cost now counts what the house buys after the battery runs out** (#1325). It showed empty before.
 - 🐛 **A load SEM never saw running says "not measured yet"** instead of a made-up 1 kW (#1326).
 - ✨ **SEM Next**: a new dashboard, five screens — one power bar, the plan on the price strip, devices you can reorder, settings as sentences (#1321).
+- 🐛 **The Energy Plan card shows a load's daily grid run when SEM starts it** (#1330). It showed a midday run SEM never did.
+
+# [2.3.0-beta.10] — 09.11.2026
+
 - ✨ **Heaters with a thermometer follow one order** (#1102): your stop, Legionella, too cold now, Keep at in planned hours, sun. Run time steps back.
 - 🔧 **SEM checks its new load engine against the current one every cycle** and records where they differ (#1102). Nothing switches differently yet.
 - 🐛 **A boiler with a comfort band now waits for the sun before it buys its daily minimum from the grid** (#1102). It ran at noon.
