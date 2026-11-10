@@ -108,6 +108,11 @@ async def _rig(hass):
         hass.services.async_register(FIXTURE, name, _rec, schema=svc.schema)
     dev = _device(hass)
     dev.service_device_id = box_id
+    # the box's own stop, as the crawler offers it for this fixture
+    dev.stop_service = f"{FIXTURE}.action_command"
+    dev.stop_service_data = {"action_command": "pause"}
+    dev.start_service = f"{FIXTURE}.action_command"
+    dev.start_service_data = {"action_command": "resume"}
     return dev, box_id, calls
 
 
@@ -141,11 +146,11 @@ async def test_pipeline_one_write_carries_phases_and_amps(hass):
 
     assert await dev.switch_phases(1) is True
     await hass.async_block_till_done()
-    # first use: the charger's own limit is lifted once, then the shape
+    # the shape first, then the charger's own limit is raised once
     assert calls == [
-        ("set_charger_dynamic_limit", {"current": 16.0, "device_id": box_id}),
         ("set_circuit_dynamic_limit", {"current_p1": 6, "current_p2": 0,
                                        "current_p3": 0, "device_id": box_id}),
+        ("set_charger_dynamic_limit", {"current": 16.0, "device_id": box_id}),
     ]
     calls.clear()
 
@@ -172,7 +177,7 @@ async def test_pipeline_a_stop_is_never_three_zeros(hass):
     calls.clear()
     await dev._set_current(0)
     await hass.async_block_till_done()
-    assert not [c for c in calls if c[0] == "set_circuit_dynamic_limit"]
+    assert calls == []          # no three zeros, no 0 A on the charger's limit
     assert dev._phase_command(0) is None
 
 
@@ -238,7 +243,7 @@ async def test_pipeline_the_read_back_reads_the_box(hass):
 
 async def test_pipeline_not_wired_without_what_it_needs(hass):
     dev, box_id, _calls = await _rig(hass)
-    no_id = _device(hass)                            # keyed by device, none saved
+    no_id = _with_stop(_device(hass))                # keyed by device, none saved
     assert wire_phase_service(hass, no_id, "c2") is False
     assert no_id.phase_service is None
     number = _device(hass, charger_service=None,
@@ -354,7 +359,7 @@ def test_a_box_that_reports_another_count_did_not_switch():
     t += SETTLE_S + 5
     _tick(h, box, _amps(), _cp(0.0, charging=False), t)        # settle → 1
     box.readback = 3                                           # the box: still 3
-    _tick(h, box, _amps(), _cp(0.0, charging=False), t + 10)
+    _tick(h, box, _amps(), _cp(0.0, charging=False), t + SETTLE_S + 10)
     assert h._phase_contradictions["c1"]["count"] == 1
     assert h._phase_believed["c1"] == 3
 
@@ -414,3 +419,212 @@ def test_a_named_entity_still_wins():
     _tick(h, box, _amps(), _cp(0.0, charging=False), 20.0)
     assert box.switched == []
     h.hass.services.async_call.assert_called_once()
+
+
+# ── review round: lockout, shared circuit, lagging read-back, lift order ─
+
+STOP = {"action_command": "pause"}
+
+
+def _with_stop(dev):
+    dev.stop_service = f"{FIXTURE}.action_command"
+    dev.stop_service_data = dict(STOP)
+    dev.start_service = f"{FIXTURE}.action_command"
+    dev.start_service_data = {"action_command": "resume"}
+    return dev
+
+
+async def test_stop_then_start_the_car_gets_current_again(hass):
+    """A stop on this path never parks 0 A on the charger's own limit, and
+    the start after it restores that limit — else the car is locked out."""
+    dev, box_id, calls = await _rig(hass)
+    _with_stop(dev)
+    assert wire_phase_service(hass, dev, "c1") is True
+    await dev.switch_phases(3)
+    await dev._set_current(10)
+    calls.clear()
+
+    await dev.deactivate()                           # the stop
+    await hass.async_block_till_done()
+    own = [c for c in calls if c[0] == "set_charger_dynamic_limit"]
+    assert not [c for c in own if c[1]["current"] <= 0], (
+        "0 A parked on the charger's own limit")
+    assert not [c for c in calls if c[0] == "set_circuit_dynamic_limit"
+                and not any(c[1][p] for p in P)]
+    calls.clear()
+
+    await dev._set_current(10)                       # the next start
+    await hass.async_block_till_done()
+    assert ("set_circuit_dynamic_limit", {
+        "current_p1": 10, "current_p2": 10, "current_p3": 10,
+        "device_id": box_id}) in calls
+    assert ("set_charger_dynamic_limit",
+            {"current": 16.0, "device_id": box_id}) in calls, (
+        "the charger's own limit was not restored after the stop")
+
+
+async def test_a_plain_write_in_between_is_lifted_again(hass):
+    """Whatever wrote the charger's own limit, the next shape lifts it."""
+    dev, box_id, calls = await _rig(hass)
+    _with_stop(dev)
+    wire_phase_service(hass, dev, "c1")
+    await dev.switch_phases(1)
+    dev.phase_target = None                          # e.g. switching turned off
+    await dev._set_current(8)                        # the plain service: 8 A
+    dev.phase_target = 1
+    calls.clear()
+    await dev._set_current(10)
+    await hass.async_block_till_done()
+    assert ("set_charger_dynamic_limit",
+            {"current": 16.0, "device_id": box_id}) in calls
+
+
+async def test_not_wired_without_a_stop_of_its_own(hass):
+    """0 A may not stop this charger (it would cap the per-phase limit), so
+    a charger with no stop of its own does not switch phases by current."""
+    _dev, box_id, _calls = await _rig(hass)
+    dev = _device(hass)
+    dev.service_device_id = box_id
+    assert wire_phase_service(hass, dev, "c1") is False
+    assert dev.phase_service is None
+    _with_stop(dev)
+    assert wire_phase_service(hass, dev, "c1") is True
+
+
+async def test_the_shape_goes_first_and_the_lift_never_alone(hass):
+    dev, box_id, calls = await _rig(hass)
+    _with_stop(dev)
+    wire_phase_service(hass, dev, "c1")
+    await dev.switch_phases(1)
+    await hass.async_block_till_done()
+    assert [c[0] for c in calls] == ["set_circuit_dynamic_limit",
+                                     "set_charger_dynamic_limit"]
+
+    # the shape write fails: the charger's own limit is left alone
+    dev2, _box, calls2 = await _rig_second(hass, box_id)
+    _with_stop(dev2)
+    wire_phase_service(hass, dev2, "c9")
+    real_send = dev2.send
+
+    async def _send(domain, service, data=None, **kw):
+        if service == "set_circuit_dynamic_limit":
+            return False                              # withheld / not taken
+        return await real_send(domain, service, data, **kw)
+    dev2.send = _send
+    assert await dev2.switch_phases(1) is False
+    await hass.async_block_till_done()
+    assert calls2 == []
+
+
+async def _rig_second(hass, box_id):
+    calls = []
+    for name, svc in list(hass.services.async_services().get(FIXTURE, {}).items()):
+        async def _rec(call, _n=name):
+            calls.append((_n, dict(call.data)))
+        hass.services.async_register(FIXTURE, name, _rec, schema=svc.schema)
+    dev = _device(hass, device_id="c9")
+    dev.service_device_id = box_id
+    return dev, box_id, calls
+
+
+# shared circuit ---------------------------------------------------------
+
+def _circuit_box(circuit=None, service="box.set_phase_currents"):
+    b = _Box(service)
+    b.charger_service = "box.set_current"
+    b.circuit = circuit
+    return b
+
+
+def _share_host(a, b, **kw):
+    h = _host(**kw)
+    h._ev_devices = {"c1": a, "c2": b}
+    return h
+
+
+@pytest.mark.unit
+def test_two_chargers_on_one_circuit_do_not_switch_by_current(monkeypatch):
+    from custom_components.solar_energy_management import hardware_detection as hd
+    monkeypatch.setattr(hd, "phase_circuit_key",
+                        lambda hass, dev: getattr(dev, "circuit", None))
+    a, b = _circuit_box("circuit-1"), _circuit_box("circuit-1")
+    h = _share_host(a, b)
+    d = _amps()
+    assert _tick(h, a, d, _cp(6900.0), 0.0) is d       # untouched
+    _tick(h, a, d, _cp(0.0, charging=False), 20.0)
+    assert a.switched == [] and b.switched == []
+    assert h._phase_switch_states["c1"] == "shared_circuit"
+
+
+@pytest.mark.unit
+def test_an_unknown_circuit_counts_as_shared(monkeypatch):
+    from custom_components.solar_energy_management import hardware_detection as hd
+    monkeypatch.setattr(hd, "phase_circuit_key",
+                        lambda hass, dev: getattr(dev, "circuit", None))
+    a, b = _circuit_box("circuit-1"), _circuit_box(None)
+    h = _share_host(a, b)
+    d = _amps()
+    assert _tick(h, a, d, _cp(6900.0), 0.0) is d
+    assert h._phase_switch_states["c1"] == "shared_circuit"
+
+
+@pytest.mark.unit
+def test_two_circuits_or_another_integration_switch_as_before(monkeypatch):
+    from custom_components.solar_energy_management import hardware_detection as hd
+    monkeypatch.setattr(hd, "phase_circuit_key",
+                        lambda hass, dev: getattr(dev, "circuit", None))
+    a, b = _circuit_box("circuit-1"), _circuit_box("circuit-2")
+    h = _share_host(a, b)
+    _switch_to_one(h, a)
+    assert a.switched == [1]
+    other = SimpleNamespace(phase_service=None, charger_service="otherbox.set",
+                            service_device_id=None)
+    a2 = _circuit_box(None)
+    h2 = _share_host(a2, other)
+    _switch_to_one(h2, a2)
+    assert a2.switched == [1]
+
+
+async def test_the_circuit_is_read_from_what_the_install_exposes(hass):
+    from custom_components.solar_energy_management.hardware_detection import (
+        phase_circuit_key,
+    )
+    dev, box_id, _calls = await _rig(hass)
+    assert phase_circuit_key(hass, dev) is None        # nothing says which
+    hass.states.async_set("sensor.easee_home_eh123456_status", "charging",
+                          {"config_circuitId": 4711})
+    assert phase_circuit_key(hass, dev) == "4711"
+
+
+# a lagging read-back ----------------------------------------------------
+
+@pytest.mark.unit
+def test_a_read_back_that_lags_is_not_yet_an_answer():
+    h, box = _host(), _Box()
+    t = _switch_to_one(h, box)
+    box.readback = 3                       # the cloud still shows the old count
+    t += SETTLE_S + 5
+    _tick(h, box, _amps(), _cp(0.0, charging=False), t)        # settle → 1
+    _tick(h, box, _amps(), _cp(0.0, charging=False), t + 10)
+    _tick(h, box, _amps(), _cp(0.0, charging=False), t + 20)
+    assert h._phase_contradictions["c1"]["count"] == 0, (
+        "a stale reading inside the settle time counted as not switched")
+    assert h._phase_believed["c1"] == 1
+    box.readback = 1                       # it catches up
+    _tick(h, box, _amps(), _cp(0.0, charging=False), t + SETTLE_S + 30)
+    assert h._phase_contradictions["c1"]["count"] == 0
+
+
+@pytest.mark.unit
+def test_the_measured_draw_overrules_a_stale_read_back():
+    h, box = _host(), _Box()
+    t = _switch_to_one(h, box)
+    t += SETTLE_S + 5
+    _tick(h, box, _amps(), _cp(0.0, charging=False), t)        # settle → 1
+    box.readback = 3                       # stale for good
+    t += 2 * SETTLE_S + 60
+    _tick(h, box, _amps(), _cp(2300.0), t)                     # 10 A × 1 phase
+    _tick(h, box, _amps(), _cp(2300.0), t + 10)
+    assert h._phase_contradictions["c1"]["count"] == 0
+    assert h._phase_believed["c1"] == 1
+    assert h._phase_switch_states["c1"] != "not_taking"

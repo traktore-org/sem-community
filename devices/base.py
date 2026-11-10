@@ -2542,6 +2542,10 @@ class CurrentControlDevice(ControllableDevice):
         self.phase_readback_entity: Optional[str] = None
         self.phase_target: Optional[int] = None
         self._phase_written: Optional[int] = None
+        # The charger's OWN limit caps the per-phase one. True only while SEM
+        # knows it stands at the maximum; any stop or plain write clears it,
+        # and the next per-phase write restores it.
+        self._own_limit_lifted: bool = False
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
         self.global_services: bool = True  # True = services don't need entity_id (KEBA-style)
         # Start/stop control — per-integration (#82)
@@ -2817,7 +2821,18 @@ class CurrentControlDevice(ControllableDevice):
     def _zero_amps_would_lock(self) -> bool:
         """(#976) A 0 A write here parks a limit the charge point keeps —
         it is not a pause. Unset means unknown → treated as a pause."""
-        return bool(getattr(self, "zero_amps_parks_a_limit", False))
+        if bool(getattr(self, "zero_amps_parks_a_limit", False)):
+            return True
+        # (#1015) Phases set by one current per phase: the charger's own
+        # limit caps the per-phase one, so 0 A parked there outlives the
+        # stop — the next start sets only the per-phase limit and the car
+        # gets nothing. The stop is the charger's own stop.
+        return self._phases_by_current()
+
+    def _phases_by_current(self) -> bool:
+        """The per-phase service is this charger's current control now."""
+        return (isinstance(getattr(self, "phase_service", None), str)
+                and getattr(self, "phase_target", None) in (1, 3))
 
     def can_stop_charging(self) -> bool:
         """Whether SEM has ANY mechanism that can actually open the contactor.
@@ -2918,6 +2933,8 @@ class CurrentControlDevice(ControllableDevice):
         self._status.allocated_power_w = 0.0
         self._current_setpoint = 0.0
         self._last_write_at = 0.0  # #392: reset heartbeat tracker on full stop
+        # (#1015) after any stop the next start restores the charger's limit
+        self._own_limit_lifted = False
 
     async def adjust_power(self, available_watts: float) -> float:
         if not self.is_active:
@@ -3028,21 +3045,27 @@ class CurrentControlDevice(ControllableDevice):
         cmd = self._phase_command(current)
         if cmd is None:
             return False
-        if self._phase_written is None and self.charger_service:
-            # First use of the per-phase limit: the charger's own limit was
-            # SEM's until now and would cap the new one. Lift it once to the
-            # configured maximum — the per-phase limit is the control from here.
+        # The shape FIRST: it is the tighter limit. Only once it stands is
+        # the charger's own limit raised to the maximum — never the other
+        # way round, and never alone: a shape that was withheld or failed
+        # leaves the charger's own limit exactly as it was.
+        sent = await self.send(*cmd, why=f"{self.phase_target}-phase by current")
+        if not sent:
+            return False
+        self._phase_written = self.phase_target
+        if not self._own_limit_lifted and self.charger_service:
+            # The charger's own limit was SEM's control before, and a stop
+            # or anything else may have lowered it since. It caps the
+            # per-phase limit, so it is restored whenever SEM cannot be sure.
             domain, service = self.charger_service.split(".", 1)
             lift = {**(self.service_extra_data or {}),
                     self.service_param_name: float(round(self.max_current))}
             if self.service_device_id:
                 lift["device_id"] = self.service_device_id
-            await self.send(domain, service, lift,
-                            why="lift the charger limit — phases by current")
-        sent = await self.send(*cmd, why=f"{self.phase_target}-phase by current")
-        if sent:
-            self._phase_written = self.phase_target
-        return bool(sent)
+            self._own_limit_lifted = bool(await self.send(
+                domain, service, lift,
+                why="restore the charger limit — phases by current"))
+        return True
 
     async def switch_phases(self, phases: int) -> bool:
         """(#1015) Put the charger on ``phases`` (1 or 3) by per-phase
@@ -3136,6 +3159,9 @@ class CurrentControlDevice(ControllableDevice):
         # accepted — a lockout, not a pause (a charge point was left that way
         # on 18.09). The builder marks such entities; the stop is the
         # start/stop switch, and a 0 A write never leaves here.
+        if current <= 0 and self._phases_by_current():
+            # (#1015) not a write at all: the charger's own stop ends it
+            return self._status.current_consumption_w
         if current <= 0 and self._zero_amps_would_lock():
             if not getattr(self, "_zero_refused_logged", False):
                 self._zero_refused_logged = True
@@ -3195,6 +3221,9 @@ class CurrentControlDevice(ControllableDevice):
                 # Pass entity_id only if service requires it (non-global services)
                 elif self.charger_service_entity_id and not self.global_services:
                     service_data["entity_id"] = self.charger_service_entity_id
+                # (#1015) the charger's own limit is no longer known to stand
+                # at the maximum
+                self._own_limit_lifted = False
                 await self.send(domain, service, service_data)
             elif self.current_entity_id:
                 # Number entity control
@@ -4191,6 +4220,8 @@ class CurrentControlDevice(ControllableDevice):
         explicit ``keba.disable`` call (v1.6.3 PROD soak regression).
         """
         stop_method = None
+        # (#1015) after any stop the next start restores the charger's limit
+        self._own_limit_lifted = False
         try:
             if self.stop_service:
                 domain, service = self.stop_service.split(".", 1)
