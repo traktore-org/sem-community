@@ -332,7 +332,7 @@ async def test_reconcile_noop_when_off_and_idle():
     assert consumed == 0.0
 
 
-# ── Phase 3: parity harness (new desired-state path == old imperative passes) ─
+# ── Phase 3: the whole-set walk on shapes (was the parity harness, #1335) ─
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,
 )
@@ -340,8 +340,7 @@ from custom_components.solar_energy_management.const import LoadManagementState
 
 
 class _PDev:
-    """A switch-like device that behaves under BOTH the imperative passes and the
-    desired-state path (is_active follows activate/deactivate), for parity."""
+    """A switch-like device whose is_active follows activate/deactivate."""
     _controller = None
 
     def __init__(self, device_id, priority, **kw):
@@ -508,38 +507,58 @@ _SCENARIOS = {
 }
 
 
-async def _run(specs, kw, use_desired):
+async def _run(specs, kw):
     hass = MagicMock()
     sc = SurplusController(hass)
-    sc._use_desired_state = use_desired
     for s in specs:
         sc.register_device(_PDev(**s))
     await sc.update(**kw)
     return {d.device_id: d.is_active for d in sc._devices.values()}
 
 
-# The two parity gaps that lived here (tier1_assist_activates,
-# peak_shedding_one_per_cycle) were closed by #688: the imperative walk now
-# debits an active/activated load's full draw minus the Tier-1 battery share,
-# which is exactly the battery-aware accounting the desired-state path models.
-# Full parity — no xfails left. Add new gaps back as strict xfails only.
-_XFAIL: dict = {}
+# (#1335) What each shape lands on. These were the parity scenarios between
+# the old imperative passes and the three layers (#688 closed the last two
+# gaps); the passes are gone, so they now pin the one engine's answer — the
+# answer both engines gave.
+_EXPECTED = {
+    "abundant_surplus_two_idle": {"a": True, "b": True},
+    "low_surplus_one_fits_one_not": {"a": True, "b": False},
+    "running_load_cap_reached": {"a": False},
+    "running_load_past_floor_keeps_surplus": {"a": True},
+    "overnight_battery_activates": {"a": True},
+    "overnight_disabled_stops": {"a": False},
+    "cheap_grid_activates": {"a": True},
+    "grid_disabled_stops": {"a": False},
+    "peak_emergency_sheds_all": {"a": False, "b": False},
+    "off_mode_untouched": {"a": True},
+    "no_surplus_all_off": {"a": False, "b": False},
+    "tier1_assist_activates": {"a": True},
+    "peak_shedding_one_per_cycle": {"a": False, "b": False},
+    "reclaim_above_battery_only": {"above": True, "below": False},
+    "peak_warning_freezes_new": {"a": False},
+}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("name", [
-    pytest.param(n, marks=pytest.mark.xfail(reason=_XFAIL[n], strict=True))
-    if n in _XFAIL else n
-    for n in _SCENARIOS
-])
-async def test_desired_state_parity(name):
+@pytest.mark.parametrize("name", list(_SCENARIOS))
+async def test_scenario_outcome(name):
     specs, kw = _SCENARIOS[name]
-    old = await _run(specs, kw, use_desired=False)
-    new = await _run(specs, kw, use_desired=True)
-    assert old == new, f"{name}: imperative={old} desired={new}"
+    assert await _run(specs, kw) == _EXPECTED[name], name
 
 
-# ── #1335: parity per D-item, multi-cycle, power + markers + reason ───────
+@pytest.mark.asyncio
+async def test_shedding_takes_one_per_cycle_while_the_sun_holds_the_rest():
+    """SHEDDING is gentle: with sun enough for both, it takes the lowest
+    one only — the other keeps running (the scenario above has no sun, so
+    the deficit stop takes the second)."""
+    specs = [dict(device_id="a", priority=1, min_power=800, is_active=True, draw=800),
+             dict(device_id="b", priority=2, min_power=800, is_active=True, draw=800)]
+    assert await _run(specs, dict(available_power_w=2000.0,
+                                  peak_state=LoadManagementState.SHEDDING)) == {
+        "a": True, "b": False}
+
+
+# ── #1335: one scenario per D-item, multi-cycle, power + markers + reason ─
 from custom_components.solar_energy_management.coordinator.plan_verdict import (
     PlanVerdict,
 )
@@ -681,10 +700,9 @@ def _family(code):
     return _FAMILY.get(code, code)
 
 
-async def _run_cycles(specs, cycles, use_desired):
+async def _run_cycles(specs, cycles):
     hass = MagicMock()
     sc = SurplusController(hass)
-    sc._use_desired_state = use_desired
     sc.regulation_offset = 0.0
     for spec in specs:
         spec = dict(spec)
@@ -705,24 +723,14 @@ async def _run_cycles(specs, cycles, use_desired):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("name", list(_D_SCENARIOS))
-async def test_d_item_parity(name):
-    """(#1335) Both engines, the same multi-cycle inputs: the same on/off,
-    the same draw (a watt setpoint's too), the same markers, the same reason
-    family."""
-    specs, cycles = _D_SCENARIOS[name]
-    old = await _run_cycles(specs, cycles, use_desired=False)
-    new = await _run_cycles(specs, cycles, use_desired=True)
-    assert old == new, f"{name}:\n imperative={old}\n layered   ={new}"
-
-
-@pytest.mark.asyncio
 async def test_d_items_say_what_they_pin():
-    """The scenarios above are not vacuous: each one lands where its item
-    says (checked on the layered engine)."""
+    """(#1335) Each item of the engine map lands where its decision says.
+    Before the old passes were deleted, both engines ran these same
+    multi-cycle inputs and gave the same on/off, draw, markers and reason
+    family (commit history: the parity step)."""
     async def last(name):
         specs, cycles = _D_SCENARIOS[name]
-        return (await _run_cycles(specs, cycles, use_desired=True))[-1]
+        return (await _run_cycles(specs, cycles))[-1]
     assert (await last("d1_banking_holds_in_its_block"))["boiler"][:3] == (True, 3000, True)
     r = await last("d2_lowest_priority_loses_first")
     assert [r[k][0] for k in "abc"] == [True, True, False]
@@ -737,7 +745,7 @@ async def test_d_items_say_what_they_pin():
     assert not (await last("d5_peak_slot_refuses_a_grid_start"))["pool"][0]
     assert (await last("d5_peak_slot_with_room_starts"))["pool"][:3] == (True, 800, True)
     specs, cycles = _D_SCENARIOS["d6_dependent_stops_with_its_parent"]
-    first, second = await _run_cycles(specs, cycles, use_desired=True)
+    first, second = await _run_cycles(specs, cycles)
     assert not first["heat_pump"][0] and not first["boiler"][0]
     assert first["boiler"][4] == "dependency"
     # next cycle the pump alone fits again; the boiler waits for it

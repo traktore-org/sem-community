@@ -6046,8 +6046,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # (#1021) the grid operator's relay — the Control tab's banner
             result.update(self._shed_signal_payload())
-            # (#1102) where the two load engines differ — summary + full log
-            result.update(self._engine_shadow_payload())
 
             # Add night window sensors
             try:
@@ -11191,22 +11189,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if lm is not None and hasattr(lm, "set_operator_cap"):
             lm.set_operator_cap(sig.cap_kw if sig.active else None)
         return sig
-
-    def _engine_shadow_payload(self) -> dict:
-        """(#1102) The load engines' comparison: a small summary for the
-        load-management sensor, the full change log for diagnostics."""
-        shadow = getattr(getattr(self, "_surplus_controller", None), "engine_shadow", None)
-        summary = getattr(shadow, "summary", None)
-        records = getattr(shadow, "records", None)
-        if not callable(summary) or not callable(records):
-            return {}
-        try:
-            s, r = summary(), records()
-        except Exception:  # noqa: BLE001 — recording never breaks a cycle
-            return {}
-        if not isinstance(s, dict) or not isinstance(r, list):
-            return {}
-        return {"engine_shadow": s, "engine_shadow_records": r}
 
     def _shed_signal_payload(self) -> dict:
         """(#1021) The relay for the cards and diagnostics."""

@@ -88,8 +88,8 @@ def tier1_battery_reserved_w(devices, *, below_priority, allowance_w,
       battery" load (``battery_eligible_overnight``) reserves NOTHING here.
 
       Two things make that safe, and neither is the one first written down.
-      It is NOT that the SOC bands cannot overlap: ``_tier2_overnight_eligible``
-      gates only on the opt-in and ``soc > reserve``, with no upper bound tying
+      It is NOT that the SOC bands cannot overlap: the Tier-2 clause of
+      ``compute_load_intent`` gates only on the opt-in, night and ``soc > reserve``, with no upper bound tying
       it below the buffer. What actually separates them is
       (a) **time** — Tier 2 runs in the overnight pass while the charger's
       Zone 3/4 assist exists only in ``_decide_day``, and ``decide`` dispatches
@@ -479,13 +479,6 @@ def import_absorbed_by_loads_w(
     return min(deficit, max(0.0, float(grid_export_w) + float(active_draw_w)))
 
 
-def _walk_charge_w(device, consumption_w) -> float:
-    """(#1102) What the walk took from the pool for a running load: its
-    draw less the battery's Tier-1 share (``_tier1_batt_w``, #885)."""
-    return max(0.0, float(consumption_w or 0.0)
-               - max(0.0, float(getattr(device, "_tier1_batt_w", 0.0) or 0.0)))
-
-
 def reclaim_handed_back(remaining_w: float, reclaim_w: float) -> float:
     """(#576, #1102) The walk's pool after it crosses the battery's slot.
 
@@ -837,8 +830,9 @@ def compute_load_intent(
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
 
-    Faithful to ``SurplusController.update()``'s 7 passes, collapsed into one
-    ordered decision (first match wins). ``remaining_surplus_w`` is the solar
+    Layer 1: one ordered decision (first match wins) — every reason a load
+    turns on or off docks here (#1335: the 7 imperative passes it replaced
+    are gone). ``remaining_surplus_w`` is the solar
     surplus left for THIS device after higher-priority loads (the caller's
     priority walk fills it); the battery/grid clauses don't consume it.
     Everything else is read off ``device`` so it works on a real device or a mock.
@@ -856,9 +850,8 @@ def compute_load_intent(
     # rebuilt from scratch every cycle and ``_apply_source_markers`` derives
     # ``_offpeak_forced`` from the source, so a load whose gate has closed
     # simply falls through to the solar clause (kept, marker cleared) or to
-    # "no source available" (stopped). The imperative passes, which PROD
-    # runs, carry a sticky marker and need the twin in the force-expiry
-    # pass — class 17.
+    # "no source available" (stopped). The old imperative passes carried a
+    # sticky marker and needed a twin in their force-expiry pass — class 17.
     sun_still_has_time = grid_top_up_defers_to_sun(
         device, daylight_remaining_s=daylight_remaining_s, is_night=is_night,
         comfort_block_open=plan.comfort_in_block)
@@ -1639,15 +1632,6 @@ class SurplusController:
         self._tier1_budget_left: float = 0.0
         # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
         self._surplus_samples: List[float] = []
-        # (desired-state, phase 3; #1335) update() runs the three layers —
-        # ``_desired_intents`` → ``reconcile_load`` — on every install. The
-        # imperative passes remain only until step E of #1335 deletes them.
-        self._use_desired_state: bool = True
-        # (#1102) The three layers run beside the passes on every real cycle
-        # and record where they differ (dry: no device or controller state
-        # changes). Read by the load-management sensor and diagnostics.
-        from .engine_shadow import EngineShadow
-        self.engine_shadow = EngineShadow()
         # (#638 G4) per-cycle window verdicts from the joint energy plan:
         # device_id → True (inside its planned block) / False (planned
         # elsewhere tonight — don't start now). Absent = the plan has no say.
@@ -1885,28 +1869,13 @@ class SurplusController:
 
     def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,
                          battery_priority, price_level,
-                         peak_freeze, peak_shed, peak_shed_all, dry=False):
+                         peak_freeze, peak_shed, peak_shed_all):
         """(desired-state, phase 3) The management-layer decision for the whole
         load set: the priority walk → one ``LoadIntent`` per device. Pure of
         actuation (``reconcile_load`` applies them); the shared cycle context
         (``self._batt_*`` / ``self._tier1_budget_left``) is already stamped by
-        ``update()``. This is what REPLACES the 7 imperative passes.
-
-        ``dry=True`` (#1102): the same walk, then every device and the
-        controller are put back exactly as they were — the layer-1 Off branch
-        and the layer-2 battery bookkeeping write state, and the passes that
-        run next must not see it."""
-        if dry:
-            from .engine_shadow import restore, snapshot
-            saved = snapshot(self, list(self._devices.values()))
-            try:
-                return self._desired_intents(
-                    devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
-                    battery_priority=battery_priority, price_level=price_level,
-                    peak_freeze=peak_freeze, peak_shed=peak_shed,
-                    peak_shed_all=peak_shed_all, dry=False)
-            finally:
-                restore(saved)
+        ``update()``. (#1335) Layer 2: it writes no device state but the
+        Tier-1 bookkeeping (what the pack funds per load, #885)."""
         soc_above = (self._batt_soc is not None
                      and self._batt_soc > self._batt_reserve_soc)
 
@@ -2073,7 +2042,7 @@ class SurplusController:
             observer=False):
         """(desired-state, phase 3) Compute intents, reconcile every load (the
         single actuator), and assemble the same ``SurplusAllocationData`` the
-        imperative ``update()`` returns.
+        old imperative ``update()`` returned.
 
         ``observer=True`` runs the exact same decision, but the reconcile step
         only logs what it would command — the read-only path for observer mode."""
@@ -2222,17 +2191,17 @@ class SurplusController:
             None if battery_assist_budget_above_w is None
             else max(0.0, float(battery_assist_budget_above_w)))
         self._batt_priority = battery_priority
-        # (#633) "Finish overnight from: Battery" is a NIGHT source — the
-        # Tier-2 pass and its force-expiry both gate on this cycle flag.
+        # (#633) "Finish overnight from: Battery" is a NIGHT source — layer
+        # 1's Tier-2 clause gates on this cycle flag.
         self._is_night_cycle = bool(is_night)
         # (#953) the free window's remaining length — the "finish" gate on
-        # the cheap-hours grid top-up, on both the imperative pass and the
-        # intent path. Stamped here so the two read one value per cycle.
+        # the cheap-hours grid top-up, read by layer 1. Stamped here so every
+        # load reads one value per cycle.
         self._daylight_remaining_s = (
             None if daylight_remaining_s is None
             else max(0.0, float(daylight_remaining_s)))
         # (#638 G4) stamp this cycle's joint-plan window verdicts for the
-        # intent path AND the imperative passes below.
+        # intent path.
         self._plan_windows = dict(plan_windows or {})
         # (#864/#1335) the billing slot a grid start must fit, for layer 2
         self._peak_slot_allowed_w = peak_slot_allowed_w
@@ -2302,21 +2271,12 @@ class SurplusController:
             distributable = self._apply_price_adjustment(distributable, price_level)
 
         devices = self.get_devices_sorted()
-        allocations: List[SurplusAllocation] = []
         # (#576) The home battery sits at ``battery_priority`` in this walk.
         # ``reclaim_w`` (the power that would charge it) is offered at the TOP;
         # when the walk crosses the battery's slot it is handed back to the
         # battery, so loads ABOVE the battery reclaim it and loads BELOW see
-        # only the export surplus. ``max(0, …)`` yields exactly the export
-        # surplus the higher-priority loads left unconsumed (see #576 tests).
+        # only the export surplus.
         remaining_surplus = distributable + max(0.0, reclaim_w)
-        _reclaim_handed_back = False
-        # (#1102) What the walk took from the pool for each load. The
-        # deficit pass gives back exactly this when it stops one: a switch
-        # is debited its rating, and its power sensor can read 0 W while a
-        # thermostat holds it off.
-        _walk_spend: dict = {}
-        active_count = 0
         # (#620) Tier-1 running budget — the battery can only supply its assist
         # budget ONCE, not once per device. Decremented as each battery-assist
         # load draws from it, so N loads can't each claim the full budget.
@@ -2329,862 +2289,19 @@ class SurplusController:
         for _d in self._devices.values():
             _d._tier1_batt_w = 0.0
 
-        # (desired-state) Delegate to the single declarative path when enabled
-        # for actuation (``_use_desired_state``) OR whenever we're observing.
-        # OBSERVER always takes this path: it's the only one with a single
-        # execution seam (``reconcile_load``) that can cut the trigger cleanly —
-        # so observer mode runs the FULL real decision against live sensors and
-        # merely logs what it would command. No separate ``observe_only`` path.
-        if self._use_desired_state or observer:
-            return await self._finish_via_desired_state(
-                devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
-                battery_priority=battery_priority, price_level=price_level,
-                peak_state=peak_state, peak_freeze=peak_freeze,
-                peak_shed=peak_shed, peak_shed_all=peak_shed_all,
-                distributable=distributable, available_power_w=available_power_w,
-                observer=observer,
-            )
-
-        # (#1102) The three layers decide the same cycle, dry, before the
-        # passes touch anything; compared with what the passes did below.
-        _shadow_devices = devices
-        _shadow_intents = None
-        _shadow_was_on: dict = {}
-        try:
-            _shadow_was_on = {d.device_id: bool(d.is_active) for d in devices}
-            _shadow_intents = self._desired_intents(
-                devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
-                battery_priority=battery_priority, price_level=price_level,
-                peak_freeze=peak_freeze, peak_shed=peak_shed,
-                peak_shed_all=peak_shed_all, dry=True)
-        except Exception:  # noqa: BLE001 — the comparison never costs a cycle
-            _LOGGER.debug("Load engine shadow skipped", exc_info=True)
-            _shadow_intents = None
-
-        # (#1021) A load behind the grid operator's relay, relay on: the
-        # relay cuts it, so the imperative passes leave it alone — no
-        # start, no stop, no runtime judged. The intent path above says why.
-        devices = [d for d in devices
-                   if not (getattr(d, "locked_by_operator", False) is True)]
-
-        # (#1335) A device's own run (Legionella) is started and ended by
-        # layer 1 and switched by ``reconcile_load`` — in this engine too, so
-        # the run is SEM's own command here as well (ownership, anti-cycle,
-        # the decision log). A shed still wins: the peak pass below has it.
-        for device in devices:
-            if not (getattr(device, "runs_without_surplus", False) is True
-                    or getattr(device, "own_run_ending", False) is True):
-                continue
-            _own = compute_load_intent(
-                device, remaining_surplus_w=0.0, peak_freeze=peak_freeze,
-                is_shed_target=bool(peak_shed or _phase_shed(device)),
-                plan=self._plan_windows.get(device.device_id) or NO_OPINION)
-            if _own.code == RC.LOAD_LEGIONELLA:
-                await reconcile_load(device, _own, controller=self)
-
-        # Force expiry: a cheap-hours force ends with its reason (#559 review) —
-        # the tariff left the cheap window, OR the day rolled over (the deficit
-        # it served was YESTERDAY's — without the date check a device forced
-        # into a cheap midnight window would re-fill the NEW day's target from
-        # grid all night).
-        from ..devices.base import DeviceControlMode
-        for device in devices:
-            if not device.is_active:
-                continue
-            # (#703) Staleness is judged against the load's OWN meter day —
-            # the sunrise-held boundary its deficit lives on — never the
-            # calendar date, which flips at 00:00 mid-top-up and produced a
-            # spurious stop/restart flap every midnight.
-            device_day = _load_meter_day(device)
-            reason = None
-            # (class-17 sibling, caught live 2026-07-23) Mode switched to Off
-            # while SEM is DRIVING the load: release it — stop once, clear
-            # markers/ownership — instead of stranding it running forever
-            # (the activation pass just skips OFF devices; nothing else stops
-            # them). A user-turned-on load (not _sem_owned) stays untouched:
-            # Off means SEM keeps its hands off the user's own choices.
-            _user_off = False
-            if (device.control_mode == DeviceControlMode.OFF
-                    and getattr(device, "_sem_owned", False)):
-                if getattr(device, "_sem_commanded", False):
-                    reason = "mode off — ending SEM-started run"
-                    _user_off = True   # (#1335) the user's Off beats min_on
-                else:
-                    # (#847) adopted, not SEM-started: release the
-                    # claim without a write - Off means hands off.
-                    device._sem_owned = False
-                    device._offpeak_forced = False
-                    device._offpeak_forced_date = None
-                    device._batt_overnight_forced = False
-                    device._batt_overnight_forced_date = None
-                    _LOGGER.info(
-                        "%s: mode off — released adopted load "
-                        "without actuation (#847)", device.name,
-                    )
-            # (#1335, D1) A banking run in its comfort block lives by the
-            # block: the block closing (plan), its band leaving "willing" or
-            # its stop end it, never the cheap-hours terms below — those
-            # ended it one minimum run in and the banking pass started it
-            # again one minimum pause later, cycling the load through the
-            # block (and on a flat tariff it never banked at all).
-            _banking = bool(
-                device._offpeak_forced
-                and not getattr(device, "_batt_overnight_forced", False)
-                and getattr(self._plan_windows.get(device.device_id),
-                            "comfort_in_block", False)
-                and getattr(device, "comfort_state", "") == "willing")
-            if reason is None and device._offpeak_forced and not _banking:
-                stale = (
-                    device._offpeak_forced_date is not None
-                    and device._offpeak_forced_date != device_day
-                )
-                if getattr(device, "top_up_policy", "solar_only") == "solar_only":
-                    # (#620) the "Finish overnight from" picker moved off Grid
-                    # (top_up_policy → solar_only). A load already running on the
-                    # cheap-hours force must STOP, not keep importing until the
-                    # window ends — the grid-path sibling of the battery-toggle
-                    # fix (caught live on the picker's Off test).
-                    reason = "cheap-hours disabled by user"
-                elif stale:
-                    reason = "cheap-hours force expired (day rollover)"
-                elif grid_top_up_defers_to_sun(
-                        device,
-                        daylight_remaining_s=self._daylight_remaining_s,
-                        is_night=self._is_night_cycle,
-                        # (#1102) a banking run lives in its comfort block
-                        comfort_block_open=getattr(
-                            self._plan_windows.get(device.device_id),
-                            "comfort_in_block", False)):
-                    # (#953) The grid top-up is a FINISH source. A run that
-                    # legitimately started inside the overnight window must
-                    # not ride into a morning that can still deliver the
-                    # deficit for free — the daytime twin of the Tier-2
-                    # expiry below (#633), because the start gate alone
-                    # only blocks re-activation (class 17).
-                    reason = ("cheap-hours top-up ended — today's daylight "
-                              "can still finish the target")
-                elif not is_cheap_name(
-                        _lvl := device_price_level(device, price_level)):
-                    # (#992/#994) Say which of three things happened. "tariff
-                    # now flat" claims a transition that a flat tariff cannot
-                    # make — it was flat when this top-up started — and
-                    # "tariff now no_prices" blames the tariff for SEM losing
-                    # the price feed. Class 99: a verdict naming a cause its
-                    # own scope refutes. (#812) ``_lvl`` is the device's own
-                    # tariff when it has one.
-                    if _lvl == "flat":
-                        reason = ("cheap-hours top-up ended — this tariff has "
-                                  "no cheaper hours to wait for")
-                    elif _lvl in ("no_prices", "", "unknown", None):
-                        reason = ("cheap-hours top-up ended — no prices left "
-                                  "to compare")
-                    else:
-                        reason = f"tariff now {_lvl}"
-            # (#620) Tier-2 overnight battery force expiry — its OWN terms: the
-            # user turned the "Use battery overnight" toggle OFF, the Reserve
-            # floor was crossed (battery must be protected), or the day rolled
-            # over. NOT expired by tariff (it isn't tariff-driven). The
-            # daily-target-met stop is handled by the goal gate below.
-            if reason is None and getattr(device, "_batt_overnight_forced", False):
-                soc = self._batt_soc
-                _bo_date = getattr(device, "_batt_overnight_forced_date", None)
-                if not getattr(device, "battery_eligible_overnight", False):
-                    # The toggle gates ACTIVATION, but a load already running off
-                    # the battery must also STOP the moment the user disables it —
-                    # else it keeps draining until reserve/rollover (caught live
-                    # on the Heizband toggle test).
-                    reason = "overnight battery disabled by user"
-                elif (_bo_date is not None and _bo_date != device_day):
-                    reason = "overnight battery force expired (day rollover)"
-                elif not getattr(self, "_is_night_cycle", True):
-                    # (#633) the overnight window ended — a load still running
-                    # off the battery must stop, not ride into the day
-                    # (class-17: the gate alone only blocks re-activation).
-                    reason = "overnight battery window ended (daytime)"
-                elif soc is not None and soc <= self._batt_reserve_soc:
-                    reason = "overnight battery force ended (reserve SoC reached)"
-            if reason:
-                # (#1135) the minimum run holds here as on every other stop
-                # pass — this one trusted the device to hold it itself, and a
-                # heat pump's SG-Ready stand-down does not.
-                if _user_off:
-                    device._last_activated = None
-                    if getattr(device, "_status", None) is not None:
-                        device._status.last_activated = None
-                if (_user_off or device.can_deactivate()) and await _deactivate_owned(
-                        device,
-                        reason_code=RC.LOAD_MODE_OFF if _user_off else RC.LOAD_OVERNIGHT_END,
-                        text=reason):
-                    device._offpeak_forced = False
-                    device._offpeak_forced_date = None
-                    device._batt_overnight_forced = False
-                    device._batt_overnight_forced_date = None
-                    _LOGGER.info(
-                        "Force ended for %s (%s)", device.name, reason,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "Force-end of %s blocked by anti-flicker", device.name,
-                    )
-
-        # Activation pass: iterate by priority, activate eligible devices
-        # Only devices in "surplus" mode are candidates for activation (#49).
-        # Devices in "peak_only" mode are tracked but never proactively turned on.
-        # Devices in "off" mode are skipped entirely.
-        for device in devices:
-            # (#576) Cross the home battery's slot: hand the reclaim back so
-            # every load from here down (lower priority than the battery) sees
-            # only the export surplus and the battery charges first.
-            if (not _reclaim_handed_back and battery_priority is not None
-                    and reclaim_w > 0 and device.priority >= battery_priority):
-                remaining_surplus = reclaim_handed_back(
-                    remaining_surplus, reclaim_w)
-                _reclaim_handed_back = True
-            # Skip devices in "off" mode — SEM never touches these
-            if device.control_mode == DeviceControlMode.OFF:
-                continue
-
-            # (#559) Goal gates — a device that is DONE for the day (its
-            # daily max cap reached, or the external stop condition like the
-            # car's SOC target) is stopped and stays off until the day rolls
-            # over. Only SURPLUS-mode devices: peak_only devices are
-            # user-managed, SEM never proactively stops them.
-            #
-            # Ordering note (#688): the force-expiry pass above has already
-            # run, so a device whose ``_batt_overnight_forced`` /
-            # ``_offpeak_forced`` marker was cleared there (day rollover,
-            # night ended) was deactivated by that pass. Anything still
-            # carrying a marker HERE is a live PAID run — exactly what the
-            # floor clause below must end, because a marked device is exempt
-            # from the deficit LIFO and nothing else would ever stop it.
-            if device.control_mode == DeviceControlMode.SURPLUS:
-                done_reason = None
-                # (#1102) each stop says its own cause on the Why? card —
-                # one code for all four printed "It ran long enough today"
-                # for a tank that had reached its temperature.
-                done_code = RC.LOAD_TARGET_MET
-                if (getattr(device, "vacation", False) is True
-                        and getattr(device, "vacation_dhw_surplus", False) is not True):
-                    # (#594/#1335) away: no comfort heating — the stop the
-                    # vacation edge handler used to make, every cycle
-                    done_reason = "comfort heating paused while away"
-                    done_code = RC.LOAD_VACATION
-                elif device.daily_max_runtime_reached:
-                    # (#620) the hard cap must STOP a running device, not just
-                    # block re-activation — otherwise a load already on when it
-                    # crosses the cap keeps running past it (caught live on the
-                    # Heizband PROD test). The cap overrides the min deficit.
-                    done_reason = "daily max runtime cap reached"
-                    done_code = RC.LOAD_DAILY_MAX
-                elif ((_pv := self._plan_windows.get(device.device_id)) is not None
-                        and getattr(_pv, "hold", False)
-                        and (device._offpeak_forced
-                             or getattr(device, "_batt_overnight_forced", False))):
-                    # (#638 Stage 3) the plan's window closed while a paid run
-                    # was on — the hold is only raised while the remaining
-                    # blocks can still deliver the deficit (load_verdict), so
-                    # cutting here banks the energy for the planned block.
-                    # Imperative twin of compute_load_intent clause 2b: PROD
-                    # runs THESE passes, and a stop that lives only in the
-                    # desired-state path is a stop that never happens.
-                    done_reason = getattr(_pv, "reason", "") or \
-                        "joint energy plan: window closed"
-                    done_code = RC.LOAD_PLAN_CLOSED
-                elif (device.daily_targets_met
-                        and (device._offpeak_forced
-                             or getattr(device, "_batt_overnight_forced", False))
-                        # (#1102) a banking run in its comfort block is not
-                        # the floor's run: ending it here after its minimum
-                        # run, while the banking pass starts it again after
-                        # the minimum pause, cycles the load through the block.
-                        # Grid runs only — banking never runs on the battery,
-                        # so a battery run past the floor still ends here.
-                        and not (device._offpeak_forced
-                                 and not getattr(device,
-                                                 "_batt_overnight_forced", False)
-                                 and getattr(self._plan_windows.get(
-                                     device.device_id),
-                                     "comfort_in_block", False)
-                                 and getattr(device, "comfort_state", "")
-                                 == "willing")):
-                    # (#688) The floor ends the PAID run, not the load. A
-                    # Tier-2 / cheap-grid device is EXEMPT from the deficit
-                    # LIFO (it runs without surplus by design), so nothing else
-                    # would ever end it — it would drain the battery or buy
-                    # grid past its own target all night (class 18). A load
-                    # riding free surplus is left alone: it may run on up to
-                    # the Max cap, which is what the slider promises (#245
-                    # EV floor/ceiling contract).
-                    done_reason = "daily target met — ending battery/grid top-up"
-                elif device.stop_condition_met:
-                    # (#1062) A device can meet its stop without a stop
-                    # entity (a boiler at its target, a banked comfort band)
-                    # — then there is no "<entity> >= <value>" to print.
-                    done_reason = (
-                        f"stop condition met ({device.stop_entity} >= "
-                        f"{device.stop_at:g})" if device.stop_entity
-                        else "stop condition met (target reached)"
-                    )
-                    done_code = RC.LOAD_STOP_CONDITION
-                if done_reason:
-                    if device.is_active and device.can_deactivate():
-                        if await _deactivate_owned(
-                                device, reason_code=done_code, text=done_reason):
-                            device._offpeak_forced = False
-                            device._offpeak_forced_date = None
-                            # (#620) done-for-the-day also ends any Tier-2
-                            # overnight force — otherwise the marker leaks until
-                            # day rollover and the LIFO exemption keeps shielding
-                            # an already-finished device.
-                            device._batt_overnight_forced = False
-                            device._batt_overnight_forced_date = None
-                            _LOGGER.info(
-                                "%s: %s — deactivated for the rest of the day",
-                                device.name, done_reason,
-                            )
-                    elif device.is_active:
-                        _LOGGER.debug(
-                            "%s: %s — deactivation waiting for anti-flicker",
-                            device.name, done_reason,
-                        )
-                    if device.is_active:
-                        # (#1102) Still on (anti-flicker, or the stop did not
-                        # take): its draw sits in the pool's add-back, so it
-                        # is debited like any running load. Skipping it gave
-                        # its watts to every load below it.
-                        _held = max(
-                            0.0, float(device.get_current_consumption() or 0.0))
-                        if (device._offpeak_forced or getattr(
-                                device, "_batt_overnight_forced", False)):
-                            # a paid run takes the sun that is left, no more
-                            _held = min(_held, max(0.0, remaining_surplus))
-                        remaining_surplus -= _held
-                        _walk_spend[device.device_id] = _held
-                    allocations.append(SurplusAllocation(
-                        device_id=device.device_id,
-                        device_name=device.name,
-                        priority=device.priority,
-                        allocated_watts=0.0,
-                        actual_consumption_watts=device.get_current_consumption() if device.is_active else 0.0,
-                        state=DeviceState.ACTIVE.value if device.is_active else DeviceState.IDLE.value,
-                    ))
-                    continue
-
-            # (#620) Tier 1 — daytime battery assist. A "Solar + battery"
-            # device (battery_assist_enabled) sees the raw surplus PLUS the
-            # battery-assist budget, but ONLY while the battery is above the
-            # Buffer SoC — mirrors the EV Solar Gate (#537/#545): the battery
-            # tops the device up out of the surplus-above-buffer it would
-            # otherwise export, never below the buffer. Off-flag / below-buffer
-            # → headroom is 0 and this is identical to pre-#620.
-            effective_surplus = remaining_surplus + self._tier1_headroom_w(device)
-            # (#688/#1335, D4) a fresh start needs its start reserve on top
-            # of the threshold, as layer 1 asks
-            _start_bar = float(device.min_power_threshold) + max(
-                0.0, float(getattr(device, "start_reserve_w", 0.0) or 0.0))
-            if effective_surplus >= _start_bar and not device.is_active:
-                # Only activate if device is in "surplus" mode
-                if device.control_mode != DeviceControlMode.SURPLUS:
-                    continue  # peak_only: never proactively turn on
-                if peak_freeze:
-                    continue  # #508 W2: don't add load while peak is at risk
-                if device.can_activate():
-                    consumed = await _activate_owned(
-                        device, remaining_surplus, reason_code=RC.LOAD_SURPLUS,
-                        text="enough sun to start")
-                    assist = 0.0
-                    if consumed > 0:
-                        device.reset_surplus_timer()
-                        # (#620) if the battery covered a shortfall for this
-                        # assist device, subtract that from the running budget
-                        # — capped by the actual headroom (enabled + above
-                        # buffer + budget left), which is 0 for a plain load.
-                        # (#688) Only the solar-funded remainder leaves the
-                        # pool: debiting the battery's share too made the
-                        # deficit LIFO below read it as a shortfall and kill
-                        # the assist load the same cycle it activated.
-                        headroom = self._tier1_headroom_w(device)
-                        if headroom > 0:
-                            shortfall = max(0.0, consumed - max(0.0, remaining_surplus))
-                            assist = min(headroom, shortfall)
-                            device._tier1_batt_w = assist   # (#885)
-                            self._tier1_budget_left = max(
-                                0.0, self._tier1_budget_left - assist)
-                    remaining_surplus -= max(0.0, consumed - assist)
-                    _walk_spend[device.device_id] = max(0.0, consumed - assist)
-                    if consumed > 0:
-                        active_count += 1
-
-            elif not device.is_active and effective_surplus < _start_bar:
-                device.reset_surplus_timer()
-
-            elif device.is_active:
-                # Already active — adjust power level (applies to all modes)
-                # (#1102) Offer ``remaining_surplus`` alone: the pool already
-                # holds this load's draw (the #508 W7 add-back), and the
-                # walk only debits loads AHEAD of it. ``+ old_consumption``
-                # dates from the export-only pool of v1.0 and counted the
-                # draw twice — a watt setpoint ramped to its maximum on the
-                # grid. On/off loads ignore the figure and are unchanged.
-                _paid = bool(device._offpeak_forced or getattr(
-                    device, "_batt_overnight_forced", False))
-                if device.control_mode == DeviceControlMode.SURPLUS and not _paid:
-                    # Tier-1 assist is part of what it may have (0 for a
-                    # plain load); the debit below takes the battery's share
-                    # back out.
-                    consumed = await _adjust_owned(
-                        device,
-                        remaining_surplus + self._tier1_headroom_w(device),
-                        reason_code=RC.LOAD_SURPLUS, text="follows the sun")
-                else:
-                    # (#1102) peak_only is the user's: SEM only sheds it
-                    # (the desired-state twin leaves it alone too). A paid
-                    # run (cheap-hours grid, Tier-2) holds the power its
-                    # force pass set — the sun's pool is not its budget, and
-                    # offering it ~0 W wrote its floor every other cycle.
-                    consumed = float(device.get_current_consumption() or 0.0)
-                # (#688) Debit the FULL draw, not just its change. The pool was
-                # credited with every active device's draw (the feedback-free
-                # add-back), so leaving the draw in after walking past the
-                # device over-funds every lower-priority load by exactly that
-                # amount — and, because the solar bound (#620) floors the pool
-                # at 0, it kept ``remaining_surplus`` above the deficit-LIFO
-                # trigger forever: a load that lost its surplus was never
-                # stopped and ran to its Max cap on grid/battery (@onkelfu's
-                # pool pump). The LIFO has always credited a shed device's
-                # draw BACK — proof the walk was meant to debit it. Tier-1
-                # battery assist covers its share of a shortfall first (only
-                # the solar-funded remainder leaves the pool, mirroring the
-                # activation branch); ``_tier1_headroom_w`` is 0 past the
-                # daily floor, so a past-floor run is solar-funded only.
-                assist = 0.0
-                if consumed > 0:
-                    headroom = self._tier1_headroom_w(device)
-                    if headroom > 0:
-                        shortfall = max(0.0, consumed - max(0.0, remaining_surplus))
-                        assist = min(headroom, shortfall)
-                        device._tier1_batt_w = assist   # (#885)
-                        self._tier1_budget_left = max(
-                            0.0, self._tier1_budget_left - assist)
-                spend = max(0.0, consumed - assist)
-                # (#1102) A load on a PAID source (cheap-hours grid, Tier-2
-                # battery) takes the sun that is left, never more: the rest
-                # it buys by design. Since the pool sees the import, its
-                # grid share would otherwise push the walk negative and the
-                # deficit LIFO — which skips it — would stop a solar load
-                # AHEAD of it that the sun still funds. The desired-state
-                # twin debits paid loads nothing; this keeps the priority
-                # order for the sun.
-                if _paid:
-                    spend = min(spend, max(0.0, remaining_surplus))
-                remaining_surplus -= spend
-                _walk_spend[device.device_id] = spend
-                active_count += 1
-
-            allocations.append(SurplusAllocation(
-                device_id=device.device_id,
-                device_name=device.name,
-                priority=device.priority,
-                allocated_watts=device.status.allocated_power_w,
-                actual_consumption_watts=device.get_current_consumption(),
-                state=device.status.state.value,
-            ))
-
-        # Deactivation pass (reverse priority — LIFO): if surplus is negative,
-        # deactivate lowest-priority active devices first
-        if remaining_surplus < -DEFAULT_MIN_SURPLUS_CHANGE:
-            for device in reversed(devices):
-                if remaining_surplus >= 0:
-                    break
-                # (#688) Only SURPLUS-mode loads are the LIFO's to stop —
-                # peak_only and Off are user-managed (SEM never proactively
-                # turns them off; same gate the peak-shed pass carries, and
-                # what the desired-state twin's "user-managed" intents pin).
-                # Latent before: the dead trigger meant the missing gate
-                # never fired on anything.
-                if device.control_mode != DeviceControlMode.SURPLUS:
-                    continue
-                # (#559) off-peak-forced devices run WITHOUT surplus by
-                # design — the force-expiry section and the peak shed pass
-                # own their lifecycle; the deficit LIFO must not flap them off.
-                # (#620) same for a Tier-2 overnight-battery forced device: it
-                # runs off the battery by design and is only ended by its OWN
-                # terms (reserve SoC / day rollover), never by the deficit LIFO.
-                # (#1121) …and a device's own run (Legionella) needs no sun.
-                if device._offpeak_forced or getattr(
-                        device, "_batt_overnight_forced", False) or getattr(
-                        device, "runs_without_surplus", False) is True:
-                    continue
-                if device.is_active and device.can_deactivate():
-                    consumption = device.get_current_consumption()
-                    # (#1102) Give back what the walk took from the pool. A
-                    # Tier-1 load's battery share was never taken, so it is
-                    # not given back; a load the battery covers in full
-                    # costs the sun nothing, and stopping it recovers
-                    # nothing — the pass moves on to the load that does.
-                    # A switch was taken its rating, so an idle one (0 W
-                    # read, thermostat off) gives that back and is stopped,
-                    # as before: skipping it left every load below it off.
-                    charged = _walk_spend.get(
-                        device.device_id, _walk_charge_w(device, consumption))
-                    if charged <= 0.0:
-                        continue
-                    if await _deactivate_owned(
-                            device, reason_code=RC.LOAD_SURPLUS_SHORT,
-                            text="not enough sun"):
-                        remaining_surplus += charged
-                        active_count -= 1
-                        _LOGGER.info(
-                            "Deactivated %s (priority %d) to recover %.0fW",
-                            device.name, device.priority, consumption,
-                        )
-                        # Cascade: deactivate dependents (#122)
-                        for dep in self.get_dependents(device.device_id):
-                            if dep.is_active and dep.can_deactivate():
-                                dep_consumption = dep.get_current_consumption()
-                                if await _deactivate_owned(
-                                    dep, reason_code=RC.LOAD_DEPENDENCY,
-                                    text=f"{device.name} stopped"):
-                                    remaining_surplus += _walk_spend.get(
-                                        dep.device_id,
-                                        _walk_charge_w(dep, dep_consumption))
-                                    active_count -= 1
-                                    _LOGGER.info(
-                                        "Cascade deactivated %s (depends on %s)",
-                                        dep.name, device.name,
-                        )
-                        # Update allocation
-                        for a in allocations:
-                            if a.device_id == device.device_id:
-                                a.allocated_watts = 0.0
-                                a.actual_consumption_watts = 0.0
-                                a.state = DeviceState.IDLE.value
-                    else:
-                        _LOGGER.debug(
-                            "Deactivation of %s blocked by anti-flicker",
-                            device.name,
-                        )
-
-        # (#1048) The phase guard took these for a phase over its limit. The
-        # load manager may not switch a load this controller owns (#649), so
-        # the guard's order arrives here as a hold: back them off now —
-        # anti-flicker still holds a compressor through its minimum run.
-        for device in devices:
-            if not _phase_shed(device):
-                continue
-            if not device.is_active or not device.can_deactivate():
-                continue
-            consumption = device.get_current_consumption()
-            if await _deactivate_owned(
-                    device, reason_code=RC.LOAD_PHASE_GUARD,
-                    text="phase over its limit"):
-                active_count = max(0, active_count - 1)
-                remaining_surplus += consumption
-                _LOGGER.info(
-                    "Phase %s over its limit: shed %s (%.0f W)",
-                    device._phase_hold, device.name, consumption,
-                )
-                for a in allocations:
-                    if a.device_id == device.device_id:
-                        a.allocated_watts = 0.0
-                        a.actual_consumption_watts = 0.0
-                        a.state = DeviceState.IDLE.value
-
-        # #508 W2 — peak shed pass. On SHEDDING/EMERGENCY, back the
-        # controller's own active discretionary (SURPLUS-mode) devices off
-        # by reverse priority. EMERGENCY sheds every one this cycle;
-        # SHEDDING sheds one per cycle so the load-manager + surplus
-        # back-off don't overshoot together. Externally-managed devices
-        # (the EV) are already excluded by ``get_devices_sorted``; the load
-        # manager owns the EV's peak shedding via ``shed_priority`` (#470).
-        # (#620) A Tier-2 overnight-battery device is NOT exempt here: the peak
-        # limit is a HARD grid ceiling that overrides the battery tiers. Shedding
-        # it relieves grid import; once peak clears the Tier-2 pass re-activates
-        # it. We clear its force marker so the shed device carries no stale state.
-        if peak_shed:
-            for device in reversed(devices):
-                if device.control_mode != DeviceControlMode.SURPLUS:
-                    continue
-                if not device.is_active or not device.can_deactivate():
-                    continue
-                consumption = device.get_current_consumption()
-                if await _deactivate_owned(
-                        device, reason_code=RC.LOAD_PEAK_SHED,
-                        text="grid peak limit"):
-                    device._batt_overnight_forced = False
-                    device._batt_overnight_forced_date = None
-                    active_count = max(0, active_count - 1)
-                    remaining_surplus += consumption
-                    _LOGGER.info(
-                        "Peak %s: shed %s (priority %d) to relieve %.0fW",
-                        peak_state, device.name, device.priority, consumption,
-                    )
-                    for a in allocations:
-                        if a.device_id == device.device_id:
-                            a.allocated_watts = 0.0
-                            a.actual_consumption_watts = 0.0
-                            a.state = DeviceState.IDLE.value
-                    if not peak_shed_all:
-                        break  # SHEDDING: gentle, one device per cycle
-                else:
-                    _LOGGER.debug(
-                        "Peak shed of %s blocked by anti-flicker", device.name,
-                    )
-
-        # Check for scheduled devices that must start (deadline approaching).
-        # #508 W2: deliberately NOT gated on peak_freeze — a deadline is a
-        # hard commitment that must run regardless of peak posture (like a
-        # critical device), and the one-cycle import is bounded by
-        # rated_power. Do not add a peak gate here.
-        for device in devices:
-            if (getattr(device, "is_deadline_approaching", False) is True
-                    and not device.is_active
-                    # (#1048) a deadline outranks the peak, not a fuse
-                    and not _phase_held(device)):
-                consumed = await _activate_owned(
-                    device, device.rated_power, reason_code=RC.LOAD_DEADLINE,
-                    text="deadline is near")
-                if consumed > 0:
-                    active_count += 1
-                    remaining_surplus -= consumed
-                    for a in allocations:
-                        if a.device_id == device.device_id:
-                            a.allocated_watts = consumed
-                            a.actual_consumption_watts = consumed
-                            a.state = DeviceState.ACTIVE.value
-                _LOGGER.warning(
-                    "Force-starting %s due to deadline (%.0fW)",
-                    device.name, consumed,
-                )
-
-        # Off-peak activation pass: force-activate devices with runtime deficit
-        # Only for "surplus" mode devices — off-peak is a form of proactive activation (#49).
-        # #508 W2: suppressed while the peak is at risk — a cheap-tariff
-        # runtime deficit must not push grid import over the limit.
-        # (#638 C5) Comfort-banking pass — the imperative twin of the
-        # willing+in_block clause in compute_load_intent. PROD runs THESE
-        # passes: a run that lives only in the desired-state path is a run
-        # that never happens. A WILLING band whose planned comfort block is
-        # open banks now; forced rooms stay with the deficit passes.
-        if not peak_freeze:
-            for device in devices:
-                if device.control_mode != DeviceControlMode.SURPLUS:
-                    continue
-                if device.is_active or device.stop_condition_met:
-                    continue
-                if getattr(device, "comfort_state", "") != "willing":
-                    continue
-                # (#1102) the COMFORT block. ``in_block`` is also true in
-                # the runtime block, and starting that here skipped the
-                # cheap-hours pass's terms (daylight wait, source, price,
-                # billing slot).
-                _pv = self._plan_windows.get(device.device_id)
-                if _pv is None or not getattr(_pv, "comfort_in_block", False):
-                    continue
-                if not device.can_activate():
-                    continue
-                consumed = await _activate_owned(
-                    device, device.min_power_threshold,
-                    reason_code=RC.LOAD_PLAN_WINDOW, text="planned block")
-                if consumed > 0:
-                    device._offpeak_forced = True
-                    device._offpeak_forced_date = _load_meter_day(device)
-                    active_count += 1
-                    remaining_surplus -= consumed
-                    _LOGGER.info(
-                        "Comfort banking: %s runs in its planned block (%.0fW)",
-                        device.name, consumed,
-                    )
-
-        if not peak_freeze:
-            for device in devices:
-                # (#812) the device's own tariff when it has one; else the
-                # house level, exactly the old ``is_cheap_name(price_level)``
-                if not is_cheap_name(device_price_level(device, price_level)):
-                    continue
-                if device.control_mode != DeviceControlMode.SURPLUS:
-                    continue
-                # (#559) solar_only devices NEVER grid-force — they accept
-                # missing the target on a dark day (logged once per day).
-                if device.top_up_policy == "solar_only":
-                    continue
-                if device.stop_condition_met:
-                    continue
-                # (#638 G4) the joint plan placed this load's blocks elsewhere
-                # tonight — don't start it in THIS cheap hour. Gates the start
-                # only; a run already going ends by its own terms (deficit /
-                # expiry), matching the plan's min-run quantization.
-                _pv = self._plan_windows.get(device.device_id)
-                if _pv is not None and getattr(_pv, "hold", _pv is False):
-                    continue
-                # (arc) Respect can_activate() here too — otherwise a cheap-hours
-                # top-up would re-activate a load the user just turned off,
-                # bypassing the reconciler's user-respect cooldown (and the
-                # device min_off anti-flicker).
-                if device.needs_offpeak_activation and device.can_activate():
-                    # (#953) "Finish overnight from: Grid" is a FINISH
-                    # source — the window its battery twin has carried
-                    # since #633. While today's remaining daylight is
-                    # still long enough to close the deficit, the meter
-                    # waits. At night this is trivially open, so the
-                    # overnight promise is untouched. Below
-                    # needs_offpeak_activation deliberately: a load the
-                    # sun is already carrying is not "deferred".
-                    # (#1102) The same terms as the force-expiry twin, so a
-                    # start here is not ended there one minimum run later.
-                    if grid_top_up_defers_to_sun(
-                            device,
-                            daylight_remaining_s=self._daylight_remaining_s,
-                            is_night=self._is_night_cycle,
-                            comfort_block_open=getattr(
-                                _pv, "comfort_in_block", False)):
-                        log_on_change(
-                            _LOGGER, f"finishwindow:{device.device_id}",
-                            logging.INFO,
-                            "%s: cheap-hours top-up deferred — %.1f h of "
-                            "daylight left can still cover the %.1f h still "
-                            "owed (#953)",
-                            device.name,
-                            (self._daylight_remaining_s or 0.0) / 3600.0,
-                            device.remaining_daily_runtime_sec / 3600.0,
-                        )
-                        continue
-                    # (#864) The security layer: a cheap-hours GRID force
-                    # must FIT the billing slot before it starts. Price
-                    # says go; the meter's budget says how much. Refusing
-                    # here is preventive — the load simply waits for a
-                    # slot with headroom (or the reactive shed, which
-                    # stays senior for what SEM did not command).
-                    from .peak_guard import clamp_import_command
-                    _fit_w, _clamped = clamp_import_command(
-                        float(device.min_power_threshold or 0.0),
-                        peak_slot_allowed_w, grid_import_w,
-                        grid_import_known=grid_import_known)
-                    if _clamped and _fit_w < float(device.min_power_threshold or 0.0):
-                        log_on_change(
-                            _LOGGER, f"peakslot:{device.device_id}",
-                            logging.INFO,
-                            "%s: cheap-hours start deferred — needs %.0fW, "
-                            "the billing slot has %.0fW headroom (#864)",
-                            device.name,
-                            float(device.min_power_threshold or 0.0), _fit_w,
-                        )
-                        continue
-                    consumed = await _activate_owned(
-                        device, device.min_power_threshold,
-                        reason_code=RC.LOAD_CHEAP_GRID, text="cheap hours")
-                    if consumed > 0:
-                        device._offpeak_forced = True
-                        device._offpeak_forced_date = _load_meter_day(device)
-                        active_count += 1
-                        remaining_surplus -= consumed
-                        # Update or add allocation entry
-                        found = False
-                        for a in allocations:
-                            if a.device_id == device.device_id:
-                                a.allocated_watts = consumed
-                                a.actual_consumption_watts = consumed
-                                a.state = DeviceState.ACTIVE.value
-                                found = True
-                                break
-                        if not found:
-                            allocations.append(SurplusAllocation(
-                                device_id=device.device_id,
-                                device_name=device.name,
-                                priority=device.priority,
-                                allocated_watts=consumed,
-                                actual_consumption_watts=consumed,
-                                state=DeviceState.ACTIVE.value,
-                            ))
-                        _LOGGER.info(
-                            "Off-peak forced %s (%.0fW, deficit %.0fs)",
-                            device.name, consumed, device.remaining_daily_runtime_sec,
-                        )
-
-        # (#620) Tier 2 — overnight battery pass. A device that opted into
-        # "Use battery overnight" and still has a runtime deficit may run from
-        # the home battery when there is no surplus, PRIORITY-ORDERED, while
-        # the battery is above the hard Reserve SoC. Distinct from the cheap-
-        # hours off-peak pass (grid-sourced): this spends stored house energy,
-        # so it is gated on the explicit opt-in + the Reserve floor, not price.
-        # Suppressed under peak risk (same as the off-peak pass). can_activate()
-        # enforces the max cap + anti-cycle, so a capped or recently-toggled
-        # device is skipped. Inert for every device with the flag off (default).
-        if not peak_freeze:
-            for device in devices:
-                if device.control_mode != DeviceControlMode.SURPLUS:
-                    continue
-                if device.is_active or device.stop_condition_met:
-                    continue
-                if not device.needs_offpeak_activation:  # deficit + not capped
-                    continue
-                if not self._tier2_overnight_eligible(device):
-                    continue
-                # (#638 G4) same window gate as the cheap-hours pass: the plan
-                # may defer a Tier-2 load to a later slot when the battery's
-                # shared discharge budget is contested.
-                _pv = self._plan_windows.get(device.device_id)
-                if _pv is not None and getattr(_pv, "hold", _pv is False):
-                    continue
-                if not device.can_activate():
-                    continue
-                consumed = await _activate_owned(
-                    device, device.min_power_threshold,
-                    reason_code=RC.LOAD_TIER2_BATTERY, text="overnight from the battery")
-                if consumed > 0:
-                    device._batt_overnight_forced = True  # (#620) own marker
-                    device._batt_overnight_forced_date = _load_meter_day(device)
-                    active_count += 1
-                    for a in allocations:
-                        if a.device_id == device.device_id:
-                            a.allocated_watts = consumed
-                            a.actual_consumption_watts = consumed
-                            a.state = DeviceState.ACTIVE.value
-                            break
-                    else:
-                        allocations.append(SurplusAllocation(
-                            device_id=device.device_id,
-                            device_name=device.name,
-                            priority=device.priority,
-                            allocated_watts=consumed,
-                            actual_consumption_watts=consumed,
-                            state=DeviceState.ACTIVE.value,
-                        ))
-                    _LOGGER.info(
-                        "#620 Tier 2: %s on battery (%.0fW, deficit %.0fs, "
-                        "SoC %.0f%% > reserve %.0f%%)",
-                        device.name, consumed, device.remaining_daily_runtime_sec,
-                        self._batt_soc or 0.0, self._batt_reserve_soc,
-                    )
-
-        # (#559 beta.19) The deadline-critical pass was removed: it grid/
-        # battery-forced with no SOC gate (HIGH-2) to hit a per-device
-        # deadline. solar_only (the switch-load default) never grid-forces;
-        # cheap_hours devices still top up via the off-peak pass above.
-
-        # (#1102) What the passes did, against what the three layers decided.
-        if _shadow_intents is not None:
-            try:
-                self.engine_shadow.compare(_shadow_intents, _shadow_devices,
-                                           was_on=_shadow_was_on)
-            except Exception:  # noqa: BLE001 — recording only
-                _LOGGER.debug("Load engine comparison skipped", exc_info=True)
-
-        # Build allocation data
-        total_allocated = sum(a.actual_consumption_watts for a in allocations)
-        self._allocation_data = SurplusAllocationData(
-            total_surplus_w=available_power_w,
-            distributable_surplus_w=distributable,
-            regulation_offset_w=self.regulation_offset,
-            allocated_w=total_allocated,
-            unallocated_w=max(0, distributable - total_allocated),
-            active_devices=active_count,
-            total_devices=len(self._devices),
-            allocations=allocations,
-            last_update=dt_util.now(),
+        # (#1335) The one engine: layer 1 (``compute_load_intent``) and
+        # layer 2 (``_desired_intents``) decide, layer 3 (``reconcile_load``)
+        # switches — on every install. Observer mode is one branch in layer 3:
+        # the same decision runs against live sensors and only logs what it
+        # would command.
+        return await self._finish_via_desired_state(
+            devices, remaining_surplus=remaining_surplus, reclaim_w=reclaim_w,
+            battery_priority=battery_priority, price_level=price_level,
+            peak_state=peak_state, peak_freeze=peak_freeze,
+            peak_shed=peak_shed, peak_shed_all=peak_shed_all,
+            distributable=distributable, available_power_w=available_power_w,
+            observer=observer,
         )
-
-        return self._allocation_data
 
     def _tier1_headroom_w(self, device) -> float:
         """(#620) Tier 1 daytime battery-assist headroom for one device (W).
@@ -3199,8 +2316,8 @@ class SurplusController:
             return 0.0
         # (#688) Past its daily floor the device has nothing left to guarantee,
         # so the battery stops paying for it — free surplus only from here to
-        # the Max cap. Single point: both the imperative pass and the
-        # desired-state intent builder read their headroom through here.
+        # the Max cap. Single point: layers 1 and 2 read their headroom
+        # through here.
         if getattr(device, "daily_targets_met", False):
             return 0.0
         soc = self._batt_soc
@@ -3220,20 +2337,6 @@ class SurplusController:
                 and int(getattr(device, "priority", 0)) < int(bprio)):
             return above
         return self._batt_assist_budget_w
-
-    def _tier2_overnight_eligible(self, device) -> bool:
-        """(#620) Tier 2 — may this device draw the battery BELOW the buffer,
-        down to the Reserve SoC, to meet its runtime floor when there is no
-        surplus? Opt-in flag + battery strictly above the hard Reserve SoC.
-        The Reserve is never crossed."""
-        if not getattr(device, "battery_eligible_overnight", False):
-            return False
-        # (#633) overnight means overnight — no Tier-2 activation in daytime
-        # (caught live: a load fed "from the battery" at 09:10 in full sun).
-        if not getattr(self, "_is_night_cycle", True):
-            return False
-        soc = self._batt_soc
-        return soc is not None and soc > self._batt_reserve_soc
 
     def _apply_price_adjustment(self, distributable: float, price_level: str) -> float:
         """(#953) Damp the distributable surplus for the price level.

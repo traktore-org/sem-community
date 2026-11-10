@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Loads now switch in one place, so Mode Off and shutdown also stop a Legionella run** (#1335). Observer mode holds the heat pump too.
 - 🐛 **The Energy Plan card shows a load's daily grid run when SEM starts it** (#1330). It showed a midday run SEM never did.
 
 # [2.3.0-beta.10] — 09.11.2026

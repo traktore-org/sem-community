@@ -206,7 +206,7 @@ class TestThePlanAsksForKeepAt:
 
 
 @pytest.mark.unit
-def test_layer_three_remembers_a_floor_run_and_a_dry_walk_writes_nothing():
+def test_layer_three_remembers_a_floor_run_the_layers_write_nothing():
     from custom_components.solar_energy_management.coordinator.surplus_controller import (
         SurplusController,
     )
@@ -215,8 +215,6 @@ def test_layer_three_remembers_a_floor_run_and_a_dry_walk_writes_nothing():
     sc.register_device(dev)
     kw = dict(remaining_surplus=0.0, reclaim_w=0.0, battery_priority=None, price_level=None,
               peak_freeze=False, peak_shed=False, peak_shed_all=False)
-    sc._desired_intents([dev], dry=True, **kw)
-    assert getattr(dev, "_comfort_floor_run", False) is False
     intents = sc._desired_intents([dev], **kw)
     assert intents["boiler"].code == RC.LOAD_COMFORT_FLOOR
     # (#1335) the layers decide; layer 3 writes the memory with the markers

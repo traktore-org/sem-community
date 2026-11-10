@@ -425,7 +425,8 @@ class TestTheControllerReadsOneWordPerQuestion:
         calls = [n for n in ast.walk(_sc_tree())
                  if isinstance(n, ast.Call)
                  and getattr(n.func, "id", "") == "grid_top_up_defers_to_sun"]
-        assert len(calls) >= 3          # the intent, the start, the expiry
+        # (#1335) one engine: layer 1 is the one site (start and stop alike)
+        assert len(calls) >= 1
         missing = [c.lineno for c in calls
                    if "comfort_block_open" not in {k.arg for k in c.keywords}]
         assert missing == [], f"no comfort_block_open at {missing}"

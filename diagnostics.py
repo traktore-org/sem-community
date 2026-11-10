@@ -849,11 +849,6 @@ async def async_get_config_entry_diagnostics(
         # exact defect this issue fixes.
         "appliance_schedules": data.get("diag_appliance_schedules"),
         "load_management": load_info,
-        # (#1102) where the three-layer engine would have switched differently
-        "engine_shadow": {
-            "summary": data.get("engine_shadow"),
-            "records": data.get("engine_shadow_records"),
-        },
         "ev_stability": ev_stability,
         "external_control": _safe(
             lambda: coordinator._external_control.rows()) or [],

@@ -502,27 +502,21 @@ class TestAVariableLoadFollowsTheSun:
         assert hass.value == pytest.approx(2000.0)
 
     async def test_the_walk_offers_a_running_load_the_pool_once(self):
-        # Source pin: the active branch hands ``adjust_power`` the remaining
-        # pool, which already holds the load's own draw (the add-back).
-        tree = ast.parse(_SC.read_text(encoding="utf-8"))
-        calls = [
-            n for n in ast.walk(tree)
-            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-            and n.func.attr == "adjust_power"
-            and isinstance(n.func.value, ast.Name) and n.func.value.id == "device"
-        ]
-        args = [ast.unparse(c.args[0]) for c in calls if c.args]
-        # (#1084) the surplus walk adjusts through ``_adjust_owned(device,
-        # watts)`` — the one choke point the decision log reads
-        args += [
-            ast.unparse(n.args[1]) for n in ast.walk(tree)
-            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-            and n.func.id == "_adjust_owned" and len(n.args) > 1
-        ]
-        # the pool, plus the Tier-1 battery headroom (0 for a plain load)
-        assert "remaining_surplus + self._tier1_headroom_w(device)" in args, args
-        assert not any("old_consumption" in a or "get_current_consumption" in a
-                       for a in args), args
+        # (#1335) Layer 1 sends a running sun load the remaining pool plus
+        # its Tier-1 share — the pool already holds its own draw (the
+        # add-back), so the draw is never added again.
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            compute_load_intent,
+        )
+        dev = SimpleNamespace(
+            control_mode=DeviceControlMode.SURPLUS, is_active=True,
+            rated_power=3000.0, min_power_threshold=500.0,
+            daily_max_runtime_reached=False, daily_targets_met=False,
+            stop_condition_met=False, has_runtime_deficit=False,
+            get_current_consumption=lambda: 1000.0)
+        it = compute_load_intent(dev, remaining_surplus_w=500.0,
+                                 tier1_headroom_w=200.0)
+        assert it.on and it.command_w == pytest.approx(700.0)
 
 
 # ── 4. the guard: the coordinator hands the pool the import ──────────────

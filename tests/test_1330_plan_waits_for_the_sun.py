@@ -242,10 +242,27 @@ class TestTheDayPlanWaitsForTheSun:
                            tm=_FallbackSunTime())
         assert "12:00" in _load_starts(plan) or "13:00" in _load_starts(plan)
 
-    def test_a_forced_band_does_not_wait(self, freeze_targets, monkeypatch):
-        """Too cold now: execution skips the wait, so the plan does too."""
+    def test_a_forced_band_is_not_planned_as_run_time(self, freeze_targets,
+                                                      monkeypatch):
+        """(#1102/#1335) Too cold now: the band leads on every install — it
+        heats at once (the floor rung), and its run time asks the plan for
+        nothing. Before, this held only where the layers switched."""
         _, plan = _plan_at(monkeypatch, 9, _grid_load(state="forced"))
-        assert any(s in ("12:00", "13:00") for s in _load_starts(plan))
+        assert _load_starts(plan) == []
+
+    def test_the_wait_itself_skips_a_forced_band(self):
+        """The wait's own rule is unchanged: a forced band does not wait."""
+        from datetime import datetime, timedelta
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            grid_top_up_waits_until,
+        )
+        sunset = datetime(2026, 10, 29, 17, 0)
+        assert grid_top_up_waits_until(
+            _grid_load(state="forced"), sunrise=sunset - timedelta(hours=9),
+            sunset=sunset) is None
+        assert grid_top_up_waits_until(
+            _grid_load(), sunrise=sunset - timedelta(hours=9),
+            sunset=sunset) is not None
 
     def test_a_plan_made_in_the_night_is_unchanged(self, freeze_targets,
                                                    monkeypatch):
