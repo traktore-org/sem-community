@@ -1750,6 +1750,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "heat_pump_boost_offset",
     "heat_pump_climate_entity",
     "heat_pump_invert_sg_ready",
+    "heat_pump_step_down",   # (#1323)
     "heat_pump_max_setpoint",
     "heat_pump_power_sensor",
     "heat_pump_priority",
@@ -3914,6 +3915,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "heat_pump_invert_sg_ready",
                     default=_c("heat_pump_invert_sg_ready", False),
                 ): selector.BooleanSelector(),
+                # (#1323) step down in a shortfall: off unless picked
+                vol.Optional(
+                    "heat_pump_step_down",
+                    default=_c("heat_pump_step_down", "off") or "off",
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["off", "setpoint", "block"],
+                        translation_key="heat_pump_step_down",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 # (#801) A contact may be a text/number/select entity instead
                 # of a switch (EMS-ESP carries SG-Ready as bit-string text
                 # fields). These say what to WRITE for that contact's two
@@ -4118,6 +4130,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "heat_pump_invert_sg_ready",
                     default=bool(_row("heat_pump_invert_sg_ready", False)),
                 ): selector.BooleanSelector(),
+                # (#1323) step down in a shortfall: off unless picked
+                vol.Optional(
+                    "heat_pump_step_down",
+                    default=_row("heat_pump_step_down", "off") or "off",
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["off", "setpoint", "block"],
+                        translation_key="heat_pump_step_down",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 # (#801) see the primary heat-pump step.
                 vol.Optional(
                     "heat_pump_relay1_on_value",

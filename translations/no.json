@@ -581,6 +581,7 @@
           "heat_pump_relay1_entity": "SG-Ready-relé 1 (valgfri switch-entitet)",
           "heat_pump_relay2_entity": "SG-Ready-relé 2 (valgfri switch-entitet)",
           "heat_pump_invert_sg_ready": "Inverter SG-Ready-kontakter (for NC-kobling)",
+          "heat_pump_step_down": "Skru ned når strømmen er knapp",
           "heat_pump_climate_entity": "Klimaentitet for settpunkt-boost (valgfri)",
           "heat_pump_power_sensor": "Effektsensor (valgfri)",
           "heat_pump_boost_offset": "Temperatur-boost-offset (°C)",
@@ -601,6 +602,7 @@
           "heat_pump_relay1_entity": "Switch-entitet for SG-Ready-relé 1 (signal for normal drift). Angis sammen med relé 2 for SG-Ready-protokollen.",
           "heat_pump_relay2_entity": "Switch-entitet for SG-Ready-relé 2 (signal for overskudds-boost). Angis sammen med relé 1 for SG-Ready-protokollen.",
           "heat_pump_invert_sg_ready": "Aktiver kun hvis varmepumpens SG-Ready-kontakter er koblet som normalt lukket (NC). SEM følger standard sannhetstabell for SG-Ready; hvis boost blokkerer pumpen (og omvendt), slår du på dette for å snu begge reléene.",
+          "heat_pump_step_down": "Når huset kjøper nettstrøm i en dyr time, eller nærmer seg effektgrensen din, senker SEM settpunktet eller sender SG-Ready-sperresignalet. Det krever et komfortbånd (Hold på og Kjør nå forbi); SEM skrur aldri ned under det.",
           "heat_pump_climate_entity": "Klimaentitet som brukes til å heve settpunktet under soloverskudd. Tilstrekkelig alene for kun-klima-modus (ingen reléer nødvendig).",
           "heat_pump_power_sensor": "Valgfri sensor (W) som rapporterer varmepumpens nåværende effektforbruk.",
           "heat_pump_boost_offset": "Antall grader Celsius som legges til det normale settpunktet under en boost med soloverskudd.",
@@ -757,6 +759,7 @@
           "heat_pump_relay1_entity": "SG-Ready-relé 1",
           "heat_pump_relay2_entity": "SG-Ready-relé 2",
           "heat_pump_invert_sg_ready": "Inverter SG-Ready-reléer (NC-kobling)",
+          "heat_pump_step_down": "Skru ned når strømmen er knapp",
           "heat_pump_climate_entity": "Klimaentitet",
           "heat_pump_power_sensor": "Effektsensor",
           "heat_pump_energy_sensor": "Energisensor",
@@ -2181,6 +2184,13 @@
       "options": {
         "none": "ikke funnet",
         "why_guessed": "Energi-dashbordet ditt har ingen sensor for netteffekt, så SEM gjettet en."
+      }
+    },
+    "heat_pump_step_down": {
+      "options": {
+        "off": "Av",
+        "setpoint": "Senk settpunktet",
+        "block": "Send sperresignalet"
       }
     }
   }

@@ -3956,6 +3956,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return True
         return False
 
+    def _step_down_memos(self) -> Dict[str, Any]:
+        """(#1323) ``{device_id: memo}`` for every load stepped down now."""
+        out: Dict[str, Any] = {}
+        for did, dev in (getattr(self._surplus_controller, "_devices", {}) or {}).items():
+            memo_fn = getattr(dev, "step_down_memo", None)
+            memo = memo_fn() if callable(memo_fn) else None
+            if isinstance(memo, dict):
+                out[str(did)] = memo
+        return out
+
+    #: (#1323) the outlook is the mean over this many hours ahead
+    _OUTLOOK_HOURS = 24
+
+    def _outdoor_outlook_c(self) -> Optional[float]:
+        """(#1323) The outdoor outlook in °C: the mean of the temperature
+        forecast SEM already reads (#1082) over the next day, else what it
+        measures now, else None. No new source and no new reader."""
+        now = dt_util.now()
+        ahead = now + timedelta(hours=self._OUTLOOK_HOURS)
+        temps = [t for start, t, _kind in (getattr(self, "_temp_forecast", None) or [])
+                 if now - timedelta(hours=1) <= start <= ahead]
+        if temps:
+            return sum(temps) / len(temps)
+        return self._outdoor_temperature_or_none()
+
+    def _stamp_outdoor_outlook(self) -> None:
+        """(#1323) Hand the outlook to every unit that picks its season."""
+        units = [d for d in (getattr(self._surplus_controller, "_devices", {}) or {}).values()
+                 if callable(getattr(d, "update_season", None))
+                 and getattr(d, "hvac_setting", "") == "by_forecast"]
+        if not units:
+            return
+        outlook = self._outdoor_outlook_c()
+        for dev in units:
+            dev.update_season(outlook)
+
     async def _apply_vacation_mode(self) -> bool:
         """Set the per-cycle vacation flag on the comfort-heating controllers
         (#594). (#1335) Layer 1 stops their comfort runs from the flag.
@@ -5817,6 +5853,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 basis = self._sensor_reader.export_battery_basis()
                 if basis is not None:
                     self._storage.set_battery_sign_basis(basis)
+                # (#1323) a stepped-down heat pump: what a restart must
+                # know to take it back
+                try:
+                    self._storage.set_step_down_state(self._step_down_memos())
+                except (AttributeError, TypeError, ValueError):
+                    pass
                 # Persist the legionella timestamp (#508 I2).
                 _hw = self._surplus_controller._devices.get("hot_water") \
                     if hasattr(self, "_surplus_controller") else None
@@ -7358,6 +7400,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             await self._apply_vacation_mode()
         except Exception as e:  # noqa: BLE001 — never break the cycle
             _LOGGER.debug("Vacation mode apply failed: %s", e)
+        # (#1323) …and the outdoor outlook, for a unit that picks heat or
+        # cool itself. A stamp like the vacation flag: the device reports
+        # its mode to layer 1, nothing is switched here.
+        try:
+            self._stamp_outdoor_outlook()
+        except Exception as e:  # noqa: BLE001 — never break the cycle
+            _LOGGER.debug("Outdoor outlook stamp failed: %s", e)
 
         # Surplus controller (Phase 0.2)
         surplus_data = SurplusControlData()
@@ -17553,6 +17602,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         cfg.get("heat_pump_force_on_threshold", 5000)
                     )
                     hp.invert_sg_ready = bool(cfg.get("heat_pump_invert_sg_ready", False))
+                    # (#1323) step down in a shortfall: off unless picked
+                    from ..devices.heat_pump_controller import step_down_action
+                    hp.step_down_action = step_down_action(
+                        cfg.get("heat_pump_step_down"))
                     hp.cop = float(cfg.get("heat_pump_cop", 3.0) or 3.0)
                     # #602/#576 — priority is the DRAG-LIST position now (resolved
                     # by refresh_direct_device_overrides), NOT a standalone knob.

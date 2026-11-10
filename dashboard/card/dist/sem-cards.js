@@ -8696,6 +8696,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${this._renderOptionTextInput("heat_pump_relay2_off_value","config_hp_relay2_off",i,"config_help_hp_contact_values","000000000000")}`:K}
                 ${""}
                 ${this._renderOptionToggle("heat_pump_invert_sg_ready","config_hp_invert_sg_ready",i,"config_help_hp_invert_sg_ready",!1)}
+                ${""}
+                ${this._renderOptionSelect("heat_pump_step_down","config_hp_step_down",["off","setpoint","block"].map(e=>({value:e,label:this._t("config_hp_step_down_"+e)})),i,"config_help_hp_step_down","off")}
                 ${this._renderPicker("heat_pump_climate_entity","config_hp_climate","climate",null,i,"config_help_hp_climate")}
                 ${this._renderPicker("heat_pump_power_sensor","config_hp_power_sensor","sensor","power",i,"config_help_hp_power_sensor")}
                 ${""}

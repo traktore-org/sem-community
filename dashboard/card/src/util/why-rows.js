@@ -25,6 +25,8 @@ export const WHY_VERBS = [
     'force_charge', 'stop_force_charge', 'force_discharge',
     'stop_force_discharge', 'off', 'on', 'restore',
     'limit_export', 'release_export',
+    // (#1323) a heat pump held below its normal state
+    'step_down',
 ];
 
 export const chipKey = (rec) => `${rec?.device_kind || ''}:${rec?.device_id || ''}`;

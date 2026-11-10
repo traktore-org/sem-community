@@ -2034,6 +2034,11 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
         return 0.0
 
 
+#: (#1323) ``hvac_mode`` value: SEM picks heat or cool from the outdoor
+#: outlook. Not an HA climate mode — HA's own ``auto`` stays the unit's.
+HVAC_BY_FORECAST = "by_forecast"
+
+
 class ClimateDevice(ComfortBandMixin, ControllableDevice):
     """On/off surplus control for a ``climate.*`` entity (#569).
 
@@ -2085,6 +2090,13 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
             energy_entity_id=energy_entity_id,
         )
         self.rated_power = rated_power
+        # (#1323) ``by_forecast``: SEM picks heat or cool itself, from the
+        # outdoor outlook the coordinator stamps each cycle. ``hvac_mode``
+        # (the property below) is then the mode in force; every other
+        # value is the user's fixed mode, exactly as before.
+        self._season_mode: Optional[str] = None
+        self._season_since: Optional[datetime] = None
+        self.outdoor_outlook_c: Optional[float] = None
         self.hvac_mode = hvac_mode or "cool"
         self.target_temperature = target_temperature
         # (#644) unified anti-cycle knobs (see SwitchDevice)
@@ -2127,6 +2139,99 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
     @min_off_seconds.setter
     def min_off_seconds(self, value) -> None:
         self._min_off_configured = int(value)
+
+    # ── (#1323) heat or cool by the outdoor outlook ────────────────────
+    #: Outlook (°C, the mean of the next day) under which the unit heats and
+    #: over which it cools. Between the two nothing changes: the dead band.
+    SEASON_HEAT_BELOW_C = 15.0
+    SEASON_COOL_ABOVE_C = 22.0
+    #: A change of season waits a day — unless the outlook is past the
+    #: other threshold by this much, which is a clear flip.
+    SEASON_MIN_DWELL_S = 86400.0
+    SEASON_CLEAR_MARGIN_C = 3.0
+
+    @property
+    def hvac_mode(self) -> str:
+        """The mode SEM sets when it turns the unit on. With ``by_forecast``
+        it is the season in force, or ``by_forecast`` itself while no
+        outlook has ever been read (the unit is then not started)."""
+        if self._hvac_setting == HVAC_BY_FORECAST:
+            return self._season_mode or HVAC_BY_FORECAST
+        return self._hvac_setting
+
+    @hvac_mode.setter
+    def hvac_mode(self, value) -> None:
+        self._hvac_setting = str(value or "cool")
+
+    @property
+    def hvac_setting(self) -> str:
+        """What the user picked: a fixed mode, or ``by_forecast``."""
+        return self._hvac_setting
+
+    def update_season(self, outlook_c: Optional[float],
+                      now: Optional[datetime] = None) -> Optional[str]:
+        """Pick heat or cool from the outdoor outlook. Returns the season
+        in force (None: none decided yet). Pure of any write — the device
+        only reports its mode; layer 3 sends it with the next start.
+
+        Not ``by_forecast``: nothing happens. No outlook: the season in
+        force stays. The first reading decides by the middle of the dead
+        band. After that the season changes only past the other threshold,
+        only while the unit is off, and only after a day in the present
+        one — or at once when the outlook is clearly past it.
+        """
+        self.outdoor_outlook_c = outlook_c
+        if self._hvac_setting != HVAC_BY_FORECAST:
+            return None
+        if outlook_c is None:
+            return self._season_mode
+        now = now or datetime.now()
+        if self._season_mode is None:
+            middle = (self.SEASON_HEAT_BELOW_C + self.SEASON_COOL_ABOVE_C) / 2.0
+            self._season_mode = "heat" if outlook_c < middle else "cool"
+            self._season_since = now
+            return self._season_mode
+        if self._season_mode == "heat":
+            want, past = "cool", outlook_c - self.SEASON_COOL_ABOVE_C
+        else:
+            want, past = "heat", self.SEASON_HEAT_BELOW_C - outlook_c
+        if past <= 0.0 or self.is_active:
+            return self._season_mode
+        dwelt = (self._season_since is None
+                 or (now - self._season_since).total_seconds()
+                 >= self.SEASON_MIN_DWELL_S)
+        if dwelt or past >= self.SEASON_CLEAR_MARGIN_C:
+            _LOGGER.info("%s: outdoor outlook %.1f °C — now %s",
+                         self.name, outlook_c, want)
+            self._season_mode = want
+            self._season_since = now
+        return self._season_mode
+
+    @property
+    def start_refusal(self) -> Optional[str]:
+        """(#1323) ``by_forecast`` with no outlook ever read: SEM does not
+        guess a season, so layer 1 does not start the unit."""
+        if self._hvac_setting == HVAC_BY_FORECAST and self._season_mode is None:
+            return "sensor"
+        return None
+
+    @property
+    def comfort_limit(self) -> float:
+        """The band's limit. (#1323) With ``by_forecast`` the typed limit
+        is mirrored to the side the season in force defends (below the
+        target when heating, above it when cooling), so one band serves
+        the whole year."""
+        raw = float(getattr(self, "_comfort_limit_set", 0.0) or 0.0)
+        target = float(getattr(self, "comfort_target", 0.0) or 0.0)
+        if (raw and target and self._hvac_setting == HVAC_BY_FORECAST
+                and self._season_mode is not None):
+            gap = abs(raw - target)
+            return target + gap if self._season_mode == "cool" else target - gap
+        return raw
+
+    @comfort_limit.setter
+    def comfort_limit(self, value) -> None:
+        self._comfort_limit_set = float(value or 0.0)
 
     def _comfort_direction(self) -> str:
         return "cool" if self.hvac_mode == "cool" else "heat"
@@ -2222,6 +2327,10 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
             if elapsed < self.min_off_seconds:
                 return 0.0
 
+        if self.hvac_mode == HVAC_BY_FORECAST:
+            # (#1323) no season decided yet: nothing to send
+            return 0.0
+
         # Set the mode first. If THIS fails the unit never turned on — report
         # ERROR and bail.
         try:
@@ -2301,6 +2410,9 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         d = super().to_dict()
         d.update({
             "hvac_mode": self.hvac_mode,
+            # (#1323) what the user picked, and the outlook the season reads
+            "hvac_setting": self.hvac_setting,
+            "outdoor_outlook_c": self.outdoor_outlook_c,
             "target_temperature": self.target_temperature,
         })
         return d

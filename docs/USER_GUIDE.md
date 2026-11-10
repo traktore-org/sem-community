@@ -407,6 +407,40 @@ tariff.
 Other loads get the same fields in their goals on the Load Priority card.
 More in [Tariff models](TARIFF_MODELS.md#a-tariff-per-device-812).
 
+### Step down when power is short (#1323)
+
+SEM can also turn the heat pump **down**. It is off until you pick an action
+under **Configuration → Heat Pump → Step down when power is short**:
+
+- **Lower the setpoint**: the climate entity's target goes down by the boost
+  offset, never under the unit's minimum. SEM puts the old target back.
+- **Send the blocked signal**: the SG-Ready contacts (or service) are set to
+  state 1.
+
+It steps down in two cases: the house buys grid power in an **expensive**
+hour, or it is **near your peak limit**. It needs a comfort band on the heat
+pump (*Keep at* and *Run now past*) and a thermometer. Below *Run now past*
+the pump is never held back, and a pump that gets too cold is released at
+once. Away mode, Mode Off and removing SEM also release it.
+
+A step-down lasts at least 15 minutes, and the next one waits 15 minutes, so
+a price that flickers does not cycle the compressor. In observer mode SEM
+only shows that it would step down. The **Why?** card names the cause.
+
+### Heat or cool by the outdoor forecast (#1323)
+
+A climate unit added with `hvac_mode: by_forecast` picks its season itself.
+SEM reads the mean outdoor temperature of the next day (the same forecast it
+already uses, else your outdoor sensor):
+
+- under 15 °C it heats, over 22 °C it cools, in between nothing changes;
+- a change waits a day, unless the outlook is 3 °C past the other side;
+- it never changes while the unit runs, and without any outdoor reading the
+  unit is not started.
+
+One comfort band serves both seasons: SEM puts *Run now past* on the side
+the season needs. `auto` stays the unit's own Home Assistant mode.
+
 ### What a kWh of heat costs (#1081)
 
 The sensor *Heat Pump Cost of Heat* divides the price of the power the pump

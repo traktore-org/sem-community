@@ -386,9 +386,13 @@ def _own_inputs(device) -> Optional[Mapping[str, Any]]:
 
 def record_load(log: Optional[DecisionLog], device, *, on: bool,
                 watts: Optional[float] = None, reason_code: str = "",
-                text: str = "", observer: bool = False
+                text: str = "", observer: bool = False,
+                verb: Optional[str] = None
                 ) -> Optional[DecisionRecord]:
-    """A surplus load's on / off / setpoint at the load choke points."""
+    """A surplus load's on / off / setpoint at the load choke points.
+
+    (#1323) ``verb`` names a command that is neither: ``step_down`` — the
+    load is held below its normal state. Its release is an ``off``."""
     if not isinstance(log, DecisionLog):
         return None
     did = str(getattr(device, "device_id", "") or "")
@@ -401,7 +405,8 @@ def record_load(log: Optional[DecisionLog], device, *, on: bool,
     else:
         value = None
     return log.record(
-        device_id=did, kind=KIND_LOAD, verb="on" if on else "off",
+        device_id=did, kind=KIND_LOAD,
+        verb=verb or ("on" if on else "off"),
         value=value,
         reason_code=reason_code or (RC.LOAD_START if on else RC.LOAD_STOP),
         text=text, observer=observer,
