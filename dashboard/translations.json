@@ -2716,7 +2716,16 @@
     "why_reason_comfort_floor": "Je příliš chladno, proto topí hned, až na udržovanou teplotu.",
     "why_reason_legionella": "Je čas na ohřev proti legionele, proto topí na teplotu proti legionele.",
     "energy_plan_why_band_leads": "Rozhoduje jeho teploměr, proto denní doba chodu nic nežádá.",
-    "why_reason_comfort_goal": "Je pod udržovanou teplotou, proto topí v plánovaném čase."
+    "why_reason_comfort_goal": "Je pod udržovanou teplotou, proto topí v plánovaném čase.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Největší spotřebiče teď",
+    "next_top_none": "SEM teď nevidí žádný spotřebič s odběrem.",
+    "next_top_fold": "klepnutím sbalíte",
+    "next_top_unfold": "klepněte pro top 3"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5435,7 +5444,16 @@
     "why_reason_comfort_floor": "Det er for koldt, så den varmer nu, op til sin holdetemperatur.",
     "why_reason_legionella": "Legionella-opvarmningen er forfalden, så den varmer til legionella-temperaturen.",
     "energy_plan_why_band_leads": "Dens termometer bestemmer, så den daglige køretid beder ikke om noget.",
-    "why_reason_comfort_goal": "Den er under sin holdetemperatur, så den varmer i det planlagte tidsrum."
+    "why_reason_comfort_goal": "Den er under sin holdetemperatur, så den varmer i det planlagte tidsrum.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Største forbrugere nu",
+    "next_top_none": "SEM kan lige nu ikke se nogen enkelt forbruger med effekt.",
+    "next_top_fold": "tryk for at folde sammen",
+    "next_top_unfold": "tryk for top 3"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8154,7 +8172,16 @@
     "why_reason_comfort_floor": "Es ist zu kalt, darum heizt es jetzt, bis zur Halte-Temperatur.",
     "why_reason_legionella": "Die Legionellen-Aufheizung ist fällig, darum heizt es auf die Legionellen-Temperatur.",
     "energy_plan_why_band_leads": "Sein Thermometer entscheidet, darum verlangt die tägliche Laufzeit nichts.",
-    "why_reason_comfort_goal": "Es liegt unter der Halte-Temperatur, darum heizt es in der geplanten Zeit."
+    "why_reason_comfort_goal": "Es liegt unter der Halte-Temperatur, darum heizt es in der geplanten Zeit.",
+    "next_drift": "Drift {pct} %",
+    "next_sun_kwh": "Sonne {kwh} kWh",
+    "next_move": "Verschieben",
+    "next_minutes": "Minuten",
+    "next_flip": "umkehren",
+    "next_top_title": "Grösste Verbraucher jetzt",
+    "next_top_none": "SEM sieht gerade keinen einzelnen Verbraucher mit Leistung.",
+    "next_top_fold": "tippen zum Schliessen",
+    "next_top_unfold": "tippen für die Top 3"
   },
   "en": {
     "% of limit": "% of limit",
@@ -10873,7 +10900,16 @@
     "why_reason_comfort_floor": "It is too cold, so it heats now, up to its keep-at temperature.",
     "why_reason_legionella": "Its Legionella heat-up is due, so it heats to the Legionella temperature.",
     "energy_plan_why_band_leads": "Its thermometer leads, so its daily run time asks nothing.",
-    "why_reason_comfort_goal": "It is below its keep-at temperature, so it heats in the planned time."
+    "why_reason_comfort_goal": "It is below its keep-at temperature, so it heats in the planned time.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Biggest loads now",
+    "next_top_none": "No single load is drawing power that SEM can see.",
+    "next_top_fold": "tap to fold the top 3",
+    "next_top_unfold": "tap for the top 3"
   },
   "es": {
     "% of limit": "% del límite",
@@ -13592,7 +13628,16 @@
     "why_reason_comfort_floor": "Hace demasiado frío, así que calienta ya, hasta su temperatura a mantener.",
     "why_reason_legionella": "Toca el calentamiento antilegionela, así que calienta a la temperatura antilegionela.",
     "energy_plan_why_band_leads": "Manda su termómetro, así que su tiempo diario de marcha no pide nada.",
-    "why_reason_comfort_goal": "Está por debajo de su temperatura a mantener, así que calienta en el horario planificado."
+    "why_reason_comfort_goal": "Está por debajo de su temperatura a mantener, así que calienta en el horario planificado.",
+    "next_drift": "deriva {pct} %",
+    "next_sun_kwh": "sol {kwh} kWh",
+    "next_move": "Mover",
+    "next_minutes": "minutos",
+    "next_flip": "invertir",
+    "next_top_title": "Mayores consumos ahora",
+    "next_top_none": "SEM no ve ahora ninguna carga con consumo.",
+    "next_top_fold": "toca para cerrar",
+    "next_top_unfold": "toca para ver los 3 mayores"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -16311,7 +16356,16 @@
     "why_reason_comfort_floor": "On liian kylmä, joten se lämmittää nyt ylläpitolämpötilaan asti.",
     "why_reason_legionella": "Legionellalämmitys on vuorossa, joten se lämmittää legionellalämpötilaan.",
     "energy_plan_why_band_leads": "Sen lämpömittari päättää, joten päivittäinen käyntiaika ei pyydä mitään.",
-    "why_reason_comfort_goal": "Se on alle ylläpitolämpötilan, joten se lämmittää suunniteltuna aikana."
+    "why_reason_comfort_goal": "Se on alle ylläpitolämpötilan, joten se lämmittää suunniteltuna aikana.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Suurimmat kuluttajat nyt",
+    "next_top_none": "SEM ei näe juuri nyt yhtään laitetta, joka käyttää tehoa.",
+    "next_top_fold": "napauta sulkeaksesi",
+    "next_top_unfold": "napauta kolmelle suurimmalle"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -19030,7 +19084,16 @@
     "why_reason_comfort_floor": "Il fait trop froid, il chauffe donc maintenant, jusqu’à sa température à maintenir.",
     "why_reason_legionella": "Le chauffage anti-légionelle est dû, il chauffe donc à la température anti-légionelle.",
     "energy_plan_why_band_leads": "Son thermomètre décide, son temps de marche quotidien ne demande donc rien.",
-    "why_reason_comfort_goal": "Il est sous sa température à maintenir, il chauffe donc à l’heure prévue."
+    "why_reason_comfort_goal": "Il est sous sa température à maintenir, il chauffe donc à l’heure prévue.",
+    "next_drift": "dérive {pct} %",
+    "next_sun_kwh": "soleil {kwh} kWh",
+    "next_move": "Déplacer",
+    "next_minutes": "minutes",
+    "next_flip": "inverser",
+    "next_top_title": "Plus gros consommateurs",
+    "next_top_none": "SEM ne voit aucun appareil consommer en ce moment.",
+    "next_top_fold": "toucher pour replier",
+    "next_top_unfold": "toucher pour le top 3"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -21749,7 +21812,16 @@
     "why_reason_comfort_floor": "Túl hideg van, ezért most fűt, a tartandó hőmérsékletig.",
     "why_reason_legionella": "Esedékes a legionella elleni felfűtés, ezért a legionella-hőmérsékletre fűt.",
     "energy_plan_why_band_leads": "A hőmérője dönt, ezért a napi üzemidő nem kér semmit.",
-    "why_reason_comfort_goal": "A tartandó hőmérséklet alatt van, ezért a tervezett időben fűt."
+    "why_reason_comfort_goal": "A tartandó hőmérséklet alatt van, ezért a tervezett időben fűt.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Legnagyobb fogyasztók most",
+    "next_top_none": "A SEM most nem lát egyetlen fogyasztót sem teljesítménnyel.",
+    "next_top_fold": "koppintson a bezáráshoz",
+    "next_top_unfold": "koppintson a top 3-hoz"
   },
   "it": {
     "% of limit": "% del limite",
@@ -24468,7 +24540,16 @@
     "why_reason_comfort_floor": "Fa troppo freddo, quindi scalda ora, fino alla temperatura da mantenere.",
     "why_reason_legionella": "È ora del riscaldamento antilegionella, quindi scalda alla temperatura antilegionella.",
     "energy_plan_why_band_leads": "Decide il suo termometro, quindi il tempo di funzionamento giornaliero non chiede nulla.",
-    "why_reason_comfort_goal": "È sotto la temperatura da mantenere, quindi scalda nell’orario pianificato."
+    "why_reason_comfort_goal": "È sotto la temperatura da mantenere, quindi scalda nell’orario pianificato.",
+    "next_drift": "deriva {pct} %",
+    "next_sun_kwh": "sole {kwh} kWh",
+    "next_move": "Sposta",
+    "next_minutes": "minuti",
+    "next_flip": "inverti",
+    "next_top_title": "Maggiori consumi ora",
+    "next_top_none": "SEM non vede ora nessun carico acceso.",
+    "next_top_fold": "tocca per chiudere",
+    "next_top_unfold": "tocca per i primi 3"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -27187,7 +27268,16 @@
     "why_reason_comfort_floor": "Het is te koud, dus het verwarmt nu, tot de vasthoudtemperatuur.",
     "why_reason_legionella": "De legionella-opwarming is aan de beurt, dus het verwarmt tot de legionellatemperatuur.",
     "energy_plan_why_band_leads": "Zijn thermometer beslist, dus de dagelijkse looptijd vraagt niets.",
-    "why_reason_comfort_goal": "Het is onder de vasthoudtemperatuur, dus het verwarmt in de geplande tijd."
+    "why_reason_comfort_goal": "Het is onder de vasthoudtemperatuur, dus het verwarmt in de geplande tijd.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "zon {kwh} kWh",
+    "next_move": "Verplaatsen",
+    "next_minutes": "minuten",
+    "next_flip": "omdraaien",
+    "next_top_title": "Grootste verbruikers nu",
+    "next_top_none": "SEM ziet nu geen apparaat met verbruik.",
+    "next_top_fold": "tik om in te klappen",
+    "next_top_unfold": "tik voor de top 3"
   },
   "no": {
     "% of limit": "% av grense",
@@ -29906,7 +29996,16 @@
     "why_reason_comfort_floor": "Det er for kaldt, så den varmer nå, opp til holdetemperaturen.",
     "why_reason_legionella": "Legionella-oppvarmingen er forfalt, så den varmer til legionellatemperaturen.",
     "energy_plan_why_band_leads": "Termometeret bestemmer, så den daglige driftstiden ber ikke om noe.",
-    "why_reason_comfort_goal": "Den er under holdetemperaturen, så den varmer i den planlagte tiden."
+    "why_reason_comfort_goal": "Den er under holdetemperaturen, så den varmer i den planlagte tiden.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Største forbrukere nå",
+    "next_top_none": "SEM ser akkurat nå ingen enkeltforbruker med effekt.",
+    "next_top_fold": "trykk for å lukke",
+    "next_top_unfold": "trykk for topp 3"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -32625,7 +32724,16 @@
     "why_reason_comfort_floor": "Jest za zimno, więc grzeje teraz, do temperatury utrzymania.",
     "why_reason_legionella": "Pora na grzanie przeciw legionelli, więc grzeje do temperatury przeciw legionelli.",
     "energy_plan_why_band_leads": "Decyduje jego termometr, więc dzienny czas pracy niczego nie wymaga.",
-    "why_reason_comfort_goal": "Jest poniżej temperatury utrzymania, więc grzeje w zaplanowanym czasie."
+    "why_reason_comfort_goal": "Jest poniżej temperatury utrzymania, więc grzeje w zaplanowanym czasie.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Najwięksi odbiorcy teraz",
+    "next_top_none": "SEM nie widzi teraz żadnego odbiornika pobierającego moc.",
+    "next_top_fold": "dotknij, aby zwinąć",
+    "next_top_unfold": "dotknij, aby zobaczyć top 3"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -35344,7 +35452,16 @@
     "why_reason_comfort_floor": "Está demasiado frio, por isso aquece já, até à temperatura a manter.",
     "why_reason_legionella": "O aquecimento antilegionela está na hora, por isso aquece à temperatura antilegionela.",
     "energy_plan_why_band_leads": "Manda o seu termómetro, por isso o tempo diário de funcionamento não pede nada.",
-    "why_reason_comfort_goal": "Está abaixo da temperatura a manter, por isso aquece no horário planeado."
+    "why_reason_comfort_goal": "Está abaixo da temperatura a manter, por isso aquece no horário planeado.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Maiores consumidores agora",
+    "next_top_none": "O SEM não vê agora nenhuma carga com consumo.",
+    "next_top_fold": "toque para fechar",
+    "next_top_unfold": "toque para ver os 3 maiores"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -38063,7 +38180,16 @@
     "why_reason_comfort_floor": "Este prea rece, așa că încălzește acum, până la temperatura de menținut.",
     "why_reason_legionella": "Este timpul încălzirii anti-Legionella, așa că încălzește la temperatura anti-Legionella.",
     "energy_plan_why_band_leads": "Decide termometrul său, așa că timpul zilnic de funcționare nu cere nimic.",
-    "why_reason_comfort_goal": "Este sub temperatura de menținut, așa că încălzește în timpul planificat."
+    "why_reason_comfort_goal": "Este sub temperatura de menținut, așa că încălzește în timpul planificat.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Cei mai mari consumatori acum",
+    "next_top_none": "SEM nu vede acum niciun consumator cu putere.",
+    "next_top_fold": "atingeți pentru a închide",
+    "next_top_unfold": "atingeți pentru top 3"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -40782,7 +40908,16 @@
     "why_reason_comfort_floor": "Det är för kallt, så den värmer nu, upp till hålltemperaturen.",
     "why_reason_legionella": "Legionellauppvärmningen är dags, så den värmer till legionellatemperaturen.",
     "energy_plan_why_band_leads": "Dess termometer bestämmer, så den dagliga drifttiden ber inte om något.",
-    "why_reason_comfort_goal": "Den är under hålltemperaturen, så den värmer under den planerade tiden."
+    "why_reason_comfort_goal": "Den är under hålltemperaturen, så den värmer under den planerade tiden.",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "Största förbrukare just nu",
+    "next_top_none": "SEM ser just nu ingen enskild förbrukare med effekt.",
+    "next_top_fold": "tryck för att fälla ihop",
+    "next_top_unfold": "tryck för topp 3"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -43501,6 +43636,15 @@
     "why_reason_comfort_floor": "温度过低，所以现在加热，直到保持温度。",
     "why_reason_legionella": "该进行军团菌加热了，所以加热到军团菌温度。",
     "energy_plan_why_band_leads": "由温度计决定，所以每日运行时间不再要求任何电量。",
-    "why_reason_comfort_goal": "低于保持温度，所以在计划时间内加热。"
+    "why_reason_comfort_goal": "低于保持温度，所以在计划时间内加热。",
+    "next_drift": "drift {pct} %",
+    "next_sun_kwh": "sun {kwh} kWh",
+    "next_move": "Move",
+    "next_minutes": "minutes",
+    "next_flip": "flip",
+    "next_top_title": "当前最大用电设备",
+    "next_top_none": "SEM 目前看不到任何有功率的单个设备。",
+    "next_top_fold": "点按收起",
+    "next_top_unfold": "点按查看前 3 名"
   }
 }

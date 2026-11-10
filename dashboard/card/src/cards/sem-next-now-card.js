@@ -102,12 +102,13 @@ const nowCss = css`
 class SEMNextNowCard extends SEMNextBase {
     static get styles() { return [nextCss, nowCss]; }
     static get properties() {
-        return { _io: { state: true }, _hint: { state: true }, _hist: { state: true }, _fc: { state: true }, _tick: { state: true } };
+        return { _house: { state: true }, _io: { state: true }, _hint: { state: true }, _hist: { state: true }, _fc: { state: true }, _tick: { state: true } };
     }
 
     constructor() {
         super();
         this._io = readLocal(IO_KEY) !== '0';
+        this._house = false;
         this._hint = readLocal(HINT_KEY) !== '1';
         this._hist = null;
         this._histAt = 0;
@@ -341,6 +342,26 @@ class SEMNextNowCard extends SEMNextBase {
             ${this._io ? this._ioList(bar) : nothing}`;
     }
 
+    /** The three loads drawing most right now (chargers and the battery have their own rows). */
+    _topConsumers() {
+        const devices = this._attrs('sensor.sem_controllable_devices_count').devices || {};
+        const list = [];
+        for (const [id, d] of Object.entries(devices)) {
+            if (!d || d.device_type === 'battery' || d.device_type === 'ev_charger') continue;
+            let w = d.power_entity ? this._powerW(d.power_entity) : null;
+            if (w === null && d.is_on && Number.isFinite(Number(d.current_power))) w = Number(d.current_power);
+            if (w === null || w < 1) continue;
+            list.push({ id, name: d.name || id, w, entity: d.power_entity || null });
+        }
+        list.sort((a, b) => b.w - a.w);
+        const top = list.slice(0, 3);
+        if (!top.length) return html`<p class="help" style="margin:4px 0 8px">${this._t('next_top_none')}</p>`;
+        return html`<div style="margin:0 0 6px 12px;border-left:2px solid ${C.home};padding-left:8px">
+            <div class="lbl" style="margin-top:6px">${this._t('next_top_title')}</div>
+            ${top.map((d, i) => this._row('mdi:numeric-' + (i + 1) + '-circle-outline', d.name, this._kw(d.w), '',
+                { color: C.home, onClick: d.entity ? () => this._moreInfo(d.entity) : null }))}</div>`;
+    }
+
     /** One row per source and sink: kW now, the daily kWh and one more fact. */
     _ioList(bar) {
         const kwhToday = (id) => { const v = this._num(id); return v === null ? '' : this._tf('next_kwh_today', { kwh: this._fmt(v, 1) }); };
@@ -363,7 +384,14 @@ class SEMNextNowCard extends SEMNextBase {
             ins.push(row('grid_in', this._t('next_grid_import'), negOf('sensor.sem_grid_power'), sub(kwhToday('sensor.sem_daily_grid_import_energy'), cost === null ? '' : this._money(cost)), 'sensor.sem_grid_power'));
         }
         if (this._has('sensor.sem_home_consumption_power')) {
-            outs.push(row('home', this._t('next_src_house'), posOf('sensor.sem_home_consumption_power'), kwhToday('sensor.sem_daily_home_energy'), 'sensor.sem_home_consumption_power'));
+            const hw = posOf('sensor.sem_home_consumption_power');
+            // The number opens the history chart as before; the rest of the row opens the top 3.
+            const hv = html`<button type="button" class="val" @click=${(e) => { e.stopPropagation(); this._moreInfo('sensor.sem_home_consumption_power'); }}>${hw === null ? '—' : this._kw(hw)}</button>`;
+            const hr = this._row(META.home.icon, this._t('next_src_house'), hv,
+                sub(kwhToday('sensor.sem_daily_home_energy'), this._t(this._house ? 'next_top_fold' : 'next_top_unfold')),
+                { color: META.home.color, onClick: () => { this._house = !this._house; } });
+            outs.push(hr);
+            if (this._house) outs.push(this._topConsumers());
         }
         if (this._chargers.length) {
             for (const cid of this._chargers) {
