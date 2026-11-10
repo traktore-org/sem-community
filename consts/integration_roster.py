@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-02T11:07:14Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 69, 'roles_mined': 196}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-10T16:26:27Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 70, 'roles_mined': 198}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -184,7 +184,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'solaredgeoptimizers': {'name': 'SolarEdge Optimizers Data', 'repo': 'ProudElm/solaredgeoptimizers', 'origin': 'hacs', 'installs': 607, 'kind': 'energy', 'kind_from': 'keyword'},
     'solarfocus': {'name': 'Solarfocus eco manager-touch', 'repo': 'LavermanJJ/home-assistant-solarfocus', 'origin': 'hacs', 'installs': 78, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'solarlog': {'name': 'Solar-Log', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 424, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
-    'solarman': {'name': 'Solarman Integration', 'repo': 'StephanJoubert/home_assistant_solarman', 'origin': 'hacs', 'installs': 10076, 'kind': 'energy', 'kind_from': 'keyword'},
+    'solarman': {'name': 'Solarman', 'repo': 'davidrapan/ha-solarman', 'origin': 'hacs', 'installs': 10076, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'solarwatt_manager': {'name': 'SOLARWATT Manager', 'repo': 'thokaro/solarwatt-manager-homeassistant', 'origin': 'hacs', 'installs': 66, 'kind': 'energy', 'kind_from': 'keyword'},
     'solax': {'name': 'SolaX Power', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 762, 'kind': 'energy', 'kind_from': 'keyword'},
     'solax_cloud_api': {'name': 'Solax Cloud API for Single and Multi Inverter Systems', 'repo': 'NoUsername10/Solax-Cloud-API-for-Home-assistant', 'origin': 'hacs', 'installs': 270, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
@@ -450,6 +450,12 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'solarfocus': {
         'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
+    },
+    'solarman': {
+        'battery_discharge_limit': {'platform': 'number', 'keys': ('battery_discharging_power',), 'options': ()},
+        'battery_force_charge': {'platform': 'switch', 'keys': ('battery_grid_charging',), 'options': ()},
+        'battery_strategy': {'platform': 'select', 'keys': ('battery_operation_mode', 'energy_pattern', 'work_mode'), 'options': ('Voltage', 'Capacity', 'No Battery', 'Battery First', 'Load First', 'Off', 'On', 'Time of Use')},
+        'battery_target_soc': {'platform': 'number', 'keys': ('battery_grid_max_charge',), 'options': ()},
     },
     'solis_cloud_control': {
         'battery_charge_end_soc': {'platform': 'number', 'keys': ('battery_max_charge_soc',), 'options': ()},

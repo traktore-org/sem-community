@@ -132,7 +132,8 @@ class _OwnCeiling:
             return self
         raw = getattr(obj, self._raw, 0.0)
         own = entity_max_watts(getattr(obj, "_hass", None),
-                               getattr(obj, "_discharge_control_entity", ""))
+                               getattr(obj, "_discharge_control_entity", ""),
+                               percent_of_w=getattr(obj, "_percent_base_w", None))
         return raw if own is None else min(raw, own)
 
     def __set__(self, obj, value) -> None:
@@ -299,7 +300,8 @@ class BatteryControlAdapter(ABC):
         elapsed = _time.monotonic() - at
         if elapsed < self._WRITE_GRACE_S:
             return None          # not yet judged; integrations poll
-        from ..units import power_state_to_watts, power_unit_scale
+        from ..units import (
+            finite_float, normalize_unit, power_state_to_watts, power_unit_scale)
         st = self._hass.states.get(entity_id)
         # Has the integration REPORTED the entity since the write? Until it
         # has, the state is the stale pre-write value by definition and there
@@ -328,6 +330,15 @@ class BatteryControlAdapter(ABC):
         # the tolerance — the resolution the register can express.
         scale = power_unit_scale(st) if st is not None else 1.0
         seen_w = power_state_to_watts(st) if st is not None else None
+        base = getattr(self, "_percent_base_w", None)
+        if st is not None and base and normalize_unit(st) == "%":
+            # (#1158) a limit in percent of the pack's rating: read back
+            # through the same base it was written with
+            scale = float(base) / 100.0
+            try:
+                seen_w = finite_float(st.state) * scale
+            except (TypeError, ValueError):
+                seen_w = None
         tol_w = self._WRITE_TOLERANCE_NATIVE * scale
         # the entity may clamp to its own max — a reflected write is one
         # that landed within tolerance OR at the entity's ceiling
@@ -410,8 +421,42 @@ class BatteryControlAdapter(ABC):
 
     def _clear_no_limit_error(self) -> None:
         """(#1066) The gap is only an error while a limit is asked for."""
-        if self._last_error == self.NO_DISCHARGE_LIMIT_ERROR:
+        if self._last_error in (self.NO_DISCHARGE_LIMIT_ERROR,
+                                self.NO_PERCENT_BASE_ERROR):
             self._last_error = None
+
+    #: (#1158) what ``last_error`` says when the discharge limit takes
+    #: percent and SEM does not know what 100 % is.
+    NO_PERCENT_BASE_ERROR = (
+        "the discharge limit takes percent, and the battery's maximum "
+        "discharge power is not set — SEM cannot convert its watts, so it "
+        "writes no limit")
+
+    #: (#1158) The watts 100 % stands for on a percent limit: the
+    #: "Maximum battery discharge power" setting. ``None`` = the config
+    #: carries none, and SEM does not guess a rating to convert with.
+    _percent_base_w: "Optional[float]" = None
+
+    def _percent_limit_unwritable(self) -> bool:
+        """(#1158) True when the discharge limit takes percent and there is
+        no base to convert with — and say so, once. Three states (#925):
+        a watt control (False), a percent control with a base (False), a
+        percent control without one (True, nothing written, no limit
+        recorded)."""
+        from ..power_control import is_percent_control
+        entity = getattr(self, "_discharge_control_entity", "")
+        if (not entity or self._percent_base_w
+                or not is_percent_control(self._hass, entity)):
+            return False
+        self._last_discharge_limit_w = -1.0
+        self._last_error = self.NO_PERCENT_BASE_ERROR
+        if not getattr(self, "_no_percent_base_said", False):
+            self._no_percent_base_said = True
+            _LOGGER.warning(
+                "Battery: %s takes percent and 'Maximum battery discharge "
+                "power' is not set, so SEM writes no discharge limit (#1158)",
+                entity)
+        return True
 
     _max_discharge_w = _OwnCeiling()
 
@@ -475,6 +520,12 @@ class BatteryControlAdapter(ABC):
         # of entry data/options and never serialised into the adapter.
         self._config_entry_id: str = config.get("config_entry_id", "")
         self._battery_id: str = config.get("battery_id", "")
+        # (#1158) see ``_percent_base_w``
+        try:
+            base = float(config.get("battery_max_discharge_power") or 0.0)
+        except (TypeError, ValueError):
+            base = 0.0
+        self._percent_base_w = base if base > 0 else None
 
     # ─── Capability ────────────────────────────────────────────
 

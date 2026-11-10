@@ -14,7 +14,10 @@ import logging
 from typing import Optional
 
 from ..charger_types import BatteryIntent, ExportIntent
-from ..power_control import async_write_power_setpoint_verbose
+from ..power_control import (
+    async_write_power_setpoint_verbose,
+    prepare_power_setpoint,
+)
 from .base import BatteryControlAdapter
 from ...utils.select_option import listed_option
 
@@ -633,16 +636,27 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if not self._discharge_control_entity:
             self._last_discharge_limit_w = watts
             return
+        if self._percent_limit_unwritable():            # (#1158)
+            return
+        # (#1158) What the control can SAY for these watts: a percent
+        # control takes whole steps inside its own range, so 0 W on a
+        # 1–100 % register is 1 %. The read-back is judged against that.
+        prepared = prepare_power_setpoint(
+            self._hass, self._discharge_control_entity, watts,
+            percent_of_w=self._percent_base_w)
         ok, wrote = await async_write_power_setpoint_verbose(
             self._hass,
             self._discharge_control_entity,
             watts,
             context="Generic battery discharge limit",
             force=force,
+            percent_of_w=self._percent_base_w,
         )
         if ok:
             self._last_discharge_limit_w = watts
             if wrote:
                 # only a write that went OUT is judged; the same-value skip
                 # is not a write and must not re-arm the grace (06.09 audit)
-                self._note_pending_write(self._discharge_control_entity, watts)
+                sent_w = (prepared.value * prepared.scale_to_watts
+                          if prepared is not None else watts)
+                self._note_pending_write(self._discharge_control_entity, sent_w)

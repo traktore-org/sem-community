@@ -573,10 +573,6 @@ class TestTheMatrixControlClaimsAgreeWithTheRoster:
         "GoodWe": "declares `eco_mode_power` (a % of rated, adapter-specific) "
                   "and `battery_discharge_depth`; not a watt limit",
         "SolaX": "solax_modbus declares no keys (entity names set in code)",
-        "DEYE / Sunsynk": "ha-solarman: entity names come from YAML "
-                          "profiles, nothing declared",
-        "Sofar": "ha-solarman, same",
-        "Solis": "ha-solarman, same",
         "Sessy (battery)": "one declared control (the power strategy); the "
                            "setpoint is a service, not a number",
     }

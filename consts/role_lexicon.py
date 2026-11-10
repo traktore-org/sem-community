@@ -49,8 +49,12 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
     # ── battery control ────────────────────────────────────────────────
     "battery_discharge_limit": {
         "platform": "number",
+        # (#1158) ``battery_discharging_power`` as a NUMBER is the limit an
+        # inverter without watt registers offers, in percent of its rating
+        # (a reading of that name is a sensor, and never matches here).
         "any": (r"max.*discharg.*power", r"discharg.*power.*(limit|max)",
-                r"storage_maximum_discharging", r"discharge_power_limit"),
+                r"storage_maximum_discharging", r"discharge_power_limit",
+                r"^battery_discharging_power$"),
         # a current register is amperes: writing watts into it is the #749
         # bug this project already shipped once
         "not": (r"current", r"soc", r"percent", r"cutoff", r"voltage"),
@@ -90,8 +94,12 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         # charge target with a one-click accept. Huawei's capacity-control
         # family is a peak-shaving feature, not a target; there is no brand
         # whose target SOC is named only by those two words.
+        # (#1158) ``grid_max_charge`` is the level a grid charge stops at on
+        # an inverter that has a grid-charge switch and no program groups:
+        # the target of exactly the charge that switch starts.
         "any": (r"(target|charge|end).*(?:^|_)soc(?:_|$)",
-                r"(?:^|_)soc(?:_|$).*(limit|target)"),
+                r"(?:^|_)soc(?:_|$).*(limit|target)",
+                r"(?:^|_)grid_max_charge$"),
         # (#810, @Azlinon on real EG4 hardware) A declared key is not
         # automatically a key SEM may WRITE. He named three that look like a
         # target SOC and are not: ``system_charge_soc_limit`` is the global
@@ -161,6 +169,12 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         "platform": "switch",
         "any": (r"force.*charg", r"forcible.*charg", r"quick_charge",
                 r"ac_charge(_enable)?$"),
+        # (#1158) A ``grid_charging`` switch is two different things. In
+        # the stick-logger profiles it charges the pack from the grid while
+        # it is on, up to ``grid_max_charge``. Elsewhere the same words are
+        # a permission ("the battery MAY charge from the grid"), which
+        # starts nothing — so the word counts for that one integration.
+        "brand_any": {"solarman": (r"^battery_grid_charging$",)},
         "not": (r"discharg",),
     },
     # ── EV charger control ────────────────────────────────────────────
@@ -599,12 +613,15 @@ READ_ONLY_CONTROL_ROLES: Final[frozenset] = frozenset({"battery_charge_end_soc"}
 #: (switches, selects).
 UNIT_CLASSES: Final[Dict[str, frozenset]] = {
     "power": frozenset({"W", "kW"}),
+    # (#1158) a limit in percent of the pack's rating: SEM converts its
+    # watts with the maximum discharge power the user has set
+    "power_or_percent": frozenset({"W", "kW", "%"}),
     "percent": frozenset({"%"}),
     "current": frozenset({"A"}),
 }
 ROLE_EXPECTED_UNIT: Final[Dict[str, str]] = {
     "battery_charge_limit": "power",
-    "battery_discharge_limit": "power",
+    "battery_discharge_limit": "power_or_percent",
     "battery_target_soc": "percent",
     "battery_charge_end_soc": "percent",       # (#1166)
     "battery_power": "power",
