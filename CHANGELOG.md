@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **SEM Next**: a new dashboard, five screens — one power bar, the plan on the price strip, devices you can reorder, settings as sentences (#1321).
 - ✨ **The plan says why each block sits where it does, and what waiting saves against buying now** (#1321).
 - ✨ **Loads get Boost: run now for 30, 60 or 120 minutes, then back to Smart** (#1321). A grid peak still stops it.
+- 📝 **The load card's Comfort hint now says how Keep at is reached**: in the planned hour from any source, sun may go further (#1334).
+
+# [2.3.0-beta.11] — 10.11.2026
+
 - 🐛 **The Energy Plan card shows a load's daily grid run when SEM starts it** (#1330). It showed a midday run SEM never did.
 
 # [2.3.0-beta.10] — 09.11.2026
