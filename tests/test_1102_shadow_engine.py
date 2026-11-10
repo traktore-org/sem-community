@@ -6,8 +6,8 @@ must be seen. These pin that the comparison:
 
 * changes NOTHING the passes do (actions and device state, over many cycles),
 * is pure (a dry walk leaves controller and devices as they were),
-* catches the known differences (D1 comfort banking cut by the force expiry,
-  D2 the per-load threshold against the −100 W band),
+* agrees where #1335 made the engines equal (D1 comfort banking, D2 the
+  whole-set deficit stop),
 * stays quiet for a Legionella own run (both engines keep it),
 * keeps its sensor summary small and its log bounded.
 """
@@ -128,11 +128,10 @@ async def test_a_dry_walk_leaves_everything_as_it_was():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_d1_comfort_banking_is_cut_by_the_old_force_expiry():
-    """#1102: a 'Solar only' boiler with a willing band and an open planned
-    block. The old banking pass starts it and marks it as a cheap-hours run;
-    next cycle the old expiry stops it ('cheap-hours disabled by user'). The
-    layers keep it for the whole block. The record says so."""
+async def test_d1_comfort_banking_holds_through_its_block_in_both():
+    """#1102/#1335: a 'Solar only' boiler with a willing band and an open
+    planned block. The old expiry used to stop the banking run one cycle in
+    ('cheap-hours disabled by user'); now both engines keep it for the block."""
     sc = SurplusController(MagicMock())
     boiler = _LogDev("boiler", 1, min_power=3000, rated_power=3000,
                      top_up_policy="solar_only", comfort_state="willing")
@@ -145,23 +144,17 @@ async def test_d1_comfort_banking_is_cut_by_the_old_force_expiry():
     block = {"boiler": PlanVerdict(in_block=True, comfort_in_block=True, reason="planned block")}
     await sc.update(available_power_w=0.0, price_level="normal", plan_windows=block)
     assert boiler.calls == [("on", 3000)]          # banking pass started it
-    boiler._can_act = False                        # the minimum off time after a stop
     await sc.update(available_power_w=0.0, price_level="normal", plan_windows=block)
-    assert boiler.calls[-1] == ("off",)            # the old expiry cut it
-
-    rec = [r for r in sc.engine_shadow.records() if r["device_id"] == "boiler"]
-    assert rec and rec[-1]["event"] == "start" and rec[-1]["kinds"] == ["on_off"]
-    assert rec[-1]["old"]["on"] is False and rec[-1]["new"]["on"] is True
-    assert "planned block" in rec[-1]["new"]["reason"]
-    assert sc.engine_shadow.summary()["by_kind"] == {"on_off": 1}
+    assert boiler.calls == [("on", 3000)]          # and kept it
+    assert sc.engine_shadow.records() == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_d2_one_threshold_per_load_against_the_old_band():
-    """Two running 800 W loads, the sun now carries 1550 W. The old pass
-    stops a load only below −100 W in total, so both stay; the layers give
-    each load its own threshold, so the second stops."""
+async def test_d2_the_walk_judges_the_whole_set_in_both():
+    """Two running 800 W loads, the sun now carries 1550 W. The walk is 50 W
+    short, inside the 100 W band, so both engines keep both (#1335: layer 2
+    runs the deficit stop the old passes ran)."""
     sc = SurplusController(MagicMock())
     sc.regulation_offset = 0.0
     a = _LogDev("a", 1, min_power=800, is_active=True, draw=800)
@@ -169,10 +162,8 @@ async def test_d2_one_threshold_per_load_against_the_old_band():
     for d in (a, b):
         sc.register_device(d)
     await sc.update(available_power_w=1550.0)
-    assert a.is_active and b.is_active               # old engine kept both
-    diffs = {r["device_id"]: r for r in sc.engine_shadow.records()}
-    assert set(diffs) == {"b"}
-    assert diffs["b"]["old"]["on"] is True and diffs["b"]["new"]["on"] is False
+    assert a.is_active and b.is_active
+    assert sc.engine_shadow.records() == []
 
 
 @pytest.mark.unit

@@ -86,8 +86,11 @@ class TestTooCold:
         dev = _boiler(45.0, active=True)
         dev._comfort_floor_run = True
         assert _intent(dev).code == RC.LOAD_COMFORT_FLOOR and _intent(dev).on
-        dev._comfort_floor_run = False   # a run the floor did not start stops (no source)
-        assert not _intent(dev).on
+        # a run the floor did not start is no floor run: it is a plain sun
+        # run, and the whole-set walk (layer 2) stops it when the sun is
+        # short (#1335)
+        dev._comfort_floor_run = False
+        assert _intent(dev).code != RC.LOAD_COMFORT_FLOOR
 
     def test_your_stop_beats_too_cold(self):
         it = _intent(_boiler(34.0, stop_at=30.0))
@@ -208,7 +211,7 @@ class TestThePlanAsksForKeepAt:
 
 
 @pytest.mark.unit
-def test_layer_two_remembers_a_floor_run_and_a_dry_walk_puts_it_back():
+def test_layer_three_remembers_a_floor_run_and_a_dry_walk_writes_nothing():
     from custom_components.solar_energy_management.coordinator.surplus_controller import (
         SurplusController,
     )
@@ -221,4 +224,10 @@ def test_layer_two_remembers_a_floor_run_and_a_dry_walk_puts_it_back():
     assert getattr(dev, "_comfort_floor_run", False) is False
     intents = sc._desired_intents([dev], **kw)
     assert intents["boiler"].code == RC.LOAD_COMFORT_FLOOR
+    # (#1335) the layers decide; layer 3 writes the memory with the markers
+    assert getattr(dev, "_comfort_floor_run", False) is False
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        _apply_source_markers,
+    )
+    _apply_source_markers(dev, intents["boiler"])
     assert dev._comfort_floor_run is True
