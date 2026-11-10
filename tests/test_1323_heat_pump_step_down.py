@@ -27,6 +27,7 @@ from custom_components.solar_energy_management.coordinator.surplus_controller im
     STEP_DOWN_VERB,
     SurplusController,
     _activate_owned,
+    _release_step_down,
     compute_load_intent,
     deactivate_devices,
     reconcile_load,
@@ -372,7 +373,7 @@ class TestObserverRestartTeardown:
         sc, hp = _pump(hass)
         await _cycle(sc, price=EXPENSIVE, buying=800.0)
         memo = hp.step_down_memo()
-        assert memo == {"action": "block", "restore": None}
+        assert memo == {"action": "block", "restore": None, "target": None}
 
         sc2, fresh = _pump_keeping_contacts(hass)
         assert fresh.restore_step_down(memo) is True
@@ -425,7 +426,8 @@ def _pump_keeping_contacts(hass):
 class TestOnePlaceSwitches:
     def test_layer_3_sends_and_takes_back(self):
         assert calls(reconcile_load, "step_down")
-        assert calls(reconcile_load, "release_step_down")
+        assert calls(reconcile_load, "_release_step_down")
+        assert calls(_release_step_down, "release_step_down")
         assert not calls(compute_load_intent, "step_down")
         assert not calls(SurplusController._desired_intents, "step_down")
 
@@ -470,13 +472,13 @@ class TestHeatOrCoolByForecast:
         warm, _ = _unit()
         assert warm.update_season(27.0, T0) == "cool" and warm.hvac_mode == "cool"
 
-    def test_no_outlook_yet_is_not_started(self):
+    def test_no_outlook_yet_waits_with_its_own_reason(self):
         dev, _ = _unit()
         assert dev.update_season(None, T0) is None
-        assert dev.start_refusal == "sensor"
+        assert dev.start_refusal == "season"
         dev.control_mode = DeviceControlMode.SURPLUS
         it = _intent(dev, remaining_surplus_w=5000.0)
-        assert (it.on, it.code) == (False, RC.LOAD_NO_READING)
+        assert (it.on, it.code) == (False, RC.LOAD_NO_SEASON)
 
     def test_the_dead_band_changes_nothing(self):
         dev, _ = _unit()
@@ -604,9 +606,11 @@ class TestSettingAndMemo:
         hp._stepped_down, hp._step_restore_setpoint = True, 21.0
         host = SimpleNamespace(_surplus_controller=sc)
         memos = SEMCoordinator._step_down_memos(host)
-        assert memos == {hp.device_id: {"action": "setpoint", "restore": 21.0}}
+        assert memos == {hp.device_id: {
+            "action": "setpoint", "restore": 21.0, "target": None}}
         SEMStorage.set_step_down_state(store, memos)
 
+        hass.set("climate.hp", "heat", temperature=19.0)   # still SEM's value
         _sc2, fresh = _pump(hass, action="setpoint", climate="climate.hp")
         coord = SimpleNamespace(_storage=SimpleNamespace(
             get_step_down_state=lambda: SEMStorage.get_step_down_state(store)))
@@ -681,3 +685,237 @@ class TestEveryPumpAndTheEditor:
             CLIMATE_HVAC_MODES,
         )
         assert {"heat", "cool", HVAC_BY_FORECAST} <= set(CLIMATE_HVAC_MODES)
+
+
+# ── review round: the season is kept, a stale memo is dropped ─────────────
+
+def _cold_unit(room="20.5"):
+    """A by-forecast unit with a band: Keep at 21 °C, run now past 19 °C."""
+    hass = _Hass()
+    hass.set("climate.ac", "off", current_temperature=float(room))
+    dev = ClimateDevice(hass, "ac", "AC", rated_power=1500.0,
+                        entity_id="climate.ac", hvac_mode=HVAC_BY_FORECAST)
+    dev.comfort_target, dev.comfort_limit = 21.0, 19.0
+    dev.control_mode = DeviceControlMode.SURPLUS
+    return dev, hass
+
+
+def _stamp(dev, *, stored=None, outlook=None):
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    host = SimpleNamespace(
+        _surplus_controller=SimpleNamespace(_devices={dev.device_id: dev}),
+        _storage=SimpleNamespace(get_season_state=lambda: dict(stored or {})),
+        _outdoor_outlook_c=lambda: outlook)
+    SEMCoordinator._stamp_outdoor_outlook(host)
+    return host
+
+
+class TestTheSeasonIsKept:
+    def test_a_restart_keeps_the_dead_band_and_the_dwell(self):
+        """Yesterday heat, outlook 19 °C, restart: 19 °C is inside the dead
+        band, so it stays heat — it used to decide anew at the middle."""
+        old, _ = _unit()
+        old.update_season(8.0, datetime.now() - timedelta(hours=20))
+        memo = old.season_memo()
+        assert memo["mode"] == "heat" and memo["since"]
+
+        fresh, _ = _unit()
+        _stamp(fresh, stored={"ac": memo}, outlook=19.0)
+        assert fresh.hvac_mode == "heat"
+        # …and the dwell goes on from the stored start, not from the restart
+        _stamp(fresh, stored={"ac": memo}, outlook=23.5)
+        assert fresh.hvac_mode == "heat", "20 h in: the day is not over"
+        assert fresh._season_since == datetime.fromisoformat(memo["since"])
+
+    def test_no_outlook_keeps_the_stored_mode(self):
+        fresh, _ = _unit()
+        _stamp(fresh, stored={"ac": {"mode": "cool", "since": None}}, outlook=None)
+        assert fresh.hvac_mode == "cool" and fresh.start_refusal is None
+
+    def test_a_bad_memo_is_no_memo(self):
+        fresh, _ = _unit()
+        _stamp(fresh, stored={"ac": {"mode": "warp"}}, outlook=None)
+        assert fresh.start_refusal == "season"
+        fixed, _ = _unit(mode="cool")
+        assert fixed.restore_season({"mode": "heat", "since": None}) is False
+
+    def test_the_season_is_stored_beside_the_other_device_state(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        from custom_components.solar_energy_management.coordinator.storage import (
+            SEMStorage,
+        )
+        dev, _ = _unit()
+        dev.update_season(27.0, T0)
+        host = SimpleNamespace(_surplus_controller=SimpleNamespace(
+            _devices={"ac": dev, "plug": SimpleNamespace()}))
+        memos = SEMCoordinator._season_memos(host)
+        assert memos == {"ac": {"mode": "cool", "since": T0.isoformat()}}
+        store = SimpleNamespace(_energy_data={})
+        SEMStorage.set_season_state(store, memos)
+        assert SEMStorage.get_season_state(store) == memos
+
+    def test_no_season_and_too_cold_heats(self):
+        """Nothing stored, no outlook, 18.5 °C against a 19 °C limit: the
+        comfort floor starts it in heat. It used to be refused ahead of
+        the floor, as a dead thermometer."""
+        dev, hass = _cold_unit("18.5")
+        _stamp(dev, outlook=None)
+        assert dev.start_refusal is None and dev.hvac_mode == "heat"
+        it = _intent(dev)
+        assert (it.on, it.code) == (True, RC.LOAD_COMFORT_FLOOR)
+
+    @pytest.mark.asyncio
+    async def test_the_too_cold_start_sends_heat_and_stays_heat(self):
+        dev, hass = _cold_unit("18.5")
+        _stamp(dev, outlook=None)
+        await dev.activate(1500.0)
+        assert hass.calls("set_hvac_mode", "climate.ac")[0].args[2][
+            "hvac_mode"] == "heat"
+        from custom_components.solar_energy_management.devices.base import DeviceState
+        dev._status.state = DeviceState.ACTIVE
+        hass.set("climate.ac", "heat", current_temperature=19.5)
+        _stamp(dev, outlook=21.0)          # the first outlook, mid-run
+        assert dev.hvac_mode == "heat"
+
+    def test_no_season_and_warm_enough_waits_with_its_own_reason(self):
+        dev, _ = _cold_unit("20.5")
+        _stamp(dev, outlook=None)
+        it = _intent(dev, remaining_surplus_w=5000.0)
+        assert (it.on, it.code) == (False, RC.LOAD_NO_SEASON)
+        assert "sensor" not in it.reason
+
+
+@pytest.mark.asyncio
+class TestAStaleMemoIsDropped:
+    MEMO = {"action": "setpoint", "restore": 21.0, "target": 19.0}
+
+    def _fresh(self, live, action="setpoint", **attrs):
+        hass = _Hass()
+        hass.set("climate.hp", "heat", temperature=live, **attrs)
+        sc, hp = _pump(hass, action=action, climate="climate.hp")
+        return hass, sc, hp
+
+    async def test_a_setpoint_the_user_changed_is_left_alone(self):
+        """A crash between the release and the save leaves an old memo.
+        The user has since set 22 °C: SEM must not write 21 °C over it."""
+        hass, sc, hp = self._fresh(22.0)
+        assert hp.restore_step_down(self.MEMO) is False
+        assert not hp.is_stepped_down
+        await _cycle(sc, 3, price=NORMAL)
+        assert not hass.calls("set_temperature", "climate.hp")
+
+    async def test_a_setpoint_still_sems_is_put_back(self):
+        hass, sc, hp = self._fresh(19.0)
+        assert hp.restore_step_down(self.MEMO) is True
+        await _cycle(sc, price=NORMAL)
+        assert [c.args[2]["temperature"]
+                for c in hass.calls("set_temperature", "climate.hp")] == [21.0]
+
+    async def test_the_devices_own_step_is_the_tolerance(self):
+        hass, _sc, hp = self._fresh(19.4)            # default step 0.5
+        assert hp.restore_step_down(self.MEMO) is True
+        hass, _sc, hp = self._fresh(19.4, target_temp_step=0.1)
+        assert hp.restore_step_down(self.MEMO) is False
+        hass, _sc, hp = self._fresh("unknown")       # no reading: not believed
+        assert hp.restore_step_down(self.MEMO) is False
+
+    async def test_the_option_switched_off_still_puts_sems_value_back(self):
+        hass, sc, hp = self._fresh(19.0, action="off")
+        assert hp.restore_step_down(self.MEMO) is True
+        await _cycle(sc, price=EXPENSIVE, buying=800.0)
+        assert not hp.is_stepped_down
+        assert [c.args[2]["temperature"]
+                for c in hass.calls("set_temperature", "climate.hp")] == [21.0]
+
+    async def test_the_option_switched_off_and_not_sems_writes_nothing(self):
+        hass, sc, hp = self._fresh(22.0, action="off")
+        assert hp.restore_step_down(self.MEMO) is False
+        await _cycle(sc, 3, price=EXPENSIVE, buying=800.0)
+        assert not hass.services.async_call.await_args_list
+
+    async def test_the_memo_names_the_value_sem_wrote(self):
+        hass, sc, hp = self._fresh(21.0)
+        await _cycle(sc, price=EXPENSIVE, buying=800.0)
+        assert hp.step_down_memo() == self.MEMO
+
+
+class TestTheOutlookAndDailyForecasts:
+    def _outlook(self, rows, now_c=9.0):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        host = SimpleNamespace(_temp_forecast=rows, _OUTLOOK_HOURS=24,
+                               _outdoor_temperature_or_none=lambda: now_c)
+        return SEMCoordinator._outdoor_outlook_c(host)
+
+    def test_a_days_row_counts_for_its_day(self):
+        from homeassistant.util import dt as dt_util
+        today = dt_util.start_of_local_day()
+        rows = [(today, 12.0, "daily"),                      # today: (high+low)/2
+                (today + timedelta(days=1), 16.0, "daily"),
+                (today + timedelta(days=3), 40.0, "daily")]
+        assert self._outlook(rows) == pytest.approx(14.0)
+
+    def test_a_day_known_by_its_high_alone_is_not_the_outlook(self):
+        from homeassistant.util import dt as dt_util
+        today = dt_util.start_of_local_day()
+        assert self._outlook([(today, 28.0, "daily_high")], now_c=9.0) == 9.0
+
+    @pytest.mark.asyncio
+    async def test_a_daily_forecast_without_a_low_is_marked(self):
+        from unittest.mock import AsyncMock
+
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+
+        async def _call(domain, service, data, **_kw):
+            if data["type"] == "hourly":
+                raise ValueError("not offered")
+            return {"weather.home": {"forecast": [
+                {"datetime": "2026-11-11T00:00:00+01:00", "temperature": 28.0},
+                {"datetime": "2026-11-12T00:00:00+01:00", "temperature": 20.0,
+                 "templow": 10.0}]}}
+
+        host = SimpleNamespace(
+            hass=SimpleNamespace(
+                services=SimpleNamespace(async_call=AsyncMock(side_effect=_call)),
+                states=SimpleNamespace(get=lambda _e: SimpleNamespace(
+                    attributes={"temperature_unit": "°C"}))),
+            _forecast_weather_entity=lambda: "weather.home", _temp_forecast=[])
+        await SEMCoordinator._refresh_temperature_forecast(host)
+        assert [(t, kind) for _s, t, kind in host._temp_forecast] == [
+            (28.0, "daily_high"), (15.0, "daily")]
+
+
+@pytest.mark.asyncio
+class TestOneWriteWhenAStartReplacesABlock:
+    async def test_the_contacts_move_once(self):
+        """Blocked (1:0), then a start: straight to boost (0:1) — two
+        writes, one per contact. It used to pass through normal first."""
+        hass = _Hass()
+        sc, hp = _pump(hass)
+        await _cycle(sc, price=EXPENSIVE, buying=800.0)
+        hass.services.async_call.reset_mock()
+        await reconcile_load(hp, LoadIntent(True, 2000.0, "solar", "sun"),
+                             controller=sc)
+        assert hp.is_active and not hp.is_stepped_down
+        assert hp.sg_ready_state is SGReadyState.BOOST
+        assert len(hass.services.async_call.await_args_list) == 2
+        assert _sg(hass) == ("off", "on")
+
+    async def test_a_start_that_cannot_go_still_releases(self):
+        hass = _Hass()
+        sc, hp = _pump(hass)
+        await _cycle(sc, price=EXPENSIVE, buying=800.0)
+        hp._last_deactivated = datetime.now()        # inside its minimum pause
+        hp._status.last_deactivated = hp._last_deactivated
+        assert hp.can_activate() is False
+        await reconcile_load(hp, LoadIntent(True, 2000.0, "solar", "sun"),
+                             controller=sc)
+        assert not hp.is_stepped_down and not hp.is_active
+        assert hp.sg_ready_state is SGReadyState.NORMAL

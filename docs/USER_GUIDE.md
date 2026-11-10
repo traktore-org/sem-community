@@ -437,8 +437,10 @@ already uses, else your outdoor sensor):
 
 - under 15 °C it heats, over 22 °C it cools, in between nothing changes;
 - a change waits a day, unless the outlook is 3 °C past the other side;
-- it never changes while the unit runs, and without any outdoor reading the
-  unit is not started.
+- it never changes while the unit runs;
+- the season is kept over a restart. With no outdoor reading SEM keeps the
+  last season. If it never had one it waits, but a room that is too cold is
+  still heated.
 
 One comfort band serves both seasons: SEM puts *Run now past* on the side
 the season needs. `auto` stays the unit's own Home Assistant mode.

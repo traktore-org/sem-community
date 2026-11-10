@@ -215,6 +215,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         self._stepped_down_at: Optional[datetime] = None
         self._step_released_at: Optional[datetime] = None
         self._step_restore_setpoint: Optional[float] = None
+        #: the lowered target SEM wrote — how a restart knows the setpoint
+        #: is still SEM's and not one the user set meanwhile
+        self._step_down_target: Optional[float] = None
         #: a step-down lasts at least this long, and the next one waits this
         #: long after a release — one billing slot, so the compressor is not
         #: cycled by a price or a peak that flickers
@@ -360,6 +363,7 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             self._stepped_down = False
             self._step_released_at = datetime.now()
             self._step_restore_setpoint = None
+            self._step_down_target = None
         self._status.state = DeviceState.ACTIVE
         self._status.current_consumption_w = self.rated_power
         self._status.allocated_power_w = self.rated_power
@@ -526,6 +530,7 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                 self._last_step_down_path = "withheld"
                 return False
             self._step_restore_setpoint = live
+            self._step_down_target = target
             self._last_step_down_path = "setpoint"
         else:
             return False
@@ -561,6 +566,7 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                 return False
         self._stepped_down = False
         self._step_restore_setpoint = None
+        self._step_down_target = None
         self._step_released_at = datetime.now()
         self._last_step_down_path = "released"
         _LOGGER.info("%s: step-down released", self.name)
@@ -570,8 +576,11 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         """What a restart must know to undo a step-down, or None."""
         if not self._stepped_down:
             return None
-        return {"action": self.step_down_action,
-                "restore": self._step_restore_setpoint}
+        return {"action": (STEP_DOWN_SETPOINT
+                           if self._step_restore_setpoint is not None
+                           else STEP_DOWN_BLOCK),
+                "restore": self._step_restore_setpoint,
+                "target": self._step_down_target}
 
     def restore_step_down(self, memo) -> bool:
         """(#1323) Re-own a step-down SEM left across a reload or a restart.
@@ -580,7 +589,15 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         would stay blocked, or at its lowered setpoint, with nobody left to
         release it. The stored memo says SEM did it; the hold is taken as
         served, so the next cycle releases it unless the cause still stands.
-        A ``block`` is believed only when the contacts still read blocked.
+
+        The memo alone is not believed — it may be older than the pump's
+        state (a crash between a release and the save). A ``block`` counts
+        only while the contacts still read blocked; a ``setpoint`` only
+        while the climate target still reads the lowered value SEM wrote,
+        within one setpoint step. Anything else is the user's by now: the
+        memo is dropped and nothing is written. This holds with the option
+        switched off meanwhile too — what is still SEM's is re-owned, so
+        layer 3 puts it back; what is not is left alone.
         """
         if not isinstance(memo, dict) or self._stepped_down:
             return False
@@ -592,15 +609,35 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             self._hp_status.sg_ready_state = SGReadyState.BLOCKED
         elif action == STEP_DOWN_SETPOINT:
             try:
-                self._step_restore_setpoint = float(memo.get("restore"))
+                restore = float(memo.get("restore"))
             except (TypeError, ValueError):
                 return False
+            try:
+                target = float(memo.get("target"))
+            except (TypeError, ValueError):
+                target = self._step_down_setpoint(restore)   # an older memo
+            live = self._live_setpoint()
+            if live is None or abs(live - target) > self._setpoint_step():
+                self._last_step_down_path = "memo_stale"
+                return False
+            self._step_restore_setpoint = restore
+            self._step_down_target = target
         else:
             return False
         self._stepped_down = True
         self._stepped_down_at = None
         self._last_step_down_path = "restored"
         return True
+
+    def _setpoint_step(self) -> float:
+        """The climate entity's own setpoint step (0.5 when it names none)."""
+        st = self.hass.states.get(self.climate_entity_id) if (
+            self.hass and self.climate_entity_id) else None
+        try:
+            step = float((getattr(st, "attributes", None) or {}).get("target_temp_step"))
+        except (TypeError, ValueError):
+            step = 0.0
+        return step if step > 0 else 0.5
 
     def _relays_for(self, state: SGReadyState) -> tuple[bool, bool]:
         """(relay1_on, relay2_on) for an SG-Ready state, applying the

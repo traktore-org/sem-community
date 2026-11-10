@@ -133,6 +133,8 @@ LOAD_DISABLED = "disabled"
 LOAD_STEP_DOWN_PRICE = "step_down_price"
 LOAD_STEP_DOWN_PEAK = "step_down_peak"
 LOAD_STEP_DOWN_END = "step_down_end"
+# (#1323) a unit that picks heat or cool has no outdoor reading to pick from
+LOAD_NO_SEASON = "no_season"
 
 # ── the grid export limit (#1090) ────────────────────────────────────
 EXPORT_NEGATIVE_PRICE = "export_negative_price"
