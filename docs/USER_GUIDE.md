@@ -1671,6 +1671,16 @@ Everything below is **off by default** and lives on the Config tab under
   the hold keeps the whole pack. On a cycle whose house load SEM cannot
   measure (a dark grid sensor), it does not hold at all — nothing would show
   the slot is safe — and the pack covers the house as before.
+- **Keep the battery for the peak limit** (#970, off by default) — for a
+  tariff that bills your highest 15 minutes. The house buys from the grid
+  up to the peak limit and the pack covers only what is above it, on any
+  tariff, flat ones too. It needs a peak limit. It ends, and the pack
+  covers the house as usual, when the pack is at or above *Buffer SOC*
+  and the coming sun (what is left today or tomorrow's forecast) can
+  refill the pack from its reserve; it returns once the pack is 10 points
+  under that level. It stands aside in an expensive hour, while a car
+  charges, when the pack's level cannot be read, and for a forced charge.
+  Without a forecast it never ends by itself.
 - **Morning EV window** — before the configured departure, empty the pack
   into the car down to the *Morning drain floor*, only when today's forecast
   refills the pack.

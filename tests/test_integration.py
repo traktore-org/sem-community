@@ -55,7 +55,9 @@ class TestPlatformEntityCounts:
                         "forecast_spending_enabled",
                         "battery_may_export", "battery_may_assist_ev",
                         "export_guard_enabled", "export_guard_override_external",      # arc #921
-                        "battery_house_sink_enabled", "ev_morning_window_enabled",
+                        "battery_house_sink_enabled",
+                        # #970 — keep the battery for the peak limit, default OFF
+                        "battery_peak_hold_enabled", "ev_morning_window_enabled",
                         "simulation_tab",
                         "battery_discharge_limit_caps_charge",  # #1078
                         "ev_absorb_grid_fill",  # #1080

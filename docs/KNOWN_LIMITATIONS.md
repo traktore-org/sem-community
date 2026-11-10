@@ -395,11 +395,12 @@ different models is not supported yet. With `direction_select` SEM writes
 the direction first and the watts only once the select reads it back, so a
 change of direction lands one cycle later by design.
 
-## The house sink is all-or-nothing (#970 open)
+## Keeping the battery for the peak limit needs a forecast to end (#970)
 
-When the battery is held, the grid pays for the whole house; when it is
-open, the battery does. A rate in between — grid up to the peak limit,
-battery for the rest — is not built.
+*Keep the battery for the peak limit* lets go only when the pack is high
+and the forecast says the coming sun refills it. Without a solar forecast
+it holds until you switch it off. The discharge limit moves in 750 W
+steps, so the pack may give up to one step more than the house needs.
 
 ## Controls follow what the house can use (2.2, #996)
 

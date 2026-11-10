@@ -1633,6 +1633,9 @@
       "battery_house_sink_enabled": {
         "name": "House as a battery sink"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Keep the battery for the peak limit"
+      },
       "ev_morning_window_enabled": {
         "name": "Morning EV window"
       },

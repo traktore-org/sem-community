@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **New switch: keep the battery for the peak limit** (#970). The house buys up to your limit; the battery covers the rest. Off by default.
 - 🐛 **The "Why did SEM act?" card no longer shows the car's budget as Surplus** (#1331). A car row says Budget, the others show spare sun.
 - 🐛 **The Energy Plan card shows a battery grid charge only at night, and only when SEM will do it** (#1311). It showed day blocks too.
 - 🐛 **A car that leaves after tonight now gets a plan sized on tonight's hours only** (#1309). Day hours no longer count as charge time.

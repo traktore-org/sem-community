@@ -1633,6 +1633,9 @@
       "battery_house_sink_enabled": {
         "name": "Huis als batterij-afnemer"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Batterij bewaren voor de pieklimiet"
+      },
       "ev_morning_window_enabled": {
         "name": "Ochtendvenster voor de EV"
       },

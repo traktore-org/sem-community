@@ -1633,6 +1633,9 @@
       "battery_house_sink_enabled": {
         "name": "住宅作为电池去向"
       },
+      "battery_peak_hold_enabled": {
+        "name": "为功率上限保留电池"
+      },
       "ev_morning_window_enabled": {
         "name": "电动车晨间窗口"
       },

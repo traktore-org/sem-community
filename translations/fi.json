@@ -1633,6 +1633,9 @@
       "battery_house_sink_enabled": {
         "name": "Talo akun kohteena"
       },
+      "battery_peak_hold_enabled": {
+        "name": "Säästä akku tehorajaa varten"
+      },
       "ev_morning_window_enabled": {
         "name": "Aamuikkuna sähköautolle"
       },
