@@ -618,3 +618,66 @@ class TestSettingAndMemo:
         _seed_step_down(SimpleNamespace(_storage=SimpleNamespace(
             get_step_down_state=lambda: {})), other)
         assert not other.is_stepped_down
+
+
+# ── every heat pump reads the setting; the mode is set in the editor ──────
+
+class TestEveryPumpAndTheEditor:
+    def test_every_heat_pump_reads_its_own_row_at_refresh(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        pumps = {did: HeatPumpController(_Hass(), device_id=did)
+                 for did in ("heat_pump", "hp_cellar", "heat_pump_3")}
+        sc = SimpleNamespace(get_device=pumps.get, regulation_offset=50.0,
+                             max_export_w=0.0)
+        host = SimpleNamespace(_surplus_controller=sc, config={
+            "heat_pump_step_down": "block",
+            "heat_pumps": [
+                {"id": "hp_cellar", "heat_pump_step_down": "setpoint"},
+                {"heat_pump_step_down": "block"},     # no id: heat_pump_3
+            ]})
+        SEMCoordinator.refresh_runtime_config(host)
+        assert {d: p.step_down_action for d, p in pumps.items()} == {
+            "heat_pump": "block", "hp_cellar": "setpoint", "heat_pump_3": "block"}
+        host.config = {"heat_pumps": [{"id": "hp_cellar"}, {}]}
+        SEMCoordinator.refresh_runtime_config(host)
+        assert {p.step_down_action for p in pumps.values()} == {"off"}
+
+    def _registry(self):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry,
+        )
+        reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+        reg._device_goals = {}
+        return reg, UnifiedDeviceRegistry
+
+    def test_the_mode_is_a_goal_the_editor_sets(self):
+        reg, cls = self._registry()
+        assert "hvac_mode" in cls.GOAL_PROPERTIES
+        dev, _ = _unit(mode="cool")
+        reg._device_goals[dev.device_id] = {"hvac_mode": "by_forecast"}
+        reg._apply_goals(dev)
+        assert dev.hvac_setting == HVAC_BY_FORECAST
+        reg._device_goals[dev.device_id] = {"hvac_mode": "heat"}
+        reg._apply_goals(dev)
+        assert dev.hvac_mode == "heat"
+
+    def test_an_unknown_mode_and_a_switch_are_left_alone(self):
+        reg, _cls = self._registry()
+        dev, _ = _unit(mode="cool")
+        reg._device_goals[dev.device_id] = {"hvac_mode": "warp"}
+        reg._apply_goals(dev)
+        assert dev.hvac_mode == "cool"
+        from custom_components.solar_energy_management.devices.base import SwitchDevice
+        plug = SwitchDevice(_Hass(), "plug", "Plug", rated_power=500.0,
+                            entity_id="switch.plug")
+        reg._device_goals["plug"] = {"hvac_mode": "heat"}
+        reg._apply_goals(plug)
+        assert not hasattr(plug, "hvac_setting")
+
+    def test_the_service_takes_the_mode(self):
+        from custom_components.solar_energy_management.devices.base import (
+            CLIMATE_HVAC_MODES,
+        )
+        assert {"heat", "cool", HVAC_BY_FORECAST} <= set(CLIMATE_HVAC_MODES)

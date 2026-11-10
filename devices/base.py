@@ -2037,6 +2037,9 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
 #: (#1323) ``hvac_mode`` value: SEM picks heat or cool from the outdoor
 #: outlook. Not an HA climate mode — HA's own ``auto`` stays the unit's.
 HVAC_BY_FORECAST = "by_forecast"
+#: Every mode a climate unit may be given (the service's list, in one place).
+CLIMATE_HVAC_MODES = ("cool", "heat", "heat_cool", "dry", "fan_only", "auto",
+                      HVAC_BY_FORECAST)
 
 
 class ClimateDevice(ComfortBandMixin, ControllableDevice):

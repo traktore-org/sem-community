@@ -42,6 +42,7 @@ from .const import (
     MAX_PEAK_LIMIT_KW,
 )
 from .consts.core import DEFAULT_LOAD_MANAGEMENT_ENABLED
+from .devices.base import CLIMATE_HVAC_MODES
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS, NO_GRID_SOURCE
 from .utils.select_option import listed_option
 from .utils.own_entity import is_sem_entity  # (#1103)
@@ -5401,6 +5402,8 @@ async def _async_register_services(
             "phase",
             # (#1021) behind the grid operator's relay
             "behind_operator_relay",
+            # (#1323) a climate unit's mode
+            "hvac_mode",
             # (#812) the load's own tariff and meter
             "tariff_rate", "tariff_entity", "tariff_meter",
         ):
@@ -5565,6 +5568,8 @@ async def _async_register_services(
                     "phase",
                     # (#1021) behind the grid operator's relay
                     "behind_operator_relay",
+                    # (#1323) a climate unit's mode
+                    "hvac_mode",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -6105,8 +6110,7 @@ async def _async_register_phase_services(
             vol.Optional("hvac_mode", default="cool"): vol.In(
                 # (#1323) by_forecast: SEM picks heat or cool from the
                 # outdoor outlook ("auto" is the unit's own HA mode)
-                ["cool", "heat", "heat_cool", "dry", "fan_only", "auto",
-                 "by_forecast"]
+                list(CLIMATE_HVAC_MODES)
             ),
             vol.Optional("target_temperature"): vol.Coerce(float),
             # (#559) goal engine — grounded core (runtime target + policy)
