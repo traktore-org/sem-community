@@ -587,7 +587,8 @@ def mine_profile(text: str) -> Dict[str, Dict[str, dict]]:
                 opts = tuple(str(row.get("value")) for row in item["lookup"]
                              if isinstance(row, dict)
                              and isinstance(row.get("value"), str))
-            out.setdefault(plat, {}).setdefault(key, {"options": opts})
+            out.setdefault(plat, {}).setdefault(
+                key, {"options": opts, "profile": True})
     return out
 
 
@@ -676,6 +677,8 @@ def mine_vocabulary(repo: str, domain: str, origin: str, *,
                 entry["fields"] = tuple(body["fields"])[:_MAX_OPTIONS]
             if body.get("target"):
                 entry["target"] = str(body["target"])[:20]
+            if body.get("profile"):
+                entry["profile"] = True          # (#1158) where it was read
             out.setdefault(plat, {})[key] = entry
     return out
 
@@ -982,6 +985,8 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
                     "target": body.get("target"),
                 }
             slot["keys"].append(key)
+            if not body.get("profile"):
+                slot["declared"] = True
             for opt in body.get("options") or ():
                 if opt not in slot["options"]:
                     slot["options"].append(opt)
@@ -1034,6 +1039,12 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
                 "options": tuple(v["options"])}
         if exact_only:
             body["exact_only"] = exact_only
+        if not v.get("declared"):
+            # (#1158) Every key of this role was read from a device
+            # profile. One domain then speaks for many device families, so
+            # the install decides which family it is: see the lexicon's
+            # PROGRAM_GROUP_KEY.
+            body["profile"] = True
         if v.get("services"):
             # (#956) what each service takes: its fields and whether it
             # targets an entity — the runtime decides from these whether

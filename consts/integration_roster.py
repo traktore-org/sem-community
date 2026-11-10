@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-10T16:26:27Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 70, 'roles_mined': 198}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-10T16:41:24Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 70, 'roles_mined': 198}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -452,10 +452,10 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
     },
     'solarman': {
-        'battery_discharge_limit': {'platform': 'number', 'keys': ('battery_discharging_power',), 'options': ()},
-        'battery_force_charge': {'platform': 'switch', 'keys': ('battery_grid_charging',), 'options': ()},
-        'battery_strategy': {'platform': 'select', 'keys': ('battery_operation_mode', 'energy_pattern', 'work_mode'), 'options': ('Voltage', 'Capacity', 'No Battery', 'Battery First', 'Load First', 'Off', 'On', 'Time of Use')},
-        'battery_target_soc': {'platform': 'number', 'keys': ('battery_grid_max_charge',), 'options': ()},
+        'battery_discharge_limit': {'platform': 'number', 'keys': ('battery_discharging_power',), 'options': (), 'profile': True},
+        'battery_force_charge': {'platform': 'switch', 'keys': ('battery_grid_charging',), 'options': (), 'profile': True},
+        'battery_strategy': {'platform': 'select', 'keys': ('battery_operation_mode', 'energy_pattern', 'work_mode'), 'options': ('Voltage', 'Capacity', 'No Battery', 'Battery First', 'Load First', 'Off', 'On', 'Time of Use'), 'profile': True},
+        'battery_target_soc': {'platform': 'number', 'keys': ('battery_grid_max_charge',), 'options': (), 'profile': True},
     },
     'solis_cloud_control': {
         'battery_charge_end_soc': {'platform': 'number', 'keys': ('battery_max_charge_soc',), 'options': ()},
