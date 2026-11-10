@@ -755,16 +755,13 @@ async def test_d_items_say_what_they_pin():
 async def test_update_observer_computes_but_never_actuates(caplog):
     """The clean cut, end-to-end. Observer mode runs the FULL real decision
     (layers 1+2 against live inputs) and reconciles through the single seam in
-    log-only mode: nothing is actuated, the imperative passes are never reached,
-    and allocation data is still produced for the sensors. Works with
-    ``_use_desired_state`` OFF (the PROD-shipped default) — observer always takes
-    the clean path. This is the invariant that makes HA-TEST safe on shared
+    log-only mode: nothing is actuated, and allocation data is still produced
+    for the sensors. This is the invariant that makes HA-TEST safe on shared
     hardware."""
     import logging
     hass = MagicMock()
     sc = SurplusController(hass)
     sc.register_device(_PDev(device_id="a", priority=1, min_power=800, is_active=False))
-    assert sc._use_desired_state is False                 # PROD-shipped default
     with caplog.at_level(logging.INFO):
         data = await sc.update(available_power_w=5000.0, observer=True)
     states = {d.device_id: d.is_active for d in sc._devices.values()}

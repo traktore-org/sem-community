@@ -728,6 +728,14 @@ def _expected_draw(device, command_w: float, *, fallback: float) -> float:
     return float(fallback)
 
 
+def _num(value, default: float = 0.0) -> float:
+    """A device's watt figure as a float — only a real number counts (a
+    test double or a broken attribute is not a rating)."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return float(default)
+
+
 def _start_refused(device, now: Optional[datetime] = None) -> bool:
     """(#1335) Would ``can_activate`` refuse a start right now? Its
     read-only twin — ``can_activate`` starts the activation-delay clock, and
@@ -760,6 +768,16 @@ def _start_refused(device, now: Optional[datetime] = None) -> bool:
     except Exception:  # noqa: BLE001 — unknown is not refused
         return False
     return False
+
+
+def sem_started(device) -> bool:
+    """(#847/#908/#1335) THE ownership rule of every stop that undoes SEM's
+    own action — layer 1's Mode-Off release and the teardown: SEM issued the
+    ON itself. An adopted load (seen running, claimed so goal gates could
+    stop it) and the user's own load never qualify."""
+    # commanded ⊆ owned, as the device property states it (#847)
+    return (bool(getattr(device, "_sem_owned", False))
+            and bool(getattr(device, "_sem_commanded", False)))
 
 
 def _heater_band(device: "ControllableDevice"):
@@ -796,7 +814,7 @@ def _heater_claim(device: "ControllableDevice", active: bool, held: float) -> fl
     runs and a power reading exists, else its rating. A tank without a power
     sensor of its own reports a stored figure, not a measurement — the floor
     rung claimed 1000 W for a 3000 W boiler on .175."""
-    rated = float(getattr(device, "rated_power", 0.0) or 0.0)
+    rated = _num(getattr(device, "rated_power", 0.0))
     if active and getattr(device, "power_entity_id", None) and held > 0:
         return float(held)
     return rated
@@ -853,7 +871,7 @@ def compute_load_intent(
         # class-17 sibling caught live (PROD 2026-07-23: mode→off, load stayed
         # on and SEM never touched it again). A load the USER turned on
         # (not _sem_owned) is left exactly as-is.
-        if active and getattr(device, "_sem_commanded", False):
+        if active and sem_started(device):
             # SEM issued the ON - opt-out undoes SEM's own action.
             return LoadIntent(False, 0.0, None, "mode off — ending SEM-started run",
                               RC.LOAD_MODE_OFF)
@@ -954,13 +972,17 @@ def compute_load_intent(
     #     phase over its limit outranks it: a deadline beats the peak, not a fuse.
     if (getattr(device, "is_deadline_approaching", False) is True and not active
             and not _phase_held(device)):
-        _rated = float(getattr(device, "rated_power", 0.0) or 0.0)
+        _rated = _num(getattr(device, "rated_power", 0.0))
         return LoadIntent(True, _rated, "solar", "deadline force", RC.LOAD_DEADLINE)
 
     # 4. A source can power it. peak_freeze blocks *new* starts but keeps a
     #    running load on (only an explicit shed removes it, clause 2).
-    rated = float(getattr(device, "rated_power", 0.0) or 0.0)
-    threshold = float(getattr(device, "min_power_threshold", rated) or rated)
+    rated = _num(getattr(device, "rated_power", 0.0))
+    threshold = _num(getattr(device, "min_power_threshold", rated), rated) or rated
+    if rated <= 0.0:
+        # no rating learned yet: it claims what it needs to switch on at all
+        # (the same fallback as ``_rated_claim``)
+        rated = threshold
     can_start = active or not peak_freeze
     band = _heater_band(device)
     # (#1102) With a thermometer band the band leads: the daily run time
@@ -994,7 +1016,7 @@ def compute_load_intent(
     start_bar = threshold
     if not active:
         start_bar = threshold + max(
-            0.0, float(getattr(device, "start_reserve_w", 0.0) or 0.0))
+            0.0, _num(getattr(device, "start_reserve_w", 0.0)))
     # (#1335) What the sun's run is sent: a fresh start the free power, a
     # running load the free power plus its Tier-1 share — a watt setpoint
     # follows it, a switch ignores it. What it is expected to draw is what
@@ -1416,7 +1438,11 @@ async def deactivate_devices(devices, reason: str = "teardown") -> int:
 
     Module-level so the teardown path can use it after the registry has been
     detached — at removal time there is no controller left to ask, only the
-    devices themselves.
+    devices themselves. (#1335) This is the one stop outside
+    ``reconcile_load``, on purpose: it must work with no controller, and it
+    must stop a load inside its minimum run. It reads the same ownership rule
+    (``sem_started``), and a device's own ``send()`` still withholds under
+    observer mode.
 
     Deliberately takes the RAW device collection rather than
     ``get_devices_sorted()``: that view hides ``is_enabled=False`` and
@@ -1449,8 +1475,9 @@ async def deactivate_devices(devices, reason: str = "teardown") -> int:
         if not getattr(device, "is_active", False):
             continue
         # (#908) SEM only releases what SEM commanded. An adopted / external /
-        # observer-mode load stays exactly as the user has it.
-        if not getattr(device, "_sem_commanded", False):
+        # observer-mode load stays exactly as the user has it. (#1335) The
+        # same rule as layer 1's Mode-Off release, from one function.
+        if not sem_started(device):
             continue
         try:
             await _deactivate_owned(device, reason_code=RC.LOAD_TEARDOWN, text=reason)
@@ -1612,11 +1639,10 @@ class SurplusController:
         self._tier1_budget_left: float = 0.0
         # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
         self._surplus_samples: List[float] = []
-        # (desired-state, phase 3) When True, update() delegates to the single
-        # declarative decision + reconcile path instead of the 7 imperative
-        # passes. Default OFF — the passes stay authoritative until a parity
-        # corpus + a real-hardware soak prove the new path identical.
-        self._use_desired_state: bool = False
+        # (desired-state, phase 3; #1335) update() runs the three layers —
+        # ``_desired_intents`` → ``reconcile_load`` — on every install. The
+        # imperative passes remain only until step E of #1335 deletes them.
+        self._use_desired_state: bool = True
         # (#1102) The three layers run beside the passes on every real cycle
         # and record where they differ (dry: no device or controller state
         # changes). Read by the load-management sensor and diagnostics.
@@ -2059,16 +2085,31 @@ class SurplusController:
         allocations: List[SurplusAllocation] = []
         active_count = 0
         for device in devices:
-            await reconcile_load(device, intents[device.device_id],
-                                 observer=observer, controller=self)
-            active = bool(device.is_active)
-            consumption = device.get_current_consumption() if active else 0.0
+            intent = intents[device.device_id]
+            was_on = bool(device.is_active)
+            consumed = float(await reconcile_load(
+                device, intent, observer=observer, controller=self) or 0.0)
+            # A start that took this cycle counts what ``activate`` returned —
+            # the device's own meter has not seen it yet (the old passes did
+            # the same).
+            started = not observer and intent.on and not was_on and consumed > 0
+            active = bool(device.is_active) or started
+            if started:
+                consumption = allocated = consumed
+            else:
+                consumption = device.get_current_consumption() if active else 0.0
+                allocated = device.status.allocated_power_w if active else 0.0
             if active:
                 active_count += 1
+            # Off is the user's, a relay-locked load the operator's: neither
+            # is SEM's to allocate (the old passes left both out too)
+            if (device.control_mode == DeviceControlMode.OFF
+                    or getattr(device, "locked_by_operator", False) is True):
+                continue
             allocations.append(SurplusAllocation(
                 device_id=device.device_id, device_name=device.name,
                 priority=device.priority,
-                allocated_watts=(device.status.allocated_power_w if active else 0.0),
+                allocated_watts=allocated,
                 actual_consumption_watts=consumption,
                 state=DeviceState.ACTIVE.value if active else DeviceState.IDLE.value))
         total_allocated = sum(a.actual_consumption_watts for a in allocations)

@@ -636,16 +636,6 @@ def _control_device_says_not_now(hass, entity_id: str) -> bool:
 
 
 
-def _ladder_leads(coord) -> bool:
-    """(#1102) The heater ladder lives in layer 1 of the three-layer load
-    engine. It leads where that engine switches (observer mode, and every
-    install once the layers take over). Until then the old engine's plan
-    inputs stay exactly as they were."""
-    sc = getattr(coord, "_surplus_controller", None)
-    return (getattr(sc, "_use_desired_state", False) is True
-            or getattr(coord, "_observer_mode", False) is True)
-
-
 def _band_engaged(dev) -> bool:
     """(#1102) The load has a working thermometer band."""
     return getattr(dev, "comfort_state", None) in ("forced", "willing", "banked")
@@ -11485,7 +11475,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             try:
                 if not getattr(dev, "has_runtime_deficit", False):
                     continue
-                if _ladder_leads(self) and _band_engaged(dev):
+                if _band_engaged(dev):
                     continue  # (#1102) the collector leaves it out too
                 if getattr(dev, "locked_by_operator", False) is True:
                     continue  # (#1021) the collector leaves it out too
@@ -12671,8 +12661,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         _left_out(dev, "no_runtime_need")
                         continue
                     # (#1102) a heater with a thermometer band: the band
-                    # leads, its run time asks nothing (layer 1 mirrors it)
-                    if _ladder_leads(self) and _band_engaged(dev):
+                    # leads, its run time asks nothing (layer 1 mirrors it).
+                    # (#1335) One rule per load: the layers always switch.
+                    if _band_engaged(dev):
                         _left_out(dev, "band_leads")
                         continue
                     # (#760, N1) The intent's HARD STOP outranks the deficit:
@@ -12743,10 +12734,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
                         continue
                     _ask_fn = getattr(dev, "comfort_plan_demand", None)
-                    # (#1102) where the ladder leads, Keep at is a goal
-                    _goal = _ladder_leads(self)
-                    ask = ((_ask_fn(now, goal=True) if _goal
-                            else _ask_fn(now)) if callable(_ask_fn) else None)
+                    # (#1102/#1335) Keep at is a goal — layer 1 heats to it
+                    ask = _ask_fn(now, goal=True) if callable(_ask_fn) else None
                     if not ask:
                         continue
                     rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
@@ -12767,7 +12756,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         min_gap_s=int(getattr(dev, "min_off_seconds", 0) or 0),
                         tariff=_plan_tariff(dev),     # (#812)
                         # (#1102) a goal is placed even with no price published
-                        unpriced_ok=bool(_goal),
+                        unpriced_ok=True,
                     ))
                 except Exception:  # noqa: BLE001 — one bad band won't kill the plan
                     continue

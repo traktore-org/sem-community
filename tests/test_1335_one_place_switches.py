@@ -286,3 +286,54 @@ class TestModeOffIsOneReason:
         hp.control_mode = DeviceControlMode.OFF
         await sc.update(6000.0)
         assert not hp.is_active
+
+
+# ── step D: the three layers switch on every install ───────────────────────
+from custom_components.solar_energy_management.tests.test_1048_phase_shed import (  # noqa: E402,F401
+    _house, _switched_off, lm,
+)
+
+
+@pytest.mark.asyncio
+async def test_every_install_starts_a_load_through_the_layers():
+    """A plain switch load on sun: the start carries layer 1's own reason
+    code ("solar") — the imperative passes logged "surplus"."""
+    hass = _Hass()
+    from custom_components.solar_energy_management.devices.base import SwitchDevice
+    dev = SwitchDevice(hass=hass, device_id="pump", name="Pump",
+                       rated_power=800.0, entity_id="switch.pump")
+    dev.control_mode = DeviceControlMode.SURPLUS
+    hass.set("switch.pump", "off")
+    sc = SurplusController(hass)
+    sc.register_device(dev)
+    await sc.update(3000.0)
+    assert dev.is_active and dev._sem_commanded
+    rows = [r for r in sc.decision_log.records() if r["device_id"] == "pump"]
+    assert rows and rows[-1]["reason_code"] == RC.LOAD_SOLAR
+
+
+@pytest.mark.asyncio
+class TestTheLoadManagerWritesThroughItsSeam:
+
+    async def test_a_phase_shed_under_observer_writes_nothing(self, lm):
+        _house(lm)
+        lm._observer_mode = True
+        verdict = await lm.process_phase_guard({"L3": 7.0}, may_restore=False)
+        assert _switched_off(lm) == []
+        lm.hass.services.async_call.assert_not_awaited()
+        assert verdict["thrown"] == []
+        assert lm.withheld_commands[-1]["service"] == "switch.turn_off"
+        assert lm.withheld_commands[-1]["why"] == "observer"
+
+    async def test_a_load_another_party_steers_is_not_written(self, lm):
+        _house(lm)
+        lm._devices["pool"]["external_yield"] = True
+        await lm.process_phase_guard({"L3": 7.0}, may_restore=False)
+        assert "switch.pool_heat_pump" not in _switched_off(lm)
+        assert lm.withheld_commands[-1]["why"] == "yield"
+
+    async def test_observer_off_still_sheds(self, lm):
+        _house(lm)
+        verdict = await lm.process_phase_guard({"L3": 7.0}, may_restore=False)
+        assert verdict["thrown"] == ["pool"]
+        assert lm.withheld_commands == []

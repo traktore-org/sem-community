@@ -961,6 +961,8 @@ def _stuck(device_id, draw, priority, *, refuses_stop):
     d = _load(device_id, draw, priority)
     if refuses_stop:
         d.deactivate = AsyncMock()          # stays on
+        # (#1335) …and says so where the walk asks, as ScheduleDevice does
+        d.can_deactivate = MagicMock(return_value=False)
     else:
         d.can_deactivate = MagicMock(return_value=False)
     return d
@@ -984,7 +986,8 @@ class TestTheDeficitPassKeepsTheOrder:
         sc.register_device(pump)
         sc.register_device(dishwasher)
         await _cycles(sc, solar_w=2000.0, house_w=500.0, n=12, price="normal")
-        dishwasher.deactivate.assert_awaited()   # tried first
+        # (#1335) the started run says it cannot stop; the walk does not try
+        dishwasher.deactivate.assert_not_awaited()
         pump.deactivate.assert_awaited()
 
     async def test_a_load_in_its_minimum_run_stops_the_pump(self):
@@ -1012,9 +1015,11 @@ class TestTheDeficitPassKeepsTheOrder:
 @pytest.mark.asyncio
 class TestAnIdleSwitchIsStillStopped:
     """A 3 kW boiler whose thermostat holds it off: the switch is on, its
-    power sensor reads 0 W, and the walk takes its rating. Giving back the
-    0 W it read made the pass skip it, and the 1 kW pump below it never ran
-    while 2.5 kW went to the grid (found in review)."""
+    power sensor reads 0 W. Giving back the 0 W it read made the pass skip
+    it, and the 1 kW pump below it never ran while 2.5 kW went to the grid
+    (found in review). (#1335/#1156) The walk now books the running boiler
+    its MEASURED draw, 0 W: it costs the sun nothing, so the pump below
+    runs and the boiler is left on for its thermostat."""
 
     async def test_the_pump_below_runs(self):
         sc = SurplusController(MagicMock())
@@ -1033,7 +1038,6 @@ class TestAnIdleSwitchIsStillStopped:
             await _cycles(sc, solar_w=3000.0, house_w=500.0, n=1,
                           price="normal")
             on += bool(pump.is_active)
-        boiler.deactivate.assert_awaited()
         assert on >= 25
 
 

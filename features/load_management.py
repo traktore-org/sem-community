@@ -39,6 +39,7 @@ from .phase_shed import (
     relief_a,
 )
 from ..coordinator.units import finite_float
+from ..utils.log_gate import log_on_change
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -209,6 +210,8 @@ class LoadManagementCoordinator:
         # Observer mode: skip all hardware control (same merged view — the
         # switch writes options, so options still wins when present)
         self._observer_mode = _cfg.get("observer_mode", False)
+        # (#1335) what the seam held back, newest last (as on a device)
+        self.withheld_commands: List[Dict[str, Any]] = []
         # (#1084) the decision log, handed over by the coordinator each
         # cycle; None = record nothing
         self.decision_log = None
@@ -1792,6 +1795,38 @@ class LoadManagementCoordinator:
         device_state = self._device_discovery.get_device_current_state(device_info)
         return device_state["is_on"]
 
+    def _withheld(self, device_id: str, what: str, target: Any,
+                  data: Optional[dict] = None) -> bool:
+        """(#1335) The withhold half of the seam: observer mode, or a load
+        another party steers (``external_yield``), sends nothing — and says
+        what it held back, as ``ControllableDevice.send`` does."""
+        info = self._devices.get(device_id) or {}
+        if not (self._observer_mode or info.get("external_yield") is True):
+            return False
+        why = "observer" if self._observer_mode else "yield"
+        self.withheld_commands.append(
+            {"device_id": device_id, "service": what,
+             "data": dict(data or {}) or {"entity_id": target}, "why": why})
+        del self.withheld_commands[:-20]
+        log_on_change(
+            _LOGGER, f"lm:withheld:{device_id}:{what}", logging.INFO,
+            "%s · load manager WOULD send %s to %s",
+            why.upper(), what, info.get("friendly_name", device_id))
+        return True
+
+    async def _send(self, device_id: str, domain: str, service: str,
+                    data: dict) -> bool:
+        """(#1335) THE one place the load manager writes to a load (peak-only
+        and unregistered loads; surplus loads are the load engine's, #649).
+        Observer mode and a yield withhold the write here, for every caller —
+        the peak shed, the phase guard, a restore. True = it went out."""
+        if self._withheld(device_id, f"{domain}.{service}", None, data):
+            return False
+        # OBSERVER-GATED: ``_withheld`` above returned for observer mode and
+        # a yield — this is the seam, the same shape as ``send()``.
+        await self.hass.services.async_call(domain, service, dict(data), blocking=True)
+        return True
+
     async def _shed_device(self, device_id: str, reason: str) -> bool:
         """Turn off a device for load shedding. True when the switch was thrown.
 
@@ -1805,10 +1840,6 @@ class LoadManagementCoordinator:
         the meter answer. EMERGENCY is bounded by the plan's need instead —
         several switches in one pass when the need says so.
         """
-        if self._observer_mode:
-            _LOGGER.debug("Observer mode: skipping shed of %s", device_id)
-            return False
-
         if device_id not in self._devices:
             return False
 
@@ -1867,12 +1898,9 @@ class LoadManagementCoordinator:
                                 previous = None
                         self._devices[device_id]["_pre_shed_setpoint"] = previous
 
-                        await self.hass.services.async_call(
-                            setpoint_domain(entity), "set_value",
-                            {"entity_id": entity, "value": floor},
-                            blocking=True
-                        )
-                        success = True
+                        success = await self._send(
+                            device_id, setpoint_domain(entity), "set_value",
+                            {"entity_id": entity, "value": floor})
                         _LOGGER.debug(
                             "Shed device via setpoint %s (%s W -> %s W)",
                             entity, previous, floor,
@@ -1886,12 +1914,9 @@ class LoadManagementCoordinator:
                         was_on = switch_state is not None and switch_state.state.lower() in ("on", "true", "1")
                         self._devices[device_id]["_pre_shed_was_on"] = was_on
 
-                        await self.hass.services.async_call(
-                            "switch", "turn_off",
-                            {"entity_id": entity},
-                            blocking=True
-                        )
-                        success = True
+                        success = await self._send(
+                            device_id, "switch", "turn_off",
+                            {"entity_id": entity})
                         _LOGGER.debug("Shed device via switch %s (was_on=%s)", entity, was_on)
 
                 elif control_type == "current":
@@ -1905,12 +1930,9 @@ class LoadManagementCoordinator:
                             except (ValueError, TypeError):
                                 self._devices[device_id]["_pre_shed_current"] = control.get("original_value", 16)
 
-                        await self.hass.services.async_call(
-                            "number", "set_value",
-                            {"entity_id": entity, "value": 0},
-                            blocking=True
-                        )
-                        success = True
+                        success = await self._send(
+                            device_id, "number", "set_value",
+                            {"entity_id": entity, "value": 0})
                         _LOGGER.debug("Shed device via current control %s (set to 0A)", entity)
 
                 elif control_type == "service":
@@ -1922,12 +1944,9 @@ class LoadManagementCoordinator:
                         parts = service.split(".", 1)
                         if len(parts) == 2:
                             domain, svc = parts
-                            await self.hass.services.async_call(
-                                domain, svc,
-                                {param: shed_value},
-                                blocking=True
-                            )
-                            success = True
+                            success = await self._send(
+                                device_id, domain, svc,
+                                {param: shed_value})
                             _LOGGER.debug("Shed device via service %s", service)
 
                 elif control_type == "input_boolean":
@@ -1938,12 +1957,9 @@ class LoadManagementCoordinator:
                         was_on = bool_state is not None and bool_state.state.lower() in ("on", "true", "1")
                         self._devices[device_id]["_pre_shed_was_on"] = was_on
 
-                        await self.hass.services.async_call(
-                            "input_boolean", "turn_off",
-                            {"entity_id": entity},
-                            blocking=True
-                        )
-                        success = True
+                        success = await self._send(
+                            device_id, "input_boolean", "turn_off",
+                            {"entity_id": entity})
                         _LOGGER.debug("Shed device via input_boolean %s (was_on=%s)", entity, was_on)
 
             else:
@@ -1962,22 +1978,16 @@ class LoadManagementCoordinator:
                     charger_service = device_info.get("charger_service")
 
                     if current_entity and self.hass.states.get(current_entity):
-                        await self.hass.services.async_call(
-                            "number", "set_value",
-                            {"entity_id": current_entity, "value": 0},
-                            blocking=True
-                        )
-                        success = True
+                        success = await self._send(
+                            device_id, "number", "set_value",
+                            {"entity_id": current_entity, "value": 0})
                     elif charger_service:
                         parts = charger_service.split(".", 1)
                         if len(parts) == 2:
                             domain, service = parts
-                            await self.hass.services.async_call(
-                                domain, service,
-                                {"current": 0},
-                                blocking=True
-                            )
-                            success = True
+                            success = await self._send(
+                                device_id, domain, service,
+                                {"current": 0})
                 else:
                     # Record pre-shed state for legacy switch devices
                     switch_entity = device_info.get("switch_entity")
@@ -1986,7 +1996,8 @@ class LoadManagementCoordinator:
                         was_on = switch_state is not None and switch_state.state.lower() in ("on", "true", "1")
                         self._devices[device_id]["_pre_shed_was_on"] = was_on
 
-                    success = await self._device_discovery.turn_off_device(device_info)
+                    success = (not self._withheld(device_id, "turn_off", device_info.get("switch_entity"))
+                               and await self._device_discovery.turn_off_device(device_info))
 
             if success:
                 self._log_shed(device_id, reason, shed=True)
@@ -2033,10 +2044,6 @@ class LoadManagementCoordinator:
         - service: Call service with restore_value
         - input_boolean: Turn on the input_boolean
         """
-        if self._observer_mode:
-            _LOGGER.debug("Observer mode: skipping restore of %s", device_id)
-            return
-
         if device_id not in self._devices or device_id not in self._devices_shed:
             return
 
@@ -2070,12 +2077,9 @@ class LoadManagementCoordinator:
                     entity = control.get("entity")
                     previous = device_info.get("_pre_shed_setpoint")
                     if entity and previous is not None:
-                        await self.hass.services.async_call(
-                            setpoint_domain(entity), "set_value",
-                            {"entity_id": entity, "value": float(previous)},
-                            blocking=True
-                        )
-                        success = True
+                        success = await self._send(
+                            device_id, setpoint_domain(entity), "set_value",
+                            {"entity_id": entity, "value": float(previous)})
                         _LOGGER.debug("Restored setpoint %s to %s W", entity, previous)
                     elif entity:
                         # Never read a pre-shed value (shed before an upgrade,
@@ -2103,12 +2107,9 @@ class LoadManagementCoordinator:
                             success = True
                             _LOGGER.info("Skipping restore of %s — was off before shedding", entity)
                         else:
-                            await self.hass.services.async_call(
-                                "switch", "turn_on",
-                                {"entity_id": entity},
-                                blocking=True
-                            )
-                            success = True
+                            success = await self._send(
+                                device_id, "switch", "turn_on",
+                                {"entity_id": entity})
                             _LOGGER.debug("Restored device via switch %s", entity)
 
                 elif control_type == "current":
@@ -2131,12 +2132,9 @@ class LoadManagementCoordinator:
                         parts = service.split(".", 1)
                         if len(parts) == 2:
                             domain, svc = parts
-                            await self.hass.services.async_call(
-                                domain, svc,
-                                {param: restore_value},
-                                blocking=True
-                            )
-                            success = True
+                            success = await self._send(
+                                device_id, domain, svc,
+                                {param: restore_value})
                             _LOGGER.debug("Restored device via service %s", service)
 
                 elif control_type == "input_boolean":
@@ -2150,12 +2148,9 @@ class LoadManagementCoordinator:
                             success = True
                             _LOGGER.info("Skipping restore of %s — was off before shedding", entity)
                         else:
-                            await self.hass.services.async_call(
-                                "input_boolean", "turn_on",
-                                {"entity_id": entity},
-                                blocking=True
-                            )
-                            success = True
+                            success = await self._send(
+                                device_id, "input_boolean", "turn_on",
+                                {"entity_id": entity})
                             _LOGGER.debug("Restored device via input_boolean %s", entity)
 
             else:
@@ -2181,7 +2176,8 @@ class LoadManagementCoordinator:
                             device_info.get("friendly_name", device_id)
                         )
                     else:
-                        success = await self._device_discovery.turn_on_device(device_info)
+                        success = (not self._withheld(device_id, "turn_on", device_info.get("switch_entity"))
+                                   and await self._device_discovery.turn_on_device(device_info))
 
             if success:
                 self._log_shed(device_id, "RESTORE", shed=False)

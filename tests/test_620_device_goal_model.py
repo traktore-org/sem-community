@@ -148,6 +148,11 @@ def _mock(**kw):
     d._batt_overnight_forced_date = None
     d.needs_offpeak_activation = kw.get("needs_offpeak", False)
     d.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
+    # (#1335) the deficit the layers read — a real bool, as on a device
+    # (MagicMock reads it as True); running or not, unlike the flag above
+    d.has_runtime_deficit = kw.get(
+        "has_runtime_deficit",
+        bool(kw.get("needs_offpeak", False)) or kw.get("remaining_sec", 0) > 0)
     d.daily_min_runtime_sec = 0
     d.daily_targets_met = False
     d.daily_max_runtime_reached = kw.get("max_reached", False)
@@ -535,20 +540,24 @@ class TestRebuildKeepsControlState:
         sc = SurplusController(mock_hass)
         heiz = _mock(device_id="heiz", name="Heizband", priority=2,
                      is_active=True, _batt_overnight_forced=True,
-                     battery_eligible_overnight=True)
+                     battery_eligible_overnight=True, has_runtime_deficit=True)
         heiz.get_current_consumption = MagicMock(return_value=135.0)
         sc.register_device(heiz)
         # rediscovery rebuilds the object mid-run
         heiz2 = _mock(device_id="heiz", name="Heizband", priority=2,
-                      is_active=True, battery_eligible_overnight=True)
+                      is_active=True, battery_eligible_overnight=True,
+                      has_runtime_deficit=True)
         heiz2.get_current_consumption = MagicMock(return_value=135.0)
         sc.register_device(heiz2)
         maenner = _mock(device_id="maenner", name="Männer", priority=5,
                         min_power=1082, draw=1082, needs_offpeak=True)
         maenner.top_up_policy = "cheap_hours"
         sc.register_device(maenner)
-        # night: zero surplus; cheap window open → off-peak activates Männer
-        await sc.update(0.0, price_level="cheap")
+        # night: zero surplus; cheap window open → off-peak activates Männer.
+        # (#1335) The pack reads above its reserve: a Tier-2 run with no SOC
+        # reading is ended (the battery's floor cannot be proven).
+        await sc.update(0.0, price_level="cheap", battery_soc=80.0,
+                        battery_reserve_soc=20.0)
         maenner.activate.assert_called()          # grid top-up started
         heiz2.deactivate.assert_not_called()      # Tier-2 load survives
 

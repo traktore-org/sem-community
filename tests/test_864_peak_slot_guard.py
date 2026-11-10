@@ -281,7 +281,7 @@ class TestCheapHoursActivationIsGuarded:
         d.remaining_daily_runtime_sec = 3600; d.daily_min_runtime_sec = 3600
         d.daily_targets_met = False; d.daily_max_runtime_reached = False
         d.stop_condition_met = False
-        d.top_up_policy = "grid_allowed"
+        d.top_up_policy = "cheap_hours"   # (#1335) the policy that buys the grid
         d.battery_assist_enabled = False; d.battery_eligible_overnight = False
         d.stop_entity = ""; d.stop_at = 0
         sc.register_device(d)

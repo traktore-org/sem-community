@@ -197,17 +197,12 @@ class TestThePlanAsksForKeepAt:
     def test_without_goal_the_old_drift_ask_is_unchanged(self):
         assert _boiler(45.0).comfort_plan_demand(None) is None   # no drift model learned yet
 
-    def test_the_ladder_leads_only_where_the_layers_switch(self):
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            _band_engaged, _ladder_leads,
-        )
-        assert _ladder_leads(SimpleNamespace(_observer_mode=True, _surplus_controller=None))
-        assert _ladder_leads(SimpleNamespace(_observer_mode=False,
-                                             _surplus_controller=SimpleNamespace(_use_desired_state=True)))
-        assert not _ladder_leads(SimpleNamespace(_observer_mode=False,
-                                                 _surplus_controller=SimpleNamespace(_use_desired_state=False)))
-        assert not _ladder_leads(MagicMock())
-        assert _band_engaged(_boiler(45.0)) and not _band_engaged(SimpleNamespace())
+    def test_the_ladder_leads_on_every_install(self):
+        """(#1335) One rule per load: the plan no longer asks which engine or
+        whether observer mode is on."""
+        from custom_components.solar_energy_management.coordinator import coordinator as c
+        assert not hasattr(c, "_ladder_leads")
+        assert c._band_engaged(_boiler(45.0)) and not c._band_engaged(SimpleNamespace())
 
 
 @pytest.mark.unit

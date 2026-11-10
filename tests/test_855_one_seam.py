@@ -57,6 +57,10 @@ CHARGER_PATH = [
     # the seam themselves. A water_heater or climate tank was heated on a
     # rig that believed it was only watching.
     ROOT / "devices" / "hot_water_controller.py",
+    # (#1335) The load manager writes to peak-only and unregistered loads.
+    # Its one seam (``_send``) withholds for observer mode and a yield; a
+    # new direct call anywhere else in the file fails here.
+    ROOT / "features" / "load_management.py",
 ]
 
 # The opt-out, spelled like the codebase's other one (`# FLEET-READ:`): a
