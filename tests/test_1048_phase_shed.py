@@ -474,6 +474,33 @@ async def test_a_guard_switched_off_leaves_no_hold_behind():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("config, enforcer", [
+    ({"phase_guard_enabled": False}, None),      # guard off: the restore branch
+    (ENFORCING, "guard"),                        # guard on
+])
+async def test_the_load_manager_is_told_about_observer_on_both_branches(
+        config, enforcer):
+    """(#1335) The guard-off branch restores what was held; it used to call
+    the load manager without handing it the observer flag first."""
+    g = None
+    if enforcer:
+        g = ActivePhaseGuard()
+        g.update(_snapshot(), ENFORCING)
+    lm = MagicMock()
+    lm._observer_mode = False
+    seen = []
+
+    async def _guard(*_a, **_k):
+        seen.append(lm._observer_mode)
+        return {"hold": {}, "shed": {}}
+    lm.process_phase_guard = _guard
+    c = _coordinator(lm, g, config=config)
+    c._observer_mode = True
+    await c._phase_guard_loads(MagicMock(ev_power=0.0))
+    assert seen == [True]
+
+
+@pytest.mark.asyncio
 async def test_without_load_management_the_guard_says_so():
     g = ActivePhaseGuard()
     c = _coordinator(None, g)

@@ -335,7 +335,9 @@ class TestLegionellaPrevention:
         result = await ctrl.check_legionella_cycle()
         assert result == "legionella_started"
         assert ctrl._legionella_cycle_active is True
-        assert mock_hass.services.async_call.called
+        # (#1335) the check never switches; the load engine starts the run
+        assert not mock_hass.services.async_call.called
+        assert ctrl.runs_without_surplus is True
 
     @pytest.mark.asyncio
     async def test_no_forced_cycle_without_temp_sensor(self, mock_hass):

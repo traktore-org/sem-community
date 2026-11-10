@@ -636,16 +636,6 @@ def _control_device_says_not_now(hass, entity_id: str) -> bool:
 
 
 
-def _ladder_leads(coord) -> bool:
-    """(#1102) The heater ladder lives in layer 1 of the three-layer load
-    engine. It leads where that engine switches (observer mode, and every
-    install once the layers take over). Until then the old engine's plan
-    inputs stay exactly as they were."""
-    sc = getattr(coord, "_surplus_controller", None)
-    return (getattr(sc, "_use_desired_state", False) is True
-            or getattr(coord, "_observer_mode", False) is True)
-
-
 def _band_engaged(dev) -> bool:
     """(#1102) The load has a working thermometer band."""
     return getattr(dev, "comfort_state", None) in ("forced", "willing", "banked")
@@ -848,7 +838,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 inputs["soc"] = getattr(power, "battery_soc", None)
             # (#1084) the Why? card shows the sun SEM decided on
             inputs["solar_w"] = getattr(power, "solar_power", None)
-            inputs["surplus_w"] = getattr(charging_context, "available_power", None)
+            # (#1331) two figures: the car's budget (charger rows) and the
+            # spare sun (the rest) — last cycle's, refreshed once this
+            # cycle's is computed (``set_input`` in the loads step)
+            inputs["budget_w"] = getattr(charging_context, "available_power", None)
+            inputs["surplus_w"] = getattr(self, "_loads_true_surplus_w", None)
             inputs["target_kwh"] = getattr(charging_context, "night_target_kwh", None)
         except Exception:  # noqa: BLE001 — the log never costs a cycle
             _LOGGER.debug("decision inputs incomplete", exc_info=True)
@@ -3964,7 +3958,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     async def _apply_vacation_mode(self) -> bool:
         """Set the per-cycle vacation flag on the comfort-heating controllers
-        and deactivate them cleanly on the vacation transition (#594).
+        (#594). (#1335) Layer 1 stops their comfort runs from the flag.
 
         Runs BEFORE ``SurplusController.update`` so this cycle's activation
         pass already sees the gate. SEM only stops ENCOURAGING: deactivation
@@ -3972,7 +3966,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         boiler to its own thermostat — frost/safety logic is untouched. EV /
         battery / load-priority devices are deliberately not touched.
         """
-        was_active = self._vacation_active
         vacation = self._compute_vacation_active()
         self._vacation_active = vacation
         devices = getattr(self._surplus_controller, "_devices", {})
@@ -3985,38 +3978,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 dev.vacation_dhw_surplus = bool(
                     self.config.get("vacation_dhw_surplus", False)
                 )
-            if not vacation or self._observer_mode or not dev.is_active:
-                continue
-            # The hot-water surplus dump may stay active (it re-targets
-            # ``min_temperature`` via ``_active_target_temp``) — but on the
-            # rising edge deactivate once so the entity's written setpoint
-            # drops from the solar/comfort target to the minimum on the next
-            # (gated) activation. Legionella-in-flight is aborted by
-            # ``check_legionella_cycle`` itself.
-            dump_allowed = (
-                dev_id == "hot_water"
-                and dev.vacation_dhw_surplus
-                and not getattr(dev, "_legionella_cycle_active", False)
-            )
-            if dump_allowed and was_active:
-                continue
-            try:
-                # (#1084) through the logged stop choke point — the same
-                # deactivate + record_deactivated it did by hand, plus the
-                # decision log's row
-                from . import reason_codes as RC
-                from .surplus_controller import _deactivate_owned
-                if await _deactivate_owned(
-                        dev, reason_code=RC.LOAD_VACATION,
-                        text="comfort heating paused while away"):
-                    _LOGGER.info(
-                        "Vacation mode: deactivated %s (comfort heating "
-                        "suspended while away)", dev.name,
-                    )
-            except Exception as e:  # noqa: BLE001 — never break the cycle
-                _LOGGER.warning(
-                    "Vacation deactivation of %s failed: %s", dev_id, e,
-                )
+            # (#1335) Nothing is switched here. Layer 1 reads ``vacation``
+            # every cycle: a comfort run stops through ``reconcile_load``
+            # (anti-cycle, observer and the decision log apply), and the
+            # optional hot-water dump keeps only free sun, re-targeted to
+            # the minimum temperature by the tank itself (``target_stale``).
+            # A missed edge (a restart while away) can no longer leave a
+            # SEM-started run going.
         return vacation
 
     async def _async_update_data(self) -> Dict[str, Any]:
@@ -6082,8 +6050,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # (#1021) the grid operator's relay — the Control tab's banner
             result.update(self._shed_signal_payload())
-            # (#1102) where the two load engines differ — summary + full log
-            result.update(self._engine_shadow_payload())
 
             # Add night window sensors
             try:
@@ -7498,6 +7464,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ev_draw_w=ev_draw_w,
                 battery_discharge_w=loads_discharge_w,
             )
+            # (#1331) the Why card's "Surplus" for loads, battery and export
+            self._loads_true_surplus_w = true_surplus_w
+            _dlog = getattr(self._surplus_controller, "decision_log", None)
+            if _dlog is not None:
+                _dlog.set_input("surplus_w", true_surplus_w)
             # (#1102) …and the reclaim takes off only the import this side
             # could not, so a running load does not pay it twice.
             absorbed_w = import_absorbed_by_loads_w(
@@ -7625,6 +7596,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#953) how long the FREE window still has to run — the
                 # "finish" gate on the cheap-hours grid top-up.
                 daylight_remaining_s=self._daylight_remaining_s_now(),
+                # (#1335) solar production itself, for the no-sun stop. A
+                # dark solar sensor reads 0.0, so its flag travels with it:
+                # no reading is not night.
+                solar_w=(None if (
+                    getattr(power, "solar_power_unavailable", False) is True
+                    or getattr(power, "solar_power_read", True) is False)
+                    else getattr(power, "solar_power", None)),
                 # (#871, arc #921) the loads absorb before anything is clipped
                 grid_closed=bool(getattr(
                     (getattr(self, "_sink_verdicts", None) or {}).get("grid_export"),
@@ -7967,9 +7945,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # advances the hold-timer and fires completion correctly.
             if hasattr(hw_controller, "check_legionella_cycle"):
                 try:
-                    # (#1102) where the ladder leads, layer 1 switches the run
-                    await hw_controller.check_legionella_cycle(
-                        switch=not _ladder_leads(self))
+                    # (#1335) state only — layer 1 switches the run
+                    await hw_controller.check_legionella_cycle()
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
             try:
@@ -11108,6 +11085,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         for k in ("over", "thrown", "latched", "shed", "path")
                         if k in verdict}
             elif lm is not None:
+                # (#1335) the guard off still restores what it held: the
+                # load manager is told about observer mode on this branch too
+                lm._observer_mode = self._observer_mode
                 verdict = await lm.process_phase_guard({}, may_restore=True)
         except Exception:  # noqa: BLE001 — never costs a cycle; logged
             _LOGGER.warning("Phase guard load shed failed", exc_info=True)
@@ -11228,22 +11208,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if lm is not None and hasattr(lm, "set_operator_cap"):
             lm.set_operator_cap(sig.cap_kw if sig.active else None)
         return sig
-
-    def _engine_shadow_payload(self) -> dict:
-        """(#1102) The load engines' comparison: a small summary for the
-        load-management sensor, the full change log for diagnostics."""
-        shadow = getattr(getattr(self, "_surplus_controller", None), "engine_shadow", None)
-        summary = getattr(shadow, "summary", None)
-        records = getattr(shadow, "records", None)
-        if not callable(summary) or not callable(records):
-            return {}
-        try:
-            s, r = summary(), records()
-        except Exception:  # noqa: BLE001 — recording never breaks a cycle
-            return {}
-        if not isinstance(s, dict) or not isinstance(r, list):
-            return {}
-        return {"engine_shadow": s, "engine_shadow_records": r}
 
     def _shed_signal_payload(self) -> dict:
         """(#1021) The relay for the cards and diagnostics."""
@@ -11512,7 +11476,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             try:
                 if not getattr(dev, "has_runtime_deficit", False):
                     continue
-                if _ladder_leads(self) and _band_engaged(dev):
+                if _band_engaged(dev):
                     continue  # (#1102) the collector leaves it out too
                 if getattr(dev, "locked_by_operator", False) is True:
                     continue  # (#1021) the collector leaves it out too
@@ -12490,7 +12454,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 Demand, LedgerSlot, build_night_ledger, pack_night,
             )
             from .ev_night_targets import build_night_target_map
-            from .ev_tariff_planner import resolve_deadline
+            from .ev_tariff_planner import (
+                night_charge_end, resolve_deadline)
 
             now = dt_util.now()
             # (#638 G4) the log tag is the honest mode of THIS stamp: while
@@ -12599,7 +12564,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         or DEFAULT_MAX_CHARGING_CURRENT)),
                     min_power_w=self._ev_watts_for_amps(
                         cid, cfg, float(cfg.get("ev_min_current") or 6)),
-                    deadline=min(deadline, night_end) if deadline else night_end,
+                    deadline=night_charge_end(deadline, night_end, None),
                     # The one list counts 1 = HIGHEST (get_devices_sorted)
                     # and the packer packs LOWEST first — the directions
                     # already agree. The old negation REVERSED the list:
@@ -12698,8 +12663,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         _left_out(dev, "no_runtime_need")
                         continue
                     # (#1102) a heater with a thermometer band: the band
-                    # leads, its run time asks nothing (layer 1 mirrors it)
-                    if _ladder_leads(self) and _band_engaged(dev):
+                    # leads, its run time asks nothing (layer 1 mirrors it).
+                    # (#1335) One rule per load: the layers always switch.
+                    if _band_engaged(dev):
                         _left_out(dev, "band_leads")
                         continue
                     # (#760, N1) The intent's HARD STOP outranks the deficit:
@@ -12770,10 +12736,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
                         continue
                     _ask_fn = getattr(dev, "comfort_plan_demand", None)
-                    # (#1102) where the ladder leads, Keep at is a goal
-                    _goal = _ladder_leads(self)
-                    ask = ((_ask_fn(now, goal=True) if _goal
-                            else _ask_fn(now)) if callable(_ask_fn) else None)
+                    # (#1102/#1335) Keep at is a goal — layer 1 heats to it
+                    ask = _ask_fn(now, goal=True) if callable(_ask_fn) else None
                     if not ask:
                         continue
                     rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
@@ -12794,7 +12758,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         min_gap_s=int(getattr(dev, "min_off_seconds", 0) or 0),
                         tariff=_plan_tariff(dev),     # (#812)
                         # (#1102) a goal is placed even with no price published
-                        unpriced_ok=bool(_goal),
+                        unpriced_ok=True,
                     ))
                 except Exception:  # noqa: BLE001 — one bad band won't kill the plan
                     continue
@@ -12802,6 +12766,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (Grid-sourced: charging the battery draws through the meter.)
             dec = getattr(scheduler, "decision", None)
             deficit = float(getattr(dec, "deficit_kwh", 0.0) or 0.0)
+            # (#1311) SEM grid-charges the battery only when the scheduler
+            # says so: "not profitable", "not needed" and "target reached"
+            # carry a deficit but no charge.
+            from .battery_charge_scheduler import SchedulerState as _SS
+            if getattr(dec, "state", None) in (
+                    _SS.NOT_PROFITABLE, _SS.NOT_NEEDED, _SS.TARGET_REACHED):
+                deficit = 0.0
             if deficit > 0.1:
                 try:
                     # The battery's drag-set slot in the ONE list (#576).
@@ -12815,6 +12786,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "battery_max_charge_power_w", 5000.0)),
                     priority=batt_prio,
                     source="grid",
+                    # (#1311) A grid charge runs at night only: a priced day
+                    # hour is closed to it, a sun hour stays open (the sun
+                    # fills the pack). Cheap day hours are #1073.
+                    sun_waits_until=plan_day_end,
                 ))
 
             # ── Readiness, before anything gets stamped ─────────────────

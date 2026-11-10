@@ -332,7 +332,7 @@ async def test_reconcile_noop_when_off_and_idle():
     assert consumed == 0.0
 
 
-# ── Phase 3: parity harness (new desired-state path == old imperative passes) ─
+# ── Phase 3: the whole-set walk on shapes (was the parity harness, #1335) ─
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,
 )
@@ -340,8 +340,9 @@ from custom_components.solar_energy_management.const import LoadManagementState
 
 
 class _PDev:
-    """A switch-like device that behaves under BOTH the imperative passes and the
-    desired-state path (is_active follows activate/deactivate), for parity."""
+    """A switch-like device whose is_active follows activate/deactivate."""
+    _controller = None
+
     def __init__(self, device_id, priority, **kw):
         self.device_id = device_id
         self.name = device_id
@@ -370,6 +371,27 @@ class _PDev:
         self._can_deact = kw.get("can_deactivate", True)
         self.status = MagicMock()
         self.status.allocated_power_w = 0.0
+        # (#1335) the D-item shapes: all inert at their defaults
+        self.depends_on = list(kw.get("depends_on", []))
+        self.dependency_mode = "must_active"
+        self.start_reserve_w = float(kw.get("start_reserve_w", 0.0))
+        self._phase_hold = kw.get("phase_hold")
+        self._phase_shed = False
+        self.is_deadline_approaching = kw.get("deadline", False)
+        if "comfort" in kw:
+            # (state, reading °C, keep-at °C) — a heater band
+            state, reading, keep_at = kw["comfort"]
+            self.comfort_state = state
+            self._comfort_reading = lambda: reading
+            self._comfort_thresholds_c = lambda: (keep_at, 5.0, keep_at - 14.0)
+            self._comfort_direction = lambda: "heat"
+
+    def _check_dependencies(self):
+        for dep_id in self.depends_on:
+            dep = self._controller.get_device(dep_id) if self._controller else None
+            if dep is not None and not dep.is_active:
+                return False
+        return True
 
     @property
     def is_active(self):
@@ -380,7 +402,9 @@ class _PDev:
         return self.has_runtime_deficit and not self._active
 
     def can_activate(self):
-        return self._can_act
+        if isinstance(self._phase_hold, str):
+            return False
+        return self._can_act and self._check_dependencies()
     def can_deactivate(self):
         return self._can_deact
     def get_current_consumption(self):
@@ -483,51 +507,269 @@ _SCENARIOS = {
 }
 
 
-async def _run(specs, kw, use_desired):
+async def _run(specs, kw):
     hass = MagicMock()
     sc = SurplusController(hass)
-    sc._use_desired_state = use_desired
     for s in specs:
         sc.register_device(_PDev(**s))
     await sc.update(**kw)
     return {d.device_id: d.is_active for d in sc._devices.values()}
 
 
-# The two parity gaps that lived here (tier1_assist_activates,
-# peak_shedding_one_per_cycle) were closed by #688: the imperative walk now
-# debits an active/activated load's full draw minus the Tier-1 battery share,
-# which is exactly the battery-aware accounting the desired-state path models.
-# Full parity — no xfails left. Add new gaps back as strict xfails only.
-_XFAIL: dict = {}
+# (#1335) What each shape lands on. These were the parity scenarios between
+# the old imperative passes and the three layers (#688 closed the last two
+# gaps); the passes are gone, so they now pin the one engine's answer — the
+# answer both engines gave.
+_EXPECTED = {
+    "abundant_surplus_two_idle": {"a": True, "b": True},
+    "low_surplus_one_fits_one_not": {"a": True, "b": False},
+    "running_load_cap_reached": {"a": False},
+    "running_load_past_floor_keeps_surplus": {"a": True},
+    "overnight_battery_activates": {"a": True},
+    "overnight_disabled_stops": {"a": False},
+    "cheap_grid_activates": {"a": True},
+    "grid_disabled_stops": {"a": False},
+    "peak_emergency_sheds_all": {"a": False, "b": False},
+    "off_mode_untouched": {"a": True},
+    "no_surplus_all_off": {"a": False, "b": False},
+    "tier1_assist_activates": {"a": True},
+    "peak_shedding_one_per_cycle": {"a": False, "b": False},
+    "reclaim_above_battery_only": {"above": True, "below": False},
+    "peak_warning_freezes_new": {"a": False},
+}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("name", [
-    pytest.param(n, marks=pytest.mark.xfail(reason=_XFAIL[n], strict=True))
-    if n in _XFAIL else n
-    for n in _SCENARIOS
-])
-async def test_desired_state_parity(name):
+@pytest.mark.parametrize("name", list(_SCENARIOS))
+async def test_scenario_outcome(name):
     specs, kw = _SCENARIOS[name]
-    old = await _run(specs, kw, use_desired=False)
-    new = await _run(specs, kw, use_desired=True)
-    assert old == new, f"{name}: imperative={old} desired={new}"
+    assert await _run(specs, kw) == _EXPECTED[name], name
+
+
+@pytest.mark.asyncio
+async def test_shedding_takes_one_per_cycle_while_the_sun_holds_the_rest():
+    """SHEDDING is gentle: with sun enough for both, it takes the lowest
+    one only — the other keeps running (the scenario above has no sun, so
+    the deficit stop takes the second)."""
+    specs = [dict(device_id="a", priority=1, min_power=800, is_active=True, draw=800),
+             dict(device_id="b", priority=2, min_power=800, is_active=True, draw=800)]
+    assert await _run(specs, dict(available_power_w=2000.0,
+                                  peak_state=LoadManagementState.SHEDDING)) == {
+        "a": True, "b": False}
+
+
+# ── #1335: one scenario per D-item, multi-cycle, power + markers + reason ─
+from custom_components.solar_energy_management.coordinator.plan_verdict import (
+    PlanVerdict,
+)
+
+
+class _PSet(_PDev):
+    """A watt-setpoint load: it draws what it is sent, inside its entity's
+    bounds (the shape of ``PowerSetpointDevice``)."""
+
+    def __init__(self, device_id, priority, **kw):
+        super().__init__(device_id, priority, **kw)
+        self._lo, self._hi = kw.get("bounds", (0.0, 3000.0))
+        self.device_type = MagicMock(value="setpoint")
+
+    def _clamp(self, w):
+        return max(self._lo, min(float(w), self._hi))
+
+    def expected_draw_w(self, w):
+        return self._clamp(w)
+
+    async def activate(self, target):
+        self._draw = self._clamp(target)
+        self._active = True
+        return self._draw
+
+    async def adjust_power(self, target):
+        self._draw = self._clamp(target)
+        return self._draw
+
+
+#: The reason families the two engines must agree on. The codes differ in
+#: name only (the old passes said "surplus"/"plan_window", layer 1 says
+#: "solar"/"comfort_goal").
+_FAMILY = {"surplus": "sun", "solar": "sun", "tier1_battery": "sun", "start": "sun",
+           "plan_window": "banking", "comfort_goal": "banking",
+           "target_met": "paid_end", "overnight_end": "paid_end"}
+
+_BAND_BLOCK = {"boiler": PlanVerdict(in_block=True, comfort_in_block=True,
+                                     reason="planned block")}
+
+# id → (device specs, [update kwargs per cycle])
+_D_SCENARIOS = {
+    # D1 — a banking run holds through its comfort block (layered was right;
+    # the old expiry now leaves it to the block).
+    "d1_banking_holds_in_its_block": (
+        [dict(device_id="boiler", priority=1, min_power=3000,
+              top_up_policy="solar_only", comfort=("willing", 45.0, 50.0))],
+        [dict(available_power_w=0.0, price_level="normal", plan_windows=_BAND_BLOCK)] * 3,
+    ),
+    # D2 — the pool runs short: the LOWEST priority stops first, and only
+    # past the 100 W band (old was right; layer 2 now runs the deficit stop).
+    "d2_lowest_priority_loses_first": (
+        [dict(device_id="a", priority=1, min_power=800, is_active=True),
+         dict(device_id="b", priority=2, min_power=800, is_active=True),
+         dict(device_id="c", priority=3, min_power=800, is_active=True)],
+        [dict(available_power_w=1900.0)] * 3,
+    ),
+    "d2_inside_the_band_both_stay": (
+        [dict(device_id="a", priority=1, min_power=800, is_active=True),
+         dict(device_id="b", priority=2, min_power=800, is_active=True)],
+        [dict(available_power_w=1550.0)] * 2,
+    ),
+    "d2_a_higher_load_short_of_its_own_threshold_keeps_running": (
+        [dict(device_id="a", priority=1, min_power=1000, is_active=True),
+         dict(device_id="b", priority=2, min_power=300, is_active=True, draw=300)],
+        [dict(available_power_w=1150.0)] * 2,
+    ),
+    # D3 — a running watt setpoint follows the free power (old was right).
+    "d3_setpoint_ramps_to_free_power": (
+        [dict(device_id="heater", priority=1, min_power=500, is_active=True,
+              draw=1000, kind="setpoint")],
+        [dict(available_power_w=2600.0)] * 2,
+    ),
+    # D4 — the start reserve (#688; layered was right, old now asks it too).
+    "d4_start_reserve_waits": (
+        [dict(device_id="pump", priority=1, min_power=800, start_reserve_w=200)],
+        [dict(available_power_w=900.0)] * 2,
+    ),
+    "d4_start_reserve_met_starts": (
+        [dict(device_id="pump", priority=1, min_power=800, start_reserve_w=200)],
+        [dict(available_power_w=1100.0)],
+    ),
+    # D5 — a cheap-hours grid start must fit the billing slot (#864; old was
+    # right, layer 1 now asks it).
+    "d5_peak_slot_refuses_a_grid_start": (
+        [dict(device_id="pool", priority=1, min_power=800, has_runtime_deficit=True,
+              top_up_policy="cheap_hours")],
+        [dict(available_power_w=0.0, price_level="cheap",
+              peak_slot_allowed_w=500.0, grid_import_w=400.0)] * 2,
+    ),
+    "d5_peak_slot_with_room_starts": (
+        [dict(device_id="pool", priority=1, min_power=800, has_runtime_deficit=True,
+              top_up_policy="cheap_hours")],
+        [dict(available_power_w=0.0, price_level="cheap",
+              peak_slot_allowed_w=5000.0, grid_import_w=400.0)],
+    ),
+    # D6 — what requires a load stops with it (#122; old was right).
+    "d6_dependent_stops_with_its_parent": (
+        [dict(device_id="boiler", priority=1, min_power=800, is_active=True,
+              depends_on=["heat_pump"]),
+         dict(device_id="heat_pump", priority=2, min_power=800, is_active=True)],
+        [dict(available_power_w=900.0)] * 2,
+    ),
+    # D7 — a deadline beats the peak, not a fuse (#1048; old was right).
+    "d7_deadline_waits_for_a_phase_hold": (
+        [dict(device_id="dishwasher", priority=1, min_power=1800, deadline=True,
+              phase_hold="L1")],
+        [dict(available_power_w=0.0)] * 2,
+    ),
+    "d7_deadline_without_a_hold_starts": (
+        [dict(device_id="dishwasher", priority=1, min_power=1800, deadline=True)],
+        [dict(available_power_w=0.0)],
+    ),
+    # D8 — a watt setpoint starts at the free power (old was right).
+    "d8_setpoint_starts_at_free_power": (
+        [dict(device_id="heater", priority=1, min_power=500, kind="setpoint")],
+        [dict(available_power_w=2500.0)] * 2,
+    ),
+    # D9 — a paid run takes only the sun that is left (old's rule kept; the
+    # layered "debit nothing" handed its sun to the next load).
+    "d9_paid_run_takes_the_sun_left": (
+        [dict(device_id="pool", priority=1, min_power=800, draw=2000, is_active=True,
+              _offpeak_forced=True, has_runtime_deficit=True, top_up_policy="cheap_hours"),
+         dict(device_id="fan", priority=2, min_power=800)],
+        [dict(available_power_w=1000.0, price_level="cheap")] * 2,
+    ),
+    # D10 — a shed paid run carries no stale marker.
+    "d10_peak_shed_clears_the_marker": (
+        [dict(device_id="towel", priority=1, min_power=800, is_active=True,
+              _batt_overnight_forced=True, has_runtime_deficit=True,
+              battery_eligible_overnight=True)],
+        [dict(available_power_w=0.0, price_level="normal", battery_soc=90,
+              battery_reserve_soc=20, peak_state=LoadManagementState.EMERGENCY)],
+    ),
+}
+
+
+def _family(code):
+    return _FAMILY.get(code, code)
+
+
+async def _run_cycles(specs, cycles):
+    hass = MagicMock()
+    sc = SurplusController(hass)
+    sc.regulation_offset = 0.0
+    for spec in specs:
+        spec = dict(spec)
+        cls = _PSet if spec.pop("kind", "switch") == "setpoint" else _PDev
+        sc.register_device(cls(**spec))
+    seen = []
+    for kw in cycles:
+        await sc.update(**kw)
+        last = {}
+        for rec in sc.decision_log._records:
+            last[rec.device_id] = _family(rec.reason_code)
+        seen.append({
+            d.device_id: (d.is_active, round(d.get_current_consumption()),
+                          bool(d._offpeak_forced), bool(d._batt_overnight_forced),
+                          last.get(d.device_id))
+            for d in sc._devices.values()})
+    return seen
+
+
+@pytest.mark.asyncio
+async def test_d_items_say_what_they_pin():
+    """(#1335) Each item of the engine map lands where its decision says.
+    Before the old passes were deleted, both engines ran these same
+    multi-cycle inputs and gave the same on/off, draw, markers and reason
+    family (commit history: the parity step)."""
+    async def last(name):
+        specs, cycles = _D_SCENARIOS[name]
+        return (await _run_cycles(specs, cycles))[-1]
+    assert (await last("d1_banking_holds_in_its_block"))["boiler"][:3] == (True, 3000, True)
+    r = await last("d2_lowest_priority_loses_first")
+    assert [r[k][0] for k in "abc"] == [True, True, False]
+    assert r["c"][4] == "surplus_short"
+    r = await last("d2_inside_the_band_both_stay")
+    assert r["a"][0] and r["b"][0]
+    r = await last("d2_a_higher_load_short_of_its_own_threshold_keeps_running")
+    assert r["a"][0] and not r["b"][0]
+    assert (await last("d3_setpoint_ramps_to_free_power"))["heater"][:2] == (True, 2600)
+    assert not (await last("d4_start_reserve_waits"))["pump"][0]
+    assert (await last("d4_start_reserve_met_starts"))["pump"][0]
+    assert not (await last("d5_peak_slot_refuses_a_grid_start"))["pool"][0]
+    assert (await last("d5_peak_slot_with_room_starts"))["pool"][:3] == (True, 800, True)
+    specs, cycles = _D_SCENARIOS["d6_dependent_stops_with_its_parent"]
+    first, second = await _run_cycles(specs, cycles)
+    assert not first["heat_pump"][0] and not first["boiler"][0]
+    assert first["boiler"][4] == "dependency"
+    # next cycle the pump alone fits again; the boiler waits for it
+    assert second["heat_pump"][0] and not second["boiler"][0]
+    assert not (await last("d7_deadline_waits_for_a_phase_hold"))["dishwasher"][0]
+    assert (await last("d7_deadline_without_a_hold_starts"))["dishwasher"][0]
+    assert (await last("d8_setpoint_starts_at_free_power"))["heater"][:2] == (True, 2500)
+    r = await last("d9_paid_run_takes_the_sun_left")
+    assert r["pool"][:3] == (True, 2000, True) and not r["fan"][0]
+    r = await last("d10_peak_shed_clears_the_marker")
+    assert r["towel"][:4] == (False, 0, False, False)
 
 
 @pytest.mark.asyncio
 async def test_update_observer_computes_but_never_actuates(caplog):
     """The clean cut, end-to-end. Observer mode runs the FULL real decision
     (layers 1+2 against live inputs) and reconciles through the single seam in
-    log-only mode: nothing is actuated, the imperative passes are never reached,
-    and allocation data is still produced for the sensors. Works with
-    ``_use_desired_state`` OFF (the PROD-shipped default) — observer always takes
-    the clean path. This is the invariant that makes HA-TEST safe on shared
+    log-only mode: nothing is actuated, and allocation data is still produced
+    for the sensors. This is the invariant that makes HA-TEST safe on shared
     hardware."""
     import logging
     hass = MagicMock()
     sc = SurplusController(hass)
     sc.register_device(_PDev(device_id="a", priority=1, min_power=800, is_active=False))
-    assert sc._use_desired_state is False                 # PROD-shipped default
     with caplog.at_level(logging.INFO):
         data = await sc.update(available_power_w=5000.0, observer=True)
     states = {d.device_id: d.is_active for d in sc._devices.values()}

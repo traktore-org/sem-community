@@ -86,8 +86,11 @@ class TestTooCold:
         dev = _boiler(45.0, active=True)
         dev._comfort_floor_run = True
         assert _intent(dev).code == RC.LOAD_COMFORT_FLOOR and _intent(dev).on
-        dev._comfort_floor_run = False   # a run the floor did not start stops (no source)
-        assert not _intent(dev).on
+        # a run the floor did not start is no floor run: it is a plain sun
+        # run, and the whole-set walk (layer 2) stops it when the sun is
+        # short (#1335)
+        dev._comfort_floor_run = False
+        assert _intent(dev).code != RC.LOAD_COMFORT_FLOOR
 
     def test_your_stop_beats_too_cold(self):
         it = _intent(_boiler(34.0, stop_at=30.0))
@@ -162,13 +165,26 @@ class TestLegionellaInLayerOne:
         it = _intent(dev)
         assert it.on and it.code == RC.LOAD_LEGIONELLA
 
-    def test_where_the_ladder_leads_the_cycle_does_not_switch(self):
+    def test_the_cycle_never_switches(self):
+        """(#1335) The check keeps the run's state only, everywhere."""
         dev = self._hw(45.0)
         dev.activate = AsyncMock(return_value=3000.0)
         dev.deactivate = AsyncMock()
-        assert asyncio.run(dev.check_legionella_cycle(switch=False)) == "legionella_started"
+        assert asyncio.run(dev.check_legionella_cycle()) == "legionella_started"
         assert dev._legionella_cycle_active is True
         dev.activate.assert_not_called()
+
+    def test_a_finished_run_is_stopped_by_layer_one(self):
+        dev = self._hw(70.0, active=True)
+        dev.deactivate = AsyncMock()
+        dev._legionella_cycle_active = True
+        from datetime import timedelta
+        from homeassistant.util import dt as dt_util
+        dev._legionella_hold_start = dt_util.now() - timedelta(hours=1)
+        assert asyncio.run(dev.check_legionella_cycle()) == "legionella_complete"
+        dev.deactivate.assert_not_called()
+        assert dev.own_run_ending is True
+        assert not _intent(dev).on
 
 
 @pytest.mark.unit
@@ -181,21 +197,16 @@ class TestThePlanAsksForKeepAt:
     def test_without_goal_the_old_drift_ask_is_unchanged(self):
         assert _boiler(45.0).comfort_plan_demand(None) is None   # no drift model learned yet
 
-    def test_the_ladder_leads_only_where_the_layers_switch(self):
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            _band_engaged, _ladder_leads,
-        )
-        assert _ladder_leads(SimpleNamespace(_observer_mode=True, _surplus_controller=None))
-        assert _ladder_leads(SimpleNamespace(_observer_mode=False,
-                                             _surplus_controller=SimpleNamespace(_use_desired_state=True)))
-        assert not _ladder_leads(SimpleNamespace(_observer_mode=False,
-                                                 _surplus_controller=SimpleNamespace(_use_desired_state=False)))
-        assert not _ladder_leads(MagicMock())
-        assert _band_engaged(_boiler(45.0)) and not _band_engaged(SimpleNamespace())
+    def test_the_ladder_leads_on_every_install(self):
+        """(#1335) One rule per load: the plan no longer asks which engine or
+        whether observer mode is on."""
+        from custom_components.solar_energy_management.coordinator import coordinator as c
+        assert not hasattr(c, "_ladder_leads")
+        assert c._band_engaged(_boiler(45.0)) and not c._band_engaged(SimpleNamespace())
 
 
 @pytest.mark.unit
-def test_layer_two_remembers_a_floor_run_and_a_dry_walk_puts_it_back():
+def test_layer_three_remembers_a_floor_run_the_layers_write_nothing():
     from custom_components.solar_energy_management.coordinator.surplus_controller import (
         SurplusController,
     )
@@ -204,8 +215,12 @@ def test_layer_two_remembers_a_floor_run_and_a_dry_walk_puts_it_back():
     sc.register_device(dev)
     kw = dict(remaining_surplus=0.0, reclaim_w=0.0, battery_priority=None, price_level=None,
               peak_freeze=False, peak_shed=False, peak_shed_all=False)
-    sc._desired_intents([dev], dry=True, **kw)
-    assert getattr(dev, "_comfort_floor_run", False) is False
     intents = sc._desired_intents([dev], **kw)
     assert intents["boiler"].code == RC.LOAD_COMFORT_FLOOR
+    # (#1335) the layers decide; layer 3 writes the memory with the markers
+    assert getattr(dev, "_comfort_floor_run", False) is False
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        _apply_source_markers,
+    )
+    _apply_source_markers(dev, intents["boiler"])
     assert dev._comfort_floor_run is True

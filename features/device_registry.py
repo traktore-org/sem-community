@@ -2733,67 +2733,13 @@ class UnifiedDeviceRegistry:
             _LOGGER.info(
                 "Updated %s control mode to %s", device_id, mode,
             )
-            # (class-17 sibling, live PROD 2026-07-23) One-shot release on the
-            # transition INTO Off: turn a load SEM is DRIVING off once, then
-            # keep its hands off — without this a SEM-driven load was stranded
-            # on forever ("mode off and SEM does not touch the device any
-            # more"). The user's explicit mode change overrides the min_on
-            # anti-flicker (a deliberate command beats flicker protection).
-            #
-            # (#847, Hoyte, fresh install) But this release must ONLY touch a
-            # load SEM actually started — gate it on ``_sem_owned``, exactly as
-            # the two steady-state release paths do (``compute_load_intent`` and
-            # the imperative ``update()`` peak/goal pass both read it and both
-            # say "a user-turned-on load stays untouched"). This immediate
-            # handler was the one straggler that ignored ownership, so setting a
-            # peak-management device to Mode=Off switched off loads the USER had
-            # running (default mode is peak_only, which SEM never drives on, so
-            # ``_sem_owned`` is False and there is nothing to strand). #779 made
-            # ``_sem_owned`` the honest answer to "did SEM start this?" (adoption
-            # is gated on SURPLUS mode); a genuinely SEM-driven surplus load is
-            # re-adopted post-restart before any mode change, so the strand case
-            # is still covered while the user's own loads are left exactly as-is.
-            if (control_mode is DeviceControlMode.OFF
-                    and getattr(surplus_device, "_sem_owned", False)):
-                try:
-                    obs = surplus_device.observed_on()
-                except Exception:  # noqa: BLE001
-                    obs = None
-                if obs is True or (obs is None and surplus_device.is_active):
-                    if getattr(surplus_device, "_sem_commanded", False):
-                        # SEM issued the ON: opt-out undoes SEM's own action.
-                        # Clear the UNIFIED clock (#644) — the attribute
-                        # ``deactivate()`` actually gates on. This used to
-                        # clear ``_status.last_activated``, a DIFFERENT
-                        # attribute, so the comment above ("a deliberate
-                        # command beats flicker protection") was not true: a
-                        # Mode→Off inside ``min_on_seconds`` returned at the
-                        # anti-flicker guard and left the load ON, with no
-                        # error and no log.
-                        surplus_device._last_activated = None
-                        if getattr(surplus_device, "_status", None) is not None:
-                            surplus_device._status.last_activated = None
-                        await surplus_device.deactivate()
-                        _LOGGER.info(
-                            "Mode off: released %s (turned off once — SEM "
-                            "will not touch it again while mode stays off)",
-                            device_id,
-                        )
-                    else:
-                        # (#847 refinement, 2.1) ADOPTED only — a running
-                        # load claimed under Surplus so goal gates could
-                        # stop it, never started by SEM. Opt-out releases
-                        # the claim with ZERO writes.
-                        _LOGGER.info(
-                            "Mode off: released adopted load %s without "
-                            "actuation (#847)", device_id,
-                        )
-                    surplus_device._offpeak_forced = False
-                    surplus_device._offpeak_forced_date = None
-                    surplus_device._batt_overnight_forced = False
-                    surplus_device._batt_overnight_forced_date = None
-                    surplus_device._sem_owned = False
-                    surplus_device._sem_commanded = False
+            # (#1335) That is all this handler does. Whether SEM lets go of
+            # the load is layer 1's Off branch (a load SEM started is stopped
+            # once, an adopted one released with no write, the user's own
+            # left alone — #847), and the stop goes through
+            # ``reconcile_load``, where the user's Off beats the minimum run
+            # and observer mode withholds it. The service caller asks for a
+            # refresh, so the stop lands at once.
 
         # (#649) Keep the load manager's copy in step NOW. It is only rebuilt by
         # the 35 s rediscovery, so until then a device the user has just handed

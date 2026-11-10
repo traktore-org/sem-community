@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The "Why did SEM act?" card no longer shows the car's budget as Surplus** (#1331). A car row says Budget, the others show spare sun.
+- 🐛 **The Energy Plan card shows a battery grid charge only at night, and only when SEM will do it** (#1311). It showed day blocks too.
+- 🐛 **A car that leaves after tonight now gets a plan sized on tonight's hours only** (#1309). Day hours no longer count as charge time.
+- 🐛 **Loads now switch in one place, so Mode Off and shutdown also stop a Legionella run** (#1335). Observer mode holds the heat pump too.
+- 🔧 **Heaters with a thermometer and Keep at now join the shared plan on every install** (#1335). Cheap hours for the car and battery can shift.
+- 🐛 **A load SEM started on sun now stops when solar production ends, even when its power sensor reads 0 W** (#1335).
+- 🐛 **A planned comfort block now runs through without switching the load on and off** (#1334), also with Grid set to Off.
+- 📝 **The load card's Comfort hint now says how Keep at is reached**: in the planned hour from any source, sun may go further (#1334).
+
 # [2.3.0-beta.11] — 10.11.2026
 
 - 🐛 **The Energy Plan card shows a load's daily grid run when SEM starts it** (#1330). It showed a midday run SEM never did.

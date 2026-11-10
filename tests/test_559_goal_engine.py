@@ -177,6 +177,9 @@ def _mock_device(**kw):
     device.battery_eligible_overnight = False
     device.needs_offpeak_activation = kw.get("needs_offpeak", False)
     device.remaining_daily_runtime_sec = kw.get("remaining_sec", 0)
+    # (#1335) the deficit the layers read, as a real bool
+    device.has_runtime_deficit = bool(kw.get("needs_offpeak", False)) or (
+        kw.get("remaining_sec", 0) > 0)
     device.daily_min_runtime_sec = 0
     device.daily_targets_met = kw.get("targets_met", False)
     device.daily_max_runtime_reached = kw.get("max_reached", False)
@@ -393,11 +396,13 @@ async def test_loads_goal_with_removed_keys(registry):
 @pytest.mark.asyncio
 class TestForceExpiry:
 
-    async def test_cheap_force_expires_on_day_rollover_in_cheap_window(self, mock_hass):
+    async def test_cheap_force_rolls_over_onto_the_new_day(self, mock_hass):
         # (#703) "day rollover" = the load's METER day moved on (sunrise
-        # boundary), not the calendar flip at midnight. Force stamped for the
-        # OLD meter day + meter day now advanced → stale → stop, and the
-        # re-force stamps the CURRENT meter day.
+        # boundary), not the calendar flip at midnight. (#1335) The layers
+        # judge the deficit live: the new day's deficit in a cheap window
+        # keeps the run on (the old passes stopped it and forced it again a
+        # minimum pause later), and the marker is stamped for the CURRENT
+        # meter day.
         from datetime import date as _date
         sc = SurplusController(mock_hass)
         dev = _mock_device(is_active=True, policy="cheap_hours",
@@ -407,7 +412,8 @@ class TestForceExpiry:
         dev._daily_runtime_meter_day = _date(2020, 1, 2)  # sunrise rolled over
         sc.register_device(dev)
         await sc.update(0.0, price_level="cheap")
-        dev.deactivate.assert_awaited()
+        dev.deactivate.assert_not_awaited()
+        assert dev._offpeak_forced is True
         assert dev._offpeak_forced_date == _date(2020, 1, 2)
 
     async def test_cheap_force_rollover_without_new_deficit_stays_off(self, mock_hass):
@@ -428,7 +434,8 @@ class TestForceExpiry:
         # the sunrise-held day is the boundary that matters) → NOT stale.
         from datetime import date as _date
         sc = SurplusController(mock_hass)
-        dev = _mock_device(is_active=True, policy="cheap_hours")
+        dev = _mock_device(is_active=True, policy="cheap_hours",
+                           remaining_sec=3600)       # its deficit is open
         dev._offpeak_forced = True
         dev._offpeak_forced_date = _date(2020, 1, 1)
         dev._daily_runtime_meter_day = _date(2020, 1, 1)

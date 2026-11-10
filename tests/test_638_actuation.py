@@ -9,8 +9,9 @@ Three surfaces, all pure:
   reactive guarantees senior: a forcing deadline or an unreachable floor is
   never gated, and waiting is only allowed while the remaining blocks can
   still deliver the remaining floor.
-* ``compute_load_intent`` + the imperative passes — ``plan_window`` is an
-  extra AND-gate on the tier-2 / cheap-hours starts, never a run reason.
+* ``compute_load_intent`` (layer 1, the one load engine since #1335) — the
+  plan's hold is an extra AND-gate on the tier-2 / cheap-hours starts, never
+  a run reason.
 """
 from datetime import datetime, timedelta
 from types import SimpleNamespace

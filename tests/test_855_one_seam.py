@@ -41,10 +41,9 @@ CHARGER_PATH = [
     # so its one call carries its own observer gate — and is pinned here
     # rather than left as an un-guarded exception to the invariant.
     ROOT / "coordinator" / "ev_control.py",
-    # (2.1 audit INFO-1) The heat pump's hardware writes are observer-gated
-    # one layer UP — reconcile_load's observer branch returns before any
-    # device method runs — and nothing inside the file checks the flag.
-    # Scanning it here means a new un-annotated hardware call in that file
+    # (2.1 audit INFO-1, #1335) The heat pump writes through the seam like
+    # every other load, so Mode Off and teardown are withheld under observer
+    # too. Scanning it here means a new direct hardware call in that file
     # fails CI instead of silently bypassing observer mode.
     ROOT / "devices" / "heat_pump_controller.py",
     # The reconciler owns convergence and, since the observer gate in
@@ -58,6 +57,10 @@ CHARGER_PATH = [
     # the seam themselves. A water_heater or climate tank was heated on a
     # rig that believed it was only watching.
     ROOT / "devices" / "hot_water_controller.py",
+    # (#1335) The load manager writes to peak-only and unregistered loads.
+    # Its one seam (``_send``) withholds for observer mode and a yield; a
+    # new direct call anywhere else in the file fails here.
+    ROOT / "features" / "load_management.py",
 ]
 
 # The opt-out, spelled like the codebase's other one (`# FLEET-READ:`): a

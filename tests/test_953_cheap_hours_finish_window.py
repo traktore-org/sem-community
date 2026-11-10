@@ -569,9 +569,10 @@ class TestSourceGuards:
         assert "min" in _calls(_func("price_damped_pool"))
 
     def test_the_cheap_hours_pass_consults_the_finish_window(self):
-        # Both halves, in the one function PROD runs: the start gate in the
-        # off-peak activation pass and the force-expiry twin.
-        assert _calls(_func("update")).count("grid_top_up_defers_to_sun") >= 2
+        # (#1335) One engine: layer 1 decides start and stop alike from the
+        # finish window; ``update`` no longer carries a pass of its own.
+        assert "grid_top_up_defers_to_sun" not in _calls(_func("update"))
+        assert "grid_top_up_defers_to_sun" in _calls(_func("compute_load_intent"))
 
     def test_the_intent_path_consults_it_too(self):
         assert "grid_top_up_defers_to_sun" in _calls(

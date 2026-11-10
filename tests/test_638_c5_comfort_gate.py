@@ -228,13 +228,14 @@ class TestTheLegacySurfacesAreGone:
         assert "plan_window" not in inspect.signature(
             compute_load_intent).parameters
 
-    def test_the_imperative_twin_has_the_comfort_clause(self):
-        """PROD runs the imperative passes — a run that lives only in the
-        desired-state path is a run that never happens."""
-        import inspect
+    def test_the_one_engine_has_the_comfort_clause(self):
+        """(#1335) Every install runs the three layers: the banking run
+        lives in layer 1, the one place a run reason docks."""
         from custom_components.solar_energy_management.coordinator.surplus_controller import (
-            SurplusController,
+            compute_load_intent,
         )
-        src = inspect.getsource(SurplusController)
-        assert src.count('comfort_state') >= 1
-        assert "comfort_in_block" in src
+        from custom_components.solar_energy_management.tests.ast_contracts import (
+            reads_attribute,
+        )
+        assert reads_attribute(compute_load_intent, "plan", "comfort_in_block")
+        assert reads_attribute(compute_load_intent, "RC", "LOAD_COMFORT_GOAL")

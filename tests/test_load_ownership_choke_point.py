@@ -163,6 +163,8 @@ class TestModeOffReleasesEveryStartPath:
         intent = sc.compute_load_intent(dev, remaining_surplus_w=0.0)
         assert intent.on is True                        # left exactly as it is
         assert intent.reason == "off — monitor only"
+        assert intent.release is True                   # (#1335) layer 3 lets go
+        await sc.reconcile_load(dev, intent)
         assert dev._sem_owned is False                  # claim handed back
         assert dev.deactivate_calls == 0                # and nothing written
 

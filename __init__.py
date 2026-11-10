@@ -5333,6 +5333,12 @@ async def _async_register_services(
                         translation_placeholders={"device_id": device_id},
                     )
                 await registry.update_device_control_mode(device_id, str(value))
+                # (#1335) the mode is set; the load engine acts on it — now,
+                # not one cycle later
+                try:
+                    await coordinator.async_request_refresh()
+                except Exception:  # noqa: BLE001 — the next cycle acts anyway
+                    _LOGGER.debug("Refresh after mode change failed", exc_info=True)
             else:
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
@@ -7075,8 +7081,6 @@ async def _async_register_phase_services(
         "state_decision_path", "process_path", "action_path", "last_error",
         "shed_path", "shed_need_w", "shed_sheddable_w", "shed_futile",
         "uncontrolled_w",
-        # (#1102) the load engines' comparison: summary + full change log
-        "engine_shadow", "engine_shadow_records",
     }
     # Forecast
     _DIAGNOSE_FORECAST_OPTION = {

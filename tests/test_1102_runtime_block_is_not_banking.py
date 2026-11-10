@@ -101,6 +101,12 @@ def _boiler(*, comfort_state="willing", deficit_s=1 * H):
     d.is_deadline_approaching = False
     d.start_reserve_w = 0.0
     d.comfort_state = comfort_state
+    # (#1335) a real thermometer band (Keep at 50 °C, forced below 36 °C):
+    # the layers read the band itself, not only its state name
+    d._comfort_reading = lambda: {"willing": 45.0, "forced": 30.0,
+                                  "banked": 56.0}.get(d.comfort_state)
+    d._comfort_thresholds_c = lambda: (50.0, 5.0, 36.0)
+    d._comfort_direction = lambda: "heat"
     d.runs_without_surplus = False
     d.locked_by_operator = False
     d.stop_entity = None
@@ -211,20 +217,25 @@ class TestTheReportersNoon:
 
     async def test_the_end_of_the_day_still_buys_the_hour(self, mock_hass, notes):
         # Not a blanket refusal: once the sun has no time left, the cheap
-        # hour finishes the minimum, under the cheap-hours code.
+        # hour finishes the minimum, under the cheap-hours code. (#1102/
+        # #1335) For a load without a thermometer band: with one, the band
+        # leads and the run time asks nothing (the heater ladder).
         sc = SurplusController(mock_hass, regulation_offset=0)
-        boiler = _boiler()
+        boiler = _boiler(comfort_state="")
         sc.register_device(boiler)
         await _cycle(sc, daylight_s=0.5 * H, plan=_verdict(load_open=True))
         boiler.activate.assert_awaited_once()
         assert boiler._offpeak_forced is True
-        assert (True, RC.LOAD_CHEAP_GRID, "cheap hours") in notes
+        assert (True, RC.LOAD_CHEAP_GRID,
+                "cheap-hours grid — runtime deficit") in notes
 
     async def test_the_night_block_runs_as_cheap_hours(self, mock_hass, notes):
         # The 05:12 run: the night is the overnight promise, unchanged —
         # only its label moves from "planned block" to "cheap hours".
+        # (#1335) a load without a band: with one, the band leads and the
+        # plan places no runtime block for it (the heater ladder)
         sc = SurplusController(mock_hass, regulation_offset=0)
-        boiler = _boiler()
+        boiler = _boiler(comfort_state="")
         sc.register_device(boiler)
         await _cycle(sc, daylight_s=12 * H, is_night=True, solar_w=0.0,
                      plan=_verdict(load_open=True))
@@ -241,7 +252,8 @@ class TestTheComfortBlockStillBanks:
         await _cycle(sc, daylight_s=DAYLIGHT_AT_NOON,
                      plan=_verdict(comfort_open=True))
         boiler.activate.assert_awaited_once()
-        assert [n[1] for n in notes if n[0]] == [RC.LOAD_PLAN_WINDOW]
+        # (#1335) the layers name the banking rung its own code
+        assert [n[1] for n in notes if n[0]] == [RC.LOAD_COMFORT_GOAL]
 
     async def test_the_expiry_twin_leaves_it_in_its_block(self, mock_hass, notes):
         sc = SurplusController(mock_hass, regulation_offset=0)
@@ -333,9 +345,11 @@ class TestTheFloorDoesNotCutABankingRun:
                      plan=_verdict(comfort_open=True))
         assert not boiler.deactivate.called
 
-    async def test_a_battery_run_in_the_block_still_ends(self, mock_hass, notes):
-        # Banking never runs on the battery: a Tier-2 run past its minimum
-        # is the floor's to end, comfort block or not (#688, class 18).
+    async def test_a_battery_run_in_the_block_goes_on_from_the_grid(self, mock_hass, notes):
+        # Banking never runs on the battery. (#1335) In its comfort block a
+        # Tier-2 run past its minimum is not stopped and started again (the
+        # old passes ended it, and the banking pass restarted it one minimum
+        # pause later): it goes on as the plan's banking run, on the grid.
         sc = SurplusController(mock_hass, regulation_offset=0)
         boiler = _running(_boiler(deficit_s=0.0))
         boiler._offpeak_forced = False
@@ -347,6 +361,22 @@ class TestTheFloorDoesNotCutABankingRun:
         sc.register_device(boiler)
         await _cycle(sc, daylight_s=12 * H, is_night=True, solar_w=0.0,
                      plan=_verdict(comfort_open=True))
+        assert not boiler.deactivate.called
+        assert boiler._batt_overnight_forced is False
+        assert boiler._offpeak_forced is True
+
+    async def test_a_battery_run_past_its_floor_ends_outside_the_block(self, mock_hass, notes):
+        # …and with no comfort block it is the floor's to end (#688, class 18)
+        sc = SurplusController(mock_hass, regulation_offset=0)
+        boiler = _running(_boiler(deficit_s=0.0))
+        boiler._offpeak_forced = False
+        boiler._offpeak_forced_date = None
+        boiler._batt_overnight_forced = True
+        boiler._batt_overnight_forced_date = boiler._daily_runtime_meter_day
+        boiler.battery_eligible_overnight = True
+        boiler.daily_targets_met = True
+        sc.register_device(boiler)
+        await _cycle(sc, daylight_s=12 * H, is_night=True, solar_w=0.0)
         boiler.deactivate.assert_awaited()
         assert [n[1] for n in notes if not n[0]] == [RC.LOAD_TARGET_MET]
 
@@ -395,7 +425,8 @@ class TestTheControllerReadsOneWordPerQuestion:
         calls = [n for n in ast.walk(_sc_tree())
                  if isinstance(n, ast.Call)
                  and getattr(n.func, "id", "") == "grid_top_up_defers_to_sun"]
-        assert len(calls) >= 3          # the intent, the start, the expiry
+        # (#1335) one engine: layer 1 is the one site (start and stop alike)
+        assert len(calls) >= 1
         missing = [c.lineno for c in calls
                    if "comfort_block_open" not in {k.arg for k in c.keywords}]
         assert missing == [], f"no comfort_block_open at {missing}"

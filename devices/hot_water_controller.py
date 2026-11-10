@@ -79,9 +79,9 @@ class HotWaterController(SwitchDevice):
         # while the circuit water was still coming up. These are the SAME
         # numbers HeatPumpController committed to for its compressor (#508
         # W1: 10 min minimum run / 5 min rest), so this is consistency with
-        # a value the repo already stands behind, not a new guess. Legionella
-        # cycles bypass this window entirely (they call activate() directly),
-        # so nothing about sanitation moves.
+        # a value the repo already stands behind, not a new guess. (#1335) A
+        # Legionella run is started by the load engine like any other run,
+        # so it waits out the same rest.
         min_on_time: int = 600,
         min_off_time: int = 300,
         daily_min_runtime_sec: int = 0,
@@ -124,6 +124,12 @@ class HotWaterController(SwitchDevice):
         # could not finish waits before it is tried again
         self._legionella_started_at: Optional[datetime] = None
         self._legionella_blocked_until: Optional[datetime] = None
+        # (#1335) The run ended (done, could not finish, vacation) while the
+        # tank was on. The load engine stops it once and clears this.
+        self._legionella_end_pending: bool = False
+        # (#1335) The setpoint SEM last wrote to a water_heater / climate
+        # tank, so a changed target (Legionella, vacation) is written again.
+        self._written_target: Optional[float] = None
 
         # #594 — vacation mode. Both set each cycle by the coordinator.
         # While ``vacation`` is True there is no comfort heating (no solar-
@@ -254,18 +260,28 @@ class HotWaterController(SwitchDevice):
             return False
         return self.hours_since_legionella > self.legionella_interval_hours
 
-    async def _end_unreachable_legionella(self, path: str, why: str, switch: bool = True) -> str:
+    def _end_legionella_run(self) -> None:
+        """(#1335) The run is over. The device never switches itself: while
+        the tank is on, ``own_run_ending`` asks the load engine to stop it
+        once, through the one place that switches loads."""
+        self._legionella_cycle_active = False
+        self._legionella_hold_start = None
+        self._legionella_started_at = None
+        self._legionella_end_pending = self.is_active
+
+    @property
+    def own_run_ending(self) -> bool:
+        """(#1335) The Legionella run ended with the tank still on: stop it."""
+        return self._legionella_end_pending is True and self.is_active
+
+    async def _end_unreachable_legionella(self, path: str, why: str) -> str:
         """(#1102) End a cycle that cannot reach its target. It is NOT a
         disinfection: ``_last_legionella_time`` stays, and the next try waits
         one full interval, so the run cannot switch the tank on again and
         again on grid power."""
-        self._legionella_cycle_active = False
-        self._legionella_hold_start = None
-        self._legionella_started_at = None
+        self._end_legionella_run()
         self._legionella_blocked_until = dt_util.now() + timedelta(
             hours=self.legionella_interval_hours)
-        if switch:
-            await self.deactivate()
         _LOGGER.warning(
             "Legionella cycle for %s ended without reaching %.0f°C: %s. "
             "Next try in %.0f h.", self.name, self.legionella_target_temp, why,
@@ -411,6 +427,19 @@ class HotWaterController(SwitchDevice):
         return False
 
     @property
+    def start_refusal(self) -> Optional[str]:
+        """(#1335) Why ``activate`` would refuse a start right now: ``"sensor"``
+        (a temperature sensor is set up but reads nothing — fail-safe) or
+        ``"at_target"`` (the tank is at the active target). None = it may
+        start. Layer 1 reads this and says so, so a start is never refused
+        in silence; ``activate`` keeps the same check as a backstop."""
+        if self.is_temperature_safe():
+            return None
+        if self._last_temperature_safety_path == "configured_sensor_broken":
+            return "sensor"
+        return "at_target"
+
+    @property
     def runs_without_surplus(self) -> bool:
         """(#1121) A Legionella run heats to its target sun or not;
         ``check_legionella_cycle`` ends it."""
@@ -536,14 +565,46 @@ class HotWaterController(SwitchDevice):
             self._last_deactivation_path = "switch_fallback"
             await super().deactivate()
 
+    @property
+    def target_stale(self) -> bool:
+        """(#1335) A running water_heater / climate tank holds a setpoint SEM
+        wrote for another target (a Legionella run began, vacation moved the
+        cap to the minimum). ``adjust_power`` writes the current one."""
+        if self._entity_domain not in _SETPOINT_DOMAINS or not self.is_active:
+            return False
+        written = self._written_target
+        return written is not None and abs(written - self._active_target_temp()) > _BOOST_SETPOINT_MATCH_K
+
+    async def adjust_power(self, available_watts: float) -> float:
+        """A tank is on or off; only a stale setpoint is written again."""
+        if self.target_stale:
+            if self._entity_domain == "water_heater":
+                await self._activate_water_heater()
+            else:
+                await self._activate_climate()
+        return await super().adjust_power(available_watts)
+
+    def _claim_active(self, target: float) -> float:
+        self._written_target = target
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        return self.rated_power
+
     async def _activate_water_heater(self) -> float:
-        """Activate via water_heater domain."""
+        """Activate via water_heater domain.
+
+        (#1335) Claims ACTIVE only when the setpoint really went out: a write
+        the seam withheld (observer, yield) moved nothing."""
         try:
             target = self._active_target_temp()
-            await self.send(
+            sent = await self.send(
                 "water_heater", "set_temperature",
                 {"entity_id": self.entity_id, "temperature": target},
                 why="hot water heating")
+            if not sent:
+                self._last_activation_path = "water_heater_withheld"
+                return 0.0
             # Try turn_on if supported
             try:
                 await self.send(
@@ -551,79 +612,89 @@ class HotWaterController(SwitchDevice):
                     {"entity_id": self.entity_id}, why="hot water heating")
             except Exception:
                 pass  # Not all water_heater entities support turn_on
-            self._status.state = DeviceState.ACTIVE
-            self._status.current_consumption_w = self.rated_power
-            self._status.allocated_power_w = self.rated_power
-            return self.rated_power
+            return self._claim_active(target)
         except Exception as e:
             _LOGGER.error("Failed to activate water_heater: %s", e)
             return 0.0
 
     async def _deactivate_water_heater(self) -> None:
-        """Deactivate via water_heater domain."""
+        """Deactivate via water_heater domain. A withheld write leaves the
+        belief as it is (#1335): the tank did not move."""
         try:
-            await self.send(
+            sent = await self.send(
                 "water_heater", "turn_off",
                 {"entity_id": self.entity_id}, why="hot water off")
         except Exception:
             # Not all support turn_off — set low temp instead
             try:
-                await self.send(
+                sent = await self.send(
                     "water_heater", "set_temperature",
                     {"entity_id": self.entity_id, "temperature": self.min_temperature},
                     why="hot water off")
             except Exception as e:
                 _LOGGER.error("Failed to deactivate water_heater: %s", e)
+                sent = True   # unchanged: a failed write still reads idle
+        if not sent:
+            self._last_deactivation_path = "water_heater_withheld"
+            return
+        self._written_target = None
         self._status.state = DeviceState.IDLE
         self._status.current_consumption_w = 0.0
 
     async def _activate_climate(self) -> float:
-        """Activate via climate domain."""
+        """Activate via climate domain (#1335: only a sent write claims ACTIVE)."""
         try:
             target = self._active_target_temp()
-            await self.send(
+            sent = await self.send(
                 "climate", "set_temperature",
                 {"entity_id": self.entity_id, "temperature": target},
                 why="hot water heating")
+            if not sent:
+                self._last_activation_path = "climate_withheld"
+                return 0.0
             await self.send(
                 "climate", "set_hvac_mode",
                 {"entity_id": self.entity_id, "hvac_mode": "heat"},
                 why="hot water heating")
-            self._status.state = DeviceState.ACTIVE
-            self._status.current_consumption_w = self.rated_power
-            self._status.allocated_power_w = self.rated_power
-            return self.rated_power
+            return self._claim_active(target)
         except Exception as e:
             _LOGGER.error("Failed to activate climate for hot water: %s", e)
             return 0.0
 
     async def _deactivate_climate(self) -> None:
-        """Deactivate via climate domain."""
+        """Deactivate via climate domain (#1335: a withheld write moves nothing)."""
         try:
-            await self.send(
+            sent = await self.send(
                 "climate", "set_hvac_mode",
                 {"entity_id": self.entity_id, "hvac_mode": "off"},
                 why="hot water off")
         except Exception as e:
             _LOGGER.error("Failed to deactivate climate for hot water: %s", e)
+            sent = True
+        if not sent:
+            self._last_deactivation_path = "climate_withheld"
+            return
+        self._written_target = None
         self._status.state = DeviceState.IDLE
         self._status.current_consumption_w = 0.0
 
     # ─── Legionella Prevention ───────────────────────────────
 
-    async def check_legionella_cycle(self, switch: bool = True) -> Optional[str]:
-        """Check and execute Legionella prevention cycle.
+    async def check_legionella_cycle(self) -> Optional[str]:
+        """Advance the Legionella prevention cycle. Never switches the tank.
 
         Called every coordinator cycle. Returns a status message or None.
 
-        (#1102) ``switch=False`` where the three-layer load engine leads: this
-        keeps the run's state (due, hold, end, timestamps) and layer 1 starts
-        and stops the heater from ``runs_without_surplus`` — one place that
-        switches, with the run's reason code.
+        (#1335) This keeps the run's state only (due, hold, end, timestamps).
+        The load engine switches: layer 1 starts the run from
+        ``runs_without_surplus`` and stops it from ``own_run_ending``, and
+        ``reconcile_load`` does both. So a Legionella start is SEM's own
+        command like any other — Mode Off and teardown stop it, the minimum
+        run and rest apply, and the decision log names it.
 
         Logic:
         1. If tank naturally reached ≥60°C → record timestamp, no forced cycle
-        2. If overdue (>interval hours) → force heat to target, hold, record
+        2. If overdue (>interval hours) → the run is due, heat to target, hold
         3. If cycle active → check hold duration, complete when done
 
         Records which branch fired on ``self._last_legionella_path`` (#420):
@@ -632,14 +703,18 @@ class HotWaterController(SwitchDevice):
         ``overdue_no_sensor`` / ``idle`` / ``vacation_paused`` /
         ``vacation_aborted`` (#594).
 
-        #594 vacation: cycles are PAUSED — no disinfection activation while
-        away. ``_last_legionella_time`` is deliberately NOT touched, so
+        #594 vacation: cycles are PAUSED — no disinfection while away.
+        ``_last_legionella_time`` is deliberately NOT touched, so
         ``hours_since_legionella`` keeps accumulating; when the interval
         elapses during the vacation, the normal overdue branch fires on the
-        first post-vacation cycle (run-on-return). An in-flight cycle is
-        aborted cleanly once (deactivate, clear hold) and re-runs on return
-        via the same overdue path.
+        first post-vacation cycle (run-on-return). An in-flight cycle ends
+        once and re-runs on return via the same overdue path.
         """
+        # (#1335) An end the engine already acted on (or that a user beat
+        # it to) is done.
+        if self._legionella_end_pending and not self.is_active:
+            self._legionella_end_pending = False
+
         temp = self.get_current_temperature()
 
         # 1. Natural achievement: solar heated to ≥60°C
@@ -653,10 +728,7 @@ class HotWaterController(SwitchDevice):
         # forced heating.
         if self.vacation:
             if self._legionella_cycle_active:
-                self._legionella_cycle_active = False
-                self._legionella_hold_start = None
-                if switch:
-                    await self.deactivate()
+                self._end_legionella_run()
                 _LOGGER.info(
                     "Legionella cycle aborted: vacation mode active — "
                     "will re-run when vacation ends"
@@ -681,13 +753,9 @@ class HotWaterController(SwitchDevice):
                 elapsed = (dt_util.now() - self._legionella_hold_start).total_seconds() / 60
                 if elapsed >= self.legionella_hold_minutes:
                     # Cycle complete
-                    self._legionella_cycle_active = False
-                    self._legionella_hold_start = None
-                    self._legionella_started_at = None
+                    self._end_legionella_run()
                     self._legionella_blocked_until = None
                     self._last_legionella_time = dt_util.now()
-                    if switch:
-                        await self.deactivate()
                     _LOGGER.info("Legionella prevention cycle completed at %.0f°C", temp)
                     self._last_legionella_path = "hold_complete"
                     return "legionella_complete"
@@ -701,18 +769,16 @@ class HotWaterController(SwitchDevice):
                 if super(ComfortBandMixin, self).stop_condition_met:
                     return await self._end_unreachable_legionella(
                         "blocked_by_stop",
-                        f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it",
-                        switch=switch)
+                        f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it")
                 started = self._legionella_started_at
                 if started is not None and (dt_util.now() - started) > timedelta(hours=LEGIONELLA_MAX_RUN_HOURS):
                     return await self._end_unreachable_legionella(
-                        "timed_out", f"still below it after {LEGIONELLA_MAX_RUN_HOURS:g} h",
-                        switch=switch)
+                        "timed_out", f"still below it after {LEGIONELLA_MAX_RUN_HOURS:g} h")
                 # Still heating towards target
                 self._last_legionella_path = "heating_to_target"
                 return "legionella_heating"
 
-        # 3. Check if overdue — start forced cycle
+        # 3. Check if overdue — the run is due
         if self.legionella_overdue:
             if temp is None:
                 _LOGGER.warning("Legionella cycle overdue but no temperature sensor — skipping")
@@ -732,15 +798,13 @@ class HotWaterController(SwitchDevice):
                 self._legionella_cycle_active = True
                 return await self._end_unreachable_legionella(
                     "blocked_by_stop",
-                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is already met",
-                    switch=switch)
+                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is already met")
             self._legionella_cycle_active = True
             self._legionella_hold_start = None
             self._legionella_started_at = dt_util.now()
-            # Force activate regardless of solar surplus (layer 1 does it
-            # where the three layers lead)
-            if switch:
-                await self.activate(self.rated_power)
+            self._legionella_end_pending = False
+            # (#1335) The run is due; layer 1 starts it regardless of sun
+            # (``runs_without_surplus``) and ``reconcile_load`` switches it.
             self._last_legionella_path = "overdue_start"
             return "legionella_started"
 

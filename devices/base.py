@@ -4379,6 +4379,15 @@ class ScheduleDevice(ControllableDevice):
             self._status.error_message = str(e)
             return 0.0
 
+    def can_deactivate(self) -> bool:
+        """(#1335) A started appliance run is not interrupted — ``deactivate``
+        ignores it. Say so here, where the load walk asks, so the deficit
+        stop frees the power from the next load up instead of counting on a
+        stop that will not happen."""
+        if self._started:
+            return False
+        return super().can_deactivate()
+
     async def deactivate(self) -> None:
         # Scheduled devices generally should not be interrupted once started
         # Only deactivate if not yet started

@@ -1,5 +1,7 @@
 # Declarative desired-state for surplus loads — design
 
+> Superseded by #1335: the three layers are the only load engine; the imperative passes and the `use_desired_state` flag are gone.
+
 *2026-07-22. Scope: the surplus-controller's generic loads (switch / climate /
 heat-pump / hot-water). NOT the EV charger (its own decide/actuate path stays).*
 

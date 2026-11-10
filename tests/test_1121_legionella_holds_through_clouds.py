@@ -1,6 +1,7 @@
 """#1121 — a Legionella run is not stopped by the first cloud.
 
-The run starts with a plain ``activate()``. The deficit pass in
+The run used to start with a plain ``activate()`` (#1335: the load engine
+starts it now). The deficit pass in
 ``SurplusController.update`` frees power by switching off the lowest
 surplus loads; it spared forced night runs and Tier-2 battery runs, not a
 Legionella run. The tank went off one cycle later and nothing switched it
@@ -47,7 +48,11 @@ async def _legionella_running(hass):
     hass.set("sensor.boiler_temp", "45.0")
     status = await dev.check_legionella_cycle()   # never run → due now
     assert status == "legionella_started"
+    # (#1335) the check only says the run is due; the engine starts it
+    assert not dev.is_active and not hass.calls("turn_on")
+    await sc.update(-3000.0)                      # no sun at all
     assert dev.is_active and hass.calls("turn_on")
+    assert dev._sem_commanded, "a Legionella start is SEM's own command"
     _past_min_run(dev)
     return sc, dev
 
@@ -80,7 +85,9 @@ class TestTheRunHoldsOnADeficit:
         await dev.check_legionella_cycle()          # hold starts
         dev._legionella_hold_start -= timedelta(hours=2)
         assert await dev.check_legionella_cycle() == "legionella_complete"
-        assert not dev.is_active
+        assert dev.is_active, "the check never switches (#1335)"
+        await sc.update(-3000.0)                    # layer 1 ends the run
+        assert not dev.is_active and hass.calls("turn_off")
 
     async def test_a_peak_shed_still_wins(self):
         hass = _Hass()

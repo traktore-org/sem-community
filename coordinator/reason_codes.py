@@ -121,6 +121,11 @@ LOAD_NO_SOURCE = "no_source"
 LOAD_COMFORT_FLOOR = "comfort_floor"
 LOAD_COMFORT_GOAL = "comfort_goal"
 LOAD_LEGIONELLA = "legionella"
+# (#1335) a stop or a no-start says its own cause, never a start's sentence
+LOAD_LEGIONELLA_END = "legionella_end"
+LOAD_AT_TARGET = "at_target"
+LOAD_NO_READING = "no_reading"
+LOAD_DISABLED = "disabled"
 
 # ── the grid export limit (#1090) ────────────────────────────────────
 EXPORT_NEGATIVE_PRICE = "export_negative_price"
