@@ -2048,6 +2048,20 @@ class _ServiceNames(set):
         return self.fields.get(name, default)
 
 
+def _has_program_groups(dev_entities) -> bool:
+    """(#1158) Does this install have a program-group entity? Read from the
+    entities' own words (translation key, unique id), never the entity id."""
+    try:
+        from .consts import role_lexicon as _lex
+        pattern = re.compile(_lex.PROGRAM_GROUP_KEY, re.I)
+    except Exception:  # noqa: BLE001
+        return False
+    return any(pattern.search(w) for e in dev_entities
+               for w in (getattr(e, "translation_key", None),
+                         getattr(e, "unique_id", None))
+               if isinstance(w, str) and w)
+
+
 def propose_roles_from_roster(dev_entities, domain: str, *,
                               state_of=None,
                               strategy_values=None,
@@ -2074,7 +2088,12 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
     if not vocab:
         return {}
     out: Dict[str, Any] = {}
+    programs = _has_program_groups(dev_entities)
     for role, body in vocab.items():
+        if body.get("profile") and programs:
+            # (#1158) a role read from a device profile, on an install
+            # that is driven through program groups: not this family's
+            continue
         keys = tuple(body.get("keys", ()))
         want_domain = str(body.get("platform") or "")
         if want_domain == "service":

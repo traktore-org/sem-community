@@ -347,6 +347,97 @@ class TestTheInstallIsOfferedItsThreeControls:
         ).supports_forced_charge
 
 
+# ───────────────── program groups: the switch keeps its old meaning ───────
+
+DEYE_SHAPED = [
+    # the same integration, another device family: numbered charge programs
+    _ent("switch.deye_battery_grid_charging", "battery_grid_charging"),
+    _ent("number.deye_program_1_soc", "program_1_soc"),
+    _ent("number.deye_program_1_power", "program_1_power"),
+    _ent("time.deye_program_1_time", "program_1_time"),
+    _ent("select.deye_work_mode", "work_mode"),
+    _ent("number.deye_battery_grid_max_charge", "battery_grid_max_charge"),
+    _ent("number.deye_battery_discharging_power", "battery_discharging_power"),
+]
+
+
+def _base_roster_vocab():
+    """The roster as it was before the profiles were read: without the
+    roles that came from a profile."""
+    return {role: body for role, body in _roster().ROLE_VOCAB[DOMAIN].items()
+            if not body.get("profile")}
+
+
+@pytest.mark.unit
+class TestAnInstallWithProgramGroupsSeesNothingNew:
+    def test_every_new_role_is_marked_as_read_from_a_profile(self):
+        vocab = _roster().ROLE_VOCAB[DOMAIN]
+        assert vocab and all(body.get("profile") for body in vocab.values())
+        assert _base_roster_vocab() == {}
+
+    def test_program_groups_get_no_proposal_at_all(self):
+        """On such an inverter the grid-charge switch is a permission the
+        programs use. Before this issue the install got no proposal; it
+        still gets none."""
+        hass = _Hass()
+        props = hd.propose_roles_from_roster(
+            DEYE_SHAPED, DOMAIN, state_of=hass.states.get)
+        assert props == {}
+
+    def test_without_program_groups_the_proposals_appear(self):
+        props = _proposals(_Hass())
+        assert {"battery_force_charge", "battery_target_soc",
+                "battery_discharge_limit"} <= set(props)
+
+    @pytest.mark.parametrize("key, hit", [
+        ("program_1_soc", True), ("program_6_power", True),
+        ("prog2_time", True), ("prog_3_capacity", True),
+        ("01hx_program_4_soc_number", True),
+        ("battery_grid_charging", False), ("program_soc", False),
+        ("programmable_mode", False), ("progress_1_done", False),
+        ("timed_charge_1_start", False)])
+    def test_what_a_program_group_key_is(self, key, hit):
+        import re
+        assert bool(re.search(lex.PROGRAM_GROUP_KEY, key, re.I)) is hit
+
+    def test_it_is_read_from_the_entitys_own_words_not_its_id(self):
+        renamed = [_ent(SWITCH, "battery_grid_charging"),
+                   _ent("number.program_1_soc", "battery_low_soc")]
+        assert not hd._has_program_groups(renamed)
+        assert hd._has_program_groups(DEYE_SHAPED)
+
+    def test_a_role_declared_in_strings_is_never_withheld(self):
+        """Only profile-read roles ask the question: a brand that declares
+        its target in strings.json keeps it, programs or not."""
+        ents = [SimpleNamespace(
+                    entity_id="number.eg4_charge_soc", platform="eg4_web_monitor",
+                    device_id="d", translation_key="ac_charge_soc_limit",
+                    unique_id="x_ac_charge_soc_limit", original_device_class=None,
+                    disabled_by=None, config_entry_id="e"),
+                SimpleNamespace(
+                    entity_id="number.eg4_program_1_soc",
+                    platform="eg4_web_monitor", device_id="d",
+                    translation_key="program_1_soc", unique_id="x_program_1_soc",
+                    original_device_class=None, disabled_by=None,
+                    config_entry_id="e")]
+        assert "battery_target_soc" in hd.propose_roles_from_roster(
+            ents, "eg4_web_monitor")
+
+    def test_the_adapter_choice_is_what_it_was(self):
+        """The program-group install keeps its adapter, pinned or not: the
+        roster proposes, it never picks an adapter."""
+        from custom_components.solar_energy_management.coordinator.battery_adapters import (
+            DeyeBatteryAdapter,
+        )
+        hass = _Hass()
+        pinned = {"battery_charge_platform": "deye",
+                  "deye_force_charge_switch": "switch.deye_battery_grid_charging"}
+        assert isinstance(adapter_for(hass, pinned), DeyeBatteryAdapter)
+        auto = adapter_for(hass, {})
+        assert isinstance(auto, GenericBatteryAdapter)
+        assert not auto.supports_forced_charge
+
+
 # ───────────────────────── the pipeline: config → writes ──────────────────
 
 def _adapter(hass, **extra):

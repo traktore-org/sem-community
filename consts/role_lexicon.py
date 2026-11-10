@@ -589,6 +589,15 @@ PER_CHARGER_ROLES: Final[frozenset] = frozenset({
     "ev_current_control", "ev_charge_mode",
 })
 
+#: (#1158) The key of a PROGRAM GROUP: the numbered charge programs some
+#: inverters are driven through (``program_1_soc``, ``program_3_power``,
+#: ``prog2_time``). On such an inverter the grid-charge switch is a
+#: permission the programs use, not a command, and SEM drives it through
+#: the program-group adapter. So a role read from a device profile is
+#: offered only to an install that has no entity of this shape: what the
+#: install has decides, never the name of a brand or a profile.
+PROGRAM_GROUP_KEY: Final[str] = r"(?:^|_)prog(?:ram)?_?\d+(?:_|$)"
+
 #: Roles SEM names and WATCHES but must never write (#845). A proposal here
 #: carries no button, and says so — the name is the value: the Config card
 #: can tell a Victron owner "this is your ESS mode; SEM reads it, you set it".
