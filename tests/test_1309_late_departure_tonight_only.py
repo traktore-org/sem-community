@@ -59,7 +59,15 @@ def test_helper_is_min_of_departure_and_night_end():
 
 
 def test_joint_plan_uses_the_same_helper():
-    src = (Path(__file__).resolve().parent.parent
-           / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
-    assert "min(deadline, night_end)" not in src
-    assert "night_charge_end(deadline, night_end, None)" in src
+    import ast
+
+    from .ast_contracts import call_sites
+
+    assert any(path.endswith("coordinator.py")
+               for path, _line, _kw in call_sites("night_charge_end"))
+    tree = ast.parse((Path(__file__).resolve().parent.parent
+                      / "coordinator" / "coordinator.py").read_text(encoding="utf-8"))
+    own_min = [n.lineno for n in ast.walk(tree)
+               if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "min"
+               and [getattr(a, "id", "") for a in n.args] == ["deadline", "night_end"]]
+    assert own_min == [], "the joint plan cuts the deadline itself again"
