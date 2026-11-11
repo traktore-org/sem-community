@@ -5406,6 +5406,8 @@ async def _async_register_services(
             "hvac_mode",
             # (#812) the load's own tariff and meter
             "tariff_rate", "tariff_entity", "tariff_meter",
+            # (#1341) the load's own name — display only
+            "name",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -5570,6 +5572,8 @@ async def _async_register_services(
                     "behind_operator_relay",
                     # (#1323) a climate unit's mode
                     "hvac_mode",
+                    # (#1341) the load's own name
+                    "name",
                 ]),
                 vol.Required("value"): cv.string,
             }),

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **A load can have its own name in SEM** (#1341): type it under Configure device. Empty brings the Energy dashboard name back.
 - ✨ **Inverters with a grid-charge switch and limits in percent can now be charged and limited by SEM** (#1158), such as KSTAR via ha-solarman.
 - ✨ **Phase switching now works on chargers that take one current per phase, such as Easee** (#1015). Off by default, like all phase switching.
 - ✨ **A heat pump can step down when power is short** (#1323): on expensive grid power or near the peak limit. Off by default.

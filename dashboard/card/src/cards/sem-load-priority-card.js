@@ -30,6 +30,7 @@ import {
     buildLoadConfigModalHTML,
     readFormValues,
     findDeviceForConfig,
+    cleanLoadName,
 } from './load-config-modal.js';
 import { stateLabel } from '../util/state-label.js';
 import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
@@ -1686,6 +1687,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
         overlay.innerHTML = buildLoadConfigModalHTML({
             deviceName, values, t: (k) => this._t(k), hasManual,
             behindRelay: isLoad ? !!dev.behindRelay : null,
+            // (#1341) loads only: a charger is named in its own setup
+            ownName: isLoad ? ((dev.goals && dev.goals.name) || '') : null,
+            autoName: isLoad ? ((dev.goals && dev.goals.automatic_name) || dev.name || '') : '',
             // (#1145) a device set up in the Configuration tab has no manual
             // mapping, so the form would open empty; say what is in use
             inUse: !hasManual && !values.entity ? (dev?.controlEntity || '') : '',
@@ -1734,6 +1738,23 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 relay.setAttribute('aria-checked', String(on));
                 dev.behindRelay = on;
                 this._sendDeviceUpdate(dev.id, 'behind_operator_relay', String(on));
+            });
+        }
+        // (#1341) the name is not part of the control mapping either: it
+        // saves when the field is left, and an empty field brings the
+        // automatic name back.
+        const nameInput = overlay.querySelector('#cfg-name');
+        if (nameInput && dev) {
+            nameInput.addEventListener('change', () => {
+                const name = cleanLoadName(nameInput.value);
+                nameInput.value = name;
+                dev.goals = dev.goals || {};
+                if ((dev.goals.name || '') === name) return;
+                const auto = dev.goals.automatic_name || nameInput.placeholder || dev.name;
+                dev.goals.name = name;
+                dev.name = name || auto;
+                this._sendDeviceUpdate(dev.id, 'name', name);
+                this.requestUpdate();
             });
         }
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
