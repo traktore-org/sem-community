@@ -506,6 +506,9 @@ hands over, and, for anything left out, why not. This is the single place to
 see what SEM intends to do tonight. See
 [Energy planner](ENERGY_PLANNER.md) for how the plan is built.
 
+A battery charge from the grid shows only in night hours, and only when SEM
+will do it.
+
 Hover a price slot to see its time and price. If your grid CO₂ sensor has a
 forecast, the slot also shows its CO₂ in g/kWh.
 
