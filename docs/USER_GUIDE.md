@@ -427,6 +427,31 @@ A step-down lasts at least 15 minutes, and the next one waits 15 minutes, so
 a price that flickers does not cycle the compressor. In observer mode SEM
 only shows that it would step down. The **Why?** card names the cause.
 
+### Keep at, Extra from surplus, Run now past
+
+A heater with a thermometer (a boiler, a heat pump, a room unit) has three
+fields under **Comfort** on the Load Priority card. In French they read
+*Maintenir à*, *Extra grâce au surplus* and *Marche forcée au-delà de*.
+
+| Field | What SEM does |
+|---|---|
+| **Keep at** | Below this temperature SEM heats in the hour its plan picks, from any power source, and stops at it |
+| **Extra from surplus** | Spare sun may heat this much above Keep at |
+| **Run now past** | Below this limit SEM heats at once, on any tariff, and goes on to Keep at |
+
+SEM checks in this order, and the first match decides:
+
+1. Your own stop temperature is reached: it stops.
+2. A Legionella run is due: it runs to its own target.
+3. The tank is colder than *Run now past*: it heats now.
+4. The tank is below *Keep at* and the planned hour is open: it heats.
+5. There is spare sun: it heats up to *Keep at* plus *Extra from surplus*.
+
+With a thermometer the daily run time asks for nothing: a warm tank is not
+heated again for its minutes. *Finish overnight via* only covers the daily
+run time of loads without a thermometer; it does not switch *Keep at* off.
+The **Why?** card names the step that decided.
+
 ### Heat or cool by the outdoor forecast (#1323)
 
 A climate unit set to **By outdoor forecast** picks its season itself. Pick it

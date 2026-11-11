@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A load SEM started on sun now stops when solar production ends, even when its power sensor reads 0 W** (#1335).
 - 🐛 **A planned comfort block now runs through without switching the load on and off** (#1334), also with Grid set to Off.
 - 📝 **The load card's Comfort hint now says how Keep at is reached**: in the planned hour from any source, sun may go further (#1334).
+- 📝 **The guides now explain Keep at, Extra from surplus and Run now past, and the order SEM follows** (#1334).
 - 🐛 **EG4 Web Monitor: solar power is found and grid import reads right from the start** (#810). The charge-start SOC is no longer the target.
 
 # [2.3.0-beta.11] — 10.11.2026
