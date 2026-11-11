@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.12] — 11.11.2026
+
 - 🐛 **Today's plan no longer shows "{kwh}" in the "Min reached" row** (#1310). It now shows the kWh still needed.
 - ✨ **A load can have its own name in SEM** (#1341): type it under Configure device. Empty brings the Energy dashboard name back.
 - 🐛 **A planned run now starts only when the tank is clearly below Keep at** (#1102). Just under it, it no longer starts.
