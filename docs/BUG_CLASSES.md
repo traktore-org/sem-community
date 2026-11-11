@@ -2496,7 +2496,21 @@ the force expiry does, so a band on the default "Off" turns on and off through i
 (which side is right is a choice, still open); the plan placing a "Grid" load's daily minimum by
 day is fixed (class 181, second catch). #1331: the Why? card's "Surplus" is the car's budget on every
 row.
-Refs #780 #779 #650 #1310 #1102.
+**Fifth catch (#1338, 11.11.2026):** `ComfortBandMixin.has_runtime_deficit` read a `forced` band
+("too cold now") as "run time owed", and a deficit is served only from the sources the load's mode
+allows. @hoyte's heat pump tank (climate entity, "Solar + battery", Run now past 41 °C) fell to
+28 °C on 2.3.0-beta.9 on a November day: no sun, an empty battery, and the grid only in the cheap
+night hours, so nothing could heat it (`hot_water_activation_path: uninitialized`).
+**Closure:** the #1102 heater ladder (68da1c5e, 2.3.0-beta.10) gave "too cold" its own rung in
+`compute_load_intent`: at or past the limit the load runs now on any source and tariff, on to Keep
+at (`comfort_floor`); a band device's run time asks nothing. No new code for #1338.
+**Guard:** `tests/test_1102_heater_ladder.py` (a switch boiler) and
+`tests/test_1338_cold_tank_heats.py` — climate and water_heater tanks with the reporter's numbers
+through `SurplusController.update`, day and night, three price levels; the engine must send the
+start. Disabling the rung fails 8 of its 10 cases.
+**Left open:** loads driven by watts or amperes (`PowerSetpointDevice`, `CurrentControlDevice`) show
+the Comfort fields on the card but have no band, so Run now past does nothing there (#1344).
+Refs #780 #779 #650 #1310 #1102 #1338.
 
 ### 48. A removed host API called past its removal, its failure swallowed as a benign case — GUARDED
 **Symptom:** a feature that has always worked goes dead for users on a *newer Home Assistant* than
