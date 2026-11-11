@@ -703,6 +703,12 @@ class SEMNextPlanCard extends SEMNextBase {
         for (const d of demands) if (isLoad(d)) loadIds.add(String(d.id));
         for (const b of blocks) if (isLoad(b)) loadIds.add(String(b.id));
         for (const n of notSched) if (isLoad(n)) loadIds.add(String(n.id));
+        // one row per heater: its Keep at run speaks for it, so a run-time
+        // entry that only says "not scheduled" is dropped beside it
+        const hasBlock = (id) => blocks.some((b) => String(b.id) === id);
+        for (const id of [...loadIds]) {
+            if (id.startsWith('load:') && !hasBlock(id) && hasBlock('comfort:' + id.slice(5))) loadIds.delete(id);
+        }
         for (const id of loadIds) rows.push(this._loadRow(id, plan, blocks, demands, notSched));
         // …and a heater that is below its line with no hour says so, not nothing
         for (const h of this._cold(plan)) {

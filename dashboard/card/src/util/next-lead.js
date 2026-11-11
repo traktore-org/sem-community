@@ -138,7 +138,8 @@ export function planLead(a, extra) {
     const main = evKwh > 0.05
         ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh) } }
         : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } } : quiet);
-    const sub = { key: 'next_plan_sub', params: {
+    // (#1321) hours with no price yet give no cost: say so, not "cost ,"
+    const sub = { key: extra?.cost ? 'next_plan_sub' : 'next_plan_sub_nocost', params: {
         time: extra?.computedAt || '', cost: extra?.cost || '',
         fits: extra?.fitsKey || '', sun: fmt1(extra?.sunTomorrowKwh) } };
     return { main, sub };
