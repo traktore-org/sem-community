@@ -453,7 +453,9 @@ SEM checks in this order, and the first match decides:
 1. Your own stop temperature is reached: it stops.
 2. A Legionella run is due: it runs to its own target.
 3. The tank is colder than *Run now past*: it heats now.
-4. The tank is below *Keep at* and the planned hour is open: it heats.
+4. The tank is below *Keep at* and the planned hour is open: it heats. It runs
+   through to *Keep at* without switching on and off, also when *Finish
+   overnight via* is Off.
 5. There is spare sun: it heats up to *Keep at* plus *Extra from surplus*.
 
 With a thermometer the daily run time asks for nothing: a warm tank is not
