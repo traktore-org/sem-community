@@ -13,15 +13,18 @@ text that names ``{kwh}``.
 Guards:
 * every row the composer can build, in every language, gets a value for each
   ``{name}`` its label and detail texts name (run on real composes that reach
-  every row kind the module builds);
+  every ``PlanRow(...)`` call in the module — this also covers a detail key
+  picked at run time);
 * an AST check over every ``PlanRow(...)`` in ``today_plan.py``: the keys the
   label/detail name must be in the ``values`` dict on every branch.
 """
 import ast
 import json
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -103,18 +106,26 @@ def _scenarios():
             {"name": "Bojler", "when": NOW, "done": True}])
 
 
-def _built_kinds():
-    """The KIND_* names the module's PlanRow calls can give a row."""
+def _plan_row_calls():
+    """Every ``PlanRow(...)`` call in the module, as AST nodes."""
     tree = ast.parse(SRC.read_text(encoding="utf-8"))
-    names = set()
-    for node in ast.walk(tree):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id == "PlanRow"):
-            for kw in node.keywords:
-                if kw.arg == "kind":
-                    names |= {n.id for n in ast.walk(kw.value)
-                              if isinstance(n, ast.Name) and n.id.startswith("KIND_")}
-    return {getattr(today_plan, n) for n in names}
+    return [n for n in ast.walk(tree)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+            and n.func.id == "PlanRow"]
+
+
+def _compose_recording_builders(kw):
+    """Compose, and note the line of each ``PlanRow(...)`` that built a row."""
+    real = today_plan.PlanRow
+    lines = set()
+
+    def spy(*a, **k):
+        lines.add(sys._getframe(1).f_lineno)
+        return real(*a, **k)
+
+    with patch.object(today_plan, "PlanRow", spy):
+        plan = compose_today_plan(**kw)
+    return plan, lines
 
 
 class TestTheReportedRow:
@@ -155,10 +166,15 @@ class TestEveryRowFillsItsText:
         return [(name, r) for name, kw in _scenarios()
                 for r in compose_today_plan(**kw)]
 
-    def test_the_scenarios_reach_every_row_kind(self, rows):
-        seen = {r["kind"] for _n, r in rows}
-        missing = _built_kinds() - seen
-        assert not missing, f"no scenario builds {sorted(missing)}"
+    def test_the_scenarios_reach_every_builder(self):
+        """Each ``PlanRow(...)`` line builds a row in some scenario — so the
+        name check below runs on every builder, not one per kind."""
+        built = set()
+        for _name, kw in _scenarios():
+            built |= _compose_recording_builders(kw)[1]
+        want = {c.lineno for c in _plan_row_calls()}
+        assert want - built == set(), f"no scenario reaches lines {sorted(want - built)}"
+        assert built <= want, f"the spy saw lines that are no call: {sorted(built - want)}"
 
     def test_every_name_in_every_language_has_a_value(self, rows, tables):
         bad = []
@@ -193,13 +209,13 @@ def _dict_keys(node):
 class TestEveryPlanRowCall:
     def test_values_cover_what_the_texts_name(self, tables):
         en = tables["en"]
-        tree = ast.parse(SRC.read_text(encoding="utf-8"))
-        calls = [n for n in ast.walk(tree)
-                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-                 and n.func.id == "PlanRow"]
+        calls = _plan_row_calls()
         assert len(calls) >= 15, "the scan lost the PlanRow calls"
         bad = []
         for call in calls:
+            if call.args or any(k.arg is None for k in call.keywords):
+                bad.append((call.lineno, "positional or ** args the scan cannot read"))
+                continue
             kws = {k.arg: k.value for k in call.keywords}
             keys = {c.value for f in ("label", "detail") if f in kws
                     for c in ast.walk(kws[f])
