@@ -66,6 +66,8 @@ test('a load without a heating band keeps its texts, and off names a cause', () 
     // a cooling band and Mode Off are not the heater sentence
     assert.equal(heaterSays(tank(27, { hvac: 'cool' }), {}), null);
     assert.equal(pill(tank(45, {}, null, { control_mode: 'off' })).key, 'next_st_off_mode');
+    // peak-only: SEM never starts it — the row says so, not a bare 'off'
+    assert.equal(pill(plain({ on: false, source: null, code: '' }, { control_mode: 'peak_only' })).key, 'next_st_off_peak_only');
     assert.equal(becauseKey({ on: true, code: 'peak_shed' }), '');
     assert.equal(becauseKey({ on: false, code: 'something_new' }), '');
 });

@@ -220,6 +220,8 @@ export function statePill(row, live = {}) {
     if (heater) return heater;
     if (running) return p('next_st_on', {}, 'ok');
     if (row.mergedMode === 'off') return p('next_st_off_mode');
+    // (#1321) peak-only: SEM never starts it, it only pauses it at a peak
+    if (row.mergedMode === 'peak_only' || row.mergedMode === 'peak') return p('next_st_off_peak_only');
     if (live.plannedAt) return p('next_st_waits_for', { time: live.plannedAt });
     return { ...p('next_st_off'), why: becauseKey(row.intent) };
 }
