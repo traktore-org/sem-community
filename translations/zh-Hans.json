@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "无效的设备属性：“{property}”。"
     },
+    "device_named_elsewhere": {
+      "message": "无法在此为“{device_id}”命名。充电桩在其自身设置中命名；电池没有可设置的名称。"
+    },
     "invalid_deadline_format": {
       "message": "无效的时间截止格式：“{deadline}”。请使用 ISO 8601 格式，例如 2026-05-27T07:00:00。"
     },

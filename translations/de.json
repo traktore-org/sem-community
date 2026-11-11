@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Ungültige Geräteeigenschaft: „{property}“."
     },
+    "device_named_elsewhere": {
+      "message": "„{device_id}“ kann hier nicht benannt werden. Eine Ladestation wird in ihrer eigenen Einrichtung benannt; die Batterie hat keinen Namen."
+    },
     "invalid_deadline_format": {
       "message": "Ungültiges Fristformat: „{deadline}“. Verwenden Sie das ISO-8601-Format, zum Beispiel 2026-05-27T07:00:00."
     },

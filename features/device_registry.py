@@ -647,6 +647,20 @@ class UnifiedDeviceRegistry:
         names[device_id] = auto
         return self.own_name(device_id) or auto
 
+    def can_be_named(self, device_id: str) -> bool:
+        """(#1341) May the user name this row here? A load, yes. A charger
+        is named in its own setup and the battery row has no name to set: a
+        name stored for either would be read by nothing."""
+        live = (self._surplus_controller.get_device(device_id)
+                if self._surplus_controller is not None else None)
+        if live is not None and getattr(live, "is_ev", False) is True:
+            return False
+        try:
+            row = self.get_devices_for_sensor().get(device_id) or {}
+        except Exception:  # noqa: BLE001 — an unbuildable payload names nothing
+            return False
+        return row.get("device_type") not in ("ev_charger", "ev_charging", "battery")
+
     def automatic_name(self, device_id: str) -> str:
         """(#1341) The name the load has without the user's own."""
         return (self.__dict__.get("_auto_names") or {}).get(device_id, "")
@@ -762,6 +776,8 @@ class UnifiedDeviceRegistry:
         if prop not in self.GOAL_PROPERTIES:
             raise ValueError(f"Unknown goal property: {prop}")
         if prop == "name":
+            if not self.can_be_named(device_id):
+                raise ValueError(f"{device_id} is not named here")
             value = clean_load_name(value)
         async with self._goal_write_lock:
             goals = self._device_goals.setdefault(device_id, {})

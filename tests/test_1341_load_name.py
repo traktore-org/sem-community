@@ -22,6 +22,10 @@ from custom_components.solar_energy_management.features.device_registry import (
 
 from .test_744_light_import_filter import LIGHT_ENTRIES, _registry
 
+from custom_components.solar_energy_management.const import (
+    BATTERY_SURPLUS_DEVICE_ID as BATTERY_ROW,
+)
+
 BOILER = "energy_dashboard_boiler"
 ROWS = [{"energy_sensor": "sensor.boiler_energy", "power_sensor": None,
          "name": "Boiler", "is_ev": False}]
@@ -205,3 +209,63 @@ class TestTheServiceTakesIt:
         assert len(holders) >= 2
         assert all("name" in {getattr(e, "value", None) for e in h.elts}
                    for h in holders)
+
+
+@pytest.mark.unit
+class TestARowThatIsNamedElsewhereIsRefused:
+    """A charger is named in its setup and the battery row has no name. A
+    name stored for either would be read by nothing, so it is refused."""
+
+    async def _reg(self, monkeypatch):
+        reg, lm = _reg(monkeypatch, {"daily_min_runtime_min": 45})
+        reg._has_battery = True
+        reg.set_ev_chargers([{"id": "keba", "name": "KEBA", "priority_seed": 1,
+                              "power_entity": None, "current_power_w": 0.0,
+                              "is_on": False, "max_power_w": 11000.0,
+                              "connected": False}])
+        await reg.async_refresh_devices()
+        return reg, lm
+
+    async def test_the_rows_are_what_the_card_shows(self, monkeypatch):
+        reg, _ = await self._reg(monkeypatch)
+        rows = reg.get_devices_for_sensor()
+        assert rows["keba"]["device_type"] == "ev_charger"
+        assert rows[BATTERY_ROW]["device_type"] == "battery"
+        assert (reg.can_be_named("keba"), reg.can_be_named(BATTERY_ROW),
+                reg.can_be_named(BOILER)) == (False, False, True)
+
+    @pytest.mark.parametrize("row", ["keba", "battery_row"])
+    async def test_a_name_for_it_raises_and_stores_nothing(self, monkeypatch, row):
+        reg, _ = await self._reg(monkeypatch)
+        did = BATTERY_ROW if row == "battery_row" else row
+        before = {k: dict(v) for k, v in reg._device_goals.items()}
+        reg._save_storage.reset_mock()
+        with pytest.raises(ValueError):
+            await reg.async_update_device_goal(did, "name", "Mine")
+        assert reg._device_goals == before
+        reg._save_storage.assert_not_awaited()
+
+    async def test_a_load_is_still_named(self, monkeypatch):
+        reg, lm = await self._reg(monkeypatch)
+        await reg.async_update_device_goal(BOILER, "name", "Pool pump")
+        assert _names(reg, lm)[1:] == ("Pool pump", "Pool pump")
+
+    def test_the_service_says_so_before_it_stores(self):
+        """The handler asks ``can_be_named`` and raises its own translated
+        error; the text exists in every language."""
+        import json
+        from pathlib import Path
+
+        from custom_components.solar_energy_management import (
+            _async_register_services,
+        )
+        from .ast_contracts import calls
+
+        assert calls(_async_register_services, "can_be_named")
+        root = Path(__file__).resolve().parent.parent
+        files = [root / "strings.json", *sorted((root / "translations").glob("*.json"))]
+        assert len(files) == 17
+        for f in files:
+            text = json.loads(f.read_text(encoding="utf-8"))[
+                "exceptions"]["device_named_elsewhere"]["message"]
+            assert "{device_id}" in text, f.name

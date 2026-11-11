@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Proprietà del dispositivo non valida: «{property}»."
     },
+    "device_named_elsewhere": {
+      "message": "«{device_id}» non può essere rinominato qui. Una wallbox si rinomina nella propria configurazione; la batteria non ha un nome."
+    },
     "invalid_deadline_format": {
       "message": "Formato scadenza non valido: «{deadline}». Usa il formato ISO 8601, ad esempio 2026-05-27T07:00:00."
     },

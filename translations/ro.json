@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Proprietate de dispozitiv invalidă: „{property}”."
     },
+    "device_named_elsewhere": {
+      "message": "„{device_id}” nu poate fi denumit aici. Un încărcător se denumește în propria configurare; bateria nu are nume."
+    },
     "invalid_deadline_format": {
       "message": "Format de termen invalid: „{deadline}”. Folosiți formatul ISO 8601, de exemplu 2026-05-27T07:00:00."
     },

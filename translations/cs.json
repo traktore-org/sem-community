@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Neplatná vlastnost zařízení: „{property}“."
     },
+    "device_named_elsewhere": {
+      "message": "„{device_id}“ zde nelze pojmenovat. Nabíječka se pojmenuje ve svém vlastním nastavení; baterie název nemá."
+    },
     "invalid_deadline_format": {
       "message": "Neplatný formát termínu: „{deadline}“. Použijte formát ISO 8601, například 2026-05-27T07:00:00."
     },

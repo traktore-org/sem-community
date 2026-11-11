@@ -5424,6 +5424,14 @@ async def _async_register_services(
                     translation_key="device_not_found",
                     translation_placeholders={"device_id": device_id},
                 )
+            # (#1341) a charger is named in its setup and the battery row
+            # has no name: a name stored for either would do nothing.
+            if prop == "name" and not registry.can_be_named(device_id):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="device_named_elsewhere",
+                    translation_placeholders={"device_id": device_id},
+                )
             # (#1020) a mode the device knows, or empty to clear; a Schedule
             # helper, or empty to clear. Anything else would store and then
             # silently be no schedule.
