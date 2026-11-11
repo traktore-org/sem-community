@@ -564,6 +564,8 @@ If your own *Stop when ≥* sensor ends the run before the tank reaches the Legi
 
 The Legionella prevention cycle is a safety requirement mandated by building codes. It cannot be turned off. You can adjust the interval and the target temperature (minimum 60°C) in the integration options, but the cycle itself is always active when hot water control is enabled. This protects against dangerous Legionella bacteria growth in stored hot water.
 
+A run that has started still stops when you set the load's Mode to Off or turn SEM off.
+
 ---
 
 ## Charging Modes
@@ -2226,6 +2228,7 @@ SEM skips:
 - Battery discharge limit changes
 - Device shedding commands
 - Hot-water heating, also the Legionella run
+- Heat pump commands
 
 When you turn it off, SEM can start a load right away. A stop it held back does not start the load's minimum off time.
 
