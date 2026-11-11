@@ -76,6 +76,7 @@ update_device_config:
             - critical
             - phase
             - behind_operator_relay
+            - name
     value:
       name: Value
       description: >-

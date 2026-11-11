@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Ongeldige apparaateigenschap: “{property}”."
     },
+    "device_named_elsewhere": {
+      "message": "\"{device_id}\" kan hier geen naam krijgen. Een laadpaal krijgt zijn naam in zijn eigen instellingen; de batterij heeft geen naam."
+    },
     "invalid_deadline_format": {
       "message": "Ongeldig deadlineformaat: “{deadline}”. Gebruik de ISO 8601-notatie, bijvoorbeeld 2026-05-27T07:00:00."
     },

@@ -252,6 +252,15 @@ Each charger gets its own sensor entities:
 
 To **edit** an existing charger, select it from the charger menu. To **remove**, select "Remove a charger". A working primary charger cannot be removed; a half-filled one can. The Repairs of a charger you removed clear the next time SEM starts. If an earlier setup left a charger half-filled, SEM offers it again: add it and the new charger replaces the old card.
 
+### Name a load
+
+A load takes its name from the Energy dashboard. To give it your own name in
+SEM, open **Configure device** on its row of the **Control** tab and fill in
+**Name in SEM**. The name shows everywhere in SEM at once and stays after a
+restart. Empty the field to get the Energy dashboard name back. Only the name
+changes: the load keeps its settings and its history. A charger is named in
+its own setup.
+
 ### Appliance Dependencies
 
 Devices can require other devices to be active before they turn on. Set this from the **Control** tab on the dashboard:

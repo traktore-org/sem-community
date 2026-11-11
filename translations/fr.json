@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Propriété d’appareil invalide : « {property} »."
     },
+    "device_named_elsewhere": {
+      "message": "« {device_id} » ne peut pas être nommé ici. Une borne se nomme dans sa propre configuration ; la batterie n'a pas de nom."
+    },
     "invalid_deadline_format": {
       "message": "Format d’échéance invalide : « {deadline} ». Utilisez le format ISO 8601, par exemple 2026-05-27T07:00:00."
     },

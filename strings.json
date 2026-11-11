@@ -1845,6 +1845,9 @@
     "invalid_device_property": {
       "message": "Unknown device property: {property}. Expected \"controllable\" or \"critical\"."
     },
+    "device_named_elsewhere": {
+      "message": "\"{device_id}\" cannot be named here. A charger is named in its own setup; the battery has no name to set."
+    },
     "dashboard_generation_failed": {
       "message": "Dashboard generation failed. See logs for details."
     },

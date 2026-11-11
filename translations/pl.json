@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Nieprawidłowa właściwość urządzenia: „{property}”."
     },
+    "device_named_elsewhere": {
+      "message": "„{device_id}” nie można tu nazwać. Ładowarkę nazywa się w jej własnej konfiguracji; bateria nie ma nazwy."
+    },
     "invalid_deadline_format": {
       "message": "Nieprawidłowy format terminu: „{deadline}”. Użyj formatu ISO 8601, na przykład 2026-05-27T07:00:00."
     },

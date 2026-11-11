@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Érvénytelen eszköztulajdonság: „{property}”."
     },
+    "device_named_elsewhere": {
+      "message": "A(z) „{device_id}” itt nem nevezhető el. A töltőt a saját beállításában lehet elnevezni; az akkumulátornak nincs neve."
+    },
     "invalid_deadline_format": {
       "message": "Érvénytelen határidőformátum: „{deadline}”. Használjon ISO 8601 formátumot, például 2026-05-27T07:00:00."
     },

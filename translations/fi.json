@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Virheellinen laiteominaisuus: ”{property}”."
     },
+    "device_named_elsewhere": {
+      "message": "Laitetta ”{device_id}” ei voi nimetä tässä. Laturi nimetään sen omissa asetuksissa; akulla ei ole nimeä."
+    },
     "invalid_deadline_format": {
       "message": "Virheellinen määräajan muoto: ”{deadline}”. Käytä ISO 8601 -muotoa, esimerkiksi 2026-05-27T07:00:00."
     },
