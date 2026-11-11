@@ -444,7 +444,7 @@ fields under **Comfort** on the Load Priority card. In French they read
 
 | Field | What SEM does |
 |---|---|
-| **Keep at** | Below this temperature SEM heats in the hour its plan picks, from any power source, and stops at it |
+| **Keep at** | Below this temperature SEM heats in the hour its plan picks, from any power source, and stops at it. A planned run starts only 1 °C below it (less when *Run now past* is close) |
 | **Extra from surplus** | Spare sun may heat this much above Keep at |
 | **Run now past** | Below this limit SEM heats at once, on any tariff, and goes on to Keep at |
 
