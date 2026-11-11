@@ -195,6 +195,13 @@ export function planRows({ win, nowMs, plan, names = {} }) {
     const blockRow = (id) => {
         if (id.startsWith('ev:')) { const cid = id.slice(3); return row(id, 'ev', names.charger ? names.charger(cid) : cid); }
         if (id.startsWith('load:')) { const lid = id.slice(5); return row(id, 'load', names.load ? names.load(lid) : lid); }
+        // (#1321) a heater's Keep at run: its own row, named after the device
+        if (id.startsWith('comfort:')) {
+            const lid = id.slice(8);
+            const r = row(id, 'load', names.load ? names.load(lid) : lid);
+            r.keepOf = lid;
+            return r;
+        }
         if (id.includes('battery')) return row('battery_in', 'battery_in', '');
         return row(id, 'load', id);
     };

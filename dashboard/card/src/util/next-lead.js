@@ -99,16 +99,45 @@ export function fill(text, params, t) {
     return out;
 }
 
+/**
+ * (#1321) Heaters that are below the line a planned run starts under, are
+ * off, and have no hour in the plan (now or ahead). From the engine's own
+ * band lines (`comfort.keep_c` / `start_c`, °C) — nothing re-derived.
+ * → [{ id, name, keepC }]
+ */
+export function coldHeaters(devices, blocks, nowMs) {
+    const list = Array.isArray(blocks) ? blocks : [];
+    const out = [];
+    for (const [id, info] of Object.entries(devices || {})) {
+        const c = info && info.comfort;
+        if (!c || c.hvac === 'cool' || c.keep_c == null || c.reading_c == null) continue;
+        const keep = Number(c.keep_c), start = Number(c.start_c ?? c.keep_c), reading = Number(c.reading_c);
+        if (![keep, start, reading].every(Number.isFinite) || reading > start) continue;
+        if (info.is_on || (info.intent && info.intent.on)) continue;
+        if (info.control_mode === 'off' || info.user_hands_off === true) continue;
+        const has = list.some((b) => b && (String(b.id) === 'comfort:' + id || String(b.id) === 'load:' + id) && Date.parse(b.end) > nowMs);
+        if (!has) out.push({ id, name: info.name || id, keepC: keep });
+    }
+    return out;
+}
+
 /** The Plan screen's line from the plan sensor's attributes. */
 export function planLead(a, extra) {
     const ok = a && typeof a === 'object' && Array.isArray(a.blocks);
     if (!ok || !a.computed_at) return { main: { key: 'next_plan_none', params: {} }, sub: null };
     const evKwh = kwhOf(a.blocks, (id) => String(id).startsWith('ev:'));
-    const loadKwh = kwhOf(a.blocks, (id) => String(id).startsWith('load:'));
+    // (#1321) a heater's Keep at run is a load run too (plan id comfort:<id>)
+    const loadKwh = kwhOf(a.blocks, (id) => String(id).startsWith('load:') || String(id).startsWith('comfort:'));
+    // A heater below its start line with no hour planned: "nothing planned"
+    // would read as "nothing is needed". Say what is missing instead.
+    const cold = extra?.cold || null;
+    const quiet = cold
+        ? { key: cold.time ? 'next_plan_below_no_hour' : 'next_plan_below_no_hour_plain',
+            params: { name: cold.name, keep: cold.keep, time: cold.time || '' } }
+        : { key: 'next_plan_quiet', params: {} };
     const main = evKwh > 0.05
         ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh) } }
-        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } }
-                          : { key: 'next_plan_quiet', params: {} });
+        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } } : quiet);
     const sub = { key: 'next_plan_sub', params: {
         time: extra?.computedAt || '', cost: extra?.cost || '',
         fits: extra?.fitsKey || '', sun: fmt1(extra?.sunTomorrowKwh) } };

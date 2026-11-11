@@ -803,6 +803,11 @@ step) and the battery's *Sell*. **Expected**: grid cost, sun tomorrow with
 its trust, arbitrage advice, the actuation switch, *Replan*. **Decisions
 today**: the decision log with a device filter and an *Earlier* fold.
 
+A heater's *Keep at* run has its own row, named after the device with
+*to 52 °C*. A heater that is below its start line with no hour planned is
+listed with *is below 52 °C; no cheap hour before 07:00*, and the top line
+says the same in place of "Nothing planned from the grid".
+
 #### sem-next-devices-card
 
 **SEM · Devices** · *SEM Next, Devices screen*
@@ -818,6 +823,26 @@ mode, zone bar, Tonight, charge pacing, sell window, per-battery mode,
 evidence and health. Load: Off / Peak only / Solar only / Solar + battery,
 goal, min run / pause, Requires, phase, comfort, tariff, may-switch.
 Every row needs its entity; controls are off in observer mode.
+
+A heater with a thermometer says what it does and what comes next, in the
+pill and as the first line of its open card:
+
+| It says | It means |
+|---|---|
+| too cold · heating now | below *heat at once below*: it heats on any tariff |
+| heating to 52 °C | its planned hour is open; it stops at *Keep at* |
+| heating on sun · up to 56 °C | spare sun heats past *Keep at*, by what the sun may add |
+| heats to 52 °C at 23:00 | it is below the start line; that hour is planned |
+| below 52 °C · no hour planned yet | nothing is planned; the cause follows when SEM names one |
+| warm · heats again below 51 °C | just under *Keep at*: no run starts for so little |
+| warm · 52.4 °C | at or above *Keep at* |
+| Legionella run | its own heat-up runs to the Legionella temperature |
+| no temperature reading | the band is set but its thermometer reads nothing |
+
+Any other load that is off names the cause when SEM has one, such as
+*off · not enough spare sun* or *off · ran long enough today*. The Comfort
+row reads *Keep at · sun may add · heat at once below*, the same three
+values as in the [User Guide](USER_GUIDE.md#keep-at-extra-from-surplus-run-now-past).
 
 #### sem-next-insights-card
 

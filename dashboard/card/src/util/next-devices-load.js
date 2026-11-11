@@ -10,7 +10,8 @@
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
-import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, simpleMode } from './next-devices.js';
+import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, simpleMode, statePill } from './next-devices.js';
+import { plainReason } from './why-rows.js';
 
 const MODES = [
     { key: 'off', label: 'off', help: 'help_mode_off' },
@@ -205,7 +206,7 @@ export function loadBody(card, row) {
     const tUnit = card._hass?.config?.unit_system?.temperature || '°C';
     const cNum = (key, val) => numVal(key, val ? val + ' ' + tUnit : '—', { value: val || null, step: 0.5, unit: tUnit, onCommit: (v) => send(key, String(v)) });
     rows.push(card._row('mdi:thermometer', t('next_comfort'), displayTemp(card, row.comfort && row.comfort.reading_c) || '—',
-        card._sentence(t('next_keep_limit_pre'), { target: cNum('comfort_target', target), limit: cNum('comfort_limit', limit), offset: cNum('comfort_offset', offset) }),
+        html`${card._sentence(t('next_keep_sentence'), { target: cNum('comfort_target', target), limit: cNum('comfort_limit', limit), offset: cNum('comfort_offset', offset) })}<div class="modehelp">${t('next_keep_sub')}</div>`,
         { more: !engaged && !(row.comfort && row.comfort.reading_c != null) }));
     if (kind === 'heat_pump') {
         rows.push(card._row('mdi:cash-multiple', t('next_device_tariff'), card._has('sensor.sem_heat_pump_cost_of_heat') ? card._money(card._num('sensor.sem_heat_pump_cost_of_heat')) : '—', t('device_tariff_heat_pump'), { more: true }));
@@ -226,8 +227,25 @@ export function loadBody(card, row) {
         { more: true }));
 
     return html`
+        ${saysLine(card, row)}
         ${simple}
         ${stats}
         ${pct === null ? nothing : html`<div style="margin:6px 0 10px">${card._track(pct, 'var(--c)')}</div>`}
         <div class="rows">${rows}</div>`;
+}
+
+/**
+ * (#1321) The first line of an open load: what it does now and what comes
+ * next (the pill's words), then the engine's reason as a sentence when it
+ * has one. Nothing for a load the engine has not decided yet.
+ */
+export function saysLine(card, row) {
+    if (!row.intent && !(row.comfort && row.comfort.keep_c != null)) return nothing;
+    const pill = statePill(row, card._live(row));
+    const text = card._pillText(pill);
+    const code = row.intent && row.intent.code;
+    const sentence = code ? plainReason({ reason_code: code }, (k) => card._t(k)) : null;
+    const lead = text.charAt(0).toUpperCase() + text.slice(1) + '.';
+    const tail = sentence ? ' ' + sentence : '';
+    return html`<p class="sent says"><span class="val">${lead}</span>${tail}</p>`;
 }

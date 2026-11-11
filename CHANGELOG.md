@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
 - ✨ **A load can have its own name in SEM** (#1341): type it under Configure device. Empty brings the Energy dashboard name back.
 - 🐛 **A planned run now starts only when the tank is clearly below Keep at** (#1102). Just under it, it no longer starts.
 - ✨ **Inverters with a grid-charge switch and limits in percent can now be charged and limited by SEM** (#1158), such as KSTAR via ha-solarman.

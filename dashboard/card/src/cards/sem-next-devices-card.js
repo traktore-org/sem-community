@@ -26,7 +26,7 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS } from '../util/next-devices.js';
+import { deviceRows, statePill, nextBlock, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
@@ -196,14 +196,20 @@ class SEMNextDevicesCard extends SEMNextBase {
         return rows;
     }
 
-    /** The next planned start for a plan id (ev:<cid> · battery · load:<id>), as HH:MM, or ''. */
-    _plannedAt(planId) {
+    /**
+     * The next planned start for a plan id (ev:<cid> · battery · load:<id>), as HH:MM, or ''.
+     * Several ids: the earliest of them (a heater's run-time block and its Keep at block).
+     */
+    _plannedAt(...planIds) {
         const plan = this._attrs('sensor.sem_energy_plan');
-        const now = Date.now();
-        const next = (Array.isArray(plan.blocks) ? plan.blocks : [])
-            .filter((b) => String(b.id) === planId && Date.parse(b.start) > now)
-            .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0];
+        const next = nextBlock(plan.blocks, planIds, Date.now());
         return next ? this._hhmm(next.start) : '';
+    }
+
+    /** The pill's words: the state, then why when the engine names a cause. */
+    _pillText(pill) {
+        const text = this._tf(pill.key, pill.params);
+        return pill.why ? text + ' · ' + this._t(pill.why) : text;
     }
 
     _live(row) {
@@ -234,7 +240,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         const parent = row.blockedBy ? this._rowsNow().find((r) => r.id === row.blockedBy) : null;
         return {
             powerW: row.powerEntity ? this._powerW(row.powerEntity) : null,
-            plannedAt: this._plannedAt('load:' + row.id),
+            plannedAt: this._plannedAt('load:' + row.id, 'comfort:' + row.id),
+            fmtTemp: (c) => this._temp(c),
             parentName: parent ? parent.name : '',
         };
     }
@@ -724,7 +731,7 @@ class SEMNextDevicesCard extends SEMNextBase {
                 <span class="handle" title=${locked ? t('locked_under_parent') : t('drag_to_reorder')}
                     @pointerdown=${locked ? nothing : (e) => this._dragStart(e, row.id)}>${this._icon(locked ? 'mdi:subdirectory-arrow-right' : 'mdi:drag-vertical')}</span>
                 <span class="rank" title=${t('next_priority')}>${i + 1}</span>
-                <div class="name tap" @click=${toggle}>${this._icon(row.icon)}<span>${row.name}</span>${this._pill(this._tf(pill.key, pill.params), pill.cls)}</div>
+                <div class="name tap" @click=${toggle}>${this._icon(row.icon)}<span>${row.name}</span>${this._pill(this._pillText(pill), pill.cls)}</div>
                 <span class="live muted sm">${liveText}</span>
                 ${row.type === 'load' && !row.lockedByOperator ? this._pill(t(verdictKey(row)), '', { icon: 'mdi:hand-back-left-outline' }) : nothing}
                 <div class="arrows">

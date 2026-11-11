@@ -336,6 +336,12 @@ export class SEMNextBase extends SEMLitBase {
         return c || 'CHF';
     }
     _tf(key, params) { return fill(this._t(key), params, (k) => this._t(k)); }
+    /** (#1321) A temperature in the user's unit (payloads are °C). */
+    _temp(c) {
+        const unit = this._hass?.config?.unit_system?.temperature || '°C';
+        const v = unit === '°F' ? Number(c) * 9 / 5 + 32 : Number(c);
+        return (Math.round(v * 10) / 10) + ' ' + unit;
+    }
     _moreInfo(entityId) { this._fireMoreInfo(entityId); }
     /** Navigate inside HA without a reload. */
     _go(path) {
