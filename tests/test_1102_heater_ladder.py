@@ -224,3 +224,52 @@ def test_layer_three_remembers_a_floor_run_the_layers_write_nothing():
     )
     _apply_source_markers(dev, intents["boiler"])
     assert dev._comfort_floor_run is True
+
+
+BLOCK = PlanVerdict(in_block=True, comfort_in_block=True)
+
+
+@pytest.mark.unit
+class TestAPlannedRunStartsClearlyBelowKeepAt:
+    """.175, 11.11: a tank at 49.86 °C under Keep at 50 was started in its
+    block, reached 50 a minute later and ran its minimum time on bought
+    power. A planned run starts 1 °C below Keep at; a run going heats on."""
+
+    @pytest.mark.parametrize("temp", [49.86, 49.5, 49.1])
+    def test_a_tank_just_under_keep_at_is_not_started(self, temp):
+        it = _intent(_boiler(temp), plan=BLOCK)
+        assert not it.on
+
+    @pytest.mark.parametrize("temp", [49.0, 48.0, 40.0])
+    def test_a_tank_clearly_below_keep_at_starts(self, temp):
+        it = _intent(_boiler(temp), plan=BLOCK)
+        assert it.on and it.code == RC.LOAD_COMFORT_GOAL
+
+    @pytest.mark.parametrize("temp", [49.2, 49.86])
+    def test_a_run_already_going_heats_on_to_keep_at(self, temp):
+        it = _intent(_boiler(temp, active=True), plan=BLOCK)
+        assert it.on and it.code == RC.LOAD_COMFORT_GOAL
+
+    def test_a_run_going_stops_at_keep_at(self):
+        it = _intent(_boiler(50.1, active=True), plan=BLOCK)
+        assert not it.on or it.code != RC.LOAD_COMFORT_GOAL
+
+    def test_the_plan_asks_nothing_inside_the_gap_unless_it_runs(self):
+        now = None
+        assert _boiler(49.86).comfort_plan_demand(now, goal=True) is None
+        assert _boiler(48.5).comfort_plan_demand(now, goal=True) is not None
+        assert _boiler(49.86, active=True).comfort_plan_demand(now, goal=True) is not None
+
+    def test_a_narrow_band_halves_the_gap(self):
+        dev = _boiler(49.6)
+        dev.comfort_limit = 49.0            # band of 1 °C → gap 0.5 °C
+        assert dev.comfort_goal_start_gap_c() == pytest.approx(0.5)
+        assert not _intent(dev, plan=BLOCK).on
+        dev2 = _boiler(49.4)
+        dev2.comfort_limit = 49.0
+        assert _intent(dev2, plan=BLOCK).on
+
+    def test_too_cold_and_the_sun_ignore_the_gap(self):
+        assert _intent(_boiler(34.0), plan=BLOCK).code == RC.LOAD_COMFORT_FLOOR
+        it = _intent(_boiler(49.86), remaining_surplus_w=4000.0, is_night=False)
+        assert it.on and it.source == "solar"

@@ -1673,6 +1673,34 @@ class ComfortBandMixin:
     #: the run stops at Keep at by itself, so too much is never bought.
     COMFORT_GOAL_FALLBACK_H = 1.0
 
+    #: (#1102) How far below Keep at a planned run STARTS. A run already
+    #: going heats on to Keep at. Without the gap a tank 0.1 °C under Keep
+    #: at was started in its block, reached Keep at a minute later and then
+    #: ran its minimum time on bought power (.175, 11.11: 49.86 °C, 0.5 kWh).
+    COMFORT_GOAL_START_GAP_C = 1.0
+
+    def comfort_goal_start_gap_c(self) -> float:
+        """(#1102) The start gap in °C: 1 °C, or half the band between Keep
+        at and the too-cold limit when the band is narrower than 2 °C."""
+        try:
+            target_c, _offset_c, limit_c = self._comfort_thresholds_c()
+            band = abs(float(target_c) - float(limit_c))
+        except Exception:  # noqa: BLE001 — an unreadable band has no gap
+            return 0.0
+        return min(self.COMFORT_GOAL_START_GAP_C, band / 2.0)
+
+    def comfort_goal_wants_start(self) -> bool:
+        """(#1102) Is the reading far enough from Keep at to START a planned
+        run? The one rule for the plan's ask and for layer 1's start."""
+        temp = self._comfort_reading()
+        if temp is None:
+            return False
+        target_c = float(self._comfort_thresholds_c()[0])
+        gap = self.comfort_goal_start_gap_c()
+        if self._comfort_direction() == "cool":
+            return float(temp) >= target_c + gap
+        return float(temp) <= target_c - gap
+
     def comfort_plan_demand(self, now, goal: bool = False):
         """The band's plannable ask: ``{"energy_kwh", "deadline"}`` or None.
 
@@ -1733,6 +1761,10 @@ class ComfortBandMixin:
         target_c, _offset_c, _limit_c = self._comfort_thresholds_c()
         below = temp > target_c if direction == "cool" else temp < target_c
         if not below:
+            return None
+        # A tank inside the start gap asks for nothing — unless it is
+        # already heating: that run goes on to Keep at, so its block stays.
+        if not self.is_active and not self.comfort_goal_wants_start():
             return None
         rated = float(getattr(self, "rated_power", 0.0) or 0.0)
         if rated <= 0:

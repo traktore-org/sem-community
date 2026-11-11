@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Ugyldig enhedsegenskab: ”{property}”."
     },
+    "device_named_elsewhere": {
+      "message": "\"{device_id}\" kan ikke navngives her. En lader navngives i sin egen opsætning; batteriet har intet navn."
+    },
     "invalid_deadline_format": {
       "message": "Ugyldigt deadlineformat: ”{deadline}”. Brug ISO 8601-format, for eksempel 2026-05-27T07:00:00."
     },

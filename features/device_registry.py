@@ -75,6 +75,20 @@ STORAGE_COPY_KEY = f"{DOMAIN}_device_marks"
 MAX_PLAUSIBLE_CHARGER_AMPS: int = 32
 
 
+#: (#1341) The longest name a user may give a load.
+LOAD_NAME_MAX = 60
+
+
+def clean_load_name(value: Any) -> str:
+    """(#1341) A load name as typed, made safe to store and show: one line
+    of plain text, trimmed, at most ``LOAD_NAME_MAX`` characters. Empty
+    means "no own name" — the automatic one applies."""
+    if value is None:
+        return ""
+    text = "".join(ch if ch.isprintable() else " " for ch in str(value))
+    return " ".join(text.split())[:LOAD_NAME_MAX].strip()
+
+
 def _tariff_payload(live: Any, goals: Dict[str, Any]) -> Dict[str, Any]:
     """(#812) The own-tariff fields for the card: the live device's, else
     what is stored (no live object yet)."""
@@ -337,6 +351,8 @@ class UnifiedDeviceRegistry:
         # the other — the value would silently drop back to 0 (caught live on
         # the Heizband PROD test). One lock makes each update atomic.
         self._goal_write_lock = asyncio.Lock()
+        # (#1341) device_id → the name a load has without the user's own
+        self._auto_names: Dict[str, str] = {}
         # (#622) Callback that re-applies persisted per-device accrued daily
         # runtime from the coordinator's storage onto any device that came back
         # EMPTY after a rebuild. Set by the coordinator after construction.
@@ -612,7 +628,42 @@ class UnifiedDeviceRegistry:
         # (#812) the load's own tariff: a fixed rate or a price entity, and
         # its own meter. None set = the house tariff.
         "tariff_rate", "tariff_entity", "tariff_meter",
+        # (#1341) the name the user gave the load — display only
+        "name",
     )
+
+    def own_name(self, device_id: str) -> str:
+        """(#1341) The name the user gave this load, or ``""``."""
+        goals = getattr(self, "_device_goals", None) or {}
+        return clean_load_name((goals.get(device_id) or {}).get("name"))
+
+    def name_for(self, device_id: str, automatic: Any) -> str:
+        """(#1341) The ONE answer to "what is this load called": the user's
+        own name when they gave one, else the automatic name (Energy
+        dashboard, sensor, registration). The automatic name is remembered
+        so clearing the own name brings it back without a restart."""
+        auto = str(automatic or "") or device_id
+        names = self.__dict__.setdefault("_auto_names", {})
+        names[device_id] = auto
+        return self.own_name(device_id) or auto
+
+    def can_be_named(self, device_id: str) -> bool:
+        """(#1341) May the user name this row here? A load, yes. A charger
+        is named in its own setup and the battery row has no name to set: a
+        name stored for either would be read by nothing."""
+        live = (self._surplus_controller.get_device(device_id)
+                if self._surplus_controller is not None else None)
+        if live is not None and getattr(live, "is_ev", False) is True:
+            return False
+        try:
+            row = self.get_devices_for_sensor().get(device_id) or {}
+        except Exception:  # noqa: BLE001 — an unbuildable payload names nothing
+            return False
+        return row.get("device_type") not in ("ev_charger", "ev_charging", "battery")
+
+    def automatic_name(self, device_id: str) -> str:
+        """(#1341) The name the load has without the user's own."""
+        return (self.__dict__.get("_auto_names") or {}).get(device_id, "")
 
     def phase_for(self, device_id: str) -> str:
         """(#1048) The phase the user put this load on, ``unknown`` until
@@ -629,6 +680,18 @@ class UnifiedDeviceRegistry:
         goals = self._device_goals.get(device.device_id)
         if not goals:
             return
+        # (#1341) the user's own name, key-present-only. The live object was
+        # built with the automatic name (or already carries the own one, an
+        # Energy-dashboard row is named before it is built): remember the
+        # automatic name once, then show the own name, or the automatic one
+        # again when it was cleared.
+        if "name" in goals:
+            _did = device.device_id
+            _auto = self.automatic_name(_did)
+            if not _auto:
+                _auto = str(getattr(device, "name", "") or _did)
+                self.__dict__.setdefault("_auto_names", {})[_did] = _auto
+            device.name = self.own_name(_did) or _auto
         # (#1048) key-present-only, like the anti-cycle windows below
         if "phase" in goals:
             device.phase = load_phase(goals.get("phase"))
@@ -712,12 +775,18 @@ class UnifiedDeviceRegistry:
         """Set one goal property, persist it, and apply it live (#559)."""
         if prop not in self.GOAL_PROPERTIES:
             raise ValueError(f"Unknown goal property: {prop}")
+        if prop == "name":
+            if not self.can_be_named(device_id):
+                raise ValueError(f"{device_id} is not named here")
+            value = clean_load_name(value)
         async with self._goal_write_lock:
             goals = self._device_goals.setdefault(device_id, {})
             goals[prop] = value
             device = self._surplus_controller.get_device(device_id)
             if device:
                 self._apply_goals(device)
+            if prop == "name":
+                self._rename_rows(device_id)
             # (#1048) the shedder reads the phase off its own row: put it
             # there now, not at the next registry sync
             if prop == "phase" and self._load_manager is not None:
@@ -726,6 +795,20 @@ class UnifiedDeviceRegistry:
                     row["phase"] = load_phase(value)
             await self._save_storage()
         _LOGGER.info("Device goal updated: %s.%s = %s", device_id, prop, value)
+
+    def _rename_rows(self, device_id: str) -> None:
+        """(#1341) Put a changed name on the rows that copied it: the
+        Energy-dashboard record and the load manager's row. Nothing is
+        rebuilt — a rename must not touch a running load."""
+        for record in self._devices:
+            if record.device_id == device_id:
+                record.name = self.name_for(
+                    device_id, self.automatic_name(device_id) or record.name)
+        lm = self._load_manager
+        row = lm._devices.get(device_id) if lm is not None else None
+        if isinstance(row, dict) and "friendly_name" in row:
+            row["friendly_name"] = self.name_for(
+                device_id, self.automatic_name(device_id) or row["friendly_name"])
 
     def _register_service_devices(self) -> None:
         """(Re-)register all persisted service registrations with the
@@ -949,6 +1032,8 @@ class UnifiedDeviceRegistry:
                 is_ev=is_ev,
             )
             device_id = temp.device_id
+            # (#1341) the user's own name wins over the Energy dashboard's
+            name = self.name_for(device_id, name)
 
             # Manual mapping takes precedence over auto-discovery
             has_manual = energy_sensor in self._manual_mappings
@@ -1929,7 +2014,7 @@ class UnifiedDeviceRegistry:
             # kW here, so a 2 kW draw rendered as "2 W"). Matches the ED rows.
             current_power = round(live.get_current_consumption()) if is_on and live else 0.0
             result[did] = {
-                "name": spec.get("name", did),
+                "name": self.name_for(did, spec.get("name", did)),
                 # (#890) the one axis, not the spec — a drag must show here
                 "priority": self._service_device_priority(did, spec),
                 # (#780) an explicit registration IS the control handle.
@@ -2172,7 +2257,7 @@ class UnifiedDeviceRegistry:
             "energy_entity": spec.get("energy_entity_id"),
             "switch_entity": entity,
             "control": {"type": "switch", "entity": entity} if entity else None,
-            "friendly_name": spec.get("name", device_id),
+            "friendly_name": self.name_for(device_id, spec.get("name", device_id)),
             "device_type": "individual_device",
             "description": f"Registered device: {spec.get('name', device_id)}",
             "source": "service_registration",
@@ -2504,6 +2589,10 @@ class UnifiedDeviceRegistry:
                 "min_off_effective_min": (
                     None if live is None or getattr(live, "min_off_seconds", None) is None
                     else round(float(live.min_off_seconds) / 60.0, 1)),
+                # (#1341) the user's own name ("" = none) and the name the
+                # load has without it — the editor's field and its hint
+                "name": self.own_name(device_id),
+                "automatic_name": self.automatic_name(device_id),
                 # (#1048) the supply phase — the editor's select
                 "phase": load_phase(goals.get("phase")),
                 # (#1021) the Configure-device switch

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **A load can have its own name in SEM** (#1341): type it under Configure device. Empty brings the Energy dashboard name back.
+- 🐛 **A planned run now starts only when the tank is clearly below Keep at** (#1102). Just under it, it no longer starts.
 - ✨ **Inverters with a grid-charge switch and limits in percent can now be charged and limited by SEM** (#1158), such as KSTAR via ha-solarman.
 - ✨ **Phase switching now works on chargers that take one current per phase, such as Easee** (#1015). Off by default, like all phase switching.
 - ✨ **A heat pump can step down when power is short** (#1323): on expensive grid power or near the peak limit. Off by default.
@@ -33,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **The plan says why each block sits where it does, and what waiting saves against buying now** (#1321).
 - ✨ **Loads get Boost: run now for 30, 60 or 120 minutes, then back to Smart** (#1321). A grid peak still stops it.
 - 📝 **The load card's Comfort hint now says how Keep at is reached**: in the planned hour from any source, sun may go further (#1334).
+- 📝 **The guides now explain Keep at, Extra from surplus and Run now past, and the order SEM follows** (#1334).
 - 🐛 **EG4 Web Monitor: solar power is found and grid import reads right from the start** (#810). The charge-start SOC is no longer the target.
 
 # [2.3.0-beta.11] — 10.11.2026

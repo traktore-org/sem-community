@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Ogiltig enhetsegenskap: ”{property}”."
     },
+    "device_named_elsewhere": {
+      "message": "”{device_id}” kan inte namnges här. En laddare namnges i sin egen inställning; batteriet har inget namn."
+    },
     "invalid_deadline_format": {
       "message": "Ogiltigt deadlineformat: ”{deadline}”. Använd ISO 8601-format, till exempel 2026-05-27T07:00:00."
     },

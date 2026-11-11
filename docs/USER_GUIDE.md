@@ -252,6 +252,15 @@ Each charger gets its own sensor entities:
 
 To **edit** an existing charger, select it from the charger menu. To **remove**, select "Remove a charger". A working primary charger cannot be removed; a half-filled one can. The Repairs of a charger you removed clear the next time SEM starts. If an earlier setup left a charger half-filled, SEM offers it again: add it and the new charger replaces the old card.
 
+### Name a load
+
+A load takes its name from the Energy dashboard. To give it your own name in
+SEM, open **Configure device** on its row of the **Control** tab and fill in
+**Name in SEM**. The name shows everywhere in SEM at once and stays after a
+restart. Empty the field to get the Energy dashboard name back. Only the name
+changes: the load keeps its settings and its history. A charger is named in
+its own setup.
+
 ### Appliance Dependencies
 
 Devices can require other devices to be active before they turn on. Set this from the **Control** tab on the dashboard:
@@ -426,6 +435,31 @@ once. Away mode, Mode Off and removing SEM also release it.
 A step-down lasts at least 15 minutes, and the next one waits 15 minutes, so
 a price that flickers does not cycle the compressor. In observer mode SEM
 only shows that it would step down. The **Why?** card names the cause.
+
+### Keep at, Extra from surplus, Run now past
+
+A heater with a thermometer (a boiler, a heat pump, a room unit) has three
+fields under **Comfort** on the Load Priority card. In French they read
+*Maintenir à*, *Extra grâce au surplus* and *Marche forcée au-delà de*.
+
+| Field | What SEM does |
+|---|---|
+| **Keep at** | Below this temperature SEM heats in the hour its plan picks, from any power source, and stops at it |
+| **Extra from surplus** | Spare sun may heat this much above Keep at |
+| **Run now past** | Below this limit SEM heats at once, on any tariff, and goes on to Keep at |
+
+SEM checks in this order, and the first match decides:
+
+1. Your own stop temperature is reached: it stops.
+2. A Legionella run is due: it runs to its own target.
+3. The tank is colder than *Run now past*: it heats now.
+4. The tank is below *Keep at* and the planned hour is open: it heats.
+5. There is spare sun: it heats up to *Keep at* plus *Extra from surplus*.
+
+With a thermometer the daily run time asks for nothing: a warm tank is not
+heated again for its minutes. *Finish overnight via* only covers the daily
+run time of loads without a thermometer; it does not switch *Keep at* off.
+The **Why?** card names the step that decided.
 
 ### Heat or cool by the outdoor forecast (#1323)
 

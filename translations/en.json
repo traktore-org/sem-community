@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Invalid device property: “{property}”."
     },
+    "device_named_elsewhere": {
+      "message": "\"{device_id}\" cannot be named here. A charger is named in its own setup; the battery has no name to set."
+    },
     "unknown_appliance_schedule": {
       "message": "No appliance schedule found for {device_id}. Check the device ID you used with the schedule_appliance service."
     },

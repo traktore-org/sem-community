@@ -1857,6 +1857,9 @@
     "invalid_device_property": {
       "message": "Propiedad de dispositivo no válida: «{property}»."
     },
+    "device_named_elsewhere": {
+      "message": "«{device_id}» no se puede nombrar aquí. Un cargador se nombra en su propia configuración; la batería no tiene nombre."
+    },
     "invalid_deadline_format": {
       "message": "Formato de fecha límite no válido: «{deadline}». Usa el formato ISO 8601, por ejemplo 2026-05-27T07:00:00."
     },
