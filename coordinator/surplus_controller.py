@@ -1035,7 +1035,19 @@ def compute_load_intent(
     #     and the walk books it only the sun that is left (#1335).
     #     When the override ends this clause is simply not taken: the walk
     #     below decides again, and with no sun it stops the run SEM started.
+    # (#1323) The peak limit near, on a load that can step down (clause 3f).
+    peak_step_down = (not active and peak_freeze
+                      and getattr(device, "step_down_ready", False) is True)
     if override == "skip":
+        if peak_step_down:
+            # (#1321/#1323) A pause must not undo a PEAK step-down: a plain
+            # off intent let layer 3 release it after its hold while the
+            # peak was still near. The peak's intent wins — the load is off
+            # either way, and the step-down is the peak's, so it says so.
+            # A PRICE step-down is not kept: a pause means SEM does nothing.
+            return LoadIntent(False, 0.0, None,
+                              "peak limit near — stepped down",
+                              RC.LOAD_STEP_DOWN_PEAK, step_down=True)
         return LoadIntent(False, 0.0, None, "paused by you for now",
                           RC.LOAD_OVERRIDE_STOP)
     if (override == "force" and override_may_force(device)
@@ -1052,7 +1064,7 @@ def compute_load_intent(
         _rated = _num(getattr(device, "rated_power", 0.0))
         return LoadIntent(True, _rated, "solar", "deadline force", RC.LOAD_DEADLINE)
 
-    # 3e. (#1323) A shortfall: the load steps DOWN. Only a load that can
+    # 3f. (#1323) A shortfall: the load steps DOWN. Only a load that can
     #     (``step_down_ready`` — the user switched it on, and its comfort
     #     band reads inside its range, so "too cold" below still leads), and
     #     only one that is not running: a run is ended by its own reasons
@@ -1064,7 +1076,7 @@ def compute_load_intent(
     #     the cause is the expensive hour without sun, not the meter reading
     #     its own effect.
     if not active and getattr(device, "step_down_ready", False) is True:
-        if peak_freeze:
+        if peak_step_down:
             return LoadIntent(False, 0.0, None,
                               "peak limit near — stepped down",
                               RC.LOAD_STEP_DOWN_PEAK, step_down=True)

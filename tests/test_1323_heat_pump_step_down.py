@@ -6,7 +6,7 @@ additions, both off unless the user asks:
 1. **Step down.** When the house buys grid power in an expensive hour, or
    nears its peak limit, the pump is held below its normal state: a lower
    setpoint, or the SG-Ready "blocked" signal. It is a layer-1 reason
-   (``compute_load_intent``, clause 3e, its own reason codes); layer 2 hands
+   (``compute_load_intent``, clause 3f, its own reason codes); layer 2 hands
    it the price level and the peak state it already has; layer 3
    (``reconcile_load``) is the only place that sends it and takes it back.
 2. **Heat or cool by itself.** ``hvac_mode: by_forecast`` on a climate unit:
@@ -919,3 +919,78 @@ class TestOneWriteWhenAStartReplacesABlock:
                              controller=sc)
         assert not hp.is_stepped_down and not hp.is_active
         assert hp.sg_ready_state is SGReadyState.NORMAL
+
+
+# ── a pause (#1321) and a step-down ───────────────────────────────────────
+
+PAUSE = {"heat_pump": {"action": "skip", "until": "23:00"}}
+BOOST = {"heat_pump": {"action": "force", "until": "23:00"}}
+NEAR = LoadManagementState.WARNING
+
+
+async def _paused(sc, n=1, *, overrides=PAUSE, price=NORMAL, buying=0.0, peak=None):
+    for _ in range(n):
+        await sc.update(0.0, price_level=price, peak_state=peak,
+                        grid_import_w=buying, is_night=True,
+                        load_overrides=overrides)
+
+
+@pytest.mark.asyncio
+class TestAPauseAndAStepDown:
+    async def test_a_pause_does_not_release_a_peak_step_down(self):
+        """Stepped down for the peak, then paused: the plain off intent let
+        layer 3 release it after the 900 s hold, the peak still near."""
+        hass = _Hass()
+        sc, hp = _pump(hass)
+        await _cycle(sc, peak=NEAR)
+        assert hp.is_stepped_down
+        await _paused(sc, 5, peak=NEAR)
+        _served(hp)                                # the 900 s hold is over
+        await _paused(sc, 30, peak=NEAR)
+        assert hp.is_stepped_down and not hp.is_active
+        assert not hass.calls("turn_off", "switch.sg1")
+        assert len(hass.calls("turn_on", "switch.sg1")) == 1
+        it = _intent(hp, peak_freeze=True, override="skip")
+        assert not it.on and it.step_down and it.code == RC.LOAD_STEP_DOWN_PEAK
+
+    async def test_the_peak_gone_the_pause_lets_it_go(self):
+        hass = _Hass()
+        sc, hp = _pump(hass)
+        await _cycle(sc, peak=NEAR)
+        _served(hp)
+        await _paused(sc, 5)                       # paused, no peak
+        assert not hp.is_stepped_down and not hp.is_active
+        assert _intent(hp, override="skip").code == RC.LOAD_OVERRIDE_STOP
+
+    async def test_a_pause_may_release_a_price_step_down(self):
+        """A pause means SEM does nothing: the pump goes back to its own
+        control once the hold is served."""
+        hass = _Hass()
+        sc, hp = _pump(hass)
+        await _cycle(sc, price=EXPENSIVE, buying=800.0)
+        assert hp.is_stepped_down
+        await _paused(sc, 3, price=EXPENSIVE, buying=800.0)
+        assert hp.is_stepped_down, "inside its hold"
+        _served(hp)
+        await _paused(sc, 3, price=EXPENSIVE, buying=800.0)
+        assert not hp.is_stepped_down and not hp.is_active
+        it = _intent(hp, price_is_expensive=True, buying_w=800.0, override="skip")
+        assert not it.on and not it.step_down and it.code == RC.LOAD_OVERRIDE_STOP
+
+    async def test_with_the_option_off_a_pause_is_unchanged(self):
+        hass = _Hass()
+        sc, hp = _pump(hass, action="off")
+        await _paused(sc, 5, peak=NEAR)
+        assert not hp.is_stepped_down and not hp.is_active
+        hass.services.async_call.assert_not_awaited()
+        it = _intent(hp, peak_freeze=True, override="skip")
+        assert not it.step_down and it.code == RC.LOAD_OVERRIDE_STOP
+
+    async def test_a_boost_during_a_peak_step_down_does_not_start(self):
+        hass = _Hass()
+        sc, hp = _pump(hass)
+        await _cycle(sc, peak=NEAR)
+        _served(hp)
+        await _paused(sc, 5, overrides=BOOST, peak=NEAR)
+        assert hp.is_stepped_down and not hp.is_active
+        assert _intent(hp, peak_freeze=True, override="force").code == RC.LOAD_STEP_DOWN_PEAK
