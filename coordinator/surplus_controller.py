@@ -808,6 +808,18 @@ def _heater_band(device: "ControllableDevice"):
     return state, below
 
 
+def _goal_wants_start(device: "ControllableDevice") -> bool:
+    """(#1102) The device's own start gap below Keep at. A device without
+    the rule (a test double, an older device class) starts as before."""
+    wants = getattr(device, "comfort_goal_wants_start", None)
+    if not callable(wants):
+        return True
+    try:
+        return wants() is not False
+    except Exception:  # noqa: BLE001 — an unreadable band starts as before
+        return True
+
+
 #: (#1102) A device's own run (Legionella): SEM-driven, never re-tuned.
 OWN_RUN_SOURCE = "legionella"
 
@@ -1115,9 +1127,11 @@ def compute_load_intent(
     # and Keep at is the goal there: it heats up to Keep at; Extra above it
     # is for the sun only. (#864/#1335) A start from the grid must fit the
     # billing slot, as the cheap-hours start does.
+    # (#1102) A START also needs the reading clearly below Keep at (the
+    # device's start gap); a run already going heats on to Keep at.
     if (plan.comfort_in_block and can_start and band is not None
             and band[0] == "willing" and band[1]
-            and (active or grid_start_fits)):
+            and (active or (grid_start_fits and _goal_wants_start(device)))):
         return LoadIntent(True, _heater_claim(device, active, held), "cheap_grid",
                           plan.reason or "joint plan: heats to its keep-at temperature",
                           RC.LOAD_COMFORT_GOAL, command_w=paid_command)
