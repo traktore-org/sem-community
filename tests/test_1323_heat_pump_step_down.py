@@ -326,9 +326,14 @@ class TestPrecedence:
             min_power_threshold=2000.0, runs_without_surplus=True,
             step_down_ready=True, is_stepped_down=False,
             get_current_consumption=lambda: 0.0)
+        it = _intent(dev, price_is_expensive=True, buying_w=3000.0)
+        assert (it.on, it.code, it.step_down) == (True, RC.LOAD_LEGIONELLA, False)
+        # (#1344) …but a due run does not START into a peak (the shed ended
+        # it the next cycle, on and off for as long as the peak lasted): it
+        # waits, and the peak's own step-down applies meanwhile
         it = _intent(dev, peak_freeze=True, price_is_expensive=True,
                      buying_w=3000.0)
-        assert (it.on, it.code, it.step_down) == (True, RC.LOAD_LEGIONELLA, False)
+        assert (it.on, it.code, it.step_down) == (False, RC.LOAD_STEP_DOWN_PEAK, True)
 
     async def test_a_boost_replaces_the_step_down(self):
         hass = _Hass()

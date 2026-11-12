@@ -9,16 +9,22 @@ combination of
     device class   every class that carries the comfort band (discovered)
     grid setting   solar_only · cheap_hours · battery
     tank state     too cold · below the start line · inside the start gap ·
-                   at Keep at · above Keep at + Extra · no reading
+                   at Keep at · above Keep at + Extra · no reading ·
+                   under your own stop · at your own stop · too cold but
+                   past your own stop
     situation      night with its planned hour open · night with no plan ·
                    day with spare sun · day with too little sun · peak shed ·
-                   away · Mode Off · watch-only (observer)
+                   Mode Off · watch-only (observer)
+    away           the house is away, or not
 
 and compares the outcome with ``_spec``, one small function written from
 docs/USER_GUIDE.md, "Keep at, Extra from surplus, Run now past":
 
     own stop → Legionella → too cold → Keep at in its planned hour, if the
-    grid is allowed → sun up to Keep at + Extra → nothing.
+    grid is allowed → sun up to Keep at + Extra → nothing; and while away
+    only the too-cold limit heats, back above the limit and no further.
+
+A second table runs the Legionella run of every class that has one.
 
 A new class that gains the band enters the matrix by itself; without a
 factory here the first test fails and names it.
@@ -26,6 +32,7 @@ factory here the first test fails and names it.
 from __future__ import annotations
 
 import itertools
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -59,15 +66,21 @@ from custom_components.solar_energy_management.features.load_management import (
 TANK = "sensor.tank"
 DID = "heater"
 KEEP, EXTRA, LIMIT = 50.0, 5.0, 36.0          # start line 49, ceiling 55
-CYCLES = 60
+CYCLES = 30
 
 GRID = ("solar_only", "cheap_hours", "battery")
+#: tank state -> (reading in °C, the user's own stop temperature or None)
 TANKS = {
-    "too_cold": 34.0, "below_start": 45.0, "in_gap": 49.5,
-    "at_keep": 50.0, "above_ceiling": 56.0, "no_reading": None,
+    "too_cold": (34.0, None), "below_start": (45.0, None), "in_gap": (49.5, None),
+    "at_keep": (50.0, None), "above_ceiling": (56.0, None), "no_reading": (None, None),
+    # "Stop when": the first rung. Under it the ladder runs as usual; at or
+    # above it nothing starts and a run ends, whatever else says go.
+    "under_own_stop": (52.0, 53.0), "at_own_stop": (53.5, 53.0),
+    "too_cold_past_own_stop": (34.0, 30.0),
 }
 SITUATIONS = ("night_block", "night_no_block", "day_sun", "day_little_sun",
-              "peak_shed", "away", "mode_off", "observer")
+              "peak_shed", "mode_off", "observer")
+AWAY = (False, True)
 
 
 class _Hass:
@@ -180,16 +193,24 @@ def test_every_class_with_the_band_is_in_the_matrix():
         "tests/test_1344_heater_matrix.py — add one, so the matrix runs them")
 
 
-def _build(cls, grid, tank, situation):
+#: (the guide, "no reading") A tank whose OWN temperature sensor is set up
+#: but silent is not heated blind. Every other class without a reading has no
+#: band at all and runs as a plain load.
+REFUSES_BLIND = {HotWaterController}
+
+
+def _build(cls, grid, tank, situation, away=False):
     hass = _Hass()
     dev = FACTORIES[cls](hass)
-    reading = TANKS[tank]
+    reading, own_stop = TANKS[tank]
     hass.set(TANK, "unavailable" if reading is None else reading,
              unit_of_measurement="°C")
     dev.control_mode = (DeviceControlMode.OFF if situation == "mode_off"
                         else DeviceControlMode.SURPLUS)
     dev.comfort_entity = TANK
     dev.comfort_target, dev.comfort_offset, dev.comfort_limit = KEEP, EXTRA, LIMIT
+    if own_stop is not None:
+        dev.stop_entity, dev.stop_at = TANK, own_stop
     dev.top_up_policy = "cheap_hours" if grid == "cheap_hours" else "solar_only"
     dev.battery_eligible_overnight = grid == "battery"
     # nothing hides a flap: no minimum run, pause or start delay
@@ -198,12 +219,11 @@ def _build(cls, grid, tank, situation):
                  "min_power_change_interval", "_min_power_change_interval"):
         if hasattr(dev, attr):
             setattr(dev, attr, 0)
-    away = situation == "away" and hasattr(dev, "vacation")
-    if away:
-        dev.vacation = True
+    # the one stamp the coordinator makes on every device with the band
+    dev.vacation = bool(away)
     sc = SurplusController(hass, regulation_offset=0)
     sc.register_device(dev)
-    return hass, sc, dev, away
+    return hass, sc, dev
 
 
 def _inputs(situation):
@@ -225,30 +245,34 @@ def _inputs(situation):
         return {**night, "peak_state": LoadManagementState.EMERGENCY}
     if situation == "observer":
         return {**night, "observer": True}
-    return night            # night_block, away, mode_off
+    return night            # night_block, mode_off
 
 
-def _spec(grid, tank, situation, *, away, refuses_blind):
-    """(on, family) per the User Guide. family: floor · goal · sun · none."""
+def _spec(cls, grid, tank, situation, away):
+    """(on, family) per the User Guide. family: floor · floor_away · goal ·
+    sun · none. Written from the guide alone — it asks the device nothing."""
     off = (False, "none")
+    reading, own_stop = TANKS[tank]
     if situation == "mode_off":
         return off                      # SEM does not drive it
     if situation == "peak_shed":
         return off                      # a shed outranks every run
+    if own_stop is not None and reading is not None and reading >= own_stop:
+        return off                      # your own stop is the first rung
     if away:
-        return off                      # no comfort heating while away
-    if situation == "away":
-        situation = "night_block"       # a load SEM is not told about away
+        # no Keep at run, no banking: only the too-cold limit heats
+        return (True, "floor_away") if tank == "too_cold" else off
     sun = situation == "day_sun"
-    if tank == "no_reading":
-        # no reading is no band: a plain load on spare sun — unless the
-        # device refuses to heat blind
-        return (True, "sun") if sun and not refuses_blind else off
-    if tank == "too_cold":
+    if reading is None:
+        # no reading: the band does nothing — no planned run, no too-cold
+        # run. The load runs as a plain load on spare sun, unless its own
+        # sensor is the silent one (it is not heated blind).
+        return (True, "sun") if sun and cls not in REFUSES_BLIND else off
+    if reading <= LIMIT:
         return (True, "floor")          # at once, on any tariff
-    if tank == "above_ceiling":
+    if reading >= KEEP + EXTRA:
         return off
-    if (tank == "below_start" and grid == "cheap_hours"
+    if (reading <= KEEP - 1.0 and grid == "cheap_hours"
             and situation in ("night_block", "observer")):
         return (True, "goal")           # bought, in its planned hour
     if sun:
@@ -259,34 +283,24 @@ def _spec(grid, tank, situation, *, away, refuses_blind):
 def _family(code, source):
     if code == RC.LOAD_COMFORT_FLOOR:
         return "floor"
+    if code == RC.LOAD_COMFORT_FLOOR_AWAY:
+        return "floor_away"
     if code == RC.LOAD_COMFORT_GOAL:
         return "goal"
+    if code == RC.LOAD_LEGIONELLA:
+        return "legionella"
     return "sun" if source in ("solar", "tier1_battery") or code in (
         "solar", "tier1_battery") else "other"
 
 
-CELLS = [
-    pytest.param(cls, grid, tank, situation,
-                 id=f"{cls.__name__}-{grid}-{tank}-{situation}")
-    for cls, grid, tank, situation in itertools.product(
-        FACTORIES, GRID, TANKS, SITUATIONS)
-]
+def _where(cls, grid, tank, situation, away):
+    reading, own_stop = TANKS.get(tank, (tank, None))
+    return (f"{cls.__name__} · grid {grid} · tank {tank} ({reading} °C"
+            f"{'' if own_stop is None else f', own stop {own_stop} °C'}) · "
+            f"{situation} · {'away' if away else 'at home'}")
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("cls, grid, tank, situation", CELLS)
-async def test_a_heater_does_what_the_guide_says(cls, grid, tank, situation):
-    hass, sc, dev, away = _build(cls, grid, tank, situation)
-    where = (f"{cls.__name__} · grid {grid} · tank {tank} "
-             f"({TANKS[tank]} °C) · {situation}")
-    refuses_blind = getattr(dev, "start_refusal", None) == "sensor"
-    want_on, want_family = _spec(grid, tank, situation,
-                                 away=away, refuses_blind=refuses_blind)
-    kw = _inputs(situation)
-    power = kw.pop("available_power_w")
-    for _ in range(CYCLES):
-        await sc.update(power, **kw)
-
+def _check(hass, sc, dev, where, situation, want_on, want_family, grid):
     records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
     # a watt or ampere load's record reads "on 3000 W"
     starts = [r for r in records if str(r["new"]).startswith("on")]
@@ -311,8 +325,199 @@ async def test_a_heater_does_what_the_guide_says(cls, grid, tank, situation):
     assert got == want_family, (
         f"{where}: expected a {want_family} run, got {got} "
         f"(code {starts[0]['reason_code']})")
-    if grid != "cheap_hours" and got not in ("floor", "sun"):
+    if grid != "cheap_hours" and got not in ("floor", "floor_away", "sun", "legionella"):
         pytest.fail(f"{where}: bought power without the grid allowed ({got})")
+
+
+CELLS = [
+    pytest.param(cls, grid, tank, situation, away,
+                 id=f"{cls.__name__}-{grid}-{tank}-{situation}-{'away' if away else 'home'}")
+    for cls, grid, tank, situation, away in itertools.product(
+        FACTORIES, GRID, TANKS, SITUATIONS, AWAY)
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls, grid, tank, situation, away", CELLS)
+async def test_a_heater_does_what_the_guide_says(cls, grid, tank, situation, away):
+    hass, sc, dev = _build(cls, grid, tank, situation, away)
+    where = _where(cls, grid, tank, situation, away)
+    want_on, want_family = _spec(cls, grid, tank, situation, away)
+    kw = _inputs(situation)
+    power = kw.pop("available_power_w")
+    for _ in range(CYCLES):
+        await sc.update(power, **kw)
+    _check(hass, sc, dev, where, situation, want_on, want_family, grid)
+
+
+# ── away: the too-cold run heats back above the limit, and no further ─────
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", list(FACTORIES), ids=lambda c: c.__name__)
+async def test_away_the_too_cold_run_ends_just_above_the_limit(cls):
+    """Limit 36, start gap 1: it starts at or under 36, runs on at 36.5 and
+    stops at 37 — it is not taken on to Keep at 50, and 36.5 does not start it."""
+    hass, sc, dev = _build(cls, "cheap_hours", "too_cold", "night_block", away=True)
+    kw = _inputs("night_block")
+    power = kw.pop("available_power_w")
+    await _run(sc, 5, power, **kw)
+    assert dev.is_active, f"{cls.__name__}: too cold while away must heat"
+    hass.set(TANK, 36.5, unit_of_measurement="°C")
+    await _run(sc, 5, power, **kw)
+    assert dev.is_active, f"{cls.__name__}: stopped inside the gap above the limit"
+    hass.set(TANK, 37.2, unit_of_measurement="°C")
+    await _run(sc, 5, power, **kw)
+    assert not dev.is_active, f"{cls.__name__}: heated on past the limit while away"
+    hass.set(TANK, 36.5, unit_of_measurement="°C")
+    await _run(sc, 5, power, **kw)
+    assert not dev.is_active, f"{cls.__name__}: restarted inside the gap"
+    records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
+    assert [r["reason_code"] for r in records if str(r["new"]).startswith("on")] == [
+        RC.LOAD_COMFORT_FLOOR_AWAY]
+    assert len([r for r in records if str(r["new"]).startswith("off")]) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", list(FACTORIES), ids=lambda c: c.__name__)
+async def test_going_away_ends_a_keep_at_run_and_the_plan_is_asked_nothing(cls):
+    hass, sc, dev = _build(cls, "cheap_hours", "below_start", "night_block")
+    kw = _inputs("night_block")
+    power = kw.pop("available_power_w")
+    await _run(sc, 5, power, **kw)
+    assert dev.is_active
+    assert dev.comfort_plan_demand(None, goal=True) is not None
+    dev.vacation = True
+    await _run(sc, 5, power, **kw)
+    assert not dev.is_active, f"{cls.__name__}: kept heating to Keep at while away"
+    assert dev.comfort_plan_demand(None, goal=True) is None
+    assert dev.comfort_state == "disengaged" and dev.away_pauses() is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", [c for c in FACTORIES if c.away_needs_band],
+                         ids=lambda c: c.__name__)
+async def test_away_leaves_a_load_without_a_band_alone(cls):
+    """A load SEM found is a heater only once its band is set up."""
+    hass, sc, dev = _build(cls, "solar_only", "below_start", "day_sun", away=True)
+    dev.comfort_target = dev.comfort_limit = dev.comfort_offset = 0.0
+    kw = _inputs("day_sun")
+    await _run(sc, 5, kw.pop("available_power_w"), **kw)
+    assert dev.away_pauses() is False
+    assert dev.is_active, f"{cls.__name__}: a plain load was paused by away"
+
+
+# ── Legionella: every class that has the run ──────────────────────────────
+
+LEGIONELLA_CLASSES = [c for c in FACTORIES if hasattr(c, "check_legionella_cycle")]
+LEGIONELLA_CASES = {
+    # case -> (reading, own stop)
+    "due_below_target": (45.0, None),
+    "due_own_stop_already_met": (54.0, 53.0),
+    "due_no_reading": (None, None),
+}
+LEGIONELLA_SITUATIONS = ("night_no_block", "day_sun", "peak_shed", "mode_off", "observer")
+
+
+def test_a_class_with_a_legionella_run_is_in_its_table():
+    assert LEGIONELLA_CLASSES, "no class with a Legionella run was found"
+
+
+def _legionella_spec(cls, case, situation, away):
+    """The run outranks the band and needs no sun; it heats to its OWN
+    target. A shed, Mode Off and away (paused, #594) stop it from starting;
+    your own stop under its target ends it (#1102); no reading, no run."""
+    off = (False, "none")
+    reading, own_stop = LEGIONELLA_CASES[case]
+    if situation in ("mode_off", "peak_shed"):
+        return off
+    if own_stop is not None and reading >= own_stop:
+        return off
+    if reading is None:
+        return off                      # no run, and not heated blind
+    if away:
+        return off                      # paused; 45 °C is not too cold
+    return (True, "legionella")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls, grid, case, situation, away", [
+    pytest.param(c, g, k, s, a, id=f"{c.__name__}-{g}-{k}-{s}-{'away' if a else 'home'}")
+    for c, g, k, s, a in itertools.product(
+        LEGIONELLA_CLASSES, GRID, LEGIONELLA_CASES, LEGIONELLA_SITUATIONS, AWAY)
+])
+async def test_a_legionella_run_does_what_the_guide_says(cls, grid, case, situation, away):
+    hass, sc, dev = _build(cls, grid, "below_start", situation, away)
+    reading, own_stop = LEGIONELLA_CASES[case]
+    hass.set(TANK, "unavailable" if reading is None else reading,
+             unit_of_measurement="°C")
+    if own_stop is not None:
+        dev.stop_entity, dev.stop_at = TANK, own_stop
+    where = (f"{cls.__name__} · grid {grid} · Legionella {case} · {situation} · "
+             f"{'away' if away else 'at home'}")
+    want_on, want_family = _legionella_spec(cls, case, situation, away)
+    kw = _inputs(situation)
+    power = kw.pop("available_power_w")
+    for _ in range(CYCLES):
+        await dev.check_legionella_cycle()      # as the coordinator does
+        await sc.update(power, **kw)
+    _check(hass, sc, dev, where, situation, want_on, want_family, grid)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", LEGIONELLA_CLASSES, ids=lambda c: c.__name__)
+async def test_a_legionella_run_heats_to_its_own_target_and_ends_once(cls):
+    hass, sc, dev = _build(cls, "solar_only", "below_start", "night_no_block")
+    kw = _inputs("night_no_block")
+    power = kw.pop("available_power_w")
+
+    async def cycles(n):
+        for _ in range(n):
+            await dev.check_legionella_cycle()
+            await sc.update(power, **kw)
+
+    await cycles(5)
+    assert dev.is_active
+    # past Keep at + Extra and still on: it runs to ITS target, not the band's
+    hass.set(TANK, 58.0, unit_of_measurement="°C")
+    await cycles(5)
+    assert dev.is_active, "the band's ceiling ended the Legionella run"
+    hass.set(TANK, dev.legionella_target_temp + 0.5, unit_of_measurement="°C")
+    await cycles(2)
+    assert dev.is_active, "it must hold at its target, not stop on reaching it"
+    # the hold is over (its length comes from the target temperature)
+    dev._legionella_hold_start -= timedelta(hours=2)
+    await cycles(5)
+    assert not dev.is_active
+    records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
+    assert [r["reason_code"] for r in records] == [
+        RC.LOAD_LEGIONELLA, RC.LOAD_LEGIONELLA_END], records
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", LEGIONELLA_CLASSES, ids=lambda c: c.__name__)
+async def test_your_own_stop_under_the_target_ends_a_legionella_run_once(cls):
+    """(#1102) It cannot finish: it ends, and does not start again when the
+    tank cools under the stop."""
+    hass, sc, dev = _build(cls, "solar_only", "below_start", "night_no_block")
+    dev.stop_entity, dev.stop_at = TANK, 53.0
+    kw = _inputs("night_no_block")
+    power = kw.pop("available_power_w")
+
+    async def cycles(n):
+        for _ in range(n):
+            await dev.check_legionella_cycle()
+            await sc.update(power, **kw)
+
+    await cycles(5)
+    assert dev.is_active
+    hass.set(TANK, 53.5, unit_of_measurement="°C")
+    await cycles(5)
+    assert not dev.is_active
+    hass.set(TANK, 52.0, unit_of_measurement="°C")
+    await cycles(10)
+    assert not dev.is_active, "the run started again under your stop"
+    records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
+    assert len([r for r in records if str(r["new"]).startswith("on")]) == 1
 
 
 # ── the watt and ampere loads, beyond on and off ──────────────────────────
@@ -328,7 +533,7 @@ async def _run(sc, n, power, **kw):
     (BandedCurrentLoad, "number.heater", 13.0),
 ])
 async def test_a_too_cold_run_asks_for_the_full_setpoint(cls, entity, full):
-    hass, sc, dev, _ = _build(cls, "solar_only", "too_cold", "night_no_block")
+    hass, sc, dev = _build(cls, "solar_only", "too_cold", "night_no_block")
     kw = _inputs("night_no_block")
     await _run(sc, 5, kw.pop("available_power_w"), **kw)
     assert dev.is_active
@@ -343,7 +548,7 @@ async def test_a_too_cold_run_asks_for_the_full_setpoint(cls, entity, full):
 async def test_a_heater_on_little_sun_goes_to_full_when_it_gets_too_cold(cls, sun_w, full):
     """It followed the sun below its full power; the tank fell under Run now
     past. The too-cold run is not left at the sun's setpoint."""
-    hass, sc, dev, _ = _build(cls, "solar_only", "at_keep", "day_sun")
+    hass, sc, dev = _build(cls, "solar_only", "at_keep", "day_sun")
     dev.min_power_threshold = 1000.0
     day = dict(price_level="normal", is_night=False, solar_w=3000.0,
                plan_windows={}, daylight_remaining_s=4 * 3600.0)
@@ -357,7 +562,7 @@ async def test_a_heater_on_little_sun_goes_to_full_when_it_gets_too_cold(cls, su
 
 @pytest.mark.asyncio
 async def test_a_watt_heater_in_its_planned_hour_runs_at_full_and_stops_at_keep_at():
-    hass, sc, dev, _ = _build(PowerSetpointDevice, "cheap_hours", "below_start", "night_block")
+    hass, sc, dev = _build(PowerSetpointDevice, "cheap_hours", "below_start", "night_block")
     kw = _inputs("night_block")
     power = kw.pop("available_power_w")
     await _run(sc, 10, power, **kw)
@@ -400,6 +605,10 @@ def test_the_stored_band_reaches_a_watt_and_an_ampere_load_at_registration():
         reg._initial_rated_power = MagicMock(return_value=3000.0)
         reg._device_goals = {"rod": {"comfort_entity": TANK, "comfort_target": 50,
                                       "comfort_offset": 5, "comfort_limit": 36}}
+        # …and neither were the user's Mode and "Requires" link
+        reg._service_registrations = {}
+        reg._control_mode_overrides = {"rod": "surplus"}
+        reg._dependency_overrides = {"rod": ["pump"]}
         device = MagicMock()
         device.device_id, device.name, device.priority = "rod", "Heating rod", 1
         device.power_sensor = None
@@ -409,3 +618,20 @@ def test_the_stored_band_reaches_a_watt_and_an_ampere_load_at_registration():
         live = reg._surplus_controller.register_device.call_args[0][0]
         assert isinstance(live, cls), (unit, type(live))
         assert (live.comfort_entity, live.comfort_target, live.comfort_limit) == (TANK, 50.0, 36.0)
+        assert live.control_mode is DeviceControlMode.SURPLUS, (
+            f"{cls.__name__}: rebuilt with {live.control_mode}, not the user's mode")
+        assert live.depends_on == ["pump"]
+
+
+def test_a_watt_heater_with_no_measured_rating_runs_a_heater_rung_at_its_entity_maximum():
+    """(#1344, found on a real instance) No power sensor → the 1 kW rating is
+    a placeholder. A 3 kW rod under its too-cold limit was sent 1 kW."""
+    hass = _Hass()
+    hass.set("number.heater", "0", unit_of_measurement="W", min=0, max=3000, step=1)
+    unmeasured = PowerSetpointDevice(hass, DID, "Heater", rated_power=0.0,
+                                     entity_id="number.heater")
+    assert unmeasured.rated_power_measured is False
+    assert unmeasured.heater_full_w() == 3000.0
+    measured = PowerSetpointDevice(hass, DID, "Heater", rated_power=2000.0,
+                                   entity_id="number.heater")
+    assert measured.heater_full_w() == 2000.0

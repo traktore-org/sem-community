@@ -121,6 +121,8 @@ LOAD_PLAN_WAIT = "plan_wait"
 LOAD_NO_SOURCE = "no_source"
 # (#1102) the heater ladder: each rung names itself
 LOAD_COMFORT_FLOOR = "comfort_floor"
+# (#1344) too cold while the house is away: back above the limit, no further
+LOAD_COMFORT_FLOOR_AWAY = "comfort_floor_away"
 LOAD_COMFORT_GOAL = "comfort_goal"
 LOAD_LEGIONELLA = "legionella"
 # (#1335) a stop or a no-start says its own cause, never a start's sentence

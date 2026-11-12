@@ -468,6 +468,18 @@ heated again for its minutes. Solar only is solar only, as for a car: without
 too-cold limit, *Run now past*, heats at once whatever the setting.
 The **Why?** card names the step that decided.
 
+**While you are away** (the *Vacation mode* switch, or your own away
+entity) the same rule holds for every heater with these fields: no *Keep
+at* run, nothing bought for it, no extra from the sun. Only the too-cold
+limit still heats, and only back to just above *Run now past*, so a house on
+holiday is kept from going cold but is not kept warm. A Legionella run waits
+until you are back. If you let the hot-water tank take surplus while away,
+it still takes free sun up to its minimum temperature. A load without these
+fields is not touched by away.
+
+A Legionella run that is due does not start while the house is at its peak
+limit; it starts when the peak has passed.
+
 ### Heat or cool by the outdoor forecast (#1323)
 
 A climate unit set to **By outdoor forecast** picks its season itself. Pick it

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ⚠️ **While away, every heater pauses Keep at; only the too-cold limit still heats** (#1344).
+- 🐛 **A heating rod on a watt setpoint keeps its mode after a restart and heats at full power when too cold** (#1344).
 - 🐛 **A heater driven by a watt or ampere setpoint now follows Keep at and Run now past** (#1344). The fields were saved but did nothing.
 - ⚠️ **Solar only is solar only: Keep at buys grid power only with "Finish overnight from: Grid"** (#1102). The too-cold limit still heats at once.
 # [2.3.0-beta.12] — 11.11.2026

@@ -397,7 +397,8 @@ class TestThePayloadIsTheSingleSource:
     def test_the_live_verdict_rides_beside_the_goals(self):
         dev = _ac(_hass_with({"sensor.room_temp": "27.0"}))
         p = self._registry_with(dev, {})._goal_payload(dev.device_id)
-        assert p["comfort"] == {"state": "forced", "reading_c": 27.0, "hvac": "cool"}
+        assert p["comfort"] == {"state": "forced", "reading_c": 27.0, "hvac": "cool",
+                                "away": False}
 
     def test_a_bandless_device_carries_no_comfort_block(self):
         """Phase 2 gave switches the band, so THEY now report disengaged
@@ -426,7 +427,8 @@ class TestThePayloadIsTheSingleSource:
         set and a dead sensor must not look identical to one without)."""
         dev = _ac(_hass_with({}))  # sensor missing
         p = self._registry_with(dev, {})._goal_payload(dev.device_id)
-        assert p["comfort"] == {"state": "disengaged", "reading_c": None, "hvac": "cool"}
+        assert p["comfort"] == {"state": "disengaged", "reading_c": None, "hvac": "cool",
+                                "away": False}
 
 
 class TestSetpointAnchoring:
@@ -581,7 +583,7 @@ class TestPhase2SwitchLoads:
         reg._surplus_controller = ctrl
         p = reg._goal_payload("floor1")
         assert p["comfort"] == {"state": "willing", "reading_c": 20.0,
-                                "hvac": "heat"}
+                                "hvac": "heat", "away": False}
 
     def test_a_switch_without_comfort_goals_is_untouched(self):
         from custom_components.solar_energy_management.devices.base import (
