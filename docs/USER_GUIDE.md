@@ -1531,10 +1531,12 @@ The **Mode** dropdown on a device's Control-tab row offers four options:
 |------|--------------|----------------|----------|
 | **Off** | Never | Never | Monitoring only (coffee machine, lights you don't want managed) |
 | **Peak Only** | Never | Yes, during grid peaks | Devices under your control that SEM may shed to protect the grid limit |
-| **Solar only** | Yes, on PV surplus | Yes, when surplus drops or during peaks | Discretionary loads on sun alone (pool pump, boiler) |
-| **Solar + battery** | Yes, on PV surplus + home-battery assist above the buffer | Same | Loads that should ride through cloud/evening on the battery (#620) |
+| **SEM runs it** (was *Solar only*) | Yes, on spare sun | Yes, when the sun drops or during peaks | Loads SEM should start and stop (pool pump, boiler) |
+| **SEM runs it, battery may help** (was *Solar + battery*) | Yes, on spare sun plus home-battery help above the buffer | Same | Loads that should ride through a cloud on the battery (#620) |
 
-**Default for all devices: Peak Only** — SEM never proactively turns a device on unless you pick one of the Solar modes.
+**Default for all devices: Peak Only** — SEM never turns a device on unless you pick one of the two *SEM runs it* modes.
+
+The mode says who runs the load, not where its power comes from. Whether SEM buys power for it is its own question: *May SEM buy power for it?* (see [A heater's four questions](#a-heaters-four-questions)). A car's charge modes keep their names.
 
 Internally the two Solar modes share the `surplus` control mode (`control_mode`: `off` / `peak_only` / `surplus`), differentiated by the battery-assist flag — relevant when writing the mode via the service below.
 

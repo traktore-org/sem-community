@@ -7493,8 +7493,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <div class="help-panel">
                         <div class="help-item"><b>${this._t("off")}</b> — ${this._t("help_mode_off")}</div>
                         <div class="help-item"><b>${this._t("peak_only")}</b> — ${this._t("help_mode_peak_only")}</div>
-                        <div class="help-item"><b>${this._t("mode_solar_only")}</b> — ${this._t("help_mode_surplus")}</div>
-                        <div class="help-item"><b>${this._t("mode_solar_battery")}</b> — ${this._t("battery_overnight_hint")}</div>
+                        <div class="help-item"><b>${this._t("load_mode_sem")}</b> — ${this._t("load_mode_help_sem")}</div>
+                        <div class="help-item"><b>${this._t("load_mode_sem_battery")}</b> — ${this._t("load_mode_help_sem_battery")}</div>
                         <div class="help-item"><b>${this._t("priority")}</b> — ${this._t("help_device_priority")}</div>
                         <div class="help-item"><b>${this._t("requires")}</b> — ${this._t("help_device_requires")}</div>
                         <div class="help-item"><b>${this._t("configure")}</b> — ${this._t("help_device_configure")}</div>
@@ -7552,13 +7552,13 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <div class="spacer"></div>
                     ${s?W`<span class="dim" title="${this._t("battery_role_help")}">${this._t("battery_role_label")}</span>`:G}
                     ${"ev_charger"===e.deviceType||"ev_charging"===e.deviceType||s?G:W`
-                    <label class="toggle-label" title="${this._t("mode_tooltip")}">
+                    <label class="toggle-label" title="${this._t("load_mode_tooltip")}">
                         <span class="dim">${this._t("mode")}</span>
                         <select class="mode-select" data-action="combined_mode" data-device="${e.id}">
                             <option value="off" ?selected="${"off"===this._mergedMode(e)}">${this._t("off")}</option>
                             <option value="peak_only" ?selected="${"peak_only"===this._mergedMode(e)}">${this._t("peak_only")}</option>
-                            <option value="solar_only" ?selected="${"solar_only"===this._mergedMode(e)}">${this._t("mode_solar_only")}</option>
-                            <option value="solar_battery" ?selected="${"solar_battery"===this._mergedMode(e)}">${this._t("mode_solar_battery")}</option>
+                            <option value="solar_only" ?selected="${"solar_only"===this._mergedMode(e)}">${this._t("load_mode_sem")}</option>
+                            <option value="solar_battery" ?selected="${"solar_battery"===this._mergedMode(e)}">${this._t("load_mode_sem_battery")}</option>
                         </select>
                     </label>`}
                     ${s?G:W`
@@ -7593,7 +7593,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${["unknown","L1","L2","L3","3ph"].map(e=>W`
                         <option value="${e}" ?selected="${t===e}">${i(e)}</option>`)}
                 </select>
-            </label>`}_mergedMode(e){const t=e.controlMode||"peak_only";return"surplus"!==t?t:(e.goals||{}).battery_assist_enabled?"solar_battery":"solar_only"}_mergedModeLabel(e){const t=this._mergedMode(e),i={off:"off",peak_only:"peak_only",solar_only:"mode_solar_only",solar_battery:"mode_solar_battery"}[t]||t;return this._t(i)}_applyMergedMode(e,t){const i="off"===t||"peak_only"===t?t:"surplus";if(e.controlMode=i,this._sendDeviceUpdate(e.id,"control_mode",i),"surplus"===i){const i="solar_battery"===t;e.goals=e.goals||{},e.goals.battery_assist_enabled=i,this._sendDeviceUpdate(e.id,"battery_assist_enabled",String(i)),"always"===e.goals.top_up_policy&&(e.goals.top_up_policy="solar_only",this._sendDeviceUpdate(e.id,"top_up_policy","solar_only"))}this.requestUpdate()}_hasTarget(e){return parseFloat((e.goals||{}).daily_min_runtime_min)>0}_goalPct(e){const t=e.goals,i=e.progress;if(!t||!i)return null;const s=parseFloat(t.daily_min_runtime_min);return s>0?Math.min(100,i.runtime_today_min/s*100):null}_renderGoalSlider(e){const t=e.goals||{},i=this._goalDrag;let s=(parseFloat(t.daily_min_runtime_min)||0)/60,r=parseFloat(t.daily_max_runtime_min)||0,a=r>0?r/60:12;i&&i.id===e.id&&("min"===i.handle?s=i.value:a=i.value),a<s&&(a=s);const o=Math.min(100,s/12*100),n=Math.min(100,a/12*100),l=a>=11.999999,c=e=>e%1==0?String(e):e.toFixed(1),d=a-s<.499999;return W`
+            </label>`}_mergedMode(e){const t=e.controlMode||"peak_only";return"surplus"!==t?t:(e.goals||{}).battery_assist_enabled?"solar_battery":"solar_only"}_mergedModeLabel(e){const t=this._mergedMode(e),i={off:"off",peak_only:"peak_only",solar_only:"load_mode_sem",solar_battery:"load_mode_sem_battery"}[t]||t;return this._t(i)}_applyMergedMode(e,t){const i="off"===t||"peak_only"===t?t:"surplus";if(e.controlMode=i,this._sendDeviceUpdate(e.id,"control_mode",i),"surplus"===i){const i="solar_battery"===t;e.goals=e.goals||{},e.goals.battery_assist_enabled=i,this._sendDeviceUpdate(e.id,"battery_assist_enabled",String(i)),"always"===e.goals.top_up_policy&&(e.goals.top_up_policy="solar_only",this._sendDeviceUpdate(e.id,"top_up_policy","solar_only"))}this.requestUpdate()}_hasTarget(e){return parseFloat((e.goals||{}).daily_min_runtime_min)>0}_goalPct(e){const t=e.goals,i=e.progress;if(!t||!i)return null;const s=parseFloat(t.daily_min_runtime_min);return s>0?Math.min(100,i.runtime_today_min/s*100):null}_renderGoalSlider(e){const t=e.goals||{},i=this._goalDrag;let s=(parseFloat(t.daily_min_runtime_min)||0)/60,r=parseFloat(t.daily_max_runtime_min)||0,a=r>0?r/60:12;i&&i.id===e.id&&("min"===i.handle?s=i.value:a=i.value),a<s&&(a=s);const o=Math.min(100,s/12*100),n=Math.min(100,a/12*100),l=a>=11.999999,c=e=>e%1==0?String(e):e.toFixed(1),d=a-s<.499999;return W`
             <div class="range-wrap">
                 ${this._serviceError?W`<div class="svc-error" role="alert">${this._serviceError}</div>`:G}
                 <div class="range-labels">

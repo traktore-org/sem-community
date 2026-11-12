@@ -165,3 +165,15 @@ test('the classic card asks the shared model, and the old chip words are gone fo
     assert.ok(classic.includes("this._questions(device).view === 'band'"));
     assert.ok(planCard.includes('coldHeaters('));
 });
+
+test('a load\'s mode says who runs it — no "Solar only" beside the buy question', () => {
+    for (const old of ["'mode_solar_only'", "'mode_solar_battery'", "'mode_tooltip'", "'help_mode_surplus'", "'battery_overnight_hint'"]) {
+        assert.ok(!classic.includes(old), old + ' is still on the load card');
+    }
+    for (const k of ['load_mode_sem', 'load_mode_sem_battery', 'load_mode_help_sem', 'load_mode_help_sem_battery', 'load_mode_tooltip']) {
+        assert.ok(classic.includes("'" + k + "'"), k);
+        for (const [lang, table] of Object.entries(words)) assert.ok(table[k], lang + ' lacks ' + k);
+    }
+    // a car's charge modes keep their names
+    assert.equal(words.en.charge_mode_solar_only !== undefined, true);
+});
