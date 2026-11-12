@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.13] — 12.11.2026
+
 - ⚠️ **While away, every heater pauses Keep at; only the too-cold limit still heats** (#1344).
 - 🐛 **A heating rod on a watt setpoint keeps its mode after a restart and heats at full power when too cold** (#1344).
 - 🐛 **A heater driven by a watt or ampere setpoint now follows Keep at and Run now past** (#1344). The fields were saved but did nothing.
