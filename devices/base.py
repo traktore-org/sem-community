@@ -4499,6 +4499,31 @@ class CurrentControlDevice(ControllableDevice):
         return d
 
 
+class BandedCurrentLoad(ComfortBandMixin, CurrentControlDevice):
+    """(#1344) A LOAD (not a car) that SEM drives by amperes, with the
+    comfort band. The load card shows Keep at / Extra from surplus / Run
+    now past for every load, and the registry stores them; an ampere-driven
+    load had no band to read them, so they did nothing. Its own class, so a
+    charger never gains a band: only the registry's load path builds it.
+    A heater rung (too cold, Keep at in its planned hour) asks for its full
+    power: the maximum current on every phase."""
+
+    def heater_full_w(self) -> float:
+        """The watts of its maximum current — what a band run is sent."""
+        return float(self.max_current) * float(self.phases) * float(self.voltage)
+
+    @property
+    def target_stale(self) -> bool:
+        """A band run wants the full current, but the load still holds the
+        smaller one it had while it followed the sun. Layer 3 then writes
+        the run's power once."""
+        if not self.is_active:
+            return False
+        if self.comfort_state not in ("forced", "willing"):
+            return False
+        return float(self._status.allocated_power_w or 0.0) < self.heater_full_w() - 1.0
+
+
 class SetpointDevice(ControllableDevice):
     """Numerical setpoint device (heat pump temperature, battery charge).
 

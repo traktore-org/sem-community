@@ -352,6 +352,7 @@ def _sync_rig(control, unit="W"):
     )
     reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
     reg._built_from_store = {}          # (#1067)
+    reg._device_goals = {}      # (#1344) goals are applied on this path too
     reg.hass = MagicMock()
     st = MagicMock()
     st.state = "0"
