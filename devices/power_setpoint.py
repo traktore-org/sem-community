@@ -196,6 +196,25 @@ class PowerSetpointDevice(ComfortBandMixin, ControllableDevice):
         except (TypeError, ValueError):
             return None
 
+    def heater_full_w(self) -> Optional[float]:
+        """(#1344) The full power a heater rung (too cold, Keep at in its
+        planned hour) sends this load.
+
+        A measured rating is what it draws, so that is its full power. With
+        no rating measured — a rod without a power sensor, the usual case —
+        the 1 kW in ``rated_power`` is a placeholder, and a 3 kW rod under
+        its too-cold limit was sent 1 kW. Its entity's own maximum is the
+        honest full power then."""
+        if not self.entity_id:
+            return None
+        scale = self.scale_to_watts()
+        if scale is None:
+            return None
+        if self.rated_power_measured:
+            return self.expected_draw_w(float(self.rated_power or 0.0))
+        _low, high, _step = self._bounds(scale)
+        return float(high) * scale if high > 0 else None
+
     async def _write(self, watts: float) -> float:
         """Write the setpoint and record it. Returns the WATTS it represents."""
         if not self.entity_id:
@@ -328,7 +347,7 @@ class PowerSetpointDevice(ComfortBandMixin, ControllableDevice):
             return False
         if getattr(self, "comfort_state", "disengaged") not in ("forced", "willing"):
             return False
-        full = self.expected_draw_w(float(self.rated_power or 0.0))
+        full = self.heater_full_w()
         if full is None:
             return False
         return float(self._status.current_consumption_w or 0.0) < full - 1.0

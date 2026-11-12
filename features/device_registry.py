@@ -1408,6 +1408,7 @@ class UnifiedDeviceRegistry:
             )
             # (#1344) its stored goals — the comfort band among them — were
             # never put on the live object on this path
+            self._apply_saved_load_choices(_watt_load)
             self._apply_goals(_watt_load)
             self._surplus_controller.register_device(_watt_load)
             return
@@ -1439,8 +1440,30 @@ class UnifiedDeviceRegistry:
         # be "stopped" with a 0 A profile the charge point keeps.
         from ..hardware_detection import wire_current_entity
         wire_current_entity(self.hass, surplus_device, device.device_id, entity)
+        self._apply_saved_load_choices(surplus_device)
         self._apply_goals(surplus_device)     # (#1344) as on every other path
         self._surplus_controller.register_device(surplus_device)
+
+    def _apply_saved_load_choices(self, live) -> None:
+        """(#1344) The user's Mode and "Requires" link, put back on a load
+        this path rebuilds — as the switch path has done since #49 / #122.
+
+        A load driven by a watt or ampere setpoint was rebuilt with the
+        class default on every restart, re-discovery and reorder: a heating
+        rod the user had set to Solar came back as peak-only, so SEM
+        stopped driving it — a tank under its too-cold limit included."""
+        from ..devices.base import DeviceControlMode
+        try:
+            live.control_mode = DeviceControlMode(
+                self.control_mode_for(live.device_id))
+        except ValueError:
+            live.control_mode = DeviceControlMode(DEFAULT_DISCOVERED_CONTROL_MODE)
+        except AttributeError:
+            # a registry with no stores yet (built bare) has no saved choice
+            return
+        deps = getattr(self, "_dependency_overrides", {}).get(live.device_id)
+        if deps:
+            live.depends_on = list(deps)
 
     def control_mode_for(self, device_id: str) -> str:
         """What a device may do: the user's choice, else the discovery default.
@@ -2642,6 +2665,11 @@ class UnifiedDeviceRegistry:
         """
         if live is None or not hasattr(live, "comfort_state"):
             return {}
+
+        def _is_away(dev) -> bool:
+            rule = getattr(dev, "away_pauses", None)
+            return callable(rule) and rule() is True
+
         try:
             out = {
                 "state": str(live.comfort_state),
@@ -2650,6 +2678,10 @@ class UnifiedDeviceRegistry:
                 # from the band's own direction hook, not hvac_mode (a
                 # switch heater has no hvac_mode).
                 "hvac": live._comfort_direction(),
+                # (#1344) the house is away and this heater is paused: the
+                # state above reads disengaged then, so the card needs the
+                # cause to say "away" and not "no band"
+                "away": _is_away(live),
             }
         except Exception:  # noqa: BLE001 — a payload must never break the sensor
             return {}

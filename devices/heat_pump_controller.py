@@ -274,14 +274,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         """
         return f"sg{int(self._hp_status.sg_ready_state)}"
 
-    @property
-    def comfort_state(self) -> str:
-        """(#1081 Slice B, mirrors HotWaterController #594/#1062) vacation
-        suspends comfort pre-heat the same way it already suspends SG-Ready
-        off-peak forcing — no banked block while away."""
-        if self.vacation:
-            return "disengaged"
-        return super().comfort_state
+    # (#594/#1344) it heats for comfort by nature: away pauses it, band or
+    # not. The band itself goes quiet while away in the shared mixin.
+    away_needs_band = False
 
     def _comfort_fallback_reading(self) -> Optional[float]:
         """No ``comfort_entity`` configured → the pump's own temperature
@@ -322,7 +317,8 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         (``vacation_blocked`` path). The coordinator already deactivated a
         running boost on the vacation transition.
         """
-        if self.vacation:
+        if self.vacation and not self.comfort_away_heats(self.is_active):
+            # (#1344) the too-cold limit is the one run away leaves
             self._last_activation_path = "vacation_blocked"
             return 0.0
         if available_watts >= self.force_on_threshold:

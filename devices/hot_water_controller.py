@@ -412,9 +412,11 @@ class HotWaterController(SwitchDevice):
                 return True
             self._last_temperature_safety_path = "in_legionella_cycle_at_target"
             return False
-        if self.vacation and self.vacation_dhw_surplus:
+        if (self.vacation and self.vacation_dhw_surplus
+                and not self.comfort_away_heats(self.is_active)):
             # #594 — surplus dump caps at the MINIMUM temperature target,
-            # not the solar comfort target.
+            # not the solar comfort target. (#1344) A too-cold run is not
+            # the dump: the user's limit heats back above itself.
             if temp < self.min_temperature:
                 self._last_temperature_safety_path = "vacation_below_min_target"
                 return True
@@ -470,14 +472,10 @@ class HotWaterController(SwitchDevice):
         temp = self.get_current_temperature()
         return temp is not None and temp >= self._active_target_temp()
 
-    @property
-    def comfort_state(self) -> str:
-        """(#594 / #1062) Vacation suspends comfort heating, so the band is off
-        while away: no force, no planned banking block, no banked stop. The
-        vacation surplus dump keeps its own cap (``_active_target_temp``)."""
-        if self.vacation:
-            return "disengaged"
-        return super().comfort_state
+    # (#594/#1344) it heats for comfort by nature: away pauses it, band or
+    # not. The band itself goes quiet while away in the shared mixin; the
+    # vacation surplus dump keeps its own cap (``_active_target_temp``).
+    away_needs_band = False
 
     def _comfort_fallback_reading(self):
         """(#1062) The band's thermometer when none is picked: the boiler's own
@@ -526,7 +524,9 @@ class HotWaterController(SwitchDevice):
         surplus, capped at ``min_temperature`` (see ``_active_target_temp``
         and the vacation branch in ``is_temperature_safe``).
         """
-        if self.vacation and not self.vacation_dhw_surplus:
+        if (self.vacation and not self.vacation_dhw_surplus
+                and not self.comfort_away_heats(self.is_active)):
+            # (#1344) the too-cold limit is the one run away leaves
             self._last_activation_path = "vacation_blocked"
             return 0.0
         if not self.is_temperature_safe():
