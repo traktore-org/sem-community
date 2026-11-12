@@ -283,13 +283,32 @@ export function heaterSays(row, live = {}, running = false) {
         return null;
     }
     if (row.mergedMode === 'off') return null;
-    if (reading === null) return p('next_st_no_reading', {}, 'warn');
-    if (reading >= keep) return p('next_st_warm', { reading: T(reading) });
+    // idle: these say what comes NEXT, so the open row adds no "it turns off"
+    const idle = (key, params = {}, cls = '', why = '') => ({ ...p(key, params, cls, why), next: true });
+    if (reading === null) return idle('next_st_no_reading', {}, 'warn');
+    if (reading >= keep) return idle('next_st_warm', { reading: T(reading) });
     const line = start === null ? keep : start;
-    if (reading > line) return p('next_st_warm_again', { start: T(line) });
-    if (live.plannedAt) return p('next_st_heats_at', { keep: T(keep), time: live.plannedAt });
+    if (reading > line) return idle('next_st_warm_again', { start: T(line) });
+    if (live.plannedAt) return idle('next_st_heats_at', { keep: T(keep), time: live.plannedAt });
+    // (#1102) Solar only buys nothing: no hour will ever be planned. Say
+    // what it waits for, and (in the open row) how to allow the grid.
+    if (c.may_buy === false) return { ...idle('next_st_waits_sun', { keep: T(keep) }), noBuy: true };
     const why = becauseKey(row.intent);
-    return p('next_st_below_none', { keep: T(keep) }, 'warn', why === 'next_because_no_sun' ? '' : why);
+    return idle('next_st_below_none', { keep: T(keep) }, 'warn', why === 'next_because_no_sun' ? '' : why);
+}
+
+/**
+ * (#1102) The mode sentence of a sun load, true to its grid setting: plain
+ * "never imports" only when nothing is bought; with "finish overnight from"
+ * on Grid or Battery it says what the load really does.
+ */
+export function modeHelpKey(merged, goals) {
+    if (merged === 'off') return 'help_mode_off';
+    if (merged === 'peak_only') return 'help_mode_peak_only';
+    if (merged === 'solar_battery') return 'battery_overnight_hint';
+    if (merged !== 'solar_only') return '';
+    const src = overnightSource(goals);
+    return src === 'grid' ? 'help_mode_surplus_grid' : src === 'battery' ? 'help_mode_surplus_battery' : 'help_mode_surplus';
 }
 
 /**

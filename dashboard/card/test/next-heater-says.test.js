@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deviceRows, statePill, heaterSays, becauseKey, nextBlock } from '../src/util/next-devices.js';
+import { deviceRows, statePill, heaterSays, becauseKey, nextBlock, modeHelpKey } from '../src/util/next-devices.js';
 import { planLead, coldHeaters } from '../src/util/next-lead.js';
 import { planRows } from '../src/util/next-plan-chart.js';
 
@@ -38,15 +38,15 @@ test('a running heater says what it heats to', () => {
 test('an idle heater says what comes next', () => {
     // discussion 1059: 45.8 under Keep at 52, a Keep at block ahead
     assert.deepEqual(pill(tank(45.8), { plannedAt: '23:00' }),
-        { key: 'next_st_heats_at', params: { keep: '52 °C', time: '23:00' }, cls: '', why: '' });
+        { key: 'next_st_heats_at', params: { keep: '52 °C', time: '23:00' }, cls: '', why: '', next: true });
     // …and none: it says so, never plain "off"
     assert.deepEqual(pill(tank(45.8, {}, { on: false, source: null, code: 'no_source' })),
-        { key: 'next_st_below_none', params: { keep: '52 °C' }, cls: 'warn', why: '' });
+        { key: 'next_st_below_none', params: { keep: '52 °C' }, cls: 'warn', why: '', next: true });
     assert.equal(pill(tank(45.8, {}, { on: false, source: null, code: 'peak_shed' })).why, 'next_because_peak');
     assert.equal(pill(tank(45.8, {}, { on: false, source: null, code: 'vacation' })).why, 'next_because_away');
     // inside the start gap: warm, and the line it heats again under
-    assert.deepEqual(pill(tank(51.4)), { key: 'next_st_warm_again', params: { start: '51 °C' }, cls: '', why: '' });
-    assert.deepEqual(pill(tank(52)), { key: 'next_st_warm', params: { reading: '52 °C' }, cls: '', why: '' });
+    assert.deepEqual(pill(tank(51.4)), { key: 'next_st_warm_again', params: { start: '51 °C' }, cls: '', why: '', next: true });
+    assert.deepEqual(pill(tank(52)), { key: 'next_st_warm', params: { reading: '52 °C' }, cls: '', why: '', next: true });
     assert.equal(pill(tank(54.2)).params.reading, '54.2 °C');
     assert.equal(pill(tank(null, { state: 'disengaged' })).key, 'next_st_no_reading');
 });
@@ -117,4 +117,38 @@ test('a Keep at run is a row named after its device, not its plan id', () => {
     assert.equal(rows[0].label, 'Boiler');
     assert.equal(rows[0].keepOf, 'boiler');
     assert.equal(rows[0].kind, 'load');
+});
+
+test('solar only buys nothing: a cold tank waits for sun, and says how to allow the grid', () => {
+    // discussion 1059 again: Solar only, 45.8 under Keep at 52 — no hour will ever be planned
+    const row = tank(45.8, { may_buy: false }, { on: false, source: null, code: 'no_source' });
+    assert.deepEqual(pill(row), { key: 'next_st_waits_sun', params: { keep: '52 °C' }, cls: '', why: '', next: true, noBuy: true });
+    // with the grid allowed it is the plan that is missing
+    assert.equal(pill(tank(45.8, { may_buy: true }, { on: false, code: 'no_source' })).key, 'next_st_below_none');
+    assert.equal(pill(tank(45.8, { may_buy: true }), { plannedAt: '23:00' }).key, 'next_st_heats_at');
+    // a block ahead (its run time from the battery) still says when
+    assert.equal(pill(row, { plannedAt: '02:00' }).key, 'next_st_heats_at');
+    // warm and running states do not change
+    assert.equal(pill(tank(52.3, { may_buy: false })).key, 'next_st_warm');
+    assert.equal(pill(tank(34, { may_buy: false, state: 'forced' }, { on: true, code: 'comfort_floor' }, { is_on: true })).key, 'next_st_too_cold');
+});
+
+test('a running heater keeps the engine sentence; an idle one says only what comes next', () => {
+    assert.equal(pill(tank(45, {}, { on: true, source: 'cheap_grid', code: 'comfort_goal' }, { is_on: true })).next, undefined);
+    assert.equal(pill(tank(45.8), { plannedAt: '03:00' }).next, true);
+});
+
+test('a heater that buys nothing is not a gap in the plan', () => {
+    const dev = (may) => ({ boiler: { name: 'Boiler', control_mode: 'surplus', is_on: false, comfort: { ...BAND, reading_c: 45.8, may_buy: may } } });
+    assert.deepEqual(coldHeaters(dev(false), [], NOW), []);
+    assert.equal(coldHeaters(dev(true), [], NOW).length, 1);
+});
+
+test('the mode sentence is true to the grid setting', () => {
+    assert.equal(modeHelpKey('solar_only', {}), 'help_mode_surplus');
+    assert.equal(modeHelpKey('solar_only', { top_up_policy: 'cheap_hours' }), 'help_mode_surplus_grid');
+    assert.equal(modeHelpKey('solar_only', { battery_eligible_overnight: true }), 'help_mode_surplus_battery');
+    assert.equal(modeHelpKey('solar_battery', { top_up_policy: 'cheap_hours' }), 'battery_overnight_hint');
+    assert.equal(modeHelpKey('off', {}), 'help_mode_off');
+    assert.equal(modeHelpKey('peak_only', {}), 'help_mode_peak_only');
 });

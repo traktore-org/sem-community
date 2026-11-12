@@ -811,7 +811,8 @@ today**: the decision log with a device filter and an *Earlier* fold.
 A heater's *Keep at* run has its own row, named after the device with
 *to 52 °C*. A heater that is below its start line with no hour planned is
 listed with *is below 52 °C; no cheap hour before 07:00*, and the top line
-says the same in place of "Nothing planned from the grid".
+says the same in place of "Nothing planned from the grid". A heater that buys no
+power is not in the plan: it waits for sun.
 
 #### sem-next-devices-card
 
@@ -839,6 +840,7 @@ pill and as the first line of its open card:
 | heating on sun · up to 56 °C | spare sun heats past *Keep at*, by what the sun may add |
 | heats to 52 °C at 23:00 | it is below the start line; that hour is planned |
 | below 52 °C · no hour planned yet | nothing is planned; the cause follows when SEM names one |
+| below 52 °C · waits for sun | the load buys no power (*finish overnight from* is not Grid), so only the sun heats it |
 | warm · heats again below 51 °C | just under *Keep at*: no run starts for so little |
 | warm · 52.4 °C | at or above *Keep at* |
 | Legionella run | its own heat-up runs to the Legionella temperature |

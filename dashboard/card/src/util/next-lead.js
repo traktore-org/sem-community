@@ -115,6 +115,8 @@ export function coldHeaters(devices, blocks, nowMs) {
         if (![keep, start, reading].every(Number.isFinite) || reading > start) continue;
         if (info.is_on || (info.intent && info.intent.on)) continue;
         if (info.control_mode === 'off' || info.user_hands_off === true) continue;
+        // (#1102) solar only buys nothing: it is not in the plan, it waits for sun
+        if (c.may_buy === false) continue;
         const has = list.some((b) => b && (String(b.id) === 'comfort:' + id || String(b.id) === 'load:' + id) && Date.parse(b.end) > nowMs);
         if (!has) out.push({ id, name: info.name || id, keepC: keep });
     }

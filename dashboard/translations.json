@@ -2796,10 +2796,15 @@
     "next_because_held_back": "ztlumeno, energie je málo",
     "next_because_no_season": "zatím žádná venkovní teplota",
     "next_keep_sentence": "Udržovat na {target} · slunce smí přidat {offset} · topit hned pod {limit}",
-    "next_keep_sub": "SEM topí na „Udržovat na“ v nejlevnější plánované hodině. Solární přebytek smí jít výš. Pod limitem topí hned.",
+    "next_keep_sub": "Solární přebytek topí na „Udržovat na“ a smí jít výš. V plánované levné hodině SEM dokoupí zbytek. Pod limitem topí hned.",
     "next_plan_to_keep": "na {keep}",
     "next_plan_below_no_hour": "{name} je pod {keep}; žádná levná hodina před {time}",
-    "next_plan_below_no_hour_plain": "{name} je pod {keep}; žádná levná hodina v plánu"
+    "next_plan_below_no_hour_plain": "{name} je pod {keep}; žádná levná hodina v plánu",
+    "next_st_waits_sun": "pod {keep} · čeká na slunce",
+    "next_no_buy_hint": "SEM pro tento spotřebič nekupuje energii. Nastavte „{setting}“ na {grid}, aby topil v levné hodině.",
+    "next_keep_sub_no_buy": "Solární přebytek topí na „Udržovat na“ a smí jít výš. SEM pro něj nic nekupuje. Pod limitem topí hned.",
+    "help_mode_surplus_grid": "SEM ho spouští ze solárního přebytku a dokončí ze sítě v levných hodinách.",
+    "help_mode_surplus_battery": "SEM ho spouští ze solárního přebytku a dokončí z baterie přes noc."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5598,10 +5603,15 @@
     "next_because_held_back": "skruet ned, strømmen er knap",
     "next_because_no_season": "ingen udetemperatur endnu",
     "next_keep_sentence": "Hold på {target} · solen må lægge {offset} til · varm straks under {limit}",
-    "next_keep_sub": "SEM varmer til »Hold på« i den billigste planlagte time. Soloverskud må gå højere. Under grænsen varmer den straks.",
+    "next_keep_sub": "Soloverskud varmer til »Hold på« og må gå højere. I en planlagt billig time køber SEM resten. Under grænsen varmer den straks.",
     "next_plan_to_keep": "til {keep}",
     "next_plan_below_no_hour": "{name} er under {keep}; ingen billig time før {time}",
-    "next_plan_below_no_hour_plain": "{name} er under {keep}; ingen billig time planlagt"
+    "next_plan_below_no_hour_plain": "{name} er under {keep}; ingen billig time planlagt",
+    "next_st_waits_sun": "under {keep} · venter på sol",
+    "next_no_buy_hint": "SEM køber ingen strøm til denne enhed. Sæt »{setting}« til {grid} for at varme den i en billig time.",
+    "next_keep_sub_no_buy": "Soloverskud varmer til »Hold på« og må gå højere. SEM køber intet til den. Under grænsen varmer den straks.",
+    "help_mode_surplus_grid": "SEM kører den på soloverskud og gør færdig fra nettet i billige timer.",
+    "help_mode_surplus_battery": "SEM kører den på soloverskud og gør færdig fra batteriet om natten."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8400,10 +8410,15 @@
     "next_because_held_back": "gedrosselt, Strom ist knapp",
     "next_because_no_season": "noch kein Außenwert",
     "next_keep_sentence": "Halten auf {target} · Sonne darf {offset} mehr · sofort heizen unter {limit}",
-    "next_keep_sub": "SEM heizt in der günstigsten geplanten Stunde auf „Halten auf“. Sonnenüberschuss darf höher gehen. Unter der Grenze heizt es sofort.",
+    "next_keep_sub": "Sonnenüberschuss heizt auf „Halten auf“ und darf höher gehen. In einer geplanten günstigen Stunde kauft SEM den Rest. Unter der Grenze heizt es sofort.",
     "next_plan_to_keep": "auf {keep}",
     "next_plan_below_no_hour": "{name} ist unter {keep}; keine günstige Stunde vor {time}",
-    "next_plan_below_no_hour_plain": "{name} ist unter {keep}; keine günstige Stunde geplant"
+    "next_plan_below_no_hour_plain": "{name} ist unter {keep}; keine günstige Stunde geplant",
+    "next_st_waits_sun": "unter {keep} · wartet auf Sonne",
+    "next_no_buy_hint": "SEM kauft für dieses Gerät keinen Strom. Stellen Sie „{setting}“ auf {grid}, um es in einer günstigen Stunde zu heizen.",
+    "next_keep_sub_no_buy": "Sonnenüberschuss heizt auf „Halten auf“ und darf höher gehen. SEM kauft dafür nichts. Unter der Grenze heizt es sofort.",
+    "help_mode_surplus_grid": "SEM schaltet es bei Solarüberschuss ein und beendet in günstigen Stunden aus dem Netz.",
+    "help_mode_surplus_battery": "SEM schaltet es bei Solarüberschuss ein und beendet nachts aus der Batterie."
   },
   "en": {
     "% of limit": "% of limit",
@@ -11202,10 +11217,15 @@
     "next_because_held_back": "turned down, power is short",
     "next_because_no_season": "no outdoor reading yet",
     "next_keep_sentence": "Keep at {target} · sun may add {offset} · heat at once below {limit}",
-    "next_keep_sub": "SEM heats to Keep at in the cheapest planned hour. Spare sun may go higher. Below the limit it heats at once.",
+    "next_keep_sub": "Spare sun heats to Keep at and may go higher. In a planned cheap hour SEM buys the rest. Below the limit it heats at once.",
     "next_plan_to_keep": "to {keep}",
     "next_plan_below_no_hour": "{name} is below {keep}; no cheap hour before {time}",
-    "next_plan_below_no_hour_plain": "{name} is below {keep}; no cheap hour planned"
+    "next_plan_below_no_hour_plain": "{name} is below {keep}; no cheap hour planned",
+    "next_st_waits_sun": "below {keep} · waits for sun",
+    "next_no_buy_hint": "SEM buys no power for this load. Set “{setting}” to {grid} to heat it in a cheap hour.",
+    "next_keep_sub_no_buy": "Spare sun heats to Keep at and may go higher. SEM buys nothing for it. Below the limit it heats at once.",
+    "help_mode_surplus_grid": "SEM runs it on solar surplus, and finishes from the grid in cheap hours.",
+    "help_mode_surplus_battery": "SEM runs it on solar surplus, and finishes from the battery overnight."
   },
   "es": {
     "% of limit": "% del límite",
@@ -14004,10 +14024,15 @@
     "next_because_held_back": "reducido, falta energía",
     "next_because_no_season": "sin temperatura exterior",
     "next_keep_sentence": "Mantener a {target} · el sol puede añadir {offset} · calentar enseguida bajo {limit}",
-    "next_keep_sub": "SEM calienta hasta «Mantener a» en la hora planificada más barata. El excedente solar puede subir más. Bajo el límite calienta enseguida.",
+    "next_keep_sub": "El excedente solar calienta hasta «Mantener a» y puede subir más. En una hora barata planificada SEM compra el resto. Bajo el límite calienta enseguida.",
     "next_plan_to_keep": "a {keep}",
     "next_plan_below_no_hour": "{name} está bajo {keep}; ninguna hora barata antes de las {time}",
-    "next_plan_below_no_hour_plain": "{name} está bajo {keep}; ninguna hora barata planificada"
+    "next_plan_below_no_hour_plain": "{name} está bajo {keep}; ninguna hora barata planificada",
+    "next_st_waits_sun": "bajo {keep} · espera al sol",
+    "next_no_buy_hint": "SEM no compra energía para esta carga. Pon «{setting}» en {grid} para calentarla en una hora barata.",
+    "next_keep_sub_no_buy": "El excedente solar calienta hasta «Mantener a» y puede subir más. SEM no compra nada para ello. Bajo el límite calienta enseguida.",
+    "help_mode_surplus_grid": "SEM lo hace funcionar con excedente solar y termina desde la red en horas baratas.",
+    "help_mode_surplus_battery": "SEM lo hace funcionar con excedente solar y termina desde la batería por la noche."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -16806,10 +16831,15 @@
     "next_because_held_back": "hillitty, sähkö on vähissä",
     "next_because_no_season": "ei vielä ulkolämpötilaa",
     "next_keep_sentence": "Pidä lämpötilassa {target} · aurinko saa lisätä {offset} · lämmitä heti alle {limit}",
-    "next_keep_sub": "SEM lämmittää Pidä lämpötilassa -arvoon halvimmalla suunnitellulla tunnilla. Aurinkoylijäämä saa nostaa korkeammalle. Rajan alla se lämmittää heti.",
+    "next_keep_sub": "Aurinkoylijäämä lämmittää Pidä lämpötilassa -arvoon ja saa nostaa korkeammalle. Suunnitellulla halvalla tunnilla SEM ostaa loput. Rajan alla se lämmittää heti.",
     "next_plan_to_keep": "{keep} asti",
     "next_plan_below_no_hour": "{name} on alle {keep}; ei halpaa tuntia ennen klo {time}",
-    "next_plan_below_no_hour_plain": "{name} on alle {keep}; halpaa tuntia ei ole suunniteltu"
+    "next_plan_below_no_hour_plain": "{name} on alle {keep}; halpaa tuntia ei ole suunniteltu",
+    "next_st_waits_sun": "alle {keep} · odottaa aurinkoa",
+    "next_no_buy_hint": "SEM ei osta sähköä tälle laitteelle. Aseta ”{setting}” arvoon {grid}, niin se lämmitetään halvalla tunnilla.",
+    "next_keep_sub_no_buy": "Aurinkoylijäämä lämmittää Pidä lämpötilassa -arvoon ja saa nostaa korkeammalle. SEM ei osta sille mitään. Rajan alla se lämmittää heti.",
+    "help_mode_surplus_grid": "SEM käyttää sitä aurinkoylijäämällä ja viimeistelee verkosta halvoilla tunneilla.",
+    "help_mode_surplus_battery": "SEM käyttää sitä aurinkoylijäämällä ja viimeistelee akusta yöllä."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -19608,10 +19638,15 @@
     "next_because_held_back": "réduit, l'énergie manque",
     "next_because_no_season": "pas encore de température extérieure",
     "next_keep_sentence": "Maintenir à {target} · le soleil peut ajouter {offset} · chauffer tout de suite sous {limit}",
-    "next_keep_sub": "SEM chauffe jusqu'à « Maintenir à » pendant l'heure prévue la moins chère. Le surplus solaire peut aller plus haut. Sous la limite, il chauffe tout de suite.",
+    "next_keep_sub": "Le surplus solaire chauffe jusqu'à « Maintenir à » et peut aller plus haut. Pendant une heure creuse prévue, SEM achète le reste. Sous la limite, il chauffe tout de suite.",
     "next_plan_to_keep": "à {keep}",
     "next_plan_below_no_hour": "{name} est sous {keep} ; aucune heure creuse avant {time}",
-    "next_plan_below_no_hour_plain": "{name} est sous {keep} ; aucune heure creuse prévue"
+    "next_plan_below_no_hour_plain": "{name} est sous {keep} ; aucune heure creuse prévue",
+    "next_st_waits_sun": "sous {keep} · attend le soleil",
+    "next_no_buy_hint": "SEM n'achète pas d'énergie pour cet appareil. Réglez « {setting} » sur {grid} pour le chauffer pendant une heure creuse.",
+    "next_keep_sub_no_buy": "Le surplus solaire chauffe jusqu'à « Maintenir à » et peut aller plus haut. SEM n'achète rien pour cela. Sous la limite, il chauffe tout de suite.",
+    "help_mode_surplus_grid": "SEM le pilote sur surplus solaire et termine depuis le réseau pendant les heures creuses.",
+    "help_mode_surplus_battery": "SEM le pilote sur surplus solaire et termine depuis la batterie pendant la nuit."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -22410,10 +22445,15 @@
     "next_because_held_back": "visszavéve, kevés az áram",
     "next_because_no_season": "még nincs külső hőmérséklet",
     "next_keep_sentence": "Tartás {target} · a nap {offset} értéket adhat hozzá · azonnal fűt {limit} alatt",
-    "next_keep_sub": "A SEM a legolcsóbb tervezett órában fűt a Tartás értékig. A napelemes többlet magasabbra mehet. A határ alatt azonnal fűt.",
+    "next_keep_sub": "A napelemes többlet a Tartás értékig fűt, és magasabbra is mehet. Tervezett olcsó órában a SEM megveszi a többit. A határ alatt azonnal fűt.",
     "next_plan_to_keep": "{keep} értékig",
     "next_plan_below_no_hour": "{name} {keep} alatt van; nincs olcsó óra {time} előtt",
-    "next_plan_below_no_hour_plain": "{name} {keep} alatt van; nincs tervezett olcsó óra"
+    "next_plan_below_no_hour_plain": "{name} {keep} alatt van; nincs tervezett olcsó óra",
+    "next_st_waits_sun": "{keep} alatt · napra vár",
+    "next_no_buy_hint": "A SEM ehhez a fogyasztóhoz nem vesz áramot. Állítsa a „{setting}” beállítást erre: {grid}, hogy olcsó órában fűtsön.",
+    "next_keep_sub_no_buy": "A napelemes többlet a Tartás értékig fűt, és magasabbra is mehet. A SEM ehhez semmit nem vesz. A határ alatt azonnal fűt.",
+    "help_mode_surplus_grid": "A SEM napelemes többletről járatja, és olcsó órákban a hálózatról fejezi be.",
+    "help_mode_surplus_battery": "A SEM napelemes többletről járatja, és éjszaka az akkuról fejezi be."
   },
   "it": {
     "% of limit": "% del limite",
@@ -25212,10 +25252,15 @@
     "next_because_held_back": "ridotto, l'energia scarseggia",
     "next_because_no_season": "nessuna temperatura esterna",
     "next_keep_sentence": "Mantieni a {target} · il sole può aggiungere {offset} · scalda subito sotto {limit}",
-    "next_keep_sub": "SEM scalda fino a «Mantieni a» nell'ora pianificata più economica. Il surplus solare può salire oltre. Sotto il limite scalda subito.",
+    "next_keep_sub": "Il surplus solare scalda fino a «Mantieni a» e può salire oltre. In un'ora economica pianificata SEM compra il resto. Sotto il limite scalda subito.",
     "next_plan_to_keep": "a {keep}",
     "next_plan_below_no_hour": "{name} è sotto {keep}; nessuna ora economica prima delle {time}",
-    "next_plan_below_no_hour_plain": "{name} è sotto {keep}; nessuna ora economica pianificata"
+    "next_plan_below_no_hour_plain": "{name} è sotto {keep}; nessuna ora economica pianificata",
+    "next_st_waits_sun": "sotto {keep} · attende il sole",
+    "next_no_buy_hint": "SEM non compra energia per questo carico. Imposta «{setting}» su {grid} per scaldarlo in un'ora economica.",
+    "next_keep_sub_no_buy": "Il surplus solare scalda fino a «Mantieni a» e può salire oltre. SEM non compra nulla per questo. Sotto il limite scalda subito.",
+    "help_mode_surplus_grid": "SEM lo fa funzionare con il surplus solare e completa dalla rete nelle ore economiche.",
+    "help_mode_surplus_battery": "SEM lo fa funzionare con il surplus solare e completa dalla batteria durante la notte."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -28014,10 +28059,15 @@
     "next_because_held_back": "teruggeschakeld, stroom is krap",
     "next_because_no_season": "nog geen buitentemperatuur",
     "next_keep_sentence": "Houden op {target} · zon mag {offset} toevoegen · meteen verwarmen onder {limit}",
-    "next_keep_sub": "SEM verwarmt in het goedkoopste geplande uur tot 'Houden op'. Zonne-overschot mag hoger gaan. Onder de grens verwarmt het meteen.",
+    "next_keep_sub": "Zonne-overschot verwarmt tot 'Houden op' en mag hoger gaan. In een gepland goedkoop uur koopt SEM de rest. Onder de grens verwarmt het meteen.",
     "next_plan_to_keep": "tot {keep}",
     "next_plan_below_no_hour": "{name} is onder {keep}; geen goedkoop uur voor {time}",
-    "next_plan_below_no_hour_plain": "{name} is onder {keep}; geen goedkoop uur gepland"
+    "next_plan_below_no_hour_plain": "{name} is onder {keep}; geen goedkoop uur gepland",
+    "next_st_waits_sun": "onder {keep} · wacht op zon",
+    "next_no_buy_hint": "SEM koopt geen stroom voor dit apparaat. Zet '{setting}' op {grid} om het in een goedkoop uur te verwarmen.",
+    "next_keep_sub_no_buy": "Zonne-overschot verwarmt tot 'Houden op' en mag hoger gaan. SEM koopt er niets voor. Onder de grens verwarmt het meteen.",
+    "help_mode_surplus_grid": "SEM laat het op zonne-overschot draaien en maakt het in goedkope uren af uit het net.",
+    "help_mode_surplus_battery": "SEM laat het op zonne-overschot draaien en maakt het 's nachts af uit de batterij."
   },
   "no": {
     "% of limit": "% av grense",
@@ -30816,10 +30866,15 @@
     "next_because_held_back": "skrudd ned, strømmen er knapp",
     "next_because_no_season": "ingen utetemperatur ennå",
     "next_keep_sentence": "Hold på {target} · solen kan legge til {offset} · varm straks under {limit}",
-    "next_keep_sub": "SEM varmer til «Hold på» i den billigste planlagte timen. Soloverskudd kan gå høyere. Under grensen varmer den straks.",
+    "next_keep_sub": "Soloverskudd varmer til «Hold på» og kan gå høyere. I en planlagt billig time kjøper SEM resten. Under grensen varmer den straks.",
     "next_plan_to_keep": "til {keep}",
     "next_plan_below_no_hour": "{name} er under {keep}; ingen billig time før {time}",
-    "next_plan_below_no_hour_plain": "{name} er under {keep}; ingen billig time planlagt"
+    "next_plan_below_no_hour_plain": "{name} er under {keep}; ingen billig time planlagt",
+    "next_st_waits_sun": "under {keep} · venter på sol",
+    "next_no_buy_hint": "SEM kjøper ingen strøm til denne enheten. Sett «{setting}» til {grid} for å varme den i en billig time.",
+    "next_keep_sub_no_buy": "Soloverskudd varmer til «Hold på» og kan gå høyere. SEM kjøper ingenting til den. Under grensen varmer den straks.",
+    "help_mode_surplus_grid": "SEM kjører den på soloverskudd og fullfører fra nettet i billige timer.",
+    "help_mode_surplus_battery": "SEM kjører den på soloverskudd og fullfører fra batteriet om natten."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -33618,10 +33673,15 @@
     "next_because_held_back": "przykręcone, brakuje mocy",
     "next_because_no_season": "brak jeszcze temperatury zewnętrznej",
     "next_keep_sentence": "Utrzymuj na {target} · słońce może dodać {offset} · grzej od razu poniżej {limit}",
-    "next_keep_sub": "SEM grzeje do „Utrzymuj na” w najtańszej zaplanowanej godzinie. Nadwyżka słoneczna może grzać wyżej. Poniżej limitu grzeje od razu.",
+    "next_keep_sub": "Nadwyżka słoneczna grzeje do „Utrzymuj na” i może grzać wyżej. W zaplanowanej taniej godzinie SEM dokupuje resztę. Poniżej limitu grzeje od razu.",
     "next_plan_to_keep": "do {keep}",
     "next_plan_below_no_hour": "{name} jest poniżej {keep}; brak taniej godziny przed {time}",
-    "next_plan_below_no_hour_plain": "{name} jest poniżej {keep}; nie zaplanowano taniej godziny"
+    "next_plan_below_no_hour_plain": "{name} jest poniżej {keep}; nie zaplanowano taniej godziny",
+    "next_st_waits_sun": "poniżej {keep} · czeka na słońce",
+    "next_no_buy_hint": "SEM nie kupuje energii dla tego odbiornika. Ustaw „{setting}” na {grid}, aby grzać go w taniej godzinie.",
+    "next_keep_sub_no_buy": "Nadwyżka słoneczna grzeje do „Utrzymuj na” i może grzać wyżej. SEM nic dla niego nie kupuje. Poniżej limitu grzeje od razu.",
+    "help_mode_surplus_grid": "SEM uruchamia go z nadwyżki słonecznej i kończy z sieci w tanich godzinach.",
+    "help_mode_surplus_battery": "SEM uruchamia go z nadwyżki słonecznej i kończy z baterii w nocy."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -36420,10 +36480,15 @@
     "next_because_held_back": "reduzido, falta energia",
     "next_because_no_season": "sem temperatura exterior",
     "next_keep_sentence": "Manter em {target} · o sol pode somar {offset} · aquecer logo abaixo de {limit}",
-    "next_keep_sub": "O SEM aquece até «Manter em» na hora planeada mais barata. O excedente solar pode ir mais alto. Abaixo do limite aquece logo.",
+    "next_keep_sub": "O excedente solar aquece até «Manter em» e pode ir mais alto. Numa hora barata planeada o SEM compra o resto. Abaixo do limite aquece logo.",
     "next_plan_to_keep": "até {keep}",
     "next_plan_below_no_hour": "{name} está abaixo de {keep}; nenhuma hora barata antes das {time}",
-    "next_plan_below_no_hour_plain": "{name} está abaixo de {keep}; nenhuma hora barata planeada"
+    "next_plan_below_no_hour_plain": "{name} está abaixo de {keep}; nenhuma hora barata planeada",
+    "next_st_waits_sun": "abaixo de {keep} · espera pelo sol",
+    "next_no_buy_hint": "O SEM não compra energia para esta carga. Defina «{setting}» como {grid} para a aquecer numa hora barata.",
+    "next_keep_sub_no_buy": "O excedente solar aquece até «Manter em» e pode ir mais alto. O SEM não compra nada para isso. Abaixo do limite aquece logo.",
+    "help_mode_surplus_grid": "O SEM faz funcionar com excedente solar e termina a partir da rede nas horas baratas.",
+    "help_mode_surplus_battery": "O SEM faz funcionar com excedente solar e termina a partir da bateria durante a noite."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -39222,10 +39287,15 @@
     "next_because_held_back": "redus, energia e puțină",
     "next_because_no_season": "încă fără temperatură exterioară",
     "next_keep_sentence": "Menține la {target} · soarele poate adăuga {offset} · încălzește imediat sub {limit}",
-    "next_keep_sub": "SEM încălzește până la „Menține la” în cea mai ieftină oră planificată. Surplusul solar poate urca mai sus. Sub limită încălzește imediat.",
+    "next_keep_sub": "Surplusul solar încălzește până la „Menține la” și poate urca mai sus. Într-o oră ieftină planificată SEM cumpără restul. Sub limită încălzește imediat.",
     "next_plan_to_keep": "la {keep}",
     "next_plan_below_no_hour": "{name} este sub {keep}; nicio oră ieftină înainte de {time}",
-    "next_plan_below_no_hour_plain": "{name} este sub {keep}; nicio oră ieftină planificată"
+    "next_plan_below_no_hour_plain": "{name} este sub {keep}; nicio oră ieftină planificată",
+    "next_st_waits_sun": "sub {keep} · așteaptă soarele",
+    "next_no_buy_hint": "SEM nu cumpără energie pentru acest consumator. Setați „{setting}” la {grid} ca să îl încălzească într-o oră ieftină.",
+    "next_keep_sub_no_buy": "Surplusul solar încălzește până la „Menține la” și poate urca mai sus. SEM nu cumpără nimic pentru el. Sub limită încălzește imediat.",
+    "help_mode_surplus_grid": "SEM îl pornește pe surplus solar și termină din rețea în orele ieftine.",
+    "help_mode_surplus_battery": "SEM îl pornește pe surplus solar și termină din baterie peste noapte."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -42024,10 +42094,15 @@
     "next_because_held_back": "nedskruvad, strömmen är knapp",
     "next_because_no_season": "ingen utetemperatur än",
     "next_keep_sentence": "Håll på {target} · solen får lägga till {offset} · värm direkt under {limit}",
-    "next_keep_sub": "SEM värmer till ”Håll på” under den billigaste planerade timmen. Solöverskott får gå högre. Under gränsen värmer den direkt.",
+    "next_keep_sub": "Solöverskott värmer till ”Håll på” och får gå högre. Under en planerad billig timme köper SEM resten. Under gränsen värmer den direkt.",
     "next_plan_to_keep": "till {keep}",
     "next_plan_below_no_hour": "{name} är under {keep}; ingen billig timme före {time}",
-    "next_plan_below_no_hour_plain": "{name} är under {keep}; ingen billig timme planerad"
+    "next_plan_below_no_hour_plain": "{name} är under {keep}; ingen billig timme planerad",
+    "next_st_waits_sun": "under {keep} · väntar på sol",
+    "next_no_buy_hint": "SEM köper ingen el till den här lasten. Sätt ”{setting}” till {grid} för att värma den under en billig timme.",
+    "next_keep_sub_no_buy": "Solöverskott värmer till ”Håll på” och får gå högre. SEM köper inget till den. Under gränsen värmer den direkt.",
+    "help_mode_surplus_grid": "SEM kör den på solöverskott och avslutar från nätet under billiga timmar.",
+    "help_mode_surplus_battery": "SEM kör den på solöverskott och avslutar från batteriet under natten."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -44826,9 +44901,14 @@
     "next_because_held_back": "已调低，电力不足",
     "next_because_no_season": "尚无室外温度",
     "next_keep_sentence": "保持在 {target} · 光伏可再加 {offset} · 低于 {limit} 立即加热",
-    "next_keep_sub": "SEM 在最便宜的计划时段加热到“保持在”温度。富余光伏可以加热得更高。低于限值时立即加热。",
+    "next_keep_sub": "富余光伏加热到“保持在”温度，还可以更高。在计划的低价时段，SEM 购电补足其余部分。低于限值时立即加热。",
     "next_plan_to_keep": "至 {keep}",
     "next_plan_below_no_hour": "{name} 低于 {keep}；{time} 前没有低价时段",
-    "next_plan_below_no_hour_plain": "{name} 低于 {keep}；未安排低价时段"
+    "next_plan_below_no_hour_plain": "{name} 低于 {keep}；未安排低价时段",
+    "next_st_waits_sun": "低于 {keep} · 等待光伏",
+    "next_no_buy_hint": "SEM 不为此负载购电。将“{setting}”设为{grid}，即可在低价时段加热。",
+    "next_keep_sub_no_buy": "富余光伏加热到“保持在”温度，还可以更高。SEM 不为它购电。低于限值时立即加热。",
+    "help_mode_surplus_grid": "SEM 用富余光伏运行它，并在低价时段从电网补足。",
+    "help_mode_surplus_battery": "SEM 用富余光伏运行它，并在夜间从电池补足。"
   }
 }

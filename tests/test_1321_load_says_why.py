@@ -33,7 +33,7 @@ TANK = "sensor.tank"
 BLOCK = {"boiler": PlanVerdict(in_block=True, comfort_in_block=True, reason="planned block")}
 
 
-def _boiler(hass, temp="45.8", *, band=True):
+def _boiler(hass, temp="45.8", *, band=True, grid=False):
     hass.set("switch.boiler", "off")
     hass.set(TANK, temp, unit_of_measurement="°C")
     dev = SwitchDevice(hass, "boiler", "Boiler", rated_power=3000.0, entity_id="switch.boiler")
@@ -41,6 +41,8 @@ def _boiler(hass, temp="45.8", *, band=True):
     if band:
         dev.comfort_entity, dev.comfort_target = TANK, 52.0
         dev.comfort_offset, dev.comfort_limit = 4.0, 36.0
+    # (#1102) a Keep at run is bought only with the grid allowed
+    dev.top_up_policy = "cheap_hours" if grid else "solar_only"
     dev.min_on_seconds = dev.min_off_seconds = 0
     dev.min_on_time = dev.min_off_time = 0
     return dev
@@ -97,7 +99,7 @@ class TestEveryCycleSaysWhatEachLoadIsToDo:
 
     async def test_the_record_is_replaced_not_appended(self):
         hass = _Hass()
-        sc = _controller(hass, _boiler(hass))
+        sc = _controller(hass, _boiler(hass, grid=True))
         await sc.update(0.0, price_level="normal", is_night=True)
         await sc.update(0.0, price_level="normal", is_night=True, plan_windows=BLOCK)
         assert sc.load_intent("boiler") == {
@@ -121,7 +123,7 @@ class TestEveryCycleSaysWhatEachLoadIsToDo:
         said = []
         for observer in (False, True):
             hass = _Hass()
-            sc = _controller(hass, _boiler(hass))
+            sc = _controller(hass, _boiler(hass, grid=True))
             await sc.update(0.0, price_level="normal", is_night=True,
                             plan_windows=BLOCK, observer=observer)
             said.append(sc.load_intent("boiler"))
@@ -195,3 +197,33 @@ class TestItStaysOutOfTheRecorder:
         from .ast_contracts import calls
         assert calls(UnifiedDeviceRegistry._intent_payload, "load_intent") or \
             calls(UnifiedDeviceRegistry._intent_payload, "ask")
+
+
+@pytest.mark.asyncio
+class TestTheRowSaysWhetherKeepAtMayBeBought:
+    """(#1102) Solar only is solar only: the card must not promise a planned
+    hour to a load that buys nothing."""
+
+    async def test_solar_only_publishes_may_buy_false(self):
+        hass = _Hass()
+        sc = _controller(hass, _boiler(hass))
+        assert _registry(sc)._goal_payload("boiler")["comfort"]["may_buy"] is False
+
+    async def test_grid_allowed_publishes_may_buy_true(self):
+        hass = _Hass()
+        dev = _boiler(hass)
+        dev.top_up_policy = "cheap_hours"
+        sc = _controller(hass, dev)
+        assert _registry(sc)._goal_payload("boiler")["comfort"]["may_buy"] is True
+
+    async def test_it_is_the_devices_own_rule(self):
+        hass = _Hass()
+        dev = _boiler(hass)
+        sc = _controller(hass, dev)
+        for policy in ("solar_only", "cheap_hours"):
+            dev.top_up_policy = policy
+            assert (_registry(sc)._goal_payload("boiler")["comfort"]["may_buy"]
+                    is dev.comfort_goal_may_buy())
+
+    async def test_a_device_without_the_rule_buys_nothing(self):
+        assert UnifiedDeviceRegistry._may_buy(object()) is False

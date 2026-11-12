@@ -10,7 +10,7 @@
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
-import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, simpleMode, statePill } from './next-devices.js';
+import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, simpleMode, statePill, modeHelpKey } from './next-devices.js';
 import { plainReason } from './why-rows.js';
 
 const MODES = [
@@ -98,7 +98,7 @@ export function loadBody(card, row) {
     const simple = measureOnly ? nothing : simpleControl(card, row, dis);
     const seg = card._seg(MODES.map((m) => ({ key: m.key, label: t(m.label) })), merged,
         (key) => { for (const w of modeWrites(row, key)) send(w.property, w.value); }, { disabled: dis, small: true });
-    const helpKey = (MODES.find((m) => m.key === merged) || {}).help;
+    const helpKey = modeHelpKey(merged, g) || (MODES.find((m) => m.key === merged) || {}).help;
 
     // ── stats ──
     const live = row.powerEntity ? card._powerW(row.powerEntity) : null;
@@ -206,7 +206,7 @@ export function loadBody(card, row) {
     const tUnit = card._hass?.config?.unit_system?.temperature || '°C';
     const cNum = (key, val) => numVal(key, val ? val + ' ' + tUnit : '—', { value: val || null, step: 0.5, unit: tUnit, onCommit: (v) => send(key, String(v)) });
     rows.push(card._row('mdi:thermometer', t('next_comfort'), displayTemp(card, row.comfort && row.comfort.reading_c) || '—',
-        html`${card._sentence(t('next_keep_sentence'), { target: cNum('comfort_target', target), limit: cNum('comfort_limit', limit), offset: cNum('comfort_offset', offset) })}<div class="modehelp">${t('next_keep_sub')}</div>`,
+        html`${card._sentence(t('next_keep_sentence'), { target: cNum('comfort_target', target), limit: cNum('comfort_limit', limit), offset: cNum('comfort_offset', offset) })}<div class="modehelp">${t(row.comfort && row.comfort.may_buy === false ? 'next_keep_sub_no_buy' : 'next_keep_sub')}</div>`,
         { more: !engaged && !(row.comfort && row.comfort.reading_c != null) }));
     if (kind === 'heat_pump') {
         rows.push(card._row('mdi:cash-multiple', t('next_device_tariff'), card._has('sensor.sem_heat_pump_cost_of_heat') ? card._money(card._num('sensor.sem_heat_pump_cost_of_heat')) : '—', t('device_tariff_heat_pump'), { more: true }));
@@ -244,8 +244,12 @@ export function saysLine(card, row) {
     const pill = statePill(row, card._live(row));
     const text = card._pillText(pill);
     const code = row.intent && row.intent.code;
-    const sentence = code ? plainReason({ reason_code: code }, (k) => card._t(k)) : null;
+    // The engine's sentence describes the last switch ("…so it turns off").
+    // A line that already says what comes NEXT does not get it on top.
+    const sentence = code && !pill.next ? plainReason({ reason_code: code }, (k) => card._t(k)) : null;
+    const hint = pill.noBuy
+        ? card._tf('next_no_buy_hint', { setting: card._t('finish_overnight_from'), grid: card._t('overnight_grid') }) : '';
     const lead = text.charAt(0).toUpperCase() + text.slice(1) + '.';
-    const tail = sentence ? ' ' + sentence : '';
+    const tail = [sentence, hint].filter(Boolean).map((s) => ' ' + s).join('');
     return html`<p class="sent says"><span class="val">${lead}</span>${tail}</p>`;
 }
