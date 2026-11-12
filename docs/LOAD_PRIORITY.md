@@ -214,21 +214,24 @@ device deadlines** (see "Why no deadlines" below).
 
 Each load's row has a **Mode** selector:
 
+The mode says who runs the load, not where its power comes from; whether
+SEM buys power for it is the load's own buy question.
+
 | Mode | What SEM does |
 |---|---|
 | **Off** | Monitor only. SEM never turns it on or off, and the peak guard does not shed it. |
 | **Peak only** | Your automations run it. SEM never starts it; it only turns it off while the grid peak is at risk, and back on when the peak falls. |
-| **Solar only** | Starts on spare sun. Stops when the house buys power from the grid for it, or when the sun makes less than the load draws. It never starts on the battery. See the note below for the evening. |
-| **Solar + battery** | As Solar only, and by day the home battery may help it, down to the Buffer SoC (or tonight's floor when that sits higher). The help starts only while at least the Solar Gate (`battery_assist_min_surplus`, 1200 W) goes to the grid. See the note below. |
+| **SEM runs it** (was *Solar only*) | Starts on spare sun. Stops when the house buys power from the grid for it, or when the sun makes less than the load draws. It never starts on the battery. See the note below for the evening. |
+| **SEM runs it, battery may help** (was *Solar + battery*) | As *SEM runs it*, and by day the home battery may help it, down to the Buffer SoC (or tonight's floor when that sits higher). The help starts only while at least the Solar Gate (`battery_assist_min_surplus`, 1200 W) goes to the grid. See the note below. |
 
-> **Solar only in the evening.** A running Solar-only load keeps going while
+> **SEM runs it, in the evening.** A running load in this mode keeps going while
 > the sun still makes at least what the load itself draws. If the house then
 > needs more, a home battery covers the gap and the grid reads 0 W, so SEM
 > does not stop the load. Example: sun 3.2 kW, house 1.5 kW, boiler 3 kW —
 > the boiler runs on and 1.3 kW comes from the battery. Without a battery the
 > house would import instead, and the load stops. Open for discussion: #1112.
 >
-> **Solar + battery while the battery charges.** SEM measures spare sun at the
+> **Battery may help, while the battery charges.** SEM measures spare sun at the
 > grid meter. While the battery is still charging from spare sun, little goes
 > to the grid, so the battery's help usually waits until the battery is full.
 > Example: sun 2 kW, house 0.5 kW, battery at 95 % taking 1.5 kW — a 3 kW
@@ -332,7 +335,7 @@ no-sun source (nothing / battery to reserve / cheap grid). Switching the picker
 also **stops a load that's already running** on the source you moved away from —
 you don't have to wait for the reserve floor or the cheap window to end.
 
-The daytime battery help ("Solar + battery" mode) uses the same Solar Gate
+The daytime battery help (mode "SEM runs it, battery may help") uses the same Solar Gate
 setting as the EV assist (`battery_assist_min_surplus`), but loads measure it
 at the grid meter (spare sun going out), while chargers measure solar − home.
 The overnight battery drain stops at `Battery priority SOC` (default 30 %).

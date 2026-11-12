@@ -34,6 +34,10 @@ import {
 } from './load-config-modal.js';
 import { stateLabel } from '../util/state-label.js';
 import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
+import {
+    heaterSays, heaterSub, heaterQuestions, sunMaxWrites, nextBlock,
+    asSentence, BUY_LABEL,
+} from '../util/heater-questions.js';
 
 // (#1200) A load's live power in kW from its own entity, or null while that
 // entity is out. Older backends carry current_power in the map instead.
@@ -381,6 +385,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 .ge-ctl { margin-left:0; width:100%; }
                 .goal-editor input.ge-entity { flex:1; width:auto; }
             }
+            .hq-say { font-size:14px; margin:2px 0 4px; }
+            .hq-more { margin-top:8px; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px; }
+            .hq-more > summary { cursor:pointer; font-size:13px; opacity:0.7; padding:4px 0; }
             .ge-hint {
                 display:flex; align-items:center; gap:6px;
                 font-size:12px; color:var(--secondary-text-color,#999); padding:4px 0 6px;
@@ -500,6 +507,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     goals: info.goals || null,
                     progress: info.progress || null,
                     comfort: info.comfort || null,   // (#705) live band verdict
+                    // (#1349) what the load engine decided this cycle
+                    intent: (info.intent && typeof info.intent === 'object') ? info.intent : null,
                     blockedBy: info.blocked_by || null,
                     soc: info.soc,   // (#576) battery row only
                     icon: this._resolveDeviceIcon(info),
@@ -586,8 +595,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="help-panel">
                         <div class="help-item"><b>${this._t('off')}</b> — ${this._t('help_mode_off')}</div>
                         <div class="help-item"><b>${this._t('peak_only')}</b> — ${this._t('help_mode_peak_only')}</div>
-                        <div class="help-item"><b>${this._t('mode_solar_only')}</b> — ${this._t('help_mode_surplus')}</div>
-                        <div class="help-item"><b>${this._t('mode_solar_battery')}</b> — ${this._t('battery_overnight_hint')}</div>
+                        <div class="help-item"><b>${this._t('load_mode_sem')}</b> — ${this._t('load_mode_help_sem')}</div>
+                        <div class="help-item"><b>${this._t('load_mode_sem_battery')}</b> — ${this._t('load_mode_help_sem_battery')}</div>
                         <div class="help-item"><b>${this._t('priority')}</b> — ${this._t('help_device_priority')}</div>
                         <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
                         <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
@@ -682,13 +691,13 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="spacer"></div>
                     ${isBattery ? html`<span class="dim" title="${this._t('battery_role_help')}">${this._t('battery_role_label')}</span>` : nothing}
                     ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery ? nothing : html`
-                    <label class="toggle-label" title="${this._t('mode_tooltip')}">
+                    <label class="toggle-label" title="${this._t('load_mode_tooltip')}">
                         <span class="dim">${this._t('mode')}</span>
                         <select class="mode-select" data-action="combined_mode" data-device="${device.id}">
                             <option value="off" ?selected="${this._mergedMode(device) === 'off'}">${this._t('off')}</option>
                             <option value="peak_only" ?selected="${this._mergedMode(device) === 'peak_only'}">${this._t('peak_only')}</option>
-                            <option value="solar_only" ?selected="${this._mergedMode(device) === 'solar_only'}">${this._t('mode_solar_only')}</option>
-                            <option value="solar_battery" ?selected="${this._mergedMode(device) === 'solar_battery'}">${this._t('mode_solar_battery')}</option>
+                            <option value="solar_only" ?selected="${this._mergedMode(device) === 'solar_only'}">${this._t('load_mode_sem')}</option>
+                            <option value="solar_battery" ?selected="${this._mergedMode(device) === 'solar_battery'}">${this._t('load_mode_sem_battery')}</option>
                         </select>
                     </label>`}
                     ${isBattery ? nothing : html`
@@ -763,8 +772,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
     _mergedModeLabel(device) {
         const m = this._mergedMode(device);
         const key = { off: 'off', peak_only: 'peak_only',
-                      solar_only: 'mode_solar_only',
-                      solar_battery: 'mode_solar_battery' }[m] || m;
+                      solar_only: 'load_mode_sem',
+                      solar_battery: 'load_mode_sem_battery' }[m] || m;
         return this._t(key);
     }
 
@@ -1044,6 +1053,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
         // show a stale/counting timer (#559 alex "Issue 6").
         const _m = this._mergedMode(device);
         if (_m !== 'solar_only' && _m !== 'solar_battery') return nothing;
+        // (#1349) with a thermometer the daily run time asks nothing
+        if (this._questions(device).view === 'band') return nothing;
         const pct = this._goalPct(device);
         if (pct === null) return nothing;
         const g = device.goals, p = device.progress;
@@ -1062,8 +1073,27 @@ class SEMLoadPriorityCard extends SEMLitBase {
         // Mode-gated disclosure — shown in the two solar modes (#620).
         const mode = this._mergedMode(device);
         if (mode !== 'solar_only' && mode !== 'solar_battery') return nothing;
-        const g = device.goals || {};
-        return html`
+        // (#1349) four plain questions. A heater whose thermometer leads:
+        // keep · never colder · sun up to · buy. A load without one: its
+        // daily run time · buy. Everything else sits under More. A cooling
+        // band keeps the earlier layout.
+        const q = this._questions(device);
+        if (q.view === 'band') {
+            return html`
+            <div class="goal-editor">
+                ${this._renderHeaterQuestions(device, q)}
+                ${this._renderBuyQuestion(device, q)}
+                <details class="hq-more" @click=${(e) => e.stopPropagation()}>
+                    <summary>${this._t('hq_more')}</summary>
+                    ${this._renderThermometerRows(device)}
+                    ${this._renderAntiCycle(device)}
+                    ${this._renderOwnTariff(device)}
+                    ${this._renderStopCondition(device)}
+                </details>
+            </div>`;
+        }
+        if (q.view === 'cool') {
+            return html`
             <div class="goal-editor">
                 <div class="ge-title">
                     <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
@@ -1074,6 +1104,31 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 ${this._renderOvernightPicker(device)}
                 ${this._renderAntiCycle(device)}
                 ${this._renderOwnTariff(device)}
+                ${this._renderStopCondition(device)}
+            </div>`;
+        }
+        return html`
+            <div class="goal-editor">
+                <div class="ge-title">
+                    <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
+                    ${this._t('hq_run_each_day')}
+                </div>
+                ${this._renderGoalSlider(device)}
+                <div class="ge-hint">${this._t('hq_run_each_day_sub')}</div>
+                ${this._renderBuyQuestion(device, q)}
+                <details class="hq-more" @click=${(e) => e.stopPropagation()}>
+                    <summary>${this._t('hq_more')}</summary>
+                    ${this._renderComfortBand(device)}
+                    ${this._renderAntiCycle(device)}
+                    ${this._renderOwnTariff(device)}
+                    ${this._renderStopCondition(device)}
+                </details>
+            </div>`;
+    }
+
+    _renderStopCondition(device) {
+        const g = device.goals || {};
+        return html`
                 <div class="ge-row">
                     <span class="ge-label">${this._t('stop_condition')}</span>
                     <span class="ge-ctl">
@@ -1096,8 +1151,153 @@ class SEMLoadPriorityCard extends SEMLitBase {
                                data-goal="stop_at" data-device="${device.id}">
                     </span>
                 </div>
-                <div class="ge-hint">${this._t('stop_condition_hint')}</div>
-            </div>`;
+                <div class="ge-hint">${this._t('stop_condition_hint')}</div>`;
+    }
+
+    // ── (#1349) a heater's four questions ───────────────────────────
+    // ONE model for this card and the SEM Next Devices card
+    // (util/heater-questions.js). The stored goals do not change: the
+    // card translates "heat up to X" into the offset above Keep at.
+
+    _tf(key, params = {}) {
+        let text = this._t(key) || '';
+        for (const [k, v] of Object.entries(params || {})) {
+            text = text.split('{' + k + '}').join(String(v ?? ''));
+        }
+        return text;
+    }
+
+    _hasBattery() {
+        return (this.devices || []).some((d) => d.deviceType === 'battery');
+    }
+
+    _questions(device) {
+        return heaterQuestions({ goals: device.goals, comfort: device.comfort },
+            { hasBattery: this._hasBattery() });
+    }
+
+    /** The next planned start (HH:MM) of this load's run-time or Keep at block. */
+    _plannedAt(device) {
+        const plan = this._hass && this._hass.states[this._prefix + 'energy_plan'];
+        const next = nextBlock(plan && plan.attributes && plan.attributes.blocks,
+            ['load:' + device.id, 'comfort:' + device.id], Date.now());
+        if (!next) return '';
+        const d = new Date(next.start);
+        const two = (n) => String(n).padStart(2, '0');
+        return two(d.getHours()) + ':' + two(d.getMinutes());
+    }
+
+    _heaterSays(device) {
+        const running = device.isOn || device.power > 0.01;
+        return heaterSays(
+            { comfort: device.comfort, intent: device.intent, mergedMode: this._mergedMode(device) },
+            { fmtTemp: (c) => this._displayTemp(c), plannedAt: this._plannedAt(device) },
+            running);
+    }
+
+    _setGoal(device, key, value) {
+        device.goals = { ...(device.goals || {}), [key]: value };
+        this._sendDeviceUpdate(device.id, key, String(value));
+    }
+
+    /** min/max of the Configuration tab's Solar target, in the user's unit, or null. */
+    _solarTargetBounds() {
+        const st = this._hass && this._hass.states['number.sem_hot_water_solar_target'];
+        const unit = this.hass?.config?.unit_system?.temperature || '°C';
+        if (!st || !st.attributes || unit !== '°C') return null;
+        return { min: st.attributes.min, max: st.attributes.max };
+    }
+
+    /**
+     * A hot-water tank also stops at the Configuration tab's Solar target
+     * ("SEM stops at the lower of the two"). Keep it on the same value, so
+     * the number shown here is the number SEM uses.
+     */
+    _syncSolarTarget(device, value) {
+        if (!/^hot_water/.test(String(device.id || '')) || !this._hass) return;
+        const unit = this.hass?.config?.unit_system?.temperature || '°C';
+        const v = Number(value);
+        if (!Number.isFinite(v)) return;
+        const celsius = unit === '°F' ? (v - 32) * 5 / 9 : v;
+        this._hass.callService('solar_energy_management', 'set_option', {
+            options: { hot_water_solar_target: Math.round(celsius * 10) / 10 },
+        }).catch((err) => this._showServiceError(err));
+    }
+
+    _onKeepChange(device, q, e) {
+        const v = parseFloat(e.target.value);
+        if (!Number.isFinite(v)) return;
+        this._setGoal(device, 'comfort_target', v);
+        this._syncSolarTarget(device, v + (q.offset || 0));
+        this.requestUpdate();
+    }
+
+    _onSunMaxChange(device, q, e) {
+        const res = sunMaxWrites({ id: device.id, keep: q.keep }, e.target.value,
+            this._solarTargetBounds());
+        this._hqError = { ...(this._hqError || {}) };
+        if (res.error) {
+            this._hqError[device.id] = this._tf(res.error, res.params);
+            e.target.value = String(q.sunMax);
+            this.requestUpdate();
+            return;
+        }
+        delete this._hqError[device.id];
+        for (const w of res.writes) this._setGoal(device, w.property, w.value);
+        if (res.option) this._syncSolarTarget(device, res.option.value);
+        this.requestUpdate();
+    }
+
+    _renderHeaterQuestions(device, q) {
+        const unit = this.hass?.config?.unit_system?.temperature || '°C';
+        const fmt = { fmtTemp: (c) => this._displayTemp(c) };
+        const says = this._heaterSays(device);
+        const sub = heaterSub(says, device, fmt);
+        const now = this._displayTemp(device.comfort ? device.comfort.reading_c : null);
+        const said = says ? asSentence(this._tf(says.key, says.params)
+            + (says.why ? ' \u00B7 ' + this._t(says.why) : '')) : '';
+        const err = this._hqError && this._hqError[device.id];
+        const numIn = (val, onChange) => html`
+            <input type="number" step="0.5" style="width:56px"
+                   .value="${val === null || val === undefined ? '' : String(val)}"
+                   @change=${onChange}
+                   @click=${(e) => e.stopPropagation()}>
+            <span class="ge-unit">${unit}</span>`;
+        const ask = (label, hint, ctl) => html`
+            <div class="ge-row">
+                <span class="ge-label">${label}</span>
+                <span class="ge-ctl">${ctl}</span>
+            </div>
+            <div class="ge-hint">${hint}</div>`;
+        return html`
+            <div class="hq-say">${now ? this._tf('hq_now', { reading: now }) + ' ' : ''}${said}</div>
+            ${sub ? html`<div class="ge-hint">${this._tf(sub.key, sub.params)}</div>` : nothing}
+            ${this._renderBandStrip(device)}
+            ${ask(this._t('hq_keep'), this._t('hq_keep_sub'),
+                numIn(q.keep, (e) => this._onKeepChange(device, q, e)))}
+            ${ask(this._t('hq_floor'), this._t('hq_floor_sub'),
+                numIn(q.floor, (e) => {
+                    const v = parseFloat(e.target.value);
+                    if (Number.isFinite(v)) this._setGoal(device, 'comfort_limit', v);
+                }))}
+            ${ask(this._t('hq_sun_max'), this._t('hq_sun_max_sub'),
+                numIn(q.sunMax, (e) => this._onSunMaxChange(device, q, e)))}
+            ${err ? html`<div class="ge-hint" style="color:#f44336;font-style:normal">${err}</div>` : nothing}`;
+    }
+
+    _renderBuyQuestion(device, q) {
+        const keep = q.view === 'band'
+            ? (q.keep + '\u00A0' + (this.hass?.config?.unit_system?.temperature || '°C')) : '';
+        const opt = (val) => html`
+            <button class="ov-opt ${q.buy === val ? 'on' : ''}"
+                    data-action="set-overnight" data-overnight="${val}"
+                    data-device="${device.id}">${this._t(BUY_LABEL[val])}</button>`;
+        return html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('hq_buy')}</span>
+                <span class="ge-ctl ov-picker">${q.buyChoices.map(opt)}</span>
+            </div>
+            <div class="ge-hint">${this._tf(q.buySubKey, { keep })}</div>`;
     }
 
     // ── (#705) thermal comfort — chip + band strip ──────────────────
@@ -1153,12 +1353,100 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _renderComfortChip(device) {
+        // (#1349) a heater says what it does and what comes next — the
+        // earlier chip read "pre-heat" on a tank that was off.
+        const says = this._heaterSays(device);
+        if (says) {
+            const color = { ok: '#8DC892', warn: '#ffc107' }[says.cls] || '#4db6ac';
+            const reading = says.key === 'hq_st_warm' ? null
+                : this._displayTemp(device.comfort ? device.comfort.reading_c : null);
+            const why = says.why ? ' \u00B7 ' + this._t(says.why) : '';
+            return html`
+            <div class="comfort-chip" style="border-color:${color}55;color:${color}">
+                ${reading ? html`${reading} \u00B7 ` : nothing}${this._tf(says.key, says.params)}${why}
+            </div>`;
+        }
         const meta = this._comfortChipMeta(device);
         if (!meta) return nothing;
         const temp = this._displayTemp(device.comfort.reading_c);
         return html`
             <div class="comfort-chip" style="border-color:${meta.color}55;color:${meta.color}">
                 <span>${meta.icon}</span> ${meta.label}${temp ? html` \u00B7 ${temp}` : nothing}
+            </div>`;
+    }
+
+    /** The thermometer picker (and, when asked, the heats-or-cools row). */
+    _renderThermometerRows(device, withHvac = true) {
+        const g = device.goals || {};
+        return html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_thermometer')}</span>
+                <span class="ge-ctl">
+                    ${this.hass && customElements.get('ha-entity-picker') ? html`
+                    <ha-entity-picker class="ge-entity"
+                           .hass=${this.hass}
+                           .value=${g.comfort_entity || ''}
+                           .includeDomains=${['sensor', 'input_number']}
+                           .placeholder=${this._t('comfort_own_thermometer')}
+                           allow-custom-entity
+                           @value-changed=${(e) => {
+                               const v = e.detail?.value ?? '';
+                               device.goals = { ...(device.goals || {}), comfort_entity: v };
+                               this._sendDeviceUpdate(device.id, 'comfort_entity', v);
+                           }}
+                           @click=${(e) => e.stopPropagation()}></ha-entity-picker>
+                    ` : html`
+                    <input type="text" class="ge-entity"
+                           placeholder="${this._t('comfort_own_thermometer')}"
+                           .value="${g.comfort_entity || ''}"
+                           @change=${(e) => this._sendDeviceUpdate(device.id, 'comfort_entity', e.target.value)}>`}
+                </span>
+            </div>
+            ${withHvac ? this._renderHvacRow(device) : nothing}`;
+    }
+
+    _renderHvacRow(device) {
+        const g = device.goals || {};
+        return html`
+            ${g.hvac_mode ? html`
+            <div class="ge-row" title="${this._t('comfort_hvac_hint')}">
+                <span class="ge-label">${this._t('comfort_hvac_mode')}</span>
+                <span class="ge-ctl">
+                    <select class="mode-select" data-goal="hvac_mode" data-device="${device.id}"
+                            @click=${(e) => e.stopPropagation()}>
+                        ${hvacModeOptions(g.hvac_mode).map(m => html`
+                            <option value="${m}" ?selected="${g.hvac_mode === m}">${
+                                HVAC_MODE_LABELS[m] ? this._t(HVAC_MODE_LABELS[m]) : m}</option>`)}
+                    </select>
+                </span>
+            </div>` : nothing}`;
+    }
+
+    /** The band on one strip: the too-cold (or too-warm) limit, Keep at, how
+     *  far the sun may go, and where the reading is now. */
+    _renderBandStrip(device) {
+        const g = device.goals || {};
+        const unit = this.hass?.config?.unit_system?.temperature || '°C';
+        const target = parseFloat(g.comfort_target) || 0;
+        const offset = parseFloat(g.comfort_offset) || 0;
+        const limit = parseFloat(g.comfort_limit) || 0;
+        if (!(target > 0 && limit > 0)) return nothing;
+        // heating banks ABOVE Keep at, cooling below it
+        const bank = limit > target ? target - offset : target + offset;
+        const lo = Math.min(bank, target, limit) - 3;
+        const hi = Math.max(bank, target, limit) + 3;
+        const pct = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+        const readC = device.comfort ? device.comfort.reading_c : null;
+        const read = readC == null ? null
+            : (unit === '°F' ? readC * 9 / 5 + 32 : readC);
+        return html`
+            <div class="comfort-strip">
+                <div class="cs-track"></div>
+                <div class="cs-zone" style="left:${pct(Math.min(bank, target))}%;width:${Math.abs(pct(bank) - pct(target))}%"></div>
+                <div class="cs-mark" style="left:${pct(bank)}%;background:#8DC892" title="${bank}"></div>
+                <div class="cs-mark" style="left:${pct(target)}%;background:#4db6ac" title="${target}"></div>
+                <div class="cs-mark" style="left:${pct(limit)}%;background:#ffc107" title="${limit}"></div>
+                ${read != null ? html`<div class="cs-read" style="left:${pct(read)}%" title="${this._displayTemp(readC)}">\u25B2</div>` : nothing}
             </div>`;
     }
 
@@ -1182,13 +1470,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const offset = parseFloat(g.comfort_offset) || 0;
         const limit = parseFloat(g.comfort_limit) || 0;
         const engaged = target > 0 && limit > 0;
-        // Strip geometry — a fixed pad around the configured band.
-        const lo = engaged ? Math.min(target - offset, limit) - 3 : 18;
-        const hi = engaged ? Math.max(target, limit) + 3 : 30;
-        const pct = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
-        const readC = device.comfort ? device.comfort.reading_c : null;
-        const read = readC == null ? null
-            : (unit === '°F' ? readC * 9 / 5 + 32 : readC);
         // (#1145) a worked example, hot water only: the issue was a user who
         // could not tell what the extra degrees do
         const showExample = /^hot_water/.test(String(device.id || '')) && target > 0;
@@ -1215,50 +1496,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:12px"></ha-icon>
                 </a>
             </div>
-            <div class="ge-row">
-                <span class="ge-label">${this._t('comfort_thermometer')}</span>
-                <span class="ge-ctl">
-                    ${this.hass && customElements.get('ha-entity-picker') ? html`
-                    <ha-entity-picker class="ge-entity"
-                           .hass=${this.hass}
-                           .value=${g.comfort_entity || ''}
-                           .includeDomains=${['sensor', 'input_number']}
-                           .placeholder=${this._t('comfort_own_thermometer')}
-                           allow-custom-entity
-                           @value-changed=${(e) => {
-                               const v = e.detail?.value ?? '';
-                               device.goals = { ...(device.goals || {}), comfort_entity: v };
-                               this._sendDeviceUpdate(device.id, 'comfort_entity', v);
-                           }}
-                           @click=${(e) => e.stopPropagation()}></ha-entity-picker>
-                    ` : html`
-                    <input type="text" class="ge-entity"
-                           placeholder="${this._t('comfort_own_thermometer')}"
-                           .value="${g.comfort_entity || ''}"
-                           @change=${(e) => this._sendDeviceUpdate(device.id, 'comfort_entity', e.target.value)}>`}
-                </span>
-            </div>
-            ${engaged ? html`
-            <div class="comfort-strip">
-                <div class="cs-track"></div>
-                <div class="cs-zone" style="left:${pct(Math.min(target - offset, limit))}%;width:${Math.abs(pct(limit) - pct(target - offset))}%"></div>
-                <div class="cs-mark" style="left:${pct(target - offset)}%;background:#8DC892" title="bank"></div>
-                <div class="cs-mark" style="left:${pct(target)}%;background:#4db6ac" title="target"></div>
-                <div class="cs-mark" style="left:${pct(limit)}%;background:#ffc107" title="limit"></div>
-                ${read != null ? html`<div class="cs-read" style="left:${pct(read)}%" title="${this._displayTemp(readC)}">\u25B2</div>` : nothing}
-            </div>` : nothing}
-            ${g.hvac_mode ? html`
-            <div class="ge-row" title="${this._t('comfort_hvac_hint')}">
-                <span class="ge-label">${this._t('comfort_hvac_mode')}</span>
-                <span class="ge-ctl">
-                    <select class="mode-select" data-goal="hvac_mode" data-device="${device.id}"
-                            @click=${(e) => e.stopPropagation()}>
-                        ${hvacModeOptions(g.hvac_mode).map(m => html`
-                            <option value="${m}" ?selected="${g.hvac_mode === m}">${
-                                HVAC_MODE_LABELS[m] ? this._t(HVAC_MODE_LABELS[m]) : m}</option>`)}
-                    </select>
-                </span>
-            </div>` : nothing}
+            ${this._renderThermometerRows(device, false)}
+            ${this._renderBandStrip(device)}
+            ${this._renderHvacRow(device)}
             <div class="ge-row">
                 <span class="ge-label">${this._t('comfort_keep_at')}</span>
                 <span class="ge-ctl">${num('comfort_target', target, 0.5)}

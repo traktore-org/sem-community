@@ -436,36 +436,48 @@ A step-down lasts at least 15 minutes, and the next one waits 15 minutes, so
 a price that flickers does not cycle the compressor. In observer mode SEM
 only shows that it would step down. The **Why?** card names the cause.
 
-### Keep at, Extra from surplus, Run now past
+### A heater's four questions
 
-A heater with a thermometer (a boiler, a heat pump, a room unit) has three
-fields under **Comfort** on the Load Priority card. In French they read
-*Maintenir à*, *Extra grâce au surplus* and *Marche forcée au-delà de*.
+A heater with a thermometer (a boiler, a heat pump, a room unit) is set with
+four questions. Both dashboards ask them in the same words: on the Load
+Priority card under the target button, and on the SEM Next Devices screen in
+the opened row.
 
-| Field | What SEM does |
+| Question | What SEM does |
 |---|---|
-| **Keep at** | The temperature to keep. Spare sun heats to it. With *Finish overnight from: Grid* SEM also heats to it in a planned cheap hour; that run starts only 1 °C below it (less when *Run now past* is close) |
-| **Extra from surplus** | Spare sun may heat this much above Keep at |
-| **Run now past** | Below this limit SEM heats at once, on any tariff, and goes on to Keep at |
+| **Keep it at** (was *Keep at*) | The temperature to keep. Spare sun heats to it. If SEM may buy power, it also heats to it in a planned cheap hour; that run starts only 1 °C below it (less when *Never colder than* is close) |
+| **Never colder than** (was *Run now past*) | Below this SEM heats at once, at any price, and goes on to *Keep it at* |
+| **With spare sun, heat up to** (was *Extra from surplus*) | How hot free sun may heat it. You type the temperature itself; SEM stores the degrees above *Keep it at*. On a hot-water tank it also sets the Solar target of the Configuration tab, so both stops agree |
+| **May SEM buy power for it?** (was *Finish overnight from*) | *No, sun only*: only the sun heats it. *Yes, in cheap hours*: SEM buys the rest in the cheapest hours |
+
+Above the questions one line says what the heater does now and what comes
+next, for example "45.8 °C now. Heats to 52 °C at 23:00." Everything else —
+the thermometer, minimum on and off time, its own tariff, *Stop when* — sits
+under **More**.
+
+A load without a thermometer is asked for its time instead: **Run it each
+day for**, then the same buy question. There *Yes, from the house battery at
+night* is a third choice when the house has a battery. A cooling unit keeps
+the earlier layout for now.
 
 A heater SEM drives by a watt or ampere setpoint (a heating rod, for
-example) follows the same three fields. A too-cold run and a planned
-*Keep at* run ask for its full power; on spare sun it follows the sun.
+example) follows the same questions. A too-cold run and a planned run ask
+for its full power; on spare sun it follows the sun.
 
 SEM checks in this order, and the first match decides:
 
 1. Your own stop temperature is reached: it stops.
 2. A Legionella run is due: it runs to its own target.
-3. The tank is colder than *Run now past*: it heats now.
-4. The tank is below *Keep at*, you allow the grid (*Finish overnight from:
-   Grid*) and the planned hour is open: it heats, and runs through to *Keep
-   at* without switching on and off.
-5. There is spare sun: it heats up to *Keep at* plus *Extra from surplus*.
+3. The tank is colder than *Never colder than*: it heats now.
+4. The tank is below *Keep it at*, SEM may buy power for it and the planned
+   hour is open: it heats, and runs through to *Keep it at* without switching
+   on and off.
+5. There is spare sun: it heats up to *With spare sun, heat up to*.
 
 With a thermometer the daily run time asks for nothing: a warm tank is not
-heated again for its minutes. Solar only is solar only, as for a car: without
-*Finish overnight from: Grid* SEM buys no power to reach *Keep at*. Only the
-too-cold limit, *Run now past*, heats at once whatever the setting.
+heated again for its minutes. Solar only is solar only, as for a car: with
+*No, sun only* SEM buys no power to reach *Keep it at*. Only *Never colder
+than* heats at once whatever the answer.
 The **Why?** card names the step that decided.
 
 **While you are away** (the *Vacation mode* switch, or your own away
@@ -1519,10 +1531,12 @@ The **Mode** dropdown on a device's Control-tab row offers four options:
 |------|--------------|----------------|----------|
 | **Off** | Never | Never | Monitoring only (coffee machine, lights you don't want managed) |
 | **Peak Only** | Never | Yes, during grid peaks | Devices under your control that SEM may shed to protect the grid limit |
-| **Solar only** | Yes, on PV surplus | Yes, when surplus drops or during peaks | Discretionary loads on sun alone (pool pump, boiler) |
-| **Solar + battery** | Yes, on PV surplus + home-battery assist above the buffer | Same | Loads that should ride through cloud/evening on the battery (#620) |
+| **SEM runs it** (was *Solar only*) | Yes, on spare sun | Yes, when the sun drops or during peaks | Loads SEM should start and stop (pool pump, boiler) |
+| **SEM runs it, battery may help** (was *Solar + battery*) | Yes, on spare sun plus home-battery help above the buffer | Same | Loads that should ride through a cloud on the battery (#620) |
 
-**Default for all devices: Peak Only** — SEM never proactively turns a device on unless you pick one of the Solar modes.
+**Default for all devices: Peak Only** — SEM never turns a device on unless you pick one of the two *SEM runs it* modes.
+
+The mode says who runs the load, not where its power comes from. Whether SEM buys power for it is its own question: *May SEM buy power for it?* (see [A heater's four questions](#a-heaters-four-questions)). A car's charge modes keep their names.
 
 Internally the two Solar modes share the `surplus` control mode (`control_mode`: `off` / `peak_only` / `surplus`), differentiated by the battery-assist flag — relevant when writing the mode via the service below.
 

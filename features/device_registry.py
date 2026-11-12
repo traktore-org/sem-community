@@ -2638,7 +2638,18 @@ class UnifiedDeviceRegistry:
             "locked_by_operator": bool(
                 live is not None
                 and getattr(live, "locked_by_operator", False) is True),
-        } | self._comfort_payload(live)
+        } | self._comfort_payload(live) | self._intent_payload(device_id)
+
+    def _intent_payload(self, device_id: str) -> Dict[str, Any]:
+        """(#1321) What the load engine decided for this load THIS cycle:
+        ``{"intent": {"on", "source", "code"}}``. Absent until the first
+        cycle. The card says it in words; nothing here is prose."""
+        ask = getattr(self._surplus_controller, "load_intent", None)
+        try:
+            rec = ask(device_id) if callable(ask) else None
+        except Exception:  # noqa: BLE001 — a payload must never break the sensor
+            return {}
+        return {"intent": rec} if isinstance(rec, dict) and rec else {}
 
     @staticmethod
     def _comfort_payload(live) -> Dict[str, Any]:
@@ -2660,7 +2671,7 @@ class UnifiedDeviceRegistry:
             return callable(rule) and rule() is True
 
         try:
-            return {"comfort": {
+            out = {
                 "state": str(live.comfort_state),
                 "reading_c": live._comfort_reading(),
                 # so the chip says cooling vs heating without guessing —
@@ -2671,9 +2682,48 @@ class UnifiedDeviceRegistry:
                 # state above reads disengaged then, so the card needs the
                 # cause to say "away" and not "no band"
                 "away": _is_away(live),
-            }}
+            }
         except Exception:  # noqa: BLE001 — a payload must never break the sensor
             return {}
+        out.update(UnifiedDeviceRegistry._band_lines(live))
+        return {"comfort": out}
+
+    @staticmethod
+    def _band_lines(live) -> Dict[str, Any]:
+        """(#1321) The band's lines in °C, as the engine holds them: Keep at,
+        the line a planned run starts under, how far the sun may go and the
+        too-cold limit. From the device, never re-derived by the card. Empty
+        for a band that is not set."""
+        if not (getattr(live, "comfort_target", None)
+                and getattr(live, "comfort_limit", None)):
+            return {}
+        try:
+            keep, extra, limit = (float(v) for v in live._comfort_thresholds_c())
+            gap_fn = getattr(live, "comfort_goal_start_gap_c", None)
+            gap = float(gap_fn()) if callable(gap_fn) else 0.0
+            cooling = live._comfort_direction() == "cool"
+        except Exception:  # noqa: BLE001 — an unreadable band publishes no lines
+            return {}
+        sign = 1.0 if cooling else -1.0
+        return {
+            "keep_c": round(keep, 2),
+            "start_c": round(keep + sign * gap, 2),
+            "max_c": round(keep - sign * extra, 2),
+            "limit_c": round(limit, 2),
+            # (#1102) the device's own run — the tank heats past Keep at
+            "own_run": getattr(live, "runs_without_surplus", False) is True,
+            # (#1102) may a planned hour be BOUGHT to reach Keep at? The
+            # device's own rule; without it only the sun keeps the tank.
+            "may_buy": UnifiedDeviceRegistry._may_buy(live),
+        }
+
+    @staticmethod
+    def _may_buy(live) -> bool:
+        ask = getattr(live, "comfort_goal_may_buy", None)
+        try:
+            return ask() is True if callable(ask) else False
+        except Exception:  # noqa: BLE001 — an unreadable rule buys nothing
+            return False
 
     async def async_set_manual_mapping(
         self,
