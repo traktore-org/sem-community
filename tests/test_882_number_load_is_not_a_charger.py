@@ -44,6 +44,7 @@ def _registry(entity_unit):
     )
     reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
     reg._built_from_store = {}          # (#1067)
+    reg._device_goals = {}      # (#1344) goals are applied on this path too
     hass = MagicMock()
     st = MagicMock()
     st.state = "0"
@@ -147,6 +148,7 @@ class TestGenuineCurrentControlIsUntouched:
         )
         reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
         reg._built_from_store = {}          # (#1067)
+        reg._device_goals = {}      # (#1344) goals are applied on this path too
         hass = MagicMock()
         hass.states.get.return_value = None
         reg.hass = hass
@@ -171,6 +173,7 @@ class TestTheRepairFollowsTheMapping:
         )
         reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
         reg._built_from_store = {}          # (#1067)
+        reg._device_goals = {}      # (#1344) goals are applied on this path too
         reg.hass = MagicMock()
         reg._surplus_controller = MagicMock()
         reg._surplus_controller._devices = {}

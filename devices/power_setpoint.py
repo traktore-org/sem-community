@@ -34,7 +34,7 @@ from homeassistant.core import HomeAssistant
 
 from ..coordinator.power_control import native_power_scale
 from ..consts.core import DEFAULT_DEVICE_RATED_POWER
-from .base import ControllableDevice, DeviceState, DeviceType
+from .base import ComfortBandMixin, ControllableDevice, DeviceState, DeviceType
 from ..coordinator.units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
@@ -75,8 +75,16 @@ def device_class_for_control(entity_id: Optional[str]):
     return PowerSetpointDevice if domain in SETPOINT_DOMAINS else SwitchDevice
 
 
-class PowerSetpointDevice(ControllableDevice):
-    """A load whose draw SEM sets in watts, through a ``number`` entity."""
+class PowerSetpointDevice(ComfortBandMixin, ControllableDevice):
+    """A load whose draw SEM sets in watts, through a ``number`` entity.
+
+    (#1344) It carries the comfort band like every other heater: a heating
+    rod on a watt setpoint is exactly the load Keep at / Run now past are
+    for. The card showed the three fields and the registry stored them, but
+    this class had no band, so a tank under its too-cold limit was not
+    heated. The band's own runs (too cold, Keep at in its planned hour) ask
+    for the FULL setpoint; the sun's run follows the free power as before.
+    """
 
     def __init__(
         self,
@@ -310,6 +318,20 @@ class PowerSetpointDevice(ControllableDevice):
         self._status.activation_count += 1
         _LOGGER.info("Set %s to %.0fW (surplus)", self.name, written)
         return written
+
+    @property
+    def target_stale(self) -> bool:
+        """(#1344) A band run (too cold, Keep at) wants the full setpoint,
+        but this load still holds a smaller one — it was following the sun
+        when the run began. Layer 3 then writes the run's power once."""
+        if not self.is_active:
+            return False
+        if getattr(self, "comfort_state", "disengaged") not in ("forced", "willing"):
+            return False
+        full = self.expected_draw_w(float(self.rated_power or 0.0))
+        if full is None:
+            return False
+        return float(self._status.current_consumption_w or 0.0) < full - 1.0
 
     async def adjust_power(self, available_watts: float) -> float:
         """The whole point of the class: follow the surplus while running."""

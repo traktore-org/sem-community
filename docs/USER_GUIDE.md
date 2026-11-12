@@ -448,6 +448,10 @@ fields under **Comfort** on the Load Priority card. In French they read
 | **Extra from surplus** | Spare sun may heat this much above Keep at |
 | **Run now past** | Below this limit SEM heats at once, on any tariff, and goes on to Keep at |
 
+A heater SEM drives by a watt or ampere setpoint (a heating rod, for
+example) follows the same three fields. A too-cold run and a planned
+*Keep at* run ask for its full power; on spare sun it follows the sun.
+
 SEM checks in this order, and the first match decides:
 
 1. Your own stop temperature is reached: it stops.
