@@ -1689,6 +1689,14 @@ class ComfortBandMixin:
             return 0.0
         return min(self.COMFORT_GOAL_START_GAP_C, band / 2.0)
 
+    def comfort_goal_may_buy(self) -> bool:
+        """(#1102) May Keep at be reached with BOUGHT power? Only when the
+        user allows the grid for this load ("Finish overnight via: Grid").
+        Solar only is solar only, as for a car: the sun keeps the tank, a
+        planned cheap hour is not bought. The too-cold limit is the user's
+        own emergency line and is not asked here."""
+        return getattr(self, "top_up_policy", "solar_only") == "cheap_hours"
+
     def comfort_goal_wants_start(self) -> bool:
         """(#1102) Is the reading far enough from Keep at to START a planned
         run? The one rule for the plan's ask and for layer 1's start."""
@@ -1761,6 +1769,9 @@ class ComfortBandMixin:
         target_c, _offset_c, _limit_c = self._comfort_thresholds_c()
         below = temp > target_c if direction == "cool" else temp < target_c
         if not below:
+            return None
+        # Without the grid allowed there is nothing to plan: the sun keeps it.
+        if not self.comfort_goal_may_buy():
             return None
         # A tank inside the start gap asks for nothing — unless it is
         # already heating: that run goes on to Keep at, so its block stays.
