@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
 - ⚠️ **Solar only is solar only: Keep at buys grid power only with "Finish overnight from: Grid"** (#1102). The too-cold limit still heats at once.
+
 # [2.3.0-beta.12] — 11.11.2026
 
 - 🐛 **Today's plan no longer shows "{kwh}" in the "Min reached" row** (#1310). It now shows the kWh still needed.
