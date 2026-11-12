@@ -862,6 +862,20 @@ def _goal_may_buy(device: "ControllableDevice") -> bool:
     return getattr(device, "top_up_policy", "solar_only") == "cheap_hours"
 
 
+def _goal_may_use_battery(device: "ControllableDevice") -> bool:
+    """(#1349) May this load's Keep at run take the house battery at night?
+    The device's own rule; a device without it follows its battery flag."""
+    may = getattr(device, "comfort_goal_may_use_battery", None)
+    if callable(may):
+        try:
+            said = may()
+        except Exception:  # noqa: BLE001 — an unreadable rule takes nothing
+            return False
+        if isinstance(said, bool):
+            return said
+    return getattr(device, "battery_eligible_overnight", False) is True
+
+
 def _goal_wants_start(device: "ControllableDevice") -> bool:
     """(#1102) The device's own start gap below Keep at. A device without
     the rule (a test double, an older device class) starts as before."""
@@ -1240,6 +1254,24 @@ def compute_load_intent(
                           RC.LOAD_COMFORT_GOAL,
                           command_w=paid_command if _full is None else _full)
 
+    # (#1349) Keep at from the house battery: "Finish overnight from:
+    # Battery" on a heater whose thermometer leads. The run-time clause
+    # below is closed to it (the band leads, so it has no deficit), so the
+    # choice did nothing. Same terms as that clause — night, no plan hold,
+    # the battery above its reserve — and the band's own: a start only
+    # below the start gap, a run going heats on to Keep at. At the reserve
+    # the terms end and the run ends with them; it waits for the sun and is
+    # never turned into a bought run.
+    if (band is not None and band[0] == "willing" and band[1]
+            and can_start and is_night and not plan_hold
+            and soc_above_reserve and _goal_may_use_battery(device)
+            and (active or _goal_wants_start(device))):
+        _full = _heater_full_w(device)
+        return LoadIntent(True, _heater_claim(device, active, held), "tier2_battery",
+                          "heats to its keep-at temperature from the house battery",
+                          RC.LOAD_COMFORT_GOAL_BATTERY,
+                          command_w=paid_command if _full is None else _full)
+
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire
     # in daytime (caught live at 09:10 in full sun).
@@ -1296,6 +1328,14 @@ def compute_load_intent(
     # 5. No source → off. When a plan hold is what suppressed the paid
     #    sources, SAY SO — "no source available" with a block twenty
     #    minutes away reads as a bug; the plan's own words read as a plan.
+    # (#1349) It would heat to Keep at from the house battery tonight, but
+    # the battery is at its reserve: say so, it is not "no source".
+    if (band is not None and band[0] == "willing" and band[1] and is_night
+            and not soc_above_reserve and _goal_may_use_battery(device)
+            and _goal_wants_start(device)):
+        return LoadIntent(False, 0.0, None,
+                          "waits — the house battery is at its reserve",
+                          RC.LOAD_BATTERY_RESERVE)
     if plan_hold and deficit:
         detail = f" (until {plan.until:%H:%M})" if plan.until else ""
         return LoadIntent(False, 0.0, None,

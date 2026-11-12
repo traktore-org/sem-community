@@ -485,7 +485,8 @@ class SEMEnergyPlanCard extends SEMLitBase {
         const unit = this._hass?.config?.unit_system?.temperature || '°C';
         const temp = (c) => (Math.round((unit === '°F' ? c * 9 / 5 + 32 : c) * 10) / 10) + '\u00A0' + unit;
         return coldHeaters(devs && devs.attributes && devs.attributes.devices, blocks, Date.now())
-            .map((h) => (this._t(time ? 'hq_plan_below_no_hour' : 'hq_plan_below_no_hour_plain') || '')
+            .map((h) => (this._t((h.cool ? 'hq_plan_above_no_hour' : 'hq_plan_below_no_hour')
+                + (time ? '' : '_plain')) || '')
                 .replace('{name}', h.name).replace('{keep}', temp(h.keepC)).replace('{time}', time));
     }
 

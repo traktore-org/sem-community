@@ -1764,6 +1764,12 @@ class ComfortBandMixin:
         own emergency line and is not asked here."""
         return getattr(self, "top_up_policy", "solar_only") == "cheap_hours"
 
+    def comfort_goal_may_use_battery(self) -> bool:
+        """(#1349) May Keep at be reached at night from the house battery?
+        Only with "Finish overnight from: Battery". That is not buying: the
+        grid rule (``comfort_goal_may_buy``) stays its own question."""
+        return getattr(self, "battery_eligible_overnight", False) is True
+
     def comfort_goal_wants_start(self) -> bool:
         """(#1102) Is the reading far enough from Keep at to START a planned
         run? The one rule for the plan's ask and for layer 1's start."""

@@ -227,3 +227,24 @@ class TestTheRowSaysWhetherKeepAtMayBeBought:
 
     async def test_a_device_without_the_rule_buys_nothing(self):
         assert UnifiedDeviceRegistry._may_buy(object()) is False
+
+
+@pytest.mark.asyncio
+class TestTheRowSaysWhetherTheBatteryMayReachKeepAt:
+    """(#1349) "Finish overnight from: Battery" on a heater whose thermometer
+    leads: the row carries the device's own answer, so the card can say
+    "heats tonight from the battery"."""
+
+    async def test_the_battery_choice_is_published(self):
+        hass = _Hass()
+        dev = _boiler(hass)
+        sc = _controller(hass, dev)
+        assert _registry(sc)._goal_payload("boiler")["comfort"]["may_use_battery"] is False
+        dev.battery_eligible_overnight = True
+        comfort = _registry(sc)._goal_payload("boiler")["comfort"]
+        assert comfort["may_use_battery"] is True
+        # the battery is not buying: the grid rule stays its own answer
+        assert comfort["may_buy"] is False
+
+    async def test_a_device_without_the_rule_takes_nothing(self):
+        assert UnifiedDeviceRegistry._may_use_battery(object()) is False
