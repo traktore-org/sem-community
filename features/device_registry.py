@@ -37,8 +37,8 @@ from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 # unaliased so a structural test can see the call.
 from .device_axes import user_hands_off
 from ..devices.base import (
+    BandedCurrentLoad,
     CLIMATE_HVAC_MODES,
-    CurrentControlDevice,
     SwitchDevice,
     surplus_device_from_spec,
 )
@@ -1395,7 +1395,7 @@ class UnifiedDeviceRegistry:
                 clear_load_current_control_wrong_unit(self.hass, device.device_id)
             except Exception:  # noqa: BLE001
                 pass
-            self._surplus_controller.register_device(PowerSetpointDevice(
+            _watt_load = PowerSetpointDevice(
                 hass=self.hass,
                 device_id=device.device_id,
                 name=device.name,
@@ -1405,7 +1405,11 @@ class UnifiedDeviceRegistry:
                 entity_id=entity,
                 power_entity_id=device.power_sensor,
                 energy_entity_id=getattr(device, "energy_sensor", None),
-            ))
+            )
+            # (#1344) its stored goals — the comfort band among them — were
+            # never put on the live object on this path
+            self._apply_goals(_watt_load)
+            self._surplus_controller.register_device(_watt_load)
             return
 
         try:
@@ -1416,7 +1420,8 @@ class UnifiedDeviceRegistry:
         except Exception:  # noqa: BLE001
             pass
 
-        surplus_device = CurrentControlDevice(
+        # (#1344) a load, not a car: it carries the comfort band
+        surplus_device = BandedCurrentLoad(
             hass=self.hass,
             device_id=device.device_id,
             name=device.name,
@@ -1434,6 +1439,7 @@ class UnifiedDeviceRegistry:
         # be "stopped" with a 0 A profile the charge point keeps.
         from ..hardware_detection import wire_current_entity
         wire_current_entity(self.hass, surplus_device, device.device_id, entity)
+        self._apply_goals(surplus_device)     # (#1344) as on every other path
         self._surplus_controller.register_device(surplus_device)
 
     def control_mode_for(self, device_id: str) -> str:

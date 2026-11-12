@@ -1396,18 +1396,16 @@ path, the hot-water boiler is a simple on/off device controlled by SEM.
 | Legionella target | Target temperature for the periodic Legionella cycle (default 65 °C) |
 
 Mode, priority, and when to stop or force heating are set on the **Control
-tab**, in the boiler's row. Under **Comfort** there are three fields:
+tab**, in the boiler's row, as four questions:
 
-- **Keep at** — the temperature SEM keeps. Spare sun heats to it. With
-  "Finish overnight from: Grid" SEM also heats to it in a planned cheap hour.
-- **Extra from surplus** — how far spare sun may heat above Keep at.
-- **Run now past** — the too-cold limit. Below it SEM heats at once, on any
-  tariff, and goes on to Keep at.
+- **Keep it at** — the temperature SEM keeps.
+- **Never colder than** — below it SEM heats at once, at any price.
+- **With spare sun, heat up to** — how hot free sun may heat it. This also
+  sets the Solar target above, so both stops agree.
+- **May SEM buy power for it?** — *No, sun only*, or *Yes, in cheap hours*.
 
-An example under the fields shows how high surplus may heat. The section also
-names the thermometer it reads; with none picked, it reads the boiler's own
-temperature. The order SEM follows is in the
-[User Guide](USER_GUIDE.md#keep-at-extra-from-surplus-run-now-past).
+One line above them says what the boiler does now and next. The order SEM
+follows is in the [User Guide](USER_GUIDE.md#a-heaters-four-questions).
 
 **If the temperature sensor is omitted:** SEM operates the boiler "blind" —
 it controls the on/off but relies on the boiler's internal thermostat to

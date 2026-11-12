@@ -13,6 +13,11 @@
 import { regroupChildren, renumber } from './drag-reorder.js';
 import { shedReasonKey } from './shed-reason.js';
 
+// (#1349) the heater's words and questions are ONE model, shared with the
+// Load Priority card
+import { heaterSays, becauseKey } from './heater-questions.js';
+export { heaterSays, becauseKey, nextBlock } from './heater-questions.js';
+
 export const CHARGER_PREFIX = 'load_device_';
 
 const ICONS = {
@@ -176,13 +181,6 @@ export function deviceRows(devices, chargers = [], { hasBattery = false, charger
  * null. A heater has two plan ids: `load:<id>` (its run time) and
  * `comfort:<id>` (its Keep at run).
  */
-export function nextBlock(blocks, ids, nowMs) {
-    const want = new Set((ids || []).map(String));
-    return (Array.isArray(blocks) ? blocks : [])
-        .filter((b) => b && want.has(String(b.id)) && Date.parse(b.start) > nowMs)
-        .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0] || null;
-}
-
 /**
  * The head pill: a translation key, its params and a class (ok · warn · bad · '').
  * `live` carries what only the entities know: power, amps, pause, the
@@ -224,77 +222,6 @@ export function statePill(row, live = {}) {
     if (row.mergedMode === 'peak_only' || row.mergedMode === 'peak') return p('next_st_off_peak_only');
     if (live.plannedAt) return p('next_st_waits_for', { time: live.plannedAt });
     return { ...p('next_st_off'), why: becauseKey(row.intent) };
-}
-
-/**
- * (#1321) Why a load is off, as a short text key, from the engine's reason
- * code. '' when the code says nothing a reader needs ("no source" is what
- * "off" already says for a sun load: it is named, the rest is not).
- */
-const BECAUSE = {
-    peak_shed: 'next_because_peak',
-    phase_guard: 'next_because_phase',
-    phase_shed: 'next_because_phase',
-    vacation: 'next_because_away',
-    plan_wait: 'next_because_plan_wait',
-    no_source: 'next_because_no_sun',
-    surplus_short: 'next_because_no_sun',
-    target_met: 'next_because_ran_enough',
-    daily_max: 'next_because_daily_max',
-    stop_condition: 'next_because_stop',
-    at_target: 'next_because_stop',
-    load_override_stop: 'next_because_paused',
-    step_down_price: 'next_because_held_back',
-    step_down_peak: 'next_because_held_back',
-    no_season: 'next_because_no_season',
-};
-export function becauseKey(intent) {
-    if (!intent || intent.on) return '';
-    return BECAUSE[String(intent.code || '')] || '';
-}
-
-const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-
-/**
- * (#1321) A heater with a Keep at band says what it does and what comes
- * next. The engine's reason code leads, the band's lines (published in °C
- * by the engine, never re-derived here) fill in the numbers. null for a
- * load without a heating band — it keeps the plain texts.
- * `live.fmtTemp` turns °C into the user's unit; `live.plannedAt` is the next
- * planned start (HH:MM) of its run-time or Keep at block.
- */
-export function heaterSays(row, live = {}, running = false) {
-    const c = row.comfort;
-    if (!c || c.hvac === 'cool') return null;
-    const keep = num(c.keep_c), start = num(c.start_c), max = num(c.max_c);
-    if (keep === null) return null;
-    const T = typeof live.fmtTemp === 'function' ? live.fmtTemp : (v) => (Math.round(v * 10) / 10) + ' °C';
-    const p = (key, params = {}, cls = '', why = '') => ({ key, params, cls, why });
-    const intent = row.intent || {};
-    const code = String(intent.code || '');
-    const reading = num(c.reading_c);
-    if (running) {
-        if (c.own_run || code === 'legionella') return p('next_st_legionella', {}, 'ok');
-        if (code === 'comfort_floor' || c.state === 'forced') return p('next_st_too_cold', {}, 'warn');
-        if (code === 'comfort_goal') return p('next_st_heating_to', { keep: T(keep) }, 'ok');
-        if (intent.source === 'solar' || intent.source === 'tier1_battery') {
-            return p('next_st_heating_sun', { max: T(max === null ? keep : max) }, 'ok');
-        }
-        return null;
-    }
-    if (row.mergedMode === 'off') return null;
-    // idle: these say what comes NEXT, so the open row adds no "it turns off"
-    const idle = (key, params = {}, cls = '', why = '') => ({ ...p(key, params, cls, why), next: true });
-    if (reading === null) return idle('next_st_no_reading', {}, 'warn');
-    if (reading >= keep) return idle('next_st_warm', { reading: T(reading) });
-    const line = start === null ? keep : start;
-    if (reading > line) return idle('next_st_warm_again', { start: T(line) });
-    if (live.plannedAt) return idle('next_st_heats_at', { keep: T(keep), time: live.plannedAt });
-    // (#1102) Solar only buys nothing: no hour will ever be planned. Say
-    // what it waits for, and (in the open row) how to allow the grid.
-    if (c.may_buy === false) return { ...idle('next_st_waits_sun', { keep: T(keep) }), noBuy: true };
-    const why = becauseKey(row.intent);
-    return idle('next_st_below_none', { keep: T(keep) }, 'warn', why === 'next_because_no_sun' ? '' : why);
 }
 
 /**

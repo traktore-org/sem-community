@@ -471,3 +471,78 @@ test('the simple control reads the mode and the active one-off', async () => {
     assert.equal(simpleMode(by.e), 'smart');
     assert.equal(by.b.override, null);
 });
+
+// ── (#1349) a heater's four questions, cases A · B · C of the approved mockup ──
+function heaterStates({ mayBuy = true, withBand = true, planned = true } = {}) {
+    const st = states();
+    const devs = st['sensor.sem_controllable_devices_count'].attributes.devices;
+    devs.hot_water = {
+        name: 'Hot water', priority: 3, control_mode: 'surplus', is_on: false, power_rating: 3000,
+        goals: withBand
+            ? { comfort_target: 52, comfort_offset: 4, comfort_limit: 36, top_up_policy: mayBuy ? 'cheap_hours' : 'solar_only', daily_min_runtime_min: 60 }
+            : { daily_min_runtime_min: 60, top_up_policy: 'solar_only' },
+        progress: { runtime_today_min: 0 },
+        comfort: withBand
+            ? { state: 'willing', hvac: 'heat', reading_c: 45.8, keep_c: 52, start_c: 51, max_c: 56, limit_c: 36, own_run: false, may_buy: mayBuy }
+            : null,
+        intent: { on: false, source: null, code: 'no_source' },
+    };
+    st['sensor.sem_energy_plan'] = S('ok', { computed_at: 'x', blocks: planned
+        ? [{ id: 'comfort:hot_water', start: '2099-01-01T23:00:00+01:00', end: '2099-01-02T00:30:00+01:00', power_w: 3000 }] : [] });
+    return st;
+}
+function openHotWater(el) {
+    const row = el._rowsNow().find((r) => r.id === 'hot_water');
+    if (!el._isOpen(row)) el._toggleOpen(row);
+    return text(el.render());
+}
+
+test('case A: a tank waiting for its planned hour shows the sentence, the bar and four questions', () => {
+    const out = openHotWater(makeCard(heaterStates()));
+    for (const k of ['hq_now', 'hq_st_heats_at', 'hq_sub_sun_free', 'hq_keep', 'hq_keep_sub', 'hq_floor', 'hq_floor_sub',
+        'hq_sun_max', 'hq_sun_max_sub', 'hq_buy', 'hq_buy_no', 'hq_buy_cheap', 'hq_buy_sub_band']) assert.match(out, new RegExp(k), k);
+    // the three temperatures as typed, the sun's as an absolute value
+    assert.match(out, /52 °C/); assert.match(out, /36 °C/); assert.match(out, /56 °C/);
+    // a battery finish serves the run time only: not offered to a heater whose thermometer leads
+    assert.doesNotMatch(out, /hq_buy_battery/);
+    // the run-time goal and the old comfort sentence are gone from this row
+    assert.doesNotMatch(out, /next_goal_value|next_keep_sentence|next_finish_overnight/);
+    assert.doesNotMatch(out, /undefined|NaN/);
+});
+
+test('case B: with buying off the tank waits for sun and says SEM buys nothing', () => {
+    const out = openHotWater(makeCard(heaterStates({ mayBuy: false, planned: false })));
+    assert.match(out, /hq_st_waits_sun/);
+    assert.match(out, /hq_sub_no_buy/);
+    assert.match(out, /hq_buy_no/);
+    assert.doesNotMatch(out, /hq_st_heats_at|hq_sub_sun_free/);
+});
+
+test('case C: a load without a thermometer is asked for its time, and may finish from the battery', () => {
+    const out = openHotWater(makeCard(heaterStates({ withBand: false, planned: false })));
+    for (const k of ['hq_run_each_day', 'hq_run_each_day_sub', 'hq_buy', 'hq_buy_battery', 'hq_buy_sub_time']) assert.match(out, new RegExp(k), k);
+    assert.doesNotMatch(out, /hq_keep\b|hq_floor\b|hq_sun_max\b/);
+});
+
+test('the buy question and "heat up to" write the stored settings', async () => {
+    const calls = [];
+    const el = makeCard(heaterStates());
+    el._hass.callService = async (domain, service, data) => { calls.push([service, data]); };
+    const { loadBody } = await import('../src/util/next-devices-load.js');
+    const row = el._rowsNow().find((r) => r.id === 'hot_water');
+    const seen = [];
+    const realSeg = el._seg.bind(el), realNum = el._numEdit.bind(el), realInline = el._inline.bind(el);
+    el._seg = (items, cur, onPick, o) => { if (items.some((i) => i.key === 'grid' && i.label === 'hq_buy_cheap')) seen.push(['buy', onPick]); return realSeg(items, cur, onPick, o); };
+    el._inline = (key, textv, editor, o) => { if (key === 'sun_max:hot_water') seen.push(['sun', editor]); return realInline(key, textv, editor, o); };
+    el._numEdit = (key, o) => { if (key === 'sun_max:hot_water') seen.push(['commit', o.onCommit]); return realNum(key, o); };
+    loadBody(el, row);
+    seen.find((s) => s[0] === 'buy')[1]('off');
+    seen.find((s) => s[0] === 'sun')[1]();
+    seen.find((s) => s[0] === 'commit')[1](58);
+    await Promise.resolve();
+    const cfg = calls.filter((c) => c[0] === 'update_device_config').map((c) => c[1].property + '=' + c[1].value);
+    assert.deepEqual(cfg, ['battery_eligible_overnight=false', 'top_up_policy=solar_only', 'comfort_offset=6']);
+    // a hot-water tank also sets the Solar target, so both stops agree
+    const opt = calls.find((c) => c[0] === 'set_option');
+    assert.deepEqual(opt[1], { options: { hot_water_solar_target: 58 } });
+});

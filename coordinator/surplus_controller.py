@@ -876,9 +876,35 @@ def _heater_claim(device: "ControllableDevice", active: bool, held: float) -> fl
     sensor of its own reports a stored figure, not a measurement — the floor
     rung claimed 1000 W for a 3000 W boiler on .175."""
     rated = _num(getattr(device, "rated_power", 0.0))
+    full = _heater_full_w(device)
+    if full is not None:
+        # (#1344) a watt setpoint is SENT its full power by a heater rung,
+        # so that is what it will draw — not the smaller figure it held
+        # while it followed the sun
+        return full
     if active and getattr(device, "power_entity_id", None) and held > 0:
         return float(held)
     return rated
+
+
+def _heater_full_w(device: "ControllableDevice") -> "Optional[float]":
+    """(#1344) The full power a heater rung sends a load SEM drives by a
+    setpoint: what its entity takes for its rating. None for a load that is
+    only switched (a relay draws what it draws)."""
+    own = getattr(device, "heater_full_w", None)
+    fn = getattr(device, "expected_draw_w", None)
+    if not callable(own) and not callable(fn):
+        return None
+    try:
+        # an ampere load names its own full power; a watt setpoint is asked
+        # what its entity takes for its rating
+        value = own() if callable(own) else fn(
+            _num(getattr(device, "rated_power", 0.0)))
+    except Exception:  # noqa: BLE001 — an unreadable entity is no setpoint
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        return float(value)
+    return None
 
 
 def compute_load_intent(
@@ -1219,9 +1245,12 @@ def compute_load_intent(
             and band[0] == "willing" and band[1]
             and _goal_may_buy(device)
             and (active or (grid_start_fits and _goal_wants_start(device)))):
+        # (#1344) a watt setpoint is sent its full power for this run
+        _full = _heater_full_w(device)
         return LoadIntent(True, _heater_claim(device, active, held), "cheap_grid",
                           plan.reason or "joint plan: heats to its keep-at temperature",
-                          RC.LOAD_COMFORT_GOAL, command_w=paid_command)
+                          RC.LOAD_COMFORT_GOAL,
+                          command_w=paid_command if _full is None else _full)
 
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire

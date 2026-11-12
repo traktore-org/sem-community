@@ -22,6 +22,7 @@ import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semDefineCard, semFormatTime, semGetCurrency } from '../base/sem-shared.js';
 import { demandName } from '../util/demand-name.js';
 import { battIndexes, homeCover } from '../util/plan-cover.js';
+import { coldHeaters } from '../util/heater-questions.js';
 
 const DEFAULT_ENTITY = 'sensor.sem_energy_plan';
 
@@ -470,8 +471,26 @@ class SEMEnergyPlanCard extends SEMLitBase {
         `;
     }
 
+    /**
+     * (#1349) Heaters below their start line, buying allowed, with no hour
+     * in the plan — as sentences. "Nothing needs the night" was wrong while
+     * a tank sat under Keep at.
+     */
+    _coldHeaters(slots, blocks) {
+        const devs = this._hass && this._hass.states['sensor.sem_controllable_devices_count'];
+        const end = slots.length ? slots[slots.length - 1].end : '';
+        const d = end && Number.isFinite(Date.parse(end)) ? new Date(end) : null;
+        const two = (n) => String(n).padStart(2, '0');
+        const time = d ? two(d.getHours()) + ':' + two(d.getMinutes()) : '';
+        const unit = this._hass?.config?.unit_system?.temperature || '°C';
+        const temp = (c) => (Math.round((unit === '°F' ? c * 9 / 5 + 32 : c) * 10) / 10) + '\u00A0' + unit;
+        return coldHeaters(devs && devs.attributes && devs.attributes.devices, blocks, Date.now())
+            .map((h) => (this._t(time ? 'hq_plan_below_no_hour' : 'hq_plan_below_no_hour_plain') || '')
+                .replace('{name}', h.name).replace('{keep}', temp(h.keepC)).replace('{time}', time));
+    }
+
     _renderIdle(act, textKey = 'energy_plan_idle', suffix = '', hasTomorrow = false,
-                why = '', whyCodes = [], notSched = [], arb = null) {
+                why = '', whyCodes = [], notSched = [], arb = null, cold = []) {
         // (#638 C7) translated sentences from the machine codes; the raw
         // diagnostic prose survives only as the hover tooltip. Rendering
         // it verbatim read as an unfinished placeholder (first
@@ -489,7 +508,9 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         ${this._modeChip(act)}
                         ${this._docsLink()}
                     </div>
-                    <div class="idle">${this._t(textKey)}${suffix}</div>
+                    ${(cold || []).length
+                        ? cold.map(line => html`<div class="idle">${line}</div>`)
+                        : html`<div class="idle">${this._t(textKey)}${suffix}</div>`}
                     ${sentences
                         ? html`<div class="why" title="${why}">${sentences}</div>`
                         : (why ? html`<div class="why" title="${why}">${why}</div>` : nothing)}
@@ -552,7 +573,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
         if (verdict === 'idle' || !demands.length) {
             return this._renderIdle(act, 'energy_plan_idle', '', !!a.tomorrow,
                 a.why || '', a.why_codes || [], a.not_scheduled || [],
-                a.arbitrage);
+                a.arbitrage, this._coldHeaters(slots, blocks));
         }
 
         const t0 = slots.length ? Date.parse(slots[0].start) : NaN;

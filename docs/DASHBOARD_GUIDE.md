@@ -609,6 +609,15 @@ placeholder is the window the device is actually holding, or a dash until it
 comes up — never a made-up number (#914). A value you type survives restarts.
 They act only in the solar modes; see [LOAD_PRIORITY.md](LOAD_PRIORITY.md#minimum-run--minimum-pause--anti-cycling).
 
+**A heater's four questions (#1349).** The target button of a heater with a
+thermometer opens one line that says what it does now and next, then four
+questions: *Keep it at*, *Never colder than*, *With spare sun, heat up to* and
+*May SEM buy power for it?*. A load without a thermometer is asked *Run it
+each day for* and the same buy question. Thermometer, minimum on/off time,
+own tariff and *Stop when* sit under **More**. The chip under the row says the
+same in short, for example "45.8 °C · heats to 52 °C at 23:00". See
+[A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
+
 #### sem-onboarding-banner
 
 **SEM Onboarding Banner** · *Home tab*
@@ -835,21 +844,28 @@ pill and as the first line of its open card:
 
 | It says | It means |
 |---|---|
-| too cold · heating now | below *heat at once below*: it heats on any tariff |
-| heating to 52 °C | its planned hour is open; it stops at *Keep at* |
-| heating on sun · up to 56 °C | spare sun heats past *Keep at*, by what the sun may add |
+| too cold · heating now | below *Never colder than*: it heats at any price |
+| heating to 52 °C | its planned hour is open; it stops at *Keep it at* |
+| heating on sun · up to 56 °C | spare sun heats up to *With spare sun, heat up to* |
 | heats to 52 °C at 23:00 | it is below the start line; that hour is planned |
 | below 52 °C · no hour planned yet | nothing is planned; the cause follows when SEM names one |
-| below 52 °C · waits for sun | the load buys no power (*finish overnight from* is not Grid), so only the sun heats it |
-| warm · heats again below 51 °C | just under *Keep at*: no run starts for so little |
-| warm · 52.4 °C | at or above *Keep at* |
+| below 52 °C · waits for sun | SEM may not buy power for it, so only the sun heats it |
+| warm · heats again below 51 °C | just under *Keep it at*: no run starts for so little |
+| warm · 52.4 °C | at or above *Keep it at* |
 | Legionella run | its own heat-up runs to the Legionella temperature |
 | no temperature reading | the band is set but its thermometer reads nothing |
 
 Any other load that is off names the cause when SEM has one, such as
-*off · not enough spare sun* or *off · ran long enough today*. The Comfort
-row reads *Keep at · sun may add · heat at once below*, the same three
-values as in the [User Guide](USER_GUIDE.md#keep-at-extra-from-surplus-run-now-past).
+*off · not enough spare sun* or *off · ran long enough today*.
+
+**A heater's four questions (#1349).** Under that line and a bar with the
+three temperatures, the opened row asks: *Keep it at*, *Never colder than*,
+*With spare sun, heat up to* and *May SEM buy power for it?* — the same
+questions, in the same words, as the Load Priority card. A load without a
+thermometer is asked *Run it each day for* and the buy question. The mode,
+minimum run and pause, Requires, phase, *Stop when*, the thermometer and
+Legionella show under **All settings**. See
+[A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
 
 #### sem-next-insights-card
 

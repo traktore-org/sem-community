@@ -715,7 +715,7 @@ class SEMNextPlanCard extends SEMNextBase {
             if (loadIds.has('comfort:' + h.id) || loadIds.has('load:' + h.id)) continue;
             rows.push(this._devRow('mdi:thermometer-alert', C.home, h.name,
                 t('next_not_scheduled'),
-                this._tf(h.time ? 'next_plan_below_no_hour' : 'next_plan_below_no_hour_plain', { name: h.name, keep: h.keep, time: h.time }), []));
+                this._tf(h.time ? 'hq_plan_below_no_hour' : 'hq_plan_below_no_hour_plain', { name: h.name, keep: h.keep, time: h.time }), []));
         }
         if (!rows.length) return nothing;
         return this._sec(t('next_per_device'), html`<div class="rows">${rows}</div>

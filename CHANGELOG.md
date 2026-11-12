@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
+- ✨ **A heater is set with four plain questions and says what it does next** (#1349).
+- 🐛 **A heater driven by a watt or ampere setpoint now follows Keep at and Run now past** (#1344). The fields were saved but did nothing.
 - ⚠️ **Solar only is solar only: Keep at buys grid power only with "Finish overnight from: Grid"** (#1102). The too-cold limit still heats at once.
 
 # [2.3.0-beta.12] — 11.11.2026
