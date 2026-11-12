@@ -1491,6 +1491,14 @@ class ComfortBandMixin:
       ``current_temperature``.
     """
 
+    # (#594/#1344) The house is away. Stamped every cycle by the coordinator
+    # on every device that carries the band — one place reads the switch.
+    vacation: bool = False
+    # A load SEM found is a heater only once its band is set up (Keep at and
+    # Run now past), so away leaves it alone without one. The hot-water and heat-pump controllers
+    # heat for comfort by nature: away pauses them band or not.
+    away_needs_band: bool = True
+
     # Class-level defaults: a device that never received comfort goals
     # carries a disengaged band instead of AttributeErrors.
     comfort_entity: str = ""
@@ -1595,7 +1603,51 @@ class ComfortBandMixin:
 
     @property
     def comfort_state(self) -> str:
-        """forced / willing / banked / disengaged.
+        """forced / willing / banked / disengaged — and disengaged while the
+        house is away (#594/#1344): no planned run, no banking, no banked
+        stop. The too-cold limit is asked through ``comfort_away_heats``."""
+        if getattr(self, "vacation", False) is True:
+            return "disengaged"
+        return self._comfort_band_state()
+
+    def away_pauses(self) -> bool:
+        """(#1344) Is this device paused because the house is away? A heater
+        with its band set up, and a controller that only heats for comfort."""
+        if getattr(self, "vacation", False) is not True:
+            return False
+        # set up, not "reading right now": a heater whose thermometer went
+        # silent on holiday stays paused, it does not ride the sun blind
+        return (self.away_needs_band is not True
+                or bool(self.comfort_target and self.comfort_limit))
+
+    def comfort_away_floor_open(self) -> bool:
+        """(#1344) While away a too-cold run heats only back above the limit
+        (limit + the start gap), not on to Keep at."""
+        temp = self._comfort_reading()
+        if temp is None:
+            return False
+        try:
+            limit_c = float(self._comfort_thresholds_c()[2])
+        except Exception:  # noqa: BLE001 — an unreadable band heats nothing
+            return False
+        gap = self.comfort_goal_start_gap_c()
+        if self._comfort_direction() == "cool":
+            return float(temp) > limit_c - gap
+        return float(temp) < limit_c + gap
+
+    def comfort_away_heats(self, running: bool = False) -> bool:
+        """(#1344) While away: does the too-cold limit heat now? At or past
+        the limit it starts; a run it started goes on until the reading is
+        back above the limit by the start gap."""
+        state = self._comfort_band_state()
+        if state == "forced":
+            return True
+        return bool(running and state == "willing"
+                    and getattr(self, "_comfort_floor_run", False) is True
+                    and self.comfort_away_floor_open())
+
+    def _comfort_band_state(self) -> str:
+        """forced / willing / banked / disengaged, whatever away says.
 
         Direction from ``_comfort_direction()``: cool forces ABOVE the
         limit and banks down to target − offset; heat is the mirror.
@@ -1689,6 +1741,21 @@ class ComfortBandMixin:
             return 0.0
         return min(self.COMFORT_GOAL_START_GAP_C, band / 2.0)
 
+    def comfort_run_power_w(self) -> float:
+        """(#1344) What a Keep at run draws, for the plan: a load driven by
+        amperes names its full power (it has no rating of its own), every
+        other load its rating. Without this an ampere heater asked the plan
+        for nothing, so its Keep at hour was never planned."""
+        full = getattr(self, "heater_full_w", None)
+        if callable(full):
+            try:
+                value = float(full())
+            except Exception:  # noqa: BLE001 — fall back to the rating
+                value = 0.0
+            if value > 0:
+                return value
+        return float(getattr(self, "rated_power", 0.0) or 0.0)
+
     def comfort_goal_may_buy(self) -> bool:
         """(#1102) May Keep at be reached with BOUGHT power? Only when the
         user allows the grid for this load ("Finish overnight via: Grid").
@@ -1724,6 +1791,8 @@ class ComfortBandMixin:
         rooms have nothing to bank, a missing model must never invent a
         demand.
         """
+        # (#1344) away: the plan is asked nothing — comfort_state is
+        # disengaged then, so this also returns None
         if self.comfort_state != "willing":
             return None
         from ..coordinator.comfort_drift import (
@@ -1777,7 +1846,7 @@ class ComfortBandMixin:
         # already heating: that run goes on to Keep at, so its block stays.
         if not self.is_active and not self.comfort_goal_wants_start():
             return None
-        rated = float(getattr(self, "rated_power", 0.0) or 0.0)
+        rated = self.comfort_run_power_w()
         if rated <= 0:
             return None
         on = learn_drift(list(getattr(self, "_comfort_on_samples", None) or ()))

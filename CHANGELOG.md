@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
 - ✨ **A heater is set with four plain questions and says what it does next** (#1349).
+
+# [2.3.0-beta.13] — 12.11.2026
+
+- ⚠️ **While away, every heater pauses Keep at; only the too-cold limit still heats** (#1344).
+- 🐛 **A heating rod on a watt setpoint keeps its mode after a restart and heats at full power when too cold** (#1344).
 - 🐛 **A heater driven by a watt or ampere setpoint now follows Keep at and Run now past** (#1344). The fields were saved but did nothing.
 - ⚠️ **Solar only is solar only: Keep at buys grid power only with "Finish overnight from: Grid"** (#1102). The too-cold limit still heats at once.
 
@@ -109,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **Ask Assist to skip or force charge for one night, or go back to normal** (#1086). Off by default, like the other voice commands.
 - ✨ **Pause or force a battery or charger for a set time** (#1085). It survives a restart and ends on its own.
 - 🔧 **Setup now knows the price sensor of Tibber, Tibber Prices and ENTSO-e by its own name** (#1168). Nothing reads it yet.
+
 # [2.3.0-beta.2] — 01.11.2026
 
 - 🐛 **A restart no longer drops lifetime totals above 100 MWh or costs above 100,000** (#1295). The lifetime home read the grid import.
@@ -772,6 +778,7 @@ Needs Home Assistant 2026.2.0 or newer. New features are off until you switch th
   stale string to erase a level real breakpoints had produced. An hour whose
   price the classifier could not compare now reads `unknown` on the hour-wise
   accessor too, instead of a confident `normal`.
+
 # [2.1.0-beta.34] — 19.09.2026
 
 - 🐛 **A charger's current entity missing at startup was treated as missing
@@ -3488,6 +3495,7 @@ those people.
   up to five minutes of them no longer refuse a whole night — zero tolerance
   plus the rig's daily automated restart would have refused every night,
   forever. A real outage still refuses.
+
 # [2.0.0-beta.10] — 19.08.2026
 
 - 🔋 **The battery recorder actually survives, and tells you in the morning**

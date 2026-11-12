@@ -597,8 +597,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="help-panel">
                         <div class="help-item"><b>${this._t('off')}</b> — ${this._t('help_mode_off')}</div>
                         <div class="help-item"><b>${this._t('peak_only')}</b> — ${this._t('help_mode_peak_only')}</div>
-                        <div class="help-item"><b>${this._t('mode_solar_only')}</b> — ${this._t('help_mode_surplus')}</div>
-                        <div class="help-item"><b>${this._t('mode_solar_battery')}</b> — ${this._t('battery_overnight_hint')}</div>
+                        <div class="help-item"><b>${this._t('load_mode_sem')}</b> — ${this._t('load_mode_help_sem')}</div>
+                        <div class="help-item"><b>${this._t('load_mode_sem_battery')}</b> — ${this._t('load_mode_help_sem_battery')}</div>
                         <div class="help-item"><b>${this._t('priority')}</b> — ${this._t('help_device_priority')}</div>
                         <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
                         <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
@@ -695,13 +695,13 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="spacer"></div>
                     ${isBattery ? html`<span class="dim" title="${this._t('battery_role_help')}">${this._t('battery_role_label')}</span>` : nothing}
                     ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery ? nothing : html`
-                    <label class="toggle-label" title="${this._t('mode_tooltip')}">
+                    <label class="toggle-label" title="${this._t('load_mode_tooltip')}">
                         <span class="dim">${this._t('mode')}</span>
                         <select class="mode-select" data-action="combined_mode" data-device="${device.id}">
                             <option value="off" ?selected="${this._mergedMode(device) === 'off'}">${this._t('off')}</option>
                             <option value="peak_only" ?selected="${this._mergedMode(device) === 'peak_only'}">${this._t('peak_only')}</option>
-                            <option value="solar_only" ?selected="${this._mergedMode(device) === 'solar_only'}">${this._t('mode_solar_only')}</option>
-                            <option value="solar_battery" ?selected="${this._mergedMode(device) === 'solar_battery'}">${this._t('mode_solar_battery')}</option>
+                            <option value="solar_only" ?selected="${this._mergedMode(device) === 'solar_only'}">${this._t('load_mode_sem')}</option>
+                            <option value="solar_battery" ?selected="${this._mergedMode(device) === 'solar_battery'}">${this._t('load_mode_sem_battery')}</option>
                         </select>
                     </label>`}
                     ${isBattery ? nothing : html`
@@ -776,8 +776,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
     _mergedModeLabel(device) {
         const m = this._mergedMode(device);
         const key = { off: 'off', peak_only: 'peak_only',
-                      solar_only: 'mode_solar_only',
-                      solar_battery: 'mode_solar_battery' }[m] || m;
+                      solar_only: 'load_mode_sem',
+                      solar_battery: 'load_mode_sem_battery' }[m] || m;
         return this._t(key);
     }
 

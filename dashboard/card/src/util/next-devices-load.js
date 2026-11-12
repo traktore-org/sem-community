@@ -17,8 +17,9 @@ import { heaterQuestions, heaterSub, sunMaxWrites, buyWrites, BUY_LABEL } from '
 const MODES = [
     { key: 'off', label: 'off', help: 'help_mode_off' },
     { key: 'peak_only', label: 'peak_only', help: 'help_mode_peak_only' },
-    { key: 'solar_only', label: 'mode_solar_only', help: 'help_mode_surplus' },
-    { key: 'solar_battery', label: 'mode_solar_battery', help: 'battery_overnight_hint' },
+    // (#1349) a load's mode says who runs it; the buy question says whether power is bought
+    { key: 'solar_only', label: 'load_mode_sem', help: 'load_mode_help_sem' },
+    { key: 'solar_battery', label: 'load_mode_sem_battery', help: 'load_mode_help_sem_battery' },
 ];
 const PHASES = ['unknown', 'L1', 'L2', 'L3', '3ph'];
 const DOMAIN = 'solar_energy_management';
@@ -108,10 +109,12 @@ export function loadBody(card, row) {
         : (row.rating > 0 ? (row.ratingMeasured ? html`<span class="dim">~${card._kw(row.rating)}</span>` : html`<span class="dim">${card._t('rating_not_measured')}</span>`)
             : (live === null ? '—' : card._kw(live)));
     const minMin = parseFloat(g.daily_min_runtime_min) || 0, maxMin = parseFloat(g.daily_max_runtime_min) || 0;
+    // (#1349) with a thermometer the run-time goal asks nothing: Today shows the time run, no goal
+    const thermoLeads = !measureOnly && heaterQuestions({ goals: g, comfort: row.comfort }).view === 'band';
     const today = row.progress ? Number(row.progress.runtime_today_min) : null;
     const todayText = today === null || !Number.isFinite(today) ? '—'
-        : (solar && minMin > 0 ? tf('next_h_of', { h: hours(today), min: hours(minMin) }) : tf('next_h_today', { h: hours(today) }));
-    const goalSub = solar && minMin > 0 ? tf('next_on_solar_goal', { min: hours(minMin), max: maxMin > 0 ? hours(maxMin) : t('uncapped') }) : '';
+        : (solar && !thermoLeads && minMin > 0 ? tf('next_h_of', { h: hours(today), min: hours(minMin) }) : tf('next_h_today', { h: hours(today) }));
+    const goalSub = solar && !thermoLeads && minMin > 0 ? tf('next_on_solar_goal', { min: hours(minMin), max: maxMin > 0 ? hours(maxMin) : t('uncapped') }) : '';
     // (#1349) four plain questions: a heater whose thermometer leads ('band'),
     // a load asked for its time ('time'), or a cooling band (earlier layout).
     const q = measureOnly ? { view: 'none' } : heaterQuestions({ goals: g, comfort: row.comfort },

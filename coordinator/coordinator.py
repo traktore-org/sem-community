@@ -4075,20 +4075,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     async def _apply_vacation_mode(self) -> bool:
         """Set the per-cycle vacation flag on the comfort-heating controllers
-        (#594). (#1335) Layer 1 stops their comfort runs from the flag.
+        and on every load that carries the comfort band (#594, #1344).
+        (#1335) Layer 1 stops their comfort runs from the flag.
 
         Runs BEFORE ``SurplusController.update`` so this cycle's activation
         pass already sees the gate. SEM only stops ENCOURAGING: deactivation
         returns the heat pump to SG-Ready NORMAL (never BLOCKED) and the
-        boiler to its own thermostat — frost/safety logic is untouched. EV /
-        battery / load-priority devices are deliberately not touched.
+        boiler to its own thermostat — frost/safety logic is untouched. EV,
+        battery and loads without a comfort band are not touched.
         """
         vacation = self._compute_vacation_active()
         self._vacation_active = vacation
         devices = getattr(self._surplus_controller, "_devices", {})
-        for dev_id in ("heat_pump", "hot_water"):
-            dev = devices.get(dev_id)
-            if dev is None:
+        from ..devices.base import ComfortBandMixin
+        for dev_id, dev in list(devices.items()):
+            # (#1344) every device that carries the comfort band learns it
+            # here, from this one read of the switch — the two controllers
+            # and every load a user gave Keep at. Layer 1 decides what away
+            # means for each (``away_pauses``).
+            if dev is None or not (
+                    dev_id in ("heat_pump", "hot_water")
+                    or isinstance(dev, ComfortBandMixin)):
                 continue
             dev.vacation = vacation
             if dev_id == "hot_water":
@@ -13105,7 +13112,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ask = _ask_fn(now, goal=True) if callable(_ask_fn) else None
                     if not ask:
                         continue
-                    rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
+                    # (#1344) an ampere load has no rating: its run power
+                    _run_w = getattr(dev, "comfort_run_power_w", None)
+                    _said = _run_w() if callable(_run_w) else None
+                    rated = (float(_said) if isinstance(_said, (int, float))
+                             and not isinstance(_said, bool)
+                             else float(getattr(dev, "rated_power", 0.0) or 0.0))
                     if rated <= 0:
                         continue
                     did = dev.device_id

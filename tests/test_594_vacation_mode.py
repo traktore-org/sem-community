@@ -485,14 +485,110 @@ class TestApplyVacationMode:
 
     @pytest.mark.asyncio
     async def test_other_devices_untouched(self):
-        """EV / battery / other surplus loads are not the vacation gate's
-        business — only heat_pump + hot_water are touched."""
+        """EV / battery / a load without the comfort band are not the
+        vacation gate's business. (#1344) Every device that carries the band
+        is stamped — see ``TestAwayIsOneRuleForEveryHeater``."""
         hass = _hass({"switch.sem_vacation_mode": _state("on")})
         pool = MagicMock()
         pool.deactivate = AsyncMock()
         c = _FakeCoordinator(hass, devices={"pool_pump": pool})
         await c._apply_vacation_mode()
         pool.deactivate.assert_not_called()
+
+
+class TestAwayIsOneRuleForEveryHeater:
+    """(#1344) Away pauses Keep at for every heater and keeps only the
+    too-cold limit. Before, away reached the two controllers only: a load
+    SEM found, with Keep at set, kept heating to it on holiday — and on the
+    controllers a tank under "Run now past" was not heated at all."""
+
+    def _tank(self, temp):
+        from custom_components.solar_energy_management.devices.base import (
+            DeviceControlMode, SwitchDevice,
+        )
+        states = {"sensor.tank": _state(temp, {"unit_of_measurement": "°C"}),
+                  "switch.sem_vacation_mode": _state("on")}
+        hass = _hass(states)
+        hass.config = SimpleNamespace(units=SimpleNamespace(temperature_unit="°C"))
+        dev = SwitchDevice(hass, "rod", "Heating rod", rated_power=3000.0,
+                           entity_id="switch.rod")
+        dev.control_mode = DeviceControlMode.SURPLUS
+        dev.comfort_entity = "sensor.tank"
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = 50.0, 5.0, 36.0
+        return hass, dev, states
+
+    @pytest.mark.asyncio
+    async def test_a_load_with_the_band_is_stamped_from_the_one_switch_read(self):
+        hass, dev, _ = self._tank(45.0)
+        plain = MagicMock()
+        plain.vacation = "untouched"
+        c = _FakeCoordinator(hass, devices={"rod": dev, "pool_pump": plain})
+        assert await c._apply_vacation_mode() is True
+        assert dev.vacation is True and dev.away_pauses() is True
+        assert plain.vacation == "untouched"
+        hass.services.async_call.assert_not_called()
+
+    def test_away_asks_the_plan_nothing_and_says_so_in_the_row(self):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry,
+        )
+        hass, dev, _ = self._tank(45.0)
+        dev.top_up_policy = "cheap_hours"
+        assert dev.comfort_plan_demand(None, goal=True) is not None
+        dev.vacation = True
+        assert dev.comfort_plan_demand(None, goal=True) is None
+        reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+        reg._device_goals = {"rod": {}}
+        ctrl = MagicMock()
+        ctrl.get_device.return_value = dev
+        reg._surplus_controller = ctrl
+        row = reg._goal_payload("rod")["comfort"]
+        assert row["away"] is True and row["state"] == "disengaged"
+
+    def test_a_load_without_a_band_is_not_paused(self):
+        hass, dev, _ = self._tank(45.0)
+        dev.comfort_target = dev.comfort_limit = 0.0
+        dev.vacation = True
+        assert dev.away_pauses() is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("dump", [False, True])
+    async def test_a_tank_under_its_limit_is_heated_while_away(self, dump):
+        """The hot-water controller, with and without the sun dump: under
+        "Run now past" it heats, back above the limit and no further."""
+        from custom_components.solar_energy_management.coordinator import reason_codes as RC
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            SurplusController,
+        )
+        from custom_components.solar_energy_management.devices.base import DeviceControlMode
+        states = {"sensor.tank_temp": _state(34.0, {"unit_of_measurement": "°C"}),
+                  "switch.boiler": _state("off")}
+        hass = _hass(states)
+        hass.config = SimpleNamespace(units=SimpleNamespace(temperature_unit="°C"))
+
+        async def _call(domain, service, data=None, **_kw):
+            if service in ("turn_on", "turn_off"):
+                states[data["entity_id"]] = _state("on" if service == "turn_on" else "off")
+        hass.services.async_call = AsyncMock(side_effect=_call)
+        hw = HotWaterController(hass=hass, entity_id="switch.boiler",
+                                temperature_entity_id="sensor.tank_temp",
+                                min_on_time=0, min_off_time=0)
+        hw.control_mode = DeviceControlMode.SURPLUS
+        hw.comfort_entity = "sensor.tank_temp"
+        hw.comfort_target, hw.comfort_offset, hw.comfort_limit = 50.0, 5.0, 36.0
+        hw.vacation, hw.vacation_dhw_surplus = True, dump
+        sc = SurplusController(hass, regulation_offset=0)
+        sc.register_device(hw)
+        for _ in range(3):
+            await sc.update(0.0, is_night=True, solar_w=0.0)
+        assert hw.is_active, "too cold while away must heat"
+        states["sensor.tank_temp"] = _state(37.5, {"unit_of_measurement": "°C"})
+        for _ in range(3):
+            await sc.update(0.0, is_night=True, solar_w=0.0)
+        assert not hw.is_active, "it must stop just above the limit, not at Keep at"
+        codes = [r["reason_code"] for r in sc.decision_log.records()
+                 if str(r["new"]).startswith("on")]
+        assert codes == [RC.LOAD_COMFORT_FLOOR_AWAY]
 
 
 class TestVacationPublished:

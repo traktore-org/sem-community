@@ -820,6 +820,34 @@ def _heater_band(device: "ControllableDevice"):
     return state, below
 
 
+def _away_pauses(device: "ControllableDevice") -> bool:
+    """(#594/#1344) Is this device paused because the house is away? The
+    device's own rule (a heater with its band set up, or a comfort
+    controller); a device without the rule follows its ``vacation`` flag."""
+    if getattr(device, "vacation", False) is not True:
+        return False
+    rule = getattr(device, "away_pauses", None)
+    if callable(rule):
+        try:
+            said = rule()
+        except Exception:  # noqa: BLE001 — an unreadable band stays paused
+            return True
+        if isinstance(said, bool):
+            return said
+    return True
+
+
+def _away_heats(device: "ControllableDevice", active: bool) -> bool:
+    """(#1344) While away: does the device's too-cold limit heat now?"""
+    rule = getattr(device, "comfort_away_heats", None)
+    if not callable(rule):
+        return False
+    try:
+        return rule(active) is True
+    except Exception:  # noqa: BLE001 — an unreadable band heats nothing
+        return False
+
+
 def _goal_may_buy(device: "ControllableDevice") -> bool:
     """(#1102) May this load's Keep at run be bought from the grid? The
     device's own rule; a device without it follows its top-up policy."""
@@ -1063,8 +1091,20 @@ def compute_load_intent(
     # 3d. (#594/#1335) Away: no comfort heating. A run stops; the optional
     #     hot-water dump may still take free sun (capped at the minimum
     #     temperature by the device's own target), nothing paid.
+    #     (#1344) ONE rule for every heater: a load with its band set up is
+    #     paused like the two controllers — no Keep at run, no banking — and
+    #     only the too-cold limit still heats, back above the limit and no
+    #     further. Peak shed (clause 2) and the operator's lock still outrank it.
     sun_only = False
-    if getattr(device, "vacation", False) is True:
+    if _away_pauses(device):
+        if (active or not peak_freeze) and _away_heats(device, active):
+            _thr = (_num(getattr(device, "min_power_threshold", 0.0))
+                    or _num(getattr(device, "rated_power", 0.0)))
+            src = ("solar" if float(remaining_surplus_w) >= _thr > 0
+                   else "comfort_floor")
+            return LoadIntent(True, _heater_claim(device, active, held), src,
+                              "too cold while away — heats back above its limit",
+                              RC.LOAD_COMFORT_FLOOR_AWAY)
         if getattr(device, "vacation_dhw_surplus", False) is not True:
             return LoadIntent(False, 0.0, None,
                               "comfort heating paused while away",
@@ -1081,8 +1121,14 @@ def compute_load_intent(
             return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
                               "Legionella run — ends at its own target",
                               RC.LOAD_LEGIONELLA)
-        return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
-                          "Legionella run due", RC.LOAD_LEGIONELLA)
+        # (#1344) A due run does not START into a peak: the shed (clause 2)
+        # ended it the next cycle and it started again, on and off for as
+        # long as the peak lasted. It waits — the rungs below decide as if
+        # it were not due, and none of them starts a load into a peak. A run
+        # already going is kept, as above.
+        if not peak_freeze:
+            return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
+                              "Legionella run due", RC.LOAD_LEGIONELLA)
 
     # 3e. (#1321) The user's one-off, for the minutes they chose: ``skip``
     #     keeps it off, ``force`` runs it with or without sun. Only in
@@ -1350,7 +1396,8 @@ def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> N
     # to Keep at — written here with the other derived markers, not by the
     # layers that decide
     device._comfort_floor_run = bool(
-        intent.on and intent.code == RC.LOAD_COMFORT_FLOOR)
+        intent.on and intent.code in (RC.LOAD_COMFORT_FLOOR,
+                                      RC.LOAD_COMFORT_FLOOR_AWAY))
 
 
 def _clear_source_markers(device: "ControllableDevice") -> None:
@@ -2350,7 +2397,9 @@ class SurplusController:
         return (device.control_mode == DeviceControlMode.SURPLUS
                 and intent.on
                 and intent.source in ("solar", "tier1_battery")
-                and intent.code not in (RC.LOAD_COMFORT_FLOOR, RC.LOAD_DEADLINE)
+                and intent.code not in (RC.LOAD_COMFORT_FLOOR,
+                                        RC.LOAD_COMFORT_FLOOR_AWAY,
+                                        RC.LOAD_DEADLINE)
                 and getattr(device, "runs_without_surplus", False) is not True)
 
     def _walk_debit(self, device, intent: "LoadIntent", *, remaining: float,

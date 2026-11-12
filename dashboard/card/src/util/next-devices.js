@@ -225,17 +225,14 @@ export function statePill(row, live = {}) {
 }
 
 /**
- * (#1102) The mode sentence of a sun load, true to its grid setting: plain
- * "never imports" only when nothing is bought; with "finish overnight from"
- * on Grid or Battery it says what the load really does.
+ * (#1349) The mode sentence of a load: who runs it. Whether power is bought
+ * is the buy question's to say, so the grid setting no longer changes it.
  */
-export function modeHelpKey(merged, goals) {
+export function modeHelpKey(merged) {
     if (merged === 'off') return 'help_mode_off';
     if (merged === 'peak_only') return 'help_mode_peak_only';
-    if (merged === 'solar_battery') return 'battery_overnight_hint';
-    if (merged !== 'solar_only') return '';
-    const src = overnightSource(goals);
-    return src === 'grid' ? 'help_mode_surplus_grid' : src === 'battery' ? 'help_mode_surplus_battery' : 'help_mode_surplus';
+    if (merged === 'solar_battery') return 'load_mode_help_sem_battery';
+    return merged === 'solar_only' ? 'load_mode_help_sem' : '';
 }
 
 /**

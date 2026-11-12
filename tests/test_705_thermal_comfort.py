@@ -399,6 +399,7 @@ class TestThePayloadIsTheSingleSource:
         p = self._registry_with(dev, {})._goal_payload(dev.device_id)
         c = p["comfort"]
         assert (c["state"], c["reading_c"], c["hvac"]) == ("forced", 27.0, "cool")
+        assert c["away"] is False
         # (#1321) the band's lines ride along, mirrored for cooling: a run
         # starts ABOVE Keep at, the sun may cool BELOW it
         assert (c["keep_c"], c["start_c"], c["max_c"], c["limit_c"]) == (24.0, 25.0, 22.0, 26.0)
@@ -432,6 +433,7 @@ class TestThePayloadIsTheSingleSource:
         p = self._registry_with(dev, {})._goal_payload(dev.device_id)
         c = p["comfort"]
         assert (c["state"], c["reading_c"], c["hvac"]) == ("disengaged", None, "cool")
+        assert c["away"] is False
 
 
 class TestSetpointAnchoring:
@@ -587,6 +589,7 @@ class TestPhase2SwitchLoads:
         p = reg._goal_payload("floor1")
         c = p["comfort"]
         assert (c["state"], c["reading_c"], c["hvac"]) == ("willing", 20.0, "heat")
+        assert c["away"] is False
         assert (c["keep_c"], c["start_c"], c["max_c"], c["limit_c"]) == (21.0, 20.0, 23.0, 18.0)
 
     def test_a_switch_without_comfort_goals_is_untouched(self):

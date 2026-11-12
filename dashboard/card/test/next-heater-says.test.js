@@ -145,10 +145,9 @@ test('a heater that buys nothing is not a gap in the plan', () => {
 });
 
 test('the mode sentence is true to the grid setting', () => {
-    assert.equal(modeHelpKey('solar_only', {}), 'help_mode_surplus');
-    assert.equal(modeHelpKey('solar_only', { top_up_policy: 'cheap_hours' }), 'help_mode_surplus_grid');
-    assert.equal(modeHelpKey('solar_only', { battery_eligible_overnight: true }), 'help_mode_surplus_battery');
-    assert.equal(modeHelpKey('solar_battery', { top_up_policy: 'cheap_hours' }), 'battery_overnight_hint');
-    assert.equal(modeHelpKey('off', {}), 'help_mode_off');
-    assert.equal(modeHelpKey('peak_only', {}), 'help_mode_peak_only');
+    // (#1349) a load's mode says who runs it; the grid setting no longer changes the sentence
+    assert.equal(modeHelpKey('solar_only'), 'load_mode_help_sem');
+    assert.equal(modeHelpKey('solar_battery'), 'load_mode_help_sem_battery');
+    assert.equal(modeHelpKey('off'), 'help_mode_off');
+    assert.equal(modeHelpKey('peak_only'), 'help_mode_peak_only');
 });

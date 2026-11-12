@@ -265,7 +265,7 @@ test('the card renders every device with its body, the surplus section and the l
     assert.match(out, /operator_limit_banner/);
     for (const k of ['next_st_charging_a', 'next_st_on', 'next_st_waiting_for', 'next_st_to_house',
         'charge_mode_hint_solar_plus_cheap_surplus', 'next_departures', 'next_set_once', 'next_lifetime',
-        'help_mode_surplus', 'next_legionella', 'next_sg_ready', 'battery_mode_hint_auto', 'next_bat_sent_fill',
+        'load_mode_help_sem', 'next_legionella', 'next_sg_ready', 'battery_mode_hint_auto', 'next_bat_sent_fill',
         'planning_phase_holding', 'charge_pacing', 'next_sell_window', 'next_battery_n', 'next_evidence', 'health']) {
         assert.match(out, new RegExp(k), k);
     }
@@ -281,7 +281,7 @@ test('loads start folded, chargers and the battery open; a tap and All settings 
     assert.equal(el._isOpen(byId.battery), true);
     assert.equal(el._isOpen(byId.heat_pump), false);
     let out = text(el.render());
-    assert.doesNotMatch(out, /help_mode_surplus/);
+    assert.doesNotMatch(out, /load_mode_help_sem/);
     assert.match(out, /next_open_all/);
     el._toggleOpen(byId.heat_pump);
     assert.equal(el._isOpen(byId.heat_pump), true);
@@ -290,7 +290,7 @@ test('loads start folded, chargers and the battery open; a tap and All settings 
     el._setAllOpen(rows, true);
     assert.ok(rows.every((r) => el._isOpen(r)));
     out = text(el.render());
-    assert.match(out, /help_mode_surplus/);
+    assert.match(out, /load_mode_help_sem/);
     assert.match(out, /next_fold_all/);
     el._setAllOpen(rows, false);
     el._all = true;
@@ -506,6 +506,9 @@ test('case A: a tank waiting for its planned hour shows the sentence, the bar an
     // a battery finish serves the run time only: not offered to a heater whose thermometer leads
     assert.doesNotMatch(out, /hq_buy_battery/);
     // the run-time goal and the old comfort sentence are gone from this row
+    // …also from the Today tile: the time run, no goal
+    assert.match(out, /next_h_today/);
+    assert.doesNotMatch(out, /next_h_of|next_on_solar_goal/);
     assert.doesNotMatch(out, /next_goal_value|next_keep_sentence|next_finish_overnight/);
     assert.doesNotMatch(out, /undefined|NaN/);
 });

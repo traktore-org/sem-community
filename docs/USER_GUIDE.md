@@ -480,6 +480,18 @@ heated again for its minutes. Solar only is solar only, as for a car: with
 than* heats at once whatever the answer.
 The **Why?** card names the step that decided.
 
+**While you are away** (the *Vacation mode* switch, or your own away
+entity) the same rule holds for every heater with these fields: no *Keep
+at* run, nothing bought for it, no extra from the sun. Only the too-cold
+limit still heats, and only back to just above *Run now past*, so a house on
+holiday is kept from going cold but is not kept warm. A Legionella run waits
+until you are back. If you let the hot-water tank take surplus while away,
+it still takes free sun up to its minimum temperature. A load without these
+fields is not touched by away.
+
+A Legionella run that is due does not start while the house is at its peak
+limit; it starts when the peak has passed.
+
 ### Heat or cool by the outdoor forecast (#1323)
 
 A climate unit set to **By outdoor forecast** picks its season itself. Pick it
@@ -1519,10 +1531,12 @@ The **Mode** dropdown on a device's Control-tab row offers four options:
 |------|--------------|----------------|----------|
 | **Off** | Never | Never | Monitoring only (coffee machine, lights you don't want managed) |
 | **Peak Only** | Never | Yes, during grid peaks | Devices under your control that SEM may shed to protect the grid limit |
-| **Solar only** | Yes, on PV surplus | Yes, when surplus drops or during peaks | Discretionary loads on sun alone (pool pump, boiler) |
-| **Solar + battery** | Yes, on PV surplus + home-battery assist above the buffer | Same | Loads that should ride through cloud/evening on the battery (#620) |
+| **SEM runs it** (was *Solar only*) | Yes, on spare sun | Yes, when the sun drops or during peaks | Loads SEM should start and stop (pool pump, boiler) |
+| **SEM runs it, battery may help** (was *Solar + battery*) | Yes, on spare sun plus home-battery help above the buffer | Same | Loads that should ride through a cloud on the battery (#620) |
 
-**Default for all devices: Peak Only** — SEM never proactively turns a device on unless you pick one of the Solar modes.
+**Default for all devices: Peak Only** — SEM never turns a device on unless you pick one of the two *SEM runs it* modes.
+
+The mode says who runs the load, not where its power comes from. Whether SEM buys power for it is its own question: *May SEM buy power for it?* (see [A heater's four questions](#a-heaters-four-questions)). A car's charge modes keep their names.
 
 Internally the two Solar modes share the `surplus` control mode (`control_mode`: `off` / `peak_only` / `surplus`), differentiated by the battery-assist flag — relevant when writing the mode via the service below.
 
