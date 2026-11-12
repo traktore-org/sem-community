@@ -706,6 +706,18 @@ class LoadIntent:
     step_down: bool = False
 
 
+def intent_record(intent: "LoadIntent") -> Dict[str, Any]:
+    """(#1321) A load's intent as the cards read it: on or off, the source
+    and the reason CODE — never prose (the card translates the code). An
+    intent without a code is named by its source ("solar", "cheap_grid")."""
+    return {
+        "on": bool(intent.on),
+        "source": intent.source or None,
+        "code": str(intent.code or intent.source or ""),
+        **({"step_down": True} if intent.step_down else {}),
+    }
+
+
 #: (#1335) Sources that buy the run (grid, battery) or need no sun (the
 #: comfort floor): a run on them holds its power and is never re-tuned to
 #: the sun's pool, and the walk lets it take only the sun that is left.
@@ -1811,6 +1823,10 @@ class SurplusController:
         self.max_export_w: float = 0  # 0 = no limit. E.g., 10000 for 10kW export limit
         self._devices: Dict[str, ControllableDevice] = {}
         self._allocation_data = SurplusAllocationData()
+        #: (#1321) Each load's layer-1 intent of THIS cycle, for the cards:
+        #: ``{device_id: {"on", "source", "code"}}``. A roster — rebuilt
+        #: whole every cycle, never appended to, codes only.
+        self._intent_roster: Dict[str, Dict[str, Any]] = {}
         self._price_responsive_mode = False
         self._last_surplus = 0.0
         self._smoothed_surplus: Optional[float] = None
@@ -2006,6 +2022,12 @@ class SurplusController:
     def get_device(self, device_id: str) -> Optional[ControllableDevice]:
         """Get a registered device by ID."""
         return self._devices.get(device_id)
+
+    def load_intent(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """(#1321) This cycle's layer-1 intent for one load, or None when the
+        walk has not decided it (no cycle yet, or the load is gone)."""
+        rec = self._intent_roster.get(device_id)
+        return dict(rec) if rec else None
 
     def get_devices_sorted(self) -> List[ControllableDevice]:
         """Get all devices sorted by priority (1=highest).
@@ -2308,6 +2330,11 @@ class SurplusController:
             battery_priority=battery_priority, price_level=price_level,
             peak_freeze=peak_freeze, peak_shed=peak_shed,
             peak_shed_all=peak_shed_all)
+        # (#1321) What each load is to do now and why, for the cards — the
+        # same on a real install and in observer mode (the intent is the
+        # decision; only the write differs).
+        self._intent_roster = {
+            did: intent_record(intent) for did, intent in intents.items()}
         allocations: List[SurplusAllocation] = []
         active_count = 0
         for device in devices:

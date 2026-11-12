@@ -607,6 +607,15 @@ placeholder is the window the device is actually holding, or a dash until it
 comes up — never a made-up number (#914). A value you type survives restarts.
 They act only in the solar modes; see [LOAD_PRIORITY.md](LOAD_PRIORITY.md#minimum-run--minimum-pause--anti-cycling).
 
+**A heater's four questions (#1349).** The target button of a heater with a
+thermometer opens one line that says what it does now and next, then four
+questions: *Keep it at*, *Never colder than*, *With spare sun, heat up to* and
+*May SEM buy power for it?*. A load without a thermometer is asked *Run it
+each day for* and the same buy question. Thermometer, minimum on/off time,
+own tariff and *Stop when* sit under **More**. The chip under the row says the
+same in short, for example "45.8 °C · heats to 52 °C at 23:00". See
+[A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
+
 #### sem-onboarding-banner
 
 **SEM Onboarding Banner** · *Home tab*
