@@ -820,6 +820,20 @@ def _heater_band(device: "ControllableDevice"):
     return state, below
 
 
+def _goal_may_buy(device: "ControllableDevice") -> bool:
+    """(#1102) May this load's Keep at run be bought from the grid? The
+    device's own rule; a device without it follows its top-up policy."""
+    may = getattr(device, "comfort_goal_may_buy", None)
+    if callable(may):
+        try:
+            said = may()
+        except Exception:  # noqa: BLE001 — an unreadable rule buys nothing
+            return False
+        if isinstance(said, bool):
+            return said
+    return getattr(device, "top_up_policy", "solar_only") == "cheap_hours"
+
+
 def _goal_wants_start(device: "ControllableDevice") -> bool:
     """(#1102) The device's own start gap below Keep at. A device without
     the rule (a test double, an older device class) starts as before."""
@@ -1199,8 +1213,11 @@ def compute_load_intent(
     # billing slot, as the cheap-hours start does.
     # (#1102) A START also needs the reading clearly below Keep at (the
     # device's start gap); a run already going heats on to Keep at.
+    # Bought power needs the user's word for the grid on this load: solar
+    # only is solar only, as for a car.
     if (plan.comfort_in_block and can_start and band is not None
             and band[0] == "willing" and band[1]
+            and _goal_may_buy(device)
             and (active or (grid_start_fits and _goal_wants_start(device)))):
         return LoadIntent(True, _heater_claim(device, active, held), "cheap_grid",
                           plan.reason or "joint plan: heats to its keep-at temperature",

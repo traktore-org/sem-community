@@ -508,6 +508,9 @@ hands over, and, for anything left out, why not. This is the single place to
 see what SEM intends to do tonight. See
 [Energy planner](ENERGY_PLANNER.md) for how the plan is built.
 
+A battery charge from the grid shows only in night hours, and only when SEM
+will do it.
+
 Hover a price slot to see its time and price. If your grid CO₂ sensor has a
 forecast, the slot also shows its CO₂ in g/kWh.
 
@@ -744,6 +747,8 @@ Why did SEM act? One row per command SEM changed on a device: the time, the
 device, its old and new command, the reason as a short sentence in your
 language, and the numbers SEM decided on (sun, battery level, prices,
 surplus). Hold the pointer on the sentence to see SEM's own reason text.
+On a car row, *Budget* is the power SEM gives the car. Other rows show spare
+sun as *Surplus*.
 When a load stops, the row says why: it ran long enough today, it reached its
 longest run time for today, its planned time ended, or its stop condition was
 met.

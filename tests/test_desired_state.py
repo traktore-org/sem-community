@@ -605,7 +605,7 @@ _D_SCENARIOS = {
     # the old expiry now leaves it to the block).
     "d1_banking_holds_in_its_block": (
         [dict(device_id="boiler", priority=1, min_power=3000,
-              top_up_policy="solar_only", comfort=("willing", 45.0, 50.0))],
+              top_up_policy="cheap_hours", comfort=("willing", 45.0, 50.0))],
         [dict(available_power_w=0.0, price_level="normal", plan_windows=_BAND_BLOCK)] * 3,
     ),
     # D2 — the pool runs short: the LOWEST priority stops first, and only

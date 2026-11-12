@@ -444,7 +444,7 @@ fields under **Comfort** on the Load Priority card. In French they read
 
 | Field | What SEM does |
 |---|---|
-| **Keep at** | Below this temperature SEM heats in the hour its plan picks, from any power source, and stops at it |
+| **Keep at** | The temperature to keep. Spare sun heats to it. With *Finish overnight from: Grid* SEM also heats to it in a planned cheap hour; that run starts only 1 °C below it (less when *Run now past* is close) |
 | **Extra from surplus** | Spare sun may heat this much above Keep at |
 | **Run now past** | Below this limit SEM heats at once, on any tariff, and goes on to Keep at |
 
@@ -453,12 +453,15 @@ SEM checks in this order, and the first match decides:
 1. Your own stop temperature is reached: it stops.
 2. A Legionella run is due: it runs to its own target.
 3. The tank is colder than *Run now past*: it heats now.
-4. The tank is below *Keep at* and the planned hour is open: it heats.
+4. The tank is below *Keep at*, you allow the grid (*Finish overnight from:
+   Grid*) and the planned hour is open: it heats, and runs through to *Keep
+   at* without switching on and off.
 5. There is spare sun: it heats up to *Keep at* plus *Extra from surplus*.
 
 With a thermometer the daily run time asks for nothing: a warm tank is not
-heated again for its minutes. *Finish overnight via* only covers the daily
-run time of loads without a thermometer; it does not switch *Keep at* off.
+heated again for its minutes. Solar only is solar only, as for a car: without
+*Finish overnight from: Grid* SEM buys no power to reach *Keep at*. Only the
+too-cold limit, *Run now past*, heats at once whatever the setting.
 The **Why?** card names the step that decided.
 
 ### Heat or cool by the outdoor forecast (#1323)
@@ -561,6 +564,8 @@ If your own *Stop when ≥* sensor ends the run before the tank reaches the Legi
 ### Important: Legionella cycle cannot be disabled
 
 The Legionella prevention cycle is a safety requirement mandated by building codes. It cannot be turned off. You can adjust the interval and the target temperature (minimum 60°C) in the integration options, but the cycle itself is always active when hot water control is enabled. This protects against dangerous Legionella bacteria growth in stored hot water.
+
+A run that has started still stops when you set the load's Mode to Off or turn SEM off.
 
 ---
 
@@ -2240,6 +2245,7 @@ SEM skips:
 - Battery discharge limit changes
 - Device shedding commands
 - Hot-water heating, also the Legionella run
+- Heat pump commands
 
 When you turn it off, SEM can start a load right away. A stop it held back does not start the load's minimum off time.
 

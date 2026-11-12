@@ -239,6 +239,9 @@ Each mode promise is tested: `tests/test_docs_contracts_loads.py`.
 The Mode is **axis 1 — the daytime source**. What happens *overnight* (no sun) is a
 separate choice, the **"Finish overnight from"** picker below.
 
+A load SEM started on sun stops when your solar production ends, even when
+the load's power sensor reads 0 W. A load you switched on yourself is left on.
+
 ## Min / Max runtime (the dual slider)
 
 Under the 🎯 target button, a **dual-handle slider** sets the daily runtime

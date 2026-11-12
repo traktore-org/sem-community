@@ -273,3 +273,25 @@ class TestAPlannedRunStartsClearlyBelowKeepAt:
         assert _intent(_boiler(34.0), plan=BLOCK).code == RC.LOAD_COMFORT_FLOOR
         it = _intent(_boiler(49.86), remaining_surplus_w=4000.0, is_night=False)
         assert it.on and it.source == "solar"
+
+
+@pytest.mark.unit
+class TestSolarOnlyIsSolarOnly:
+    """A Keep at run is bought only with the grid allowed for the load
+    ("Finish overnight via: Grid") — the same word a car's Solar only keeps."""
+
+    def test_without_the_grid_a_planned_block_buys_nothing(self):
+        it = _intent(_boiler(45.0, policy="solar_only"), plan=BLOCK)
+        assert not it.on
+
+    def test_without_the_grid_the_plan_is_asked_nothing(self):
+        assert _boiler(45.0, policy="solar_only").comfort_plan_demand(None, goal=True) is None
+        assert _boiler(45.0, policy="cheap_hours").comfort_plan_demand(None, goal=True) is not None
+
+    def test_without_the_grid_the_sun_still_heats(self):
+        it = _intent(_boiler(45.0, policy="solar_only"), remaining_surplus_w=4000.0, is_night=False)
+        assert it.on and it.source == "solar"
+
+    def test_without_the_grid_too_cold_still_heats_at_once(self):
+        it = _intent(_boiler(34.0, policy="solar_only"))
+        assert it.on and it.code == RC.LOAD_COMFORT_FLOOR
