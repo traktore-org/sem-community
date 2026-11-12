@@ -444,7 +444,7 @@ fields under **Comfort** on the Load Priority card. In French they read
 
 | Field | What SEM does |
 |---|---|
-| **Keep at** | Below this temperature SEM heats in the hour its plan picks, from any power source, and stops at it. A planned run starts only 1 °C below it (less when *Run now past* is close) |
+| **Keep at** | The temperature to keep. Spare sun heats to it. With *Finish overnight from: Grid* SEM also heats to it in a planned cheap hour; that run starts only 1 °C below it (less when *Run now past* is close) |
 | **Extra from surplus** | Spare sun may heat this much above Keep at |
 | **Run now past** | Below this limit SEM heats at once, on any tariff, and goes on to Keep at |
 
@@ -453,14 +453,15 @@ SEM checks in this order, and the first match decides:
 1. Your own stop temperature is reached: it stops.
 2. A Legionella run is due: it runs to its own target.
 3. The tank is colder than *Run now past*: it heats now.
-4. The tank is below *Keep at* and the planned hour is open: it heats. It runs
-   through to *Keep at* without switching on and off, also when *Finish
-   overnight via* is Off.
+4. The tank is below *Keep at*, you allow the grid (*Finish overnight from:
+   Grid*) and the planned hour is open: it heats, and runs through to *Keep
+   at* without switching on and off.
 5. There is spare sun: it heats up to *Keep at* plus *Extra from surplus*.
 
 With a thermometer the daily run time asks for nothing: a warm tank is not
-heated again for its minutes. *Finish overnight via* only covers the daily
-run time of loads without a thermometer; it does not switch *Keep at* off.
+heated again for its minutes. Solar only is solar only, as for a car: without
+*Finish overnight from: Grid* SEM buys no power to reach *Keep at*. Only the
+too-cold limit, *Run now past*, heats at once whatever the setting.
 The **Why?** card names the step that decided.
 
 ### Heat or cool by the outdoor forecast (#1323)

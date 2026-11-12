@@ -1398,8 +1398,8 @@ path, the hot-water boiler is a simple on/off device controlled by SEM.
 Mode, priority, and when to stop or force heating are set on the **Control
 tab**, in the boiler's row. Under **Comfort** there are three fields:
 
-- **Keep at** — the temperature SEM keeps. Below it, SEM heats in the hour
-  its plan picks, from any power source.
+- **Keep at** — the temperature SEM keeps. Spare sun heats to it. With
+  "Finish overnight from: Grid" SEM also heats to it in a planned cheap hour.
 - **Extra from surplus** — how far spare sun may heat above Keep at.
 - **Run now past** — the too-cold limit. Below it SEM heats at once, on any
   tariff, and goes on to Keep at.

@@ -7,10 +7,11 @@ minimum pause later the banking pass started it again. On "Grid" the same
 happened when a planned sun hour turned cloudy and the price was not cheap.
 
 Since #1335 one rule decides the start and the stop: layer 1's banking
-clause. While the plan's comfort block is open and the tank is below Keep
-at, the load runs — from any source, whatever "Finish overnight via" says
-(that picker is about the daily run time, not the band). It stops once: at
-Keep at, or when the block closes.
+clause. With the grid allowed for the load ("Finish overnight via: Grid")
+it runs while the plan's comfort block is open and the tank is below Keep
+at, and stops once: at Keep at, or when the block closes. With the grid
+not allowed, solar only is solar only (#1102): the block buys nothing, so
+there is nothing to switch on and off.
 """
 from __future__ import annotations
 
@@ -61,8 +62,8 @@ async def _block(sc, n, *, price, solar_w=0.0, plan=BLOCK):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("policy, price, solar_w", [
-    ("solar_only", "normal", 0.0),      # Finish overnight via: Off
-    ("solar_only", "expensive", 0.0),
+    ("cheap_hours", "normal", 0.0),     # Finish overnight via: Grid
+    ("cheap_hours", "expensive", 0.0),
     ("cheap_hours", "normal", 400.0),   # Grid, a planned sun hour gone cloudy
 ])
 async def test_1334_a_full_comfort_block_runs_without_cycling(policy, price, solar_w):
@@ -86,7 +87,7 @@ async def test_1334_a_full_comfort_block_runs_without_cycling(policy, price, sol
 @pytest.mark.asyncio
 async def test_1334_the_block_closing_ends_it_once():
     hass = _Hass()
-    sc, dev = _boiler(hass, "solar_only")
+    sc, dev = _boiler(hass, "cheap_hours")
     await _block(sc, 10, price="normal")
     assert dev.is_active
     await _block(sc, 20, price="normal", plan={})            # block over
@@ -102,3 +103,29 @@ async def test_1334_without_a_block_grid_off_never_buys():
     sc, dev = _boiler(hass, "solar_only")
     await _block(sc, 20, price="cheap", plan={})
     assert not dev.is_active and not hass.calls("turn_on")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("price", ["cheap", "normal", "expensive"])
+async def test_1334_grid_off_buys_nothing_in_a_comfort_block(price):
+    """Solar only is solar only (#1102): with "Finish overnight via: Off" a
+    comfort block starts nothing from the grid — and so switches nothing."""
+    hass = _Hass()
+    sc, dev = _boiler(hass, "solar_only")
+    await _block(sc, 60, price=price)
+    assert not dev.is_active
+    assert not hass.calls("turn_on") and not hass.calls("turn_off")
+
+
+@pytest.mark.asyncio
+async def test_1334_grid_off_still_heats_on_sun_and_when_too_cold():
+    hass = _Hass()
+    sc, dev = _boiler(hass, "solar_only")
+    await sc.update(4000.0, price_level="normal", plan_windows=BLOCK,
+                    is_night=False, solar_w=5000.0)
+    assert dev.is_active, "spare sun heats a solar-only tank"
+    hass2 = _Hass()
+    sc2, dev2 = _boiler(hass2, "solar_only")
+    hass2.set(TANK, "34", unit_of_measurement="°C")       # under Run now past 36
+    await _block(sc2, 3, price="expensive", plan={})
+    assert dev2.is_active, "the too-cold limit heats at once, whatever the mode"

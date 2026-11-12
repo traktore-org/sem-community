@@ -163,7 +163,8 @@ def _comfort_dev(*, willing=True, active=False):
     dev.is_deadline_approaching = False
     dev.daily_targets_met = False
     dev.battery_eligible_overnight = False
-    dev.top_up_policy = "solar_only"
+    # (#1102) a Keep at run is bought only with the grid allowed
+    dev.top_up_policy = "cheap_hours"
     dev.comfort_state = "willing" if willing else "forced"
     # (#1102) the ladder reads the band itself: a willing tank below Keep at,
     # a forced one past its limit
