@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
     parseCopCurve, formatCopCurve, curveRows, curveToSend, heatCostNow, heatCostLine,
+    copSourceOf, copSourceOptions, copLearnLine,
 } from '../src/util/heat-pump-cost.js';
 
 const T = {
@@ -56,4 +57,40 @@ test('no sensor or no COP is no line', () => {
     assert.equal(heatCostNow(undefined), null);
     assert.equal(heatCostNow({ state: '0.1', attributes: {} }), null);
     assert.equal(heatCostLine(null, t), '');
+});
+
+test('(#1081) never picked reads as today: the curve if set, else fixed', () => {
+    assert.equal(copSourceOf({}), 'flat');
+    assert.equal(copSourceOf({ cop_curve: '-7:2.5, 12:4.2' }), 'curve');
+    assert.equal(copSourceOf({ cop_source: 'learned' }), 'learned');
+    assert.equal(copSourceOf({ cop_source: 'junk', cop_curve: '' }), 'flat');
+});
+
+test('(#1081) learned is offered only once there is a learned curve', () => {
+    assert.deepEqual(copSourceOptions({}), ['flat']);
+    assert.deepEqual(copSourceOptions({ cop_learn: { state: 'not_enough' } }), ['flat']);
+    assert.deepEqual(copSourceOptions({ cop_curve: '-7:2.5, 12:4.2', cop_learn: { state: 'learned' } }),
+        ['flat', 'curve', 'learned']);
+    // a pick never vanishes from under the user
+    assert.deepEqual(copSourceOptions({ cop_source: 'learned', cop_learn: { state: 'not_enough' } }),
+        ['flat', 'learned']);
+});
+
+test('(#1081) the learner line', () => {
+    const L = {
+        hp_cop_learned_from: 'Learned: {hours} h, {tmin} to {tmax} °C',
+        hp_cop_learning: 'Learning: {hours} h',
+    };
+    const tl = (k) => L[k] || k;
+    assert.equal(copLearnLine(null, tl), '');
+    assert.equal(copLearnLine({ state: 'no_meter' }, tl), '');
+    assert.equal(copLearnLine({ state: 'not_enough', hours: 4 }, tl), 'Learning: 4 h');
+    assert.equal(copLearnLine({ state: 'learned', hours: 54, tmin: -6.04, tmax: 11 }, tl),
+        'Learned: 54 h, -6 to 11 °C');
+});
+
+test('(#1081) the live line says learned', () => {
+    const now = heatCostNow({ state: '0.08', attributes: { cop_used: 3.1, cop_source: 'learned', outdoor_c: 3 } });
+    assert.equal(now.source, 'learned');
+    assert.equal(now.outdoorC, 3);
 });

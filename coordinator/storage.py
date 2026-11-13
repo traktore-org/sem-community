@@ -791,6 +791,14 @@ class SEMStorage:
     # (#1323) A climate unit that picks heat or cool itself: the season in
     # force and when it began, by device id — so a restart keeps the dead
     # band and the day's dwell instead of deciding anew.
+    # (#1081) each heat pump's COP learner: ``{device_id: state}``
+    def get_cop_learn_state(self) -> Dict[str, Any]:
+        value = self._energy_data.get("cop_learn_state")
+        return dict(value) if isinstance(value, dict) else {}
+
+    def set_cop_learn_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["cop_learn_state"] = dict(state or {})
+
     def get_season_state(self) -> Dict[str, Any]:
         value = self._energy_data.get("season_state")
         return dict(value) if isinstance(value, dict) else {}

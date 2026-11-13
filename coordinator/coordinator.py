@@ -4091,6 +4091,69 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 dev.restore_season(stored.get(str(dev.device_id)))
             dev.update_season(outlook)
 
+    def _feed_cop_learners(self) -> None:
+        """(#1081) Each heat pump with a heat meter learns its COP: once a
+        cycle, the meter, the electricity SEM booked for that unit and the
+        outdoor temperature go to ``cop_learner.observe``; a finished clock
+        hour becomes one sample. Learning acts on nothing — the curve only
+        counts when the user picks it (``cop_source`` "learned").
+
+        Nothing is read and nothing stored for a unit without a heat meter.
+        Electricity SEM only ESTIMATED (no power sensor or counter) is no
+        reading: an hour on an estimate would teach the rated power's COP."""
+        from . import cop_learner as _cl
+        ctrl = getattr(self, "_surplus_controller", None)
+        devs = [d for d in (getattr(ctrl, "_devices", {}) or {}).values()
+                if hasattr(d, "cop_learned")]
+        if not devs:
+            return
+        states = getattr(self, "_cop_learn_states", None)
+        if states is None:
+            storage = getattr(self, "_storage", None)
+            try:
+                states = storage.get_cop_learn_state() if storage else {}
+            except Exception:  # noqa: BLE001 — no store is a fresh start
+                states = {}
+            self._cop_learn_states = states
+        meters = [d for d in devs if getattr(d, "heat_energy_entity_id", None)]
+        outdoor = self._outdoor_temperature_or_none() if meters else None
+        now = dt_util.now()
+        hour_id = now.strftime("%Y-%m-%dT%H")
+        calc = getattr(self, "_energy_calculator", None)
+        for dev in devs:
+            did = str(dev.device_id)
+            meter = getattr(dev, "heat_energy_entity_id", None)
+            if not meter:
+                dev.cop_learned = []
+                dev.cop_learn_summary = _cl.summary(None, has_meter=False)
+                continue
+            heat = energy_state_to_kwh(self.hass.states.get(meter))
+            elec = None
+            if calc is not None and getattr(dev, "daily_energy_is_measured", False):
+                try:
+                    _day = (getattr(dev, "_daily_runtime_meter_day", None)
+                            or self.time_manager.get_current_meter_day_sunrise_based())
+                    elec = calc.get_device_energy(did, _day)["lifetime_kwh"]
+                except (AttributeError, KeyError, TypeError, ValueError):
+                    elec = None
+            # a meter blind since the last look booked nothing for that
+            # time: the hour's electricity would read low and the COP high
+            blind = float(getattr(dev, "daily_energy_blind_s", 0.0) or 0.0)
+            if blind > float(getattr(dev, "_cop_blind_seen", blind)):
+                elec = None
+            dev._cop_blind_seen = blind
+            try:
+                watts = dev.observed_power_w()
+            except Exception:  # noqa: BLE001 — an unread draw is "not running"
+                watts = None
+            rated = float(getattr(dev, "rated_power", 0) or 0)
+            running = watts is not None and watts > max(100.0, 0.1 * rated)
+            states[did] = _cl.observe(
+                states.get(did), hour_id=hour_id, elec_kwh=elec,
+                heat_kwh=heat, outdoor_c=outdoor, running=running)
+            dev.cop_learned = _cl.learned_points(states[did])
+            dev.cop_learn_summary = _cl.summary(states[did], has_meter=True)
+
     def _season_memos(self) -> Dict[str, Any]:
         """(#1323) ``{device_id: memo}`` for every unit with a season."""
         out: Dict[str, Any] = {}
@@ -5994,6 +6057,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         **self._season_memos()})
                 except (AttributeError, TypeError, ValueError):
                     pass
+                # (#1081) each heat pump's COP learner, merged over what is
+                # stored: a unit not built yet keeps its samples
+                _cls = getattr(self, "_cop_learn_states", None)
+                if _cls:
+                    try:
+                        self._storage.set_cop_learn_state({
+                            **self._storage.get_cop_learn_state(), **_cls})
+                    except (AttributeError, TypeError, ValueError):
+                        pass
                 # Persist the legionella timestamp (#508 I2).
                 _hw = self._surplus_controller._devices.get("hot_water") \
                     if hasattr(self, "_surplus_controller") else None
@@ -8061,22 +8133,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # electricity price — cheaper on a mild day than a cold one even
         # at the same rate. The device's own tariff (#812) if it has one,
         # else the house's; never invents a price when neither can say.
+        try:
+            self._feed_cop_learners()          # (#1081)
+        except Exception:  # noqa: BLE001 — learning never costs a cycle
+            _LOGGER.debug("COP learner failed", exc_info=True)
         _hp_cop = (float(getattr(hp_controller, "cop", 3.0) or 3.0)
                   if hp_controller is not None else None)
         # (#1081) with a COP curve, the COP at the outdoor temperature now;
         # without one (or with no reading) the flat COP, as before.
+        # (#1081) …or the curve it learned from its heat meter, when the
+        # user chose that (``device_cop_at``, the one reader).
         _hp_cop_source = "flat" if hp_controller is not None else None
         _hp_cop_outdoor = None
-        _hp_curve = (getattr(hp_controller, "cop_curve", None)
-                     if hp_controller is not None else None)
-        if _hp_curve:
+        from .heat_cost import device_has_cop_shape as _has_shape
+        if hp_controller is not None and _has_shape(hp_controller):
             # read the outdoor temperature only for a curve: without one
             # nothing here changes, not even what is read
-            from .heat_cost import cop_at as _cop_at_fn
+            from .heat_cost import device_cop_at as _device_cop_at
             _hp_cop_outdoor = self._outdoor_temperature_or_none()
-            _hp_cop, _hp_cop_source = _cop_at_fn(
-                _hp_curve, _hp_cop_outdoor, _hp_cop)
-            if _hp_cop_source != "curve":
+            _cop_now, _hp_cop_source = _device_cop_at(
+                hp_controller, _hp_cop_outdoor)
+            if _cop_now:
+                _hp_cop = float(_cop_now)
+            if _hp_cop_source == "flat":
                 _hp_cop_outdoor = None
         from .heat_cost import heat_pump_price as _heat_pump_price_fn
         _hp_price = None
@@ -12412,6 +12491,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # A restart must not blank last night's verdict — it is read all day.
         self._refresh_demand_review()
 
+    def _plan_cop_fn(self, dev, t_now_cache: list):
+        """(#1081) ``ts -> COP`` for a heat pump whose COP follows the
+        outdoor temperature, else None (the packer then sees the demand
+        exactly as before). The forecast at that hour; the reading now where
+        the forecast has no row (read once, kept in ``t_now_cache``).
+        Tonight's plan and tomorrow's preview both ask here."""
+        from .heat_cost import device_cop_at, device_has_cop_shape
+        if not device_has_cop_shape(dev):
+            return None
+
+        def _at(ts):
+            t = self._temperature_at(ts)
+            if t is None:
+                if not t_now_cache:
+                    t_now_cache.append(self._outdoor_temperature_or_none())
+                t = t_now_cache[0]
+            return device_cop_at(dev, t)[0]
+        return _at
+
     def _compose_tomorrow_preview(self, power=None):
         """(#638 consolidation / #722) The next energy day's books,
         previewed for the card's Tomorrow view — or None when the frame
@@ -12479,6 +12577,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # counters reset at midnight; no packing, no verdicts — that
         # plan honestly does not exist until it stamps.
         asks = []
+        # (#1081) the COP function of each ask, by index — kept beside the
+        # asks, not in them: ``known_asks`` is published as it is
+        ask_cop: dict = {}
+        _t_now_c2: list = []
         try:
             from ..devices.base import DeviceControlMode as _DCM
             _ctrl = getattr(self, "_surplus_controller", None)
@@ -12506,6 +12608,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "kwh": round(_rated * _min_s / 3600.0 / 1000.0, 2),
                         "power_w": _rated,
                     })
+                    _cop_fn = self._plan_cop_fn(_dev, _t_now_c2)
+                    if _cop_fn is not None:
+                        ask_cop[len(asks) - 1] = _cop_fn
                 except Exception:  # noqa: BLE001 — one device, not the list
                     continue
             for _cfg in (self.config.get("ev_chargers") or []):
@@ -12609,6 +12714,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         energy_kwh=float(ask["kwh"]),
                         max_power_w=power, min_power_w=power,
                         deadline=day_end, priority=i, source="grid",
+                        cop_at=ask_cop.get(i),     # (#1081)
                     ))
                 # the reserve, as tonight's plan reads it
                 _reserve = _battery_floor_for(self)[0]
@@ -13028,23 +13134,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ONLY: the kWh it asks for and the cost the plan reports stay
             # electricity. No curve → None → the packer sees exactly today's
             # demand.
-            _t_now_c = []
+            _t_now_c: list = []
 
             def _plan_cop_at(dev):
-                curve = getattr(dev, "cop_curve", None)
-                if not curve:
-                    return None
-                from .heat_cost import cop_at as _cop_at_fn
-                flat = getattr(dev, "cop", None)
-
-                def _at(ts):
-                    t = self._temperature_at(ts)
-                    if t is None:
-                        if not _t_now_c:
-                            _t_now_c.append(self._outdoor_temperature_or_none())
-                        t = _t_now_c[0]
-                    return _cop_at_fn(curve, t, flat)[0]
-                return _at
+                return self._plan_cop_fn(dev, _t_now_c)
             loads_seen = 0
             loads_eligible = 0
             from ..devices.base import DeviceControlMode as _DCM

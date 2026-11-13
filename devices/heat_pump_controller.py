@@ -199,6 +199,14 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         # (#1081) an optional COP curve against the outdoor temperature,
         # set as a device goal (``cop_curve``). None = the flat COP above.
         self.cop_curve = None
+        # (#1081) the pump's heat meter (a rising kWh counter of heat
+        # delivered), read only; with it SEM learns the COP curve below.
+        # ``cop_source`` is the user's pick: "" / "curve" / "flat" /
+        # "learned" — only "learned" lets the learned curve act.
+        self.heat_energy_entity_id: Optional[str] = None
+        self.cop_source = ""
+        self.cop_learned: list = []
+        self.cop_learn_summary: Optional[Dict[str, Any]] = None
         self._hp_status = HeatPumpStatus()
 
         # #594 — vacation mode. Set each cycle by the coordinator. While

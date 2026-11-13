@@ -292,6 +292,8 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #600 — load-device kWh energy counters (derive power when no power sensor);
     # read at controller construction → reload on change.
     "heat_pump_energy_sensor", "hot_water_energy_sensor",
+    # (#1081) the heat meter — set on the controller at construction
+    "heat_pump_heat_energy_sensor",
     # #602 — heat pump / hot water rated power (W), read at controller
     # construction; was config-flow-only, now settable from the dashboard.
     "heat_pump_rated_power", "hot_water_rated_power",
@@ -1890,6 +1892,7 @@ def _heat_pump_rows(full_config: dict) -> list[dict]:
             "heat_pump_relay1_entity", "heat_pump_relay2_entity",
             "heat_pump_climate_entity", "heat_pump_power_sensor",
             "heat_pump_energy_sensor", "heat_pump_temperature_sensor",
+            "heat_pump_heat_energy_sensor",   # (#1081)
             "heat_pump_rated_power", "heat_pump_priority",
             "heat_pump_boost_offset", "heat_pump_max_setpoint",
             "heat_pump_force_on_threshold", "heat_pump_cop",
@@ -3302,6 +3305,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 relay2_off_value=_row.get("heat_pump_relay2_off_value"),
                 step_down=_row.get("heat_pump_step_down") or STEP_DOWN_OFF,
             )
+            # (#1081) the heat meter the COP is learned from (read only)
+            hp_extra.heat_energy_entity_id = (
+                _row.get("heat_pump_heat_energy_sensor") or None)
             # (#1323) …and a step-down SEM left: re-owned from its stored
             # memo, so the next cycle takes it back unless its cause stands.
             _seed_step_down(coordinator, hp_extra)
@@ -5435,6 +5441,8 @@ async def _async_register_services(
             "name",
             # (#1081) a heat pump's COP against the outdoor temperature
             "cop_curve",
+            # (#1081) where its COP comes from: flat, curve or learned
+            "cop_source",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -5491,6 +5499,15 @@ async def _async_register_services(
                         translation_placeholders={"property": f"{prop}={value}"},
                     )
                 value = format_cop_curve(_curve)
+            if prop == "cop_source":
+                from .coordinator.heat_cost import COP_SOURCES
+                value = str(value or "").strip().lower()
+                if value and value not in COP_SOURCES:
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    )
             if prop == "top_up_policy" and str(value) not in (
                 "solar_only", "cheap_hours"
             ):
@@ -5624,6 +5641,8 @@ async def _async_register_services(
                     "name",
                     # (#1081) a heat pump's COP curve, "-7:2.5, 2:3.2, 12:4.2"
                     "cop_curve",
+                    # (#1081) flat / curve / learned ("" = as before)
+                    "cop_source",
                 ]),
                 vol.Required("value"): cv.string,
             }),

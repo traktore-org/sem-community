@@ -25,7 +25,7 @@ globalThis.document = { addEventListener() {}, removeEventListener() {}, documen
 const registry = new Map();
 globalThis.customElements = { get: (t) => registry.get(t), define: (t, c) => registry.set(t, c) };
 globalThis.navigator ??= {};
-const { copCurveRow } = await import('../src/util/next-devices-load.js');
+const { copCurveRow, copSourceRow } = await import('../src/util/next-devices-load.js');
 
 function fakeCard(states = {}) {
     const card = {
@@ -37,6 +37,7 @@ function fakeCard(states = {}) {
         editors: {},
         _inline(key, text, editor) { this.editors[key] = editor; return text; },
         _textEdit(key, o) { return o; },
+        _selEdit(key, o) { return o; },
         _row(icon, label, val, sub, o) { return { icon, label, val, sub, o }; },
     };
     return card;
@@ -66,4 +67,20 @@ test('only a whole curve or an empty box is sent', () => {
     ed.onCommit(' 12:4.2,-7:2.5 ');
     ed.onCommit('');
     assert.deepEqual(sent, [['cop_curve', '-7:2.5, 12:4.2'], ['cop_curve', '']]);
+});
+
+test('(#1081) COP used: learned is offered once learned, a pick is sent', () => {
+    const sent = [];
+    const card = fakeCard();
+    const none = copSourceRow(card, { id: 'heat_pump' }, { cop_source: '', cop_learn: { state: 'not_enough', hours: 3 } },
+        (p, v) => sent.push([p, v]));
+    assert.equal(none.val, 'hp_cop_source_flat');
+    assert.equal(none.sub, 'hp_cop_learning');
+    const g = { cop_source: '', cop_curve: '-7:2.5, 12:4.2', cop_learn: { state: 'learned', hours: 40, tmin: -3, tmax: 9 } };
+    copSourceRow(card, { id: 'heat_pump' }, g, (p, v) => sent.push([p, v]));
+    const ed = card.editors['copsrc:heat_pump']();
+    assert.deepEqual(ed.options.map((o) => o.key), ['flat', 'curve', 'learned']);
+    assert.equal(ed.value, 'curve');
+    ed.onCommit('learned');
+    assert.deepEqual(sent, [['cop_source', 'learned']]);
 });

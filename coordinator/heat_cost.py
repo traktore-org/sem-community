@@ -110,3 +110,55 @@ def cop_at(curve: Optional[list], outdoor_c: Optional[float],
                 if t0 <= t <= t1:
                     return float(c0 + (c1 - c0) * (t - t0) / (t1 - t0)), "curve"
     return flat_cop, "flat"
+
+
+#: (#1081) where a heat pump's COP comes from — the user's choice per unit.
+#: ``""`` (never chosen) = the curve when one is set, else the flat COP:
+#: exactly what SEM did before it could learn.
+COP_SOURCES = ("flat", "curve", "learned")
+#: a learned curve is used only from this many trusted points on
+LEARNED_MIN_POINTS = 2
+
+
+def learned_curve_of(device: Any) -> Optional[list]:
+    """(#1081) The device's learned curve when the user chose it and it has
+    enough points; else None."""
+    if str(getattr(device, "cop_source", "") or "") != "learned":
+        return None
+    pts = getattr(device, "cop_learned", None) or []
+    return list(pts) if len(pts) >= LEARNED_MIN_POINTS else None
+
+
+def device_cop_at(device: Any, outdoor_c: Optional[float]) -> tuple:
+    """(#1081) The COP of ``device`` at ``outdoor_c``: ``(cop, source)``.
+
+    ``cop_source`` "flat" → the flat COP. "learned" → the learned curve
+    inside the temperatures it has seen; outside them the user's curve if
+    there is one (the learned ends are not stretched over a cold snap it
+    never measured), else the learned end. Not enough learned points → as
+    if "curve". "curve" or unset → the user's curve, else flat."""
+    flat = getattr(device, "cop", None)
+    choice = str(getattr(device, "cop_source", "") or "")
+    if choice == "flat":
+        return flat, "flat"
+    curve = getattr(device, "cop_curve", None)
+    learned = learned_curve_of(device)
+    if learned and outdoor_c is not None:
+        try:
+            t = float(outdoor_c)
+        except (TypeError, ValueError):
+            t = None
+        if t is not None and t == t:
+            inside = learned[0][0] <= t <= learned[-1][0]
+            if inside or not curve:
+                cop, src = cop_at(learned, t, flat)
+                return cop, ("learned" if src == "curve" else src)
+    return cop_at(curve, outdoor_c, flat)
+
+
+def device_has_cop_shape(device: Any) -> bool:
+    """(#1081) True when the COP of ``device`` can change with the outdoor
+    temperature (a curve it uses, or a learned one it chose)."""
+    if str(getattr(device, "cop_source", "") or "") == "flat":
+        return False
+    return bool(getattr(device, "cop_curve", None) or learned_curve_of(device))

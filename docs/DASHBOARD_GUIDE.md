@@ -637,7 +637,8 @@ same in short, for example "45.8 °C · heats to 52 °C at 23:00". See
 **A heat pump's COP (#1081).** Under **More**, a heat pump has *COP by outdoor
 temperature*: the COP now and what a kWh of heat costs, then two or three
 rows "At … °C outside the COP is …". It is saved once two rows are filled in;
-all empty is one fixed COP. See
+all empty is one fixed COP. With a heat meter, *COP used* picks Fixed, My
+curve or Learned; the line under it says how many hours SEM has learned. See
 [What a kWh of heat costs](USER_GUIDE.md#what-a-kwh-of-heat-costs-1081).
 
 #### sem-onboarding-banner
@@ -882,7 +883,7 @@ min* button; goal, min run / pause, Requires, phase, comfort, tariff,
 may-switch. Rows that do nothing for a load in Off or Peak only are hidden.
 A heat pump shows what a kWh of heat costs, and under *All settings* its
 COP by outdoor temperature as text (*-7:2.5, 12:4.2*; empty = one fixed
-COP, #1081).
+COP, #1081) and *COP used* (Fixed, My curve, Learned from the heat meter).
 Every row needs its entity; controls are off in observer mode.
 
 A heater with a thermometer says what it does and what comes next, in the

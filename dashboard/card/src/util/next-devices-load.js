@@ -13,7 +13,8 @@ import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-se
 import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey } from './next-devices.js';
 import { plainReason } from './why-rows.js';
 import { loadRunsBySem } from './settings-applies.js';
-import { parseCopCurve, formatCopCurve, heatCostNow } from './heat-pump-cost.js';
+import { parseCopCurve, formatCopCurve, heatCostNow,
+    copSourceOf, copSourceOptions, copLearnLine } from './heat-pump-cost.js';
 import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, BUY_LABEL } from './heater-questions.js';
 
 const MODES = [
@@ -275,6 +276,10 @@ export function loadBody(card, row) {
         if (Object.prototype.hasOwnProperty.call(g, 'cop_curve')) {
             rows.push(copCurveRow(card, row, g, send));
         }
+        // (#1081) what the heat meter taught, and which COP SEM uses
+        if (Object.prototype.hasOwnProperty.call(g, 'cop_source')) {
+            rows.push(copSourceRow(card, row, g, send));
+        }
         const offId = 'number.sem_heat_pump_boost_offset';
         if (card._has(offId)) {
             rows.push(card._row('mdi:tune-vertical', t('next_relay_values'),
@@ -376,4 +381,23 @@ export function bandBar(card, q, row) {
         ${tick(q.floor)}${tick(q.keep)}${tick(q.sunMax)}
         ${now === null ? nothing : html`<span style="position:absolute;top:-11px;left:calc(${pct(now)}% - 6px);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid var(--primary-text-color,#fff)"></span>`}
     </div>`;
+}
+
+/** (#1081) "COP used: Fixed / My curve / Learned", with what the heat meter
+ *  taught under it. "Learned" is offered once the learner has a curve. */
+export function copSourceRow(card, row, g, send) {
+    const t = (k) => card._t(k);
+    const cur = copSourceOf(g);
+    const opts = copSourceOptions(g);
+    const label = t('hp_cop_source_' + cur);
+    const key = 'copsrc:' + row.id;
+    const val = opts.length > 1
+        ? card._inline(key, label, () => card._selEdit(key, {
+            value: cur,
+            options: opts.map((o) => ({ key: o, label: t('hp_cop_source_' + o) })),
+            onCommit: (v) => send('cop_source', v),
+        }))
+        : label;
+    const sub = copLearnLine(g.cop_learn, t);
+    return card._row('mdi:school-outline', t('hp_cop_source'), val, sub, { more: true });
 }
