@@ -3663,6 +3663,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "solar_used_kwh": d.get("daily_co2_solar_used_kwh"),
                 "co2_kg_per_kwh_today": d.get("daily_co2_kg_per_kwh"),
             })
+        elif self.entity_description.key in ("daily_costs", "monthly_costs", "yearly_costs"):
+            # (#1321) what SEM paid per bought kWh against the hours'
+            # average price — only on a dynamic tariff (else no keys)
+            d = self.coordinator.data
+            period = self.entity_description.key.split("_")[0]
+            if d.get("price_comparison"):
+                attrs.update({
+                    "avg_price_paid": d.get(f"{period}_avg_price_paid"),
+                    "avg_price_hours": d.get(f"{period}_avg_price_hours"),
+                })
         elif self.entity_description.key == "forecast_correction_factor":
             d = self.coordinator.data
             attrs.update({
