@@ -23,6 +23,7 @@ import {
 import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, chargerSays } from '../util/charger-questions.js';
 import { plainReason } from '../util/why-rows.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
+import { chargerNameOf } from '../util/charger-name.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -414,16 +415,11 @@ class SEMEVStatusCard extends SEMLitBase {
     }
 
     _chargerName(id) {
-        const entity = this._hass?.states[`${this._prefix}charger_${id}_power`];
-        let name = id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        // (#1053) the charger's own name, in the user's language
-        if (entity?.attributes?.charger_name) return entity.attributes.charger_name;
-        if (entity?.attributes?.friendly_name) {
-            name = entity.attributes.friendly_name
-                .replace(/^SEM\s+/i, '')
-                .replace(/\s+Power$/i, '');
-        }
-        return name;
+        // (#1053/#1321) the configured name; the translated friendly name
+        // is never parsed. Without it, the id in title case.
+        const name = chargerNameOf(this._hass?.states, id, this._prefix);
+        return name === String(id).replace(/_/g, ' ')
+            ? name.replace(/\b\w/g, c => c.toUpperCase()) : name;
     }
 
     _renderSocGauge(soc, isEstimate = false) {

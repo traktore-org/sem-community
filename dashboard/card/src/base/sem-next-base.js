@@ -20,6 +20,7 @@ import { fill } from '../util/next-lead.js';
 import { hhmmIn } from '../util/next-time.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
+import { chargerNameOf } from '../util/charger-name.js';
 
 export { html, css, svg, nothing };
 
@@ -318,9 +319,7 @@ export class SEMNextBase extends SEMLitBase {
         return s > e ? (now >= s || now < e) : (now >= s && now < e);
     }
     _chargerName(cid) {
-        const n = this._hass?.states[`sensor.sem_charger_${cid}_power`]?.attributes?.friendly_name || '';
-        const m = /^(?:SEM\s+)?(.*?)\s+Power$/i.exec(n);
-        return (m && m[1]) ? m[1] : cid.replace(/_/g, ' ');
+        return chargerNameOf(this._hass?.states, cid);
     }
     _chargerEntity(domain, cid, suffix) {
         const id = `${domain}.sem_charger_${cid}_${suffix}`;
