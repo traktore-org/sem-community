@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🔧 **SEM Next asks the peak limit, battery levels and charger targets with the same words and logic as the classic dashboard** (#1354).
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
+- 🐛 **The night plan lets the house use the battery down to its reserve, not the 30 % level** (#1358). A 28 % battery read as empty.
 - 🔧 **Plan card notes speak your language** (#1354). "13 slot(s) unpriced…" was English only.
 - 🔧 **The VPP and Deye test switches are called "dry run"** (#1354). Three settings were named Observer mode.
 - 🐛 **Setup reads the battery's discharge rating, not its last limit** (#1354). A 750 W limit became the rating.

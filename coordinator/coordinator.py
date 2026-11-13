@@ -6573,10 +6573,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _bat_cap = self.config.get("battery_capacity_kwh", 15.0)
                     _bat_soc = power.battery_soc if power.battery_soc is not None else None
                     # The battery-empty ETA references the real discharge
-                    # floor — the SOC-zone priority floor — not the retired
-                    # ``battery_minimum_soc`` knob (which never stopped
-                    # discharge; it was a misleading "hard stop" label).
-                    _bat_floor = self.config.get("battery_priority_soc", 30)
+                    # floor — the reserve, where the inverter stops — not the
+                    # priority level (the house runs on below it) nor the
+                    # retired ``battery_minimum_soc`` knob.
+                    _bat_floor = reserve_soc_of(self.config)
                     if _bat_soc is not None and _bat_cap > 0:
                         if _bat_kw > _MIN_USEFUL_RATE_KW and _bat_soc < 99:
                             remaining_kwh = (100 - _bat_soc) / 100 * _bat_cap
@@ -12557,8 +12557,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         max_power_w=power, min_power_w=power,
                         deadline=day_end, priority=i, source="grid",
                     ))
-                _reserve = float(self.config.get(
-                    "battery_priority_soc", 30) or 30)
+                # the reserve, as tonight's plan reads it
+                _reserve = reserve_soc_of(self.config)
                 _floor2 = _reserve / 100.0 * cap_kwh2
                 _md_w = float(self.config.get(
                     "battery_max_discharge_power", 5000.0) or 5000.0)
@@ -13379,7 +13379,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Battery state: live SOC → kWh; the sunrise floor reserves
             # tomorrow's need = max(reserve, the scheduler's target SOC).
             soc_kwh = max(0.0, float(soc or 0.0) / 100.0 * cap_kwh)
-            reserve_pct = float(self.config.get("battery_priority_soc", 30) or 30)
+            # The floor the house may draw the battery down to at night is the
+            # RESERVE (the inverter's own end of discharge, 20 % by default),
+            # not the priority level — that one says when the car waits for
+            # the battery, and the house kept running below it (PROD 13.11:
+            # the plan called a 28 % pack empty while it powered the house).
+            reserve_pct = reserve_soc_of(self.config)
             target_pct = float(getattr(getattr(scheduler, "decision", None),
                                        "target_soc", 0.0) or 0.0)
             floor_kwh = max(reserve_pct, target_pct) / 100.0 * cap_kwh
