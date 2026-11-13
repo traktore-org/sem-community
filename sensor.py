@@ -230,6 +230,10 @@ def _energy_plan_attrs(
         # battery icon and the hand-over time. None (a stash from before
         # #1063) keeps the card's old drawing.
         "has_battery": plan.get("has_battery"),
+        # (#1358) the floor the night plan drew the battery down to, and
+        # whether it is SEM's reserve or the inverter's own end of discharge
+        "battery_floor_pct": plan.get("battery_floor_pct"),
+        "battery_floor_source": plan.get("battery_floor_source"),
         # (#638 G4) True while the actuation switch is on — the plan's
         # blocks feed the night signals; the card swaps its shadow chip.
         "actuation": bool(plan.get("actuation", False)),

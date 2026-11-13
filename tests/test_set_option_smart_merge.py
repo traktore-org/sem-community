@@ -298,6 +298,8 @@ class TestStructuralKeysVisibility:
             "battery_discharge_control_entities",
             # (#1166) the pack's own end-of-charge level, shared and per battery
             "battery_charge_end_soc_entity", "battery_charge_end_soc_entities",
+            # (#1358) the inverter's own end-of-discharge level, shared
+            "battery_discharge_end_soc_entity",
             "battery_strategy_entities",
             "battery_strategy_control_entity",
             "battery_setpoint_bidirectional",

@@ -78,6 +78,8 @@ BATTERY_WIRING_KEYS: tuple[str, ...] = (
     # bound one proves a battery like the SOC sensor does
     "battery_charge_end_soc_entity",
     "battery_charge_end_soc_entities",
+    # (#1358) the inverter's own end-of-discharge level, read every plan
+    "battery_discharge_end_soc_entity",
     # (#923, ruflo) seeded by the config flow when it finds a battery-mode
     # select, and watched every cycle by the #845 BatteryModeWatch — a battery
     # SEM can watch but not yet drive is still a battery.

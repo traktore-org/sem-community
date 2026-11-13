@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Akkumulátor-támogatás – min. napenergia-többlet (W)",
           "grid_sign_invert": "Hálózati teljesítmény előjelének megfordítása",
           "battery_operating_mode_entity": "Akkumulátor üzemmód entitás (figyelt)",
-          "battery_charge_end_soc_entity": "Akkumulátor töltés vége szint (opcionális)"
+          "battery_charge_end_soc_entity": "Akkumulátor töltés vége szint (opcionális)",
+          "battery_discharge_end_soc_entity": "Akkumulátor kisütés vége szint (opcionális)"
         },
         "data_description": {
           "update_interval": "Milyen gyakran olvassa a koordinátor az érzékelőket és szabályozza a hardvert. A 10 s adja a legpontosabb energiaintegrálást; a 30 s feletti értékek alulmérik az energiát. Tartomány: 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "A legkisebb tényleges napenergia-többlet, amely felett a házi akkumulátor segíthet az EV töltésében — bármely töltési módban. Ez alatt az akkumulátor a ház számára van fenntartva (az autó a hálózatból + napenergiából tölt). Alapértelmezés 1200 W. Állítsa 0-ra, hogy az akkumulátor mindenhol támogassa az EV-t, éjszaka is.",
           "grid_sign_invert": "Csak akkor kapcsold be, ha a hálózati vételezés pozitív értékként jelenik meg (pl. Enphase). A SEM konvenciója szerint negatív = vételezés; ez megfordítja a nyers értéket, és kihagyja az automatikus előjel-felismerést.",
           "battery_operating_mode_entity": "Az inverter üzemmód-választója (pl. Huawei „Working mode”). A SEM csak OLVASSA: a mód az akkumulátor-adatok mellett jelenik meg, és egy egyszeri javítási figyelmeztetés jelzi, ha nem az a saját fogyasztás mód, amit a SEM tervezése feltételez. A SEM sosem módosítja. Hagyja üresen a figyelés kikapcsolásához.",
-          "battery_charge_end_soc_entity": "Ahol az inverter maga leállítja az akkumulátor töltését, %-ban. A SEM csak olvassa, soha nem írja. A kényszertöltés ekkor ott is véget ér, ha 90 % alatt van."
+          "battery_charge_end_soc_entity": "Ahol az inverter maga leállítja az akkumulátor töltését, %-ban. A SEM csak olvassa, soha nem írja. A kényszertöltés ekkor ott is véget ér, ha 90 % alatt van.",
+          "battery_discharge_end_soc_entity": "Ahol az inverter maga leállítja a kisütést, %-ban. A SEM csak olvassa. Az éjszakai terv soha nem számol az akkuval ez alatt vagy a tartalék alatt."
         }
       },
       "settings_battery_limit": {

@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Wsparcie baterii – min. nadwyżka solarna (W)",
           "grid_sign_invert": "Odwróć znak mocy sieci",
           "battery_operating_mode_entity": "Encja trybu pracy baterii (obserwowana)",
-          "battery_charge_end_soc_entity": "Poziom końca ładowania baterii (opcjonalnie)"
+          "battery_charge_end_soc_entity": "Poziom końca ładowania baterii (opcjonalnie)",
+          "battery_discharge_end_soc_entity": "Poziom końca rozładowania baterii (opcjonalnie)"
         },
         "data_description": {
           "update_interval": "Jak często koordynator odczytuje czujniki i reguluje sprzęt. 10 s daje najdokładniejsze całkowanie energii; wartości powyżej 30 s zaniżą liczoną energię. Zakres 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Minimalna rzeczywista nadwyżka solarna, zanim bateria domowa będzie mogła pomóc w ładowaniu EV — w każdym trybie ładowania. Poniżej tej wartości bateria jest zarezerwowana dla domu (samochód pobiera z sieci + słońca). Domyślnie 1200 W. Ustaw 0, aby bateria wspierała EV zawsze, także nocą.",
           "grid_sign_invert": "Włącz tylko, jeśli pobór z sieci pokazywany jest jako wartość dodatnia (np. Enphase). Konwencja SEM to ujemny = pobór; neguje surowy odczyt i pomija automatyczne wykrywanie znaku.",
           "battery_operating_mode_entity": "Selektor zasady pracy falownika (np. „Working mode” Huawei). SEM go tylko ODCZYTUJE: tryb jest pokazywany obok dowodów dotyczących baterii, a jednorazowa naprawa ostrzega, gdy nie jest to tryb autokonsumpcji, który zakłada planowanie SEM. SEM nigdy go nie zmienia. Zostaw puste, aby wyłączyć obserwację.",
-          "battery_charge_end_soc_entity": "Gdzie falownik sam kończy ładowanie baterii, w %. SEM tylko go odczytuje, nigdy nie zapisuje. Wymuszone ładowanie kończy się wtedy także tam, gdy jest poniżej 90 %."
+          "battery_charge_end_soc_entity": "Gdzie falownik sam kończy ładowanie baterii, w %. SEM tylko go odczytuje, nigdy nie zapisuje. Wymuszone ładowanie kończy się wtedy także tam, gdy jest poniżej 90 %.",
+          "battery_discharge_end_soc_entity": "Poziom, przy którym falownik sam kończy rozładowanie, w %. SEM tylko go odczytuje. Plan nocny nigdy nie liczy baterii poniżej niego ani poniżej rezerwy."
         }
       },
       "settings_battery_limit": {

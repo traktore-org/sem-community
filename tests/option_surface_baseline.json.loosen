@@ -1,3 +1,4 @@
 # RATCHET-LOOSENED: #1308 to=222 — whether the car may charge from the grid at day price after the night end to make its departure is the user's choice, not SEM's
 # RATCHET-LOOSENED: #1323 to=223 — whether a heat pump may be held back in an expensive hour or near the peak limit, and by which signal, is the comfort the user gives up; SEM cannot choose it
 # RATCHET-LOOSENED: #970 to=224 — whether the battery is kept for the peak limit or spent on the house first is the user's tariff choice (capacity fee or not), not something SEM can read
+# RATCHET-LOOSENED: #1358 to=225 — the inverter's own discharge floor is a fact SEM must read, not a choice it can make
