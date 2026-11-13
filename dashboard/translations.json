@@ -2170,7 +2170,14 @@
     "bq_next_selling": "Teď prodává do sítě.",
     "bq_next_keeps": "Dnes v noci si nechá {floor} % na ráno.",
     "bq_levels_here": "Úrovně baterie: pod {priority} % se nabíjí jako první; od {buffer} % smí pomáhat autu, naplno od {autostart} %.",
-    "bq_levels_open": "Změnit na kartě Baterie"
+    "bq_levels_open": "Změnit na kartě Baterie",
+    "plan_note_no_night_window": "žádné noční okno",
+    "plan_note_no_block_fits": "žádný souvislý blok se nevejde",
+    "plan_note_unpriced_slots": "{count} úsek(y) bez ceny — přeplánuje, až přijdou zítřejší ceny",
+    "plan_note_one_price_day": "levné hodiny v den s jedinou cenou se nepoužívají",
+    "plan_note_waits_for_sun": "čeká na slunce do {time}",
+    "plan_note_no_cheap_window": "dnes v noci žádné levné okno",
+    "plan_note_cost_unknown": "umístěno do hodin bez ceny — cena neznámá"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4343,7 +4350,14 @@
     "bq_next_selling": "Det sælger til nettet nu.",
     "bq_next_keeps": "I nat beholder det {floor} % til morgenen.",
     "bq_levels_here": "Batteriniveauer: under {priority} % lades det først; fra {buffer} % må det hjælpe bilen, fuldt ud fra {autostart} %.",
-    "bq_levels_open": "Skift dem på fanen Batteri"
+    "bq_levels_open": "Skift dem på fanen Batteri",
+    "plan_note_no_night_window": "intet natvindue",
+    "plan_note_no_block_fits": "ingen sammenhængende blok passer",
+    "plan_note_unpriced_slots": "{count} tidsrum uden pris — planlægger igen, når morgendagens priser kommer",
+    "plan_note_one_price_day": "lavlasttimer på en dag med én pris bruges ikke",
+    "plan_note_waits_for_sun": "venter på solen til {time}",
+    "plan_note_no_cheap_window": "intet billigt vindue i nat",
+    "plan_note_cost_unknown": "lagt i timer uden pris endnu — pris ukendt"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6516,7 +6530,14 @@
     "bq_next_selling": "Sie verkauft jetzt ins Netz.",
     "bq_next_keeps": "Heute Nacht behält sie {floor} % für den Morgen.",
     "bq_levels_here": "Batteriestufen: Unter {priority} % lädt sie zuerst; ab {buffer} % darf sie dem Auto helfen, ab {autostart} % voll.",
-    "bq_levels_open": "Im Tab Batterie ändern"
+    "bq_levels_open": "Im Tab Batterie ändern",
+    "plan_note_no_night_window": "kein Nachtfenster",
+    "plan_note_no_block_fits": "kein zusammenhängender Block passt",
+    "plan_note_unpriced_slots": "{count} Zeitfenster ohne Preis — plant neu, sobald die Preise für morgen da sind",
+    "plan_note_one_price_day": "Niedertarifstunden an einem Tag mit nur einem Preis werden nicht genutzt",
+    "plan_note_waits_for_sun": "wartet bis {time} auf die Sonne",
+    "plan_note_no_cheap_window": "heute Nacht kein günstiges Zeitfenster",
+    "plan_note_cost_unknown": "in Stunden ohne Preis gelegt — Kosten unbekannt"
   },
   "en": {
     "% of limit": "% of limit",
@@ -8689,7 +8710,14 @@
     "bq_next_selling": "It sells to the grid now.",
     "bq_next_keeps": "Tonight it keeps {floor} % for the morning.",
     "bq_levels_here": "Battery levels: it fills first below {priority} %; from {buffer} % it may help the car, fully from {autostart} %.",
-    "bq_levels_open": "Change them on the Battery tab"
+    "bq_levels_open": "Change them on the Battery tab",
+    "plan_note_no_night_window": "no night window",
+    "plan_note_no_block_fits": "no single block fits",
+    "plan_note_unpriced_slots": "{count} slot(s) without a price — replans when tomorrow's prices arrive",
+    "plan_note_one_price_day": "off-peak hours on a day with one price are not used",
+    "plan_note_waits_for_sun": "waits for the sun until {time}",
+    "plan_note_no_cheap_window": "no cheap window tonight",
+    "plan_note_cost_unknown": "placed in hours with no price yet — cost unknown"
   },
   "es": {
     "% of limit": "% del límite",
@@ -10862,7 +10890,14 @@
     "bq_next_selling": "Ahora vende a la red.",
     "bq_next_keeps": "Esta noche guarda el {floor} % para la mañana.",
     "bq_levels_here": "Niveles de la batería: por debajo del {priority} % se carga primero; desde el {buffer} % puede ayudar al coche, del todo desde el {autostart} %.",
-    "bq_levels_open": "Cambiarlos en la pestaña Batería"
+    "bq_levels_open": "Cambiarlos en la pestaña Batería",
+    "plan_note_no_night_window": "no hay franja nocturna",
+    "plan_note_no_block_fits": "no cabe ningún bloque seguido",
+    "plan_note_unpriced_slots": "{count} franja(s) sin precio — replanifica cuando lleguen los precios de mañana",
+    "plan_note_one_price_day": "las horas valle de un día con un solo precio no se usan",
+    "plan_note_waits_for_sun": "espera al sol hasta las {time}",
+    "plan_note_no_cheap_window": "esta noche no hay franja barata",
+    "plan_note_cost_unknown": "colocado en horas aún sin precio — coste desconocido"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13035,7 +13070,14 @@
     "bq_next_selling": "Se myy nyt verkkoon.",
     "bq_next_keeps": "Tänä yönä se säästää {floor} % aamuksi.",
     "bq_levels_here": "Akun tasot: alle {priority} %:n se latautuu ensin; {buffer} %:sta se saa auttaa autoa, täysin {autostart} %:sta.",
-    "bq_levels_open": "Muuta niitä Akku-välilehdellä"
+    "bq_levels_open": "Muuta niitä Akku-välilehdellä",
+    "plan_note_no_night_window": "ei yöikkunaa",
+    "plan_note_no_block_fits": "mikään yhtenäinen jakso ei mahdu",
+    "plan_note_unpriced_slots": "{count} jakso(a) ilman hintaa — suunnittelee uudelleen, kun huomisen hinnat tulevat",
+    "plan_note_one_price_day": "halvan ajan tunteja ei käytetä päivänä, jolla on yksi hinta",
+    "plan_note_waits_for_sun": "odottaa aurinkoa klo {time} asti",
+    "plan_note_no_cheap_window": "ei halpaa jaksoa tänä yönä",
+    "plan_note_cost_unknown": "sijoitettu tunteihin, joilla ei vielä ole hintaa — hinta tuntematon"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15208,7 +15250,14 @@
     "bq_next_selling": "Elle vend au réseau maintenant.",
     "bq_next_keeps": "Cette nuit, elle garde {floor} % pour le matin.",
     "bq_levels_here": "Niveaux de la batterie : elle se charge d'abord sous {priority} % ; à partir de {buffer} % elle peut aider la voiture, pleinement à partir de {autostart} %.",
-    "bq_levels_open": "Les modifier dans l'onglet Batterie"
+    "bq_levels_open": "Les modifier dans l'onglet Batterie",
+    "plan_note_no_night_window": "pas de créneau de nuit",
+    "plan_note_no_block_fits": "aucun bloc continu ne convient",
+    "plan_note_unpriced_slots": "{count} créneau(x) sans prix — replanifie dès que les prix de demain arrivent",
+    "plan_note_one_price_day": "les heures creuses d'un jour à prix unique ne sont pas utilisées",
+    "plan_note_waits_for_sun": "attend le soleil jusqu'à {time}",
+    "plan_note_no_cheap_window": "pas de créneau bon marché cette nuit",
+    "plan_note_cost_unknown": "placé dans des heures encore sans prix — coût inconnu"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17381,7 +17430,14 @@
     "bq_next_selling": "Most a hálózatra ad el.",
     "bq_next_keeps": "Ma éjjel {floor} %-ot megtart reggelre.",
     "bq_levels_here": "Akkumulátorszintek: {priority} % alatt előbb töltődik; {buffer} %-tól segíthet az autónak, {autostart} %-tól teljesen.",
-    "bq_levels_open": "Módosítás az Akkumulátor lapon"
+    "bq_levels_open": "Módosítás az Akkumulátor lapon",
+    "plan_note_no_night_window": "nincs éjszakai időablak",
+    "plan_note_no_block_fits": "egyetlen összefüggő blokk sem fér el",
+    "plan_note_unpriced_slots": "{count} idősáv ár nélkül — újratervez, amikor megjönnek a holnapi árak",
+    "plan_note_one_price_day": "az egyárú napon a völgyidőszaki órákat nem használja",
+    "plan_note_waits_for_sun": "{time}-ig vár a napra",
+    "plan_note_no_cheap_window": "ma éjjel nincs olcsó időablak",
+    "plan_note_cost_unknown": "még ár nélküli órákba került — költség ismeretlen"
   },
   "it": {
     "% of limit": "% del limite",
@@ -19554,7 +19610,14 @@
     "bq_next_selling": "Ora vende alla rete.",
     "bq_next_keeps": "Stanotte tiene il {floor} % per il mattino.",
     "bq_levels_here": "Livelli della batteria: sotto il {priority} % si carica prima; dal {buffer} % può aiutare l'auto, pienamente dal {autostart} %.",
-    "bq_levels_open": "Modificali nella scheda Batteria"
+    "bq_levels_open": "Modificali nella scheda Batteria",
+    "plan_note_no_night_window": "nessuna finestra notturna",
+    "plan_note_no_block_fits": "nessun blocco unico entra",
+    "plan_note_unpriced_slots": "{count} fascia/e senza prezzo — ripianifica quando arrivano i prezzi di domani",
+    "plan_note_one_price_day": "le ore fuori punta in un giorno a prezzo unico non vengono usate",
+    "plan_note_waits_for_sun": "aspetta il sole fino alle {time}",
+    "plan_note_no_cheap_window": "nessuna fascia economica stanotte",
+    "plan_note_cost_unknown": "messo in ore ancora senza prezzo — costo sconosciuto"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -21727,7 +21790,14 @@
     "bq_next_selling": "Hij verkoopt nu aan het net.",
     "bq_next_keeps": "Vannacht houdt hij {floor} % over voor de ochtend.",
     "bq_levels_here": "Accuniveaus: onder {priority} % laadt hij eerst; vanaf {buffer} % mag hij de auto helpen, volledig vanaf {autostart} %.",
-    "bq_levels_open": "Wijzig ze in het tabblad Batterij"
+    "bq_levels_open": "Wijzig ze in het tabblad Batterij",
+    "plan_note_no_night_window": "geen nachtvenster",
+    "plan_note_no_block_fits": "geen aaneengesloten blok past",
+    "plan_note_unpriced_slots": "{count} blok(ken) zonder prijs — plant opnieuw zodra de prijzen van morgen er zijn",
+    "plan_note_one_price_day": "daluren op een dag met één prijs worden niet gebruikt",
+    "plan_note_waits_for_sun": "wacht tot {time} op de zon",
+    "plan_note_no_cheap_window": "vannacht geen goedkoop venster",
+    "plan_note_cost_unknown": "in uren zonder prijs gezet — kosten onbekend"
   },
   "no": {
     "% of limit": "% av grense",
@@ -23900,7 +23970,14 @@
     "bq_next_selling": "Det selger til nettet nå.",
     "bq_next_keeps": "I natt beholder det {floor} % til morgenen.",
     "bq_levels_here": "Batterinivåer: under {priority} % lades det først; fra {buffer} % kan det hjelpe bilen, fullt ut fra {autostart} %.",
-    "bq_levels_open": "Endre dem i fanen Batteri"
+    "bq_levels_open": "Endre dem i fanen Batteri",
+    "plan_note_no_night_window": "ikke noe nattvindu",
+    "plan_note_no_block_fits": "ingen sammenhengende blokk passer",
+    "plan_note_unpriced_slots": "{count} tidsrom uten pris — planlegger på nytt når morgendagens priser kommer",
+    "plan_note_one_price_day": "lavlasttimer på en dag med én pris brukes ikke",
+    "plan_note_waits_for_sun": "venter på sola til {time}",
+    "plan_note_no_cheap_window": "ikke noe billig vindu i natt",
+    "plan_note_cost_unknown": "lagt i timer uten pris ennå — kostnad ukjent"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26073,7 +26150,14 @@
     "bq_next_selling": "Teraz sprzedaje do sieci.",
     "bq_next_keeps": "Tej nocy zostawia {floor} % na rano.",
     "bq_levels_here": "Poziomy akumulatora: poniżej {priority} % ładuje się najpierw; od {buffer} % może pomagać autu, w pełni od {autostart} %.",
-    "bq_levels_open": "Zmień je w zakładce Bateria"
+    "bq_levels_open": "Zmień je w zakładce Bateria",
+    "plan_note_no_night_window": "brak okna nocnego",
+    "plan_note_no_block_fits": "żaden ciągły blok się nie mieści",
+    "plan_note_unpriced_slots": "{count} okres(y) bez ceny — plan zostanie odświeżony, gdy pojawią się ceny na jutro",
+    "plan_note_one_price_day": "tańsze godziny w dniu z jedną ceną nie są używane",
+    "plan_note_waits_for_sun": "czeka na słońce do {time}",
+    "plan_note_no_cheap_window": "dziś w nocy brak taniego okna",
+    "plan_note_cost_unknown": "umieszczono w godzinach bez ceny — koszt nieznany"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28246,7 +28330,14 @@
     "bq_next_selling": "Está a vender à rede agora.",
     "bq_next_keeps": "Esta noite guarda {floor} % para a manhã.",
     "bq_levels_here": "Níveis da bateria: abaixo de {priority} % carrega primeiro; a partir de {buffer} % pode ajudar o carro, totalmente a partir de {autostart} %.",
-    "bq_levels_open": "Alterá-los no separador Bateria"
+    "bq_levels_open": "Alterá-los no separador Bateria",
+    "plan_note_no_night_window": "sem janela noturna",
+    "plan_note_no_block_fits": "nenhum bloco contínuo cabe",
+    "plan_note_unpriced_slots": "{count} intervalo(s) sem preço — replaneia quando chegarem os preços de amanhã",
+    "plan_note_one_price_day": "as horas de vazio num dia com um só preço não são usadas",
+    "plan_note_waits_for_sun": "espera pelo sol até às {time}",
+    "plan_note_no_cheap_window": "sem janela barata esta noite",
+    "plan_note_cost_unknown": "colocado em horas ainda sem preço — custo desconhecido"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30419,7 +30510,14 @@
     "bq_next_selling": "Acum vinde în rețea.",
     "bq_next_keeps": "La noapte păstrează {floor} % pentru dimineață.",
     "bq_levels_here": "Nivelurile bateriei: sub {priority} % se încarcă întâi; de la {buffer} % poate ajuta mașina, pe deplin de la {autostart} %.",
-    "bq_levels_open": "Modifică-le în fila Baterie"
+    "bq_levels_open": "Modifică-le în fila Baterie",
+    "plan_note_no_night_window": "nicio fereastră de noapte",
+    "plan_note_no_block_fits": "niciun bloc continuu nu încape",
+    "plan_note_unpriced_slots": "{count} interval(e) fără preț — replanifică atunci când sosesc prețurile de mâine",
+    "plan_note_one_price_day": "orele de noapte dintr-o zi cu un singur preț nu sunt folosite",
+    "plan_note_waits_for_sun": "așteaptă soarele până la {time}",
+    "plan_note_no_cheap_window": "nicio fereastră ieftină în noaptea asta",
+    "plan_note_cost_unknown": "pus în ore încă fără preț — cost necunoscut"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -32592,7 +32690,14 @@
     "bq_next_selling": "Det säljer till nätet nu.",
     "bq_next_keeps": "I natt behåller det {floor} % till morgonen.",
     "bq_levels_here": "Batterinivåer: under {priority} % laddas det först; från {buffer} % får det hjälpa bilen, fullt ut från {autostart} %.",
-    "bq_levels_open": "Ändra dem på fliken Batteri"
+    "bq_levels_open": "Ändra dem på fliken Batteri",
+    "plan_note_no_night_window": "inget nattfönster",
+    "plan_note_no_block_fits": "inget sammanhängande block passar",
+    "plan_note_unpriced_slots": "{count} intervall utan pris — planerar om när morgondagens priser kommer",
+    "plan_note_one_price_day": "lågpristimmar en dag med ett enda pris används inte",
+    "plan_note_waits_for_sun": "väntar på solen till {time}",
+    "plan_note_no_cheap_window": "inget billigt fönster i natt",
+    "plan_note_cost_unknown": "lagt i timmar utan pris ännu — kostnad okänd"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -34765,6 +34870,13 @@
     "bq_next_selling": "正在向电网售电。",
     "bq_next_keeps": "今晚为早晨保留 {floor}%。",
     "bq_levels_here": "电池电量：低于 {priority}% 优先充电；从 {buffer}% 起可协助汽车，从 {autostart}% 起全力协助。",
-    "bq_levels_open": "在“蓄电池”标签页中修改"
+    "bq_levels_open": "在“蓄电池”标签页中修改",
+    "plan_note_no_night_window": "没有夜间时段",
+    "plan_note_no_block_fits": "没有合适的连续时段",
+    "plan_note_unpriced_slots": "{count} 个时段尚无价格 — 明天的价格公布后重新规划",
+    "plan_note_one_price_day": "单一电价日的低谷时段不被使用",
+    "plan_note_waits_for_sun": "等待阳光直到 {time}",
+    "plan_note_no_cheap_window": "今晚没有低价时段",
+    "plan_note_cost_unknown": "安排在尚无价格的时段 — 费用未知"
   }
 }

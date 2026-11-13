@@ -350,6 +350,7 @@ class TestTariffRobustness:
         r = _by_id(plan, "ev")
         assert r.status == "partial"
         assert "unpriced" in r.note
+        assert r.note_codes == (("unpriced_slots", {"count": 2}),)  # #1354
         assert all(a.price in (0.1, 0.2) for a in _allocs(plan, "ev"))
 
     def test_cheap_hours_load_respects_the_level_gate(self):

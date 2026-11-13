@@ -13568,6 +13568,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "needed_kwh": round(r.needed_kwh, 2),
                 "est_cost": (round(r.est_cost, 2) if r.est_cost is not None else None),
                 "note": r.note or None,
+                # (#1354) the note as codes the card translates
+                "notes": [{"code": c, "params": dict(p)}
+                          for c, p in getattr(r, "note_codes", ())],
             } for r in plan.results]
             # The ledger itself — the card's hour axis and battery
             # trajectory, in the ONE shape a quiet night draws too.
