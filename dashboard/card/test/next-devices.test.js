@@ -264,7 +264,7 @@ test('the card renders every device with its body, the surplus section and the l
     assert.match(out, /next_surplus_peak/);
     assert.match(out, /operator_limit_banner/);
     for (const k of ['next_st_charging_a', 'next_st_on', 'next_st_waiting_for', 'next_st_to_house',
-        'charge_mode_hint_solar_plus_cheap_surplus', 'next_departures', 'next_set_once', 'next_lifetime',
+        'charge_mode_hint_solar_plus_cheap_surplus', 'ev_charge_by', 'next_set_once', 'next_lifetime',
         'load_mode_help_sem', 'next_legionella', 'next_sg_ready', 'battery_mode_hint_auto', 'next_bat_sent_fill',
         'planning_phase_holding', 'charge_pacing', 'next_sell_window', 'next_battery_n', 'next_evidence', 'health']) {
         assert.match(out, new RegExp(k), k);
@@ -323,7 +323,7 @@ test('a missing entity leaves its row out', () => {
     for (const id of Object.keys(st)) if (/battery_charge_pacing|may_export|forecast_|battery_health|cycles|temperature|measured_capacity|drift|legionella/.test(id)) delete st[id];
     delete st['sensor.sem_target_peak_limit'];
     const out = text(makeCard(st).render());
-    for (const k of ['charge_pacing', 'next_sell_window', 'next_evidence', '>health<', 'next_legionella', 'next_sent_limit', 'next_peak']) {
+    for (const k of ['charge_pacing', 'next_sell_window', 'next_evidence', '>health<', 'next_legionella', 'peak_q_label', 'next_peak']) {
         assert.doesNotMatch(out, new RegExp(k), k);
     }
     assert.match(out, /next_surplus/);

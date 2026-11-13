@@ -141,15 +141,17 @@ test('a missing entity drops its fragment; the sentence still reads', () => {
     const states = fullStates();
     delete states['number.sem_battery_auto_start_soc'];
     const batt = groups(states, t, CTX).find((x) => x.key === 'battery');
+    // (#1354) the levels are read back here and asked on the battery row in Devices
     const ids = slots(batt.sentence).map((s) => s.id);
-    assert.ok(ids.includes('number.sem_battery_priority_soc'));
-    assert.ok(!ids.includes('number.sem_battery_auto_start_soc'));
-    assert.ok(strings(batt.sentence).includes('buffer at'));
+    assert.ok(!ids.includes('number.sem_battery_priority_soc'));
+    const ro = batt.sentence.filter((p) => p && p.ro).map((p) => p.value);
+    assert.deepEqual(ro, ['50 %', '20 %']);
     assert.ok(!strings(batt.sentence).includes('help the house'));
-    // the flags that exist are joined into one sentence, capitalised once
+    assert.ok(batt.sentence.some((p) => p && p.kind === 'action' && p.nav && p.action === 'open_battery'));
+    // the flags asked on the battery row are not asked here a second time
     const txt = strings(batt.sentence);
     assert.ok(txt.includes('Spend forecast sun '));
-    assert.ok(txt.includes(', sell '));
+    assert.ok(!txt.includes('sell '));
 });
 
 test('no battery, no battery group; no charger, a one-line charger group', () => {

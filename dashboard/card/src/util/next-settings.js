@@ -23,7 +23,9 @@
  * setup card's picker for the same key (ENTITY_FIELDS).
  */
 
-import { priceAddOns } from './next-applies.js';
+import { priceAddOns } from './settings-applies.js';
+import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from './peak-questions.js';
+import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
 
 // (#528) option keys that reload the entry when written — copied from
 // cards/sem-config-card.js STRUCTURAL_KEYS.
@@ -190,6 +192,16 @@ function text(v) { return v ? { kind: 'text', ro: true, value: String(v) } : nul
 function action(name, labelKey) { return { kind: 'action', action: name, labelKey }; }
 
 // ── sentence building ──
+
+/** (#1354) Where a navigation link goes: the screen beside this one that
+ *  asks the setting (SEM Next's views share one dashboard path). */
+export function navTarget(pathname, action) {
+    const screen = { open_battery: 'devices' }[action];
+    if (!screen) return pathname || '';
+    const parts = String(pathname || '').split('/').filter(Boolean);
+    if (parts.length) parts[parts.length - 1] = screen; else parts.push(screen);
+    return '/' + parts.join('/');
+}
 
 export function pendingKey(slot) {
     if (!slot) return '';
@@ -627,23 +639,28 @@ export function groups(states, t, ctx = {}) {
 
     // 2 · What SEM may do
     {
-        const unlimited = optSwitch(o, 'peak_limit_unlimited', false);
-        const limit = optNum(o, 'target_peak_limit', { min: 1, max: 80, step: 0.1, unit: 'kW', default: 5 });
-        const warn = optNum(o, 'warning_peak_level', { min: 1, max: 80, step: 0.1, unit: 'kW', default: 4.5 });
-        const shed = optNum(o, 'emergency_peak_level', { min: 1, max: 80, step: 0.1, unit: 'kW', default: 6 });
+        // (#1354) the peak limit is ONE question, the same model as the classic card
+        const pq = o ? peakQuestion({ unlimited: !!o.peak_limit_unlimited, limitKw: o.target_peak_limit }) : null;
+        const answer = pq ? { option: 'peak_limit_unlimited', kind: 'select', peak: true,
+            value: pq.limited ? 'limit' : 'none',
+            options: [{ value: 'limit', labelKey: PEAK_TEXT.limit }, { value: 'none', labelKey: PEAK_TEXT.none }] } : null;
+        const kwRange = { min: PEAK_KW.min, max: PEAK_KW.max, step: PEAK_KW.step, unit: 'kW' };
+        const limit = pq ? { ...optNum(o, 'target_peak_limit', { ...kwRange, default: PEAK_KW.fallback }), value: pq.kw } : null;
+        const warn = optNum(o, 'warning_peak_level', { ...kwRange, default: 4.5 });
+        const shed = optNum(o, 'emergency_peak_level', { ...kwRange, default: 6 });
         const ac = optNum(o, 'inverter_ac_limit_w', { min: 0, max: 100000, step: 100, unit: 'W', default: 0 });
         const acSet = ac && ac.value > 0 ? ac : null;
         const relay = o && o.shed_signal_entity ? o.shed_signal_entity : null;
         const sentence = join(
-            unlimited && unlimited.value
-                ? clause([frag(t, 'next_may_unlimited', { unlimited })])
-                : clause([frag(t, 'next_may_peak', { limit })]),
-            unlimited && unlimited.value ? [] : clause([frag(t, 'next_may_levels', { warn, shed })]),
+            !pq ? [] : pq.limited
+                ? [t(PEAK_TEXT.label) + ' ', limit, ' · ', answer, '. ', t(PEAK_TEXT.sub)]
+                : [answer, '. ', t(PEAK_TEXT.subNone)],
             clause([frag(t, 'next_may_ac', { ac: acSet })]),
         );
         const m = more(t, [
             ['next_more_load_mgmt', optSwitch(o, 'load_management_enabled', false)],
-            ['next_more_no_limit', unlimited],
+            ['config_lm_warning_peak', pq && pq.limited ? warn : null],
+            ['config_lm_emergency_peak', pq && pq.limited ? shed : null],
             ['next_more_shed_signal', optEntity(o, 'shed_signal_entity')],
             ['next_more_operator_limit', relay ? optNum(o, 'shed_signal_limit', { min: 1, max: 80, step: 0.1, unit: 'kW', default: 4.2 }) : null],
             ['next_more_ac_limit', acSet ? null : ac],
@@ -664,27 +681,22 @@ export function groups(states, t, ctx = {}) {
 
     // 3 · Battery rules (only with a battery)
     if (hasBattery(states)) {
-        const priority = numSlot(states, 'number.sem_battery_priority_soc');
-        const buffer = numSlot(states, 'number.sem_battery_buffer_soc');
-        const auto = numSlot(states, 'number.sem_battery_auto_start_soc');
+        // (#1354) The levels, help, pacing, selling and reserves are asked in ONE
+        // place: the battery on the Devices screen (as the classic card asks
+        // them on its Battery tab). Here they are read back, with a link there.
+        const lv = batteryLevels(states);
+        const ro = (x) => (x === null ? null : { ro: true, value: Math.round(x) + ' %' });
+        const lvSlots = { priority: ro(lv.priority), buffer: ro(lv.buffer), autostart: ro(lv.autostart) };
         const sentence = join(
-            clause([frag(t, 'next_batt_zones', { priority, buffer, autostart: auto })
-                || frag(t, 'next_batt_zones_two', { priority, buffer })]),
-            clause([
-                frag(t, 'next_batt_spend', { v: switchSlot(states, 'switch.sem_forecast_spending_enabled') }),
-                frag(t, 'next_batt_pace', { v: switchSlot(states, 'switch.sem_battery_charge_pacing_enabled') }),
-                frag(t, 'next_batt_sell', { v: switchSlot(states, 'switch.sem_battery_may_export') }),
-                frag(t, 'next_batt_assist', { v: switchSlot(states, 'switch.sem_battery_may_assist_ev') }),
-            ]),
+            clause([frag(t, 'next_batt_zones', lvSlots)
+                || frag(t, 'next_batt_zones_two', { priority: lvSlots.priority, buffer: lvSlots.buffer })], ', ', '. '),
+            [{ kind: 'action', action: 'open_battery', labelKey: 'next_bq_levels_open', nav: true }],
+            clause([frag(t, 'next_batt_spend', { v: switchSlot(states, 'switch.sem_forecast_spending_enabled') })]),
         );
-        const reserves = reserveIds(states).map((id, i) => ['next_more_reserve', numSlot(states, id)]);
         const m = more(t, [
-            ['next_more_max_discharge', numSlot(states, 'number.sem_battery_max_discharge_power')],
+            ['next_more_max_discharge', numSlot(states, BATTERY_QUESTIONS.discharge_max.entity)],
             ['next_more_drain_floor', numSlot(states, 'number.sem_battery_morning_drain_floor_soc')],
             ['next_more_house_sink', switchSlot(states, 'switch.sem_battery_house_sink_enabled')],
-            ...reserves,
-            ['next_more_assist_max', numSlot(states, 'number.sem_battery_assist_max_power')],
-            ['next_more_solar_gate', numSlot(states, 'number.sem_battery_assist_min_surplus')],
             ['next_more_protection', optSwitch(o, 'battery_discharge_protection_enabled', true)],
             ...batteryWiring(o, cur, batteryCount(states)),
             ...batteryListItems(o, batteryCount(states), t),
@@ -929,6 +941,8 @@ export function applyPlan(pending, states) {
             if (!chargers[slot.charger]) chargers[slot.charger] = { id: slot.charger };
             chargers[slot.charger][slot.key] = value;
             reload = true;
+        } else if (slot.peak) {
+            Object.assign(options, peakWrites(value === 'limit', null));
         } else if (slot.option) {
             options[slot.option] = slot.kind === 'number' ? Number(value) : value;
             if (STRUCTURAL_KEYS.has(slot.option)) reload = true;

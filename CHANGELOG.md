@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **SEM Next asks the peak limit, battery levels and charger targets with the same words and logic as the classic dashboard** (#1354).
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
 - 🔧 **Plan card notes speak your language** (#1354). "13 slot(s) unpriced…" was English only.
 - 🔧 **The VPP and Deye test switches are called "dry run"** (#1354). Three settings were named Observer mode.

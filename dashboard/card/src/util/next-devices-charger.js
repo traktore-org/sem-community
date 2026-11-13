@@ -10,6 +10,7 @@ import { resolveChargerSoc } from './charger-soc.js';
 import { kwhOf } from './next-lead.js';
 import { targetModel, weekdaySummary } from './next-devices.js';
 import { monthTotals, rowsForMonth } from './sessions.js';
+import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities } from './charger-questions.js';
 
 const SMART_DEFAULT = 'min_plus_solar';
 const LATE = [0, 15, 30, 45, 60, 90, 120];
@@ -84,11 +85,12 @@ export function chargerBody(card, row) {
         else pickSmart();
     };
     const segItems = [];
-    if (options.includes('off')) segItems.push({ key: 'off', label: t('charge_mode_off') });
+    // (#1354) the modes by the shared names and order, as the classic card lists them
+    if (options.includes('off')) segItems.push({ key: 'off', label: t(chargeModeKey('off')) });
     if (smartOpts.length) segItems.push({ key: 'smart', label: t('next_smart'), icon: 'mdi:chevron-down' });
-    if (options.includes('always_max')) segItems.push({ key: 'always', label: t('next_always') });
+    if (options.includes('always_max')) segItems.push({ key: 'always', label: t(chargeModeKey('always_max')) });
     const smartSeg = segKey === 'smart' && smartOpts.length > 1 ? card._seg(
-        smartOpts.map((o) => ({ key: o, label: t('charge_mode_' + o) || o, disabled: !tariffOk && needTariff.includes(o) })),
+        [...smartOpts].sort((x, y) => CHARGE_MODES.indexOf(x) - CHARGE_MODES.indexOf(y)).map((o) => ({ key: o, label: t(chargeModeKey(o)) || o, disabled: !tariffOk && needTariff.includes(o) })),
         mode, (o) => { card._smartLast = { ...(card._smartLast || {}), [cid]: o }; card._selectOption(modeId, o); },
         { small: true, disabled: dis }) : nothing;
     const buffer = card._num('number.sem_battery_buffer_soc');
@@ -129,8 +131,10 @@ export function chargerBody(card, row) {
     const typeOpts = typeId ? (card._attrs(typeId).options || ['kwh']) : ['kwh'];
     const isSoc = type === 'soc';
     const unit = isSoc ? '%' : 'kWh';
-    const minId = isSoc ? ent('number', 'target_soc') : ent('number', 'daily_ev_target');
-    const maxId = isSoc ? ent('number', 'target_soc_max') : ent('number', 'daily_ev_target_max');
+    // (#1354) the target pair from the shared model: "At least / Up to", kWh or SOC
+    const te = targetEntities(cid, type);
+    const minId = card._has(te.atLeast) ? te.atLeast : null;
+    const maxId = card._has(te.upTo) ? te.upTo : null;
     const min = minId ? card._num(minId) : null;
     const max = maxId ? card._num(maxId) : null;
     const { soc, isEstimate } = resolveChargerSoc(card._num(S('vehicle_soc')), card._num('sensor.sem_vehicle_soc'),
@@ -161,7 +165,7 @@ export function chargerBody(card, row) {
     const timeVal = timeId ? card._inline('time:' + cid, chargeBy || '—', () => card._timeEdit('time:' + cid, {
         value: chargeBy, onCommit: (v) => card._setTime(timeId, v) })) : html`${chargeBy || '—'}`;
     const daysVal = card._val(hasOwnDays ? t('ev_dep_most_days') : t('next_every_day'), () => card._toggleDep(cid), { disabled: dis });
-    const targetText = fmtT(min) + ' – ' + fmtT(max) + ' ' + unit;
+    const targetText = `${t(CHARGER_TEXT.atLeast)} ${fmtT(min)} · ${t(CHARGER_TEXT.upTo)} ${fmtT(max)} ${unit}`;
     const targetVal = minId && maxId ? card._inline('target:' + cid, targetText, () => card._pairEdit('target:' + cid, {
         a: { value: min, min: card._attrs(minId).min, max: card._attrs(minId).max, step: card._attrs(minId).step },
         b: { value: max, min: card._attrs(maxId).min, max: card._attrs(maxId).max, step: card._attrs(maxId).step },
@@ -172,9 +176,9 @@ export function chargerBody(card, row) {
     const stats2 = html`<div class="stats" style="margin-top:4px">
         <div><span class="lbl">${t('next_charge')}</span><div class="big num">${soc === null ? '—' : (isEstimate ? '~' : '') + Math.round(soc) + ' %'}</div>
             <div class="sub2">${soc === null ? t('next_no_soc') : html`${kmNow === null ? '' : tf('next_km', { km: kmNow }) + ' · '}${isEstimate ? t('next_estimate') : t('next_measured')}`}</div></div>
-        <div><span class="lbl">${t('next_plan')}</span><div class="big num">${timeVal}</div>
+        <div><span class="lbl">${t(CHARGER_TEXT.departure)}</span><div class="big num">${timeVal}</div>
             <div class="sub2">${daysVal}${plannedKwh > 0 ? ' · ' + tf('next_kwh_planned', { kwh: card._fmt(plannedKwh, 1) }) : ''}</div></div>
-        <div><span class="lbl">${t('next_target')}</span><div class="big num">${targetVal}</div>
+        <div><span class="lbl">${t(CHARGER_TEXT.target)}</span><div class="big num">${targetVal}</div>
             <div class="sub2">${typeVal} ↔ ${isSoc ? 'kWh' : t('next_soc')}${kmAdd ? ' · ' + tf('next_plus_km', { km: kmAdd }) : ''}</div></div>
     </div>`;
 
@@ -221,7 +225,7 @@ export function chargerBody(card, row) {
     const lateMin = Number(dep.late_min) || 0;
     const lateOpts = LATE.includes(lateMin) ? LATE : [...LATE, lateMin].sort((a, b) => a - b);
     const rows = [];
-    rows.push(card._row('mdi:calendar-repeat', t('next_departures'), runText || depDefault || '—',
+    rows.push(card._row('mdi:calendar-repeat', t(CHARGER_TEXT.departure), runText || depDefault || '—',
         nextDep ? tf('next_next_departure', { time: nextDep }) : (hasOwnDays ? t('ev_dep_most_days') : ''), { onClick: () => card._toggleDep(cid) }));
     if (depEditor !== nothing) rows.push(depEditor);
     rows.push(card._row('mdi:view-agenda', t('ev_dep_one_block'),

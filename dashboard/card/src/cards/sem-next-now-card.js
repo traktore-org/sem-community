@@ -19,7 +19,7 @@ import { powerBar } from '../util/next-power-bar.js';
 import { todayRows } from '../util/next-today-rows.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
-import { strategyWords } from '../util/next-strategy-reason.js';
+import { chargerSays } from '../util/charger-questions.js';
 import { plainReason } from '../util/why-rows.js';
 import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
@@ -483,10 +483,10 @@ class SEMNextNowCard extends SEMNextBase {
 
     _why() {
         const rows = [];
-        const strat = this._hass?.states['sensor.sem_charging_strategy'];
-        if (strat && strat.state && strat.state !== 'unavailable' && strat.state !== 'unknown') {
-            // (#1354) the user's words only: never the engine's raw text
-            const { title, text } = strategyWords(strat, (k) => this._t(k), plainReason);
+        // (#1354) the user's words only, from the shared charger model
+        const said = chargerSays(this._hass?.states, (k) => this._t(k), plainReason);
+        if (said) {
+            const { title, text } = said;
             const evW = this._powerW('sensor.sem_ev_power');
             rows.push(this._row('mdi:car-electric', title, evW === null ? '' : this._kw(evW), text, { color: C.ev }));
         }

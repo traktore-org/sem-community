@@ -5,10 +5,11 @@
  * The stored settings do not change. Every question names the entity it
  * shows and writes, exactly the entity the old control wrote.
  *
- * The battery zones (docs/USER_GUIDE.md "Battery zones"): below the priority
- * level the battery fills first and the car waits; up to the buffer the car
- * gets spare sun only; above the buffer the battery may help the car; above
- * auto-start the car may start without spare sun.
+ * The battery zones (coordinator/decide.py `soc_zone`, flow_calculator.py
+ * `battery_assist_potential_w`): below the priority level the battery fills
+ * first and the car waits; up to the buffer the car gets spare sun only; from
+ * the buffer the battery may help the car; from auto-start it may help fully,
+ * still only with enough spare sun.
  */
 
 const finite = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
