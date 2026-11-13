@@ -9061,7 +9061,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
         `}_renderBatteryScheduler(e){const t=this._options||{};return H`
             <div class="setup-intro">${this._t("config_battery_scheduler_intro")}</div>
             ${this._renderOptionToggle("battery_charge_scheduler_enabled","config_bs_enabled",t,"config_help_bs_enabled",!1)}
-            ${this._renderOptionNumberInput("battery_capacity_kwh","config_bs_capacity",{min:1,max:100,step:.5,unit:"kWh",default:10},t,"config_help_bs_capacity")}
+            ${""}
+            ${this._renderOptionNumberInput("battery_capacity_kwh","config_bs_capacity",{min:1,max:100,step:.5,unit:"kWh",default:this._num("number.sem_battery_capacity")??15},t,"config_help_bs_capacity")}
             ${this._renderOptionNumberInput("battery_max_charge_power_w","config_bs_max_charge",{min:500,max:25e3,step:100,unit:"W",default:5e3},t,"config_help_bs_max_charge")}
             ${this._renderOptionSlider("battery_roundtrip_efficiency","config_bs_efficiency",{min:.7,max:.99,step:.01,unit:"",default:.92},t,"config_help_bs_efficiency")}
             ${this._renderOptionNumberInput("battery_cycle_cost","config_bs_cycle_cost",{min:0,max:.5,step:.001,unit:fe(this._hass)+"/kWh",default:.02},t,"config_help_bs_cycle_cost")}

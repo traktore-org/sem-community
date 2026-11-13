@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The battery size shows the size SEM plans with when you have not set it** (#1354). The field said 10 or 15 kWh.
 - 🔧 **A charger's target reads "At least / Up to" everywhere** (#1354). The Configuration tab said "Daily target / Max daily" or "Target / Max SOC".
 - 📝 **The auto-start level is described as SEM uses it**: from it the battery helps the car fully, still only with spare sun (#1354).
 - 🔧 **The battery levels are plain questions, set in one place on the Battery tab** (#1354). The bar no longer calls the first band "Reserve".

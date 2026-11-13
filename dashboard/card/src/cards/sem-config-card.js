@@ -2884,8 +2884,10 @@ class SEMConfigCard extends SEMLitBase {
             <div class="setup-intro">${this._t('config_battery_scheduler_intro')}</div>
             ${this._renderOptionToggle('battery_charge_scheduler_enabled', 'config_bs_enabled',
                 opts, 'config_help_bs_enabled', false)}
+            ${/* (#1354) unset, the field shows the size SEM plans with (the
+                  entity follows it), not a default of its own */ ''}
             ${this._renderOptionNumberInput('battery_capacity_kwh', 'config_bs_capacity',
-                { min: 1, max: 100, step: 0.5, unit: 'kWh', default: 10.0 }, opts, 'config_help_bs_capacity')}
+                { min: 1, max: 100, step: 0.5, unit: 'kWh', default: this._num('number.sem_battery_capacity') ?? 15 }, opts, 'config_help_bs_capacity')}
             ${this._renderOptionNumberInput('battery_max_charge_power_w', 'config_bs_max_charge',
                 { min: 500, max: 25000, step: 100, unit: 'W', default: 5000 }, opts, 'config_help_bs_max_charge')}
             ${this._renderOptionSlider('battery_roundtrip_efficiency', 'config_bs_efficiency',

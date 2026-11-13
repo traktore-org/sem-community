@@ -65,3 +65,10 @@ test('the classic cards take the battery from the shared model', () => {
     assert.ok(read('sem-battery-zones-card.js').includes("from '../util/battery-questions.js'"));
     assert.ok(read('sem-battery-card.js').includes('batterySaysFromStates(this._hass?.states)'));
 });
+
+test('the battery size field shows the size SEM plans with when it is unset', () => {
+    // (#1354) one stored setting; unset, the card showed a default of 10 kWh
+    // while the entity said 15 and SEM used the detected size
+    const cfg = fs.readFileSync(new URL('../src/cards/sem-config-card.js', import.meta.url), 'utf8');
+    assert.ok(cfg.includes("default: this._num('number.sem_battery_capacity') ?? 15"));
+});
