@@ -333,7 +333,7 @@ const STRUCTURAL_KEYS = new Set([
     // (#1166) the end-of-charge level of the battery: read from the config
     // snapshot, which only a reload rebuilds.
     'battery_charge_end_soc_entity',
-    // (#1358) the inverter's own end-of-discharge level, read the same way
+    // (#1358) the end-of-discharge level of the inverter, read the same way
     'battery_discharge_end_soc_entity',
     // #550 — structural TOGGLES: reload the entry too, so they stage + commit on
     // Apply like the pickers (a live flip would reload and discard staged edits).
