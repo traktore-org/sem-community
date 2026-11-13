@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
     heaterSays, heaterSub, heaterQuestions, sunMaxWrites, buySource, buyWrites,
-    coldHeaters, nextBlock, becauseKey, asSentence, BUY_LABEL,
+    coldHeaters, nextBlock, becauseKey, asSentence, BUY_LABEL, limitWrites,
 } from '../src/util/heater-questions.js';
 
 const here = new URL('.', import.meta.url);
@@ -172,6 +172,41 @@ test('a unit that picks its season says which one it is in', () => {
     assert.equal(heaterQuestions({ goals: GOALS, comfort: band(45) }).season, null);
 });
 
+test('a unit that rides its own setpoint shows what SEM uses, not what was typed', () => {
+    // typed Keep 23 / limit 27 / extra 2, the thermostat at 24: SEM uses 24 / 28 / 22
+    const goals = { comfort_target: '23', comfort_limit: '27', comfort_offset: '2', top_up_policy: 'cheap_hours' };
+    const comfort = { hvac: 'cool', anchored: true, keep_c: 24, limit_c: 28, max_c: 22, start_c: 25, reading_c: 26 };
+    const q = heaterQuestions({ goals, comfort });
+    assert.deepEqual([q.keep, q.floor, q.sunMax], [24, 28, 22]);
+    assert.equal(q.anchored, true);
+    // Keep at is the unit's own setpoint: read-only here, with the note
+    assert.equal(q.keepReadOnly, true);
+    assert.equal(q.keepNoteKey, 'hq_keep_anchored');
+    // "never warmer than 29" → the stored limit keeps its distance from the stored target
+    assert.deepEqual(limitWrites(q, 29).writes, [{ property: 'comfort_limit', value: '28' }]);   // 23 + (29 − 24)
+    // "cool down to 21" → 3 below the effective Keep at
+    assert.deepEqual(sunMaxWrites({ id: 'ac', keep: q.keep, cooling: true }, 21).writes, [{ property: 'comfort_offset', value: '3' }]);
+    // a heating unit the same way: typed 21 / 18 / 2, thermostat at 20 → 20 / 17 / 22
+    const h = heaterQuestions({ goals: { comfort_target: '21', comfort_limit: '18', comfort_offset: '2' },
+        comfort: { hvac: 'heat', anchored: true, keep_c: 20, limit_c: 17, max_c: 22 } });
+    assert.deepEqual([h.keep, h.floor, h.sunMax, h.keepReadOnly], [20, 17, 22, true]);
+    assert.deepEqual(limitWrites(h, 16).writes, [{ property: 'comfort_limit', value: '17' }]);   // 21 + (16 − 20)
+    // °F: the published °C lines are shown in the user's unit
+    const f = heaterQuestions({ goals: { comfort_target: '74', comfort_limit: '80', comfort_offset: '4' },
+        comfort: { hvac: 'cool', anchored: true, keep_c: 24, limit_c: 28, max_c: 22 } }, { toUnit: (c) => c * 9 / 5 + 32 });
+    assert.deepEqual([f.keep, f.floor, f.sunMax], [75.2, 82.4, 71.6]);
+    // a band that is not anchored shows and writes the typed values, as before
+    const plain = heaterQuestions({ goals: GOALS, comfort: band(45) });
+    assert.deepEqual([plain.anchored, plain.keepReadOnly, plain.keepNoteKey], [false, false, null]);
+    assert.deepEqual(limitWrites(plain, 35).writes, [{ property: 'comfort_limit', value: '35' }]);
+});
+
+test('the line under the buy question is mirrored for a cooling unit', () => {
+    assert.equal(heaterQuestions({ goals: COOL_GOALS, comfort: { hvac: 'cool' } }).buySubKey, 'hq_buy_sub_band_cool');
+    assert.equal(heaterQuestions({ goals: GOALS, comfort: band(45) }).buySubKey, 'hq_buy_sub_band');
+    assert.doesNotMatch(words.en.hq_buy_sub_band_cool, /heat/);
+});
+
 test('the battery choice: it heats tonight from the house battery, or waits at the reserve', () => {
     const say = (intent, over = {}, live = T, running = false) =>
         heaterSays({ comfort: band(45, { may_buy: false, may_use_battery: true, ...over }), intent, mergedMode: 'solar_only' }, live, running);
@@ -215,6 +250,7 @@ test('every text of the model exists in every language', () => {
     const keys = new Set([...src.matchAll(/'(hq_[a-z_]+)'/g)].map((m) => m[1]));
     for (const k of ['hq_now', 'hq_keep', 'hq_keep_sub', 'hq_floor', 'hq_floor_sub', 'hq_sun_max', 'hq_sun_max_sub',
         'hq_plan_above_no_hour', 'hq_plan_above_no_hour_plain',
+        'hq_keep_anchored', 'hq_buy_sub_band_cool',
         'hq_buy', 'hq_more', 'hq_run_each_day', 'hq_run_each_day_sub', 'hq_plan_below_no_hour', 'hq_plan_below_no_hour_plain',
         ...Object.values(BUY_LABEL)]) keys.add(k);
     assert.ok(keys.size > 35);
@@ -229,6 +265,8 @@ test('the classic card asks the shared model, and the old chip words are gone fo
     // one band view for heating and cooling; the words come from the model
     assert.ok(classic.includes("q.view === 'band'") && !classic.includes("q.view === 'cool'"));
     assert.ok(classic.includes('q.keys.floor') && classic.includes('q.keys.sunMax') && classic.includes('cooling: q.cooling'));
+    // (#705) a unit that rides its own setpoint: effective values, Keep at read-only, the limit as a distance
+    assert.ok(classic.includes('limitWrites(q,') && classic.includes('q.keepReadOnly') && classic.includes('q.keepNoteKey') && classic.includes('toUnit:'));
     // the run-time progress is hidden when the thermometer leads
     assert.ok(classic.includes("this._questions(device).view === 'band'"));
     assert.ok(planCard.includes('coldHeaters('));

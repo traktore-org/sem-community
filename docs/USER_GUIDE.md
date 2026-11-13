@@ -464,6 +464,11 @@ warmer than** (above it SEM cools at once), **With spare sun, cool down to**
 picks heat or cool from the outdoor forecast shows the questions of the
 season it is in, and says which.
 
+A room unit with its own thermostat follows that thermostat: **Keep it at**
+shows the unit's own setpoint and is changed on the unit. The other two
+temperatures show what SEM uses, and keep their distance to the setpoint
+when it moves.
+
 A heater SEM drives by a watt or ampere setpoint (a heating rod, for
 example) follows the same questions. A too-cold run and a planned run ask
 for its full power; on spare sun it follows the sun.

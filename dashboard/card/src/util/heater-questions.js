@@ -189,14 +189,25 @@ export function buyWrites(source) {
  * set for a unit that picks heat or cool from the outdoor forecast.
  * Temperatures are in the user's unit, as typed and stored.
  * `goals` = the row's goals; `comfort` = the row's live comfort block.
+ *
+ * (#705) A unit that rides its OWN setpoint (`comfort.anchored`): Keep at IS
+ * that setpoint and the typed limit only gives its distance. The questions
+ * then show what SEM uses — the published lines, turned into the user's
+ * unit by `toUnit` — and `keepReadOnly` says Keep at is changed on the unit.
+ * `storedKeep` is the typed target the limit's distance is measured from.
  */
-export function heaterQuestions({ goals, comfort }, { hasBattery = false } = {}) {
+export function heaterQuestions({ goals, comfort }, { hasBattery = false, toUnit = (c) => c } = {}) {
     const g = goals || {};
-    const keep = num(g.comfort_target), floor = num(g.comfort_limit);
+    const storedKeep = num(g.comfort_target), storedFloor = num(g.comfort_limit);
     const offset = num(g.comfort_offset) || 0;
-    const engaged = keep !== null && keep > 0 && floor !== null && floor > 0;
+    const engaged = storedKeep !== null && storedKeep > 0 && storedFloor !== null && storedFloor > 0;
+    const r1 = (v) => Math.round(Number(toUnit(v)) * 10) / 10;
+    const anchored = engaged && !!comfort && comfort.anchored === true
+        && num(comfort.keep_c) !== null && num(comfort.limit_c) !== null;
+    const keep = anchored ? r1(comfort.keep_c) : storedKeep;
+    const floor = anchored ? r1(comfort.limit_c) : storedFloor;
     const cooling = (comfort && comfort.hvac === 'cool')
-        || (engaged && !(comfort && comfort.hvac) && floor > keep)
+        || (engaged && !(comfort && comfort.hvac) && storedFloor > storedKeep)
         || (!(comfort && comfort.hvac) && g.hvac_mode === 'cool');
     const src = buySource(g);
     const buy = src === 'battery' && !hasBattery ? 'off' : src;
@@ -204,9 +215,12 @@ export function heaterQuestions({ goals, comfort }, { hasBattery = false } = {})
     if (engaged) {
         return {
             view: 'band', cooling, keep, floor, offset,
-            sunMax: Math.round((cooling ? keep - offset : keep + offset) * 10) / 10,
+            sunMax: anchored && num(comfort.max_c) !== null ? r1(comfort.max_c)
+                : Math.round((cooling ? keep - offset : keep + offset) * 10) / 10,
+            anchored, keepReadOnly: anchored, storedKeep,
+            keepNoteKey: anchored ? 'hq_keep_anchored' : null,
             buy, buyChoices,
-            buySubKey: 'hq_buy_sub_band',
+            buySubKey: cooling ? 'hq_buy_sub_band_cool' : 'hq_buy_sub_band',
             // (#1349) the battery reaches Keep at at night, above its reserve
             buySubBatteryKey: hasBattery ? 'hq_buy_sub_band_battery' : null,
             season: g.hvac_mode === 'by_forecast' ? (cooling ? 'hq_season_cooling' : 'hq_season_heating') : null,
@@ -248,6 +262,20 @@ export function sunMaxWrites({ id, keep, cooling = false }, x, solarTarget = nul
         writes: [{ property: 'comfort_offset', value: String(offset) }],
         option: isHotWater ? { key: 'hot_water_solar_target', value: Math.round((k + offset) * 10) / 10 } : null,
     };
+}
+
+/**
+ * "Never colder than X" (cooling: "never warmer than X") → the write.
+ * On a unit that rides its own setpoint the stored limit is only a distance
+ * from the stored target, so X is turned back into that distance: after
+ * saving, the limit SEM uses equals what the user typed.
+ */
+export function limitWrites(q, x) {
+    const v = num(x);
+    if (v === null) return { writes: [] };
+    const stored = q && q.anchored && num(q.storedKeep) !== null && num(q.keep) !== null
+        ? Math.round((Number(q.storedKeep) + (v - Number(q.keep))) * 10) / 10 : v;
+    return { writes: [{ property: 'comfort_limit', value: String(stored) }] };
 }
 
 /** A sentence from a short status text: first letter up, a full stop at the end. */
