@@ -2277,9 +2277,9 @@ Every screen opens with one line in words.
 
 It is the default dashboard. A new install gets it, and
 `solar_energy_management.generate_dashboard` builds it unless you ask for
-`template: classic`. It appears in the sidebar as **Solar Energy
-Management** at `/sem-next/now`. The old dashboard is called **SEM Classic**
-and stays for one more release; build it again with `template: classic`. In observer mode
+`template: classic`. It appears in the sidebar as **SEM-dashboard**
+at `/sem-next/now`. The old dashboard is called **SEM-classic** (still at
+`/sem-dashboard`) and stays for one more release; build it again with `template: classic`. In observer mode
 the screens are the same, greyed, and every line says what SEM *would* do.
 
 ## Observer Mode

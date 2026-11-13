@@ -27,9 +27,9 @@ The dashboard is generated automatically on first install. If you need to regene
 
 1. Go to **Developer Tools** > **Services**
 2. Search for `solar_energy_management.generate_dashboard`
-3. Click **Call Service**. It builds the default dashboard, **Solar Energy
-   Management**, at `/sem-next`. For the old one, **SEM Classic**, add
-   `template: classic`.
+3. Click **Call Service**. It builds the default dashboard, **SEM-dashboard**,
+   at `/sem-next`. For the old one, **SEM-classic** (still at
+   `/sem-dashboard`), add `template: classic`.
 4. The dashboard appears in the sidebar — hard-refresh your browser (Ctrl+Shift+R)
 
 ---
@@ -818,6 +818,13 @@ price now and the next cheap window, and the signals: tip, best surplus
 window, peak, CO2, score, weather. Plan ›, Decisions › and Insights › open
 the other screens. A sensor that is out leaves its row out.
 
+Under the power bar a thin bar shows where the power comes from now, in
+percent (sun, battery, grid); it stays visible when the list is folded. The
+money section ends with the price for the next 24 hours as a coloured strip
+(cheap, normal, expensive, by your own price levels) with a mark for now; a
+one-rate tariff shows no strip. At the bottom one chip per device (battery
+charge, each car, each heat pump or tank) opens the Devices screen.
+
 #### sem-next-plan-card
 
 **SEM · Plan** · *SEM Next, Plan screen*
@@ -911,8 +918,10 @@ the recorder; a missing entity leaves its series or row out.
 
 **SEM · System** · *SEM Next, System screen*
 
-Health first: a tile per source with its age (solar, grid, battery, car,
-prices, forecast, each load), the setup check with the grid and battery
+Health first: a tile per source with its value and age (solar, grid,
+battery, car, prices, forecast, each load) and, in small type, the entity SEM
+really reads (for example the inverter's power sensor), which helps when a
+setup reads the wrong sensor, the setup check with the grid and battery
 signs, the hardware, what is unavailable, the version; buttons Copy
 diagnostics, Diagnose (copies the report) and Observer on/off behind a
 confirm step. Then what SEM held back. Then seven settings groups written

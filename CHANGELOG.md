@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **SEM-dashboard Now shows where power comes from in percent, the next 24 hours of price, and a chip per device** (#1321).
+- ✨ **SEM-dashboard System shows each source's value and the entity SEM reads** (#1321), to check a setup.
+- 🔧 **The two dashboards are named SEM-dashboard and SEM-classic in the sidebar** (#1321). The names change at the next "generate dashboard".
 - 🐛 **SEM Next shows a charger by its own name in every language, not as "ev charger 1"** (#1321).
 - 🔧 **SEM Next asks the peak limit, battery levels and charger targets with the same words and logic as the classic dashboard** (#1354).
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".

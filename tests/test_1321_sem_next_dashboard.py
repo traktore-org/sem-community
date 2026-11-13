@@ -151,8 +151,8 @@ def test_the_default_takes_the_main_name_and_the_old_one_is_classic():
     from custom_components.solar_energy_management.features.dashboard_generator import (
         CLASSIC_DASHBOARD_TITLE, NEXT_DASHBOARD_TITLE,
     )
-    assert NEXT_DASHBOARD_TITLE == "Solar Energy Management"
-    assert CLASSIC_DASHBOARD_TITLE == "SEM Classic"
+    assert NEXT_DASHBOARD_TITLE == "SEM-dashboard"
+    assert CLASSIC_DASHBOARD_TITLE == "SEM-classic"
     with open(os.path.join(ROOT, "__init__.py"), encoding="utf-8") as f:
         src = f.read()
     assert "dashboard_title = CLASSIC_DASHBOARD_TITLE" in src

@@ -15,6 +15,20 @@ export const SOURCE_ROWS = [
     { key: 'next_src_price', entity: 'sensor.sem_tariff_current_import_rate', okS: 2 * 3600, oldS: 26 * 3600 },
 ];
 
+/** (#1321) Which part of SEM's own Energy-dashboard read each source row follows. */
+const SOURCE_PART = { next_src_solar: 'solar', next_src_grid: 'grid', next_src_battery: 'battery' };
+
+/**
+ * The real entity behind a source row — what SEM reads, as the System card's
+ * debug line shows it (Rien, PR 1322). edConfig: sensor.sem_diag_ed_config's
+ * `energy_dashboard` attribute. → an entity id, or '' when SEM does not say.
+ */
+export function sourceEntityOf(key, edConfig) {
+    const part = SOURCE_PART[key];
+    const id = part ? edConfig?.[part]?.power : null;
+    return typeof id === 'string' ? id : '';
+}
+
 export function ageSeconds(stateObj, nowMs = Date.now()) {
     const t = Date.parse(stateObj?.last_updated || '');
     return Number.isFinite(t) ? Math.max(0, (nowMs - t) / 1000) : null;
