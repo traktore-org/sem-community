@@ -333,6 +333,8 @@ const STRUCTURAL_KEYS = new Set([
     // (#1166) the end-of-charge level of the battery: read from the config
     // snapshot, which only a reload rebuilds.
     'battery_charge_end_soc_entity',
+    // (#1358) the end-of-discharge level of the inverter, read the same way
+    'battery_discharge_end_soc_entity',
     // #550 — structural TOGGLES: reload the entry too, so they stage + commit on
     // Apply like the pickers (a live flip would reload and discard staged edits).
     'battery_discharge_protection_enabled', 'battery_setpoint_bidirectional',
@@ -1609,6 +1611,11 @@ class SEMConfigCard extends SEMLitBase {
                     ['number', 'sensor', 'input_number'], i, n, opts,
                     'config_help_batt_charge_end_entity_each'))}`;
             })()}
+            ${/* (#1358) read only: where the inverter itself stops
+                  discharging. The night plan never counts the battery
+                  below it, nor below the reserve. */ ''}
+            ${this._renderPicker('battery_discharge_end_soc_entity', 'config_batt_discharge_end_entity',
+                ['number', 'sensor', 'input_number'], null, opts, 'config_help_batt_discharge_end_entity')}
         `;
     }
 

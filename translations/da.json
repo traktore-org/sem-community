@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Batteristøtte – min. soloverskud (W)",
           "grid_sign_invert": "Vend fortegn for neteffekt",
           "battery_operating_mode_entity": "Batteriets driftstilstands-entitet (overvåget)",
-          "battery_charge_end_soc_entity": "Batteriets ladestopniveau (valgfrit)"
+          "battery_charge_end_soc_entity": "Batteriets ladestopniveau (valgfrit)",
+          "battery_discharge_end_soc_entity": "Batteriets afladningsstopniveau (valgfrit)"
         },
         "data_description": {
           "update_interval": "Hvor ofte koordinatoren læser sensorer og justerer hardwaren. 10 s giver den mest præcise energiintegration; værdier over 30 s vil undervurdere energien. Interval 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Mindste reelle soloverskud, før husbatteriet må hjælpe med at oplade EV'en — i alle opladningstilstande. Herunder er batteriet reserveret til huset (bilen trækker fra nettet + sol). Standard 1200 W. Sæt til 0 for at lade batteriet understøtte EV'en overalt, også om natten.",
           "grid_sign_invert": "Slå kun til, hvis netimport vises som en positiv værdi (f.eks. Enphase). SEM's konvention er negativ = import; dette negerer råaflæsningen og springer automatisk fortegnsregistrering over.",
           "battery_operating_mode_entity": "Inverterens driftspolitik-vælger (f.eks. Huaweis 'Working mode'). SEM LÆSER den kun: tilstanden vises ved siden af batteribeviset, og en engangsreparation advarer, når det ikke er den egetforbrugstilstand, SEM's planlægning forudsætter. SEM ændrer den aldrig. Lad stå tom for at deaktivere overvågningen.",
-          "battery_charge_end_soc_entity": "Hvor inverteren selv stopper opladningen af batteriet, i %. SEM læser det kun og skriver det aldrig. Tvungen opladning slutter så også der, når det er under 90 %."
+          "battery_charge_end_soc_entity": "Hvor inverteren selv stopper opladningen af batteriet, i %. SEM læser det kun og skriver det aldrig. Tvungen opladning slutter så også der, når det er under 90 %.",
+          "battery_discharge_end_soc_entity": "Hvor inverteren selv stopper afladningen, i %. SEM læser det kun. Natplanen regner aldrig batteriet under det eller under reserven."
         }
       },
       "settings_battery_limit": {

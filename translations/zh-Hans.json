@@ -232,7 +232,8 @@
           "diagram_style": "系统图样式",
           "grid_sign_invert": "反转电网功率符号",
           "battery_operating_mode_entity": "电池运行模式实体（受监测）",
-          "battery_charge_end_soc_entity": "蓄电池充电截止电量（可选）"
+          "battery_charge_end_soc_entity": "蓄电池充电截止电量（可选）",
+          "battery_discharge_end_soc_entity": "蓄电池放电截止电量（可选）"
         },
         "data_description": {
           "update_interval": "协调器读取传感器和调整硬件的频率。10 秒可提供最准确的电量统计；超过 30 秒的值会导致电量少计。范围：10–60 秒。",
@@ -258,7 +259,8 @@
           "legionella_interval_hours": "在 SEM 强制启动加热之前，两次军团菌消毒周期之间的最大间隔时间（小时）。",
           "grid_sign_invert": "仅当电网进口显示为正值时开启（例如 Enphase）。SEM 的约定是负值＝进口；此选项会对原始读数取反并跳过符号自动检测。",
           "battery_operating_mode_entity": "逆变器的运行策略选择器（例如华为的 'Working mode'）。SEM 只【读取】它：该模式会显示在电池证据旁边，当它不是 SEM 规划所假定的自发自用模式时，会触发一次性维修提醒。SEM 绝不会更改它。留空则停用监测。",
-          "battery_charge_end_soc_entity": "逆变器自身停止为蓄电池充电的电量（%）。SEM 只读取它，从不写入。低于 90 % 时，强制充电也在此结束。"
+          "battery_charge_end_soc_entity": "逆变器自身停止为蓄电池充电的电量（%）。SEM 只读取它，从不写入。低于 90 % 时，强制充电也在此结束。",
+          "battery_discharge_end_soc_entity": "逆变器自身停止放电的电量，单位 %。SEM 只读取它。夜间计划绝不把电池算到它或备用电量以下。"
         }
       },
       "settings_battery_limit": {

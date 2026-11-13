@@ -29,6 +29,7 @@ _ROLE_OF_KEY: dict[str, str] = {
     "battery_temperature_sensor": "temperature",
     "battery_target_soc_entity": "control",
     "battery_charge_end_soc_entity": "control",
+    "battery_discharge_end_soc_entity": "control",
     "battery_operating_mode_entity": "control",
     "battery_charge_power_limit_entity": "control",
     "battery_discharge_control_entity": "control",

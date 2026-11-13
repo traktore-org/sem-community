@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **The night plan also respects the inverter's own end-of-discharge level, when SEM finds it** (#1358). Change it in the inverter's app; the plan follows.
+
 # [2.3.0-beta.14] — 13.11.2026
 
 - 🐛 **The night plan lets the house use the battery down to its reserve, not the 30 % level** (#1358). A 28 % battery read as empty.
