@@ -7,7 +7,7 @@
 # template: next) and never replaces the classic one at /sem-dashboard.
 # ============================================================
 
-title: SEM Next
+title: SEM-dashboard
 views:
   - title: Now
     path: now

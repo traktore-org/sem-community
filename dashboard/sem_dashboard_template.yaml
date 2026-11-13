@@ -33,7 +33,7 @@
 #   sem-load-priority-card   — drag-and-drop device priority (inlined SortableJS)
 # ============================================================
 
-title: Solar Energy Management
+title: SEM-classic
 views:
   # ============================================================
   # VIEW 0: HOME — At-a-glance power flow & status

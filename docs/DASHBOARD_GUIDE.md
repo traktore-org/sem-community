@@ -27,9 +27,9 @@ The dashboard is generated automatically on first install. If you need to regene
 
 1. Go to **Developer Tools** > **Services**
 2. Search for `solar_energy_management.generate_dashboard`
-3. Click **Call Service**. It builds the default dashboard, **Solar Energy
-   Management**, at `/sem-next`. For the old one, **SEM Classic**, add
-   `template: classic`.
+3. Click **Call Service**. It builds the default dashboard, **SEM-dashboard**,
+   at `/sem-next`. For the old one, **SEM-classic** (still at
+   `/sem-dashboard`), add `template: classic`.
 4. The dashboard appears in the sidebar — hard-refresh your browser (Ctrl+Shift+R)
 
 ---
