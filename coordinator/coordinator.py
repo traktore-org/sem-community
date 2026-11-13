@@ -672,6 +672,33 @@ def _plan_day_end(time_manager, now, night_end):
         pass
     return None
 
+
+def _discharge_end_reading(coord, cfg) -> "float | None":
+    """(#1358) The inverter's own end-of-discharge level, or ``None``.
+
+    Read from ``battery_discharge_end_soc_entity`` — the twin of
+    ``SEMCoordinator._charge_end_soc``. SEM only reads it, never writes it.
+    Unset, missing, unavailable or not a number → ``None``. Module level and
+    read through ``getattr`` so every caller (and a stand-in coordinator)
+    reaches it the same way."""
+    eid = (cfg or {}).get("battery_discharge_end_soc_entity")
+    hass = getattr(coord, "hass", None)
+    states = getattr(hass, "states", None)
+    if not eid or not isinstance(eid, str) or states is None:
+        return None
+    try:
+        st = states.get(eid)
+        return finite_float(st.state) if st is not None else None
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _battery_floor_for(coord) -> "tuple[float, str]":
+    """(#1358) The pack's real floor: SEM's reserve or the inverter's own end
+    of discharge, whichever is higher (``battery_floor_of``)."""
+    cfg = getattr(coord, "config", None) or {}
+    return battery_floor_of(cfg, _discharge_end_reading(coord, cfg))
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -6536,7 +6563,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # floor — the reserve, where the inverter stops — not the
                     # priority level (the house runs on below it) nor the
                     # retired ``battery_minimum_soc`` knob.
-                    _bat_floor = self._battery_floor()[0]
+                    _bat_floor = _battery_floor_for(self)[0]
                     if _bat_soc is not None and _bat_cap > 0:
                         if _bat_kw > _MIN_USEFUL_RATE_KW and _bat_soc < 99:
                             remaining_kwh = (100 - _bat_soc) / 100 * _bat_cap
@@ -8456,25 +8483,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return None
 
     def _discharge_end_soc(self, cfg: dict) -> "float | None":
-        """(#1358) The inverter's own end-of-discharge level, or ``None``.
-
-        Read from ``battery_discharge_end_soc_entity`` — the twin of
-        ``_charge_end_soc``. SEM only reads it, never writes it. Unset,
-        missing, unavailable or not a number → ``None``."""
-        eid = (cfg or {}).get("battery_discharge_end_soc_entity")
-        hass = getattr(self, "hass", None)
-        if not eid or not isinstance(eid, str) or hass is None:
-            return None
-        try:
-            st = hass.states.get(eid)
-            return finite_float(st.state) if st is not None else None
-        except (TypeError, ValueError, AttributeError):
-            return None
+        """(#1358) See ``_discharge_end_reading``."""
+        return _discharge_end_reading(self, cfg)
 
     def _battery_floor(self) -> "tuple[float, str]":
-        """(#1358) The pack's real floor: SEM's reserve or the inverter's own
-        end of discharge, whichever is higher (``battery_floor_of``)."""
-        return battery_floor_of(self.config, self._discharge_end_soc(self.config))
+        """(#1358) See ``_battery_floor_for``."""
+        return _battery_floor_for(self)
 
     def _finish_manual_battery_modes(
         self, battery_items, soc_read: dict, count: int,
@@ -9428,7 +9442,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             now = dt_util.now()
             left = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
             tomorrow = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
-            need = cap * (1.0 - float(self._battery_floor()[0]) / 100.0)
+            need = cap * (1.0 - float(_battery_floor_for(self)[0]) / 100.0)
             day = timedelta(days=1)
             nets = [tomorrow - self._house_kwh_between(sunrise + day, sunset + day)]
             if now < sunset:
@@ -12467,7 +12481,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         deadline=day_end, priority=i, source="grid",
                     ))
                 # the reserve, as tonight's plan reads it
-                _reserve = self._battery_floor()[0]
+                _reserve = _battery_floor_for(self)[0]
                 _floor2 = _reserve / 100.0 * cap_kwh2
                 _md_w = float(self.config.get(
                     "battery_max_discharge_power", 5000.0) or 5000.0)
@@ -13268,7 +13282,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # the battery, and the house kept running below it (PROD 13.11:
             # the plan called a 28 % pack empty while it powered the house).
             # (#1358) …or the inverter's own end of discharge when it is higher
-            reserve_pct, _plan_floor_src = self._battery_floor()
+            reserve_pct, _plan_floor_src = _battery_floor_for(self)
             _plan_floor[0], _plan_floor[1] = reserve_pct, _plan_floor_src
             target_pct = float(getattr(getattr(scheduler, "decision", None),
                                        "target_soc", 0.0) or 0.0)

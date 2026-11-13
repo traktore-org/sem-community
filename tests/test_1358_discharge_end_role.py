@@ -134,9 +134,10 @@ class TestTheFloor:
         assert self._coord({}, {})._battery_floor() == (20.0, "reserve")
 
     def test_the_plan_reads_the_one_helper(self):
-        assert calls(SEMCoordinator._shadow_energy_plan, "_battery_floor")
-        assert calls(SEMCoordinator._battery_floor, "battery_floor_of")
-        assert calls(SEMCoordinator._battery_floor, "_discharge_end_soc")
+        from custom_components.solar_energy_management.coordinator import coordinator as cmod
+        assert calls(SEMCoordinator._shadow_energy_plan, "_battery_floor_for")
+        assert calls(cmod._battery_floor_for, "battery_floor_of")
+        assert calls(cmod._battery_floor_for, "_discharge_end_reading")
 
 
 class TestNeverWritten:
@@ -144,7 +145,7 @@ class TestNeverWritten:
         src = (_ROOT / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
         tree = ast.parse(src)
         fn = next(n for n in ast.walk(tree)
-                  if isinstance(n, ast.FunctionDef) and n.name == "_discharge_end_soc")
+                  if isinstance(n, ast.FunctionDef) and n.name == "_discharge_end_reading")
         names = {getattr(c.func, "attr", getattr(c.func, "id", ""))
                  for c in ast.walk(fn) if isinstance(c, ast.Call)}
         assert not names & {"async_call", "call", "send", "async_set_value"}, names
