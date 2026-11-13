@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye încărcare forțată din rețea",
-        "description": "Conectează un invertor hibrid Deye pentru încărcarea programată din rețea. Modul observator este PORNIT, iar acționarea OPRITĂ implicit, astfel încât nimic nu este scris în invertor până nu activezi explicit.",
+        "description": "Conectează un invertor hibrid Deye pentru încărcarea programată din rețea. Repetiția este PORNITĂ, iar acționarea OPRITĂ implicit, astfel încât nimic nu este scris în invertor până nu activezi explicit.",
         "data": {
           "deye_grid_charge_switch": "Comutator încărcare din rețea (entitate)",
           "deye_charge_current_entity": "Entitate number curent de încărcare (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Plafon opțional impus de BMS. 0 înseamnă fără limită BMS — se aplică maximul invertorului.",
           "deye_observer_mode": "Când este PORNIT, SEM calculează și înregistrează acțiunile Deye, dar nu scrie niciodată în invertor.",
-          "deye_actuation_enabled": "Când este OPRIT, SEM nu scrie niciodată în invertor, chiar dacă modul observator este de asemenea oprit. Ambele porți trebuie să permită înainte de trimiterea unei comenzi.",
+          "deye_actuation_enabled": "Când este OPRIT, SEM nu scrie niciodată în invertor, chiar dacă repetiția este de asemenea oprită. Ambele porți trebuie să permită înainte de trimiterea unei comenzi.",
           "deye_max_charge_current_a": "Limita superioară sigură pe care SEM o va comanda pe entitatea curentului de încărcare."
         }
       },

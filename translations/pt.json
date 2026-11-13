@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Carga de rede forçada Deye",
-        "description": "Ligue um inversor híbrido Deye para carregamento de rede agendado. O modo observador está ligado e a atuação desligada por predefinição, pelo que nada é escrito no inversor até o ativar explicitamente.",
+        "description": "Ligue um inversor híbrido Deye para carregamento de rede agendado. O ensaio está ligado e a atuação desligada por predefinição, pelo que nada é escrito no inversor até o ativar explicitamente.",
         "data": {
           "deye_grid_charge_switch": "Interruptor de carga de rede (entidade)",
           "deye_charge_current_entity": "Entidade number de corrente de carga (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Limite opcional imposto pelo BMS. 0 significa sem limite do BMS — aplica-se o máximo do inversor.",
           "deye_observer_mode": "Quando ligado, o SEM calcula e regista as suas ações Deye mas nunca escreve no inversor.",
-          "deye_actuation_enabled": "Quando desligado, o SEM nunca escreve no inversor, mesmo que o modo observador também esteja desligado. Ambas as barreiras têm de permitir antes de qualquer comando.",
+          "deye_actuation_enabled": "Quando desligado, o SEM nunca escreve no inversor, mesmo que o ensaio também esteja desligado. Ambas as barreiras têm de permitir antes de qualquer comando.",
           "deye_max_charge_current_a": "Limite superior seguro que o SEM comandará na entidade de corrente de carga."
         }
       },

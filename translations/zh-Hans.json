@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye 强制电网充电",
-        "description": "接入 Deye 混合逆变器以进行计划电网充电。默认开启观察者模式、关闭执行，因此在你明确启用之前不会向逆变器写入任何指令。",
+        "description": "接入 Deye 混合逆变器以进行计划电网充电。默认开启演练、关闭执行，因此在你明确启用之前不会向逆变器写入任何指令。",
         "data": {
           "deye_grid_charge_switch": "电网充电开关实体",
           "deye_charge_current_entity": "充电电流 number 实体 (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "可选的 BMS 上限。0 表示无 BMS 限制——采用逆变器自身的最大值。",
           "deye_observer_mode": "开启时，SEM 会计算并记录其 Deye 操作，但绝不写入逆变器。",
-          "deye_actuation_enabled": "关闭时，即使观察者模式也关闭，SEM 也绝不写入逆变器。发送任何指令前，两道闸门都必须放行。",
+          "deye_actuation_enabled": "关闭时，即使演练也关闭，SEM 也绝不写入逆变器。发送任何指令前，两道闸门都必须放行。",
           "deye_max_charge_current_a": "SEM 在充电电流实体上下达的安全上限。"
         }
       },

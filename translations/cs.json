@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye vynucené nabíjení ze sítě",
-        "description": "Zapojte hybridní střídač Deye pro plánované nabíjení ze sítě. Režim pozorovatele je ve výchozím stavu ZAPNUTÝ a akční zásah VYPNUTÝ, takže do střídače se nic nezapíše, dokud to výslovně nepovolíte.",
+        "description": "Zapojte hybridní střídač Deye pro plánované nabíjení ze sítě. Zkouška nanečisto je ve výchozím stavu ZAPNUTÁ a akční zásah VYPNUTÝ, takže do střídače se nic nezapíše, dokud to výslovně nepovolíte.",
         "data": {
           "deye_grid_charge_switch": "Přepínač nabíjení ze sítě (entita)",
           "deye_charge_current_entity": "Číselná entita nabíjecího proudu (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Volitelný strop daný BMS. 0 = žádný limit BMS; platí maximum střídače.",
           "deye_observer_mode": "Když je ZAPNUTO, SEM své akce Deye vypočítá a zaznamená, ale do střídače nikdy nezapisuje.",
-          "deye_actuation_enabled": "Když je VYPNUTO, SEM do střídače nikdy nezapíše, i když je režim pozorovatele také vypnutý. Než se odešle příkaz, musí povolit obě brány.",
+          "deye_actuation_enabled": "Když je VYPNUTO, SEM do střídače nikdy nezapíše, i když je zkouška nanečisto také vypnutá. Než se odešle příkaz, musí povolit obě brány.",
           "deye_max_charge_current_a": "Bezpečná horní mez, kterou SEM nastaví na entitě nabíjecího proudu."
         }
       },

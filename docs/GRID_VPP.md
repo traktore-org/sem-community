@@ -29,7 +29,7 @@ dispatch every cycle and:
 - publishes `sensor.sem_vpp_event` with the live accounting,
 
 but **actuates nothing**. Run a few events like this, compare the log against
-what your VPP portal expected, then disable observer mode.
+what your VPP portal expected, then turn VPP dry run off.
 
 ## Entity wiring (Axle Energy)
 

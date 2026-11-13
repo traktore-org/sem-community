@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Carica di rete forzata Deye",
-        "description": "Collega un inverter ibrido Deye per la carica di rete pianificata. La modalità osservatore è attiva e l'attuazione disattivata per impostazione predefinita, quindi non viene scritto nulla sull'inverter finché non lo abiliti esplicitamente.",
+        "description": "Collega un inverter ibrido Deye per la carica di rete pianificata. La prova a vuoto è attiva e l'attuazione disattivata per impostazione predefinita, quindi non viene scritto nulla sull'inverter finché non lo abiliti esplicitamente.",
         "data": {
           "deye_grid_charge_switch": "Interruttore carica di rete (entità)",
           "deye_charge_current_entity": "Entità number corrente di carica (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Limite opzionale imposto dal BMS. 0 = nessun limite BMS; vale il massimo dell'inverter.",
           "deye_observer_mode": "Se attivo, SEM calcola e registra le sue azioni Deye ma non scrive mai sull'inverter.",
-          "deye_actuation_enabled": "Se disattivato, SEM non scrive mai sull'inverter, anche se la modalità osservatore è pure disattivata. Entrambi i gate devono consentire prima di inviare un comando.",
+          "deye_actuation_enabled": "Se disattivato, SEM non scrive mai sull'inverter, anche se la prova a vuoto è pure disattivata. Entrambi i gate devono consentire prima di inviare un comando.",
           "deye_max_charge_current_a": "Limite superiore sicuro che SEM imposterà sull'entità di corrente di carica."
         }
       },

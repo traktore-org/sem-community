@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye tvunget nettlading",
-        "description": "Koble til en Deye hybrid-inverter for planlagt nettlading. Observatørmodus er PÅ og aktivering AV som standard, så ingenting skrives til inverteren før du uttrykkelig aktiverer det.",
+        "description": "Koble til en Deye hybrid-inverter for planlagt nettlading. Tørrkjøring er PÅ og aktivering AV som standard, så ingenting skrives til inverteren før du uttrykkelig aktiverer det.",
         "data": {
           "deye_grid_charge_switch": "Nettlading-bryter (entitet)",
           "deye_charge_current_entity": "Ladestrøm-number-entitet (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Valgfritt BMS-pålagt tak. 0 = ingen BMS-grense — inverterens eget maksimum gjelder.",
           "deye_observer_mode": "Når PÅ beregner og logger SEM sine Deye-handlinger, men skriver aldri til inverteren.",
-          "deye_actuation_enabled": "Når AV skriver SEM aldri til inverteren, selv om observatørmodus også er av. Begge portene må tillate før en kommando sendes.",
+          "deye_actuation_enabled": "Når AV skriver SEM aldri til inverteren, selv om tørrkjøring også er av. Begge portene må tillate før en kommando sendes.",
           "deye_max_charge_current_a": "Trygg øvre grense SEM vil kommandere på ladestrøm-entiteten."
         }
       },

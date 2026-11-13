@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye forced grid charge",
-        "description": "Wire a Deye hybrid inverter for scheduled grid charging. Observer mode is ON and actuation is OFF by default, so nothing is written to the inverter until you explicitly enable it.",
+        "description": "Wire a Deye hybrid inverter for scheduled grid charging. Dry run is ON and actuation is OFF by default, so nothing is written to the inverter until you explicitly enable it.",
         "data": {
           "deye_grid_charge_switch": "Grid-charge switch entity",
           "deye_charge_current_entity": "Charge-current number entity (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Optional BMS-imposed ceiling. 0 means no BMS limit — the inverter's own maximum applies.",
           "deye_observer_mode": "When ON, SEM computes and logs its Deye actions but never writes to the inverter.",
-          "deye_actuation_enabled": "When OFF, SEM never writes to the inverter even if observer mode is also off. Both gates must permit before any command is sent.",
+          "deye_actuation_enabled": "When OFF, SEM never writes to the inverter even if dry run is also off. Both gates must permit before any command is sent.",
           "deye_max_charge_current_a": "Safe upper limit SEM will command on the charge-current entity."
         }
       },

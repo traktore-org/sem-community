@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye geforceerd netladen",
-        "description": "Sluit een Deye hybride omvormer aan voor gepland netladen. Waarnemersmodus staat standaard AAN en aansturing UIT, dus er wordt niets naar de omvormer geschreven tot je dit expliciet inschakelt.",
+        "description": "Sluit een Deye hybride omvormer aan voor gepland netladen. Proefdraaien staat standaard AAN en aansturing UIT, dus er wordt niets naar de omvormer geschreven tot je dit expliciet inschakelt.",
         "data": {
           "deye_grid_charge_switch": "Netladen-schakelaar (entiteit)",
           "deye_charge_current_entity": "Laadstroom-numberentiteit (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Optioneel door het BMS opgelegd maximum. 0 betekent geen BMS-limiet — het maximum van de omvormer geldt.",
           "deye_observer_mode": "Indien AAN berekent en logt SEM zijn Deye-acties, maar schrijft nooit naar de omvormer.",
-          "deye_actuation_enabled": "Indien UIT schrijft SEM nooit naar de omvormer, zelfs als de waarnemersmodus ook uit staat. Beide poorten moeten toestaan voordat een commando wordt verzonden.",
+          "deye_actuation_enabled": "Indien UIT schrijft SEM nooit naar de omvormer, zelfs als proefdraaien ook uit staat. Beide poorten moeten toestaan voordat een commando wordt verzonden.",
           "deye_max_charge_current_a": "Veilige bovengrens die SEM op de laadstroom-entiteit stuurt."
         }
       },

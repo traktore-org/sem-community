@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye framtvingad nätladdning",
-        "description": "Anslut en Deye hybridväxelriktare för schemalagd nätladdning. Observatörsläge är PÅ och styrning AV som standard, så inget skrivs till växelriktaren förrän du uttryckligen aktiverar det.",
+        "description": "Anslut en Deye hybridväxelriktare för schemalagd nätladdning. Torrkörning är PÅ och styrning AV som standard, så inget skrivs till växelriktaren förrän du uttryckligen aktiverar det.",
         "data": {
           "deye_grid_charge_switch": "Nätladdningsbrytare (entitet)",
           "deye_charge_current_entity": "Laddström-number-entitet (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Valfritt tak från BMS. 0 = ingen BMS-gräns — växelriktarens eget maximum gäller.",
           "deye_observer_mode": "När PÅ beräknar och loggar SEM sina Deye-åtgärder men skriver aldrig till växelriktaren.",
-          "deye_actuation_enabled": "När AV skriver SEM aldrig till växelriktaren, även om observatörsläget också är av. Båda grindarna måste tillåta innan ett kommando skickas.",
+          "deye_actuation_enabled": "När AV skriver SEM aldrig till växelriktaren, även om torrkörningen också är av. Båda grindarna måste tillåta innan ett kommando skickas.",
           "deye_max_charge_current_a": "Säker övre gräns som SEM kommenderar på laddström-entiteten."
         }
       },

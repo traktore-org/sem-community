@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye tvungen netopladning",
-        "description": "Tilslut en Deye hybrid-inverter til planlagt netopladning. Observatørtilstand er som standard TIL og aktivering FRA, så der skrives intet til inverteren, før du udtrykkeligt aktiverer det.",
+        "description": "Tilslut en Deye hybrid-inverter til planlagt netopladning. Tørkørsel er som standard TIL og aktivering FRA, så der skrives intet til inverteren, før du udtrykkeligt aktiverer det.",
         "data": {
           "deye_grid_charge_switch": "Netopladningskontakt (entitet)",
           "deye_charge_current_entity": "Ladestrøm-number-entitet (A)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Valgfrit BMS-pålagt loft. 0 = ingen BMS-grænse — inverterens eget maksimum gælder.",
           "deye_observer_mode": "Når TIL beregner og logger SEM sine Deye-handlinger, men skriver aldrig til inverteren.",
-          "deye_actuation_enabled": "Når FRA skriver SEM aldrig til inverteren, selv hvis observatørtilstand også er fra. Begge porte skal tillade det, før en kommando sendes.",
+          "deye_actuation_enabled": "Når FRA skriver SEM aldrig til inverteren, selv hvis tørkørsel også er fra. Begge porte skal tillade det, før en kommando sendes.",
           "deye_max_charge_current_a": "Sikker øvre grænse SEM vil kommandere på ladestrøm-entiteten."
         }
       },
