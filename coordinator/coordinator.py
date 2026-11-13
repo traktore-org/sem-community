@@ -12385,6 +12385,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if _min_s <= 0 or _rated <= 0:
                         continue
                     asks.append({
+                        # (#1321) the same id tonight's plan uses, so one
+                        # device is one row on the chart, not two
+                        "id": f"load:{_dev.device_id}",
                         "kind": "load",
                         # (#1053) None = no name; the card shows the kind
                         # in the user's language, never the device id.
@@ -12403,6 +12406,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if _tgt <= 0.05:
                         continue
                     asks.append({
+                        "id": f"ev:{_cfg.get('id')}" if _cfg.get("id") else None,
                         "kind": "ev",
                         "label": charger_own_name(_cfg),  # (#1053)
                         "kwh": round(_tgt, 2),
@@ -12466,7 +12470,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 labels2 = {}
                 demands2 = []
                 for i, ask in enumerate(asks):
-                    did = f"{ask['kind']}:{i}"
+                    did = ask.get("id") or f"{ask['kind']}:{i}"
                     labels2[did] = ask["label"]
                     power = float(ask.get("power_w") or 0.0)
                     if ask["kind"] == "ev" and power <= 0:
