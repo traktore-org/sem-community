@@ -238,7 +238,7 @@
           "update_interval": "Jak często koordynator odczytuje czujniki i reguluje sprzęt. 10 s daje najdokładniejsze całkowanie energii; wartości powyżej 30 s zaniżą liczoną energię. Zakres 10–60 s.",
           "battery_priority_soc": "Granica strefy 1 → strefy 2. Poniżej tego SOC cała energia słoneczna trafia do baterii, a ładowanie EV jest zablokowane. Domyślnie 30 %. Strategia czterostrefowa (dokumentacja architektury) wymaga NISKIEJ wartości (5–60 %) — NIE myl tego ze starym znaczeniem 3-strefowym, gdzie była to wysoka wartość docelowa.",
           "battery_buffer_soc": "Granica strefy 2 → strefy 3. Powyżej tego SOC bateria może się rozładowywać, aby mostkować deficyty słoneczne podczas ładowania EV. Domyślnie 70 %.",
-          "battery_auto_start_soc": "Granica strefy 3 → strefy 4. Powyżej tego SOC pojazd EV może zacząć ładowanie nawet bez nadwyżki słonecznej, pobierając energię z baterii. Domyślnie 90 %.",
+          "battery_auto_start_soc": "Granica strefy 3 → strefy 4. Od tego SOC akumulator może w pełni pomagać autu, nadal tylko przy nadwyżce słonecznej. Domyślnie 90 %.",
           "min_solar_power": "Dolny próg surowej produkcji PV — moc paneli, poniżej której „słońce jest aktywne” jest fałszem: solar_only nie startuje, a zabezpieczenie przed głębokim deficytem traktuje to jak ciemność (ładowanie szybko się zatrzymuje zamiast mostkować z sieci). To jest SUROWA produkcja, NIE nadwyżka — w przeciwieństwie do „Wsparcie baterii – min. nadwyżka solarna” (słońce − dom), która decyduje, kiedy bateria domowa może pomóc. Domyślnie 1000 W; utrzymuj poniżej minimum sprzętowego ładowarki EV (~4140 W przy 3 fazach, ~1380 W przy 1 fazie).",
           "daily_ev_target": "SEM doładowuje z sieci w nocy, aby rano samochód miał co najmniej tyle. To dolna granica, nie limit — słońce może dodać więcej. 0 = nigdy nie używaj sieci.",
           "battery_assist_max_power": "Maksymalna moc, jaką bateria domowa może oddać, wspierając ładowanie EV w strefie 3/4. Domyślnie 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye wymuszone ładowanie z sieci",
-        "description": "Podłącz hybrydowy falownik Deye do zaplanowanego ładowania z sieci. Tryb obserwatora jest domyślnie włączony, a sterowanie wyłączone, więc nic nie zostanie zapisane do falownika, dopóki wyraźnie tego nie włączysz.",
+        "description": "Podłącz hybrydowy falownik Deye do zaplanowanego ładowania z sieci. Próba jest domyślnie włączona, a sterowanie wyłączone, więc nic nie zostanie zapisane do falownika, dopóki wyraźnie tego nie włączysz.",
         "data": {
           "deye_grid_charge_switch": "Przełącznik ładowania z sieci (encja)",
           "deye_charge_current_entity": "Encja number prądu ładowania (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Maks. prąd ładowania BMS (A)",
           "deye_max_discharge_power": "Maks. moc rozładowania (W)",
           "deye_program_control": "Steruj przedziałami czasowymi programu",
-          "deye_observer_mode": "Tryb obserwatora (tylko odczyt)",
+          "deye_observer_mode": "Próba Deye (tylko log)",
           "deye_actuation_enabled": "Włącz sterowanie (zapis do falownika)",
           "deye_work_mode_control": "Steruj trybem pracy",
           "deye_work_mode_entity": "Encja select trybu pracy",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Opcjonalny limit narzucony przez BMS. 0 oznacza brak limitu BMS — obowiązuje maksimum falownika.",
           "deye_observer_mode": "Gdy włączony, SEM oblicza i rejestruje swoje akcje Deye, ale nigdy nie zapisuje do falownika.",
-          "deye_actuation_enabled": "Gdy wyłączone, SEM nigdy nie zapisuje do falownika, nawet jeśli tryb obserwatora też jest wyłączony. Zanim polecenie zostanie wysłane, obie bramki muszą zezwolić.",
+          "deye_actuation_enabled": "Gdy wyłączone, SEM nigdy nie zapisuje do falownika, nawet jeśli próba też jest wyłączona. Zanim polecenie zostanie wysłane, obie bramki muszą zezwolić.",
           "deye_max_charge_current_a": "Bezpieczny górny limit, jaki SEM ustawi na encji prądu ładowania."
         }
       },

@@ -238,7 +238,7 @@
           "update_interval": "Hoe vaak de coördinator sensoren uitleest en hardware aanstuurt. 10 s geeft de meest nauwkeurige energie-integratie; waarden boven 30 s zullen energie onderschatten. Bereik 10–60 s.",
           "battery_priority_soc": "Grens tussen zone 1 en zone 2. Onder deze SOC gaat alle zonne-energie naar de batterij en wordt de EV geblokkeerd. Standaard 30%. De vierzone-strategie vereist dat deze waarde LAAG is (5–60%) — verwar dit niet met de oude 3-zonebetekenis waarbij dit een hoge doelwaarde was.",
           "battery_buffer_soc": "Grens tussen zone 2 en zone 3. Boven deze SOC mag de batterij ontladen om tekorten in zonne-energie op te vangen terwijl de EV wordt geladen. Standaard 70%.",
-          "battery_auto_start_soc": "Grens tussen zone 3 en zone 4. Boven deze SOC kan de EV beginnen met laden, zelfs zonder zonne-overschot, gebruikmakend van de batterij. Standaard 90%.",
+          "battery_auto_start_soc": "Grens tussen zone 3 en zone 4. Vanaf deze SOC mag de accu de auto volledig helpen, nog steeds alleen met genoeg zonne-overschot. Standaard 90 %.",
           "min_solar_power": "Ondergrens voor ruwe PV-productie — het paneelvermogen waaronder 'zon is actief' onwaar is: solar_only start niet en de diepe-tekort-bewaking behandelt het als duisternis (laden stopt dus snel in plaats van te overbruggen op het net). Dit is RUWE productie, GEEN overschot — in tegenstelling tot 'Min. zonne-overschot voor batterij-ondersteuning' (zon − huis), dat bepaalt wanneer de thuisbatterij mag helpen. Standaard 1000 W; houd dit onder het hardware-minimum van de EV-lader (~4140 W bij 3-fase, ~1380 W bij 1-fase).",
           "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
           "battery_assist_max_power": "Maximaal vermogen dat de thuisbatterij kan ontladen om de EV te ondersteunen in zone 3/4. Standaard 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye geforceerd netladen",
-        "description": "Sluit een Deye hybride omvormer aan voor gepland netladen. Waarnemersmodus staat standaard AAN en aansturing UIT, dus er wordt niets naar de omvormer geschreven tot je dit expliciet inschakelt.",
+        "description": "Sluit een Deye hybride omvormer aan voor gepland netladen. Proefdraaien staat standaard AAN en aansturing UIT, dus er wordt niets naar de omvormer geschreven tot je dit expliciet inschakelt.",
         "data": {
           "deye_grid_charge_switch": "Netladen-schakelaar (entiteit)",
           "deye_charge_current_entity": "Laadstroom-numberentiteit (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS max. laadstroom (A)",
           "deye_max_discharge_power": "Max. ontlaadvermogen (W)",
           "deye_program_control": "Programma-tijdvakken beheren",
-          "deye_observer_mode": "Waarnemersmodus (alleen-lezen)",
+          "deye_observer_mode": "Deye-proefdraaien (alleen loggen)",
           "deye_actuation_enabled": "Aansturing inschakelen (naar omvormer schrijven)",
           "deye_work_mode_control": "Werkmodus beheren",
           "deye_work_mode_entity": "Werkmodus-select (entiteit)",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Optioneel door het BMS opgelegd maximum. 0 betekent geen BMS-limiet — het maximum van de omvormer geldt.",
           "deye_observer_mode": "Indien AAN berekent en logt SEM zijn Deye-acties, maar schrijft nooit naar de omvormer.",
-          "deye_actuation_enabled": "Indien UIT schrijft SEM nooit naar de omvormer, zelfs als de waarnemersmodus ook uit staat. Beide poorten moeten toestaan voordat een commando wordt verzonden.",
+          "deye_actuation_enabled": "Indien UIT schrijft SEM nooit naar de omvormer, zelfs als proefdraaien ook uit staat. Beide poorten moeten toestaan voordat een commando wordt verzonden.",
           "deye_max_charge_current_a": "Veilige bovengrens die SEM op de laadstroom-entiteit stuurt."
         }
       },

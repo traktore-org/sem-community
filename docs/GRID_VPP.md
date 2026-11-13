@@ -18,7 +18,8 @@ surplus controller's peak posture). There is no second actuator to strand.
 
 ## Observer-first rollout
 
-`vpp_observer_mode` defaults to **on**. While it is on, SEM computes the full
+**VPP dry run (log only)** (`vpp_observer_mode`) defaults to **on**. It is
+separate from SEM's own Observer mode. While it is on, SEM computes the full
 dispatch every cycle and:
 
 - logs one INFO per phase transition — `VPP event started (export) — WOULD
@@ -28,7 +29,7 @@ dispatch every cycle and:
 - publishes `sensor.sem_vpp_event` with the live accounting,
 
 but **actuates nothing**. Run a few events like this, compare the log against
-what your VPP portal expected, then disable observer mode.
+what your VPP portal expected, then turn VPP dry run off.
 
 ## Entity wiring (Axle Energy)
 

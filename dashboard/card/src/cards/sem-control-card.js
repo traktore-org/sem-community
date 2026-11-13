@@ -18,6 +18,8 @@ import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
 import { isUncapped } from '../util/peak-slot.js';
+import { hotWaterSetUp } from '../util/settings-applies.js';
+import { PEAK_TEXT } from '../util/peak-questions.js';
 import { fmtValue, readNumber, socDisplay } from '../util/missing-value.js';
 
 // EV section removed in #282 audit: every control (charging mode, night
@@ -349,6 +351,13 @@ class SEMControlCard extends SEMLitBase {
         // entity with no Config-card equivalent (Config's
         // hot_water_legionella_target is a *different* storage path via
         // set_option; unifying them is the out-of-scope follow-up).
+        // (#1354) Without a boiler there is nothing to protect: one line
+        // says so, as for the heat pump, not the legal rules.
+        if (!hotWaterSetUp(this._hass?.states)) {
+            return html`<div class="info-box-text" style="opacity:0.6">
+                ${this._t('hot_water_not_configured')}
+            </div>`;
+        }
         return html`
             ${this._renderStepper('number.sem_legionella_target_temp', 'legionella_target', T)}
             <div class="info-box">
@@ -389,7 +398,7 @@ class SEMControlCard extends SEMLitBase {
         return html`
             <div class="peak-hero">
                 ${uncapped
-                    ? html`<span class="peak-pct" style="color:#8DC892">${this._t('uncapped')}</span>`
+                    ? html`<span class="peak-pct" style="color:#8DC892">${this._t(PEAK_TEXT.none)}</span>`
                     : html`<span class="peak-pct" style="color:${peakColor}">${fmtValue(peakPct, 0)}%</span>
                 <span class="peak-of-limit">${this._t('of_limit')}</span>`}
             </div>
@@ -403,7 +412,7 @@ class SEMControlCard extends SEMLitBase {
                     <ha-icon icon="mdi:shield-check" style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                     <div class="info-tile-content">
                         <span class="info-tile-label">${this._t('peak_margin')}</span>
-                        <span class="info-tile-value">${uncapped ? this._t('uncapped') : `${fmtValue(this._valNum('peak_margin'), 1)} kW`}</span>
+                        <span class="info-tile-value">${uncapped ? this._t(PEAK_TEXT.none) : `${fmtValue(this._valNum('peak_margin'), 1)} kW`}</span>
                     </div>
                 </div>
                 <div class="info-tile">

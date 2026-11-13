@@ -84,15 +84,18 @@ test('every language has the three words', () => {
     for (const l of LANGS) for (const k of KEYS) assert.ok(TABLES[l][k], `${l} ${k}`);
 });
 
-test('the zones line says Puffer in German, not Buffer', () => {
+test('the zones card asks its levels in German, not English', () => {
+    // (#1354) the levels are questions now; the German card must not fall
+    // back to the English words (it said "Buffer" once).
     const st = {
         'number.sem_battery_auto_start_soc': S(30),
         'number.sem_battery_buffer_soc': S(20),
         'number.sem_battery_priority_soc': S(10),
     };
     const out = text(card('sem-battery-zones-card', st, 'de').render());
-    assert.match(out, /Puffer 20%/, out);
-    assert.doesNotMatch(out, /Buffer 20%/);
+    assert.match(out, /Ab hier darf die Batterie dem Auto helfen/, out);
+    assert.match(out, /Batterie lädt zuerst/, out);
+    assert.doesNotMatch(out, /From this the battery may help the car|Buffer/);
 });
 
 test('the EV costs line says zon in Dutch, not solar', () => {

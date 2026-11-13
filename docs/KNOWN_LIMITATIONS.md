@@ -169,7 +169,7 @@ freely. Two further limits worth knowing:
   the gap. An install whose meter is blind for minutes at a time still relies
   on the reactive EMERGENCY stop for that window.
 
-Set the Control tab's Target Limit slider to MAX (*No grid limit*) to disable
+Set the Control tab's Limit grid draw to slider to MAX (*No limit*) to disable
 peak management entirely, guard included.
 
 

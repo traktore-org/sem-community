@@ -16,6 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FLOW = (ROOT / "config_flow.py").read_text()
 CARD = (ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js").read_text()
+# (#1354) the battery questions keep their entity ids in one shared module
+CARD += (ROOT / "dashboard" / "card" / "src" / "util" / "battery-questions.js").read_text()
 BATT = (ROOT / "dashboard" / "card" / "src" / "cards" / "sem-battery-card.js").read_text()
 STRINGS = json.loads((ROOT / "strings.json").read_text())
 

@@ -16,6 +16,7 @@ import { capacityConsequence, horizonLabel, trustConsequence }
 import { semTheme, semFormatPower, semGetCurrency, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
 import { temperatureUnit } from '../util/temperature.js';
 import { MISSING, allOut, fmtValue, readNumber, socDisplay } from '../util/missing-value.js';
+import { BATTERY_QUESTIONS, batterySaysFromStates } from '../util/battery-questions.js';
 import { solarSharePct } from '../util/solar-share.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -333,6 +334,15 @@ class SEMBatteryCard extends SEMLitBase {
     // Mode dropdown + reserve stepper for a battery (#523). Shared by the
     // per-battery sections (multi-battery) and the fleet hero (single battery).
     // Renders nothing when the backend mode entity doesn't exist.
+    // (#1354) One sentence: what the battery does now and what comes next,
+    // from what the engine publishes (shared with the new dashboard).
+    _renderSays() {
+        const says = batterySaysFromStates(this._hass?.states);
+        const fill = (part) => Object.entries(part.params || {}).reduce(
+            (s, [k, v]) => s.replace('{' + k + '}', String(v)), this._t(part.key));
+        return html`<div class="says">${fill(says.now)}${says.next ? ' ' + fill(says.next) : ''}</div>`;
+    }
+
     _renderModeControls(modeEntityId, reserveEntityId) {
         const modeState = this._hass?.states[modeEntityId];
         if (!modeState) return nothing;
@@ -365,7 +375,7 @@ class SEMBatteryCard extends SEMLitBase {
                 ` : nothing}
                 ${showReserve ? html`
                     <div class="bsc-row">
-                        <span class="bsc-label">${this._t('reserve_soc')}</span>
+                        <span class="bsc-label">${this._t(BATTERY_QUESTIONS.reserve.key)}</span>
                         <span class="bsc-stepper">
                             <button class="bsc-btn"
                                 @click=${() => this._stepNumber(reserveEntityId, -1)}>−</button>
@@ -374,6 +384,7 @@ class SEMBatteryCard extends SEMLitBase {
                                 @click=${() => this._stepNumber(reserveEntityId, 1)}>+</button>
                         </span>
                     </div>
+                    <div class="bsc-sub">${this._t(BATTERY_QUESTIONS.reserve.sub)}</div>
                 ` : nothing}
             </div>
         `;
@@ -1060,6 +1071,8 @@ class SEMBatteryCard extends SEMLitBase {
                     border-top: 1px solid ${surfBorder};
                     display: flex; flex-direction: column; gap: 8px;
                 }
+                .says { font-size: 15px; margin: 0 0 12px; line-height: 1.4; }
+                .bsc-sub { font-size: 11px; opacity: 0.7; margin-top: -4px; }
                 .bsc-row {
                     display: flex; align-items: center; justify-content: space-between;
                     gap: 8px;
@@ -1134,6 +1147,7 @@ class SEMBatteryCard extends SEMLitBase {
 
             <ha-card>
                 <div class="wrap">
+                    ${this._renderSays()}
                     <div class="hero">
                         <div class="battery-ring">
                             <svg viewBox="0 0 100 100">
