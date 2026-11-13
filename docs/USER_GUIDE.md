@@ -198,15 +198,16 @@ reaches the supported-hardware list after someone confirms it on real hardware.
 ### Battery Settings
 
 Both dashboards ask the three battery levels as plain questions: **Below this
-the battery fills first** (`battery_priority_soc`), **Keep this for the house**
-(`battery_buffer_soc`) and **Above this the car may start without spare sun**
-(`battery_auto_start_soc`). They are set on the Battery tab.
+the battery fills first** (`battery_priority_soc`), **From this the battery
+may help the car** (`battery_buffer_soc`) and **From this it may help fully**
+(`battery_auto_start_soc`). They are set on the Battery tab. Battery help to
+the car always needs enough spare sun first (the Solar Gate).
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `battery_priority_soc` | 30% | Below: all solar to battery, EV blocked |
 | `battery_buffer_soc` | 70% | Above: battery can discharge for EV. This is the single assist floor — below it, battery assist to the EV stops |
-| `battery_auto_start_soc` | 90% | Above: start EV even without surplus |
+| `battery_auto_start_soc` | 90% | From here: the battery may give the car its full help, still only with spare sun past the Solar Gate |
 | `battery_assist_max_power` | 4500W | Maximum battery discharge for EV (1000-10000W) |
 | `battery_assist_min_surplus` | 1200W | **Solar Gate (v1.7.3)** — battery only assists above this real solar surplus (0-5000W) |
 | `battery_capacity_kwh` | — | Total battery capacity (5-100 kWh). With two or more batteries SEM reads each pack's own capacity sensor; a pack without one gets its share of this total, split by how much each pack can discharge. |
@@ -752,7 +753,7 @@ The battery begins discharging to supplement solar for the EV. The assist power 
 
 ### Zone 4 — Full Assist (SOC >= 90%)
 
-Full battery assist (default 4500W). The EV starts charging even without solar surplus — the battery alone can push the EV above its minimum threshold.
+Full battery assist (default 4500W). The battery may give the car its full help — still only with enough spare sun past the Solar Gate, so the battery tops up a sunny session rather than charging the car alone (#1354: this used to say the car starts without sun; the engine never did that).
 
 ### When the battery SOC is unknown
 

@@ -25,6 +25,15 @@ test('the band under the priority level is where the battery fills first, not "R
     assert.ok(!BATTERY_ZONES.some((z) => /reserve/.test(z.key)));
 });
 
+test('the auto-start level means full help, never a start without sun', () => {
+    // decide.py: battery help to the car needs spare sun past the Solar Gate
+    // in every zone; the zone above auto-start is the FULL help.
+    const en = JSON.parse(fs.readFileSync(new URL('../../translations.json', import.meta.url), 'utf8')).en;
+    for (const k of ['bq_autostart', 'bq_autostart_sub', 'bq_zone_full', 'zone_help_autostart', 'bq_levels_here']) {
+        assert.doesNotMatch(en[k].replace(/\{[a-z_]+\}/g, ''), /without (spare )?sun|without surplus|start/i, k);
+    }
+});
+
 test('the other questions write the entities the old controls wrote', () => {
     assert.equal(BATTERY_QUESTIONS.solar_gate.entity, 'number.sem_battery_assist_min_surplus');
     assert.equal(BATTERY_QUESTIONS.assist_max.entity, 'number.sem_battery_assist_max_power');

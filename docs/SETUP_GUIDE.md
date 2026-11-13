@@ -501,7 +501,7 @@ Night charging and smart night charging are **not settings here** — since v1.6
 |---------|---------|-------------------------------------|
 | Priority SOC (%) | 30% | Zone 1/2 boundary. Below this, all solar goes to the battery and the EV is blocked. Raise it (e.g. to 40%) if you want more aggressive battery protection. |
 | Buffer SOC (%) | 70% | Zone 2/3 boundary. Above this, battery can supplement solar for EV charging. Lower it if you have limited solar and want battery assist to start earlier. |
-| Auto-start SOC (%) | 90% | Zone 3/4 boundary. Above this, EV charging starts even without solar surplus. Lower it if your battery rarely reaches 90% and you still want battery-assisted charging. |
+| Auto-start SOC (%) | 90% | Zone 3/4 boundary. From here the battery may give the car its full help, still only with spare sun past the Solar Gate. Lower it if your battery rarely reaches 90% and you still want battery-assisted charging. |
 | Assist floor SOC (%) | 60% | Once battery assist starts, it stays on until SOC drops here. This prevents rapid on/off cycling. Raise it if the battery cycles too often. |
 | Battery capacity (kWh) | 10 kWh | Your battery's usable capacity. Used for SOC target calculations and cost attribution. |
 | Max assist power (W) | 4500 W | Maximum battery discharge power allowed for EV charging. Set it to the lower of your battery's rated discharge power and your charger's maximum input. |
@@ -815,9 +815,9 @@ ramps from 50% of `battery_assist_max_power` at SOC 70%, up to 100% at SOC
 is sufficient.
 
 **Zone 4 — Full Assist** (SOC above 90%):
-The battery is nearly full. Full battery assist is active. EV charging starts
-even without solar surplus — a nearly full battery has little additional value
-and the energy is better used in the car.
+The battery is nearly full. Full battery assist is active: the battery may
+give the car its full help, still only with enough spare sun past the Solar
+Gate.
 
 **Assist floor**: Battery assist only engages while SOC is above
 `battery_buffer_soc` (default 70%) — below the buffer the battery is
@@ -1045,7 +1045,8 @@ pauses when surplus falls further.
 The battery supplements solar to give the EV more power. In Zone 3, battery
 assist is proportional — at SOC 70% the battery contributes 50% of its
 maximum assist power; at SOC 90% it contributes 100%. In Zone 4 (above
-auto-start SOC) the EV starts even without solar surplus.
+auto-start SOC) the battery helps fully, still only with spare sun past the
+Solar Gate.
 
 Scenario: 1.5 kW solar surplus, SOC 85%. Battery contributes ~2.5 kW assist,
 giving the EV ~4 kW. Charger runs continuously instead of intermittently.

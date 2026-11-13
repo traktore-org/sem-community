@@ -187,7 +187,7 @@ Key settings you can adjust (all have sensible defaults):
 | Daily EV target | 10 kWh | How much energy to charge overnight |
 | Battery priority SOC | 30% | Below this, all solar goes to battery first |
 | Battery buffer SOC | 70% | Above this, battery can help charge the EV |
-| Battery auto-start SOC | 90% | Above this, EV starts even without solar surplus |
+| Battery auto-start SOC | 90% | From this, the battery may help the car fully (still only with spare sun) |
 | Min solar power | 500W | Minimum surplus before solar EV charging starts |
 | Observer mode | **On** | SEM watches and shows what it *would* do, commanding nothing. Turn it off when the decisions look right. |
 

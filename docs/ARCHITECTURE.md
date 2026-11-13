@@ -665,7 +665,7 @@ SOC  0%  ───────────────────────�
 
 **Zone 3 — Discharge Assist** (SOC 70-90%): Battery supplements solar for EV. The assist **potential** ramps from 50% at SOC 70% to 100% at SOC 90%.
 
-**Zone 4 — Full Assist** (SOC >= 90%): Full battery assist (default 4500W). EV starts even without surplus.
+**Zone 4 — Full Assist** (SOC >= 90%): Full battery assist (default 4500W), still only with spare sun past the Solar Gate (`battery_assist_min_surplus`).
 
 **Assist offered (#545 — "max out till self-consumption"):** in the assist band (Zone 3/4, with real surplus past the Solar Gate) SEM offers the **full** potential — it raises the offered amps so the inverter discharges the battery **into the car down to the buffer SoC** (the self-consumption reserve floor), emptying a near-full battery into the car rather than leaving it idle. The potential ramp (above) self-tapers the discharge toward the buffer. This supersedes the older #501 cap that only topped the car up to the charger minimum. SEM commands no battery directly — it's pure offered amps; the inverter's self-consumption does the discharge.
 

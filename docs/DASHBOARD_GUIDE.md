@@ -426,12 +426,12 @@ questions, each with a line that says what it means:
 | Question | Setting |
 |---|---|
 | **Below this the battery fills first** | priority SOC |
-| **Keep this for the house** | buffer SOC |
-| **Above this the car may start without spare sun** | auto-start SOC |
+| **From this the battery may help the car** | buffer SOC |
+| **From this it may help fully** | auto-start SOC |
 
 The bar under them shows the four bands with their names: *Battery fills
-first*, *Car on spare sun*, *Battery helps the car*, *Car starts without
-sun*. This is the one place to set them; the Configuration tab names them and
+first*, *Car on spare sun*, *Battery may help the car*, *Battery helps
+fully*. Battery help to the car always needs enough spare sun first. This is the one place to set them; the Configuration tab names them and
 links here. Editing them here is the same as editing them in the options flow.
 
 #### sem-charger-status-card

@@ -93,9 +93,9 @@ test('the zones card asks its levels in German, not English', () => {
         'number.sem_battery_priority_soc': S(10),
     };
     const out = text(card('sem-battery-zones-card', st, 'de').render());
-    assert.match(out, /So viel für das Haus behalten/, out);
+    assert.match(out, /Ab hier darf die Batterie dem Auto helfen/, out);
     assert.match(out, /Batterie lädt zuerst/, out);
-    assert.doesNotMatch(out, /Keep this for the house|Buffer/);
+    assert.doesNotMatch(out, /From this the battery may help the car|Buffer/);
 });
 
 test('the EV costs line says zon in Dutch, not solar', () => {
