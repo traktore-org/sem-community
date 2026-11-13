@@ -12410,8 +12410,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if soc_seed is not None:
                 from .day_ledger import (build_day_slots,
                                          provisional_soc_curve)
-                from .energy_planner import (Demand, build_night_ledger,
-                                                pack_night)
+                from .energy_planner import (Demand, battery_at_end,
+                                                build_night_ledger, pack_night)
                 slots2 = build_day_slots(
                     start=day_start, end=day_end, day_kwh=day_kwh,
                     sunrise=sunrise, sunset=sunset,
@@ -12496,6 +12496,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "soc_curve": curve,
                     "fits": plan2.fits,
                     "blocks": _blocks2,
+                    # (#1321) the battery when tomorrow's preview ends
+                    "battery_end": battery_at_end(ledger2, _floor2, cap_kwh2),
                 }
         except Exception:  # noqa: BLE001 — provisional is additive, never fatal
             preview["provisional"] = None
@@ -12700,7 +12702,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             from datetime import timedelta as _td
             from .energy_planner import (
-                Demand, LedgerSlot, build_night_ledger, pack_night,
+                Demand, LedgerSlot, battery_at_end, build_night_ledger, pack_night,
             )
             from .ev_night_targets import build_night_target_map
             from .ev_tariff_planner import (
@@ -13163,7 +13165,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     **({"batt": True} if s.home_batt_kwh > 1e-6 else {}),
                 } for s in rows]
 
-            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None):
+            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None,
+                              battery_end=None):
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
                 # broken one; burned three placement bugs learning that).
@@ -13229,6 +13232,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
+                    # (#1321) where the battery ends tonight, when walked
+                    "battery_end": battery_end,
                 }
 
             # ── The Night Ledger (spec) ─────────────────────────────────
@@ -13518,7 +13523,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # any other demand — that branch used to be unreachable.)
                 self._energy_plan_shadow = _quiet_answer(
                     arb, fsell, _slot_rows(ledger),
-                    predict_self_consumption(ledger, []).as_dict())
+                    predict_self_consumption(ledger, []).as_dict(),
+                    battery_end=battery_at_end(ledger, floor_kwh, cap_kwh))
                 return True
             plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
                               max_discharge_w=max_discharge_w,
@@ -13634,6 +13640,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # instead of an anecdote.
                 "self_consumption": predict_self_consumption(
                     ledger, blocks).as_dict(),
+                # (#1321) where the battery ends tonight, on the plan's own
+                # trajectory and floor — the Plan card's "Expected" tile
+                "battery_end": battery_at_end(ledger, floor_kwh, cap_kwh),
+                "battery_floor_pct": round(
+                    floor_kwh / cap_kwh * 100.0, 1) if cap_kwh > 0 else None,
             }
             return True
         except Exception:  # noqa: BLE001 — shadow must never break the cycle

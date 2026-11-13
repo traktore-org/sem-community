@@ -180,6 +180,25 @@ def _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w) -> None:
             s.headroom_w = float("inf")
 
 
+def battery_at_end(ledger, floor_kwh, capacity_kwh) -> Optional[dict]:
+    """(#1321) The battery's expected level when the walked ledger ends:
+    ``{"kwh", "pct", "at"}``. The last slot replays the walk's own step
+    (charge in, house draw, battery-sourced loads), so the number is the
+    trajectory the plan used. None without slots or a battery."""
+    if not ledger or not capacity_kwh or capacity_kwh <= 0:
+        return None
+    s = ledger[-1]
+    soc = float(s.soc_kwh) + float(getattr(s, "batt_in_kwh", 0.0) or 0.0)
+    avail = max(0.0, soc - float(floor_kwh))
+    batt_home = float(getattr(s, "home_batt_kwh", 0.0) or 0.0)
+    batt_loads = min(float(getattr(s, "batt_out_kwh", 0.0) or 0.0),
+                     max(0.0, avail - batt_home))
+    end = max(0.0, soc - batt_home - batt_loads)
+    return {"kwh": round(end, 2),
+            "pct": round(min(100.0, end / float(capacity_kwh) * 100.0), 1),
+            "at": s.end.isoformat()}
+
+
 # ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **The plan says where the battery ends tonight and tomorrow** (#1321), on its own trajectory and floor.
 - 🐛 **The night plan lets the house use the battery down to its reserve, not the 30 % level** (#1358). A 28 % battery read as empty.
 - 🔧 **Plan card notes speak your language** (#1354). "13 slot(s) unpriced…" was English only.
 - 🔧 **The VPP and Deye test switches are called "dry run"** (#1354). Three settings were named Observer mode.
