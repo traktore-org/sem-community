@@ -35,3 +35,21 @@ test('a plain sentence without a mode code stays whole', () => {
 test('empty input is safe', () => {
     assert.deepEqual(splitStrategyReason(undefined), { mode: '', head: '', detail: '' });
 });
+
+// (#1354) PROD showed "min_plus_solar but EV disconnected [structural: …]" on Now.
+test('the car row says the mode label and the engine reason in words, never the raw text', async () => {
+    const { strategyWords } = await import('../src/util/next-strategy-reason.js');
+    const { plainReason } = await import('../src/util/why-rows.js');
+    const t = (k) => ({ charge_mode_min_plus_solar: 'Min + Solar', ev_charger: 'EV Charger',
+        why_reason_ev_disconnected: 'No car is plugged in.' }[k] || k);
+    const raw = 'min_plus_solar but EV disconnected [structural: no car]';
+    const withCode = strategyWords({ state: raw, attributes: { reason: raw, reason_code: 'ev_disconnected', reason_params: {} } }, t, plainReason);
+    assert.deepEqual(withCode, { title: 'Min + Solar', text: 'No car is plugged in.' });
+    // no code: no second line, and never the engine's words
+    const noCode = strategyWords({ state: raw, attributes: { reason: raw } }, t, plainReason);
+    assert.deepEqual(noCode, { title: 'Min + Solar', text: '' });
+    // an unknown mode: the generic title, not the raw head
+    const odd = strategyWords({ state: 'weird_mode zone: x', attributes: {} }, t, plainReason);
+    assert.equal(odd.title, 'EV Charger');
+    for (const r of [withCode, noCode, odd]) assert.doesNotMatch(r.title + r.text, /structural|min_plus_solar|EV disconnected/);
+});

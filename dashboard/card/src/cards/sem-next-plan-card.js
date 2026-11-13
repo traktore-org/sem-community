@@ -286,7 +286,8 @@ class SEMNextPlanCard extends SEMNextBase {
         const code = n?.why || n?.reason || '';
         const key = 'energy_plan_why_' + code;
         const said = this._t(key);
-        return said && said !== key ? said : (n?.note || String(code));
+        // (#1354) never a bare engine code on screen
+        return said && said !== key ? said : (n?.note || '');
     }
 
     /** (#1321) The planner's own why for the tapped block, in words; '' when none. */
