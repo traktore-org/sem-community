@@ -19,6 +19,7 @@ import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base
 import { priceLevelKey } from '../util/price-level.js';
 import { isUncapped } from '../util/peak-slot.js';
 import { hotWaterSetUp } from '../util/settings-applies.js';
+import { PEAK_TEXT } from '../util/peak-questions.js';
 import { fmtValue, readNumber, socDisplay } from '../util/missing-value.js';
 
 // EV section removed in #282 audit: every control (charging mode, night
@@ -397,7 +398,7 @@ class SEMControlCard extends SEMLitBase {
         return html`
             <div class="peak-hero">
                 ${uncapped
-                    ? html`<span class="peak-pct" style="color:#8DC892">${this._t('uncapped')}</span>`
+                    ? html`<span class="peak-pct" style="color:#8DC892">${this._t(PEAK_TEXT.none)}</span>`
                     : html`<span class="peak-pct" style="color:${peakColor}">${fmtValue(peakPct, 0)}%</span>
                 <span class="peak-of-limit">${this._t('of_limit')}</span>`}
             </div>
@@ -411,7 +412,7 @@ class SEMControlCard extends SEMLitBase {
                     <ha-icon icon="mdi:shield-check" style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                     <div class="info-tile-content">
                         <span class="info-tile-label">${this._t('peak_margin')}</span>
-                        <span class="info-tile-value">${uncapped ? this._t('uncapped') : `${fmtValue(this._valNum('peak_margin'), 1)} kW`}</span>
+                        <span class="info-tile-value">${uncapped ? this._t(PEAK_TEXT.none) : `${fmtValue(this._valNum('peak_margin'), 1)} kW`}</span>
                     </div>
                 </div>
                 <div class="info-tile">

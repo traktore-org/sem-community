@@ -2131,7 +2131,12 @@
     "why_reason_disabled": "Je zakázané, takže SEM ukončí běh, který spustil.",
     "energy_plan_why_band_leads": "Rozhoduje jeho teploměr, proto denní doba chodu nic nežádá.",
     "config_unit_per_kw_month": "{currency}/kW za měsíc",
-    "hot_water_not_configured": "Teplá voda není nastavena — vyberte bojler na kartě Konfigurace v části Teplá voda."
+    "hot_water_not_configured": "Teplá voda není nastavena — vyberte bojler na kartě Konfigurace v části Teplá voda.",
+    "peak_q_label": "Omezit odběr ze sítě na",
+    "peak_q_choice_limit": "Limit",
+    "peak_q_choice_none": "Bez omezení",
+    "peak_q_sub": "SEM nastaví auto a spotřebiče tak, abyste za každých 15 minut zůstali pod touto hodnotou. Se zapnutým řízením zátěže také vypíná spotřebiče.",
+    "peak_q_sub_none": "SEM nic nepřizpůsobuje limitu sítě a kvůli němu nikdy nevypíná spotřebiče."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4265,7 +4270,12 @@
     "why_reason_disabled": "Den er deaktiveret, så SEM afslutter den kørsel, det startede.",
     "energy_plan_why_band_leads": "Dens termometer bestemmer, så den daglige køretid beder ikke om noget.",
     "config_unit_per_kw_month": "{currency}/kW pr. måned",
-    "hot_water_not_configured": "Intet varmt vand sat op — vælg en vandvarmer på fanen Konfiguration under Varmt vand."
+    "hot_water_not_configured": "Intet varmt vand sat op — vælg en vandvarmer på fanen Konfiguration under Varmt vand.",
+    "peak_q_label": "Begræns nettræk til",
+    "peak_q_choice_limit": "En grænse",
+    "peak_q_choice_none": "Ingen grænse",
+    "peak_q_sub": "SEM tilpasser bilen og dine forbrugere, så du holder dig under dette pr. 15 minutter. Med laststyring slukker den også forbrugere.",
+    "peak_q_sub_none": "SEM tilpasser intet til en netgrænse og slukker aldrig forbrugere for den."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6399,7 +6409,12 @@
     "why_reason_disabled": "Es ist deaktiviert, darum beendet SEM den Lauf, den es gestartet hat.",
     "energy_plan_why_band_leads": "Sein Thermometer entscheidet, darum verlangt die tägliche Laufzeit nichts.",
     "config_unit_per_kw_month": "{currency}/kW pro Monat",
-    "hot_water_not_configured": "Kein Warmwasser eingerichtet — wähle im Tab Konfiguration unter Warmwasser einen Boiler."
+    "hot_water_not_configured": "Kein Warmwasser eingerichtet — wähle im Tab Konfiguration unter Warmwasser einen Boiler.",
+    "peak_q_label": "Netzbezug begrenzen auf",
+    "peak_q_choice_limit": "Ein Limit",
+    "peak_q_choice_none": "Kein Limit",
+    "peak_q_sub": "SEM bemisst Auto und Verbraucher so, dass du pro 15 Minuten darunter bleibst. Mit Lastmanagement schaltet es auch Verbraucher ab.",
+    "peak_q_sub_none": "SEM richtet nichts nach einem Netzlimit aus und schaltet dafür nie Verbraucher ab."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8533,7 +8548,12 @@
     "why_reason_disabled": "It is disabled, so SEM ends the run it started.",
     "energy_plan_why_band_leads": "Its thermometer leads, so its daily run time asks nothing.",
     "config_unit_per_kw_month": "{currency}/kW per month",
-    "hot_water_not_configured": "No hot water set up — pick a boiler in the Configuration tab under Hot Water."
+    "hot_water_not_configured": "No hot water set up — pick a boiler in the Configuration tab under Hot Water.",
+    "peak_q_label": "Limit grid draw to",
+    "peak_q_choice_limit": "A limit",
+    "peak_q_choice_none": "No limit",
+    "peak_q_sub": "SEM sizes the car and your loads to stay under this per 15 minutes. With load management on, it also switches loads off.",
+    "peak_q_sub_none": "SEM sizes nothing to a grid limit and never switches loads off for one."
   },
   "es": {
     "% of limit": "% del límite",
@@ -10482,7 +10502,7 @@
     "config_fee_model_per_kwh": "Por kWh",
     "config_fee_model_tiered": "Tramos por kWh al año",
     "config_fee_model_fixed_monthly": "Fijo al mes",
-    "config_value_needs_spot_basis": "Tu precio incluye impuestos, así que el margen, el impuesto y el IVA no se piden.",
+    "config_value_needs_spot_basis": "Su precio incluye impuestos, así que el margen, el impuesto y el IVA no se piden.",
     "config_export_value_threshold": "Detener exportación por debajo de",
     "config_help_export_value_threshold": "Si un kWh vendido vale menos, SEM detiene la exportación: la batería y las cargas toman el sol primero. 0 = solo por debajo de cero. Requiere el interruptor Guardia de exportación.",
     "pacing_closed_meter": "exportación cerrada, la batería toma el sol",
@@ -10667,7 +10687,12 @@
     "why_reason_disabled": "Está desactivado, así que SEM termina la marcha que inició.",
     "energy_plan_why_band_leads": "Manda su termómetro, así que su tiempo diario de marcha no pide nada.",
     "config_unit_per_kw_month": "{currency}/kW al mes",
-    "hot_water_not_configured": "Sin agua caliente configurada — elige un calentador en la pestaña Configuración, en Agua caliente."
+    "hot_water_not_configured": "Sin agua caliente configurada — elige un calentador en la pestaña Configuración, en Agua caliente.",
+    "peak_q_label": "Limitar el consumo de red a",
+    "peak_q_choice_limit": "Un límite",
+    "peak_q_choice_none": "Sin límite",
+    "peak_q_sub": "SEM ajusta el coche y sus cargas para quedar por debajo de esto cada 15 minutos. Con la gestión de carga activada, también apaga cargas.",
+    "peak_q_sub_none": "SEM no ajusta nada a un límite de red y nunca apaga cargas por ello."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -12801,7 +12826,12 @@
     "why_reason_disabled": "Se on poistettu käytöstä, joten SEM lopettaa käynnistämänsä ajon.",
     "energy_plan_why_band_leads": "Sen lämpömittari päättää, joten päivittäinen käyntiaika ei pyydä mitään.",
     "config_unit_per_kw_month": "{currency}/kW kuukaudessa",
-    "hot_water_not_configured": "Lämmintä vettä ei ole määritetty — valitse varaaja Asetukset-välilehdellä kohdassa Lämmin vesi."
+    "hot_water_not_configured": "Lämmintä vettä ei ole määritetty — valitse varaaja Asetukset-välilehdellä kohdassa Lämmin vesi.",
+    "peak_q_label": "Rajoita verkosta ottoa",
+    "peak_q_choice_limit": "Raja",
+    "peak_q_choice_none": "Ei rajaa",
+    "peak_q_sub": "SEM mitoittaa auton ja kuormat pysymään tämän alla 15 minuutin jaksoissa. Kun kuormanhallinta on käytössä, se myös kytkee kuormia pois.",
+    "peak_q_sub_none": "SEM ei mitoita mitään verkkorajan mukaan eikä koskaan kytke kuormia pois sen takia."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -14935,7 +14965,12 @@
     "why_reason_disabled": "Il est désactivé, SEM arrête donc la marche qu'il a lancée.",
     "energy_plan_why_band_leads": "Son thermomètre décide, son temps de marche quotidien ne demande donc rien.",
     "config_unit_per_kw_month": "{currency}/kW par mois",
-    "hot_water_not_configured": "Aucune eau chaude configurée — choisissez un ballon dans l'onglet Configuration, sous Eau chaude."
+    "hot_water_not_configured": "Aucune eau chaude configurée — choisissez un ballon dans l'onglet Configuration, sous Eau chaude.",
+    "peak_q_label": "Limiter le soutirage réseau à",
+    "peak_q_choice_limit": "Une limite",
+    "peak_q_choice_none": "Aucune limite",
+    "peak_q_sub": "SEM dimensionne la voiture et vos charges pour rester sous cette valeur par 15 minutes. Avec la gestion de charge, il coupe aussi des charges.",
+    "peak_q_sub_none": "SEM ne dimensionne rien selon une limite réseau et ne coupe jamais de charge pour cela."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17069,7 +17104,12 @@
     "why_reason_disabled": "Le van tiltva, ezért a SEM leállítja az általa indított futást.",
     "energy_plan_why_band_leads": "A hőmérője dönt, ezért a napi üzemidő nem kér semmit.",
     "config_unit_per_kw_month": "{currency}/kW havonta",
-    "hot_water_not_configured": "Nincs melegvíz beállítva — válasszon bojlert a Konfiguráció lapon, a Melegvíz résznél."
+    "hot_water_not_configured": "Nincs melegvíz beállítva — válasszon bojlert a Konfiguráció lapon, a Melegvíz résznél.",
+    "peak_q_label": "Hálózati vétel korlátja",
+    "peak_q_choice_limit": "Korlát",
+    "peak_q_choice_none": "Nincs korlát",
+    "peak_q_sub": "A SEM úgy méretezi az autót és a fogyasztókat, hogy 15 percenként e alatt maradjon. Bekapcsolt terheléskezeléssel fogyasztókat is lekapcsol.",
+    "peak_q_sub_none": "A SEM semmit nem méretez hálózati korláthoz, és sosem kapcsol le miatta fogyasztót."
   },
   "it": {
     "% of limit": "% del limite",
@@ -19203,7 +19243,12 @@
     "why_reason_disabled": "È disattivato, quindi SEM termina il ciclo che ha avviato.",
     "energy_plan_why_band_leads": "Decide il suo termometro, quindi il tempo di funzionamento giornaliero non chiede nulla.",
     "config_unit_per_kw_month": "{currency}/kW al mese",
-    "hot_water_not_configured": "Nessuna acqua calda impostata — scegli un boiler nella scheda Configurazione, sotto Acqua calda."
+    "hot_water_not_configured": "Nessuna acqua calda impostata — scegli un boiler nella scheda Configurazione, sotto Acqua calda.",
+    "peak_q_label": "Limita il prelievo dalla rete a",
+    "peak_q_choice_limit": "Un limite",
+    "peak_q_choice_none": "Nessun limite",
+    "peak_q_sub": "SEM dimensiona l'auto e i carichi per restare sotto questo valore ogni 15 minuti. Con la gestione carico attiva spegne anche dei carichi.",
+    "peak_q_sub_none": "SEM non dimensiona nulla su un limite di rete e non spegne mai carichi per questo."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -21337,7 +21382,12 @@
     "why_reason_disabled": "Het is uitgeschakeld, dus SEM stopt wat het zelf startte.",
     "energy_plan_why_band_leads": "Zijn thermometer beslist, dus de dagelijkse looptijd vraagt niets.",
     "config_unit_per_kw_month": "{currency}/kW per maand",
-    "hot_water_not_configured": "Geen warm water ingesteld — kies een boiler in het tabblad Configuratie onder Warm water."
+    "hot_water_not_configured": "Geen warm water ingesteld — kies een boiler in het tabblad Configuratie onder Warm water.",
+    "peak_q_label": "Netafname beperken tot",
+    "peak_q_choice_limit": "Een limiet",
+    "peak_q_choice_none": "Geen limiet",
+    "peak_q_sub": "SEM stemt de auto en je verbruikers af om per 15 minuten hieronder te blijven. Met verbruiksbeheer schakelt het ook verbruikers uit.",
+    "peak_q_sub_none": "SEM stemt niets af op een netlimiet en schakelt daarvoor nooit verbruikers uit."
   },
   "no": {
     "% of limit": "% av grense",
@@ -23471,7 +23521,12 @@
     "why_reason_disabled": "Den er deaktivert, så SEM avslutter kjøringen det startet.",
     "energy_plan_why_band_leads": "Termometeret bestemmer, så den daglige driftstiden ber ikke om noe.",
     "config_unit_per_kw_month": "{currency}/kW per måned",
-    "hot_water_not_configured": "Ikke noe varmtvann satt opp — velg en varmtvannsbereder i fanen Konfigurasjon under Varmtvann."
+    "hot_water_not_configured": "Ikke noe varmtvann satt opp — velg en varmtvannsbereder i fanen Konfigurasjon under Varmtvann.",
+    "peak_q_label": "Begrens nettuttak til",
+    "peak_q_choice_limit": "En grense",
+    "peak_q_choice_none": "Ingen grense",
+    "peak_q_sub": "SEM tilpasser bilen og forbrukerne dine slik at du holder deg under dette per 15 minutter. Med laststyring slår den også av forbrukere.",
+    "peak_q_sub_none": "SEM tilpasser ingenting til en nettgrense og slår aldri av forbrukere for den."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -25605,7 +25660,12 @@
     "why_reason_disabled": "Jest wyłączony z obsługi, więc SEM kończy pracę, którą uruchomił.",
     "energy_plan_why_band_leads": "Decyduje jego termometr, więc dzienny czas pracy niczego nie wymaga.",
     "config_unit_per_kw_month": "{currency}/kW na miesiąc",
-    "hot_water_not_configured": "Nie skonfigurowano ciepłej wody — wybierz bojler w zakładce Konfiguracja, w sekcji Ciepła woda."
+    "hot_water_not_configured": "Nie skonfigurowano ciepłej wody — wybierz bojler w zakładce Konfiguracja, w sekcji Ciepła woda.",
+    "peak_q_label": "Ogranicz pobór z sieci do",
+    "peak_q_choice_limit": "Limit",
+    "peak_q_choice_none": "Bez limitu",
+    "peak_q_sub": "SEM dobiera ładowanie auta i odbiorniki tak, by na każde 15 minut zostać poniżej tej wartości. Przy włączonym zarządzaniu obciążeniem wyłącza też odbiorniki.",
+    "peak_q_sub_none": "SEM niczego nie dopasowuje do limitu sieci i nigdy nie wyłącza z tego powodu odbiorników."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -27739,7 +27799,12 @@
     "why_reason_disabled": "Está desativado, por isso o SEM termina o funcionamento que iniciou.",
     "energy_plan_why_band_leads": "Manda o seu termómetro, por isso o tempo diário de funcionamento não pede nada.",
     "config_unit_per_kw_month": "{currency}/kW por mês",
-    "hot_water_not_configured": "Sem água quente configurada — escolha um termoacumulador no separador Configuração, em Água quente."
+    "hot_water_not_configured": "Sem água quente configurada — escolha um termoacumulador no separador Configuração, em Água quente.",
+    "peak_q_label": "Limitar o consumo da rede a",
+    "peak_q_choice_limit": "Um limite",
+    "peak_q_choice_none": "Sem limite",
+    "peak_q_sub": "O SEM ajusta o carro e as suas cargas para ficar abaixo disto a cada 15 minutos. Com a gestão de carga ativa, também desliga cargas.",
+    "peak_q_sub_none": "O SEM não ajusta nada a um limite de rede e nunca desliga cargas por isso."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -29688,7 +29753,7 @@
     "config_fee_model_per_kwh": "Pe kWh",
     "config_fee_model_tiered": "Praguri după kWh pe an",
     "config_fee_model_fixed_monthly": "Fix pe lună",
-    "config_value_needs_spot_basis": "Prețul tău include taxele, așa că adaosul, taxa și TVA nu se cer.",
+    "config_value_needs_spot_basis": "Prețul dvs. include taxele, așa că adaosul, taxa și TVA nu se cer.",
     "config_export_value_threshold": "Oprește exportul sub",
     "config_help_export_value_threshold": "Dacă un kWh vândut valorează mai puțin, SEM oprește exportul: bateria și consumatorii iau întâi soarele. 0 = doar sub zero. Necesită comutatorul Gardă de export.",
     "pacing_closed_meter": "export închis, bateria ia soarele",
@@ -29873,7 +29938,12 @@
     "why_reason_disabled": "Este dezactivat, deci SEM încheie rularea pe care a pornit-o.",
     "energy_plan_why_band_leads": "Decide termometrul său, așa că timpul zilnic de funcționare nu cere nimic.",
     "config_unit_per_kw_month": "{currency}/kW pe lună",
-    "hot_water_not_configured": "Nu este setată apa caldă — alege un boiler în fila Configurare, la Apă caldă."
+    "hot_water_not_configured": "Nu este setată apa caldă — alegeți un boiler în fila Configurare, la Apă caldă.",
+    "peak_q_label": "Limitează consumul din rețea la",
+    "peak_q_choice_limit": "O limită",
+    "peak_q_choice_none": "Fără limită",
+    "peak_q_sub": "SEM dimensionează mașina și consumatorii dvs. ca să rămâneți sub această valoare la fiecare 15 minute. Cu gestionarea sarcinii activată, oprește și consumatori.",
+    "peak_q_sub_none": "SEM nu ajustează nimic după o limită de rețea și nu oprește niciodată consumatori pentru ea."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -32007,7 +32077,12 @@
     "why_reason_disabled": "Den är inaktiverad, så SEM avslutar körningen det startade.",
     "energy_plan_why_band_leads": "Dess termometer bestämmer, så den dagliga drifttiden ber inte om något.",
     "config_unit_per_kw_month": "{currency}/kW per månad",
-    "hot_water_not_configured": "Inget varmvatten inställt — välj en varmvattenberedare på fliken Konfiguration under Varmvatten."
+    "hot_water_not_configured": "Inget varmvatten inställt — välj en varmvattenberedare på fliken Konfiguration under Varmvatten.",
+    "peak_q_label": "Begränsa nätuttaget till",
+    "peak_q_choice_limit": "En gräns",
+    "peak_q_choice_none": "Ingen gräns",
+    "peak_q_sub": "SEM anpassar bilen och dina förbrukare så att du håller dig under detta per 15 minuter. Med laststyrning stänger den också av förbrukare.",
+    "peak_q_sub_none": "SEM anpassar inget till en nätgräns och stänger aldrig av förbrukare för den."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -34141,6 +34216,11 @@
     "why_reason_disabled": "它已被停用，所以 SEM 结束它启动的运行。",
     "energy_plan_why_band_leads": "由温度计决定，所以每日运行时间不再要求任何电量。",
     "config_unit_per_kw_month": "{currency}/kW 每月",
-    "hot_water_not_configured": "未设置热水 — 请在“配置”标签页的“热水”中选择热水器。"
+    "hot_water_not_configured": "未设置热水 — 请在“配置”标签页的“热水”中选择热水器。",
+    "peak_q_label": "电网取电限制为",
+    "peak_q_choice_limit": "设定限制",
+    "peak_q_choice_none": "无限制",
+    "peak_q_sub": "SEM 按每 15 分钟调整汽车和负载，使取电保持在此值以下。开启负载管理后，还会关闭负载。",
+    "peak_q_sub_none": "SEM 不按电网限制调整任何设备，也不会为此关闭负载。"
   }
 }

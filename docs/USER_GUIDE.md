@@ -281,7 +281,7 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `load_management_enabled` | false | Enable peak load management — **off on a fresh install**; SEM never sheds a circuit you did not ask it to defend |
-| `peak_limit_unlimited` | false | **No grid limit** — turn peak management off entirely |
+| `peak_limit_unlimited` | false | **No limit** — the answer to *Limit grid draw to*; turns peak management off entirely |
 | `target_peak_limit` | 5 kW | Maximum grid power SEM stays under (1–80 kW) |
 | `warning_peak_level` | 90% of target | Warning threshold — must be **below** the target (1–80 kW) |
 | `emergency_peak_level` | 120% of target | Emergency shedding threshold — must be **above** the target (1–80 kW) |
@@ -296,20 +296,21 @@ poll), so a 38 kW service is never stuck with the 4.5 kW / 6.0 kW levels that
 suit a 5 kW one. All three accept **1–80 kW**, and the options flow rejects an
 out-of-order ladder (warning ≥ target, or emergency ≤ target).
 
-Two places to change it after install:
+Both dashboards ask it as one question: **Limit grid draw to** a number of kW,
+or **No limit**. Two places to answer it after install:
 - **Control tab** — the Load Management card's slider is the fast path: drag
-  to any value between 1 and 80 kW, or all the way to the top for **Uncapped**
-  (the No grid limit opt-out below). Changes apply live, no restart needed.
-- **Configuration tab** — the same value as a precise kW number field, for
-  when you want an exact figure rather than a drag. Warning and emergency
-  aren't separate fields anymore; they live behind an **Advanced** disclosure
-  here, since almost nobody needs to touch the derived ratios.
+  to any value between 1 and 80 kW, or all the way to the top for **No limit**.
+  Changes apply live, no restart needed.
+- **Configuration tab** — the same question with a precise kW number field
+  and a *A limit / No limit* choice. Warning and emergency live behind an
+  **Advanced** disclosure there, since almost nobody needs to touch the
+  derived ratios.
 
 #### No grid limit
 
 Some connections are large enough that no household load can threaten them —
-an industrial supply, or a site where the limit is enforced upstream. Turn on
-**No grid limit** and SEM stops treating the peak limit as a ceiling at all:
+an industrial supply, or a site where the limit is enforced upstream. Answer
+**No limit** and SEM stops treating the peak limit as a ceiling at all:
 the EV charger sizes its current from surplus alone, load management never
 escalates, and the kW fields disappear from the card.
 
@@ -319,7 +320,7 @@ This is **not** the same as leaving *Enable Load Management* off:
 |---|---|---|
 | Load management **on** | yes | yes |
 | Load management **off** | no | **yes** — the ceiling still stands |
-| **No grid limit** on | no | no |
+| **No limit** | no | no |
 
 That distinction is deliberate. Turning shedding off means "leave my loads
 alone", not "there is no limit" — if it meant both, an install that only
@@ -1714,14 +1715,14 @@ Because the limit lives at the **power meter**, everything downstream answers
 to it — this is a layer above the devices, not an EV feature.
 
 **Turning it off** uses the control that already exists: set the Control tab's
-**Target Limit** slider to its MAX notch (*No grid limit*). There is no second
+**Limit grid draw to** slider to its MAX notch (*No limit*). There is no second
 toggle. An install with no target peak limit behaves exactly as it did before.
 
 Live values: `peak_slot_allowed_w` (what the rest of the slot may average) and
 `peak_slot_used_kwh` (what it has taken so far), both on the load-management
 surface.
 
-Off on a fresh install: SEM sheds nothing until you enable it. Enable via **Enable Load Management** on the Configuration tab — the toggle and the target limit sit together in the Load Management section (reach it from the Setup overview's *Load management* chip; the section is not hidden behind *Advanced*). Requires controllable devices with switch entities. For the target/warning/emergency range, the Control-tab slider, and the **No grid limit** opt-out, see [Load Management Settings](#load-management-settings).
+Off on a fresh install: SEM sheds nothing until you enable it. Enable via **Enable Load Management** on the Configuration tab — the toggle and the target limit sit together in the Load Management section (reach it from the Setup overview's *Load management* chip; the section is not hidden behind *Advanced*). Requires controllable devices with switch entities. For the target/warning/emergency range, the Control-tab slider, and the **No limit** answer, see [Load Management Settings](#load-management-settings).
 
 ---
 

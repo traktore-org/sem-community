@@ -28,6 +28,7 @@ import { batteryListEdit } from '../util/battery-slot-edit.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
 import { taxesApply } from '../util/settings-applies.js';
+import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
@@ -2943,17 +2944,10 @@ class SEMConfigCard extends SEMLitBase {
             </div>
             ${this._renderOptionToggle('load_management_enabled', 'config_lm_enabled',
                 opts, 'config_help_lm_enabled', false)}
-            ${this._renderOptionToggle('peak_limit_unlimited', 'config_lm_unlimited',
-                opts, 'config_help_lm_unlimited', false)}
+            ${this._renderPeakQuestion(opts)}
             ${unlimited ? html`
-                <div class="readonly-row">
-                    <span class="ctrl-label">${this._t('config_lm_target_peak')}</span>
-                    <span class="readonly-value">${this._t('config_lm_unlimited_value')}</span>
-                </div>
                 ${this._renderOperatorRelay(opts)}
             ` : html`
-                ${this._renderOptionNumberInput('target_peak_limit', 'config_lm_target_peak',
-                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
                 ${this._renderOperatorRelay(opts)}
                 ${!this._showsControl('warning_peak_level') ? this._hideRows(2) : html`
                 <div class="advanced-toggle-row" @click=${() => { this._lmAdvancedOpen = !this._lmAdvancedOpen; }}>
@@ -2968,6 +2962,52 @@ class SEMConfigCard extends SEMLitBase {
                         { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
                 ` : nothing}`}
             `}
+        `;
+    }
+
+    // (#1354) The peak limit as one question: "Limit grid draw to [x kW] /
+    // No limit". It stages the two stored fields the old switch and number
+    // staged (peakWrites), so Apply saves exactly what it saved before.
+    _renderPeakQuestion(opts) {
+        if (!this._gate('target_peak_limit')) return nothing;
+        const usid = 'opt:peak_limit_unlimited';
+        const tsid = 'opt:target_peak_limit';
+        this._reg(usid);
+        this._reg(tsid);
+        const q = peakQuestion({
+            unlimited: !!this._stagedVal(usid, !!opts.peak_limit_unlimited),
+            limitKw: this._stagedVal(tsid, opts.target_peak_limit ?? PEAK_KW.fallback),
+        });
+        const dirty = this._isDirty(usid) || this._isDirty(tsid);
+        const answer = (limited, kw) => {
+            const w = peakWrites(limited, kw);
+            this._stage(usid, 'option', w.peak_limit_unlimited);
+            if (w.target_peak_limit !== undefined) this._stage(tsid, 'option', w.target_peak_limit);
+        };
+        return html`
+            <div class="stepper-cell ${dirty ? 'dirty' : ''}">
+                <div class="ctrl-row">
+                    <span class="ctrl-label">${this._t(PEAK_TEXT.label)}${dirty ? html`<span class="dirty-dot">●</span>` : nothing}</span>
+                    <div class="q-answer">
+                        ${q.limited ? html`
+                            <div class="num-input-wrap">
+                                <input class="sem-num-input peak-q-kw" type="number"
+                                       .value=${String(q.kw)}
+                                       min=${PEAK_KW.min} max=${PEAK_KW.max} step=${PEAK_KW.step}
+                                       @change=${(e) => answer(true, e.target.value)}
+                                       @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}>
+                                <span class="num-unit">kW</span>
+                            </div>` : nothing}
+                        <div class="q-seg">
+                            <span class="q-seg-btn ${q.limited ? 'on' : ''}" data-peak="limit"
+                                  @click=${() => answer(true, q.kw)}>${this._t(PEAK_TEXT.limit)}</span>
+                            <span class="q-seg-btn ${q.limited ? '' : 'on'}" data-peak="none"
+                                  @click=${() => answer(false, q.kw)}>${this._t(PEAK_TEXT.none)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="setting-help-text">${this._t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone)}</div>
+            </div>
         `;
     }
 
@@ -3836,6 +3876,11 @@ class SEMConfigCard extends SEMLitBase {
                     transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1);
                 }
                 .chip:hover { border-color: var(--divider-color, ${T.surfaceHover}); }
+                /* (#1354) a question answered with a value or a choice */
+                .q-answer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+                .q-seg { display: inline-flex; border: 1px solid var(--divider-color, ${T.surfaceBorder}); border-radius: 8px; overflow: hidden; }
+                .q-seg-btn { padding: 4px 10px; font-size: 12px; cursor: pointer; opacity: 0.7; }
+                .q-seg-btn.on { background: ${accent}; color: #fff; opacity: 1; font-weight: 600; }
                 .chip-label {
                     font-size: 10px; color: var(--secondary-text-color, ${T.textSec});
                     font-weight: 500; letter-spacing: 0.3px; margin: 3px 0;

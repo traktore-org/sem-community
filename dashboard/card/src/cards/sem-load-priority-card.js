@@ -34,6 +34,7 @@ import {
 } from './load-config-modal.js';
 import { stateLabel } from '../util/state-label.js';
 import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
+import { PEAK_KW, PEAK_TEXT, sliderAnswer } from '../util/peak-questions.js';
 import {
     heaterSays, heaterSub, heaterQuestions, sunMaxWrites, limitWrites, nextBlock,
     asSentence, BUY_LABEL,
@@ -543,7 +544,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <div class="spacer"></div>
                         <span class="dim">${this._t('peak_15min_avg')}</span>
                         <span id="peak-current" class="mono">${fmtValue(this.currentPeak, 2)} kW</span>
-                        <span class="dim">/ ${unlimited ? this._t('uncapped') : fmtValue(this.targetPeakLimit, 1)}</span>
+                        <span class="dim">/ ${unlimited ? this._t(PEAK_TEXT.none) : fmtValue(this.targetPeakLimit, 1)}</span>
                         <button class="help-btn ${this._showHelp ? 'active' : ''}" data-action="toggle-help"
                                 title="${this._t('help')}">?</button>
                     </div>
@@ -560,7 +561,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         </div>`}
                         <div class="peak-row">
                             <span class="dim">${this._t('target_limit')}</span>
-                            <span id="peak-target" class="mono">${unlimited ? this._t('uncapped') : fmtValue(this.targetPeakLimit, 2) + ' kW'}</span>
+                            <span id="peak-target" class="mono">${unlimited ? this._t(PEAK_TEXT.none) : fmtValue(this.targetPeakLimit, 2) + ' kW'}</span>
                         </div>
                         ${unlimited ? nothing : html`
                         <div class="peak-row">
@@ -587,8 +588,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     </div>
 
                     <div class="peak-box" style="margin-bottom:16px">
-                        <span class="dim">${this._t('adjust_target_peak')}</span>
+                        <span class="dim">${this._t(PEAK_TEXT.label)}</span>
                         ${this._renderPeakSlider()}
+                        <div class="dim" style="font-size:12px;margin-top:6px">${this._t(unlimited ? PEAK_TEXT.subNone : PEAK_TEXT.sub)}</div>
                     </div>
 
                     ${this._showHelp ? html`
@@ -930,7 +932,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ceiling. Reaching the top of the range is the explicit, deliberate
     // "Unlimited" opt-out (#716) — never inferred from an absent value.
     _renderPeakSlider() {
-        const MIN_KW = 1, MAX_KW = 80;
+        const MIN_KW = PEAK_KW.min, MAX_KW = PEAK_KW.max;
         const drag = this._peakDrag;
         let kw = this.peakLimitUnlimited ? MAX_KW : Math.min(MAX_KW, Math.max(MIN_KW, this.targetPeakLimit || MIN_KW));
         if (drag != null) kw = drag;
@@ -938,12 +940,14 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const atMax = kw >= MAX_KW - 1e-6;
         // (#1200) no limit read and none dragged: the dash, not the 1 kW end
         const unread = drag == null && !this.peakLimitUnlimited && this.targetPeakLimit == null;
+        // (#1354) the slider's end is the "No limit" answer, in the same
+        // words as the Configuration tab's question
         const label = unread ? `${MISSING} kW`
-            : atMax ? this._t('uncapped') : `${kw.toFixed(1)} kW`;
+            : atMax ? this._t(PEAK_TEXT.none) : `${kw.toFixed(1)} kW`;
         return html`
             <div class="range-wrap">
                 <div class="range-labels">
-                    <span>${this._t('target_limit')}</span>
+                    <span></span>
                     <span><b style="color:#488fc2">${label}</b></span>
                 </div>
                 <div class="range-track">
@@ -957,7 +961,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
     _peakSliderStart(e) {
         e.stopPropagation();
         e.preventDefault();
-        const MIN_KW = 1, MAX_KW = 80, STEP_KW = 0.5;
+        const MIN_KW = PEAK_KW.min, MAX_KW = PEAK_KW.max, STEP_KW = PEAK_KW.slider;
         const track = e.currentTarget.parentElement;  // handle → .range-track
         const rect = track.getBoundingClientRect();
         const toVal = (clientX) => {
@@ -975,9 +979,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
             window.removeEventListener('pointercancel', onUp);
-            const kw = toVal(ev.clientX);
+            const a = sliderAnswer(toVal(ev.clientX));
             this._peakDrag = null;
-            this._commitPeakLimit(kw, kw >= MAX_KW - 1e-6);
+            this._commitPeakLimit(a.kw, !a.limited);
         };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);

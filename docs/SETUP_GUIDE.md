@@ -335,10 +335,10 @@ your grid ceiling during setup. The ceiling only *sizes* what SEM offers (the
 EV charger above all); load **shedding** stays off until you enable it on the
 Configuration tab. Tune it afterward from the **Control** tab's
 Load Management card (drag the slider up to **80 kW**, or all the way to
-**Uncapped** if the connection has no limit worth defending), or type an exact
-kW value on the **Configuration** tab. See
+**No limit** if the connection has no limit worth defending), or answer
+**Limit grid draw to** with an exact kW value on the **Configuration** tab. See
 [Load Management Settings](USER_GUIDE.md#load-management-settings) for the
-full range, the warning/emergency ladder, and the **No grid limit** switch.
+full range, the warning/emergency ladder, and the **No limit** answer.
 
 ### First-run welcome notification
 

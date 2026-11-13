@@ -8,6 +8,7 @@
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 import { peakLimitText } from '../util/peak-slot.js';
+import { PEAK_TEXT } from '../util/peak-questions.js';
 import { MISSING, isMissing, socDisplay } from '../util/missing-value.js';
 
 const _t = (key, hass) => (typeof semLocalize === 'function') ? semLocalize(key, hass?.language) : key;
@@ -226,7 +227,7 @@ class SEMTabHeader extends SEMLitBase {
         ];
         if (tab === 'control') return [
             peakLimitText(this._hass?.states[`${this._prefix}target_peak_limit`],
-                _t('uncapped', this._hass)),
+                _t(PEAK_TEXT.none, this._hass)),
             fig(this._getState('controllable_devices_count'), (v) => v.toFixed(0)),
             fig(this._getState('surplus_active_devices'), (v) => v.toFixed(0)),
         ];

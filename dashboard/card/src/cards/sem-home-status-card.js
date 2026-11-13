@@ -16,6 +16,7 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semDefineCard } from '../base/sem-shared.js';
 import { MISSING, fmtValue, readNumber, socDisplay } from '../util/missing-value.js';
+import { PEAK_TEXT } from '../util/peak-questions.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -117,7 +118,7 @@ class SEMHomeStatusCard extends SEMLitBase {
         const peakColor = this._peakColor(peakPct);
         const currentPeak = fmtValue(this._val('consecutive_peak_15min'), 1);
         const limitState = this._hass.states[`${this._prefix}target_peak_limit`];
-        const targetLimit = peakLimitText(limitState, this._t('uncapped'));
+        const targetLimit = peakLimitText(limitState, this._t(PEAK_TEXT.none));
         const uncapped = isUncapped(limitState);
 
         const co2Today = fmtValue(this._val('daily_co2_avoided'), 2);
