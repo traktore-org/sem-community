@@ -23,6 +23,8 @@
  * setup card's picker for the same key (ENTITY_FIELDS).
  */
 
+import { priceAddOns } from './next-applies.js';
+
 // (#528) option keys that reload the entry when written — copied from
 // cards/sem-config-card.js STRUCTURAL_KEYS.
 export const STRUCTURAL_KEYS = new Set([
@@ -578,6 +580,13 @@ export function groups(states, t, ctx = {}) {
         const provider = text(labels.provider);
         const feeModel = optSelect(o, 'feed_in_fee_model', FEE_MODELS, 'none');
         const feeV = feeModel ? feeModel.value : 'none';
+        // (#1354) only what changes the price: an all-in price takes no VAT,
+        // markup or tax; the grid fee is added by the dynamic tariff only
+        const basisSel = optSelect(o, 'import_price_basis', PRICE_BASIS, 'all_in');
+        const adds = priceAddOns(basisSel ? basisSel.value : 'all_in', modeV);
+        const markup = optNum(o, 'import_markup', { min: 0, max: 10000, step: 0.0001, unit: perKwh, default: 0 });
+        const tax = optNum(o, 'import_energy_tax', { min: 0, max: 10000, step: 0.0001, unit: perKwh, default: 0 });
+        const isSet = (slot) => !!slot && Number(slot.value) > 0;
         const first = modeV === 'dynamic'
             ? (frag(t, 'next_pay_dynamic', { mode, provider }) || frag(t, 'next_pay_mode', { mode }))
             : modeV === 'calendar'
@@ -585,7 +594,12 @@ export function groups(states, t, ctx = {}) {
                 : (frag(t, 'next_pay_static', { mode, rate }) || frag(t, 'next_pay_rate', { rate }) || frag(t, 'next_pay_mode', { mode }));
         const sentence = join(
             first ? capFirst(first) : [],
-            clause([frag(t, 'next_pay_taxes', { vat, fee })]),
+            clause([
+                adds.vat && isSet(vat) ? frag(t, 'next_pay_plus_vat', { vat }) : null,
+                adds.markup && isSet(markup) ? frag(t, 'next_pay_plus_markup', { markup }) : null,
+                adds.tax && isSet(tax) ? frag(t, 'next_pay_plus_tax', { tax }) : null,
+                adds.fee && isSet(fee) ? frag(t, 'next_pay_plus_fee', { fee }) : null,
+            ]),
             clause([frag(t, 'next_pay_export', { export: exportRate })]),
             clause([frag(t, 'next_pay_thresholds', { cheap, expensive, basis }) || frag(t, 'next_pay_thresholds_plain', { cheap, expensive })]),
         );
@@ -597,9 +611,11 @@ export function groups(states, t, ctx = {}) {
             ['next_more_fee_amount', feeV === 'per_kwh' || feeV === 'fixed_monthly'
                 ? optNum(o, 'feed_in_fee', { min: 0, max: 100000, step: 0.0001, unit: feeV === 'fixed_monthly' ? `${cur}/${t('next_month_short')}` : perKwh, default: 0 }) : null],
             ['next_more_fee_tiers', feeV === 'tiered' ? optText(o, 'feed_in_fee_tiers') : null],
-            ['next_more_price_basis', optSelect(o, 'import_price_basis', PRICE_BASIS, 'all_in')],
-            ['next_more_markup', optNum(o, 'import_markup', { min: 0, max: 10000, step: 0.0001, unit: perKwh, default: 0 })],
-            ['next_more_energy_tax', optNum(o, 'import_energy_tax', { min: 0, max: 10000, step: 0.0001, unit: perKwh, default: 0 })],
+            ['next_more_price_basis', basisSel],
+            ['next_more_markup', adds.markup ? markup : null],
+            ['next_more_energy_tax', adds.tax ? tax : null],
+            ['next_more_vat', adds.vat ? vat : null],
+            ['next_more_grid_fee', adds.fee ? fee : null],
             ['next_more_export_floor', optNum(o, 'export_value_threshold', { min: -10000, max: 10000, step: 0.0001, unit: perKwh, default: 0 })],
             ['next_more_preset', optSelect(o, 'tariff_value_preset', PRESETS, 'none')],
             ...(modeV === 'dynamic' ? ['dynamic_tariff_entity', 'dynamic_forecast_entity', 'dynamic_feedin_entity']
