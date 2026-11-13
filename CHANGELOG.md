@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **On a dynamic tariff, the cost sensors show the average price paid per bought kWh and the average price of all hours** (#1321).
 - ✨ **The plan says where the battery ends tonight and tomorrow** (#1321), on its own trajectory and floor.
 - ✨ **The night plan also respects the inverter's own end-of-discharge level, when SEM finds it** (#1358). Change it in the inverter's app; the plan follows.
+- ✨ **A heat pump's COP can follow the outdoor temperature, so the plan picks the hours where heat is cheapest** (#1081).
 
 # [2.3.0-beta.14] — 13.11.2026
 

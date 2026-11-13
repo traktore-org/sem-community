@@ -8019,6 +8019,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # else the house's; never invents a price when neither can say.
         _hp_cop = (float(getattr(hp_controller, "cop", 3.0) or 3.0)
                   if hp_controller is not None else None)
+        # (#1081) with a COP curve, the COP at the outdoor temperature now;
+        # without one (or with no reading) the flat COP, as before.
+        _hp_cop_source = "flat" if hp_controller is not None else None
+        _hp_cop_outdoor = None
+        _hp_curve = (getattr(hp_controller, "cop_curve", None)
+                     if hp_controller is not None else None)
+        if _hp_curve:
+            # read the outdoor temperature only for a curve: without one
+            # nothing here changes, not even what is read
+            from .heat_cost import cop_at as _cop_at_fn
+            _hp_cop_outdoor = self._outdoor_temperature_or_none()
+            _hp_cop, _hp_cop_source = _cop_at_fn(
+                _hp_curve, _hp_cop_outdoor, _hp_cop)
+            if _hp_cop_source != "curve":
+                _hp_cop_outdoor = None
         from .heat_cost import heat_pump_price as _heat_pump_price_fn
         _hp_price = None
         if hp_controller is not None:
@@ -8067,6 +8082,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 hp_controller, "daily_energy_is_measured", False
             )),
             heat_pump_cop=_hp_cop,
+            heat_pump_cop_source=_hp_cop_source,
+            heat_pump_cop_outdoor_c=_hp_cop_outdoor,
             heat_pump_cost_of_heat=_hp_cost_of_heat,
         )
 
@@ -12881,6 +12898,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _dtariffs = getattr(controller, "device_tariffs", None)
             _plan_tariff = ((lambda d: _dtariffs.plan_tariff(d)) if _dtariffs is not None
                             else (lambda d: None))
+            # (#1081) A heat pump with a COP curve ranks its hours by the
+            # price of HEAT: price ÷ COP at that hour's outdoor temperature
+            # (the forecast SEM already reads; the reading now where the
+            # forecast has no row; the flat COP when neither says). RANK
+            # ONLY: the kWh it asks for and the cost the plan reports stay
+            # electricity. No curve → None → the packer sees exactly today's
+            # demand.
+            _t_now_c = []
+
+            def _plan_cop_at(dev):
+                curve = getattr(dev, "cop_curve", None)
+                if not curve:
+                    return None
+                from .heat_cost import cop_at as _cop_at_fn
+                flat = getattr(dev, "cop", None)
+
+                def _at(ts):
+                    t = self._temperature_at(ts)
+                    if t is None:
+                        if not _t_now_c:
+                            _t_now_c.append(self._outdoor_temperature_or_none())
+                        t = _t_now_c[0]
+                    return _cop_at_fn(curve, t, flat)[0]
+                return _at
             loads_seen = 0
             loads_eligible = 0
             from ..devices.base import DeviceControlMode as _DCM
@@ -13008,6 +13049,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # (#812) its own tariff, when it has one — the
                         # reader the live gate uses
                         tariff=_plan_tariff(dev),
+                        cop_at=_plan_cop_at(dev),     # (#1081)
                     ))
                 except Exception:  # noqa: BLE001 — one bad device won't kill the plan
                     continue
@@ -13052,6 +13094,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         tariff=_plan_tariff(dev),     # (#812)
                         # (#1102) a goal is placed even with no price published
                         unpriced_ok=True,
+                        cop_at=_plan_cop_at(dev),     # (#1081)
                     ))
                 except Exception:  # noqa: BLE001 — one bad band won't kill the plan
                     continue
@@ -13614,6 +13657,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # strings are what the log lines and the soak notes quote.
             kind_of = {d.id: d.kind for d in demands}
             source_of = {d.id: d.source for d in demands}
+            cop_of = {d.id: d.cop_at for d in demands}       # (#1081)
             allocs_of = {}
             for _a in plan.allocations:
                 allocs_of.setdefault(_a.demand_id, []).append(_a)
@@ -13633,7 +13677,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1321) why its runs landed where they did — one code
                 # for the Plan card's "Why this plan" list
                 "why": demand_why(allocs_of.get(r.demand_id, ()), ledger,
-                                  source_of.get(r.demand_id, "grid")),
+                                  source_of.get(r.demand_id, "grid"),
+                                  cop_of.get(r.demand_id)),
             } for r in plan.results]
             # The ledger itself — the card's hour axis and battery
             # trajectory, in the ONE shape a quiet night draws too.

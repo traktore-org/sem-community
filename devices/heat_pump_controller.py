@@ -196,6 +196,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         # exists (Slice C); never 0/negative — cost_of_heat() would divide
         # by it.
         self.cop = float(cop) if cop and cop > 0 else 3.0
+        # (#1081) an optional COP curve against the outdoor temperature,
+        # set as a device goal (``cop_curve``). None = the flat COP above.
+        self.cop_curve = None
         self._hp_status = HeatPumpStatus()
 
         # #594 — vacation mode. Set each cycle by the coordinator. While

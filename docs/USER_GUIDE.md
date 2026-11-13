@@ -535,6 +535,17 @@ uses by its COP, so it shows what one kWh of heat costs right now. It uses
 the pump's own tariff (above); without one, it uses your house price. Pre-heat
 timing can use it.
 
+**COP by outdoor temperature.** A heat pump works better on a mild day. Give
+SEM two or three points, for example "At −7 °C the COP is 2.5, at 12 °C it is
+4.2" (load list → heat pump → target → **More**). SEM reads the COP between
+the points from the outdoor temperature, and plans the pump's bought hours
+where heat is cheapest, not only where power is cheapest. A mild afternoon can
+then beat a slightly cheaper cold morning. The kWh it plans and the cost it
+shows stay power. Leave the points empty for one fixed COP: the plan is then
+exactly as before. With no outdoor reading SEM uses the fixed COP. The
+service is `update_device_config` with property `cop_curve`, value
+`-7:2.5, 12:4.2`. A COP learned from a heat meter may follow later.
+
 ### How much did SG-Ready actually shift? (#769)
 
 The SG-Ready unit has its own energy row, on the same footing as the EV:

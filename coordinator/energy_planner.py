@@ -82,6 +82,11 @@ class Demand:
     #: sun slots first, then the hours closest to its deadline. Its cost is
     #: then unknown (None), never 0.
     unpriced_ok: bool = False
+    #: (#1081) A heat pump with a COP curve: ``cop_at(slot start)`` → the
+    #: COP at that hour. Its grid slots are RANKED by price ÷ COP (the price
+    #: of heat); the kWh asked and the cost reported stay electricity. None
+    #: = ranked by price, exactly as before.
+    cop_at: Any = field(default=None, compare=False)
 
 
 @dataclass
@@ -199,7 +204,8 @@ def battery_at_end(ledger, floor_kwh, capacity_kwh) -> Optional[dict]:
             "at": s.end.isoformat()}
 
 
-def demand_why(allocations, ledger, source: str = "grid") -> Optional[dict]:
+def demand_why(allocations, ledger, source: str = "grid",
+               cop_at=None) -> Optional[dict]:
     """(#1321) One reason code for where a demand's runs landed, for the
     Plan card's "Why this plan" list: ``{"code", "params"}`` or None when
     nothing was placed. Read off what the packer did, never re-decided:
@@ -211,7 +217,9 @@ def demand_why(allocations, ledger, source: str = "grid") -> Optional[dict]:
     * ``one_rate`` — the night has one price, so the hours are not chosen
       by price;
     * ``cheapest_hours`` — otherwise: the cheapest priced hours, with the
-      average price (``price``) of the runs.
+      average price (``price``) of the runs;
+    * ``cheapest_heat`` — a heat pump with a COP curve (#1081): its hours
+      were ranked by the price of heat; ``cop`` is the mean COP of its runs.
     """
     runs = [a for a in allocations]
     if not runs:
@@ -240,6 +248,19 @@ def demand_why(allocations, ledger, source: str = "grid") -> Optional[dict]:
         return {"code": "one_rate", "params": span}
     kwh = sum(a.energy_kwh for a in runs)
     avg = (sum(a.energy_kwh * float(a.price) for a in runs) / kwh) if kwh > 0 else None
+    if cop_at is not None and kwh > 0:
+        cops = []
+        for a in runs:
+            try:
+                c = cop_at(a.start)
+            except Exception:  # noqa: BLE001 — no COP, no heat reason
+                c = None
+            if isinstance(c, (int, float)) and not isinstance(c, bool) and c > 0:
+                cops.append((a.energy_kwh, float(c)))
+        if cops:
+            cop = sum(k * c for k, c in cops) / sum(k for k, _ in cops)
+            return {"code": "cheapest_heat",
+                    "params": {**span, "cop": round(cop, 1)}}
     return {"code": "cheapest_hours",
             "params": {**span, **({"price": round(avg, 3)} if avg is not None else {})}}
 
@@ -357,13 +378,29 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         s = ledger[i]
         return s.level_cheap if d.tariff is None else bool(d.tariff.cheap_at(s.start))
 
+    def _rank_price(d, i):
+        """(#1081) What orders this demand's slots: the slot's price, or —
+        for a heat pump with a COP curve — the price of heat, price ÷ COP
+        at that hour. Rank only; the cost stays ``_price``."""
+        p = _price(d, i)
+        if p is None or d.cop_at is None:
+            return p
+        try:
+            cop = d.cop_at(ledger[i].start)
+        except Exception:  # noqa: BLE001 — an unreadable COP ranks by price
+            return p
+        if not isinstance(cop, (int, float)) or isinstance(cop, bool) or cop <= 0:
+            return p
+        return float(p) / float(cop)
+
     def _order(d):
-        """Grid demands walk the cheapest slots first — by their own price."""
-        if d.tariff is None:
+        """Grid demands walk the cheapest slots first — by their own price
+        (by the price of heat for a heat pump with a COP curve)."""
+        if d.tariff is None and d.cop_at is None:
             priced = list(by_price)
         else:
             priced = sorted((i for i in idx if _price(d, i) is not None),
-                            key=lambda i: (_price(d, i), ledger[i].start))
+                            key=lambda i: (_rank_price(d, i), ledger[i].start))
         if not d.unpriced_ok:
             return priced
         # (#1102) then the unpriced slots: sun first, else nearest the deadline
@@ -534,7 +571,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 block_done = True
         order = (idx if d.source == "battery" else _order(d))
         own_rank = ({i: n + 1 for n, i in enumerate(order)}
-                    if d.tariff is not None and d.source != "battery" else rank)
+                    if (d.tariff is not None or d.cop_at is not None)
+                    and d.source != "battery" else rank)
         if block_done:
             order = ()                  # the block holds it all
         for i in order:

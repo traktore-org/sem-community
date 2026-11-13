@@ -630,6 +630,8 @@ class UnifiedDeviceRegistry:
         "tariff_rate", "tariff_entity", "tariff_meter",
         # (#1341) the name the user gave the load — display only
         "name",
+        # (#1081) a heat pump's COP against the outdoor temperature
+        "cop_curve",
     )
 
     def own_name(self, device_id: str) -> str:
@@ -753,6 +755,11 @@ class UnifiedDeviceRegistry:
             _mode = str(goals.get("hvac_mode") or "").strip().lower()
             if _mode in CLIMATE_HVAC_MODES:
                 device.hvac_mode = _mode
+        # (#1081) a heat pump's COP curve, key-present-only; a device with
+        # no COP (anything but a heat pump) has nothing to apply it to.
+        if "cop_curve" in goals and hasattr(device, "cop_curve"):
+            from ..coordinator.heat_cost import parse_cop_curve
+            device.cop_curve = parse_cop_curve(goals.get("cop_curve"))
         if "comfort_entity" in goals:
             device.comfort_entity = str(goals.get("comfort_entity", "") or "")
         for _ck in ("comfort_target", "comfort_offset", "comfort_limit"):
@@ -2607,6 +2614,10 @@ class UnifiedDeviceRegistry:
                 "automatic_name": self.automatic_name(device_id),
                 # (#1048) the supply phase — the editor's select
                 "phase": load_phase(goals.get("phase")),
+                # (#1081) the COP curve "°C:COP, …" ("" = none) — only a
+                # load with a COP (a heat pump) gets the key at all
+                **({"cop_curve": str(goals.get("cop_curve") or "")}
+                   if live is not None and hasattr(live, "cop_curve") else {}),
                 # (#1021) the Configure-device switch
                 "behind_operator_relay": _goal_bool(
                     goals.get("behind_operator_relay")),

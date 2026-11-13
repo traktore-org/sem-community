@@ -975,6 +975,11 @@ class HeatPumpSensorData:
     # (#1081 Slice A) the configured COP and the live price/COP cost of
     # one kWh of heat — None only when the live price itself is unknown.
     heat_pump_cop: Optional[float] = None
+    # (#1081) where that COP came from: "curve" (the outdoor temperature on
+    # the user's curve) or "flat" (the one COP set)
+    heat_pump_cop_source: Optional[str] = None
+    # (#1081) the outdoor °C that COP was read at — only with a curve
+    heat_pump_cop_outdoor_c: Optional[float] = None
     heat_pump_cost_of_heat: Optional[float] = None
 
 
@@ -1674,6 +1679,8 @@ class SEMData:
             "heat_pump_energy_source": self.heat_pump.heat_pump_energy_source,
             "heat_pump_energy_measured": self.heat_pump.heat_pump_energy_measured,
             "heat_pump_cop": self.heat_pump.heat_pump_cop,
+            "heat_pump_cop_source": self.heat_pump.heat_pump_cop_source,
+            "heat_pump_cop_outdoor_c": self.heat_pump.heat_pump_cop_outdoor_c,
             "heat_pump_cost_of_heat": self.heat_pump.heat_pump_cost_of_heat,
 
             # Hot water (#454)
