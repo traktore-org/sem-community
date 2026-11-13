@@ -232,7 +232,8 @@
           "diagram_style": "Systeemdiagram stijl",
           "grid_sign_invert": "Teken van netvermogen omkeren",
           "battery_operating_mode_entity": "Batterij-bedrijfsmodus-entiteit (gevolgd)",
-          "battery_charge_end_soc_entity": "Laadeinde-niveau van de batterij (optioneel)"
+          "battery_charge_end_soc_entity": "Laadeinde-niveau van de batterij (optioneel)",
+          "battery_discharge_end_soc_entity": "Ontlaadeinde-niveau van de batterij (optioneel)"
         },
         "data_description": {
           "update_interval": "Hoe vaak de coördinator sensoren uitleest en hardware aanstuurt. 10 s geeft de meest nauwkeurige energie-integratie; waarden boven 30 s zullen energie onderschatten. Bereik 10–60 s.",
@@ -258,7 +259,8 @@
           "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert.",
           "grid_sign_invert": "Alleen inschakelen als netafname als positieve waarde wordt weergegeven (bijv. Enphase). SEM's conventie is negatief = afname; dit keert de ruwe meting om en omzeilt de automatische tekenherkenning.",
           "battery_operating_mode_entity": "De bedrijfsmodus-keuzeschakelaar van de omvormer (bijv. Huawei's 'Working mode'). SEM LEEST hem alleen: de modus wordt naast het batterijbewijs getoond, en een eenmalige reparatiemelding waarschuwt als het niet de zelfconsumptiemodus is die SEM's planning veronderstelt. SEM verandert hem nooit. Laat leeg om het volgen uit te schakelen.",
-          "battery_charge_end_soc_entity": "Waar de omvormer zelf stopt met het laden van de batterij, in %. SEM leest het alleen en schrijft het nooit. Geforceerd laden stopt dan ook daar als het onder 90 % ligt."
+          "battery_charge_end_soc_entity": "Waar de omvormer zelf stopt met het laden van de batterij, in %. SEM leest het alleen en schrijft het nooit. Geforceerd laden stopt dan ook daar als het onder 90 % ligt.",
+          "battery_discharge_end_soc_entity": "Waar de omvormer zelf stopt met ontladen, in %. SEM leest het alleen. Het nachtplan rekent de batterij nooit lager, en nooit onder de reserve."
         }
       },
       "settings_battery_limit": {

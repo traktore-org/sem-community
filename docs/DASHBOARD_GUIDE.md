@@ -27,9 +27,9 @@ The dashboard is generated automatically on first install. If you need to regene
 
 1. Go to **Developer Tools** > **Services**
 2. Search for `solar_energy_management.generate_dashboard`
-3. Click **Call Service**. It builds the default dashboard, **Solar Energy
-   Management**, at `/sem-next`. For the old one, **SEM Classic**, add
-   `template: classic`.
+3. Click **Call Service**. It builds the default dashboard, **SEM-dashboard**,
+   at `/sem-next`. For the old one, **SEM-classic** (still at
+   `/sem-dashboard`), add `template: classic`.
 4. The dashboard appears in the sidebar — hard-refresh your browser (Ctrl+Shift+R)
 
 ---
@@ -818,6 +818,13 @@ price now and the next cheap window, and the signals: tip, best surplus
 window, peak, CO2, score, weather. Plan ›, Decisions › and Insights › open
 the other screens. A sensor that is out leaves its row out.
 
+Under the power bar a thin bar shows where the power comes from now, in
+percent (sun, battery, grid); it stays visible when the list is folded. The
+money section ends with the price for the next 24 hours as a coloured strip
+(cheap, normal, expensive, by your own price levels) with a mark for now; a
+one-rate tariff shows no strip. At the bottom one chip per device (battery
+charge, each car, each heat pump or tank) opens the Devices screen.
+
 #### sem-next-plan-card
 
 **SEM · Plan** · *SEM Next, Plan screen*
@@ -826,11 +833,15 @@ Today or tomorrow as one strip from `sensor.sem_energy_plan`: hourly price
 bars with the cheap and the expensive band, the sun forecast as a curve,
 and the plan's blocks on three lanes (car, battery, loads); solid runs,
 dashed is planned. Tap a block for its reason. *Show timeline per device*
-opens one lane per charger and load. **Per device**: one row each with
-*Skip*, *Move* (minutes) and *Start now* (`plan_override`, one night),
-*Back to plan* (`plan_override_clear`), *Charge now* (Always max, confirm
-step) and the battery's *Sell*. **Expected**: grid cost, sun tomorrow with
-its trust, arbitrage advice, the actuation switch, *Replan*. **Decisions
+opens one lane per charger and load. On a phone the strip fits the screen
+width; it never scrolls sideways. **Why this plan**: one line per planned
+device (at most four) — what, when and why, in plain words. **Per device**:
+one row each with *Skip* and *Start now* for a car (`plan_override`, one
+night), *Back to plan* (`plan_override_clear`), *Charge now* (Always max,
+confirm step), *Charge plan* (opens the charger's charge plan on Devices)
+and the battery's *Sell*. **Expected**: grid cost, saved by the plan, the
+battery level at the end of the plan (when the plan publishes it), sun
+tomorrow with its trust, arbitrage advice, the actuation switch, *Replan*. **Decisions
 today**: the decision log with a device filter and an *Earlier* fold.
 The planner's notes ("13 hours have no price yet", "no cheap hour before
 07:00") are shown in your language, the same words as on the classic Energy
@@ -893,6 +904,15 @@ minimum run and pause, Requires, phase, *Stop when*, the thermometer and
 Legionella show under **All settings**. See
 [A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
 
+Each charger card shows its charge plan in one line under the name, also
+when folded: *Ready by 07:00 · 20–100 kWh · Mon–Sun*. The pencil opens the
+charge plan. Every value you can change is underlined with dots; a pencil
+shows on hover and always on a touch screen. The battery's level bar marks
+its reserve and says how much is above it (*About 1.2 kWh above the 20 %
+reserve*); with two batteries each gets its own level and power. A heat pump
+shows what a kWh of heat costs and its next planned run. On a phone every
+card starts folded, with its state pill as the one-line summary.
+
 #### sem-next-insights-card
 
 **SEM · Insights** · *SEM Next, Insights screen*
@@ -907,12 +927,17 @@ sessions by month with the .xlsx download, progress and lifetime), Money
 arrow across a chart to read one bucket. Charts are hand-drawn SVG fed by
 the recorder; a missing entity leaves its series or row out.
 
+With a dynamic tariff, *Money* also shows the average price SEM paid per kWh
+against the market's average, when SEM publishes it.
+
 #### sem-next-system-card
 
 **SEM · System** · *SEM Next, System screen*
 
-Health first: a tile per source with its age (solar, grid, battery, car,
-prices, forecast, each load), the setup check with the grid and battery
+Health first: a tile per source with its value and age (solar, grid,
+battery, car, prices, forecast, each load) and, in small type, the entity SEM
+really reads (for example the inverter's power sensor), which helps when a
+setup reads the wrong sensor, the setup check with the grid and battery
 signs, the hardware, what is unavailable, the version; buttons Copy
 diagnostics, Diagnose (copies the report) and Observer on/off behind a
 confirm step. Then what SEM held back. Then seven settings groups written

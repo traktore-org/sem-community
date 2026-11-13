@@ -27,8 +27,9 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, nextBlock, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS } from '../util/next-devices.js';
+import { deviceRows, statePill, nextBlock, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, weekdaySummary, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
+import { chargePlanSummary, targetEntities } from '../util/charger-questions.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
 
@@ -77,6 +78,11 @@ function writeOpen(map) {
 }
 
 const devicesCss = css`
+    .cpchip { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 6px 36px; padding: 4px 10px; border-radius: 999px;
+        border: 1px solid var(--n-line); background: var(--n-bg2, transparent); color: var(--n-fg); font: inherit; font-size: 12.5px; cursor: pointer; max-width: calc(100% - 36px); }
+    .cpchip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cpchip ha-icon { --mdc-icon-size: 15px; color: var(--n-fg2); flex: 0 0 auto; }
+    .cpchip:focus-visible { outline: 2px solid var(--n-accent, currentColor); outline-offset: 2px; }
     .addform { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 6px; }
     .addform label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--n-fg2); }
     .addform input.txt { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--n-line); background: var(--n-card2); color: var(--n-fg); font: inherit; }
@@ -157,7 +163,11 @@ class SEMNextDevicesCard extends SEMNextBase {
         }
         bats.sort();
         this._batteries = bats;
-        for (const bid of bats) ids.push('select.sem_battery_' + bid + '_mode', 'number.sem_battery_' + bid + '_reserve_soc');
+        for (const bid of bats) {
+            ids.push('select.sem_battery_' + bid + '_mode', 'number.sem_battery_' + bid + '_reserve_soc');
+            for (const s of ['soc', 'power', 'status']) if (st['sensor.sem_battery_' + bid + '_' + s]) ids.push('sensor.sem_battery_' + bid + '_' + s);
+        }
+        for (const id of ['sensor.sem_energy_plan', 'number.sem_battery_reserve_soc']) if (st[id]) ids.push(id);
         return ids;
     }
 
@@ -173,6 +183,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             if (el && el.focus) el.focus();
         }
         this._watchSessions();
+        this._afterRender();
     }
 
     // ── rows ──
@@ -466,7 +477,57 @@ class SEMNextDevicesCard extends SEMNextBase {
     _isOpen(row) {
         if (this._all) return true;
         const v = this._open[row.id];
-        return v === undefined ? row.type !== 'load' : !!v;
+        return v === undefined ? defaultOpen(row.type, this._narrow()) : !!v;
+    }
+
+    /** (#1321) A phone-width screen: every card starts folded there. */
+    _narrow() {
+        try { return !!(window.matchMedia && window.matchMedia(`(max-width: ${PHONE_MAX_PX}px)`).matches); } catch (e) { return false; }
+    }
+
+    /** (#1321) Open a charger's card at its charge plan, e.g. from the Plan screen. */
+    _openChargePlan(cid) {
+        this._open = { ...this._open, [CHARGER_PREFIX + cid]: true };
+        writeOpen(this._open);
+        this._depOpen = { ...this._depOpen, [cid]: true };
+        this._scrollTo = CHARGER_PREFIX + cid;
+        this._tick++;
+    }
+
+    /** (#1321) The charge plan in one line, always visible: "Ready by 07:00 · 20–100 kWh · Mon–Sun" + a pencil. */
+    _chargePlanChip(row) {
+        const cid = row.cid;
+        const typeId = this._chargerEntity('select', cid, 'ev_target_type');
+        const type = typeId ? (this._str(typeId) || 'kwh') : 'kwh';
+        const te = targetEntities(cid, type);
+        const timeId = this._chargerEntity('time', cid, 'target_time');
+        const chargeBy = timeId ? this._hhmm(this._str(timeId)) : '';
+        const dep = ((this._attrs('sensor.sem_charging_state').per_charger_departure || {})[cid]) || {};
+        const runs = weekdaySummary(dep.by_weekday || {}, chargeBy || dep.default || '');
+        const s = chargePlanSummary({
+            chargeBy, unit: type === 'soc' ? '%' : 'kWh',
+            min: this._has(te.atLeast) ? this._num(te.atLeast) : null, max: this._has(te.upTo) ? this._num(te.upTo) : null,
+            runs, dayName: (i) => this._dayName(i),
+        });
+        const parts = [s.time ? this._tf('next_cp_ready_by', { time: s.time }) : '', s.range, s.days].filter(Boolean);
+        if (!parts.length) return nothing;
+        return html`<button type="button" class="cpchip" title=${this._t('next_cp_edit')} aria-label=${this._t('next_cp_edit')}
+            @click=${() => this._openChargePlan(cid)}>${this._icon('mdi:calendar-clock', 's')}<span>${parts.join(' · ')}</span>${this._icon('mdi:pencil', 's')}</button>`;
+    }
+
+    /** A charge plan another screen asked for, read once. */
+    _takeOpenRequest() {
+        let cid = null;
+        try { cid = window.sessionStorage.getItem(OPEN_CHARGE_PLAN_KEY); if (cid) window.sessionStorage.removeItem(OPEN_CHARGE_PLAN_KEY); } catch (e) { cid = null; }
+        if (cid) this._openChargePlan(cid);
+    }
+
+    _afterRender() {
+        if (this._chargers && this._chargers.length && !this._openTaken) { this._openTaken = true; this._takeOpenRequest(); }
+        if (this._scrollTo) {
+            const el = this.renderRoot && this.renderRoot.querySelector(`section[data-id="${this._scrollTo}"]`);
+            if (el) { this._scrollTo = null; el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+        }
     }
 
     _toggleOpen(row) {
@@ -751,6 +812,7 @@ class SEMNextDevicesCard extends SEMNextBase {
                 <button type="button" class="fold" aria-expanded=${open ? 'true' : 'false'} aria-label=${t(open ? 'next_fold_device' : 'next_open_device')}
                     @click=${toggle}>${this._icon('mdi:chevron-down')}</button>
             </div>
+            ${row.type === 'charger' && !this._reorder ? this._chargePlanChip(row) : nothing}
             ${open ? html`<div class="body">${body}</div>` : nothing}</section>`;
     }
 

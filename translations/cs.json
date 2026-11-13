@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Podpora baterie – min. solární přebytek (W)",
           "grid_sign_invert": "Obrátit znaménko síťového výkonu",
           "battery_operating_mode_entity": "Entita provozního režimu baterie (sledovaná)",
-          "battery_charge_end_soc_entity": "Úroveň konce nabíjení baterie (volitelné)"
+          "battery_charge_end_soc_entity": "Úroveň konce nabíjení baterie (volitelné)",
+          "battery_discharge_end_soc_entity": "Úroveň konce vybíjení baterie (volitelné)"
         },
         "data_description": {
           "update_interval": "Jak často koordinátor čte senzory a upravuje hardware. 10 s dává nejpřesnější integraci energie; hodnoty nad 30 s energii podhodnocují. Rozsah 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Minimální skutečný solární přebytek, než smí domácí baterie pomáhat s nabíjením EV — v jakémkoli režimu nabíjení. Pod touto hodnotou je baterie vyhrazena pro dům (auto odebírá ze sítě + slunce). Výchozí 1200 W. Nastavte na 0, aby baterie podporovala EV všude, včetně noci.",
           "grid_sign_invert": "Zapněte jen tehdy, pokud se odběr ze sítě zobrazuje jako kladná hodnota (např. Enphase). Konvence SEM je záporné = odběr; toto otočí surovou hodnotu a obejde automatickou detekci znaménka.",
           "battery_operating_mode_entity": "Výběr provozní zásady střídače (např. Huaweiho „Working mode“). SEM ji pouze ČTE: režim se zobrazuje vedle důkazů o baterii a jednorázová oprava upozorní, když to není režim vlastní spotřeby, který plánování SEM předpokládá. SEM ji nikdy nemění. Ponechte prázdné pro vypnutí sledování.",
-          "battery_charge_end_soc_entity": "Kde střídač sám ukončí nabíjení baterie, v %. SEM ji jen čte, nikdy nezapisuje. Vynucené nabíjení pak skončí i tam, když je pod 90 %."
+          "battery_charge_end_soc_entity": "Kde střídač sám ukončí nabíjení baterie, v %. SEM ji jen čte, nikdy nezapisuje. Vynucené nabíjení pak skončí i tam, když je pod 90 %.",
+          "battery_discharge_end_soc_entity": "Úroveň, kde střídač sám ukončí vybíjení, v %. SEM ji jen čte. Noční plán nikdy nepočítá baterii pod ní ani pod rezervou."
         }
       },
       "settings_battery_limit": {

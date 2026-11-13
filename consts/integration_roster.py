@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-10T16:41:24Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 70, 'roles_mined': 198}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-13T19:39:56Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 70, 'roles_mined': 204}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -346,6 +346,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_capacity_spec': {'platform': 'sensor', 'keys': ('rated_ess_capacity', 'storage_rated_capacity'), 'options': ()},
         'battery_charge_end_soc': {'platform': 'number', 'keys': ('storage_charging_cutoff_capacity',), 'options': ()},
         'battery_charge_limit': {'platform': 'number', 'keys': ('storage_maximum_charging_power',), 'options': ()},
+        'battery_discharge_end_soc': {'platform': 'number', 'keys': ('storage_discharging_cutoff_capacity',), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('storage_maximum_discharging_power',), 'options': ()},
         'battery_power': {'platform': 'sensor', 'keys': ('battery_charge_discharge_power', 'storage_charge_discharge_power'), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('state_of_capacity', 'storage_state_of_capacity'), 'options': (), 'exact_only': ('state_of_capacity',)},
@@ -369,6 +370,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     'marstek_venus_energy_manager': {
         'battery_charge_end_soc': {'platform': 'number', 'keys': ('charging_cutoff_capacity',), 'options': ()},
         'battery_charge_limit': {'platform': 'number', 'keys': ('max_charge_power', 'system_max_charge_power'), 'options': (), 'exact_only': ('max_charge_power',)},
+        'battery_discharge_end_soc': {'platform': 'number', 'keys': ('discharging_cutoff_capacity',), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('max_discharge_power', 'system_max_discharge_power'), 'options': (), 'exact_only': ('max_discharge_power',)},
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
@@ -426,6 +428,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     'sigen': {
         'battery_charge_end_soc': {'platform': 'number', 'keys': ('plant_charge_cut_off_soc',), 'options': ()},
         'battery_charge_limit': {'platform': 'number', 'keys': ('dc_charger_max_charging_power_limit',), 'options': ()},
+        'battery_discharge_end_soc': {'platform': 'number', 'keys': ('plant_discharge_cut_off_soc',), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('dc_charger_max_discharging_power_limit',), 'options': ()},
         'ev_current_control': {'platform': 'number', 'keys': ('ac_charger_output_current',), 'options': ()},
     },
@@ -472,6 +475,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'sungrow': {
         'battery_charge_end_soc': {'platform': 'number', 'keys': ('soc_upper_limit',), 'options': ()},
+        'battery_discharge_end_soc': {'platform': 'number', 'keys': ('soc_lower_limit',), 'options': ()},
         'battery_target_soc': {'platform': 'number', 'keys': ('forced_charging_target_soc_1', 'forced_charging_target_soc_2'), 'options': ()},
     },
     'sunsynk': {

@@ -12,7 +12,7 @@
  *   type: custom:sem-next-now-card
  */
 
-import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { planIdName } from '../util/plan-ids.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
@@ -25,6 +25,11 @@ import { chargerSays } from '../util/charger-questions.js';
 import { plainReason } from '../util/why-rows.js';
 import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
+import { chartWindow, chartTicks, priceModel } from '../util/next-plan-chart.js';
+import { priceLevelColor } from '../util/price-level.js';
+import { sourceMix, priceStrip, deviceChips } from '../util/next-now-extras.js';
+import { resolveChargerSoc } from '../util/charger-soc.js';
+import { loadKind } from '../util/next-devices.js';
 
 const IDS = [
     'sensor.sem_solar_power', 'sensor.sem_grid_power', 'sensor.sem_battery_power', 'sensor.sem_battery_soc',
@@ -43,6 +48,7 @@ const IDS = [
     'sensor.sem_monthly_costs', 'sensor.sem_monthly_savings',
     'sensor.sem_tariff_current_import_rate', 'sensor.sem_tariff_current_export_rate', 'sensor.sem_tariff_price_level',
     'sensor.sem_energy_tip', 'sensor.sem_best_surplus_window', 'sensor.sem_energy_optimization_score',
+    'number.sem_cheap_price_threshold', 'number.sem_expensive_price_threshold', 'sensor.sem_vehicle_soc',
 ];
 
 /** The power sensors whose hourly means draw today's sparklines. */
@@ -83,6 +89,11 @@ const META = {
     grid_out:    { icon: 'mdi:transmission-tower',  color: C.export,      dark: true },
 };
 
+/** (#1321) The price strip's pieces: a level run, the now marker, an hour tick. */
+const svgRun = (x1, x2, h, fill) => svg`<rect x="${x1}" y="0" width="${Math.max(0, x2 - x1)}" height="${h}" fill="${fill}"></rect>`;
+const svgNow = (x, h) => svg`<line x1="${x}" x2="${x}" y1="-1" y2="${h + 1}" stroke="var(--n-fg)" stroke-width="1.5"></line>`;
+const svgTick = (x, h, label) => svg`<text x="${x}" y="${h + 10}" font-size="7" text-anchor="middle" fill="var(--n-fg3)">${label}</text>`;
+
 function readLocal(key) {
     try { return window.localStorage.getItem(key); } catch (e) { return null; }
 }
@@ -99,6 +110,15 @@ const nowCss = css`
     .ebar:focus-visible { outline: 2px solid var(--n-accent); outline-offset: 4px; border-radius: 8px; }
     .fc { display: inline-flex; flex-wrap: wrap; gap: 2px 8px; }
     .fc span { white-space: nowrap; }
+    .mix { margin-top: 8px; }
+    .mix .mb { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--n-line); }
+    .mix .mb i { display: block; height: 100%; }
+    .mix .ml { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 12px; color: var(--n-fg2); }
+    .mix .ml i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+    .pstrip { margin-top: 10px; }
+    .pstrip svg { display: block; width: 100%; height: auto; }
+    .devrow { display: flex; flex-wrap: wrap; gap: 8px; }
+    .devrow .chip { cursor: pointer; border: 1px solid var(--n-line); }
 `;
 
 class SEMNextNowCard extends SEMNextBase {
@@ -139,7 +159,8 @@ class SEMNextNowCard extends SEMNextBase {
                      `sensor.sem_charger_${cid}_daily_energy`, `sensor.sem_charger_${cid}_session_solar_share`,
                      `number.sem_charger_${cid}_daily_ev_target`, `time.sem_charger_${cid}_target_time`,
                      `sensor.sem_charger_${cid}_vehicle_soc`, `number.sem_charger_${cid}_target_soc`,
-                     `select.sem_charger_${cid}_ev_target_type`, `number.sem_charger_${cid}_ev_battery_capacity_kwh`);
+                     `select.sem_charger_${cid}_ev_target_type`, `number.sem_charger_${cid}_ev_battery_capacity_kwh`,
+                     `sensor.sem_charger_${cid}_estimated_soc`, `binary_sensor.sem_charger_${cid}_connected`);
         }
         const wid = this._weatherId();
         return [...super._watchIds(), ...IDS, ...per, ...(wid ? [wid] : [])];
@@ -343,8 +364,69 @@ class SEMNextNowCard extends SEMNextBase {
                 <div class="bar">${bar.sources.map(sg)}</div>
                 <div class="lane bot">${bar.sinks.map(mk)}</div>
             </div>
+            ${this._mixLine(bar)}
             <p class="help" style="margin-top:8px">${this._io ? this._t('next_bar_fold') : this._t('next_bar_unfold')}${self === null ? '' : ' · ' + this._tf('next_self_use_pct', { pct: Math.round(self) })} · ${this._t('next_tap_row_history')}</p>
             ${this._io ? this._ioList(bar) : nothing}`;
+    }
+
+    /** (#1321) Where the power comes from now, in percent — always shown, not folded. */
+    _mixLine(bar) {
+        const mix = sourceMix(bar);
+        if (!mix.length) return nothing;
+        const name = { solar: 'next_src_solar', battery_out: 'next_src_battery', grid_in: 'next_src_grid' };
+        return html`<div class="mix" role="img" aria-label="${this._t('next_mix_label')}">
+            <div class="mb">${mix.map((m) => html`<i style="width:${m.pct}%;background:${META[m.key].color}"></i>`)}</div>
+            <div class="ml"><span>${this._t('next_mix_label')}</span>${mix.map((m) => html`<span><i style="background:${META[m.key].color}"></i>${this._t(name[m.key])} ${m.pct} %</span>`)}</div>
+        </div>`;
+    }
+
+    /** (#1321) The next 24 hours of price as cheap / normal / expensive, with a now marker. */
+    _priceStrip() {
+        const now = this._tick || Date.now();
+        const tz = this._hass?.config?.time_zone;
+        const win = chartWindow(now, 'next', tz);
+        const tar = this._attrs('sensor.sem_tariff_current_import_rate');
+        const plan = this._attrs('sensor.sem_energy_plan');
+        const pm = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, schedule: tar.schedule_today,
+            isDynamic: tar.is_dynamic, level: tar.price_level || this._str('sensor.sem_tariff_price_level'), todayAvg: tar.today_avg });
+        const strip = priceStrip(pm, win, now, {
+            cheap: this._num('number.sem_cheap_price_threshold'), expensive: this._num('number.sem_expensive_price_threshold') });
+        if (!strip) return nothing;
+        const W = 240, H = 12, span = win.end - win.start;
+        const x = (t) => (t - win.start) / span * W;
+        const ticks = chartTicks(win, tz, 6);
+        return html`<div class="pstrip">
+            <div class="lbl">${this._t('next_price_strip')}</div>
+            <svg viewBox="0 0 ${W} ${H + 12}" role="img" aria-label="${this._t('next_price_strip')}">
+                ${strip.runs.map((r) => svgRun(x(r.s), x(r.e), H, r.level === 'unknown' ? 'var(--n-line)' : priceLevelColor(r.level)))}
+                ${svgNow(x(now), H)}
+                ${ticks.map((t) => svgTick(x(t.t), H, t.label))}
+            </svg>
+        </div>`;
+    }
+
+    /** (#1321) One chip per device — the house battery, each car, each heat pump or tank — to Devices. */
+    _devicesRow() {
+        const cars = this._chargers.map((cid) => {
+            const S = (k) => `sensor.sem_charger_${cid}_${k}`;
+            const conn = this._str(`binary_sensor.sem_charger_${cid}_connected`);
+            const w = this._powerW(S('power'));
+            const { soc } = resolveChargerSoc(this._num(S('vehicle_soc')), this._num('sensor.sem_vehicle_soc'), this._num(S('estimated_soc')), this._chargers.length);
+            return { name: this._chargerName(cid), connected: conn === null || conn === undefined || conn === '' ? null : conn === 'on', charging: w !== null && w > 50, soc };
+        });
+        const devices = this._attrs('sensor.sem_controllable_devices_count').devices || {};
+        const heaters = Object.entries(devices).filter(([id]) => loadKind(id) !== 'load')
+            .map(([id, d]) => ({ name: d?.name || id, on: !!(d && (d.is_on || d.is_active)) }));
+        const chips = deviceChips({ batterySoc: this._num('sensor.sem_battery_soc'), cars, heaters });
+        if (!chips.length) return nothing;
+        const stateKey = { charging: 'next_st_charging', plugged: 'next_st_plugged', unplugged: 'next_st_unplugged', on: 'next_st_on', off: 'next_st_off' };
+        const icon = { battery: 'mdi:home-battery-outline', car: 'mdi:car-electric', heater: 'mdi:water-boiler' };
+        const go = () => this._go('/sem-next/devices');
+        const text = (c) => [c.kind === 'battery' ? this._t('next_src_battery') : c.label,
+            c.state ? this._t(stateKey[c.state]) : '', c.soc === null ? '' : `${c.soc} %`].filter(Boolean).join(' · ');
+        return this._sec(this._t('next_devices_summary'), html`<div class="devrow">${chips.map((c) => html`<span class="chip" role="button" tabindex="0"
+                @click=${go} @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }}>${this._icon(icon[c.kind])}${text(c)}</span>`)}</div>`,
+            { extra: this._link(this._t('next_devices_link'), go) });
     }
 
     /** The three loads drawing most right now (chargers and the battery have their own rows). */
@@ -577,7 +659,8 @@ class SEMNextNowCard extends SEMNextBase {
         }
         if (exp !== null) sum.push(html`<span>${this._t('next_export')} <b>${this._fmt(exp, 2)}</b></span>`);
         return this._sec(this._t('next_money'), html`${tiles.length ? this._tiles(tiles, { three: tiles.length === 3 }) : nothing}
-            ${sum.length ? html`<div class="sumrow">${sum}</div>` : nothing}`,
+            ${sum.length ? html`<div class="sumrow">${sum}</div>` : nothing}
+            ${this._priceStrip()}`,
             { extra: this._link(this._t('next_insights_link'), () => this._go('/sem-next/insights')) });
     }
 
@@ -649,6 +732,7 @@ class SEMNextNowCard extends SEMNextBase {
             ${this._why()}
             ${this._moneySec()}
             ${this._signals()}
+            ${this._devicesRow()}
         </div>`);
     }
 }

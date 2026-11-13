@@ -263,7 +263,12 @@ export function loadBody(card, row) {
         html`${card._sentence(t('next_keep_sentence'), { target: cNum('comfort_target', target), limit: cNum('comfort_limit', limit), offset: cNum('comfort_offset', offset) })}<div class="modehelp">${t(row.comfort && row.comfort.may_buy === false ? 'next_keep_sub_no_buy' : 'next_keep_sub')}</div>`,
         { more: q.view === 'time' || (!engaged && !(row.comfort && row.comfort.reading_c != null)) }));
     if (kind === 'heat_pump') {
-        rows.push(card._row('mdi:cash-multiple', t('next_device_tariff'), card._has('sensor.sem_heat_pump_cost_of_heat') ? card._money(card._num('sensor.sem_heat_pump_cost_of_heat')) : '—', t('device_tariff_heat_pump'), { more: true }));
+        // (#1321) one visible line: what a kWh of heat costs now, and the next planned run
+        const coh = card._has('sensor.sem_heat_pump_cost_of_heat') ? card._num('sensor.sem_heat_pump_cost_of_heat') : null;
+        const nextAt = card._plannedAt('load:' + row.id, 'comfort:' + row.id);
+        rows.push(card._row('mdi:heat-pump-outline', t('next_cost_of_heat'),
+            coh === null ? '—' : tf('next_per_kwh_heat', { v: card._money(coh) }),
+            nextAt ? tf('next_hp_next_run', { time: nextAt }) : t('next_nothing_planned')));
         const offId = 'number.sem_heat_pump_boost_offset';
         if (card._has(offId)) {
             rows.push(card._row('mdi:tune-vertical', t('next_relay_values'),

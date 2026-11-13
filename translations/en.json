@@ -232,7 +232,8 @@
           "diagram_style": "System diagram style",
           "grid_sign_invert": "Invert grid power sign",
           "battery_operating_mode_entity": "Battery operating-mode entity (watched)",
-          "battery_charge_end_soc_entity": "Battery end-of-charge level (optional)"
+          "battery_charge_end_soc_entity": "Battery end-of-charge level (optional)",
+          "battery_discharge_end_soc_entity": "Battery end-of-discharge level (optional)"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -258,7 +259,8 @@
           "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
           "grid_sign_invert": "Turn ON only if grid import shows as a positive value (e.g. Enphase). SEM's convention is negative = import; this negates the raw reading and bypasses sign auto-detection.",
           "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch.",
-          "battery_charge_end_soc_entity": "Where the inverter itself stops charging the battery, in %. SEM only reads it, never writes it. Force charge then also ends there when it is below 90 %."
+          "battery_charge_end_soc_entity": "Where the inverter itself stops charging the battery, in %. SEM only reads it, never writes it. Force charge then also ends there when it is below 90 %.",
+          "battery_discharge_end_soc_entity": "Where the inverter itself stops discharging the battery, in %. SEM only reads it, never writes it. The night plan never counts the battery below it."
         }
       },
       "settings_battery_limit": {

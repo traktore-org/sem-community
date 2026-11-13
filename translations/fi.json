@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Akkutuki – vähimmäisaurinkoylijäämä (W)",
           "grid_sign_invert": "Käännä verkkotehon etumerkki",
           "battery_operating_mode_entity": "Akun käyttötila-entiteetti (tarkkailtu)",
-          "battery_charge_end_soc_entity": "Akun latauksen lopetustaso (valinnainen)"
+          "battery_charge_end_soc_entity": "Akun latauksen lopetustaso (valinnainen)",
+          "battery_discharge_end_soc_entity": "Akun purkauksen lopetustaso (valinnainen)"
         },
         "data_description": {
           "update_interval": "Kuinka usein koordinaattori lukee anturit ja säätää laitteistoa. 10 s antaa tarkimman energiaintegroinnin; yli 30 s:n arvot aliarvioivat energian. Alue 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Pienin todellinen aurinkoylijäämä, ennen kuin kotiakku saa auttaa EV:n lataamisessa — kaikissa lataustiloissa. Tämän alapuolella akku on varattu talolle (auto ottaa verkosta + auringosta). Oletus 1200 W. Aseta arvoon 0, jotta akku tukee EV:tä kaikkialla, myös yöllä.",
           "grid_sign_invert": "Ota käyttöön vain, jos verkosta otto näkyy positiivisena arvona (esim. Enphase). SEM:n käytäntö on negatiivinen = otto; tämä kääntää raakalukeman ja ohittaa etumerkin automaattitunnistuksen.",
           "battery_operating_mode_entity": "Invertterin käytäntövalitsin (esim. Huawein 'Working mode'). SEM vain LUKEE sitä: tila näytetään akkutietojen vieressä, ja kertaluonteinen korjaus varoittaa, kun se ei ole se omakulutustila, jota SEM:n suunnittelu olettaa. SEM ei koskaan muuta sitä. Jätä tyhjäksi poistaaksesi tarkkailun käytöstä.",
-          "battery_charge_end_soc_entity": "Missä invertteri itse lopettaa akun latauksen, %. SEM vain lukee sen eikä koskaan kirjoita sitä. Pakkolataus päättyy silloin myös siihen, kun se on alle 90 %."
+          "battery_charge_end_soc_entity": "Missä invertteri itse lopettaa akun latauksen, %. SEM vain lukee sen eikä koskaan kirjoita sitä. Pakkolataus päättyy silloin myös siihen, kun se on alle 90 %.",
+          "battery_discharge_end_soc_entity": "Taso, jolla invertteri itse lopettaa purkamisen, %. SEM vain lukee sen. Yösuunnitelma ei koskaan laske akkua sen tai varauksen alle."
         }
       },
       "settings_battery_limit": {

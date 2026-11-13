@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Assistance batterie – surplus solaire min. (W)",
           "grid_sign_invert": "Inverser le signe de la puissance réseau",
           "battery_operating_mode_entity": "Entité de mode de fonctionnement de la batterie (surveillée)",
-          "battery_charge_end_soc_entity": "Niveau de fin de charge de la batterie (facultatif)"
+          "battery_charge_end_soc_entity": "Niveau de fin de charge de la batterie (facultatif)",
+          "battery_discharge_end_soc_entity": "Niveau de fin de décharge de la batterie (facultatif)"
         },
         "data_description": {
           "update_interval": "Fréquence à laquelle le coordinateur lit les capteurs et ajuste le matériel. 10 s donne l'intégration d'énergie la plus précise ; au-delà de 30 s, l'énergie sera sous-comptée. Plage 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Surplus solaire réel minimum avant que la batterie domestique puisse aider à charger le VE — dans tous les modes de charge. En dessous, la batterie est réservée à la maison (la voiture se recharge sur le réseau + solaire). Par défaut 1200 W. Réglez sur 0 pour que la batterie soutienne le VE en toutes circonstances, y compris la nuit.",
           "grid_sign_invert": "À activer uniquement si l'import réseau s'affiche en positif (p. ex. Enphase). La convention de SEM est négatif = import ; ceci inverse la lecture brute et contourne la détection automatique du signe.",
           "battery_operating_mode_entity": "Le sélecteur de politique de fonctionnement de l'onduleur (par exemple 'Working mode' chez Huawei). SEM se contente de le LIRE : le mode est affiché à côté des preuves batterie, et une réparation ponctuelle avertit quand ce n'est pas le mode autoconsommation que la planification de SEM suppose. SEM ne le modifie jamais. Laissez vide pour désactiver la surveillance.",
-          "battery_charge_end_soc_entity": "Là où l'onduleur arrête lui-même la charge de la batterie, en %. SEM le lit seulement, sans jamais l'écrire. La charge forcée s'arrête alors aussi là quand il est sous 90 %."
+          "battery_charge_end_soc_entity": "Là où l'onduleur arrête lui-même la charge de la batterie, en %. SEM le lit seulement, sans jamais l'écrire. La charge forcée s'arrête alors aussi là quand il est sous 90 %.",
+          "battery_discharge_end_soc_entity": "Niveau où l'onduleur arrête lui-même la décharge, en %. SEM le lit seulement. Le plan de nuit ne compte jamais la batterie en dessous, ni sous la réserve."
         }
       },
       "settings_battery_limit": {
