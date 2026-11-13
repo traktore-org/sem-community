@@ -172,7 +172,8 @@ def test_the_service_yaml_selector_matches_the_shared_range():
         # peak-limit control).
         ("sem-load-priority-card.js",
          r"range-handle-peak",
-         r"MAX_KW\s*=\s*80\b"),
+         # (#1354) the ceiling lives in util/peak-questions.js
+         r"MAX_KW\s*=\s*80\b|max:\s*80\b"),
     ],
 )
 def test_no_card_hard_codes_the_old_ceiling(card, anchor, positive):
@@ -182,6 +183,9 @@ def test_no_card_hard_codes_the_old_ceiling(card, anchor, positive):
     Set and nothing at all happened. #717 replaced that box with a slider
     that reaches 80 kW ("Unlimited") at the top."""
     source = (_CARDS / card).read_text(encoding="utf-8")
+    if "util/peak-questions.js" in source:      # (#1354) shared bound
+        source += (_CARDS.parent / "util" / "peak-questions.js").read_text(
+            encoding="utf-8")
     assert re.search(anchor, source), f"{card}: anchor gone — retarget this scan"
     for stale in (r"max:\s*(?:15|20)(?:\.0)?\b", r'max="(?:15|20)"',
                   r"val\s*<=\s*20\b", r"Math\.min\(\s*(?:15|20)\s*,",

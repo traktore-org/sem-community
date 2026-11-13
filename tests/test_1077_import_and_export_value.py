@@ -554,7 +554,8 @@ class TestTheBasisCheck:
     def test_the_card_greys_the_amounts_on_all_in(self):
         card = (ROOT / "dashboard" / "card" / "src" / "cards"
                 / "sem-config-card.js").read_text(encoding="utf-8")
-        assert "disabled: allIn" in card
+        # (#1354) on all-in the three fields are not asked at all
+        assert "taxesApply(basis)" in card
         assert "config_value_needs_spot_basis" in card
 
 

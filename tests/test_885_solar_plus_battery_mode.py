@@ -164,7 +164,10 @@ class TestStabilityAndSurfaces:
     def test_the_card_knows_the_mode_and_both_prerequisite_rules(self):
         src = (ROOT / "dashboard" / "card" / "src" / "cards"
                / "sem-ev-status-card.js").read_text()
-        assert "charge_mode_solar_plus_battery" in src
+        # (#1354) the mode list and its text keys live in one shared module
+        src += (ROOT / "dashboard" / "card" / "src" / "util"
+                / "charger-questions.js").read_text()
+        assert "'solar_plus_battery'" in src and "'charge_mode_' +" in src
         assert "modeDisabled" in src and "tariff_available" in src
         assert "charge_mode_battery_learning_info" in src, (
             "Rule 01.09: while the learner is not done, selecting the "

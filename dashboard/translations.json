@@ -10892,7 +10892,7 @@
     "bq_levels_here": "Niveles de la batería: por debajo del {priority} % se carga primero; desde el {buffer} % puede ayudar al coche, del todo desde el {autostart} %.",
     "bq_levels_open": "Cambiarlos en la pestaña Batería",
     "plan_note_no_night_window": "no hay franja nocturna",
-    "plan_note_no_block_fits": "no cabe ningún bloque seguido",
+    "plan_note_no_block_fits": "no cabe ningún bloque continuo",
     "plan_note_unpriced_slots": "{count} franja(s) sin precio — replanifica cuando lleguen los precios de mañana",
     "plan_note_one_price_day": "las horas valle de un día con un solo precio no se usan",
     "plan_note_waits_for_sun": "espera al sol hasta las {time}",
