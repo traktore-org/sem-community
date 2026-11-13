@@ -25,7 +25,7 @@
 
 import { priceAddOns } from './settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from './peak-questions.js';
-import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
+import { BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
 
 // (#528) option keys that reload the entry when written — copied from
 // cards/sem-config-card.js STRUCTURAL_KEYS.
