@@ -699,6 +699,28 @@ def _battery_floor_for(coord) -> "tuple[float, str]":
     cfg = getattr(coord, "config", None) or {}
     return battery_floor_of(cfg, _discharge_end_reading(coord, cfg))
 
+def _plan_cop_fn(coord, dev, t_now_cache: list):
+    """(#1081) ``ts -> COP`` for a heat pump whose COP follows the outdoor
+    temperature, else None (the packer then sees the demand exactly as
+    before). The forecast at that hour; the reading now where the forecast
+    has no row (read once, kept in ``t_now_cache``). Tonight's plan and
+    tomorrow's preview both ask here. A module function, not a method: the
+    plan runs unbound in tests against fakes that carry only what it reads,
+    and a device without a curve must not need anything of ``coord``."""
+    from .heat_cost import device_cop_at, device_has_cop_shape
+    if not device_has_cop_shape(dev):
+        return None
+
+    def _at(ts):
+        t = coord._temperature_at(ts)
+        if t is None:
+            if not t_now_cache:
+                t_now_cache.append(coord._outdoor_temperature_or_none())
+            t = t_now_cache[0]
+        return device_cop_at(dev, t)[0]
+    return _at
+
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -4087,8 +4109,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._cop_learn_states = states
         meters = [d for d in devs if getattr(d, "heat_energy_entity_id", None)]
         outdoor = self._outdoor_temperature_or_none() if meters else None
-        now = dt_util.now()
-        hour_id = now.strftime("%Y-%m-%dT%H")
+        # whole hours since the epoch: one id per real hour, DST or not
+        hour_id = int(dt_util.now().timestamp() // 3600)
         calc = getattr(self, "_energy_calculator", None)
         for dev in devs:
             did = str(dev.device_id)
@@ -4120,7 +4142,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             running = watts is not None and watts > max(100.0, 0.1 * rated)
             states[did] = _cl.observe(
                 states.get(did), hour_id=hour_id, elec_kwh=elec,
-                heat_kwh=heat, outdoor_c=outdoor, running=running)
+                heat_kwh=heat, outdoor_c=outdoor, running=running,
+                meter=str(meter))
             dev.cop_learned = _cl.learned_points(states[did])
             dev.cop_learn_summary = _cl.summary(states[did], has_meter=True)
 
@@ -12395,25 +12418,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # A restart must not blank last night's verdict — it is read all day.
         self._refresh_demand_review()
 
-    def _plan_cop_fn(self, dev, t_now_cache: list):
-        """(#1081) ``ts -> COP`` for a heat pump whose COP follows the
-        outdoor temperature, else None (the packer then sees the demand
-        exactly as before). The forecast at that hour; the reading now where
-        the forecast has no row (read once, kept in ``t_now_cache``).
-        Tonight's plan and tomorrow's preview both ask here."""
-        from .heat_cost import device_cop_at, device_has_cop_shape
-        if not device_has_cop_shape(dev):
-            return None
-
-        def _at(ts):
-            t = self._temperature_at(ts)
-            if t is None:
-                if not t_now_cache:
-                    t_now_cache.append(self._outdoor_temperature_or_none())
-                t = t_now_cache[0]
-            return device_cop_at(dev, t)[0]
-        return _at
-
     def _compose_tomorrow_preview(self, power=None):
         """(#638 consolidation / #722) The next energy day's books,
         previewed for the card's Tomorrow view — or None when the frame
@@ -12512,7 +12516,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "kwh": round(_rated * _min_s / 3600.0 / 1000.0, 2),
                         "power_w": _rated,
                     })
-                    _cop_fn = self._plan_cop_fn(_dev, _t_now_c2)
+                    _cop_fn = _plan_cop_fn(self, _dev, _t_now_c2)
                     if _cop_fn is not None:
                         ask_cop[len(asks) - 1] = _cop_fn
                 except Exception:  # noqa: BLE001 — one device, not the list
@@ -13014,7 +13018,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _t_now_c: list = []
 
             def _plan_cop_at(dev):
-                return self._plan_cop_fn(dev, _t_now_c)
+                return _plan_cop_fn(self, dev, _t_now_c)
             loads_seen = 0
             loads_eligible = 0
             from ..devices.base import DeviceControlMode as _DCM
