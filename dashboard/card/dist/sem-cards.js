@@ -8669,7 +8669,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${"per_kwh"===a||"fixed_monthly"===a?this._renderOptionNumberInput("feed_in_fee","config_feed_in_fee",{min:0,max:1e5,step:1e-4,unit:o,default:0},e,"config_help_feed_in_fee"):G}
             ${"tiered"===a?this._renderOptionTextInput("feed_in_fee_tiers","config_feed_in_fee_tiers",e,"config_help_feed_in_fee_tiers","0:0, 1000:0.02, 3000:0.05"):G}
             ${this._renderOptionNumberInput("export_value_threshold","config_export_value_threshold",{min:-1e4,max:1e4,step:1e-4,unit:n,default:0},e,"config_help_export_value_threshold")}
-        `}_renderTariff(e){const t=this._options||{},s=this._hass?.states["sensor.sem_tariff_current_import_rate"],i=s?s.state:"—",r=s?.attributes?.unit_of_measurement||"",a=this._hass?.config?.currency||"EUR",o=[{value:"static",label:this._t("config_tariff_mode_static")},{value:"dynamic",label:this._t("config_tariff_mode_dynamic")},{value:"calendar",label:this._t("config_tariff_mode_calendar")}],n=[{value:"percentile",label:this._t("config_tariff_class_percentile")},{value:"static",label:this._t("config_tariff_class_static")}],l=this._tariffMode();return q`
+        `}_renderTariff(e){const t=this._options||{},s=this._hass?.states["sensor.sem_tariff_current_import_rate"],i=s?s.state:"—",r=s?.attributes?.unit_of_measurement||"",a=fe(this._hass),o=[{value:"static",label:this._t("config_tariff_mode_static")},{value:"dynamic",label:this._t("config_tariff_mode_dynamic")},{value:"calendar",label:this._t("config_tariff_mode_calendar")}],n=[{value:"percentile",label:this._t("config_tariff_class_percentile")},{value:"static",label:this._t("config_tariff_class_static")}],l=this._tariffMode();return q`
             <div class="readonly-row tariff-rate-row">
                 <ha-icon icon="mdi:flash" style="--mdc-icon-size:18px;color:#ff9800"></ha-icon>
                 <span class="ctrl-label" style="flex:1">${this._t("current_electricity_price")}</span>
@@ -8700,7 +8700,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${this._renderOptionNumberInput("grid_import_surcharge","config_import_surcharge",{min:0,max:10,step:.001,unit:`${a}/kWh`,default:0},t,"config_help_import_surcharge")}
             ${""}
             ${this._renderValueLayer(t,a)}
-            ${this._renderOptionNumberInput("demand_charge_rate","config_demand_charge_rate",{min:0,max:1e5,step:.01,unit:`${a}/kW/Mt`,default:4.32},t,"config_help_demand_charge_rate")}
+            ${this._renderOptionNumberInput("demand_charge_rate","config_demand_charge_rate",{min:0,max:1e5,step:.01,unit:this._t("config_unit_per_kw_month").replace("{currency}",a),default:4.32},t,"config_help_demand_charge_rate")}
             ${this._renderPicker("grid_import_power_entity","config_grid_import_entity","sensor","power",t,"config_help_grid_import_entity")}
             ${this._renderPicker("grid_export_power_entity","config_grid_export_entity","sensor","power",t,"config_help_grid_export_entity")}
             ${""}
@@ -8731,7 +8731,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 `:G}
             `:G}
             ${""}
-        `}_renderHeatPump(e){const t=this._bin("heat_pump_registered"),s=this._options||{},i=(this._hass?.config?.currency||"EUR")+"/kWh",r=t?q`
+        `}_renderHeatPump(e){const t=this._bin("heat_pump_registered"),s=this._options||{},i=fe(this._hass)+"/kWh",r=t?q`
             <div class="hp-status">
                 <div class="readonly-row">
                     <span class="ctrl-label">${this._t("heat_pump_mode")}</span>
@@ -9051,7 +9051,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${this._renderOptionNumberInput("battery_capacity_kwh","config_bs_capacity",{min:1,max:100,step:.5,unit:"kWh",default:10},t,"config_help_bs_capacity")}
             ${this._renderOptionNumberInput("battery_max_charge_power_w","config_bs_max_charge",{min:500,max:25e3,step:100,unit:"W",default:5e3},t,"config_help_bs_max_charge")}
             ${this._renderOptionSlider("battery_roundtrip_efficiency","config_bs_efficiency",{min:.7,max:.99,step:.01,unit:"",default:.92},t,"config_help_bs_efficiency")}
-            ${this._renderOptionNumberInput("battery_cycle_cost","config_bs_cycle_cost",{min:0,max:.5,step:.001,unit:"EUR/kWh",default:.02},t,"config_help_bs_cycle_cost")}
+            ${this._renderOptionNumberInput("battery_cycle_cost","config_bs_cycle_cost",{min:0,max:.5,step:.001,unit:fe(this._hass)+"/kWh",default:.02},t,"config_help_bs_cycle_cost")}
             ${this._renderOptionSlider("battery_precharge_trigger_hour","config_bs_trigger_hour",{min:18,max:23,step:1,unit:"h",default:21},t,"config_help_bs_trigger_hour")}
             ${this._renderOptionSlider("battery_replan_interval_min","config_bs_replan_interval",{min:5,max:120,step:5,unit:"min",default:30},t,"config_help_bs_replan_interval")}
             ${this._renderOptionToggle("battery_prefer_consecutive_window","config_bs_block_mode",t,"config_help_bs_block_mode",!0)}

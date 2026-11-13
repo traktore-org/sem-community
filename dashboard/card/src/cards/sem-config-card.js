@@ -19,7 +19,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { semTheme, semDefineCard, semCardSurfaceCSS } from '../base/sem-shared.js';
+import { semTheme, semDefineCard, semCardSurfaceCSS, semGetCurrency } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
 import { readNumber, socDisplay } from '../util/missing-value.js';
 import { chargerAddPlan, detectRowLabelKey, isCo2IntensityEntity, isOutdoorTemperatureCandidate, isPowerEntity, nearMissAction, proposalWrite, watchOnlyHelpKey, writeIsSaved } from '../util/detect-rows.js';
@@ -1685,7 +1685,7 @@ class SEMConfigCard extends SEMLitBase {
         const rateEntity = this._hass?.states['sensor.sem_tariff_current_import_rate'];
         const rate = rateEntity ? rateEntity.state : '—';
         const unit = rateEntity?.attributes?.unit_of_measurement || '';
-        const currency = this._hass?.config?.currency || 'EUR';
+        const currency = semGetCurrency(this._hass);
         const tariffModeOptions = [
             { value: 'static', label: this._t('config_tariff_mode_static') },
             { value: 'dynamic', label: this._t('config_tariff_mode_dynamic') },
@@ -1748,7 +1748,7 @@ class SEMConfigCard extends SEMLitBase {
                   the fields, and with none set every price stays as it was. */ ''}
             ${this._renderValueLayer(opts, currency)}
             ${this._renderOptionNumberInput('demand_charge_rate', 'config_demand_charge_rate',
-                { min: 0, max: 100000, step: 0.01, unit: `${currency}/kW/Mt`, default: 4.32 }, opts, 'config_help_demand_charge_rate')}
+                { min: 0, max: 100000, step: 0.01, unit: this._t('config_unit_per_kw_month').replace('{currency}', currency), default: 4.32 }, opts, 'config_help_demand_charge_rate')}
             ${this._renderPicker('grid_import_power_entity', 'config_grid_import_entity',
                 'sensor', 'power', opts, 'config_help_grid_import_entity')}
             ${this._renderPicker('grid_export_power_entity', 'config_grid_export_entity',
@@ -1833,7 +1833,7 @@ class SEMConfigCard extends SEMLitBase {
         const registered = this._bin('heat_pump_registered');
         const opts = this._options || {};
         // (#812) the unit of the pump's own rate
-        const rateUnit = (this._hass?.config?.currency || 'EUR') + '/kWh';
+        const rateUnit = semGetCurrency(this._hass) + '/kWh';
         // Live-status block — only when SEM has the heat pump registered
         const statusBlock = registered ? html`
             <div class="hp-status">
@@ -2866,7 +2866,7 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderOptionSlider('battery_roundtrip_efficiency', 'config_bs_efficiency',
                 { min: 0.70, max: 0.99, step: 0.01, unit: '', default: 0.92 }, opts, 'config_help_bs_efficiency')}
             ${this._renderOptionNumberInput('battery_cycle_cost', 'config_bs_cycle_cost',
-                { min: 0, max: 0.5, step: 0.001, unit: 'EUR/kWh', default: 0.02 }, opts, 'config_help_bs_cycle_cost')}
+                { min: 0, max: 0.5, step: 0.001, unit: semGetCurrency(this._hass) + '/kWh', default: 0.02 }, opts, 'config_help_bs_cycle_cost')}
             ${this._renderOptionSlider('battery_precharge_trigger_hour', 'config_bs_trigger_hour',
                 { min: 18, max: 23, step: 1, unit: 'h', default: 21 }, opts, 'config_help_bs_trigger_hour')}
             ${this._renderOptionSlider('battery_replan_interval_min', 'config_bs_replan_interval',
