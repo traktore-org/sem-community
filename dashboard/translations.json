@@ -2944,7 +2944,16 @@
     "next_per_kwh_heat": "{v} za kWh tepla",
     "next_hp_next_run": "další běh {time}",
     "next_avg_purchase": "Průměrná zaplacená cena",
-    "next_avg_vs_market": "průměrná cena hodin {price}"
+    "next_avg_vs_market": "průměrná cena hodin {price}",
+    "plan_why_cheapest_heat": "Kde je teplo nejlevnější, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Při",
+    "hp_cop_curve_section": "COP podle venkovní teploty",
+    "hp_cop_curve_hint": "Se dvěma nebo třemi body SEM plánuje tepelné čerpadlo do hodin, kdy je teplo nejlevnější. Nechte prázdné pro pevný COP.",
+    "hp_cop_now_at": "COP nyní {cop} při {temp}",
+    "hp_cop_now": "COP nyní {cop}",
+    "hp_heat_costs": "teplo stojí {price}",
+    "hp_cop_point_is": "venku je COP",
+    "next_cop_fixed": "Pevný COP"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5891,7 +5900,16 @@
     "next_per_kwh_heat": "{v} pr. kWh varme",
     "next_hp_next_run": "næste kørsel {time}",
     "next_avg_purchase": "Gennemsnitlig betalt pris",
-    "next_avg_vs_market": "gennemsnitspris for timerne {price}"
+    "next_avg_vs_market": "gennemsnitspris for timerne {price}",
+    "plan_why_cheapest_heat": "Hvor varme er billigst, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Ved",
+    "hp_cop_curve_section": "COP efter udetemperatur",
+    "hp_cop_curve_hint": "Med to eller tre punkter planlægger SEM varmepumpen i de timer, hvor varme er billigst. Lad stå tomt for én fast COP.",
+    "hp_cop_now_at": "COP nu {cop} ved {temp}",
+    "hp_cop_now": "COP nu {cop}",
+    "hp_heat_costs": "varme koster {price}",
+    "hp_cop_point_is": "ude er COP",
+    "next_cop_fixed": "Én fast COP"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8838,7 +8856,16 @@
     "next_per_kwh_heat": "{v} pro kWh Wärme",
     "next_hp_next_run": "nächster Lauf {time}",
     "next_avg_purchase": "Durchschnittlich bezahlter Preis",
-    "next_avg_vs_market": "Durchschnittspreis der Stunden {price}"
+    "next_avg_vs_market": "Durchschnittspreis der Stunden {price}",
+    "plan_why_cheapest_heat": "Wo Wärme am günstigsten ist, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Bei",
+    "hp_cop_curve_section": "COP nach Außentemperatur",
+    "hp_cop_curve_hint": "Mit zwei oder drei Punkten plant SEM die Wärmepumpe in die Stunden, in denen Wärme am günstigsten ist. Leer lassen für einen festen COP.",
+    "hp_cop_now_at": "COP jetzt {cop} bei {temp}",
+    "hp_cop_now": "COP jetzt {cop}",
+    "hp_heat_costs": "Wärme kostet {price}",
+    "hp_cop_point_is": "draußen ist der COP",
+    "next_cop_fixed": "Ein fester COP"
   },
   "en": {
     "% of limit": "% of limit",
@@ -11785,7 +11812,16 @@
     "next_per_kwh_heat": "{v} per kWh of heat",
     "next_hp_next_run": "next run {time}",
     "next_avg_purchase": "Average price paid",
-    "next_avg_vs_market": "average price of the hours {price}"
+    "next_avg_vs_market": "average price of the hours {price}",
+    "plan_why_cheapest_heat": "Where heat is cheapest, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "At",
+    "hp_cop_curve_section": "COP by outdoor temperature",
+    "hp_cop_curve_hint": "With two or three points SEM plans the heat pump for the hours where heat is cheapest. Leave empty for one fixed COP.",
+    "hp_cop_now_at": "COP now {cop} at {temp}",
+    "hp_cop_now": "COP now {cop}",
+    "hp_heat_costs": "heat costs {price}",
+    "hp_cop_point_is": "outside the COP is",
+    "next_cop_fixed": "One fixed COP"
   },
   "es": {
     "% of limit": "% del límite",
@@ -14732,7 +14768,16 @@
     "next_per_kwh_heat": "{v} por kWh de calor",
     "next_hp_next_run": "próxima marcha {time}",
     "next_avg_purchase": "Precio medio pagado",
-    "next_avg_vs_market": "precio medio de las horas {price}"
+    "next_avg_vs_market": "precio medio de las horas {price}",
+    "plan_why_cheapest_heat": "Donde el calor es más barato, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "A",
+    "hp_cop_curve_section": "COP según la temperatura exterior",
+    "hp_cop_curve_hint": "Con dos o tres puntos, SEM planifica la bomba de calor en las horas en que el calor es más barato. Déjelo vacío para un COP fijo.",
+    "hp_cop_now_at": "COP ahora {cop} a {temp}",
+    "hp_cop_now": "COP ahora {cop}",
+    "hp_heat_costs": "el calor cuesta {price}",
+    "hp_cop_point_is": "fuera, el COP es",
+    "next_cop_fixed": "Un COP fijo"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -17679,7 +17724,16 @@
     "next_per_kwh_heat": "{v} / kWh lämpöä",
     "next_hp_next_run": "seuraava käynti {time}",
     "next_avg_purchase": "Keskimäärin maksettu hinta",
-    "next_avg_vs_market": "tuntien keskihinta {price}"
+    "next_avg_vs_market": "tuntien keskihinta {price}",
+    "plan_why_cheapest_heat": "Missä lämpö on halvinta, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Kun ulkona on",
+    "hp_cop_curve_section": "COP ulkolämpötilan mukaan",
+    "hp_cop_curve_hint": "Kahdella tai kolmella pisteellä SEM ajoittaa lämpöpumpun tunteihin, joina lämpö on halvinta. Jätä tyhjäksi, jos COP on kiinteä.",
+    "hp_cop_now_at": "COP nyt {cop} lämpötilassa {temp}",
+    "hp_cop_now": "COP nyt {cop}",
+    "hp_heat_costs": "lämpö maksaa {price}",
+    "hp_cop_point_is": "COP on",
+    "next_cop_fixed": "Kiinteä COP"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -20626,7 +20680,16 @@
     "next_per_kwh_heat": "{v} par kWh de chaleur",
     "next_hp_next_run": "prochaine marche {time}",
     "next_avg_purchase": "Prix moyen payé",
-    "next_avg_vs_market": "prix moyen des heures {price}"
+    "next_avg_vs_market": "prix moyen des heures {price}",
+    "plan_why_cheapest_heat": "Là où la chaleur coûte le moins, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "À",
+    "hp_cop_curve_section": "COP selon la température extérieure",
+    "hp_cop_curve_hint": "Avec deux ou trois points, SEM place la pompe à chaleur aux heures où la chaleur coûte le moins. Laissez vide pour un COP fixe.",
+    "hp_cop_now_at": "COP actuel {cop} à {temp}",
+    "hp_cop_now": "COP actuel {cop}",
+    "hp_heat_costs": "la chaleur coûte {price}",
+    "hp_cop_point_is": "dehors, le COP est",
+    "next_cop_fixed": "Un COP fixe"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -23573,7 +23636,16 @@
     "next_per_kwh_heat": "{v} / kWh hő",
     "next_hp_next_run": "következő futás {time}",
     "next_avg_purchase": "Átlagosan fizetett ár",
-    "next_avg_vs_market": "az órák átlagára {price}"
+    "next_avg_vs_market": "az órák átlagára {price}",
+    "plan_why_cheapest_heat": "Ahol a hő a legolcsóbb, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Kint",
+    "hp_cop_curve_section": "COP a külső hőmérséklet szerint",
+    "hp_cop_curve_hint": "Két vagy három ponttal a SEM a hőszivattyút azokra az órákra tervezi, amikor a hő a legolcsóbb. Hagyja üresen egy fix COP-hoz.",
+    "hp_cop_now_at": "COP most {cop}, {temp} mellett",
+    "hp_cop_now": "COP most {cop}",
+    "hp_heat_costs": "a hő ára {price}",
+    "hp_cop_point_is": "esetén a COP",
+    "next_cop_fixed": "Fix COP"
   },
   "it": {
     "% of limit": "% del limite",
@@ -26520,7 +26592,16 @@
     "next_per_kwh_heat": "{v} per kWh di calore",
     "next_hp_next_run": "prossimo avvio {time}",
     "next_avg_purchase": "Prezzo medio pagato",
-    "next_avg_vs_market": "prezzo medio delle ore {price}"
+    "next_avg_vs_market": "prezzo medio delle ore {price}",
+    "plan_why_cheapest_heat": "Dove il calore costa meno, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "A",
+    "hp_cop_curve_section": "COP secondo la temperatura esterna",
+    "hp_cop_curve_hint": "Con due o tre punti SEM pianifica la pompa di calore nelle ore in cui il calore costa meno. Lascia vuoto per un COP fisso.",
+    "hp_cop_now_at": "COP ora {cop} a {temp}",
+    "hp_cop_now": "COP ora {cop}",
+    "hp_heat_costs": "il calore costa {price}",
+    "hp_cop_point_is": "fuori il COP è",
+    "next_cop_fixed": "Un COP fisso"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -29467,7 +29548,16 @@
     "next_per_kwh_heat": "{v} per kWh warmte",
     "next_hp_next_run": "volgende run {time}",
     "next_avg_purchase": "Gemiddeld betaalde prijs",
-    "next_avg_vs_market": "gemiddelde prijs van de uren {price}"
+    "next_avg_vs_market": "gemiddelde prijs van de uren {price}",
+    "plan_why_cheapest_heat": "Waar warmte het goedkoopst is, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Bij",
+    "hp_cop_curve_section": "COP naar buitentemperatuur",
+    "hp_cop_curve_hint": "Met twee of drie punten plant SEM de warmtepomp in de uren waarin warmte het goedkoopst is. Laat leeg voor één vaste COP.",
+    "hp_cop_now_at": "COP nu {cop} bij {temp}",
+    "hp_cop_now": "COP nu {cop}",
+    "hp_heat_costs": "warmte kost {price}",
+    "hp_cop_point_is": "buiten is de COP",
+    "next_cop_fixed": "Eén vaste COP"
   },
   "no": {
     "% of limit": "% av grense",
@@ -32414,7 +32504,16 @@
     "next_per_kwh_heat": "{v} per kWh varme",
     "next_hp_next_run": "neste kjøring {time}",
     "next_avg_purchase": "Gjennomsnittlig betalt pris",
-    "next_avg_vs_market": "gjennomsnittspris for timene {price}"
+    "next_avg_vs_market": "gjennomsnittspris for timene {price}",
+    "plan_why_cheapest_heat": "Der varme er billigst, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Ved",
+    "hp_cop_curve_section": "COP etter utetemperatur",
+    "hp_cop_curve_hint": "Med to eller tre punkter planlegger SEM varmepumpen i timene der varme er billigst. La stå tomt for én fast COP.",
+    "hp_cop_now_at": "COP nå {cop} ved {temp}",
+    "hp_cop_now": "COP nå {cop}",
+    "hp_heat_costs": "varme koster {price}",
+    "hp_cop_point_is": "ute er COP",
+    "next_cop_fixed": "Én fast COP"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -35361,7 +35460,16 @@
     "next_per_kwh_heat": "{v} za kWh ciepła",
     "next_hp_next_run": "następne uruchomienie {time}",
     "next_avg_purchase": "Średnia zapłacona cena",
-    "next_avg_vs_market": "średnia cena godzin {price}"
+    "next_avg_vs_market": "średnia cena godzin {price}",
+    "plan_why_cheapest_heat": "Tam, gdzie ciepło jest najtańsze, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Przy",
+    "hp_cop_curve_section": "COP według temperatury zewnętrznej",
+    "hp_cop_curve_hint": "Z dwoma lub trzema punktami SEM planuje pompę ciepła na godziny, w których ciepło jest najtańsze. Zostaw puste dla stałego COP.",
+    "hp_cop_now_at": "COP teraz {cop} przy {temp}",
+    "hp_cop_now": "COP teraz {cop}",
+    "hp_heat_costs": "ciepło kosztuje {price}",
+    "hp_cop_point_is": "na zewnątrz COP wynosi",
+    "next_cop_fixed": "Stały COP"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -38308,7 +38416,16 @@
     "next_per_kwh_heat": "{v} por kWh de calor",
     "next_hp_next_run": "próxima execução {time}",
     "next_avg_purchase": "Preço médio pago",
-    "next_avg_vs_market": "preço médio das horas {price}"
+    "next_avg_vs_market": "preço médio das horas {price}",
+    "plan_why_cheapest_heat": "Onde o calor é mais barato, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "A",
+    "hp_cop_curve_section": "COP pela temperatura exterior",
+    "hp_cop_curve_hint": "Com dois ou três pontos, o SEM planeia a bomba de calor nas horas em que o calor é mais barato. Deixe vazio para um COP fixo.",
+    "hp_cop_now_at": "COP agora {cop} a {temp}",
+    "hp_cop_now": "COP agora {cop}",
+    "hp_heat_costs": "o calor custa {price}",
+    "hp_cop_point_is": "lá fora o COP é",
+    "next_cop_fixed": "Um COP fixo"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -41255,7 +41372,16 @@
     "next_per_kwh_heat": "{v} pe kWh de căldură",
     "next_hp_next_run": "următoarea pornire {time}",
     "next_avg_purchase": "Preț mediu plătit",
-    "next_avg_vs_market": "prețul mediu al orelor {price}"
+    "next_avg_vs_market": "prețul mediu al orelor {price}",
+    "plan_why_cheapest_heat": "Unde căldura este cea mai ieftină, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "La",
+    "hp_cop_curve_section": "COP după temperatura exterioară",
+    "hp_cop_curve_hint": "Cu două sau trei puncte, SEM planifică pompa de căldură în orele în care căldura este cea mai ieftină. Lăsați gol pentru un COP fix.",
+    "hp_cop_now_at": "COP acum {cop} la {temp}",
+    "hp_cop_now": "COP acum {cop}",
+    "hp_heat_costs": "căldura costă {price}",
+    "hp_cop_point_is": "afară, COP este",
+    "next_cop_fixed": "Un COP fix"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -44202,7 +44328,16 @@
     "next_per_kwh_heat": "{v} per kWh värme",
     "next_hp_next_run": "nästa körning {time}",
     "next_avg_purchase": "Genomsnittligt betalt pris",
-    "next_avg_vs_market": "genomsnittspris för timmarna {price}"
+    "next_avg_vs_market": "genomsnittspris för timmarna {price}",
+    "plan_why_cheapest_heat": "Där värmen är billigast, {from}–{to}, COP {cop}.",
+    "hp_cop_point_at": "Vid",
+    "hp_cop_curve_section": "COP efter utetemperatur",
+    "hp_cop_curve_hint": "Med två eller tre punkter planerar SEM värmepumpen till de timmar då värmen är billigast. Lämna tomt för ett fast COP.",
+    "hp_cop_now_at": "COP nu {cop} vid {temp}",
+    "hp_cop_now": "COP nu {cop}",
+    "hp_heat_costs": "värme kostar {price}",
+    "hp_cop_point_is": "ute är COP",
+    "next_cop_fixed": "Ett fast COP"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -47149,6 +47284,15 @@
     "next_per_kwh_heat": "每 kWh 热量 {v}",
     "next_hp_next_run": "下次运行 {time}",
     "next_avg_purchase": "平均支付价格",
-    "next_avg_vs_market": "这些时段的平均价格 {price}"
+    "next_avg_vs_market": "这些时段的平均价格 {price}",
+    "plan_why_cheapest_heat": "在热量最便宜的时段，{from}–{to}，COP {cop}。",
+    "hp_cop_point_at": "室外",
+    "hp_cop_curve_section": "按室外温度的 COP",
+    "hp_cop_curve_hint": "设置两到三个点后，SEM 会把热泵安排在热量最便宜的时段。留空则使用固定 COP。",
+    "hp_cop_now_at": "当前 COP {cop}，室外 {temp}",
+    "hp_cop_now": "当前 COP {cop}",
+    "hp_heat_costs": "热量价格 {price}",
+    "hp_cop_point_is": "时 COP 为",
+    "next_cop_fixed": "固定 COP"
   }
 }

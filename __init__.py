@@ -5433,6 +5433,8 @@ async def _async_register_services(
             "tariff_rate", "tariff_entity", "tariff_meter",
             # (#1341) the load's own name — display only
             "name",
+            # (#1081) a heat pump's COP against the outdoor temperature
+            "cop_curve",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -5476,6 +5478,19 @@ async def _async_register_services(
                     translation_key="invalid_device_property",
                     translation_placeholders={"property": f"{prop}={value}"},
                 )
+            # (#1081) 2–3 points "°C:COP", or empty to clear. A curve that
+            # cannot be read would be stored and then silently be no curve.
+            if prop == "cop_curve":
+                from .coordinator.heat_cost import (
+                    format_cop_curve, parse_cop_curve)
+                _curve = parse_cop_curve(value)
+                if str(value).strip() and _curve is None:
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    )
+                value = format_cop_curve(_curve)
             if prop == "top_up_policy" and str(value) not in (
                 "solar_only", "cheap_hours"
             ):
@@ -5607,6 +5622,8 @@ async def _async_register_services(
                     "hvac_mode",
                     # (#1341) the load's own name
                     "name",
+                    # (#1081) a heat pump's COP curve, "-7:2.5, 2:3.2, 12:4.2"
+                    "cop_curve",
                 ]),
                 vol.Required("value"): cv.string,
             }),

@@ -38,3 +38,75 @@ def cost_of_heat(price: Optional[float], cop: Optional[float]) -> Optional[float
     if cop <= 0:
         return None
     return float(price) / cop
+
+
+#: (#1081) A COP curve has 2 or 3 points: outdoor °C → COP.
+COP_CURVE_MIN_POINTS = 2
+COP_CURVE_MAX_POINTS = 3
+
+
+def parse_cop_curve(raw: Any) -> Optional[list]:
+    """(#1081) A heat pump's COP curve as sorted ``[(outdoor °C, COP)]``.
+
+    Accepts the stored text ``"-7:2.5, 2:3.2, 12:4.2"`` or a list of pairs.
+    ``None`` for "no curve" (empty) AND for anything that is not 2–3 points
+    with distinct temperatures and a COP above 0 — a curve that cannot be
+    read is no curve, never a guess."""
+    if raw is None:
+        return None
+    pairs: list = []
+    try:
+        if isinstance(raw, str):
+            text = raw.strip()
+            if not text:
+                return None
+            for part in text.replace(";", ",").split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                t, c = part.split(":")
+                pairs.append((float(t), float(c)))
+        else:
+            for item in raw:
+                t, c = item
+                pairs.append((float(t), float(c)))
+    except (TypeError, ValueError):
+        return None
+    if not COP_CURVE_MIN_POINTS <= len(pairs) <= COP_CURVE_MAX_POINTS:
+        return None
+    if any(c <= 0 or c != c or t != t for t, c in pairs):
+        return None
+    pairs.sort()
+    if len({t for t, _ in pairs}) != len(pairs):
+        return None
+    return pairs
+
+
+def format_cop_curve(curve: Optional[list]) -> str:
+    """(#1081) The stored text of a parsed curve; ``""`` for none."""
+    if not curve:
+        return ""
+    return ", ".join(f"{t:g}:{c:g}" for t, c in curve)
+
+
+def cop_at(curve: Optional[list], outdoor_c: Optional[float],
+           flat_cop: Optional[float]) -> tuple:
+    """(#1081) The COP for an outdoor temperature: ``(cop, source)``.
+
+    With a curve and a reading: linear between the points, clamped at the
+    ends — ``source`` ``"curve"``. Otherwise the flat COP the user set,
+    ``source`` ``"flat"`` (today's behaviour, unchanged)."""
+    if curve and outdoor_c is not None:
+        try:
+            t = float(outdoor_c)
+        except (TypeError, ValueError):
+            t = None
+        if t is not None and t == t:
+            if t <= curve[0][0]:
+                return float(curve[0][1]), "curve"
+            if t >= curve[-1][0]:
+                return float(curve[-1][1]), "curve"
+            for (t0, c0), (t1, c1) in zip(curve, curve[1:], strict=False):
+                if t0 <= t <= t1:
+                    return float(c0 + (c1 - c0) * (t - t0) / (t1 - t0)), "curve"
+    return flat_cop, "flat"
