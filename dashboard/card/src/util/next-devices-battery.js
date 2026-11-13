@@ -99,6 +99,10 @@ export function batteryBody(card, row) {
         const assistVal = assistId ? card._val(assistOn ? t('next_on') : t('next_off'), () => card._toggleSwitch(assistId), { disabled: dis }) : html`${t('next_on')}`;
         parts.push(assistOn
             ? card._sentence(t('next_bat_sent_assist'), {
+                // (#1354) the help starts at the buffer and is full from auto-start
+                // (coordinator/decide.py `soc_zone`, flow_calculator.py `battery_assist_potential_w`)
+                buffer: card._has(ids.buffer) ? v(ids.buffer, Math.round(num(ids.buffer)) + ' %') : html`—`,
+                autostart: card._has(ids.auto) ? v(ids.auto, Math.round(num(ids.auto)) + ' %') : html`—`,
                 max: maxId ? v(maxId, card._kw(num(maxId))) : html`—`,
                 gate: gateId ? v(gateId, card._fmt(num(gateId), 0) + ' W') : html`—`,
                 assist: assistVal })

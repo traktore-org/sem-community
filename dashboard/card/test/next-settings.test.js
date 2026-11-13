@@ -21,7 +21,8 @@ const TEXT = {
     [K_PAY_DYNAMIC]: 'prices are {mode} from {provider}.',
     next_pay_mode: 'prices are {mode}.',
     next_pay_rate: 'prices: {rate} per kWh.',
-    next_pay_taxes: 'VAT {vat} and a grid fee of {fee} come on top',
+    next_pay_plus_vat: 'plus VAT {vat}',
+    next_pay_plus_fee: 'plus a grid fee of {fee}',
     next_pay_export: 'export pays {export}',
     next_pay_thresholds_plain: 'cheap means below {cheap}, expensive above {expensive}',
     [K_BATT_ZONES]: 'fill the battery first below {priority}, buffer at {buffer}, help the house above {autostart}',
@@ -107,10 +108,25 @@ test('a static tariff binds the rate to its number entity and keeps the text aro
     const mode = slots(pay.sentence).find((s) => s.option === 'tariff_mode');
     assert.equal(mode.value, 'static');
     assert.ok(strings(pay.sentence).startsWith('Prices are '));
-    // the VAT and fee come from options, as numbers with their units
+    // (#1354) an all-in price (the default basis) takes no VAT: not in the sentence, not in More
+    assert.equal(slots(pay.sentence).find((s) => s.option === 'import_vat_percent'), undefined);
+    assert.ok(!pay.more.some((m) => JSON.stringify(m).includes('import_vat_percent')));
+});
+
+test('a spot price names the VAT that applies; a dynamic tariff adds its grid fee', () => {
+    const pay = groups(fullStates(), t, { ...CTX, options: { ...OPTS, import_price_basis: 'spot', tariff_mode: 'dynamic', grid_import_surcharge: 0.05 } })
+        .find((x) => x.key === 'pay');
     const vat = slots(pay.sentence).find((s) => s.option === 'import_vat_percent');
     assert.equal(vat.value, 8.1);
     assert.equal(vat.unit, '%');
+    const fee = slots(pay.sentence).find((s) => s.option === 'grid_import_surcharge');
+    assert.equal(fee.value, 0.05);
+    assert.match(strings(pay.sentence), /plus VAT/i);
+    // a static tariff never adds the grid fee, so it is neither said nor offered
+    const st = groups(fullStates(), t, { ...CTX, options: { ...OPTS, import_price_basis: 'spot', grid_import_surcharge: 0.05 } })
+        .find((x) => x.key === 'pay');
+    assert.equal(slots(st.sentence).find((s) => s.option === 'grid_import_surcharge'), undefined);
+    assert.ok(!st.more.some((m) => JSON.stringify(m).includes('grid_import_surcharge')));
 });
 
 test('a dynamic tariff names the provider as plain text, not a control', () => {

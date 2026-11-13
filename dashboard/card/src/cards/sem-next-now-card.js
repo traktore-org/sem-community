@@ -19,7 +19,7 @@ import { powerBar } from '../util/next-power-bar.js';
 import { todayRows } from '../util/next-today-rows.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
-import { splitStrategyReason } from '../util/next-strategy-reason.js';
+import { strategyWords } from '../util/next-strategy-reason.js';
 import { plainReason } from '../util/why-rows.js';
 import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
@@ -485,13 +485,10 @@ class SEMNextNowCard extends SEMNextBase {
         const rows = [];
         const strat = this._hass?.states['sensor.sem_charging_strategy'];
         if (strat && strat.state && strat.state !== 'unavailable' && strat.state !== 'unknown') {
-            const reason = String(strat.attributes?.reason || strat.state);
-            const { mode, head, detail } = splitStrategyReason(reason);
-            const label = mode ? this._t('charge_mode_' + mode) : '';
-            const title = label && label !== 'charge_mode_' + mode ? label : head;
-            const said = plainReason({ reason_code: strat.attributes?.reason_code, params: strat.attributes?.reason_params }, (k) => this._t(k));
+            // (#1354) the user's words only: never the engine's raw text
+            const { title, text } = strategyWords(strat, (k) => this._t(k), plainReason);
             const evW = this._powerW('sensor.sem_ev_power');
-            rows.push(this._row('mdi:car-electric', title, evW === null ? '' : this._kw(evW), this._all ? reason : (said || detail), { color: C.ev }));
+            rows.push(this._row('mdi:car-electric', title, evW === null ? '' : this._kw(evW), text, { color: C.ev }));
         }
         const soc = this._num('sensor.sem_battery_soc');
         const floor = this._spending() ? this._num('sensor.sem_battery_dynamic_floor_pct') : null;

@@ -26,3 +26,19 @@ export function splitStrategyReason(reason) {
         .join(' · ');
     return { mode, head: head || text, detail };
 }
+
+/**
+ * (#1354) What the Now screen says about the car, in the user's words only:
+ * the mode's own label (else "EV Charger") and the engine's published reason
+ * (reason_code + params, through `plainReason`). The engine's raw English
+ * text — "min_plus_solar but EV disconnected [structural: …]" — is never
+ * shown; without a code there is no second line.
+ */
+export function strategyWords(strat, t, plainReason) {
+    const a = (strat && strat.attributes) || {};
+    const { mode } = splitStrategyReason(String(a.reason || (strat && strat.state) || ''));
+    const label = mode ? t('charge_mode_' + mode) : '';
+    const title = label && label !== 'charge_mode_' + mode ? label : t('ev_charger');
+    const text = plainReason({ reason_code: a.reason_code, params: a.reason_params }, t) || '';
+    return { title, text };
+}

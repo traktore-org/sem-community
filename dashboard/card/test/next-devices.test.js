@@ -452,24 +452,44 @@ test('a load shows its stop sensor and thermometer pickers and writes them', () 
     assert.deepEqual(calls.map((c) => c[1].property + '=' + c[1].value), ['stop_entity=sensor.boiler_temp', 'comfort_entity=']);
 });
 
-// (#1321) Normal / Smart / Boost: Boost is the active one-off, not a mode.
-test('the simple control reads the mode and the active one-off', async () => {
-    const { simpleMode } = await import('../src/util/next-devices.js');
-    const rows = deviceRows({
-        a: { name: 'A', control_mode: 'off' },
-        b: { name: 'B', control_mode: 'surplus' },
-        c: { name: 'C', control_mode: 'surplus', override: { action: 'force', until: '14:30' } },
-        d: { name: 'D', control_mode: 'peak_only' },
-        e: { name: 'E', control_mode: 'surplus', override: { action: 'skip', until: '15:00' } },
-    });
-    const by = Object.fromEntries(rows.map((r) => [r.id, r]));
-    assert.equal(simpleMode(by.a), 'normal');
-    assert.equal(simpleMode(by.b), 'smart');
-    assert.equal(simpleMode(by.c), 'boost');
-    assert.deepEqual(by.c.override, { action: 'force', until: '14:30' });
-    assert.equal(simpleMode(by.d), '');
-    assert.equal(simpleMode(by.e), 'smart');
-    assert.equal(by.b.override, null);
+// (#1354) ONE mode control per load: the four modes, then Boost. "Normal"
+// used to sit beside them and wrote mode Off.
+test('a load has one mode control: the four modes, no Normal / Smart segment', async () => {
+    // the load's own body: a charger row on the same card keeps its Smart
+    const el = makeCard(heaterStates());
+    const { loadBody } = await import('../src/util/next-devices-load.js');
+    const out = text(loadBody(el, el._rowsNow().find((r) => r.id === 'hot_water')));
+    for (const k of ['off', 'peak_only', 'load_mode_sem', 'load_mode_sem_battery', 'next_boost_for']) assert.match(out, new RegExp(k), k);
+    for (const k of ['next_mode_normal', 'next_smart\\b', 'next_boost_needs_smart', 'next_mode_all']) assert.doesNotMatch(out, new RegExp(k), k);
+});
+
+test('Boost starts with one tap on its minutes; a mode writes the stored mode', async () => {
+    const calls = [];
+    const el = makeCard(heaterStates());
+    el._hass.callService = async (domain, service, data) => { calls.push([service, data]); };
+    const { loadBody } = await import('../src/util/next-devices-load.js');
+    const row = el._rowsNow().find((r) => r.id === 'hot_water');
+    const seen = {};
+    const realSeg = el._seg.bind(el);
+    el._seg = (items, cur, onPick, o) => {
+        if (items.some((i) => i.key === 30)) seen.boost = onPick;
+        if (items.some((i) => i.key === 'peak_only')) seen.mode = onPick;
+        return realSeg(items, cur, onPick, o);
+    };
+    loadBody(el, row);
+    await seen.boost(60);
+    assert.deepEqual(calls.pop(), ['plan_override', { device_id: 'hot_water', action: 'force', minutes: 60 }]);
+    await seen.mode('off');
+    const cfg = calls.filter((c) => c[0] === 'update_device_config').map((c) => c[1].property + '=' + c[1].value);
+    assert.deepEqual(cfg, ['control_mode=off']);
+});
+
+test('a running one-off says until when and offers Back; a mode change ends it first', async () => {
+    const st = heaterStates();
+    st['sensor.sem_controllable_devices_count'].attributes.devices.hot_water.override = { action: 'force', until: '14:30' };
+    const out = openHotWater(makeCard(st));
+    assert.match(out, /next_boost_until/); assert.match(out, /next_back/);
+    assert.doesNotMatch(out, /next_boost_for/);
 });
 
 // ── (#1349) a heater's four questions, cases A · B · C of the approved mockup ──
@@ -601,4 +621,42 @@ test('the buy question and "heat up to" write the stored settings', async () => 
     // a hot-water tank also sets the Solar target, so both stops agree
     const opt = calls.find((c) => c[0] === 'set_option');
     assert.deepEqual(opt[1], { options: { hot_water_solar_target: 58 } });
+});
+
+// (#1354) in Off and Peak only SEM does not run a load: its stop, thermometer,
+// Legionella and comfort rows would change nothing, so they are not shown.
+test('a load SEM does not run shows no stop, thermometer or comfort rows', async () => {
+    const { loadBody } = await import('../src/util/next-devices-load.js');
+    const body = (mode) => {
+        const st = heaterStates();
+        st['sensor.sem_controllable_devices_count'].attributes.devices.hot_water.control_mode = mode;
+        const el = makeCard(st);
+        el._all = true;
+        return text(loadBody(el, el._rowsNow().find((r) => r.id === 'hot_water')));
+    };
+    for (const mode of ['off', 'peak_only']) {
+        const out = body(mode);
+        // the reading tile may stay (it is a reading, not a setting); the setting rows go
+        for (const k of ['next_stop_when', 'next_own_thermometer', 'next_legionella', 'next_keep_sentence', 'hq_keep']) {
+            assert.doesNotMatch(out, new RegExp(k + '\\b'), mode + ' ' + k);
+        }
+    }
+    // SEM runs it: the rows are there
+    const runs = body('surplus');
+    assert.match(runs, /next_own_thermometer/);
+    assert.match(runs, /hq_keep/);
+});
+
+// (#1354) the battery's help to the car starts at the buffer and is full from
+// auto-start (coordinator/decide.py soc_zone, flow_calculator.py battery_assist_potential_w).
+test('the battery texts say the car is helped from the buffer, fully from auto-start', async () => {
+    const fs = await import('node:fs');
+    const tr = JSON.parse(fs.readFileSync(new URL('../../translations.json', import.meta.url), 'utf8'));
+    for (const [lang, d] of Object.entries(tr)) {
+        assert.match(d.next_bat_sent_assist, /\{buffer\}/, lang);
+        assert.match(d.next_bat_sent_assist, /\{autostart\}/, lang);
+        assert.match(d.next_batt_zones, /\{autostart\}/, lang);
+    }
+    assert.doesNotMatch(tr.en.next_batt_zones, /house/);
+    assert.match(tr.en.next_batt_zones, /car/);
 });
