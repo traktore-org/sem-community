@@ -12481,6 +12481,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if _min_s <= 0 or _rated <= 0:
                         continue
                     asks.append({
+                        # (#1321) the same id tonight's plan uses, so one
+                        # device is one row on the chart, not two
+                        "id": f"load:{_dev.device_id}",
                         "kind": "load",
                         # (#1053) None = no name; the card shows the kind
                         # in the user's language, never the device id.
@@ -12515,6 +12518,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     except Exception:  # noqa: BLE001 — unknown fullness: keep the ask
                         pass
                     asks.append({
+                        "id": f"ev:{_cfg.get('id')}" if _cfg.get("id") else None,
                         "kind": "ev",
                         "label": charger_own_name(_cfg),  # (#1053)
                         "kwh": round(_tgt, 2),
@@ -12579,7 +12583,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 labels2 = {}
                 demands2 = []
                 for i, ask in enumerate(asks):
-                    did = f"{ask['kind']}:{i}"
+                    did = ask.get("id") or f"{ask['kind']}:{i}"
                     labels2[did] = ask["label"]
                     power = float(ask.get("power_w") or 0.0)
                     if ask["kind"] == "ev" and power <= 0:
@@ -12614,8 +12618,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 from .energy_planner import keep_sun_only
                 _sun_starts = {s.start for s in slots2
                                if getattr(s, "cap_override_w", None) is not None}
-                _sun_only = [f"{a['kind']}:{i}" for i, a in enumerate(asks)
-                             if a.get("sun_only")]
+                _sun_only = [a.get("id") or f"{a['kind']}:{i}"
+                             for i, a in enumerate(asks) if a.get("sun_only")]
                 _allocs2, _no_sun = keep_sun_only(
                     plan2.allocations, _sun_starts, _sun_only)
                 curve = provisional_soc_curve(
