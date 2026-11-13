@@ -30,6 +30,7 @@ import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
 import { taxesApply } from '../util/settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
 import { BATTERY_QUESTIONS, batteryLevels, zoneBands } from '../util/battery-questions.js';
+import { CHARGER_TEXT, targetEntities } from '../util/charger-questions.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
@@ -1112,15 +1113,17 @@ class SEMConfigCard extends SEMLitBase {
                     ${/* (config-on-dashboard) the charge TARGET value — the
                           select above only picks kWh vs SOC; these set the
                           actual target + its ceiling (#245 range). */ ''}
-                    ${charger.ev_target_type === 'soc' ? html`
+                    ${/* (#1354) one pair, one name, in every card: At least /
+                          Up to — of kWh per day or of the car's SOC. */ ''}
+                    ${(() => {
+                        const soc = charger.ev_target_type === 'soc';
+                        const ent = targetEntities(cid, charger.ev_target_type);
+                        return html`
                         <div class="stepper-pair">
-                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc`, 'config_ev_target_soc', T, 'config_help_ev_target_soc')}
-                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc_max`, 'config_ev_target_soc_max', T, 'config_help_ev_target_soc_max')}
-                        </div>` : html`
-                        <div class="stepper-pair">
-                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, 'config_help_ev_daily_target')}
-                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, 'config_help_ev_daily_target_max')}
-                        </div>`}
+                            ${this._renderStepper(ent.atLeast, CHARGER_TEXT.atLeast, T, soc ? 'config_help_ev_target_soc' : 'config_help_ev_daily_target')}
+                            ${this._renderStepper(ent.upTo, CHARGER_TEXT.upTo, T, soc ? 'config_help_ev_target_soc_max' : 'config_help_ev_daily_target_max')}
+                        </div>`;
+                    })()}
                     ${/* (#1308) after the night end, a set Charge by still
                           wins: keep charging to the departure at day price. */ ''}
                     ${this._renderToggleNested(idx, cid, 'finish_by_departure', 'config_finish_by_departure',
