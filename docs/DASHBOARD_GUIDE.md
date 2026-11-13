@@ -832,6 +832,9 @@ opens one lane per charger and load. **Per device**: one row each with
 step) and the battery's *Sell*. **Expected**: grid cost, sun tomorrow with
 its trust, arbitrage advice, the actuation switch, *Replan*. **Decisions
 today**: the decision log with a device filter and an *Earlier* fold.
+The planner's notes ("13 hours have no price yet", "no cheap hour before
+07:00") are shown in your language, the same words as on the classic Energy
+Plan card.
 
 A heater's *Keep at* run has its own row, named after the device with
 *to 52 °C*. A heater that is below its start line with no hour planned is
@@ -846,13 +849,20 @@ power is not in the plan: it waits for sun.
 One list, one order: every charger, the battery and every load as one card
 (rank · name · state pill · live kW · ⚙ configure), sorted by priority.
 *Reorder* moves cards by drag or ▲▼; *Done* writes the order. Above the
-list: surplus, active devices, the 15-min peak with its limit (tap to
-change, or unlimited), slot budget, month peak and what SEM can shed.
-Charger: Off / Smart / Always, target bar, charge-by, departures, pause,
-battery boost, phases, set-once values, this month, lifetime. Battery:
-mode, zone bar, Tonight, charge pacing, sell window, per-battery mode,
-evidence and health. Load: Off / Peak only / SEM runs it / SEM runs it, battery may help,
-goal, min run / pause, Requires, phase, comfort, tariff, may-switch.
+list: surplus, active devices, the 15-min peak, then the peak limit as one
+question, *Limit grid draw to 5.0 kW · A limit / No limit*, with what it
+does; slot budget, month peak and what SEM can shed.
+Charger: *Off*, the mode group and *Always (max)* by the same names as the
+classic EV card, target bar, *Charge by* (time and days), *Charge Target*
+as *At least 10 · Up to 40 kWh*, pause, battery boost, phases, set-once
+values, this month, lifetime. Battery: mode, a line that says what it does
+now and next (*Giving 0.8 kW. Tonight it keeps 40 % for the morning.*),
+zone bar, its levels, help for the car, charge pacing, sell window,
+per-battery mode and reserve, evidence and health. The battery's levels and
+permissions are asked here only. Load: one mode control, *Off / Peak only /
+SEM runs it / SEM runs it, battery may help*, and a *Boost for 30/60/120
+min* button; goal, min run / pause, Requires, phase, comfort, tariff,
+may-switch. Rows that do nothing for a load in Off or Peak only are hidden.
 Every row needs its entity; controls are off in observer mode.
 
 A heater with a thermometer says what it does and what comes next, in the
@@ -909,7 +919,11 @@ confirm step. Then what SEM held back. Then seven settings groups written
 as sentences (How I pay · What SEM may do · Battery rules · Chargers · Heat
 pump and hot water · What SEM reads · Notifications and more): tap a value,
 change it, and apply every change at once from the bar at the bottom. The
-"N more" line opens with All settings. Adding or detecting a charger,
+"N more" line opens with All settings. *What SEM may do* asks the peak limit
+as the same question as the Devices screen. *Battery rules* reads the
+battery's levels back and links to the battery on the Devices screen, where
+they are asked. Tax, VAT and grid-fee rows show only where they change the
+price. Adding or detecting a charger,
 entity pickers and PV strings stay on the classic Configuration tab.
 
 ### System Diagram Style
