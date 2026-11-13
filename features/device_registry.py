@@ -37,8 +37,8 @@ from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 # unaliased so a structural test can see the call.
 from .device_axes import user_hands_off
 from ..devices.base import (
+    BandedCurrentLoad,
     CLIMATE_HVAC_MODES,
-    CurrentControlDevice,
     SwitchDevice,
     surplus_device_from_spec,
 )
@@ -73,6 +73,20 @@ STORAGE_COPY_KEY = f"{DOMAIN}_device_marks"
 #: (#880) The top of every EVSE SEM supports. A "current" control that
 #: ranges past it is not amperes — see ``_register_current_control``.
 MAX_PLAUSIBLE_CHARGER_AMPS: int = 32
+
+
+#: (#1341) The longest name a user may give a load.
+LOAD_NAME_MAX = 60
+
+
+def clean_load_name(value: Any) -> str:
+    """(#1341) A load name as typed, made safe to store and show: one line
+    of plain text, trimmed, at most ``LOAD_NAME_MAX`` characters. Empty
+    means "no own name" — the automatic one applies."""
+    if value is None:
+        return ""
+    text = "".join(ch if ch.isprintable() else " " for ch in str(value))
+    return " ".join(text.split())[:LOAD_NAME_MAX].strip()
 
 
 def _tariff_payload(live: Any, goals: Dict[str, Any]) -> Dict[str, Any]:
@@ -337,6 +351,8 @@ class UnifiedDeviceRegistry:
         # the other — the value would silently drop back to 0 (caught live on
         # the Heizband PROD test). One lock makes each update atomic.
         self._goal_write_lock = asyncio.Lock()
+        # (#1341) device_id → the name a load has without the user's own
+        self._auto_names: Dict[str, str] = {}
         # (#622) Callback that re-applies persisted per-device accrued daily
         # runtime from the coordinator's storage onto any device that came back
         # EMPTY after a rebuild. Set by the coordinator after construction.
@@ -612,7 +628,42 @@ class UnifiedDeviceRegistry:
         # (#812) the load's own tariff: a fixed rate or a price entity, and
         # its own meter. None set = the house tariff.
         "tariff_rate", "tariff_entity", "tariff_meter",
+        # (#1341) the name the user gave the load — display only
+        "name",
     )
+
+    def own_name(self, device_id: str) -> str:
+        """(#1341) The name the user gave this load, or ``""``."""
+        goals = getattr(self, "_device_goals", None) or {}
+        return clean_load_name((goals.get(device_id) or {}).get("name"))
+
+    def name_for(self, device_id: str, automatic: Any) -> str:
+        """(#1341) The ONE answer to "what is this load called": the user's
+        own name when they gave one, else the automatic name (Energy
+        dashboard, sensor, registration). The automatic name is remembered
+        so clearing the own name brings it back without a restart."""
+        auto = str(automatic or "") or device_id
+        names = self.__dict__.setdefault("_auto_names", {})
+        names[device_id] = auto
+        return self.own_name(device_id) or auto
+
+    def can_be_named(self, device_id: str) -> bool:
+        """(#1341) May the user name this row here? A load, yes. A charger
+        is named in its own setup and the battery row has no name to set: a
+        name stored for either would be read by nothing."""
+        live = (self._surplus_controller.get_device(device_id)
+                if self._surplus_controller is not None else None)
+        if live is not None and getattr(live, "is_ev", False) is True:
+            return False
+        try:
+            row = self.get_devices_for_sensor().get(device_id) or {}
+        except Exception:  # noqa: BLE001 — an unbuildable payload names nothing
+            return False
+        return row.get("device_type") not in ("ev_charger", "ev_charging", "battery")
+
+    def automatic_name(self, device_id: str) -> str:
+        """(#1341) The name the load has without the user's own."""
+        return (self.__dict__.get("_auto_names") or {}).get(device_id, "")
 
     def phase_for(self, device_id: str) -> str:
         """(#1048) The phase the user put this load on, ``unknown`` until
@@ -629,6 +680,18 @@ class UnifiedDeviceRegistry:
         goals = self._device_goals.get(device.device_id)
         if not goals:
             return
+        # (#1341) the user's own name, key-present-only. The live object was
+        # built with the automatic name (or already carries the own one, an
+        # Energy-dashboard row is named before it is built): remember the
+        # automatic name once, then show the own name, or the automatic one
+        # again when it was cleared.
+        if "name" in goals:
+            _did = device.device_id
+            _auto = self.automatic_name(_did)
+            if not _auto:
+                _auto = str(getattr(device, "name", "") or _did)
+                self.__dict__.setdefault("_auto_names", {})[_did] = _auto
+            device.name = self.own_name(_did) or _auto
         # (#1048) key-present-only, like the anti-cycle windows below
         if "phase" in goals:
             device.phase = load_phase(goals.get("phase"))
@@ -712,12 +775,18 @@ class UnifiedDeviceRegistry:
         """Set one goal property, persist it, and apply it live (#559)."""
         if prop not in self.GOAL_PROPERTIES:
             raise ValueError(f"Unknown goal property: {prop}")
+        if prop == "name":
+            if not self.can_be_named(device_id):
+                raise ValueError(f"{device_id} is not named here")
+            value = clean_load_name(value)
         async with self._goal_write_lock:
             goals = self._device_goals.setdefault(device_id, {})
             goals[prop] = value
             device = self._surplus_controller.get_device(device_id)
             if device:
                 self._apply_goals(device)
+            if prop == "name":
+                self._rename_rows(device_id)
             # (#1048) the shedder reads the phase off its own row: put it
             # there now, not at the next registry sync
             if prop == "phase" and self._load_manager is not None:
@@ -726,6 +795,20 @@ class UnifiedDeviceRegistry:
                     row["phase"] = load_phase(value)
             await self._save_storage()
         _LOGGER.info("Device goal updated: %s.%s = %s", device_id, prop, value)
+
+    def _rename_rows(self, device_id: str) -> None:
+        """(#1341) Put a changed name on the rows that copied it: the
+        Energy-dashboard record and the load manager's row. Nothing is
+        rebuilt — a rename must not touch a running load."""
+        for record in self._devices:
+            if record.device_id == device_id:
+                record.name = self.name_for(
+                    device_id, self.automatic_name(device_id) or record.name)
+        lm = self._load_manager
+        row = lm._devices.get(device_id) if lm is not None else None
+        if isinstance(row, dict) and "friendly_name" in row:
+            row["friendly_name"] = self.name_for(
+                device_id, self.automatic_name(device_id) or row["friendly_name"])
 
     def _register_service_devices(self) -> None:
         """(Re-)register all persisted service registrations with the
@@ -949,6 +1032,8 @@ class UnifiedDeviceRegistry:
                 is_ev=is_ev,
             )
             device_id = temp.device_id
+            # (#1341) the user's own name wins over the Energy dashboard's
+            name = self.name_for(device_id, name)
 
             # Manual mapping takes precedence over auto-discovery
             has_manual = energy_sensor in self._manual_mappings
@@ -1310,7 +1395,7 @@ class UnifiedDeviceRegistry:
                 clear_load_current_control_wrong_unit(self.hass, device.device_id)
             except Exception:  # noqa: BLE001
                 pass
-            self._surplus_controller.register_device(PowerSetpointDevice(
+            _watt_load = PowerSetpointDevice(
                 hass=self.hass,
                 device_id=device.device_id,
                 name=device.name,
@@ -1320,7 +1405,12 @@ class UnifiedDeviceRegistry:
                 entity_id=entity,
                 power_entity_id=device.power_sensor,
                 energy_entity_id=getattr(device, "energy_sensor", None),
-            ))
+            )
+            # (#1344) its stored goals — the comfort band among them — were
+            # never put on the live object on this path
+            self._apply_saved_load_choices(_watt_load)
+            self._apply_goals(_watt_load)
+            self._surplus_controller.register_device(_watt_load)
             return
 
         try:
@@ -1331,7 +1421,8 @@ class UnifiedDeviceRegistry:
         except Exception:  # noqa: BLE001
             pass
 
-        surplus_device = CurrentControlDevice(
+        # (#1344) a load, not a car: it carries the comfort band
+        surplus_device = BandedCurrentLoad(
             hass=self.hass,
             device_id=device.device_id,
             name=device.name,
@@ -1349,7 +1440,30 @@ class UnifiedDeviceRegistry:
         # be "stopped" with a 0 A profile the charge point keeps.
         from ..hardware_detection import wire_current_entity
         wire_current_entity(self.hass, surplus_device, device.device_id, entity)
+        self._apply_saved_load_choices(surplus_device)
+        self._apply_goals(surplus_device)     # (#1344) as on every other path
         self._surplus_controller.register_device(surplus_device)
+
+    def _apply_saved_load_choices(self, live) -> None:
+        """(#1344) The user's Mode and "Requires" link, put back on a load
+        this path rebuilds — as the switch path has done since #49 / #122.
+
+        A load driven by a watt or ampere setpoint was rebuilt with the
+        class default on every restart, re-discovery and reorder: a heating
+        rod the user had set to Solar came back as peak-only, so SEM
+        stopped driving it — a tank under its too-cold limit included."""
+        from ..devices.base import DeviceControlMode
+        try:
+            live.control_mode = DeviceControlMode(
+                self.control_mode_for(live.device_id))
+        except ValueError:
+            live.control_mode = DeviceControlMode(DEFAULT_DISCOVERED_CONTROL_MODE)
+        except AttributeError:
+            # a registry with no stores yet (built bare) has no saved choice
+            return
+        deps = getattr(self, "_dependency_overrides", {}).get(live.device_id)
+        if deps:
+            live.depends_on = list(deps)
 
     def control_mode_for(self, device_id: str) -> str:
         """What a device may do: the user's choice, else the discovery default.
@@ -1929,7 +2043,7 @@ class UnifiedDeviceRegistry:
             # kW here, so a 2 kW draw rendered as "2 W"). Matches the ED rows.
             current_power = round(live.get_current_consumption()) if is_on and live else 0.0
             result[did] = {
-                "name": spec.get("name", did),
+                "name": self.name_for(did, spec.get("name", did)),
                 # (#890) the one axis, not the spec — a drag must show here
                 "priority": self._service_device_priority(did, spec),
                 # (#780) an explicit registration IS the control handle.
@@ -2172,7 +2286,7 @@ class UnifiedDeviceRegistry:
             "energy_entity": spec.get("energy_entity_id"),
             "switch_entity": entity,
             "control": {"type": "switch", "entity": entity} if entity else None,
-            "friendly_name": spec.get("name", device_id),
+            "friendly_name": self.name_for(device_id, spec.get("name", device_id)),
             "device_type": "individual_device",
             "description": f"Registered device: {spec.get('name', device_id)}",
             "source": "service_registration",
@@ -2504,6 +2618,10 @@ class UnifiedDeviceRegistry:
                 "min_off_effective_min": (
                     None if live is None or getattr(live, "min_off_seconds", None) is None
                     else round(float(live.min_off_seconds) / 60.0, 1)),
+                # (#1341) the user's own name ("" = none) and the name the
+                # load has without it — the editor's field and its hint
+                "name": self.own_name(device_id),
+                "automatic_name": self.automatic_name(device_id),
                 # (#1048) the supply phase — the editor's select
                 "phase": load_phase(goals.get("phase")),
                 # (#1021) the Configure-device switch
@@ -2537,7 +2655,18 @@ class UnifiedDeviceRegistry:
             "locked_by_operator": bool(
                 live is not None
                 and getattr(live, "locked_by_operator", False) is True),
-        } | self._comfort_payload(live)
+        } | self._comfort_payload(live) | self._intent_payload(device_id)
+
+    def _intent_payload(self, device_id: str) -> Dict[str, Any]:
+        """(#1321) What the load engine decided for this load THIS cycle:
+        ``{"intent": {"on", "source", "code"}}``. Absent until the first
+        cycle. The card says it in words; nothing here is prose."""
+        ask = getattr(self._surplus_controller, "load_intent", None)
+        try:
+            rec = ask(device_id) if callable(ask) else None
+        except Exception:  # noqa: BLE001 — a payload must never break the sensor
+            return {}
+        return {"intent": rec} if isinstance(rec, dict) and rec else {}
 
     @staticmethod
     def _comfort_payload(live) -> Dict[str, Any]:
@@ -2553,17 +2682,87 @@ class UnifiedDeviceRegistry:
         """
         if live is None or not hasattr(live, "comfort_state"):
             return {}
+
+        def _is_away(dev) -> bool:
+            rule = getattr(dev, "away_pauses", None)
+            return callable(rule) and rule() is True
+
         try:
-            return {"comfort": {
+            out = {
                 "state": str(live.comfort_state),
                 "reading_c": live._comfort_reading(),
                 # so the chip says cooling vs heating without guessing —
                 # from the band's own direction hook, not hvac_mode (a
                 # switch heater has no hvac_mode).
                 "hvac": live._comfort_direction(),
-            }}
+                # (#1344) the house is away and this heater is paused: the
+                # state above reads disengaged then, so the card needs the
+                # cause to say "away" and not "no band"
+                "away": _is_away(live),
+            }
         except Exception:  # noqa: BLE001 — a payload must never break the sensor
             return {}
+        out.update(UnifiedDeviceRegistry._band_lines(live))
+        return {"comfort": out}
+
+    @staticmethod
+    def _band_lines(live) -> Dict[str, Any]:
+        """(#1321) The band's lines in °C, as the engine holds them: Keep at,
+        the line a planned run starts under, how far the sun may go and the
+        too-cold limit. From the device, never re-derived by the card. Empty
+        for a band that is not set."""
+        if not (getattr(live, "comfort_target", None)
+                and getattr(live, "comfort_limit", None)):
+            return {}
+        try:
+            keep, extra, limit = (float(v) for v in live._comfort_thresholds_c())
+            gap_fn = getattr(live, "comfort_goal_start_gap_c", None)
+            gap = float(gap_fn()) if callable(gap_fn) else 0.0
+            cooling = live._comfort_direction() == "cool"
+        except Exception:  # noqa: BLE001 — an unreadable band publishes no lines
+            return {}
+        sign = 1.0 if cooling else -1.0
+        return {
+            "keep_c": round(keep, 2),
+            "start_c": round(keep + sign * gap, 2),
+            "max_c": round(keep - sign * extra, 2),
+            "limit_c": round(limit, 2),
+            # (#1102) the device's own run — the tank heats past Keep at
+            "own_run": getattr(live, "runs_without_surplus", False) is True,
+            # (#1102) may a planned hour be BOUGHT to reach Keep at? The
+            # device's own rule; without it only the sun keeps the tank.
+            "may_buy": UnifiedDeviceRegistry._may_buy(live),
+            # (#1349) may it reach Keep at at night from the house battery?
+            "may_use_battery": UnifiedDeviceRegistry._may_use_battery(live),
+            # (#705/#1349) the band rides the unit's own live setpoint: Keep
+            # at IS that setpoint, the typed limit only gives its distance.
+            # The card shows these lines, not the typed numbers.
+            "anchored": UnifiedDeviceRegistry._anchored(live),
+        }
+
+    @staticmethod
+    def _may_buy(live) -> bool:
+        ask = getattr(live, "comfort_goal_may_buy", None)
+        try:
+            return ask() is True if callable(ask) else False
+        except Exception:  # noqa: BLE001 — an unreadable rule buys nothing
+            return False
+
+    @staticmethod
+    def _anchored(live) -> bool:
+        ask = getattr(live, "_comfort_anchor_c", None)
+        try:
+            return callable(ask) and ask() is not None
+        except Exception:  # noqa: BLE001 — a broken anchor is no anchor
+            return False
+
+    @staticmethod
+    def _may_use_battery(live) -> bool:
+        ask = getattr(live, "comfort_goal_may_use_battery", None)
+        try:
+            return ask() is True if callable(ask) else False
+        except Exception:  # noqa: BLE001 — an unreadable rule takes nothing
+            return False
 
     async def async_set_manual_mapping(
         self,

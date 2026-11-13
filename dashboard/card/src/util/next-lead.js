@@ -99,17 +99,28 @@ export function fill(text, params, t) {
     return out;
 }
 
+// (#1349) one implementation, shared with the classic Energy Plan card
+export { coldHeaters } from './heater-questions.js';
+
 /** The Plan screen's line from the plan sensor's attributes. */
 export function planLead(a, extra) {
     const ok = a && typeof a === 'object' && Array.isArray(a.blocks);
     if (!ok || !a.computed_at) return { main: { key: 'next_plan_none', params: {} }, sub: null };
     const evKwh = kwhOf(a.blocks, (id) => String(id).startsWith('ev:'));
-    const loadKwh = kwhOf(a.blocks, (id) => String(id).startsWith('load:'));
+    // (#1321) a heater's Keep at run is a load run too (plan id comfort:<id>)
+    const loadKwh = kwhOf(a.blocks, (id) => String(id).startsWith('load:') || String(id).startsWith('comfort:'));
+    // A heater below its start line with no hour planned: "nothing planned"
+    // would read as "nothing is needed". Say what is missing instead.
+    const cold = extra?.cold || null;
+    const quiet = cold
+        ? { key: (cold.cool ? 'hq_plan_above_no_hour' : 'hq_plan_below_no_hour') + (cold.time ? '' : '_plain'),
+            params: { name: cold.name, keep: cold.keep, time: cold.time || '' } }
+        : { key: 'next_plan_quiet', params: {} };
     const main = evKwh > 0.05
         ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh) } }
-        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } }
-                          : { key: 'next_plan_quiet', params: {} });
-    const sub = { key: 'next_plan_sub', params: {
+        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } } : quiet);
+    // (#1321) hours with no price yet give no cost: say so, not "cost ,"
+    const sub = { key: extra?.cost ? 'next_plan_sub' : 'next_plan_sub_nocost', params: {
         time: extra?.computedAt || '', cost: extra?.cost || '',
         fits: extra?.fitsKey || '', sun: fmt1(extra?.sunTomorrowKwh) } };
     return { main, sub };

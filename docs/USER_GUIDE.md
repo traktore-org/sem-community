@@ -252,6 +252,15 @@ Each charger gets its own sensor entities:
 
 To **edit** an existing charger, select it from the charger menu. To **remove**, select "Remove a charger". A working primary charger cannot be removed; a half-filled one can. The Repairs of a charger you removed clear the next time SEM starts. If an earlier setup left a charger half-filled, SEM offers it again: add it and the new charger replaces the old card.
 
+### Name a load
+
+A load takes its name from the Energy dashboard. To give it your own name in
+SEM, open **Configure device** on its row of the **Control** tab and fill in
+**Name in SEM**. The name shows everywhere in SEM at once and stays after a
+restart. Empty the field to get the Energy dashboard name back. Only the name
+changes: the load keeps its settings and its history. A charger is named in
+its own setup.
+
 ### Appliance Dependencies
 
 Devices can require other devices to be active before they turn on. Set this from the **Control** tab on the dashboard:
@@ -427,6 +436,73 @@ A step-down lasts at least 15 minutes, and the next one waits 15 minutes, so
 a price that flickers does not cycle the compressor. In observer mode SEM
 only shows that it would step down. The **Why?** card names the cause.
 
+### A heater's four questions
+
+A heater with a thermometer (a boiler, a heat pump, a room unit) is set with
+four questions. Both dashboards ask them in the same words: on the Load
+Priority card under the target button, and on the SEM Next Devices screen in
+the opened row.
+
+| Question | What SEM does |
+|---|---|
+| **Keep it at** (was *Keep at*) | The temperature to keep. Spare sun heats to it. If SEM may buy power, it also heats to it in a planned cheap hour; that run starts only 1 °C below it (less when *Never colder than* is close) |
+| **Never colder than** (was *Run now past*) | Below this SEM heats at once, at any price, and goes on to *Keep it at* |
+| **With spare sun, heat up to** (was *Extra from surplus*) | How hot free sun may heat it. You type the temperature itself; SEM stores the degrees above *Keep it at*. On a hot-water tank it also sets the Solar target of the Configuration tab, so both stops agree |
+| **May SEM buy power for it?** (was *Finish overnight from*) | *No, sun only*: only the sun heats it. *Yes, in cheap hours*: SEM buys the rest in the cheapest hours. *Yes, from the house battery at night* (only with a house battery): at night it heats to *Keep it at* from the battery, while the battery is above its reserve. At the reserve it stops and waits for the sun; it never turns into a bought run |
+
+Above the questions one line says what the heater does now and what comes
+next, for example "45.8 °C now. Heats to 52 °C at 23:00." Everything else —
+the thermometer, minimum on and off time, its own tariff, *Stop when* — sits
+under **More**.
+
+A load without a thermometer is asked for its time instead: **Run it each
+day for**, then the same buy question.
+
+A cooling unit is asked the same four, turned round: **Keep it at**, **Never
+warmer than** (above it SEM cools at once), **With spare sun, cool down to**
+(a temperature below *Keep it at*) and the same buy question. A unit that
+picks heat or cool from the outdoor forecast shows the questions of the
+season it is in, and says which.
+
+A room unit with its own thermostat follows that thermostat: **Keep it at**
+shows the unit's own setpoint and is changed on the unit. The other two
+temperatures show what SEM uses, and keep their distance to the setpoint
+when it moves.
+
+A heater SEM drives by a watt or ampere setpoint (a heating rod, for
+example) follows the same questions. A too-cold run and a planned run ask
+for its full power; on spare sun it follows the sun.
+
+SEM checks in this order, and the first match decides:
+
+1. Your own stop temperature is reached: it stops.
+2. A Legionella run is due: it runs to its own target.
+3. The tank is colder than *Never colder than*: it heats now.
+4. The tank is below *Keep it at*, SEM may buy power for it and the planned
+   hour is open: it heats, and runs through to *Keep it at* without switching
+   on and off.
+5. It is night, you chose the house battery and the battery is above its
+   reserve: it heats to *Keep it at* from the battery.
+6. There is spare sun: it heats up to *With spare sun, heat up to*.
+
+With a thermometer the daily run time asks for nothing: a warm tank is not
+heated again for its minutes. Solar only is solar only, as for a car: with
+*No, sun only* SEM buys no power to reach *Keep it at*. Only *Never colder
+than* heats at once whatever the answer.
+The **Why?** card names the step that decided.
+
+**While you are away** (the *Vacation mode* switch, or your own away
+entity) the same rule holds for every heater with these fields: no *Keep
+at* run, nothing bought for it, no extra from the sun. Only the too-cold
+limit still heats, and only back to just above *Run now past*, so a house on
+holiday is kept from going cold but is not kept warm. A Legionella run waits
+until you are back. If you let the hot-water tank take surplus while away,
+it still takes free sun up to its minimum temperature. A load without these
+fields is not touched by away.
+
+A Legionella run that is due does not start while the house is at its peak
+limit; it starts when the peak has passed.
+
 ### Heat or cool by the outdoor forecast (#1323)
 
 A climate unit set to **By outdoor forecast** picks its season itself. Pick it
@@ -527,6 +603,8 @@ If your own *Stop when ≥* sensor ends the run before the tank reaches the Legi
 ### Important: Legionella cycle cannot be disabled
 
 The Legionella prevention cycle is a safety requirement mandated by building codes. It cannot be turned off. You can adjust the interval and the target temperature (minimum 60°C) in the integration options, but the cycle itself is always active when hot water control is enabled. This protects against dangerous Legionella bacteria growth in stored hot water.
+
+A run that has started still stops when you set the load's Mode to Off or turn SEM off.
 
 ---
 
@@ -1464,10 +1542,12 @@ The **Mode** dropdown on a device's Control-tab row offers four options:
 |------|--------------|----------------|----------|
 | **Off** | Never | Never | Monitoring only (coffee machine, lights you don't want managed) |
 | **Peak Only** | Never | Yes, during grid peaks | Devices under your control that SEM may shed to protect the grid limit |
-| **Solar only** | Yes, on PV surplus | Yes, when surplus drops or during peaks | Discretionary loads on sun alone (pool pump, boiler) |
-| **Solar + battery** | Yes, on PV surplus + home-battery assist above the buffer | Same | Loads that should ride through cloud/evening on the battery (#620) |
+| **SEM runs it** (was *Solar only*) | Yes, on spare sun | Yes, when the sun drops or during peaks | Loads SEM should start and stop (pool pump, boiler) |
+| **SEM runs it, battery may help** (was *Solar + battery*) | Yes, on spare sun plus home-battery help above the buffer | Same | Loads that should ride through a cloud on the battery (#620) |
 
-**Default for all devices: Peak Only** — SEM never proactively turns a device on unless you pick one of the Solar modes.
+**Default for all devices: Peak Only** — SEM never turns a device on unless you pick one of the two *SEM runs it* modes.
+
+The mode says who runs the load, not where its power comes from. Whether SEM buys power for it is its own question: *May SEM buy power for it?* (see [A heater's four questions](#a-heaters-four-questions)). A car's charge modes keep their names.
 
 Internally the two Solar modes share the `surplus` control mode (`control_mode`: `off` / `peak_only` / `surplus`), differentiated by the battery-assist flag — relevant when writing the mode via the service below.
 
@@ -2206,6 +2286,7 @@ SEM skips:
 - Battery discharge limit changes
 - Device shedding commands
 - Hot-water heating, also the Legionella run
+- Heat pump commands
 
 When you turn it off, SEM can start a load right away. A stop it held back does not start the load's minimum off time.
 

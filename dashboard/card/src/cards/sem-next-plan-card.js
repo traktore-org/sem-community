@@ -13,7 +13,7 @@
 
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
-import { planLead, kwhOf } from '../util/next-lead.js';
+import { planLead, kwhOf, coldHeaters } from '../util/next-lead.js';
 
 /** null / '' is unknown, never 0 (Number(null) is 0). */
 export function knownNum(v) {
@@ -250,8 +250,23 @@ class SEMNextPlanCard extends SEMNextBase {
             const i = evs.indexOf(r);
             return evs.length > 1 && i >= 0 ? `${this._t('next_src_car')} ${i + 1}` : this._t('next_src_car');
         }
-        if (r.kind === 'ev' || r.kind === 'load') return r.label || this._t('next_lane_load');
+        if (r.kind === 'ev' || r.kind === 'load') return (r.label || this._t('next_lane_load')) + this._toKeep(r.keepOf);
         return this._t({ battery_in: 'next_row_charge', battery_out: 'next_row_to_house', grid: 'next_row_from_grid' }[r.kind]);
+    }
+
+    /** (#1321) " · to 52 °C" for a heater's Keep at run, '' otherwise. */
+    _toKeep(deviceId) {
+        const keep = deviceId ? this._devices()[deviceId]?.comfort?.keep_c : null;
+        return keep == null || !Number.isFinite(Number(keep)) ? '' : ' · ' + this._tf('next_plan_to_keep', { keep: this._temp(keep) });
+    }
+
+    /** (#1321) Heaters below their start line with no hour in the plan. */
+    _cold(plan) {
+        const slots = Array.isArray(plan.slots) ? plan.slots : [];
+        const end = slots.length ? slots[slots.length - 1].end : '';
+        const time = end && Number.isFinite(Date.parse(end)) ? this._hhmm(end) : '';
+        return coldHeaters(this._devices(), plan.blocks, Date.now())
+            .map((h) => ({ ...h, keep: this._temp(h.keepC), time }));
     }
 
     _rowName(r) {
@@ -651,10 +666,11 @@ class SEMNextPlanCard extends SEMNextBase {
     _loadRow(id, plan, blocks, demands, notSched) {
         const t = (k) => this._t(k);
         const obs = this._obs();
-        const key = id.replace(/^load:/, '');
+        const keepRun = id.startsWith('comfort:');
+        const key = id.replace(/^(load|comfort):/, '');
         const d = demands.find((x) => x.id === id);
         const ns = notSched.find((x) => x.id === id);
-        const name = this._devices()[key]?.name || d?.label || ns?.label || key;
+        const name = (this._devices()[key]?.name || d?.label || ns?.label || key) + (keepRun ? this._toKeep(key) : '');
         const win = this._windowOf(blocks, id);
         const kwh = win ? kwhOf(blocks, (x) => x === id) : Number(d?.planned_kwh) || 0;
         const bits = [];
@@ -682,10 +698,25 @@ class SEMNextPlanCard extends SEMNextBase {
             && (this._has('select.sem_battery_mode') || blocks.some((b) => String(b.id).startsWith('battery')) || (Array.isArray(plan.batt_runs) && plan.batt_runs.length > 0));
         if (hasBattery) rows.push(this._batteryRow(plan, blocks, demands));
         const loadIds = new Set();
-        for (const d of demands) if (String(d.id).startsWith('load:')) loadIds.add(String(d.id));
-        for (const b of blocks) if (String(b.id).startsWith('load:')) loadIds.add(String(b.id));
-        for (const n of notSched) if (String(n.id).startsWith('load:')) loadIds.add(String(n.id));
+        // (#1321) a heater's Keep at run (comfort:<id>) is listed like its run time
+        const isLoad = (x) => String(x.id).startsWith('load:') || String(x.id).startsWith('comfort:');
+        for (const d of demands) if (isLoad(d)) loadIds.add(String(d.id));
+        for (const b of blocks) if (isLoad(b)) loadIds.add(String(b.id));
+        for (const n of notSched) if (isLoad(n)) loadIds.add(String(n.id));
+        // one row per heater: its Keep at run speaks for it, so a run-time
+        // entry that only says "not scheduled" is dropped beside it
+        const hasBlock = (id) => blocks.some((b) => String(b.id) === id);
+        for (const id of [...loadIds]) {
+            if (id.startsWith('load:') && !hasBlock(id) && hasBlock('comfort:' + id.slice(5))) loadIds.delete(id);
+        }
         for (const id of loadIds) rows.push(this._loadRow(id, plan, blocks, demands, notSched));
+        // …and a heater that is below its line with no hour says so, not nothing
+        for (const h of this._cold(plan)) {
+            if (loadIds.has('comfort:' + h.id) || loadIds.has('load:' + h.id)) continue;
+            rows.push(this._devRow('mdi:thermometer-alert', C.home, h.name,
+                t('next_not_scheduled'),
+                this._tf((h.cool ? 'hq_plan_above_no_hour' : 'hq_plan_below_no_hour') + (h.time ? '' : '_plain'), { name: h.name, keep: h.keep, time: h.time }), []));
+        }
         if (!rows.length) return nothing;
         return this._sec(t('next_per_device'), html`<div class="rows">${rows}</div>
             <p class="help">${this._obs() ? t('next_observing_hint') : t('next_override_help')}</p>`);
@@ -805,6 +836,7 @@ class SEMNextPlanCard extends SEMNextBase {
             cost: Number.isFinite(knownNum(m.cost)) ? this._money(knownNum(m.cost)) : '',
             fitsKey: m.fits === undefined ? '' : this._t(m.fits ? 'next_fits_yes' : 'next_fits_no'),
             sunTomorrowKwh: this._num('sensor.sem_forecast_tomorrow_kwh'),
+            cold: this._cold(plan)[0] || null,
         });
         const flat = (this._str('sensor.sem_tariff_price_level') || 'flat') === 'flat';
         const main = this._tf(lead.main.key, lead.main.params);

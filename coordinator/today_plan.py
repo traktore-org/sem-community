@@ -415,9 +415,9 @@ def compose_today_plan(
             # the honest answer where the old value was the inner block's.
             last_end = max(we for _ws, we, _late in windows)
             if now < last_end < horizon:
-                # The plan's own promise — not a rate estimate.
-                # (#1321) The label reads "Min reached ({kwh} kWh)": without
-                # the value the cards printed the placeholder itself.
+                # The plan's own promise — not a rate estimate. (#1310) Its
+                # text names {kwh}, as the estimate's does below: with no
+                # value the card printed "Min reached ({kwh} kWh)".
                 rows.append(PlanRow(
                     when=last_end, kind=KIND_EV_MIN_REACHED,
                     label="plan_ev_min_reached",
@@ -486,14 +486,14 @@ def compose_today_plan(
     # ``plan_ev_min_reached`` above which is a NIGHT planner estimate
     # (when will the deadline-floor be hit). This row tracks the LIVE
     # session's projected completion.
-    if ev_target_eta and now < ev_target_eta < horizon:
+    # (#1310) The text names {kwh}, so no kWh means no row: an empty value
+    # printed "EV reaches target ({kwh} kWh)". The caller sets both together.
+    if (ev_target_eta and ev_target_kwh is not None
+            and now < ev_target_eta < horizon):
         rows.append(PlanRow(
             when=ev_target_eta, kind=KIND_EV_TARGET_REACHED,
             label="plan_ev_target_reached",
-            values=(
-                {"kwh": f"{ev_target_kwh:.1f}"}
-                if ev_target_kwh is not None else {}
-            ),
+            values={"kwh": f"{ev_target_kwh:.1f}"},
         ))
 
     # Home battery — full or empty ETA. Mutually exclusive in practice

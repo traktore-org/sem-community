@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Switch-entitet för SG-Ready-relä 1 (signal för normaldrift). Ange tillsammans med relä 2 för SG-Ready-protokollet.",
           "heat_pump_relay2_entity": "Switch-entitet för SG-Ready-relä 2 (signal för överskottsboost). Ange tillsammans med relä 1 för SG-Ready-protokollet.",
           "heat_pump_invert_sg_ready": "Aktivera endast om värmepumpens SG-Ready-kontakter är kopplade som normalt slutna (NC). SEM följer standardsanningstabellen för SG-Ready; om boost blockerar pumpen (och tvärtom) slår du på detta för att vända båda reläerna.",
-          "heat_pump_step_down": "När huset köper nätel under en dyr timme, eller närmar sig din effektgräns, sänker SEM börvärdet eller skickar SG-Ready-spärrsignalen. Det kräver ett komfortband (Håll på och Kör nu förbi); SEM drar aldrig ner under det.",
+          "heat_pump_step_down": "När huset köper nätel under en dyr timme, eller närmar sig din effektgräns, sänker SEM börvärdet eller skickar SG-Ready-spärrsignalen. Det kräver ett komfortband (Håll på och Kör direkt över); SEM drar aldrig ner under det.",
           "heat_pump_climate_entity": "Klimatentitet som används för att höja börvärdet vid solöverskott. Räcker på egen hand för läget endast klimat (inga reläer behövs).",
           "heat_pump_power_sensor": "Valfri sensor (W) som rapporterar värmepumpens aktuella effektförbrukning.",
           "heat_pump_boost_offset": "Antal grader Celsius som läggs till det normala börvärdet under en boost med solöverskott.",
@@ -1856,6 +1856,9 @@
     },
     "invalid_device_property": {
       "message": "Ogiltig enhetsegenskap: ”{property}”."
+    },
+    "device_named_elsewhere": {
+      "message": "”{device_id}” kan inte namnges här. En laddare namnges i sin egen inställning; batteriet har inget namn."
     },
     "invalid_deadline_format": {
       "message": "Ogiltigt deadlineformat: ”{deadline}”. Använd ISO 8601-format, till exempel 2026-05-27T07:00:00."

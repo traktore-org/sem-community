@@ -706,6 +706,18 @@ class LoadIntent:
     step_down: bool = False
 
 
+def intent_record(intent: "LoadIntent") -> Dict[str, Any]:
+    """(#1321) A load's intent as the cards read it: on or off, the source
+    and the reason CODE — never prose (the card translates the code). An
+    intent without a code is named by its source ("solar", "cheap_grid")."""
+    return {
+        "on": bool(intent.on),
+        "source": intent.source or None,
+        "code": str(intent.code or intent.source or ""),
+        **({"step_down": True} if intent.step_down else {}),
+    }
+
+
 #: (#1335) Sources that buy the run (grid, battery) or need no sun (the
 #: comfort floor): a run on them holds its power and is never re-tuned to
 #: the sun's pool, and the walk lets it take only the sun that is left.
@@ -808,6 +820,74 @@ def _heater_band(device: "ControllableDevice"):
     return state, below
 
 
+def _away_pauses(device: "ControllableDevice") -> bool:
+    """(#594/#1344) Is this device paused because the house is away? The
+    device's own rule (a heater with its band set up, or a comfort
+    controller); a device without the rule follows its ``vacation`` flag."""
+    if getattr(device, "vacation", False) is not True:
+        return False
+    rule = getattr(device, "away_pauses", None)
+    if callable(rule):
+        try:
+            said = rule()
+        except Exception:  # noqa: BLE001 — an unreadable band stays paused
+            return True
+        if isinstance(said, bool):
+            return said
+    return True
+
+
+def _away_heats(device: "ControllableDevice", active: bool) -> bool:
+    """(#1344) While away: does the device's too-cold limit heat now?"""
+    rule = getattr(device, "comfort_away_heats", None)
+    if not callable(rule):
+        return False
+    try:
+        return rule(active) is True
+    except Exception:  # noqa: BLE001 — an unreadable band heats nothing
+        return False
+
+
+def _goal_may_buy(device: "ControllableDevice") -> bool:
+    """(#1102) May this load's Keep at run be bought from the grid? The
+    device's own rule; a device without it follows its top-up policy."""
+    may = getattr(device, "comfort_goal_may_buy", None)
+    if callable(may):
+        try:
+            said = may()
+        except Exception:  # noqa: BLE001 — an unreadable rule buys nothing
+            return False
+        if isinstance(said, bool):
+            return said
+    return getattr(device, "top_up_policy", "solar_only") == "cheap_hours"
+
+
+def _goal_may_use_battery(device: "ControllableDevice") -> bool:
+    """(#1349) May this load's Keep at run take the house battery at night?
+    The device's own rule; a device without it follows its battery flag."""
+    may = getattr(device, "comfort_goal_may_use_battery", None)
+    if callable(may):
+        try:
+            said = may()
+        except Exception:  # noqa: BLE001 — an unreadable rule takes nothing
+            return False
+        if isinstance(said, bool):
+            return said
+    return getattr(device, "battery_eligible_overnight", False) is True
+
+
+def _goal_wants_start(device: "ControllableDevice") -> bool:
+    """(#1102) The device's own start gap below Keep at. A device without
+    the rule (a test double, an older device class) starts as before."""
+    wants = getattr(device, "comfort_goal_wants_start", None)
+    if not callable(wants):
+        return True
+    try:
+        return wants() is not False
+    except Exception:  # noqa: BLE001 — an unreadable band starts as before
+        return True
+
+
 #: (#1102) A device's own run (Legionella): SEM-driven, never re-tuned.
 OWN_RUN_SOURCE = "legionella"
 
@@ -838,9 +918,35 @@ def _heater_claim(device: "ControllableDevice", active: bool, held: float) -> fl
     sensor of its own reports a stored figure, not a measurement — the floor
     rung claimed 1000 W for a 3000 W boiler on .175."""
     rated = _num(getattr(device, "rated_power", 0.0))
+    full = _heater_full_w(device)
+    if full is not None:
+        # (#1344) a watt setpoint is SENT its full power by a heater rung,
+        # so that is what it will draw — not the smaller figure it held
+        # while it followed the sun
+        return full
     if active and getattr(device, "power_entity_id", None) and held > 0:
         return float(held)
     return rated
+
+
+def _heater_full_w(device: "ControllableDevice") -> "Optional[float]":
+    """(#1344) The full power a heater rung sends a load SEM drives by a
+    setpoint: what its entity takes for its rating. None for a load that is
+    only switched (a relay draws what it draws)."""
+    own = getattr(device, "heater_full_w", None)
+    fn = getattr(device, "expected_draw_w", None)
+    if not callable(own) and not callable(fn):
+        return None
+    try:
+        # an ampere load names its own full power; a watt setpoint is asked
+        # what its entity takes for its rating
+        value = own() if callable(own) else fn(
+            _num(getattr(device, "rated_power", 0.0)))
+    except Exception:  # noqa: BLE001 — an unreadable entity is no setpoint
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        return float(value)
+    return None
 
 
 def compute_load_intent(
@@ -999,8 +1105,20 @@ def compute_load_intent(
     # 3d. (#594/#1335) Away: no comfort heating. A run stops; the optional
     #     hot-water dump may still take free sun (capped at the minimum
     #     temperature by the device's own target), nothing paid.
+    #     (#1344) ONE rule for every heater: a load with its band set up is
+    #     paused like the two controllers — no Keep at run, no banking — and
+    #     only the too-cold limit still heats, back above the limit and no
+    #     further. Peak shed (clause 2) and the operator's lock still outrank it.
     sun_only = False
-    if getattr(device, "vacation", False) is True:
+    if _away_pauses(device):
+        if (active or not peak_freeze) and _away_heats(device, active):
+            _thr = (_num(getattr(device, "min_power_threshold", 0.0))
+                    or _num(getattr(device, "rated_power", 0.0)))
+            src = ("solar" if float(remaining_surplus_w) >= _thr > 0
+                   else "comfort_floor")
+            return LoadIntent(True, _heater_claim(device, active, held), src,
+                              "too cold while away — heats back above its limit",
+                              RC.LOAD_COMFORT_FLOOR_AWAY)
         if getattr(device, "vacation_dhw_surplus", False) is not True:
             return LoadIntent(False, 0.0, None,
                               "comfort heating paused while away",
@@ -1017,8 +1135,14 @@ def compute_load_intent(
             return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
                               "Legionella run — ends at its own target",
                               RC.LOAD_LEGIONELLA)
-        return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
-                          "Legionella run due", RC.LOAD_LEGIONELLA)
+        # (#1344) A due run does not START into a peak: the shed (clause 2)
+        # ended it the next cycle and it started again, on and off for as
+        # long as the peak lasted. It waits — the rungs below decide as if
+        # it were not due, and none of them starts a load into a peak. A run
+        # already going is kept, as above.
+        if not peak_freeze:
+            return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
+                              "Legionella run due", RC.LOAD_LEGIONELLA)
 
     # 3e. (#1321) The user's one-off, for the minutes they chose: ``skip``
     #     keeps it off, ``force`` runs it with or without sun. Only in
@@ -1173,12 +1297,38 @@ def compute_load_intent(
     # and Keep at is the goal there: it heats up to Keep at; Extra above it
     # is for the sun only. (#864/#1335) A start from the grid must fit the
     # billing slot, as the cheap-hours start does.
+    # (#1102) A START also needs the reading clearly below Keep at (the
+    # device's start gap); a run already going heats on to Keep at.
+    # Bought power needs the user's word for the grid on this load: solar
+    # only is solar only, as for a car.
     if (plan.comfort_in_block and can_start and band is not None
             and band[0] == "willing" and band[1]
-            and (active or grid_start_fits)):
+            and _goal_may_buy(device)
+            and (active or (grid_start_fits and _goal_wants_start(device)))):
+        # (#1344) a watt setpoint is sent its full power for this run
+        _full = _heater_full_w(device)
         return LoadIntent(True, _heater_claim(device, active, held), "cheap_grid",
                           plan.reason or "joint plan: heats to its keep-at temperature",
-                          RC.LOAD_COMFORT_GOAL, command_w=paid_command)
+                          RC.LOAD_COMFORT_GOAL,
+                          command_w=paid_command if _full is None else _full)
+
+    # (#1349) Keep at from the house battery: "Finish overnight from:
+    # Battery" on a heater whose thermometer leads. The run-time clause
+    # below is closed to it (the band leads, so it has no deficit), so the
+    # choice did nothing. Same terms as that clause — night, no plan hold,
+    # the battery above its reserve — and the band's own: a start only
+    # below the start gap, a run going heats on to Keep at. At the reserve
+    # the terms end and the run ends with them; it waits for the sun and is
+    # never turned into a bought run.
+    if (band is not None and band[0] == "willing" and band[1]
+            and can_start and is_night and not plan_hold
+            and soc_above_reserve and _goal_may_use_battery(device)
+            and (active or _goal_wants_start(device))):
+        _full = _heater_full_w(device)
+        return LoadIntent(True, _heater_claim(device, active, held), "tier2_battery",
+                          "heats to its keep-at temperature from the house battery",
+                          RC.LOAD_COMFORT_GOAL_BATTERY,
+                          command_w=paid_command if _full is None else _full)
 
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
     # (#633) gated on night — "Finish overnight from: Battery" must not fire
@@ -1236,6 +1386,14 @@ def compute_load_intent(
     # 5. No source → off. When a plan hold is what suppressed the paid
     #    sources, SAY SO — "no source available" with a block twenty
     #    minutes away reads as a bug; the plan's own words read as a plan.
+    # (#1349) It would heat to Keep at from the house battery tonight, but
+    # the battery is at its reserve: say so, it is not "no source".
+    if (band is not None and band[0] == "willing" and band[1] and is_night
+            and not soc_above_reserve and _goal_may_use_battery(device)
+            and _goal_wants_start(device)):
+        return LoadIntent(False, 0.0, None,
+                          "waits — the house battery is at its reserve",
+                          RC.LOAD_BATTERY_RESERVE)
     if plan_hold and deficit:
         detail = f" (until {plan.until:%H:%M})" if plan.until else ""
         return LoadIntent(False, 0.0, None,
@@ -1278,7 +1436,8 @@ def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> N
     # to Keep at — written here with the other derived markers, not by the
     # layers that decide
     device._comfort_floor_run = bool(
-        intent.on and intent.code == RC.LOAD_COMFORT_FLOOR)
+        intent.on and intent.code in (RC.LOAD_COMFORT_FLOOR,
+                                      RC.LOAD_COMFORT_FLOOR_AWAY))
 
 
 def _clear_source_markers(device: "ControllableDevice") -> None:
@@ -1810,6 +1969,10 @@ class SurplusController:
         self.max_export_w: float = 0  # 0 = no limit. E.g., 10000 for 10kW export limit
         self._devices: Dict[str, ControllableDevice] = {}
         self._allocation_data = SurplusAllocationData()
+        #: (#1321) Each load's layer-1 intent of THIS cycle, for the cards:
+        #: ``{device_id: {"on", "source", "code"}}``. A roster — rebuilt
+        #: whole every cycle, never appended to, codes only.
+        self._intent_roster: Dict[str, Dict[str, Any]] = {}
         self._price_responsive_mode = False
         self._last_surplus = 0.0
         self._smoothed_surplus: Optional[float] = None
@@ -2008,6 +2171,12 @@ class SurplusController:
     def get_device(self, device_id: str) -> Optional[ControllableDevice]:
         """Get a registered device by ID."""
         return self._devices.get(device_id)
+
+    def load_intent(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """(#1321) This cycle's layer-1 intent for one load, or None when the
+        walk has not decided it (no cycle yet, or the load is gone)."""
+        rec = self._intent_roster.get(device_id)
+        return dict(rec) if rec else None
 
     def get_devices_sorted(self) -> List[ControllableDevice]:
         """Get all devices sorted by priority (1=highest).
@@ -2268,7 +2437,9 @@ class SurplusController:
         return (device.control_mode == DeviceControlMode.SURPLUS
                 and intent.on
                 and intent.source in ("solar", "tier1_battery")
-                and intent.code not in (RC.LOAD_COMFORT_FLOOR, RC.LOAD_DEADLINE)
+                and intent.code not in (RC.LOAD_COMFORT_FLOOR,
+                                        RC.LOAD_COMFORT_FLOOR_AWAY,
+                                        RC.LOAD_DEADLINE)
                 and getattr(device, "runs_without_surplus", False) is not True)
 
     def _walk_debit(self, device, intent: "LoadIntent", *, remaining: float,
@@ -2344,6 +2515,11 @@ class SurplusController:
             battery_priority=battery_priority, price_level=price_level,
             peak_freeze=peak_freeze, peak_shed=peak_shed,
             peak_shed_all=peak_shed_all)
+        # (#1321) What each load is to do now and why, for the cards — the
+        # same on a real install and in observer mode (the intent is the
+        # decision; only the write differs).
+        self._intent_roster = {
+            did: intent_record(intent) for did, intent in intents.items()}
         allocations: List[SurplusAllocation] = []
         active_count = 0
         for device in devices:

@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Switch-entiteetti SG-Ready-releelle 1 (normaalikäytön signaali). Aseta yhdessä releen 2 kanssa SG-Ready-protokollaa varten.",
           "heat_pump_relay2_entity": "Switch-entiteetti SG-Ready-releelle 2 (ylijäämäboostin signaali). Aseta yhdessä releen 1 kanssa SG-Ready-protokollaa varten.",
           "heat_pump_invert_sg_ready": "Ota käyttöön vain, jos lämpöpumppusi SG-Ready-koskettimet on kytketty normaalisti suljettuina (NC). SEM noudattaa SG-Readyn vakiototuustaulukkoa; jos boost estää pumpun (ja päinvastoin), kytke tämä päälle kääntääksesi molemmat releet.",
-          "heat_pump_step_down": "Kun talo ostaa verkkosähköä kalliina tuntina tai lähestyy tehorajaasi, SEM laskee asetusarvoa tai lähettää SG-Ready-estosignaalin. Tähän tarvitaan mukavuusalue (Pidä lämpötilassa ja Käy heti rajan yli); SEM ei koskaan vähennä sen alle.",
+          "heat_pump_step_down": "Kun talo ostaa verkkosähköä kalliina tuntina tai lähestyy tehorajaasi, SEM laskee asetusarvoa tai lähettää SG-Ready-estosignaalin. Tähän tarvitaan mukavuusalue (Pidä lämpötilassa ja Käynnistä heti yli); SEM ei koskaan vähennä sen alle.",
           "heat_pump_climate_entity": "Ilmastointientiteetti, jolla asetusarvoa nostetaan aurinkoylijäämän aikana. Riittää yksinään pelkän ilmastoinnin tilaan (releitä ei tarvita).",
           "heat_pump_power_sensor": "Valinnainen anturi (W), joka raportoi lämpöpumpun nykyisen tehonkulutuksen.",
           "heat_pump_boost_offset": "Celsiusasteet, jotka lisätään normaaliin asetusarvoon aurinkoylijäämän boostin aikana.",
@@ -1856,6 +1856,9 @@
     },
     "invalid_device_property": {
       "message": "Virheellinen laiteominaisuus: ”{property}”."
+    },
+    "device_named_elsewhere": {
+      "message": "Laitetta ”{device_id}” ei voi nimetä tässä. Laturi nimetään sen omissa asetuksissa; akulla ei ole nimeä."
     },
     "invalid_deadline_format": {
       "message": "Virheellinen määräajan muoto: ”{deadline}”. Käytä ISO 8601 -muotoa, esimerkiksi 2026-05-27T07:00:00."

@@ -997,6 +997,8 @@ it composes with `test_674` (`strings.json` == translations) to cover every lang
 
 **Instance — #1125, a hand-off list, not a persist boundary.** A charger found after start-up (`_retry_ev_device_setup`) handed its sensors to the reader through a literal `key_map` typed beside the reader's start-up parse (`SensorReader._parse_config`). The map had plug and charging, a dead `ev_total_energy_sensor` (no such reader field), and no power sensor, so `ev_power` read 0 W and the car counted as house load. **Closure:** first `SensorReader.adopt_late_charger` ran the found keys through `_parse_config`; since #1136 the find is saved and setup reads it like any saved charger, so there is no hand-over at all. **Guard:** `tests/test_1125_late_charger_power.py` — every key both discovery writes and the parse reads is taken; no production code outside `sensor_reader.py` writes the reader's config.
 
+**Instance — #1310, a text that names a value its row never sends.** The #674 dropped placeholder again, here between two builders of one row rather than two files. Today's plan showed "Osiągnięto Min ({kwh} kWh)" (@matekogon, Polish). Two builders make the "Min reached" row: the estimate sent `values={"kwh": …}`, the one from the energy plan's blocks (#742) sent none, so the card's `_format` left the name in the text. The live target row sent `{}` when it had no kWh. **Closure:** the blocks row sends the kWh still owed to Min, as the estimate does; a target with no kWh is no row. **Guard:** `tests/test_1310_plan_row_placeholders.py` — real composes reach every `PlanRow(...)` call in `today_plan.py` (a spy records each call's line), and each row fills every name its label and detail use in all 16 languages, a detail picked at run time too; an AST check that each call uses keywords only and sends, on every branch of `values`, every name its literal label and detail keys use. **Swept:** the Energy plan review rows, the 21 card calls that fill a literal key from a literal dict, the hand-written `.replace('{x}', …)` chains in six cards, and the logbook's plain reasons (#1174): each sends every name. **Sweep question:** when a text names a value, does every builder of that row send it? Refs #1310 #742 #674.
+
 ### 25. Mutual delegation — two layers each defer the action to the other — GUARDED
 **Symptom:** the intent is right, the command is issued, the logs say it was issued, and the
 thing never happens. Nothing raises, because from each layer's own point of view it behaved
@@ -2496,7 +2498,21 @@ the force expiry does, so a band on the default "Off" turns on and off through i
 (which side is right is a choice, still open); the plan placing a "Grid" load's daily minimum by
 day is fixed (class 181, second catch). #1331: the Why? card's "Surplus" is the car's budget on every
 row.
-Refs #780 #779 #650 #1310 #1102.
+**Fifth catch (#1338, 11.11.2026):** `ComfortBandMixin.has_runtime_deficit` read a `forced` band
+("too cold now") as "run time owed", and a deficit is served only from the sources the load's mode
+allows. @hoyte's heat pump tank (climate entity, "Solar + battery", Run now past 41 °C) fell to
+28 °C on 2.3.0-beta.9 on a November day: no sun, an empty battery, and the grid only in the cheap
+night hours, so nothing could heat it (`hot_water_activation_path: uninitialized`).
+**Closure:** the #1102 heater ladder (68da1c5e, 2.3.0-beta.10) gave "too cold" its own rung in
+`compute_load_intent`: at or past the limit the load runs now on any source and tariff, on to Keep
+at (`comfort_floor`); a band device's run time asks nothing. No new code for #1338.
+**Guard:** `tests/test_1102_heater_ladder.py` (a switch boiler) and
+`tests/test_1338_cold_tank_heats.py` — climate and water_heater tanks with the reporter's numbers
+through `SurplusController.update`, day and night, three price levels; the engine must send the
+start. Disabling the rung fails 8 of its 10 cases.
+**Left open:** loads driven by watts or amperes (`PowerSetpointDevice`, `CurrentControlDevice`) show
+the Comfort fields on the card but have no band, so Run now past does nothing there (#1344).
+Refs #780 #779 #650 #1310 #1102 #1338.
 
 ### 48. A removed host API called past its removal, its failure swallowed as a benign case — GUARDED
 **Symptom:** a feature that has always worked goes dead for users on a *newer Home Assistant* than

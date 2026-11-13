@@ -232,15 +232,14 @@ class TestLiveETARows:
         assert rows[0]["values"] == {"kwh": "22.5"}
         assert rows[0]["label"] == "plan_ev_target_reached"
 
-    def test_ev_target_eta_without_kwh_emits_row_without_values(self):
+    def test_ev_target_eta_without_kwh_emits_no_row(self):
         """Defensive: composer must not crash when the caller has an ETA
-        but no target value (e.g. SOC-mode charger with a missing kWh
-        translation)."""
+        but no target value. (#1310) The row's text names {kwh}; with no
+        value the card printed the raw name, so there is no row."""
         eta = NOW + timedelta(hours=3)
         plan = compose_today_plan(now=NOW, ev_target_eta=eta)
         rows = [r for r in plan if r["kind"] == KIND_EV_TARGET_REACHED]
-        assert len(rows) == 1
-        assert rows[0]["values"] == {}
+        assert rows == []
 
     def test_battery_eta_outside_horizon_suppressed(self):
         # 25h ahead — past the default 24h horizon

@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Switch-entiteit voor SG-Ready relais 1 (signaal voor normaal bedrijf). Stel samen met relais 2 in voor het SG-Ready protocol.",
           "heat_pump_relay2_entity": "Switch-entiteit voor SG-Ready relais 2 (signaal voor overschot-boost). Stel samen met relais 1 in voor het SG-Ready protocol.",
           "heat_pump_invert_sg_ready": "Schakel dit alleen in als de SG-Ready contacten van je warmtepomp als verbreekcontact (NC) zijn bedraad. SEM stuurt de standaard SG-Ready waarheidstabel aan; als de boost de pomp blokkeert (en omgekeerd), zet dit dan aan om beide relais om te keren.",
-          "heat_pump_step_down": "Koopt het huis in een duur uur netstroom, of nadert het uw piekgrens, dan verlaagt SEM het setpoint of stuurt het SG-Ready-blokkeersignaal. Hiervoor is een comfortband nodig (Houden op en Nu draaien voorbij); daaronder schakelt SEM nooit terug.",
+          "heat_pump_step_down": "Koopt het huis in een duur uur netstroom, of nadert het je pieklimiet, dan verlaagt SEM het setpoint of stuurt het SG-Ready-blokkeersignaal. Hiervoor is een comfortband nodig (Houden op en Direct draaien voorbij); daaronder schakelt SEM nooit terug.",
           "heat_pump_climate_entity": "Klimaat-entiteit waarmee het instelpunt wordt verhoogd tijdens zonne-overschot. Op zichzelf voldoende voor de klimaat-only modus (geen relais nodig).",
           "heat_pump_power_sensor": "Optionele sensor (W) die het huidige stroomverbruik van de warmtepomp rapporteert.",
           "heat_pump_boost_offset": "Graden Celsius die tijdens een zonne-overschot-boost bij het normale instelpunt worden opgeteld.",
@@ -1856,6 +1856,9 @@
     },
     "invalid_device_property": {
       "message": "Ongeldige apparaateigenschap: “{property}”."
+    },
+    "device_named_elsewhere": {
+      "message": "\"{device_id}\" kan hier geen naam krijgen. Een laadpaal krijgt zijn naam in zijn eigen instellingen; de batterij heeft geen naam."
     },
     "invalid_deadline_format": {
       "message": "Ongeldig deadlineformaat: “{deadline}”. Gebruik de ISO 8601-notatie, bijvoorbeeld 2026-05-27T07:00:00."

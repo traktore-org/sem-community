@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Switch-entitet til SG-Ready-relæ 1 (signal for normal drift). Angives sammen med relæ 2 for SG-Ready-protokollen.",
           "heat_pump_relay2_entity": "Switch-entitet til SG-Ready-relæ 2 (signal for overskuds-boost). Angives sammen med relæ 1 for SG-Ready-protokollen.",
           "heat_pump_invert_sg_ready": "Aktivér kun, hvis din varmepumpes SG-Ready-kontakter er tilsluttet som normalt lukkede (NC). SEM følger standard-sandhedstabellen for SG-Ready; hvis boost blokerer pumpen (og omvendt), slår du dette til for at vende begge relæer.",
-          "heat_pump_step_down": "Når huset køber netstrøm i en dyr time, eller nærmer sig din effektgrænse, sænker SEM setpunktet eller sender SG-Ready-spærresignalet. Det kræver et komfortbånd (Hold på og Kør nu forbi); SEM skruer aldrig ned under det.",
+          "heat_pump_step_down": "Når huset køber netstrøm i en dyr time, eller nærmer sig din effektgrænse, sænker SEM setpunktet eller sender SG-Ready-spærresignalet. Det kræver et komfortbånd (Hold på og Kør straks over); SEM skruer aldrig ned under det.",
           "heat_pump_climate_entity": "Klimaentitet, der bruges til at hæve setpunktet under soloverskud. Tilstrækkelig alene til kun-klima-tilstand (ingen relæer nødvendige).",
           "heat_pump_power_sensor": "Valgfri sensor (W), der rapporterer varmepumpens aktuelle effektforbrug.",
           "heat_pump_boost_offset": "Antal grader Celsius, der lægges til det normale setpunkt under en boost med soloverskud.",
@@ -1856,6 +1856,9 @@
     },
     "invalid_device_property": {
       "message": "Ugyldig enhedsegenskab: ”{property}”."
+    },
+    "device_named_elsewhere": {
+      "message": "\"{device_id}\" kan ikke navngives her. En lader navngives i sin egen opsætning; batteriet har intet navn."
     },
     "invalid_deadline_format": {
       "message": "Ugyldigt deadlineformat: ”{deadline}”. Brug ISO 8601-format, for eksempel 2026-05-27T07:00:00."

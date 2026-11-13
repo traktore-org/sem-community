@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Entidade switch do relé 1 SG-Ready (sinal de funcionamento normal). Defina em conjunto com o relé 2 para o protocolo SG-Ready.",
           "heat_pump_relay2_entity": "Entidade switch do relé 2 SG-Ready (sinal de boost por excedente). Defina em conjunto com o relé 1 para o protocolo SG-Ready.",
           "heat_pump_invert_sg_ready": "Ative apenas se os contactos SG-Ready da sua bomba de calor estiverem cablados como normalmente fechados (NF). O SEM aplica a tabela de verdade padrão do SG-Ready; se o boost bloquear a bomba (e vice-versa), ative esta opção para inverter ambos os relés.",
-          "heat_pump_step_down": "Quando a casa compra energia da rede numa hora cara, ou se aproxima do limite de potência, o SEM baixa o setpoint ou envia o sinal de bloqueio SG-Ready. Precisa de uma faixa de conforto (Manter em e Funcionar a partir de); o SEM nunca desce abaixo dela.",
+          "heat_pump_step_down": "Quando a casa compra energia da rede numa hora cara, ou se aproxima do limite de potência, o SEM baixa o setpoint ou envia o sinal de bloqueio SG-Ready. Precisa de uma faixa de conforto (Manter em e Forçar além de); o SEM nunca desce abaixo dela.",
           "heat_pump_climate_entity": "Entidade climate usada para subir o setpoint durante o excedente solar. É suficiente por si só para o modo apenas-climate (não são necessários relés).",
           "heat_pump_power_sensor": "Sensor opcional (W) que reporta o consumo atual da bomba de calor.",
           "heat_pump_boost_offset": "Graus Celsius adicionados ao setpoint normal durante um boost por excedente solar.",
@@ -1856,6 +1856,9 @@
     },
     "invalid_device_property": {
       "message": "Propriedade de dispositivo inválida: «{property}»."
+    },
+    "device_named_elsewhere": {
+      "message": "«{device_id}» não pode ser nomeado aqui. Um carregador é nomeado na sua própria configuração; a bateria não tem nome."
     },
     "invalid_deadline_format": {
       "message": "Formato de prazo inválido: «{deadline}». Use o formato ISO 8601, por exemplo 2026-05-27T07:00:00."

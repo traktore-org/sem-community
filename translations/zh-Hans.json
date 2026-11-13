@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "SG-Ready 继电器 1（正常运行信号）的 switch 实体。需与继电器 2 一同设置才能使用 SG-Ready 协议。",
           "heat_pump_relay2_entity": "SG-Ready 继电器 2（富余绿电增强信号）的 switch 实体。需与继电器 1 一同设置才能使用 SG-Ready 协议。",
           "heat_pump_invert_sg_ready": "仅当您的热泵 SG-Ready 触点采用常闭 (NC) 接线时才启用。SEM 使用标准的 SG-Ready 真值表；如果增强反而锁定了热泵（或反之），请开启此项以同时反转两个继电器。",
-          "heat_pump_step_down": "当家庭在高价时段从电网购电，或接近您的功率上限时，SEM 会降低设定温度或发送 SG-Ready 封锁信号。需要设置舒适区间（保持在 和 立即运行阈值）；SEM 绝不会降到区间以下。",
+          "heat_pump_step_down": "当家庭在高价时段从电网购电，或接近您的功率上限时，SEM 会降低设定温度或发送 SG-Ready 封锁信号。需要设置舒适区间（保持在 和 超过即运行）；SEM 绝不会降到区间以下。",
           "heat_pump_climate_entity": "在太阳能富余期间用于提高设定值的 climate 实体。仅使用它即可满足仅 climate 模式（无需继电器）。",
           "heat_pump_power_sensor": "可选。报告热泵当前功耗的传感器 (W)。",
           "heat_pump_boost_offset": "太阳能富余绿电增强期间在正常设定值之上增加的摄氏度数。",
@@ -1856,6 +1856,9 @@
     },
     "invalid_device_property": {
       "message": "无效的设备属性：“{property}”。"
+    },
+    "device_named_elsewhere": {
+      "message": "无法在此为“{device_id}”命名。充电桩在其自身设置中命名；电池没有可设置的名称。"
     },
     "invalid_deadline_format": {
       "message": "无效的时间截止格式：“{deadline}”。请使用 ISO 8601 格式，例如 2026-05-27T07:00:00。"

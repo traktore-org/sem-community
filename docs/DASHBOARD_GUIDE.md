@@ -508,6 +508,9 @@ hands over, and, for anything left out, why not. This is the single place to
 see what SEM intends to do tonight. See
 [Energy planner](ENERGY_PLANNER.md) for how the plan is built.
 
+A battery charge from the grid shows only in night hours, and only when SEM
+will do it.
+
 Hover a price slot to see its time and price. If your grid CO₂ sensor has a
 forecast, the slot also shows its CO₂ in g/kWh.
 
@@ -605,6 +608,17 @@ a load flapping on a passing cloud. Leave them blank for the device's default
 placeholder is the window the device is actually holding, or a dash until it
 comes up — never a made-up number (#914). A value you type survives restarts.
 They act only in the solar modes; see [LOAD_PRIORITY.md](LOAD_PRIORITY.md#minimum-run--minimum-pause--anti-cycling).
+
+**Mode names.** A load's Mode reads *Off*, *Peak only*, *SEM runs it* and *SEM runs it, battery may help*. It says who runs the load; the buy question says whether power is bought.
+
+**A heater's four questions (#1349).** The target button of a heater with a
+thermometer opens one line that says what it does now and next, then four
+questions: *Keep it at*, *Never colder than*, *With spare sun, heat up to* and
+*May SEM buy power for it?*. A load without a thermometer is asked *Run it
+each day for* and the same buy question. Thermometer, minimum on/off time,
+own tariff and *Stop when* sit under **More**. The chip under the row says the
+same in short, for example "45.8 °C · heats to 52 °C at 23:00". See
+[A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
 
 #### sem-onboarding-banner
 
@@ -744,6 +758,8 @@ Why did SEM act? One row per command SEM changed on a device: the time, the
 device, its old and new command, the reason as a short sentence in your
 language, and the numbers SEM decided on (sun, battery level, prices,
 surplus). Hold the pointer on the sentence to see SEM's own reason text.
+On a car row, *Budget* is the power SEM gives the car. Other rows show spare
+sun as *Surplus*.
 When a load stops, the row says why: it ran long enough today, it reached its
 longest run time for today, its planned time ended, or its stop condition was
 met.
@@ -803,6 +819,12 @@ step) and the battery's *Sell*. **Expected**: grid cost, sun tomorrow with
 its trust, arbitrage advice, the actuation switch, *Replan*. **Decisions
 today**: the decision log with a device filter and an *Earlier* fold.
 
+A heater's *Keep at* run has its own row, named after the device with
+*to 52 °C*. A heater that is below its start line with no hour planned is
+listed with *is below 52 °C; no cheap hour before 07:00*, and the top line
+says the same in place of "Nothing planned from the grid". A heater that buys no
+power is not in the plan: it waits for sun.
+
 #### sem-next-devices-card
 
 **SEM · Devices** · *SEM Next, Devices screen*
@@ -815,9 +837,37 @@ change, or unlimited), slot budget, month peak and what SEM can shed.
 Charger: Off / Smart / Always, target bar, charge-by, departures, pause,
 battery boost, phases, set-once values, this month, lifetime. Battery:
 mode, zone bar, Tonight, charge pacing, sell window, per-battery mode,
-evidence and health. Load: Off / Peak only / Solar only / Solar + battery,
+evidence and health. Load: Off / Peak only / SEM runs it / SEM runs it, battery may help,
 goal, min run / pause, Requires, phase, comfort, tariff, may-switch.
 Every row needs its entity; controls are off in observer mode.
+
+A heater with a thermometer says what it does and what comes next, in the
+pill and as the first line of its open card:
+
+| It says | It means |
+|---|---|
+| too cold · heating now | below *Never colder than*: it heats at any price |
+| heating to 52 °C | its planned hour is open; it stops at *Keep it at* |
+| heating on sun · up to 56 °C | spare sun heats up to *With spare sun, heat up to* |
+| heats to 52 °C at 23:00 | it is below the start line; that hour is planned |
+| below 52 °C · no hour planned yet | nothing is planned; the cause follows when SEM names one |
+| below 52 °C · waits for sun | SEM may not buy power for it, so only the sun heats it |
+| warm · heats again below 51 °C | just under *Keep it at*: no run starts for so little |
+| warm · 52.4 °C | at or above *Keep it at* |
+| Legionella run | its own heat-up runs to the Legionella temperature |
+| no temperature reading | the band is set but its thermometer reads nothing |
+
+Any other load that is off names the cause when SEM has one, such as
+*off · not enough spare sun* or *off · ran long enough today*.
+
+**A heater's four questions (#1349).** Under that line and a bar with the
+three temperatures, the opened row asks: *Keep it at*, *Never colder than*,
+*With spare sun, heat up to* and *May SEM buy power for it?* — the same
+questions, in the same words, as the Load Priority card. A load without a
+thermometer is asked *Run it each day for* and the buy question. The mode,
+minimum run and pause, Requires, phase, *Stop when*, the thermometer and
+Legionella show under **All settings**. See
+[A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
 
 #### sem-next-insights-card
 

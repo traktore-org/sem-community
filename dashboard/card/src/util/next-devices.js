@@ -13,6 +13,11 @@
 import { regroupChildren, renumber } from './drag-reorder.js';
 import { shedReasonKey } from './shed-reason.js';
 
+// (#1349) the heater's words and questions are ONE model, shared with the
+// Load Priority card
+import { heaterSays, becauseKey } from './heater-questions.js';
+export { heaterSays, becauseKey, nextBlock } from './heater-questions.js';
+
 export const CHARGER_PREFIX = 'load_device_';
 
 const ICONS = {
@@ -132,6 +137,8 @@ function rowFromMap(id, info) {
         goals: i.goals || null,
         progress: i.progress || null,
         comfort: i.comfort || null,
+        // (#1321) what the load engine decided this cycle: {on, source, code}
+        intent: i.intent && typeof i.intent === 'object' ? i.intent : null,
         blockedBy: i.blocked_by || null,
         soc: i.soc,
         // (#1321) the active one-off: {action: 'force'|'skip', until: 'HH:MM'} or null
@@ -170,6 +177,11 @@ export function deviceRows(devices, chargers = [], { hasBattery = false, charger
 }
 
 /**
+ * (#1321) The earliest block of any of `ids` that starts after `nowMs`, or
+ * null. A heater has two plan ids: `load:<id>` (its run time) and
+ * `comfort:<id>` (its Keep at run).
+ */
+/**
  * The head pill: a translation key, its params and a class (ok · warn · bad · '').
  * `live` carries what only the entities know: power, amps, pause, the
  * planned start, the battery status and boost.
@@ -201,10 +213,26 @@ export function statePill(row, live = {}) {
         return p('next_st_rests');
     }
     if (row.blockedBy) return p('next_st_waiting_for', { parent: live.parentName || row.blockedBy });
-    if (row.isOn || (w !== null && w > 10)) return p('next_st_on', {}, 'ok');
+    const running = row.isOn || (w !== null && w > 10);
+    const heater = heaterSays(row, live, running);
+    if (heater) return heater;
+    if (running) return p('next_st_on', {}, 'ok');
     if (row.mergedMode === 'off') return p('next_st_off_mode');
+    // (#1321) peak-only: SEM never starts it, it only pauses it at a peak
+    if (row.mergedMode === 'peak_only' || row.mergedMode === 'peak') return p('next_st_off_peak_only');
     if (live.plannedAt) return p('next_st_waits_for', { time: live.plannedAt });
-    return p('next_st_off');
+    return { ...p('next_st_off'), why: becauseKey(row.intent) };
+}
+
+/**
+ * (#1349) The mode sentence of a load: who runs it. Whether power is bought
+ * is the buy question's to say, so the grid setting no longer changes it.
+ */
+export function modeHelpKey(merged) {
+    if (merged === 'off') return 'help_mode_off';
+    if (merged === 'peak_only') return 'help_mode_peak_only';
+    if (merged === 'solar_battery') return 'load_mode_help_sem_battery';
+    return merged === 'solar_only' ? 'load_mode_help_sem' : '';
 }
 
 /**

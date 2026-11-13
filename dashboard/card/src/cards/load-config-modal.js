@@ -101,7 +101,18 @@ const FIELD_STYLE =
  * @param {string} inUse  (#1145) the entity SEM already drives from the Configuration
  *   tab; named above the empty form so it does not read as "nothing set"
  */
-export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = false, behindRelay = null, inUse = '' }) {
+/** (#1341) The longest name a load may be given — the backend's cap. */
+export const LOAD_NAME_MAX = 60;
+
+/**
+ * (#1341) A typed load name as it is saved: one line, trimmed, capped.
+ * Empty means "no own name" and brings the automatic name back.
+ */
+export function cleanLoadName(raw) {
+    return String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim().slice(0, LOAD_NAME_MAX).trim();
+}
+
+export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = false, behindRelay = null, inUse = '', ownName = null, autoName = '' }) {
     const v = values;
     const isService = v.type === 'service';
     const opt = (val, label) =>
@@ -110,6 +121,10 @@ export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = fa
         <div style="background:var(--card-background-color,#1e1e2e);border-radius:12px;padding:24px;min-width:320px;max-width:90vw;color:var(--primary-text-color,#e0e0e0)">
             <div style="font-weight:700;margin-bottom:16px">${t('configure_device')}: ${escapeHtml(deviceName)}</div>
             ${inUse ? `<div class="cfg-in-use" style="font-size:13px;opacity:0.8;margin-bottom:12px">${escapeHtml(t('cfg_in_use_hint').replace(/\{entity\}/g, inUse))}</div>` : ''}
+            ${ownName === null ? '' : `
+            <label style="font-size:13px;opacity:0.7">${t('cfg_own_name')}</label>
+            <input id="cfg-name" type="text" maxlength="${LOAD_NAME_MAX}" placeholder="${escapeHtml(autoName)}" value="${escapeHtml(ownName)}" style="${FIELD_STYLE}">
+            <div style="font-size:12px;opacity:.65;font-style:italic;margin:-6px 0 12px;max-width:340px">${t('cfg_own_name_hint')}</div>`}
             <label style="font-size:13px;opacity:0.7">${t('control_type')}</label>
             <select id="cfg-type" style="${FIELD_STYLE}">
                 ${opt('switch', t('mode_switch'))}
