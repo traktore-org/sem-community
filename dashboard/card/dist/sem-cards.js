@@ -8454,19 +8454,19 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${this._t("config_ev_add_charger")}
                 </button>
             </div>
-        `}_chargerFriendlyName(e){return(this._hass?.states[`number.sem_charger_${e}_minimum_current`]?.attributes?.friendly_name||e).replace(/\s+Min Amps$/i,"")}_renderZoneKnob(e,t,s,i,r=null){const a=this._hass?.states[e];if(!a)return G;if(!this._gate(e))return G;this._reg(e);const o=parseFloat(a.state)||0,n=this._isDirty(e),l=Number(this._stagedVal(e,o)),c=parseFloat(a.attributes.min),d=parseFloat(a.attributes.max),p=Number.isNaN(c)?0:c,h=Number.isNaN(d)?100:d,_=parseFloat(a.attributes.step)||1,u=a.attributes.unit_of_measurement||"",g=_<1?1:0,m=h>p?Math.round((l-p)/(h-p)*100):0,f=t=>{const s=Math.max(p,Math.min(h,l+t*_));this._stage(e,"number",s)};return H`
+        `}_chargerFriendlyName(e){return(this._hass?.states[`number.sem_charger_${e}_minimum_current`]?.attributes?.friendly_name||e).replace(/\s+Min Amps$/i,"")}_renderZoneKnob(e,t,s,i,r=null){const a=this._hass?.states[e];if(!a)return G;if(!this._gate(e))return G;this._reg(e);const o=parseFloat(a.state)||0,n=this._isDirty(e),l=Number(this._stagedVal(e,o)),c=parseFloat(a.attributes.min),d=parseFloat(a.attributes.max),p=Number.isNaN(c)?0:c,h=Number.isNaN(d)?100:d,_=parseFloat(a.attributes.step)||1,u=a.attributes.unit_of_measurement||"",g=_<1?1:0,m=Math.min(p,l),f=Math.max(h,l),v=f>m?Math.round((l-m)/(f-m)*100):0,y=t=>{if(t<0&&l<=p||t>0&&l>=h)return;const s=Math.max(p,Math.min(h,l+t*_));this._stage(e,"number",s)};return H`
             <div class="zone-knob ${n?"dirty":""}">
                 <div class="zone-knob-top">
                     <span class="zone-knob-label">${this._t(t)}${this._helpBtn(i)}</span>
                     <span class="zone-chip">${n?H`<span class="dirty-dot">●</span>`:G}${l.toFixed(g)}${u?" "+u:""}</span>
                 </div>
                 <div class="zone-knob-slider">
-                    <button class="zone-mini" @click=${()=>f(-1)}>−</button>
+                    <button class="zone-mini" @click=${()=>y(-1)}>−</button>
                     <input type="range" class="zone-range"
-                        min=${p} max=${h} step=${_} .value=${String(l)}
-                        style=${`--fill:${m}%`}
-                        @change=${t=>this._stage(e,"number",parseFloat(t.target.value))} />
-                    <button class="zone-mini" @click=${()=>f(1)}>+</button>
+                        min=${m} max=${f} step=${_} .value=${String(l)}
+                        style=${`--fill:${v}%`}
+                        @change=${t=>this._stage(e,"number",Math.max(p,Math.min(h,parseFloat(t.target.value))))} />
+                    <button class="zone-mini" @click=${()=>y(1)}>+</button>
                 </div>
                 ${r?H`<div class="setting-help-text">${this._t(r)}</div>`:G}
                 ${this._helpBlock(i,a.attributes.sem_default,u,e,"number")}

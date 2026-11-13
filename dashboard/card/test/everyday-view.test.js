@@ -361,3 +361,17 @@ test('the segmented switch picks a view and stores it', () => {
     assert.equal(el._advanced, false);
     assert.equal(store.get(viewMode.VIEW_MODE_KEY), '0');
 });
+
+// #1354 — a stored 750 W under the field's 1000 W floor showed as 1000.
+test('a knob shows a stored value below its floor where it truly is', () => {
+    const eid = 'number.sem_battery_assist_max_power';
+    const states = { ...STATES, [eid]: { entity_id: eid, state: '750',
+        attributes: { min: 1000, max: 25000, step: 500, unit_of_measurement: 'W' } } };
+    const el = card({ advanced: true, states });
+    const out = el._renderZoneKnob(eid, 'x', {}, '');
+    const s = text(out);
+    assert.match(s, /750 W/);
+    const range = findTemplates(out, 'type="range"')[0];
+    const i = range.strings.findIndex((p) => p.trimEnd().endsWith('min='));
+    assert.equal(range.values[i], 750, 'slider floor follows the stored value');
+});

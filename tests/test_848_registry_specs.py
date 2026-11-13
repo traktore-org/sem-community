@@ -29,6 +29,13 @@ def _state(eid, value, unit=None):
                            attributes=({"unit_of_measurement": unit} if unit else {}))
 
 
+def _num(eid, value, maximum):
+    """A writable limit: state = last write, ``max`` = hardware ceiling."""
+    return SimpleNamespace(entity_id=eid, state=str(value),
+                           attributes={"unit_of_measurement": "W",
+                                       "max": maximum, "min": 0})
+
+
 def _registry(entries):
     reg = SimpleNamespace(); reg.entities = {e.entity_id: e for e in entries}
     return reg
@@ -48,7 +55,7 @@ class TestRegistryFirst:
         states = {
             "sensor.speicher_gesamt": _state("sensor.speicher_gesamt", 15000, "Wh"),
             "sensor.anlage_leistung": _state("sensor.anlage_leistung", 10000, "W"),
-            "number.speicher_limit": _state("number.speicher_limit", 5000, "W"),
+            "number.speicher_limit": _num("number.speicher_limit", 750, 5000),
         }
         entries = [
             _ent("sensor.speicher_gesamt", "huawei_solar",

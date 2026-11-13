@@ -1176,8 +1176,13 @@ class SEMConfigCard extends SEMLitBase {
         const step = parseFloat(e.attributes.step) || 1;
         const unit = e.attributes.unit_of_measurement || '';
         const decimals = step < 1 ? 1 : 0;
-        const pct = max > min ? Math.round(((val - min) / (max - min)) * 100) : 0;
+        // #1354 — a stored value outside the range (750 W under a 1000 W
+        // floor) sits where it truly is; the slider never pins it to the end.
+        const lo = Math.min(min, val);
+        const hi = Math.max(max, val);
+        const pct = hi > lo ? Math.round(((val - lo) / (hi - lo)) * 100) : 0;
         const stepBy = (dir) => {
+            if ((dir < 0 && val <= min) || (dir > 0 && val >= max)) return;
             const next = Math.max(min, Math.min(max, val + dir * step));
             this._stage(entityId, 'number', next);
         };
@@ -1190,9 +1195,9 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="zone-knob-slider">
                     <button class="zone-mini" @click=${() => stepBy(-1)}>−</button>
                     <input type="range" class="zone-range"
-                        min=${min} max=${max} step=${step} .value=${String(val)}
+                        min=${lo} max=${hi} step=${step} .value=${String(val)}
                         style=${`--fill:${pct}%`}
-                        @change=${(ev) => this._stage(entityId, 'number', parseFloat(ev.target.value))} />
+                        @change=${(ev) => this._stage(entityId, 'number', Math.max(min, Math.min(max, parseFloat(ev.target.value))))} />
                     <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
                 ${subKey ? html`<div class="setting-help-text">${this._t(subKey)}</div>` : nothing}
