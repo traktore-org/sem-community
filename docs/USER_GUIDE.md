@@ -210,7 +210,7 @@ the car always needs enough spare sun first (the Solar Gate).
 | `battery_auto_start_soc` | 90% | From here: the battery may give the car its full help, still only with spare sun past the Solar Gate |
 | `battery_assist_max_power` | 4500W | Maximum battery discharge for EV (1000-10000W) |
 | `battery_assist_min_surplus` | 1200W | **Solar Gate (v1.7.3)** — battery only assists above this real solar surplus (0-5000W) |
-| `battery_capacity_kwh` | — | Total battery capacity (5-100 kWh). With two or more batteries SEM reads each pack's own capacity sensor; a pack without one gets its share of this total, split by how much each pack can discharge. |
+| `battery_capacity_kwh` | size SEM finds, else 15 kWh | Total battery capacity (1-100 kWh). Until you set it, the field shows the size SEM uses. With two or more batteries SEM reads each pack's own capacity sensor; a pack without one gets its share of this total, split by how much each pack can discharge. |
 | `battery_discharge_protection_enabled` | true | Protect battery during night charging |
 | `battery_max_discharge_power` | 5000W | Maximum battery discharge rate (500-10000W) |
 | `battery_discharge_control_entity` | — | Number entity to control inverter discharge limit |
@@ -1924,8 +1924,8 @@ settings**. Or **Configure → Tariff & Advanced**.
 | Feed-in fee | *Per kWh*, *Tiers by kWh per year* or *Fixed per month* |
 | Feed-in fee amount / tiers | the fee; tiers as `0:0, 1000:0.02, 3000:0.05` (kWh exported this year : fee per kWh) |
 
-Markup, tax and VAT only work with a spot price. Beside *All-in* they are
-greyed out, and the options flow refuses them.
+Markup, tax and VAT only work with a spot price. With *All-in* the
+dashboard does not ask for them, and the options flow refuses them.
 
 Once a field is set, six sensors appear: **Self-consumption value**, **Export
 value** and **Feed-in fees**, each for today and this year.
