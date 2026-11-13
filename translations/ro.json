@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Entitate switch pentru releul SG-Ready 1 (semnal de funcționare normală). Setați-o împreună cu releul 2 pentru protocolul SG-Ready.",
           "heat_pump_relay2_entity": "Entitate switch pentru releul SG-Ready 2 (semnal de stimulare din surplus). Setați-o împreună cu releul 1 pentru protocolul SG-Ready.",
           "heat_pump_invert_sg_ready": "Activați doar dacă contactele SG-Ready ale pompei de căldură sunt cablate normal-închise (NC). SEM aplică tabelul de adevăr standard SG-Ready; dacă stimularea blochează pompa (și invers), activați această opțiune pentru a inversa ambele relee.",
-          "heat_pump_step_down": "Când casa cumpără energie din rețea într-o oră scumpă sau se apropie de limita de putere, SEM coboară valoarea setată sau trimite semnalul de blocare SG-Ready. Este nevoie de o bandă de confort (Menține la și Pornește peste limită); SEM nu coboară niciodată sub ea.",
+          "heat_pump_step_down": "Când casa cumpără energie din rețea într-o oră scumpă sau se apropie de limita de putere, SEM coboară valoarea setată sau trimite semnalul de blocare SG-Ready. Este nevoie de o bandă de confort (Menține la și Pornește imediat peste); SEM nu coboară niciodată sub ea.",
           "heat_pump_climate_entity": "Entitatea climate folosită pentru a ridica setpoint-ul în timpul surplusului solar. Este suficientă în sine pentru modul doar climate (fără relee).",
           "heat_pump_power_sensor": "Senzor opțional (W) care raportează consumul curent de putere al pompei de căldură.",
           "heat_pump_boost_offset": "Grade Celsius adăugate la setpoint-ul normal în timpul unei stimulări din surplus solar.",

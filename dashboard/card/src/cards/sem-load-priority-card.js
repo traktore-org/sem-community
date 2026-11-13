@@ -35,7 +35,7 @@ import {
 import { stateLabel } from '../util/state-label.js';
 import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
 import {
-    heaterSays, heaterSub, heaterQuestions, sunMaxWrites, nextBlock,
+    heaterSays, heaterSub, heaterQuestions, sunMaxWrites, limitWrites, nextBlock,
     asSentence, BUY_LABEL,
 } from '../util/heater-questions.js';
 
@@ -1161,8 +1161,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _questions(device) {
+        const f = (this.hass?.config?.unit_system?.temperature || '°C') === '°F';
         return heaterQuestions({ goals: device.goals, comfort: device.comfort },
-            { hasBattery: this._hasBattery() });
+            { hasBattery: this._hasBattery(), toUnit: (c) => (f ? Number(c) * 9 / 5 + 32 : Number(c)) });
     }
 
     /** The next planned start (HH:MM) of this load's run-time or Keep at block. */
@@ -1246,9 +1247,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const said = says ? asSentence(this._tf(says.key, says.params)
             + (says.why ? ' \u00B7 ' + this._t(says.why) : '')) : '';
         const err = this._hqError && this._hqError[device.id];
-        const numIn = (val, onChange) => html`
+        const numIn = (val, onChange, readOnly = false) => html`
             <input type="number" step="0.5" style="width:56px"
                    .value="${val === null || val === undefined ? '' : String(val)}"
+                   ?disabled=${readOnly}
                    @change=${onChange}
                    @click=${(e) => e.stopPropagation()}>
             <span class="ge-unit">${unit}</span>`;
@@ -1264,11 +1266,14 @@ class SEMLoadPriorityCard extends SEMLitBase {
             ${sub ? html`<div class="ge-hint">${this._tf(sub.key, sub.params)}</div>` : nothing}
             ${this._renderBandStrip(device)}
             ${ask(this._t('hq_keep'), this._t(q.keys.keepSub),
-                numIn(q.keep, (e) => this._onKeepChange(device, q, e)))}
+                numIn(q.keep, (e) => this._onKeepChange(device, q, e), q.keepReadOnly))}
+            ${q.keepNoteKey ? html`<div class="ge-hint" style="font-style:normal">${this._t(q.keepNoteKey)}</div>` : nothing}
             ${ask(this._t(q.keys.floor), this._t(q.keys.floorSub),
                 numIn(q.floor, (e) => {
-                    const v = parseFloat(e.target.value);
-                    if (Number.isFinite(v)) this._setGoal(device, 'comfort_limit', v);
+                    // (#705) on a unit that rides its own setpoint the stored
+                    // limit is a distance: the model turns the typed value back
+                    for (const w of limitWrites(q, e.target.value).writes) this._setGoal(device, w.property, w.value);
+                    this.requestUpdate();
                 }))}
             ${ask(this._t(q.keys.sunMax), this._t(q.keys.sunMaxSub),
                 numIn(q.sunMax, (e) => this._onSunMaxChange(device, q, e)))}

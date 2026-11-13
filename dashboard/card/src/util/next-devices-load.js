@@ -12,7 +12,7 @@ import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
 import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, simpleMode, statePill, modeHelpKey } from './next-devices.js';
 import { plainReason } from './why-rows.js';
-import { heaterQuestions, heaterSub, sunMaxWrites, buyWrites, BUY_LABEL } from './heater-questions.js';
+import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, BUY_LABEL } from './heater-questions.js';
 
 const MODES = [
     { key: 'off', label: 'off', help: 'help_mode_off' },
@@ -117,8 +117,11 @@ export function loadBody(card, row) {
     const goalSub = solar && !thermoLeads && minMin > 0 ? tf('next_on_solar_goal', { min: hours(minMin), max: maxMin > 0 ? hours(maxMin) : t('uncapped') }) : '';
     // (#1349) four plain questions: a heater whose thermometer leads ('band'),
     // a load asked for its time ('time'), or a cooling band (earlier layout).
+    // (#705) a unit that rides its own setpoint shows the lines SEM uses, in the user's unit
+    const inF = (card._hass?.config?.unit_system?.temperature || '°C') === '°F';
     const q = measureOnly ? { view: 'none' } : heaterQuestions({ goals: g, comfort: row.comfort },
-        { hasBattery: (card._rowsNow() || []).some((r) => r.type === 'battery') });
+        { hasBattery: (card._rowsNow() || []).some((r) => r.type === 'battery'),
+          toUnit: (c) => (inF ? Number(c) * 9 / 5 + 32 : Number(c)) });
     const band = q.view === 'band';
     const asked = band || q.view === 'time';
     let third = ['', '', ''];
@@ -178,13 +181,16 @@ export function loadBody(card, row) {
             };
             const temp = (key, val, onCommit) => numVal(key, val === null || val === undefined ? '—' : val + ' ' + tUnit,
                 { value: val, step: 0.5, unit: tUnit, onCommit });
+            // Keep at of an anchored unit IS the unit's own setpoint: shown, not edited here
             rows.push(card._row('mdi:thermometer', t('hq_keep'),
-                temp('comfort_target', q.keep, (v) => { send('comfort_target', String(v)); syncSolar(Number(v) + q.offset); }),
-                t(q.keys.keepSub) + (q.season ? ' ' + t(q.season) + '.' : '')));
+                q.keepReadOnly ? html`<span>${q.keep + ' ' + tUnit}</span>`
+                    : temp('comfort_target', q.keep, (v) => { send('comfort_target', String(v)); syncSolar(Number(v) + q.offset); }),
+                t(q.keys.keepSub) + (q.season ? ' ' + t(q.season) + '.' : '')
+                    + (q.keepNoteKey ? ' ' + t(q.keepNoteKey) : '')));
             // (#1349) a cooling band asks the same, turned round: its words
             // and the direction of "sun up to" come from the shared model
             rows.push(card._row(q.cooling ? 'mdi:thermometer-alert' : 'mdi:snowflake-alert', t(q.keys.floor),
-                temp('comfort_limit', q.floor, (v) => send('comfort_limit', String(v))), t(q.keys.floorSub)));
+                temp('comfort_limit', q.floor, (v) => { for (const w of limitWrites(q, v).writes) send(w.property, w.value); }), t(q.keys.floorSub)));
             rows.push(card._row('mdi:white-balance-sunny', t(q.keys.sunMax),
                 temp('sun_max', q.sunMax, (v) => {
                     const res = sunMaxWrites({ id, keep: q.keep, cooling: q.cooling }, v, solarTarget);

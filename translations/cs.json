@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Entita switch pro relé SG-Ready 1 (signál normálního provozu). Nastavte společně s relé 2 pro protokol SG-Ready.",
           "heat_pump_relay2_entity": "Entita switch pro relé SG-Ready 2 (signál navýšení z přebytku). Nastavte společně s relé 1 pro protokol SG-Ready.",
           "heat_pump_invert_sg_ready": "Zapněte pouze tehdy, pokud jsou kontakty SG-Ready vašeho tepelného čerpadla zapojeny jako rozpínací (NC). SEM řídí standardní pravdivostní tabulku SG-Ready; pokud navýšení čerpadlo blokuje (a naopak), zapnutím této volby obě relé prohodíte.",
-          "heat_pump_step_down": "Když dům kupuje energii ze sítě v drahé hodině nebo se blíží k limitu výkonu, SEM sníží žádanou teplotu nebo pošle blokovací signál SG-Ready. Je k tomu potřeba komfortní pásmo (Udržovat na a Spustit za limitem); pod něj SEM nikdy nejde.",
+          "heat_pump_step_down": "Když dům kupuje energii ze sítě v drahé hodině nebo se blíží k limitu výkonu, SEM sníží žádanou teplotu nebo pošle blokovací signál SG-Ready. Je k tomu potřeba komfortní pásmo (Udržovat na a Spustit ihned za); pod něj SEM nikdy nejde.",
           "heat_pump_climate_entity": "Entita climate používaná ke zvýšení cílové teploty během solárního přebytku. Sama o sobě stačí pro režim pouze climate (relé nejsou potřeba).",
           "heat_pump_power_sensor": "Volitelný senzor (W) hlásící aktuální spotřebu tepelného čerpadla.",
           "heat_pump_boost_offset": "Stupně Celsia přičtené k normální cílové teplotě během navýšení ze solárního přebytku.",

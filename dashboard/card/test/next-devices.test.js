@@ -517,6 +517,24 @@ test('a cooling unit shows the same four questions, turned round', () => {
     assert.doesNotMatch(out, /undefined|NaN/);
 });
 
+test('a unit that rides its own setpoint shows what SEM uses, and Keep at is not edited here', () => {
+    const st = heaterStates();
+    const devs = st['sensor.sem_controllable_devices_count'].attributes.devices;
+    // typed Keep 23 / limit 27 / extra 2, the thermostat at 24: SEM uses 24 / 28 / 22
+    devs.hot_water = {
+        ...devs.hot_water, name: 'Bedroom AC',
+        goals: { comfort_target: 23, comfort_offset: 2, comfort_limit: 27, top_up_policy: 'cheap_hours' },
+        comfort: { state: 'willing', hvac: 'cool', anchored: true, reading_c: 26, keep_c: 24, start_c: 25, max_c: 22, limit_c: 28, own_run: false, may_buy: true },
+    };
+    const out = openHotWater(makeCard(st));
+    assert.match(out, /hq_keep_anchored/);
+    assert.match(out, /24 °C/); assert.match(out, /28 °C/); assert.match(out, /22 °C/);
+    // the typed numbers are not shown as the band
+    assert.doesNotMatch(out, />23 °C</); assert.doesNotMatch(out, />27 °C</); assert.doesNotMatch(out, />21 °C</);
+    // a cooling row: the line under the buy question says "cools"
+    assert.match(out, /hq_buy_sub_band_cool/);
+});
+
 test('the battery choice says it heats tonight from the battery, or waits at the reserve', () => {
     const mk = (code) => {
         const st = heaterStates({ mayBuy: false, planned: false });

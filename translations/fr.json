@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Entité switch du relais SG-Ready 1 (signal de fonctionnement normal). À renseigner avec le relais 2 pour utiliser le protocole SG-Ready.",
           "heat_pump_relay2_entity": "Entité switch du relais SG-Ready 2 (signal de boost sur surplus). À renseigner avec le relais 1 pour utiliser le protocole SG-Ready.",
           "heat_pump_invert_sg_ready": "À activer uniquement si les contacts SG-Ready de votre pompe à chaleur sont câblés normalement fermés (NF). SEM applique la table de vérité SG-Ready standard ; si le boost bloque la pompe (et inversement), activez cette option pour inverser les deux relais.",
-          "heat_pump_step_down": "Quand la maison achète du courant du réseau pendant une heure chère, ou approche de votre limite de puissance, SEM baisse la consigne ou envoie le signal de blocage SG-Ready. Il faut une plage de confort (Maintenir à et Démarrer au-delà de) ; SEM ne descend jamais en dessous.",
+          "heat_pump_step_down": "Quand la maison achète du courant du réseau pendant une heure chère, ou approche de votre limite de puissance, SEM baisse la consigne ou envoie le signal de blocage SG-Ready. Il faut une plage de confort (Maintenir à et Marche forcée au-delà de) ; SEM ne descend jamais en dessous.",
           "heat_pump_climate_entity": "Entité climate utilisée pour relever la consigne pendant un surplus solaire. Suffisante à elle seule pour le mode climate seul (aucun relais requis).",
           "heat_pump_power_sensor": "Capteur optionnel (W) indiquant la consommation actuelle de la pompe à chaleur.",
           "heat_pump_boost_offset": "Degrés Celsius ajoutés à la consigne normale pendant un boost sur surplus solaire.",

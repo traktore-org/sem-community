@@ -780,3 +780,61 @@ async def test_the_battery_run_goes_on_to_keep_at_and_stops_there():
     for _ in range(3):
         await sc.update(power, **kw)
     assert not dev.is_active
+
+
+# ── (#705/#1349) a unit that rides its own setpoint ──────────────────────
+# Typed Keep 50 / limit 36 / extra 5 with the thermostat at 48: the band is
+# 48 / 34 / up to 53, and a planned run starts at 47. Cooling: typed 24 / 27 /
+# 2 with the thermostat at 25 gives 25 / 28 / down to 23, start at 26.
+
+ANCHORED = [
+    # (hvac, setpoint, reading, situation, on, family)
+    ("heat", 48.0, 47.5, "night_block", False, "none"),     # inside the EFFECTIVE gap
+    ("heat", 48.0, 49.5, "night_block", False, "none"),     # under the typed 50, over the unit's 48
+    ("heat", 48.0, 46.5, "night_block", True, "goal"),
+    ("heat", 48.0, 35.0, "night_no_block", False, "none"),  # under the typed limit 36, over the unit's 34
+    ("heat", 48.0, 33.5, "night_no_block", True, "floor"),
+    ("heat", 48.0, 52.0, "day_sun", True, "sun"),           # the sun goes to 48 + 5
+    ("heat", 48.0, 53.5, "day_sun", False, "none"),
+    ("cool", 25.0, 25.5, "night_block", False, "none"),
+    ("cool", 25.0, 24.5, "night_block", False, "none"),     # over the typed 24, under the unit's 25
+    ("cool", 25.0, 26.5, "night_block", True, "goal"),
+    ("cool", 25.0, 27.5, "night_no_block", False, "none"),  # over the typed limit 27, under the unit's 28
+    ("cool", 25.0, 28.5, "night_no_block", True, "floor"),
+    ("cool", 25.0, 23.5, "day_sun", True, "sun"),           # the sun goes down to 25 − 2
+    ("cool", 25.0, 22.5, "day_sun", False, "none"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hvac, setpoint, reading, situation, want_on, want_family", ANCHORED,
+                         ids=[f"{h}-{r}-{s}" for h, _sp, r, s, _o, _f in ANCHORED])
+async def test_a_unit_that_rides_its_own_setpoint_follows_that_setpoint(
+        hvac, setpoint, reading, situation, want_on, want_family):
+    hass = _Hass()
+    hass.set("climate.heater", "off", hvac_modes=["off", hvac], temperature=setpoint)
+    dev = ClimateDevice(hass, DID, "Unit", rated_power=3000.0,
+                        entity_id="climate.heater", hvac_mode=hvac)
+    hass.set(TANK, reading, unit_of_measurement="°C")
+    dev.control_mode = DeviceControlMode.SURPLUS
+    dev.comfort_entity = TANK
+    if hvac == "heat":
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = KEEP, EXTRA, LIMIT
+    else:
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = C_KEEP, C_EXTRA, C_LIMIT
+    dev.top_up_policy = "cheap_hours"
+    for attr in ("min_on_seconds", "min_off_seconds", "min_on_time",
+                 "min_off_time", "activation_delay_seconds"):
+        if hasattr(dev, attr):
+            setattr(dev, attr, 0)
+    sc = SurplusController(hass, regulation_offset=0)
+    sc.register_device(dev)
+    kw = _inputs(situation)
+    power = kw.pop("available_power_w")
+    for _ in range(CYCLES):
+        await sc.update(power, **kw)
+        # the unit's own setpoint is the anchor: SEM's writes must not move it
+        hass.set("climate.heater", hass.states.get("climate.heater").state,
+                 hvac_modes=["off", hvac], temperature=setpoint)
+    where = f"anchored {hvac} unit at {setpoint} °C · reading {reading} °C · {situation}"
+    _check(hass, sc, dev, where, situation, want_on, want_family, "cheap_hours")

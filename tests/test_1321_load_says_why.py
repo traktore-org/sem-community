@@ -248,3 +248,42 @@ class TestTheRowSaysWhetherTheBatteryMayReachKeepAt:
 
     async def test_a_device_without_the_rule_takes_nothing(self):
         assert UnifiedDeviceRegistry._may_use_battery(object()) is False
+
+
+@pytest.mark.asyncio
+class TestTheRowSaysWhenTheBandRidesTheUnitsOwnSetpoint:
+    """(#705/#1349) A climate unit's band is anchored on its live setpoint:
+    typed Keep 23 / limit 27 with the thermostat at 24 means SEM uses 24 / 28.
+    The row carries the lines SEM uses and says they are anchored, so the
+    card shows those and not the typed numbers."""
+
+    def _unit(self, hass, setpoint):
+        from custom_components.solar_energy_management.devices.base import ClimateDevice
+        attrs = {"hvac_modes": ["off", "cool"], "current_temperature": 26.0}
+        if setpoint is not None:
+            attrs["temperature"] = setpoint
+        hass.set("climate.ac", "off", **attrs)
+        dev = ClimateDevice(hass, "ac", "AC", rated_power=1000.0,
+                            entity_id="climate.ac", hvac_mode="cool")
+        dev.control_mode = DeviceControlMode.SURPLUS
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = 23.0, 2.0, 27.0
+        return dev
+
+    async def test_an_anchored_unit_publishes_the_lines_sem_uses(self):
+        hass = _Hass()
+        sc = _controller(hass, self._unit(hass, 24.0))
+        c = _registry(sc)._goal_payload("ac")["comfort"]
+        assert c["anchored"] is True
+        assert (c["keep_c"], c["limit_c"], c["max_c"], c["start_c"]) == (24.0, 28.0, 22.0, 25.0)
+
+    async def test_without_a_live_setpoint_the_typed_values_are_the_lines(self):
+        hass = _Hass()
+        sc = _controller(hass, self._unit(hass, None))
+        c = _registry(sc)._goal_payload("ac")["comfort"]
+        assert c["anchored"] is False
+        assert (c["keep_c"], c["limit_c"], c["max_c"]) == (23.0, 27.0, 21.0)
+
+    async def test_a_plain_heater_is_never_anchored(self):
+        hass = _Hass()
+        sc = _controller(hass, _boiler(hass))
+        assert _registry(sc)._goal_payload("boiler")["comfort"]["anchored"] is False
