@@ -179,7 +179,8 @@ test('All settings still shows every row', () => {
     // (#1354) −3: the three battery levels are set on the Battery tab only.
     const everyday = renderTab(card()).total;
     const { per, total } = renderTab(card({ advanced: true }));
-    assert.equal(total, 105, `All settings drew ${total} rows`);
+    // (#1358) +1: the inverter's own end-of-discharge level, read only.
+    assert.equal(total, 106, `All settings drew ${total} rows`);
     assert.ok(per.battery_zones >= 6, 'battery knobs and pickers');
     assert.ok(per.ev_chargers >= 15, 'every per-charger row');
     assert.ok(total > everyday * 5);
@@ -264,7 +265,7 @@ test('"N more in All settings" counts the hidden rows and turns the switch on', 
     // plus the external-control mode select (#1079); the protection toggle shown.
     // (#1354) the three battery levels are set on the Battery tab: here a
     // line names them with the way there, and it is not a control.
-    assert.deepEqual(rows, { shown: 1, hidden: 8 });
+    assert.deepEqual(rows, { shown: 1, hidden: 9 });
     const btn = findTemplates(real(rows), 'class="everyday-more-btn"')[0];
     assert.ok(btn);
     store.clear();

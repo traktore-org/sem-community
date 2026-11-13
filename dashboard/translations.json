@@ -2092,6 +2092,8 @@
     "config_batt_charge_end_entity": "Úroveň konce nabíjení",
     "config_help_batt_charge_end_entity": "Kde střídač sám ukončí nabíjení, v %. SEM ji jen čte. Vynucené nabíjení tam skončí, když je pod 90 %.",
     "config_help_batt_charge_end_entity_each": "Vlastní úroveň konce nabíjení této baterie. Prázdné: SEM použije entitu výše.",
+    "config_batt_discharge_end_entity": "Úroveň konce vybíjení",
+    "config_help_batt_discharge_end_entity": "Úroveň, kde střídač sám ukončí vybíjení, v %. SEM ji jen čte. Noční plán nikdy nepočítá baterii pod ní ani pod rezervou.",
     "config_check_intro": "SEM právě čte:",
     "config_check_solar": "Slunce",
     "config_check_grid": "Síť",
@@ -2920,7 +2922,13 @@
     "plan_note_one_price_day": "levné hodiny v den s jedinou cenou se nepoužívají",
     "plan_note_waits_for_sun": "čeká na slunce do {time}",
     "plan_note_no_cheap_window": "dnes v noci žádné levné okno",
-    "plan_note_cost_unknown": "umístěno do hodin bez ceny — cena neznámá"
+    "plan_note_cost_unknown": "umístěno do hodin bez ceny — cena neznámá",
+    "plan_why_from_battery": "Z domácí baterie, {from}–{to}.",
+    "plan_why_on_sun": "Ze solárního přebytku, {from}–{to}.",
+    "plan_why_before_departure": "Těsně před odjezdem, {from}–{to}.",
+    "plan_why_unpriced_hours": "V hodinách ještě bez ceny, {from}–{to}.",
+    "plan_why_one_rate": "Jeden tarif celou noc, každá hodina stojí stejně: {from}–{to}.",
+    "plan_why_cheapest_hours": "V nejlevnějších hodinách, {from}–{to}, v průměru {price}."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5015,6 +5023,8 @@
     "config_batt_charge_end_entity": "Ladestopniveau",
     "config_help_batt_charge_end_entity": "Hvor inverteren selv stopper opladningen, i %. SEM læser det kun. Tvungen opladning slutter der, når det er under 90 %.",
     "config_help_batt_charge_end_entity_each": "Dette batteris eget ladestopniveau. Tom: SEM bruger entiteten ovenfor.",
+    "config_batt_discharge_end_entity": "Afladningsstopniveau",
+    "config_help_batt_discharge_end_entity": "Hvor inverteren selv stopper afladningen, i %. SEM læser det kun. Natplanen regner aldrig batteriet under det eller under reserven.",
     "config_check_intro": "Lige nu læser SEM:",
     "config_check_solar": "Sol",
     "config_check_grid": "Net",
@@ -5843,7 +5853,13 @@
     "plan_note_one_price_day": "lavlasttimer på en dag med én pris bruges ikke",
     "plan_note_waits_for_sun": "venter på solen til {time}",
     "plan_note_no_cheap_window": "intet billigt vindue i nat",
-    "plan_note_cost_unknown": "lagt i timer uden pris endnu — pris ukendt"
+    "plan_note_cost_unknown": "lagt i timer uden pris endnu — pris ukendt",
+    "plan_why_from_battery": "Fra husets batteri, {from}–{to}.",
+    "plan_why_on_sun": "På soloverskud, {from}–{to}.",
+    "plan_why_before_departure": "Lige før afgang, {from}–{to}.",
+    "plan_why_unpriced_hours": "I timer uden pris endnu, {from}–{to}.",
+    "plan_why_one_rate": "Én tarif hele natten, hver time koster det samme: {from}–{to}.",
+    "plan_why_cheapest_hours": "I de billigste timer, {from}–{to}, i snit {price}."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -7938,6 +7954,8 @@
     "config_batt_charge_end_entity": "Ladeende-Stand",
     "config_help_batt_charge_end_entity": "Wo der Wechselrichter selbst das Laden stoppt, in %. SEM liest ihn nur. Zwangsladen endet dort, wenn er unter 90 % liegt.",
     "config_help_batt_charge_end_entity_each": "Der eigene Ladeende-Stand dieser Batterie. Leer: SEM nutzt die Entität oben.",
+    "config_batt_discharge_end_entity": "Entladeende-Stand",
+    "config_help_batt_discharge_end_entity": "Wo der Wechselrichter selbst das Entladen stoppt, in %. SEM liest ihn nur. Der Nachtplan rechnet die Batterie nie darunter oder unter die Reserve.",
     "config_check_intro": "Gerade liest SEM:",
     "config_check_solar": "Solar",
     "config_check_grid": "Netz",
@@ -8766,7 +8784,13 @@
     "plan_note_one_price_day": "Niedertarifstunden an einem Tag mit nur einem Preis werden nicht genutzt",
     "plan_note_waits_for_sun": "wartet bis {time} auf die Sonne",
     "plan_note_no_cheap_window": "heute Nacht kein günstiges Zeitfenster",
-    "plan_note_cost_unknown": "in Stunden ohne Preis gelegt — Kosten unbekannt"
+    "plan_note_cost_unknown": "in Stunden ohne Preis gelegt — Kosten unbekannt",
+    "plan_why_from_battery": "Aus der Hausbatterie, {from}–{to}.",
+    "plan_why_on_sun": "Mit Überschuss, {from}–{to}.",
+    "plan_why_before_departure": "Kurz vor der Abfahrt, {from}–{to}.",
+    "plan_why_unpriced_hours": "In Stunden ohne Preis, {from}–{to}.",
+    "plan_why_one_rate": "Ein Tarif die ganze Nacht, jede Stunde kostet gleich: {from}–{to}.",
+    "plan_why_cheapest_hours": "In den günstigsten Stunden, {from}–{to}, im Schnitt {price}."
   },
   "en": {
     "% of limit": "% of limit",
@@ -10861,6 +10885,8 @@
     "config_batt_charge_end_entity": "End-of-charge level",
     "config_help_batt_charge_end_entity": "Where the inverter itself stops charging, in %. SEM only reads it. Force charge ends there when it is below 90 %.",
     "config_help_batt_charge_end_entity_each": "This battery's own end-of-charge level. Empty: SEM uses the entity above.",
+    "config_batt_discharge_end_entity": "End-of-discharge level",
+    "config_help_batt_discharge_end_entity": "Where the inverter itself stops discharging, in %. SEM only reads it. The night plan never counts the battery below it or below the reserve.",
     "config_check_intro": "Right now SEM reads:",
     "config_check_solar": "Solar",
     "config_check_grid": "Grid",
@@ -11689,7 +11715,13 @@
     "plan_note_one_price_day": "off-peak hours on a day with one price are not used",
     "plan_note_waits_for_sun": "waits for the sun until {time}",
     "plan_note_no_cheap_window": "no cheap window tonight",
-    "plan_note_cost_unknown": "placed in hours with no price yet — cost unknown"
+    "plan_note_cost_unknown": "placed in hours with no price yet — cost unknown",
+    "plan_why_from_battery": "From the house battery, {from}–{to}.",
+    "plan_why_on_sun": "On spare sun, {from}–{to}.",
+    "plan_why_before_departure": "Just before it leaves, {from}–{to}.",
+    "plan_why_unpriced_hours": "In hours with no price yet, {from}–{to}.",
+    "plan_why_one_rate": "One rate all night, so every hour costs the same: {from}–{to}.",
+    "plan_why_cheapest_hours": "In the cheapest hours, {from}–{to}, at {price} on average."
   },
   "es": {
     "% of limit": "% del límite",
@@ -13784,6 +13816,8 @@
     "config_batt_charge_end_entity": "Nivel de fin de carga",
     "config_help_batt_charge_end_entity": "Donde el inversor deja de cargar por sí mismo, en %. SEM solo lo lee. La carga forzada termina ahí cuando está por debajo del 90 %.",
     "config_help_batt_charge_end_entity_each": "El nivel de fin de carga propio de esta batería. Vacío: SEM usa la entidad de arriba.",
+    "config_batt_discharge_end_entity": "Nivel de fin de descarga",
+    "config_help_batt_discharge_end_entity": "Donde el inversor deja de descargar por sí mismo, en %. SEM solo lo lee. El plan nocturno nunca cuenta la batería por debajo, ni por debajo de la reserva.",
     "config_check_intro": "Ahora mismo SEM lee:",
     "config_check_solar": "Solar",
     "config_check_grid": "Red",
@@ -14612,7 +14646,13 @@
     "plan_note_one_price_day": "las horas valle de un día con un solo precio no se usan",
     "plan_note_waits_for_sun": "espera al sol hasta las {time}",
     "plan_note_no_cheap_window": "esta noche no hay franja barata",
-    "plan_note_cost_unknown": "colocado en horas aún sin precio — coste desconocido"
+    "plan_note_cost_unknown": "colocado en horas aún sin precio — coste desconocido",
+    "plan_why_from_battery": "Desde la batería de casa, {from}–{to}.",
+    "plan_why_on_sun": "Con excedente solar, {from}–{to}.",
+    "plan_why_before_departure": "Justo antes de salir, {from}–{to}.",
+    "plan_why_unpriced_hours": "En horas aún sin precio, {from}–{to}.",
+    "plan_why_one_rate": "Una sola tarifa toda la noche, cada hora cuesta igual: {from}–{to}.",
+    "plan_why_cheapest_hours": "En las horas más baratas, {from}–{to}, a {price} de media."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -16707,6 +16747,8 @@
     "config_batt_charge_end_entity": "Latauksen lopetustaso",
     "config_help_batt_charge_end_entity": "Missä invertteri itse lopettaa latauksen, %. SEM vain lukee sen. Pakkolataus päättyy siihen, kun se on alle 90 %.",
     "config_help_batt_charge_end_entity_each": "Tämän akun oma latauksen lopetustaso. Tyhjä: SEM käyttää yllä olevaa entiteettiä.",
+    "config_batt_discharge_end_entity": "Purkauksen lopetustaso",
+    "config_help_batt_discharge_end_entity": "Taso, jolla invertteri itse lopettaa purkamisen, %. SEM vain lukee sen. Yösuunnitelma ei koskaan laske akkua sen tai varauksen alle.",
     "config_check_intro": "Juuri nyt SEM lukee:",
     "config_check_solar": "Aurinko",
     "config_check_grid": "Verkko",
@@ -17535,7 +17577,13 @@
     "plan_note_one_price_day": "halvan ajan tunteja ei käytetä päivänä, jolla on yksi hinta",
     "plan_note_waits_for_sun": "odottaa aurinkoa klo {time} asti",
     "plan_note_no_cheap_window": "ei halpaa jaksoa tänä yönä",
-    "plan_note_cost_unknown": "sijoitettu tunteihin, joilla ei vielä ole hintaa — hinta tuntematon"
+    "plan_note_cost_unknown": "sijoitettu tunteihin, joilla ei vielä ole hintaa — hinta tuntematon",
+    "plan_why_from_battery": "Kotiakusta, {from}–{to}.",
+    "plan_why_on_sun": "Aurinkoylijäämällä, {from}–{to}.",
+    "plan_why_before_departure": "Juuri ennen lähtöä, {from}–{to}.",
+    "plan_why_unpriced_hours": "Tunteina, joilla ei vielä ole hintaa, {from}–{to}.",
+    "plan_why_one_rate": "Yksi hinta koko yön, joka tunti maksaa saman: {from}–{to}.",
+    "plan_why_cheapest_hours": "Halvimpina tunteina, {from}–{to}, keskimäärin {price}."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -19630,6 +19678,8 @@
     "config_batt_charge_end_entity": "Niveau de fin de charge",
     "config_help_batt_charge_end_entity": "Là où l'onduleur arrête lui-même la charge, en %. SEM le lit seulement. La charge forcée s'arrête là quand il est sous 90 %.",
     "config_help_batt_charge_end_entity_each": "Le niveau de fin de charge propre à cette batterie. Vide : SEM utilise l'entité ci-dessus.",
+    "config_batt_discharge_end_entity": "Niveau de fin de décharge",
+    "config_help_batt_discharge_end_entity": "Niveau où l'onduleur arrête lui-même la décharge, en %. SEM le lit seulement. Le plan de nuit ne compte jamais la batterie en dessous, ni sous la réserve.",
     "config_check_intro": "En ce moment SEM lit :",
     "config_check_solar": "Solaire",
     "config_check_grid": "Réseau",
@@ -20458,7 +20508,13 @@
     "plan_note_one_price_day": "les heures creuses d'un jour à prix unique ne sont pas utilisées",
     "plan_note_waits_for_sun": "attend le soleil jusqu'à {time}",
     "plan_note_no_cheap_window": "pas de créneau bon marché cette nuit",
-    "plan_note_cost_unknown": "placé dans des heures encore sans prix — coût inconnu"
+    "plan_note_cost_unknown": "placé dans des heures encore sans prix — coût inconnu",
+    "plan_why_from_battery": "Depuis la batterie de la maison, {from}–{to}.",
+    "plan_why_on_sun": "Avec le surplus solaire, {from}–{to}.",
+    "plan_why_before_departure": "Juste avant le départ, {from}–{to}.",
+    "plan_why_unpriced_hours": "Dans des heures encore sans prix, {from}–{to}.",
+    "plan_why_one_rate": "Un seul tarif toute la nuit, chaque heure coûte pareil : {from}–{to}.",
+    "plan_why_cheapest_hours": "Aux heures les plus bon marché, {from}–{to}, à {price} en moyenne."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -22553,6 +22609,8 @@
     "config_batt_charge_end_entity": "Töltés vége szint",
     "config_help_batt_charge_end_entity": "Ahol az inverter maga leállítja a töltést, %-ban. A SEM csak olvassa. A kényszertöltés ott véget ér, ha 90 % alatt van.",
     "config_help_batt_charge_end_entity_each": "Ennek az akkumulátornak a saját töltés vége szintje. Üres: a SEM a fenti entitást használja.",
+    "config_batt_discharge_end_entity": "Kisütés vége szint",
+    "config_help_batt_discharge_end_entity": "Ahol az inverter maga leállítja a kisütést, %-ban. A SEM csak olvassa. Az éjszakai terv soha nem számol az akkuval ez alatt vagy a tartalék alatt.",
     "config_check_intro": "A SEM most ezt olvassa:",
     "config_check_solar": "Napelem",
     "config_check_grid": "Hálózat",
@@ -23381,7 +23439,13 @@
     "plan_note_one_price_day": "az egyárú napon a völgyidőszaki órákat nem használja",
     "plan_note_waits_for_sun": "{time}-ig vár a napra",
     "plan_note_no_cheap_window": "ma éjjel nincs olcsó időablak",
-    "plan_note_cost_unknown": "még ár nélküli órákba került — költség ismeretlen"
+    "plan_note_cost_unknown": "még ár nélküli órákba került — költség ismeretlen",
+    "plan_why_from_battery": "A házi akkumulátorból, {from}–{to}.",
+    "plan_why_on_sun": "Napelemes többletből, {from}–{to}.",
+    "plan_why_before_departure": "Közvetlenül indulás előtt, {from}–{to}.",
+    "plan_why_unpriced_hours": "Még ár nélküli órákban, {from}–{to}.",
+    "plan_why_one_rate": "Egész éjjel egy tarifa, minden óra ugyanannyiba kerül: {from}–{to}.",
+    "plan_why_cheapest_hours": "A legolcsóbb órákban, {from}–{to}, átlagosan {price}."
   },
   "it": {
     "% of limit": "% del limite",
@@ -25476,6 +25540,8 @@
     "config_batt_charge_end_entity": "Livello di fine carica",
     "config_help_batt_charge_end_entity": "Dove l'inverter stesso smette di caricare, in %. SEM lo legge soltanto. La carica forzata finisce lì quando è sotto il 90 %.",
     "config_help_batt_charge_end_entity_each": "Il livello di fine carica proprio di questa batteria. Vuoto: SEM usa l'entità sopra.",
+    "config_batt_discharge_end_entity": "Livello di fine scarica",
+    "config_help_batt_discharge_end_entity": "Dove l'inverter stesso smette di scaricare, in %. SEM lo legge soltanto. Il piano notturno non conta mai la batteria sotto questo livello né sotto la riserva.",
     "config_check_intro": "In questo momento SEM legge:",
     "config_check_solar": "Solare",
     "config_check_grid": "Rete",
@@ -26304,7 +26370,13 @@
     "plan_note_one_price_day": "le ore fuori punta in un giorno a prezzo unico non vengono usate",
     "plan_note_waits_for_sun": "aspetta il sole fino alle {time}",
     "plan_note_no_cheap_window": "nessuna fascia economica stanotte",
-    "plan_note_cost_unknown": "messo in ore ancora senza prezzo — costo sconosciuto"
+    "plan_note_cost_unknown": "messo in ore ancora senza prezzo — costo sconosciuto",
+    "plan_why_from_battery": "Dalla batteria di casa, {from}–{to}.",
+    "plan_why_on_sun": "Con il surplus solare, {from}–{to}.",
+    "plan_why_before_departure": "Poco prima della partenza, {from}–{to}.",
+    "plan_why_unpriced_hours": "In ore ancora senza prezzo, {from}–{to}.",
+    "plan_why_one_rate": "Una sola tariffa tutta la notte, ogni ora costa uguale: {from}–{to}.",
+    "plan_why_cheapest_hours": "Nelle ore più economiche, {from}–{to}, a {price} in media."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -28399,6 +28471,8 @@
     "config_batt_charge_end_entity": "Laadeinde-niveau",
     "config_help_batt_charge_end_entity": "Waar de omvormer zelf stopt met laden, in %. SEM leest het alleen. Geforceerd laden stopt daar als het onder 90 % ligt.",
     "config_help_batt_charge_end_entity_each": "Het eigen laadeinde-niveau van deze batterij. Leeg: SEM gebruikt de entiteit hierboven.",
+    "config_batt_discharge_end_entity": "Ontlaadeinde-niveau",
+    "config_help_batt_discharge_end_entity": "Waar de omvormer zelf stopt met ontladen, in %. SEM leest het alleen. Het nachtplan rekent de batterij nooit lager, en nooit onder de reserve.",
     "config_check_intro": "Nu leest SEM:",
     "config_check_solar": "Zon",
     "config_check_grid": "Net",
@@ -29227,7 +29301,13 @@
     "plan_note_one_price_day": "daluren op een dag met één prijs worden niet gebruikt",
     "plan_note_waits_for_sun": "wacht tot {time} op de zon",
     "plan_note_no_cheap_window": "vannacht geen goedkoop venster",
-    "plan_note_cost_unknown": "in uren zonder prijs gezet — kosten onbekend"
+    "plan_note_cost_unknown": "in uren zonder prijs gezet — kosten onbekend",
+    "plan_why_from_battery": "Uit de thuisbatterij, {from}–{to}.",
+    "plan_why_on_sun": "Op zonne-overschot, {from}–{to}.",
+    "plan_why_before_departure": "Vlak voor vertrek, {from}–{to}.",
+    "plan_why_unpriced_hours": "In uren zonder prijs, {from}–{to}.",
+    "plan_why_one_rate": "Eén tarief de hele nacht, elk uur kost hetzelfde: {from}–{to}.",
+    "plan_why_cheapest_hours": "In de goedkoopste uren, {from}–{to}, gemiddeld {price}."
   },
   "no": {
     "% of limit": "% av grense",
@@ -31322,6 +31402,8 @@
     "config_batt_charge_end_entity": "Ladestoppnivå",
     "config_help_batt_charge_end_entity": "Hvor vekselretteren selv stopper ladingen, i %. SEM leser det bare. Tvungen lading slutter der når det er under 90 %.",
     "config_help_batt_charge_end_entity_each": "Dette batteriets eget ladestoppnivå. Tom: SEM bruker enheten ovenfor.",
+    "config_batt_discharge_end_entity": "Utladingsstoppnivå",
+    "config_help_batt_discharge_end_entity": "Der omformeren selv stopper utladingen, i %. SEM leser det bare. Nattplanen regner aldri batteriet under det eller under reserven.",
     "config_check_intro": "Akkurat nå leser SEM:",
     "config_check_solar": "Sol",
     "config_check_grid": "Nett",
@@ -32150,7 +32232,13 @@
     "plan_note_one_price_day": "lavlasttimer på en dag med én pris brukes ikke",
     "plan_note_waits_for_sun": "venter på sola til {time}",
     "plan_note_no_cheap_window": "ikke noe billig vindu i natt",
-    "plan_note_cost_unknown": "lagt i timer uten pris ennå — kostnad ukjent"
+    "plan_note_cost_unknown": "lagt i timer uten pris ennå — kostnad ukjent",
+    "plan_why_from_battery": "Fra husets batteri, {from}–{to}.",
+    "plan_why_on_sun": "På soloverskudd, {from}–{to}.",
+    "plan_why_before_departure": "Like før avreise, {from}–{to}.",
+    "plan_why_unpriced_hours": "I timer uten pris ennå, {from}–{to}.",
+    "plan_why_one_rate": "Én tariff hele natten, hver time koster det samme: {from}–{to}.",
+    "plan_why_cheapest_hours": "I de billigste timene, {from}–{to}, i snitt {price}."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -34245,6 +34333,8 @@
     "config_batt_charge_end_entity": "Poziom końca ładowania",
     "config_help_batt_charge_end_entity": "Gdzie falownik sam kończy ładowanie, w %. SEM tylko go odczytuje. Wymuszone ładowanie kończy się tam, gdy jest poniżej 90 %.",
     "config_help_batt_charge_end_entity_each": "Własny poziom końca ładowania tej baterii. Puste: SEM używa encji powyżej.",
+    "config_batt_discharge_end_entity": "Poziom końca rozładowania",
+    "config_help_batt_discharge_end_entity": "Poziom, przy którym falownik sam kończy rozładowanie, w %. SEM tylko go odczytuje. Plan nocny nigdy nie liczy baterii poniżej niego ani poniżej rezerwy.",
     "config_check_intro": "W tej chwili SEM odczytuje:",
     "config_check_solar": "Słońce",
     "config_check_grid": "Sieć",
@@ -35073,7 +35163,13 @@
     "plan_note_one_price_day": "tańsze godziny w dniu z jedną ceną nie są używane",
     "plan_note_waits_for_sun": "czeka na słońce do {time}",
     "plan_note_no_cheap_window": "dziś w nocy brak taniego okna",
-    "plan_note_cost_unknown": "umieszczono w godzinach bez ceny — koszt nieznany"
+    "plan_note_cost_unknown": "umieszczono w godzinach bez ceny — koszt nieznany",
+    "plan_why_from_battery": "Z domowej baterii, {from}–{to}.",
+    "plan_why_on_sun": "Z nadwyżki słonecznej, {from}–{to}.",
+    "plan_why_before_departure": "Tuż przed wyjazdem, {from}–{to}.",
+    "plan_why_unpriced_hours": "W godzinach jeszcze bez ceny, {from}–{to}.",
+    "plan_why_one_rate": "Jedna taryfa całą noc, każda godzina kosztuje tyle samo: {from}–{to}.",
+    "plan_why_cheapest_hours": "W najtańszych godzinach, {from}–{to}, średnio {price}."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -37168,6 +37264,8 @@
     "config_batt_charge_end_entity": "Nível de fim de carga",
     "config_help_batt_charge_end_entity": "Onde o inversor para de carregar por si, em %. O SEM apenas o lê. A carga forçada termina aí quando está abaixo de 90 %.",
     "config_help_batt_charge_end_entity_each": "O nível de fim de carga próprio desta bateria. Vazio: o SEM usa a entidade acima.",
+    "config_batt_discharge_end_entity": "Nível de fim de descarga",
+    "config_help_batt_discharge_end_entity": "Onde o inversor para de descarregar por si, em %. O SEM só o lê. O plano noturno nunca conta a bateria abaixo dele nem abaixo da reserva.",
     "config_check_intro": "Agora o SEM lê:",
     "config_check_solar": "Solar",
     "config_check_grid": "Rede",
@@ -37996,7 +38094,13 @@
     "plan_note_one_price_day": "as horas de vazio num dia com um só preço não são usadas",
     "plan_note_waits_for_sun": "espera pelo sol até às {time}",
     "plan_note_no_cheap_window": "sem janela barata esta noite",
-    "plan_note_cost_unknown": "colocado em horas ainda sem preço — custo desconhecido"
+    "plan_note_cost_unknown": "colocado em horas ainda sem preço — custo desconhecido",
+    "plan_why_from_battery": "Da bateria da casa, {from}–{to}.",
+    "plan_why_on_sun": "Com excedente solar, {from}–{to}.",
+    "plan_why_before_departure": "Mesmo antes da partida, {from}–{to}.",
+    "plan_why_unpriced_hours": "Em horas ainda sem preço, {from}–{to}.",
+    "plan_why_one_rate": "Uma só tarifa toda a noite, cada hora custa o mesmo: {from}–{to}.",
+    "plan_why_cheapest_hours": "Nas horas mais baratas, {from}–{to}, a {price} em média."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -40091,6 +40195,8 @@
     "config_batt_charge_end_entity": "Nivel de final de încărcare",
     "config_help_batt_charge_end_entity": "Unde invertorul oprește singur încărcarea, în %. SEM doar îl citește. Încărcarea forțată se termină acolo când este sub 90 %.",
     "config_help_batt_charge_end_entity_each": "Nivelul propriu de final de încărcare al acestei baterii. Gol: SEM folosește entitatea de mai sus.",
+    "config_batt_discharge_end_entity": "Nivel de final de descărcare",
+    "config_help_batt_discharge_end_entity": "Nivelul la care invertorul oprește singur descărcarea, în %. SEM doar îl citește. Planul de noapte nu socotește niciodată bateria sub el sau sub rezervă.",
     "config_check_intro": "Acum SEM citește:",
     "config_check_solar": "Solar",
     "config_check_grid": "Rețea",
@@ -40919,7 +41025,13 @@
     "plan_note_one_price_day": "orele de noapte dintr-o zi cu un singur preț nu sunt folosite",
     "plan_note_waits_for_sun": "așteaptă soarele până la {time}",
     "plan_note_no_cheap_window": "nicio fereastră ieftină în noaptea asta",
-    "plan_note_cost_unknown": "pus în ore încă fără preț — cost necunoscut"
+    "plan_note_cost_unknown": "pus în ore încă fără preț — cost necunoscut",
+    "plan_why_from_battery": "Din bateria casei, {from}–{to}.",
+    "plan_why_on_sun": "Din surplusul solar, {from}–{to}.",
+    "plan_why_before_departure": "Chiar înainte de plecare, {from}–{to}.",
+    "plan_why_unpriced_hours": "În ore încă fără preț, {from}–{to}.",
+    "plan_why_one_rate": "Un singur tarif toată noaptea, fiecare oră costă la fel: {from}–{to}.",
+    "plan_why_cheapest_hours": "În cele mai ieftine ore, {from}–{to}, în medie {price}."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -43014,6 +43126,8 @@
     "config_batt_charge_end_entity": "Laddstoppnivå",
     "config_help_batt_charge_end_entity": "Där växelriktaren själv slutar ladda, i %. SEM läser den bara. Tvångsladdning slutar där när den är under 90 %.",
     "config_help_batt_charge_end_entity_each": "Detta batteris egen laddstoppnivå. Tom: SEM använder entiteten ovan.",
+    "config_batt_discharge_end_entity": "Urladdningsstoppnivå",
+    "config_help_batt_discharge_end_entity": "Där växelriktaren själv slutar ladda ur, i %. SEM läser den bara. Nattplanen räknar aldrig batteriet under den eller under reserven.",
     "config_check_intro": "Just nu läser SEM:",
     "config_check_solar": "Sol",
     "config_check_grid": "Nät",
@@ -43842,7 +43956,13 @@
     "plan_note_one_price_day": "lågpristimmar en dag med ett enda pris används inte",
     "plan_note_waits_for_sun": "väntar på solen till {time}",
     "plan_note_no_cheap_window": "inget billigt fönster i natt",
-    "plan_note_cost_unknown": "lagt i timmar utan pris ännu — kostnad okänd"
+    "plan_note_cost_unknown": "lagt i timmar utan pris ännu — kostnad okänd",
+    "plan_why_from_battery": "Från husets batteri, {from}–{to}.",
+    "plan_why_on_sun": "På solöverskott, {from}–{to}.",
+    "plan_why_before_departure": "Strax före avresa, {from}–{to}.",
+    "plan_why_unpriced_hours": "Under timmar utan pris än, {from}–{to}.",
+    "plan_why_one_rate": "En taxa hela natten, varje timme kostar lika: {from}–{to}.",
+    "plan_why_cheapest_hours": "Under de billigaste timmarna, {from}–{to}, i snitt {price}."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -45937,6 +46057,8 @@
     "config_batt_charge_end_entity": "充电截止电量",
     "config_help_batt_charge_end_entity": "逆变器自身停止充电的电量（%）。SEM 只读取它。低于 90 % 时，强制充电在此结束。",
     "config_help_batt_charge_end_entity_each": "此蓄电池自己的充电截止电量。留空：SEM 使用上方的实体。",
+    "config_batt_discharge_end_entity": "放电截止电量",
+    "config_help_batt_discharge_end_entity": "逆变器自身停止放电的电量，单位 %。SEM 只读取它。夜间计划绝不把电池算到它或备用电量以下。",
     "config_check_intro": "SEM 现在读取：",
     "config_check_solar": "光伏",
     "config_check_grid": "电网",
@@ -46765,6 +46887,12 @@
     "plan_note_one_price_day": "单一电价日的低谷时段不被使用",
     "plan_note_waits_for_sun": "等待阳光直到 {time}",
     "plan_note_no_cheap_window": "今晚没有低价时段",
-    "plan_note_cost_unknown": "安排在尚无价格的时段 — 费用未知"
+    "plan_note_cost_unknown": "安排在尚无价格的时段 — 费用未知",
+    "plan_why_from_battery": "来自家用电池，{from}–{to}。",
+    "plan_why_on_sun": "使用富余光伏，{from}–{to}。",
+    "plan_why_before_departure": "出发前不久，{from}–{to}。",
+    "plan_why_unpriced_hours": "在尚无价格的时段，{from}–{to}。",
+    "plan_why_one_rate": "整晚同一电价，每小时价格相同：{from}–{to}。",
+    "plan_why_cheapest_hours": "在最便宜的时段，{from}–{to}，平均 {price}。"
   }
 }

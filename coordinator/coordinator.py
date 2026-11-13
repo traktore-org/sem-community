@@ -85,6 +85,7 @@ from .battery_controls import (  # (#1071, #1195)
 )
 from ..consts.battery_modes import (
     DEFAULT_BATTERY_MODE, DEFAULT_BATTERY_RESERVE_SOC, reserve_soc_of,
+    battery_floor_of,
 )
 
 from .types import (
@@ -697,6 +698,33 @@ def _plan_day_end(time_manager, now, night_end):
     except Exception:  # noqa: BLE001 — no window → night-only shape
         pass
     return None
+
+
+def _discharge_end_reading(coord, cfg) -> "float | None":
+    """(#1358) The inverter's own end-of-discharge level, or ``None``.
+
+    Read from ``battery_discharge_end_soc_entity`` — the twin of
+    ``SEMCoordinator._charge_end_soc``. SEM only reads it, never writes it.
+    Unset, missing, unavailable or not a number → ``None``. Module level and
+    read through ``getattr`` so every caller (and a stand-in coordinator)
+    reaches it the same way."""
+    eid = (cfg or {}).get("battery_discharge_end_soc_entity")
+    hass = getattr(coord, "hass", None)
+    states = getattr(hass, "states", None)
+    if not eid or not isinstance(eid, str) or states is None:
+        return None
+    try:
+        st = states.get(eid)
+        return finite_float(st.state) if st is not None else None
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _battery_floor_for(coord) -> "tuple[float, str]":
+    """(#1358) The pack's real floor: SEM's reserve or the inverter's own end
+    of discharge, whichever is higher (``battery_floor_of``)."""
+    cfg = getattr(coord, "config", None) or {}
+    return battery_floor_of(cfg, _discharge_end_reading(coord, cfg))
 
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
@@ -6576,7 +6604,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # floor — the reserve, where the inverter stops — not the
                     # priority level (the house runs on below it) nor the
                     # retired ``battery_minimum_soc`` knob.
-                    _bat_floor = reserve_soc_of(self.config)
+                    _bat_floor = _battery_floor_for(self)[0]
                     if _bat_soc is not None and _bat_cap > 0:
                         if _bat_kw > _MIN_USEFUL_RATE_KW and _bat_soc < 99:
                             remaining_kwh = (100 - _bat_soc) / 100 * _bat_cap
@@ -8498,6 +8526,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except (TypeError, ValueError, AttributeError):
             return None
 
+    def _discharge_end_soc(self, cfg: dict) -> "float | None":
+        """(#1358) See ``_discharge_end_reading``."""
+        return _discharge_end_reading(self, cfg)
+
+    def _battery_floor(self) -> "tuple[float, str]":
+        """(#1358) See ``_battery_floor_for``."""
+        return _battery_floor_for(self)
+
     def _finish_manual_battery_modes(
         self, battery_items, soc_read: dict, count: int,
         power_read: "dict | None" = None, site=None,
@@ -9450,7 +9486,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             now = dt_util.now()
             left = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
             tomorrow = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
-            need = cap * (1.0 - float(reserve_soc_of(self.config)) / 100.0)
+            need = cap * (1.0 - float(_battery_floor_for(self)[0]) / 100.0)
             day = timedelta(days=1)
             nets = [tomorrow - self._house_kwh_between(sunrise + day, sunset + day)]
             if now < sunset:
@@ -12523,8 +12559,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if soc_seed is not None:
                 from .day_ledger import (build_day_slots,
                                          provisional_soc_curve)
-                from .energy_planner import (Demand, build_night_ledger,
-                                                pack_night)
+                from .energy_planner import (Demand, battery_at_end,
+                                                build_night_ledger, pack_night)
                 slots2 = build_day_slots(
                     start=day_start, end=day_end, day_kwh=day_kwh,
                     sunrise=sunrise, sunset=sunset,
@@ -12558,7 +12594,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         deadline=day_end, priority=i, source="grid",
                     ))
                 # the reserve, as tonight's plan reads it
-                _reserve = reserve_soc_of(self.config)
+                _reserve = _battery_floor_for(self)[0]
                 _floor2 = _reserve / 100.0 * cap_kwh2
                 _md_w = float(self.config.get(
                     "battery_max_discharge_power", 5000.0) or 5000.0)
@@ -12619,6 +12655,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (#1321) asks the sun cannot carry in their mode
                     "not_enough_sun": [{"id": d, "label": labels2.get(d)}
                                        for d in _no_sun],
+                    # (#1321) the battery when tomorrow's preview ends
+                    "battery_end": battery_at_end(ledger2, _floor2, cap_kwh2),
                 }
         except Exception:  # noqa: BLE001 — provisional is additive, never fatal
             preview["provisional"] = None
@@ -12823,7 +12861,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             from datetime import timedelta as _td
             from .energy_planner import (
-                Demand, LedgerSlot, build_night_ledger, pack_night,
+                Demand, LedgerSlot, battery_at_end, build_night_ledger, demand_why,
+                pack_night,
             )
             from .ev_night_targets import build_night_target_map
             from .ev_tariff_planner import (
@@ -13306,7 +13345,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                    has_grid_blocks),
                 }
 
-            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None, ledger_slots=None):
+            # (#1358) the floor the ledger used, published with the plan
+            _plan_floor = [None, None]
+
+            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None, ledger_slots=None,
+                              battery_end=None):
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
                 # broken one; burned three placement bugs learning that).
@@ -13369,10 +13412,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "battery_fleet_partial": partial_note,
                     # (#1063) whether this ledger walked a battery at all.
                     "has_battery": cap_kwh > 0,
+                    "battery_floor_pct": _plan_floor[0],
+                    "battery_floor_source": _plan_floor[1],
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
                     **_cost_keys(ledger_slots, 0.0),
+                    # (#1321) where the battery ends tonight, when walked
+                    "battery_end": battery_end,
                 }
 
             # ── The Night Ledger (spec) ─────────────────────────────────
@@ -13384,7 +13431,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # not the priority level — that one says when the car waits for
             # the battery, and the house kept running below it (PROD 13.11:
             # the plan called a 28 % pack empty while it powered the house).
-            reserve_pct = reserve_soc_of(self.config)
+            # (#1358) …or the inverter's own end of discharge when it is higher
+            reserve_pct, _plan_floor_src = _battery_floor_for(self)
+            _plan_floor[0], _plan_floor[1] = reserve_pct, _plan_floor_src
             target_pct = float(getattr(getattr(scheduler, "decision", None),
                                        "target_soc", 0.0) or 0.0)
             floor_kwh = max(reserve_pct, target_pct) / 100.0 * cap_kwh
@@ -13663,7 +13712,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._energy_plan_shadow = _quiet_answer(
                     arb, fsell, _slot_rows(ledger),
                     predict_self_consumption(ledger, []).as_dict(),
-                    ledger_slots=ledger)
+                    ledger_slots=ledger,
+                    battery_end=battery_at_end(ledger, floor_kwh, cap_kwh))
                 return True
             plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
                               max_discharge_w=max_discharge_w,
@@ -13708,6 +13758,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # so publish the fields, not the sentence. Both stay — the
             # strings are what the log lines and the soak notes quote.
             kind_of = {d.id: d.kind for d in demands}
+            source_of = {d.id: d.source for d in demands}
+            allocs_of = {}
+            for _a in plan.allocations:
+                allocs_of.setdefault(_a.demand_id, []).append(_a)
             rows = [{
                 "id": r.demand_id,
                 "kind": kind_of.get(r.demand_id, "load"),
@@ -13721,6 +13775,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1354) the note as codes the card translates
                 "notes": [{"code": c, "params": dict(p)}
                           for c, p in getattr(r, "note_codes", ())],
+                # (#1321) why its runs landed where they did — one code
+                # for the Plan card's "Why this plan" list
+                "why": demand_why(allocs_of.get(r.demand_id, ()), ledger,
+                                  source_of.get(r.demand_id, "grid")),
             } for r in plan.results]
             # The ledger itself — the card's hour axis and battery
             # trajectory, in the ONE shape a quiet night draws too.
@@ -13767,6 +13825,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1063) False when the ledger walked no battery: the card
                 # then draws no battery icon and no hand-over time.
                 "has_battery": cap_kwh > 0,
+                "battery_floor_pct": _plan_floor[0],
+                "battery_floor_source": _plan_floor[1],
                 # (night 3, finding 3) a re-stamped night must be
                 # distinguishable from the first answer.
                 "replan_cause": replan_cause,
@@ -13782,6 +13842,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # instead of an anecdote.
                 "self_consumption": predict_self_consumption(
                     ledger, blocks).as_dict(),
+                # (#1321) where the battery ends tonight, on the plan's own
+                # trajectory and floor — the Plan card's "Expected" tile
+                "battery_end": battery_at_end(ledger, floor_kwh, cap_kwh),
             }
             return True
         except Exception:  # noqa: BLE001 — shadow must never break the cycle

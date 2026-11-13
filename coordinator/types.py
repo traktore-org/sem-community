@@ -705,6 +705,17 @@ class CostData:
     daily_feed_in_fees: float = 0.0
     yearly_feed_in_fees: float = 0.0
 
+    # (#1321) average price paid per bought kWh, and the hours' average
+    # price over the same period — None on a fixed tariff (no comparison)
+    # or before there is data. ``price_comparison``: the tariff is dynamic.
+    price_comparison: bool = False
+    daily_avg_price_paid: Optional[float] = None
+    daily_avg_price_hours: Optional[float] = None
+    monthly_avg_price_paid: Optional[float] = None
+    monthly_avg_price_hours: Optional[float] = None
+    yearly_avg_price_paid: Optional[float] = None
+    yearly_avg_price_hours: Optional[float] = None
+
     # Environmental impact
     daily_co2_avoided_kg: float = 0.0
     # (#1221) the kWh and kg/kWh behind ``daily_co2_avoided_kg``; None
@@ -1461,6 +1472,15 @@ class SEMData:
             "yearly_export_value": self.costs.yearly_export_value,
             "daily_feed_in_fees": self.costs.daily_feed_in_fees,
             "yearly_feed_in_fees": self.costs.yearly_feed_in_fees,
+
+            # (#1321) paid vs the hours' average price
+            "price_comparison": self.costs.price_comparison,
+            "daily_avg_price_paid": self.costs.daily_avg_price_paid,
+            "daily_avg_price_hours": self.costs.daily_avg_price_hours,
+            "monthly_avg_price_paid": self.costs.monthly_avg_price_paid,
+            "monthly_avg_price_hours": self.costs.monthly_avg_price_hours,
+            "yearly_avg_price_paid": self.costs.yearly_avg_price_paid,
+            "yearly_avg_price_hours": self.costs.yearly_avg_price_hours,
 
             # Environmental impact
             "daily_co2_avoided": self.costs.daily_co2_avoided_kg,

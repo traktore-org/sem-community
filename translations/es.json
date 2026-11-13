@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Asistencia batería – mín. excedente solar (W)",
           "grid_sign_invert": "Invertir el signo de la potencia de red",
           "battery_operating_mode_entity": "Entidad de modo de funcionamiento de la batería (observada)",
-          "battery_charge_end_soc_entity": "Nivel de fin de carga de la batería (opcional)"
+          "battery_charge_end_soc_entity": "Nivel de fin de carga de la batería (opcional)",
+          "battery_discharge_end_soc_entity": "Nivel de fin de descarga de la batería (opcional)"
         },
         "data_description": {
           "update_interval": "Con qué frecuencia el coordinador lee los sensores y ajusta el hardware. 10 s da la integración de energía más precisa; valores por encima de 30 s subestiman la energía. Rango 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Excedente solar real mínimo antes de que la batería doméstica pueda ayudar a cargar el VE — en cualquier modo de carga. Por debajo de este valor la batería queda reservada para la casa (el coche toma de la red + solar). Por defecto 1200 W. Ponlo a 0 para que la batería apoye al VE en todo momento, incluso de noche.",
           "grid_sign_invert": "Actívalo solo si la importación de red aparece como valor positivo (p. ej. Enphase). La convención de SEM es negativo = importación; esto niega la lectura bruta y omite la detección automática del signo.",
           "battery_operating_mode_entity": "El selector de política de funcionamiento del inversor (p. ej. 'Working mode' de Huawei). SEM solo LEE esta entidad: el modo se muestra junto a la evidencia de la batería, y una reparación puntual avisa cuando no es el modo de autoconsumo que la planificación de SEM asume. SEM nunca lo cambia. Déjelo vacío para desactivar la observación.",
-          "battery_charge_end_soc_entity": "Donde el inversor deja de cargar la batería por sí mismo, en %. SEM solo lo lee, nunca lo escribe. La carga forzada también termina ahí cuando está por debajo del 90 %."
+          "battery_charge_end_soc_entity": "Donde el inversor deja de cargar la batería por sí mismo, en %. SEM solo lo lee, nunca lo escribe. La carga forzada también termina ahí cuando está por debajo del 90 %.",
+          "battery_discharge_end_soc_entity": "Donde el inversor deja de descargar por sí mismo, en %. SEM solo lo lee. El plan nocturno nunca cuenta la batería por debajo, ni por debajo de la reserva."
         }
       },
       "settings_battery_limit": {
