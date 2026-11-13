@@ -660,3 +660,41 @@ test('the battery texts say the car is helped from the buffer, fully from auto-s
     assert.doesNotMatch(tr.en.next_batt_zones, /house/);
     assert.match(tr.en.next_batt_zones, /car/);
 });
+
+// (#1354) The battery row starts open and says what it does now and next,
+// then asks its levels — the levels are asked here only.
+test('the battery row is open on first view and asks its levels from the shared model', () => {
+    const st = states();
+    const el = makeCard(st);
+    const out = text(el.render());
+    const at = out.indexOf('data-id=battery');
+    assert.ok(at >= 0, 'a battery row');
+    const row = out.slice(at);
+    assert.ok(!out.includes('class="card dev folded" data-id=battery'), 'open on first view');
+    assert.match(row, /bq_says_(giving|charging|resting)/);
+    assert.match(row, /next_bat_sent_fill/);
+    // one tap on the name folds it, a second opens it again
+    el._toggleOpen({ id: 'battery', type: 'battery' });
+    assert.ok(text(el.render()).includes('class="card dev folded" data-id=battery'), 'one tap folds it');
+    el._toggleOpen({ id: 'battery', type: 'battery' });
+    assert.match(text(el.render()), /bq_says_/);
+});
+
+// (#1354) A plan id is never printed as is: the Now card names a heater's
+// Keep at run after the device.
+test('the next block is named after the device, not by its plan id', async () => {
+    await import('../src/cards/sem-next-now-card.js');
+    const st = states();
+    const soon = new Date(Date.now() + 3 * 3600e3).toISOString(), later = new Date(Date.now() + 4 * 3600e3).toISOString();
+    st['sensor.sem_energy_plan'] = S('ok', { blocks: [{ id: 'comfort:hot_water', start: soon, end: later, power_w: 1900 }],
+        demands: [{ id: 'comfort:hot_water', note: 'placed in hours with no price yet — cost unknown', notes: [{ code: 'cost_unknown', params: {} }] }] });
+    st['sensor.sem_controllable_devices_count'] = S(1, { devices: { hot_water: { name: 'Sim Boiler', control_mode: 'surplus', priority: 1 } } });
+    const el = new (customElements.get('sem-next-now-card'))();
+    el.setConfig({ type: 'custom:sem-next-now-card' });
+    el.hass = { states: st, language: 'en', config: { currency: 'CHF', unit_system: { temperature: '°C' }, time_zone: 'UTC' }, callService: async () => {}, callWS: async () => ({}) };
+    el._all = true;
+    const out = text(el.render());
+    assert.doesNotMatch(out, /comfort:hot_water|load:hot_water/);
+    assert.equal(el._nextBlock().who, 'Sim Boiler');
+    assert.equal(el._whoName('comfort:unknown_heater'), 'Unknown heater');
+});

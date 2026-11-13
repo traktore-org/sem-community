@@ -12,6 +12,7 @@
  */
 
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { planIdName } from '../util/plan-ids.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, kwhOf, coldHeaters } from '../util/next-lead.js';
@@ -338,7 +339,9 @@ class SEMNextPlanCard extends SEMNextBase {
             isDynamic: tar.is_dynamic, level: tar.price_level || this._str('sensor.sem_tariff_price_level'), todayAvg: tar.today_avg });
         const rows = planRows({ win, nowMs: now, plan, names: {
             charger: (cid) => (this._chargers.includes(cid) ? this._chargerName(cid) : ''),
-            load: (id) => this._devices()[id]?.name || id,
+            load: (id) => this._devices()[id]?.name,
+            battery: () => this._t('next_src_battery'),
+            label: (pid) => [...(plan.demands || []), ...(plan.not_scheduled || [])].find((x) => x && x.id === pid)?.label,
         } });
         this._lastRows = rows;
         return { tz, now, win, sun, price, rows };
@@ -673,7 +676,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const key = id.replace(/^(load|comfort):/, '');
         const d = demands.find((x) => x.id === id);
         const ns = notSched.find((x) => x.id === id);
-        const name = (this._devices()[key]?.name || d?.label || ns?.label || key) + (keepRun ? this._toKeep(key) : '');
+        const name = planIdName(id, { load: (k) => this._devices()[k]?.name, label: () => d?.label || ns?.label }) + (keepRun ? this._toKeep(key) : '');
         const win = this._windowOf(blocks, id);
         const kwh = win ? kwhOf(blocks, (x) => x === id) : Number(d?.planned_kwh) || 0;
         const bits = [];

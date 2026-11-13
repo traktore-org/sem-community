@@ -7,6 +7,8 @@
  * dropped. Times of day follow the home's time zone.
  */
 
+import { planIdName, planIdParts } from './plan-ids.js';
+
 const HOUR = 3600e3;
 const CELL = 15 * 60e3;
 
@@ -193,17 +195,19 @@ export function planRows({ win, nowMs, plan, names = {} }) {
         else r.blocks.push({ s, e, kwh, provisional });
     };
     const blockRow = (id) => {
-        if (id.startsWith('ev:')) { const cid = id.slice(3); return row(id, 'ev', names.charger ? names.charger(cid) : cid); }
-        if (id.startsWith('load:')) { const lid = id.slice(5); return row(id, 'load', names.load ? names.load(lid) : lid); }
+        // (#1354) every row is named through the one plan-id reader, never by its id
+        const name = planIdName(id, names);
+        const { kind, key } = planIdParts(id);
+        if (kind === 'ev') return row(id, 'ev', name);
+        if (kind === 'load') return row(id, 'load', name);
         // (#1321) a heater's Keep at run: its own row, named after the device
-        if (id.startsWith('comfort:')) {
-            const lid = id.slice(8);
-            const r = row(id, 'load', names.load ? names.load(lid) : lid);
-            r.keepOf = lid;
+        if (kind === 'comfort') {
+            const r = row(id, 'load', name);
+            r.keepOf = key;
             return r;
         }
-        if (id.includes('battery')) return row('battery_in', 'battery_in', '');
-        return row(id, 'load', id);
+        if (kind === 'battery') return row('battery_in', 'battery_in', '');
+        return row(id, 'load', name);
     };
     const fromBlocks = (list, provisional) => {
         for (const b of list || []) {

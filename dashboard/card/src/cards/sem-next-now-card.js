@@ -13,6 +13,8 @@
  */
 
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { planIdName } from '../util/plan-ids.js';
+import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { nowLead } from '../util/next-lead.js';
 import { powerBar } from '../util/next-power-bar.js';
@@ -231,11 +233,14 @@ class SEMNextNowCard extends SEMNextBase {
 
     /** A plan id as a name: the charger's, the battery's, or the load's. */
     _whoName(id) {
-        if (id.startsWith('ev:')) return this._chargerName(id.slice(3));
-        if (id.startsWith('battery')) return this._t('next_src_battery');
-        const lid = id.replace(/^load:/, '');
-        const dev = this._devices().find((d) => d.id === lid);
-        return dev?.name || lid;
+        // (#1354) one reader for every card: never the raw id ("comfort:hot_water")
+        const demands = this._attrs('sensor.sem_energy_plan').demands || [];
+        return planIdName(id, {
+            charger: (cid) => this._chargerName(cid),
+            load: (key) => this._devices().find((d) => d.id === key)?.name,
+            battery: () => this._t('next_src_battery'),
+            label: (pid) => demands.find((x) => x && x.id === pid)?.label,
+        });
     }
 
     /** Every entry of the devices map as [{id, ...}]. */
@@ -524,10 +529,12 @@ class SEMNextNowCard extends SEMNextBase {
                 const parent = this._devices().find((x) => x.id === String(d.blocked_by));
                 rows.push(this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), '', this._tf('next_waits_for', { name: parent?.name || String(d.blocked_by) }), { color: C.home }));
             } else {
-                const b = this._nextBlock((id) => id === `load:${d.id}`);
+                // a load's run time and a heater's Keep at run both count
+                const b = this._nextBlock((id) => id === `load:${d.id}` || id === `comfort:${d.id}`);
                 if (b) {
-                    const demand = (this._attrs('sensor.sem_energy_plan').demands || []).find((x) => x && x.id === `load:${d.id}`);
-                    rows.push(this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), b.time, demand?.note ? String(demand.note) : '', { color: C.home }));
+                    const demand = (this._attrs('sensor.sem_energy_plan').demands || []).find((x) => x && x.id === b.id);
+                    rows.push(this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), b.time,
+                        demand ? (planNoteText(demand, (k) => this._t(k)) || '') : '', { color: C.home }));
                 }
             }
         }
