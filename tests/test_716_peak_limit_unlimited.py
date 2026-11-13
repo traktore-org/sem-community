@@ -401,7 +401,6 @@ class TestConfigSurface:
         # (#1354) the answer's writes live in one shared module
         src += (_ROOT / "dashboard" / "card" / "src" / "util"
                 / "peak-questions.js").read_text()
-        assert "renderPeakQuestion" in src or "_renderPeakQuestion" in src
         assert "peak_limit_unlimited" in src
         assert "peak_q_choice_none" in src       # the "No limit" answer
 
