@@ -448,7 +448,7 @@ the opened row.
 | **Keep it at** (was *Keep at*) | The temperature to keep. Spare sun heats to it. If SEM may buy power, it also heats to it in a planned cheap hour; that run starts only 1 °C below it (less when *Never colder than* is close) |
 | **Never colder than** (was *Run now past*) | Below this SEM heats at once, at any price, and goes on to *Keep it at* |
 | **With spare sun, heat up to** (was *Extra from surplus*) | How hot free sun may heat it. You type the temperature itself; SEM stores the degrees above *Keep it at*. On a hot-water tank it also sets the Solar target of the Configuration tab, so both stops agree |
-| **May SEM buy power for it?** (was *Finish overnight from*) | *No, sun only*: only the sun heats it. *Yes, in cheap hours*: SEM buys the rest in the cheapest hours |
+| **May SEM buy power for it?** (was *Finish overnight from*) | *No, sun only*: only the sun heats it. *Yes, in cheap hours*: SEM buys the rest in the cheapest hours. *Yes, from the house battery at night* (only with a house battery): at night it heats to *Keep it at* from the battery, while the battery is above its reserve. At the reserve it stops and waits for the sun; it never turns into a bought run |
 
 Above the questions one line says what the heater does now and what comes
 next, for example "45.8 °C now. Heats to 52 °C at 23:00." Everything else —
@@ -456,9 +456,18 @@ the thermometer, minimum on and off time, its own tariff, *Stop when* — sits
 under **More**.
 
 A load without a thermometer is asked for its time instead: **Run it each
-day for**, then the same buy question. There *Yes, from the house battery at
-night* is a third choice when the house has a battery. A cooling unit keeps
-the earlier layout for now.
+day for**, then the same buy question.
+
+A cooling unit is asked the same four, turned round: **Keep it at**, **Never
+warmer than** (above it SEM cools at once), **With spare sun, cool down to**
+(a temperature below *Keep it at*) and the same buy question. A unit that
+picks heat or cool from the outdoor forecast shows the questions of the
+season it is in, and says which.
+
+A room unit with its own thermostat follows that thermostat: **Keep it at**
+shows the unit's own setpoint and is changed on the unit. The other two
+temperatures show what SEM uses, and keep their distance to the setpoint
+when it moves.
 
 A heater SEM drives by a watt or ampere setpoint (a heating rod, for
 example) follows the same questions. A too-cold run and a planned run ask
@@ -472,7 +481,9 @@ SEM checks in this order, and the first match decides:
 4. The tank is below *Keep it at*, SEM may buy power for it and the planned
    hour is open: it heats, and runs through to *Keep it at* without switching
    on and off.
-5. There is spare sun: it heats up to *With spare sun, heat up to*.
+5. It is night, you chose the house battery and the battery is above its
+   reserve: it heats to *Keep it at* from the battery.
+6. There is spare sun: it heats up to *With spare sun, heat up to*.
 
 With a thermometer the daily run time asks for nothing: a warm tank is not
 heated again for its minutes. Solar only is solar only, as for a car: with

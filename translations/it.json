@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Entità switch del relè 1 SG-Ready (segnale di funzionamento normale). Impostala insieme al relè 2 per il protocollo SG-Ready.",
           "heat_pump_relay2_entity": "Entità switch del relè 2 SG-Ready (segnale di boost da eccedenza). Impostala insieme al relè 1 per il protocollo SG-Ready.",
           "heat_pump_invert_sg_ready": "Attiva solo se i contatti SG-Ready della tua pompa di calore sono cablati come normalmente chiusi (NC). SEM applica la tabella di verità standard SG-Ready; se il boost blocca la pompa (e viceversa), attiva questa opzione per invertire entrambi i relè.",
-          "heat_pump_step_down": "Quando la casa compra energia dalla rete in un'ora cara, o si avvicina al limite di potenza, SEM abbassa il setpoint o invia il segnale di blocco SG-Ready. Serve una fascia di comfort (Mantieni a e Avvia oltre); SEM non scende mai sotto.",
+          "heat_pump_step_down": "Quando la casa compra energia dalla rete in un'ora cara, o si avvicina al limite di potenza, SEM abbassa il setpoint o invia il segnale di blocco SG-Ready. Serve una fascia di comfort (Mantieni a e Forza oltre); SEM non scende mai sotto.",
           "heat_pump_climate_entity": "Entità climate usata per alzare il setpoint durante l'eccedenza solare. Da sola è sufficiente per la modalità solo-climate (nessun relè necessario).",
           "heat_pump_power_sensor": "Sensore opzionale (W) che riporta il consumo attuale della pompa di calore.",
           "heat_pump_boost_offset": "Gradi Celsius aggiunti al setpoint normale durante un boost da eccedenza solare.",

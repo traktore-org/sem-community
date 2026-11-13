@@ -35,7 +35,7 @@ import {
 import { stateLabel } from '../util/state-label.js';
 import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
 import {
-    heaterSays, heaterSub, heaterQuestions, sunMaxWrites, nextBlock,
+    heaterSays, heaterSub, heaterQuestions, sunMaxWrites, limitWrites, nextBlock,
     asSentence, BUY_LABEL,
 } from '../util/heater-questions.js';
 
@@ -1076,7 +1076,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         // (#1349) four plain questions. A heater whose thermometer leads:
         // keep · never colder · sun up to · buy. A load without one: its
         // daily run time · buy. Everything else sits under More. A cooling
-        // band keeps the earlier layout.
+        // band asks the same four, turned round.
         const q = this._questions(device);
         if (q.view === 'band') {
             return html`
@@ -1090,21 +1090,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._renderOwnTariff(device)}
                     ${this._renderStopCondition(device)}
                 </details>
-            </div>`;
-        }
-        if (q.view === 'cool') {
-            return html`
-            <div class="goal-editor">
-                <div class="ge-title">
-                    <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
-                    ${this._t('daily_target')}
-                </div>
-                ${this._renderGoalSlider(device)}
-                ${this._renderComfortBand(device)}
-                ${this._renderOvernightPicker(device)}
-                ${this._renderAntiCycle(device)}
-                ${this._renderOwnTariff(device)}
-                ${this._renderStopCondition(device)}
             </div>`;
         }
         return html`
@@ -1172,8 +1157,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _questions(device) {
+        const f = (this.hass?.config?.unit_system?.temperature || '°C') === '°F';
         return heaterQuestions({ goals: device.goals, comfort: device.comfort },
-            { hasBattery: this._hasBattery() });
+            { hasBattery: this._hasBattery(), toUnit: (c) => (f ? Number(c) * 9 / 5 + 32 : Number(c)) });
     }
 
     /** The next planned start (HH:MM) of this load's run-time or Keep at block. */
@@ -1228,12 +1214,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const v = parseFloat(e.target.value);
         if (!Number.isFinite(v)) return;
         this._setGoal(device, 'comfort_target', v);
-        this._syncSolarTarget(device, v + (q.offset || 0));
+        if (!q.cooling) this._syncSolarTarget(device, v + (q.offset || 0));
         this.requestUpdate();
     }
 
     _onSunMaxChange(device, q, e) {
-        const res = sunMaxWrites({ id: device.id, keep: q.keep }, e.target.value,
+        const res = sunMaxWrites({ id: device.id, keep: q.keep, cooling: q.cooling }, e.target.value,
             this._solarTargetBounds());
         this._hqError = { ...(this._hqError || {}) };
         if (res.error) {
@@ -1257,9 +1243,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const said = says ? asSentence(this._tf(says.key, says.params)
             + (says.why ? ' \u00B7 ' + this._t(says.why) : '')) : '';
         const err = this._hqError && this._hqError[device.id];
-        const numIn = (val, onChange) => html`
+        const numIn = (val, onChange, readOnly = false) => html`
             <input type="number" step="0.5" style="width:56px"
                    .value="${val === null || val === undefined ? '' : String(val)}"
+                   ?disabled=${readOnly}
                    @change=${onChange}
                    @click=${(e) => e.stopPropagation()}>
             <span class="ge-unit">${unit}</span>`;
@@ -1270,17 +1257,21 @@ class SEMLoadPriorityCard extends SEMLitBase {
             </div>
             <div class="ge-hint">${hint}</div>`;
         return html`
+            ${q.season ? html`<div class="ge-hint" style="font-style:normal">${this._t(q.season)}</div>` : nothing}
             <div class="hq-say">${now ? this._tf('hq_now', { reading: now }) + ' ' : ''}${said}</div>
             ${sub ? html`<div class="ge-hint">${this._tf(sub.key, sub.params)}</div>` : nothing}
             ${this._renderBandStrip(device)}
-            ${ask(this._t('hq_keep'), this._t('hq_keep_sub'),
-                numIn(q.keep, (e) => this._onKeepChange(device, q, e)))}
-            ${ask(this._t('hq_floor'), this._t('hq_floor_sub'),
+            ${ask(this._t('hq_keep'), this._t(q.keys.keepSub),
+                numIn(q.keep, (e) => this._onKeepChange(device, q, e), q.keepReadOnly))}
+            ${q.keepNoteKey ? html`<div class="ge-hint" style="font-style:normal">${this._t(q.keepNoteKey)}</div>` : nothing}
+            ${ask(this._t(q.keys.floor), this._t(q.keys.floorSub),
                 numIn(q.floor, (e) => {
-                    const v = parseFloat(e.target.value);
-                    if (Number.isFinite(v)) this._setGoal(device, 'comfort_limit', v);
+                    // (#705) on a unit that rides its own setpoint the stored
+                    // limit is a distance: the model turns the typed value back
+                    for (const w of limitWrites(q, e.target.value).writes) this._setGoal(device, w.property, w.value);
+                    this.requestUpdate();
                 }))}
-            ${ask(this._t('hq_sun_max'), this._t('hq_sun_max_sub'),
+            ${ask(this._t(q.keys.sunMax), this._t(q.keys.sunMaxSub),
                 numIn(q.sunMax, (e) => this._onSunMaxChange(device, q, e)))}
             ${err ? html`<div class="ge-hint" style="color:#f44336;font-style:normal">${err}</div>` : nothing}`;
     }
@@ -1297,7 +1288,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 <span class="ge-label">${this._t('hq_buy')}</span>
                 <span class="ge-ctl ov-picker">${q.buyChoices.map(opt)}</span>
             </div>
-            <div class="ge-hint">${this._tf(q.buySubKey, { keep })}</div>`;
+            <div class="ge-hint">${this._tf(q.buySubKey, { keep })}${q.buySubBatteryKey
+                ? ' ' + this._tf(q.buySubBatteryKey, { keep }) : ''}</div>`;
     }
 
     // ── (#705) thermal comfort — chip + band strip ──────────────────
@@ -1358,7 +1350,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const says = this._heaterSays(device);
         if (says) {
             const color = { ok: '#8DC892', warn: '#ffc107' }[says.cls] || '#4db6ac';
-            const reading = says.key === 'hq_st_warm' ? null
+            const reading = (says.key === 'hq_st_warm' || says.key === 'hq_st_cool') ? null
                 : this._displayTemp(device.comfort ? device.comfort.reading_c : null);
             const why = says.why ? ' \u00B7 ' + this._t(says.why) : '';
             return html`

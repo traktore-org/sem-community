@@ -2715,6 +2715,12 @@ class UnifiedDeviceRegistry:
             # (#1102) may a planned hour be BOUGHT to reach Keep at? The
             # device's own rule; without it only the sun keeps the tank.
             "may_buy": UnifiedDeviceRegistry._may_buy(live),
+            # (#1349) may it reach Keep at at night from the house battery?
+            "may_use_battery": UnifiedDeviceRegistry._may_use_battery(live),
+            # (#705/#1349) the band rides the unit's own live setpoint: Keep
+            # at IS that setpoint, the typed limit only gives its distance.
+            # The card shows these lines, not the typed numbers.
+            "anchored": UnifiedDeviceRegistry._anchored(live),
         }
 
     @staticmethod
@@ -2723,6 +2729,22 @@ class UnifiedDeviceRegistry:
         try:
             return ask() is True if callable(ask) else False
         except Exception:  # noqa: BLE001 — an unreadable rule buys nothing
+            return False
+
+    @staticmethod
+    def _anchored(live) -> bool:
+        ask = getattr(live, "_comfort_anchor_c", None)
+        try:
+            return callable(ask) and ask() is not None
+        except Exception:  # noqa: BLE001 — a broken anchor is no anchor
+            return False
+
+    @staticmethod
+    def _may_use_battery(live) -> bool:
+        ask = getattr(live, "comfort_goal_may_use_battery", None)
+        try:
+            return ask() is True if callable(ask) else False
+        except Exception:  # noqa: BLE001 — an unreadable rule takes nothing
             return False
 
     async def async_set_manual_mapping(

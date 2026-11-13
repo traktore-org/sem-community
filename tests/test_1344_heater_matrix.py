@@ -79,7 +79,10 @@ TANKS = {
     "too_cold_past_own_stop": (34.0, 30.0),
 }
 SITUATIONS = ("night_block", "night_no_block", "day_sun", "day_little_sun",
-              "peak_shed", "mode_off", "observer")
+              "peak_shed", "mode_off", "observer",
+              # (#1349) "Finish overnight from: Battery": the house battery
+              # above its reserve, and at it
+              "night_battery_ok", "night_battery_low")
 AWAY = (False, True)
 
 
@@ -233,6 +236,12 @@ def _inputs(situation):
                  solar_w=0.0, plan_windows=block)
     if situation == "night_no_block":
         return {**night, "plan_windows": {}}
+    if situation == "night_battery_ok":
+        return {**night, "plan_windows": {}, "battery_soc": 80.0,
+                "battery_reserve_soc": 20.0}
+    if situation == "night_battery_low":
+        return {**night, "plan_windows": {}, "battery_soc": 20.0,
+                "battery_reserve_soc": 20.0}
     if situation == "day_sun":
         return dict(available_power_w=6000.0, price_level="normal",
                     is_night=False, solar_w=8000.0, plan_windows={},
@@ -275,6 +284,9 @@ def _spec(cls, grid, tank, situation, away):
     if (reading <= KEEP - 1.0 and grid == "cheap_hours"
             and situation in ("night_block", "observer")):
         return (True, "goal")           # bought, in its planned hour
+    if (reading <= KEEP - 1.0 and grid == "battery"
+            and situation == "night_battery_ok"):
+        return (True, "goal_battery")   # at night, from the house battery
     if sun:
         return (True, "sun")            # up to Keep at + Extra
     return off
@@ -287,6 +299,8 @@ def _family(code, source):
         return "floor_away"
     if code == RC.LOAD_COMFORT_GOAL:
         return "goal"
+    if code == RC.LOAD_COMFORT_GOAL_BATTERY:
+        return "goal_battery"
     if code == RC.LOAD_LEGIONELLA:
         return "legionella"
     return "sun" if source in ("solar", "tier1_battery") or code in (
@@ -325,7 +339,9 @@ def _check(hass, sc, dev, where, situation, want_on, want_family, grid):
     assert got == want_family, (
         f"{where}: expected a {want_family} run, got {got} "
         f"(code {starts[0]['reason_code']})")
-    if grid != "cheap_hours" and got not in ("floor", "floor_away", "sun", "legionella"):
+    if got == "goal_battery":
+        assert grid == "battery", f"{where}: took the house battery without the user's word"
+    elif grid != "cheap_hours" and got not in ("floor", "floor_away", "sun", "legionella"):
         pytest.fail(f"{where}: bought power without the grid allowed ({got})")
 
 
@@ -635,3 +651,190 @@ def test_a_watt_heater_with_no_measured_rating_runs_a_heater_rung_at_its_entity_
     measured = PowerSetpointDevice(hass, DID, "Heater", rated_power=2000.0,
                                    entity_id="number.heater")
     assert measured.heater_full_w() == 2000.0
+
+
+# ── (#1349) cooling: the same ladder, mirrored ───────────────────────────
+# Keep at 24, sun may cool down to 22, never warmer than 27; a planned run
+# starts at 25 (the start gap above Keep at).
+
+C_KEEP, C_EXTRA, C_LIMIT = 24.0, 2.0, 27.0
+C_ROOMS = {
+    "too_warm": 28.0, "above_start": 26.0, "in_gap": 24.5, "at_keep": 24.0,
+    "below_floor": 21.5, "no_reading": None,
+}
+
+
+def _cooler(hass):
+    hass.set("climate.heater", "off", hvac_modes=["off", "cool"])
+    return ClimateDevice(hass, DID, "Cooler", rated_power=3000.0,
+                         entity_id="climate.heater", hvac_mode="cool")
+
+
+def _build_cool(grid, room, situation, away=False):
+    hass = _Hass()
+    dev = _cooler(hass)
+    reading = C_ROOMS[room]
+    hass.set(TANK, "unavailable" if reading is None else reading,
+             unit_of_measurement="°C")
+    dev.control_mode = (DeviceControlMode.OFF if situation == "mode_off"
+                        else DeviceControlMode.SURPLUS)
+    dev.comfort_entity = TANK
+    dev.comfort_target, dev.comfort_offset, dev.comfort_limit = C_KEEP, C_EXTRA, C_LIMIT
+    dev.top_up_policy = "cheap_hours" if grid == "cheap_hours" else "solar_only"
+    dev.battery_eligible_overnight = grid == "battery"
+    for attr in ("min_on_seconds", "min_off_seconds", "min_on_time",
+                 "min_off_time", "activation_delay_seconds"):
+        if hasattr(dev, attr):
+            setattr(dev, attr, 0)
+    dev.vacation = bool(away)
+    sc = SurplusController(hass, regulation_offset=0)
+    sc.register_device(dev)
+    return hass, sc, dev
+
+
+def _spec_cool(grid, room, situation, away):
+    """The heater's spec with every comparison turned round."""
+    off = (False, "none")
+    reading = C_ROOMS[room]
+    if situation in ("mode_off", "peak_shed"):
+        return off
+    if away:
+        return (True, "floor_away") if room == "too_warm" else off
+    sun = situation == "day_sun"
+    if reading is None:
+        return (True, "sun") if sun else off
+    if reading >= C_LIMIT:
+        return (True, "floor")          # too warm: at once, on any tariff
+    if reading <= C_KEEP - C_EXTRA:
+        return off                      # cooled as far as the sun may take it
+    if (reading >= C_KEEP + 1.0 and grid == "cheap_hours"
+            and situation in ("night_block", "observer")):
+        return (True, "goal")
+    if (reading >= C_KEEP + 1.0 and grid == "battery"
+            and situation == "night_battery_ok"):
+        return (True, "goal_battery")
+    if sun:
+        return (True, "sun")
+    return off
+
+
+COOL_CELLS = [
+    pytest.param(grid, room, situation, away,
+                 id=f"cool-{grid}-{room}-{situation}-{'away' if away else 'home'}")
+    for grid, room, situation, away in itertools.product(
+        GRID, C_ROOMS, SITUATIONS, AWAY)
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("grid, room, situation, away", COOL_CELLS)
+async def test_a_cooler_does_the_same_mirrored(grid, room, situation, away):
+    hass, sc, dev = _build_cool(grid, room, situation, away)
+    where = (f"ClimateDevice cooling · grid {grid} · room {room} "
+             f"({C_ROOMS[room]} °C) · {situation} · {'away' if away else 'at home'}")
+    want_on, want_family = _spec_cool(grid, room, situation, away)
+    kw = _inputs(situation)
+    power = kw.pop("available_power_w")
+    for _ in range(CYCLES):
+        await sc.update(power, **kw)
+    _check(hass, sc, dev, where, situation, want_on, want_family, grid)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", list(FACTORIES), ids=lambda c: c.__name__)
+async def test_the_battery_run_ends_at_the_reserve_and_buys_nothing(cls):
+    """(#1349) It heats from the house battery while the battery is above its
+    reserve; at the reserve it stops and waits — it is not turned into a
+    bought run, and it says why."""
+    hass, sc, dev = _build(cls, "battery", "below_start", "night_battery_ok")
+    kw = _inputs("night_battery_ok")
+    power = kw.pop("available_power_w")
+    for _ in range(5):
+        await sc.update(power, **kw)
+    assert dev.is_active, f"{cls.__name__}: not heating from the battery"
+    kw["battery_soc"] = 20.0                       # down to its reserve
+    for _ in range(10):
+        await sc.update(power, **kw)
+    assert not dev.is_active, f"{cls.__name__}: kept heating at the reserve"
+    records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
+    starts = [r for r in records if str(r["new"]).startswith("on")]
+    assert [r["reason_code"] for r in starts] == [RC.LOAD_COMFORT_GOAL_BATTERY]
+    intent = sc.intent_for(DID) if hasattr(sc, "intent_for") else None
+    if intent is not None:
+        assert intent.get("code") == RC.LOAD_BATTERY_RESERVE
+
+
+@pytest.mark.asyncio
+async def test_the_battery_run_goes_on_to_keep_at_and_stops_there():
+    hass, sc, dev = _build(SwitchDevice, "battery", "below_start", "night_battery_ok")
+    kw = _inputs("night_battery_ok")
+    power = kw.pop("available_power_w")
+    for _ in range(3):
+        await sc.update(power, **kw)
+    assert dev.is_active
+    hass.set(TANK, 49.6, unit_of_measurement="°C")   # inside the start gap: goes on
+    for _ in range(3):
+        await sc.update(power, **kw)
+    assert dev.is_active
+    hass.set(TANK, 50.2, unit_of_measurement="°C")   # Keep at reached
+    for _ in range(3):
+        await sc.update(power, **kw)
+    assert not dev.is_active
+
+
+# ── (#705/#1349) a unit that rides its own setpoint ──────────────────────
+# Typed Keep 50 / limit 36 / extra 5 with the thermostat at 48: the band is
+# 48 / 34 / up to 53, and a planned run starts at 47. Cooling: typed 24 / 27 /
+# 2 with the thermostat at 25 gives 25 / 28 / down to 23, start at 26.
+
+ANCHORED = [
+    # (hvac, setpoint, reading, situation, on, family)
+    ("heat", 48.0, 47.5, "night_block", False, "none"),     # inside the EFFECTIVE gap
+    ("heat", 48.0, 49.5, "night_block", False, "none"),     # under the typed 50, over the unit's 48
+    ("heat", 48.0, 46.5, "night_block", True, "goal"),
+    ("heat", 48.0, 35.0, "night_no_block", False, "none"),  # under the typed limit 36, over the unit's 34
+    ("heat", 48.0, 33.5, "night_no_block", True, "floor"),
+    ("heat", 48.0, 52.0, "day_sun", True, "sun"),           # the sun goes to 48 + 5
+    ("heat", 48.0, 53.5, "day_sun", False, "none"),
+    ("cool", 25.0, 25.5, "night_block", False, "none"),
+    ("cool", 25.0, 24.5, "night_block", False, "none"),     # over the typed 24, under the unit's 25
+    ("cool", 25.0, 26.5, "night_block", True, "goal"),
+    ("cool", 25.0, 27.5, "night_no_block", False, "none"),  # over the typed limit 27, under the unit's 28
+    ("cool", 25.0, 28.5, "night_no_block", True, "floor"),
+    ("cool", 25.0, 23.5, "day_sun", True, "sun"),           # the sun goes down to 25 − 2
+    ("cool", 25.0, 22.5, "day_sun", False, "none"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hvac, setpoint, reading, situation, want_on, want_family", ANCHORED,
+                         ids=[f"{h}-{r}-{s}" for h, _sp, r, s, _o, _f in ANCHORED])
+async def test_a_unit_that_rides_its_own_setpoint_follows_that_setpoint(
+        hvac, setpoint, reading, situation, want_on, want_family):
+    hass = _Hass()
+    hass.set("climate.heater", "off", hvac_modes=["off", hvac], temperature=setpoint)
+    dev = ClimateDevice(hass, DID, "Unit", rated_power=3000.0,
+                        entity_id="climate.heater", hvac_mode=hvac)
+    hass.set(TANK, reading, unit_of_measurement="°C")
+    dev.control_mode = DeviceControlMode.SURPLUS
+    dev.comfort_entity = TANK
+    if hvac == "heat":
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = KEEP, EXTRA, LIMIT
+    else:
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = C_KEEP, C_EXTRA, C_LIMIT
+    dev.top_up_policy = "cheap_hours"
+    for attr in ("min_on_seconds", "min_off_seconds", "min_on_time",
+                 "min_off_time", "activation_delay_seconds"):
+        if hasattr(dev, attr):
+            setattr(dev, attr, 0)
+    sc = SurplusController(hass, regulation_offset=0)
+    sc.register_device(dev)
+    kw = _inputs(situation)
+    power = kw.pop("available_power_w")
+    for _ in range(CYCLES):
+        await sc.update(power, **kw)
+        # the unit's own setpoint is the anchor: SEM's writes must not move it
+        hass.set("climate.heater", hass.states.get("climate.heater").state,
+                 hvac_modes=["off", hvac], temperature=setpoint)
+    where = f"anchored {hvac} unit at {setpoint} °C · reading {reading} °C · {situation}"
+    _check(hass, sc, dev, where, situation, want_on, want_family, "cheap_hours")

@@ -602,7 +602,7 @@
           "heat_pump_relay1_entity": "Encja switch przekaźnika SG-Ready 1 (sygnał normalnej pracy). Ustaw razem z przekaźnikiem 2, aby używać protokołu SG-Ready.",
           "heat_pump_relay2_entity": "Encja switch przekaźnika SG-Ready 2 (sygnał podbicia nadwyżką). Ustaw razem z przekaźnikiem 1, aby używać protokołu SG-Ready.",
           "heat_pump_invert_sg_ready": "Włącz tylko wtedy, gdy styki SG-Ready Twojej pompy ciepła są okablowane jako normalnie zwarte (NC). SEM steruje standardową tabelą prawdy SG-Ready; jeśli podbicie blokuje pompę (i odwrotnie), włącz tę opcję, aby odwrócić oba przekaźniki.",
-          "heat_pump_step_down": "Gdy dom kupuje energię z sieci w drogiej godzinie albo zbliża się do limitu mocy, SEM obniża nastawę lub wysyła sygnał blokady SG-Ready. Potrzebny jest zakres komfortu (Utrzymuj na i Uruchom po przekroczeniu); SEM nigdy nie schodzi poniżej niego.",
+          "heat_pump_step_down": "Gdy dom kupuje energię z sieci w drogiej godzinie albo zbliża się do limitu mocy, SEM obniża nastawę lub wysyła sygnał blokady SG-Ready. Potrzebny jest zakres komfortu (Utrzymuj na i Uruchom natychmiast powyżej); SEM nigdy nie schodzi poniżej niego.",
           "heat_pump_climate_entity": "Encja climate używana do podniesienia nastawy podczas nadwyżki słonecznej. Wystarcza samodzielnie w trybie tylko climate (przekaźniki nie są potrzebne).",
           "heat_pump_power_sensor": "Opcjonalny czujnik (W) raportujący bieżące zużycie mocy pompy ciepła.",
           "heat_pump_boost_offset": "Stopnie Celsjusza dodawane do normalnej nastawy podczas podbicia nadwyżką słoneczną.",
