@@ -195,3 +195,12 @@ test('the range switch is remembered and clears a picked block', () => {
     assert.equal(el._range, 'tomorrow');
     globalThis.localStorage = { getItem: () => null, setItem() {} };
 });
+
+test('(#1081) a heat pump planned on the price of heat names its COP', () => {
+    const el = makeCard();
+    el._t = (k) => (k === 'plan_why_cheapest_heat' ? 'heat {from}–{to}, COP {cop}' : k);
+    const out = el._planWhyText('cheapest_heat',
+        { from: '2026-11-14T13:00:00+01:00', to: '2026-11-14T15:00:00+01:00', cop: 4.18 });
+    assert.match(out, /COP 4\.2$/);
+    assert.doesNotMatch(out, /\{cop\}/);
+});

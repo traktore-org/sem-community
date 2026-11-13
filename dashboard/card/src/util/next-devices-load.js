@@ -13,6 +13,7 @@ import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-se
 import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey } from './next-devices.js';
 import { plainReason } from './why-rows.js';
 import { loadRunsBySem } from './settings-applies.js';
+import { parseCopCurve, formatCopCurve, heatCostNow } from './heat-pump-cost.js';
 import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, BUY_LABEL } from './heater-questions.js';
 
 const MODES = [
@@ -269,6 +270,11 @@ export function loadBody(card, row) {
         rows.push(card._row('mdi:heat-pump-outline', t('next_cost_of_heat'),
             coh === null ? '—' : tf('next_per_kwh_heat', { v: card._money(coh) }),
             nextAt ? tf('next_hp_next_run', { time: nextAt }) : t('next_nothing_planned')));
+        // (#1081) the COP by outdoor temperature: what it is now, then the
+        // 2–3 points as text "−7:2.5, 12:4.2"; empty = one fixed COP
+        if (Object.prototype.hasOwnProperty.call(g, 'cop_curve')) {
+            rows.push(copCurveRow(card, row, g, send));
+        }
         const offId = 'number.sem_heat_pump_boost_offset';
         if (card._has(offId)) {
             rows.push(card._row('mdi:tune-vertical', t('next_relay_values'),
@@ -292,6 +298,35 @@ export function loadBody(card, row) {
         ${stats}
         ${pct === null ? nothing : html`<div style="margin:6px 0 10px">${card._track(pct, 'var(--c)')}</div>`}
         <div class="rows">${rows}</div>`;
+}
+
+/** (#1081) The heat pump's COP row under More: the COP now (and the
+ *  outdoor °C with a curve), then the curve as text to edit. A curve that
+ *  cannot be read is not sent; an empty box clears it. */
+export function copCurveRow(card, row, g, send) {
+    const t = (k) => card._t(k);
+    const tf = (k, p) => card._tf(k, p);
+    const now = row.id === 'heat_pump'
+        ? heatCostNow(card._hass?.states?.['sensor.sem_heat_pump_cost_of_heat']) : null;
+    const nowText = !now ? ''
+        : (now.outdoorC !== null
+            ? tf('hp_cop_now_at', { cop: card._fmt(now.cop, 1), temp: card._fmt(now.outdoorC, 0) + ' °C' })
+            : tf('hp_cop_now', { cop: card._fmt(now.cop, 1) }));
+    const curve = parseCopCurve(g.cop_curve);
+    const text = curve ? formatCopCurve(curve) : t('next_cop_fixed');
+    const key = 'cop:' + row.id;
+    const val = card._inline(key, text, () => card._textEdit(key, {
+        value: curve ? formatCopCurve(curve) : '',
+        placeholder: '-7:2.5, 2:3.2, 12:4.2',
+        onCommit: (v) => {
+            const raw = String(v || '').trim();
+            if (raw === '') { send('cop_curve', ''); return; }
+            const c = parseCopCurve(raw);
+            if (c) send('cop_curve', formatCopCurve(c));
+        },
+    }));
+    const sub = [nowText, t('hp_cop_curve_hint')].filter(Boolean).join(' · ');
+    return card._row('mdi:thermometer-lines', t('hp_cop_curve_section'), val, sub, { more: true });
 }
 
 /**

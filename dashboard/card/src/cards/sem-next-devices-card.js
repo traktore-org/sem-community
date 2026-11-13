@@ -299,6 +299,13 @@ class SEMNextDevicesCard extends SEMNextBase {
             @keydown=${this._keys(commit)} @change=${commit} @blur=${() => { this._edit = null; }}>${unit ? html`<span class="sm muted">${unit}</span>` : nothing}`;
     }
 
+    /** (#1081) One text box: Enter or a change commits, Escape closes. */
+    _textEdit(key, { value, placeholder, onCommit }) {
+        const commit = (e) => { const v = e.target.value; this._edit = null; onCommit(v); };
+        return html`<input type="text" .value=${value || ''} placeholder=${placeholder || nothing}
+            @keydown=${this._keys(commit)} @change=${commit} @blur=${() => { this._edit = null; }}>`;
+    }
+
     _selEdit(key, { value, options, onCommit }) {
         return html`<select @change=${(e) => { const v = e.target.value; this._edit = null; onCommit(v); }}
             @keydown=${this._keys(() => { this._edit = null; })} @blur=${() => { this._edit = null; }}>
