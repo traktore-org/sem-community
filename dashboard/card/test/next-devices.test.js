@@ -497,14 +497,49 @@ function openHotWater(el) {
     return text(el.render());
 }
 
+test('a cooling unit shows the same four questions, turned round', () => {
+    const st = heaterStates();
+    const devs = st['sensor.sem_controllable_devices_count'].attributes.devices;
+    devs.hot_water = {
+        ...devs.hot_water, name: 'Bedroom AC',
+        goals: { comfort_target: 24, comfort_offset: 2, comfort_limit: 27, top_up_policy: 'cheap_hours' },
+        comfort: { state: 'willing', hvac: 'cool', reading_c: 26, keep_c: 24, start_c: 25, max_c: 22, limit_c: 27, own_run: false, may_buy: true },
+    };
+    st['sensor.sem_energy_plan'] = S('ok', { computed_at: 'x', blocks: [
+        { id: 'comfort:hot_water', start: '2099-01-01T13:00:00+01:00', end: '2099-01-01T14:00:00+01:00', power_w: 3000 }] });
+    const out = openHotWater(makeCard(st));
+    for (const k of ['hq_st_cools_at', 'hq_sub_sun_free_cool', 'hq_keep', 'hq_keep_sub_cool', 'hq_ceiling', 'hq_ceiling_sub',
+        'hq_sun_min', 'hq_sun_min_sub', 'hq_buy']) assert.match(out, new RegExp(k), k);
+    // the heating words are not on a cooling row
+    for (const k of ['hq_floor_sub', 'hq_sun_max_sub', 'hq_st_heats_at']) assert.doesNotMatch(out, new RegExp(k + '\\b'), k);
+    // keep 24, never warmer than 27, cool down to 22 (absolute, below Keep at)
+    assert.match(out, /24 °C/); assert.match(out, /27 °C/); assert.match(out, /22 °C/);
+    assert.doesNotMatch(out, /undefined|NaN/);
+});
+
+test('the battery choice says it heats tonight from the battery, or waits at the reserve', () => {
+    const mk = (code) => {
+        const st = heaterStates({ mayBuy: false, planned: false });
+        const hw = st['sensor.sem_controllable_devices_count'].attributes.devices.hot_water;
+        hw.goals = { ...hw.goals, battery_eligible_overnight: true };
+        hw.comfort = { ...hw.comfort, may_use_battery: true };
+        hw.intent = { on: false, source: null, code };
+        return openHotWater(makeCard(st));
+    };
+    assert.match(mk('no_source'), /hq_st_heats_tonight_battery/);
+    assert.match(mk('battery_reserve'), /hq_st_waits_battery/);
+});
+
 test('case A: a tank waiting for its planned hour shows the sentence, the bar and four questions', () => {
     const out = openHotWater(makeCard(heaterStates()));
     for (const k of ['hq_now', 'hq_st_heats_at', 'hq_sub_sun_free', 'hq_keep', 'hq_keep_sub', 'hq_floor', 'hq_floor_sub',
         'hq_sun_max', 'hq_sun_max_sub', 'hq_buy', 'hq_buy_no', 'hq_buy_cheap', 'hq_buy_sub_band']) assert.match(out, new RegExp(k), k);
     // the three temperatures as typed, the sun's as an absolute value
     assert.match(out, /52 °C/); assert.match(out, /36 °C/); assert.match(out, /56 °C/);
-    // a battery finish serves the run time only: not offered to a heater whose thermometer leads
-    assert.doesNotMatch(out, /hq_buy_battery/);
+    // (#1349) with a house battery the battery choice is offered here too,
+    // and the line under it says what it does
+    assert.match(out, /hq_buy_battery/);
+    assert.match(out, /hq_buy_sub_band_battery/);
     // the run-time goal and the old comfort sentence are gone from this row
     // …also from the Today tile: the time run, no goal
     assert.match(out, /next_h_today/);

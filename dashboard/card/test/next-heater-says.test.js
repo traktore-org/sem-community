@@ -63,8 +63,12 @@ test('a load without a heating band keeps its texts, and off names a cause', () 
     assert.equal(pill(plain({ on: false, source: null, code: 'no_source' })).why, 'hq_because_no_sun');
     assert.equal(pill(plain(null)).why, '');
     assert.equal(pill(plain({ on: false, code: 'plan_wait' }), { plannedAt: '13:30' }).key, 'next_st_waits_for');
-    // a cooling band and Mode Off are not the heater sentence
-    assert.equal(heaterSays(tank(27, { hvac: 'cool' }), {}), null);
+    // (#1349) a cooling band says the same with its own words
+    const COOL = { hvac: 'cool', keep_c: 24, start_c: 25, max_c: 22, limit_c: 27 };
+    assert.equal(heaterSays(tank(23.5, COOL), {}).key, 'hq_st_cool');
+    assert.equal(heaterSays(tank(26, COOL), {}).key, 'hq_st_above_none');
+    assert.equal(pill(tank(26, COOL), { plannedAt: '13:00' }).key, 'hq_st_cools_at');
+    assert.equal(heaterSays(tank(26, COOL), {}).cool, true);
     assert.equal(pill(tank(45, {}, null, { control_mode: 'off' })).key, 'next_st_off_mode');
     // peak-only: SEM never starts it — the row says so, not a bare 'off'
     assert.equal(pill(plain({ on: false, source: null, code: '' }, { control_mode: 'peak_only' })).key, 'next_st_off_peak_only');

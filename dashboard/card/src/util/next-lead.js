@@ -113,7 +113,7 @@ export function planLead(a, extra) {
     // would read as "nothing is needed". Say what is missing instead.
     const cold = extra?.cold || null;
     const quiet = cold
-        ? { key: cold.time ? 'hq_plan_below_no_hour' : 'hq_plan_below_no_hour_plain',
+        ? { key: (cold.cool ? 'hq_plan_above_no_hour' : 'hq_plan_below_no_hour') + (cold.time ? '' : '_plain'),
             params: { name: cold.name, keep: cold.keep, time: cold.time || '' } }
         : { key: 'next_plan_quiet', params: {} };
     const main = evKwh > 0.05

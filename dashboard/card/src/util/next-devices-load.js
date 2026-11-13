@@ -122,7 +122,8 @@ export function loadBody(card, row) {
     const band = q.view === 'band';
     const asked = band || q.view === 'time';
     let third = ['', '', ''];
-    if (band && row.comfort && row.comfort.reading_c != null) {
+    // a heat pump keeps its SG-Ready tile: the reading is in the top line
+    if (band && kind !== 'heat_pump' && row.comfort && row.comfort.reading_c != null) {
         third = [t('next_comfort'), displayTemp(card, row.comfort.reading_c) || '—', ''];
     } else if (kind === 'hot_water') {
         const stop = g.stop_entity && card._has(g.stop_entity) ? g.stop_entity : null;
@@ -162,11 +163,12 @@ export function loadBody(card, row) {
         const buyRow = () => card._row('mdi:cash-check', t('hq_buy'),
             card._seg(q.buyChoices.map((k) => ({ key: k, label: t(BUY_LABEL[k]) })), q.buy,
                 (k) => { for (const w of buyWrites(k)) send(w.property, w.value); }, { disabled: dis, small: true }),
-            tf(q.buySubKey, { keep: band ? q.keep + ' ' + tUnit : '' }));
+            tf(q.buySubKey, { keep: band ? q.keep + ' ' + tUnit : '' })
+                + (band && q.buySubBatteryKey ? ' ' + tf(q.buySubBatteryKey, { keep: q.keep + ' ' + tUnit }) : ''));
         if (band) {
             // On a hot-water tank the Configuration tab's Solar target also
             // stops the sun; keep it on the same value so both stops agree.
-            const hotWater = /^hot_water/.test(String(id));
+            const hotWater = !q.cooling && /^hot_water/.test(String(id));
             const solarTarget = hotWater && tUnit === '°C' && card._has('number.sem_hot_water_solar_target')
                 ? card._attrs('number.sem_hot_water_solar_target') : null;
             const syncSolar = (v) => {
@@ -178,16 +180,18 @@ export function loadBody(card, row) {
                 { value: val, step: 0.5, unit: tUnit, onCommit });
             rows.push(card._row('mdi:thermometer', t('hq_keep'),
                 temp('comfort_target', q.keep, (v) => { send('comfort_target', String(v)); syncSolar(Number(v) + q.offset); }),
-                t('hq_keep_sub')));
-            rows.push(card._row('mdi:snowflake-alert', t('hq_floor'),
-                temp('comfort_limit', q.floor, (v) => send('comfort_limit', String(v))), t('hq_floor_sub')));
-            rows.push(card._row('mdi:white-balance-sunny', t('hq_sun_max'),
+                t(q.keys.keepSub) + (q.season ? ' ' + t(q.season) + '.' : '')));
+            // (#1349) a cooling band asks the same, turned round: its words
+            // and the direction of "sun up to" come from the shared model
+            rows.push(card._row(q.cooling ? 'mdi:thermometer-alert' : 'mdi:snowflake-alert', t(q.keys.floor),
+                temp('comfort_limit', q.floor, (v) => send('comfort_limit', String(v))), t(q.keys.floorSub)));
+            rows.push(card._row('mdi:white-balance-sunny', t(q.keys.sunMax),
                 temp('sun_max', q.sunMax, (v) => {
-                    const res = sunMaxWrites({ id, keep: q.keep }, v, solarTarget);
+                    const res = sunMaxWrites({ id, keep: q.keep, cooling: q.cooling }, v, solarTarget);
                     if (res.error) { card._showError(new Error(tf(res.error, res.params))); return; }
                     for (const w of res.writes) send(w.property, w.value);
                     if (res.option) syncSolar(res.option.value);
-                }), t('hq_sun_max_sub')));
+                }), t(q.keys.sunMaxSub)));
             rows.push(buyRow());
         } else if (q.view === 'time') {
             rows.push(card._row('mdi:flag-outline', t('hq_run_each_day'),
@@ -305,7 +309,7 @@ export function saysLine(card, row) {
     // free; a load SEM buys nothing for says so
     const sub = heaterSub(pill, row, { fmtTemp: (c) => displayTemp(card, c) });
     const hint = sub ? card._tf(sub.key, sub.params) : '';
-    const reading = row.comfort && row.comfort.keep_c != null && pill.key !== 'hq_st_warm'
+    const reading = row.comfort && row.comfort.keep_c != null && pill.key !== 'hq_st_warm' && pill.key !== 'hq_st_cool'
         ? displayTemp(card, row.comfort.reading_c) : null;
     const now = reading ? card._tf('hq_now', { reading }) + ' ' : '';
     const lead = now + text.charAt(0).toUpperCase() + text.slice(1) + '.';
@@ -315,7 +319,9 @@ export function saysLine(card, row) {
 
 /**
  * (#1349) One bar for the band: never colder than · keep it at · sun up to,
- * and a marker for now. Temperatures in the user's unit, as typed.
+ * and a marker for now. A cooling band is the same bar turned round: the
+ * limit on the warm side, the sun's range below Keep at. Temperatures in
+ * the user's unit, as typed.
  */
 export function bandBar(card, q, row) {
     const lo = Math.min(q.floor, q.keep, q.sunMax) - 3, hi = Math.max(q.floor, q.keep, q.sunMax) + 3;
@@ -326,8 +332,10 @@ export function bandBar(card, q, row) {
     const tick = (v) => html`<span style="position:absolute;top:-4px;left:${pct(v)}%;width:2px;height:16px;background:var(--primary-text-color,#ddd)"></span>
         <span class="muted" style="position:absolute;top:15px;left:${pct(v)}%;transform:translateX(-50%);font-size:11px;white-space:nowrap">${v} ${unit}</span>`;
     return html`<div style="position:relative;height:8px;border-radius:5px;margin:14px 0 26px;background:var(--divider-color,#333)">
-        <span style="position:absolute;left:0;top:0;height:8px;border-radius:5px 0 0 5px;width:${pct(q.floor)}%;background:#b23c3c"></span>
-        <span style="position:absolute;top:0;height:8px;left:${pct(q.keep)}%;width:${Math.max(0, pct(q.sunMax) - pct(q.keep))}%;background:#ff9800"></span>
+        ${q.cooling
+        ? html`<span style="position:absolute;right:0;top:0;height:8px;border-radius:0 5px 5px 0;width:${100 - pct(q.floor)}%;background:#b23c3c"></span>`
+        : html`<span style="position:absolute;left:0;top:0;height:8px;border-radius:5px 0 0 5px;width:${pct(q.floor)}%;background:#b23c3c"></span>`}
+        <span style="position:absolute;top:0;height:8px;left:${pct(Math.min(q.keep, q.sunMax))}%;width:${Math.abs(pct(q.sunMax) - pct(q.keep))}%;background:#ff9800"></span>
         ${tick(q.floor)}${tick(q.keep)}${tick(q.sunMax)}
         ${now === null ? nothing : html`<span style="position:absolute;top:-11px;left:calc(${pct(now)}% - 6px);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid var(--primary-text-color,#fff)"></span>`}
     </div>`;

@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
+- ✨ **A cooling unit is set with the same four questions, turned round** (#1349): keep it at, never warmer than, cool down to, buy power.
+- ✨ **A heater with a thermometer can reach Keep at from the house battery at night** (#1349), while the battery is above its reserve.
 - ✨ **A heater is set with four plain questions and says what it does next** (#1349).
 
 # [2.3.0-beta.13] — 12.11.2026

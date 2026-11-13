@@ -36,9 +36,14 @@ test('case A: a tank waiting for its planned hour says when, and that sun is fre
     const q = heaterQuestions({ goals: GOALS, comfort: row.comfort }, { hasBattery: true });
     assert.equal(q.view, 'band');
     assert.deepEqual([q.keep, q.floor, q.sunMax, q.buy], [52, 36, 56, 'grid']);
-    // a battery finish serves the daily run time only — not offered here
-    assert.deepEqual(q.buyChoices, ['off', 'grid']);
+    // (#1349) with a house battery the battery choice is offered here too:
+    // it reaches Keep at at night, above the battery's reserve
+    assert.deepEqual(q.buyChoices, ['off', 'grid', 'battery']);
     assert.equal(q.buySubKey, 'hq_buy_sub_band');
+    assert.equal(q.buySubBatteryKey, 'hq_buy_sub_band_battery');
+    const noBatt = heaterQuestions({ goals: GOALS, comfort: row.comfort });
+    assert.deepEqual(noBatt.buyChoices, ['off', 'grid']);
+    assert.equal(noBatt.buySubBatteryKey, null);
 });
 
 test('case B: the same tank with buying off waits for sun and says SEM buys nothing', () => {
@@ -76,8 +81,7 @@ test('every other state of a heater has its own words', () => {
     assert.equal(say(45, { on: true, code: 'comfort_goal' }, {}, T, true).key, 'hq_st_heating_to');
     assert.equal(say(45, { on: true, source: 'solar', code: 'solar' }, {}, T, true).key, 'hq_st_heating_sun');
     assert.equal(say(55, { on: true, code: 'legionella' }, { own_run: true }, T, true).key, 'hq_st_legionella');
-    // a cooling band and Mode Off are not this sentence
-    assert.equal(heaterSays({ comfort: band(27, { hvac: 'cool' }), mergedMode: 'solar_only' }, T), null);
+    // Mode Off is not this sentence
     assert.equal(heaterSays({ comfort: band(45), mergedMode: 'off' }, T), null);
     assert.equal(becauseKey({ on: true, code: 'peak_shed' }), '');
 });
@@ -119,9 +123,68 @@ test('the buy question writes exactly the two flags the old picker wrote', () =>
     assert.equal(buySource(null), 'off');
 });
 
-test('a cooling band keeps the earlier layout', () => {
-    const q = heaterQuestions({ goals: { comfort_target: '24', comfort_offset: '2', comfort_limit: '27' }, comfort: { hvac: 'cool' } });
-    assert.equal(q.view, 'cool');
+const coolBand = (reading, over = {}) => ({
+    state: 'willing', hvac: 'cool', reading_c: reading,
+    keep_c: 24, start_c: 25, max_c: 22, limit_c: 27, own_run: false, may_buy: true, ...over,
+});
+const COOL_GOALS = { comfort_target: '24', comfort_offset: '2', comfort_limit: '27', top_up_policy: 'cheap_hours' };
+
+test('a cooling band asks the same four questions, turned round', () => {
+    const q = heaterQuestions({ goals: COOL_GOALS, comfort: { hvac: 'cool' } });
+    assert.equal(q.view, 'band');
+    assert.equal(q.cooling, true);
+    // "cool down to" is absolute and BELOW Keep at
+    assert.deepEqual([q.keep, q.floor, q.sunMax, q.buy], [24, 27, 22, 'grid']);
+    assert.deepEqual(q.keys, { keepSub: 'hq_keep_sub_cool', floor: 'hq_ceiling', floorSub: 'hq_ceiling_sub',
+        sunMax: 'hq_sun_min', sunMaxSub: 'hq_sun_min_sub' });
+    // a heater keeps its own words
+    assert.equal(heaterQuestions({ goals: GOALS, comfort: band(45) }).keys.floor, 'hq_floor');
+    // "cool down to 21" stores an offset of 3; above Keep at is refused
+    assert.deepEqual(sunMaxWrites({ id: 'ac', keep: 24, cooling: true }, 21).writes,
+        [{ property: 'comfort_offset', value: '3' }]);
+    assert.equal(sunMaxWrites({ id: 'ac', keep: 24, cooling: true }, 21).option, null);
+    assert.deepEqual(sunMaxWrites({ id: 'ac', keep: 24, cooling: true }, 25),
+        { error: 'hq_err_above_keep', params: { keep: '24' } });
+});
+
+test('a cooling band says the same things with its own words', () => {
+    const say = (reading, intent, over = {}, live = T, running = false) =>
+        heaterSays({ comfort: coolBand(reading, over), intent, mergedMode: 'solar_only' }, live, running);
+    assert.equal(say(23.5, null).key, 'hq_st_cool');
+    assert.equal(say(24.5, null).key, 'hq_st_cool_again');
+    assert.deepEqual(say(26, { on: false, code: 'plan_wait' }, {}, { ...T, plannedAt: '13:00' }),
+        { key: 'hq_st_cools_at', params: { keep: '24 °C', time: '13:00' }, cls: '', why: '', cool: true, next: true });
+    assert.equal(say(26, { on: false, code: 'no_source' }).key, 'hq_st_above_none');
+    const noBuy = say(26, { on: false, code: 'no_source' }, { may_buy: false });
+    assert.equal(noBuy.key, 'hq_st_waits_sun_cool');
+    assert.deepEqual(heaterSub(noBuy, { comfort: coolBand(26) }, T), { key: 'hq_sub_no_buy_cool', params: { limit: '27 °C' } });
+    assert.equal(heaterSub(say(26, null, {}, { ...T, plannedAt: '13:00' }), {}, T).key, 'hq_sub_sun_free_cool');
+    assert.equal(say(28, { on: true, code: 'comfort_floor' }, {}, T, true).key, 'hq_st_too_warm');
+    assert.equal(say(26, { on: true, code: 'comfort_goal' }, {}, T, true).key, 'hq_st_cooling_to');
+    assert.equal(say(26, { on: true, source: 'solar', code: 'solar' }, {}, T, true).key, 'hq_st_cooling_sun');
+    assert.equal(say(null, null).key, 'hq_st_no_reading');
+});
+
+test('a unit that picks its season says which one it is in', () => {
+    const g = { ...COOL_GOALS, hvac_mode: 'by_forecast' };
+    assert.equal(heaterQuestions({ goals: g, comfort: { hvac: 'cool' } }).season, 'hq_season_cooling');
+    assert.equal(heaterQuestions({ goals: { ...GOALS, hvac_mode: 'by_forecast' }, comfort: band(45) }).season, 'hq_season_heating');
+    assert.equal(heaterQuestions({ goals: GOALS, comfort: band(45) }).season, null);
+});
+
+test('the battery choice: it heats tonight from the house battery, or waits at the reserve', () => {
+    const say = (intent, over = {}, live = T, running = false) =>
+        heaterSays({ comfort: band(45, { may_buy: false, may_use_battery: true, ...over }), intent, mergedMode: 'solar_only' }, live, running);
+    assert.deepEqual(say({ on: false, code: 'no_source' }),
+        { key: 'hq_st_heats_tonight_battery', params: { keep: '52 °C' }, cls: '', why: '', next: true, battery: true });
+    assert.equal(say({ on: false, code: 'battery_reserve' }).key, 'hq_st_waits_battery');
+    assert.equal(say({ on: true, source: 'tier2_battery', code: 'comfort_goal_battery' }, {}, T, true).key, 'hq_st_heating_battery');
+    // a planned hour ahead still wins the sentence
+    assert.equal(say({ on: false, code: 'plan_wait' }, {}, { ...T, plannedAt: '02:00' }).key, 'hq_st_heats_at');
+    assert.equal(becauseKey({ on: false, code: 'battery_reserve' }), 'hq_because_battery_reserve');
+    // the stored value is the old picker's
+    assert.equal(heaterQuestions({ goals: { ...GOALS, top_up_policy: 'solar_only', battery_eligible_overnight: true }, comfort: band(45) }, { hasBattery: true }).buy, 'battery');
+    assert.equal(heaterQuestions({ goals: { ...GOALS, top_up_policy: 'solar_only', battery_eligible_overnight: true }, comfort: band(45) }).buy, 'off');
 });
 
 test('the plan names a heater below its line that has no hour — unless buying is off', () => {
@@ -134,6 +197,9 @@ test('the plan names a heater below its line that has no hour — unless buying 
     assert.deepEqual(coldHeaters(devs, [], now), [{ id: 'boiler', name: 'Boiler', keepC: 52 }]);
     const block = [{ id: 'comfort:boiler', start: '2026-11-12T23:00:00Z', end: '2026-11-13T00:30:00Z' }];
     assert.deepEqual(coldHeaters(devs, block, now), []);
+    // a cooler above its line is named too, and marked for its words
+    const ac = { ac: { name: 'AC', control_mode: 'surplus', comfort: coolBand(26) }, fine: { name: 'Fine', control_mode: 'surplus', comfort: coolBand(24.5) } };
+    assert.deepEqual(coldHeaters(ac, [], now), [{ id: 'ac', name: 'AC', keepC: 24, cool: true }]);
     assert.equal(nextBlock(block, ['load:boiler', 'comfort:boiler'], now).id, 'comfort:boiler');
     assert.equal(nextBlock(block, ['load:other'], now), null);
 });
@@ -148,6 +214,7 @@ test('every text of the model exists in every language', () => {
     const src = fs.readFileSync(new URL('../src/util/heater-questions.js', here), 'utf8');
     const keys = new Set([...src.matchAll(/'(hq_[a-z_]+)'/g)].map((m) => m[1]));
     for (const k of ['hq_now', 'hq_keep', 'hq_keep_sub', 'hq_floor', 'hq_floor_sub', 'hq_sun_max', 'hq_sun_max_sub',
+        'hq_plan_above_no_hour', 'hq_plan_above_no_hour_plain',
         'hq_buy', 'hq_more', 'hq_run_each_day', 'hq_run_each_day_sub', 'hq_plan_below_no_hour', 'hq_plan_below_no_hour_plain',
         ...Object.values(BUY_LABEL)]) keys.add(k);
     assert.ok(keys.size > 35);
@@ -159,8 +226,9 @@ test('every text of the model exists in every language', () => {
 test('the classic card asks the shared model, and the old chip words are gone for heaters', () => {
     assert.ok(classic.includes("from '../util/heater-questions.js'"));
     for (const fn of ['heaterSays(', 'heaterQuestions(', 'sunMaxWrites(', 'heaterSub(']) assert.ok(classic.includes(fn), fn);
-    // the three views
-    assert.ok(classic.includes("q.view === 'band'") && classic.includes("q.view === 'cool'"));
+    // one band view for heating and cooling; the words come from the model
+    assert.ok(classic.includes("q.view === 'band'") && !classic.includes("q.view === 'cool'"));
+    assert.ok(classic.includes('q.keys.floor') && classic.includes('q.keys.sunMax') && classic.includes('cooling: q.cooling'));
     // the run-time progress is hidden when the thermometer leads
     assert.ok(classic.includes("this._questions(device).view === 'band'"));
     assert.ok(planCard.includes('coldHeaters('));
