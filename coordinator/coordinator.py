@@ -12446,8 +12446,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if soc_seed is not None:
                 from .day_ledger import (build_day_slots,
                                          provisional_soc_curve)
-                from .energy_planner import (Demand, build_night_ledger,
-                                                pack_night)
+                from .energy_planner import (Demand, battery_at_end,
+                                                build_night_ledger, pack_night)
                 slots2 = build_day_slots(
                     start=day_start, end=day_end, day_kwh=day_kwh,
                     sunrise=sunrise, sunset=sunset,
@@ -12532,6 +12532,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "soc_curve": curve,
                     "fits": plan2.fits,
                     "blocks": _blocks2,
+                    # (#1321) the battery when tomorrow's preview ends
+                    "battery_end": battery_at_end(ledger2, _floor2, cap_kwh2),
                 }
         except Exception:  # noqa: BLE001 — provisional is additive, never fatal
             preview["provisional"] = None
@@ -12736,7 +12738,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             from datetime import timedelta as _td
             from .energy_planner import (
-                Demand, LedgerSlot, build_night_ledger, pack_night,
+                Demand, LedgerSlot, battery_at_end, build_night_ledger, demand_why,
+                pack_night,
             )
             from .ev_night_targets import build_night_target_map
             from .ev_tariff_planner import (
@@ -13202,7 +13205,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1358) the floor the ledger used, published with the plan
             _plan_floor = [None, None]
 
-            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None):
+            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None,
+                              battery_end=None):
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
                 # broken one; burned three placement bugs learning that).
@@ -13270,6 +13274,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
+                    # (#1321) where the battery ends tonight, when walked
+                    "battery_end": battery_end,
                 }
 
             # ── The Night Ledger (spec) ─────────────────────────────────
@@ -13561,7 +13567,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # any other demand — that branch used to be unreachable.)
                 self._energy_plan_shadow = _quiet_answer(
                     arb, fsell, _slot_rows(ledger),
-                    predict_self_consumption(ledger, []).as_dict())
+                    predict_self_consumption(ledger, []).as_dict(),
+                    battery_end=battery_at_end(ledger, floor_kwh, cap_kwh))
                 return True
             plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
                               max_discharge_w=max_discharge_w,
@@ -13606,6 +13613,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # so publish the fields, not the sentence. Both stay — the
             # strings are what the log lines and the soak notes quote.
             kind_of = {d.id: d.kind for d in demands}
+            source_of = {d.id: d.source for d in demands}
+            allocs_of = {}
+            for _a in plan.allocations:
+                allocs_of.setdefault(_a.demand_id, []).append(_a)
             rows = [{
                 "id": r.demand_id,
                 "kind": kind_of.get(r.demand_id, "load"),
@@ -13619,6 +13630,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1354) the note as codes the card translates
                 "notes": [{"code": c, "params": dict(p)}
                           for c, p in getattr(r, "note_codes", ())],
+                # (#1321) why its runs landed where they did — one code
+                # for the Plan card's "Why this plan" list
+                "why": demand_why(allocs_of.get(r.demand_id, ()), ledger,
+                                  source_of.get(r.demand_id, "grid")),
             } for r in plan.results]
             # The ledger itself — the card's hour axis and battery
             # trajectory, in the ONE shape a quiet night draws too.
@@ -13679,6 +13694,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # instead of an anecdote.
                 "self_consumption": predict_self_consumption(
                     ledger, blocks).as_dict(),
+                # (#1321) where the battery ends tonight, on the plan's own
+                # trajectory and floor — the Plan card's "Expected" tile
+                "battery_end": battery_at_end(ledger, floor_kwh, cap_kwh),
             }
             return True
         except Exception:  # noqa: BLE001 — shadow must never break the cycle

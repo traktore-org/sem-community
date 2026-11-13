@@ -457,6 +457,13 @@ METER_FLOW_KEYS = ("flow_t", "flow_gh", "flow_home", "flow_cost")
 CO2_KG_PER_TREE_PER_YEAR = 22  # EPA estimate
 
 
+
+#: (#1321) Cost-row categories for the hours' average price: the hours a
+#: price was known, and that price × those hours. Pruned with the cost rows.
+PRICE_HOURS = "price_hours"
+PRICE_X_HOURS = "price_x_hours"
+
+
 class EnergyCalculator:
     """Calculates energy totals from power readings over time."""
 
@@ -1168,6 +1175,17 @@ class EnergyCalculator:
         energy.monthly_ev = self._get_monthly(EV_CATEGORY, month_key)
         energy.yearly_ev = self._get_yearly(EV_CATEGORY, year_key)
 
+        # (#1321) the hours' own price, time-weighted: what a kWh cost on
+        # average this period, bought or not — Insights compares it with
+        # what SEM paid per bought kWh (cost ÷ kWh). Not a cost.
+        try:
+            _rate = float(self._import_rate)
+        except (TypeError, ValueError):
+            _rate = None
+        if _rate is not None and interval_hours > 0:
+            self._accumulate_cost(PRICE_HOURS, today, month_key, year_key, interval_hours)
+            self._accumulate_cost(PRICE_X_HOURS, today, month_key, year_key,
+                                  _rate * interval_hours)
         # Grid import
         if held_w["grid_import_power"] >= MIN_POWER_THRESHOLD:
             import_increment = (held_w["grid_import_power"] * interval_hours) / 1000
@@ -4398,6 +4416,26 @@ class EnergyCalculator:
         costs.yearly_total_savings = round(
             costs.yearly_savings + costs.yearly_battery_savings, 2,
         )
+
+        # (#1321) average price paid per bought kWh against the hours'
+        # average price — only where the price moves (a dynamic tariff);
+        # on one fixed rate the two are the same number and say nothing.
+        dynamic = str((self.config or {}).get("tariff_mode") or "") == "dynamic"
+        costs.price_comparison = dynamic
+        for period, key, get, kwh in (
+                ("daily", today, self._daily_cost_accumulators, energy.daily_grid_import),
+                ("monthly", month_key, self._monthly_cost_accumulators, energy.monthly_grid_import),
+                ("yearly", year_key, self._yearly_cost_accumulators, energy.yearly_grid_import)):
+            paid = hours = None
+            if dynamic:
+                cost = get.get(f"cost_import_{key}", 0.0)
+                if kwh and kwh > 0.05:
+                    paid = round(cost / kwh, 4)
+                h = get.get(f"{PRICE_HOURS}_{key}", 0.0)
+                if h > 0:
+                    hours = round(get.get(f"{PRICE_X_HOURS}_{key}", 0.0) / h, 4)
+            setattr(costs, f"{period}_avg_price_paid", paid)
+            setattr(costs, f"{period}_avg_price_hours", hours)
 
         # (#1077) The value layer's books — 0 until a value field is set.
         costs.daily_self_consumption_value = self._get_daily_cost(VALUE_SELF_CONSUMPTION, today)
