@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Maks. prąd ładowania BMS (A)",
           "deye_max_discharge_power": "Maks. moc rozładowania (W)",
           "deye_program_control": "Steruj przedziałami czasowymi programu",
-          "deye_observer_mode": "Tryb obserwatora (tylko odczyt)",
+          "deye_observer_mode": "Próba Deye (tylko log)",
           "deye_actuation_enabled": "Włącz sterowanie (zapis do falownika)",
           "deye_work_mode_control": "Steruj trybem pracy",
           "deye_work_mode_entity": "Encja select trybu pracy",

@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS max. töltőáram (A)",
           "deye_max_discharge_power": "Max. kisütési teljesítmény (W)",
           "deye_program_control": "Program időzónáinak vezérlése",
-          "deye_observer_mode": "Megfigyelő mód (csak olvasható)",
+          "deye_observer_mode": "Deye próbaüzem (csak napló)",
           "deye_actuation_enabled": "Beavatkozás engedélyezése (írás az inverterbe)",
           "deye_work_mode_control": "Munkamód vezérlése",
           "deye_work_mode_entity": "Munkamód select entitás",

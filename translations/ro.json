@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Curent max. de încărcare BMS (A)",
           "deye_max_discharge_power": "Putere max. de descărcare (W)",
           "deye_program_control": "Controlează intervalele orare ale programului",
-          "deye_observer_mode": "Mod observator (doar citire)",
+          "deye_observer_mode": "Repetiție Deye (doar jurnal)",
           "deye_actuation_enabled": "Activează acționarea (scriere în invertor)",
           "deye_work_mode_control": "Controlează modul de lucru",
           "deye_work_mode_entity": "Entitate select mod de lucru",

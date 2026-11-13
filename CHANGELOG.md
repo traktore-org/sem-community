@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **The VPP and Deye test switches are called "dry run"** (#1354). Three settings were named Observer mode.
 - 🐛 **Setup reads the battery's discharge rating, not the last limit written to it** (#1354). A 750 W limit was stored as the rating; the field showed 1000 W.
 - 🐛 **The battery size shows the size SEM plans with when you have not set it** (#1354). The field said 10 or 15 kWh.
 - 🔧 **A charger's target reads "At least / Up to" everywhere** (#1354). The Configuration tab said "Daily target / Max daily" or "Target / Max SOC".

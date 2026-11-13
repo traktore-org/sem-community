@@ -18,7 +18,8 @@ surplus controller's peak posture). There is no second actuator to strand.
 
 ## Observer-first rollout
 
-`vpp_observer_mode` defaults to **on**. While it is on, SEM computes the full
+**VPP dry run (log only)** (`vpp_observer_mode`) defaults to **on**. It is
+separate from SEM's own Observer mode. While it is on, SEM computes the full
 dispatch every cycle and:
 
 - logs one INFO per phase transition — `VPP event started (export) — WOULD

@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS:n suurin latausvirta (A)",
           "deye_max_discharge_power": "Suurin purkausteho (W)",
           "deye_program_control": "Ohjaa ohjelman aikavälejä",
-          "deye_observer_mode": "Tarkkailutila (vain luku)",
+          "deye_observer_mode": "Deye-kuivaharjoitus (vain loki)",
           "deye_actuation_enabled": "Ota ohjaus käyttöön (kirjoita invertteriin)",
           "deye_work_mode_control": "Ohjaa työtilaa",
           "deye_work_mode_entity": "Työtilan select-entiteetti",

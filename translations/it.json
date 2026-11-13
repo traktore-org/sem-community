@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Corrente di carica max BMS (A)",
           "deye_max_discharge_power": "Potenza di scarica max (W)",
           "deye_program_control": "Controlla le fasce orarie del programma",
-          "deye_observer_mode": "Modalità osservatore (sola lettura)",
+          "deye_observer_mode": "Prova a vuoto Deye (solo log)",
           "deye_actuation_enabled": "Abilita attuazione (scrittura sull'inverter)",
           "deye_work_mode_control": "Controlla la modalità di lavoro",
           "deye_work_mode_entity": "Entità select della modalità di lavoro",

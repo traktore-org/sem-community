@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Max. nabíjecí proud BMS (A)",
           "deye_max_discharge_power": "Max. vybíjecí výkon (W)",
           "deye_program_control": "Řídit časové úseky programu",
-          "deye_observer_mode": "Režim pozorovatele (jen ke čtení)",
+          "deye_observer_mode": "Zkouška nanečisto Deye (jen log)",
           "deye_actuation_enabled": "Povolit akční zásah (zápis do střídače)",
           "deye_work_mode_control": "Řídit pracovní režim",
           "deye_work_mode_entity": "Výběrová entita pracovního režimu",

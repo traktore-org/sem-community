@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Courant de charge max. BMS (A)",
           "deye_max_discharge_power": "Puissance de décharge max. (W)",
           "deye_program_control": "Piloter les créneaux du programme",
-          "deye_observer_mode": "Mode observateur (lecture seule)",
+          "deye_observer_mode": "Essai à blanc Deye (journal uniquement)",
           "deye_actuation_enabled": "Activer l'actionnement (écriture sur l'onduleur)",
           "deye_work_mode_control": "Piloter le mode de fonctionnement",
           "deye_work_mode_entity": "Entité select du mode de fonctionnement",

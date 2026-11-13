@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS maks. ladestrøm (A)",
           "deye_max_discharge_power": "Maks. utladingseffekt (W)",
           "deye_program_control": "Styr programmets tidsrom",
-          "deye_observer_mode": "Observatørmodus (skrivebeskyttet)",
+          "deye_observer_mode": "Deye-tørrkjøring (kun logg)",
           "deye_actuation_enabled": "Aktiver styring (skriv til inverter)",
           "deye_work_mode_control": "Styr arbeidsmodus",
           "deye_work_mode_entity": "Arbeidsmodus-select-entitet",

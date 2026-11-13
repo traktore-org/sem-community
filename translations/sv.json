@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS max laddström (A)",
           "deye_max_discharge_power": "Max urladdningseffekt (W)",
           "deye_program_control": "Styr programmets tidsluckor",
-          "deye_observer_mode": "Observatörsläge (skrivskyddat)",
+          "deye_observer_mode": "Deye-torrkörning (endast logg)",
           "deye_actuation_enabled": "Aktivera styrning (skriv till växelriktare)",
           "deye_work_mode_control": "Styr arbetsläge",
           "deye_work_mode_entity": "Arbetsläge-select-entitet",

@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS max charge current (A)",
           "deye_max_discharge_power": "Max discharge power (W)",
           "deye_program_control": "Control program time slots",
-          "deye_observer_mode": "Observer mode (read-only)",
+          "deye_observer_mode": "Deye dry run (log only)",
           "deye_actuation_enabled": "Enable actuation (write to inverter)",
           "deye_work_mode_control": "Control work mode",
           "deye_work_mode_entity": "Work-mode select entity",
