@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Asistență baterie – surplus solar min. (W)",
           "grid_sign_invert": "Inversează semnul puterii din rețea",
           "battery_operating_mode_entity": "Entitate mod de funcționare baterie (urmărită)",
-          "battery_charge_end_soc_entity": "Nivel de final de încărcare al bateriei (opțional)"
+          "battery_charge_end_soc_entity": "Nivel de final de încărcare al bateriei (opțional)",
+          "battery_discharge_end_soc_entity": "Nivel de final de descărcare al bateriei (opțional)"
         },
         "data_description": {
           "update_interval": "Cât de des citește coordonatorul senzorii și reglează hardware-ul. 10 s oferă cea mai precisă integrare a energiei; valorile peste 30 s vor subestima energia. Interval 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Surplusul solar real minim înainte ca bateria casei să poată ajuta la încărcarea EV — în orice mod de încărcare. Sub această valoare bateria este rezervată casei (mașina consumă din rețea + solar). Implicit 1200 W. Setați 0 pentru ca bateria să susțină EV oriunde, inclusiv pe timp de noapte.",
           "grid_sign_invert": "Activează doar dacă importul din rețea apare ca valoare pozitivă (de ex. Enphase). Convenția SEM este negativ = import; aceasta neagă citirea brută și ocolește detectarea automată a semnului.",
           "battery_operating_mode_entity": "Selectorul politicii de funcționare al invertorului (de ex. „Working mode” la Huawei). SEM doar îl CITEȘTE: modul este afișat lângă dovezile bateriei, iar o reparație unică avertizează când nu este modul de consum propriu pe care planificarea SEM îl presupune. SEM nu îl schimbă niciodată. Lăsați gol pentru a dezactiva urmărirea.",
-          "battery_charge_end_soc_entity": "Unde invertorul oprește singur încărcarea bateriei, în %. SEM doar îl citește, nu îl scrie niciodată. Încărcarea forțată se termină atunci și acolo când este sub 90 %."
+          "battery_charge_end_soc_entity": "Unde invertorul oprește singur încărcarea bateriei, în %. SEM doar îl citește, nu îl scrie niciodată. Încărcarea forțată se termină atunci și acolo când este sub 90 %.",
+          "battery_discharge_end_soc_entity": "Nivelul la care invertorul oprește singur descărcarea, în %. SEM doar îl citește. Planul de noapte nu socotește niciodată bateria sub el sau sub rezervă."
         }
       },
       "settings_battery_limit": {

@@ -325,6 +325,8 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # snapshot, which only a reload rebuilds — shared and per battery.
     "battery_charge_end_soc_entity",
     "battery_charge_end_soc_entities",
+    # (#1358) the inverter's own end-of-discharge level, read the same way
+    "battery_discharge_end_soc_entity",
     # #523 Sessy / AC-coupled: per-battery power-strategy selects, also read
     # at adapter construction.
     "battery_strategy_entities",

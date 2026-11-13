@@ -251,6 +251,9 @@
       "battery_charge_limit": [
         "storage_maximum_charging_power"
       ],
+      "battery_discharge_end_soc": [
+        "storage_discharging_cutoff_capacity"
+      ],
       "battery_discharge_limit": [
         "storage_maximum_discharging_power"
       ],
@@ -308,6 +311,9 @@
       "battery_charge_limit": [
         "max_charge_power",
         "system_max_charge_power"
+      ],
+      "battery_discharge_end_soc": [
+        "discharging_cutoff_capacity"
       ],
       "battery_discharge_limit": [
         "max_discharge_power",
@@ -427,6 +433,9 @@
       "battery_charge_limit": [
         "dc_charger_max_charging_power_limit"
       ],
+      "battery_discharge_end_soc": [
+        "plant_discharge_cut_off_soc"
+      ],
       "battery_discharge_limit": [
         "dc_charger_max_discharging_power_limit"
       ],
@@ -523,6 +532,9 @@
     "sungrow": {
       "battery_charge_end_soc": [
         "soc_upper_limit"
+      ],
+      "battery_discharge_end_soc": [
+        "soc_lower_limit"
       ],
       "battery_target_soc": [
         "forced_charging_target_soc_1",

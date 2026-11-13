@@ -62,6 +62,30 @@ def reserve_soc_of(cfg) -> float:
     return float(value)
 
 
+def battery_floor_of(cfg, discharge_end=None) -> "tuple[float, str]":
+    """(#1358) The lowest level the pack really discharges to, and why.
+
+    The higher of SEM's reserve (``reserve_soc_of``) and the inverter's own
+    end-of-discharge level, when that one was read: the inverter stops there
+    whatever SEM's reserve says, and someone may change it in the vendor's
+    app. ``discharge_end`` counts only as a real number from 0 to 100; an
+    entity that is not set, not read, unknown or out of range neither raises
+    nor lowers the floor — the reserve stands. Returns ``(pct, source)`` with
+    source ``"inverter"`` or ``"reserve"``."""
+    reserve = reserve_soc_of(cfg)
+    if isinstance(discharge_end, bool) or discharge_end is None:
+        return reserve, "reserve"
+    try:
+        level = float(discharge_end)
+    except (TypeError, ValueError):
+        return reserve, "reserve"
+    if level != level or level < 0.0 or level > 100.0:
+        return reserve, "reserve"
+    if level > reserve:
+        return level, "inverter"
+    return reserve, "reserve"
+
+
 def arbitrage_allowed_for_mode(
     mode: str, global_enabled: bool, permissions: dict = None,
 ) -> bool:

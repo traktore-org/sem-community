@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Batteristöd – min. solöverskott (W)",
           "grid_sign_invert": "Invertera näteffektens tecken",
           "battery_operating_mode_entity": "Batteriets driftlägesentitet (bevakad)",
-          "battery_charge_end_soc_entity": "Batteriets laddstoppnivå (valfritt)"
+          "battery_charge_end_soc_entity": "Batteriets laddstoppnivå (valfritt)",
+          "battery_discharge_end_soc_entity": "Batteriets urladdningsstoppnivå (valfritt)"
         },
         "data_description": {
           "update_interval": "Hur ofta koordinatorn läser sensorer och justerar hårdvaran. 10 s ger den mest exakta energiintegrationen; värden över 30 s underskattar energin. Intervall 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Minsta verkliga solöverskott innan husbatteriet får hjälpa till att ladda EV:n — i alla laddningslägen. Under detta är batteriet reserverat för huset (bilen drar från nätet + sol). Standard 1200 W. Ställ in 0 för att låta batteriet stödja EV:n överallt, även nattetid.",
           "grid_sign_invert": "Slå på endast om nätimport visas som ett positivt värde (t.ex. Enphase). SEM:s konvention är negativ = import; detta negerar råvärdet och kringgår automatisk teckendetektering.",
           "battery_operating_mode_entity": "Växelriktarens driftpolicyväljare (t.ex. Huaweis 'Working mode'). SEM LÄSER den bara: läget visas bredvid batteriunderlaget, och en engångsreparation varnar när det inte är det egenförbrukningsläge SEM:s planering förutsätter. SEM ändrar den aldrig. Lämna tom för att stänga av bevakningen.",
-          "battery_charge_end_soc_entity": "Där växelriktaren själv slutar ladda batteriet, i %. SEM läser den bara och skriver den aldrig. Tvångsladdning slutar då också där när den är under 90 %."
+          "battery_charge_end_soc_entity": "Där växelriktaren själv slutar ladda batteriet, i %. SEM läser den bara och skriver den aldrig. Tvångsladdning slutar då också där när den är under 90 %.",
+          "battery_discharge_end_soc_entity": "Där växelriktaren själv slutar ladda ur, i %. SEM läser den bara. Nattplanen räknar aldrig batteriet under den eller under reserven."
         }
       },
       "settings_battery_limit": {

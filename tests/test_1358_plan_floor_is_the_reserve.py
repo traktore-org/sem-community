@@ -18,8 +18,11 @@ from .ast_contracts import calls
 
 @pytest.mark.unit
 def test_every_battery_floor_reads_the_reserve():
-    # the night ledger and the tomorrow preview both live in the plan builder
-    assert calls(SEMCoordinator._shadow_energy_plan, "reserve_soc_of")
+    # the night ledger and the tomorrow preview both live in the plan builder;
+    # since the inverter's own end of discharge counts too, they read the one
+    # floor helper, which starts from the reserve
+    assert calls(SEMCoordinator._shadow_energy_plan, "_battery_floor")
+    assert calls(SEMCoordinator._battery_floor, "battery_floor_of")
 
 
 @pytest.mark.unit

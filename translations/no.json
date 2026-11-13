@@ -232,7 +232,8 @@
           "battery_assist_min_surplus": "Batteristøtte – min. soloverskudd (W)",
           "grid_sign_invert": "Snu fortegn for netteffekt",
           "battery_operating_mode_entity": "Batteriets driftsmodus-entitet (overvåket)",
-          "battery_charge_end_soc_entity": "Batteriets ladestoppnivå (valgfritt)"
+          "battery_charge_end_soc_entity": "Batteriets ladestoppnivå (valgfritt)",
+          "battery_discharge_end_soc_entity": "Batteriets utladingsstoppnivå (valgfritt)"
         },
         "data_description": {
           "update_interval": "Hvor ofte koordinatoren leser sensorer og justerer maskinvaren. 10 s gir den mest nøyaktige energiintegrasjonen; verdier over 30 s vil telle for lite energi. Område 10–60 s.",
@@ -258,7 +259,8 @@
           "battery_assist_min_surplus": "Minste reelle soloverskudd før husbatteriet kan bidra til å lade EV-en — i alle lademoduser. Under dette er batteriet reservert for huset (bilen henter fra nettet + sol). Standard 1200 W. Sett til 0 for å la batteriet støtte EV-en overalt, også om natten.",
           "grid_sign_invert": "Slå på kun hvis nettimport vises som en positiv verdi (f.eks. Enphase). SEMs konvensjon er negativ = import; dette negerer råavlesningen og hopper over automatisk fortegnsgjenkjenning.",
           "battery_operating_mode_entity": "Inverterens driftspolicy-velger (f.eks. Huaweis 'Working mode'). SEM LESER den bare: modusen vises ved siden av batteribeviset, og en engangsreparasjon advarer når det ikke er egenforbruksmodusen SEMs planlegging forutsetter. SEM endrer den aldri. La stå tom for å deaktivere overvåkingen.",
-          "battery_charge_end_soc_entity": "Hvor vekselretteren selv stopper ladingen av batteriet, i %. SEM leser det bare og skriver det aldri. Tvungen lading slutter da også der når det er under 90 %."
+          "battery_charge_end_soc_entity": "Hvor vekselretteren selv stopper ladingen av batteriet, i %. SEM leser det bare og skriver det aldri. Tvungen lading slutter da også der når det er under 90 %.",
+          "battery_discharge_end_soc_entity": "Der omformeren selv stopper utladingen, i %. SEM leser det bare. Nattplanen regner aldri batteriet under det eller under reserven."
         }
       },
       "settings_battery_limit": {

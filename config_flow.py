@@ -1685,6 +1685,8 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     # one per battery on the per-battery page
     "battery_charge_end_soc_entity",
     "battery_charge_end_soc_entities",
+    # (#1358) the inverter's own end-of-discharge level, read only
+    "battery_discharge_end_soc_entity",
     "battery_operating_mode_entity",
     "battery_discharge_protection_enabled",
     "battery_force_charge_negative_price",
@@ -2932,6 +2934,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "battery_charge_end_soc_entity",
                     description={"suggested_value": current_config.get("battery_charge_end_soc_entity") or None},
+                ): selector.EntitySelector(selector.EntitySelectorConfig(
+                    domain=["number", "sensor", "input_number"])),
+                # (#1358) Read only: the level at which the inverter itself
+                # stops discharging. The night plan never counts the battery
+                # below it. SEM never writes this entity.
+                vol.Optional(
+                    "battery_discharge_end_soc_entity",
+                    description={"suggested_value": current_config.get("battery_discharge_end_soc_entity") or None},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(
                     domain=["number", "sensor", "input_number"])),
                 # (#845) Observe-only: the inverter's operating-policy

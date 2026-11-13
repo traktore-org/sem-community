@@ -788,6 +788,9 @@ When you have multiple batteries (e.g. Huawei + Growatt, or split Huawei units),
 > **The reserve.** The reserve stops SEM's own sales (Force Discharge and the
 > planned sells). In Auto and Self-Consumption SEM does not stop the house
 > from using the battery below it; the inverter's own limit does that.
+> The night plan counts the battery down to the higher of the two: your
+> reserve, or the inverter's own *End-of-discharge level* when SEM has found
+> it (Configuration → battery; SEM only reads it).
 >
 > **A sale lifts SEM's own limit.** SEM sometimes limits the battery to the
 > house, down to 0 W, while a car charges or in a cheap hour. When the battery

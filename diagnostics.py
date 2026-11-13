@@ -276,6 +276,8 @@ REDACT_CONFIG_KEYS = {
     # (#1166) the pack's own end-of-charge level, shared and per battery
     "battery_charge_end_soc_entity",
     "battery_charge_end_soc_entities",
+    # (#1358) the inverter's own end-of-discharge level
+    "battery_discharge_end_soc_entity",
     # (#915, 06.09 audit) the split pair the sources step now fills for any
     # split-meter brand — same privacy class as the keys above
     "grid_import_power_entity",

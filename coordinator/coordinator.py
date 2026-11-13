@@ -85,6 +85,7 @@ from .battery_controls import (  # (#1071, #1195)
 )
 from ..consts.battery_modes import (
     DEFAULT_BATTERY_MODE, DEFAULT_BATTERY_RESERVE_SOC, reserve_soc_of,
+    battery_floor_of,
 )
 
 from .types import (
@@ -6535,7 +6536,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # floor — the reserve, where the inverter stops — not the
                     # priority level (the house runs on below it) nor the
                     # retired ``battery_minimum_soc`` knob.
-                    _bat_floor = reserve_soc_of(self.config)
+                    _bat_floor = self._battery_floor()[0]
                     if _bat_soc is not None and _bat_cap > 0:
                         if _bat_kw > _MIN_USEFUL_RATE_KW and _bat_soc < 99:
                             remaining_kwh = (100 - _bat_soc) / 100 * _bat_cap
@@ -8454,6 +8455,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except (TypeError, ValueError, AttributeError):
             return None
 
+    def _discharge_end_soc(self, cfg: dict) -> "float | None":
+        """(#1358) The inverter's own end-of-discharge level, or ``None``.
+
+        Read from ``battery_discharge_end_soc_entity`` — the twin of
+        ``_charge_end_soc``. SEM only reads it, never writes it. Unset,
+        missing, unavailable or not a number → ``None``."""
+        eid = (cfg or {}).get("battery_discharge_end_soc_entity")
+        hass = getattr(self, "hass", None)
+        if not eid or not isinstance(eid, str) or hass is None:
+            return None
+        try:
+            st = hass.states.get(eid)
+            return finite_float(st.state) if st is not None else None
+        except (TypeError, ValueError, AttributeError):
+            return None
+
+    def _battery_floor(self) -> "tuple[float, str]":
+        """(#1358) The pack's real floor: SEM's reserve or the inverter's own
+        end of discharge, whichever is higher (``battery_floor_of``)."""
+        return battery_floor_of(self.config, self._discharge_end_soc(self.config))
+
     def _finish_manual_battery_modes(
         self, battery_items, soc_read: dict, count: int,
         power_read: "dict | None" = None, site=None,
@@ -9406,7 +9428,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             now = dt_util.now()
             left = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
             tomorrow = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
-            need = cap * (1.0 - float(reserve_soc_of(self.config)) / 100.0)
+            need = cap * (1.0 - float(self._battery_floor()[0]) / 100.0)
             day = timedelta(days=1)
             nets = [tomorrow - self._house_kwh_between(sunrise + day, sunset + day)]
             if now < sunset:
@@ -12445,7 +12467,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         deadline=day_end, priority=i, source="grid",
                     ))
                 # the reserve, as tonight's plan reads it
-                _reserve = reserve_soc_of(self.config)
+                _reserve = self._battery_floor()[0]
                 _floor2 = _reserve / 100.0 * cap_kwh2
                 _md_w = float(self.config.get(
                     "battery_max_discharge_power", 5000.0) or 5000.0)
@@ -13163,6 +13185,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     **({"batt": True} if s.home_batt_kwh > 1e-6 else {}),
                 } for s in rows]
 
+            # (#1358) the floor the ledger used, published with the plan
+            _plan_floor = [None, None]
+
             def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None):
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
@@ -13226,6 +13251,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "battery_fleet_partial": partial_note,
                     # (#1063) whether this ledger walked a battery at all.
                     "has_battery": cap_kwh > 0,
+                    "battery_floor_pct": _plan_floor[0],
+                    "battery_floor_source": _plan_floor[1],
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
@@ -13240,7 +13267,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # not the priority level — that one says when the car waits for
             # the battery, and the house kept running below it (PROD 13.11:
             # the plan called a 28 % pack empty while it powered the house).
-            reserve_pct = reserve_soc_of(self.config)
+            # (#1358) …or the inverter's own end of discharge when it is higher
+            reserve_pct, _plan_floor_src = self._battery_floor()
+            _plan_floor[0], _plan_floor[1] = reserve_pct, _plan_floor_src
             target_pct = float(getattr(getattr(scheduler, "decision", None),
                                        "target_soc", 0.0) or 0.0)
             floor_kwh = max(reserve_pct, target_pct) / 100.0 * cap_kwh
@@ -13619,6 +13648,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1063) False when the ledger walked no battery: the card
                 # then draws no battery icon and no hand-over time.
                 "has_battery": cap_kwh > 0,
+                "battery_floor_pct": _plan_floor[0],
+                "battery_floor_source": _plan_floor[1],
                 # (night 3, finding 3) a re-stamped night must be
                 # distinguishable from the first answer.
                 "replan_cause": replan_cause,
