@@ -258,7 +258,6 @@ def _energy_plan_attrs(
         # (#1321) the battery when tonight's plan ends {kwh, pct, at}, and
         # the floor the plan drew it to — the Plan card's "Expected" tile
         "battery_end": plan.get("battery_end"),
-        "battery_floor_pct": plan.get("battery_floor_pct"),
     }
     for key, value in (extra or {}).items():
         if value:
