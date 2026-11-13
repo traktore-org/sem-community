@@ -19,7 +19,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { semTheme, semDefineCard, semCardSurfaceCSS } from '../base/sem-shared.js';
+import { semTheme, semDefineCard, semCardSurfaceCSS, semGetCurrency } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
 import { readNumber, socDisplay } from '../util/missing-value.js';
 import { chargerAddPlan, detectRowLabelKey, isCo2IntensityEntity, isOutdoorTemperatureCandidate, isPowerEntity, nearMissAction, proposalWrite, watchOnlyHelpKey, writeIsSaved } from '../util/detect-rows.js';
@@ -27,6 +27,10 @@ import { roleSource, showsRoleLegend } from '../util/role-source.js';
 import { batteryListEdit } from '../util/battery-slot-edit.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
+import { taxesApply } from '../util/settings-applies.js';
+import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
+import { BATTERY_QUESTIONS, batteryLevels, zoneBands } from '../util/battery-questions.js';
+import { CHARGER_TEXT, targetEntities } from '../util/charger-questions.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
@@ -804,7 +808,7 @@ class SEMConfigCard extends SEMLitBase {
         return this._renderZoneKnob(entityId, labelKey, T, helpKey);
     }
 
-    _renderToggle(entityId, labelKey, T, helpKey) {
+    _renderToggle(entityId, labelKey, T, helpKey, subKey = null) {
         const entity = this._hass?.states[entityId];
         if (!entity) return nothing;
         if (!this._gate(entityId)) return nothing;
@@ -821,6 +825,7 @@ class SEMConfigCard extends SEMLitBase {
                         <div class="toggle-thumb"></div>
                     </div>
                 </div>
+                ${subKey ? html`<div class="setting-help-text">${this._t(subKey)}</div>` : nothing}
                 ${this._helpBlock(helpKey)}
             </div>
         `;
@@ -1108,15 +1113,17 @@ class SEMConfigCard extends SEMLitBase {
                     ${/* (config-on-dashboard) the charge TARGET value — the
                           select above only picks kWh vs SOC; these set the
                           actual target + its ceiling (#245 range). */ ''}
-                    ${charger.ev_target_type === 'soc' ? html`
+                    ${/* (#1354) one pair, one name, in every card: At least /
+                          Up to — of kWh per day or of the car's SOC. */ ''}
+                    ${(() => {
+                        const soc = charger.ev_target_type === 'soc';
+                        const ent = targetEntities(cid, charger.ev_target_type);
+                        return html`
                         <div class="stepper-pair">
-                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc`, 'config_ev_target_soc', T, 'config_help_ev_target_soc')}
-                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc_max`, 'config_ev_target_soc_max', T, 'config_help_ev_target_soc_max')}
-                        </div>` : html`
-                        <div class="stepper-pair">
-                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, 'config_help_ev_daily_target')}
-                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, 'config_help_ev_daily_target_max')}
-                        </div>`}
+                            ${this._renderStepper(ent.atLeast, CHARGER_TEXT.atLeast, T, soc ? 'config_help_ev_target_soc' : 'config_help_ev_daily_target')}
+                            ${this._renderStepper(ent.upTo, CHARGER_TEXT.upTo, T, soc ? 'config_help_ev_target_soc_max' : 'config_help_ev_daily_target_max')}
+                        </div>`;
+                    })()}
                     ${/* (#1308) after the night end, a set Charge by still
                           wins: keep charging to the departure at day price. */ ''}
                     ${this._renderToggleNested(idx, cid, 'finish_by_departure', 'config_finish_by_departure',
@@ -1151,7 +1158,7 @@ class SEMConfigCard extends SEMLitBase {
     // battery-card design language restored to the config controls). Live
     // tunable: drag → _setNumber, no entry reload. Themed via
     // ``var(--section-accent)`` so each section keeps its colour.
-    _renderZoneKnob(entityId, labelKey, T, helpKey) {
+    _renderZoneKnob(entityId, labelKey, T, helpKey, subKey = null) {
         const e = this._hass?.states[entityId];
         if (!e) return nothing;
         // (#830) Everyday shows the essential list only. The battery floors
@@ -1169,8 +1176,13 @@ class SEMConfigCard extends SEMLitBase {
         const step = parseFloat(e.attributes.step) || 1;
         const unit = e.attributes.unit_of_measurement || '';
         const decimals = step < 1 ? 1 : 0;
-        const pct = max > min ? Math.round(((val - min) / (max - min)) * 100) : 0;
+        // #1354 — a stored value outside the range (750 W under a 1000 W
+        // floor) sits where it truly is; the slider never pins it to the end.
+        const lo = Math.min(min, val);
+        const hi = Math.max(max, val);
+        const pct = hi > lo ? Math.round(((val - lo) / (hi - lo)) * 100) : 0;
         const stepBy = (dir) => {
+            if ((dir < 0 && val <= min) || (dir > 0 && val >= max)) return;
             const next = Math.max(min, Math.min(max, val + dir * step));
             this._stage(entityId, 'number', next);
         };
@@ -1183,11 +1195,12 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="zone-knob-slider">
                     <button class="zone-mini" @click=${() => stepBy(-1)}>−</button>
                     <input type="range" class="zone-range"
-                        min=${min} max=${max} step=${step} .value=${String(val)}
+                        min=${lo} max=${hi} step=${step} .value=${String(val)}
                         style=${`--fill:${pct}%`}
-                        @change=${(ev) => this._stage(entityId, 'number', parseFloat(ev.target.value))} />
+                        @change=${(ev) => this._stage(entityId, 'number', Math.max(min, Math.min(max, parseFloat(ev.target.value))))} />
                     <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
+                ${subKey ? html`<div class="setting-help-text">${this._t(subKey)}</div>` : nothing}
                 ${this._helpBlock(helpKey, e.attributes.sem_default, unit, entityId, 'number')}
             </div>
         `;
@@ -1197,29 +1210,22 @@ class SEMConfigCard extends SEMLitBase {
     // the priority/buffer/auto-start relationship is obvious at a glance
     // (the "very nice and colorful" battery viz, #528).
     _renderSocZoneStrip(T) {
-        const p = this._num('number.sem_battery_priority_soc');
-        const b = this._num('number.sem_battery_buffer_soc');
-        const a = this._num('number.sem_battery_auto_start_soc');
-        if (p == null || b == null || a == null) return nothing;
+        // (#1354) the bands and their names from the shared battery model:
+        // the band under the priority level is where the battery fills
+        // first — it was labelled "Reserve", which is another setting.
+        const bands = zoneBands(batteryLevels(this._hass?.states));
+        if (!bands) return nothing;
         const soc = this._num('sensor.sem_battery_soc');
         const clamp = (x) => Math.max(0, Math.min(100, x));
         return html`
             <div class="soc-strip">
                 <div class="soc-bar">
-                    <div class="soc-zone" style=${`width:${clamp(p)}%;background:#e57373`}></div>
-                    <div class="soc-zone" style=${`width:${clamp(b - p)}%;background:#ffb74d`}></div>
-                    <div class="soc-zone" style=${`width:${clamp(a - b)}%;background:#81c784`}></div>
-                    <div class="soc-zone" style=${`width:${clamp(100 - a)}%;background:#64b5f6`}></div>
+                    ${bands.map((z) => html`<div class="soc-zone" style=${`width:${z.width}%;background:${z.color}`}></div>`)}
                     ${soc != null ? html`<div class="soc-now" style=${`left:${clamp(soc)}%`} title="SOC ${soc}%"></div>` : nothing}
-                    <div class="soc-tick" style=${`left:${clamp(p)}%`}><span>${p}</span></div>
-                    <div class="soc-tick" style=${`left:${clamp(b)}%`}><span>${b}</span></div>
-                    <div class="soc-tick" style=${`left:${clamp(a)}%`}><span>${a}</span></div>
+                    ${bands.slice(1).map((z) => html`<div class="soc-tick" style=${`left:${z.from}%`}><span>${Math.round(z.from)}</span></div>`)}
                 </div>
                 <div class="soc-legend">
-                    <span><i style="background:#e57373"></i>${this._t('zone_legend_reserve')}</span>
-                    <span><i style="background:#ffb74d"></i>${this._t('zone_legend_buffer')}</span>
-                    <span><i style="background:#81c784"></i>${this._t('zone_legend_assist')}</span>
-                    <span><i style="background:#64b5f6"></i>${this._t('zone_legend_surplus')}</span>
+                    ${bands.map((z) => html`<span><i style="background:${z.color}"></i>${this._t(z.key)}</span>`)}
                 </div>
             </div>
         `;
@@ -1560,17 +1566,17 @@ class SEMConfigCard extends SEMLitBase {
                   #593 — hardware cycle count stays here. */ ''}
             ${this._renderPicker('battery_cycles_sensor', 'config_battery_cycles_sensor',
                 'sensor', null, opts, 'config_help_battery_cycles_sensor')}
-            ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
-            ${this._renderZoneKnob('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
-            ${this._renderZoneKnob('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
-            ${this._renderZoneKnob('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
-            ${this._renderZoneKnob('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
+            ${/* (#1354) The three battery levels are set in ONE place, the
+                  Battery tab; here they are named, with the way there. */ ''}
+            ${this._renderBatteryLevelsLink()}
+            ${this._renderZoneKnob(BATTERY_QUESTIONS.solar_gate.entity, BATTERY_QUESTIONS.solar_gate.key, T, 'zone_help_assist_min_surplus', BATTERY_QUESTIONS.solar_gate.sub)}
+            ${this._renderZoneKnob(BATTERY_QUESTIONS.assist_max.entity, BATTERY_QUESTIONS.assist_max.key, T, 'zone_help_assist_max_power', BATTERY_QUESTIONS.assist_max.sub)}
             ${/* #528 — battery discharge-protection settings, migrated from the
                   options flow (async_step_settings). Visual separator only. */ ''}
             <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
             ${this._renderOptionToggle('battery_discharge_protection_enabled', 'config_batt_protection',
                 opts, 'config_help_batt_protection', true)}
-            ${this._renderZoneKnob('number.sem_battery_max_discharge_power', 'battery_max_discharge_power', T, 'config_help_batt_max_discharge')}
+            ${this._renderZoneKnob(BATTERY_QUESTIONS.discharge_max.entity, BATTERY_QUESTIONS.discharge_max.key, T, 'config_help_batt_max_discharge', BATTERY_QUESTIONS.discharge_max.sub)}
             ${this._renderPicker('battery_discharge_control_entity', 'config_batt_discharge_entity',
                 'number', null, opts, 'config_help_batt_discharge_entity')}
             ${/* (#1089) one limit per battery. The one entity above limited
@@ -1604,6 +1610,29 @@ class SEMConfigCard extends SEMLitBase {
                     'config_help_batt_charge_end_entity_each'))}`;
             })()}
         `;
+    }
+
+    // (#1354) The three battery levels, named, with the way to the Battery
+    // tab where they are set. Not a control, so it is not counted.
+    _renderBatteryLevelsLink() {
+        const lv = batteryLevels(this._hass?.states);
+        if (lv.priority == null || lv.buffer == null || lv.autostart == null) return nothing;
+        const fill = (s) => s.replace('{priority}', Math.round(lv.priority))
+            .replace('{buffer}', Math.round(lv.buffer)).replace('{autostart}', Math.round(lv.autostart));
+        return html`
+            <div class="setting-help-text battery-levels-link">
+                ${fill(this._t('bq_levels_here'))}
+                <a href="#" @click=${(e) => { e.preventDefault(); this._goView('battery'); }}>${this._t('bq_levels_open')}</a>
+            </div>
+        `;
+    }
+
+    // Another view of this dashboard, by its path.
+    _goView(path) {
+        const parts = window.location.pathname.split('/');
+        parts[parts.length - 1] = path;
+        window.history.pushState(null, '', parts.join('/'));
+        window.dispatchEvent(new PopStateEvent('popstate'));
     }
 
     // (#751) a free-text option row — the four power-strategy VALUES a
@@ -1646,25 +1675,26 @@ class SEMConfigCard extends SEMLitBase {
         const feeUnit = model === 'fixed_monthly' ? `${currency}/Mt` : `${currency}/kWh`;
         // (#1090) the export threshold: below this value SEM stops exporting
         const feeUnitKwh = `${currency}/kWh`;
-        // (#1077) An all-in price already holds markup, tax and VAT: those
-        // rows are greyed out with a one-line hint, and set_option refuses
-        // a positive amount beside an all-in basis.
+        // (#1077/#1354) An all-in price already holds markup, tax and VAT:
+        // those rows are not asked (one line says why), and set_option
+        // refuses a positive amount beside an all-in basis.
         const basis = this._stagedVal('opt:import_price_basis',
             opts.import_price_basis ?? 'all_in');
-        const allIn = basis === 'all_in';
+        const taxes = taxesApply(basis);
         const kwhUnit = currency + '/kWh';
         return html`
             ${this._renderOptionSelect('tariff_value_preset', 'config_value_preset',
                 presetOptions, opts, 'config_help_value_preset', 'none')}
             ${this._renderOptionSelect('import_price_basis', 'config_price_basis',
                 basisOptions, opts, 'config_help_price_basis', 'all_in')}
-            ${allIn ? html`<div class="setting-help-text">${this._t('config_value_needs_spot_basis')}</div>` : nothing}
-            ${this._renderOptionNumberInput('import_markup', 'config_import_markup',
-                { min: 0, max: 10000, step: 0.0001, unit: kwhUnit, default: 0, disabled: allIn }, opts, 'config_help_import_markup')}
-            ${this._renderOptionNumberInput('import_energy_tax', 'config_import_energy_tax',
-                { min: 0, max: 10000, step: 0.0001, unit: kwhUnit, default: 0, disabled: allIn }, opts, 'config_help_import_energy_tax')}
-            ${this._renderOptionNumberInput('import_vat_percent', 'config_import_vat_percent',
-                { min: 0, max: 100, step: 0.1, unit: '%', default: 0, disabled: allIn }, opts, 'config_help_import_vat_percent')}
+            ${taxes ? html`
+                ${this._renderOptionNumberInput('import_markup', 'config_import_markup',
+                    { min: 0, max: 10000, step: 0.0001, unit: kwhUnit, default: 0 }, opts, 'config_help_import_markup')}
+                ${this._renderOptionNumberInput('import_energy_tax', 'config_import_energy_tax',
+                    { min: 0, max: 10000, step: 0.0001, unit: kwhUnit, default: 0 }, opts, 'config_help_import_energy_tax')}
+                ${this._renderOptionNumberInput('import_vat_percent', 'config_import_vat_percent',
+                    { min: 0, max: 100, step: 0.1, unit: '%', default: 0 }, opts, 'config_help_import_vat_percent')}`
+              : html`<div class="setting-help-text">${this._t('config_value_needs_spot_basis')}</div>`}
             ${this._renderOptionSelect('feed_in_fee_model', 'config_fee_model',
                 feeOptions, opts, 'config_help_fee_model', 'none')}
             ${model === 'per_kwh' || model === 'fixed_monthly'
@@ -1685,7 +1715,7 @@ class SEMConfigCard extends SEMLitBase {
         const rateEntity = this._hass?.states['sensor.sem_tariff_current_import_rate'];
         const rate = rateEntity ? rateEntity.state : '—';
         const unit = rateEntity?.attributes?.unit_of_measurement || '';
-        const currency = this._hass?.config?.currency || 'EUR';
+        const currency = semGetCurrency(this._hass);
         const tariffModeOptions = [
             { value: 'static', label: this._t('config_tariff_mode_static') },
             { value: 'dynamic', label: this._t('config_tariff_mode_dynamic') },
@@ -1748,7 +1778,7 @@ class SEMConfigCard extends SEMLitBase {
                   the fields, and with none set every price stays as it was. */ ''}
             ${this._renderValueLayer(opts, currency)}
             ${this._renderOptionNumberInput('demand_charge_rate', 'config_demand_charge_rate',
-                { min: 0, max: 100000, step: 0.01, unit: `${currency}/kW/Mt`, default: 4.32 }, opts, 'config_help_demand_charge_rate')}
+                { min: 0, max: 100000, step: 0.01, unit: this._t('config_unit_per_kw_month').replace('{currency}', currency), default: 4.32 }, opts, 'config_help_demand_charge_rate')}
             ${this._renderPicker('grid_import_power_entity', 'config_grid_import_entity',
                 'sensor', 'power', opts, 'config_help_grid_import_entity')}
             ${this._renderPicker('grid_export_power_entity', 'config_grid_export_entity',
@@ -1833,7 +1863,7 @@ class SEMConfigCard extends SEMLitBase {
         const registered = this._bin('heat_pump_registered');
         const opts = this._options || {};
         // (#812) the unit of the pump's own rate
-        const rateUnit = (this._hass?.config?.currency || 'EUR') + '/kWh';
+        const rateUnit = semGetCurrency(this._hass) + '/kWh';
         // Live-status block — only when SEM has the heat pump registered
         const statusBlock = registered ? html`
             <div class="hp-status">
@@ -2859,14 +2889,16 @@ class SEMConfigCard extends SEMLitBase {
             <div class="setup-intro">${this._t('config_battery_scheduler_intro')}</div>
             ${this._renderOptionToggle('battery_charge_scheduler_enabled', 'config_bs_enabled',
                 opts, 'config_help_bs_enabled', false)}
+            ${/* (#1354) unset, the field shows the size SEM plans with (the
+                  entity follows it), not a default of its own */ ''}
             ${this._renderOptionNumberInput('battery_capacity_kwh', 'config_bs_capacity',
-                { min: 1, max: 100, step: 0.5, unit: 'kWh', default: 10.0 }, opts, 'config_help_bs_capacity')}
+                { min: 1, max: 100, step: 0.5, unit: 'kWh', default: this._num('number.sem_battery_capacity') ?? 15 }, opts, 'config_help_bs_capacity')}
             ${this._renderOptionNumberInput('battery_max_charge_power_w', 'config_bs_max_charge',
                 { min: 500, max: 25000, step: 100, unit: 'W', default: 5000 }, opts, 'config_help_bs_max_charge')}
             ${this._renderOptionSlider('battery_roundtrip_efficiency', 'config_bs_efficiency',
                 { min: 0.70, max: 0.99, step: 0.01, unit: '', default: 0.92 }, opts, 'config_help_bs_efficiency')}
             ${this._renderOptionNumberInput('battery_cycle_cost', 'config_bs_cycle_cost',
-                { min: 0, max: 0.5, step: 0.001, unit: 'EUR/kWh', default: 0.02 }, opts, 'config_help_bs_cycle_cost')}
+                { min: 0, max: 0.5, step: 0.001, unit: semGetCurrency(this._hass) + '/kWh', default: 0.02 }, opts, 'config_help_bs_cycle_cost')}
             ${this._renderOptionSlider('battery_precharge_trigger_hour', 'config_bs_trigger_hour',
                 { min: 18, max: 23, step: 1, unit: 'h', default: 21 }, opts, 'config_help_bs_trigger_hour')}
             ${this._renderOptionSlider('battery_replan_interval_min', 'config_bs_replan_interval',
@@ -2895,10 +2927,10 @@ class SEMConfigCard extends SEMLitBase {
         const deye = opts.battery_charge_platform === 'deye';
         return html`
             ${this._renderToggle('switch.sem_forecast_spending_enabled', 'forecast_spending', T, 'config_help_forecast_spending')}
-            ${this._renderToggle('switch.sem_battery_may_export', 'battery_may_export', T, 'config_help_battery_may_export')}
-            ${this._renderToggle('switch.sem_battery_may_assist_ev', 'battery_may_assist_ev', T, 'config_help_battery_may_assist_ev')}
+            ${this._renderToggle(BATTERY_QUESTIONS.may_export.entity, BATTERY_QUESTIONS.may_export.key, T, 'config_help_battery_may_export', BATTERY_QUESTIONS.may_export.sub)}
+            ${this._renderToggle(BATTERY_QUESTIONS.may_assist.entity, BATTERY_QUESTIONS.may_assist.key, T, 'config_help_battery_may_assist_ev', BATTERY_QUESTIONS.may_assist.sub)}
             <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
-            ${this._renderToggle('switch.sem_battery_charge_pacing_enabled', 'battery_charge_pacing', T, 'config_help_battery_charge_pacing')}
+            ${this._renderToggle(BATTERY_QUESTIONS.pacing.entity, BATTERY_QUESTIONS.pacing.key, T, 'config_help_battery_charge_pacing', BATTERY_QUESTIONS.pacing.sub)}
             ${this._renderPicker('battery_charge_power_limit_entity', 'config_charge_power_limit_entity',
                 'number', null, opts, 'config_help_charge_power_limit_entity')}
             ${this._renderOptionNumberInput('inverter_ac_limit_w', 'config_inverter_ac_limit',
@@ -2941,17 +2973,10 @@ class SEMConfigCard extends SEMLitBase {
             </div>
             ${this._renderOptionToggle('load_management_enabled', 'config_lm_enabled',
                 opts, 'config_help_lm_enabled', false)}
-            ${this._renderOptionToggle('peak_limit_unlimited', 'config_lm_unlimited',
-                opts, 'config_help_lm_unlimited', false)}
+            ${this._renderPeakQuestion(opts)}
             ${unlimited ? html`
-                <div class="readonly-row">
-                    <span class="ctrl-label">${this._t('config_lm_target_peak')}</span>
-                    <span class="readonly-value">${this._t('config_lm_unlimited_value')}</span>
-                </div>
                 ${this._renderOperatorRelay(opts)}
             ` : html`
-                ${this._renderOptionNumberInput('target_peak_limit', 'config_lm_target_peak',
-                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
                 ${this._renderOperatorRelay(opts)}
                 ${!this._showsControl('warning_peak_level') ? this._hideRows(2) : html`
                 <div class="advanced-toggle-row" @click=${() => { this._lmAdvancedOpen = !this._lmAdvancedOpen; }}>
@@ -2966,6 +2991,52 @@ class SEMConfigCard extends SEMLitBase {
                         { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
                 ` : nothing}`}
             `}
+        `;
+    }
+
+    // (#1354) The peak limit as one question: "Limit grid draw to [x kW] /
+    // No limit". It stages the two stored fields the old switch and number
+    // staged (peakWrites), so Apply saves exactly what it saved before.
+    _renderPeakQuestion(opts) {
+        if (!this._gate('target_peak_limit')) return nothing;
+        const usid = 'opt:peak_limit_unlimited';
+        const tsid = 'opt:target_peak_limit';
+        this._reg(usid);
+        this._reg(tsid);
+        const q = peakQuestion({
+            unlimited: !!this._stagedVal(usid, !!opts.peak_limit_unlimited),
+            limitKw: this._stagedVal(tsid, opts.target_peak_limit ?? PEAK_KW.fallback),
+        });
+        const dirty = this._isDirty(usid) || this._isDirty(tsid);
+        const answer = (limited, kw) => {
+            const w = peakWrites(limited, kw);
+            this._stage(usid, 'option', w.peak_limit_unlimited);
+            if (w.target_peak_limit !== undefined) this._stage(tsid, 'option', w.target_peak_limit);
+        };
+        return html`
+            <div class="stepper-cell ${dirty ? 'dirty' : ''}">
+                <div class="ctrl-row">
+                    <span class="ctrl-label">${this._t(PEAK_TEXT.label)}${dirty ? html`<span class="dirty-dot">●</span>` : nothing}</span>
+                    <div class="q-answer">
+                        ${q.limited ? html`
+                            <div class="num-input-wrap">
+                                <input class="sem-num-input peak-q-kw" type="number"
+                                       .value=${String(q.kw)}
+                                       min=${PEAK_KW.min} max=${PEAK_KW.max} step=${PEAK_KW.step}
+                                       @change=${(e) => answer(true, e.target.value)}
+                                       @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}>
+                                <span class="num-unit">kW</span>
+                            </div>` : nothing}
+                        <div class="q-seg">
+                            <span class="q-seg-btn ${q.limited ? 'on' : ''}" data-peak="limit"
+                                  @click=${() => answer(true, q.kw)}>${this._t(PEAK_TEXT.limit)}</span>
+                            <span class="q-seg-btn ${q.limited ? '' : 'on'}" data-peak="none"
+                                  @click=${() => answer(false, q.kw)}>${this._t(PEAK_TEXT.none)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="setting-help-text">${this._t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone)}</div>
+            </div>
         `;
     }
 
@@ -3834,6 +3905,11 @@ class SEMConfigCard extends SEMLitBase {
                     transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1);
                 }
                 .chip:hover { border-color: var(--divider-color, ${T.surfaceHover}); }
+                /* (#1354) a question answered with a value or a choice */
+                .q-answer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+                .q-seg { display: inline-flex; border: 1px solid var(--divider-color, ${T.surfaceBorder}); border-radius: 8px; overflow: hidden; }
+                .q-seg-btn { padding: 4px 10px; font-size: 12px; cursor: pointer; opacity: 0.7; }
+                .q-seg-btn.on { background: ${accent}; color: #fff; opacity: 1; font-weight: 600; }
                 .chip-label {
                     font-size: 10px; color: var(--secondary-text-color, ${T.textSec});
                     font-weight: 500; letter-spacing: 0.3px; margin: 3px 0;

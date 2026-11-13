@@ -8,6 +8,10 @@
 import { html, nothing } from '../base/sem-next-base.js';
 import { providerName } from './forecast-evidence.js';
 import { zonesModel } from './next-devices.js';
+import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels, batterySaysFromStates } from './battery-questions.js';
+
+/** (#1354) The entity of a shared battery level by its id. */
+const LEVEL = Object.fromEntries(BATTERY_LEVELS.map((l) => [l.id, l.entity]));
 
 const AUTO_MODES = ['auto', 'self_consumption', 'allow_arbitrage'];
 const SPEND = 'sensor.sem_battery_spendable_kwh';
@@ -75,9 +79,10 @@ export function batteryBody(card, row) {
     ];
 
     // ── zones ──
-    const ids = { priority: 'number.sem_battery_priority_soc', buffer: 'number.sem_battery_buffer_soc',
-        auto: 'number.sem_battery_auto_start_soc', tonight: 'sensor.sem_battery_dynamic_floor_pct' };
-    const z = zonesModel({ soc, priority: num(ids.priority), buffer: num(ids.buffer), autoStart: num(ids.auto), floor: num(ids.tonight) });
+    // (#1354) the levels come from the shared battery model, as on the classic Battery tab
+    const ids = { priority: LEVEL.priority, buffer: LEVEL.buffer, auto: LEVEL.autostart, tonight: 'sensor.sem_battery_dynamic_floor_pct' };
+    const lv = batteryLevels(card._hass?.states);
+    const z = zonesModel({ soc, priority: lv.priority, buffer: lv.buffer, autoStart: lv.autostart, floor: num(ids.tonight) });
     // Two marks closer than 14 % would overprint: the second goes under the bar.
     let lastPct = -99, lastLo = false, anyLo = false;
     const marks = z.marks.map((m) => {
@@ -90,10 +95,14 @@ export function batteryBody(card, row) {
         ${z.cur === null ? nothing : html`<span class="cur" style="left:${z.cur}%"></span>`}</div>` : nothing;
     const v = (id, text) => card._val(text, () => card._moreInfo(id));
     const parts = [];
+    // what it does now and next, the same words as the classic Battery tab
+    const says = batterySaysFromStates(card._hass?.states);
+    parts.push(html`${tf(says.now.key, says.now.params)}${says.next ? html` ${tf(says.next.key, says.next.params)}` : nothing}`);
     if (card._has(ids.priority)) parts.push(card._sentence(t('next_bat_sent_fill'), { priority: v(ids.priority, Math.round(num(ids.priority)) + ' %') }));
-    const assistId = card._has('switch.sem_battery_may_assist_ev') ? 'switch.sem_battery_may_assist_ev' : null;
-    const maxId = card._has('number.sem_battery_assist_max_power') ? 'number.sem_battery_assist_max_power' : null;
-    const gateId = card._has('number.sem_battery_assist_min_surplus') ? 'number.sem_battery_assist_min_surplus' : null;
+    const Q = BATTERY_QUESTIONS;
+    const assistId = card._has(Q.may_assist.entity) ? Q.may_assist.entity : null;
+    const maxId = card._has(Q.assist_max.entity) ? Q.assist_max.entity : null;
+    const gateId = card._has(Q.solar_gate.entity) ? Q.solar_gate.entity : null;
     if (assistId || maxId || gateId) {
         const assistOn = assistId ? card._str(assistId) === 'on' : true;
         const assistVal = assistId ? card._val(assistOn ? t('next_on') : t('next_off'), () => card._toggleSwitch(assistId), { disabled: dis }) : html`${t('next_on')}`;
@@ -108,7 +117,6 @@ export function batteryBody(card, row) {
                 assist: assistVal })
             : card._sentence(t('next_bat_sent_no_assist'), { assist: assistVal }));
     }
-    if (card._has(ids.tonight)) parts.push(card._sentence(t('next_bat_sent_floor'), { floor: v(ids.tonight, Math.round(num(ids.tonight)) + ' %') }));
     const sentence = parts.length ? html`<p class="sent">${parts.map((p, i) => html`${i ? ' ' : ''}${p}`)}</p>` : nothing;
 
     // ── rows ──
@@ -127,7 +135,7 @@ export function batteryBody(card, row) {
             html`${subs.join(' · ')}${sa.phase === 'learning' ? html`${subs.length ? ' · ' : ''}${rebuild}` : ''}`));
     }
     const paceId = 'sensor.sem_battery_charge_pacing';
-    const paceSw = card._has('switch.sem_battery_charge_pacing_enabled') ? 'switch.sem_battery_charge_pacing_enabled' : null;
+    const paceSw = card._has(Q.pacing.entity) ? Q.pacing.entity : null;
     if (card._has(paceId) || paceSw) {
         const a = card._attrs(paceId);
         const code = a.reason_code || 'none';
@@ -142,7 +150,7 @@ export function batteryBody(card, row) {
         const sw = paceSw ? card._val(card._str(paceSw) === 'on' ? t('next_on') : t('next_off'), () => card._toggleSwitch(paceSw), { disabled: dis }) : '';
         rows.push(card._row('mdi:speedometer', t('charge_pacing'), value, html`${capText}${capText && sw ? ' · ' : ''}${sw}`));
     }
-    const sellSw = card._has('switch.sem_battery_may_export') ? 'switch.sem_battery_may_export' : null;
+    const sellSw = card._has(Q.may_export.entity) ? Q.may_export.entity : null;
     const st = sa.battery_sell_state && sa.battery_sell_state !== 'none' ? sa.battery_sell_state : '';
     if (sellSw || st) {
         const until = sa.battery_sell_until ? card._hhmm(sa.battery_sell_until) : '';
@@ -168,7 +176,7 @@ export function batteryBody(card, row) {
         }).filter(Boolean);
         rows.push(card._row('mdi:swap-vertical', bats.map((_, i) => tf('next_battery_n', { n: i + 1 })).join(' · '),
             html`${vals.map((x, i) => html`${i ? ' · ' : ''}${x}`)}`,
-            reserves.length ? html`${t('next_reserve')} ${reserves.map((x, i) => html`${i ? ' · ' : ''}${x}`)}` : ''));
+            reserves.length ? html`${t(Q.reserve.key)} ${reserves.map((x, i) => html`${i ? ' · ' : ''}${x}`)}` : ''));
     }
     const src = card._str('sensor.sem_forecast_source');
     const d1 = card._has('sensor.sem_forecast_trust_d1') ? num('sensor.sem_forecast_trust_d1') : (Number.isFinite(Number(sa.forecast_trust_d1)) ? Number(sa.forecast_trust_d1) * 100 : null);

@@ -12,7 +12,7 @@ import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
 import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey } from './next-devices.js';
 import { plainReason } from './why-rows.js';
-import { loadRunsBySem } from './next-applies.js';
+import { loadRunsBySem } from './settings-applies.js';
 import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, BUY_LABEL } from './heater-questions.js';
 
 const MODES = [

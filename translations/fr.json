@@ -238,7 +238,7 @@
           "update_interval": "Fréquence à laquelle le coordinateur lit les capteurs et ajuste le matériel. 10 s donne l'intégration d'énergie la plus précise ; au-delà de 30 s, l'énergie sera sous-comptée. Plage 10–60 s.",
           "battery_priority_soc": "Limite Zone 1 → Zone 2. En dessous de ce SOC, tout le solaire va à la batterie et le VE est bloqué. Par défaut 30 %. La stratégie à quatre zones (documentation Architecture) nécessite une valeur BASSE (5–60 %) — à ne PAS confondre avec l'ancienne logique à 3 zones où il s'agissait d'une cible élevée.",
           "battery_buffer_soc": "Limite Zone 2 → Zone 3. Au-dessus de ce SOC, la batterie peut se décharger pour compenser les déficits solaires pendant la charge du VE. Par défaut 70 %.",
-          "battery_auto_start_soc": "Limite Zone 3 → Zone 4. Au-dessus de ce SOC, le VE peut démarrer la charge même sans surplus solaire, en puisant dans la batterie. Par défaut 90 %.",
+          "battery_auto_start_soc": "Limite Zone 3 → Zone 4. À partir de ce SOC, la batterie peut aider pleinement la voiture, toujours seulement avec assez de surplus solaire. Par défaut 90 %.",
           "min_solar_power": "Plancher de production PV brute — la puissance des panneaux en dessous de laquelle « le solaire est actif » est faux : solar_only ne démarre pas et la protection contre le déficit profond traite cela comme l'obscurité (la charge s'arrête donc rapidement au lieu de compenser sur le réseau). Il s'agit de la production BRUTE, PAS du surplus — à distinguer de « Assistance batterie – surplus solaire min. » (solaire − maison), qui détermine quand la batterie domestique peut aider. Par défaut 1000 W ; gardez-le sous le minimum matériel du chargeur VE (~4140 W en triphasé, ~1380 W en monophasé).",
           "daily_ev_target": "SEM complète depuis le réseau la nuit pour que la voiture ait au moins cela au matin. C'est un plancher, pas une limite — le soleil peut ajouter plus. 0 = ne jamais utiliser le réseau.",
           "battery_assist_max_power": "Puissance maximale que la batterie domestique peut décharger pour assister le VE en Zone 3/4. Par défaut 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Charge réseau forcée Deye",
-        "description": "Raccorder un onduleur hybride Deye pour la charge réseau planifiée. Le mode observateur est activé et l'actionnement désactivé par défaut : rien n'est écrit sur l'onduleur tant que vous ne l'autorisez pas explicitement.",
+        "description": "Raccorder un onduleur hybride Deye pour la charge réseau planifiée. L'essai à blanc est activé et l'actionnement désactivé par défaut : rien n'est écrit sur l'onduleur tant que vous ne l'autorisez pas explicitement.",
         "data": {
           "deye_grid_charge_switch": "Interrupteur de charge réseau (entité)",
           "deye_charge_current_entity": "Entité number de courant de charge (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Courant de charge max. BMS (A)",
           "deye_max_discharge_power": "Puissance de décharge max. (W)",
           "deye_program_control": "Piloter les créneaux du programme",
-          "deye_observer_mode": "Mode observateur (lecture seule)",
+          "deye_observer_mode": "Essai à blanc Deye (journal uniquement)",
           "deye_actuation_enabled": "Activer l'actionnement (écriture sur l'onduleur)",
           "deye_work_mode_control": "Piloter le mode de fonctionnement",
           "deye_work_mode_entity": "Entité select du mode de fonctionnement",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Plafond optionnel imposé par le BMS. 0 = aucune limite BMS ; le maximum de l'onduleur s'applique.",
           "deye_observer_mode": "Si activé, SEM calcule et journalise ses actions Deye mais n'écrit jamais sur l'onduleur.",
-          "deye_actuation_enabled": "Si désactivé, SEM n'écrit jamais sur l'onduleur, même si le mode observateur est aussi désactivé. Les deux autorisations doivent être données avant tout envoi de commande.",
+          "deye_actuation_enabled": "Si désactivé, SEM n'écrit jamais sur l'onduleur, même si l'essai à blanc est aussi désactivé. Les deux autorisations doivent être données avant tout envoi de commande.",
           "deye_max_charge_current_a": "Limite haute de sécurité que SEM commandera sur l'entité de courant de charge."
         }
       },

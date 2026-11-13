@@ -238,7 +238,7 @@
           "update_interval": "Ogni quanto il coordinatore legge i sensori e regola l'hardware. 10 s garantisce l'integrazione energetica più accurata; valori superiori a 30 s sottostimano l'energia. Intervallo 10–60 s.",
           "battery_priority_soc": "Confine Zona 1 → Zona 2. Sotto questo SOC tutto il solare va alla batteria e il VE è bloccato. Predefinito 30 %. La strategia a quattro zone (documentazione Architecture) richiede un valore BASSO (5–60 %) — da NON confondere con il vecchio significato a 3 zone in cui questo era un obiettivo elevato.",
           "battery_buffer_soc": "Confine Zona 2 → Zona 3. Sopra questo SOC la batteria può scaricarsi per compensare i deficit solari mentre carica il VE. Predefinito 70 %.",
-          "battery_auto_start_soc": "Confine Zona 3 → Zona 4. Sopra questo SOC il VE può iniziare a caricare anche senza eccedenza solare, prelevando dalla batteria. Predefinito 90 %.",
+          "battery_auto_start_soc": "Confine Zona 3 → Zona 4. Da questo SOC la batteria può aiutare pienamente l'auto, sempre solo con abbastanza surplus solare. Predefinito 90 %.",
           "min_solar_power": "Soglia di produzione FV grezza — la potenza dei pannelli sotto la quale «il solare è attivo» è falso: solar_only non si avvia e la protezione da deficit profondo la tratta come oscurità (la carica si arresta quindi rapidamente invece di compensare dalla rete). Questa è produzione GREZZA, NON surplus — a differenza di «Assistenza batteria – surplus solare min.» (solare − casa), che decide quando la batteria domestica può aiutare. Predefinito 1000 W; mantenerlo sotto il minimo hardware del caricatore EV (~4140 W trifase, ~1380 W monofase).",
           "daily_ev_target": "SEM ricarica dalla rete di notte perché l'auto abbia almeno questo al mattino. È un minimo, non un limite — il sole può aggiungere altro. 0 = non usare mai la rete.",
           "battery_assist_max_power": "Potenza massima che la batteria domestica può scaricare per assistere il VE nelle Zone 3/4. Predefinito 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Carica di rete forzata Deye",
-        "description": "Collega un inverter ibrido Deye per la carica di rete pianificata. La modalità osservatore è attiva e l'attuazione disattivata per impostazione predefinita, quindi non viene scritto nulla sull'inverter finché non lo abiliti esplicitamente.",
+        "description": "Collega un inverter ibrido Deye per la carica di rete pianificata. La prova a vuoto è attiva e l'attuazione disattivata per impostazione predefinita, quindi non viene scritto nulla sull'inverter finché non lo abiliti esplicitamente.",
         "data": {
           "deye_grid_charge_switch": "Interruttore carica di rete (entità)",
           "deye_charge_current_entity": "Entità number corrente di carica (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Corrente di carica max BMS (A)",
           "deye_max_discharge_power": "Potenza di scarica max (W)",
           "deye_program_control": "Controlla le fasce orarie del programma",
-          "deye_observer_mode": "Modalità osservatore (sola lettura)",
+          "deye_observer_mode": "Prova a vuoto Deye (solo log)",
           "deye_actuation_enabled": "Abilita attuazione (scrittura sull'inverter)",
           "deye_work_mode_control": "Controlla la modalità di lavoro",
           "deye_work_mode_entity": "Entità select della modalità di lavoro",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Limite opzionale imposto dal BMS. 0 = nessun limite BMS; vale il massimo dell'inverter.",
           "deye_observer_mode": "Se attivo, SEM calcola e registra le sue azioni Deye ma non scrive mai sull'inverter.",
-          "deye_actuation_enabled": "Se disattivato, SEM non scrive mai sull'inverter, anche se la modalità osservatore è pure disattivata. Entrambi i gate devono consentire prima di inviare un comando.",
+          "deye_actuation_enabled": "Se disattivato, SEM non scrive mai sull'inverter, anche se la prova a vuoto è pure disattivata. Entrambi i gate devono consentire prima di inviare un comando.",
           "deye_max_charge_current_a": "Limite superiore sicuro che SEM imposterà sull'entità di corrente di carica."
         }
       },

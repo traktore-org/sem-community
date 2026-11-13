@@ -238,7 +238,7 @@
           "update_interval": "协调器读取传感器和调整硬件的频率。10 秒可提供最准确的电量统计；超过 30 秒的值会导致电量少计。范围：10–60 秒。",
           "battery_priority_soc": "区域 1 → 区域 2 的边界。低于此电量 (SOC) 时，所有太阳能都将优先供给蓄电池，且电动汽车充电将被锁定。默认值为 30%。四区域策略（见架构文档）需要将此值设为低位 (5–60%) —— 请勿与旧版 3 区域含义混淆（旧版中此值是一个高目标值）。",
           "battery_buffer_soc": "区域 2 → 区域 3 的边界。高于此电量 (SOC) 时，蓄电池可以放电以弥补太阳能不足，从而为电动汽车充电。默认值为 70%。",
-          "battery_auto_start_soc": "区域 3 → 区域 4 的边界。高于此电量 (SOC) 时，即使没有太阳能富余，电动汽车也可以开始充电，电能直接从蓄电池中抽取。默认值为 90%。",
+          "battery_auto_start_soc": "区域 3 → 区域 4 的边界。从此电量 (SOC) 起，电池可全力协助汽车，但仍需有足够的富余光伏。默认值为 90%。",
           "min_solar_power": "原始光伏发电底线 —— 低于该面板输出功率时，“太阳能可用”状态将转为 false：仅太阳能充电模式不会启动，且深度亏电保护会将其视作黑夜（因此充电会迅速停止，而不会转由电网支撑）。注意这是原始发电量，而不是富余量 —— 区别于“蓄电池辅助最低太阳能富余量”（光伏减去家庭用电），后者决定了家用蓄电池何时可以介入协助。默认值为 1000 W；请保持在电动汽车充电桩的硬件最低功率以下（三相约为 4140 W，单相约为 1380 W）。",
           "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
           "battery_assist_max_power": "在区域 3/4 中，家用蓄电池可以放电协助电动汽车充电的最大功率。默认值为 4500 W。",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye 强制电网充电",
-        "description": "接入 Deye 混合逆变器以进行计划电网充电。默认开启观察者模式、关闭执行，因此在你明确启用之前不会向逆变器写入任何指令。",
+        "description": "接入 Deye 混合逆变器以进行计划电网充电。默认开启演练、关闭执行，因此在你明确启用之前不会向逆变器写入任何指令。",
         "data": {
           "deye_grid_charge_switch": "电网充电开关实体",
           "deye_charge_current_entity": "充电电流 number 实体 (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS 最大充电电流 (A)",
           "deye_max_discharge_power": "最大放电功率 (W)",
           "deye_program_control": "控制程序时段",
-          "deye_observer_mode": "观察者模式（只读）",
+          "deye_observer_mode": "Deye 演练（仅记录）",
           "deye_actuation_enabled": "启用执行（写入逆变器）",
           "deye_work_mode_control": "控制工作模式",
           "deye_work_mode_entity": "工作模式 select 实体",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "可选的 BMS 上限。0 表示无 BMS 限制——采用逆变器自身的最大值。",
           "deye_observer_mode": "开启时，SEM 会计算并记录其 Deye 操作，但绝不写入逆变器。",
-          "deye_actuation_enabled": "关闭时，即使观察者模式也关闭，SEM 也绝不写入逆变器。发送任何指令前，两道闸门都必须放行。",
+          "deye_actuation_enabled": "关闭时，即使演练也关闭，SEM 也绝不写入逆变器。发送任何指令前，两道闸门都必须放行。",
           "deye_max_charge_current_a": "SEM 在充电电流实体上下达的安全上限。"
         }
       },

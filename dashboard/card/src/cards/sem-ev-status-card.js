@@ -20,6 +20,8 @@ import { readNumber } from '../util/missing-value.js';
 import {
     sessionMonth, shiftMonth, rowsForMonth, monthTotals, sessionRowView,
 } from '../util/sessions.js';
+import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, chargerSays } from '../util/charger-questions.js';
+import { plainReason } from '../util/why-rows.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -993,8 +995,8 @@ class SEMEVStatusCard extends SEMLitBase {
         return html`
             <div class="range-wrap">
                 <div class="range-labels">
-                    <span>${this._t('at_least')} <b style="color:#8DC892">${fmt(minVal)}${unit}</b></span>
-                    <span>${this._t('up_to')} <b style="color:#ff9800">${atFull ? this._t('full') : fmt(maxVal) + unit}</b></span>
+                    <span>${this._t(CHARGER_TEXT.atLeast)} <b style="color:#8DC892">${fmt(minVal)}${unit}</b></span>
+                    <span>${this._t(CHARGER_TEXT.upTo)} <b style="color:#ff9800">${atFull ? this._t('full') : fmt(maxVal) + unit}</b></span>
                 </div>
                 <div class="range-track">
                     <div class="range-fill" style="left:${minPct}%;width:${Math.max(0, maxPct - minPct)}%"></div>
@@ -1063,6 +1065,15 @@ class SEMEVStatusCard extends SEMLitBase {
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
         window.addEventListener('pointercancel', onUp);  // mobile scroll-interrupt cleanup
+    }
+
+    /** (#1354) Why the charger does what it does, the same words as the new
+     *  dashboard. The engine publishes one reason for the fleet, so it shows
+     *  only when SEM runs one charger. */
+    _chargerWhy() {
+        if ((this._chargers || []).length !== 1) return nothing;
+        const said = chargerSays(this._hass?.states, (k) => this._t(k), plainReason);
+        return said && said.text ? html`<div class="charger-why">${said.text}</div>` : nothing;
     }
 
     _renderChargerSection(id, idx) {
@@ -1200,10 +1211,7 @@ class SEMEVStatusCard extends SEMLitBase {
         const pauseLeftLabel = pauseRemainingMin >= 60
             ? `${Math.floor(pauseRemainingMin / 60)} h ${pauseRemainingMin % 60} min`
             : `${pauseRemainingMin} min`;
-        const chargeModeOptions = chargeModeAttrs.options || [
-            'solar_only', 'solar_plus_battery', 'solar_plus_cheap',
-            'min_plus_solar', 'always_max', 'off',
-        ];
+        const chargeModeOptions = chargeModeAttrs.options || CHARGE_MODES;
         // (#885 matrix, decision 3) One rule, two severities. A mode that
         // CANNOT function without its prerequisite is DISABLED with the
         // reason (solar_plus_cheap without a dynamic tariff has no cheap
@@ -1222,14 +1230,8 @@ class SEMEVStatusCard extends SEMLitBase {
         const learnerInfo = (this._t('charge_mode_battery_learning_info') || '')
             .replace(/\{n\}/g, spendableAttrs.nights_sealed ?? '?')
             .replace(/\{total\}/g, spendableAttrs.nights_required ?? '?');
-        const chargeModeLabels = {
-            solar_only:       this._t('charge_mode_solar_only'),
-            solar_plus_battery: this._t('charge_mode_solar_plus_battery'),
-            solar_plus_cheap: this._t('charge_mode_solar_plus_cheap'),
-            min_plus_solar:   this._t('charge_mode_min_plus_solar'),
-            always_max:       this._t('charge_mode_always_max'),
-            off:              this._t('charge_mode_off'),
-        };
+        const chargeModeLabels = Object.fromEntries(
+            CHARGE_MODES.map((m) => [m, this._t(chargeModeKey(m))]));
         // Mode hints (#charge-mode-detail) — three structured rows
         // (Surplus / Overnight / House battery) per mode. The battery
         // row substitutes {buffer} and {priority} with the user's
@@ -1452,6 +1454,7 @@ class SEMEVStatusCard extends SEMLitBase {
                     <span class="charger-name">${name}</span>
                     <span class="charger-status" style="color:${isCharging ? color : ''}">${statusText}${all && commandedAmps > 0 ? html` <span class="charger-set">(${Math.round(commandedAmps)}&nbsp;A)</span>` : nothing}</span>
                 </div>
+                ${this._chargerWhy()}
 
                 <div class="charger-body">
                     <div class="charger-soc" title="${socIsEstimate ? this._t('soc_estimated_hint') : ''}">
@@ -1487,7 +1490,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 <div class="charge-target-group">
                     <div class="ct-title">
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
-                        ${this._t('charge_target')}
+                        ${this._t(CHARGER_TEXT.target)}
                         ${chargeKm != null && chargeKm > 0 ? html`<span class="ct-range">· +${chargeKm} km</span>` : nothing}
                         <span class="ct-spacer"></span>
                         ${unitControl}
@@ -1562,7 +1565,7 @@ class SEMEVStatusCard extends SEMLitBase {
                     ` : nothing)}
                     <div class="ct-row clickable charge-by-row"
                         @click=${() => moreInfo(targetTimeId)}>
-                        <span class="ct-label">${this._t('ev_charge_by')}</span>
+                        <span class="ct-label">${this._t(CHARGER_TEXT.departure)}</span>
                         <span class="ct-ctl ct-time">
                             <ha-icon icon="mdi:clock-end" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
                             ${targetTimeLabel}
@@ -1991,6 +1994,9 @@ class SEMEVStatusCard extends SEMLitBase {
                 border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
                 border-radius: 12px;
                 padding: 12px 14px;
+            }
+            .charger-why {
+                font-size: 12.5px; opacity: .75; margin: -4px 0 10px;
             }
             .charger-header {
                 display: flex; align-items: center; gap: 8px;

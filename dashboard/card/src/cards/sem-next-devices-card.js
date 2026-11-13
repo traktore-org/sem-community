@@ -17,6 +17,7 @@
  */
 
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { moveToIndex, computeDropIndex } from '../util/drag-reorder.js';
@@ -680,12 +681,20 @@ class SEMNextDevicesCard extends SEMNextBase {
         const parts = {};
         const sent = [];
         if (peakE) {
-            parts.limit = this._inline('peak', uncapped ? t('uncapped') : this._kw(limitW), () => this._numEdit('peak', {
-                value: limit, min: 1, max: 80, step: 0.5, unit: 'kW',
-                onCommit: (v) => this._svc('update_target_peak', { target_peak_limit: v, peak_limit_unlimited: false }) }));
-            parts.unlimited = this._val(uncapped ? t('next_unlimited_on') : t('next_unlimited_off'),
-                () => this._svc('update_target_peak', { target_peak_limit: limit ?? 1, peak_limit_unlimited: !uncapped }), { disabled: dis || limit === null });
-            sent.push(this._sentence(t('next_sent_limit'), parts));
+            // (#1354) the peak limit is ONE question, the same model as the classic card
+            const q = peakQuestion({ unlimited: uncapped, limitKw: limit });
+            const send = (limited, kw) => {
+                const w = peakWrites(limited, kw);
+                this._svc('update_target_peak', { target_peak_limit: w.target_peak_limit ?? q.kw, peak_limit_unlimited: w.peak_limit_unlimited });
+            };
+            // a limit that is not read shows no number (no fallback in its place)
+            parts.limit = this._inline('peak', limit === null ? '—' : this._kw(q.kw * 1000), () => this._numEdit('peak', {
+                value: q.kw, min: PEAK_KW.min, max: PEAK_KW.max, step: PEAK_KW.slider, unit: 'kW',
+                onCommit: (v) => send(true, v) }));
+            parts.answer = this._val(t(q.limited ? PEAK_TEXT.limit : PEAK_TEXT.none),
+                () => send(!q.limited, q.kw), { disabled: dis || limit === null });
+            sent.push(this._sentence(q.limited ? t(PEAK_TEXT.label) + ' {limit} · {answer}.' : '{answer}.', parts));
+            sent.push(t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone));
             const slot = uncapped ? null : slotStatus({ targetKw: limit, usedKwh: peakE.attributes?.peak_slot_used_kwh, allowedW: peakE.attributes?.peak_slot_allowed_w });
             if (slot) sent.push(this._tf('next_sent_slot', { used: slot.usedKwh.toFixed(2), budget: slot.budgetKwh.toFixed(2) }));
         }

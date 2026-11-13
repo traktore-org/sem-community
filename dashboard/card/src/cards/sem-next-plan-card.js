@@ -12,6 +12,8 @@
  */
 
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { planIdName } from '../util/plan-ids.js';
+import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, kwhOf, coldHeaters } from '../util/next-lead.js';
 
@@ -234,6 +236,7 @@ class SEMNextPlanCard extends SEMNextBase {
             nightStart: this._str('sensor.sem_night_start_time'), nightEnd: this._str('sensor.sem_night_end_time'),
             forecastTomorrowKwh: this._num('sensor.sem_forecast_tomorrow_kwh'),
             forecastTodayKwh: this._num('sensor.sem_forecast_today_kwh'),
+            noteText: (d) => planNoteText(d, (k) => this._t(k)),
         });
     }
 
@@ -287,7 +290,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const key = 'energy_plan_why_' + code;
         const said = this._t(key);
         // (#1354) never a bare engine code on screen
-        return said && said !== key ? said : (n?.note || '');
+        return said && said !== key ? said : (planNoteText(n, (k) => this._t(k)) || '');
     }
 
     /** (#1321) The planner's own why for the tapped block, in words; '' when none. */
@@ -321,7 +324,7 @@ class SEMNextPlanCard extends SEMNextBase {
         if (kind === 'grid') return this._t('next_reason_house_grid');
         const demands = Array.isArray(plan.demands) ? plan.demands : [];
         const d = demands.find((x) => x.id === fb.row.key);
-        if (d?.note) return String(d.note);
+        if (d?.note || d?.notes) return planNoteText(d, (k) => this._t(k)) || '';
         if (d?.status) return this._t('next_status_' + d.status);
         return this._tf(kind === 'ev' ? 'next_reason_ev_block' : 'next_reason_load_block', { kw, status: '', note: '' }).replace(/\s+/g, ' ').trim();
     }
@@ -336,7 +339,9 @@ class SEMNextPlanCard extends SEMNextBase {
             isDynamic: tar.is_dynamic, level: tar.price_level || this._str('sensor.sem_tariff_price_level'), todayAvg: tar.today_avg });
         const rows = planRows({ win, nowMs: now, plan, names: {
             charger: (cid) => (this._chargers.includes(cid) ? this._chargerName(cid) : ''),
-            load: (id) => this._devices()[id]?.name || id,
+            load: (id) => this._devices()[id]?.name,
+            battery: () => this._t('next_src_battery'),
+            label: (pid) => [...(plan.demands || []), ...(plan.not_scheduled || [])].find((x) => x && x.id === pid)?.label,
         } });
         this._lastRows = rows;
         return { tz, now, win, sun, price, rows };
@@ -607,7 +612,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const d = demands.find((x) => x.id === id);
         const ns = notSched.find((x) => x.id === id);
         const bits = [];
-        if (d?.note) bits.push(String(d.note));
+        if (d?.note || d?.notes) bits.push(planNoteText(d, (k) => this._t(k)) || '');
         else if (d?.status) bits.push(t('next_status_' + d.status));
         else if (ns) bits.push(this._whyText(ns));
         else if (!win) bits.push(t('next_nothing_planned'));
@@ -650,7 +655,7 @@ class SEMNextPlanCard extends SEMNextBase {
         if (first && last) parts.push(`${t('next_to_house')} ${this._hhmm(first.start)} – ${this._hhmm(last.end)}`);
         const d = demands.find((x) => String(x.id).startsWith('battery'));
         const arb = plan.arbitrage;
-        const sub = d?.note ? String(d.note) : (this._whyCodes(plan) || (arb && arb.enabled && arb.reason ? String(arb.reason) : ''));
+        const sub = d?.note || d?.notes ? (planNoteText(d, (k) => this._t(k)) || '') : (this._whyCodes(plan) || (arb && arb.enabled && arb.reason ? String(arb.reason) : ''));
         const mode = this._str('select.sem_battery_mode');
         const options = this._attrs('select.sem_battery_mode').options || [];
         const btns = [];
@@ -671,11 +676,11 @@ class SEMNextPlanCard extends SEMNextBase {
         const key = id.replace(/^(load|comfort):/, '');
         const d = demands.find((x) => x.id === id);
         const ns = notSched.find((x) => x.id === id);
-        const name = (this._devices()[key]?.name || d?.label || ns?.label || key) + (keepRun ? this._toKeep(key) : '');
+        const name = planIdName(id, { load: (k) => this._devices()[k]?.name, label: () => d?.label || ns?.label }) + (keepRun ? this._toKeep(key) : '');
         const win = this._windowOf(blocks, id);
         const kwh = win ? kwhOf(blocks, (x) => x === id) : Number(d?.planned_kwh) || 0;
         const bits = [];
-        if (d?.note) bits.push(String(d.note));
+        if (d?.note || d?.notes) bits.push(planNoteText(d, (k) => this._t(k)) || '');
         else if (d?.status) bits.push(t('next_status_' + d.status));
         else if (ns) bits.push(this._whyText(ns));
         const ov = this._overrideOf(key);

@@ -264,7 +264,7 @@ test('the card renders every device with its body, the surplus section and the l
     assert.match(out, /next_surplus_peak/);
     assert.match(out, /operator_limit_banner/);
     for (const k of ['next_st_charging_a', 'next_st_on', 'next_st_waiting_for', 'next_st_to_house',
-        'charge_mode_hint_solar_plus_cheap_surplus', 'next_departures', 'next_set_once', 'next_lifetime',
+        'charge_mode_hint_solar_plus_cheap_surplus', 'ev_charge_by', 'next_set_once', 'next_lifetime',
         'load_mode_help_sem', 'next_legionella', 'next_sg_ready', 'battery_mode_hint_auto', 'next_bat_sent_fill',
         'planning_phase_holding', 'charge_pacing', 'next_sell_window', 'next_battery_n', 'next_evidence', 'health']) {
         assert.match(out, new RegExp(k), k);
@@ -323,7 +323,7 @@ test('a missing entity leaves its row out', () => {
     for (const id of Object.keys(st)) if (/battery_charge_pacing|may_export|forecast_|battery_health|cycles|temperature|measured_capacity|drift|legionella/.test(id)) delete st[id];
     delete st['sensor.sem_target_peak_limit'];
     const out = text(makeCard(st).render());
-    for (const k of ['charge_pacing', 'next_sell_window', 'next_evidence', '>health<', 'next_legionella', 'next_sent_limit', 'next_peak']) {
+    for (const k of ['charge_pacing', 'next_sell_window', 'next_evidence', '>health<', 'next_legionella', 'peak_q_label', 'next_peak']) {
         assert.doesNotMatch(out, new RegExp(k), k);
     }
     assert.match(out, /next_surplus/);
@@ -659,4 +659,42 @@ test('the battery texts say the car is helped from the buffer, fully from auto-s
     }
     assert.doesNotMatch(tr.en.next_batt_zones, /house/);
     assert.match(tr.en.next_batt_zones, /car/);
+});
+
+// (#1354) The battery row starts open and says what it does now and next,
+// then asks its levels — the levels are asked here only.
+test('the battery row is open on first view and asks its levels from the shared model', () => {
+    const st = states();
+    const el = makeCard(st);
+    const out = text(el.render());
+    const at = out.indexOf('data-id=battery');
+    assert.ok(at >= 0, 'a battery row');
+    const row = out.slice(at);
+    assert.ok(!out.includes('class="card dev folded" data-id=battery'), 'open on first view');
+    assert.match(row, /bq_says_(giving|charging|resting)/);
+    assert.match(row, /next_bat_sent_fill/);
+    // one tap on the name folds it, a second opens it again
+    el._toggleOpen({ id: 'battery', type: 'battery' });
+    assert.ok(text(el.render()).includes('class="card dev folded" data-id=battery'), 'one tap folds it');
+    el._toggleOpen({ id: 'battery', type: 'battery' });
+    assert.match(text(el.render()), /bq_says_/);
+});
+
+// (#1354) A plan id is never printed as is: the Now card names a heater's
+// Keep at run after the device.
+test('the next block is named after the device, not by its plan id', async () => {
+    await import('../src/cards/sem-next-now-card.js');
+    const st = states();
+    const soon = new Date(Date.now() + 3 * 3600e3).toISOString(), later = new Date(Date.now() + 4 * 3600e3).toISOString();
+    st['sensor.sem_energy_plan'] = S('ok', { blocks: [{ id: 'comfort:hot_water', start: soon, end: later, power_w: 1900 }],
+        demands: [{ id: 'comfort:hot_water', note: 'placed in hours with no price yet — cost unknown', notes: [{ code: 'cost_unknown', params: {} }] }] });
+    st['sensor.sem_controllable_devices_count'] = S(1, { devices: { hot_water: { name: 'Sim Boiler', control_mode: 'surplus', priority: 1 } } });
+    const el = new (customElements.get('sem-next-now-card'))();
+    el.setConfig({ type: 'custom:sem-next-now-card' });
+    el.hass = { states: st, language: 'en', config: { currency: 'CHF', unit_system: { temperature: '°C' }, time_zone: 'UTC' }, callService: async () => {}, callWS: async () => ({}) };
+    el._all = true;
+    const out = text(el.render());
+    assert.doesNotMatch(out, /comfort:hot_water|load:hot_water/);
+    assert.equal(el._nextBlock().who, 'Sim Boiler');
+    assert.equal(el._whoName('comfort:unknown_heater'), 'Unknown heater');
 });

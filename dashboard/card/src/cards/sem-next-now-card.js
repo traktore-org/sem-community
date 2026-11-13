@@ -13,13 +13,15 @@
  */
 
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { planIdName } from '../util/plan-ids.js';
+import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { nowLead } from '../util/next-lead.js';
 import { powerBar } from '../util/next-power-bar.js';
 import { todayRows } from '../util/next-today-rows.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
-import { strategyWords } from '../util/next-strategy-reason.js';
+import { chargerSays } from '../util/charger-questions.js';
 import { plainReason } from '../util/why-rows.js';
 import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
@@ -231,11 +233,14 @@ class SEMNextNowCard extends SEMNextBase {
 
     /** A plan id as a name: the charger's, the battery's, or the load's. */
     _whoName(id) {
-        if (id.startsWith('ev:')) return this._chargerName(id.slice(3));
-        if (id.startsWith('battery')) return this._t('next_src_battery');
-        const lid = id.replace(/^load:/, '');
-        const dev = this._devices().find((d) => d.id === lid);
-        return dev?.name || lid;
+        // (#1354) one reader for every card: never the raw id ("comfort:hot_water")
+        const demands = this._attrs('sensor.sem_energy_plan').demands || [];
+        return planIdName(id, {
+            charger: (cid) => this._chargerName(cid),
+            load: (key) => this._devices().find((d) => d.id === key)?.name,
+            battery: () => this._t('next_src_battery'),
+            label: (pid) => demands.find((x) => x && x.id === pid)?.label,
+        });
     }
 
     /** Every entry of the devices map as [{id, ...}]. */
@@ -483,10 +488,10 @@ class SEMNextNowCard extends SEMNextBase {
 
     _why() {
         const rows = [];
-        const strat = this._hass?.states['sensor.sem_charging_strategy'];
-        if (strat && strat.state && strat.state !== 'unavailable' && strat.state !== 'unknown') {
-            // (#1354) the user's words only: never the engine's raw text
-            const { title, text } = strategyWords(strat, (k) => this._t(k), plainReason);
+        // (#1354) the user's words only, from the shared charger model
+        const said = chargerSays(this._hass?.states, (k) => this._t(k), plainReason);
+        if (said) {
+            const { title, text } = said;
             const evW = this._powerW('sensor.sem_ev_power');
             rows.push(this._row('mdi:car-electric', title, evW === null ? '' : this._kw(evW), text, { color: C.ev }));
         }
@@ -524,10 +529,12 @@ class SEMNextNowCard extends SEMNextBase {
                 const parent = this._devices().find((x) => x.id === String(d.blocked_by));
                 rows.push(this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), '', this._tf('next_waits_for', { name: parent?.name || String(d.blocked_by) }), { color: C.home }));
             } else {
-                const b = this._nextBlock((id) => id === `load:${d.id}`);
+                // a load's run time and a heater's Keep at run both count
+                const b = this._nextBlock((id) => id === `load:${d.id}` || id === `comfort:${d.id}`);
                 if (b) {
-                    const demand = (this._attrs('sensor.sem_energy_plan').demands || []).find((x) => x && x.id === `load:${d.id}`);
-                    rows.push(this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), b.time, demand?.note ? String(demand.note) : '', { color: C.home }));
+                    const demand = (this._attrs('sensor.sem_energy_plan').demands || []).find((x) => x && x.id === b.id);
+                    rows.push(this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), b.time,
+                        demand ? (planNoteText(demand, (k) => this._t(k)) || '') : '', { color: C.home }));
                 }
             }
         }

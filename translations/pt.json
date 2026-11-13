@@ -238,7 +238,7 @@
           "update_interval": "Com que frequência o coordenador lê os sensores e ajusta o hardware. 10 s dá a integração de energia mais exata; valores acima de 30 s contabilizam energia a menos. Intervalo de 10–60 s.",
           "battery_priority_soc": "Fronteira zona 1 → zona 2. Abaixo deste SOC, todo o solar vai para a bateria e o VE fica bloqueado. Predefinição 30 %. A estratégia de quatro zonas (documentação de Arquitetura) exige um valor BAIXO (5–60 %) — não confundir com o antigo significado de 3 zonas, em que este era um alvo elevado.",
           "battery_buffer_soc": "Fronteira zona 2 → zona 3. Acima deste SOC, a bateria pode descarregar para compensar défices solares enquanto carrega o VE. Predefinição 70 %.",
-          "battery_auto_start_soc": "Fronteira zona 3 → zona 4. Acima deste SOC, o VE pode começar a carregar mesmo sem excedente solar, consumindo da bateria. Predefinição 90 %.",
+          "battery_auto_start_soc": "Fronteira zona 3 → zona 4. A partir deste SOC a bateria pode ajudar totalmente o carro, sempre só com excedente solar suficiente. Predefinido 90 %.",
           "min_solar_power": "Limite de produção FV bruta — a potência dos painéis abaixo da qual «o solar está ativo» é falso: solar_only não inicia e a proteção de défice profundo trata-o como escuridão (o carregamento para rapidamente em vez de compensar pela rede). Isto é produção BRUTA, NÃO excedente — ao contrário de «Assistência bateria – excedente solar mín.» (solar − casa), que decide quando a bateria doméstica pode ajudar. Predefinição 1000 W; mantenha-o abaixo do mínimo de hardware do carregador VE (~4140 W trifásico, ~1380 W monofásico).",
           "daily_ev_target": "O SEM carrega da rede durante a noite para o carro ter pelo menos isto de manhã. É um mínimo, não um limite — o sol pode acrescentar mais. 0 = nunca usar a rede.",
           "battery_assist_max_power": "Potência máxima que a bateria doméstica pode descarregar para ajudar o VE nas zonas 3/4. Predefinição 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Carga de rede forçada Deye",
-        "description": "Ligue um inversor híbrido Deye para carregamento de rede agendado. O modo observador está ligado e a atuação desligada por predefinição, pelo que nada é escrito no inversor até o ativar explicitamente.",
+        "description": "Ligue um inversor híbrido Deye para carregamento de rede agendado. O ensaio está ligado e a atuação desligada por predefinição, pelo que nada é escrito no inversor até o ativar explicitamente.",
         "data": {
           "deye_grid_charge_switch": "Interruptor de carga de rede (entidade)",
           "deye_charge_current_entity": "Entidade number de corrente de carga (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Corrente de carga máx. do BMS (A)",
           "deye_max_discharge_power": "Potência de descarga máx. (W)",
           "deye_program_control": "Controlar as faixas horárias do programa",
-          "deye_observer_mode": "Modo observador (só leitura)",
+          "deye_observer_mode": "Ensaio Deye (apenas registo)",
           "deye_actuation_enabled": "Ativar atuação (escrever no inversor)",
           "deye_work_mode_control": "Controlar o modo de trabalho",
           "deye_work_mode_entity": "Entidade select do modo de trabalho",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Limite opcional imposto pelo BMS. 0 significa sem limite do BMS — aplica-se o máximo do inversor.",
           "deye_observer_mode": "Quando ligado, o SEM calcula e regista as suas ações Deye mas nunca escreve no inversor.",
-          "deye_actuation_enabled": "Quando desligado, o SEM nunca escreve no inversor, mesmo que o modo observador também esteja desligado. Ambas as barreiras têm de permitir antes de qualquer comando.",
+          "deye_actuation_enabled": "Quando desligado, o SEM nunca escreve no inversor, mesmo que o ensaio também esteja desligado. Ambas as barreiras têm de permitir antes de qualquer comando.",
           "deye_max_charge_current_a": "Limite superior seguro que o SEM comandará na entidade de corrente de carga."
         }
       },

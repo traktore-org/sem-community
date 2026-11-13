@@ -22,7 +22,7 @@ import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS } from '../util/next-freshness.js';
 import { plainReason, deviceName } from '../util/why-rows.js';
 import { MISSING } from '../util/missing-value.js';
-import { groups, applyPlan, pendingKey, slotText, setupItems, loadSources, unavailableCount,
+import { groups, applyPlan, pendingKey, navTarget, slotText, setupItems, loadSources, unavailableCount,
          reserveIds, pvStrings, chargerSkeleton, FILTER_CLASSES } from '../util/next-settings.js';
 import { isPowerEntity, isCo2IntensityEntity, isOutdoorTemperatureCandidate } from '../util/detect-rows.js';
 
@@ -330,6 +330,8 @@ class SEMNextSystemCard extends SEMNextBase {
         if (typeof p === 'string') return p;
         if (!p || typeof p !== 'object') return '';
         if (p.ro) return html`<span class="ro">${p.value}</span>`;
+        // (#1354) a link to where a setting is asked works while SEM only watches
+        if (p.kind === 'action' && p.nav) return this._val(this._t(p.labelKey), () => this._go(navTarget(window.location.pathname, p.action)));
         if (p.kind === 'action') return this._val(this._t(p.labelKey), () => this._action(p.action), { disabled: this._obs() });
         return this._slot(p);
     }

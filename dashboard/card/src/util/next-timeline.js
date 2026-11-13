@@ -123,7 +123,9 @@ export function laneModel(o) {
                 lane.blocks.push({ x0: f[0], x1: f[1], kind: prefix, color, dashed: Date.parse(b.start) > start,
                     powerW: Number(b.power_w) || 0,
                     reasonKey: prefix === 'ev' ? 'next_reason_ev_block' : 'next_reason_load_block',
-                    params: { kw: ((Number(b.power_w) || 0) / 1000).toFixed(1), status: d.status || '', note: d.note || '' } });
+                    params: { kw: ((Number(b.power_w) || 0) / 1000).toFixed(1), status: d.status || '',
+                        // (#1354) the planner's note in the user's words when the card passes a reader
+                        note: (typeof o.noteText === 'function' ? o.noteText(d) : d.note) || '' } });
             }
             if (keepEmpty || lane.blocks.length) lanes.push(lane);
         }

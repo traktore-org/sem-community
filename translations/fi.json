@@ -238,7 +238,7 @@
           "update_interval": "Kuinka usein koordinaattori lukee anturit ja säätää laitteistoa. 10 s antaa tarkimman energiaintegroinnin; yli 30 s:n arvot aliarvioivat energian. Alue 10–60 s.",
           "battery_priority_soc": "Vyöhykkeen 1 → vyöhykkeen 2 raja. Tämän varaustason alapuolella kaikki aurinkoenergia menee akkuun ja sähköauton lataus on estetty. Oletus 30 %. Neljän vyöhykkeen strategia (Architecture-dokumentaatio) vaatii tämän MATALAKSI (5–60 %) — älä sekoita vanhaan 3-vyöhykkeiseen merkitykseen, jossa tämä oli korkea tavoite.",
           "battery_buffer_soc": "Vyöhykkeen 2 → vyöhykkeen 3 raja. Tämän varaustason yläpuolella akku saa purkautua paikatakseen aurinkovajetta sähköauton latauksen aikana. Oletus 70 %.",
-          "battery_auto_start_soc": "Vyöhykkeen 3 → vyöhykkeen 4 raja. Tämän varaustason yläpuolella sähköauto voi aloittaa latauksen ilman aurinkoylijäämääkin ottamalla energiaa akusta. Oletus 90 %.",
+          "battery_auto_start_soc": "Vyöhykkeen 3 → vyöhykkeen 4 raja. Tästä varaustasosta akku saa auttaa autoa täysin, silti vain, kun aurinkoylijäämää on tarpeeksi. Oletus 90 %.",
           "min_solar_power": "Raa'an PV-tuotannon alaraja — paneeliteho, jonka alapuolella ”aurinko on aktiivinen” on epätosi: solar_only ei käynnisty ja syvän vajeen suojaus käsittelee sen pimeytenä (lataus pysähtyy siis nopeasti sen sijaan, että se siltautuisi verkosta). Tämä on RAAKA tuotanto, EI ylijäämä — toisin kuin ”Akkutuki – vähimmäisaurinkoylijäämä” (aurinko − koti), joka päättää, milloin kotiakku saa auttaa. Oletus 1000 W; pidä se EV-laturin laitteistominimin alapuolella (~4140 W 3-vaiheisena, ~1380 W 1-vaiheisena).",
           "daily_ev_target": "SEM täydentää verkosta yöllä, jotta autossa on aamulla vähintään tämä. Tämä on alaraja, ei rajoitus — aurinko voi lisätä enemmän. 0 = älä koskaan käytä verkkoa.",
           "battery_assist_max_power": "Suurin teho, jolla kotiakku saa purkautua avustaakseen sähköautoa vyöhykkeellä 3/4. Oletus 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye pakotettu verkkolataus",
-        "description": "Liitä Deye-hybridi-invertteri ajastettuun verkkolataukseen. Tarkkailutila on oletuksena PÄÄLLÄ ja ohjaus POIS, joten invertteriin ei kirjoiteta mitään ennen kuin otat sen nimenomaisesti käyttöön.",
+        "description": "Liitä Deye-hybridi-invertteri ajastettuun verkkolataukseen. Kuivaharjoitus on oletuksena PÄÄLLÄ ja ohjaus POIS, joten invertteriin ei kirjoiteta mitään ennen kuin otat sen nimenomaisesti käyttöön.",
         "data": {
           "deye_grid_charge_switch": "Verkkolatauksen kytkin (entiteetti)",
           "deye_charge_current_entity": "Latausvirran number-entiteetti (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS:n suurin latausvirta (A)",
           "deye_max_discharge_power": "Suurin purkausteho (W)",
           "deye_program_control": "Ohjaa ohjelman aikavälejä",
-          "deye_observer_mode": "Tarkkailutila (vain luku)",
+          "deye_observer_mode": "Deye-kuivaharjoitus (vain loki)",
           "deye_actuation_enabled": "Ota ohjaus käyttöön (kirjoita invertteriin)",
           "deye_work_mode_control": "Ohjaa työtilaa",
           "deye_work_mode_entity": "Työtilan select-entiteetti",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Valinnainen BMS:n asettama katto. 0 = ei BMS-rajaa; invertterin oma maksimi pätee.",
           "deye_observer_mode": "Kun PÄÄLLÄ, SEM laskee ja kirjaa Deye-toimensa mutta ei koskaan kirjoita invertteriin.",
-          "deye_actuation_enabled": "Kun POIS, SEM ei koskaan kirjoita invertteriin, vaikka tarkkailutila olisi myös pois. Molempien porttien on sallittava ennen komennon lähetystä.",
+          "deye_actuation_enabled": "Kun POIS, SEM ei koskaan kirjoita invertteriin, vaikka kuivaharjoitus olisi myös pois. Molempien porttien on sallittava ennen komennon lähetystä.",
           "deye_max_charge_current_a": "Turvallinen yläraja, jonka SEM komentaa latausvirran entiteetille."
         }
       },

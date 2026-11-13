@@ -398,8 +398,11 @@ class TestConfigSurface:
         src = (
             _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js"
         ).read_text()
-        assert "'peak_limit_unlimited'" in src
-        assert "config_lm_unlimited_value" in src
+        # (#1354) the answer's writes live in one shared module
+        src += (_ROOT / "dashboard" / "card" / "src" / "util"
+                / "peak-questions.js").read_text()
+        assert "peak_limit_unlimited" in src
+        assert "peak_q_choice_none" in src       # the "No limit" answer
 
     def test_bundle_is_rebuilt(self):
         """Deploy scripts only rsync — an un-rebuilt bundle ships the old

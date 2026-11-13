@@ -97,9 +97,11 @@ NUMBER_TYPES = [
     NumberEntityDescription(
         key="battery_capacity",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        native_min_value=5,
-        native_max_value=100,
-        native_step=5,
+        # (#1354) the ONE range of the one stored setting: a 5 kWh step
+        # could not hold a 12.7 kWh pack the options flow accepts
+        native_min_value=BOUNDS["battery_capacity_kwh"].min,
+        native_max_value=BOUNDS["battery_capacity_kwh"].max,
+        native_step=BOUNDS["battery_capacity_kwh"].step,
         mode=NumberMode.BOX,
     ),
     NumberEntityDescription(
@@ -770,6 +772,28 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
     def device_info(self):
         """Return device information."""
         return self.coordinator.device_info
+
+    @property
+    def native_value(self):
+        """(#1354) The battery size is ONE stored setting
+        (``battery_capacity_kwh``); this entity and the options flow both
+        write it. Unset, the entity showed its own default (15) while SEM
+        planned with the size it detected — so it shows that size: the one
+        ``coordinator.battery_capacity_kwh`` answers."""
+        if self.entity_description.key == "battery_capacity":
+            stored = (getattr(self.coordinator, "config", None) or {}).get("battery_capacity_kwh")
+            try:
+                stored = float(stored) if stored not in (None, "") else None
+            except (TypeError, ValueError):
+                stored = None
+            if stored is None or stored <= 0:
+                try:
+                    used = float(getattr(self.coordinator, "battery_capacity_kwh", 0) or 0)
+                except (TypeError, ValueError):
+                    used = 0.0
+                if used > 0:
+                    return used
+        return self._attr_native_value
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the setting value."""
