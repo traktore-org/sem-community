@@ -486,8 +486,8 @@ armed — and every per-device setting that goes through the device registry
 
 **Fix:**
 1. Go to **Settings > Devices & Services > Solar Energy Management > Configure**
-2. Verify `load_management_enabled` is checked, and that **No grid limit**
-   (`peak_limit_unlimited`) is **off** — it hides the kW fields and disables
+2. Verify `load_management_enabled` is checked, and that **Limit grid draw to**
+   is not answered **No limit** (`peak_limit_unlimited`) — that disables
    peak management entirely, including the ceiling the EV charger sizes against
 3. Set a realistic `target_peak_limit` — your grid connection ceiling, from the
    supply contract or main breaker (e.g. 5.0 kW for a typical European household,

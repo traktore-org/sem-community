@@ -238,7 +238,7 @@
           "update_interval": "Cât de des citește coordonatorul senzorii și reglează hardware-ul. 10 s oferă cea mai precisă integrare a energiei; valorile peste 30 s vor subestima energia. Interval 10–60 s.",
           "battery_priority_soc": "Limita dintre zona 1 și zona 2. Sub acest SOC, tot solarul merge către baterie, iar VE este blocat. Implicit 30 %. Strategia cu patru zone (documentația Architecture) are nevoie ca această valoare să fie MICĂ (5–60 %) — nu o confundați cu vechea semnificație din strategia cu 3 zone, unde era o țintă ridicată.",
           "battery_buffer_soc": "Limita dintre zona 2 și zona 3. Peste acest SOC, bateria poate să se descarce pentru a acoperi deficitele solare în timpul încărcării VE. Implicit 70 %.",
-          "battery_auto_start_soc": "Limita dintre zona 3 și zona 4. Peste acest SOC, VE poate începe încărcarea chiar și fără surplus solar, consumând din baterie. Implicit 90 %.",
+          "battery_auto_start_soc": "Limita dintre zona 3 și zona 4. De la acest SOC bateria poate ajuta mașina pe deplin, tot doar cu destul surplus solar. Implicit 90 %.",
           "min_solar_power": "Prag minim al producției FV brute — puterea panourilor sub care „solarul este activ” este fals: solar_only nu pornește, iar protecția împotriva deficitului profund o tratează ca pe întuneric (încărcarea se oprește astfel rapid în loc să fie suplinită din rețea). Aceasta este producția BRUTĂ, NU surplusul — spre deosebire de „Asistență baterie – surplus solar min.” (solar − casă), care decide când poate ajuta bateria casnică. Implicit 1000 W; păstrați-l sub minimul hardware al încărcătorului EV (~4140 W la 3 faze, ~1380 W la 1 fază).",
           "daily_ev_target": "SEM completează din rețea peste noapte ca mașina să aibă cel puțin atât dimineața. Este un prag minim, nu o limită — soarele poate adăuga mai mult. 0 = nu folosi niciodată rețeaua.",
           "battery_assist_max_power": "Puterea maximă pe care bateria casei o poate descărca pentru a ajuta VE în zonele 3/4. Implicit 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye încărcare forțată din rețea",
-        "description": "Conectează un invertor hibrid Deye pentru încărcarea programată din rețea. Modul observator este PORNIT, iar acționarea OPRITĂ implicit, astfel încât nimic nu este scris în invertor până nu activezi explicit.",
+        "description": "Conectează un invertor hibrid Deye pentru încărcarea programată din rețea. Repetiția este PORNITĂ, iar acționarea OPRITĂ implicit, astfel încât nimic nu este scris în invertor până nu activezi explicit.",
         "data": {
           "deye_grid_charge_switch": "Comutator încărcare din rețea (entitate)",
           "deye_charge_current_entity": "Entitate number curent de încărcare (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Curent max. de încărcare BMS (A)",
           "deye_max_discharge_power": "Putere max. de descărcare (W)",
           "deye_program_control": "Controlează intervalele orare ale programului",
-          "deye_observer_mode": "Mod observator (doar citire)",
+          "deye_observer_mode": "Repetiție Deye (doar jurnal)",
           "deye_actuation_enabled": "Activează acționarea (scriere în invertor)",
           "deye_work_mode_control": "Controlează modul de lucru",
           "deye_work_mode_entity": "Entitate select mod de lucru",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Plafon opțional impus de BMS. 0 înseamnă fără limită BMS — se aplică maximul invertorului.",
           "deye_observer_mode": "Când este PORNIT, SEM calculează și înregistrează acțiunile Deye, dar nu scrie niciodată în invertor.",
-          "deye_actuation_enabled": "Când este OPRIT, SEM nu scrie niciodată în invertor, chiar dacă modul observator este de asemenea oprit. Ambele porți trebuie să permită înainte de trimiterea unei comenzi.",
+          "deye_actuation_enabled": "Când este OPRIT, SEM nu scrie niciodată în invertor, chiar dacă repetiția este de asemenea oprită. Ambele porți trebuie să permită înainte de trimiterea unei comenzi.",
           "deye_max_charge_current_a": "Limita superioară sigură pe care SEM o va comanda pe entitatea curentului de încărcare."
         }
       },

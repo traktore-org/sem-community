@@ -8,12 +8,17 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard } from '../base/sem-shared.js';
 import { fmtValue } from '../util/missing-value.js';
+import { BATTERY_LEVELS, batteryLevels, zoneBands } from '../util/battery-questions.js';
 
+// (#1354) The three battery levels as the shared questions: the label says
+// what the level does and the line under it says what that means. The colour
+// is the colour of the band each level ends (the zone bar below).
+const LEVEL = Object.fromEntries(BATTERY_LEVELS.map((l) => [l.id, l]));
 const ZONES = [
-    { id: 'autostart', entity: 'number.sem_battery_auto_start_soc', icon: 'mdi:play-circle',        labelKey: 'auto_start_soc', helpKey: 'zone_help_autostart', color: '#4db6ac' },
-    { id: 'buffer',    entity: 'number.sem_battery_buffer_soc',    icon: 'mdi:shield-half-full',    labelKey: 'buffer_soc',    helpKey: 'zone_help_buffer',    color: '#ff9800' },
-    { id: 'priority',  entity: 'number.sem_battery_priority_soc',  icon: 'mdi:shield-alert',       labelKey: 'priority_soc',  helpKey: 'zone_help_priority', color: '#f44336' },
-];
+    { id: 'autostart', icon: 'mdi:play-circle',     helpKey: 'zone_help_autostart', color: '#81c784' },
+    { id: 'buffer',    icon: 'mdi:shield-half-full', helpKey: 'zone_help_buffer',    color: '#ffb74d' },
+    { id: 'priority',  icon: 'mdi:shield-alert',     helpKey: 'zone_help_priority',  color: '#e57373' },
+].map((z) => ({ ...z, entity: LEVEL[z.id].entity, labelKey: LEVEL[z.id].key, subKey: LEVEL[z.id].sub }));
 
 class SEMBatteryZonesCard extends SEMLitBase {
     static get watchedEntities() {
@@ -115,6 +120,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
                         >+</button>
                     </div>
                 </div>
+                <div class="zone-sub">${this._t(z.subKey)}</div>
                 ${this._showHelp ? html`<div class="zone-help-text" style="border-left-color:${z.color}">${helpText}</div>` : nothing}
             </div>
         `;
@@ -124,10 +130,9 @@ class SEMBatteryZonesCard extends SEMLitBase {
         if (!this._config) return nothing;
 
         const T = this._theme();
-        const autostart = this._state(ZONES[0].entity);
-        const buffer    = this._state(ZONES[1].entity);
-        const priority  = this._state(ZONES[2].entity);
-        const subtitle  = `${this._t('auto_start_soc')} ${fmtValue(autostart, 0)}% · ${this._t('buffer_word')} ${fmtValue(buffer, 0)}% · ${this._t('priority_soc')} ${fmtValue(priority, 0)}%`;
+        const lv = batteryLevels(this._hass?.states);
+        const bands = zoneBands(lv);
+        const subtitle = `${fmtValue(lv.priority, 0)}% · ${fmtValue(lv.buffer, 0)}% · ${fmtValue(lv.autostart, 0)}%`;
 
         return html`
             <style>
@@ -161,6 +166,12 @@ class SEMBatteryZonesCard extends SEMLitBase {
                     text-overflow: ellipsis;
                     white-space: nowrap;
                 }
+                .zone-bar.banded { background: none; opacity: 1; }
+                .zone-band { position: absolute; top: 0; bottom: 0; opacity: 0.7; }
+                .zone-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; margin: 18px 4px 12px; color: var(--secondary-text-color, ${T.textSec}); }
+                .zone-legend span { display: inline-flex; align-items: center; gap: 5px; }
+                .zone-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+                .zone-sub { font-size: 12px; opacity: 0.7; margin: 2px 0 0 26px; }
                 .zone-bar-wrap {
                     margin: 0 0 14px;
                     padding: 0 4px;
@@ -317,11 +328,15 @@ class SEMBatteryZonesCard extends SEMLitBase {
                     ></ha-icon>
                 </div>
                 <div class="zone-bar-wrap">
-                    <div class="zone-bar">
+                    <div class="zone-bar ${bands ? 'banded' : ''}">
+                        ${bands ? bands.map((z) => html`<div class="zone-band" style="left:${z.from}%;width:${z.width}%;background:${z.color}"></div>`) : nothing}
                         ${this._renderZoneMarkers(T)}
                         ${this._renderDynamicFloor()}
                     </div>
                 </div>
+                ${bands ? html`<div class="zone-legend">
+                    ${bands.map((z) => html`<span><i style="background:${z.color}"></i>${this._t(z.key)}</span>`)}
+                </div>` : nothing}
                 <div class="stepper-grid">
                     ${ZONES.map(z => this._renderStepper(z, T))}
                 </div>

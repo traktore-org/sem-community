@@ -238,7 +238,7 @@
           "update_interval": "Con qué frecuencia el coordinador lee los sensores y ajusta el hardware. 10 s da la integración de energía más precisa; valores por encima de 30 s subestiman la energía. Rango 10–60 s.",
           "battery_priority_soc": "Límite Zona 1 → Zona 2. Por debajo de este SOC toda la energía solar va a la batería y el VE queda bloqueado. Por defecto 30 %. La estrategia de cuatro zonas (documentación de Arquitectura) necesita un valor BAJO (5–60 %) — no lo confunda con el antiguo significado de 3 zonas, donde este era un objetivo alto.",
           "battery_buffer_soc": "Límite Zona 2 → Zona 3. Por encima de este SOC la batería puede descargarse para cubrir déficits solares mientras carga el VE. Por defecto 70 %.",
-          "battery_auto_start_soc": "Límite Zona 3 → Zona 4. Por encima de este SOC el VE puede empezar a cargar incluso sin excedente solar, tomando energía de la batería. Por defecto 90 %.",
+          "battery_auto_start_soc": "Límite Zona 3 → Zona 4. Desde este SOC la batería puede ayudar del todo al coche, siempre solo con suficiente excedente solar. Predeterminado 90 %.",
           "min_solar_power": "Umbral de producción FV bruta — la potencia de los paneles por debajo de la cual «el sol está activo» es falso: solar_only no arranca y la protección de déficit profundo lo trata como oscuridad (la carga se detiene rápidamente en lugar de compensar con la red). Esto es producción BRUTA, NO excedente — a diferencia de «Asistencia batería – mín. excedente solar» (solar − casa), que decide cuándo puede ayudar la batería doméstica. Por defecto 1000 W; manténgalo por debajo del mínimo de hardware del cargador VE (~4140 W trifásico, ~1380 W monofásico).",
           "daily_ev_target": "SEM recarga de la red por la noche para que el coche tenga al menos esto por la mañana. Es un mínimo, no un límite — el sol puede añadir más. 0 = nunca usar la red.",
           "battery_assist_max_power": "Potencia máxima que la batería doméstica puede descargar para ayudar al VE en las Zonas 3/4. Por defecto 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Carga de red forzada Deye",
-        "description": "Conecta un inversor híbrido Deye para la carga de red programada. El modo observador está activado y la actuación desactivada por defecto, así que no se escribe nada en el inversor hasta que lo habilites explícitamente.",
+        "description": "Conecta un inversor híbrido Deye para la carga de red programada. El simulacro está activado y la actuación desactivada por defecto, así que no se escribe nada en el inversor hasta que lo habilites explícitamente.",
         "data": {
           "deye_grid_charge_switch": "Interruptor de carga de red (entidad)",
           "deye_charge_current_entity": "Entidad number de corriente de carga (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Corriente de carga máx. del BMS (A)",
           "deye_max_discharge_power": "Potencia de descarga máx. (W)",
           "deye_program_control": "Controlar franjas horarias del programa",
-          "deye_observer_mode": "Modo observador (solo lectura)",
+          "deye_observer_mode": "Simulacro Deye (solo registro)",
           "deye_actuation_enabled": "Habilitar actuación (escribir en el inversor)",
           "deye_work_mode_control": "Controlar el modo de trabajo",
           "deye_work_mode_entity": "Entidad select del modo de trabajo",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Límite opcional impuesto por el BMS. 0 significa sin límite del BMS: se aplica el máximo del inversor.",
           "deye_observer_mode": "Cuando está activado, SEM calcula y registra sus acciones Deye pero nunca escribe en el inversor.",
-          "deye_actuation_enabled": "Cuando está desactivado, SEM nunca escribe en el inversor, aunque el modo observador también esté desactivado. Ambas puertas deben permitir antes de enviar cualquier comando.",
+          "deye_actuation_enabled": "Cuando está desactivado, SEM nunca escribe en el inversor, aunque el simulacro también esté desactivado. Ambas puertas deben permitir antes de enviar cualquier comando.",
           "deye_max_charge_current_a": "Límite superior seguro que SEM ordenará en la entidad de corriente de carga."
         }
       },

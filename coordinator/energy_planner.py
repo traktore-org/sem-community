@@ -229,6 +229,9 @@ class DemandResult:
     needed_kwh: float
     est_cost: float
     note: str = ""
+    # (#1354) The same note as codes + params, for the card to translate:
+    # ((code, {param: value}), ...). ``note`` stays for logs.
+    note_codes: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -281,7 +284,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         results = tuple(
             DemandResult(d.id, "fits" if d.energy_kwh <= 1e-9 else "yields",
                          0.0, round(max(0.0, d.energy_kwh), 3), 0.0,
-                         note="no night window")
+                         note="no night window",
+                         note_codes=(("no_night_window", {}),))
             for d in sorted(demands, key=lambda d: (d.priority, d.id)))
         return EnergyPlan((), results, 0.0,
                              all(r.status == "fits" for r in results), None)
@@ -440,6 +444,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         cost_known = True               # (#1102) false once an unpriced slot is used
         note = ""
         block_note = ""
+        codes: list = []
+        block_code: list = []
         if (d.late_s > 0 and d.deadline is not None
                 and d.source != "battery" and need > 1e-9):
             # (#1023) The late part first: latest slot first, each run
@@ -484,6 +490,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             run = _cheapest_run(d, need - planned)
             if run is None:
                 block_note = "no single block fits"
+                block_code = [("no_block_fits", {})]
             else:
                 for i, power, run_h in run:
                     s = ledger[i]
@@ -595,6 +602,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 and d.source != "battery"):
             note = (f"{unpriced} slot(s) unpriced — replans when the "
                     f"day-ahead series lands")
+            codes = [("unpriced_slots", {"count": unpriced})]
         elif (d.needs_cheap_level and d.tariff is None and need > 1e-9
               and planned < need * FIT_EPS
               and any(ledger[i].tariff_cheap and not ledger[i].level_cheap
@@ -603,6 +611,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             # only the off-peak price is cheap there. The gate refuses that
             # day (#994): say so, or the note and the band disagree.
             note = "off-peak hours on a day with one price are not used"
+            codes = [("one_price_day", {})]
         elif d.needs_cheap_level and planned == 0 and need > 1e-9:
             if not any(_cheap(d, i) and (d.sun_waits_until is None
                                          or _in_time(d, i)) for i in idx):
@@ -612,15 +621,21 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     for i in idx)
                 note = (f"waits for the sun until {d.sun_waits_until:%H:%M}"
                         if waited else "no cheap window tonight")
+                codes = ([("waits_for_sun",
+                           {"time": f"{d.sun_waits_until:%H:%M}"})]
+                         if waited else [("no_cheap_window", {})])
         if not cost_known:
             note = "; ".join(n for n in (note, "placed in hours with no price yet — cost unknown") if n)
+            codes = codes + [("cost_unknown", {})]
         note = "; ".join(n for n in (block_note, note) if n)
+        codes = block_code + codes
         status = ("fits" if planned >= need * FIT_EPS or need <= 1e-9
                   else "partial" if planned > 0 else "yields")
         results.append(DemandResult(
             demand_id=d.id, status=status, planned_kwh=round(planned, 3),
             needed_kwh=round(need, 3),
-            est_cost=round(cost, 4) if cost_known else None, note=note))
+            est_cost=round(cost, 4) if cost_known else None, note=note,
+            note_codes=tuple(codes)))
 
     takeover = takeover_of(ledger)
     allocations.sort(key=lambda a: (a.start, a.demand_id))

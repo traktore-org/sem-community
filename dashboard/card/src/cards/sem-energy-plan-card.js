@@ -23,6 +23,7 @@ import { semDefineCard, semFormatTime, semGetCurrency } from '../base/sem-shared
 import { demandName } from '../util/demand-name.js';
 import { battIndexes, homeCover } from '../util/plan-cover.js';
 import { coldHeaters } from '../util/heater-questions.js';
+import { planNoteText } from '../util/plan-notes.js';
 
 const DEFAULT_ENTITY = 'sensor.sem_energy_plan';
 
@@ -769,7 +770,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                     b.price != null ? ` · ${b.price}` : ''}`).join('\n') || null,
                                 `${(d.planned_kwh || 0).toFixed(1)} / ${(d.needed_kwh || 0).toFixed(1)} kWh`
                                     + ` · ${this._t('energy_plan_est')} ${(d.est_cost || 0).toFixed(2)} ${currency}`,
-                                d.note || null,
+                                planNoteText(d, (k) => this._t(k)),
                             ].filter(Boolean).join('\n');
                             // (#638 G4) live chip while actuation is on.
                             const live = act ? this._liveState(d, blocks) : null;
@@ -777,7 +778,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                             // itself — the packer's note when it wrote one,
                             // the generic fallback line otherwise. An empty
                             // row used to be the only signal.
-                            const reason = d.note || (d.status !== 'fits'
+                            const reason = planNoteText(d, (k) => this._t(k)) || (d.status !== 'fits'
                                 ? this._format('energy_plan_yield_reason', {
                                     planned: (d.planned_kwh || 0).toFixed(1),
                                     needed: (d.needed_kwh || 0).toFixed(1),

@@ -238,7 +238,7 @@
           "update_interval": "Hvor ofte koordinatoren leser sensorer og justerer maskinvaren. 10 s gir den mest nøyaktige energiintegrasjonen; verdier over 30 s vil telle for lite energi. Område 10–60 s.",
           "battery_priority_soc": "Grensen sone 1 → sone 2. Under denne SOC-en går all sol til batteriet, og elbilen blokkeres. Standard 30 %. Firesone-strategien (Architecture-dokumentasjonen) krever at denne er LAV (5–60 %) — må IKKE forveksles med den gamle 3-sonebetydningen der dette var et høyt mål.",
           "battery_buffer_soc": "Grensen sone 2 → sone 3. Over denne SOC-en kan batteriet lade ut for å dekke solunderskudd mens elbilen lader. Standard 70 %.",
-          "battery_auto_start_soc": "Grensen sone 3 → sone 4. Over denne SOC-en kan elbilen begynne å lade selv uten soloverskudd, ved å trekke fra batteriet. Standard 90 %.",
+          "battery_auto_start_soc": "Grensen sone 3 → sone 4. Fra denne SOC-en kan batteriet hjelpe bilen fullt ut, fortsatt bare med nok soloverskudd. Standard 90 %.",
           "min_solar_power": "Nedre grense for rå PV-produksjon — paneleffekten der „solen er aktiv“ er usann: solar_only starter ikke, og vernet mot dypt underskudd behandler det som mørke (ladingen stopper altså raskt i stedet for å bygge bro via strømnettet). Dette er RÅ produksjon, IKKE overskudd — i motsetning til „Batteristøtte – min. soloverskudd“ (sol − hjem), som avgjør når hjemmebatteriet kan hjelpe. Standard 1000 W; hold den under EV-laderens maskinvareminimum (~4140 W ved 3-fase, ~1380 W ved 1-fase).",
           "daily_ev_target": "SEM fyller på fra nettet om natten så bilen har minst dette om morgenen. Dette er en bunngrense, ikke en grense — sola kan legge til mer. 0 = bruk aldri nettet.",
           "battery_assist_max_power": "Maksimal effekt husbatteriet kan lade ut for å støtte elbilen i sone 3/4. Standard 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye tvunget nettlading",
-        "description": "Koble til en Deye hybrid-inverter for planlagt nettlading. Observatørmodus er PÅ og aktivering AV som standard, så ingenting skrives til inverteren før du uttrykkelig aktiverer det.",
+        "description": "Koble til en Deye hybrid-inverter for planlagt nettlading. Tørrkjøring er PÅ og aktivering AV som standard, så ingenting skrives til inverteren før du uttrykkelig aktiverer det.",
         "data": {
           "deye_grid_charge_switch": "Nettlading-bryter (entitet)",
           "deye_charge_current_entity": "Ladestrøm-number-entitet (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS maks. ladestrøm (A)",
           "deye_max_discharge_power": "Maks. utladingseffekt (W)",
           "deye_program_control": "Styr programmets tidsrom",
-          "deye_observer_mode": "Observatørmodus (skrivebeskyttet)",
+          "deye_observer_mode": "Deye-tørrkjøring (kun logg)",
           "deye_actuation_enabled": "Aktiver styring (skriv til inverter)",
           "deye_work_mode_control": "Styr arbeidsmodus",
           "deye_work_mode_entity": "Arbeidsmodus-select-entitet",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Valgfritt BMS-pålagt tak. 0 = ingen BMS-grense — inverterens eget maksimum gjelder.",
           "deye_observer_mode": "Når PÅ beregner og logger SEM sine Deye-handlinger, men skriver aldri til inverteren.",
-          "deye_actuation_enabled": "Når AV skriver SEM aldri til inverteren, selv om observatørmodus også er av. Begge portene må tillate før en kommando sendes.",
+          "deye_actuation_enabled": "Når AV skriver SEM aldri til inverteren, selv om tørrkjøring også er av. Begge portene må tillate før en kommando sendes.",
           "deye_max_charge_current_a": "Trygg øvre grense SEM vil kommandere på ladestrøm-entiteten."
         }
       },

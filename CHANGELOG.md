@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
+- 🔧 **Plan card notes speak your language** (#1354). "13 slot(s) unpriced…" was English only.
+- 🔧 **The VPP and Deye test switches are called "dry run"** (#1354). Three settings were named Observer mode.
+- 🐛 **Setup reads the battery's discharge rating, not its last limit** (#1354). A 750 W limit became the rating.
+- 🐛 **The battery size shows the size SEM plans with when you have not set it** (#1354). The field said 10 or 15 kWh.
+- 🔧 **A charger's target reads "At least / Up to" everywhere** (#1354). The Configuration tab said "Daily target / Max daily" or "Target / Max SOC".
+- 📝 **The auto-start level is described as SEM uses it**: from it the battery helps the car fully, still only with spare sun (#1354).
+- 🔧 **The battery levels are plain questions, set in one place on the Battery tab** (#1354). The bar no longer calls the first band "Reserve".
+- 🔧 **The peak limit is one question: "Limit grid draw to" a kW value, or "No limit"** (#1354). It replaces a separate switch.
+- 🔧 **Settings that do nothing are no longer asked** (#1354): tax and VAT beside an all-in price, Legionella rules without a boiler.
+- 🐛 **Battery and grid-fee prices on the Configuration tab now show your own currency** (#1354). One field always said EUR.
 - ✨ **A cooling unit is set with the same four questions, turned round** (#1349): keep it at, never warmer than, cool down to, buy power.
 - ✨ **A heater with a thermometer can reach Keep at from the house battery at night** (#1349), while the battery is above its reserve.
 - ✨ **A heater is set with four plain questions and says what it does next** (#1349).

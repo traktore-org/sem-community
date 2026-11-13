@@ -238,7 +238,7 @@
           "update_interval": "Jak často koordinátor čte senzory a upravuje hardware. 10 s dává nejpřesnější integraci energie; hodnoty nad 30 s energii podhodnocují. Rozsah 10–60 s.",
           "battery_priority_soc": "Hranice zóny 1 → zóny 2. Pod tímto SOC jde veškerá solární energie do baterie a EV je blokováno. Výchozí 30 %. Čtyřzónová strategie (dokumentace Architecture) vyžaduje NÍZKOU hodnotu (5–60 %) — NEZAMĚŇUJTE s původním třízónovým významem, kde šlo o vysoký cíl.",
           "battery_buffer_soc": "Hranice zóny 2 → zóny 3. Nad tímto SOC se baterie smí vybíjet a překlenovat solární deficity při nabíjení EV. Výchozí 70 %.",
-          "battery_auto_start_soc": "Hranice zóny 3 → zóny 4. Nad tímto SOC může EV začít nabíjet i bez solárního přebytku, s odběrem z baterie. Výchozí 90 %.",
+          "battery_auto_start_soc": "Hranice zóny 3 → zóny 4. Od tohoto SOC smí baterie pomáhat autu naplno, stále jen s dostatkem solárního přebytku. Výchozí 90 %.",
           "min_solar_power": "Spodní mez surové výroby FV — výkon panelů, pod kterým je „slunce je aktivní“ nepravdivé: solar_only se nespustí a ochrana proti hlubokému deficitu to považuje za tmu (nabíjení se tedy rychle zastaví místo přemostění ze sítě). Toto je SUROVÁ výroba, NIKOLI přebytek — na rozdíl od „Podpora baterie – min. solární přebytek“ (slunce − dům), který rozhoduje, kdy může domácí baterie pomoci. Výchozí 1000 W; udržujte pod hardwarovým minimem nabíječky EV (~4140 W u 3 fází, ~1380 W u 1 fáze).",
           "daily_ev_target": "SEM v noci dobíjí ze sítě, aby auto mělo ráno alespoň tolik. Je to spodní mez, ne limit — slunce může přidat víc. 0 = nikdy nepoužívat síť.",
           "battery_assist_max_power": "Maximální výkon, kterým smí domácí baterie vybíjet na podporu EV v zóně 3/4. Výchozí 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye vynucené nabíjení ze sítě",
-        "description": "Zapojte hybridní střídač Deye pro plánované nabíjení ze sítě. Režim pozorovatele je ve výchozím stavu ZAPNUTÝ a akční zásah VYPNUTÝ, takže do střídače se nic nezapíše, dokud to výslovně nepovolíte.",
+        "description": "Zapojte hybridní střídač Deye pro plánované nabíjení ze sítě. Zkouška nanečisto je ve výchozím stavu ZAPNUTÁ a akční zásah VYPNUTÝ, takže do střídače se nic nezapíše, dokud to výslovně nepovolíte.",
         "data": {
           "deye_grid_charge_switch": "Přepínač nabíjení ze sítě (entita)",
           "deye_charge_current_entity": "Číselná entita nabíjecího proudu (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "Max. nabíjecí proud BMS (A)",
           "deye_max_discharge_power": "Max. vybíjecí výkon (W)",
           "deye_program_control": "Řídit časové úseky programu",
-          "deye_observer_mode": "Režim pozorovatele (jen ke čtení)",
+          "deye_observer_mode": "Zkouška nanečisto Deye (jen log)",
           "deye_actuation_enabled": "Povolit akční zásah (zápis do střídače)",
           "deye_work_mode_control": "Řídit pracovní režim",
           "deye_work_mode_entity": "Výběrová entita pracovního režimu",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Volitelný strop daný BMS. 0 = žádný limit BMS; platí maximum střídače.",
           "deye_observer_mode": "Když je ZAPNUTO, SEM své akce Deye vypočítá a zaznamená, ale do střídače nikdy nezapisuje.",
-          "deye_actuation_enabled": "Když je VYPNUTO, SEM do střídače nikdy nezapíše, i když je režim pozorovatele také vypnutý. Než se odešle příkaz, musí povolit obě brány.",
+          "deye_actuation_enabled": "Když je VYPNUTO, SEM do střídače nikdy nezapíše, i když je zkouška nanečisto také vypnutá. Než se odešle příkaz, musí povolit obě brány.",
           "deye_max_charge_current_a": "Bezpečná horní mez, kterou SEM nastaví na entitě nabíjecího proudu."
         }
       },

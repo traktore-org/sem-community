@@ -238,7 +238,7 @@
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
           "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
           "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
-          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
+          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. From this SOC the battery may give the car its full help, still only with enough spare sun. Default 90 %.",
           "min_solar_power": "Raw PV-production floor — the panel output below which 'solar is up' is false: solar_only won't start and the deep-deficit guard treats it as darkness (so charging stops quickly instead of bridging on grid). This is RAW production, NOT surplus — contrast 'Battery assist minimum solar surplus' (solar − home), which decides when the home battery may help. Default 1000 W; keep below the EV charger's hardware minimum (~4140 W 3-phase, ~1380 W 1-phase).",
           "daily_ev_target": "SEM tops up from the grid overnight so the car has at least this much by morning. This is a floor, not a limit — sunshine can add more. 0 = never use the grid.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
@@ -696,7 +696,7 @@
       },
       "deye": {
         "title": "Deye forced grid charge",
-        "description": "Wire a Deye hybrid inverter for scheduled grid charging. Observer mode is ON and actuation is OFF by default, so nothing is written to the inverter until you explicitly enable it.",
+        "description": "Wire a Deye hybrid inverter for scheduled grid charging. Dry run is ON and actuation is OFF by default, so nothing is written to the inverter until you explicitly enable it.",
         "data": {
           "deye_grid_charge_switch": "Grid-charge switch entity",
           "deye_charge_current_entity": "Charge-current number entity (A)",
@@ -706,7 +706,7 @@
           "deye_bms_max_charge_current_a": "BMS max charge current (A)",
           "deye_max_discharge_power": "Max discharge power (W)",
           "deye_program_control": "Control program time slots",
-          "deye_observer_mode": "Observer mode (read-only)",
+          "deye_observer_mode": "Deye dry run (log only)",
           "deye_actuation_enabled": "Enable actuation (write to inverter)",
           "deye_work_mode_control": "Control work mode",
           "deye_work_mode_entity": "Work-mode select entity",
@@ -740,7 +740,7 @@
         "data_description": {
           "deye_bms_max_charge_current_a": "Optional BMS-imposed ceiling. 0 means no BMS limit — the inverter's own maximum applies.",
           "deye_observer_mode": "When ON, SEM computes and logs its Deye actions but never writes to the inverter.",
-          "deye_actuation_enabled": "When OFF, SEM never writes to the inverter even if observer mode is also off. Both gates must permit before any command is sent.",
+          "deye_actuation_enabled": "When OFF, SEM never writes to the inverter even if dry run is also off. Both gates must permit before any command is sent.",
           "deye_max_charge_current_a": "Safe upper limit SEM will command on the charge-current entity."
         }
       },

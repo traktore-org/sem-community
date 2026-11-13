@@ -565,6 +565,38 @@ def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
     return found
 
 
+# (#1354) The discharge settings' own ranges (number.py). A detected
+# rating is snapped into them so the field never shows a value it cannot
+# hold (a stored 750 W showed as 1000 W on the slider).
+_DISCHARGE_RANGE = (500, 25000)
+_ASSIST_RANGE = (1000, 25000)
+
+
+def _discharge_rating_w(state) -> float | None:
+    """The battery's discharge RATING in W, or None.
+
+    (#1354) A ``number`` entity is a writable LIMIT: its state is whatever
+    was last written (often by SEM itself, e.g. 750 W), never the rating.
+    Its ``max`` attribute is the hardware ceiling. A sensor reports the
+    rating as its state.
+    """
+    try:
+        if str(state.entity_id).startswith("number."):
+            val = finite_float((state.attributes or {}).get("max"))
+        else:
+            val = finite_float(state.state)
+    except (TypeError, ValueError):
+        return None
+    return val if val > 0 else None
+
+
+def _place_discharge_rating(detected: Dict[str, float], val: float) -> None:
+    lo, hi = _DISCHARGE_RANGE
+    detected["battery_max_discharge_power"] = float(round(min(max(val, lo), hi), 0))
+    lo, hi = _ASSIST_RANGE
+    detected["battery_assist_max_power"] = float(round(min(max(val, lo), hi), 0))
+
+
 def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, float]:
     """Auto-detect battery capacity, system size, and max discharge from hardware.
 
@@ -578,6 +610,11 @@ def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, floa
     for spec, eid in _spec_from_registry(hass, registry=registry).items():
         state = hass.states.get(eid)
         if state is None:
+            continue
+        if spec == "battery_max_discharge_power":
+            rating = _discharge_rating_w(state)
+            if rating is not None:
+                _place_discharge_rating(detected, rating)
             continue
         try:
             val = finite_float(state.state)
@@ -594,9 +631,6 @@ def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, floa
         elif spec == "system_size_kwp":
             if val > 100:                      # W → kWp
                 detected[spec] = round(val / 1000, 1)
-        else:                                   # discharge power, W
-            detected["battery_max_discharge_power"] = round(val, 0)
-            detected["battery_assist_max_power"] = round(val, 0)
 
     # Battery capacity (Wh or kWh)
     capacity_patterns = [
@@ -663,14 +697,10 @@ def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, floa
         for state in hass.states.async_all(["number", "sensor"]):
             if fnmatch.fnmatch(state.entity_id, pattern) \
                     and not is_sem_entity(hass, state.entity_id, registry):
-                try:
-                    val = finite_float(state.state)
-                    if val > 0:
-                        detected["battery_max_discharge_power"] = round(val, 0)
-                        detected["battery_assist_max_power"] = round(val, 0)
-                        break
-                except (ValueError, TypeError):
-                    continue
+                rating = _discharge_rating_w(state)
+                if rating is not None:
+                    _place_discharge_rating(detected, rating)
+                    break
         if "battery_max_discharge_power" in detected:
             break
 

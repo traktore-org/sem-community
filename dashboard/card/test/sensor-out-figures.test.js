@@ -152,7 +152,7 @@ const ALLOWED_OUT = {
     'sem-charger-status-card': ['1'],                          // chargers found
     'sem-chart-card': [],
     'sem-config-card': ['0', '33', '0'],                       // counts, setup steps done
-    'sem-control-card': ['551', '60', '385', '1', '60', '5019', '60', '70', '3'],  // the hot-water norms
+    'sem-control-card': [],   // (#1354) the hot-water norms print only with a boiler set up
     'sem-costs-card': [],
     'sem-costs-detail-card': [],
     'sem-diagnose-button': [],

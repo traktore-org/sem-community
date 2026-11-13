@@ -173,12 +173,22 @@ test('All settings still shows every row', () => {
     // charger's mode select (the indicator picker shows only when a mode is set).
     // (#1308) +1 for the charger's Finish by departure toggle.
     // (#1323) +1 for the heat pump's Step down when power is short.
+    // (#1354) −3: markup, tax and VAT are not asked beside an all-in price
+    // (they were greyed out); a spot price shows them again, see below.
+    // (#1354) −1: "No grid limit" and the limit are one question.
+    // (#1354) −3: the three battery levels are set on the Battery tab only.
     const everyday = renderTab(card()).total;
     const { per, total } = renderTab(card({ advanced: true }));
-    assert.equal(total, 112, `All settings drew ${total} rows`);
-    assert.ok(per.battery_zones >= 9, 'battery knobs and pickers');
+    assert.equal(total, 105, `All settings drew ${total} rows`);
+    assert.ok(per.battery_zones >= 6, 'battery knobs and pickers');
     assert.ok(per.ev_chargers >= 15, 'every per-charger row');
     assert.ok(total > everyday * 5);
+});
+
+test('a spot price asks markup, tax and VAT again', () => {
+    const allIn = renderTab(card({ advanced: true })).per.tariff;
+    const spot = renderTab(card({ advanced: true, options: { ...OPTIONS, import_price_basis: 'spot' } })).per.tariff;
+    assert.equal(spot - allIn, 3);
 });
 
 test('the charger keeps its power and its control in Everyday', () => {
@@ -250,9 +260,11 @@ test('"N more in All settings" counts the hidden rows and turns the switch on', 
     el._renderEverydayMore = (r) => { rows = { ...r }; return real(r); };
     el._renderSection({ id: 'battery_zones', color: '', icon: '', titleKey: 't', subtitleFn: () => '' },
         (T) => el._renderBatteryZones(T), new Proxy({}, { get: () => '' }));
-    // six knobs + four pickers hidden (#1166: the end-of-charge level),
-    // plus the external-control mode select (#1079); the protection toggle shown
-    assert.deepEqual(rows, { shown: 1, hidden: 11 });
+    // three knobs + four pickers hidden (#1166: the end-of-charge level),
+    // plus the external-control mode select (#1079); the protection toggle shown.
+    // (#1354) the three battery levels are set on the Battery tab: here a
+    // line names them with the way there, and it is not a control.
+    assert.deepEqual(rows, { shown: 1, hidden: 8 });
     const btn = findTemplates(real(rows), 'class="everyday-more-btn"')[0];
     assert.ok(btn);
     store.clear();
@@ -348,4 +360,18 @@ test('the segmented switch picks a view and stores it', () => {
     el._setView(false);
     assert.equal(el._advanced, false);
     assert.equal(store.get(viewMode.VIEW_MODE_KEY), '0');
+});
+
+// #1354 — a stored 750 W under the field's 1000 W floor showed as 1000.
+test('a knob shows a stored value below its floor where it truly is', () => {
+    const eid = 'number.sem_battery_assist_max_power';
+    const states = { ...STATES, [eid]: { entity_id: eid, state: '750',
+        attributes: { min: 1000, max: 25000, step: 500, unit_of_measurement: 'W' } } };
+    const el = card({ advanced: true, states });
+    const out = el._renderZoneKnob(eid, 'x', {}, '');
+    const s = text(out);
+    assert.match(s, /750 W/);
+    const range = findTemplates(out, 'type="range"')[0];
+    const i = range.strings.findIndex((p) => p.trimEnd().endsWith('min='));
+    assert.equal(range.values[i], 750, 'slider floor follows the stored value');
 });
