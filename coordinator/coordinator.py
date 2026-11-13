@@ -12702,7 +12702,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             from datetime import timedelta as _td
             from .energy_planner import (
-                Demand, LedgerSlot, battery_at_end, build_night_ledger, pack_night,
+                Demand, LedgerSlot, battery_at_end, build_night_ledger, demand_why,
+                pack_night,
             )
             from .ev_night_targets import build_night_target_map
             from .ev_tariff_planner import (
@@ -13569,6 +13570,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # so publish the fields, not the sentence. Both stay — the
             # strings are what the log lines and the soak notes quote.
             kind_of = {d.id: d.kind for d in demands}
+            source_of = {d.id: d.source for d in demands}
+            allocs_of = {}
+            for _a in plan.allocations:
+                allocs_of.setdefault(_a.demand_id, []).append(_a)
             rows = [{
                 "id": r.demand_id,
                 "kind": kind_of.get(r.demand_id, "load"),
@@ -13582,6 +13587,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1354) the note as codes the card translates
                 "notes": [{"code": c, "params": dict(p)}
                           for c, p in getattr(r, "note_codes", ())],
+                # (#1321) why its runs landed where they did — one code
+                # for the Plan card's "Why this plan" list
+                "why": demand_why(allocs_of.get(r.demand_id, ()), ledger,
+                                  source_of.get(r.demand_id, "grid")),
             } for r in plan.results]
             # The ledger itself — the card's hour axis and battery
             # trajectory, in the ONE shape a quiet night draws too.

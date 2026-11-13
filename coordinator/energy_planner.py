@@ -199,6 +199,51 @@ def battery_at_end(ledger, floor_kwh, capacity_kwh) -> Optional[dict]:
             "at": s.end.isoformat()}
 
 
+def demand_why(allocations, ledger, source: str = "grid") -> Optional[dict]:
+    """(#1321) One reason code for where a demand's runs landed, for the
+    Plan card's "Why this plan" list: ``{"code", "params"}`` or None when
+    nothing was placed. Read off what the packer did, never re-decided:
+
+    * ``from_battery`` — a battery-sourced (Tier-2) demand;
+    * ``on_sun`` — every run sits in a sun slot;
+    * ``before_departure`` — a run is the late top-up before the deadline;
+    * ``unpriced_hours`` — a run had no published price;
+    * ``one_rate`` — the night has one price, so the hours are not chosen
+      by price;
+    * ``cheapest_hours`` — otherwise: the cheapest priced hours, with the
+      average price (``price``) of the runs.
+    """
+    runs = [a for a in allocations]
+    if not runs:
+        return None
+    first = min(a.start for a in runs)
+    last = max(a.end for a in runs)
+    span = {"from": first.isoformat(), "to": last.isoformat()}
+    if source == "battery":
+        return {"code": "from_battery", "params": span}
+
+    def _slot(a):
+        for s in ledger:
+            if s.start <= a.start < s.end:
+                return s
+        return None
+
+    slots = [_slot(a) for a in runs]
+    if all(s is not None and s.cap_override_w is not None for s in slots):
+        return {"code": "on_sun", "params": span}
+    if any(getattr(a, "late", False) for a in runs):
+        return {"code": "before_departure", "params": span}
+    if any(a.price is None for a in runs):
+        return {"code": "unpriced_hours", "params": span}
+    prices = {round(float(s.price), 4) for s in ledger if s.price is not None}
+    if len(prices) <= 1:
+        return {"code": "one_rate", "params": span}
+    kwh = sum(a.energy_kwh for a in runs)
+    avg = (sum(a.energy_kwh * float(a.price) for a in runs) / kwh) if kwh > 0 else None
+    return {"code": "cheapest_hours",
+            "params": {**span, **({"price": round(avg, 3)} if avg is not None else {})}}
+
+
 # ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
