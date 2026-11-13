@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **SEM Next: the plan says why per device, each charger shows its charge plan, the battery its reserve** (#1321). Phones get no sideways scroll.
 - 🐛 **SEM Next shows a charger by its own name in every language, not as "ev charger 1"** (#1321).
 - 🔧 **SEM Next asks the peak limit, battery levels and charger targets with the same words and logic as the classic dashboard** (#1354).
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".

@@ -8,7 +8,7 @@
 import { html, nothing } from '../base/sem-next-base.js';
 import { providerName } from './forecast-evidence.js';
 import { zonesModel } from './next-devices.js';
-import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels, batterySaysFromStates } from './battery-questions.js';
+import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels, batterySaysFromStates, batteryFloorPct, kwhAboveFloor, batteryUnits } from './battery-questions.js';
 
 /** (#1354) The entity of a shared battery level by its id. */
 const LEVEL = Object.fromEntries(BATTERY_LEVELS.map((l) => [l.id, l.entity]));
@@ -82,7 +82,10 @@ export function batteryBody(card, row) {
     // (#1354) the levels come from the shared battery model, as on the classic Battery tab
     const ids = { priority: LEVEL.priority, buffer: LEVEL.buffer, auto: LEVEL.autostart, tonight: 'sensor.sem_battery_dynamic_floor_pct' };
     const lv = batteryLevels(card._hass?.states);
-    const z = zonesModel({ soc, priority: lv.priority, buffer: lv.buffer, autoStart: lv.autostart, floor: num(ids.tonight) });
+    // (#1321) the reserve the plan uses (its own floor when published, else the setting)
+    const floorPct = batteryFloorPct(card._hass?.states, card._attrs('sensor.sem_energy_plan'));
+    const z = zonesModel({ soc, priority: lv.priority, buffer: lv.buffer, autoStart: lv.autostart, floor: num(ids.tonight), reserve: floorPct });
+    const above = kwhAboveFloor(soc, floorPct, cap);
     // Two marks closer than 14 % would overprint: the second goes under the bar.
     let lastPct = -99, lastLo = false, anyLo = false;
     const marks = z.marks.map((m) => {
@@ -117,6 +120,7 @@ export function batteryBody(card, row) {
                 assist: assistVal })
             : card._sentence(t('next_bat_sent_no_assist'), { assist: assistVal }));
     }
+    if (above !== null) parts.push(tf('next_above_reserve', { kwh: card._fmt(above, 1), reserve: Math.round(floorPct) }));
     const sentence = parts.length ? html`<p class="sent">${parts.map((p, i) => html`${i ? ' ' : ''}${p}`)}</p>` : nothing;
 
     // ── rows ──
@@ -177,6 +181,15 @@ export function batteryBody(card, row) {
         rows.push(card._row('mdi:swap-vertical', bats.map((_, i) => tf('next_battery_n', { n: i + 1 })).join(' · '),
             html`${vals.map((x, i) => html`${i ? ' · ' : ''}${x}`)}`,
             reserves.length ? html`${t(Q.reserve.key)} ${reserves.map((x, i) => html`${i ? ' · ' : ''}${x}`)}` : ''));
+        // (#1321) each battery's own level and power, when SEM publishes them
+        const units = batteryUnits(card._hass?.states, bats);
+        units.forEach((u) => {
+            const i = bats.indexOf(u.bid);
+            const pw = u.powerW === null ? '—' : (u.powerW < 0 ? '−' : '') + card._kw(Math.abs(u.powerW));
+            rows.push(card._row('mdi:battery-outline', tf('next_battery_n', { n: i + 1 }),
+                (u.soc === null ? '—' : Math.round(u.soc) + ' %') + ' · ' + pw,
+                (() => { const k = String(u.status || '').toLowerCase(); const w = k ? t(k) : ''; return w && w !== k ? w : (u.status || ''); })()));
+        });
     }
     const src = card._str('sensor.sem_forecast_source');
     const d1 = card._has('sensor.sem_forecast_trust_d1') ? num('sensor.sem_forecast_trust_d1') : (Number.isFinite(Number(sa.forecast_trust_d1)) ? Number(sa.forecast_trust_d1) * 100 : null);

@@ -14,6 +14,8 @@
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { planIdName } from '../util/plan-ids.js';
 import { planNoteText } from '../util/plan-notes.js';
+import { whyLines, batteryEndPct } from '../util/plan-why.js';
+import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, kwhOf, coldHeaters } from '../util/next-lead.js';
 
@@ -300,16 +302,42 @@ class SEMNextPlanCard extends SEMNextBase {
             && (x.id === fb.row.key || (fb.row.kind === 'battery_in' && String(x.id || '').includes('battery'))))
             .sort((p, q) => Date.parse(p.start) - Date.parse(q.start))[0];
         if (!b) return '';
-        const key = 'next_reason_' + b.reason;
+        return this._reasonText(b.reason, b.reason_params);
+    }
+
+    /** A block's reason code in words, '' when the code has no text. */
+    _reasonText(reason, params) {
+        const key = 'next_reason_' + reason;
         const text = this._t(key);
-        if (!text || text === key) return '';
-        const p = b.reason_params || {};
+        if (!reason || !text || text === key) return '';
+        const p = params || {};
         const time = p.deadline ? this._hhmm(p.deadline) : '';
         if (text.includes('{time}') && !time) return '';
         const said = this._tf(key, { time });
         const price = Number(p.price);
         return p.price !== undefined && p.price !== null && Number.isFinite(price)
             ? `${said} · ${this._tf('next_tip_price', { price: this._fmt(price, 3), cur: this._currency() })}` : said;
+    }
+
+    // ── why this plan ──
+    /** (#1321) One visible line per planned device: what, when, why. */
+    _whySec(plan) {
+        const t = (k) => this._t(k);
+        const lines = whyLines(plan, Date.now());
+        if (!lines.length) return nothing;
+        const devices = this._devices();
+        const rows = lines.map((l) => {
+            const name = planIdName(l.id, {
+                charger: (cid) => this._chargerName(cid), load: (k) => devices[k]?.name,
+                battery: () => t('next_src_battery'), label: () => l.label,
+            });
+            const kind = l.id.startsWith('ev:') ? 'ev' : l.id.includes('battery') ? 'battery_in' : 'load';
+            const when = l.start ? `${this._hhmm(l.start)} – ${this._hhmm(l.end)}${l.kwh > 0.05 ? ' · ' + this._kwh(l.kwh) : ''}` : t('next_not_scheduled');
+            const why = l.why ? this._whyText({ why: l.why }) : this._reasonText(l.reason, l.params);
+            return html`<div class="row" style="--c:${KIND_COLOR[kind] || C.home}"><div class="k">${this._icon(KIND_ICON[kind] || 'mdi:power-plug')}
+                <span class="t"><b>${name}</b> · ${when}${why ? html`<br><span class="sm muted">${why}</span>` : nothing}</span></div></div>`;
+        });
+        return this._sec(t('next_why_plan'), html`<div class="rows">${rows}</div>`);
     }
 
     _focusReason(fb, plan) {
@@ -633,6 +661,8 @@ class SEMNextPlanCard extends SEMNextBase {
             btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, primary: true, disabled: obs }));
             if (mode) btns.push(this._btn(t('next_charge_now'), () => { this._confirm = cid; }, { small: true, ghost: true, disabled: obs || mode === 'always_max' }));
         }
+        // (#1321) the charge plan lives on the charger's Devices card: one tap there
+        btns.push(this._btn(t('next_charge_plan'), () => this._openChargePlan(cid), { small: true, ghost: true, icon: 'mdi:pencil' }));
         const rest = win ? `${win}${kwh > 0.05 ? ' · ' + this._kwh(kwh) : ''}` : '';
         return this._devRow('mdi:car-electric', C.ev, this._chargerName(cid), rest, bits.join(' · '), btns);
     }
@@ -736,6 +766,12 @@ class SEMNextPlanCard extends SEMNextBase {
         this.requestUpdate();
     }
 
+    /** Open the charger's charge plan on the Devices screen. */
+    _openChargePlan(cid) {
+        try { window.sessionStorage.setItem(OPEN_CHARGE_PLAN_KEY, String(cid)); } catch (e) { /* private window: the screen still opens */ }
+        this._go('/sem-next/devices');
+    }
+
     async _overrideClear(deviceId) {
         if (!await this._callService(DOMAIN, 'plan_override_clear', { device_id: deviceId })) return false;
         const { [deviceId]: _gone, ...rest } = this._local;
@@ -768,6 +804,14 @@ class SEMNextPlanCard extends SEMNextBase {
         if (Number.isFinite(saved)) {
             tiles.push({ label: t('next_saved_by_plan'), value: this._fmt(saved, 2), unit: this._currency(), sub: t('next_vs_now'), valueColor: C.good });
         }
+        // (#1321) the battery level the plan expects at its end; no field, no tile
+        const endPct = batteryEndPct(plan);
+        if (endPct !== null) {
+            const slots = Array.isArray(plan.slots) ? plan.slots : [];
+            const end = slots.length ? slots[slots.length - 1].end : '';
+            tiles.push({ label: t('next_batt_end'), value: Math.round(endPct), unit: '%',
+                sub: end && Number.isFinite(Date.parse(end)) ? this._tf('next_batt_end_sub', { time: this._hhmm(end) }) : '' });
+        }
         const sun = this._num('sensor.sem_forecast_tomorrow_kwh');
         if (sun !== null) {
             const trust = this._num('sensor.sem_forecast_trust_d2');
@@ -790,7 +834,7 @@ class SEMNextPlanCard extends SEMNextBase {
         rows.push(this._row('mdi:sync', t('next_replan'),
             this._btn(t('next_now_btn'), () => this._callService(DOMAIN, 'replan', {}), { small: true, disabled: obs }),
             m.computedAt ? this._tf('next_replan_last', { time: this._hhmm(m.computedAt) }) : ''));
-        return this._sec(t('next_expected'), html`${tiles.length ? this._tiles(tiles, { three: tiles.length === 3 }) : nothing}
+        return this._sec(t('next_expected'), html`${tiles.length ? this._tiles(tiles, { three: tiles.length % 3 === 0 }) : nothing}
             <div class="rows" style="margin-top:8px">${rows}</div>`);
     }
 
@@ -858,6 +902,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const m = this._model();
         return this._frame(this._lead(plan, m), html`<div class="grid">
             ${this._stripSec(plan)}
+            ${this._whySec(plan)}
             ${this._deviceSec(plan)}
             ${this._expectedSec(plan, m)}
             ${this._decisionsSec()}

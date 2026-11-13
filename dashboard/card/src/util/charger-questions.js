@@ -47,3 +47,21 @@ export function chargerSays(states, t, plainReason) {
     if (!strat || !strat.state || strat.state === 'unavailable' || strat.state === 'unknown') return null;
     return strategyWords(strat, t, plainReason);
 }
+
+/**
+ * (#1321) The charge plan in one line: "Ready by 07:00 · 20–100 kWh · Mon–Sun".
+ * `runs` = weekday runs [{from, to, time}] (0 = Monday); `dayName(i)` names a day.
+ * Returns {time, range, days}; each part is '' when unknown.
+ */
+export function chargePlanSummary({ chargeBy = '', min = null, max = null, unit = 'kWh', runs = [], dayName = (i) => String(i) } = {}) {
+    const fmt = (v) => (unit === '%' ? String(Math.round(v)) : String(Math.round(v * 10) / 10));
+    const hasMin = Number.isFinite(Number(min)) && min !== null, hasMax = Number.isFinite(Number(max)) && max !== null;
+    const range = hasMin && hasMax ? `${fmt(Number(min))}–${fmt(Number(max))} ${unit}`
+        : hasMin ? `${fmt(Number(min))} ${unit}` : '';
+    const list = Array.isArray(runs) ? runs : [];
+    const one = list.length === 1 ? list[0] : null;
+    const time = one && one.time ? one.time : (chargeBy || '');
+    const span = (r) => (r.from === r.to ? dayName(r.from) : `${dayName(r.from)}–${dayName(r.to)}`);
+    const days = list.length ? list.map((r) => (one ? span(r) : `${span(r)} ${r.time}`)).join(', ') : '';
+    return { time, range, days };
+}

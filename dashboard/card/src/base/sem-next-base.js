@@ -112,6 +112,9 @@ export const nextCss = css`
     .row:has(.btns) .btns { margin-left: auto; }
     .val { background: none; border: 0; padding: 0; font: inherit; color: var(--n-fg); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; text-decoration-color: var(--n-fg3); text-decoration-thickness: 1.5px; cursor: pointer; font-weight: 500; }
     .val[disabled] { cursor: default; opacity: .6; }
+    .val:not([disabled])::after { content: '✎'; display: inline-block; margin-left: 3px; font-size: .8em; color: var(--n-fg3); opacity: 0; transition: opacity .15s; text-decoration: none; }
+    .val:not([disabled]):hover::after, .val:not([disabled]):focus-visible::after { opacity: 1; }
+    @media (hover: none) { .val:not([disabled])::after { opacity: .7; } }
     .sent { line-height: 1.6; margin: 0; color: var(--n-fg2); }
     .sent .val { color: var(--n-fg); }
     .btn { border: 1px solid var(--n-line); background: var(--n-card2); color: var(--n-fg); border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 500; min-height: 40px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; text-decoration: none; }
@@ -155,8 +158,8 @@ export const nextCss = css`
     .reason ha-icon { color: var(--c); }
     .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--n-fg2); margin-top: 6px; }
     .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
-    .lanes { overflow-x: auto; margin-top: 8px; -webkit-overflow-scrolling: touch; }
-    .lanes svg { display: block; min-width: 600px; }
+    .lanes { margin-top: 8px; }
+    .lanes svg { display: block; width: 100%; max-width: 100%; }
 
     /* devices */
     .dev { position: relative; }
