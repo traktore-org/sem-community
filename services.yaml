@@ -78,13 +78,15 @@ update_device_config:
             - behind_operator_relay
             - name
             - cop_curve
+            - cop_source
     value:
       name: Value
       description: >-
         New boolean value — or, for phase (#1048), the supply phase the load
         sits on: L1, L2, L3, 3ph or unknown. For cop_curve (#1081), 2 or 3
         points of outdoor °C and COP, like "-7:2.5, 2:3.2, 12:4.2"; empty
-        clears it.
+        clears it. For cop_source: flat, curve or learned (the COP learned
+        from the heat meter); empty = the curve if set, else flat.
       required: true
       selector:
         boolean:

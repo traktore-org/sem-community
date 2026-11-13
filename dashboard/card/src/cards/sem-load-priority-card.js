@@ -33,7 +33,8 @@ import {
     cleanLoadName,
 } from './load-config-modal.js';
 import { stateLabel } from '../util/state-label.js';
-import { curveRows, curveToSend, heatCostNow, heatCostLine } from '../util/heat-pump-cost.js';
+import { curveRows, curveToSend, heatCostNow, heatCostLine,
+    copSourceOf, copSourceOptions, copLearnLine } from '../util/heat-pump-cost.js';
 import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
 import { PEAK_KW, PEAK_TEXT, sliderAnswer } from '../util/peak-questions.js';
 import {
@@ -1637,7 +1638,32 @@ class SEMLoadPriorityCard extends SEMLitBase {
                            @click=${(e) => e.stopPropagation()}>
                 </span>
             </div>`)}
-            <div class="ge-hint">${this._t('hp_cop_curve_hint')}</div>`;
+            <div class="ge-hint">${this._t('hp_cop_curve_hint')}</div>
+            ${this._renderCopSource(device)}`;
+    }
+
+    /** (#1081) What the heat pump learned from its heat meter, and which
+     *  COP SEM uses: fixed, the user's curve, or the learned one. Only a
+     *  heat pump row carries cop_source. */
+    _renderCopSource(device) {
+        const g = device.goals || {};
+        if (!Object.prototype.hasOwnProperty.call(g, 'cop_source')) return nothing;
+        const learn = copLearnLine(g.cop_learn, (k) => this._t(k));
+        const cur = copSourceOf(g);
+        const opts = copSourceOptions(g);
+        return html`
+            ${learn ? html`<div class="ge-hint">${learn}</div>` : nothing}
+            ${opts.length > 1 ? html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('hp_cop_source')}</span>
+                <span class="ge-ctl">
+                    <select class="mode-select" data-goal="cop_source" data-device="${device.id}"
+                            @click=${(e) => e.stopPropagation()}>
+                        ${opts.map((o) => html`
+                            <option value="${o}" ?selected="${cur === o}">${this._t(`hp_cop_source_${o}`)}</option>`)}
+                    </select>
+                </span>
+            </div>` : nothing}`;
     }
 
     /** (#812) The load's own tariff: a fixed rate or a price entity, and its

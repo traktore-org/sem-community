@@ -632,6 +632,8 @@ class UnifiedDeviceRegistry:
         "name",
         # (#1081) a heat pump's COP against the outdoor temperature
         "cop_curve",
+        # (#1081) …and where it comes from: flat, curve or learned
+        "cop_source",
     )
 
     def own_name(self, device_id: str) -> str:
@@ -760,6 +762,10 @@ class UnifiedDeviceRegistry:
         if "cop_curve" in goals and hasattr(device, "cop_curve"):
             from ..coordinator.heat_cost import parse_cop_curve
             device.cop_curve = parse_cop_curve(goals.get("cop_curve"))
+        if "cop_source" in goals and hasattr(device, "cop_source"):
+            from ..coordinator.heat_cost import COP_SOURCES
+            _src = str(goals.get("cop_source") or "").strip().lower()
+            device.cop_source = _src if _src in COP_SOURCES else ""
         if "comfort_entity" in goals:
             device.comfort_entity = str(goals.get("comfort_entity", "") or "")
         for _ck in ("comfort_target", "comfort_offset", "comfort_limit"):
@@ -2618,6 +2624,11 @@ class UnifiedDeviceRegistry:
                 # load with a COP (a heat pump) gets the key at all
                 **({"cop_curve": str(goals.get("cop_curve") or "")}
                    if live is not None and hasattr(live, "cop_curve") else {}),
+                # (#1081) the COP's source ("" = never chosen) and what the
+                # learner has: state, hours, the range, the points
+                **({"cop_source": str(goals.get("cop_source") or ""),
+                    "cop_learn": getattr(live, "cop_learn_summary", None)}
+                   if live is not None and hasattr(live, "cop_source") else {}),
                 # (#1021) the Configure-device switch
                 "behind_operator_relay": _goal_bool(
                     goals.get("behind_operator_relay")),

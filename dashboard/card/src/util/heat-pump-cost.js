@@ -79,8 +79,8 @@ export function heatCostNow(stateObj) {
     const bad = ['unknown', 'unavailable', ''].includes(String(stateObj.state ?? ''));
     return {
         cop,
-        source: a.cop_source === 'curve' ? 'curve' : 'flat',
-        outdoorC: a.cop_source === 'curve' ? num(a.outdoor_c) : null,
+        source: ['curve', 'learned'].includes(a.cop_source) ? a.cop_source : 'flat',
+        outdoorC: ['curve', 'learned'].includes(a.cop_source) ? num(a.outdoor_c) : null,
         price: bad ? null : num(stateObj.state),
         unit: a.unit_of_measurement || '',
     };
@@ -99,4 +99,40 @@ export function heatCostLine(now, t) {
         line += ` · ${t('hp_heat_costs').replace('{price}', price)}`;
     }
     return line;
+}
+
+/** (#1081) Where the COP comes from, as the user picks it. "" (never
+ *  picked) reads as the curve when one is set, else the flat COP. */
+export const COP_SOURCES = ['flat', 'curve', 'learned'];
+
+/** The source the select shows for these goals. */
+export function copSourceOf(goals) {
+    const g = goals || {};
+    const s = String(g.cop_source || '');
+    if (COP_SOURCES.includes(s)) return s;
+    return parseCopCurve(g.cop_curve) ? 'curve' : 'flat';
+}
+
+/** The choices the select offers: "learned" only once the learner has a
+ *  curve (or it is already the pick, so it never vanishes from under it),
+ *  "curve" only with a curve set (or already picked). */
+export function copSourceOptions(goals) {
+    const g = goals || {};
+    const cur = copSourceOf(g);
+    const out = ['flat'];
+    if (parseCopCurve(g.cop_curve) || cur === 'curve') out.push('curve');
+    if (g.cop_learn?.state === 'learned' || cur === 'learned') out.push('learned');
+    return out;
+}
+
+/** The learner's line: "Learned from 54 hours, -6 to 11 °C", "Learning:
+ *  12 hours so far", or "" without a heat meter. */
+export function copLearnLine(learn, t) {
+    if (!learn || learn.state === 'no_meter') return '';
+    const hours = String(Math.round(num(learn.hours) || 0));
+    if (learn.state === 'learned') {
+        return t('hp_cop_learned_from').replace('{hours}', hours)
+            .replace('{tmin}', fmt(num(learn.tmin))).replace('{tmax}', fmt(num(learn.tmax)));
+    }
+    return t('hp_cop_learning').replace('{hours}', hours);
 }

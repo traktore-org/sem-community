@@ -2193,7 +2193,13 @@
     "hp_cop_curve_section": "COP podle venkovní teploty",
     "hp_cop_point_at": "Při",
     "hp_cop_point_is": "venku je COP",
-    "hp_cop_curve_hint": "Se dvěma nebo třemi body SEM plánuje tepelné čerpadlo do hodin, kdy je teplo nejlevnější. Nechte prázdné pro pevný COP."
+    "hp_cop_curve_hint": "Se dvěma nebo třemi body SEM plánuje tepelné čerpadlo do hodin, kdy je teplo nejlevnější. Nechte prázdné pro pevný COP.",
+    "hp_cop_source": "Použitý COP",
+    "hp_cop_source_flat": "Pevný COP",
+    "hp_cop_source_curve": "Moje křivka",
+    "hp_cop_source_learned": "Naučený",
+    "hp_cop_learned_from": "Naučeno z měřiče tepla: {hours} hodin, {tmin} až {tmax} °C",
+    "hp_cop_learning": "Učí se z měřiče tepla: zatím {hours} hodin"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4389,7 +4395,13 @@
     "hp_cop_curve_section": "COP efter udetemperatur",
     "hp_cop_point_at": "Ved",
     "hp_cop_point_is": "ude er COP",
-    "hp_cop_curve_hint": "Med to eller tre punkter planlægger SEM varmepumpen i de timer, hvor varme er billigst. Lad stå tomt for én fast COP."
+    "hp_cop_curve_hint": "Med to eller tre punkter planlægger SEM varmepumpen i de timer, hvor varme er billigst. Lad stå tomt for én fast COP.",
+    "hp_cop_source": "Brugt COP",
+    "hp_cop_source_flat": "Fast COP",
+    "hp_cop_source_curve": "Min kurve",
+    "hp_cop_source_learned": "Lært",
+    "hp_cop_learned_from": "Lært fra varmemåleren: {hours} timer, {tmin} til {tmax} °C",
+    "hp_cop_learning": "Lærer fra varmemåleren: {hours} timer indtil nu"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6585,7 +6597,13 @@
     "hp_cop_curve_section": "COP nach Außentemperatur",
     "hp_cop_point_at": "Bei",
     "hp_cop_point_is": "draußen ist der COP",
-    "hp_cop_curve_hint": "Mit zwei oder drei Punkten plant SEM die Wärmepumpe in die Stunden, in denen Wärme am günstigsten ist. Leer lassen für einen festen COP."
+    "hp_cop_curve_hint": "Mit zwei oder drei Punkten plant SEM die Wärmepumpe in die Stunden, in denen Wärme am günstigsten ist. Leer lassen für einen festen COP.",
+    "hp_cop_source": "Verwendeter COP",
+    "hp_cop_source_flat": "Fester COP",
+    "hp_cop_source_curve": "Meine Kurve",
+    "hp_cop_source_learned": "Gelernt",
+    "hp_cop_learned_from": "Vom Wärmezähler gelernt: {hours} Stunden, {tmin} bis {tmax} °C",
+    "hp_cop_learning": "Lernt vom Wärmezähler: bisher {hours} Stunden"
   },
   "en": {
     "% of limit": "% of limit",
@@ -8781,7 +8799,13 @@
     "hp_cop_curve_section": "COP by outdoor temperature",
     "hp_cop_point_at": "At",
     "hp_cop_point_is": "outside the COP is",
-    "hp_cop_curve_hint": "With two or three points SEM plans the heat pump for the hours where heat is cheapest. Leave empty for one fixed COP."
+    "hp_cop_curve_hint": "With two or three points SEM plans the heat pump for the hours where heat is cheapest. Leave empty for one fixed COP.",
+    "hp_cop_source": "COP used",
+    "hp_cop_source_flat": "Fixed COP",
+    "hp_cop_source_curve": "My curve",
+    "hp_cop_source_learned": "Learned",
+    "hp_cop_learned_from": "Learned from the heat meter: {hours} hours, {tmin} to {tmax} °C",
+    "hp_cop_learning": "Learning from the heat meter: {hours} hours so far"
   },
   "es": {
     "% of limit": "% del límite",
@@ -10977,7 +11001,13 @@
     "hp_cop_curve_section": "COP según la temperatura exterior",
     "hp_cop_point_at": "A",
     "hp_cop_point_is": "fuera, el COP es",
-    "hp_cop_curve_hint": "Con dos o tres puntos, SEM planifica la bomba de calor en las horas en que el calor es más barato. Déjelo vacío para un COP fijo."
+    "hp_cop_curve_hint": "Con dos o tres puntos, SEM planifica la bomba de calor en las horas en que el calor es más barato. Déjelo vacío para un COP fijo.",
+    "hp_cop_source": "COP usado",
+    "hp_cop_source_flat": "COP fijo",
+    "hp_cop_source_curve": "Mi curva",
+    "hp_cop_source_learned": "Aprendido",
+    "hp_cop_learned_from": "Aprendido del contador de calor: {hours} horas, de {tmin} a {tmax} °C",
+    "hp_cop_learning": "Aprendiendo del contador de calor: {hours} horas hasta ahora"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13173,7 +13203,13 @@
     "hp_cop_curve_section": "COP ulkolämpötilan mukaan",
     "hp_cop_point_at": "Kun ulkona on",
     "hp_cop_point_is": "COP on",
-    "hp_cop_curve_hint": "Kahdella tai kolmella pisteellä SEM ajoittaa lämpöpumpun tunteihin, joina lämpö on halvinta. Jätä tyhjäksi, jos COP on kiinteä."
+    "hp_cop_curve_hint": "Kahdella tai kolmella pisteellä SEM ajoittaa lämpöpumpun tunteihin, joina lämpö on halvinta. Jätä tyhjäksi, jos COP on kiinteä.",
+    "hp_cop_source": "Käytetty COP",
+    "hp_cop_source_flat": "Kiinteä COP",
+    "hp_cop_source_curve": "Oma käyrä",
+    "hp_cop_source_learned": "Opittu",
+    "hp_cop_learned_from": "Opittu lämpöenergiamittarista: {hours} tuntia, {tmin}–{tmax} °C",
+    "hp_cop_learning": "Oppii lämpöenergiamittarista: tähän mennessä {hours} tuntia"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15369,7 +15405,13 @@
     "hp_cop_curve_section": "COP selon la température extérieure",
     "hp_cop_point_at": "À",
     "hp_cop_point_is": "dehors, le COP est",
-    "hp_cop_curve_hint": "Avec deux ou trois points, SEM place la pompe à chaleur aux heures où la chaleur coûte le moins. Laissez vide pour un COP fixe."
+    "hp_cop_curve_hint": "Avec deux ou trois points, SEM place la pompe à chaleur aux heures où la chaleur coûte le moins. Laissez vide pour un COP fixe.",
+    "hp_cop_source": "COP utilisé",
+    "hp_cop_source_flat": "COP fixe",
+    "hp_cop_source_curve": "Ma courbe",
+    "hp_cop_source_learned": "Appris",
+    "hp_cop_learned_from": "Appris du compteur de chaleur : {hours} heures, de {tmin} à {tmax} °C",
+    "hp_cop_learning": "Apprend du compteur de chaleur : {hours} heures jusqu'ici"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17565,7 +17607,13 @@
     "hp_cop_curve_section": "COP a külső hőmérséklet szerint",
     "hp_cop_point_at": "Kint",
     "hp_cop_point_is": "esetén a COP",
-    "hp_cop_curve_hint": "Két vagy három ponttal a SEM a hőszivattyút azokra az órákra tervezi, amikor a hő a legolcsóbb. Hagyja üresen egy fix COP-hoz."
+    "hp_cop_curve_hint": "Két vagy három ponttal a SEM a hőszivattyút azokra az órákra tervezi, amikor a hő a legolcsóbb. Hagyja üresen egy fix COP-hoz.",
+    "hp_cop_source": "Használt COP",
+    "hp_cop_source_flat": "Fix COP",
+    "hp_cop_source_curve": "Saját görbe",
+    "hp_cop_source_learned": "Tanult",
+    "hp_cop_learned_from": "A hőmennyiségmérőből tanulva: {hours} óra, {tmin} és {tmax} °C között",
+    "hp_cop_learning": "Tanul a hőmennyiségmérőből: eddig {hours} óra"
   },
   "it": {
     "% of limit": "% del limite",
@@ -19761,7 +19809,13 @@
     "hp_cop_curve_section": "COP secondo la temperatura esterna",
     "hp_cop_point_at": "A",
     "hp_cop_point_is": "fuori il COP è",
-    "hp_cop_curve_hint": "Con due o tre punti SEM pianifica la pompa di calore nelle ore in cui il calore costa meno. Lascia vuoto per un COP fisso."
+    "hp_cop_curve_hint": "Con due o tre punti SEM pianifica la pompa di calore nelle ore in cui il calore costa meno. Lascia vuoto per un COP fisso.",
+    "hp_cop_source": "COP usato",
+    "hp_cop_source_flat": "COP fisso",
+    "hp_cop_source_curve": "La mia curva",
+    "hp_cop_source_learned": "Appreso",
+    "hp_cop_learned_from": "Appreso dal contatore di calore: {hours} ore, da {tmin} a {tmax} °C",
+    "hp_cop_learning": "Apprende dal contatore di calore: finora {hours} ore"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -21957,7 +22011,13 @@
     "hp_cop_curve_section": "COP naar buitentemperatuur",
     "hp_cop_point_at": "Bij",
     "hp_cop_point_is": "buiten is de COP",
-    "hp_cop_curve_hint": "Met twee of drie punten plant SEM de warmtepomp in de uren waarin warmte het goedkoopst is. Laat leeg voor één vaste COP."
+    "hp_cop_curve_hint": "Met twee of drie punten plant SEM de warmtepomp in de uren waarin warmte het goedkoopst is. Laat leeg voor één vaste COP.",
+    "hp_cop_source": "Gebruikte COP",
+    "hp_cop_source_flat": "Vaste COP",
+    "hp_cop_source_curve": "Mijn curve",
+    "hp_cop_source_learned": "Geleerd",
+    "hp_cop_learned_from": "Geleerd van de warmtemeter: {hours} uur, {tmin} tot {tmax} °C",
+    "hp_cop_learning": "Leert van de warmtemeter: tot nu toe {hours} uur"
   },
   "no": {
     "% of limit": "% av grense",
@@ -24153,7 +24213,13 @@
     "hp_cop_curve_section": "COP etter utetemperatur",
     "hp_cop_point_at": "Ved",
     "hp_cop_point_is": "ute er COP",
-    "hp_cop_curve_hint": "Med to eller tre punkter planlegger SEM varmepumpen i timene der varme er billigst. La stå tomt for én fast COP."
+    "hp_cop_curve_hint": "Med to eller tre punkter planlegger SEM varmepumpen i timene der varme er billigst. La stå tomt for én fast COP.",
+    "hp_cop_source": "Brukt COP",
+    "hp_cop_source_flat": "Fast COP",
+    "hp_cop_source_curve": "Min kurve",
+    "hp_cop_source_learned": "Lært",
+    "hp_cop_learned_from": "Lært fra varmemåleren: {hours} timer, {tmin} til {tmax} °C",
+    "hp_cop_learning": "Lærer fra varmemåleren: {hours} timer så langt"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26349,7 +26415,13 @@
     "hp_cop_curve_section": "COP według temperatury zewnętrznej",
     "hp_cop_point_at": "Przy",
     "hp_cop_point_is": "na zewnątrz COP wynosi",
-    "hp_cop_curve_hint": "Z dwoma lub trzema punktami SEM planuje pompę ciepła na godziny, w których ciepło jest najtańsze. Zostaw puste dla stałego COP."
+    "hp_cop_curve_hint": "Z dwoma lub trzema punktami SEM planuje pompę ciepła na godziny, w których ciepło jest najtańsze. Zostaw puste dla stałego COP.",
+    "hp_cop_source": "Używany COP",
+    "hp_cop_source_flat": "Stały COP",
+    "hp_cop_source_curve": "Moja krzywa",
+    "hp_cop_source_learned": "Nauczony",
+    "hp_cop_learned_from": "Nauczony z licznika ciepła: {hours} godz., od {tmin} do {tmax} °C",
+    "hp_cop_learning": "Uczy się z licznika ciepła: dotąd {hours} godz."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28545,7 +28617,13 @@
     "hp_cop_curve_section": "COP pela temperatura exterior",
     "hp_cop_point_at": "A",
     "hp_cop_point_is": "lá fora o COP é",
-    "hp_cop_curve_hint": "Com dois ou três pontos, o SEM planeia a bomba de calor nas horas em que o calor é mais barato. Deixe vazio para um COP fixo."
+    "hp_cop_curve_hint": "Com dois ou três pontos, o SEM planeia a bomba de calor nas horas em que o calor é mais barato. Deixe vazio para um COP fixo.",
+    "hp_cop_source": "COP usado",
+    "hp_cop_source_flat": "COP fixo",
+    "hp_cop_source_curve": "A minha curva",
+    "hp_cop_source_learned": "Aprendido",
+    "hp_cop_learned_from": "Aprendido do contador de calor: {hours} horas, de {tmin} a {tmax} °C",
+    "hp_cop_learning": "A aprender do contador de calor: {hours} horas até agora"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30741,7 +30819,13 @@
     "hp_cop_curve_section": "COP după temperatura exterioară",
     "hp_cop_point_at": "La",
     "hp_cop_point_is": "afară, COP este",
-    "hp_cop_curve_hint": "Cu două sau trei puncte, SEM planifică pompa de căldură în orele în care căldura este cea mai ieftină. Lăsați gol pentru un COP fix."
+    "hp_cop_curve_hint": "Cu două sau trei puncte, SEM planifică pompa de căldură în orele în care căldura este cea mai ieftină. Lăsați gol pentru un COP fix.",
+    "hp_cop_source": "COP folosit",
+    "hp_cop_source_flat": "COP fix",
+    "hp_cop_source_curve": "Curba mea",
+    "hp_cop_source_learned": "Învățat",
+    "hp_cop_learned_from": "Învățat din contorul de căldură: {hours} ore, de la {tmin} la {tmax} °C",
+    "hp_cop_learning": "Învață din contorul de căldură: {hours} ore până acum"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -32937,7 +33021,13 @@
     "hp_cop_curve_section": "COP efter utetemperatur",
     "hp_cop_point_at": "Vid",
     "hp_cop_point_is": "ute är COP",
-    "hp_cop_curve_hint": "Med två eller tre punkter planerar SEM värmepumpen till de timmar då värmen är billigast. Lämna tomt för ett fast COP."
+    "hp_cop_curve_hint": "Med två eller tre punkter planerar SEM värmepumpen till de timmar då värmen är billigast. Lämna tomt för ett fast COP.",
+    "hp_cop_source": "Använd COP",
+    "hp_cop_source_flat": "Fast COP",
+    "hp_cop_source_curve": "Min kurva",
+    "hp_cop_source_learned": "Inlärd",
+    "hp_cop_learned_from": "Inlärd från värmemätaren: {hours} timmar, {tmin} till {tmax} °C",
+    "hp_cop_learning": "Lär sig från värmemätaren: {hours} timmar hittills"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -35133,6 +35223,12 @@
     "hp_cop_curve_section": "按室外温度的 COP",
     "hp_cop_point_at": "室外",
     "hp_cop_point_is": "时 COP 为",
-    "hp_cop_curve_hint": "设置两到三个点后，SEM 会把热泵安排在热量最便宜的时段。留空则使用固定 COP。"
+    "hp_cop_curve_hint": "设置两到三个点后，SEM 会把热泵安排在热量最便宜的时段。留空则使用固定 COP。",
+    "hp_cop_source": "使用的 COP",
+    "hp_cop_source_flat": "固定 COP",
+    "hp_cop_source_curve": "我的曲线",
+    "hp_cop_source_learned": "学习所得",
+    "hp_cop_learned_from": "从热量表学习：{hours} 小时，{tmin} 至 {tmax} °C",
+    "hp_cop_learning": "正在从热量表学习：已有 {hours} 小时"
   }
 }

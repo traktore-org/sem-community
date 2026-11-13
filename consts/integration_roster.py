@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-13T19:39:56Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 70, 'roles_mined': 204}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-13T22:32:01Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 72, 'roles_mined': 208}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -116,7 +116,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'keba': {'name': 'Keba Charging Station', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 427, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'kia_uvo': {'name': 'Kia Uvo / Hyundai Bluelink', 'repo': 'Hyundai-Kia-Connect/kia_uvo', 'origin': 'hacs', 'installs': 5987, 'kind': 'appliance', 'kind_from': 'keyword'},
     'kostal_plenticore': {'name': 'Kostal Plenticore Solar Inverter', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 2309, 'kind': 'energy', 'kind_from': 'keyword'},
-    'lambda_heat_pumps': {'name': 'Lambda Heat Pumps', 'repo': 'GuidoJeuken-6512/lambda_heat_pumps', 'origin': 'hacs', 'installs': 276, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
+    'lambda_heat_pumps': {'name': 'Lambda Heat Pumps', 'repo': 'GuidoJeuken-6512/lambda_heat_pumps', 'origin': 'hacs', 'installs': 276, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'lektrico': {'name': 'Lektrico Charging Station', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 159, 'kind': 'other', 'kind_from': 'keyword'},
     'leneda': {'name': 'Leneda', 'repo': 'koosoli/Leneda-integration', 'origin': 'hacs', 'installs': 58, 'kind': 'other', 'kind_from': 'keyword'},
     'luxtronik2': {'name': 'Luxtronik', 'repo': 'BenPru/luxtronik', 'origin': 'hacs', 'installs': 614, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
@@ -198,7 +198,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'solstice_season': {'name': 'Solstice Season', 'repo': 'moerk-o/SolsticeHub', 'origin': 'hacs', 'installs': 77, 'kind': 'energy', 'kind_from': 'keyword'},
     'stiebel_eltron': {'name': 'STIEBEL ELTRON', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 152, 'kind': 'energy', 'kind_from': 'keyword'},
     'stiebel_eltron_http': {'name': 'Stiebel Eltron', 'repo': 'pmq/stiebel-eltron-http', 'origin': 'hacs', 'installs': 59, 'kind': 'energy', 'kind_from': 'keyword'},
-    'stiebel_eltron_isg': {'name': 'Stiebel Eltron ISG', 'repo': 'pail23/stiebel_eltron_isg_component', 'origin': 'hacs', 'installs': 816, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
+    'stiebel_eltron_isg': {'name': 'Stiebel Eltron ISG', 'repo': 'pail23/stiebel_eltron_isg_component', 'origin': 'hacs', 'installs': 816, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'stromligning': {'name': 'Strømligning', 'repo': 'MTrab/stromligning', 'origin': 'hacs', 'installs': 575, 'kind': 'energy', 'kind_from': 'keyword'},
     'subaru': {'name': 'Subaru', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 556, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
     'sungrow': {'name': 'Sungrow iSolarCloud', 'repo': 'KRoperUK/sungrow-hass', 'origin': 'hacs', 'installs': 595, 'kind': 'energy', 'kind_from': 'vocabulary'},
@@ -363,9 +363,13 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'idm_heatpump': {
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
+        'heat_pump_heat_energy': {'platform': 'sensor', 'keys': ('total_heat_energy',), 'options': ()},
     },
     'keba': {
         'ev_current_control': {'platform': 'service', 'keys': ('keba.set_current',), 'options': (), 'services': {'keba.set_current': {'fields': ('current',), 'target': None}}},
+    },
+    'lambda_heat_pumps': {
+        'heat_pump_heat_energy': {'platform': 'sensor', 'keys': ('compressor_thermal_energy_output_accumulated', 'heating_thermal_energy_total'), 'options': ()},
     },
     'marstek_venus_energy_manager': {
         'battery_charge_end_soc': {'platform': 'number', 'keys': ('charging_cutoff_capacity',), 'options': ()},
@@ -452,6 +456,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'solar_power': {'platform': 'sensor', 'keys': ('solar_power',), 'options': ()},
     },
     'solarfocus': {
+        'heat_pump_heat_energy': {'platform': 'sensor', 'keys': ('bb_heat_energy_total', 'hp_thermal_energy_heating', 'hp_thermal_energy_total'), 'options': ()},
         'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
     },
     'solarman': {
@@ -468,6 +473,9 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('grid_active_power',), 'options': ()},
+    },
+    'stiebel_eltron_isg': {
+        'heat_pump_heat_energy': {'platform': 'sensor', 'keys': ('produced_heating', 'produced_heating_total'), 'options': ()},
     },
     'subaru': {
         'vehicle_range': {'platform': 'sensor', 'keys': ('ev_range', 'range'), 'options': (), 'exact_only': ('range',)},

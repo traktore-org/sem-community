@@ -1799,6 +1799,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "heat_pump_tariff_rate", "heat_pump_tariff_entity", "heat_pump_tariff_meter",
     "heat_pump_temperature_sensor",
     "heat_pump_energy_sensor",
+    "heat_pump_heat_energy_sensor",   # (#1081) the heat meter
     "heat_pump_rated_power",
     "heat_pump_force_on_threshold",
     "heat_pumps",
@@ -3996,6 +3997,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "heat_pump_power_sensor",
                     description={"suggested_value": _opt("heat_pump_power_sensor")},
                 ): _power_sensor_selector(getattr(self, "hass", None)),
+                # (#1081) the heat meter: SEM learns the pump's COP from it
+                vol.Optional(
+                    "heat_pump_heat_energy_sensor",
+                    description={"suggested_value": _opt("heat_pump_heat_energy_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="energy")
+                ),
                 vol.Optional(
                     "heat_pump_boost_offset",
                     default=_c("heat_pump_boost_offset", 2.0),
@@ -4211,6 +4219,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "heat_pump_energy_sensor",
                     description={"suggested_value": _row("heat_pump_energy_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="energy")
+                ),
+                vol.Optional(
+                    "heat_pump_heat_energy_sensor",
+                    description={"suggested_value": _row("heat_pump_heat_energy_sensor")},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class="energy")
                 ),

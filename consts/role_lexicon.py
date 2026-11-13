@@ -370,6 +370,22 @@ READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         "not": (r"average", r"level", r"rank", r"rating", r"base", r"trend",
                 r"phase", r"next", r"last", r"min", r"max", r"percent"),
     },
+    # (#1081) The heat a heat pump has DELIVERED, as a rising kWh counter —
+    # its own heat meter. With the electricity it used, SEM learns the
+    # pump's real COP at each outdoor temperature. Only a lifetime total
+    # counts: a daily/monthly one resets, and hot water, cooling or defrost
+    # heat is not the space heat the curve is for. SEM only reads it.
+    "heat_pump_heat_energy": {
+        "platform": "sensor",
+        "any": (r"thermal_energy", r"(?:^|_)heat_energy",
+                r"produced_heat(ing)?", r"heat_meter", r"heat_quantity",
+                r"heat_output_energy", r"thermal_energy_output"),
+        "not": (r"daily", r"today", r"month", r"year", r"hour", r"week",
+                r"consum", r"electric", r"input", r"cool", r"defrost",
+                r"drinking", r"hot_water", r"dhw", r"tapping", r"water_heat",
+                r"circulation", r"flow", r"current_yield", r"power", r"cop",
+                r"temp", r"pool"),
+    },
     "battery_power": {
         "platform": "sensor",
         "any": (r"^battery_(active_)?power$", r"^storage_.*charge_discharge_power$",
@@ -575,6 +591,8 @@ SEM_CONFIG_KEY_FOR_ROLE: Final[Dict[str, str]] = {
     # confirmed proposal is
     "grid_import_power": "grid_import_power_entity",
     "grid_export_power": "grid_export_power_entity",
+    # (#1081) the primary heat pump's heat meter — read only
+    "heat_pump_heat_energy": "heat_pump_heat_energy_sensor",
 }
 
 #: Roles that only mean anything TOGETHER. A brand that declares one half of
@@ -649,6 +667,8 @@ UNIT_CLASSES: Final[Dict[str, frozenset]] = {
     "power_or_percent": frozenset({"W", "kW", "%"}),
     "percent": frozenset({"%"}),
     "current": frozenset({"A"}),
+    # (#1081) a counter of energy, any size
+    "energy": frozenset({"Wh", "kWh", "MWh"}),
 }
 ROLE_EXPECTED_UNIT: Final[Dict[str, str]] = {
     "battery_charge_limit": "power",
@@ -662,6 +682,7 @@ ROLE_EXPECTED_UNIT: Final[Dict[str, str]] = {
     "grid_power": "power",
     "grid_import_power": "power",
     "grid_export_power": "power",
+    "heat_pump_heat_energy": "energy",       # (#1081)
     "ev_current_control": "current",
     "vehicle_soc": "percent",
 }
