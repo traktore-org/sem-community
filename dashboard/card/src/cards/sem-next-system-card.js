@@ -19,7 +19,7 @@
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
-import { sourceRows, ageLabel, freshness, SOURCE_ROWS } from '../util/next-freshness.js';
+import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
 import { plainReason, deviceName } from '../util/why-rows.js';
 import { MISSING } from '../util/missing-value.js';
 import { groups, applyPlan, pendingKey, navTarget, slotText, setupItems, loadSources, unavailableCount,
@@ -74,6 +74,7 @@ const cardCss = css`
     .sent .ro { font-weight: 500; color: var(--n-fg); }
     .fresh .tile .xs.warn { color: var(--n-warn); }
     .fresh .tile .xs.bad { color: var(--n-bad); }
+    .fresh .tile .srcid { font-family: var(--code-font-family, monospace); overflow-wrap: anywhere; }
     .confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
     .ct .lnk.ic { padding: 2px 4px; }
     .ct .lnk.ic ha-icon { color: var(--n-fg3); }
@@ -171,10 +172,11 @@ class SEMNextSystemCard extends SEMNextBase {
     _freshRows() {
         const states = this._hass.states;
         const now = Date.now();
-        const rows = sourceRows(states, now).map((r) => ({ ...r, name: this._t(r.key), ...FRESH_LOOK[r.key] }));
+        const ed = states['sensor.sem_diag_ed_config']?.attributes?.energy_dashboard;
+        const rows = sourceRows(states, now).map((r) => ({ ...r, name: this._t(r.key), src: sourceEntityOf(r.key, ed), ...FRESH_LOOK[r.key] }));
         for (const l of loadSources(states)) {
             const e = states[l.entity];
-            rows.push({ key: l.id, name: l.name, entity: l.entity, state: freshness(e, now), age: null,
+            rows.push({ key: l.id, name: l.name, entity: l.entity, src: l.entity, state: freshness(e, now), age: null,
                         icon: 'mdi:power-plug', color: C.home });
         }
         return rows;
@@ -184,8 +186,13 @@ class SEMNextSystemCard extends SEMNextBase {
         return html`<div class="fresh">${rows.map((r) => {
             const cls = r.state === 'ok' ? 'dim' : (r.state === 'old' ? 'warn' : 'bad');
             const txt = r.state === 'ok' || r.state === 'old' ? (ageLabel(r.age) || this._t('next_fresh_ok')) : this._t('next_fresh_' + r.state);
-            return html`<div class="tile" style="--c:${r.color}" role="button" tabindex="0" @click=${() => this._moreInfo(r.entity)}>
-                ${this._icon(r.icon)}<div><div class="sm" style="font-weight:500">${r.name}</div><div class="xs ${cls}">${txt}</div></div></div>`;
+            // (#1321) the value and the real entity SEM reads, for checking a setup
+            const st = this._hass.states[r.entity];
+            const val = !st ? '' : (typeof this._hass.formatEntityState === 'function' ? this._hass.formatEntityState(st)
+                : `${st.state}${st.attributes?.unit_of_measurement ? ' ' + st.attributes.unit_of_measurement : ''}`);
+            return html`<div class="tile" style="--c:${r.color}" role="button" tabindex="0" @click=${() => this._moreInfo(r.src && this._hass.states[r.src] ? r.src : r.entity)}>
+                ${this._icon(r.icon)}<div style="min-width:0"><div class="sm" style="font-weight:500">${r.name}</div><div class="xs ${cls}">${val ? val + ' · ' : ''}${txt}</div>
+                ${r.src ? html`<div class="xs dim srcid">${r.src}</div>` : nothing}</div></div>`;
         })}</div>`;
     }
 
