@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **Settings that do nothing are no longer asked** (#1354): tax and VAT beside an all-in price, Legionella rules without a boiler.
 - 🐛 **Battery and grid-fee prices on the Configuration tab now show your own currency** (#1354). One field always said EUR.
 - ✨ **A cooling unit is set with the same four questions, turned round** (#1349): keep it at, never warmer than, cool down to, buy power.
 - ✨ **A heater with a thermometer can reach Keep at from the house battery at night** (#1349), while the battery is above its reserve.

@@ -27,6 +27,7 @@ import { roleSource, showsRoleLegend } from '../util/role-source.js';
 import { batteryListEdit } from '../util/battery-slot-edit.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
+import { taxesApply } from '../util/settings-applies.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
@@ -1646,25 +1647,26 @@ class SEMConfigCard extends SEMLitBase {
         const feeUnit = model === 'fixed_monthly' ? `${currency}/Mt` : `${currency}/kWh`;
         // (#1090) the export threshold: below this value SEM stops exporting
         const feeUnitKwh = `${currency}/kWh`;
-        // (#1077) An all-in price already holds markup, tax and VAT: those
-        // rows are greyed out with a one-line hint, and set_option refuses
-        // a positive amount beside an all-in basis.
+        // (#1077/#1354) An all-in price already holds markup, tax and VAT:
+        // those rows are not asked (one line says why), and set_option
+        // refuses a positive amount beside an all-in basis.
         const basis = this._stagedVal('opt:import_price_basis',
             opts.import_price_basis ?? 'all_in');
-        const allIn = basis === 'all_in';
+        const taxes = taxesApply(basis);
         const kwhUnit = currency + '/kWh';
         return html`
             ${this._renderOptionSelect('tariff_value_preset', 'config_value_preset',
                 presetOptions, opts, 'config_help_value_preset', 'none')}
             ${this._renderOptionSelect('import_price_basis', 'config_price_basis',
                 basisOptions, opts, 'config_help_price_basis', 'all_in')}
-            ${allIn ? html`<div class="setting-help-text">${this._t('config_value_needs_spot_basis')}</div>` : nothing}
-            ${this._renderOptionNumberInput('import_markup', 'config_import_markup',
-                { min: 0, max: 10000, step: 0.0001, unit: kwhUnit, default: 0, disabled: allIn }, opts, 'config_help_import_markup')}
-            ${this._renderOptionNumberInput('import_energy_tax', 'config_import_energy_tax',
-                { min: 0, max: 10000, step: 0.0001, unit: kwhUnit, default: 0, disabled: allIn }, opts, 'config_help_import_energy_tax')}
-            ${this._renderOptionNumberInput('import_vat_percent', 'config_import_vat_percent',
-                { min: 0, max: 100, step: 0.1, unit: '%', default: 0, disabled: allIn }, opts, 'config_help_import_vat_percent')}
+            ${taxes ? html`
+                ${this._renderOptionNumberInput('import_markup', 'config_import_markup',
+                    { min: 0, max: 10000, step: 0.0001, unit: kwhUnit, default: 0 }, opts, 'config_help_import_markup')}
+                ${this._renderOptionNumberInput('import_energy_tax', 'config_import_energy_tax',
+                    { min: 0, max: 10000, step: 0.0001, unit: kwhUnit, default: 0 }, opts, 'config_help_import_energy_tax')}
+                ${this._renderOptionNumberInput('import_vat_percent', 'config_import_vat_percent',
+                    { min: 0, max: 100, step: 0.1, unit: '%', default: 0 }, opts, 'config_help_import_vat_percent')}`
+              : html`<div class="setting-help-text">${this._t('config_value_needs_spot_basis')}</div>`}
             ${this._renderOptionSelect('feed_in_fee_model', 'config_fee_model',
                 feeOptions, opts, 'config_help_fee_model', 'none')}
             ${model === 'per_kwh' || model === 'fixed_monthly'

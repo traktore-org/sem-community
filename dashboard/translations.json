@@ -1946,7 +1946,7 @@
     "config_fee_model_per_kwh": "Za kWh",
     "config_fee_model_tiered": "Pásma podle kWh za rok",
     "config_fee_model_fixed_monthly": "Pevně měsíčně",
-    "config_value_needs_spot_basis": "Jen u spotové ceny. Cena vč. všeho je už obsahuje.",
+    "config_value_needs_spot_basis": "Vaše cena zahrnuje daně, proto se přirážka, daň a DPH nezadávají.",
     "config_export_value_threshold": "Zastavit export pod",
     "config_help_export_value_threshold": "Když má prodaná kWh menší hodnotu, SEM zastaví export: baterie a spotřebiče berou slunce jako první. 0 = jen pod nulou. Vyžaduje přepínač Hlídač exportu.",
     "pacing_closed_meter": "export zavřen, baterie bere slunce",
@@ -2130,7 +2130,8 @@
     "why_reason_no_reading": "Jeho teplotní čidlo nic nehlásí, takže zůstává vypnuté.",
     "why_reason_disabled": "Je zakázané, takže SEM ukončí běh, který spustil.",
     "energy_plan_why_band_leads": "Rozhoduje jeho teploměr, proto denní doba chodu nic nežádá.",
-    "config_unit_per_kw_month": "{currency}/kW za měsíc"
+    "config_unit_per_kw_month": "{currency}/kW za měsíc",
+    "hot_water_not_configured": "Teplá voda není nastavena — vyberte bojler na kartě Konfigurace v části Teplá voda."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4079,7 +4080,7 @@
     "config_fee_model_per_kwh": "Pr. kWh",
     "config_fee_model_tiered": "Trin efter kWh pr. år",
     "config_fee_model_fixed_monthly": "Fast pr. måned",
-    "config_value_needs_spot_basis": "Kun ved en spotpris. En pris med alt inklusive har dem allerede.",
+    "config_value_needs_spot_basis": "Din pris er inklusive afgifter, så tillæg, afgift og moms bliver ikke spurgt om.",
     "config_export_value_threshold": "Stop eksport under",
     "config_help_export_value_threshold": "Er en solgt kWh mindre værd, stopper SEM eksporten: batteri og forbrugere tager solen først. 0 = kun under nul. Kræver kontakten Eksportvagt.",
     "pacing_closed_meter": "eksport lukket, batteriet tager solen",
@@ -4263,7 +4264,8 @@
     "why_reason_no_reading": "Dens temperaturføler viser ingenting, så den forbliver slukket.",
     "why_reason_disabled": "Den er deaktiveret, så SEM afslutter den kørsel, det startede.",
     "energy_plan_why_band_leads": "Dens termometer bestemmer, så den daglige køretid beder ikke om noget.",
-    "config_unit_per_kw_month": "{currency}/kW pr. måned"
+    "config_unit_per_kw_month": "{currency}/kW pr. måned",
+    "hot_water_not_configured": "Intet varmt vand sat op — vælg en vandvarmer på fanen Konfiguration under Varmt vand."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6212,7 +6214,7 @@
     "config_fee_model_per_kwh": "Pro kWh",
     "config_fee_model_tiered": "Stufen nach kWh pro Jahr",
     "config_fee_model_fixed_monthly": "Fest pro Monat",
-    "config_value_needs_spot_basis": "Nur bei einem Spotpreis. Ein Endpreis enthält sie schon.",
+    "config_value_needs_spot_basis": "Dein Preis enthält die Steuern, darum fragt SEM nicht nach Aufschlag, Steuer und MwSt.",
     "config_export_value_threshold": "Einspeisung stoppen unter",
     "config_help_export_value_threshold": "Ist eine verkaufte kWh weniger wert, stoppt SEM die Einspeisung: Batterie und Verbraucher nehmen zuerst die Sonne. 0 = nur unter null. Braucht den Schalter Einspeise-Wächter.",
     "pacing_closed_meter": "Einspeisung zu, Batterie nimmt die Sonne",
@@ -6396,7 +6398,8 @@
     "why_reason_no_reading": "Sein Temperaturfühler liefert keinen Wert, darum bleibt es aus.",
     "why_reason_disabled": "Es ist deaktiviert, darum beendet SEM den Lauf, den es gestartet hat.",
     "energy_plan_why_band_leads": "Sein Thermometer entscheidet, darum verlangt die tägliche Laufzeit nichts.",
-    "config_unit_per_kw_month": "{currency}/kW pro Monat"
+    "config_unit_per_kw_month": "{currency}/kW pro Monat",
+    "hot_water_not_configured": "Kein Warmwasser eingerichtet — wähle im Tab Konfiguration unter Warmwasser einen Boiler."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8345,7 +8348,7 @@
     "config_fee_model_per_kwh": "Per kWh",
     "config_fee_model_tiered": "Tiers by kWh per year",
     "config_fee_model_fixed_monthly": "Fixed per month",
-    "config_value_needs_spot_basis": "Only for a spot price. An all-in price already holds these.",
+    "config_value_needs_spot_basis": "Your price includes taxes, so markup, tax and VAT are not asked.",
     "config_export_value_threshold": "Stop exporting below",
     "config_help_export_value_threshold": "When a sold kWh is worth less than this, SEM stops exporting: the battery and loads take the sun first. 0 = only below zero. Needs the Export guard switch.",
     "pacing_closed_meter": "export closed, battery takes the sun",
@@ -8529,7 +8532,8 @@
     "why_reason_no_reading": "Its temperature sensor reads nothing, so it stays off.",
     "why_reason_disabled": "It is disabled, so SEM ends the run it started.",
     "energy_plan_why_band_leads": "Its thermometer leads, so its daily run time asks nothing.",
-    "config_unit_per_kw_month": "{currency}/kW per month"
+    "config_unit_per_kw_month": "{currency}/kW per month",
+    "hot_water_not_configured": "No hot water set up — pick a boiler in the Configuration tab under Hot Water."
   },
   "es": {
     "% of limit": "% del límite",
@@ -10478,7 +10482,7 @@
     "config_fee_model_per_kwh": "Por kWh",
     "config_fee_model_tiered": "Tramos por kWh al año",
     "config_fee_model_fixed_monthly": "Fijo al mes",
-    "config_value_needs_spot_basis": "Solo con un precio spot. Un precio total ya los incluye.",
+    "config_value_needs_spot_basis": "Tu precio incluye impuestos, así que el margen, el impuesto y el IVA no se piden.",
     "config_export_value_threshold": "Detener exportación por debajo de",
     "config_help_export_value_threshold": "Si un kWh vendido vale menos, SEM detiene la exportación: la batería y las cargas toman el sol primero. 0 = solo por debajo de cero. Requiere el interruptor Guardia de exportación.",
     "pacing_closed_meter": "exportación cerrada, la batería toma el sol",
@@ -10662,7 +10666,8 @@
     "why_reason_no_reading": "Su sensor de temperatura no da ninguna lectura, así que sigue apagado.",
     "why_reason_disabled": "Está desactivado, así que SEM termina la marcha que inició.",
     "energy_plan_why_band_leads": "Manda su termómetro, así que su tiempo diario de marcha no pide nada.",
-    "config_unit_per_kw_month": "{currency}/kW al mes"
+    "config_unit_per_kw_month": "{currency}/kW al mes",
+    "hot_water_not_configured": "Sin agua caliente configurada — elige un calentador en la pestaña Configuración, en Agua caliente."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -12611,7 +12616,7 @@
     "config_fee_model_per_kwh": "kWh:lta",
     "config_fee_model_tiered": "Portaat kWh/vuosi mukaan",
     "config_fee_model_fixed_monthly": "Kiinteä kuukaudessa",
-    "config_value_needs_spot_basis": "Vain pörssihinnalle. Kokonaishinta sisältää ne jo.",
+    "config_value_needs_spot_basis": "Hintasi sisältää verot, joten marginaalia, veroa ja arvonlisäveroa ei kysytä.",
     "config_export_value_threshold": "Lopeta vienti alle",
     "config_help_export_value_threshold": "Jos myyty kWh on arvoltaan pienempi, SEM lopettaa viennin: akku ja kuormat ottavat auringon ensin. 0 = vain alle nollan. Vaatii kytkimen Vientivahti.",
     "pacing_closed_meter": "vienti suljettu, akku ottaa auringon",
@@ -12795,7 +12800,8 @@
     "why_reason_no_reading": "Sen lämpötila-anturi ei anna lukemaa, joten se pysyy pois päältä.",
     "why_reason_disabled": "Se on poistettu käytöstä, joten SEM lopettaa käynnistämänsä ajon.",
     "energy_plan_why_band_leads": "Sen lämpömittari päättää, joten päivittäinen käyntiaika ei pyydä mitään.",
-    "config_unit_per_kw_month": "{currency}/kW kuukaudessa"
+    "config_unit_per_kw_month": "{currency}/kW kuukaudessa",
+    "hot_water_not_configured": "Lämmintä vettä ei ole määritetty — valitse varaaja Asetukset-välilehdellä kohdassa Lämmin vesi."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -14744,7 +14750,7 @@
     "config_fee_model_per_kwh": "Par kWh",
     "config_fee_model_tiered": "Paliers selon kWh par an",
     "config_fee_model_fixed_monthly": "Fixe par mois",
-    "config_value_needs_spot_basis": "Seulement pour un prix spot. Un prix tout compris les contient déjà.",
+    "config_value_needs_spot_basis": "Votre prix inclut les taxes : la marge, la taxe et la TVA ne sont donc pas demandées.",
     "config_export_value_threshold": "Arrêter l'export sous",
     "config_help_export_value_threshold": "Si un kWh vendu vaut moins, SEM arrête l'export : la batterie et les charges prennent d'abord le soleil. 0 = seulement sous zéro. Nécessite l'interrupteur Garde d'export.",
     "pacing_closed_meter": "export fermé, la batterie prend le soleil",
@@ -14928,7 +14934,8 @@
     "why_reason_no_reading": "Sa sonde de température ne donne aucune valeur, il reste éteint.",
     "why_reason_disabled": "Il est désactivé, SEM arrête donc la marche qu'il a lancée.",
     "energy_plan_why_band_leads": "Son thermomètre décide, son temps de marche quotidien ne demande donc rien.",
-    "config_unit_per_kw_month": "{currency}/kW par mois"
+    "config_unit_per_kw_month": "{currency}/kW par mois",
+    "hot_water_not_configured": "Aucune eau chaude configurée — choisissez un ballon dans l'onglet Configuration, sous Eau chaude."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -16877,7 +16884,7 @@
     "config_fee_model_per_kwh": "kWh-nként",
     "config_fee_model_tiered": "Sávok éves kWh szerint",
     "config_fee_model_fixed_monthly": "Fix havi",
-    "config_value_needs_spot_basis": "Csak spot árnál. A teljes ár már tartalmazza őket.",
+    "config_value_needs_spot_basis": "Az ár tartalmazza az adókat, ezért a felárat, az adót és az áfát nem kérdezi.",
     "config_export_value_threshold": "Export leállítása ez alatt",
     "config_help_export_value_threshold": "Ha egy eladott kWh ennél kevesebbet ér, a SEM leállítja az exportot: az akkumulátor és a fogyasztók kapják először a napot. 0 = csak nulla alatt. Az Export-őr kapcsoló kell hozzá.",
     "pacing_closed_meter": "export zárva, az akku kapja a napot",
@@ -17061,7 +17068,8 @@
     "why_reason_no_reading": "A hőmérséklet-érzékelője nem ad értéket, ezért kikapcsolva marad.",
     "why_reason_disabled": "Le van tiltva, ezért a SEM leállítja az általa indított futást.",
     "energy_plan_why_band_leads": "A hőmérője dönt, ezért a napi üzemidő nem kér semmit.",
-    "config_unit_per_kw_month": "{currency}/kW havonta"
+    "config_unit_per_kw_month": "{currency}/kW havonta",
+    "hot_water_not_configured": "Nincs melegvíz beállítva — válasszon bojlert a Konfiguráció lapon, a Melegvíz résznél."
   },
   "it": {
     "% of limit": "% del limite",
@@ -19010,7 +19018,7 @@
     "config_fee_model_per_kwh": "Per kWh",
     "config_fee_model_tiered": "Scaglioni per kWh all'anno",
     "config_fee_model_fixed_monthly": "Fisso al mese",
-    "config_value_needs_spot_basis": "Solo con un prezzo spot. Un prezzo tutto incluso li contiene già.",
+    "config_value_needs_spot_basis": "Il tuo prezzo include le tasse, quindi ricarico, tassa e IVA non vengono chiesti.",
     "config_export_value_threshold": "Ferma l'esportazione sotto",
     "config_help_export_value_threshold": "Se un kWh venduto vale meno, SEM ferma l'esportazione: batteria e carichi prendono prima il sole. 0 = solo sotto zero. Richiede l'interruttore Guardia dell'esportazione.",
     "pacing_closed_meter": "esportazione chiusa, la batteria prende il sole",
@@ -19194,7 +19202,8 @@
     "why_reason_no_reading": "Il suo sensore di temperatura non dà alcun valore, quindi resta spento.",
     "why_reason_disabled": "È disattivato, quindi SEM termina il ciclo che ha avviato.",
     "energy_plan_why_band_leads": "Decide il suo termometro, quindi il tempo di funzionamento giornaliero non chiede nulla.",
-    "config_unit_per_kw_month": "{currency}/kW al mese"
+    "config_unit_per_kw_month": "{currency}/kW al mese",
+    "hot_water_not_configured": "Nessuna acqua calda impostata — scegli un boiler nella scheda Configurazione, sotto Acqua calda."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -21143,7 +21152,7 @@
     "config_fee_model_per_kwh": "Per kWh",
     "config_fee_model_tiered": "Staffel naar kWh per jaar",
     "config_fee_model_fixed_monthly": "Vast per maand",
-    "config_value_needs_spot_basis": "Alleen bij een spotprijs. Een all-in prijs bevat ze al.",
+    "config_value_needs_spot_basis": "Je prijs is inclusief belastingen, dus opslag, belasting en btw worden niet gevraagd.",
     "config_export_value_threshold": "Stop teruglevering onder",
     "config_help_export_value_threshold": "Is een verkochte kWh minder waard, dan stopt SEM met terugleveren: accu en verbruikers nemen eerst de zon. 0 = alleen onder nul. Vereist de schakelaar Exportwaker.",
     "pacing_closed_meter": "teruglevering dicht, accu neemt de zon",
@@ -21327,7 +21336,8 @@
     "why_reason_no_reading": "De temperatuursensor geeft geen waarde, dus het blijft uit.",
     "why_reason_disabled": "Het is uitgeschakeld, dus SEM stopt wat het zelf startte.",
     "energy_plan_why_band_leads": "Zijn thermometer beslist, dus de dagelijkse looptijd vraagt niets.",
-    "config_unit_per_kw_month": "{currency}/kW per maand"
+    "config_unit_per_kw_month": "{currency}/kW per maand",
+    "hot_water_not_configured": "Geen warm water ingesteld — kies een boiler in het tabblad Configuratie onder Warm water."
   },
   "no": {
     "% of limit": "% av grense",
@@ -23276,7 +23286,7 @@
     "config_fee_model_per_kwh": "Per kWh",
     "config_fee_model_tiered": "Trinn etter kWh per år",
     "config_fee_model_fixed_monthly": "Fast per måned",
-    "config_value_needs_spot_basis": "Bare ved en spotpris. En pris med alt inkludert har dem allerede.",
+    "config_value_needs_spot_basis": "Prisen din er inkludert avgifter, så påslag, avgift og mva. blir ikke spurt om.",
     "config_export_value_threshold": "Stopp eksport under",
     "config_help_export_value_threshold": "Er en solgt kWh mindre verdt, stopper SEM eksporten: batteri og forbrukere tar solen først. 0 = bare under null. Krever bryteren Eksportvakt.",
     "pacing_closed_meter": "eksport stengt, batteriet tar solen",
@@ -23460,7 +23470,8 @@
     "why_reason_no_reading": "Temperaturføleren gir ingen verdi, så den forblir av.",
     "why_reason_disabled": "Den er deaktivert, så SEM avslutter kjøringen det startet.",
     "energy_plan_why_band_leads": "Termometeret bestemmer, så den daglige driftstiden ber ikke om noe.",
-    "config_unit_per_kw_month": "{currency}/kW per måned"
+    "config_unit_per_kw_month": "{currency}/kW per måned",
+    "hot_water_not_configured": "Ikke noe varmtvann satt opp — velg en varmtvannsbereder i fanen Konfigurasjon under Varmtvann."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -25409,7 +25420,7 @@
     "config_fee_model_per_kwh": "Za kWh",
     "config_fee_model_tiered": "Progi według kWh rocznie",
     "config_fee_model_fixed_monthly": "Stała miesięcznie",
-    "config_value_needs_spot_basis": "Tylko dla ceny spot. Cena z wszystkim już je zawiera.",
+    "config_value_needs_spot_basis": "Twoja cena zawiera podatki, więc marża, podatek i VAT nie są wymagane.",
     "config_export_value_threshold": "Zatrzymaj eksport poniżej",
     "config_help_export_value_threshold": "Gdy sprzedana kWh jest warta mniej, SEM zatrzymuje eksport: bateria i odbiorniki biorą słońce najpierw. 0 = tylko poniżej zera. Wymaga przełącznika Strażnik eksportu.",
     "pacing_closed_meter": "eksport zamknięty, bateria bierze słońce",
@@ -25593,7 +25604,8 @@
     "why_reason_no_reading": "Jego czujnik temperatury nic nie pokazuje, więc pozostaje wyłączony.",
     "why_reason_disabled": "Jest wyłączony z obsługi, więc SEM kończy pracę, którą uruchomił.",
     "energy_plan_why_band_leads": "Decyduje jego termometr, więc dzienny czas pracy niczego nie wymaga.",
-    "config_unit_per_kw_month": "{currency}/kW na miesiąc"
+    "config_unit_per_kw_month": "{currency}/kW na miesiąc",
+    "hot_water_not_configured": "Nie skonfigurowano ciepłej wody — wybierz bojler w zakładce Konfiguracja, w sekcji Ciepła woda."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -27542,7 +27554,7 @@
     "config_fee_model_per_kwh": "Por kWh",
     "config_fee_model_tiered": "Escalões por kWh por ano",
     "config_fee_model_fixed_monthly": "Fixo por mês",
-    "config_value_needs_spot_basis": "Só para um preço spot. Um preço com tudo incluído já os contém.",
+    "config_value_needs_spot_basis": "O seu preço inclui impostos, por isso a margem, o imposto e o IVA não são pedidos.",
     "config_export_value_threshold": "Parar exportação abaixo de",
     "config_help_export_value_threshold": "Se um kWh vendido vale menos, o SEM para a exportação: a bateria e as cargas ficam primeiro com o sol. 0 = só abaixo de zero. Requer o interruptor Guarda de exportação.",
     "pacing_closed_meter": "exportação fechada, a bateria fica com o sol",
@@ -27726,7 +27738,8 @@
     "why_reason_no_reading": "O seu sensor de temperatura não dá leitura, por isso fica desligado.",
     "why_reason_disabled": "Está desativado, por isso o SEM termina o funcionamento que iniciou.",
     "energy_plan_why_band_leads": "Manda o seu termómetro, por isso o tempo diário de funcionamento não pede nada.",
-    "config_unit_per_kw_month": "{currency}/kW por mês"
+    "config_unit_per_kw_month": "{currency}/kW por mês",
+    "hot_water_not_configured": "Sem água quente configurada — escolha um termoacumulador no separador Configuração, em Água quente."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -29675,7 +29688,7 @@
     "config_fee_model_per_kwh": "Pe kWh",
     "config_fee_model_tiered": "Praguri după kWh pe an",
     "config_fee_model_fixed_monthly": "Fix pe lună",
-    "config_value_needs_spot_basis": "Doar pentru un preț spot. Un preț total le include deja.",
+    "config_value_needs_spot_basis": "Prețul tău include taxele, așa că adaosul, taxa și TVA nu se cer.",
     "config_export_value_threshold": "Oprește exportul sub",
     "config_help_export_value_threshold": "Dacă un kWh vândut valorează mai puțin, SEM oprește exportul: bateria și consumatorii iau întâi soarele. 0 = doar sub zero. Necesită comutatorul Gardă de export.",
     "pacing_closed_meter": "export închis, bateria ia soarele",
@@ -29859,7 +29872,8 @@
     "why_reason_no_reading": "Senzorul lui de temperatură nu dă nicio valoare, deci rămâne oprit.",
     "why_reason_disabled": "Este dezactivat, deci SEM încheie rularea pe care a pornit-o.",
     "energy_plan_why_band_leads": "Decide termometrul său, așa că timpul zilnic de funcționare nu cere nimic.",
-    "config_unit_per_kw_month": "{currency}/kW pe lună"
+    "config_unit_per_kw_month": "{currency}/kW pe lună",
+    "hot_water_not_configured": "Nu este setată apa caldă — alege un boiler în fila Configurare, la Apă caldă."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -31808,7 +31822,7 @@
     "config_fee_model_per_kwh": "Per kWh",
     "config_fee_model_tiered": "Steg efter kWh per år",
     "config_fee_model_fixed_monthly": "Fast per månad",
-    "config_value_needs_spot_basis": "Bara vid ett spotpris. Ett pris med allt inräknat har dem redan.",
+    "config_value_needs_spot_basis": "Ditt pris inkluderar skatter, så påslag, skatt och moms frågas inte efter.",
     "config_export_value_threshold": "Stoppa export under",
     "config_help_export_value_threshold": "Är en såld kWh värd mindre stoppar SEM exporten: batteri och laster tar solen först. 0 = bara under noll. Kräver brytaren Exportvakt.",
     "pacing_closed_meter": "export stängd, batteriet tar solen",
@@ -31992,7 +32006,8 @@
     "why_reason_no_reading": "Dess temperaturgivare ger inget värde, så den förblir avstängd.",
     "why_reason_disabled": "Den är inaktiverad, så SEM avslutar körningen det startade.",
     "energy_plan_why_band_leads": "Dess termometer bestämmer, så den dagliga drifttiden ber inte om något.",
-    "config_unit_per_kw_month": "{currency}/kW per månad"
+    "config_unit_per_kw_month": "{currency}/kW per månad",
+    "hot_water_not_configured": "Inget varmvatten inställt — välj en varmvattenberedare på fliken Konfiguration under Varmvatten."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -33941,7 +33956,7 @@
     "config_fee_model_per_kwh": "按度",
     "config_fee_model_tiered": "按年度度数分阶梯",
     "config_fee_model_fixed_monthly": "每月固定",
-    "config_value_needs_spot_basis": "仅适用于现货价格。全包价格已包含这些。",
+    "config_value_needs_spot_basis": "您的电价已含税，因此无需填写加价、税费和增值税。",
     "config_export_value_threshold": "低于此值停止出口",
     "config_help_export_value_threshold": "售出每 kWh 的价值低于此值时，SEM 停止出口：电池和负载优先使用太阳能。0 = 仅低于零时。需要开启“出口守护”开关。",
     "pacing_closed_meter": "出口关闭，电池吸收太阳能",
@@ -34125,6 +34140,7 @@
     "why_reason_no_reading": "它的温度传感器没有读数，所以保持关闭。",
     "why_reason_disabled": "它已被停用，所以 SEM 结束它启动的运行。",
     "energy_plan_why_band_leads": "由温度计决定，所以每日运行时间不再要求任何电量。",
-    "config_unit_per_kw_month": "{currency}/kW 每月"
+    "config_unit_per_kw_month": "{currency}/kW 每月",
+    "hot_water_not_configured": "未设置热水 — 请在“配置”标签页的“热水”中选择热水器。"
   }
 }
