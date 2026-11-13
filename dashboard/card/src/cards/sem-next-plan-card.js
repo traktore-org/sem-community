@@ -14,7 +14,7 @@
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { planIdName } from '../util/plan-ids.js';
 import { planNoteText } from '../util/plan-notes.js';
-import { whyLines, batteryEndPct } from '../util/plan-why.js';
+import { whyLines, batteryEnd } from '../util/plan-why.js';
 import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, kwhOf, coldHeaters } from '../util/next-lead.js';
@@ -333,11 +333,26 @@ class SEMNextPlanCard extends SEMNextBase {
             });
             const kind = l.id.startsWith('ev:') ? 'ev' : l.id.includes('battery') ? 'battery_in' : 'load';
             const when = l.start ? `${this._hhmm(l.start)} – ${this._hhmm(l.end)}${l.kwh > 0.05 ? ' · ' + this._kwh(l.kwh) : ''}` : t('next_not_scheduled');
-            const why = l.why ? this._whyText({ why: l.why }) : this._reasonText(l.reason, l.params);
+            const why = l.code ? this._planWhyText(l.code, l.params)
+                : l.why ? this._whyText({ why: l.why }) : this._reasonText(l.reason, l.params);
             return html`<div class="row" style="--c:${KIND_COLOR[kind] || C.home}"><div class="k">${this._icon(KIND_ICON[kind] || 'mdi:power-plug')}
                 <span class="t"><b>${name}</b> · ${when}${why ? html`<br><span class="sm muted">${why}</span>` : nothing}</span></div></div>`;
         });
         return this._sec(t('next_why_plan'), html`<div class="rows">${rows}</div>`);
+    }
+
+    /** (#1321) The engine's `why` code in words: `plan_why_<code>`, times as HH:MM. */
+    _planWhyText(code, params = {}) {
+        const key = `plan_why_${code}`;
+        const p = params || {};
+        const vars = {
+            from: p.from ? this._hhmm(p.from) : '',
+            to: p.to ? this._hhmm(p.to) : '',
+            price: Number.isFinite(Number(p.price)) && p.price !== null && p.price !== ''
+                ? `${this._fmt(Number(p.price), 2)} ${this._currency()}/kWh` : '',
+        };
+        const text = this._tf(key, vars);
+        return text && text !== key ? text : '';
     }
 
     _focusReason(fb, plan) {
@@ -805,11 +820,10 @@ class SEMNextPlanCard extends SEMNextBase {
             tiles.push({ label: t('next_saved_by_plan'), value: this._fmt(saved, 2), unit: this._currency(), sub: t('next_vs_now'), valueColor: C.good });
         }
         // (#1321) the battery level the plan expects at its end; no field, no tile
-        const endPct = batteryEndPct(plan);
-        if (endPct !== null) {
-            const slots = Array.isArray(plan.slots) ? plan.slots : [];
-            const end = slots.length ? slots[slots.length - 1].end : '';
-            tiles.push({ label: t('next_batt_end'), value: Math.round(endPct), unit: '%',
+        const bEnd = batteryEnd(plan);
+        if (bEnd) {
+            const end = bEnd.at;
+            tiles.push({ label: t('next_batt_end'), value: Math.round(bEnd.pct), unit: '%',
                 sub: end && Number.isFinite(Date.parse(end)) ? this._tf('next_batt_end_sub', { time: this._hhmm(end) }) : '' });
         }
         const sun = this._num('sensor.sem_forecast_tomorrow_kwh');

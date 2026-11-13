@@ -2943,8 +2943,8 @@
     "next_cost_of_heat": "Cena tepla",
     "next_per_kwh_heat": "{v} za kWh tepla",
     "next_hp_next_run": "další běh {time}",
-    "next_avg_purchase": "Průměrná nákupní cena",
-    "next_avg_vs_market": "průměr trhu {price}"
+    "next_avg_purchase": "Průměrná zaplacená cena",
+    "next_avg_vs_market": "průměrná cena hodin {price}"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5890,8 +5890,8 @@
     "next_cost_of_heat": "Varmepris",
     "next_per_kwh_heat": "{v} pr. kWh varme",
     "next_hp_next_run": "næste kørsel {time}",
-    "next_avg_purchase": "Gennemsnitlig købspris",
-    "next_avg_vs_market": "markedsgennemsnit {price}"
+    "next_avg_purchase": "Gennemsnitlig betalt pris",
+    "next_avg_vs_market": "gennemsnitspris for timerne {price}"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8837,8 +8837,8 @@
     "next_cost_of_heat": "Wärmekosten",
     "next_per_kwh_heat": "{v} pro kWh Wärme",
     "next_hp_next_run": "nächster Lauf {time}",
-    "next_avg_purchase": "Durchschnittlicher Einkaufspreis",
-    "next_avg_vs_market": "Marktdurchschnitt {price}"
+    "next_avg_purchase": "Durchschnittlich bezahlter Preis",
+    "next_avg_vs_market": "Durchschnittspreis der Stunden {price}"
   },
   "en": {
     "% of limit": "% of limit",
@@ -11784,8 +11784,8 @@
     "next_cost_of_heat": "Cost of heat",
     "next_per_kwh_heat": "{v} per kWh of heat",
     "next_hp_next_run": "next run {time}",
-    "next_avg_purchase": "Average purchase price",
-    "next_avg_vs_market": "market average {price}"
+    "next_avg_purchase": "Average price paid",
+    "next_avg_vs_market": "average price of the hours {price}"
   },
   "es": {
     "% of limit": "% del límite",
@@ -14731,8 +14731,8 @@
     "next_cost_of_heat": "Coste del calor",
     "next_per_kwh_heat": "{v} por kWh de calor",
     "next_hp_next_run": "próxima marcha {time}",
-    "next_avg_purchase": "Precio medio de compra",
-    "next_avg_vs_market": "media del mercado {price}"
+    "next_avg_purchase": "Precio medio pagado",
+    "next_avg_vs_market": "precio medio de las horas {price}"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -17678,8 +17678,8 @@
     "next_cost_of_heat": "Lämmön hinta",
     "next_per_kwh_heat": "{v} / kWh lämpöä",
     "next_hp_next_run": "seuraava käynti {time}",
-    "next_avg_purchase": "Keskimääräinen ostohinta",
-    "next_avg_vs_market": "markkinoiden keskiarvo {price}"
+    "next_avg_purchase": "Keskimäärin maksettu hinta",
+    "next_avg_vs_market": "tuntien keskihinta {price}"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -20625,8 +20625,8 @@
     "next_cost_of_heat": "Coût de la chaleur",
     "next_per_kwh_heat": "{v} par kWh de chaleur",
     "next_hp_next_run": "prochaine marche {time}",
-    "next_avg_purchase": "Prix d'achat moyen",
-    "next_avg_vs_market": "moyenne du marché {price}"
+    "next_avg_purchase": "Prix moyen payé",
+    "next_avg_vs_market": "prix moyen des heures {price}"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -23572,8 +23572,8 @@
     "next_cost_of_heat": "A hő ára",
     "next_per_kwh_heat": "{v} / kWh hő",
     "next_hp_next_run": "következő futás {time}",
-    "next_avg_purchase": "Átlagos vételár",
-    "next_avg_vs_market": "piaci átlag {price}"
+    "next_avg_purchase": "Átlagosan fizetett ár",
+    "next_avg_vs_market": "az órák átlagára {price}"
   },
   "it": {
     "% of limit": "% del limite",
@@ -26519,8 +26519,8 @@
     "next_cost_of_heat": "Costo del calore",
     "next_per_kwh_heat": "{v} per kWh di calore",
     "next_hp_next_run": "prossimo avvio {time}",
-    "next_avg_purchase": "Prezzo medio di acquisto",
-    "next_avg_vs_market": "media di mercato {price}"
+    "next_avg_purchase": "Prezzo medio pagato",
+    "next_avg_vs_market": "prezzo medio delle ore {price}"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -29466,8 +29466,8 @@
     "next_cost_of_heat": "Kosten van warmte",
     "next_per_kwh_heat": "{v} per kWh warmte",
     "next_hp_next_run": "volgende run {time}",
-    "next_avg_purchase": "Gemiddelde inkoopprijs",
-    "next_avg_vs_market": "marktgemiddelde {price}"
+    "next_avg_purchase": "Gemiddeld betaalde prijs",
+    "next_avg_vs_market": "gemiddelde prijs van de uren {price}"
   },
   "no": {
     "% of limit": "% av grense",
@@ -32413,8 +32413,8 @@
     "next_cost_of_heat": "Varmepris",
     "next_per_kwh_heat": "{v} per kWh varme",
     "next_hp_next_run": "neste kjøring {time}",
-    "next_avg_purchase": "Gjennomsnittlig innkjøpspris",
-    "next_avg_vs_market": "markedssnitt {price}"
+    "next_avg_purchase": "Gjennomsnittlig betalt pris",
+    "next_avg_vs_market": "gjennomsnittspris for timene {price}"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -35360,8 +35360,8 @@
     "next_cost_of_heat": "Koszt ciepła",
     "next_per_kwh_heat": "{v} za kWh ciepła",
     "next_hp_next_run": "następne uruchomienie {time}",
-    "next_avg_purchase": "Średnia cena zakupu",
-    "next_avg_vs_market": "średnia rynkowa {price}"
+    "next_avg_purchase": "Średnia zapłacona cena",
+    "next_avg_vs_market": "średnia cena godzin {price}"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -38307,8 +38307,8 @@
     "next_cost_of_heat": "Custo do calor",
     "next_per_kwh_heat": "{v} por kWh de calor",
     "next_hp_next_run": "próxima execução {time}",
-    "next_avg_purchase": "Preço médio de compra",
-    "next_avg_vs_market": "média do mercado {price}"
+    "next_avg_purchase": "Preço médio pago",
+    "next_avg_vs_market": "preço médio das horas {price}"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -41254,8 +41254,8 @@
     "next_cost_of_heat": "Costul căldurii",
     "next_per_kwh_heat": "{v} pe kWh de căldură",
     "next_hp_next_run": "următoarea pornire {time}",
-    "next_avg_purchase": "Preț mediu de cumpărare",
-    "next_avg_vs_market": "media pieței {price}"
+    "next_avg_purchase": "Preț mediu plătit",
+    "next_avg_vs_market": "prețul mediu al orelor {price}"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -44201,8 +44201,8 @@
     "next_cost_of_heat": "Värmekostnad",
     "next_per_kwh_heat": "{v} per kWh värme",
     "next_hp_next_run": "nästa körning {time}",
-    "next_avg_purchase": "Genomsnittligt inköpspris",
-    "next_avg_vs_market": "marknadssnitt {price}"
+    "next_avg_purchase": "Genomsnittligt betalt pris",
+    "next_avg_vs_market": "genomsnittspris för timmarna {price}"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -47148,7 +47148,7 @@
     "next_cost_of_heat": "制热成本",
     "next_per_kwh_heat": "每 kWh 热量 {v}",
     "next_hp_next_run": "下次运行 {time}",
-    "next_avg_purchase": "平均购电价格",
-    "next_avg_vs_market": "市场均价 {price}"
+    "next_avg_purchase": "平均支付价格",
+    "next_avg_vs_market": "这些时段的平均价格 {price}"
   }
 }

@@ -1,8 +1,7 @@
 /**
  * (#1321) "Why this plan": one line per planned device — what, when, why.
- * Pure. Takes the engine's own `why_lines` when the plan publishes them;
- * otherwise derives them from the plan's blocks (their reason codes) and
- * the not-scheduled list. At most `max` lines, the earliest first.
+ * Pure. Takes the engine's own `why` on each plan demand; a device without
+ * one keeps its block's reason code; then the not-scheduled list. At most `max` lines, the earliest first.
  */
 
 import { kwhOf } from './next-lead.js';
@@ -15,12 +14,18 @@ export const WHY_LINES_MAX = 4;
  */
 export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
     if (!plan) return [];
-    if (Array.isArray(plan.why_lines)) {
-        return plan.why_lines.filter((x) => x && x.id).slice(0, max).map((x) => ({
-            id: String(x.id), start: x.start || '', end: x.end || '',
-            reason: String(x.code || x.reason || ''), params: x.params || x.reason_params || {},
-            why: '', kwh: Number(x.kwh) || 0, label: x.label || '',
-        }));
+    // The engine's own word first: each plan demand carries
+    // `why: {code, params: {from, to, price?}}` (one line per device).
+    const own = new Map();
+    for (const d of (Array.isArray(plan.demands) ? plan.demands : [])) {
+        const w = d && d.why;
+        if (!d || !d.id || !w || !w.code) continue;
+        const p = w.params || {};
+        own.set(String(d.id), {
+            id: String(d.id), start: p.from || '', end: p.to || '',
+            reason: '', params: p, why: '', code: String(w.code),
+            kwh: Number(d.planned_kwh) || 0, label: d.label || '',
+        });
     }
     const blocks = (Array.isArray(plan.blocks) ? plan.blocks : [])
         .filter((b) => b && b.id && Number.isFinite(Date.parse(b.start)) && Date.parse(b.end) > nowMs);
@@ -36,21 +41,51 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
             if (e > cur.e) cur.e = e;
         }
     }
-    const planned = [...byId.values()].sort((a, b) => a.s - b.s).map((x) => ({
+    // a device the engine gave no why keeps the block's own reason
+    const fromBlocks = [...byId.values()].filter((x) => !own.has(x.id)).map((x) => ({
         id: x.id, start: new Date(x.s).toISOString(), end: new Date(x.e).toISOString(),
-        reason: String(x.reason), params: x.params, why: '', label: '',
-        kwh: kwhOf(blocks, (i) => String(i) === x.id),
+        reason: String(x.reason), params: x.params, why: '', code: '', label: '',
+        kwh: kwhOf(blocks, (i) => String(i) === x.id), s: x.s,
     }));
+    const planned = [...own.values()].map((x) => ({ ...x, s: Date.parse(x.start) }))
+        .concat(fromBlocks)
+        .sort((a, b) => (Number.isFinite(a.s) ? a.s : Infinity) - (Number.isFinite(b.s) ? b.s : Infinity))
+        .map(({ s: _s, ...rest }) => rest);
+    const known = new Set(planned.map((x) => x.id));
     const left = (Array.isArray(plan.not_scheduled) ? plan.not_scheduled : [])
-        .filter((n) => n && n.id && !byId.has(String(n.id)))
-        .map((n) => ({ id: String(n.id), start: '', end: '', reason: '', params: {}, why: String(n.why || n.reason || ''), kwh: 0, label: n.label || '' }));
+        .filter((n) => n && n.id && !known.has(String(n.id)))
+        .map((n) => ({ id: String(n.id), start: '', end: '', reason: '', params: {}, why: String(n.why || n.reason || ''), code: '', kwh: 0, label: n.label || '' }));
     return [...planned, ...left].slice(0, max);
 }
 
-/** The battery level the plan expects at its end, in %, or null (engine key `battery_end_soc_pct`). */
-export function batteryEndPct(plan) {
-    const v = plan ? plan.battery_end_soc_pct : null;
+/**
+ * The battery the plan expects at its end: `{pct, kwh, at}` from the
+ * engine's `battery_end`, or null. `pct` must be a real 0–100 number.
+ */
+export function batteryEnd(plan) {
+    const b = plan && plan.battery_end;
+    if (!b || typeof b !== 'object') return null;
+    const v = b.pct;
     if (v === null || v === undefined || v === '') return null;
-    const n = Number(v);
-    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+    const pct = Number(v);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) return null;
+    const kwh = Number(b.kwh);
+    return { pct, kwh: Number.isFinite(kwh) ? kwh : null, at: b.at || '' };
+}
+
+/**
+ * (#1321) What SEM paid per bought kWh against the hours' own average price,
+ * for an Insights period. The engine puts `avg_price_paid` / `avg_price_hours`
+ * on sensor.sem_daily_costs / _monthly_costs / _yearly_costs, dynamic
+ * tariffs only. `{paid, hours, entity}` or null (other periods, or absent).
+ */
+export const AVG_PRICE_SENSOR = { day: 'sensor.sem_daily_costs', month: 'sensor.sem_monthly_costs', year: 'sensor.sem_yearly_costs' };
+export function avgPriceFor(states, period) {
+    const entity = AVG_PRICE_SENSOR[period];
+    if (!entity) return null;
+    const a = (states && states[entity] && states[entity].attributes) || {};
+    const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
+    const paid = num(a.avg_price_paid), hours = num(a.avg_price_hours);
+    if (!Number.isFinite(paid)) return null;
+    return { paid, hours: Number.isFinite(hours) ? hours : null, entity };
 }

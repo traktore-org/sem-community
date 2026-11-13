@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { whyLines, batteryEndPct, WHY_LINES_MAX } from '../src/util/plan-why.js';
+import { whyLines, batteryEnd, WHY_LINES_MAX } from '../src/util/plan-why.js';
 import { chargePlanSummary } from '../src/util/charger-questions.js';
 import { batteryFloorPct, kwhAboveFloor, batteryUnits } from '../src/util/battery-questions.js';
 import { defaultOpen, zonesModel, weekdaySummary, PHONE_MAX_PX } from '../src/util/next-devices.js';
@@ -30,20 +30,40 @@ test('why lines: one per planned device, earliest first, merged windows, the hou
     assert.ok(Math.abs(lines[0].kwh - 8) < 1e-9);
     assert.equal(lines[2].why, 'no_runtime_need');
     assert.equal(lines[2].start, '');
+    assert.equal(lines[0].code, '', 'no engine why: the block keeps its reason');
 });
 
-test('why lines: never more than four; the engine\'s own lines win when published', () => {
+test('why lines: never more than four; the engine\'s `why` on a plan demand wins for that device', () => {
     const many = { blocks: [1, 2, 3, 4, 5, 6].map((i) => blk('load:l' + i, `2026-11-14T0${i}:00:00+01:00`, `2026-11-14T0${i}:30:00+01:00`, 1000)) };
     assert.equal(whyLines(many, NOW).length, WHY_LINES_MAX);
-    const own = { why_lines: [{ id: 'ev:keba', start: 'a', end: 'b', code: 'before_deadline', params: { deadline: 'x' }, kwh: 7 }], blocks: many.blocks };
-    assert.deepEqual(whyLines(own, NOW), [{ id: 'ev:keba', start: 'a', end: 'b', reason: 'before_deadline', params: { deadline: 'x' }, why: '', kwh: 7, label: '' }]);
+    // the engine's shape: plan.demands[].why = {code, params: {from, to, price?}}
+    const plan = {
+        blocks: [blk('ev:keba', '2026-11-14T00:00:00+01:00', '2026-11-14T01:00:00+01:00', 4000, 'before_deadline'),
+                 blk('comfort:hot_water', '2026-11-14T04:00:00+01:00', '2026-11-14T05:00:00+01:00', 3000, 'keep_at')],
+        demands: [{ id: 'ev:keba', label: 'KEBA', planned_kwh: 7.5,
+                    why: { code: 'cheapest_hours', params: { from: '2026-11-14T00:00:00+01:00', to: '2026-11-14T03:00:00+01:00', price: 0.11 } } },
+                  { id: 'comfort:hot_water', label: null, planned_kwh: 3 }],
+    };
+    const lines = whyLines(plan, NOW);
+    assert.deepEqual(lines.map((l) => l.id), ['ev:keba', 'comfort:hot_water']);
+    assert.equal(lines[0].code, 'cheapest_hours');
+    assert.equal(lines[0].params.price, 0.11);
+    assert.equal(lines[0].start, '2026-11-14T00:00:00+01:00');
+    assert.equal(lines[0].end, '2026-11-14T03:00:00+01:00');
+    assert.equal(lines[0].kwh, 7.5);
+    assert.equal(lines[0].label, 'KEBA');
+    assert.equal(lines[1].code, '', 'a demand without why keeps its block reason');
+    assert.equal(lines[1].reason, 'keep_at');
     assert.deepEqual(whyLines(null, NOW), []);
 });
 
-test('battery at the end: only a real percentage from the plan', () => {
-    assert.equal(batteryEndPct({ battery_end_soc_pct: 42.4 }), 42.4);
-    for (const v of [undefined, null, '', 'x', -1, 101]) assert.equal(batteryEndPct({ battery_end_soc_pct: v }), null);
-    assert.equal(batteryEndPct(null), null);
+test('battery at the end: the engine\'s battery_end, only a real percentage', () => {
+    assert.deepEqual(batteryEnd({ battery_end: { kwh: 3.0, pct: 20.0, at: '2026-11-14T07:30:00+01:00' } }),
+        { pct: 20, kwh: 3, at: '2026-11-14T07:30:00+01:00' });
+    for (const v of [undefined, null, '', 'x', -1, 101]) assert.equal(batteryEnd({ battery_end: { pct: v, kwh: 1 } }), null);
+    assert.equal(batteryEnd({ battery_end_soc_pct: 42 }), null, 'the old guessed key is not read');
+    assert.equal(batteryEnd(null), null);
+    assert.equal(batteryEnd({ battery_end: null }), null);
 });
 
 test('charge plan chip: one weekday run reads "07:00 · 20–100 kWh · Mon–Sun"', () => {
@@ -96,4 +116,29 @@ test('the plan timeline never forces a width wider than a phone', () => {
     const base = readFileSync(new URL('../src/base/sem-next-base.js', import.meta.url), 'utf8');
     assert.doesNotMatch(base, /min-width:\s*600px/);
     assert.match(base, /\.lanes svg \{[^}]*max-width: 100%/);
+});
+
+test('per-battery rows read sensor.sem_battery_<slug>_soc/_power/_status as the engine publishes them', () => {
+    const st = (v, a = {}) => ({ state: String(v), attributes: a });
+    const states = {
+        'sensor.sem_battery_b1_soc': st(60), 'sensor.sem_battery_b1_power': st(-1.5, { unit_of_measurement: 'kW' }),
+        'sensor.sem_battery_b1_status': st('discharging'),
+        'sensor.sem_battery_b2_soc': st(40), 'sensor.sem_battery_b2_power': st(800, { unit_of_measurement: 'W' }),
+    };
+    const u = batteryUnits(states, ['b1', 'b2']);
+    assert.equal(u.length, 2);
+    assert.equal(u[0].soc, 60); assert.equal(u[0].powerW, -1500);
+    assert.equal(u[1].soc, 40); assert.equal(u[1].powerW, 800);
+});
+
+test('average price paid: read from the period\'s cost sensor, only when the engine sends it', async () => {
+    const { avgPriceFor } = await import('../src/util/plan-why.js');
+    const st = (a) => ({ state: '1', attributes: a });
+    const states = { 'sensor.sem_monthly_costs': st({ avg_price_paid: 0.1, avg_price_hours: 0.25 }),
+                     'sensor.sem_daily_costs': st({}) };
+    assert.deepEqual(avgPriceFor(states, 'month'), { paid: 0.1, hours: 0.25, entity: 'sensor.sem_monthly_costs' });
+    assert.equal(avgPriceFor(states, 'day'), null, 'a fixed tariff sends nothing');
+    assert.equal(avgPriceFor(states, 'week'), null, 'no cost sensor for a week');
+    assert.equal(avgPriceFor({}, 'year'), null);
+    assert.equal(avgPriceFor(states, 'month').entity, 'sensor.sem_monthly_costs');
 });

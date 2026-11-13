@@ -20,6 +20,7 @@ import { bucketsFor, fetchSeries, fetchPeriodFor, bucketValues, stackModel, line
 import { monthTotals, rowsForMonth, sessionRowView, shiftMonth, sessionMonth } from '../util/sessions.js';
 import { downloadBase64 } from '../util/download.js';
 import { providerName, trustConsequence } from '../util/forecast-evidence.js';
+import { avgPriceFor } from '../util/plan-why.js';
 import './sem-simulation-card.js';
 
 const PERIODS = {
@@ -571,15 +572,13 @@ class SEMNextInsightsCard extends SEMNextBase {
                 [imp !== null ? `${this._t('next_import')} ${this._fmt(imp, 2)}` : '', exp !== null ? `${this._t('next_export').toLowerCase()} ${this._fmt(exp, 2)}` : ''].filter(Boolean).join(' · '),
                 { onClick: () => this._moreInfo(S + 'tariff_current_import_rate') }));
         }
-        // (#1321) what SEM paid per kWh against the market's average, dynamic tariffs only
-        const avgId = S + 'average_purchase_price';
-        if (level && level !== 'flat' && this._has(avgId)) {
-            const avg = this._num(avgId), market = Number(this._attrs(avgId).market_average);
-            if (avg !== null) {
-                rows.push(this._row('mdi:scale-balance', this._t('next_avg_purchase'), `${this._fmt(avg, 3)} ${cur}/kWh`,
-                    Number.isFinite(market) ? this._tf('next_avg_vs_market', { price: `${this._fmt(market, 3)} ${cur}/kWh` }) : '',
-                    { onClick: () => this._moreInfo(avgId) }));
-            }
+        // (#1321) what SEM paid per bought kWh against the hours' own average
+        // price — the engine sends both only on a dynamic tariff
+        const avg = avgPriceFor(this._hass?.states, this._period);
+        if (avg) {
+            rows.push(this._row('mdi:scale-balance', this._t('next_avg_purchase'), `${this._fmt(avg.paid, 3)} ${cur}/kWh`,
+                avg.hours !== null ? this._tf('next_avg_vs_market', { price: `${this._fmt(avg.hours, 3)} ${cur}/kWh` }) : '',
+                { onClick: () => this._moreInfo(avg.entity) }));
         }
         const life = this._num(S + 'lifetime_total_savings');
         if (life !== null) {
