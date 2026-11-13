@@ -375,7 +375,11 @@ Every card has its own section. The heading is the card's element tag, so
 **SEM Battery** · *Battery tab*
 
 The battery hero card: an SOC arc ring with charge/discharge power, today's
-throughput, and the current battery state in one glance.
+throughput, and the current battery state in one glance. A sentence on top
+says what the battery does now and what comes next ("Giving 0.8 kW. Tonight
+it keeps 91 % for the morning."), from what SEM publishes. Where a battery
+mode sells, its level reads **SEM sells down to no lower than**: SEM's own
+sales stop there; the house may still use the battery below it.
 
 Since 2.1 it also carries the **Tonight** panel — the working behind
 forecast-led spending (#778), in the order a person would check it. It shows
@@ -416,9 +420,19 @@ rather than showing a blank that looks like a fault.
 
 **SEM Battery Zones** · *Battery tab*
 
-The three SOC thresholds that bound every battery decision — priority,
-buffer, and auto-start. Editing them here is the same as editing them in the
-options flow.
+The three battery levels that bound every battery decision, asked as plain
+questions, each with a line that says what it means:
+
+| Question | Setting |
+|---|---|
+| **Below this the battery fills first** | priority SOC |
+| **Keep this for the house** | buffer SOC |
+| **Above this the car may start without spare sun** | auto-start SOC |
+
+The bar under them shows the four bands with their names: *Battery fills
+first*, *Car on spare sun*, *Battery helps the car*, *Car starts without
+sun*. This is the one place to set them; the Configuration tab names them and
+links here. Editing them here is the same as editing them in the options flow.
 
 #### sem-charger-status-card
 

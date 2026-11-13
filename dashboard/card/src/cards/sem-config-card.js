@@ -29,6 +29,7 @@ import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mo
 import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
 import { taxesApply } from '../util/settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
+import { BATTERY_QUESTIONS, batteryLevels, zoneBands } from '../util/battery-questions.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
@@ -806,7 +807,7 @@ class SEMConfigCard extends SEMLitBase {
         return this._renderZoneKnob(entityId, labelKey, T, helpKey);
     }
 
-    _renderToggle(entityId, labelKey, T, helpKey) {
+    _renderToggle(entityId, labelKey, T, helpKey, subKey = null) {
         const entity = this._hass?.states[entityId];
         if (!entity) return nothing;
         if (!this._gate(entityId)) return nothing;
@@ -823,6 +824,7 @@ class SEMConfigCard extends SEMLitBase {
                         <div class="toggle-thumb"></div>
                     </div>
                 </div>
+                ${subKey ? html`<div class="setting-help-text">${this._t(subKey)}</div>` : nothing}
                 ${this._helpBlock(helpKey)}
             </div>
         `;
@@ -1153,7 +1155,7 @@ class SEMConfigCard extends SEMLitBase {
     // battery-card design language restored to the config controls). Live
     // tunable: drag → _setNumber, no entry reload. Themed via
     // ``var(--section-accent)`` so each section keeps its colour.
-    _renderZoneKnob(entityId, labelKey, T, helpKey) {
+    _renderZoneKnob(entityId, labelKey, T, helpKey, subKey = null) {
         const e = this._hass?.states[entityId];
         if (!e) return nothing;
         // (#830) Everyday shows the essential list only. The battery floors
@@ -1190,6 +1192,7 @@ class SEMConfigCard extends SEMLitBase {
                         @change=${(ev) => this._stage(entityId, 'number', parseFloat(ev.target.value))} />
                     <button class="zone-mini" @click=${() => stepBy(1)}>+</button>
                 </div>
+                ${subKey ? html`<div class="setting-help-text">${this._t(subKey)}</div>` : nothing}
                 ${this._helpBlock(helpKey, e.attributes.sem_default, unit, entityId, 'number')}
             </div>
         `;
@@ -1199,29 +1202,22 @@ class SEMConfigCard extends SEMLitBase {
     // the priority/buffer/auto-start relationship is obvious at a glance
     // (the "very nice and colorful" battery viz, #528).
     _renderSocZoneStrip(T) {
-        const p = this._num('number.sem_battery_priority_soc');
-        const b = this._num('number.sem_battery_buffer_soc');
-        const a = this._num('number.sem_battery_auto_start_soc');
-        if (p == null || b == null || a == null) return nothing;
+        // (#1354) the bands and their names from the shared battery model:
+        // the band under the priority level is where the battery fills
+        // first — it was labelled "Reserve", which is another setting.
+        const bands = zoneBands(batteryLevels(this._hass?.states));
+        if (!bands) return nothing;
         const soc = this._num('sensor.sem_battery_soc');
         const clamp = (x) => Math.max(0, Math.min(100, x));
         return html`
             <div class="soc-strip">
                 <div class="soc-bar">
-                    <div class="soc-zone" style=${`width:${clamp(p)}%;background:#e57373`}></div>
-                    <div class="soc-zone" style=${`width:${clamp(b - p)}%;background:#ffb74d`}></div>
-                    <div class="soc-zone" style=${`width:${clamp(a - b)}%;background:#81c784`}></div>
-                    <div class="soc-zone" style=${`width:${clamp(100 - a)}%;background:#64b5f6`}></div>
+                    ${bands.map((z) => html`<div class="soc-zone" style=${`width:${z.width}%;background:${z.color}`}></div>`)}
                     ${soc != null ? html`<div class="soc-now" style=${`left:${clamp(soc)}%`} title="SOC ${soc}%"></div>` : nothing}
-                    <div class="soc-tick" style=${`left:${clamp(p)}%`}><span>${p}</span></div>
-                    <div class="soc-tick" style=${`left:${clamp(b)}%`}><span>${b}</span></div>
-                    <div class="soc-tick" style=${`left:${clamp(a)}%`}><span>${a}</span></div>
+                    ${bands.slice(1).map((z) => html`<div class="soc-tick" style=${`left:${z.from}%`}><span>${Math.round(z.from)}</span></div>`)}
                 </div>
                 <div class="soc-legend">
-                    <span><i style="background:#e57373"></i>${this._t('zone_legend_reserve')}</span>
-                    <span><i style="background:#ffb74d"></i>${this._t('zone_legend_buffer')}</span>
-                    <span><i style="background:#81c784"></i>${this._t('zone_legend_assist')}</span>
-                    <span><i style="background:#64b5f6"></i>${this._t('zone_legend_surplus')}</span>
+                    ${bands.map((z) => html`<span><i style="background:${z.color}"></i>${this._t(z.key)}</span>`)}
                 </div>
             </div>
         `;
@@ -1562,17 +1558,17 @@ class SEMConfigCard extends SEMLitBase {
                   #593 — hardware cycle count stays here. */ ''}
             ${this._renderPicker('battery_cycles_sensor', 'config_battery_cycles_sensor',
                 'sensor', null, opts, 'config_help_battery_cycles_sensor')}
-            ${this._renderZoneKnob('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
-            ${this._renderZoneKnob('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
-            ${this._renderZoneKnob('number.sem_battery_auto_start_soc', 'auto_start_soc', T, 'zone_help_autostart')}
-            ${this._renderZoneKnob('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
-            ${this._renderZoneKnob('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
+            ${/* (#1354) The three battery levels are set in ONE place, the
+                  Battery tab; here they are named, with the way there. */ ''}
+            ${this._renderBatteryLevelsLink()}
+            ${this._renderZoneKnob(BATTERY_QUESTIONS.solar_gate.entity, BATTERY_QUESTIONS.solar_gate.key, T, 'zone_help_assist_min_surplus', BATTERY_QUESTIONS.solar_gate.sub)}
+            ${this._renderZoneKnob(BATTERY_QUESTIONS.assist_max.entity, BATTERY_QUESTIONS.assist_max.key, T, 'zone_help_assist_max_power', BATTERY_QUESTIONS.assist_max.sub)}
             ${/* #528 — battery discharge-protection settings, migrated from the
                   options flow (async_step_settings). Visual separator only. */ ''}
             <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
             ${this._renderOptionToggle('battery_discharge_protection_enabled', 'config_batt_protection',
                 opts, 'config_help_batt_protection', true)}
-            ${this._renderZoneKnob('number.sem_battery_max_discharge_power', 'battery_max_discharge_power', T, 'config_help_batt_max_discharge')}
+            ${this._renderZoneKnob(BATTERY_QUESTIONS.discharge_max.entity, BATTERY_QUESTIONS.discharge_max.key, T, 'config_help_batt_max_discharge', BATTERY_QUESTIONS.discharge_max.sub)}
             ${this._renderPicker('battery_discharge_control_entity', 'config_batt_discharge_entity',
                 'number', null, opts, 'config_help_batt_discharge_entity')}
             ${/* (#1089) one limit per battery. The one entity above limited
@@ -1606,6 +1602,29 @@ class SEMConfigCard extends SEMLitBase {
                     'config_help_batt_charge_end_entity_each'))}`;
             })()}
         `;
+    }
+
+    // (#1354) The three battery levels, named, with the way to the Battery
+    // tab where they are set. Not a control, so it is not counted.
+    _renderBatteryLevelsLink() {
+        const lv = batteryLevels(this._hass?.states);
+        if (lv.priority == null || lv.buffer == null || lv.autostart == null) return nothing;
+        const fill = (s) => s.replace('{priority}', Math.round(lv.priority))
+            .replace('{buffer}', Math.round(lv.buffer)).replace('{autostart}', Math.round(lv.autostart));
+        return html`
+            <div class="setting-help-text battery-levels-link">
+                ${fill(this._t('bq_levels_here'))}
+                <a href="#" @click=${(e) => { e.preventDefault(); this._goView('battery'); }}>${this._t('bq_levels_open')}</a>
+            </div>
+        `;
+    }
+
+    // Another view of this dashboard, by its path.
+    _goView(path) {
+        const parts = window.location.pathname.split('/');
+        parts[parts.length - 1] = path;
+        window.history.pushState(null, '', parts.join('/'));
+        window.dispatchEvent(new PopStateEvent('popstate'));
     }
 
     // (#751) a free-text option row — the four power-strategy VALUES a
@@ -2898,10 +2917,10 @@ class SEMConfigCard extends SEMLitBase {
         const deye = opts.battery_charge_platform === 'deye';
         return html`
             ${this._renderToggle('switch.sem_forecast_spending_enabled', 'forecast_spending', T, 'config_help_forecast_spending')}
-            ${this._renderToggle('switch.sem_battery_may_export', 'battery_may_export', T, 'config_help_battery_may_export')}
-            ${this._renderToggle('switch.sem_battery_may_assist_ev', 'battery_may_assist_ev', T, 'config_help_battery_may_assist_ev')}
+            ${this._renderToggle(BATTERY_QUESTIONS.may_export.entity, BATTERY_QUESTIONS.may_export.key, T, 'config_help_battery_may_export', BATTERY_QUESTIONS.may_export.sub)}
+            ${this._renderToggle(BATTERY_QUESTIONS.may_assist.entity, BATTERY_QUESTIONS.may_assist.key, T, 'config_help_battery_may_assist_ev', BATTERY_QUESTIONS.may_assist.sub)}
             <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
-            ${this._renderToggle('switch.sem_battery_charge_pacing_enabled', 'battery_charge_pacing', T, 'config_help_battery_charge_pacing')}
+            ${this._renderToggle(BATTERY_QUESTIONS.pacing.entity, BATTERY_QUESTIONS.pacing.key, T, 'config_help_battery_charge_pacing', BATTERY_QUESTIONS.pacing.sub)}
             ${this._renderPicker('battery_charge_power_limit_entity', 'config_charge_power_limit_entity',
                 'number', null, opts, 'config_help_charge_power_limit_entity')}
             ${this._renderOptionNumberInput('inverter_ac_limit_w', 'config_inverter_ac_limit',

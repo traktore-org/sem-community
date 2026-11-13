@@ -197,6 +197,11 @@ reaches the supported-hardware list after someone confirms it on real hardware.
 
 ### Battery Settings
 
+Both dashboards ask the three battery levels as plain questions: **Below this
+the battery fills first** (`battery_priority_soc`), **Keep this for the house**
+(`battery_buffer_soc`) and **Above this the car may start without spare sun**
+(`battery_auto_start_soc`). They are set on the Battery tab.
+
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `battery_priority_soc` | 30% | Below: all solar to battery, EV blocked |
