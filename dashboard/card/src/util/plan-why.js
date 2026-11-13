@@ -83,7 +83,7 @@ export const AVG_PRICE_SENSOR = { day: 'sensor.sem_daily_costs', month: 'sensor.
 export function avgPriceFor(states, period) {
     const entity = AVG_PRICE_SENSOR[period];
     if (!entity) return null;
-    const a = (states && states[entity] && states[entity].attributes) || {};
+    const a = states?.[entity]?.attributes || {};
     const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
     const paid = num(a.avg_price_paid), hours = num(a.avg_price_hours);
     if (!Number.isFinite(paid)) return null;
