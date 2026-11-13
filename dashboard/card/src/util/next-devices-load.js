@@ -10,8 +10,9 @@
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
-import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, simpleMode, statePill, modeHelpKey } from './next-devices.js';
+import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey } from './next-devices.js';
 import { plainReason } from './why-rows.js';
+import { loadRunsBySem } from './next-applies.js';
 import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, BUY_LABEL } from './heater-questions.js';
 
 const MODES = [
@@ -25,42 +26,34 @@ const PHASES = ['unknown', 'L1', 'L2', 'L3', '3ph'];
 const DOMAIN = 'solar_energy_management';
 const BOOST_MINUTES = [30, 60, 120];
 
-/** (#1321) Normal / Smart / Boost, and while a one-off runs: until when, and Back. */
-function simpleControl(card, row, dis) {
+/** (#1354) ONE mode control: the four modes (who runs it), then the one-off
+ *  line — while a Boost or a pause runs: until when, and Back; while SEM runs
+ *  it: Boost for 30 / 60 / 120 min (one tap starts it); otherwise what the
+ *  mode means. "Normal" used to sit beside these and wrote mode Off. */
+function modeControl(card, row, dis, helpKey) {
     const t = (k) => card._t(k);
     const tf = (k, p) => card._tf(k, p);
     const id = row.id;
-    const cur = simpleMode(row);
-    const smart = row.mergedMode === 'solar_only' || row.mergedMode === 'solar_battery';
-    card._boostMins = card._boostMins || {};
-    const mins = card._boostMins[id] || 60;
-    const pick = async (key) => {
-        if (key === cur) return;
-        if (key === 'boost') {
-            await card._callService(DOMAIN, 'plan_override', { device_id: id, action: 'force', minutes: mins });
-            return;
-        }
-        // leaving Boost first ends the one-off, then sets the mode
+    const merged = row.mergedMode;
+    const semRuns = merged === 'solar_only' || merged === 'solar_battery';
+    const seg = card._seg(MODES.map((m) => ({ key: m.key, label: t(m.label) })), merged, async (key) => {
+        if (key === merged) return;
+        // a running one-off ends first, so the new mode is what happens next
         if (row.override && !await card._callService(DOMAIN, 'plan_override_clear', { device_id: id })) return;
-        if (key === 'normal') { for (const w of modeWrites(row, 'off')) card._dev(id, w.property, w.value); }
-        if (key === 'smart' && !smart) { for (const w of modeWrites(row, 'solar_only')) card._dev(id, w.property, w.value); }
-    };
-    const seg = card._seg([
-        { key: 'normal', label: t('next_mode_normal') },
-        { key: 'smart', label: t('next_smart') },
-        { key: 'boost', label: t('boost'), disabled: !smart && cur !== 'boost' },
-    ], cur, pick, { disabled: dis });
-    let line = nothing;
+        for (const w of modeWrites(row, key)) card._dev(id, w.property, w.value);
+    }, { disabled: dis });
+    let line;
     if (row.override) {
         const back = card._val(t('next_back'), () => card._callService(DOMAIN, 'plan_override_clear', { device_id: id }), { disabled: dis });
         const key = row.override.action === 'skip' ? 'next_load_paused_until' : 'next_boost_until';
         line = html`<div class="modehelp">${tf(key, { time: row.override.until || '—' })} · ${back}</div>`;
-    } else if (smart) {
-        const minSeg = card._seg(BOOST_MINUTES.map((m) => ({ key: m, label: tf('next_n_min', { n: m }) })), mins,
-            (m) => { card._boostMins = { ...card._boostMins, [id]: m }; card.requestUpdate(); }, { disabled: dis, small: true });
-        line = html`<div class="modehelp">${t('next_boost_for')} ${minSeg}</div>`;
+    } else if (semRuns) {
+        const minSeg = card._seg(BOOST_MINUTES.map((m) => ({ key: m, label: tf('next_n_min', { n: m }) })), null,
+            (m) => card._callService(DOMAIN, 'plan_override', { device_id: id, action: 'force', minutes: m }),
+            { disabled: dis, small: true });
+        line = html`<div class="modehelp">${helpKey ? html`${t(helpKey)} ` : nothing}${t('next_boost_for')} ${minSeg}</div>`;
     } else {
-        line = html`<div class="modehelp">${t(cur === 'normal' ? 'help_mode_off' : 'next_boost_needs_smart')}</div>`;
+        line = helpKey ? html`<div class="modehelp">${t(helpKey)}</div>` : nothing;
     }
     return html`${seg}${line}`;
 }
@@ -96,11 +89,9 @@ export function loadBody(card, row) {
     const measureOnly = !row.hasControlHandle;
     const solar = !measureOnly && (merged === 'solar_only' || merged === 'solar_battery');
 
-    // ── mode ── (#1321) Normal / Smart / Boost on top; the four-way mode under All settings
-    const simple = measureOnly ? nothing : simpleControl(card, row, dis);
-    const seg = card._seg(MODES.map((m) => ({ key: m.key, label: t(m.label) })), merged,
-        (key) => { for (const w of modeWrites(row, key)) send(w.property, w.value); }, { disabled: dis, small: true });
+    // ── mode ── (#1354) one control: the four modes, then Boost or what the mode means
     const helpKey = modeHelpKey(merged, g) || (MODES.find((m) => m.key === merged) || {}).help;
+    const simple = measureOnly ? nothing : modeControl(card, row, dis, helpKey);
 
     // ── stats ──
     const live = row.powerEntity ? card._powerW(row.powerEntity) : null;
@@ -153,9 +144,6 @@ export function loadBody(card, row) {
 
     // ── rows ──
     const rows = [];
-    if (!measureOnly) {
-        rows.push(card._row('mdi:tune-variant', t('next_mode_all'), seg, helpKey ? t(helpKey) : '', { more: true }));
-    }
     const numVal = (key, text, o) => card._inline(key + ':' + id, text, () => card._numEdit(key + ':' + id, o));
     if (solar) {
         const minVal = numVal('min_h', minMin > 0 ? hours(minMin) + ' h' : t('no_target'), {
@@ -247,16 +235,19 @@ export function loadBody(card, row) {
     const stopAt = stopEnt ? numVal('stopat', g.stop_at > 0 ? String(g.stop_at) + (card._unitOf(stopEnt) ? ' ' + card._unitOf(stopEnt) : '') : '—', {
         value: g.stop_at || null, step: 1, onCommit: (v) => send('stop_at', String(v)) }) : '';
     const stopNow = stopEnt && card._has(stopEnt) ? card._str(stopEnt) + (card._unitOf(stopEnt) ? ' ' + card._unitOf(stopEnt) : '') : '';
-    rows.push(card._row('mdi:flag-checkered', t('next_stop_when'), stopPick,
+    // (#1354) in Off and Peak only SEM does not run the load: its stop, thermometer,
+    // Legionella and comfort rows would change nothing, so they are not shown
+    const runs = loadRunsBySem(merged);
+    if (runs) rows.push(card._row('mdi:flag-checkered', t('next_stop_when'), stopPick,
         stopEnt ? html`${t('next_stop_at')} ${stopAt}${stopNow ? ' · ' + tf('next_now_value', { v: stopNow }) : ''}` : t('next_stop_when_sub'),
         { more: band || !stopEnt }));
     // Own thermometer for the comfort band; without one SEM reads the device's own temperature.
     const thermo = g.comfort_entity || '';
-    rows.push(card._row('mdi:thermometer-lines', t('next_own_thermometer'),
+    if (runs) rows.push(card._row('mdi:thermometer-lines', t('next_own_thermometer'),
         card._inline('thermo:' + id, thermo ? card._name(thermo) : t('next_thermo_device'), () => card._entEdit('thermo:' + id, {
             value: thermo, domains: ['sensor'], filter: isTemperature, onCommit: (v) => send('comfort_entity', v) })),
         t('next_own_thermometer_sub'), { more: band || !thermo }));
-    if (kind === 'hot_water' && card._has('number.sem_legionella_target_temp')) {
+    if (runs && kind === 'hot_water' && card._has('number.sem_legionella_target_temp')) {
         const lid = 'number.sem_legionella_target_temp', iid = 'number.sem_legionella_interval_hours';
         rows.push(card._row('mdi:bacteria-outline', t('next_legionella'),
             card._val(card._fmt(card._num(lid), 0) + ' ' + (card._unitOf(lid) || '°C'), () => card._moreInfo(lid)),
@@ -268,7 +259,7 @@ export function loadBody(card, row) {
     const tUnit = card._hass?.config?.unit_system?.temperature || '°C';
     const cNum = (key, val) => numVal(key, val ? val + ' ' + tUnit : '—', { value: val || null, step: 0.5, unit: tUnit, onCommit: (v) => send(key, String(v)) });
     // the four questions replace this row where they are shown
-    if (!(band && solar)) rows.push(card._row('mdi:thermometer', t('next_comfort'), displayTemp(card, row.comfort && row.comfort.reading_c) || '—',
+    if (runs && !(band && solar)) rows.push(card._row('mdi:thermometer', t('next_comfort'), displayTemp(card, row.comfort && row.comfort.reading_c) || '—',
         html`${card._sentence(t('next_keep_sentence'), { target: cNum('comfort_target', target), limit: cNum('comfort_limit', limit), offset: cNum('comfort_offset', offset) })}<div class="modehelp">${t(row.comfort && row.comfort.may_buy === false ? 'next_keep_sub_no_buy' : 'next_keep_sub')}</div>`,
         { more: q.view === 'time' || (!engaged && !(row.comfort && row.comfort.reading_c != null)) }));
     if (kind === 'heat_pump') {

@@ -76,14 +76,6 @@ export function modeWrites(info, merged) {
     return out;
 }
 
-/** (#1321) normal · smart · boost — which one the row is in now ('' for Peak-only). */
-export function simpleMode(row) {
-    if (row.override && row.override.action === 'force') return 'boost';
-    if (row.mergedMode === 'off') return 'normal';
-    if (row.mergedMode === 'solar_only' || row.mergedMode === 'solar_battery') return 'smart';
-    return '';
-}
-
 /** off · battery · grid — one picker over the two overnight flags. */
 export function overnightSource(goals) {
     const g = goals || {};
