@@ -20,6 +20,22 @@ export { heaterSays, becauseKey, nextBlock } from './heater-questions.js';
 
 export const CHARGER_PREFIX = 'load_device_';
 
+/** (#1321) sessionStorage key: the charger whose charge plan the Devices screen opens. */
+export const OPEN_CHARGE_PLAN_KEY = 'sem-next-open-charge-plan';
+
+/** (#1321) The width at and below which the screens lay out for a phone. */
+export const PHONE_MAX_PX = 720;
+
+/**
+ * (#1321) Whether a device card starts open: on a phone every card starts
+ * folded (its pill is the one-line summary); on a wider screen chargers and
+ * batteries open, loads fold. A tap is remembered either way.
+ */
+export function defaultOpen(type, narrow) {
+    if (narrow) return false;
+    return type !== 'load';
+}
+
 const ICONS = {
     ev_charger: 'mdi:ev-station', ev_charging: 'mdi:ev-station',
     battery: 'mdi:home-battery',
@@ -291,10 +307,12 @@ export function targetModel({ have, min, max, isSoc }) {
 }
 
 /** The battery zone bar: the two gradient stops and every marker that exists. */
-export function zonesModel({ soc, priority, buffer, autoStart, floor }) {
+export function zonesModel({ soc, priority, buffer, autoStart, floor, reserve }) {
     const c = (v) => (Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : null);
     const marks = [];
     const push = (key, v) => { const p = c(v); if (p !== null) marks.push({ key, pct: p, value: Math.round(p) }); };
+    // (#1321) the reserve: where the battery stops giving
+    push('reserve', reserve);
     push('priority', priority); push('buffer', buffer); push('auto', autoStart); push('tonight', floor);
     marks.sort((a, b) => a.pct - b.pct);
     const z1 = c(Math.min(priority ?? Infinity, buffer ?? Infinity));

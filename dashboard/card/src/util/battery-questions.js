@@ -95,3 +95,35 @@ export function batterySaysFromStates(states) {
         floorPct: s('sensor.sem_battery_dynamic_floor_pct'),
     });
 }
+
+/**
+ * (#1321) The battery's floor in %: the plan's own floor when it publishes one
+ * (`battery_floor_pct`), else the reserve setting. null when neither is known.
+ */
+export function batteryFloorPct(states, plan) {
+    const p = plan ? Number(plan.battery_floor_pct) : NaN;
+    if (plan && plan.battery_floor_pct !== null && plan.battery_floor_pct !== undefined && Number.isFinite(p)) return p;
+    const st = states ? states['number.sem_battery_reserve_soc'] : null;
+    const r = st ? Number(st.state) : NaN;
+    return Number.isFinite(r) ? r : null;
+}
+
+/** (#1321) kWh above the floor, or null without a level, a floor or a size. */
+export function kwhAboveFloor(soc, floorPct, capKwh) {
+    if (![soc, floorPct, capKwh].every((v) => v !== null && v !== undefined && Number.isFinite(Number(v)))) return null;
+    if (Number(capKwh) <= 0) return null;
+    return Math.max(0, (Number(soc) - Number(floorPct)) / 100 * Number(capKwh));
+}
+
+/** (#1321) Each battery's own level and power: [{bid, soc, powerW, status}] from sensor.sem_battery_<bid>_*. */
+export function batteryUnits(states, bids) {
+    const st = states || {};
+    const num = (id) => { const s = st[id]; const n = s ? Number(s.state) : NaN; return Number.isFinite(n) ? n : null; };
+    return (Array.isArray(bids) ? bids : []).map((bid) => {
+        const p = 'sensor.sem_battery_' + bid + '_';
+        const pw = st[p + 'power'];
+        const unit = pw && pw.attributes ? String(pw.attributes.unit_of_measurement || '').toLowerCase() : '';
+        const w = num(p + 'power');
+        return { bid, soc: num(p + 'soc'), powerW: w === null ? null : (unit === 'kw' ? w * 1000 : w), status: st[p + 'status'] ? String(st[p + 'status'].state) : '' };
+    }).filter((u) => u.soc !== null || u.powerW !== null);
+}
