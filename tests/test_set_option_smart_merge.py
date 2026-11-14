@@ -283,6 +283,7 @@ class TestStructuralKeysVisibility:
             "heat_pump_temperature_sensor",
             # #600 load-device energy sensors + #602 rated power
             "heat_pump_energy_sensor", "hot_water_energy_sensor",
+            "heat_pump_heat_energy_sensor",   # (#1081)
             "heat_pump_rated_power", "hot_water_rated_power",
             "heat_pump_invert_sg_ready",
             # (#812) the pump's own tariff decides whether its cost sensor exists

@@ -2,3 +2,4 @@
 # RATCHET-LOOSENED: #1323 to=223 — whether a heat pump may be held back in an expensive hour or near the peak limit, and by which signal, is the comfort the user gives up; SEM cannot choose it
 # RATCHET-LOOSENED: #970 to=224 — whether the battery is kept for the peak limit or spent on the house first is the user's tariff choice (capacity fee or not), not something SEM can read
 # RATCHET-LOOSENED: #1358 to=225 — the inverter's own discharge floor is a fact SEM must read, not a choice it can make
+# RATCHET-LOOSENED: #1081 to=226 — the heat meter is a fact SEM must read to learn the COP, not a choice it can make
