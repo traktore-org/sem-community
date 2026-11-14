@@ -33,7 +33,7 @@
 #   sem-load-priority-card   — drag-and-drop device priority (inlined SortableJS)
 # ============================================================
 
-title: Solar Energy Management
+title: SEM-classic
 views:
   # ============================================================
   # VIEW 0: HOME — At-a-glance power flow & status
@@ -430,6 +430,9 @@ views:
           # ══════════════════════════════════════════════════════
           - type: custom:sem-system-card
             entity_prefix: sensor.sem_
+
+          # (#1321) SEM Next: create or open the second dashboard.
+          - type: custom:sem-next-link-card
 
           # (#638: Tonight's Plan moved to the Control tab, between
           # Today's Schedule and Load Management — decision 2026-08-05.)

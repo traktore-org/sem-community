@@ -138,6 +138,12 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
         }
         if b.get("late"):
             row["late"] = True      # (#1023) the top-up stays its own run
+        if b.get("reason"):
+            # (#1321) why this block is here — a run merges only blocks
+            # with the same reason; params keep only what all of them share
+            row["reason"] = b["reason"]
+            if isinstance(b.get("reason_params"), dict) and b["reason_params"]:
+                row["reason_params"] = dict(b["reason_params"])
         by_id.setdefault(b.get("id"), []).append(row)
     out: List[Dict[str, Any]] = []
     for rows in by_id.values():
@@ -147,8 +153,17 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
             prev = run[-1] if run else None
             if (prev and prev["power_w"] == row["power_w"]
                     and prev.get("late") == row.get("late")
+                    and prev.get("reason") == row.get("reason")
                     and prev["end"] == row["start"]):
                 prev["end"] = row["end"]
+                if "reason_params" in prev:
+                    mine = row.get("reason_params") or {}
+                    shared = {k: v for k, v in prev["reason_params"].items()
+                              if mine.get(k) == v}
+                    if shared:
+                        prev["reason_params"] = shared
+                    else:
+                        del prev["reason_params"]
                 continue
             run.append(row)
         out.extend(run)
@@ -204,6 +219,15 @@ def _energy_plan_attrs(
         "computed_at": plan.get("computed_at"),
         "fits": plan.get("fits"),
         "total_cost": plan.get("total_cost"),
+        # (#1325) the parts of total_cost: placed demands and the house's
+        # own grid draw (kwh, cost, reason when the cost is unknown).
+        "device_cost": plan.get("device_cost"),
+        "house_grid": plan.get("house_grid"),
+        # (#1321) the same grid energy bought now, and what waiting saves;
+        # absent when a price is unknown (see coordinator ``_cost_keys``)
+        **({"cost_if_now": plan["cost_if_now"], "saved": plan["saved"]}
+           if plan.get("saved") is not None
+           and plan.get("cost_if_now") is not None else {}),
         "takeover": plan.get("takeover"),
         "demands": plan.get("demands") or [],
         "slots": [{
@@ -3431,6 +3455,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         elif self.entity_description.key == "charging_strategy":
             attrs.update({
                 "reason": self.coordinator.data.get("charging_strategy_reason"),
+                "reason_code": self.coordinator.data.get("charging_strategy_reason_code") or "",
+                "reason_params": self.coordinator.data.get("charging_strategy_reason_params") or {},
                 "charging_state": self.coordinator.data.get("charging_state"),
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "forecast_remaining_today_kwh": self.coordinator.data.get("forecast_remaining_today_kwh"),

@@ -339,7 +339,9 @@ def plan_decision_core(plan) -> tuple:
             blocks, demands, whys,
             str(plan.get("takeover")),
             bool(plan.get("fits")),
-            round(float(plan.get("total_cost") or 0.0), 2),
+            # (#1325) the PLACED demands' cost is the decision; the house's
+            # own grid draw follows the trajectory (TRAJECTORY_KEYS).
+            round(float(plan.get("device_cost", plan.get("total_cost")) or 0.0), 2),
             str(plan.get("battery_fleet_partial")),
             arb_core,
             fsell_core,
@@ -379,7 +381,13 @@ def plan_day_remaining_kwh(owner) -> float:
 # (#1184) Never a key a plan gate acts on: ``forecast_sell`` sat here, so a
 # kept stamp sold at the new build's times. ``slots`` stays — a gate reads
 # only its span, and every build of one period ends it at the night end.
-TRAJECTORY_KEYS = ("slots", "self_consumption", "summary")
+TRAJECTORY_KEYS = ("slots", "self_consumption", "summary",
+                   # (#1325) the house's grid draw re-derives from the live
+                   # battery walk like ``slots``; the total follows it.
+                   "house_grid", "total_cost",
+                   # (#1321) both follow total_cost; always present (None
+                   # when unknown) so a kept stamp never keeps a stale one
+                   "cost_if_now", "saved")
 
 
 def keep_decision_take_trajectory(prev: dict, fresh: dict, now_iso: str) -> dict:
@@ -638,6 +646,25 @@ def _control_device_says_not_now(hass, entity_id: str) -> bool:
                       exc_info=True)
         return False
 
+
+
+def _override_load_ids(coord) -> set:
+    """(#1321) The load ids a one-off override may name: the surplus walk's
+    own devices (the ids of the device map), never a charger it hands to
+    the per-charger loop (``managed_externally``) nor a battery id."""
+    sc = getattr(coord, "_surplus_controller", None)
+    devs = getattr(sc, "_devices", None) or {}
+    batteries = set(getattr(coord, "_known_battery_ids", set()) or set())
+    return {str(did) for did, d in devs.items()
+            if not getattr(d, "managed_externally", False)
+            and str(did) not in batteries and str(did) != "primary"}
+
+
+def _override_load(coord, device_id: str):
+    """(#1321) The load named ``device_id``, or None."""
+    if device_id not in _override_load_ids(coord):
+        return None
+    return coord._surplus_controller._devices.get(device_id)
 
 
 def _band_engaged(dev) -> bool:
@@ -1071,6 +1098,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1085 Part B) one-off per-device overrides; restored from
         # storage on the first cycle, see ``_async_update_data``.
         self._plan_overrides: Dict[str, Any] = {}
+        # (#1321) The battery ids of the last cycle: what plan_override may name.
+        self._known_battery_ids: set = set()
+        self._battery_ids_read = False
         # (#1087) a charger's departure-calendar's next event, cached —
         # departure_for stays sync/hass-free; this is the only async
         # reader, throttled, mirrors tariff/calendar_provider.py's hook.
@@ -4562,6 +4592,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             energy_flows = self._flow_calculator.integrate_energy_flows(
                 book_flows, self.update_interval.total_seconds(),
             )
+            # (#1324) On a meter-backed day the split adds up to the meters.
+            # The integrator keeps its raw sums; only the published copy fits.
+            _day_totals = getattr(self._energy_calculator, "calendar_day_totals", None)
+            _day_totals = _day_totals() if callable(_day_totals) else None
+            if isinstance(_day_totals, dict):
+                from .flow_calculator import fit_flows_to_totals
+                energy_flows = fit_flows_to_totals(energy_flows, _day_totals)
 
             # Step 3: Calculate costs and performance. ``performance``
             # gets ``energy_flows`` so autarky uses the
@@ -5377,6 +5414,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         if cid == _fleet_primary_cid:
                             charging_context.charging_strategy = decision.reason
                             charging_context.charging_strategy_reason = decision.reason
+                            charging_context.charging_strategy_reason_code = str(getattr(decision, "reason_code", "") or "")
+                            charging_context.charging_strategy_reason_params = dict(getattr(decision, "reason_params", None) or {})
                         # Reflect decision into the effective_state sensor
                         # (for dashboards that read sem_charging_state).
                         #
@@ -5856,6 +5895,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 charging_state=charging_state,
                 charging_strategy=charging_context.charging_strategy,
                 charging_strategy_reason=charging_context.charging_strategy_reason,
+                charging_strategy_reason_code=getattr(charging_context, "charging_strategy_reason_code", ""),
+                charging_strategy_reason_params=getattr(charging_context, "charging_strategy_reason_params", None) or {},
                 # Publish canonical budget (#282 unification, Phase B).
                 # The state machine and the actuator now read from the
                 # same EVBudget instance; publishing from it as well
@@ -7853,6 +7894,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 grid_closed=bool(getattr(
                     (getattr(self, "_sink_verdicts", None) or {}).get("grid_export"),
                     "state", "open") == "closed"),
+                # (#1321) the user's one-offs on loads ("run now"/"not now"),
+                # purged of expired ones at the top of this cycle.
+                load_overrides=self._load_override_payloads(),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -10683,6 +10727,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # #531: live battery count gates the global-mode fall-through in
         # _per_battery_config (single→multi bleed fix).
         _bat_count = len(battery_items)
+        self._known_battery_ids = {bid for bid, _rt in battery_items}
+        self._battery_ids_read = True
         # (#1124) …and which cached adapters are batteries THIS cycle: a
         # synthetic "primary" from the first cycles stays in the cache once
         # b1/b2 exist, and its frozen write ledger is no battery's answer.
@@ -11241,6 +11287,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         device. Raises ``ValueError`` on a bad action (the schema already
         rejects one, this is belt-and-suspenders) or ``minutes`` outside 1 to 1440."""
         from . import plan_override as _po
+        # (#1321) Only a charger or a battery acts on an override. Any other
+        # id was stored and did nothing, and the caller read it as done.
+        # Charger ids by the per-charger loop's own rule: the entry's id, else
+        # ``ev_charger_<index>``; one box set up with flat keys is ``ev_charger``.
+        raw = self.config.get("ev_chargers") or []
+        chargers = [c for c in raw if isinstance(c, dict)]
+        known = {str(c.get("id") or f"ev_charger_{i}") for i, c in enumerate(raw) if isinstance(c, dict)}
+        if not chargers:
+            known.add("ev_charger")
+        batteries = set(getattr(self, "_known_battery_ids", set()) or set())
+        known |= batteries | {"primary"}
+        # (#1321) A load the surplus walk decides acts on skip and force too
+        # (``compute_load_intent`` clause 3c) — in Smart mode only.
+        load = None if device_id in known else _override_load(self, device_id)
+        if load is not None:
+            if action not in ("skip", "force"):
+                raise ValueError(
+                    f"a load acts only on skip or force, not {action!r}")
+            from ..devices.base import DeviceControlMode as _DCM
+            if getattr(load, "control_mode", None) != _DCM.SURPLUS:
+                raise ValueError(
+                    f"{device_id!r} acts on an override only in Smart mode")
+        # Before the first cycle has read the battery ids, take the id.
+        elif device_id not in known and getattr(self, "_battery_ids_read", False):
+            raise ValueError(
+                f"not a charger, a battery or a load: {device_id!r} "
+                f"(one of {sorted(known | _override_load_ids(self))})")
         now = dt_util.utcnow()
         self._plan_overrides = _po.set_override(
             self._plan_overrides, device_id, action,
@@ -11248,6 +11321,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if self._storage is not None:
             self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
         _LOGGER.info("Plan override: %s %s for %d min", device_id, action, minutes)
+
+    def _load_override_payloads(self) -> Dict[str, Dict[str, Any]]:
+        """(#1321) ``{device_id: {"action", "until"}}`` for every load with
+        an active override — what the surplus walk acts on this cycle and
+        what the device map shows ("Boost until 14:30")."""
+        from . import plan_override as _po
+        out: Dict[str, Dict[str, Any]] = {}
+        try:
+            now = dt_util.now()
+            loads = _override_load_ids(self)
+            overrides = getattr(self, "_plan_overrides", None)
+            if not isinstance(overrides, dict):
+                return out
+            for device_id in overrides:
+                if device_id not in loads:
+                    continue
+                payload = _po.status_payload(overrides, device_id, now)
+                if payload is not None:
+                    out[device_id] = payload
+        except Exception:  # noqa: BLE001 — an unreadable override is no override
+            _LOGGER.debug("Load overrides unreadable", exc_info=True)
+            return {}
+        return out
 
     def clear_plan_override(self, device_id: str) -> None:
         """End ``device_id``'s override now, if one is set."""
@@ -12531,11 +12627,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                  or 0)
                     if _tgt <= 0.05:
                         continue
+                    # (#1321) the charger's own mode decides: off asks
+                    # nothing, a full car takes nothing, and a sun-only
+                    # mode never charges from the grid by day.
+                    from ..consts.ev_charge_modes import effective_charge_mode_for
+                    try:
+                        _mode = effective_charge_mode_for(self.hass, self.config, _cfg)
+                    except Exception:  # noqa: BLE001 — unknown mode: the old grid ask
+                        _mode = None
+                    if _mode == "off":
+                        continue
+                    _cid = str(_cfg.get("id") or "")
+                    try:
+                        if _cid and self._plan_car_full(_cid, power) is True:
+                            continue
+                    except Exception:  # noqa: BLE001 — unknown fullness: keep the ask
+                        pass
                     asks.append({
                         "id": f"ev:{_cfg.get('id')}" if _cfg.get("id") else None,
                         "kind": "ev",
                         "label": charger_own_name(_cfg),  # (#1053)
                         "kwh": round(_tgt, 2),
+                        "sun_only": _mode in ("solar_only", "solar_plus_battery"),
                     })
                 except Exception:  # noqa: BLE001
                     continue
@@ -12629,6 +12742,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 plan2 = pack_night(
                     demands2, ledger2, floor_kwh=_floor2,
                     max_discharge_w=_md_w, peak_limit_w=_peak_w)
+                from .energy_planner import keep_sun_only
+                _sun_starts = {s.start for s in slots2
+                               if getattr(s, "cap_override_w", None) is not None}
+                _sun_only = [a.get("id") or f"{a['kind']}:{i}"
+                             for i, a in enumerate(asks) if a.get("sun_only")]
+                _allocs2, _no_sun = keep_sun_only(
+                    plan2.allocations, _sun_starts, _sun_only)
                 curve = provisional_soc_curve(
                     ledger2, capacity_kwh=cap_kwh2,
                     max_charge_w=float(self.config.get(
@@ -12642,7 +12762,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # back-to-back windows into runs (the #638 G3c lesson:
                 # group by id first, neighbours in the list never merge).
                 _by_id = {}
-                for a in plan2.allocations:
+                for a in _allocs2:
                     _by_id.setdefault(a.demand_id, []).append(a)
                 _blocks2 = []
                 for _did, _rows in _by_id.items():
@@ -12661,8 +12781,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 preview["provisional"] = {
                     "soc_start": round(soc_seed, 2),
                     "soc_curve": curve,
-                    "fits": plan2.fits,
+                    "fits": plan2.fits and not _no_sun,
                     "blocks": _blocks2,
+                    # (#1321) asks the sun cannot carry in their mode
+                    "not_enough_sun": [{"id": d, "label": labels2.get(d)}
+                                       for d in _no_sun],
                     # (#1321) the battery when tomorrow's preview ends
                     "battery_end": battery_at_end(ledger2, _floor2, cap_kwh2),
                 }
@@ -13346,10 +13469,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     **({"batt": True} if s.home_batt_kwh > 1e-6 else {}),
                 } for s in rows]
 
+            def _cost_keys(ledger_slots, device_cost, device_if_now=None,
+                           has_grid_blocks=False):
+                # (#1325) The night's cost is the placed demands PLUS what the
+                # house buys once the battery's walk is done. Unknown stays
+                # None with its reason, never 0.
+                from .energy_planner import house_grid_cost
+                house = house_grid_cost(ledger_slots)
+                total = (None if house["cost"] is None or device_cost is None
+                         else round(float(device_cost) + house["cost"], 4))
+                # (#1321) what the plan saves against buying now — the
+                # comparison is stated in ``energy_planner.plan_savings``.
+                from .energy_planner import plan_savings
+                return {
+                    "total_cost": total,
+                    "device_cost": device_cost,
+                    "house_grid": house,
+                    **plan_savings(total, device_if_now, house["cost"],
+                                   has_grid_blocks),
+                }
+
             # (#1358) the floor the ledger used, published with the plan
             _plan_floor = [None, None]
 
-            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None,
+            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None, ledger_slots=None,
                               battery_end=None):
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
@@ -13418,6 +13561,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
+                    **_cost_keys(ledger_slots, 0.0),
                     # (#1321) where the battery ends tonight, when walked
                     "battery_end": battery_end,
                 }
@@ -13712,6 +13856,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._energy_plan_shadow = _quiet_answer(
                     arb, fsell, _slot_rows(ledger),
                     predict_self_consumption(ledger, []).as_dict(),
+                    ledger_slots=ledger,
                     battery_end=battery_at_end(ledger, floor_kwh, cap_kwh))
                 return True
             plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
@@ -13789,7 +13934,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._energy_plan_shadow = {
                 "computed_at": now.isoformat(),
                 "fits": plan.fits,
-                "total_cost": plan.total_cost,
+                **_cost_keys(ledger, plan.total_cost, plan.cost_if_now,
+                             any(d.source != "battery" for d in demands
+                                 if any(a.demand_id == d.id
+                                        for a in plan.allocations))),
                 "takeover": (plan.takeover.isoformat()
                              if plan.takeover is not None else None),
                 "demands": rows,
@@ -13898,6 +14046,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "charging_strategy": _clamp_state(
                 charging_context.charging_strategy),
             "charging_strategy_reason": charging_context.charging_strategy_reason,
+            "charging_strategy_reason_code": getattr(charging_context, "charging_strategy_reason_code", ""),
+            "charging_strategy_reason_params": getattr(charging_context, "charging_strategy_reason_params", None) or {},
             "canonical_strategy": charging_context.canonical_strategy,
             "discharge_limit": discharge_limit,
             # (#631) the authoritative per-charger night remaining — what the

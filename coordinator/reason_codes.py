@@ -129,11 +129,16 @@ LOAD_COMFORT_GOAL_BATTERY = "comfort_goal_battery"
 # (#1349) it would heat from the house battery, but the battery is at its reserve
 LOAD_BATTERY_RESERVE = "battery_reserve"
 LOAD_LEGIONELLA = "legionella"
+# (#1321) the user's one-off on a load: run now / not now
+LOAD_OVERRIDE_RUN = "load_override_run"
+LOAD_OVERRIDE_STOP = "load_override_stop"
 # (#1335) a stop or a no-start says its own cause, never a start's sentence
 LOAD_LEGIONELLA_END = "legionella_end"
 LOAD_AT_TARGET = "at_target"
 LOAD_NO_READING = "no_reading"
 LOAD_DISABLED = "disabled"
+# (#1335) on only: a stop for a short pool is due, the minimum run holds it
+LOAD_MIN_RUN_HOLD = "min_run_hold"
 # (#1323) a heat pump stepped down for a shortfall: grid power bought in an
 # expensive hour, or the peak limit near
 LOAD_STEP_DOWN_PRICE = "step_down_price"

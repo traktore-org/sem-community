@@ -165,6 +165,15 @@ const ALLOWED_OUT = {
     'sem-grid-card': [],
     'sem-home-status-card': [],
     'sem-load-priority-card': [],
+    // (#1321) the SEM Next screens: counts ride inside translated lines
+    // ("{n} devices"), which the stub localizer leaves as bare keys.
+    'sem-next-devices-card': ['1', '50', '2'],                 // rank badges; boost floor default
+    'sem-next-insights-card': [],
+    'sem-next-link-card': [],
+    'sem-next-now-card': [],
+    'sem-next-plan-card': [],
+    'sem-next-setup-panel': [],
+    'sem-next-system-card': [],
     'sem-onboarding-banner': [],
     'sem-period-selector-card': [],
     'sem-price-card': [],
@@ -189,6 +198,9 @@ const DASHES_WITH_READINGS = {
     'sem-battery-zones-card': 6, 'sem-control-card': 1, 'sem-costs-detail-card': 1,
     'sem-ev-status-card': 1, 'sem-price-card': 3, 'sem-schedule-card': 1,
     'sem-simulation-card': 2,
+    // (#1321) charge-by time, target min and max, departures: settings
+    // (time and number entities), which this hass does not carry
+    'sem-next-devices-card': 4,
     // drawn before the first update writes its labels (tested below)
     'sem-flow-card': 6,
 };

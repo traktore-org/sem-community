@@ -475,6 +475,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     // the load is off so the row keeps a meaningful number
                     // instead of a bare "OFF".
                     rating: info.power_rating || 0,
+                    // (#1326) the 1 kW placeholder is not a rating.
+                    ratingMeasured: info.rating_measured !== false,
                     priority: info.priority || 5,
                     isOn: info.is_on || false,
                     isShed: info.is_shed || false,
@@ -680,7 +682,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                                 : (device.isShed
                                     ? this._t('shed_label')
                                     : (device.rating > 0
-                                        ? html`<span style="opacity:0.5" title="${this._t('rated_power_hint')}">~${semFormatPower(device.rating)}</span>`
+                                        ? (device.ratingMeasured
+                                            ? html`<span style="opacity:0.5" title="${this._t('rated_power_hint')}">~${semFormatPower(device.rating)}</span>`
+                                            : html`<span style="opacity:0.5">${this._t('rating_not_measured')}</span>`)
                                         : this._t('off'))))}
                     </div>
                 </div>

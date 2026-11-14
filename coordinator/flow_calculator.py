@@ -29,6 +29,86 @@ from .types import (
 _LOGGER = logging.getLogger(__name__)
 
 
+# (#1324) The day's flow split, fitted to the meter-backed daily totals.
+# Rows are where energy came from, columns where it went. Pairs that cannot
+# flow (grid to grid, battery to battery) are not cells at all.
+FLOW_ROWS = ("solar", "grid_import", "battery_discharge")
+FLOW_COLS = ("home", "ev", "battery_charge", "grid_export")
+_FLOW_CELLS = {
+    ("solar", "home"): "solar_to_home", ("solar", "ev"): "solar_to_ev",
+    ("solar", "battery_charge"): "solar_to_battery", ("solar", "grid_export"): "solar_to_grid",
+    ("grid_import", "home"): "grid_to_home", ("grid_import", "ev"): "grid_to_ev",
+    ("grid_import", "battery_charge"): "grid_to_battery",
+    ("battery_discharge", "home"): "battery_to_home", ("battery_discharge", "ev"): "battery_to_ev",
+    ("battery_discharge", "grid_export"): "battery_to_grid",
+}
+_FIT_ITERATIONS = 50
+_FIT_TOLERANCE_KWH = 0.001
+
+
+def fit_flows_to_totals(flows: EnergyFlows, totals: Dict[str, float]) -> EnergyFlows:
+    """The day's flows scaled so each source and each sink adds up to its total.
+
+    The integrator adds power up every cycle, so a reading that drops out
+    loses energy and two readings taken moments apart can book an export
+    the meter never saw (#1324). When the daily totals are backed by the
+    meters, they are the truth and the split is only how they divide:
+    alternate row and column scaling (iterative proportional fitting)
+    keeps each flow's share and makes the sums match. A cell that is 0
+    stays 0; a total with no flow under it cannot be matched and is left.
+    Returns a new EnergyFlows; per-charger EV flows follow their fleet
+    flow's factor, per-string solar is left as measured.
+    """
+    cells = {k: max(0.0, float(getattr(flows, a, 0.0) or 0.0)) for k, a in _FLOW_CELLS.items()}
+
+    def _own(name: str) -> float:
+        axis = 0 if name in FLOW_ROWS else 1
+        return sum(v for k, v in cells.items() if k[axis] == name)
+
+    # A total given as None is not metered: it keeps the split's own sum.
+    # A house left as None is the balance, so sources and sinks still agree.
+    target = {
+        k: _own(k) if totals.get(k) is None else max(0.0, float(totals.get(k) or 0.0))
+        for k in FLOW_ROWS + FLOW_COLS
+    }
+    if totals.get("home") is None:
+        target["home"] = max(0.0, sum(target[r] for r in FLOW_ROWS)
+                             - sum(target[c] for c in FLOW_COLS if c != "home"))
+    for _ in range(_FIT_ITERATIONS):
+        for axis, names in ((0, FLOW_ROWS), (1, FLOW_COLS)):
+            for name in names:
+                keys = [k for k in cells if k[axis] == name]
+                have = sum(cells[k] for k in keys)
+                if have > 0:
+                    f = target[name] / have
+                    for k in keys:
+                        cells[k] *= f
+        worst = 0.0
+        for axis, names in ((0, FLOW_ROWS), (1, FLOW_COLS)):
+            for name in names:
+                keys = [k for k in cells if k[axis] == name]
+                have = sum(cells[k] for k in keys)
+                if have > 0:
+                    worst = max(worst, abs(have - target[name]))
+        if worst <= _FIT_TOLERANCE_KWH:
+            break
+
+    out = EnergyFlows()
+    for k, attr in _FLOW_CELLS.items():
+        setattr(out, attr, round(cells[k], 3))
+    factor = {}
+    for attr in ("solar_to_ev", "grid_to_ev", "battery_to_ev"):
+        raw = float(getattr(flows, attr, 0.0) or 0.0)
+        factor[attr] = getattr(out, attr) / raw if raw > 0 else 1.0
+    for cid, c in (flows.per_charger or {}).items():
+        out.per_charger[cid] = ChargerEnergyFlows(**{
+            attr: round(float(getattr(c, attr, 0.0) or 0.0) * f, 3)
+            for attr, f in factor.items()
+        })
+    out.per_string = dict(flows.per_string or {})
+    return out
+
+
 # ───────────────────────────────────────────────────────────────────────
 # Canonical EV-budget calculation — the unified source of truth (#282)
 #

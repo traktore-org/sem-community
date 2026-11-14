@@ -3479,6 +3479,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         # (#1084) the Why? card reads the decision log over this command
         from .decision_ws import async_register_websocket as _why_ws
         _why_ws(hass)
+        # (#1321) the Plan chart's hourly sun forecast
+        from .solar_forecast_ws import async_register_websocket as _sun_ws
+        _sun_ws(hass)
         # (#1174) the plain sentences the logbook names a decision with
         from .plain_reasons import async_load_plain_reasons
         await async_load_plain_reasons(hass)
@@ -4512,9 +4515,12 @@ async def _async_register_services(
     async def async_plan_override_service(call) -> None:
         """(#1085 Part B) One-off: this device only, for this many
         minutes — then it's gone, even across a restart."""
-        coordinator.set_plan_override(
-            call.data["device_id"], call.data["action"],
-            call.data["minutes"], call.data.get("value"))
+        try:
+            coordinator.set_plan_override(
+                call.data["device_id"], call.data["action"],
+                call.data["minutes"], call.data.get("value"))
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
         await coordinator.async_request_refresh()
 
     async def async_plan_override_clear_service(call) -> None:
@@ -4666,8 +4672,23 @@ async def _async_register_services(
     # Dashboard generation service
     async def async_generate_dashboard_service(call) -> None:
         """Generate and install the SEM dashboard with all assets."""
+        from .features.dashboard_generator import (
+            CLASSIC_DASHBOARD_TITLE, NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
+        )
+        template = call.data.get("template", "next")
         dashboard_title = call.data.get("dashboard_title", "Solar Energy Management")
         dashboard_path = call.data.get("dashboard_path", "sem-dashboard")
+        # (#1321) SEM Next lives beside the classic dashboard: with the
+        # default title/path it lands at /sem-next, never over /sem-dashboard.
+        if template == "next":
+            if dashboard_path == "sem-dashboard":
+                dashboard_path = NEXT_DASHBOARD_PATH
+            if dashboard_title == "Solar Energy Management":
+                dashboard_title = NEXT_DASHBOARD_TITLE
+        elif dashboard_title == "Solar Energy Management":
+            # the main name belongs to the default dashboard now
+            dashboard_title = CLASSIC_DASHBOARD_TITLE
+        dashboard_icon = NEXT_DASHBOARD_ICON if template == "next" else "mdi:solar-power"
 
         try:
             from .dashboard_generator import DashboardGenerator
@@ -4906,6 +4927,7 @@ async def _async_register_services(
             dashboard_config = await generator.generate_dashboard(
                 dashboard_title=dashboard_title,
                 dashboard_path=dashboard_path,
+                template=template,
             )
 
             if not dashboard_config:
@@ -4963,7 +4985,7 @@ async def _async_register_services(
                 if item.get("id") == dashboard_path:
                     item["mode"] = "storage"
                     item["title"] = dashboard_title
-                    item["icon"] = "mdi:solar-power"
+                    item["icon"] = dashboard_icon
                     item["show_in_sidebar"] = True
                     item["require_admin"] = False
                     dashboard_exists = True
@@ -4974,7 +4996,7 @@ async def _async_register_services(
                     "id": dashboard_path,
                     "mode": "storage",
                     "title": dashboard_title,
-                    "icon": "mdi:solar-power",
+                    "icon": dashboard_icon,
                     "show_in_sidebar": True,
                     "require_admin": False,
                     "url_path": dashboard_path,
@@ -5047,6 +5069,7 @@ async def _async_register_services(
             schema=vol.Schema({
                 vol.Optional("dashboard_title", default="Solar Energy Management"): cv.string,
                 vol.Optional("dashboard_path", default="sem-dashboard"): cv.string,
+                vol.Optional("template", default="next"): vol.In(["classic", "next"]),
             }),
         )
         _LOGGER.debug("Registered service: %s.generate_dashboard", DOMAIN)
@@ -5984,11 +6007,10 @@ async def _async_install_card_assets(
         dashboard_generated = True
 
     # Method 2: Dashboard storage file (set by generate_dashboard service)
-    dashboard_storage = os.path.join(
-        hass.config.config_dir, ".storage", "lovelace.sem-dashboard"
-    )
-    if os.path.exists(dashboard_storage):
-        dashboard_generated = True
+    for _path in ("sem-dashboard", "sem-next"):
+        if os.path.exists(os.path.join(
+                hass.config.config_dir, ".storage", f"lovelace.{_path}")):
+            dashboard_generated = True
 
     if not dashboard_generated:
         _LOGGER.debug(

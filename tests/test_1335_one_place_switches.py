@@ -700,3 +700,71 @@ class TestNoSunMeansNoSolarProduction:
         p = _reader({"sensor.pv": _state(0, "W")},
                     {"solar_production_sensor": "sensor.pv"}).read_power()
         assert p.solar_power_read is True
+
+
+# ── a stop the minimum run holds says so ───────────────────────────────────
+from custom_components.solar_energy_management.tests.test_desired_state import (  # noqa: E402
+    _PDev,
+)
+from unittest.mock import MagicMock  # noqa: E402
+
+def _spy_intents(sc):
+    seen = []
+    real = sc._desired_intents
+
+    def _walk(*a, **k):
+        out = real(*a, **k)
+        seen.append(dict(out))
+        return out
+    sc._desired_intents = _walk
+    return seen
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("by_sem", [True, False], ids=["sem-started", "user-started"])
+async def test_a_stop_the_minimum_run_holds_says_so(by_sem):
+    """Seen live: solar 0 W, 3.8 kW imported, a boiler inside its 10-minute
+    minimum run read "solar: running on -19W" — running on sun with no sun."""
+    hass, sc, dev = await _sun_load(by_sem=by_sem)
+    hass.set("sensor.pump_w", "2000", unit_of_measurement="W")
+    dev.min_on_seconds = 600
+    dev._last_activated = datetime.now()               # just started
+    assert dev.can_deactivate() is False
+    seen = _spy_intents(sc)
+
+    await _cycles(sc, 12, export_w=0.0, solar_w=0.0, draw_w=2000.0)
+    assert dev.is_active and not hass.calls("turn_off", "switch.pump")
+    held = seen[-1]["pump"]
+    assert held.on and held.code == RC.LOAD_MIN_RUN_HOLD
+    assert held.source == "solar"                      # books unchanged
+    assert "minimum run" in held.reason
+    assert not any("running on -" in walk["pump"].reason for walk in seen)
+
+    _past_min_run(dev)                                 # the minimum run is over
+    await _cycles(sc, 1, export_w=0.0, solar_w=0.0, draw_w=2000.0)
+    assert not dev.is_active and len(hass.calls("turn_off", "switch.pump")) == 1
+    last = sc.decision_log.records()[-1]
+    assert (last["new"], last["reason_code"]) == ("off", RC.LOAD_SURPLUS_SHORT)
+
+
+@pytest.mark.asyncio
+async def test_the_hold_changes_nothing_the_walk_books():
+    """Two loads, the pool short: the held one books its draw as before, so
+    the next one up is the one that stops."""
+    held = _PDev("low", 2, is_active=True, min_power=800, can_deactivate=False)
+    upper = _PDev("high", 1, is_active=True, min_power=800)
+    sc = SurplusController(MagicMock())
+    sc.regulation_offset = 0.0
+    sc.register_device(held)
+    sc.register_device(upper)
+    seen = _spy_intents(sc)
+    await sc.update(900.0, solar_w=3000.0)
+    assert held.is_active and not upper.is_active
+    assert seen[-1]["low"].code == RC.LOAD_MIN_RUN_HOLD
+    assert seen[-1]["low"].power_w == 800.0
+
+
+def test_layer_one_never_prints_a_negative_pool():
+    dev = _PDev("a", 1, is_active=True, min_power=800)
+    it = compute_load_intent(dev, remaining_surplus_w=-19.0)
+    assert it.on and "running on 0W" in it.reason

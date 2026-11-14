@@ -24,6 +24,17 @@ generate_dashboard:
       example: "sem-dashboard"
       selector:
         text:
+    template:
+      name: Template
+      description: "next (default) = SEM Next, five screens by question, at /sem-next; classic = the old nine-tab dashboard at /sem-dashboard, kept for one release"
+      required: false
+      default: "next"
+      example: "next"
+      selector:
+        select:
+          options:
+            - "classic"
+            - "next"
 
 sync_priorities_from_dashboard:
   name: Sync Priorities from Dashboard
@@ -700,13 +711,13 @@ stop_battery_boost:
 plan_override:
   name: Override a device for one night
   description: >-
-    (#1085) Change what one battery or charger does, for this many minutes
-    only — then it reverts, even across a restart. The standing mode is
-    not changed.
+    (#1085) Change what one battery, charger or load does, for this many
+    minutes only — then it reverts, even across a restart. The standing mode
+    is not changed. A load acts on skip or force, in Smart mode only.
   fields:
     device_id:
       name: Device
-      description: "The battery or charger's id, as in SEM's configuration."
+      description: "The battery, charger or load id, as in SEM's configuration."
       required: true
       selector:
         text:
@@ -743,7 +754,7 @@ plan_override_clear:
   fields:
     device_id:
       name: Device
-      description: "The battery or charger's id, as in SEM's configuration."
+      description: "The battery, charger or load id, as in SEM's configuration."
       required: true
       selector:
         text:

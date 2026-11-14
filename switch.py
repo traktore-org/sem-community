@@ -157,19 +157,23 @@ def regenerate_dashboard(hass: HomeAssistant) -> None:
         dashboards = getattr(ll_data, "dashboards", None)
         if dashboards is None and isinstance(ll_data, dict):
             dashboards = ll_data.get("dashboards")
-        live = isinstance(dashboards, dict) and "sem-dashboard" in dashboards
+        # (#1321) each live dashboard from its own template: SEM Next is the
+        # service's default now, so the classic one must be asked for by name.
+        live = [t for path, t in (("sem-dashboard", "classic"), ("sem-next", "next"))
+                if isinstance(dashboards, dict) and path in dashboards]
     except Exception:  # noqa: BLE001
-        live = False
+        live = []
     if not live:
         _LOGGER.debug("no live SEM dashboard — nothing to regenerate")
         return
 
     async def _run() -> None:
-        try:
-            await hass.services.async_call(
-                DOMAIN, "generate_dashboard", {}, blocking=True)
-        except Exception as err:  # noqa: BLE001 — a switch flip never fails on this
-            _LOGGER.warning("Dashboard regeneration failed: %s", err)
+        for template in live:
+            try:
+                await hass.services.async_call(
+                    DOMAIN, "generate_dashboard", {"template": template}, blocking=True)
+            except Exception as err:  # noqa: BLE001 — a switch flip never fails on this
+                _LOGGER.warning("Dashboard regeneration failed (%s): %s", template, err)
 
     hass.async_create_task(_run(), "sem simulation tab dashboard")
 

@@ -15,7 +15,7 @@ surplus distribution system.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -891,6 +891,26 @@ def _goal_wants_start(device: "ControllableDevice") -> bool:
 #: (#1102) A device's own run (Legionella): SEM-driven, never re-tuned.
 OWN_RUN_SOURCE = "legionella"
 
+#: (#1321) The user's one-off "run now" (``plan_override`` force). SEM-driven:
+#: SEM started it, so SEM stops it once the override ends.
+OVERRIDE_SOURCE = "override"
+
+#: (#1321) The one-off actions a load acts on; ``cap``/``move`` stay inert.
+LOAD_OVERRIDE_ACTIONS = ("skip", "force")
+
+
+def override_may_force(device: "ControllableDevice") -> bool:
+    """(#1321) May a ``force`` override run this load at all? Not while the
+    device is on vacation (a heat pump or a tank SEM must not encourage),
+    not past its daily cap, not once its own stop condition is met."""
+    if getattr(device, "vacation", False) is True:
+        return False
+    if getattr(device, "daily_max_runtime_reached", False) is True:
+        return False
+    if getattr(device, "stop_condition_met", False) is True:
+        return False
+    return True
+
 
 def _heater_claim(device: "ControllableDevice", active: bool, held: float) -> float:
     """(#1102) What a heater rung expects to draw: the measured draw while it
@@ -941,6 +961,7 @@ def compute_load_intent(
     is_night: bool = True,
     daylight_remaining_s: "Optional[float]" = None,
     plan: "PlanVerdict" = NO_OPINION,
+    override: Optional[str] = None,
     grid_start_fits: bool = True,
     shed_code: str = RC.LOAD_PEAK_SHED,
     price_is_expensive: bool = False,
@@ -955,6 +976,8 @@ def compute_load_intent(
     surplus left for THIS device after higher-priority loads (the caller's
     priority walk fills it); the battery/grid clauses don't consume it.
     Everything else is read off ``device`` so it works on a real device or a mock.
+    ``override`` (#1321) is the load's active one-off action (``skip`` /
+    ``force``), or None.
     """
     mode = getattr(device, "control_mode", DeviceControlMode.SURPLUS)
     active = bool(getattr(device, "is_active", False))
@@ -1121,6 +1144,41 @@ def compute_load_intent(
             return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
                               "Legionella run due", RC.LOAD_LEGIONELLA)
 
+    # 3e. (#1321) The user's one-off, for the minutes they chose: ``skip``
+    #     keeps it off, ``force`` runs it with or without sun. Only in
+    #     Smart (surplus) mode — Off and Peak-only returned above, so a
+    #     standing opt-out outranks a one-off, as for chargers and batteries.
+    #     Everything above still wins: the operator's lock (1b), the peak
+    #     shed (2 — a forced load CAN be shed by a peak), the daily cap and
+    #     the device's own stop (3) and its own run (3a). A force does not
+    #     START under a peak warning (``peak_freeze``), nor on vacation.
+    #     A tank at its target or with a dead sensor is not started (3c).
+    #     ``skip`` is an ordinary stop: the minimum run still holds (only
+    #     Mode Off beats it). ``force`` has its own source, so the whole-set
+    #     rules for sun runs — the deficit stop and "no sun" — pass it by,
+    #     and the walk books it only the sun that is left (#1335).
+    #     When the override ends this clause is simply not taken: the walk
+    #     below decides again, and with no sun it stops the run SEM started.
+    # (#1323) The peak limit near, on a load that can step down (clause 3f).
+    peak_step_down = (not active and peak_freeze
+                      and getattr(device, "step_down_ready", False) is True)
+    if override == "skip":
+        if peak_step_down:
+            # (#1321/#1323) A pause must not undo a PEAK step-down: a plain
+            # off intent let layer 3 release it after its hold while the
+            # peak was still near. The peak's intent wins — the load is off
+            # either way, and the step-down is the peak's, so it says so.
+            # A PRICE step-down is not kept: a pause means SEM does nothing.
+            return LoadIntent(False, 0.0, None,
+                              "peak limit near — stepped down",
+                              RC.LOAD_STEP_DOWN_PEAK, step_down=True)
+        return LoadIntent(False, 0.0, None, "paused by you for now",
+                          RC.LOAD_OVERRIDE_STOP)
+    if (override == "force" and override_may_force(device)
+            and (active or not peak_freeze)):
+        return LoadIntent(True, _heater_claim(device, active, held), OVERRIDE_SOURCE,
+                          "run now — set by you", RC.LOAD_OVERRIDE_RUN)
+
     # 3b. A ScheduleDevice past its deadline is a hard commitment — force it on
     #     regardless of surplus or peak posture (matches the old deadline pass,
     #     which was deliberately not peak-gated). ruflo B1. (#1048/#1335) A
@@ -1130,7 +1188,7 @@ def compute_load_intent(
         _rated = _num(getattr(device, "rated_power", 0.0))
         return LoadIntent(True, _rated, "solar", "deadline force", RC.LOAD_DEADLINE)
 
-    # 3e. (#1323) A shortfall: the load steps DOWN. Only a load that can
+    # 3f. (#1323) A shortfall: the load steps DOWN. Only a load that can
     #     (``step_down_ready`` — the user switched it on, and its comfort
     #     band reads inside its range, so "too cold" below still leads), and
     #     only one that is not running: a run is ended by its own reasons
@@ -1142,7 +1200,7 @@ def compute_load_intent(
     #     the cause is the expensive hour without sun, not the meter reading
     #     its own effect.
     if not active and getattr(device, "step_down_ready", False) is True:
-        if peak_freeze:
+        if peak_step_down:
             return LoadIntent(False, 0.0, None,
                               "peak limit near — stepped down",
                               RC.LOAD_STEP_DOWN_PEAK, step_down=True)
@@ -1322,7 +1380,7 @@ def compute_load_intent(
         # priority ones first once the pool runs more than 100 W short, so a
         # higher-priority load never loses first.
         return LoadIntent(True, sun_claim, sun_src,
-                          f"{sun_src}: running on {effective:.0f}W",
+                          f"{sun_src}: running on {max(0.0, effective):.0f}W",
                           command_w=sun_command)
 
     # 5. No source → off. When a plan hold is what suppressed the paid
@@ -1634,7 +1692,8 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         # never actuate it — SEM only re-tunes loads it is actually driving.
         if intent.source is None:
             return device.get_current_consumption()
-        if intent.source == OWN_RUN_SOURCE or intent.source in PAID_SOURCES:
+        if (intent.source in (OWN_RUN_SOURCE, OVERRIDE_SOURCE)
+                or intent.source in PAID_SOURCES):
             # (#1335) never re-tuned: an own run, or a paid run holding the
             # power its start set (offering it the sun's pool wrote its floor
             # every other cycle). A tank that holds a setpoint for another
@@ -1929,6 +1988,9 @@ class SurplusController:
         self._tier1_budget_left: float = 0.0
         # (arc Phase 4) last raw surplus samples for the median-of-3 pre-filter
         self._surplus_samples: List[float] = []
+        # (#1321) this cycle's one-off overrides on loads, stamped by update():
+        # device_id → {"action", "until"}. Empty = nothing set (the common case).
+        self._load_overrides: Dict[str, Dict[str, Any]] = {}
         # (#1335) the last three solar production readings (None = no
         # reading that cycle), for the no-sun stop
         self._solar_samples: List[Optional[float]] = []
@@ -2173,6 +2235,23 @@ class SurplusController:
             if d.is_active and getattr(d, "_offpeak_forced", False)
         )
 
+    def _override_action(self, device) -> Optional[str]:
+        """(#1321) This load's active one-off action (``skip``/``force``),
+        or None. Only a Smart-mode (surplus) load acts on one; in any other
+        mode the override is held but read as nothing."""
+        rec = self._load_overrides.get(getattr(device, "device_id", None))
+        action = rec.get("action") if isinstance(rec, dict) else None
+        if action not in LOAD_OVERRIDE_ACTIONS:
+            return None
+        if getattr(device, "control_mode", None) != DeviceControlMode.SURPLUS:
+            return None
+        return action
+
+    def load_override_status(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """(#1321) ``{"action", "until"}`` for the device map, or None."""
+        rec = self._load_overrides.get(device_id)
+        return dict(rec) if isinstance(rec, dict) else None
+
     def _desired_intents(self, devices, *, remaining_surplus, reclaim_w,
                          battery_priority, price_level,
                          peak_freeze, peak_shed, peak_shed_all):
@@ -2234,6 +2313,8 @@ class SurplusController:
                 plan=self._plan_windows.get(did) or NO_OPINION,
                 # (#864) a grid start must fit the billing slot
                 grid_start_fits=self._grid_start_fits(device),
+                # (#1321) the user's one-off on this load, if any
+                override=self._override_action(device),
                 # (#1323) the step-down's two facts: this load's price level
                 # and what the house buys now (0 when the meter is unread)
                 price_is_expensive=is_expensive_name(
@@ -2258,9 +2339,11 @@ class SurplusController:
                 did = device.device_id
                 if not self._sun_run(device, intents[did]):
                     continue
-                if device.is_active and device.can_deactivate() is False:
-                    continue
                 charged = spend.get(did, 0.0)
+                if device.is_active and device.can_deactivate() is False:
+                    if charged > 0.0:
+                        self._say_min_run_holds(device, intents)
+                    continue
                 if charged <= 0.0:
                     continue
                 remaining += self._stop_short(device, intents, spend)
@@ -2295,9 +2378,22 @@ class SurplusController:
                         and self._sun_run(device, intent)):
                     continue
                 if device.can_deactivate() is False:
+                    self._say_min_run_holds(device, intents)
                     continue
                 self._stop_short(device, intents, spend, reason="no sun left")
         return intents
+
+    @staticmethod
+    def _say_min_run_holds(device, intents) -> None:
+        """(#1335) A stop for a short pool is due, and the load's minimum
+        run time holds it on. The intent stays ON with the same power,
+        source and command — the walk's books do not change — but it says
+        so: "solar: running on 0W" read as running on sun with no sun."""
+        did = device.device_id
+        intents[did] = replace(
+            intents[did],
+            reason="minimum run time holds it — not enough sun",
+            code=RC.LOAD_MIN_RUN_HOLD)
 
     def _no_sun(self) -> bool:
         """(#1335) Is solar production itself gone? True when the reading is
@@ -2506,6 +2602,9 @@ class SurplusController:
         # TimeManager. None = no sun data; the cheap-hours grid top-up then
         # keeps its pre-#953 behaviour (unknown is not a claim about the sun).
         daylight_remaining_s: Optional[float] = None,
+        # (#1321) device_id → {"action", "until"}: the active one-off
+        # overrides. None/empty = none set → behaviour unchanged.
+        load_overrides: Optional[dict] = None,
         # (#1335) Solar production right now, W. None = no live reading
         # (the default, and a dark solar sensor): the no-sun stop never
         # fires on it.
@@ -2581,6 +2680,10 @@ class SurplusController:
         # (#638 G4) stamp this cycle's joint-plan window verdicts for the
         # intent path.
         self._plan_windows = dict(plan_windows or {})
+        # (#1321) this cycle's one-off overrides, read by layer 1 (clause 3e)
+        self._load_overrides = {
+            str(k): dict(v) for k, v in (load_overrides or {}).items()
+            if isinstance(v, dict)}
         # (#864/#1335) the billing slot a grid start must fit, for layer 2
         self._peak_slot_allowed_w = peak_slot_allowed_w
         self._grid_import_w = float(grid_import_w or 0.0)

@@ -2294,6 +2294,22 @@ standing mode. Use the services `solar_energy_management.plan_override` and
 
 ---
 
+## SEM Next (#1321)
+
+A second dashboard with five screens, each named by the question you have:
+**Now** (what SEM does and why), **Plan** (the next 24 hours as one
+timeline), **Devices** (one card shape per charger, battery and load),
+**Insights** (one period selector for energy and money, plus replay) and
+**System** (source freshness, what SEM refused, settings by question).
+Every screen opens with one line in words.
+
+It is the default dashboard. A new install gets it, and
+`solar_energy_management.generate_dashboard` builds it unless you ask for
+`template: classic`. It appears in the sidebar as **SEM-dashboard**
+at `/sem-next/now`. The old dashboard is called **SEM-classic** (still at
+`/sem-dashboard`) and stays for one more release; build it again with `template: classic`. In observer mode
+the screens are the same, greyed, and every line says what SEM *would* do.
+
 ## Observer Mode
 
 When running two HA instances against the same hardware (e.g., prod + test), enable Observer Mode on the test instance.

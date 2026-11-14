@@ -27,7 +27,9 @@ The dashboard is generated automatically on first install. If you need to regene
 
 1. Go to **Developer Tools** > **Services**
 2. Search for `solar_energy_management.generate_dashboard`
-3. Click **Call Service**
+3. Click **Call Service**. It builds the default dashboard, **SEM-dashboard**,
+   at `/sem-next`. For the old one, **SEM-classic** (still at
+   `/sem-dashboard`), add `template: classic`.
 4. The dashboard appears in the sidebar — hard-refresh your browser (Ctrl+Shift+R)
 
 ---
@@ -635,7 +637,8 @@ same in short, for example "45.8 °C · heats to 52 °C at 23:00". See
 **A heat pump's COP (#1081).** Under **More**, a heat pump has *COP by outdoor
 temperature*: the COP now and what a kWh of heat costs, then two or three
 rows "At … °C outside the COP is …". It is saved once two rows are filled in;
-all empty is one fixed COP. See
+all empty is one fixed COP. With a heat meter, *COP used* picks Fixed, My
+curve or Learned; the line under it says how many hours SEM has learned. See
 [What a kWh of heat costs](USER_GUIDE.md#what-a-kwh-of-heat-costs-1081).
 
 #### sem-onboarding-banner
@@ -799,6 +802,164 @@ Live clock, current conditions, and colour-coded temperature forecast bars.
 > [`sem-energy-plan-card`](#sem-energy-plan-card), kept so dashboards
 > generated before the rename keep rendering. It is deliberately absent from
 > the card picker. Re-run `generate_dashboard` to move to the current name.
+
+#### sem-next-link-card
+
+**SEM Next link** · *System tab*
+
+One row: create the SEM Next dashboard beside the classic one, or open it
+when it exists (`/sem-next/now`). The classic dashboard is never changed.
+Calls `solar_energy_management.generate_dashboard` with `template: next`.
+
+#### sem-next-now-card
+
+**SEM · Now** · *SEM Next, Now screen*
+
+Opens with one line in words: what SEM does right now, the next planned
+block and tonight's battery floor. Then the power bar (sources above, sinks
+below; tap it for every number, tap a row for its history), today's totals
+with hourly sparklines and the self-use and own-supply rings, the Today
+list from `sensor.sem_charging_state` (solar peak, price windows, night,
+car and battery ETAs), why each device does what it does, money with the
+price now and the next cheap window, and the signals: tip, best surplus
+window, peak, CO2, score, weather. Plan ›, Decisions › and Insights › open
+the other screens. A sensor that is out leaves its row out.
+
+Under the power bar a thin bar shows where the power comes from now, in
+percent (sun, battery, grid); it stays visible when the list is folded. The
+money section ends with the price for the next 24 hours as a coloured strip
+(cheap, normal, expensive, by your own price levels) with a mark for now; a
+one-rate tariff shows no strip. At the bottom one chip per device (battery
+charge, each car, each heat pump or tank) opens the Devices screen.
+
+#### sem-next-plan-card
+
+**SEM · Plan** · *SEM Next, Plan screen*
+
+Today or tomorrow as one strip from `sensor.sem_energy_plan`: hourly price
+bars with the cheap and the expensive band, the sun forecast as a curve,
+and the plan's blocks on three lanes (car, battery, loads); solid runs,
+dashed is planned. Tap a block for its reason. *Show timeline per device*
+opens one lane per charger and load. On a phone the strip fits the screen
+width; it never scrolls sideways. **Why this plan**: one line per planned
+device (at most four) — what, when and why, in plain words. **Per device**:
+one row each with *Skip* and *Start now* for a car (`plan_override`, one
+night), *Back to plan* (`plan_override_clear`), *Charge now* (Always max,
+confirm step), *Charge plan* (opens the charger's charge plan on Devices)
+and the battery's *Sell*. **Expected**: grid cost, saved by the plan, the
+battery level at the end of the plan (when the plan publishes it), sun
+tomorrow with its trust, arbitrage advice, the actuation switch, *Replan*. **Decisions
+today**: the decision log with a device filter and an *Earlier* fold.
+The planner's notes ("13 hours have no price yet", "no cheap hour before
+07:00") are shown in your language, the same words as on the classic Energy
+Plan card.
+
+A heater's *Keep at* run has its own row, named after the device with
+*to 52 °C*. A heater that is below its start line with no hour planned is
+listed with *is below 52 °C; no cheap hour before 07:00*, and the top line
+says the same in place of "Nothing planned from the grid". A heater that buys no
+power is not in the plan: it waits for sun.
+
+#### sem-next-devices-card
+
+**SEM · Devices** · *SEM Next, Devices screen*
+
+One list, one order: every charger, the battery and every load as one card
+(rank · name · state pill · live kW · ⚙ configure), sorted by priority.
+*Reorder* moves cards by drag or ▲▼; *Done* writes the order. Above the
+list: surplus, active devices, the 15-min peak, then the peak limit as one
+question, *Limit grid draw to 5.0 kW · A limit / No limit*, with what it
+does; slot budget, month peak and what SEM can shed.
+Charger: *Off*, the mode group and *Always (max)* by the same names as the
+classic EV card, target bar, *Charge by* (time and days), *Charge Target*
+as *At least 10 · Up to 40 kWh*, pause, battery boost, phases, set-once
+values, this month, lifetime. Battery: mode, a line that says what it does
+now and next (*Giving 0.8 kW. Tonight it keeps 40 % for the morning.*),
+zone bar, its levels, help for the car, charge pacing, sell window,
+per-battery mode and reserve, evidence and health. The battery's levels and
+permissions are asked here only. Load: one mode control, *Off / Peak only /
+SEM runs it / SEM runs it, battery may help*, and a *Boost for 30/60/120
+min* button; goal, min run / pause, Requires, phase, comfort, tariff,
+may-switch. Rows that do nothing for a load in Off or Peak only are hidden.
+A heat pump shows what a kWh of heat costs, and under *All settings* its
+COP by outdoor temperature as text (*-7:2.5, 12:4.2*; empty = one fixed
+COP, #1081) and *COP used* (Fixed, My curve, Learned from the heat meter).
+Every row needs its entity; controls are off in observer mode.
+
+A heater with a thermometer says what it does and what comes next, in the
+pill and as the first line of its open card:
+
+| It says | It means |
+|---|---|
+| too cold · heating now | below *Never colder than*: it heats at any price |
+| heating to 52 °C | its planned hour is open; it stops at *Keep it at* |
+| heating on sun · up to 56 °C | spare sun heats up to *With spare sun, heat up to* |
+| heats to 52 °C at 23:00 | it is below the start line; that hour is planned |
+| below 52 °C · no hour planned yet | nothing is planned; the cause follows when SEM names one |
+| below 52 °C · waits for sun | SEM may not buy power for it, so only the sun heats it |
+| warm · heats again below 51 °C | just under *Keep it at*: no run starts for so little |
+| warm · 52.4 °C | at or above *Keep it at* |
+| Legionella run | its own heat-up runs to the Legionella temperature |
+| no temperature reading | the band is set but its thermometer reads nothing |
+
+Any other load that is off names the cause when SEM has one, such as
+*off · not enough spare sun* or *off · ran long enough today*.
+
+**A heater's four questions (#1349).** Under that line and a bar with the
+three temperatures, the opened row asks: *Keep it at*, *Never colder than*,
+*With spare sun, heat up to* and *May SEM buy power for it?* — the same
+questions, in the same words, as the Load Priority card. A load without a
+thermometer is asked *Run it each day for* and the buy question. The mode,
+minimum run and pause, Requires, phase, *Stop when*, the thermometer and
+Legionella show under **All settings**. See
+[A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
+
+Each charger card shows its charge plan in one line under the name, also
+when folded: *Ready by 07:00 · 20–100 kWh · Mon–Sun*. The pencil opens the
+charge plan. Every value you can change is underlined with dots; a pencil
+shows on hover and always on a touch screen. The battery's level bar marks
+its reserve and says how much is above it (*About 1.2 kWh above the 20 %
+reserve*); with two batteries each gets its own level and power. A heat pump
+shows what a kWh of heat costs and its next planned run. On a phone every
+card starts folded, with its state pill as the one-line summary.
+
+#### sem-next-insights-card
+
+**SEM · Insights** · *SEM Next, Insights screen*
+
+One period for every chart: Today, Yesterday, Week, Month, Year; today's bar
+is highlighted. Seven tabs: Energy (house by source, where the energy went,
+solar yields, strings, PV health, self-use and own-supply rings, CO₂),
+Power (24 h curves), Battery (power and charge), Car (kWh per charger,
+sessions by month with the .xlsx download, progress and lifetime), Money
+(bought vs saved, payback, car economics, demand charge, tariff), Forecast
+(actual vs expected sun, accuracy) and Replay (the simulation card). Tap or
+arrow across a chart to read one bucket. Charts are hand-drawn SVG fed by
+the recorder; a missing entity leaves its series or row out.
+
+With a dynamic tariff, *Money* also shows the average price SEM paid per kWh
+against the market's average, when SEM publishes it.
+
+#### sem-next-system-card
+
+**SEM · System** · *SEM Next, System screen*
+
+Health first: a tile per source with its value and age (solar, grid,
+battery, car, prices, forecast, each load) and, in small type, the entity SEM
+really reads (for example the inverter's power sensor), which helps when a
+setup reads the wrong sensor, the setup check with the grid and battery
+signs, the hardware, what is unavailable, the version; buttons Copy
+diagnostics, Diagnose (copies the report) and Observer on/off behind a
+confirm step. Then what SEM held back. Then seven settings groups written
+as sentences (How I pay · What SEM may do · Battery rules · Chargers · Heat
+pump and hot water · What SEM reads · Notifications and more): tap a value,
+change it, and apply every change at once from the bar at the bottom. The
+"N more" line opens with All settings. *What SEM may do* asks the peak limit
+as the same question as the Devices screen. *Battery rules* reads the
+battery's levels back and links to the battery on the Devices screen, where
+they are asked. Tax, VAT and grid-fee rows show only where they change the
+price. Adding or detecting a charger,
+entity pickers and PV strings stay on the classic Configuration tab.
 
 ### System Diagram Style
 

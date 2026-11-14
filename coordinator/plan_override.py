@@ -9,10 +9,15 @@ hass-free, unit-testable — the same contract as ``curtailment.py``.
 
 One override per device at a time; setting a new one replaces the old.
 ``action`` is one of ``ACTIONS``. Only ``skip`` and ``force`` are acted on
-today, by battery and charger alike, each riding the EXISTING manual-mode
-road (``_decide_battery``'s ``mode == "off"/"force_charge"``, the same
+today, by battery, charger and load alike, each riding the EXISTING road
+(``_decide_battery``'s ``mode == "off"/"force_charge"``, the same
 ``ChargerIntent.DISABLE``/``CHARGE_MAX`` #580's VPP pause and boost already
-use) — no new decision logic, so no new hardware risk. ``cap`` and ``move``
+use; for a load (#1321) one precedence clause, 3e, in
+``compute_load_intent``) — no new actuation path. A load acts on one only in
+Smart (surplus) mode, and the peak shed, the daily cap, the device's own
+stop, its own run (Legionella) and vacation still win. Since #1335 the
+three layers are the only load engine, so the load clause acts on every
+install (observer mode withholds it). ``cap`` and ``move``
 are accepted and stored (so a later part never needs a storage migration)
 but no decider reads them yet; they stay inert until a part that needs them
 (``cap`` wants an amps-clamp path; ``move`` wants #1087's calendar data).
@@ -203,7 +208,7 @@ def apply_to_charger_decision(
     rec = active_override(overrides, charger_id, now)
     if rec is None:
         return decision
-    until = f"{rec.expires_at:%H:%M}"
+    until = _clock(rec, now)
     charging = decision.intent in (ChargerIntent.CHARGE_AT_AMPS,
                                    ChargerIntent.CHARGE_MAX)
     if rec.action == "skip" and charging:
@@ -237,4 +242,12 @@ def status_payload(
     rec = active_override(overrides, device_id, now)
     if rec is None:
         return None
-    return {"action": rec.action, "until": f"{rec.expires_at:%H:%M}"}
+    return {"action": rec.action, "until": _clock(rec, now)}
+
+
+def _clock(rec: PlanOverride, now: datetime) -> str:
+    """(#1321) The end as ``HH:MM`` on the caller's clock. The stored
+    stamp is UTC (``set_override``), so printing it as is read an hour or
+    two early in Europe; ``now`` carries the local zone."""
+    tz = now.tzinfo or timezone.utc
+    return f"{rec.expires_at.astimezone(tz):%H:%M}"
