@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.15] — 14.11.2026
+
 - 🐛 **The plan chart shows one car as one row** (#1321). Tomorrow's preview named it differently from tonight's plan.
 - ✨ **Each planned device says why its hours were chosen**: cheapest hours, sun, battery, before leaving or one rate (#1321).
 - ✨ **On a dynamic tariff, the cost sensors show the average price paid per bought kWh and the average price of all hours** (#1321).
