@@ -2199,7 +2199,8 @@
     "hp_cop_source_curve": "Moje křivka",
     "hp_cop_source_learned": "Naučený",
     "hp_cop_learned_from": "Naučeno z měřiče tepla: {hours} hodin, {tmin} až {tmax} °C",
-    "hp_cop_learning": "Učí se z měřiče tepla: zatím {hours} hodin"
+    "hp_cop_learning": "Učí se z měřiče tepla: zatím {hours} hodin",
+    "hp_cop_looks_electric": "Tento měřič počítá elektřinu, ne teplo. Vyberte měřič tepla."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4401,7 +4402,8 @@
     "hp_cop_source_curve": "Min kurve",
     "hp_cop_source_learned": "Lært",
     "hp_cop_learned_from": "Lært fra varmemåleren: {hours} timer, {tmin} til {tmax} °C",
-    "hp_cop_learning": "Lærer fra varmemåleren: {hours} timer indtil nu"
+    "hp_cop_learning": "Lærer fra varmemåleren: {hours} timer indtil nu",
+    "hp_cop_looks_electric": "Denne måler tæller strøm, ikke varme. Vælg varmemåleren."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6603,7 +6605,8 @@
     "hp_cop_source_curve": "Meine Kurve",
     "hp_cop_source_learned": "Gelernt",
     "hp_cop_learned_from": "Vom Wärmezähler gelernt: {hours} Stunden, {tmin} bis {tmax} °C",
-    "hp_cop_learning": "Lernt vom Wärmezähler: bisher {hours} Stunden"
+    "hp_cop_learning": "Lernt vom Wärmezähler: bisher {hours} Stunden",
+    "hp_cop_looks_electric": "Dieser Zähler misst Strom, nicht Wärme. Wähle den Wärmezähler."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8805,7 +8808,8 @@
     "hp_cop_source_curve": "My curve",
     "hp_cop_source_learned": "Learned",
     "hp_cop_learned_from": "Learned from the heat meter: {hours} hours, {tmin} to {tmax} °C",
-    "hp_cop_learning": "Learning from the heat meter: {hours} hours so far"
+    "hp_cop_learning": "Learning from the heat meter: {hours} hours so far",
+    "hp_cop_looks_electric": "This meter counts electricity, not heat. Pick the heat meter."
   },
   "es": {
     "% of limit": "% del límite",
@@ -11007,7 +11011,8 @@
     "hp_cop_source_curve": "Mi curva",
     "hp_cop_source_learned": "Aprendido",
     "hp_cop_learned_from": "Aprendido del contador de calor: {hours} horas, de {tmin} a {tmax} °C",
-    "hp_cop_learning": "Aprendiendo del contador de calor: {hours} horas hasta ahora"
+    "hp_cop_learning": "Aprendiendo del contador de calor: {hours} horas hasta ahora",
+    "hp_cop_looks_electric": "Este contador mide electricidad, no calor. Elige el contador de calor."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13209,7 +13214,8 @@
     "hp_cop_source_curve": "Oma käyrä",
     "hp_cop_source_learned": "Opittu",
     "hp_cop_learned_from": "Opittu lämpöenergiamittarista: {hours} tuntia, {tmin}–{tmax} °C",
-    "hp_cop_learning": "Oppii lämpöenergiamittarista: tähän mennessä {hours} tuntia"
+    "hp_cop_learning": "Oppii lämpöenergiamittarista: tähän mennessä {hours} tuntia",
+    "hp_cop_looks_electric": "Tämä mittari laskee sähköä, ei lämpöä. Valitse lämpömittari."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15411,7 +15417,8 @@
     "hp_cop_source_curve": "Ma courbe",
     "hp_cop_source_learned": "Appris",
     "hp_cop_learned_from": "Appris du compteur de chaleur : {hours} heures, de {tmin} à {tmax} °C",
-    "hp_cop_learning": "Apprend du compteur de chaleur : {hours} heures jusqu'ici"
+    "hp_cop_learning": "Apprend du compteur de chaleur : {hours} heures jusqu'ici",
+    "hp_cop_looks_electric": "Ce compteur mesure l'électricité, pas la chaleur. Choisissez le compteur de chaleur."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17613,7 +17620,8 @@
     "hp_cop_source_curve": "Saját görbe",
     "hp_cop_source_learned": "Tanult",
     "hp_cop_learned_from": "A hőmennyiségmérőből tanulva: {hours} óra, {tmin} és {tmax} °C között",
-    "hp_cop_learning": "Tanul a hőmennyiségmérőből: eddig {hours} óra"
+    "hp_cop_learning": "Tanul a hőmennyiségmérőből: eddig {hours} óra",
+    "hp_cop_looks_electric": "Ez a mérő áramot mér, nem hőt. Válaszd a hőmennyiségmérőt."
   },
   "it": {
     "% of limit": "% del limite",
@@ -19815,7 +19823,8 @@
     "hp_cop_source_curve": "La mia curva",
     "hp_cop_source_learned": "Appreso",
     "hp_cop_learned_from": "Appreso dal contatore di calore: {hours} ore, da {tmin} a {tmax} °C",
-    "hp_cop_learning": "Apprende dal contatore di calore: finora {hours} ore"
+    "hp_cop_learning": "Apprende dal contatore di calore: finora {hours} ore",
+    "hp_cop_looks_electric": "Questo contatore misura elettricità, non calore. Scegli il contatore di calore."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -22017,7 +22026,8 @@
     "hp_cop_source_curve": "Mijn curve",
     "hp_cop_source_learned": "Geleerd",
     "hp_cop_learned_from": "Geleerd van de warmtemeter: {hours} uur, {tmin} tot {tmax} °C",
-    "hp_cop_learning": "Leert van de warmtemeter: tot nu toe {hours} uur"
+    "hp_cop_learning": "Leert van de warmtemeter: tot nu toe {hours} uur",
+    "hp_cop_looks_electric": "Deze meter telt stroom, geen warmte. Kies de warmtemeter."
   },
   "no": {
     "% of limit": "% av grense",
@@ -24219,7 +24229,8 @@
     "hp_cop_source_curve": "Min kurve",
     "hp_cop_source_learned": "Lært",
     "hp_cop_learned_from": "Lært fra varmemåleren: {hours} timer, {tmin} til {tmax} °C",
-    "hp_cop_learning": "Lærer fra varmemåleren: {hours} timer så langt"
+    "hp_cop_learning": "Lærer fra varmemåleren: {hours} timer så langt",
+    "hp_cop_looks_electric": "Denne måleren teller strøm, ikke varme. Velg varmemåleren."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26421,7 +26432,8 @@
     "hp_cop_source_curve": "Moja krzywa",
     "hp_cop_source_learned": "Nauczony",
     "hp_cop_learned_from": "Nauczony z licznika ciepła: {hours} godz., od {tmin} do {tmax} °C",
-    "hp_cop_learning": "Uczy się z licznika ciepła: dotąd {hours} godz."
+    "hp_cop_learning": "Uczy się z licznika ciepła: dotąd {hours} godz.",
+    "hp_cop_looks_electric": "Ten licznik mierzy prąd, nie ciepło. Wybierz licznik ciepła."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28623,7 +28635,8 @@
     "hp_cop_source_curve": "A minha curva",
     "hp_cop_source_learned": "Aprendido",
     "hp_cop_learned_from": "Aprendido do contador de calor: {hours} horas, de {tmin} a {tmax} °C",
-    "hp_cop_learning": "A aprender do contador de calor: {hours} horas até agora"
+    "hp_cop_learning": "A aprender do contador de calor: {hours} horas até agora",
+    "hp_cop_looks_electric": "Este contador mede eletricidade, não calor. Escolha o contador de calor."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30825,7 +30838,8 @@
     "hp_cop_source_curve": "Curba mea",
     "hp_cop_source_learned": "Învățat",
     "hp_cop_learned_from": "Învățat din contorul de căldură: {hours} ore, de la {tmin} la {tmax} °C",
-    "hp_cop_learning": "Învață din contorul de căldură: {hours} ore până acum"
+    "hp_cop_learning": "Învață din contorul de căldură: {hours} ore până acum",
+    "hp_cop_looks_electric": "Acest contor măsoară curent, nu căldură. Alege contorul de căldură."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -33027,7 +33041,8 @@
     "hp_cop_source_curve": "Min kurva",
     "hp_cop_source_learned": "Inlärd",
     "hp_cop_learned_from": "Inlärd från värmemätaren: {hours} timmar, {tmin} till {tmax} °C",
-    "hp_cop_learning": "Lär sig från värmemätaren: {hours} timmar hittills"
+    "hp_cop_learning": "Lär sig från värmemätaren: {hours} timmar hittills",
+    "hp_cop_looks_electric": "Den här mätaren räknar el, inte värme. Välj värmemätaren."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -35229,6 +35244,7 @@
     "hp_cop_source_curve": "我的曲线",
     "hp_cop_source_learned": "学习所得",
     "hp_cop_learned_from": "从热量表学习：{hours} 小时，{tmin} 至 {tmax} °C",
-    "hp_cop_learning": "正在从热量表学习：已有 {hours} 小时"
+    "hp_cop_learning": "正在从热量表学习：已有 {hours} 小时",
+    "hp_cop_looks_electric": "此电表计量的是电，不是热量。请选择热量表。"
   }
 }

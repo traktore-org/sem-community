@@ -7865,7 +7865,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 </span>
             </div>`)}
             <div class="ge-hint">${this._t("hp_cop_curve_hint")}</div>
-            ${this._renderCopSource(e)}`}_renderCopSource(e){const t=e.goals||{};if(!Object.prototype.hasOwnProperty.call(t,"cop_source"))return G;const s=function(e,t){if(!e||"no_meter"===e.state)return"";const s=String(Math.round(kr(e.hours)||0));return"learned"===e.state?t("hp_cop_learned_from").replace("{hours}",s).replace("{tmin}",Cr(kr(e.tmin))).replace("{tmax}",Cr(kr(e.tmax))):t("hp_cop_learning").replace("{hours}",s)}(t.cop_learn,e=>this._t(e)),i=Dr(t),r=function(e){const t=e||{},s=Dr(t),i=["flat"];return(Sr(t.cop_curve)||"curve"===s)&&i.push("curve"),"learned"!==t.cop_learn?.state&&"learned"!==s||i.push("learned"),i}(t);return H`
+            ${this._renderCopSource(e)}`}_renderCopSource(e){const t=e.goals||{};if(!Object.prototype.hasOwnProperty.call(t,"cop_source"))return G;const s=function(e,t){if(!e||"no_meter"===e.state)return"";if("looks_electric"===e.state)return t("hp_cop_looks_electric");const s=String(Math.round(kr(e.hours)||0));return"learned"===e.state?t("hp_cop_learned_from").replace("{hours}",s).replace("{tmin}",Cr(kr(e.tmin))).replace("{tmax}",Cr(kr(e.tmax))):t("hp_cop_learning").replace("{hours}",s)}(t.cop_learn,e=>this._t(e)),i=Dr(t),r=function(e){const t=e||{},s=Dr(t),i=["flat"];return(Sr(t.cop_curve)||"curve"===s)&&i.push("curve"),"learned"!==t.cop_learn?.state&&"learned"!==s||i.push("learned"),i}(t);return H`
             ${s?H`<div class="ge-hint">${s}</div>`:G}
             ${r.length>1?H`
             <div class="ge-row">

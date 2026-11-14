@@ -194,14 +194,66 @@ class TestNothingActsUntilPicked:
         assert device_cop_at(dev, -15.0) == (2.4, "learned")
 
 
-def test_a_flagged_hot_water_hour_is_left_out():
-    s = cl.new_state()
-    for i in range(6):
-        s = cl.observe(s, hour_id="h1", elec_kwh=i * 0.2, heat_kwh=i * 0.5,
-                       outdoor_c=3, running=True, dhw=(i == 2))
-    s = cl.observe(s, hour_id="h2", elec_kwh=1.2, heat_kwh=3.0, outdoor_c=3,
-                   running=True)
-    assert s["bins"] == {} and s["rejected"] == {"hot_water": 1}
+def _hours(s, n, *, e0=0.0, h0=0.0, cop=3.0, t=3.0, start=0, heat_of=None):
+    """n whole hours, six readings each; ``heat_of(e)`` overrides the meter."""
+    e, h = e0, h0
+    for k in range(n):
+        for i in range(6):
+            e = e0 + (k * 6 + i) * 0.2
+            h = heat_of(e) if heat_of else h0 + (e - e0) * cop
+            s = cl.observe(s, hour_id=start + k, elec_kwh=e, heat_kwh=h,
+                           outdoor_c=t, running=True)
+    return cl.observe(s, hour_id=start + n, elec_kwh=e + 0.2,
+                      heat_kwh=heat_of(e + 0.2) if heat_of else h + 0.2 * cop,
+                      outdoor_c=t, running=True)
+
+
+class TestReviewFindings:
+    """(#1081 review) what a wrong or coarse meter must not teach."""
+
+    def test_an_electricity_meter_as_heat_meter_learns_nothing(self):
+        # COP 1.0: the heat meter counts what the electricity meter counts
+        s = _hours(cl.new_state(), 12, cop=1.0, t=3.0)
+        s = _hours(s, 12, cop=1.02, t=9.0, start=12, e0=50.0, h0=50.0)
+        assert cl.learned_points(s) == []
+        summ = cl.summary(s, has_meter=True)
+        assert summ["state"] == cl.LOOKS_ELECTRIC
+        assert summ["points"] == []
+
+    def test_a_coarse_heat_counter_is_not_learned_from(self):
+        # whole-kWh heat counter: hours swing 0 / 2 / 3 kWh for 1.2 kWh used
+        s = _hours(cl.new_state(), 30, cop=3.0,
+                   heat_of=lambda e: float(math.floor(e * 3.0)))
+        assert cl.learned_points(s) == []
+        assert s["rejected"].get("coarse_meter", 0) > 0
+
+    def test_a_fine_counter_still_learns(self):
+        s = _hours(cl.new_state(), 8, cop=3.0,
+                   heat_of=lambda e: round(e * 3.0, 2))
+        assert cl.learned_points(s) == [(3.0, 3.0)]
+
+    def test_the_hour_after_a_stalled_heat_counter_is_dropped(self):
+        # the heat counter sends nothing for an hour, then catches up
+        def lazy(e):
+            return 3.0 * (1.2 if 1.2 <= e < 2.6 else e)
+        s = _hours(cl.new_state(), 3, heat_of=lazy)
+        assert s["bins"] == {} or all(
+            abs(c - 3.0) < 0.05 for b in s["bins"].values() for _, c in b)
+        assert s["rejected"].get("lagging_meter", 0) >= 1
+
+    def test_a_corrupt_store_starts_fresh_instead_of_failing(self):
+        for bad in ({"v": 1, "bins": []}, {"v": 1, "bins": {"2": "x"}},
+                    {"v": 1, "bins": {"2": [["a", 3]]}}, {"v": 1, "rejected": 5},
+                    {"v": 1, "hour": "x"}):
+            s = cl.observe(bad, hour_id=1, elec_kwh=0, heat_kwh=0,
+                           outdoor_c=3, running=True)
+            cl.summary(s, has_meter=True)
+            cl.learned_points(s)
+
+    def test_observe_takes_no_hot_water_flag(self):
+        # SEM cannot tell a hot-water hour; no flag pretends it can
+        import inspect
+        assert "dhw" not in inspect.signature(cl.observe).parameters
 
 
 class TestWhatTheCoordinatorAdds:

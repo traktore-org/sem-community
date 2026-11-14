@@ -551,8 +551,12 @@ heat pump → **Heat meter**; SEM proposes it when it finds one). It must be a
 kWh total, not a daily counter, and the pump needs a power sensor or energy
 counter. Every hour SEM divides the heat delivered by the electricity used
 and files it under that hour's outdoor temperature. Hours on standby, short
-runs, meter resets or unread values are left out. SEM takes the middle
-value of each band, so a few hot-water or defrost hours do not move it.
+runs, meter resets or unread values are left out, and so is a meter that
+counts in steps too coarse for one hour (it needs 0.1 kWh or finer). SEM
+takes the middle value of each band, so a few defrost hours do not move
+it. SEM cannot tell a hot-water hour: a meter that also counts hot water
+gives a mixed COP. If the COP stays near 1, the card says the meter counts
+electricity, not heat, and nothing is learned.
 After 6 good hours in a 2 °C band, the band is learned. The load list shows "Learned from
 the heat meter: N hours, X to Y °C". Nothing changes until you set **COP
 used** to **Learned**. Outside the temperatures it has seen, SEM uses your
