@@ -384,7 +384,11 @@ READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
                 r"consum", r"electric", r"input", r"cool", r"defrost",
                 r"drinking", r"hot_water", r"dhw", r"tapping", r"water_heat",
                 r"circulation", r"flow", r"current_yield", r"power", r"cop",
-                r"temp", r"pool"),
+                r"temp", r"pool",
+                # a counter that is not the lifetime one, or not the pump's
+                r"yesterday", r"last", r"since", r"reset", r"session",
+                r"cycle", r"solar", r"boiler", r"biomass", r"^bb_",
+                r"pellet", r"wood", r"gas"),
     },
     "battery_power": {
         "platform": "sensor",

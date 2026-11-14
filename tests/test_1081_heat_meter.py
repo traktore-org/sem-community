@@ -125,9 +125,9 @@ def _hp(did="heat_pump", meter="sensor.hm", measured=True, watts=2000.0):
                 _daily_runtime_meter_day=None, watts=watts)
 
 
-def _run_hours(c, dev, states, lifetime, hours, monkeypatch, cop=3.5):
+def _run_hours(c, dev, states, lifetime, hours, monkeypatch, cop=3.5, start=0):
     from custom_components.solar_energy_management.coordinator import coordinator as cmod
-    for h in range(hours + 1):
+    for h in range(start, start + hours + 1):
         for m in (0, 20, 40):
             when = datetime(2026, 12, 1, h % 24, m) if h < 24 else \
                 datetime(2026, 12, 2, h - 24, m)
@@ -184,14 +184,15 @@ class TestTheCoordinatorFeed:
         stored = {"heat_pump": c._cop_learn_states["heat_pump"]}
         dev2 = _hp()
         c2, _ = _coord([dev2], states, life, stored=stored)
-        _run_hours(c2, dev2, states, life, cl.TRUST_HOURS - 3, monkeypatch)
+        _run_hours(c2, dev2, states, life, cl.TRUST_HOURS - 3, monkeypatch, start=4)
         assert dev2.cop_learned, c2._cop_learn_states["heat_pump"]
 
     def test_the_cycle_and_the_save_call_it(self):
+        from .ast_contracts import call_sites
         assert calls(SEMCoordinator._feed_cop_learners, "observe")
-        src = (_ROOT / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
-        assert "self._feed_cop_learners()" in src
-        assert "set_cop_learn_state(" in src
+        assert calls(SEMCoordinator._update_analytics_phases, "_feed_cop_learners")
+        assert [s for s in call_sites("set_cop_learn_state")
+                if s[0].endswith("coordinator.py")]
 
 
 class TestTheChoice:
@@ -215,7 +216,13 @@ class TestTheChoice:
         assert dev.cop_source == want
 
     def test_the_plan_and_the_sensor_ask_the_one_reader(self):
-        assert calls(SEMCoordinator._plan_cop_fn, "device_cop_at")
-        src = (_ROOT / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
-        assert src.count("cop_at=_plan_cop_at(dev)") == 2
-        assert "cop_at=ask_cop.get(i)" in src     # tomorrow's preview too
+        from custom_components.solar_energy_management.coordinator import coordinator as cmod
+        assert calls(cmod._plan_cop_fn, "device_cop_at")
+        from .ast_contracts import call_kwargs
+        # tonight's plan: every heat pump demand carries cop_at …
+        assert [kw for kw in call_kwargs(SEMCoordinator._shadow_energy_plan, "Demand")
+                if "cop_at" in kw]
+        # … and tomorrow's preview too
+        assert all("cop_at" in kw for kw in
+                   call_kwargs(SEMCoordinator._compose_tomorrow_preview, "Demand"))
+        assert calls(SEMCoordinator._compose_tomorrow_preview, "_plan_cop_fn")

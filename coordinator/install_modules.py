@@ -130,6 +130,7 @@ HEAT_PUMP_WIRING_KEYS: tuple[str, ...] = (
     "heat_pump_power_sensor",
     "heat_pump_energy_sensor",
     "heat_pump_temperature_sensor",
+    "heat_pump_heat_energy_sensor",   # (#1081) a heat pump's heat meter
 )
 HOT_WATER_WIRING_KEYS: tuple[str, ...] = (
     "hot_water_entity",

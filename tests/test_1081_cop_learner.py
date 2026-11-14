@@ -46,9 +46,9 @@ def _winter(days=60, seed=1081, restart_every_h=97):
         unread = 0.30 <= kind < 0.32
         if h == 700:
             heat = 0.0              # the heat meter was replaced
-        hour_id = ts.strftime("%Y-%m-%dT%H")
+        hour_id = 500_000 + h          # whole hours, as the coordinator passes
         for m in range(60):
-            running = not standby and (not short or m < 8)
+            running = not standby and (not short or m < 12)
             p_kw = 2.0 if running else 0.005
             cop = true_cop(t_out) * rng.uniform(0.97, 1.03)
             if hot_water:
@@ -202,3 +202,40 @@ def test_a_flagged_hot_water_hour_is_left_out():
     s = cl.observe(s, hour_id="h2", elec_kwh=1.2, heat_kwh=3.0, outdoor_c=3,
                    running=True)
     assert s["bins"] == {} and s["rejected"] == {"hot_water": 1}
+
+
+class TestWhatTheCoordinatorAdds:
+    def _hour(self, s, hid, e0, h0, cop=3.0, t=5.0, meter=None):
+        for i in range(6):
+            s = cl.observe(s, hour_id=hid, elec_kwh=e0 + i * 0.2,
+                           heat_kwh=h0 + i * 0.2 * cop, outdoor_c=t,
+                           running=True, meter=meter)
+        return s
+
+    def test_a_missed_hour_drops_the_hour_before_it(self):
+        s = self._hour(cl.new_state(), 10, 0.0, 0.0)
+        # readings resume two hours later: the counters jumped by the gap
+        s = cl.observe(s, hour_id=12, elec_kwh=5.0, heat_kwh=30.0, outdoor_c=5,
+                       running=True)
+        assert s["bins"] == {} and s["rejected"] == {"gap": 1}
+
+    def test_the_next_hour_closes_it(self):
+        s = self._hour(cl.new_state(), 10, 0.0, 0.0)
+        s = cl.observe(s, hour_id=11, elec_kwh=1.2, heat_kwh=3.6, outdoor_c=5,
+                       running=True)
+        assert s["bins"] == {"4": [[5.0, 3.0]]}
+
+    def test_another_meter_starts_fresh(self):
+        s = self._hour(cl.new_state(), 10, 0.0, 0.0, meter="sensor.a")
+        s = self._hour(s, 11, 1.2, 3.6, meter="sensor.a")
+        assert s["bins"]
+        s = cl.observe(s, hour_id=12, elec_kwh=2.4, heat_kwh=0.0, outdoor_c=5,
+                       running=True, meter="sensor.b")
+        assert s["bins"] == {} and s["meter"] == "sensor.b"
+
+    @pytest.mark.parametrize("bad", [-999.0, 85.0, float("nan")])
+    def test_a_broken_thermometer_is_no_reading(self, bad):
+        s = self._hour(cl.new_state(), 10, 0.0, 0.0, t=bad)
+        s = cl.observe(s, hour_id=11, elec_kwh=1.2, heat_kwh=3.6, outdoor_c=bad,
+                       running=True)
+        assert s["bins"] == {} and s["rejected"] == {"unread": 1}

@@ -22,12 +22,16 @@ BIN_WIDTH_C = 2.0
 TRUST_HOURS = 6
 #: newest samples kept per bin — bounds the store (≈ 35 bins × 24)
 MAX_SAMPLES_PER_BIN = 24
-#: an hour that used less electricity than this is standby, not running
-MIN_ELEC_KWH = 0.1
+#: an hour that used less electricity than this is standby, not running —
+#: and SEM's ledger rounds to 0.01 kWh, so a smaller hour would be ±3 % noise
+MIN_ELEC_KWH = 0.3
 #: an hour the pump ran less of than this is a short run (starts, defrost)
 MIN_RUN_SHARE = 0.25
 #: a COP outside this band is a meter glitch, not a heat pump
 COP_MIN, COP_MAX = 1.0, 7.0
+
+#: an outdoor reading outside this band is a broken sensor
+OUTDOOR_MIN_C, OUTDOOR_MAX_C = -40.0, 50.0
 
 #: what the learner can say about a heat pump
 LEARNED, NOT_ENOUGH, NO_METER = "learned", "not_enough", "no_meter"
@@ -102,19 +106,37 @@ def _close_hour(state: Dict[str, Any], hour: Dict[str, Any]) -> None:
         del samples[: len(samples) - MAX_SAMPLES_PER_BIN]
 
 
-def observe(state: Any, *, hour_id: str, elec_kwh: Any, heat_kwh: Any,
-            outdoor_c: Any, running: bool, dhw: bool = False) -> Dict[str, Any]:
-    """Feed one reading (any cadence). ``hour_id`` names the clock hour
-    ("2026-11-14T07"); a new id closes the previous hour into a sample.
+def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
+            outdoor_c: Any, running: bool, dhw: bool = False,
+            meter: Optional[str] = None) -> Dict[str, Any]:
+    """Feed one reading (any cadence). ``hour_id`` names the clock hour; a
+    new id closes the previous hour into a sample. The coordinator passes
+    whole hours since the epoch (an int — no DST double hour): an id that
+    is not the next one means readings were missed (a restart, a pause),
+    and the closing reading would carry the gap's energy — that hour is
+    dropped.
+
+    ``meter`` names the heat meter: another one starts the learner fresh
+    (a new meter, a new pump — its samples are not this one's).
 
     ``elec_kwh`` / ``heat_kwh`` are the counters' readings (kWh, rising);
     ``running`` says the pump drew power at this reading; ``dhw`` that it
     heated hot water. An unread value spoils the hour, never guesses."""
     state = _valid(state)
+    if meter is not None:
+        if state.get("meter") not in (None, meter):
+            state = new_state()
+        state["meter"] = meter
     e, h, t = _num(elec_kwh), _num(heat_kwh), _num(outdoor_c)
+    if t is not None and not OUTDOOR_MIN_C <= t <= OUTDOOR_MAX_C:
+        t = None
     hour = state.get("hour")
     if hour is None or hour.get("id") != hour_id:
-        if hour is not None:
+        old_id = None if hour is None else hour.get("id")
+        if (isinstance(old_id, int) and isinstance(hour_id, int)
+                and hour_id != old_id + 1):
+            _reject(state, "gap")
+        elif hour is not None:
             # the reading at the turn is the closing value of the old hour
             if e is not None:
                 hour["elec1"] = e
