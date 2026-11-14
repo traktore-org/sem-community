@@ -2372,6 +2372,8 @@ Turn it on or off on the dashboard **Configuration** tab (`switch.sem_observer_m
 - `sensor.sem_daily_savings` — today's solar savings
 - `sensor.sem_monthly_*` — monthly equivalents
 
+On a dynamic tariff, the three cost sensors (daily, monthly, yearly) also show two prices. `avg_price_paid` is what you paid per kWh you bought. `avg_price_hours` is the average price of all hours in that period. If the first is lower, SEM bought in the cheaper hours. On other tariffs these two are not shown.
+
 ### Where the stored energy came from (#770)
 
 A kWh discharged from the battery is only a saving if it was free when it

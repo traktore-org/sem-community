@@ -532,6 +532,8 @@ A day with only your off-peak price, such as a weekend, is marked cheap too.
 Loads set to run on cheap hours do not use that day: they run only on a day
 that has both prices.
 
+`sensor.sem_energy_plan` also says, for each planned device, why its hours were chosen (`why` on each row in `demands`): the cheapest hours, spare sun, the house battery, just before the car leaves, or one rate all night. `battery_end` says where the battery will be when tonight's plan ends (kWh, %, time). `battery_floor_pct` is the lowest level the plan lets it reach.
+
 #### sem-ev-progress-card
 
 **SEM EV Progress** · *EV tab*
