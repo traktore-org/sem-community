@@ -250,6 +250,65 @@ class TestReviewFindings:
             cl.summary(s, has_meter=True)
             cl.learned_points(s)
 
+    def test_an_infinite_reading_is_unread_not_a_crash(self):
+        s = cl.observe(None, hour_id=1, elec_kwh=1.0, heat_kwh=float("inf"),
+                       outdoor_c=float("inf"), running=True)
+        s = cl.observe(s, hour_id=2, elec_kwh=2.0, heat_kwh=3.0, outdoor_c=3,
+                       running=True)
+        assert s["rejected"] == {"unread": 1}
+
+    def test_bad_fields_inside_the_stored_hour_start_fresh(self):
+        bad = {"v": 1, "bins": {}, "rejected": {},
+               "hour": {"id": 1, "elec0": "x", "elec1": 2, "heat0": 1,
+                        "heat1": 2, "n_temp": 1}}
+        s = cl.observe(bad, hour_id=2, elec_kwh=0, heat_kwh=0, outdoor_c=3,
+                       running=True)
+        assert s["rejected"] == {}
+        for res in (float("nan"), 0, True, -1):
+            s = cl.observe({"v": 1, "bins": {}, "heat_res": res}, hour_id=1,
+                           elec_kwh=0, heat_kwh=0, outdoor_c=3, running=True)
+            assert s["heat_res"] == 1.0
+
+    def test_a_stall_in_a_short_hour_still_drops_the_catch_up(self):
+        s = cl.new_state()
+        # hour 0: pump runs 1 reading of 6, uses 0.3 kWh, heat stuck
+        for i in range(6):
+            s = cl.observe(s, hour_id=0, elec_kwh=0.06 * i, heat_kwh=0.0,
+                           outdoor_c=3, running=(i == 0))
+        # hour 1: runs, heat catches up two hours at once
+        for i in range(6):
+            s = cl.observe(s, hour_id=1, elec_kwh=0.36 + 0.2 * i,
+                           heat_kwh=0.0 if i == 0 else 1.08 + 0.6 * i,
+                           outdoor_c=3, running=True)
+        s = cl.observe(s, hour_id=2, elec_kwh=1.56, heat_kwh=4.68,
+                       outdoor_c=3, running=True)
+        assert s["bins"] == {}
+        assert s["rejected"].get("lagging_meter") == 2
+
+    def test_a_stall_does_not_outlive_a_gap(self):
+        s = cl.new_state()
+        for i in range(6):
+            s = cl.observe(s, hour_id=0, elec_kwh=0.2 * i, heat_kwh=0.0,
+                           outdoor_c=3, running=True)
+        s = cl.observe(s, hour_id=1, elec_kwh=1.2, heat_kwh=0.0, outdoor_c=3,
+                       running=True)
+        assert s.get("stalled")
+        s = _hours(s, 1, e0=10.0, h0=30.0, start=5)   # hour 4 skipped
+        assert not s.get("stalled")
+
+    def test_a_meter_reading_just_under_one_is_named_electric(self):
+        s = _hours(cl.new_state(), 10, cop=0.95)
+        assert cl.summary(s, has_meter=True)["state"] == cl.LOOKS_ELECTRIC
+
+    def test_a_counter_reset_learns_the_step_again(self):
+        s = _hours(cl.new_state(), 2, heat_of=lambda e: round(e * 3.0, 3) + 0.001)
+        assert s["heat_res"] <= 0.01
+        s = cl.observe(s, hour_id=3, elec_kwh=0.0, heat_kwh=0.0, outdoor_c=3,
+                       running=True)
+        s = cl.observe(s, hour_id=4, elec_kwh=1.0, heat_kwh=3.0, outdoor_c=3,
+                       running=True)
+        assert s["heat_res"] == 1.0
+
     def test_observe_takes_no_hot_water_flag(self):
         # SEM cannot tell a hot-water hour; no flag pretends it can
         import inspect

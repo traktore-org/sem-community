@@ -15,6 +15,7 @@ only USED when the user picks it for that heat pump (``cop_source`` =
 """
 from __future__ import annotations
 
+import math
 from statistics import median
 from typing import Any, Dict, Optional
 
@@ -37,6 +38,9 @@ MIN_STEPS_PER_HOUR = 10
 #: learned COPs this low (median of every sample) mean the "heat meter"
 #: counts electricity — a wrong match, or no heat pump: nothing is learned
 ELECTRIC_COP = 1.2
+ELECTRIC_LIKE_MIN = 0.85
+#: a running hour that used this much and moved no heat = a lagging counter
+STALL_ELEC_KWH = 0.05
 
 #: an outdoor reading outside this band is a broken sensor
 OUTDOOR_MIN_C, OUTDOOR_MAX_C = -40.0, 50.0
@@ -69,10 +73,31 @@ def _valid(state: Any) -> Dict[str, Any]:
             or not all(isinstance(v, list) and all(_pair_ok(p) for p in v)
                        for v in bins.values())
             or not isinstance(state["rejected"], dict)
-            or not (state["hour"] is None or isinstance(state["hour"], dict))
-            or not isinstance(state.get("heat_res", 1.0), (int, float))):
+            or not (state["hour"] is None or _hour_ok(state["hour"]))
+            or not _res_ok(state.get("heat_res", 1.0))):
         return new_state()
     return state
+
+
+def _res_ok(v: Any) -> bool:
+    return (isinstance(v, (int, float)) and not isinstance(v, bool)
+            and math.isfinite(v) and 0 < v <= 1.0)
+
+
+_HOUR_NUMS = ("elec0", "elec1", "heat0", "heat1", "sum_temp", "n_temp",
+              "n", "n_run")
+
+
+def _hour_ok(hour: Any) -> bool:
+    if not isinstance(hour, dict):
+        return False
+    for k in _HOUR_NUMS:
+        v = hour.get(k)
+        if v is not None and (isinstance(v, bool)
+                              or not isinstance(v, (int, float))
+                              or not math.isfinite(v)):
+            return False
+    return True
 
 
 def _resolution(v: float) -> float:
@@ -90,7 +115,7 @@ def _num(v: Any) -> Optional[float]:
         f = float(v)
     except (TypeError, ValueError):
         return None
-    return f if f == f else None
+    return f if math.isfinite(f) else None
 
 
 def bin_key(outdoor_c: float) -> str:
@@ -116,7 +141,19 @@ def _close_hour(state: Dict[str, Any], hour: Dict[str, Any]) -> None:
         return
     de, dh = e1 - e0, h1 - h0
     if de < 0 or dh < 0:
+        state.pop("stalled", None)
+        state.pop("heat_res", None)   # a new counter: learn its step again
         _reject(state, "reset")
+        return
+    was_stalled = state.pop("stalled", False)
+    if dh == 0 and de >= STALL_ELEC_KWH:
+        # the pump used power, the heat counter did not move: it lags, and
+        # the next hour would carry this one's heat
+        state["stalled"] = True
+        _reject(state, "lagging_meter")
+        return
+    if was_stalled:
+        _reject(state, "lagging_meter")
         return
     if de < MIN_ELEC_KWH:
         _reject(state, "standby")
@@ -125,18 +162,14 @@ def _close_hour(state: Dict[str, Any], hour: Dict[str, Any]) -> None:
     if n and (hour.get("n_run", 0) / n) < MIN_RUN_SHARE:
         _reject(state, "short_run")
         return
-    if state.pop("stalled", False):
-        # the heat counter sent nothing last hour: this hour carries its heat
-        _reject(state, "lagging_meter")
-        return
-    if dh == 0:
-        state["stalled"] = True
-        _reject(state, "lagging_meter")
-        return
     if dh < MIN_STEPS_PER_HOUR * float(state.get("heat_res", 1.0)):
         _reject(state, "coarse_meter")
         return
     cop = dh / de
+    if ELECTRIC_LIKE_MIN <= cop < COP_MIN:
+        # a little under 1: an electricity meter, not a broken one
+        _reject(state, "electric_like")
+        return
     if not COP_MIN <= cop <= COP_MAX:
         _reject(state, "implausible")
         return
@@ -179,6 +212,7 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
         old_id = None if hour is None else hour.get("id")
         if (isinstance(old_id, int) and isinstance(hour_id, int)
                 and hour_id != old_id + 1):
+            state.pop("stalled", None)
             _reject(state, "gap")
         elif hour is not None:
             # the reading at the turn is the closing value of the old hour
@@ -213,7 +247,10 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
 
 def _looks_electric(state: Dict[str, Any], need: int) -> bool:
     cops = [c for v in state["bins"].values() for _, c in v]
-    return len(cops) >= need and median(cops) <= ELECTRIC_COP
+    if len(cops) >= need and median(cops) <= ELECTRIC_COP:
+        return True
+    under = int(state["rejected"].get("electric_like", 0) or 0)
+    return under >= need and under > len(cops)
 
 
 def learned_points(state: Any, *, need: int = TRUST_HOURS) -> list:
