@@ -85,6 +85,9 @@ test('(#1081) the learner line', () => {
     assert.equal(copLearnLine(null, tl), '');
     assert.equal(copLearnLine({ state: 'no_meter' }, tl), '');
     assert.equal(copLearnLine({ state: 'not_enough', hours: 4 }, tl), 'Learning: 4 h');
+    // (#1081 review) a meter that counts electricity is named, not learned
+    assert.equal(copLearnLine({ state: 'looks_electric', hours: 30 }, (k) => k), 'hp_cop_looks_electric');
+    assert.deepEqual(copSourceOptions({ cop_learn: { state: 'looks_electric' } }), ['flat']);
     assert.equal(copLearnLine({ state: 'learned', hours: 54, tmin: -6.04, tmax: 11 }, tl),
         'Learned: 54 h, -6 to 11 °C');
 });

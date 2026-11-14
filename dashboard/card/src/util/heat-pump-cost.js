@@ -129,6 +129,7 @@ export function copSourceOptions(goals) {
  *  12 hours so far", or "" without a heat meter. */
 export function copLearnLine(learn, t) {
     if (!learn || learn.state === 'no_meter') return '';
+    if (learn.state === 'looks_electric') return t('hp_cop_looks_electric');
     const hours = String(Math.round(num(learn.hours) || 0));
     if (learn.state === 'learned') {
         return t('hp_cop_learned_from').replace('{hours}', hours)
