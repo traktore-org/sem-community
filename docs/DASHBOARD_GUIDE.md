@@ -632,6 +632,12 @@ own tariff and *Stop when* sit under **More**. The chip under the row says the
 same in short, for example "45.8 °C · heats to 52 °C at 23:00". See
 [A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
 
+**A heat pump's COP (#1081).** Under **More**, a heat pump has *COP by outdoor
+temperature*: the COP now and what a kWh of heat costs, then two or three
+rows "At … °C outside the COP is …". It is saved once two rows are filled in;
+all empty is one fixed COP. See
+[What a kWh of heat costs](USER_GUIDE.md#what-a-kwh-of-heat-costs-1081).
+
 #### sem-onboarding-banner
 
 **SEM Onboarding Banner** · *Home tab*

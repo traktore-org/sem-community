@@ -3666,6 +3666,15 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "solar_used_kwh": d.get("daily_co2_solar_used_kwh"),
                 "co2_kg_per_kwh_today": d.get("daily_co2_kg_per_kwh"),
             })
+        elif self.entity_description.key == "heat_pump_cost_of_heat":
+            # (#1081) the COP this price was divided by, and where it came
+            # from — the card says "COP now 3.4 at 6 °C" from these two
+            d = self.coordinator.data
+            attrs.update({
+                "cop_used": d.get("heat_pump_cop"),
+                "cop_source": d.get("heat_pump_cop_source"),
+                "outdoor_c": d.get("heat_pump_cop_outdoor_c"),
+            })
         elif self.entity_description.key in ("daily_costs", "monthly_costs", "yearly_costs"):
             # (#1321) what SEM paid per bought kWh against the hours'
             # average price — only on a dynamic tariff (else no keys)

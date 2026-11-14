@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 225,
+  "total": 226,
   "first_run_fields": 19,
   "first_run_steps": 5,
   "first_run_fields_best": 19,
@@ -118,6 +118,7 @@
     "heat_pump_climate_entity",
     "heat_pump_energy_sensor",
     "heat_pump_force_on_threshold",
+    "heat_pump_heat_energy_sensor",
     "heat_pump_invert_sg_ready",
     "heat_pump_max_setpoint",
     "heat_pump_power_sensor",

@@ -535,6 +535,34 @@ uses by its COP, so it shows what one kWh of heat costs right now. It uses
 the pump's own tariff (above); without one, it uses your house price. Pre-heat
 timing can use it.
 
+**COP by outdoor temperature.** A heat pump works better on a mild day. Give
+SEM two or three points, for example "At −7 °C the COP is 2.5, at 12 °C it is
+4.2" (load list → heat pump → target → **More**). SEM reads the COP between
+the points from the outdoor temperature, and plans the pump's bought hours
+where heat is cheapest, not only where power is cheapest. A mild afternoon can
+then beat a slightly cheaper cold morning. The kWh it plans and the cost it
+shows stay power. Leave the points empty for one fixed COP: the plan is then
+exactly as before. With no outdoor reading SEM uses the fixed COP. The
+service is `update_device_config` with property `cop_curve`, value
+`-7:2.5, 12:4.2`.
+
+**COP learned from a heat meter.** Name the pump's heat meter (Settings →
+heat pump → **Heat meter**; SEM proposes it when it finds one). It must be a
+kWh total, not a daily counter, and the pump needs a power sensor or energy
+counter. Every hour SEM divides the heat delivered by the electricity used
+and files it under that hour's outdoor temperature. Hours on standby, short
+runs, meter resets or unread values are left out, and so is a meter that
+counts in steps too coarse for one hour (it needs 0.1 kWh or finer). SEM
+takes the middle value of each band, so a few defrost hours do not move
+it. SEM cannot tell a hot-water hour: a meter that also counts hot water
+gives a mixed COP. If the COP stays near 1, the card says the meter counts
+electricity, not heat, and nothing is learned.
+After 6 good hours in a 2 °C band, the band is learned. The load list shows "Learned from
+the heat meter: N hours, X to Y °C". Nothing changes until you set **COP
+used** to **Learned**. Outside the temperatures it has seen, SEM uses your
+curve, if you set one. Service: `update_device_config`, property
+`cop_source`, value `flat`, `curve` or `learned`.
+
 ### How much did SG-Ready actually shift? (#769)
 
 The SG-Ready unit has its own energy row, on the same footing as the EV:

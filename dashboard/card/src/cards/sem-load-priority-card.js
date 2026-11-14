@@ -33,6 +33,8 @@ import {
     cleanLoadName,
 } from './load-config-modal.js';
 import { stateLabel } from '../util/state-label.js';
+import { curveRows, curveToSend, heatCostNow, heatCostLine,
+    copSourceOf, copSourceOptions, copLearnLine } from '../util/heat-pump-cost.js';
 import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
 import { PEAK_KW, PEAK_TEXT, sliderAnswer } from '../util/peak-questions.js';
 import {
@@ -70,6 +72,8 @@ const COMFORT_DOCS = {
 export const LOAD_PRIORITY_READS = [
     'controllable_devices_count', 'consecutive_peak_15min',
     'load_management_status', 'target_peak_limit', 'grid_power',
+    // (#1081) the heat pump's COP and price of heat, under More
+    'heat_pump_cost_of_heat',
 ];
 
 // How long a slider value the user let go of is shown before the sensor has
@@ -1092,6 +1096,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._renderThermometerRows(device)}
                     ${this._renderAntiCycle(device)}
                     ${this._renderOwnTariff(device)}
+                    ${this._renderCopCurve(device)}
                     ${this._renderStopCondition(device)}
                 </details>
             </div>`;
@@ -1110,6 +1115,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._renderComfortBand(device)}
                     ${this._renderAntiCycle(device)}
                     ${this._renderOwnTariff(device)}
+                    ${this._renderCopCurve(device)}
                     ${this._renderStopCondition(device)}
                 </details>
             </div>`;
@@ -1583,6 +1589,81 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 </span>
             </div>
             <div class="ge-hint">${this._t('anti_cycle_hint')}</div>`;
+    }
+
+    /** (#1081) A heat pump's COP against the outdoor temperature: the live
+     *  COP and price of heat, then 2 or 3 points "At X °C outside the COP is
+     *  Y". All empty = no curve, the one flat COP. Only a load whose goals
+     *  carry cop_curve (a heat pump) shows it. */
+    _renderCopCurve(device) {
+        const g = device.goals || {};
+        if (!Object.prototype.hasOwnProperty.call(g, 'cop_curve')) return nothing;
+        if (!this._copRows) this._copRows = {};
+        const rows = this._copRows[device.id] || curveRows(g.cop_curve);
+        const now = device.id === 'heat_pump'
+            ? heatCostNow(this.hass?.states?.[`${this._prefix}heat_pump_cost_of_heat`])
+            : null;
+        const line = heatCostLine(now, (k) => this._t(k));
+        const edit = (i, key, raw) => {
+            const v = String(raw).trim() === '' ? null : Number(raw);
+            const next = rows.map((r, j) => (j === i ? { ...r, [key]: Number.isFinite(v) ? v : null } : r));
+            this._copRows = { ...this._copRows, [device.id]: next };
+            const text = curveToSend(next);
+            if (text !== null && text !== (g.cop_curve || '')) {
+                device.goals = { ...g, cop_curve: text };
+                this._sendDeviceUpdate(device.id, 'cop_curve', text);
+            }
+            this.requestUpdate();
+        };
+        const val = (v) => (v === null || v === undefined ? '' : String(v));
+        return html`
+            <div class="ge-title" style="margin-top:10px">
+                <ha-icon icon="mdi:thermometer-lines" style="--mdc-icon-size:14px;color:#ff9800"></ha-icon>
+                ${this._t('hp_cop_curve_section')}
+            </div>
+            ${line ? html`<div class="ge-hint">${line}</div>` : nothing}
+            ${rows.map((r, i) => html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('hp_cop_point_at')}</span>
+                <span class="ge-ctl">
+                    <input type="number" step="1" style="width:56px" placeholder="\u00b0C"
+                           .value="${val(r.c)}"
+                           @change=${(e) => edit(i, 'c', e.target.value)}
+                           @click=${(e) => e.stopPropagation()}>
+                    <span class="ge-unit">\u00b0C</span>
+                    <span class="ge-unit">${this._t('hp_cop_point_is')}</span>
+                    <input type="number" min="0.5" step="0.1" style="width:56px" placeholder="COP"
+                           .value="${val(r.cop)}"
+                           @change=${(e) => edit(i, 'cop', e.target.value)}
+                           @click=${(e) => e.stopPropagation()}>
+                </span>
+            </div>`)}
+            <div class="ge-hint">${this._t('hp_cop_curve_hint')}</div>
+            ${this._renderCopSource(device)}`;
+    }
+
+    /** (#1081) What the heat pump learned from its heat meter, and which
+     *  COP SEM uses: fixed, the user's curve, or the learned one. Only a
+     *  heat pump row carries cop_source. */
+    _renderCopSource(device) {
+        const g = device.goals || {};
+        if (!Object.prototype.hasOwnProperty.call(g, 'cop_source')) return nothing;
+        const learn = copLearnLine(g.cop_learn, (k) => this._t(k));
+        const cur = copSourceOf(g);
+        const opts = copSourceOptions(g);
+        return html`
+            ${learn ? html`<div class="ge-hint">${learn}</div>` : nothing}
+            ${opts.length > 1 ? html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('hp_cop_source')}</span>
+                <span class="ge-ctl">
+                    <select class="mode-select" data-goal="cop_source" data-device="${device.id}"
+                            @click=${(e) => e.stopPropagation()}>
+                        ${opts.map((o) => html`
+                            <option value="${o}" ?selected="${cur === o}">${this._t(`hp_cop_source_${o}`)}</option>`)}
+                    </select>
+                </span>
+            </div>` : nothing}`;
     }
 
     /** (#812) The load's own tariff: a fixed rate or a price entity, and its
