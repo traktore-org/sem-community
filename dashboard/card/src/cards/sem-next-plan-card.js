@@ -350,6 +350,9 @@ class SEMNextPlanCard extends SEMNextBase {
             to: p.to ? this._hhmm(p.to) : '',
             price: Number.isFinite(Number(p.price)) && p.price !== null && p.price !== ''
                 ? `${this._fmt(Number(p.price), 2)} ${this._currency()}/kWh` : '',
+            // (#1081) a heat pump planned on the price of heat: its mean COP
+            cop: Number.isFinite(Number(p.cop)) && p.cop !== null && p.cop !== ''
+                ? this._fmt(Number(p.cop), 1) : '',
         };
         const text = this._tf(key, vars);
         return text && text !== key ? text : '';
