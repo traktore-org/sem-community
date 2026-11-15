@@ -7088,6 +7088,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return cav()
         return None
 
+    def _charge_command_share(self, power=None):
+        """(#1367) ``(share, unable_ids)``: the part of the fleet's kWh whose
+        adapter takes a charge command, and the packs that take none. None
+        when SEM could not ask (no adapter built yet, or one failed to
+        answer) — the caller then plans as before."""
+        adapters = self._live_battery_adapters()
+        if not adapters:
+            return None
+        able, unable = [], []
+        for bid, ad in adapters:
+            try:
+                ok = getattr(ad, "supports_forced_charge")
+            except Exception:  # noqa: BLE001 — could not ask
+                return None
+            if not isinstance(ok, bool):
+                return None
+            (able if ok else unable).append(bid)
+        if not unable:
+            return 1.0, []
+        if not able:
+            return 0.0, unable
+        caps = {}
+        for bid, _ad in adapters:
+            try:
+                caps[bid] = float(self._unit_capacity_kwh(bid, power) or 0.0)
+            except (TypeError, ValueError, AttributeError):
+                caps[bid] = 0.0
+        total = sum(caps.values())
+        share = (sum(caps[b] for b in able) / total if total > 0
+                 else len(able) / len(adapters))
+        return share, unable
+
     def _live_battery_adapters(self):
         """(#1124) ``(battery_id, adapter)`` for the batteries of the last
         cycle — every cached adapter before the first one has run."""
@@ -13207,17 +13239,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if getattr(dec, "state", None) in (
                     _SS.NOT_PROFITABLE, _SS.NOT_NEEDED, _SS.TARGET_REACHED):
                 deficit = 0.0
-            if deficit > 0.1:
+            # (#1367) Plan only the charge SEM can send: a pack whose
+            # adapter takes no charge command gets none, and the card says
+            # so instead of showing a charge that never happens.
+            plan_deficit = deficit
+            batt_max_w = float(getattr(
+                getattr(scheduler, "_config", None),
+                "battery_max_charge_power_w", 5000.0))
+            battery_left_out: list = []
+            _share_fn = getattr(self, "_charge_command_share", None)
+            _cs = _share_fn(power) if callable(_share_fn) and deficit > 0.1 else None
+            if isinstance(_cs, tuple):
+                _share, _unable = _cs
+                battery_left_out = [
+                    {"id": "battery" if _share <= 0 else f"battery:{_bid}",
+                     "why": "no_charge_control", "label": None}
+                    for _bid in (_unable if _share > 0 else _unable[:1])]
+                plan_deficit = deficit * _share
+                batt_max_w = batt_max_w * _share
+            if plan_deficit > 0.1:
                 try:
                     # The battery's drag-set slot in the ONE list (#576).
                     batt_prio = int(self._device_registry.battery_surplus_priority())
                 except Exception:  # noqa: BLE001
                     batt_prio = 0
                 demands.append(Demand(
-                    id="battery", kind="battery", energy_kwh=deficit,
-                    max_power_w=float(getattr(
-                        getattr(scheduler, "_config", None),
-                        "battery_max_charge_power_w", 5000.0)),
+                    id="battery", kind="battery", energy_kwh=plan_deficit,
+                    max_power_w=batt_max_w,
                     priority=batt_prio,
                     source="grid",
                     # (#1311) A grid charge runs at night only: a priced day
@@ -13391,7 +13439,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         ev_not_scheduled(
                             self.config, mode_opted_out, disconnected,
                             car_full)
-                        + left_out_loads),
+                        + left_out_loads
+                        + battery_left_out),
                     "summary": [f"no overnight demands tonight ({why})"],
                     # (#638 G3c) Same keys as a full plan, empty — the card
                     # renders "nothing needs the night" from the SHAPE, not
@@ -13810,7 +13859,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "not_scheduled": (
                     ev_not_scheduled(
                         self.config, mode_opted_out, disconnected, car_full)
-                    + left_out_loads),
+                    + left_out_loads
+                    + battery_left_out),
                 # None on a whole fleet. A string here means the battery
                 # figures above cover a SUBSET — the plan is still the best
                 # available answer, but it is not the fleet's answer (#638
