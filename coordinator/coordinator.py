@@ -7090,16 +7090,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     def _charge_command_share(self, power=None):
         """(#1367) ``(share, unable_ids)``: the part of the fleet's kWh whose
-        adapter takes a charge command, and the packs that take none. None
+        adapter has a charge command set up, and the packs that take none. None
         when SEM could not ask (no adapter built yet, or one failed to
         answer) — the caller then plans as before."""
         adapters = self._live_battery_adapters()
         if not adapters:
             return None
+        # a pack read this cycle with no adapter yet: the share would be of
+        # the wrong whole — could not ask
+        packs = getattr(power, "batteries", None) or {}
+        if len(packs) > len(adapters):
+            return None
         able, unable = [], []
         for bid, ad in adapters:
             try:
-                ok = ad.supports_forced_charge
+                # a configuration fact, never a live gate (the plan is
+                # stamped once a night)
+                ok = ad.charge_command_configured
             except Exception:  # noqa: BLE001 — could not ask
                 return None
             if not isinstance(ok, bool):

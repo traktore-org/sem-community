@@ -570,6 +570,15 @@ class BatteryControlAdapter(ABC):
         """True if this brand has a forced-charge service.
         ``Sonnen`` would return False — protection-only adapter."""
 
+    @property
+    def charge_command_configured(self) -> bool:
+        """(#1367) Is a charge command SET UP — a configuration fact, never
+        a live gate. The night plan is stamped once, so a charge that one
+        flaky read would refuse must still be planned; the actuator drops
+        and explains it then. Default: ``supports_forced_charge``, which is
+        a configuration answer for adapters that read no live state."""
+        return self.supports_forced_charge
+
     def _raise_force_discharge_repair(
         self, error: str, *, unstable: bool = False,
     ) -> None:

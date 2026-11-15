@@ -31,7 +31,7 @@ TZ = coord_mod.dt_util.DEFAULT_TIME_ZONE
 
 
 def _ad(ok):
-    return SimpleNamespace(supports_forced_charge=ok)
+    return SimpleNamespace(charge_command_configured=ok)
 
 
 def _plan(monkeypatch, adapters, caps=None, deficit=4.0):
@@ -83,7 +83,7 @@ def test_two_packs_only_the_commanded_one_is_planned(monkeypatch):
 
 def test_could_not_ask_plans_as_before(monkeypatch):
     # no adapter built yet, or one that answers no bool: unknown, not "no"
-    for adapters in ({}, {"b1": SimpleNamespace(supports_forced_charge=None)}):
+    for adapters in ({}, {"b1": SimpleNamespace(charge_command_configured=None)}):
         plan = _plan(monkeypatch, adapters)
         assert _battery_row(plan)["needed_kwh"] == 4.0
 
@@ -95,3 +95,39 @@ def test_every_language_has_the_reason():
     d = json.loads((root / "dashboard" / "translations.json").read_text())
     key = "energy_plan_why_" + "no_charge_control"
     assert all(d[lang].get(key) for lang in d)
+
+
+def test_a_pack_without_an_adapter_yet_plans_as_before(monkeypatch):
+    # two packs read, one adapter built: the share would be of the wrong whole
+    import types
+    adapters = {"b1": _ad(False)}
+    fake_power = types.SimpleNamespace(batteries={"b1": 1, "b2": 2})
+    fake = types.SimpleNamespace(_live_battery_adapters=lambda: list(adapters.items()))
+    assert SEMCoordinator._charge_command_share(fake, fake_power) is None
+
+
+class TestTheAdapters:
+    """A live gate must never read as "no charge control" (#1367 review)."""
+
+    def test_deye_is_always_set_up_whatever_its_gates_say(self):
+        from custom_components.solar_energy_management.coordinator.battery_adapters.deye import (
+            DeyeBatteryAdapter,
+        )
+        fake = SimpleNamespace(supports_forced_charge=False)
+        assert DeyeBatteryAdapter.charge_command_configured.fget(fake) is True
+
+    def test_the_default_is_the_adapters_own_answer(self):
+        from custom_components.solar_energy_management.coordinator.battery_adapters.base import (
+            BatteryControlAdapter,
+        )
+        for ok in (True, False):
+            fake = SimpleNamespace(supports_forced_charge=ok)
+            assert BatteryControlAdapter.charge_command_configured.fget(fake) is ok
+
+    def test_huawei_and_goodwe_never_say_no(self):
+        from custom_components.solar_energy_management.coordinator.battery_adapters import (
+            goodwe, huawei,
+        )
+        for cls in (huawei.HuaweiBatteryAdapter, goodwe.GoodWeBatteryAdapter):
+            assert "charge_command_configured" not in cls.__dict__
+            assert cls.supports_forced_charge.fget(SimpleNamespace()) is True
