@@ -11034,10 +11034,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Rolling horizon: evaluations after midnight plan for
         # *today's* solar day; the evening evaluation plans for tomorrow.
         forecast_tomorrow = 0.0
+        # (#1362) One split for the forecast and the prices: the day the
+        # plan is for.
+        plans_today = now.hour < 12
+        plan_day = (now if plans_today else now + timedelta(days=1)).date()
         if forecast.available:
             forecast_tomorrow = (
                 forecast.forecast_today_kwh
-                if now.hour < 12
+                if plans_today
                 else forecast.forecast_tomorrow_kwh
             )
         forecast_age = 0.0
@@ -11050,8 +11054,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if expected_consumption <= 0:
             expected_consumption = 12.0
 
-        # Break-even rates: the next charge window and the next daytime,
-        # from the provider. (#1362) Never a sample of today's clock: the
+        # Break-even rates: the next charge window and the plan day's
+        # daytime, from the provider. (#1362) Never a sample of today's clock: the
         # old get_price_at(today 02:00 / 14:00) read the day just gone at
         # the 21:00 trigger, and 14:00 is off-peak in a Polish G12w
         # tariff, so a calendar or static tariff asked the wrong hour of
@@ -11065,7 +11069,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 hours=4.0, within_hours=12,
             )
         if hasattr(self._tariff_provider, "get_next_daytime_rate"):
-            peak_rate = self._tariff_provider.get_next_daytime_rate()
+            peak_rate = self._tariff_provider.get_next_daytime_rate(
+                day=plan_day)
         if off_peak_rate is None:
             off_peak_rate = _cfg_rate(
                 self.config, "electricity_off_peak_rate", "electricity_nt_rate",

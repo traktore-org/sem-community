@@ -156,8 +156,75 @@ class TestTheNextDaytimeIsTheDayTheChargeIsFor:
         """Within 1 h from 21:00 only peak is left: the answer says so."""
         p = _g12w_rules()
         with _now(_at(MON, 21)):
-            assert p.get_charge_window_rate(hours=4.0, within_hours=1) == (
+            assert p.get_charge_window_rate(hours=1.0, within_hours=1) == (
                 pytest.approx(PEAK))
+
+    def test_fewer_known_hours_than_the_charge_is_no_rate(self):
+        """(review) A helper read only until 22:00 knows one peak hour of
+        the night. Its average is not the night's rate."""
+        p = _g12w_rules()
+        real = p.get_price_at
+        p.get_price_at = (lambda when: real(when)
+                          if when < _at(MON, 22) else None)
+        with _now(_at(MON, 21)):
+            assert p.get_charge_window_rate(hours=4.0, within_hours=12) is None
+            assert p.get_charge_window_rate(hours=1.0, within_hours=12) == (
+                pytest.approx(PEAK))
+
+    @pytest.mark.parametrize("now, day, want", [
+        # (review) An 18:00 or 19:00 trigger: the rest of today is not
+        # what the night charge is for.
+        (_at(FRI, 18), SAT, OFF),
+        (_at(FRI, 19, 44), SAT, OFF),
+        (_at(SUN, 18), MON, WORKDAY_DAYTIME),
+        (_at(MON, 19), TUE, WORKDAY_DAYTIME),
+        (_at(TUE, 2), TUE, WORKDAY_DAYTIME),
+        (_at(TUE, 9), TUE, (4 * PEAK + 2 * OFF + 5 * PEAK) / 11),
+        (_at(MON, 21), MON, None),          # the day is over
+    ])
+    def test_the_plan_day(self, now, day, want):
+        p = _g12w_rules()
+        with _now(now):
+            got = p.get_next_daytime_rate(day=_at(day, 0).date())
+        if want is None:
+            assert got is None
+        else:
+            assert got == pytest.approx(want)
+
+    def test_thursday_night_is_for_friday(self):
+        p = _g12w_rules()
+        with _now(_at(19, 21)):     # Thursday 19.11
+            assert p.get_next_daytime_rate() == pytest.approx(WORKDAY_DAYTIME)
+
+    def test_the_first_window_ends_the_search(self):
+        """A static tariff on Friday night: Saturday's window, not Monday's."""
+        p = _static()
+        with _now(_at(FRI, 21)):
+            assert p.get_next_daytime_rate() == pytest.approx(OFF)
+
+    def test_a_clock_change_night(self):
+        """Europe/Warsaw, 25.10.2026: the clocks go back at 03:00. Twelve
+        hours are 48 steps, and the next daytime is Sunday's (off-peak)."""
+        import zoneinfo
+        old = dt_util.get_default_time_zone()
+        tz = zoneinfo.ZoneInfo("Europe/Warsaw")
+        dt_util.set_default_time_zone(tz)
+        try:
+            now = datetime(2026, 10, 24, 21, 0, tzinfo=tz)   # Saturday
+            p = _static()
+            steps = list(p._next_steps(now, 12))
+            assert len(steps) == 48
+            # real time, not wall time: the 02:00 hour comes twice
+            assert (dt_util.as_utc(steps[-1]) - dt_util.as_utc(steps[0])
+                    == timedelta(hours=11, minutes=45))
+            assert steps[-1].hour == 7 and steps[-1].minute == 45
+            with _now(now):
+                assert p.get_next_daytime_rate() == pytest.approx(OFF)
+                assert p.get_next_daytime_rate(
+                    day=datetime(2026, 10, 26).date()) == pytest.approx(PEAK)
+                assert p.get_charge_window_rate() == pytest.approx(OFF)
+        finally:
+            dt_util.set_default_time_zone(old)
 
     @pytest.mark.parametrize("now, want", [
         (_at(FRI, 21), OFF),        # Saturday: no peak
@@ -197,6 +264,26 @@ class TestTheNextDaytimeIsTheDayTheChargeIsFor:
         with _now(_at(MON, 21)):
             assert p.get_next_daytime_rate() is None
             assert p.get_charge_window_rate() == pytest.approx(OFF)
+
+    def test_the_dynamic_provider_reads_only_the_plan_day(self):
+        """(review) At an 18:00 trigger the series' rest of today is not
+        the day the charge is for."""
+        from custom_components.solar_energy_management.tariff.tariff_provider import (
+            PriceLevel, PricePoint,
+        )
+        now = _at(FRI, 18)
+        start = _at(FRI, 18)
+        prices = [PricePoint(timestamp=start + timedelta(hours=i),
+                             price=(2.0 if i < 2 else 0.5),
+                             level=PriceLevel.NORMAL) for i in range(30)]
+        prov = DynamicTariffProvider.__new__(DynamicTariffProvider)
+        prov._read_prices_list = lambda: prices
+        prov._grid_import_surcharge = lambda: 0.0
+        with _now(now):
+            assert prov.get_next_daytime_rate(
+                day=_at(SAT, 0).date()) == pytest.approx(0.5)
+            # without the day, the rest of Friday (18-20) is mixed in
+            assert prov.get_next_daytime_rate() > 0.5
 
     def test_the_dynamic_provider_keeps_its_series(self):
         """The base answers only for providers without a price series."""
@@ -308,6 +395,18 @@ class TestTheSchedulerGetsTheNextDay:
                 off_peak_rate=kwargs["off_peak_rate"],
                 peak_rate=kwargs["peak_rate"])
         assert dec.state is SchedulerState.NOT_PROFITABLE
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("now, want", [
+        (_at(FRI, 18), OFF),                # → Saturday
+        (_at(SUN, 19), WORKDAY_DAYTIME),    # → Monday
+        (_at(TUE, 2), WORKDAY_DAYTIME),     # → today
+    ])
+    async def test_an_early_trigger_prices_the_plan_day(self, now, want):
+        """(review) The trigger hour can be 18:00: the forecast's day and
+        the price's day are one."""
+        kwargs = await _rates_at(_g12w_rules(), now)
+        assert kwargs["peak_rate"] == pytest.approx(want)
 
     @pytest.mark.asyncio
     async def test_static_sunday_night_plans_for_monday(self):

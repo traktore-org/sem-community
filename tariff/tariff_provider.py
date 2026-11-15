@@ -13,7 +13,7 @@ import math
 from abc import ABC, abstractmethod
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -534,18 +534,22 @@ class TariffProvider(ABC):
         prices = [p for p in (self.get_price_at(t) for t in
                               self._next_steps(dt_util.now(), within_hours))
                   if p is not None]
-        if not prices:
-            return None
         n = max(1, math.ceil(hours * 3600 / self.RATE_STEP.total_seconds()))
+        # Fewer known quarters than the charge needs is no rate: the
+        # known part may be the dear one (a helper read only until 22:00).
+        if len(prices) < n:
+            return None
         cheapest = sorted(prices)[:n]
         return sum(cheapest) / len(cheapest)
 
     def get_next_daytime_rate(
         self, peak_start: int = 7, peak_end: int = 20,
+        day: Optional[date] = None,
     ) -> Optional[float]:
-        """(#1362) Average price over the next daytime window, the hours a
-        night charge is stored for: tomorrow's from an evening, today's
-        from after midnight.
+        """(#1362) Average price over a daytime window, the hours a night
+        charge is stored for. ``day`` is the day the plan is for (the
+        coordinator's: today before noon, else tomorrow); without it, the
+        first daytime window still ahead.
 
         It read ``get_price_at`` at today's 14:00 before. At 21:00 that is
         the day just gone, and in a Polish G12w tariff 14:00 is off-peak on
@@ -554,6 +558,10 @@ class TariffProvider(ABC):
         """
         prices: List[float] = []
         for t in self._next_steps(dt_util.now(), 48):
+            if day is not None and t.date() < day:
+                continue
+            if day is not None and t.date() > day:
+                break
             if peak_start <= t.hour < peak_end:
                 price = self.get_price_at(t)
                 if price is None:
@@ -2520,8 +2528,13 @@ class DynamicTariffProvider(TariffProvider):
 
     def get_next_daytime_rate(
         self, peak_start: int = 7, peak_end: int = 20,
+        day: Optional[date] = None,
     ) -> Optional[float]:
         """Average price over the next daytime discharge window.
+
+        (#1362) ``day``: only that day's slots — the day the plan is for.
+        At an 18:00 trigger the rest of today is no part of tonight's
+        charge.
 
         Averages all known FUTURE slots that fall into [peak_start,
         peak_end) local time: at the 21:00 evaluation that is tomorrow's
@@ -2537,6 +2550,7 @@ class DynamicTariffProvider(TariffProvider):
             p.price for p in prices
             if p.timestamp > now
             and peak_start <= dt_util.as_local(p.timestamp).hour < peak_end
+            and (day is None or dt_util.as_local(p.timestamp).date() == day)
         ]
         if not day_prices:
             return None
