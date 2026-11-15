@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **On a peak/off-peak tariff, SEM charges your battery at night before a day with peak hours** (#1362). It checked the wrong day.
+- 🐛 **The plan no longer shows a battery charge SEM cannot send** (#1367). It says the battery needs its charge control set.
 
 # [2.3.0-beta.15] — 14.11.2026
 

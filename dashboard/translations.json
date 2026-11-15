@@ -2200,7 +2200,8 @@
     "hp_cop_source_learned": "Naučený",
     "hp_cop_learned_from": "Naučeno z měřiče tepla: {hours} hodin, {tmin} až {tmax} °C",
     "hp_cop_learning": "Učí se z měřiče tepla: zatím {hours} hodin",
-    "hp_cop_looks_electric": "Tento měřič počítá elektřinu, ne teplo. Vyberte měřič tepla."
+    "hp_cop_looks_electric": "Tento měřič počítá elektřinu, ne teplo. Vyberte měřič tepla.",
+    "energy_plan_why_no_charge_control": "SEM ji nemůže nabíjet. Nastavte řízení nabíjení."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4403,7 +4404,8 @@
     "hp_cop_source_learned": "Lært",
     "hp_cop_learned_from": "Lært fra varmemåleren: {hours} timer, {tmin} til {tmax} °C",
     "hp_cop_learning": "Lærer fra varmemåleren: {hours} timer indtil nu",
-    "hp_cop_looks_electric": "Denne måler tæller strøm, ikke varme. Vælg varmemåleren."
+    "hp_cop_looks_electric": "Denne måler tæller strøm, ikke varme. Vælg varmemåleren.",
+    "energy_plan_why_no_charge_control": "SEM kan ikke lade det. Indstil ladestyringen."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6606,7 +6608,8 @@
     "hp_cop_source_learned": "Gelernt",
     "hp_cop_learned_from": "Vom Wärmezähler gelernt: {hours} Stunden, {tmin} bis {tmax} °C",
     "hp_cop_learning": "Lernt vom Wärmezähler: bisher {hours} Stunden",
-    "hp_cop_looks_electric": "Dieser Zähler misst Strom, nicht Wärme. Wähle den Wärmezähler."
+    "hp_cop_looks_electric": "Dieser Zähler misst Strom, nicht Wärme. Wähle den Wärmezähler.",
+    "energy_plan_why_no_charge_control": "SEM kann ihn nicht laden. Lade-Steuerung einstellen."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8809,7 +8812,8 @@
     "hp_cop_source_learned": "Learned",
     "hp_cop_learned_from": "Learned from the heat meter: {hours} hours, {tmin} to {tmax} °C",
     "hp_cop_learning": "Learning from the heat meter: {hours} hours so far",
-    "hp_cop_looks_electric": "This meter counts electricity, not heat. Pick the heat meter."
+    "hp_cop_looks_electric": "This meter counts electricity, not heat. Pick the heat meter.",
+    "energy_plan_why_no_charge_control": "SEM can't charge it. Set its charge control."
   },
   "es": {
     "% of limit": "% del límite",
@@ -11012,7 +11016,8 @@
     "hp_cop_source_learned": "Aprendido",
     "hp_cop_learned_from": "Aprendido del contador de calor: {hours} horas, de {tmin} a {tmax} °C",
     "hp_cop_learning": "Aprendiendo del contador de calor: {hours} horas hasta ahora",
-    "hp_cop_looks_electric": "Este contador mide electricidad, no calor. Elige el contador de calor."
+    "hp_cop_looks_electric": "Este contador mide electricidad, no calor. Elige el contador de calor.",
+    "energy_plan_why_no_charge_control": "SEM no puede cargarla. Configura su control de carga."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13215,7 +13220,8 @@
     "hp_cop_source_learned": "Opittu",
     "hp_cop_learned_from": "Opittu lämpöenergiamittarista: {hours} tuntia, {tmin}–{tmax} °C",
     "hp_cop_learning": "Oppii lämpöenergiamittarista: tähän mennessä {hours} tuntia",
-    "hp_cop_looks_electric": "Tämä mittari laskee sähköä, ei lämpöä. Valitse lämpömittari."
+    "hp_cop_looks_electric": "Tämä mittari laskee sähköä, ei lämpöä. Valitse lämpömittari.",
+    "energy_plan_why_no_charge_control": "SEM ei voi ladata sitä. Aseta latauksen ohjaus."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15418,7 +15424,8 @@
     "hp_cop_source_learned": "Appris",
     "hp_cop_learned_from": "Appris du compteur de chaleur : {hours} heures, de {tmin} à {tmax} °C",
     "hp_cop_learning": "Apprend du compteur de chaleur : {hours} heures jusqu'ici",
-    "hp_cop_looks_electric": "Ce compteur mesure l'électricité, pas la chaleur. Choisissez le compteur de chaleur."
+    "hp_cop_looks_electric": "Ce compteur mesure l'électricité, pas la chaleur. Choisissez le compteur de chaleur.",
+    "energy_plan_why_no_charge_control": "SEM ne peut pas la charger. Réglez sa commande de charge."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17621,7 +17628,8 @@
     "hp_cop_source_learned": "Tanult",
     "hp_cop_learned_from": "A hőmennyiségmérőből tanulva: {hours} óra, {tmin} és {tmax} °C között",
     "hp_cop_learning": "Tanul a hőmennyiségmérőből: eddig {hours} óra",
-    "hp_cop_looks_electric": "Ez a mérő áramot mér, nem hőt. Válaszd a hőmennyiségmérőt."
+    "hp_cop_looks_electric": "Ez a mérő áramot mér, nem hőt. Válaszd a hőmennyiségmérőt.",
+    "energy_plan_why_no_charge_control": "A SEM nem tudja tölteni. Állítsd be a töltésvezérlést."
   },
   "it": {
     "% of limit": "% del limite",
@@ -19824,7 +19832,8 @@
     "hp_cop_source_learned": "Appreso",
     "hp_cop_learned_from": "Appreso dal contatore di calore: {hours} ore, da {tmin} a {tmax} °C",
     "hp_cop_learning": "Apprende dal contatore di calore: finora {hours} ore",
-    "hp_cop_looks_electric": "Questo contatore misura elettricità, non calore. Scegli il contatore di calore."
+    "hp_cop_looks_electric": "Questo contatore misura elettricità, non calore. Scegli il contatore di calore.",
+    "energy_plan_why_no_charge_control": "SEM non può caricarla. Imposta il comando di carica."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -22027,7 +22036,8 @@
     "hp_cop_source_learned": "Geleerd",
     "hp_cop_learned_from": "Geleerd van de warmtemeter: {hours} uur, {tmin} tot {tmax} °C",
     "hp_cop_learning": "Leert van de warmtemeter: tot nu toe {hours} uur",
-    "hp_cop_looks_electric": "Deze meter telt stroom, geen warmte. Kies de warmtemeter."
+    "hp_cop_looks_electric": "Deze meter telt stroom, geen warmte. Kies de warmtemeter.",
+    "energy_plan_why_no_charge_control": "SEM kan hem niet laden. Stel de laadsturing in."
   },
   "no": {
     "% of limit": "% av grense",
@@ -24230,7 +24240,8 @@
     "hp_cop_source_learned": "Lært",
     "hp_cop_learned_from": "Lært fra varmemåleren: {hours} timer, {tmin} til {tmax} °C",
     "hp_cop_learning": "Lærer fra varmemåleren: {hours} timer så langt",
-    "hp_cop_looks_electric": "Denne måleren teller strøm, ikke varme. Velg varmemåleren."
+    "hp_cop_looks_electric": "Denne måleren teller strøm, ikke varme. Velg varmemåleren.",
+    "energy_plan_why_no_charge_control": "SEM kan ikke lade det. Still inn ladestyringen."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26433,7 +26444,8 @@
     "hp_cop_source_learned": "Nauczony",
     "hp_cop_learned_from": "Nauczony z licznika ciepła: {hours} godz., od {tmin} do {tmax} °C",
     "hp_cop_learning": "Uczy się z licznika ciepła: dotąd {hours} godz.",
-    "hp_cop_looks_electric": "Ten licznik mierzy prąd, nie ciepło. Wybierz licznik ciepła."
+    "hp_cop_looks_electric": "Ten licznik mierzy prąd, nie ciepło. Wybierz licznik ciepła.",
+    "energy_plan_why_no_charge_control": "SEM nie może jej ładować. Ustaw sterowanie ładowaniem."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28636,7 +28648,8 @@
     "hp_cop_source_learned": "Aprendido",
     "hp_cop_learned_from": "Aprendido do contador de calor: {hours} horas, de {tmin} a {tmax} °C",
     "hp_cop_learning": "A aprender do contador de calor: {hours} horas até agora",
-    "hp_cop_looks_electric": "Este contador mede eletricidade, não calor. Escolha o contador de calor."
+    "hp_cop_looks_electric": "Este contador mede eletricidade, não calor. Escolha o contador de calor.",
+    "energy_plan_why_no_charge_control": "O SEM não a consegue carregar. Defina o controlo de carga."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30839,7 +30852,8 @@
     "hp_cop_source_learned": "Învățat",
     "hp_cop_learned_from": "Învățat din contorul de căldură: {hours} ore, de la {tmin} la {tmax} °C",
     "hp_cop_learning": "Învață din contorul de căldură: {hours} ore până acum",
-    "hp_cop_looks_electric": "Acest contor măsoară curent, nu căldură. Alege contorul de căldură."
+    "hp_cop_looks_electric": "Acest contor măsoară curent, nu căldură. Alege contorul de căldură.",
+    "energy_plan_why_no_charge_control": "SEM nu o poate încărca. Setează controlul încărcării."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -33042,7 +33056,8 @@
     "hp_cop_source_learned": "Inlärd",
     "hp_cop_learned_from": "Inlärd från värmemätaren: {hours} timmar, {tmin} till {tmax} °C",
     "hp_cop_learning": "Lär sig från värmemätaren: {hours} timmar hittills",
-    "hp_cop_looks_electric": "Den här mätaren räknar el, inte värme. Välj värmemätaren."
+    "hp_cop_looks_electric": "Den här mätaren räknar el, inte värme. Välj värmemätaren.",
+    "energy_plan_why_no_charge_control": "SEM kan inte ladda det. Ställ in laddstyrningen."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -35245,6 +35260,7 @@
     "hp_cop_source_learned": "学习所得",
     "hp_cop_learned_from": "从热量表学习：{hours} 小时，{tmin} 至 {tmax} °C",
     "hp_cop_learning": "正在从热量表学习：已有 {hours} 小时",
-    "hp_cop_looks_electric": "此电表计量的是电，不是热量。请选择热量表。"
+    "hp_cop_looks_electric": "此电表计量的是电，不是热量。请选择热量表。",
+    "energy_plan_why_no_charge_control": "SEM 无法为其充电。请设置充电控制。"
   }
 }

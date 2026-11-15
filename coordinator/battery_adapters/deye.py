@@ -1229,6 +1229,14 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         return ""
 
     @property
+    def charge_command_configured(self) -> bool:
+        """(#1367) Deye charges through its own program interface: always
+        set up. Its gates are live or the operator's (entities, observer,
+        program control) — ``force_charge_blocked_why`` names them when a
+        charge is refused; the night plan keeps the charge as before."""
+        return True
+
+    @property
     def supports_forced_charge(self) -> bool:
         """True only behind all hardware, transaction and operator gates."""
         capability = self.capability()
