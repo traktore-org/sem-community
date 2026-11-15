@@ -5420,7 +5420,23 @@ a peak hour on every day. Harmless while no field could set a helper; once #1040
 strip, the next change and the battery break-even at 02:00/14:00 would all have read the current
 tariff. Cure: read the helper's week (`schedule.get_schedule`) and ask it about the hour given.
 Guard: `tests/test_1040_calendar_schedule_field.py::TestTheHelpersWeekAnswersEveryHour`.
-Refs #994 #638 #1040.
+**Third instance (#1362):** #1040 made the helper answer any hour, but the battery break-even still
+asked the wrong one. `_maybe_run_scheduler_evaluation` priced a static or calendar tariff with
+`get_price_at(now.replace(hour=14))` and `hour=2` — at the 21:00 trigger, the day just gone. On a
+Polish G12w tariff 14:00 is off-peak every day, so "peak" was the off-peak price and the scheduler
+said `not_profitable` every night; a static tariff charged Friday night for a one-price Saturday and
+never Sunday night for Monday. **Closure:** `TariffProvider.get_next_daytime_rate(day=)` (07–20 of
+the day the plan is for — the coordinator's one noon split, shared with the forecast, so an 18:00
+trigger does not price the rest of today; `None` when any hour of it is unknown) and
+`get_charge_window_rate` (cheapest 4 h of the next 12 h; `None` when fewer hours are known) in the
+base class, asking `get_price_at` every 15 min in UTC steps; `DynamicTariffProvider` keeps its series
+and takes `day` too. The coordinator's clock sample is gone; no answer → the configured rates, as
+before. **Guard:** `tests/test_1362_break_even_next_day.py` — the
+reporter's rules and Schedule helper on each weekday night, an 18:00/19:00 trigger, a clock-change
+night, the static and dynamic tariffs, an unknown hour, the scheduler's answer, and an AST check that the evaluation builds no moment from the clock (a probe
+proves it catches one). **Left open:** a holiday sensor speaks for any moment asked, not only today
+(no field sets one).
+Refs #994 #638 #1040 #1362.
 
 ### 105. A sentinel given a name — every "is it missing?" test silently flips — GUARDED
 **Symptom:** a fix that makes absence legible breaks the code that was already handling absence
