@@ -414,12 +414,26 @@ class HotWaterController(SwitchDevice):
         if entity not in {getattr(self, "temperature_entity_id", None),
                           getattr(self, "comfort_entity", None)}:
             return None
+        # the stop compares the sensor's own reading, so its own unit says
+        # what the typed number means
+        unit = ""
         try:
-            if self._install_unit_is_f():
-                return (at - 32.0) * 5.0 / 9.0
+            st = self.hass.states.get(entity) if self.hass else None
+            unit = str((st.attributes or {}).get("unit_of_measurement", "")) if st else ""
         except Exception:  # noqa: BLE001 — no unit read: as typed
-            pass
+            unit = ""
+        if unit.endswith("F"):
+            return (at - 32.0) * 5.0 / 9.0
         return at
+
+    @property
+    def legionella_due_within_a_day(self) -> bool:
+        """(#1369) A run is due, or due within the early window — whatever
+        blocks it. The card names a blocked run only then."""
+        if self._last_legionella_time is None:
+            return True
+        return self.hours_since_legionella > (
+            self.legionella_interval_hours - LEGIONELLA_EARLY_WINDOW_H)
 
     @property
     def legionella_blocked_by_stop(self) -> bool:
@@ -988,7 +1002,15 @@ class HotWaterController(SwitchDevice):
                 self.legionella_interval_hours,
                 self.legionella_target_temp,
             )
-            # (#1102) your stop already met: the run could not get further
+            # (#1102) your stop already met: the run could not get further.
+            # (#1369) …or your stop sits below the target: it never could —
+            # no heating for a run that cannot disinfect; the card says why
+            if self.legionella_blocked_by_stop:
+                self._legionella_started_at = dt_util.now()
+                self._legionella_cycle_active = True
+                return await self._end_unreachable_legionella(
+                    "blocked_by_stop",
+                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it")
             if super(ComfortBandMixin, self).stop_condition_met:
                 self._legionella_started_at = dt_util.now()
                 self._legionella_cycle_active = True

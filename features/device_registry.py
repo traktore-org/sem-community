@@ -2754,7 +2754,10 @@ class UnifiedDeviceRegistry:
             "start_c": round(keep + sign * gap, 2),
             "max_c": round(top, 2),
             # (#1369) a stop below the Legionella target: no disinfection
-            "legionella_blocked": getattr(live, "legionella_blocked_by_stop", False) is True,
+            # only while a run is due within a day: the rest of the time the
+            # card says what the tank does next, not this
+            "legionella_blocked": (getattr(live, "legionella_blocked_by_stop", False) is True
+                                   and getattr(live, "legionella_due_within_a_day", False) is True),
             "stop_c": (round(float(_stop), 1) if _stop is not None else None),
             "legionella_c": (round(float(live.legionella_target_temp), 1)
                              if getattr(live, "legionella_target_temp", None) else None),

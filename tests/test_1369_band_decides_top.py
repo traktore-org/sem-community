@@ -444,7 +444,9 @@ class TestLostcontrolsSetup:
     def test_the_card_names_the_real_top(self):
         from custom_components.solar_energy_management.features.device_registry import (
             UnifiedDeviceRegistry)
-        lines = UnifiedDeviceRegistry._band_lines(self._his())
+        dev = self._his()
+        _since(dev, dev.legionella_interval_hours - 10)   # a run due within a day
+        lines = UnifiedDeviceRegistry._band_lines(dev)
         assert lines["max_c"] == 53.0           # his stop, not 56
         assert lines["legionella_blocked"] is True
         assert (lines["stop_c"], lines["legionella_c"]) == (53.0, 60.0)
@@ -468,3 +470,42 @@ class TestLostcontrolsSetup:
         dev = self._his()
         dev.stop_at = 62.0
         assert dev.legionella_blocked_by_stop is False
+
+
+class TestRufloRound:
+    """(#1369, ruflo challenge against #1102) the due run, the card line,
+    the stop's own unit."""
+
+    def _his(self, temp=48.0):
+        dev = _tank(_Hass(), temp)
+        dev.stop_entity, dev.stop_at = SENSOR, 53.0
+        return dev
+
+    @pytest.mark.asyncio
+    async def test_a_due_run_that_cannot_disinfect_does_not_heat(self):
+        dev = self._his(48.0)
+        _since(dev, dev.legionella_interval_hours + 1)
+        out = await _chk(dev, False, 0)
+        assert out == "legionella_blocked_by_stop"
+        assert dev.runs_without_surplus is False          # no grid heating
+        assert dev._legionella_blocked_until is not None  # next try in one interval
+
+    def test_the_blocked_line_waits_for_a_run_that_is_due(self):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry)
+        dev = self._his()
+        _since(dev, 10)                                   # just disinfected
+        assert UnifiedDeviceRegistry._band_lines(dev)["legionella_blocked"] is False
+        _since(dev, dev.legionella_interval_hours - 5)
+        assert UnifiedDeviceRegistry._band_lines(dev)["legionella_blocked"] is True
+
+    def test_the_stop_is_read_in_its_sensors_unit(self):
+        hass = _Hass("°F")
+        dev = _tank(hass, 48.0)
+        hass.set(SENSOR, "120", unit_of_measurement="°F")
+        dev.stop_entity, dev.stop_at = SENSOR, 127.4
+        assert round(dev.user_stop_c(), 1) == 53.0
+        hass2 = _Hass("°F")                               # °F house, °C sensor
+        dev2 = _tank(hass2, 48.0)
+        dev2.stop_entity, dev2.stop_at = SENSOR, 53.0
+        assert dev2.user_stop_c() == 53.0
