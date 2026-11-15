@@ -13318,6 +13318,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         tariff=_plan_tariff(dev),     # (#812)
                         # (#1102) a goal is placed even with no price published
                         unpriced_ok=True,
+                        # (#1369) …and on a day with one price: a dark hour.
+                        # The Keep at GOAL only (it carries no deadline of
+                        # its own) — banking never buys at the plain rate.
+                        one_price_ok=ask.get("deadline") is None,
                         cop_at=_plan_cop_at(dev),     # (#1081)
                     ))
                 except Exception:  # noqa: BLE001 — one bad band won't kill the plan

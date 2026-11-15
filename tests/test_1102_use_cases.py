@@ -298,3 +298,84 @@ async def test_8d_a_run_for_keep_at_that_reaches_it_says_so():
     assert not dev.is_active
     records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
     assert records[-1]["reason_code"] == RC.LOAD_AT_TARGET, records[-1]
+
+
+# ── 9. a day with one price (weekend on a two-rate tariff, a flat tariff) ──
+
+def _one_price_night(sun_hours=()):
+    from custom_components.solar_energy_management.coordinator.energy_planner import (
+        LedgerSlot, build_night_ledger)
+    t0 = datetime(2026, 11, 14, 18, 0)            # a Saturday evening
+    slots = []
+    for h in range(14):                            # 18:00 → 08:00
+        t = t0 + timedelta(hours=h)
+        slots.append(LedgerSlot(
+            start=t, end=t + timedelta(hours=1), price=0.6,
+            level_cheap=False, tariff_cheap=True, home_w=0.0,
+            solar_w=3000.0 if t.hour in sun_hours else 0.0))
+    return t0, build_night_ledger(slots, soc_kwh=0.0, floor_kwh=0.0,
+                                  max_discharge_w=0.0, peak_limit_w=8000.0)
+
+
+def _keep_at_demand(deadline, **kw):
+    from custom_components.solar_energy_management.coordinator.energy_planner import Demand
+    return Demand(id="comfort:hot_water", kind="comfort", energy_kwh=2.5,
+                  max_power_w=2500.0, min_power_w=2500.0, deadline=deadline,
+                  source="grid", needs_cheap_level=True, unpriced_ok=True, **kw)
+
+
+def test_9_a_one_price_night_still_gets_its_keep_at_hour():
+    """Saturday night: no hour is cheaper than another. Before, nothing was
+    planned and the tank cooled to its too-cold limit."""
+    from custom_components.solar_energy_management.coordinator.energy_planner import pack_night
+    t0, ledger = _one_price_night()
+    end = t0 + timedelta(hours=14)
+    old = pack_night([_keep_at_demand(end)], ledger, peak_limit_w=8000.0)
+    assert not old.allocations                            # the old answer
+    plan = pack_night([_keep_at_demand(end, one_price_ok=True)], ledger,
+                      peak_limit_w=8000.0)
+    assert plan.allocations, plan.results
+    assert sum(a.energy_kwh for a in plan.allocations) == pytest.approx(2.5, abs=0.05)
+
+
+def test_9b_never_in_a_sun_hour_and_not_when_a_cheap_hour_exists():
+    from custom_components.solar_energy_management.coordinator.energy_planner import pack_night
+    t0, ledger = _one_price_night(sun_hours=(18, 19))
+    end = t0 + timedelta(hours=14)
+    plan = pack_night([_keep_at_demand(end, one_price_ok=True)], ledger,
+                      peak_limit_w=8000.0)
+    assert plan.allocations
+    assert all(a.start.hour not in (18, 19) for a in plan.allocations)
+    # a night that HAS a cheap hour keeps using only that
+    for s in ledger:
+        if s.start.hour == 2:
+            s.level_cheap = True
+    plan = pack_night([_keep_at_demand(end, one_price_ok=True)], ledger,
+                      peak_limit_w=8000.0)
+    assert {a.start.hour for a in plan.allocations} == {2}
+
+
+@pytest.mark.asyncio
+async def test_9c_on_a_one_price_day_the_run_also_heats_on_to_keep_at():
+    hass, dev, sc = _boiler(47.6)
+    await _cycle(sc, price="normal", block=True)          # one price: "normal"
+    assert dev.is_active
+    hass.set(SENSOR, "50.1", unit_of_measurement="°C")
+    _past_minimums(dev)
+    await _cycle(sc, price="normal", block="closed")
+    assert dev.is_active
+    # the price goes up: it stops
+    await _cycle(sc, price="expensive", block="closed", night=False)
+    await _cycle(sc, price="expensive", block="closed", night=False)
+    assert not dev.is_active
+
+
+@pytest.mark.asyncio
+async def test_9d_a_run_started_cheap_stops_when_the_cheap_hours_end():
+    hass, dev, sc = _boiler(47.6)
+    await _cycle(sc, price="cheap", block=True)
+    hass.set(SENSOR, "50.1", unit_of_measurement="°C")
+    _past_minimums(dev)
+    await _cycle(sc, price="normal", block="closed", night=False)   # 07:00, high tariff
+    await _cycle(sc, price="normal", block="closed", night=False)
+    assert not dev.is_active

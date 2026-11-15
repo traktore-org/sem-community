@@ -848,6 +848,17 @@ def _away_heats(device: "ControllableDevice", active: bool) -> bool:
         return False
 
 
+def _goal_hour_holds(device, price_is_cheap: bool) -> bool:
+    """(#1369) May a Keep at run go on this hour? In a cheap hour, or while
+    the price level is still the one it started on and not expensive (a day
+    with one price). Never into a dearer hour."""
+    if price_is_cheap:
+        return True
+    now = getattr(device, "_cycle_price_tag", None)
+    started = getattr(device, "_comfort_goal_level", None)
+    return (isinstance(now, str) and now == started and now != "expensive")
+
+
 def _goal_may_buy(device: "ControllableDevice") -> bool:
     """(#1102) May this load's Keep at run be bought from the grid? The
     device's own rule; a device without it follows its top-up policy."""
@@ -1041,7 +1052,8 @@ def compute_load_intent(
     _goal_band = _heater_band(device)
     _goal_goes_on = (active and getattr(device, "_comfort_goal_run", False) is True
                      and _goal_band is not None and _goal_band[0] == "willing"
-                     and _goal_band[1] and price_is_cheap and _goal_may_buy(device))
+                     and _goal_band[1] and _goal_hour_holds(device, price_is_cheap)
+                     and _goal_may_buy(device))
     if (active and plan_hold and not _goal_goes_on
             and (getattr(device, "_batt_overnight_forced", False)
                  or getattr(device, "_offpeak_forced", False))):
@@ -1293,7 +1305,7 @@ def compute_load_intent(
     # Keep at 52 (#1102). Never into an hour that is not cheap.
     if (active and band is not None and band[0] == "willing" and band[1]
             and getattr(device, "_comfort_goal_run", False) is True
-            and price_is_cheap and _goal_may_buy(device)):
+            and _goal_hour_holds(device, price_is_cheap) and _goal_may_buy(device)):
         return LoadIntent(True, _heater_claim(device, True, held), "cheap_grid",
                           "heats on to its keep-at temperature in the cheap hour",
                           RC.LOAD_COMFORT_GOAL)
@@ -1425,8 +1437,11 @@ def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> N
         intent.on and intent.code in (RC.LOAD_COMFORT_FLOOR,
                                       RC.LOAD_COMFORT_FLOOR_AWAY))
     # (#1369) …and one the plan's comfort block started
-    device._comfort_goal_run = bool(
-        intent.on and intent.code == RC.LOAD_COMFORT_GOAL)
+    _goal = bool(intent.on and intent.code == RC.LOAD_COMFORT_GOAL)
+    if _goal and getattr(device, "_comfort_goal_run", False) is not True:
+        # the price level the run started on
+        device._comfort_goal_level = getattr(device, "_cycle_price_tag", None)
+    device._comfort_goal_run = _goal
 
 
 def _clear_source_markers(device: "ControllableDevice") -> None:
@@ -2285,6 +2300,11 @@ class SurplusController:
                 remaining = reclaim_handed_back(remaining, reclaim_w)
                 reclaim_handed = True
             tier1 = self._tier1_headroom_w(device)
+            # (#1369) this cycle's price level for the device, for the Keep
+            # at run's "never into a dearer hour"
+            _lvl = device_price_level(device, price_level)
+            device._cycle_price_tag = ("cheap" if is_cheap_name(_lvl) else
+                                       "expensive" if is_expensive_name(_lvl) else "normal")
             intent = compute_load_intent(
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 # (#812) the device's own tariff when it has one
