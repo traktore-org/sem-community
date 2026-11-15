@@ -2756,7 +2756,7 @@ class UnifiedDeviceRegistry:
             # (#1369) a stop below the Legionella target: no disinfection
             "legionella_blocked": getattr(live, "legionella_blocked_by_stop", False) is True,
             "stop_c": (round(float(_stop), 1) if _stop is not None else None),
-            "legionella_c": (round(float(getattr(live, "legionella_target_temp")), 1)
+            "legionella_c": (round(float(live.legionella_target_temp), 1)
                              if getattr(live, "legionella_target_temp", None) else None),
             "limit_c": round(limit, 2),
             # (#1102) the device's own run — the tank heats past Keep at
