@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Un tiers écrit sur {name}",
       "description": "Autre chose que SEM modifie sans cesse **{name}**, et SEM et ce tiers s'annulent l'un l'autre. Dans l'onglet Configuration de SEM, réglez cet appareil sur *Oui, SEM s'efface* et choisissez l'entité qui indique quand le tiers a la main."
+    },
+    "heater_no_rise": {
+      "title": "Le ballon d'eau chaude ne chauffe pas",
+      "description": "{name} a consommé du courant pendant {minutes} minutes et est resté à {temp} °C. Vérifiez la résistance, le thermostat du ballon, ou si une pompe à chaleur chauffe la maison à la place. Ce message disparaît dès que le ballon chauffe de nouveau."
     }
   },
   "selector": {

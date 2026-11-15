@@ -7127,6 +7127,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                  else len(able) / len(adapters))
         return share, unable
 
+    def _legionella_good_hour_now(self, true_surplus_w, tariff_data) -> bool:
+        """(#1369) A sunny or cheap hour for the hot water tank: the free
+        surplus (plus what the tank draws now, if it runs) covers its
+        rating, or its own price level is cheap. Anything unread is no."""
+        try:
+            dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
+            if dev is None:
+                return False
+            from .device_tariff import device_price_level
+            from .price_signal import is_cheap_name
+            level = device_price_level(
+                dev, getattr(tariff_data, "tariff_price_level", None))
+            if is_cheap_name(level):
+                return True
+            rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
+            if rated <= 0 or true_surplus_w is None:
+                return False
+            own = 0.0
+            if getattr(dev, "is_active", False) is True:
+                watts = dev.observed_power_w() if hasattr(dev, "observed_power_w") else None
+                own = float(watts or 0.0)
+            return float(true_surplus_w) + own >= rated
+        except Exception:  # noqa: BLE001 — a wrong read is "not a good hour"
+            return False
+
     def _live_battery_adapters(self):
         """(#1124) ``(battery_id, adapter)`` for the batteries of the last
         cycle — every cached adapter before the first one has run."""
@@ -7893,6 +7918,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     (getattr(self, "_sink_verdicts", None) or {}).get("grid_export"),
                     "state", "open") == "closed"),
             )
+            # (#1369) May a Legionella run due within a day start now? Only
+            # in an hour the sun alone could carry it, or a cheap one.
+            self._legionella_good_hour = self._legionella_good_hour_now(
+                true_surplus_w, tariff_data)
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
             surplus_data.surplus_regulation_offset_w = allocation.regulation_offset_w
@@ -8255,9 +8284,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if hasattr(hw_controller, "check_legionella_cycle"):
                 try:
                     # (#1335) state only — layer 1 switches the run
-                    await hw_controller.check_legionella_cycle()
+                    await hw_controller.check_legionella_cycle(
+                        good_hour=bool(getattr(self, "_legionella_good_hour", False)))
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
+            # (#1369) heating that does not warm the tank is a fault
+            if hasattr(hw_controller, "check_heating_works"):
+                try:
+                    changed = hw_controller.check_heating_works()
+                    if changed is not None:
+                        from .repair_issues import (
+                            clear_heater_no_rise, raise_heater_no_rise)
+                        did = str(getattr(hw_controller, "device_id", "hot_water"))
+                        if changed:
+                            raise_heater_no_rise(
+                                self.hass, did,
+                                name=str(getattr(hw_controller, "name", did)),
+                                minutes=60,
+                                temp_c=float(getattr(hw_controller, "heating_fault_temp", 0.0)))
+                            _LOGGER.warning(
+                                "%s drew power for an hour and did not warm",
+                                getattr(hw_controller, "name", did))
+                        else:
+                            clear_heater_no_rise(self.hass, did)
+                except Exception as e:  # noqa: BLE001 — never break the cycle
+                    _LOGGER.debug("Heating check failed: %s", e)
             try:
                 t = hw_controller.get_current_temperature() if hasattr(hw_controller, "get_current_temperature") else None
                 hw_current_temp = float(t) if t is not None else None

@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "En anden part skriver til {name}",
       "description": "Noget andet end SEM ændrer hele tiden **{name}**, og SEM og den part fortryder hinandens arbejde. Sæt enheden til *Ja, SEM viger* på SEM's fane Konfiguration, og vælg den entitet, der viser, hvornår den anden part har styringen."
+    },
+    "heater_no_rise": {
+      "title": "Varmtvandsbeholderen bliver ikke varm",
+      "description": "{name} brugte strøm i {minutes} minutter og blev ved {temp} °C. Tjek varmelegemet, beholderens egen termostat, eller om en varmepumpe varmer huset i stedet. Dette forsvinder, når beholderen bliver varm igen."
     }
   },
   "selector": {

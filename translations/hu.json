@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Egy másik fél ír ide: {name}",
       "description": "A SEM-en kívül valami más folyton módosítja ezt: **{name}**, és a SEM meg az a fél visszavonja egymás munkáját. A SEM Konfiguráció lapján állítsa az eszközt *Igen, a SEM visszalép* értékre, és válassza ki az entitást, amely mutatja, mikor irányít a másik fél."
+    },
+    "heater_no_rise": {
+      "title": "A melegvíztároló nem melegszik",
+      "description": "{name} {minutes} percig áramot vett fel, és {temp} °C-on maradt. Ellenőrizd a fűtőbetétet, a tároló termosztátját, vagy hogy a hőszivattyú helyette a házat fűti-e. Ez eltűnik, amint a tároló újra melegszik."
     }
   },
   "selector": {

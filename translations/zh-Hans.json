@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "第三方正在写入 {name}",
       "description": "SEM 之外的某方不断更改 **{name}**，SEM 与该方互相抵消对方的操作。请在 SEM 的“配置”选项卡中将此设备设为*是，SEM 让出控制*，并选择能显示对方何时控制的实体。"
+    },
+    "heater_no_rise": {
+      "title": "热水器不升温",
+      "description": "{name} 用电 {minutes} 分钟后仍停留在 {temp} °C。请检查加热元件、热水器自身的恒温器，或热泵是否在给房屋供暖。热水器再次升温后此提示会消失。"
     }
   },
   "selector": {

@@ -243,10 +243,10 @@ export const BUY_LABEL = { off: 'hq_buy_no', grid: 'hq_buy_cheap', battery: 'hq_
 /**
  * "With spare sun, heat up to X" (cooling: "cool down to X") → the writes,
  * or `{error, params}`. X is absolute; stored is the offset from Keep at —
- * above it for a heater, below it for a cooler. On a hot-water row the
- * Configuration tab's Solar target also stops the sun ("SEM stops at the
- * lower of the two"), so it is set to the same value: `option`.
- * `solarTarget` = {min, max} of that option's number entity, when known.
+ * above it for a heater, below it for a cooler. (#1369) The band decides
+ * the top alone now, so the Configuration tab's Solar target is no longer
+ * copied (`option` is always null). `solarTarget` = {min, max} of that
+ * option's number entity, when known: still the highest a tank may be set.
  */
 export function sunMaxWrites({ id, keep, cooling = false }, x, solarTarget = null) {
     const k = num(keep), v = num(x);
@@ -260,7 +260,7 @@ export function sunMaxWrites({ id, keep, cooling = false }, x, solarTarget = nul
     const offset = Math.round(Math.abs(v - k) * 2) / 2;
     return {
         writes: [{ property: 'comfort_offset', value: String(offset) }],
-        option: isHotWater ? { key: 'hot_water_solar_target', value: Math.round((k + offset) * 10) / 10 } : null,
+        option: null,
     };
 }
 

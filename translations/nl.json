@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Een andere partij schrijft naar {name}",
       "description": "Iets anders dan SEM verandert steeds **{name}**, en SEM en die partij maken elkaars werk ongedaan. Zet dit apparaat in SEM's tabblad Configuratie op *Ja, SEM houdt zich in* en kies de entiteit die laat zien wanneer de andere partij de controle heeft."
+    },
+    "heater_no_rise": {
+      "title": "Warmwaterboiler wordt niet warm",
+      "description": "{name} gebruikte {minutes} minuten stroom en bleef op {temp} °C. Controleer het verwarmingselement, de eigen thermostaat van de boiler, of een warmtepomp die in plaats daarvan het huis verwarmt. Dit verdwijnt zodra de boiler weer warm wordt."
     }
   },
   "selector": {

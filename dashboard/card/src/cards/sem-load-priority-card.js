@@ -1204,27 +1204,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
         return { min: st.attributes.min, max: st.attributes.max };
     }
 
-    /**
-     * A hot-water tank also stops at the Configuration tab's Solar target
-     * ("SEM stops at the lower of the two"). Keep it on the same value, so
-     * the number shown here is the number SEM uses.
-     */
-    _syncSolarTarget(device, value) {
-        if (!/^hot_water/.test(String(device.id || '')) || !this._hass) return;
-        const unit = this.hass?.config?.unit_system?.temperature || '°C';
-        const v = Number(value);
-        if (!Number.isFinite(v)) return;
-        const celsius = unit === '°F' ? (v - 32) * 5 / 9 : v;
-        this._hass.callService('solar_energy_management', 'set_option', {
-            options: { hot_water_solar_target: Math.round(celsius * 10) / 10 },
-        }).catch((err) => this._showServiceError(err));
-    }
-
     _onKeepChange(device, q, e) {
         const v = parseFloat(e.target.value);
         if (!Number.isFinite(v)) return;
         this._setGoal(device, 'comfort_target', v);
-        if (!q.cooling) this._syncSolarTarget(device, v + (q.offset || 0));
         this.requestUpdate();
     }
 
@@ -1240,7 +1223,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
         }
         delete this._hqError[device.id];
         for (const w of res.writes) this._setGoal(device, w.property, w.value);
-        if (res.option) this._syncSolarTarget(device, res.option.value);
         this.requestUpdate();
     }
 

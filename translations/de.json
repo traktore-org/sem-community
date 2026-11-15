@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Ein Dritter schreibt an {name}",
       "description": "Etwas anderes als SEM ändert ständig **{name}**, und SEM und dieser Dritte machen sich gegenseitig rückgängig. Stelle dieses Gerät im Tab Konfiguration von SEM auf *Ja, SEM hält sich zurück* und wähle die Entität, die zeigt, wann der Dritte die Kontrolle hat."
+    },
+    "heater_no_rise": {
+      "title": "Warmwasserspeicher wird nicht warm",
+      "description": "{name} hat {minutes} Minuten Strom bezogen und blieb bei {temp} °C. Prüfe den Heizstab, den Thermostat des Speichers oder ob eine Wärmepumpe stattdessen das Haus heizt. Die Meldung verschwindet, sobald der Speicher wieder warm wird."
     }
   },
   "selector": {

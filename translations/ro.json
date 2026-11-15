@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "O altă parte scrie în {name}",
       "description": "Altceva decât SEM schimbă mereu **{name}**, iar SEM și acea parte își anulează reciproc munca. În fila Configurare a SEM, setează acest dispozitiv pe *Da, SEM se retrage* și alege entitatea care arată când cealaltă parte are controlul."
+    },
+    "heater_no_rise": {
+      "title": "Boilerul nu se încălzește",
+      "description": "{name} a consumat curent {minutes} minute și a rămas la {temp} °C. Verifică rezistența, termostatul boilerului sau dacă o pompă de căldură încălzește casa în schimb. Mesajul dispare când boilerul se încălzește din nou."
     }
   },
   "selector": {

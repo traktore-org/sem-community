@@ -163,3 +163,131 @@ class TestReviewFindings:
         dev.vacation = True
         assert dev.band_top_c() is None
         assert dev._active_target_temp() == 50.0
+
+
+# ── (#1369) the Legionella run may start early, never late ────────────────
+
+from datetime import timedelta  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+from unittest.mock import patch  # noqa: E402
+
+from custom_components.solar_energy_management.devices import hot_water_controller as hwc  # noqa: E402
+
+
+def _since(dev, hours):
+    dev._last_legionella_time = hwc.dt_util.now() - timedelta(hours=hours)
+
+
+class TestLegionellaEarly:
+    @pytest.mark.asyncio
+    async def test_a_good_hour_in_the_last_day_starts_it_early(self):
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        assert dev.legionella_early_window and not dev.legionella_overdue
+        assert await dev.check_legionella_cycle(good_hour=True) == "legionella_started"
+        assert dev._last_legionella_path == "early_start"
+        assert dev.runs_without_surplus is True
+
+    @pytest.mark.asyncio
+    async def test_without_a_good_hour_it_waits_for_the_due_time(self):
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        assert await dev.check_legionella_cycle(good_hour=False) is None
+        assert dev.runs_without_surplus is False
+
+    @pytest.mark.asyncio
+    async def test_more_than_a_day_before_due_a_good_hour_does_nothing(self):
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 30)
+        assert await dev.check_legionella_cycle(good_hour=True) is None
+
+    @pytest.mark.asyncio
+    async def test_when_due_it_runs_as_before_whatever_the_hour(self):
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours + 1)
+        assert await dev.check_legionella_cycle(good_hour=False) == "legionella_started"
+        assert dev._last_legionella_path == "overdue_start"
+
+    @pytest.mark.asyncio
+    async def test_no_early_start_without_a_reading_or_while_blocked_or_away(self):
+        dev = _tank(_Hass(), None)
+        _since(dev, dev.legionella_interval_hours - 10)
+        assert await dev.check_legionella_cycle(good_hour=True) is None
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        dev._legionella_blocked_until = hwc.dt_util.now() + timedelta(hours=5)
+        assert await dev.check_legionella_cycle(good_hour=True) is None
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        dev.vacation = True
+        assert await dev.check_legionella_cycle(good_hour=True) != "legionella_started"
+
+
+class TestTheGoodHour:
+    def _coord(self, dev, level="normal"):
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        fake = SimpleNamespace(_surplus_controller=SimpleNamespace(_devices={"hot_water": dev}))
+        return lambda surplus: SEMCoordinator._legionella_good_hour_now(
+            fake, surplus, SimpleNamespace(tariff_price_level=level))
+
+    def test_enough_sun_for_the_tank(self):
+        f = self._coord(_tank(_Hass(), 48.0))
+        assert f(3300.0) is True
+        assert f(1500.0) is False
+        assert f(None) is False
+
+    def test_a_cheap_hour(self):
+        assert self._coord(_tank(_Hass(), 48.0), "cheap")(0.0) is True
+
+
+# ── (#1369) heating that does not warm the tank ────────────────────────────
+
+class TestHeatingWorks:
+    def _running(self, temp, watts=3200.0):
+        hass = _Hass()
+        dev = _tank(hass, temp)
+        dev.power_entity_id = "sensor.boiler_power"
+        hass.set("sensor.boiler_power", str(watts), unit_of_measurement="W")
+        dev.state = hwc.DeviceState.ACTIVE if hasattr(hwc, "DeviceState") else dev.state
+        return hass, dev
+
+    def _at(self, minutes):
+        return patch.object(hwc.dt_util, "now",
+                            return_value=self._t0 + timedelta(minutes=minutes))
+
+    def setup_method(self):
+        self._t0 = hwc.dt_util.now()
+
+    def _go(self, dev, hass, minutes, temp):
+        hass.set(SENSOR, str(temp), unit_of_measurement="°C")
+        with self._at(minutes), patch.object(type(dev), "is_active", new=True):
+            return dev.check_heating_works()
+
+    def test_an_hour_of_draw_without_warming_is_a_fault(self):
+        hass, dev = self._running(40.0)
+        assert self._go(dev, hass, 0, 40.0) is None
+        assert self._go(dev, hass, 30, 40.3) is None
+        assert self._go(dev, hass, 61, 40.5) is True
+        assert dev.heating_fault is True
+        assert self._go(dev, hass, 70, 40.5) is None      # said once
+        assert self._go(dev, hass, 90, 41.6) is False     # warms again: clears
+        assert dev.heating_fault is False
+
+    def test_a_warming_tank_is_fine(self):
+        hass, dev = self._running(40.0)
+        self._go(dev, hass, 0, 40.0)
+        assert self._go(dev, hass, 61, 43.0) is None
+        assert dev.heating_fault is False
+
+    def test_no_measured_draw_is_never_blamed(self):
+        hass, dev = self._running(40.0, watts=0.0)
+        self._go(dev, hass, 0, 40.0)
+        assert self._go(dev, hass, 120, 40.0) is None
+        dev2 = _tank(_Hass(), 40.0)       # no power sensor, no counter
+        with patch.object(type(dev2), "is_active", new=True):
+            assert dev2.check_heating_works() is None
+
+    def test_near_its_target_no_fault(self):
+        hass, dev = self._running(55.0)
+        self._go(dev, hass, 0, 55.0)
+        assert self._go(dev, hass, 61, 55.2) is None   # top 56: within 2 K

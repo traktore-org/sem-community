@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Another party writes to {name}",
       "description": "Something other than SEM keeps changing **{name}**, and SEM and that party undo each other. In SEM's Configuration tab, set this device to *Yes, SEM yields* and pick the entity that shows when the other party is in control."
+    },
+    "heater_no_rise": {
+      "title": "Hot water tank does not warm",
+      "description": "{name} drew power for {minutes} minutes and stayed at {temp} °C. Check the heating element, the tank's own thermostat, or whether a heat pump heats the house instead. This clears when the tank warms again."
     }
   },
   "selector": {

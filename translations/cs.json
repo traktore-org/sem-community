@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Třetí strana zapisuje do {name}",
       "description": "Něco jiného než SEM neustále mění **{name}** a SEM a ta strana si navzájem ruší práci. Na kartě Konfigurace SEM nastavte toto zařízení na *Ano, SEM ustoupí* a vyberte entitu, která ukazuje, kdy má řízení druhá strana."
+    },
+    "heater_no_rise": {
+      "title": "Zásobník teplé vody se neohřívá",
+      "description": "{name} odebíral proud {minutes} minut a zůstal na {temp} °C. Zkontrolujte topné těleso, termostat zásobníku nebo zda tepelné čerpadlo místo toho netopí dům. Hlášení zmizí, jakmile se zásobník znovu ohřeje."
     }
   },
   "selector": {

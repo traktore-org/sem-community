@@ -100,9 +100,10 @@ test('a value below Keep at is refused, with the reason', () => {
     assert.equal(sunMaxWrites({ id: 'x', keep: 52 }, '').error, 'hq_err_below_keep');
 });
 
-test('a hot-water tank also sets the Solar target, so both stops agree', () => {
+test('(#1369) a hot-water tank no longer copies into the Solar target: the band decides', () => {
     const res = sunMaxWrites({ id: 'hot_water', keep: 52 }, 56, { min: 30, max: 80 });
-    assert.deepEqual(res.option, { key: 'hot_water_solar_target', value: 56 });
+    assert.equal(res.option, null);
+    assert.deepEqual(res.writes, [{ property: 'comfort_offset', value: '4' }]);
     assert.deepEqual(sunMaxWrites({ id: 'hot_water', keep: 52 }, 85, { min: 30, max: 80 }),
         { error: 'hq_err_above_max', params: { max: '80' } });
     assert.equal(sunMaxWrites({ id: 'energy_dashboard_rod', keep: 52 }, 85, { max: 80 }).option, null);

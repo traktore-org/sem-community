@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Ktoś inny zapisuje do {name}",
       "description": "Coś innego niż SEM ciągle zmienia **{name}**, a SEM i ta strona wzajemnie cofają swoje zmiany. W zakładce Konfiguracja SEM ustaw to urządzenie na *Tak, SEM ustępuje* i wybierz encję pokazującą, kiedy kontrolę ma druga strona."
+    },
+    "heater_no_rise": {
+      "title": "Zasobnik ciepłej wody się nie nagrzewa",
+      "description": "{name} pobierał prąd przez {minutes} minut i pozostał na {temp} °C. Sprawdź grzałkę, termostat zasobnika albo czy pompa ciepła nie grzeje zamiast tego domu. Komunikat zniknie, gdy zasobnik znów się nagrzeje."
     }
   },
   "selector": {

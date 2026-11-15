@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Um terceiro escreve em {name}",
       "description": "Algo diferente do SEM altera **{name}** repetidamente, e o SEM e esse terceiro desfazem o trabalho um do outro. No separador Configuração do SEM, defina este dispositivo como *Sim, o SEM cede* e escolha a entidade que mostra quando o terceiro tem o controlo."
+    },
+    "heater_no_rise": {
+      "title": "O depósito de água quente não aquece",
+      "description": "{name} consumiu energia durante {minutes} minutos e ficou em {temp} °C. Verifique a resistência, o termóstato do depósito, ou se uma bomba de calor está a aquecer a casa. Isto desaparece quando o depósito voltar a aquecer."
     }
   },
   "selector": {

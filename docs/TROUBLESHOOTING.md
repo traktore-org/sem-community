@@ -665,11 +665,26 @@ SEM reads whether your car charges from the "Charger mode" sensor. The "Charger"
 
 ---
 
+## The hot water tank draws power but does not warm
+
+**Cause:** SEM ran the tank for an hour, a power sensor or energy counter showed it drawing at least half its rating, and the water rose less than 1 °C while still below its target. Something between the power and the water is not working.
+
+**Fix:**
+1. Check the heating element and the tank's own thermostat or safety cut-out.
+2. With a heat pump tank: check whether the pump is heating the house instead of the tank.
+3. Check that the thermometer SEM reads sits in the tank, not next to it.
+
+The repair clears by itself once a later run warms the tank again. Tanks without a power sensor or energy counter are never checked.
+
+---
+
 ## Legionella cycle not running
 
 **Cause:** The Legionella disinfection cycle triggers only when the configured interval (default 72 hours) has elapsed since the water last reached the disinfection target temperature (default 65°C).
 
 **Fix:**
+Since 2.3 a run due within the next day may start early, in an hour where the sun alone can carry the tank or the price is cheap. It never starts later than before.
+
 1. Check how long since the last disinfection: look at the hot water sensor attributes or SEM debug logs for the hours-since-last-60C counter
 2. Verify the disinfection interval setting — if set to 168 hours (maximum), cycles will be infrequent
 3. Confirm the temperature sensor is accurate — if the sensor falsely reports temperatures above 60°C, SEM will reset the counter and skip the cycle

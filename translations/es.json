@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "Un tercero escribe en {name}",
       "description": "Algo distinto de SEM cambia **{name}** una y otra vez, y SEM y ese tercero se deshacen el trabajo. En la pestaña Configuración de SEM, pon este dispositivo en *Sí, SEM cede* y elige la entidad que muestra cuándo el tercero tiene el control."
+    },
+    "heater_no_rise": {
+      "title": "El termo no se calienta",
+      "description": "{name} consumió corriente durante {minutes} minutos y se quedó en {temp} °C. Revisa la resistencia, el termostato del termo o si una bomba de calor calienta la casa en su lugar. Esto desaparece cuando el termo vuelve a calentarse."
     }
   },
   "selector": {

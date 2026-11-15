@@ -29,6 +29,13 @@ DEFAULT_HOT_WATER_POWER = 2000    # Typical immersion heater power
 # Legionella prevention defaults
 DEFAULT_LEGIONELLA_TARGET = 65.0  # Disinfection temperature
 DEFAULT_LEGIONELLA_INTERVAL_HOURS = 72  # Max hours between cycles
+#: (#1369) In the last day before a run is due, a sunny or cheap hour may
+#: start it EARLY. Never later: at the due time it runs as before.
+LEGIONELLA_EARLY_WINDOW_H = 24.0
+#: (#1369) A tank that draws power this long without warming this much has
+#: a fault (element, thermostat, a heat pump that is not heating the tank).
+HEAT_CHECK_MINUTES = 60.0
+HEAT_MIN_RISE_K = 1.0
 DEFAULT_LEGIONELLA_MIN_TEMP = 60.0  # Absolute minimum allowed
 # (#1102) A run that has not reached its target after this long ends: a 300 l
 # tank heats 40 → 65 °C on 3 kW in about 3 h, so 6 h means it cannot.
@@ -119,6 +126,10 @@ class HotWaterController(SwitchDevice):
         # Legionella tracking
         self._last_legionella_time: Optional[datetime] = None
         self._legionella_cycle_active: bool = False
+        # (#1369) heating that does not warm the tank
+        self._heat_check = None
+        self.heating_fault: bool = False
+        self.heating_fault_temp: Optional[float] = None
         self._legionella_hold_start: Optional[datetime] = None
         # (#1102) when the running cycle started, and until when a cycle that
         # could not finish waits before it is tried again
@@ -261,6 +272,60 @@ class HotWaterController(SwitchDevice):
         if self._legionella_blocked_until is not None and dt_util.now() < self._legionella_blocked_until:
             return False
         return self.hours_since_legionella > self.legionella_interval_hours
+
+    @property
+    def legionella_early_window(self) -> bool:
+        """(#1369) The last day before the run is due (and not blocked):
+        a sunny or cheap hour may start it now instead of at the due time."""
+        if self._last_legionella_time is None:
+            return False   # never run: it is due already
+        if self._legionella_blocked_until is not None and dt_util.now() < self._legionella_blocked_until:
+            return False
+        h = self.hours_since_legionella
+        return (self.legionella_interval_hours - LEGIONELLA_EARLY_WINDOW_H) < h <= self.legionella_interval_hours
+
+    def check_heating_works(self) -> Optional[bool]:
+        """(#1369) Does heating warm the tank? Counted only while SEM runs
+        it and a MEASURED draw (power sensor or energy counter) shows at
+        least half its rating: a setpoint tank whose pump is busy elsewhere
+        draws nothing and is never blamed. One hour of that draw with less
+        than 1 °C of rise, below the target, is a fault. The fault holds
+        until a later run warms the tank again.
+
+        Returns True when the fault starts, False when it clears, None when
+        nothing changed."""
+        now = dt_util.now()
+        temp = self.get_current_temperature()
+        rated = float(getattr(self, "rated_power", 0.0) or 0.0)
+        watts = None
+        if getattr(self, "power_entity_id", None) or getattr(self, "energy_entity_id", None):
+            try:
+                watts = self.observed_power_w()
+            except Exception:  # noqa: BLE001 — an unread draw counts nothing
+                watts = None
+        running = (self.is_active and temp is not None and rated > 0
+                   and watts is not None and watts >= 0.5 * rated)
+        if not running:
+            self._heat_check = None
+            return None
+        start = getattr(self, "_heat_check", None)
+        if start is None:
+            self._heat_check = (now, float(temp))
+            return None
+        t0, temp0 = start
+        if float(temp) - temp0 >= HEAT_MIN_RISE_K:
+            self._heat_check = (now, float(temp))
+            if getattr(self, "heating_fault", False):
+                self.heating_fault = False
+                return False
+            return None
+        minutes = (now - t0).total_seconds() / 60.0
+        if (minutes >= HEAT_CHECK_MINUTES and not getattr(self, "heating_fault", False)
+                and float(temp) < self._active_target_temp() - 2.0):
+            self.heating_fault = True
+            self.heating_fault_temp = float(temp)
+            return True
+        return None
 
     def _end_legionella_run(self) -> None:
         """(#1335) The run is over. The device never switches itself: while
@@ -735,7 +800,7 @@ class HotWaterController(SwitchDevice):
 
     # ─── Legionella Prevention ───────────────────────────────
 
-    async def check_legionella_cycle(self) -> Optional[str]:
+    async def check_legionella_cycle(self, good_hour: bool = False) -> Optional[str]:
         """Advance the Legionella prevention cycle. Never switches the tank.
 
         Called every coordinator cycle. Returns a status message or None.
@@ -833,8 +898,15 @@ class HotWaterController(SwitchDevice):
                 self._last_legionella_path = "heating_to_target"
                 return "legionella_heating"
 
-        # 3. Check if overdue — the run is due
-        if self.legionella_overdue:
+        # 3. Check if overdue — the run is due. (#1369) In the last day
+        # before that, a sunny or cheap hour (``good_hour``) starts it early.
+        early = (not self.legionella_overdue and good_hour
+                 and self.legionella_early_window)
+        if self.legionella_overdue or early:
+            if temp is None and early:
+                # an early start needs a reading; the due run says why not
+                self._last_legionella_path = "idle"
+                return None
             if temp is None:
                 _LOGGER.warning("Legionella cycle overdue but no temperature sensor — skipping")
                 self._last_legionella_path = "overdue_no_sensor"
@@ -860,7 +932,7 @@ class HotWaterController(SwitchDevice):
             self._legionella_end_pending = False
             # (#1335) The run is due; layer 1 starts it regardless of sun
             # (``runs_without_surplus``) and ``reconcile_load`` switches it.
-            self._last_legionella_path = "overdue_start"
+            self._last_legionella_path = "early_start" if early else "overdue_start"
             return "legionella_started"
 
         self._last_legionella_path = "idle"
@@ -909,6 +981,7 @@ class HotWaterController(SwitchDevice):
             "temperature_safe": self.is_temperature_safe(),
             "legionella_target_temp": self.legionella_target_temp,
             "legionella_interval_hours": self.legionella_interval_hours,
+            "heating_fault": self.heating_fault,          # (#1369)
             "legionella_overdue": self.legionella_overdue,
             "legionella_cycle_active": self._legionella_cycle_active,
             "vacation": self.vacation,  # #594

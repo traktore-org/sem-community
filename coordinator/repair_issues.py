@@ -248,6 +248,8 @@ _ENTITY_ID_RE = re.compile(
 #: tests/test_831_repair_next_step.py — every anchor must resolve to a real
 #: heading, the #219 lesson shape.
 _DOCS_ANCHORS = {
+    # (#1369) the tank draws power but does not warm
+    "heater_no_rise": "the-hot-water-tank-draws-power-but-does-not-warm",
     "sensor_unavailable": "a-configured-sensor-is-unavailable",
     # (#900) the options wizard pinned a brand install to the generic adapter
     "battery_platform_pinned_generic": "the-battery-platform-is-pinned-to-generic",
@@ -2042,3 +2044,32 @@ def clear_external_write_seen(hass: HomeAssistant, device: str) -> None:
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete (external_write_seen_%s) "
                       "failed: %s", device, e)
+
+
+def _heater_issue_id(device_id: str) -> str:
+    return f"heater_no_rise_{device_id}"
+
+
+def raise_heater_no_rise(hass: HomeAssistant, device_id: str, *, name: str,
+                         minutes: int, temp_c: float) -> None:
+    """(#1369) The tank drew power for ``minutes`` and did not warm."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN, issue_id=_heater_issue_id(device_id),
+            is_fixable=False, is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="heater_no_rise",
+            learn_more_url=next_step_url("docs", "heater_no_rise", **_versions(hass)),
+            translation_placeholders={
+                "name": name, "minutes": str(minutes), "temp": f"{temp_c:.1f}"},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for heater %s: %s", device_id, e)
+
+
+def clear_heater_no_rise(hass: HomeAssistant, device_id: str) -> None:
+    """(#1369) A later run warmed the tank: the fault is gone."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _heater_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for heater %s: %s", device_id, e)

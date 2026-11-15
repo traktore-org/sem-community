@@ -2107,6 +2107,10 @@
     "external_write_seen": {
       "title": "En annan part skriver till {name}",
       "description": "Något annat än SEM ändrar hela tiden **{name}**, och SEM och den parten ångrar varandras arbete. Ställ in enheten på *Ja, SEM viker* i SEM:s flik Konfiguration och välj entiteten som visar när den andra parten styr."
+    },
+    "heater_no_rise": {
+      "title": "Varmvattenberedaren blir inte varm",
+      "description": "{name} drog ström i {minutes} minuter och stannade på {temp} °C. Kontrollera elpatronen, beredarens termostat, eller om en värmepump värmer huset i stället. Detta försvinner när beredaren blir varm igen."
     }
   },
   "selector": {
