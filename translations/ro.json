@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "Boilerul nu se încălzește",
       "description": "{name} a consumat curent {minutes} minute și a rămas la {temp} °C. Verifică rezistența și termostatul sau siguranța boilerului. Mesajul dispare când boilerul se încălzește din nou."
+    },
+    "legionella_below_stop": {
+      "title": "Ciclul anti-legionella nu își atinge ținta",
+      "description": "{name}: oprirea ta la {stop} °C e sub ținta anti-legionella {target} °C. SEM nu poate dezinfecta boilerul și sare peste ciclu. Ridică oprirea sau coboară ținta. Dispare singur."
     }
   },
   "selector": {

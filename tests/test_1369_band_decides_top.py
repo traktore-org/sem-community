@@ -509,3 +509,50 @@ class TestRufloRound:
         dev2 = _tank(hass2, 48.0)
         dev2.stop_entity, dev2.stop_at = SENSOR, 53.0
         assert dev2.user_stop_c() == 53.0
+
+
+class TestRufloRound2:
+    """(#1369, ruflo day simulation) a skipped run stops nothing; a heater's
+    own stop beats the minimum run; the repair is raised and cleared."""
+
+    def _his(self, temp=47.0):
+        dev = _tank(_Hass(), temp)
+        dev.stop_entity, dev.stop_at = SENSOR, 53.0
+        return dev
+
+    @pytest.mark.asyncio
+    async def test_a_skipped_legionella_run_does_not_stop_a_sun_run(self):
+        dev = self._his(47.0)
+        _since(dev, dev.legionella_interval_hours + 1)
+        with patch.object(type(dev), "is_active", new=True):   # heating on sun
+            assert await _chk(dev, True, 0) == "legionella_blocked_by_stop"
+            assert dev.own_run_ending is False
+        assert dev._legionella_end_pending is False
+
+    @pytest.mark.asyncio
+    async def test_a_heater_at_its_stop_beats_the_minimum_run(self):
+        """Started on sun at 50 °C with a 30 min minimum run; it reaches its
+        top of 56 °C a few minutes later and is switched off at once."""
+        hass = _Hass()
+        dev = _tank(hass, 50.0)
+        dev.min_on_seconds = 1800
+        sc = SurplusController(hass)
+        sc.register_device(dev)
+        sun = dict(price_level="normal", is_night=False, battery_soc=50.0,
+                   battery_reserve_soc=10.0, daylight_remaining_s=3600.0, solar_w=5000.0)
+        await sc.update(4000.0, **sun)
+        assert dev.is_active and dev.can_deactivate() is False
+        hass.set(SENSOR, "56.1", unit_of_measurement="°C")
+        await sc.update(4000.0, **sun)
+        assert not dev.is_active, "the minimum run held a tank past its stop"
+        assert hass.calls("turn_off")
+
+    def test_the_repair_texts_exist_everywhere(self):
+        import glob
+        import json as _json
+        import pathlib as _p
+        root = _p.Path(__file__).resolve().parent.parent
+        for f in [root / "strings.json", *map(_p.Path, glob.glob(str(root / "translations" / "*.json")))]:
+            issue = _json.loads(f.read_text())["issues"]["legionella_below_stop"]
+            for ph in ("{name}", "{stop}", "{target}"):
+                assert ph in issue["description"], (f.name, ph)

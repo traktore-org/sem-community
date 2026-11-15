@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "Varmtvandsbeholderen bliver ikke varm",
       "description": "{name} brugte strøm i {minutes} minutter og blev ved {temp} °C. Tjek varmelegemet og beholderens termostat eller sikring. Dette forsvinder, når beholderen bliver varm igen."
+    },
+    "legionella_below_stop": {
+      "title": "Legionella-kørsel når ikke sit mål",
+      "description": "{name}: dit stop ved {stop} °C er under legionellamålet {target} °C. SEM kan ikke desinficere beholderen og springer kørslen over. Hæv stoppet eller sænk målet. Forsvinder af sig selv."
     }
   },
   "selector": {

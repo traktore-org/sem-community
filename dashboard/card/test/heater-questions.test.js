@@ -307,11 +307,14 @@ test('(#1369) a heater that does not warm says so first', () => {
     assert.equal(heaterSays(row, {}, false).key, 'hq_st_no_rise');
 });
 
-test('(#1369) a stop below the Legionella target is said, and the sun top is the stop', () => {
-    const idle = { comfort: { keep_c: 52, max_c: 53, start_c: 51, reading_c: 53, legionella_blocked: true, stop_c: 53, legionella_c: 60, own_run_soon: false } };
-    const said = heaterSays(idle, {}, false);
-    assert.equal(said.key, 'hq_st_legionella_blocked');
-    assert.equal(said.cls, 'warn');
+test('(#1369) a stop below the Legionella target does not hide what the tank does, and the sun top is the stop', () => {
+    const idle = { comfort: { keep_c: 52, max_c: 53, start_c: 51, reading_c: 53, legionella_blocked: true, stop_c: 53, legionella_c: 60 } };
+    assert.equal(heaterSays(idle, {}, false).key, 'hq_st_warm');   // a repair says the rest
     const sun = { comfort: { keep_c: 52, max_c: 53, start_c: 51, reading_c: 50 }, intent: { source: 'solar' } };
     assert.equal(heaterSays(sun, {}, true).params.max, '53 °C');
+});
+
+test('(#1369) a heater still on for a moment after its stop says it is warm, not nothing', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 56.2 }, intent: { code: 'stop_condition' } };
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_warm');
 });

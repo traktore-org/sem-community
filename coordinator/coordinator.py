@@ -8287,6 +8287,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         good_hour=bool(getattr(self, "_legionella_good_hour", False)))
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
+            # (#1369) a due Legionella run skipped under the user's own stop:
+            # say it once in Repairs, clear it when the stop no longer blocks
+            try:
+                from .repair_issues import (
+                    clear_legionella_below_stop, raise_legionella_below_stop)
+                _did = str(getattr(hw_controller, "device_id", "hot_water"))
+                _blocked = (getattr(hw_controller, "legionella_blocked_by_stop", False) is True
+                            and getattr(hw_controller, "_last_legionella_path", "") == "blocked_by_stop")
+                _up = getattr(self, "_legionella_stop_repair_up", None)
+                if _blocked and _up is not True:
+                    raise_legionella_below_stop(
+                        self.hass, _did,
+                        name=str(getattr(hw_controller, "name", _did)),
+                        stop_c=float(hw_controller.user_stop_c() or 0.0),
+                        target_c=float(hw_controller.legionella_target_temp))
+                    self._legionella_stop_repair_up = True
+                elif (getattr(hw_controller, "legionella_blocked_by_stop", False) is not True
+                      and _up is not False):
+                    clear_legionella_below_stop(self.hass, _did)
+                    self._legionella_stop_repair_up = False
+            except Exception as e:  # noqa: BLE001 — never break the cycle
+                _LOGGER.debug("Legionella stop repair failed: %s", e)
             # (#1369) heating that does not warm the tank is a fault
             if hasattr(hw_controller, "check_heating_works"):
                 try:

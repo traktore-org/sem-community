@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "Warmwaterboiler wordt niet warm",
       "description": "{name} gebruikte {minutes} minuten stroom en bleef op {temp} °C. Controleer het verwarmingselement en de eigen thermostaat of beveiliging van de boiler. Dit verdwijnt zodra de boiler weer warm wordt."
+    },
+    "legionella_below_stop": {
+      "title": "Legionella-run haalt zijn doel niet",
+      "description": "{name}: je stop op {stop} °C ligt onder het legionelladoel {target} °C. SEM kan de boiler niet desinfecteren en slaat de run over. Verhoog de stop of verlaag het doel. Dit verdwijnt vanzelf."
     }
   },
   "selector": {

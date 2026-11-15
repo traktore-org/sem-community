@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "A melegvíztároló nem melegszik",
       "description": "{name} {minutes} percig áramot vett fel, és {temp} °C-on maradt. Ellenőrizd a fűtőbetétet és a tároló termosztátját vagy biztonsági kapcsolóját. Ez eltűnik, amint a tároló újra melegszik."
+    },
+    "legionella_below_stop": {
+      "title": "A legionella-ciklus nem éri el a célját",
+      "description": "{name}: a leállításod {stop} °C, ez a legionella-cél ({target} °C) alatt van. A SEM nem tudja fertőtleníteni a tárolót, és kihagyja a ciklust. Emeld a leállítást vagy csökkentsd a célt. Magától eltűnik."
     }
   },
   "selector": {

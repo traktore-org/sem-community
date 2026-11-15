@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "Zásobník teplé vody se neohřívá",
       "description": "{name} odebíral proud {minutes} minut a zůstal na {temp} °C. Zkontrolujte topné těleso a termostat nebo pojistku zásobníku. Hlášení zmizí, jakmile se zásobník znovu ohřeje."
+    },
+    "legionella_below_stop": {
+      "title": "Cyklus proti legionele nedosáhne cíle",
+      "description": "{name}: vaše zastavení na {stop} °C je pod cílem proti legionele {target} °C. SEM nemůže zásobník dezinfikovat a cyklus vynechá. Zvyšte zastavení nebo snižte cíl. Zmizí samo."
     }
   },
   "selector": {

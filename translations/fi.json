@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "Lämminvesivaraaja ei lämpene",
       "description": "{name} käytti sähköä {minutes} minuuttia ja jäi {temp} °C:een. Tarkista vastus ja varaajan termostaatti tai ylikuumenemissuoja. Ilmoitus poistuu, kun varaaja lämpenee taas."
+    },
+    "legionella_below_stop": {
+      "title": "Legionellakierto ei saavuta tavoitettaan",
+      "description": "{name}: pysäytyksesi {stop} °C on legionellatavoitteen {target} °C alapuolella. SEM ei voi desinfioida varaajaa ja ohittaa kierron. Nosta pysäytystä tai laske tavoitetta. Poistuu itsestään."
     }
   },
   "selector": {

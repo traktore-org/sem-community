@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "Varmvattenberedaren blir inte varm",
       "description": "{name} drog ström i {minutes} minuter och stannade på {temp} °C. Kontrollera elpatronen och beredarens termostat eller överhettningsskydd. Detta försvinner när beredaren blir varm igen."
+    },
+    "legionella_below_stop": {
+      "title": "Legionellakörningen når inte sitt mål",
+      "description": "{name}: ditt stopp vid {stop} °C är under legionellamålet {target} °C. SEM kan inte desinficera beredaren och hoppar över körningen. Höj stoppet eller sänk målet. Försvinner av sig själv."
     }
   },
   "selector": {

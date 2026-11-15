@@ -1620,7 +1620,15 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         return consumed
 
     if not intent.on and active:
-        if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED):
+        # (#1369) a heater at its own stop or target is a thermostat
+        # clicking off: it beats the minimum run too (the minimum pause still
+        # holds the next start). Before, a 30 min minimum carried a tank
+        # 2–3 °C past the top the user set.
+        heater_stop = (intent.code == RC.LOAD_STOP_CONDITION
+                       and (hasattr(device, "check_legionella_cycle")
+                            or bool(getattr(device, "comfort_target", None)
+                                    and getattr(device, "comfort_limit", None))))
+        if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED) or heater_stop:
             # (class-17 sibling / #644 / #1335) The user's own Off (or
             # disabling the load) beats the minimum run: a deliberate command beats flicker protection.
             # The anti-cycle rule lives here, so its one exception does too

@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "Varmtvannsberederen blir ikke varm",
       "description": "{name} brukte strøm i {minutes} minutter og ble stående på {temp} °C. Sjekk varmeelementet og berederens termostat eller sikring. Dette forsvinner når berederen blir varm igjen."
+    },
+    "legionella_below_stop": {
+      "title": "Legionellakjøringen når ikke målet",
+      "description": "{name}: stoppet ditt ved {stop} °C er under legionellamålet {target} °C. SEM kan ikke desinfisere berederen og hopper over kjøringen. Hev stoppet eller senk målet. Forsvinner av seg selv."
     }
   },
   "selector": {

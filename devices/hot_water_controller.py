@@ -359,12 +359,20 @@ class HotWaterController(SwitchDevice):
         """(#1335) The Legionella run ended with the tank still on: stop it."""
         return self._legionella_end_pending is True and self.is_active
 
-    async def _end_unreachable_legionella(self, path: str, why: str) -> str:
+    async def _end_unreachable_legionella(self, path: str, why: str,
+                                          started: bool = True) -> str:
         """(#1102) End a cycle that cannot reach its target. It is NOT a
         disinfection: ``_last_legionella_time`` stays, and the next try waits
         one full interval, so the run cannot switch the tank on again and
         again on grid power."""
-        self._end_legionella_run()
+        if started:
+            self._end_legionella_run()
+        else:
+            # (#1369) the run never started: nothing of SEM's is running for
+            # it, so nothing may be stopped for it — a sun run goes on
+            self._legionella_cycle_active = False
+            self._legionella_hold_start = None
+            self._legionella_started_at = None
         self._legionella_blocked_until = dt_util.now() + timedelta(
             hours=self.legionella_interval_hours)
         _LOGGER.warning(
@@ -1006,17 +1014,15 @@ class HotWaterController(SwitchDevice):
             # (#1369) …or your stop sits below the target: it never could —
             # no heating for a run that cannot disinfect; the card says why
             if self.legionella_blocked_by_stop:
-                self._legionella_started_at = dt_util.now()
-                self._legionella_cycle_active = True
                 return await self._end_unreachable_legionella(
                     "blocked_by_stop",
-                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it")
+                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it",
+                    started=False)
             if super(ComfortBandMixin, self).stop_condition_met:
-                self._legionella_started_at = dt_util.now()
-                self._legionella_cycle_active = True
                 return await self._end_unreachable_legionella(
                     "blocked_by_stop",
-                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is already met")
+                    f"your stop ({self.stop_entity} >= {self.stop_at:g}) is already met",
+                    started=False)
             self._legionella_cycle_active = True
             self._legionella_hold_start = None
             self._legionella_started_at = dt_util.now()

@@ -2111,6 +2111,10 @@
     "heater_no_rise": {
       "title": "Le ballon d'eau chaude ne chauffe pas",
       "description": "{name} a consommé du courant pendant {minutes} minutes et est resté à {temp} °C. Vérifiez la résistance et le thermostat ou la sécurité du ballon. Ce message disparaît dès que le ballon chauffe de nouveau."
+    },
+    "legionella_below_stop": {
+      "title": "Le cycle anti-légionelles n'atteint pas sa cible",
+      "description": "{name} : votre arrêt à {stop} °C est sous la cible anti-légionelles {target} °C. SEM ne peut pas désinfecter le ballon et saute le cycle. Relevez l'arrêt ou baissez la cible. Ce message disparaît tout seul."
     }
   },
   "selector": {
