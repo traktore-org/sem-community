@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A hot water tank stops at its own stop or top even inside its minimum run time** (#1369). The minimum pause still applies.
 - 🐛 **A cheap-hour run heats on to Keep at while the hour is cheap** (#1369). It stopped when its planned block ended.
 - 🐛 **The plan is made again when a tank cools below Keep at after it was made** (#1369), also right after a restart.
-- ✨ **On a day with one price, a heater that may buy still reaches Keep at in a night hour** (#1369). Weekends on a two-rate tariff, flat tariffs.
+- ✨ **On a day with one price, a heater that may buy still reaches Keep at at night** (#1369): weekends on two-rate tariffs, flat tariffs.
 - ✨ **The card says when the boiler's own thermostat stopped it, and at which temperature** (#1369).
 
 # [2.3.0-beta.16] — 15.11.2026
