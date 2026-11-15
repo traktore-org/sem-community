@@ -1560,6 +1560,17 @@ async def _release_step_down(device) -> None:
                    text="step-down released")
 
 
+def _is_heater(device) -> bool:
+    """(#1369) A hot water tank, or a load with a temperature band set — read
+    strictly (the class's own method, real numbers), so a stand-in that
+    answers every attribute is never taken for one."""
+    if getattr(type(device), "check_legionella_cycle", None) is not None:
+        return True
+    t, lim = getattr(device, "comfort_target", None), getattr(device, "comfort_limit", None)
+    real = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and v != 0
+    return real(t) and real(lim)
+
+
 async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
                          *, observer: bool = False, controller=None) -> float:
     """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
@@ -1625,9 +1636,7 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         # holds the next start). Before, a 30 min minimum carried a tank
         # 2–3 °C past the top the user set.
         heater_stop = (intent.code == RC.LOAD_STOP_CONDITION
-                       and (hasattr(device, "check_legionella_cycle")
-                            or bool(getattr(device, "comfort_target", None)
-                                    and getattr(device, "comfort_limit", None))))
+                       and _is_heater(device))
         if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED) or heater_stop:
             # (class-17 sibling / #644 / #1335) The user's own Off (or
             # disabling the load) beats the minimum run: a deliberate command beats flicker protection.
