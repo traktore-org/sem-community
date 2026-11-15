@@ -7128,19 +7128,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return share, unable
 
     def _legionella_good_hour_now(self, true_surplus_w, tariff_data) -> bool:
-        """(#1369) A sunny or cheap hour for the hot water tank: the loads'
-        free surplus (which already counts what running loads draw) covers
-        its rating, or its own price level is cheap. Anything unread is no."""
+        """(#1369) A sunny hour for the hot water tank: the loads' free
+        surplus (which already counts what running loads draw) covers its
+        rating. Free sun only — a cheap hour bought the run at night while
+        the noon sun could have carried it; a due run still runs from any
+        source at its due time. Anything unread is no."""
         try:
             dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
             if dev is None:
                 return False
-            from .device_tariff import device_price_level
-            from .price_signal import is_cheap_name
-            level = device_price_level(
-                dev, getattr(tariff_data, "tariff_price_level", None))
-            if is_cheap_name(level):
-                return True
             rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
             if rated <= 0 or true_surplus_w is None:
                 return False

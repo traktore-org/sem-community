@@ -497,16 +497,24 @@ async def test_a_legionella_run_heats_to_its_own_target_and_ends_once(cls):
     hass.set(TANK, 58.0, unit_of_measurement="°C")
     await cycles(5)
     assert dev.is_active, "the band's ceiling ended the Legionella run"
-    hass.set(TANK, dev.legionella_target_temp + 0.5, unit_of_measurement="°C")
+    hass.set(TANK, dev.legionella_target_temp + 0.2, unit_of_measurement="°C")
     await cycles(2)
     assert dev.is_active, "it must hold at its target, not stop on reaching it"
+    assert dev._legionella_cycle_active
+    # (#1369) a switched tank holds like a thermostat: off a little above the
+    # target, the run itself goes on until the hold is over
+    hass.set(TANK, dev.legionella_target_temp + 0.6, unit_of_measurement="°C")
+    await cycles(2)
+    assert not dev.is_active, "it heated on past its target during the hold"
+    assert dev._legionella_cycle_active, "the run ended before its hold"
     # the hold is over (its length comes from the target temperature)
     dev._legionella_hold_start -= timedelta(hours=2)
     await cycles(5)
     assert not dev.is_active
+    assert not dev._legionella_cycle_active
     records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
     assert [r["reason_code"] for r in records] == [
-        RC.LOAD_LEGIONELLA, RC.LOAD_LEGIONELLA_END], records
+        RC.LOAD_LEGIONELLA, RC.LOAD_STOP_CONDITION], records
 
 
 @pytest.mark.asyncio

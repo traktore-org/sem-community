@@ -249,8 +249,10 @@ class TestTheGoodHour:
         assert f(1500.0) is False
         assert f(None) is False
 
-    def test_a_cheap_hour(self):
-        assert self._coord(_tank(_Hass(), 48.0), "cheap")(0.0) is True
+    def test_a_cheap_hour_alone_is_not_a_good_hour(self):
+        # (#1369, ruflo day) a cheap night hour bought 8 kWh the noon sun
+        # would have given; the due run still runs at its due time
+        assert self._coord(_tank(_Hass(), 48.0), "cheap")(0.0) is False
 
 
 # ── (#1369) heating that does not warm the tank ────────────────────────────
@@ -556,3 +558,47 @@ class TestRufloRound2:
             issue = _json.loads(f.read_text())["issues"]["legionella_below_stop"]
             for ph in ("{name}", "{stop}", "{target}"):
                 assert ph in issue["description"], (f.name, ph)
+
+
+class TestRufloRound3:
+    """(#1369) one-minute runs at the top, the Legionella hold, coolers."""
+
+    def test_no_start_with_less_than_a_degree_to_the_top(self):
+        dev = _tank(_Hass(), 55.5)          # top 56
+        assert dev.start_refusal == "at_target"
+        dev2 = _tank(_Hass(), 54.9)
+        assert dev2.start_refusal is None
+
+    def test_no_start_with_less_than_a_degree_to_the_users_stop(self):
+        dev = _tank(_Hass(), 52.5)
+        dev.stop_entity, dev.stop_at = SENSOR, 53.0
+        assert dev.start_refusal == "at_target"
+
+    def test_a_running_tank_still_heats_to_its_top(self):
+        dev = _tank(_Hass(), 55.5)
+        assert dev.is_temperature_safe() is True        # a run going is not refused
+
+    @pytest.mark.asyncio
+    async def test_the_legionella_hold_does_not_heat_past_the_band(self):
+        dev = _tank(_Hass(), 58.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        assert await _chk(dev, False, 0) == "legionella_started"
+        dev.hass.set(SENSOR, "60.2", unit_of_measurement="°C")
+        assert (await _chk(dev, False, 1)).startswith("legionella_holding")
+        assert dev.stop_condition_met is False          # 60.2 < 60.5
+        assert dev.own_run_needs_heat is False          # no restart for the hold
+        dev.hass.set(SENSOR, "60.6", unit_of_measurement="°C")
+        assert dev.stop_condition_met is True           # off a little above
+
+    def test_a_cooler_keeps_its_minimum_run(self):
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            _is_heater)
+        from custom_components.solar_energy_management.devices.base import SwitchDevice
+        cool = SwitchDevice.__new__(SwitchDevice)
+        cool.comfort_target, cool.comfort_limit = 24.0, 30.0
+        cool._comfort_direction = lambda: "cool"
+        assert _is_heater(cool) is False
+        heat = SwitchDevice.__new__(SwitchDevice)
+        heat.comfort_target, heat.comfort_limit = 52.0, 36.0
+        heat._comfort_direction = lambda: "heat"
+        assert _is_heater(heat) is True

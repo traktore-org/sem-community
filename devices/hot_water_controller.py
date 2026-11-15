@@ -29,12 +29,18 @@ DEFAULT_HOT_WATER_POWER = 2000    # Typical immersion heater power
 # Legionella prevention defaults
 DEFAULT_LEGIONELLA_TARGET = 65.0  # Disinfection temperature
 DEFAULT_LEGIONELLA_INTERVAL_HOURS = 72  # Max hours between cycles
-#: (#1369) In the last day before a run is due, a sunny or cheap hour may
+#: (#1369) In the last day before a run is due, a sunny hour may
 #: start it EARLY. Never later: at the due time it runs as before.
 LEGIONELLA_EARLY_WINDOW_H = 24.0
 #: (#1369) the good hour must hold this long before an early start, and be
 #: gone this long before an early run pauses — no start/stop on a passing cloud
 LEGIONELLA_EARLY_START_HOLD_MIN = 10.0
+#: (#1369) a new start needs this much room below the top (or the user's
+#: stop): no one-minute run for a tenth of a degree
+START_MARGIN_K = 1.0
+#: (#1369) a switched tank holding its Legionella temperature switches off
+#: this far above the target; the tank holds the heat through the hold
+LEGIONELLA_HOLD_BAND_K = 0.5
 LEGIONELLA_EARLY_PAUSE_HOLD_MIN = 15.0
 #: (#1369) A tank that draws power this long without warming this much has
 #: a fault (element, thermostat, a heat pump that is not heating the tank).
@@ -285,7 +291,7 @@ class HotWaterController(SwitchDevice):
     @property
     def legionella_early_window(self) -> bool:
         """(#1369) The last day before the run is due (and not blocked):
-        a sunny or cheap hour may start it now instead of at the due time."""
+        a sunny hour may start it now instead of at the due time."""
         if self._last_legionella_time is None:
             return False   # never run: it is due already
         if self._legionella_blocked_until is not None and dt_util.now() < self._legionella_blocked_until:
@@ -621,10 +627,32 @@ class HotWaterController(SwitchDevice):
         start. Layer 1 reads this and says so, so a start is never refused
         in silence; ``activate`` keeps the same check as a backstop."""
         if self.is_temperature_safe():
+            if self._legionella_cycle_active:
+                return None
+            lines = [v for v in (self.band_top_c(), self.user_stop_c()) if v is not None]
+            if lines:
+                reading = None
+                try:
+                    reading = self._comfort_reading()
+                except Exception:  # noqa: BLE001
+                    reading = None
+                if reading is None:
+                    reading = self.get_current_temperature()
+                if reading is not None and float(reading) > min(lines) - START_MARGIN_K:
+                    return "at_target"   # (#1369) too close to its top to start
             return None
         if self._last_temperature_safety_path == "configured_sensor_broken":
             return "sensor"
         return "at_target"
+
+    @property
+    def own_run_needs_heat(self) -> bool:
+        """(#1369) Does the Legionella run need the heater now? Not while the
+        tank holds at or above its target — the hold needs no heat."""
+        if not self._legionella_cycle_active:
+            return False
+        temp = self.get_current_temperature()
+        return temp is None or temp < float(self.legionella_target_temp)
 
     @property
     def runs_without_surplus(self) -> bool:
@@ -649,7 +677,16 @@ class HotWaterController(SwitchDevice):
         """
         if self._legionella_cycle_active:
             # The base stop only (the stop entity) — skip the band's banked.
-            return super(ComfortBandMixin, self).stop_condition_met
+            if super(ComfortBandMixin, self).stop_condition_met:
+                return True
+            # (#1369) a switched tank in its hold: off a little above the
+            # target — the tank holds the heat; before, it heated on to +3 K
+            if (self._entity_domain not in _SETPOINT_DOMAINS
+                    and self._legionella_hold_start is not None):
+                temp = self.get_current_temperature()
+                return temp is not None and temp >= (
+                    float(self.legionella_target_temp) + LEGIONELLA_HOLD_BAND_K)
+            return False
         if super().stop_condition_met:
             return True
         if self._entity_domain in _SETPOINT_DOMAINS:
@@ -989,7 +1026,7 @@ class HotWaterController(SwitchDevice):
                 return "legionella_heating"
 
         # 3. Check if overdue — the run is due. (#1369) In the last day
-        # before that, a sunny or cheap hour (``good_hour``) starts it early.
+        # before that, a sunny hour (``good_hour``) starts it early.
         early = (not self.legionella_overdue and good_held
                  and self.legionella_early_window
                  and not self.legionella_blocked_by_stop)
@@ -1003,13 +1040,6 @@ class HotWaterController(SwitchDevice):
                 self._last_legionella_path = "overdue_no_sensor"
                 return "legionella_no_sensor"
 
-            _LOGGER.info(
-                "Legionella prevention: %.0f hours since last cycle (max %d), "
-                "forcing heat to %.0f°C",
-                self.hours_since_legionella,
-                self.legionella_interval_hours,
-                self.legionella_target_temp,
-            )
             # (#1102) your stop already met: the run could not get further.
             # (#1369) …or your stop sits below the target: it never could —
             # no heating for a run that cannot disinfect; the card says why
@@ -1023,6 +1053,13 @@ class HotWaterController(SwitchDevice):
                     "blocked_by_stop",
                     f"your stop ({self.stop_entity} >= {self.stop_at:g}) is already met",
                     started=False)
+            _LOGGER.info(
+                "Legionella prevention: %.0f hours since last cycle (max %d), "
+                "forcing heat to %.0f°C",
+                self.hours_since_legionella,
+                self.legionella_interval_hours,
+                self.legionella_target_temp,
+            )
             self._legionella_cycle_active = True
             self._legionella_hold_start = None
             self._legionella_started_at = dt_util.now()

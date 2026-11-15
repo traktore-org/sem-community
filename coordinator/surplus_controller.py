@@ -1121,11 +1121,13 @@ def compute_load_intent(
         # long as the peak lasted. It waits — the rungs below decide as if
         # it were not due, and none of them starts a load into a peak. A run
         # already going is kept, as above.
-        if not peak_freeze:
+        # (#1369) a tank holding its Legionella temperature needs no heat:
+        # no restart for the hold
+        if not peak_freeze and getattr(device, "own_run_needs_heat", True) is not False:
             if getattr(device, "_legionella_early", False) is True:
-                # (#1369) started early: a sunny or cheap hour before it is due
+                # (#1369) started early: a sunny hour before it is due
                 return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
-                                  "Legionella run, early in a sunny or cheap hour",
+                                  "Legionella run, early in a sunny hour",
                                   RC.LOAD_LEGIONELLA_EARLY)
             return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
                               "Legionella run due", RC.LOAD_LEGIONELLA)
@@ -1568,7 +1570,14 @@ def _is_heater(device) -> bool:
         return True
     t, lim = getattr(device, "comfort_target", None), getattr(device, "comfort_limit", None)
     real = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and v != 0
-    return real(t) and real(lim)
+    if not (real(t) and real(lim)):
+        return False
+    # a heating band only: a cooler (AC, compressor) keeps its minimum run
+    direction = getattr(type(device), "_comfort_direction", None)
+    try:
+        return callable(direction) and device._comfort_direction() == "heat"
+    except Exception:  # noqa: BLE001 — unknown direction: not a heater
+        return False
 
 
 async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
