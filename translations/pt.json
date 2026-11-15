@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "O depósito de água quente não aquece",
-      "description": "{name} consumiu energia durante {minutes} minutos e ficou em {temp} °C. Verifique a resistência, o termóstato do depósito, ou se uma bomba de calor está a aquecer a casa. Isto desaparece quando o depósito voltar a aquecer."
+      "description": "{name} consumiu energia durante {minutes} minutos e ficou em {temp} °C. Verifique a resistência e o termóstato ou a proteção do depósito. Isto desaparece quando o depósito voltar a aquecer."
     }
   },
   "selector": {

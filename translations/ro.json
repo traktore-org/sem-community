@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Boilerul nu se încălzește",
-      "description": "{name} a consumat curent {minutes} minute și a rămas la {temp} °C. Verifică rezistența, termostatul boilerului sau dacă o pompă de căldură încălzește casa în schimb. Mesajul dispare când boilerul se încălzește din nou."
+      "description": "{name} a consumat curent {minutes} minute și a rămas la {temp} °C. Verifică rezistența și termostatul sau siguranța boilerului. Mesajul dispare când boilerul se încălzește din nou."
     }
   },
   "selector": {

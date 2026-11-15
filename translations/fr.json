@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Le ballon d'eau chaude ne chauffe pas",
-      "description": "{name} a consommé du courant pendant {minutes} minutes et est resté à {temp} °C. Vérifiez la résistance, le thermostat du ballon, ou si une pompe à chaleur chauffe la maison à la place. Ce message disparaît dès que le ballon chauffe de nouveau."
+      "description": "{name} a consommé du courant pendant {minutes} minutes et est resté à {temp} °C. Vérifiez la résistance et le thermostat ou la sécurité du ballon. Ce message disparaît dès que le ballon chauffe de nouveau."
     }
   },
   "selector": {

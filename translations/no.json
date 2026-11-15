@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Varmtvannsberederen blir ikke varm",
-      "description": "{name} brukte strøm i {minutes} minutter og ble stående på {temp} °C. Sjekk varmeelementet, berederens egen termostat, eller om en varmepumpe varmer huset i stedet. Dette forsvinner når berederen blir varm igjen."
+      "description": "{name} brukte strøm i {minutes} minutter og ble stående på {temp} °C. Sjekk varmeelementet og berederens termostat eller sikring. Dette forsvinner når berederen blir varm igjen."
     }
   },
   "selector": {

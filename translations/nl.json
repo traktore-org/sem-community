@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Warmwaterboiler wordt niet warm",
-      "description": "{name} gebruikte {minutes} minuten stroom en bleef op {temp} °C. Controleer het verwarmingselement, de eigen thermostaat van de boiler, of een warmtepomp die in plaats daarvan het huis verwarmt. Dit verdwijnt zodra de boiler weer warm wordt."
+      "description": "{name} gebruikte {minutes} minuten stroom en bleef op {temp} °C. Controleer het verwarmingselement en de eigen thermostaat of beveiliging van de boiler. Dit verdwijnt zodra de boiler weer warm wordt."
     }
   },
   "selector": {

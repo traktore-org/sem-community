@@ -2727,13 +2727,32 @@ class UnifiedDeviceRegistry:
         except Exception:  # noqa: BLE001 — an unreadable band publishes no lines
             return {}
         sign = 1.0 if cooling else -1.0
+        top = keep - sign * extra
+        # (#1369) the engine's own top: Keep at + Extra, capped at the
+        # Legionella target on a hot water tank
+        _top_fn = getattr(live, "_band_fields_top_c", None)
+        if callable(_top_fn) and not cooling:
+            try:
+                _t = _top_fn()
+                if _t is not None:
+                    top = float(_t)
+            except Exception:  # noqa: BLE001 — the typed top stands
+                pass
         return {
             "keep_c": round(keep, 2),
             "start_c": round(keep + sign * gap, 2),
-            "max_c": round(keep - sign * extra, 2),
+            "max_c": round(top, 2),
             "limit_c": round(limit, 2),
             # (#1102) the device's own run — the tank heats past Keep at
             "own_run": getattr(live, "runs_without_surplus", False) is True,
+            # (#1369) that run started early, in a sunny or cheap hour
+            "own_run_early": (getattr(live, "runs_without_surplus", False) is True
+                              and getattr(live, "_legionella_early", False) is True),
+            # (#1369) a Legionella run is due within a day: it may start in
+            # the next sunny or cheap hour
+            "own_run_soon": getattr(live, "legionella_early_window", False) is True,
+            # (#1369) the tank drew power for two hours and did not warm
+            "heating_fault": getattr(live, "heating_fault", False) is True,
             # (#1102) may a planned hour be BOUGHT to reach Keep at? The
             # device's own rule; without it only the sun keeps the tank.
             "may_buy": UnifiedDeviceRegistry._may_buy(live),

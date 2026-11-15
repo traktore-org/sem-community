@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Lämminvesivaraaja ei lämpene",
-      "description": "{name} käytti sähköä {minutes} minuuttia ja jäi {temp} °C:een. Tarkista vastus, varaajan oma termostaatti tai lämmittääkö lämpöpumppu taloa sen sijaan. Ilmoitus poistuu, kun varaaja lämpenee taas."
+      "description": "{name} käytti sähköä {minutes} minuuttia ja jäi {temp} °C:een. Tarkista vastus ja varaajan termostaatti tai ylikuumenemissuoja. Ilmoitus poistuu, kun varaaja lämpenee taas."
     }
   },
   "selector": {

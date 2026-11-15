@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "热水器不升温",
-      "description": "{name} 用电 {minutes} 分钟后仍停留在 {temp} °C。请检查加热元件、热水器自身的恒温器，或热泵是否在给房屋供暖。热水器再次升温后此提示会消失。"
+      "description": "{name} 用电 {minutes} 分钟后仍停留在 {temp} °C。请检查加热元件以及热水器的恒温器或安全断路器。热水器再次升温后此提示会消失。"
     }
   },
   "selector": {

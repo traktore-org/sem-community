@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Varmtvandsbeholderen bliver ikke varm",
-      "description": "{name} brugte strøm i {minutes} minutter og blev ved {temp} °C. Tjek varmelegemet, beholderens egen termostat, eller om en varmepumpe varmer huset i stedet. Dette forsvinder, når beholderen bliver varm igen."
+      "description": "{name} brugte strøm i {minutes} minutter og blev ved {temp} °C. Tjek varmelegemet og beholderens termostat eller sikring. Dette forsvinder, når beholderen bliver varm igen."
     }
   },
   "selector": {

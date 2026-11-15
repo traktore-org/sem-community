@@ -1118,6 +1118,11 @@ def compute_load_intent(
         # it were not due, and none of them starts a load into a peak. A run
         # already going is kept, as above.
         if not peak_freeze:
+            if getattr(device, "_legionella_early", False) is True:
+                # (#1369) started early: a sunny or cheap hour before it is due
+                return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
+                                  "Legionella run, early in a sunny or cheap hour",
+                                  RC.LOAD_LEGIONELLA_EARLY)
             return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
                               "Legionella run due", RC.LOAD_LEGIONELLA)
 

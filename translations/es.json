@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "El termo no se calienta",
-      "description": "{name} consumió corriente durante {minutes} minutos y se quedó en {temp} °C. Revisa la resistencia, el termostato del termo o si una bomba de calor calienta la casa en su lugar. Esto desaparece cuando el termo vuelve a calentarse."
+      "description": "{name} consumió corriente durante {minutes} minutos y se quedó en {temp} °C. Revisa la resistencia y el termostato o la seguridad del termo. Esto desaparece cuando el termo vuelve a calentarse."
     }
   },
   "selector": {

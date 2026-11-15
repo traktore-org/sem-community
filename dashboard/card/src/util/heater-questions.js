@@ -73,7 +73,10 @@ export function heaterSays(row, live = {}, running = false) {
     const intent = row.intent || {};
     const code = String(intent.code || '');
     const reading = num(c.reading_c);
+    // (#1369) a heater that does not warm says so first, running or not
+    if (c.heating_fault === true) return p('hq_st_no_rise', {}, 'warn');
     if (running) {
+        if (c.own_run_early === true || code === 'legionella_early') return p('hq_st_legionella_early', {}, 'ok');
         if (c.own_run || code === 'legionella') return p('hq_st_legionella', {}, 'ok');
         if (code === 'comfort_floor' || code === 'comfort_floor_away' || c.state === 'forced') return p('hq_st_too_cold', {}, 'warn');
         if (code === 'comfort_goal_battery' || (code !== 'comfort_goal' && intent.source === 'tier2_battery')) {
@@ -89,6 +92,9 @@ export function heaterSays(row, live = {}, running = false) {
     // idle: these say what comes NEXT
     const idle = (key, params = {}, cls = '', why = '') => ({ ...p(key, params, cls, why), next: true });
     if (reading === null) return idle('hq_st_no_reading', {}, 'warn');
+    // (#1369) a Legionella run within a day may start in the next sunny or
+    // cheap hour: say so, so a run at an odd hour is not a surprise
+    if (c.own_run_soon === true && !cool) return idle('hq_st_legionella_soon');
     // past Keep at, on the comfortable side
     if (cool ? reading <= keep : reading >= keep) return idle('hq_st_warm', { reading: T(reading) });
     const line = start === null ? keep : start;

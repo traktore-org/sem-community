@@ -62,6 +62,9 @@ _BOOST_SETPOINT_MATCH_K = 0.5
 
 
 class HotWaterController(SwitchDevice):
+    #: (#1369) what the "does not warm" repair quotes
+    HEAT_CHECK_MINUTES_USED = int(HEAT_CHECK_MINUTES)
+
     """Hot water controller with multi-entity support and Legionella prevention.
 
     Supports water_heater, climate, and switch entities.

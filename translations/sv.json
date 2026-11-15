@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Varmvattenberedaren blir inte varm",
-      "description": "{name} drog ström i {minutes} minuter och stannade på {temp} °C. Kontrollera elpatronen, beredarens termostat, eller om en värmepump värmer huset i stället. Detta försvinner när beredaren blir varm igen."
+      "description": "{name} drog ström i {minutes} minuter och stannade på {temp} °C. Kontrollera elpatronen och beredarens termostat eller överhettningsskydd. Detta försvinner när beredaren blir varm igen."
     }
   },
   "selector": {

@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Hot water tank does not warm",
-      "description": "{name} drew power for {minutes} minutes and stayed at {temp} °C. Check the heating element, the tank's own thermostat, or whether a heat pump heats the house instead. This clears when the tank warms again."
+      "description": "{name} drew power for {minutes} minutes and stayed at {temp} °C. Check the heating element and the tank's own thermostat or safety cut-out. This clears when the tank warms again."
     }
   },
   "selector": {

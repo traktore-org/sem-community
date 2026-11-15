@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Zásobník teplé vody se neohřívá",
-      "description": "{name} odebíral proud {minutes} minut a zůstal na {temp} °C. Zkontrolujte topné těleso, termostat zásobníku nebo zda tepelné čerpadlo místo toho netopí dům. Hlášení zmizí, jakmile se zásobník znovu ohřeje."
+      "description": "{name} odebíral proud {minutes} minut a zůstal na {temp} °C. Zkontrolujte topné těleso a termostat nebo pojistku zásobníku. Hlášení zmizí, jakmile se zásobník znovu ohřeje."
     }
   },
   "selector": {

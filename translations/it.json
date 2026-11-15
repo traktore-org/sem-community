@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Il bollitore non si scalda",
-      "description": "{name} ha assorbito corrente per {minutes} minuti ed è rimasto a {temp} °C. Controlla la resistenza, il termostato del bollitore, o se una pompa di calore sta scaldando la casa. Il messaggio sparisce quando il bollitore si scalda di nuovo."
+      "description": "{name} ha assorbito corrente per {minutes} minuti ed è rimasto a {temp} °C. Controlla la resistenza e il termostato o la sicurezza del bollitore. Il messaggio sparisce quando il bollitore si scalda di nuovo."
     }
   },
   "selector": {

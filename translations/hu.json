@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "A melegvíztároló nem melegszik",
-      "description": "{name} {minutes} percig áramot vett fel, és {temp} °C-on maradt. Ellenőrizd a fűtőbetétet, a tároló termosztátját, vagy hogy a hőszivattyú helyette a házat fűti-e. Ez eltűnik, amint a tároló újra melegszik."
+      "description": "{name} {minutes} percig áramot vett fel, és {temp} °C-on maradt. Ellenőrizd a fűtőbetétet és a tároló termosztátját vagy biztonsági kapcsolóját. Ez eltűnik, amint a tároló újra melegszik."
     }
   },
   "selector": {

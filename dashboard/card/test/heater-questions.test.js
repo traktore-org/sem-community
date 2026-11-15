@@ -284,3 +284,25 @@ test('a load\'s mode says who runs it — no "Solar only" beside the buy questio
     // a car's charge modes keep their names
     assert.equal(words.en.charge_mode_solar_only !== undefined, true);
 });
+
+
+// ── (#1369) every reason the tank heats is said ──────────────────────────
+test('(#1369) an early Legionella run says it started early', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 50, own_run: true, own_run_early: true }, intent: { code: 'legionella_early' } };
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_legionella_early');
+    const plain = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 50, own_run: true }, intent: { code: 'legionella' } };
+    assert.equal(heaterSays(plain, {}, true).key, 'hq_st_legionella');
+});
+
+test('(#1369) a Legionella run due within a day is announced while idle', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 53, own_run_soon: true } };
+    const said = heaterSays(row, {}, false);
+    assert.equal(said.key, 'hq_st_legionella_soon');
+    assert.equal(said.next, true);
+});
+
+test('(#1369) a heater that does not warm says so first', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 40, heating_fault: true }, intent: { code: 'comfort_goal' } };
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_no_rise');
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_no_rise');
+});

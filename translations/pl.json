@@ -2110,7 +2110,7 @@
     },
     "heater_no_rise": {
       "title": "Zasobnik ciepłej wody się nie nagrzewa",
-      "description": "{name} pobierał prąd przez {minutes} minut i pozostał na {temp} °C. Sprawdź grzałkę, termostat zasobnika albo czy pompa ciepła nie grzeje zamiast tego domu. Komunikat zniknie, gdy zasobnik znów się nagrzeje."
+      "description": "{name} pobierał prąd przez {minutes} minut i pozostał na {temp} °C. Sprawdź grzałkę oraz termostat lub zabezpieczenie zasobnika. Komunikat zniknie, gdy zasobnik znów się nagrzeje."
     }
   },
   "selector": {

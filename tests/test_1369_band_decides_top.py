@@ -332,3 +332,45 @@ class TestReviewRound2:
         with patch.object(type(dev), "is_active", new=True):
             assert dev.check_heating_works() is None
         assert dev._heat_check is None
+
+
+class TestEverythingIsSaid:
+    """(#1369) No hidden rule: the logbook and the card name each reason."""
+
+    @pytest.mark.asyncio
+    async def test_an_early_start_has_its_own_reason(self):
+        from custom_components.solar_energy_management.coordinator import reason_codes as RC
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            compute_load_intent)
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        await dev.check_legionella_cycle(good_hour=True)
+        intent = compute_load_intent(dev, remaining_surplus_w=0.0, tier1_headroom_w=0.0,
+                                     price_is_cheap=False, peak_freeze=False, is_night=True)
+        assert intent.on is True
+        assert intent.code == RC.LOAD_LEGIONELLA_EARLY
+
+    def test_the_card_gets_every_fact_it_says(self):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry)
+        dev = _tank(_Hass(), 50.0)
+        dev.comfort_target, dev.comfort_offset = 70.0, 10.0
+        lines = UnifiedDeviceRegistry._band_lines(dev)
+        assert lines["max_c"] == 60.0            # capped like the engine
+        assert lines["own_run_early"] is False
+        assert lines["heating_fault"] is False
+        _since(dev, dev.legionella_interval_hours - 10)
+        assert UnifiedDeviceRegistry._band_lines(dev)["own_run_soon"] is True
+        dev.heating_fault = True
+        assert UnifiedDeviceRegistry._band_lines(dev)["heating_fault"] is True
+
+    def test_every_new_text_exists_in_every_language(self):
+        import json
+        import pathlib
+        root = pathlib.Path(__file__).resolve().parent.parent
+        d = json.loads((root / "dashboard" / "translations.json").read_text())
+        keys = ["hq_st_legionella_early", "hq_st_legionella_soon", "hq_st_no_rise",
+                "why_reason_" + "legionella_early"]
+        for lang, table in d.items():
+            for k in keys:
+                assert table.get(k), (lang, k)

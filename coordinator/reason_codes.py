@@ -129,6 +129,8 @@ LOAD_COMFORT_GOAL_BATTERY = "comfort_goal_battery"
 # (#1349) it would heat from the house battery, but the battery is at its reserve
 LOAD_BATTERY_RESERVE = "battery_reserve"
 LOAD_LEGIONELLA = "legionella"
+# (#1369) the Legionella run started early, in a sunny or cheap hour
+LOAD_LEGIONELLA_EARLY = "legionella_early"
 # (#1335) a stop or a no-start says its own cause, never a start's sentence
 LOAD_LEGIONELLA_END = "legionella_end"
 LOAD_AT_TARGET = "at_target"
