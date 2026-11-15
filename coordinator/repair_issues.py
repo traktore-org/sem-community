@@ -1507,6 +1507,9 @@ def clear_orphan_hot_water_repairs(
                 eid = issue_id[len("hot_water_temperature_sensor_unavailable_"):]
                 if eid not in keep_temp:
                     candidates.append(issue_id)
+            elif issue_id.startswith("heater_no_rise_") and not keep_entity:
+                # (#1369) no tank left in the settings: nothing to warm
+                candidates.append(issue_id)
         for issue_id in candidates:
             try:
                 ir.async_delete_issue(hass, DOMAIN, issue_id)

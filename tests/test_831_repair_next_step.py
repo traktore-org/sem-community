@@ -29,6 +29,7 @@ REPAIR_ISSUES_PY = (
 TROUBLESHOOTING = Path(__file__).resolve().parent.parent / "docs" / "TROUBLESHOOTING.md"
 
 DOCS_SIDE = {
+    "heater_no_rise",          # (#1369) the tank draws power but does not warm
     "split_grid_guessed",   # (#911) set the two grid power entities
     # (#947) the guess was checked against the energy counters and failed —
     # the next step is naming the real meters, which is the user's config

@@ -86,6 +86,9 @@ KEYED = {
         "clear_orphan_hot_water_repairs, once per coordinator (#454)",
     "raise_hot_water_temperature_sensor_unavailable":
         "clear_orphan_hot_water_repairs, once per coordinator (#454)",
+    "raise_heater_no_rise":
+        "clear_orphan_hot_water_repairs once no tank is configured; a warming "
+        "run clears it, also after a restart (#1369)",
     "raise_external_write_seen":
         "keyed on the device (charger:<id> or battery); every known device is "
         "cleared each cycle its writes stop or its mode is not observe "
