@@ -370,6 +370,10 @@ class HotWaterController(SwitchDevice):
         self._legionella_hold_start = None
         self._legionella_started_at = None
         self._legionella_end_pending = self.is_active
+        # (#1369) nothing of this run carries into the next one
+        self._unread_since = None
+        self._hold_unread_min = 0.0
+        self._hold_stopped = False
 
     @property
     def own_run_ending(self) -> bool:
@@ -650,8 +654,16 @@ class HotWaterController(SwitchDevice):
                     reading = None
                 if reading is None:
                     reading = self.get_current_temperature()
-                if reading is not None and float(reading) > min(lines) - START_MARGIN_K:
-                    return "at_target"   # (#1369) too close to its top to start
+                if reading is not None:
+                    edge = min(lines) - START_MARGIN_K
+                    # once refused, it waits 0.2 K more: no flip on noise
+                    if getattr(self, "_margin_refused", False):
+                        edge -= 0.2
+                    refused = float(reading) > edge
+                    self._margin_refused = refused
+                    if refused:
+                        return "at_target"   # (#1369) too close to its top to start
+            self._margin_refused = False
             return None
         if self._last_temperature_safety_path == "configured_sensor_broken":
             return "sensor"
@@ -701,8 +713,16 @@ class HotWaterController(SwitchDevice):
             if (self._entity_domain not in _SETPOINT_DOMAINS
                     and self._legionella_hold_start is not None):
                 temp = self.get_current_temperature()
-                return temp is not None and temp >= (
-                    float(self.legionella_target_temp) + LEGIONELLA_HOLD_BAND_K)
+                target = float(self.legionella_target_temp)
+                if temp is None:
+                    return bool(getattr(self, "_hold_stopped", False))
+                # off above target + 0.5; once off, it stays off while the
+                # hold needs no heat — no flip on sensor noise
+                stopped = temp >= target + LEGIONELLA_HOLD_BAND_K or (
+                    getattr(self, "_hold_stopped", False)
+                    and temp >= target - LEGIONELLA_HOLD_DIP_K)
+                self._hold_stopped = stopped
+                return stopped
             return False
         if super().stop_condition_met:
             return True
@@ -1013,11 +1033,14 @@ class HotWaterController(SwitchDevice):
                     self._unread_since = None
                     self._last_legionella_path = "no_reading"
                     return "legionella_no_sensor"
-                if (self._legionella_hold_start is not None
-                        and unread_min > LEGIONELLA_UNREAD_HOLD_GRACE_MIN):
-                    # an unread tank is no hold: it starts over when read
-                    self._legionella_hold_start = None
             else:
+                # (#1369) unread minutes are no hold: the hold's clock pauses
+                # through them (a glitch under the grace is not counted out)
+                if (getattr(self, "_unread_since", None) is not None
+                        and self._legionella_hold_start is not None):
+                    gap = (now - self._unread_since).total_seconds() / 60.0
+                    if gap > LEGIONELLA_UNREAD_HOLD_GRACE_MIN:
+                        self._hold_unread_min = float(getattr(self, "_hold_unread_min", 0.0)) + gap
                 self._unread_since = None
             in_hold = temp is not None and (
                 temp >= self.legionella_target_temp
@@ -1033,7 +1056,8 @@ class HotWaterController(SwitchDevice):
                     self._last_legionella_path = "hold_reached_target"
                     return f"legionella_holding:{self.legionella_hold_minutes}"
 
-                elapsed = (dt_util.now() - self._legionella_hold_start).total_seconds() / 60
+                elapsed = ((dt_util.now() - self._legionella_hold_start).total_seconds() / 60
+                           - float(getattr(self, "_hold_unread_min", 0.0)))
                 if elapsed >= self.legionella_hold_minutes:
                     # Cycle complete
                     self._end_legionella_run()
@@ -1058,6 +1082,8 @@ class HotWaterController(SwitchDevice):
                 if (self._legionella_hold_start is not None and temp is not None
                         and temp < float(self.legionella_target_temp) - LEGIONELLA_HOLD_DIP_K):
                     self._legionella_hold_start = None
+                    self._hold_unread_min = 0.0
+                    self._hold_stopped = False
                 started = self._legionella_started_at
                 if (started is not None and getattr(self, "_legionella_early", False)
                         and not self.legionella_overdue
@@ -1128,6 +1154,9 @@ class HotWaterController(SwitchDevice):
             self._legionella_hold_start = None
             self._legionella_started_at = dt_util.now()
             self._legionella_end_pending = False
+            self._unread_since = None
+            self._hold_unread_min = 0.0
+            self._hold_stopped = False
             # (#1335) The run is due; layer 1 starts it regardless of sun
             # (``runs_without_surplus``) and ``reconcile_load`` switches it.
             self._legionella_early = bool(early)

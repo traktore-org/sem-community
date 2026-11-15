@@ -1645,7 +1645,8 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         # clicking off: it beats the minimum run too (the minimum pause still
         # holds the next start). Before, a 30 min minimum carried a tank
         # 2–3 °C past the top the user set.
-        heater_stop = (intent.code == RC.LOAD_STOP_CONDITION
+        heater_stop = (intent.code in (RC.LOAD_STOP_CONDITION, RC.LOAD_LEGIONELLA_END,
+                                       RC.LOAD_NO_READING)
                        and _is_heater(device))
         if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED) or heater_stop:
             # (class-17 sibling / #644 / #1335) The user's own Off (or

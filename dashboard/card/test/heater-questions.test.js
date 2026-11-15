@@ -373,3 +373,14 @@ test('(#1369) the pause is named only when SEM wants to start', () => {
     assert.equal(heaterSays({ comfort: base, intent: { source: 'solar' } }, {}, false).key, 'hq_st_paused');
     assert.equal(heaterSays({ comfort: base, intent: {} }, {}, false).key, 'hq_st_waits_sun');
 });
+
+
+test('(#1369) a Legionella hold with the heater off still says Legionella run', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 60.5, own_run: true } };
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_legionella');
+});
+
+test('(#1369) a cooling band keeps its sentence on noise too', () => {
+    const say = (r, prev) => heaterSays({ comfort: { hvac: 'cool', keep_c: 24, max_c: 22, start_c: 25, reading_c: r } }, { prevKey: prev }, false).key;
+    assert.equal(say(24.1, 'hq_st_cool'), 'hq_st_cool');
+});

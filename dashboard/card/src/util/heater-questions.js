@@ -102,6 +102,8 @@ export function heaterSays(row, live = {}, running = false) {
     const withSoon = (said) => (c.own_run_soon === true && !cool && said && !said.why
         ? { ...said, why: 'hq_st_legionella_soon' } : said);
     if (reading === null) return idle('hq_st_no_reading', {}, 'warn');
+    // (#1369) a Legionella run holding its temperature with the heater off
+    if (c.own_run === true && !cool) return idle('hq_st_legionella', {}, 'ok');
     // (#1369) the minimum pause holds a start the sun or the plan wants
     if (c.pause_until && (intent.on === true || intent.source === 'solar' || intent.source === 'tier1_battery')) {
         return withSoon(idle('hq_st_paused', { time: c.pause_until }));
@@ -112,10 +114,10 @@ export function heaterSays(row, live = {}, running = false) {
     const prev = live.prevKey || '';
     const stick = (keys) => (keys.includes(prev) ? 0.2 : 0);
     // past Keep at, on the comfortable side
-    const kStick = stick(['hq_st_warm']);
+    const kStick = stick(['hq_st_warm', 'hq_st_cool']);
     if (cool ? reading <= keep + kStick : reading >= keep - kStick) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
     const line = start === null ? keep : start;
-    const lStick = stick(['hq_st_warm_again', 'hq_st_warm']);
+    const lStick = stick(['hq_st_warm_again', 'hq_st_warm', 'hq_st_cool_again', 'hq_st_cool']);
     if (cool ? reading < line + lStick : reading > line - lStick) return withSoon(idle('hq_st_warm_again', { start: T(line) }));
     if (live.plannedAt) return withSoon(idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt }));
     // (#1349) the house battery reaches Keep at tonight — or is at its reserve

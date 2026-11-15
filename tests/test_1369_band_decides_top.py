@@ -749,9 +749,10 @@ class TestRufloRound7:
         dev.hass.set(SENSOR, "unavailable")
         await _chk(dev, False, 20)
         await _chk(dev, False, 23)                      # unread over the 2 min grace
-        assert dev._legionella_hold_start is None
         dev.hass.set(SENSOR, "60.1", unit_of_measurement="°C")
+        # the hold's clock paused while unread (20 → 40): 39 − 20 = 19 min < 30
         assert await _chk(dev, False, 40) != "legionella_complete"
+        assert await _chk(dev, False, 52) == "legionella_complete"  # 51 − 20 = 31
 
     @pytest.mark.asyncio
     async def test_after_an_early_timeout_no_new_early_start_until_due(self):
@@ -806,3 +807,61 @@ class TestRufloRound8:
         for m in (20, 60, 90):
             with patch.object(hwc.dt_util, "now", return_value=_T0 + timedelta(minutes=m)):
                 assert await dev.check_legionella_cycle(good_hour=False, sun_holds=True) == "legionella_heating"
+
+
+class TestRufloRound9:
+    @pytest.mark.asyncio
+    async def test_an_old_unread_time_does_not_end_a_new_run(self):
+        dev = _tank(_Hass(), 50.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        await _chk(dev, False, 0)
+        dev.hass.set(SENSOR, "unavailable")
+        await _chk(dev, False, 5)
+        dev.vacation = True
+        await _chk(dev, False, 6)                      # run aborted while unread
+        dev.vacation = False
+        dev.hass.set(SENSOR, "50.0", unit_of_measurement="°C")
+        assert await _chk(dev, False, 100) == "legionella_started"
+        dev.hass.set(SENSOR, "unavailable")
+        assert await _chk(dev, False, 101) == "legionella_heating"
+
+    @pytest.mark.asyncio
+    async def test_a_flaky_probe_still_finishes_the_hold(self):
+        dev = _tank(_Hass(), 58.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        await _chk(dev, False, 0)
+        m, out = 1, None
+        while m < 200 and out != "legionella_complete":
+            dev.hass.set(SENSOR, "60.5", unit_of_measurement="°C")
+            for _ in range(15):
+                out = await _chk(dev, False, m); m += 1
+                if out == "legionella_complete":
+                    break
+            if out == "legionella_complete":
+                break
+            dev.hass.set(SENSOR, "unavailable")
+            for _ in range(4):
+                await _chk(dev, False, m); m += 1
+        assert out == "legionella_complete"
+        assert dev._legionella_blocked_until is None
+
+    def test_the_hold_stop_does_not_flip_on_noise(self):
+        dev = _tank(_Hass(), 60.6, band=False)
+        dev._legionella_cycle_active = True
+        dev._legionella_hold_start = hwc.dt_util.now()
+        seen = []
+        for t in (60.6, 60.4, 60.5, 60.3, 60.45, 60.2):
+            dev.hass.set(SENSOR, str(t), unit_of_measurement="°C")
+            seen.append(dev.stop_condition_met)
+        assert seen == [True] * 6
+
+    def test_the_start_margin_does_not_flip_on_noise(self):
+        hass = _Hass()
+        dev = _tank(hass, 55.1)                          # top 56: refused above 55
+        seen = []
+        for t in (55.1, 54.95, 55.05, 54.9, 54.85):
+            hass.set(SENSOR, str(t), unit_of_measurement="°C")
+            seen.append(dev.start_refusal)
+        assert seen == ["at_target"] * 5
+        hass.set(SENSOR, "54.7", unit_of_measurement="°C")
+        assert dev.start_refusal is None
