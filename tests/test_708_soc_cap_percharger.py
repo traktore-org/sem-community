@@ -118,10 +118,6 @@ class TestTheConnectedScope:
 # fails the test below.
 
 PER_CHARGER_REPAIRS = {
-    "raise_heater_no_rise": (
-        "structural — keyed on the one hot water device, never a charger "
-        "(#1369)"
-    ),
     "raise_soc_cap_unenforceable": (
         "gated — coordinator._maybe_warn_soc_cap consults "
         "_last_ev_connected_per_charger[cid] (#708)"

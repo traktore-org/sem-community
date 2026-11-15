@@ -2049,16 +2049,16 @@ def clear_external_write_seen(hass: HomeAssistant, device: str) -> None:
                       "failed: %s", device, e)
 
 
-def _heater_issue_id(device_id: str) -> str:
-    return f"heater_no_rise_{device_id}"
+def _heater_issue_id(tank_id: str) -> str:
+    return f"heater_no_rise_{tank_id}"
 
 
-def raise_heater_no_rise(hass: HomeAssistant, device_id: str, *, name: str,
+def raise_heater_no_rise(hass: HomeAssistant, tank_id: str, *, name: str,
                          minutes: int, temp_c: float) -> None:
     """(#1369) The tank drew power for ``minutes`` and did not warm."""
     try:
         ir.async_create_issue(
-            hass, domain=DOMAIN, issue_id=_heater_issue_id(device_id),
+            hass, domain=DOMAIN, issue_id=_heater_issue_id(tank_id),
             is_fixable=False, is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="heater_no_rise",
@@ -2067,12 +2067,12 @@ def raise_heater_no_rise(hass: HomeAssistant, device_id: str, *, name: str,
                 "name": name, "minutes": str(minutes), "temp": f"{temp_c:.1f}"},
         )
     except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
-        _LOGGER.debug("issue_registry.create failed for heater %s: %s", device_id, e)
+        _LOGGER.debug("issue_registry.create failed for heater %s: %s", tank_id, e)
 
 
-def clear_heater_no_rise(hass: HomeAssistant, device_id: str) -> None:
+def clear_heater_no_rise(hass: HomeAssistant, tank_id: str) -> None:
     """(#1369) A later run warmed the tank: the fault is gone."""
     try:
-        ir.async_delete_issue(hass, DOMAIN, _heater_issue_id(device_id))
+        ir.async_delete_issue(hass, DOMAIN, _heater_issue_id(tank_id))
     except Exception as e:  # noqa: BLE001
-        _LOGGER.debug("issue_registry.delete failed for heater %s: %s", device_id, e)
+        _LOGGER.debug("issue_registry.delete failed for heater %s: %s", tank_id, e)
