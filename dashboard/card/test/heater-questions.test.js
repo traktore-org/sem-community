@@ -294,11 +294,21 @@ test('(#1369) an early Legionella run says it started early', () => {
     assert.equal(heaterSays(plain, {}, true).key, 'hq_st_legionella');
 });
 
-test('(#1369) a Legionella run due within a day is announced while idle', () => {
+test('(#1369) a Legionella run due within a day rides along, it never hides the tank', () => {
     const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 53, own_run_soon: true } };
     const said = heaterSays(row, {}, false);
-    assert.equal(said.key, 'hq_st_legionella_soon');
-    assert.equal(said.next, true);
+    assert.equal(said.key, 'hq_st_warm');
+    assert.equal(said.why, 'hq_st_legionella_soon');
+    const cold = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 41, own_run_soon: true, may_buy: false } };
+    assert.equal(heaterSays(cold, {}, false).key, 'hq_st_waits_sun');
+    assert.equal(heaterSays(cold, {}, false).why, 'hq_st_legionella_soon');
+});
+
+test('(#1369) the minimum pause is named, not "waits for sun"', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 48, pause_until: '13:21', may_buy: false }, intent: { source: 'solar' } };
+    const said = heaterSays(row, {}, false);
+    assert.equal(said.key, 'hq_st_paused');
+    assert.equal(said.params.time, '13:21');
 });
 
 test('(#1369) a heater that does not warm says so first', () => {

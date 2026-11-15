@@ -95,26 +95,31 @@ export function heaterSays(row, live = {}, running = false) {
     if (row.mergedMode === 'off') return null;
     // idle: these say what comes NEXT
     const idle = (key, params = {}, cls = '', why = '') => ({ ...p(key, params, cls, why), next: true });
-    if (reading === null) return idle('hq_st_no_reading', {}, 'warn');
-    // (#1369) a Legionella run within a day may start in the next sunny or
-    // cheap hour: say so, so a run at an odd hour is not a surprise
-    if (c.own_run_soon === true && !cool) return idle('hq_st_legionella_soon');
+    // (#1369) a Legionella run due within a day rides along as the second
+    // line — it never hides what the tank does now
+    const withSoon = (said) => (c.own_run_soon === true && !cool && said && !said.why
+        ? { ...said, why: 'hq_st_legionella_soon' } : said);
+    if (reading === null) return withSoon(idle('hq_st_no_reading', {}, 'warn'));
+    // (#1369) the minimum pause holds a start the sun or the plan wants
+    if (c.pause_until && (intent.on === true || intent.source === 'solar' || intent.source === 'tier1_battery')) {
+        return withSoon(idle('hq_st_paused', { time: c.pause_until }));
+    }
     // past Keep at, on the comfortable side
-    if (cool ? reading <= keep : reading >= keep) return idle('hq_st_warm', { reading: T(reading) });
+    if (cool ? reading <= keep : reading >= keep) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
     const line = start === null ? keep : start;
-    if (cool ? reading < line : reading > line) return idle('hq_st_warm_again', { start: T(line) });
-    if (live.plannedAt) return idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt });
+    if (cool ? reading < line : reading > line) return withSoon(idle('hq_st_warm_again', { start: T(line) }));
+    if (live.plannedAt) return withSoon(idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt }));
     // (#1349) the house battery reaches Keep at tonight — or is at its reserve
     if (c.may_use_battery === true) {
         if (code === 'battery_reserve') {
-            return { ...idle('hq_st_waits_battery', { keep: T(keep) }, 'warn'), battery: true };
+            return withSoon({ ...idle('hq_st_waits_battery', { keep: T(keep) }, 'warn'), battery: true });
         }
-        return { ...idle('hq_st_heats_tonight_battery', { keep: T(keep) }), battery: true };
+        return withSoon({ ...idle('hq_st_heats_tonight_battery', { keep: T(keep) }), battery: true });
     }
     // (#1102) Solar only buys nothing: no hour will ever be planned.
-    if (c.may_buy === false) return { ...idle('hq_st_waits_sun', { keep: T(keep) }), noBuy: true };
+    if (c.may_buy === false) return withSoon({ ...idle('hq_st_waits_sun', { keep: T(keep) }), noBuy: true });
     const why = becauseKey(row.intent);
-    return idle('hq_st_below_none', { keep: T(keep) }, 'warn', why === 'hq_because_no_sun' ? '' : why);
+    return withSoon(idle('hq_st_below_none', { keep: T(keep) }, 'warn', why === 'hq_because_no_sun' ? '' : why));
 }
 
 /** The cooling words of each heating text. */

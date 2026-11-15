@@ -602,3 +602,57 @@ class TestRufloRound3:
         heat.comfort_target, heat.comfort_limit = 52.0, 36.0
         heat._comfort_direction = lambda: "heat"
         assert _is_heater(heat) is True
+
+
+class TestRufloRound4:
+    """(#1369) below Run now past it always starts; a dip restarts the hold;
+    an overdue run is not 'early'; the pause is published."""
+
+    def test_below_run_now_past_the_margin_never_blocks(self):
+        dev = _tank(_Hass(), 51.2)
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = 52.0, 0.0, 51.5
+        assert dev.comfort_state == "forced"
+        assert dev.start_refusal is None
+
+    @pytest.mark.asyncio
+    async def test_a_dip_below_the_target_restarts_the_hold(self):
+        dev = _tank(_Hass(), 58.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        await _chk(dev, False, 0)
+        dev.hass.set(SENSOR, "60.1", unit_of_measurement="°C")
+        await _chk(dev, False, 1)
+        assert dev._legionella_hold_start is not None
+        dev.hass.set(SENSOR, "59.8", unit_of_measurement="°C")
+        await _chk(dev, False, 20)
+        assert dev._legionella_hold_start is None        # time under 60 is no hold
+        dev.hass.set(SENSOR, "60.0", unit_of_measurement="°C")
+        assert (await _chk(dev, False, 35)).startswith("legionella_holding")
+
+    @pytest.mark.asyncio
+    async def test_an_overdue_run_is_not_called_early(self):
+        from custom_components.solar_energy_management.coordinator import reason_codes as RC
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            compute_load_intent)
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry)
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        await _chk(dev, True, 0)
+        await _chk(dev, True, 10)
+        _since(dev, dev.legionella_interval_hours + 1)    # now it is due
+        with patch.object(type(dev), "is_active", new=True):
+            intent = compute_load_intent(dev, remaining_surplus_w=0.0, is_night=True)
+            assert intent.code == RC.LOAD_LEGIONELLA
+            assert UnifiedDeviceRegistry._band_lines(dev)["own_run_early"] is False
+
+    def test_the_pause_end_is_published(self):
+        from datetime import datetime, timedelta
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry)
+        dev = _tank(_Hass(), 48.0)
+        dev.min_off_seconds = 1800
+        dev._last_deactivated = datetime.now() - timedelta(minutes=5)
+        until = UnifiedDeviceRegistry._band_lines(dev)["pause_until"]
+        assert until == (dev._last_deactivated + timedelta(seconds=1800)).strftime("%H:%M")
+        dev._last_deactivated = datetime.now() - timedelta(hours=1)
+        assert UnifiedDeviceRegistry._band_lines(dev)["pause_until"] is None

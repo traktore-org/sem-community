@@ -2205,7 +2205,8 @@
     "hq_st_legionella_early": "Cyklus proti legionele, spuštěn dříve ve slunečné hodině",
     "hq_st_legionella_soon": "Cyklus proti legionele je na řadě do jednoho dne. Spustí se v příští slunečné hodině.",
     "hq_st_no_rise": "Ohřívá, ale neohřeje se. Viz Opravy.",
-    "why_reason_legionella_early": "Cyklus proti legionele je na řadě do jednoho dne a tato hodina je slunečná, proto se spouští teď."
+    "why_reason_legionella_early": "Cyklus proti legionele je na řadě do jednoho dne a tato hodina je slunečná, proto se spouští teď.",
+    "hq_st_paused": "Krátká pauza, znovu začne v {time}."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4413,7 +4414,8 @@
     "hq_st_legionella_early": "Legionella-kørsel, startet tidligt i en solrig time",
     "hq_st_legionella_soon": "Legionella-kørsel skal ske inden for et døgn. Den starter i næste solrige time.",
     "hq_st_no_rise": "Varmer, men bliver ikke varm. Se Reparationer.",
-    "why_reason_legionella_early": "Legionella-kørslen skal ske inden for et døgn, og denne time er solrig, så den starter nu."
+    "why_reason_legionella_early": "Legionella-kørslen skal ske inden for et døgn, og denne time er solrig, så den starter nu.",
+    "hq_st_paused": "Kort pause, starter igen kl. {time}."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6621,7 +6623,8 @@
     "hq_st_legionella_early": "Legionellen-Lauf, früh gestartet in einer sonnigen Stunde",
     "hq_st_legionella_soon": "Legionellen-Lauf innerhalb eines Tages fällig. Er startet in der nächsten sonnigen Stunde.",
     "hq_st_no_rise": "Heizt, wird aber nicht warm. Siehe Reparaturen.",
-    "why_reason_legionella_early": "Der Legionellen-Lauf ist innerhalb eines Tages fällig und diese Stunde ist sonnig, darum startet er jetzt."
+    "why_reason_legionella_early": "Der Legionellen-Lauf ist innerhalb eines Tages fällig und diese Stunde ist sonnig, darum startet er jetzt.",
+    "hq_st_paused": "Kurze Pause, startet wieder um {time}."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8829,7 +8832,8 @@
     "hq_st_legionella_early": "Legionella run, started early in a sunny hour",
     "hq_st_legionella_soon": "Legionella run due within a day. It starts in the next sunny hour.",
     "hq_st_no_rise": "Heats but does not warm. See Repairs.",
-    "why_reason_legionella_early": "Its Legionella heat-up is due within a day and this hour is sunny, so it starts now."
+    "why_reason_legionella_early": "Its Legionella heat-up is due within a day and this hour is sunny, so it starts now.",
+    "hq_st_paused": "Short pause, starts again at {time}."
   },
   "es": {
     "% of limit": "% del límite",
@@ -11037,7 +11041,8 @@
     "hq_st_legionella_early": "Ciclo antilegionela, iniciado antes en una hora de sol",
     "hq_st_legionella_soon": "Ciclo antilegionela previsto en un día. Empieza en la próxima hora de sol.",
     "hq_st_no_rise": "Calienta pero no sube de temperatura. Ver Reparaciones.",
-    "why_reason_legionella_early": "Su ciclo antilegionela toca en un día y esta hora tiene sol, así que empieza ahora."
+    "why_reason_legionella_early": "Su ciclo antilegionela toca en un día y esta hora tiene sol, así que empieza ahora.",
+    "hq_st_paused": "Pausa corta, vuelve a empezar a las {time}."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13245,7 +13250,8 @@
     "hq_st_legionella_early": "Legionellakierto, aloitettu aikaisin aurinkoisena tuntina",
     "hq_st_legionella_soon": "Legionellakierto erääntyy vuorokauden sisällä. Se alkaa seuraavana aurinkoisena tuntina.",
     "hq_st_no_rise": "Lämmittää mutta ei lämpene. Katso Korjaukset.",
-    "why_reason_legionella_early": "Legionellakierto erääntyy vuorokauden sisällä ja tämä tunti on aurinkoinen, joten se alkaa nyt."
+    "why_reason_legionella_early": "Legionellakierto erääntyy vuorokauden sisällä ja tämä tunti on aurinkoinen, joten se alkaa nyt.",
+    "hq_st_paused": "Lyhyt tauko, alkaa taas klo {time}."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15453,7 +15459,8 @@
     "hq_st_legionella_early": "Cycle anti-légionelles, lancé tôt dans une heure ensoleillée",
     "hq_st_legionella_soon": "Cycle anti-légionelles dû dans la journée. Il démarre à la prochaine heure ensoleillée.",
     "hq_st_no_rise": "Chauffe mais ne se réchauffe pas. Voir Réparations.",
-    "why_reason_legionella_early": "Son cycle anti-légionelles est dû dans la journée et cette heure est ensoleillée, il démarre donc maintenant."
+    "why_reason_legionella_early": "Son cycle anti-légionelles est dû dans la journée et cette heure est ensoleillée, il démarre donc maintenant.",
+    "hq_st_paused": "Courte pause, redémarre à {time}."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17661,7 +17668,8 @@
     "hq_st_legionella_early": "Legionella-ciklus, korábban indítva napos órában",
     "hq_st_legionella_soon": "Legionella-ciklus egy napon belül esedékes. A következő napos órában indul.",
     "hq_st_no_rise": "Fűt, de nem melegszik. Lásd Javítások.",
-    "why_reason_legionella_early": "A legionella-ciklus egy napon belül esedékes, és ez az óra napos, ezért most indul."
+    "why_reason_legionella_early": "A legionella-ciklus egy napon belül esedékes, és ez az óra napos, ezért most indul.",
+    "hq_st_paused": "Rövid szünet, újra indul: {time}."
   },
   "it": {
     "% of limit": "% del limite",
@@ -19869,7 +19877,8 @@
     "hq_st_legionella_early": "Ciclo antilegionella, avviato prima in un'ora di sole",
     "hq_st_legionella_soon": "Ciclo antilegionella previsto entro un giorno. Parte alla prossima ora di sole.",
     "hq_st_no_rise": "Riscalda ma non si scalda. Vedi Riparazioni.",
-    "why_reason_legionella_early": "Il ciclo antilegionella è previsto entro un giorno e quest'ora è di sole, quindi parte ora."
+    "why_reason_legionella_early": "Il ciclo antilegionella è previsto entro un giorno e quest'ora è di sole, quindi parte ora.",
+    "hq_st_paused": "Breve pausa, riparte alle {time}."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -22077,7 +22086,8 @@
     "hq_st_legionella_early": "Legionella-run, vroeg gestart in een zonnig uur",
     "hq_st_legionella_soon": "Legionella-run binnen een dag nodig. Hij start in het volgende zonnige uur.",
     "hq_st_no_rise": "Verwarmt maar wordt niet warm. Zie Reparaties.",
-    "why_reason_legionella_early": "De legionella-run is binnen een dag nodig en dit uur is zonnig, dus hij start nu."
+    "why_reason_legionella_early": "De legionella-run is binnen een dag nodig en dit uur is zonnig, dus hij start nu.",
+    "hq_st_paused": "Korte pauze, start weer om {time}."
   },
   "no": {
     "% of limit": "% av grense",
@@ -24285,7 +24295,8 @@
     "hq_st_legionella_early": "Legionellakjøring, startet tidlig i en solrik time",
     "hq_st_legionella_soon": "Legionellakjøring skal skje innen et døgn. Den starter i neste solrike time.",
     "hq_st_no_rise": "Varmer, men blir ikke varm. Se Reparasjoner.",
-    "why_reason_legionella_early": "Legionellakjøringen skal skje innen et døgn, og denne timen er solrik, så den starter nå."
+    "why_reason_legionella_early": "Legionellakjøringen skal skje innen et døgn, og denne timen er solrik, så den starter nå.",
+    "hq_st_paused": "Kort pause, starter igjen kl. {time}."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26493,7 +26504,8 @@
     "hq_st_legionella_early": "Cykl antylegionella, uruchomiony wcześniej w słonecznej godzinie",
     "hq_st_legionella_soon": "Cykl antylegionella wypada w ciągu doby. Zacznie się w następnej słonecznej godzinie.",
     "hq_st_no_rise": "Grzeje, ale się nie nagrzewa. Zobacz Naprawy.",
-    "why_reason_legionella_early": "Cykl antylegionella wypada w ciągu doby, a ta godzina jest słoneczna, więc startuje teraz."
+    "why_reason_legionella_early": "Cykl antylegionella wypada w ciągu doby, a ta godzina jest słoneczna, więc startuje teraz.",
+    "hq_st_paused": "Krótka przerwa, wznowi o {time}."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28701,7 +28713,8 @@
     "hq_st_legionella_early": "Ciclo anti-legionela, iniciado mais cedo numa hora de sol",
     "hq_st_legionella_soon": "Ciclo anti-legionela previsto dentro de um dia. Começa na próxima hora de sol.",
     "hq_st_no_rise": "Aquece mas não sobe de temperatura. Ver Reparações.",
-    "why_reason_legionella_early": "O ciclo anti-legionela está previsto dentro de um dia e esta hora tem sol, por isso começa agora."
+    "why_reason_legionella_early": "O ciclo anti-legionela está previsto dentro de um dia e esta hora tem sol, por isso começa agora.",
+    "hq_st_paused": "Pausa curta, volta a começar às {time}."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30909,7 +30922,8 @@
     "hq_st_legionella_early": "Ciclu anti-legionella, pornit devreme într-o oră însorită",
     "hq_st_legionella_soon": "Ciclul anti-legionella e scadent într-o zi. Pornește în următoarea oră însorită.",
     "hq_st_no_rise": "Încălzește, dar nu se încălzește apa. Vezi Reparații.",
-    "why_reason_legionella_early": "Ciclul anti-legionella e scadent într-o zi și ora aceasta e însorită, așa că pornește acum."
+    "why_reason_legionella_early": "Ciclul anti-legionella e scadent într-o zi și ora aceasta e însorită, așa că pornește acum.",
+    "hq_st_paused": "Pauză scurtă, pornește din nou la {time}."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -33117,7 +33131,8 @@
     "hq_st_legionella_early": "Legionellakörning, startad tidigt under en solig timme",
     "hq_st_legionella_soon": "Legionellakörning ska ske inom ett dygn. Den startar nästa soliga timme.",
     "hq_st_no_rise": "Värmer men blir inte varm. Se Reparationer.",
-    "why_reason_legionella_early": "Legionellakörningen ska ske inom ett dygn och den här timmen är solig, så den startar nu."
+    "why_reason_legionella_early": "Legionellakörningen ska ske inom ett dygn och den här timmen är solig, så den startar nu.",
+    "hq_st_paused": "Kort paus, startar igen kl. {time}."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -35325,6 +35340,7 @@
     "hq_st_legionella_early": "防军团菌运行，已在晴天时段提前开始",
     "hq_st_legionella_soon": "防军团菌运行将在一天内到期，将在下一个晴天时段开始。",
     "hq_st_no_rise": "正在加热但水温不升。请查看修复。",
-    "why_reason_legionella_early": "防军团菌加热将在一天内到期，且当前时段为晴天，因此现在开始。"
+    "why_reason_legionella_early": "防军团菌加热将在一天内到期，且当前时段为晴天，因此现在开始。",
+    "hq_st_paused": "短暂暂停，将在 {time} 重新开始。"
   }
 }

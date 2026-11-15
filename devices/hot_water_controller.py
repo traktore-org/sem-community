@@ -630,7 +630,8 @@ class HotWaterController(SwitchDevice):
             if self._legionella_cycle_active:
                 return None
             lines = [v for v in (self.band_top_c(), self.user_stop_c()) if v is not None]
-            if lines:
+            # below the user's own "Run now past" it always starts
+            if lines and getattr(self, "comfort_state", "") != "forced":
                 reading = None
                 try:
                     reading = self._comfort_reading()
@@ -1008,6 +1009,10 @@ class HotWaterController(SwitchDevice):
                     return await self._end_unreachable_legionella(
                         "blocked_by_stop",
                         f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it")
+                # (#1369) a dip below the target during the hold: the hold
+                # starts over when it is back — time under 60 °C is no hold
+                if self._legionella_hold_start is not None:
+                    self._legionella_hold_start = None
                 started = self._legionella_started_at
                 if started is not None and (dt_util.now() - started) > timedelta(hours=LEGIONELLA_MAX_RUN_HOURS):
                     return await self._end_unreachable_legionella(

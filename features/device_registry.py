@@ -2764,11 +2764,14 @@ class UnifiedDeviceRegistry:
             "limit_c": round(limit, 2),
             # (#1102) the device's own run — the tank heats past Keep at
             "own_run": getattr(live, "runs_without_surplus", False) is True,
-            # (#1369) that run started early, in a sunny or cheap hour
+            # (#1369) that run started early, in a sunny hour
             "own_run_early": (getattr(live, "runs_without_surplus", False) is True
-                              and getattr(live, "_legionella_early", False) is True),
+                              and getattr(live, "_legionella_early", False) is True
+                              and getattr(live, "legionella_overdue", False) is not True),
+            # (#1369) the minimum pause holds the next start: until when
+            "pause_until": UnifiedDeviceRegistry._pause_until(live),
             # (#1369) a Legionella run is due within a day: it may start in
-            # the next sunny or cheap hour
+            # the next sunny hour
             "own_run_soon": getattr(live, "legionella_early_window", False) is True,
             # (#1369) the tank drew power for two hours and did not warm
             "heating_fault": getattr(live, "heating_fault", False) is True,
@@ -2782,6 +2785,23 @@ class UnifiedDeviceRegistry:
             # The card shows these lines, not the typed numbers.
             "anchored": UnifiedDeviceRegistry._anchored(live),
         }
+
+    @staticmethod
+    def _pause_until(live):
+        """(#1369) "HH:MM" the minimum pause ends, or None when no pause
+        holds the next start."""
+        try:
+            from datetime import datetime, timedelta
+            off = getattr(live, "_last_deactivated", None)
+            secs = float(getattr(live, "min_off_seconds", 0) or 0)
+            if not isinstance(off, datetime) or secs <= 0 or getattr(live, "is_active", False):
+                return None
+            end = off + timedelta(seconds=secs)
+            if end <= datetime.now():
+                return None
+            return end.strftime("%H:%M")
+        except Exception:  # noqa: BLE001
+            return None
 
     @staticmethod
     def _may_buy(live) -> bool:
