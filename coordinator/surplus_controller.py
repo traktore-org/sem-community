@@ -1236,6 +1236,14 @@ def compute_load_intent(
                if tier1_headroom_w > 0 and remaining_surplus_w < threshold
                else "solar")
 
+    # (#1369) A run SEM started FOR Keep at (too cold, or the plan's block)
+    # that has reached it ends there, and says so — not "no spare sun".
+    if (active and band is not None and band[1] is False
+            and (getattr(device, "_comfort_floor_run", False) is True
+                 or getattr(device, "_comfort_goal_run", False) is True)):
+        return LoadIntent(False, 0.0, None, "reached its keep-at temperature",
+                          RC.LOAD_AT_TARGET)
+
     # (#1102) Too cold: at or past the limit it heats NOW on any tariff, and
     # a run the floor started goes on to Keep at, not just past the limit.
     # Peak shed (clause 2) and the operator's lock (1b) still outrank it.
@@ -1664,7 +1672,8 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         # clicking off: it beats the minimum run too (the minimum pause still
         # holds the next start). Before, a 30 min minimum carried a tank
         # 2–3 °C past the top the user set.
-        heater_stop = (intent.code in (RC.LOAD_STOP_CONDITION, RC.LOAD_LEGIONELLA_END)
+        heater_stop = (intent.code in (RC.LOAD_STOP_CONDITION, RC.LOAD_LEGIONELLA_END,
+                                       RC.LOAD_AT_TARGET)
                        and _is_heater(device))
         # (#1369) a bought Keep at run that reached Keep at stops there: the
         # minimum run carried it 2–4 K further on bought power

@@ -286,3 +286,15 @@ def test_8c_the_boilers_own_thermostat_is_named():
     with patch.object(type(dev), "is_active", new=True):
         dev.check_heating_works()
     assert dev.own_thermostat_c is None                      # it heats again
+
+
+@pytest.mark.asyncio
+async def test_8d_a_run_for_keep_at_that_reaches_it_says_so():
+    """A too-cold run that reached Keep at was logged "not enough spare sun"."""
+    hass, dev, sc = _boiler(35.5)
+    await _cycle(sc, price="normal", night=False)
+    hass.set(SENSOR, "52.1", unit_of_measurement="°C")
+    await _cycle(sc, price="normal", night=False)
+    assert not dev.is_active
+    records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
+    assert records[-1]["reason_code"] == RC.LOAD_AT_TARGET, records[-1]
