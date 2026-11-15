@@ -2776,7 +2776,7 @@ class UnifiedDeviceRegistry:
             # (#1369) the tank drew power for two hours and did not warm
             "heating_fault": getattr(live, "heating_fault", False) is True,
             # (#1369) the boiler's own thermostat cut it off at this reading
-            "own_thermostat_c": (float(getattr(live, "own_thermostat_c"))
+            "own_thermostat_c": (float(live.own_thermostat_c)
                                  if isinstance(getattr(live, "own_thermostat_c", None), (int, float))
                                  else None),
             # (#1102) may a planned hour be BOUGHT to reach Keep at? The
