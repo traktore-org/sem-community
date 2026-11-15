@@ -86,9 +86,11 @@ export function heaterSays(row, live = {}, running = false) {
         if (intent.source === 'solar' || intent.source === 'tier1_battery') {
             return p('hq_st_heating_sun', { max: T(max === null ? keep : max) }, 'ok');
         }
-        // (#1369) still on for a moment after its stop or target: say so
-        if (reading !== null && ['stop_condition', 'at_target', 'legionella_end', 'overnight_end'].includes(code)) {
-            return p('hq_st_warm', { reading: T(reading) });
+        // (#1369) still on for a moment after its stop or end: say so — warm
+        // only when it is; otherwise its minimum run holds it on
+        if (['stop_condition', 'at_target', 'legionella_end', 'overnight_end'].includes(code)) {
+            if (reading !== null && (cool ? reading <= keep : reading >= keep)) return p('hq_st_warm', { reading: T(reading) });
+            return p('hq_st_stopping');
         }
         return null;
     }
@@ -99,7 +101,7 @@ export function heaterSays(row, live = {}, running = false) {
     // line — it never hides what the tank does now
     const withSoon = (said) => (c.own_run_soon === true && !cool && said && !said.why
         ? { ...said, why: 'hq_st_legionella_soon' } : said);
-    if (reading === null) return withSoon(idle('hq_st_no_reading', {}, 'warn'));
+    if (reading === null) return idle('hq_st_no_reading', {}, 'warn');
     // (#1369) the minimum pause holds a start the sun or the plan wants
     if (c.pause_until && (intent.on === true || intent.source === 'solar' || intent.source === 'tier1_battery')) {
         return withSoon(idle('hq_st_paused', { time: c.pause_until }));

@@ -328,3 +328,16 @@ test('(#1369) a heater still on for a moment after its stop says it is warm, not
     const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 56.2 }, intent: { code: 'stop_condition' } };
     assert.equal(heaterSays(row, {}, true).key, 'hq_st_warm');
 });
+
+
+test('(#1369) held on below Keep at by its minimum run: "switching off", never "warm"', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 43.3 }, intent: { code: 'legionella_end' } };
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_stopping');
+});
+
+test('(#1369) no "Legionella due" second line while the thermometer reads nothing', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: null, own_run_soon: true } };
+    const said = heaterSays(row, {}, false);
+    assert.equal(said.key, 'hq_st_no_reading');
+    assert.ok(!said.why);
+});

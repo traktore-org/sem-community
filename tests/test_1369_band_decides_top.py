@@ -622,9 +622,9 @@ class TestRufloRound4:
         dev.hass.set(SENSOR, "60.1", unit_of_measurement="°C")
         await _chk(dev, False, 1)
         assert dev._legionella_hold_start is not None
-        dev.hass.set(SENSOR, "59.8", unit_of_measurement="°C")
+        dev.hass.set(SENSOR, "59.6", unit_of_measurement="°C")
         await _chk(dev, False, 20)
-        assert dev._legionella_hold_start is None        # time under 60 is no hold
+        assert dev._legionella_hold_start is None        # a real dip is no hold
         dev.hass.set(SENSOR, "60.0", unit_of_measurement="°C")
         assert (await _chk(dev, False, 35)).startswith("legionella_holding")
 
@@ -656,3 +656,53 @@ class TestRufloRound4:
         assert until == (dev._last_deactivated + timedelta(seconds=1800)).strftime("%H:%M")
         dev._last_deactivated = datetime.now() - timedelta(hours=1)
         assert UnifiedDeviceRegistry._band_lines(dev)["pause_until"] is None
+
+
+class TestRufloRound5:
+    @pytest.mark.asyncio
+    async def test_a_wobbling_probe_still_finishes_the_hold(self):
+        dev = _tank(_Hass(), 58.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        await _chk(dev, False, 0)
+        out = None
+        for m, t in enumerate([60.1, 59.9, 60.0, 59.8, 60.1] * 10):
+            dev.hass.set(SENSOR, str(t), unit_of_measurement="°C")
+            out = await _chk(dev, False, 1 + m)
+            if out == "legionella_complete":
+                break
+        assert out == "legionella_complete"
+
+    @pytest.mark.asyncio
+    async def test_a_real_dip_still_restarts_the_hold(self):
+        dev = _tank(_Hass(), 58.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        await _chk(dev, False, 0)
+        dev.hass.set(SENSOR, "60.1", unit_of_measurement="°C")
+        await _chk(dev, False, 1)
+        dev.hass.set(SENSOR, "59.5", unit_of_measurement="°C")
+        await _chk(dev, False, 10)
+        assert dev._legionella_hold_start is None
+
+    @pytest.mark.asyncio
+    async def test_no_early_pause_within_an_hour_of_the_due_time(self):
+        dev = _tank(_Hass(), 43.0)
+        _since(dev, dev.legionella_interval_hours - 0.5)  # due in 30 min
+        await _chk(dev, True, 0)
+        assert await _chk(dev, True, 10) == "legionella_started"
+        assert await _chk(dev, False, 11) == "legionella_heating"
+        assert await _chk(dev, False, 27) == "legionella_heating"   # no pause
+
+    def test_the_pause_time_is_in_home_assistants_zone(self):
+        from datetime import datetime, timedelta
+        from homeassistant.util import dt as dt_util
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry)
+        dev = _tank(_Hass(), 48.0)
+        dev.min_off_seconds = 1800
+        dev._last_deactivated = datetime.now() - timedelta(minutes=5)
+        want = dt_util.as_local(
+            (dev._last_deactivated + timedelta(seconds=1800)).astimezone()).strftime("%H:%M")
+        assert UnifiedDeviceRegistry._band_lines(dev)["pause_until"] == want
+        # an aware stamp does not break it
+        dev._last_deactivated = dt_util.now() - timedelta(minutes=5)
+        assert UnifiedDeviceRegistry._band_lines(dev)["pause_until"] is not None

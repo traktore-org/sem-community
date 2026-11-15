@@ -2792,14 +2792,18 @@ class UnifiedDeviceRegistry:
         holds the next start."""
         try:
             from datetime import datetime, timedelta
+            from homeassistant.util import dt as dt_util
             off = getattr(live, "_last_deactivated", None)
             secs = float(getattr(live, "min_off_seconds", 0) or 0)
             if not isinstance(off, datetime) or secs <= 0 or getattr(live, "is_active", False):
                 return None
             end = off + timedelta(seconds=secs)
-            if end <= datetime.now():
+            now = datetime.now(end.tzinfo) if end.tzinfo else datetime.now()
+            if end <= now:
                 return None
-            return end.strftime("%H:%M")
+            # the min-run clock is the process's local time: shown in HA's zone
+            aware = end if end.tzinfo else end.astimezone()
+            return dt_util.as_local(aware).strftime("%H:%M")
         except Exception:  # noqa: BLE001
             return None
 

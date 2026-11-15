@@ -41,6 +41,12 @@ START_MARGIN_K = 1.0
 #: (#1369) a switched tank holding its Legionella temperature switches off
 #: this far above the target; the tank holds the heat through the hold
 LEGIONELLA_HOLD_BAND_K = 0.5
+#: (#1369) a reading this far under the target is noise, not a dip: the hold
+#: goes on (a probe that wobbles 59.9/60.1 never finished a hold otherwise)
+LEGIONELLA_HOLD_DIP_K = 0.3
+#: (#1369) an early run does not pause this close to its due time — the
+#: minimum run would hold it on anyway, and it is due right after
+LEGIONELLA_EARLY_PAUSE_MIN_LEAD_H = 1.0
 LEGIONELLA_EARLY_PAUSE_HOLD_MIN = 15.0
 #: (#1369) A tank that draws power this long without warming this much has
 #: a fault (element, thermostat, a heat pump that is not heating the tank).
@@ -1011,17 +1017,20 @@ class HotWaterController(SwitchDevice):
                         f"your stop ({self.stop_entity} >= {self.stop_at:g}) is below it")
                 # (#1369) a dip below the target during the hold: the hold
                 # starts over when it is back — time under 60 °C is no hold
-                if self._legionella_hold_start is not None:
+                if (self._legionella_hold_start is not None and temp is not None
+                        and temp < float(self.legionella_target_temp) - LEGIONELLA_HOLD_DIP_K):
                     self._legionella_hold_start = None
                 started = self._legionella_started_at
                 if started is not None and (dt_util.now() - started) > timedelta(hours=LEGIONELLA_MAX_RUN_HOURS):
                     return await self._end_unreachable_legionella(
                         "timed_out", f"still below it after {LEGIONELLA_MAX_RUN_HOURS:g} h")
-                # (#1369) an EARLY run lives on its good hour: when the sun or
-                # the cheap price goes before it is due, it stops — not a
-                # disinfection, no block — and runs again at the due time
+                # (#1369) an EARLY run lives on its sunny hour: when the sun
+                # goes well before it is due, it stops — not a disinfection,
+                # no block — and runs again at the due time
+                hours_left = self.legionella_interval_hours - self.hours_since_legionella
                 if (getattr(self, "_legionella_early", False) and bad_held
-                        and not self.legionella_overdue):
+                        and not self.legionella_overdue
+                        and hours_left > LEGIONELLA_EARLY_PAUSE_MIN_LEAD_H):
                     self._end_legionella_run()
                     self._legionella_early = False
                     self._last_legionella_path = "early_paused"
