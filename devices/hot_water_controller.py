@@ -992,6 +992,9 @@ class HotWaterController(SwitchDevice):
         if self._legionella_cycle_active:
             # (#1369) once the hold runs, a reading inside the noise margin is
             # still the hold — so it also completes there
+            if temp is None and self._legionella_hold_start is not None:
+                # (#1369) an unread tank is no hold: it starts over when read
+                self._legionella_hold_start = None
             in_hold = temp is not None and (
                 temp >= self.legionella_target_temp
                 or (self._legionella_hold_start is not None
@@ -1039,6 +1042,8 @@ class HotWaterController(SwitchDevice):
                     # block: the due run still comes at its due time
                     self._end_legionella_run()
                     self._legionella_early = False
+                    # no new early start this interval: it could not finish
+                    self._early_spent_for = self._last_legionella_time
                     self._last_legionella_path = "early_timed_out"
                     return "legionella_early_paused"
                 if started is not None and (dt_util.now() - started) > timedelta(hours=LEGIONELLA_MAX_RUN_HOURS):
@@ -1063,7 +1068,8 @@ class HotWaterController(SwitchDevice):
         # before that, a sunny hour (``good_hour``) starts it early.
         early = (not self.legionella_overdue and good_held
                  and self.legionella_early_window
-                 and not self.legionella_blocked_by_stop)
+                 and not self.legionella_blocked_by_stop
+                 and getattr(self, "_early_spent_for", object()) != self._last_legionella_time)
         if self.legionella_overdue or early:
             if temp is None and early:
                 # an early start needs a reading; the due run says why not

@@ -354,3 +354,16 @@ test('(#1369) right after a stop, a pause while the tank wants heat is named at 
     const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 48, pause_until: '12:36', may_buy: false }, intent: {} };
     assert.equal(heaterSays(row, {}, false).key, 'hq_st_paused');
 });
+
+
+test('(#1369) noise at the restart line does not flip the line', () => {
+    for (const r of [50.8, 50.9, 51.0, 51.1, 51.2]) {
+        const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: r, may_buy: false } };
+        assert.equal(heaterSays(row, {}, false).key, 'hq_st_warm_again', String(r));
+    }
+});
+
+test('(#1369) a warm tank in its minimum pause is warm, not paused', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 50, reading_c: 51.5, pause_until: '13:20' }, intent: {} };
+    assert.notEqual(heaterSays(row, {}, false).key, 'hq_st_paused');
+});

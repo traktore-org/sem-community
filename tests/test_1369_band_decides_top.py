@@ -736,3 +736,30 @@ class TestRufloRound6:
         assert dev.own_run_needs_heat is False            # inside the margin: no restart
         out = await _chk(dev, False, 1 + dev.legionella_hold_minutes + 5)
         assert out == "legionella_complete"
+
+
+class TestRufloRound7:
+    @pytest.mark.asyncio
+    async def test_an_unread_tank_during_the_hold_is_no_hold(self):
+        dev = _tank(_Hass(), 58.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        await _chk(dev, False, 0)
+        dev.hass.set(SENSOR, "60.2", unit_of_measurement="°C")
+        await _chk(dev, False, 1)
+        dev.hass.set(SENSOR, "unavailable")
+        await _chk(dev, False, 20)
+        assert dev._legionella_hold_start is None
+        dev.hass.set(SENSOR, "60.1", unit_of_measurement="°C")
+        assert await _chk(dev, False, 40) != "legionella_complete"
+
+    @pytest.mark.asyncio
+    async def test_after_an_early_timeout_no_new_early_start_until_due(self):
+        dev = _tank(_Hass(), 45.0)
+        _since(dev, dev.legionella_interval_hours - 20)
+        await _chk(dev, True, 0)
+        await _chk(dev, True, 10)
+        end = 10 + int(hwc.LEGIONELLA_MAX_RUN_HOURS * 60) + 5
+        assert await _chk(dev, True, end) == "legionella_early_paused"
+        await _chk(dev, True, end + 1)
+        assert await _chk(dev, True, end + 15) is None     # no chained early run
+        assert dev.runs_without_surplus is False
