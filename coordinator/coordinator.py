@@ -7128,9 +7128,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return share, unable
 
     def _legionella_good_hour_now(self, true_surplus_w, tariff_data) -> bool:
-        """(#1369) A sunny or cheap hour for the hot water tank: the free
-        surplus (plus what the tank draws now, if it runs) covers its
-        rating, or its own price level is cheap. Anything unread is no."""
+        """(#1369) A sunny or cheap hour for the hot water tank: the loads'
+        free surplus (which already counts what running loads draw) covers
+        its rating, or its own price level is cheap. Anything unread is no."""
         try:
             dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
             if dev is None:
@@ -7144,11 +7144,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
             if rated <= 0 or true_surplus_w is None:
                 return False
-            own = 0.0
-            if getattr(dev, "is_active", False) is True:
-                watts = dev.observed_power_w() if hasattr(dev, "observed_power_w") else None
-                own = float(watts or 0.0)
-            return float(true_surplus_w) + own >= rated
+            # the loads' surplus already adds back what running loads draw
+            return float(true_surplus_w) >= rated
         except Exception:  # noqa: BLE001 — a wrong read is "not a good hour"
             return False
 
@@ -7481,6 +7478,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         Extracted from _async_update_data to reduce cyclomatic complexity.
         Each phase is independent and fails gracefully.
         """
+        # (#1369) "no" until this cycle's surplus pass says otherwise
+        self._legionella_good_hour = False
         # Forecast (Phase 0.3)
         forecast_data = ForecastSensorData()
         try:

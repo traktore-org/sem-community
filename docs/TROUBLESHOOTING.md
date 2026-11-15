@@ -667,14 +667,13 @@ SEM reads whether your car charges from the "Charger mode" sensor. The "Charger"
 
 ## The hot water tank draws power but does not warm
 
-**Cause:** SEM ran the tank for an hour, a power sensor or energy counter showed it drawing at least half its rating, and the water rose less than 1 °C while still below its target. Something between the power and the water is not working.
+**Cause:** SEM ran the tank's heater for two hours, a power sensor or energy counter showed it drawing at least half its rating, and the water rose less than 1 °C while still below its target. Something between the power and the water is not working.
 
 **Fix:**
 1. Check the heating element and the tank's own thermostat or safety cut-out.
-2. With a heat pump tank: check whether the pump is heating the house instead of the tank.
-3. Check that the thermometer SEM reads sits in the tank, not next to it.
+2. Check that the thermometer SEM reads sits in the tank, not next to it.
 
-The repair clears by itself once a later run warms the tank again. Tanks without a power sensor or energy counter are never checked.
+The repair clears by itself once a later run warms the tank again. Only heaters SEM switches on and off are checked; a tank driven by a setpoint (usually a heat pump) and tanks without a power sensor or energy counter are not.
 
 ---
 
@@ -683,7 +682,7 @@ The repair clears by itself once a later run warms the tank again. Tanks without
 **Cause:** The Legionella disinfection cycle triggers only when the configured interval (default 72 hours) has elapsed since the water last reached the disinfection target temperature (default 65°C).
 
 **Fix:**
-Since 2.3 a run due within the next day may start early, in an hour where the sun alone can carry the tank or the price is cheap. It never starts later than before.
+Since 2.3 a run due within the next day may start early, in an hour where the sun alone can carry the tank or the price is cheap. If that hour ends before the run is due, the early run stops and the run happens at the due time as before. It never starts later than before.
 
 1. Check how long since the last disinfection: look at the hot water sensor attributes or SEM debug logs for the hours-since-last-60C counter
 2. Verify the disinfection interval setting — if set to 168 hours (maximum), cycles will be infrequent

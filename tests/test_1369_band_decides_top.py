@@ -233,6 +233,7 @@ class TestTheGoodHour:
     def test_enough_sun_for_the_tank(self):
         f = self._coord(_tank(_Hass(), 48.0))
         assert f(3300.0) is True
+        assert f(3100.0) is False   # rated 3200: the surplus alone decides
         assert f(1500.0) is False
         assert f(None) is False
 
@@ -267,22 +268,24 @@ class TestHeatingWorks:
         hass, dev = self._running(40.0)
         assert self._go(dev, hass, 0, 40.0) is None
         assert self._go(dev, hass, 30, 40.3) is None
-        assert self._go(dev, hass, 61, 40.5) is True
+        assert self._go(dev, hass, 61, 40.5) is None      # an hour: not yet
+        assert self._go(dev, hass, 121, 40.6) is True
         assert dev.heating_fault is True
-        assert self._go(dev, hass, 70, 40.5) is None      # said once
-        assert self._go(dev, hass, 90, 41.6) is False     # warms again: clears
+        assert self._go(dev, hass, 130, 40.6) is None     # said once
+        assert self._go(dev, hass, 150, 41.7) is False    # warms again: clears
         assert dev.heating_fault is False
 
     def test_a_warming_tank_is_fine(self):
         hass, dev = self._running(40.0)
         self._go(dev, hass, 0, 40.0)
-        assert self._go(dev, hass, 61, 43.0) is None
+        assert self._go(dev, hass, 61, 43.0) is False   # first rise: clear once
+        assert self._go(dev, hass, 121, 45.0) is None
         assert dev.heating_fault is False
 
     def test_no_measured_draw_is_never_blamed(self):
         hass, dev = self._running(40.0, watts=0.0)
         self._go(dev, hass, 0, 40.0)
-        assert self._go(dev, hass, 120, 40.0) is None
+        assert self._go(dev, hass, 240, 40.0) is None
         dev2 = _tank(_Hass(), 40.0)       # no power sensor, no counter
         with patch.object(type(dev2), "is_active", new=True):
             assert dev2.check_heating_works() is None
@@ -290,4 +293,42 @@ class TestHeatingWorks:
     def test_near_its_target_no_fault(self):
         hass, dev = self._running(55.0)
         self._go(dev, hass, 0, 55.0)
-        assert self._go(dev, hass, 61, 55.2) is None   # top 56: within 2 K
+        assert self._go(dev, hass, 121, 55.2) is None   # top 56: within 2 K
+
+
+class TestReviewRound2:
+    @pytest.mark.asyncio
+    async def test_an_early_run_stops_when_its_good_hour_ends(self):
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        assert await dev.check_legionella_cycle(good_hour=True) == "legionella_started"
+        assert await dev.check_legionella_cycle(good_hour=True) == "legionella_heating"
+        assert await dev.check_legionella_cycle(good_hour=False) == "legionella_early_paused"
+        assert dev.runs_without_surplus is False
+        assert dev._legionella_blocked_until is None      # no penalty
+        # and at the due time it runs as before
+        _since(dev, dev.legionella_interval_hours + 1)
+        assert await dev.check_legionella_cycle(good_hour=False) == "legionella_started"
+        assert await dev.check_legionella_cycle(good_hour=False) == "legionella_heating"
+
+    def test_a_restart_still_clears_an_old_repair(self):
+        hass = _Hass()
+        dev = _tank(hass, 40.0)
+        dev.power_entity_id = "sensor.boiler_power"
+        hass.set("sensor.boiler_power", "3200", unit_of_measurement="W")
+        t0 = hwc.dt_util.now()
+        for m, temp in ((0, 40.0), (30, 41.2)):
+            hass.set(SENSOR, str(temp), unit_of_measurement="°C")
+            with patch.object(hwc.dt_util, "now", return_value=t0 + timedelta(minutes=m)), \
+                    patch.object(type(dev), "is_active", new=True):
+                out = dev.check_heating_works()
+        assert out is False   # fresh process, tank warms: the clear goes out once
+
+    def test_a_setpoint_tank_is_not_checked(self):
+        hass = _Hass()
+        dev = _tank(hass, 40.0, entity_id="water_heater.dhw")
+        dev.power_entity_id = "sensor.hp_power"
+        hass.set("sensor.hp_power", "3200", unit_of_measurement="W")
+        with patch.object(type(dev), "is_active", new=True):
+            assert dev.check_heating_works() is None
+        assert dev._heat_check is None
