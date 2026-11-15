@@ -205,7 +205,7 @@ class HotWaterController(SwitchDevice):
             abs(target - boost) <= _BOOST_SETPOINT_MATCH_K
             # (#1369) a band tank's boost is sent at the band's top
             for boost in (self.solar_target_temp, self.legionella_target_temp,
-                          self.band_top_c() or self.solar_target_temp)
+                          self._band_fields_top_c() or self.solar_target_temp)
         )
 
     def adopt_if_running(self) -> bool:
@@ -301,18 +301,35 @@ class HotWaterController(SwitchDevice):
                 return LEGIONELLA_HOLD_MINUTES[temp]
         return 3  # 80°C+ = 3 minutes
 
-    def band_top_c(self) -> Optional[float]:
-        """(#1369) The top a comfort band sets — Keep at + Extra, in °C —
-        or None when the tank has no usable band (fields unset, the band
-        misconfigured, or its thermometer silent: then it is disengaged and
-        the old Solar Heating Target caps the tank as before)."""
-        state_fn = getattr(self, "_comfort_band_state", None)
-        if not callable(state_fn) or state_fn() == "disengaged":
+    def _band_fields_top_c(self) -> Optional[float]:
+        """(#1369) The top the band's FIELDS set — Keep at + Extra in °C,
+        capped at the Legionella target (the hottest SEM ever heats a tank)
+        — whatever the thermometer reads now. None without a heating band
+        whose limit sits below its target."""
+        t, lim = getattr(self, "comfort_target", None), getattr(self, "comfort_limit", None)
+        if not (t and lim):
             return None
         if getattr(self, "_comfort_direction", lambda: "heat")() != "heat":
             return None
-        target_c, offset_c, _limit_c = self._comfort_thresholds_c()
-        return float(target_c) + max(0.0, float(offset_c or 0.0))
+        try:
+            target_c, offset_c, limit_c = self._comfort_thresholds_c()
+            top = float(target_c) + max(0.0, float(offset_c or 0.0))
+        except (TypeError, ValueError, AttributeError):
+            return None
+        if limit_c >= target_c:
+            return None   # misconfigured: the band is disengaged
+        return min(top, float(self.legionella_target_temp))
+
+    def band_top_c(self) -> Optional[float]:
+        """(#1369) The top a USABLE comfort band sets, or None when the tank
+        has no band, the band is misconfigured or its thermometer is silent
+        (then it is disengaged and the old Solar Heating Target caps the
+        tank as before)."""
+        # ``comfort_state`` is the band as the engine sees it: disengaged
+        # while away too, so away keeps the old target (#594)
+        if getattr(self, "comfort_state", "disengaged") == "disengaged":
+            return None
+        return self._band_fields_top_c()
 
     def normal_target_temp(self) -> float:
         """(#1369) The cutoff outside Legionella and the vacation dump: the
@@ -398,7 +415,8 @@ class HotWaterController(SwitchDevice):
     def is_temperature_safe(self) -> bool:
         """Check if temperature is below the active target.
 
-        During normal solar boost: cutoff is solar_target_temp.
+        During normal solar boost: cutoff is solar_target_temp — or, with a
+        usable comfort band, the band's top (Keep at + Extra, #1369).
         During Legionella cycle: cutoff is legionella_target_temp.
 
         Records which branch fired on
@@ -449,6 +467,11 @@ class HotWaterController(SwitchDevice):
         # caps only a tank without one
         top = self.band_top_c()
         if top is not None:
+            # the band's own thermometer decides, the same reading that
+            # engaged it (the tank sensor answers when they are the same)
+            band_temp = self._comfort_reading()
+            if band_temp is not None:
+                temp = float(band_temp)
             if temp < top:
                 self._last_temperature_safety_path = "normal_below_band_top"
                 return True

@@ -123,3 +123,43 @@ async def test_the_engine_heats_past_50_on_the_sun():
                     daylight_remaining_s=3600.0, solar_w=5000.0)
     assert hass.calls("turn_on"), hass.services.async_call.await_args_list
     assert dev.is_active
+
+
+class TestReviewFindings:
+    """(#1369 review) restart adoption, a cap, one thermometer."""
+
+    def test_a_restart_readopts_even_while_the_band_thermometer_is_silent(self):
+        hass = _Hass()
+        dev = _tank(hass, 51.0, entity_id="water_heater.dhw")
+        dev.comfort_entity = "sensor.band_not_up_yet"
+        hass.set("water_heater.dhw", "eco", current_temperature=51.0,
+                 temperature=56.0, operation_mode="eco")
+        assert dev.band_top_c() is None          # disengaged for the cutoff
+        assert dev._adoptable_now() is True      # but SEM's boost is still SEM's
+
+    def test_the_top_never_passes_the_legionella_target(self):
+        dev = _tank(_Hass(), 61.0)
+        dev.comfort_target, dev.comfort_offset = 70.0, 10.0
+        assert dev.band_top_c() == 60.0
+        assert dev.is_temperature_safe() is False
+
+    def test_the_cutoff_reads_the_band_thermometer(self):
+        hass = _Hass()
+        dev = _tank(hass, 51.0)
+        dev.comfort_entity = "sensor.band"
+        hass.set("sensor.band", "56.5", unit_of_measurement="°C")
+        # the tank sensor says 51, the band's own thermometer says 56.5
+        assert dev.is_temperature_safe() is False
+        assert dev._last_temperature_safety_path == "normal_at_band_top"
+
+    def test_a_misconfigured_band_has_no_top(self):
+        dev = _tank(_Hass(), 51.0)
+        dev.comfort_limit = 60.0   # limit above Keep at: disengaged
+        assert dev._band_fields_top_c() is None
+        assert dev.band_top_c() is None
+
+    def test_away_keeps_the_old_target(self):
+        dev = _tank(_Hass(), 51.0)
+        dev.vacation = True
+        assert dev.band_top_c() is None
+        assert dev._active_target_temp() == 50.0
