@@ -291,6 +291,8 @@ class HotWaterController(SwitchDevice):
         if self._legionella_blocked_until is not None and dt_util.now() < self._legionella_blocked_until:
             return False
         h = self.hours_since_legionella
+        if self.legionella_blocked_by_stop:
+            return False   # the run cannot finish: nothing to start early
         return (self.legionella_interval_hours - LEGIONELLA_EARLY_WINDOW_H) < h <= self.legionella_interval_hours
 
     def check_heating_works(self) -> Optional[bool]:
@@ -400,6 +402,31 @@ class HotWaterController(SwitchDevice):
         if limit_c >= target_c:
             return None   # misconfigured: the band is disengaged
         return min(top, float(self.legionella_target_temp))
+
+    def user_stop_c(self) -> Optional[float]:
+        """(#1369) The user's own "Stop when" on the tank's temperature, in
+        °C — when it reads the tank thermometer or the band's. None for a
+        stop on any other sensor (that one says nothing about the tank)."""
+        entity = getattr(self, "stop_entity", "") or ""
+        at = float(getattr(self, "stop_at", 0.0) or 0.0)
+        if not entity or at <= 0:
+            return None
+        if entity not in {getattr(self, "temperature_entity_id", None),
+                          getattr(self, "comfort_entity", None)}:
+            return None
+        try:
+            if self._install_unit_is_f():
+                return (at - 32.0) * 5.0 / 9.0
+        except Exception:  # noqa: BLE001 — no unit read: as typed
+            pass
+        return at
+
+    @property
+    def legionella_blocked_by_stop(self) -> bool:
+        """(#1369) The user's stop sits below the Legionella target: a run
+        can never reach it. SEM says so and starts no early run for it."""
+        stop = self.user_stop_c()
+        return stop is not None and stop < float(self.legionella_target_temp)
 
     def band_top_c(self) -> Optional[float]:
         """(#1369) The top a USABLE comfort band sets, or None when the tank
@@ -942,7 +969,8 @@ class HotWaterController(SwitchDevice):
         # 3. Check if overdue — the run is due. (#1369) In the last day
         # before that, a sunny or cheap hour (``good_hour``) starts it early.
         early = (not self.legionella_overdue and good_held
-                 and self.legionella_early_window)
+                 and self.legionella_early_window
+                 and not self.legionella_blocked_by_stop)
         if self.legionella_overdue or early:
             if temp is None and early:
                 # an early start needs a reading; the due run says why not

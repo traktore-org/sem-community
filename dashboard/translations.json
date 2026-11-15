@@ -2205,7 +2205,8 @@
     "hq_st_legionella_early": "Cyklus proti legionele, spuštěn dříve ve slunečné nebo levné hodině",
     "hq_st_legionella_soon": "Cyklus proti legionele je na řadě do jednoho dne. Spustí se v příští slunečné nebo levné hodině.",
     "hq_st_no_rise": "Ohřívá, ale neohřeje se. Viz Opravy.",
-    "why_reason_legionella_early": "Cyklus proti legionele je na řadě do jednoho dne a tato hodina je slunečná nebo levná, proto se spouští teď."
+    "why_reason_legionella_early": "Cyklus proti legionele je na řadě do jednoho dne a tato hodina je slunečná nebo levná, proto se spouští teď.",
+    "hq_st_legionella_blocked": "Vaše zastavení na {stop} je pod cílem proti legionele {target}. SEM nemůže zásobník dezinfikovat."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4413,7 +4414,8 @@
     "hq_st_legionella_early": "Legionella-kørsel, startet tidligt i en solrig eller billig time",
     "hq_st_legionella_soon": "Legionella-kørsel skal ske inden for et døgn. Den starter i næste solrige eller billige time.",
     "hq_st_no_rise": "Varmer, men bliver ikke varm. Se Reparationer.",
-    "why_reason_legionella_early": "Legionella-kørslen skal ske inden for et døgn, og denne time er solrig eller billig, så den starter nu."
+    "why_reason_legionella_early": "Legionella-kørslen skal ske inden for et døgn, og denne time er solrig eller billig, så den starter nu.",
+    "hq_st_legionella_blocked": "Dit stop ved {stop} er under legionellamålet {target}. SEM kan ikke desinficere beholderen."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6621,7 +6623,8 @@
     "hq_st_legionella_early": "Legionellen-Lauf, früh gestartet in einer sonnigen oder günstigen Stunde",
     "hq_st_legionella_soon": "Legionellen-Lauf innerhalb eines Tages fällig. Er startet in der nächsten sonnigen oder günstigen Stunde.",
     "hq_st_no_rise": "Heizt, wird aber nicht warm. Siehe Reparaturen.",
-    "why_reason_legionella_early": "Der Legionellen-Lauf ist innerhalb eines Tages fällig und diese Stunde ist sonnig oder günstig, darum startet er jetzt."
+    "why_reason_legionella_early": "Der Legionellen-Lauf ist innerhalb eines Tages fällig und diese Stunde ist sonnig oder günstig, darum startet er jetzt.",
+    "hq_st_legionella_blocked": "Dein Stopp bei {stop} liegt unter dem Legionellen-Ziel {target}. SEM kann den Speicher nicht desinfizieren."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8829,7 +8832,8 @@
     "hq_st_legionella_early": "Legionella run, started early in a sunny or cheap hour",
     "hq_st_legionella_soon": "Legionella run due within a day. It starts in the next sunny or cheap hour.",
     "hq_st_no_rise": "Heats but does not warm. See Repairs.",
-    "why_reason_legionella_early": "Its Legionella heat-up is due within a day and this hour is sunny or cheap, so it starts now."
+    "why_reason_legionella_early": "Its Legionella heat-up is due within a day and this hour is sunny or cheap, so it starts now.",
+    "hq_st_legionella_blocked": "Your stop at {stop} is below the Legionella target {target}. SEM cannot disinfect the tank."
   },
   "es": {
     "% of limit": "% del límite",
@@ -11037,7 +11041,8 @@
     "hq_st_legionella_early": "Ciclo antilegionela, iniciado antes en una hora de sol o barata",
     "hq_st_legionella_soon": "Ciclo antilegionela previsto en un día. Empieza en la próxima hora de sol o barata.",
     "hq_st_no_rise": "Calienta pero no sube de temperatura. Ver Reparaciones.",
-    "why_reason_legionella_early": "Su ciclo antilegionela toca en un día y esta hora tiene sol o es barata, así que empieza ahora."
+    "why_reason_legionella_early": "Su ciclo antilegionela toca en un día y esta hora tiene sol o es barata, así que empieza ahora.",
+    "hq_st_legionella_blocked": "Tu parada en {stop} está por debajo del objetivo antilegionela {target}. SEM no puede desinfectar el termo."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13245,7 +13250,8 @@
     "hq_st_legionella_early": "Legionellakierto, aloitettu aikaisin aurinkoisena tai halpana tuntina",
     "hq_st_legionella_soon": "Legionellakierto erääntyy vuorokauden sisällä. Se alkaa seuraavana aurinkoisena tai halpana tuntina.",
     "hq_st_no_rise": "Lämmittää mutta ei lämpene. Katso Korjaukset.",
-    "why_reason_legionella_early": "Legionellakierto erääntyy vuorokauden sisällä ja tämä tunti on aurinkoinen tai halpa, joten se alkaa nyt."
+    "why_reason_legionella_early": "Legionellakierto erääntyy vuorokauden sisällä ja tämä tunti on aurinkoinen tai halpa, joten se alkaa nyt.",
+    "hq_st_legionella_blocked": "Pysäytyksesi {stop} on legionellatavoitteen {target} alapuolella. SEM ei voi desinfioida varaajaa."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15453,7 +15459,8 @@
     "hq_st_legionella_early": "Cycle anti-légionelles, lancé tôt dans une heure ensoleillée ou bon marché",
     "hq_st_legionella_soon": "Cycle anti-légionelles dû dans la journée. Il démarre à la prochaine heure ensoleillée ou bon marché.",
     "hq_st_no_rise": "Chauffe mais ne se réchauffe pas. Voir Réparations.",
-    "why_reason_legionella_early": "Son cycle anti-légionelles est dû dans la journée et cette heure est ensoleillée ou bon marché, il démarre donc maintenant."
+    "why_reason_legionella_early": "Son cycle anti-légionelles est dû dans la journée et cette heure est ensoleillée ou bon marché, il démarre donc maintenant.",
+    "hq_st_legionella_blocked": "Votre arrêt à {stop} est sous la cible anti-légionelles {target}. SEM ne peut pas désinfecter le ballon."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17661,7 +17668,8 @@
     "hq_st_legionella_early": "Legionella-ciklus, korábban indítva napos vagy olcsó órában",
     "hq_st_legionella_soon": "Legionella-ciklus egy napon belül esedékes. A következő napos vagy olcsó órában indul.",
     "hq_st_no_rise": "Fűt, de nem melegszik. Lásd Javítások.",
-    "why_reason_legionella_early": "A legionella-ciklus egy napon belül esedékes, és ez az óra napos vagy olcsó, ezért most indul."
+    "why_reason_legionella_early": "A legionella-ciklus egy napon belül esedékes, és ez az óra napos vagy olcsó, ezért most indul.",
+    "hq_st_legionella_blocked": "A leállításod {stop} értéke a legionella-cél ({target}) alatt van. A SEM nem tudja fertőtleníteni a tárolót."
   },
   "it": {
     "% of limit": "% del limite",
@@ -19869,7 +19877,8 @@
     "hq_st_legionella_early": "Ciclo antilegionella, avviato prima in un'ora di sole o economica",
     "hq_st_legionella_soon": "Ciclo antilegionella previsto entro un giorno. Parte alla prossima ora di sole o economica.",
     "hq_st_no_rise": "Riscalda ma non si scalda. Vedi Riparazioni.",
-    "why_reason_legionella_early": "Il ciclo antilegionella è previsto entro un giorno e quest'ora è di sole o economica, quindi parte ora."
+    "why_reason_legionella_early": "Il ciclo antilegionella è previsto entro un giorno e quest'ora è di sole o economica, quindi parte ora.",
+    "hq_st_legionella_blocked": "Il tuo stop a {stop} è sotto l'obiettivo antilegionella {target}. SEM non può disinfettare il bollitore."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -22077,7 +22086,8 @@
     "hq_st_legionella_early": "Legionella-run, vroeg gestart in een zonnig of goedkoop uur",
     "hq_st_legionella_soon": "Legionella-run binnen een dag nodig. Hij start in het volgende zonnige of goedkope uur.",
     "hq_st_no_rise": "Verwarmt maar wordt niet warm. Zie Reparaties.",
-    "why_reason_legionella_early": "De legionella-run is binnen een dag nodig en dit uur is zonnig of goedkoop, dus hij start nu."
+    "why_reason_legionella_early": "De legionella-run is binnen een dag nodig en dit uur is zonnig of goedkoop, dus hij start nu.",
+    "hq_st_legionella_blocked": "Je stop op {stop} ligt onder het legionelladoel {target}. SEM kan de boiler niet desinfecteren."
   },
   "no": {
     "% of limit": "% av grense",
@@ -24285,7 +24295,8 @@
     "hq_st_legionella_early": "Legionellakjøring, startet tidlig i en solrik eller billig time",
     "hq_st_legionella_soon": "Legionellakjøring skal skje innen et døgn. Den starter i neste solrike eller billige time.",
     "hq_st_no_rise": "Varmer, men blir ikke varm. Se Reparasjoner.",
-    "why_reason_legionella_early": "Legionellakjøringen skal skje innen et døgn, og denne timen er solrik eller billig, så den starter nå."
+    "why_reason_legionella_early": "Legionellakjøringen skal skje innen et døgn, og denne timen er solrik eller billig, så den starter nå.",
+    "hq_st_legionella_blocked": "Stoppet ditt ved {stop} er under legionellamålet {target}. SEM kan ikke desinfisere berederen."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26493,7 +26504,8 @@
     "hq_st_legionella_early": "Cykl antylegionella, uruchomiony wcześniej w słonecznej lub taniej godzinie",
     "hq_st_legionella_soon": "Cykl antylegionella wypada w ciągu doby. Zacznie się w następnej słonecznej lub taniej godzinie.",
     "hq_st_no_rise": "Grzeje, ale się nie nagrzewa. Zobacz Naprawy.",
-    "why_reason_legionella_early": "Cykl antylegionella wypada w ciągu doby, a ta godzina jest słoneczna lub tania, więc startuje teraz."
+    "why_reason_legionella_early": "Cykl antylegionella wypada w ciągu doby, a ta godzina jest słoneczna lub tania, więc startuje teraz.",
+    "hq_st_legionella_blocked": "Twój stop przy {stop} jest poniżej celu antylegionella {target}. SEM nie może zdezynfekować zasobnika."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28701,7 +28713,8 @@
     "hq_st_legionella_early": "Ciclo anti-legionela, iniciado mais cedo numa hora de sol ou barata",
     "hq_st_legionella_soon": "Ciclo anti-legionela previsto dentro de um dia. Começa na próxima hora de sol ou barata.",
     "hq_st_no_rise": "Aquece mas não sobe de temperatura. Ver Reparações.",
-    "why_reason_legionella_early": "O ciclo anti-legionela está previsto dentro de um dia e esta hora tem sol ou é barata, por isso começa agora."
+    "why_reason_legionella_early": "O ciclo anti-legionela está previsto dentro de um dia e esta hora tem sol ou é barata, por isso começa agora.",
+    "hq_st_legionella_blocked": "A tua paragem em {stop} está abaixo do objetivo anti-legionela {target}. O SEM não pode desinfetar o depósito."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30909,7 +30922,8 @@
     "hq_st_legionella_early": "Ciclu anti-legionella, pornit devreme într-o oră însorită sau ieftină",
     "hq_st_legionella_soon": "Ciclul anti-legionella e scadent într-o zi. Pornește în următoarea oră însorită sau ieftină.",
     "hq_st_no_rise": "Încălzește, dar nu se încălzește apa. Vezi Reparații.",
-    "why_reason_legionella_early": "Ciclul anti-legionella e scadent într-o zi și ora aceasta e însorită sau ieftină, așa că pornește acum."
+    "why_reason_legionella_early": "Ciclul anti-legionella e scadent într-o zi și ora aceasta e însorită sau ieftină, așa că pornește acum.",
+    "hq_st_legionella_blocked": "Oprirea ta la {stop} e sub ținta anti-legionella {target}. SEM nu poate dezinfecta boilerul."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -33117,7 +33131,8 @@
     "hq_st_legionella_early": "Legionellakörning, startad tidigt under en solig eller billig timme",
     "hq_st_legionella_soon": "Legionellakörning ska ske inom ett dygn. Den startar nästa soliga eller billiga timme.",
     "hq_st_no_rise": "Värmer men blir inte varm. Se Reparationer.",
-    "why_reason_legionella_early": "Legionellakörningen ska ske inom ett dygn och den här timmen är solig eller billig, så den startar nu."
+    "why_reason_legionella_early": "Legionellakörningen ska ske inom ett dygn och den här timmen är solig eller billig, så den startar nu.",
+    "hq_st_legionella_blocked": "Ditt stopp vid {stop} är under legionellamålet {target}. SEM kan inte desinficera beredaren."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -35325,6 +35340,7 @@
     "hq_st_legionella_early": "防军团菌运行，已在晴天或低价时段提前开始",
     "hq_st_legionella_soon": "防军团菌运行将在一天内到期，将在下一个晴天或低价时段开始。",
     "hq_st_no_rise": "正在加热但水温不升。请查看修复。",
-    "why_reason_legionella_early": "防军团菌加热将在一天内到期，且当前时段晴天或低价，因此现在开始。"
+    "why_reason_legionella_early": "防军团菌加热将在一天内到期，且当前时段晴天或低价，因此现在开始。",
+    "hq_st_legionella_blocked": "你设置的停止温度 {stop} 低于防军团菌目标 {target}。SEM 无法对水箱消毒。"
   }
 }

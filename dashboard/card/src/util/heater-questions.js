@@ -94,6 +94,10 @@ export function heaterSays(row, live = {}, running = false) {
     if (reading === null) return idle('hq_st_no_reading', {}, 'warn');
     // (#1369) a Legionella run within a day may start in the next sunny or
     // cheap hour: say so, so a run at an odd hour is not a surprise
+    // (#1369) the user's stop sits below the Legionella target: say it once
+    if (c.legionella_blocked === true && !cool && num(c.stop_c) !== null && num(c.legionella_c) !== null) {
+        return idle('hq_st_legionella_blocked', { stop: T(num(c.stop_c)), target: T(num(c.legionella_c)) }, 'warn');
+    }
     if (c.own_run_soon === true && !cool) return idle('hq_st_legionella_soon');
     // past Keep at, on the comfortable side
     if (cool ? reading <= keep : reading >= keep) return idle('hq_st_warm', { reading: T(reading) });

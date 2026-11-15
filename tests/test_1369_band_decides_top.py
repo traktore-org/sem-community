@@ -429,3 +429,42 @@ class TestReviewRound3:
         assert again.runs_without_surplus is False
         assert getattr(again, "_legionella_early", False) is False
         assert await _chk(again, False, 11) is None      # not due: no run
+
+
+class TestLostcontrolsSetup:
+    """(#1369 challenge against #1102) Keep at 52, Extra 4, Run now past 36,
+    a switch boiler, Legionella target 60 — and a "Stop when" at 53 °C on
+    the tank's own thermometer."""
+
+    def _his(self, temp=50.0):
+        dev = _tank(_Hass(), temp)
+        dev.stop_entity, dev.stop_at = SENSOR, 53.0
+        return dev
+
+    def test_the_card_names_the_real_top(self):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry)
+        lines = UnifiedDeviceRegistry._band_lines(self._his())
+        assert lines["max_c"] == 53.0           # his stop, not 56
+        assert lines["legionella_blocked"] is True
+        assert (lines["stop_c"], lines["legionella_c"]) == (53.0, 60.0)
+
+    @pytest.mark.asyncio
+    async def test_no_early_run_that_could_never_finish(self):
+        dev = self._his(48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        assert dev.legionella_early_window is False
+        await _chk(dev, True, 0)
+        assert await _chk(dev, True, 10) is None
+        assert dev.runs_without_surplus is False
+
+    def test_a_stop_on_another_sensor_changes_nothing(self):
+        dev = self._his()
+        dev.stop_entity = "sensor.room"
+        assert dev.user_stop_c() is None
+        assert dev.legionella_blocked_by_stop is False
+
+    def test_a_stop_above_the_target_does_not_block(self):
+        dev = self._his()
+        dev.stop_at = 62.0
+        assert dev.legionella_blocked_by_stop is False

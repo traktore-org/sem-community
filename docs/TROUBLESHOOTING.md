@@ -686,9 +686,10 @@ Since 2.3 a run due within the next day may start early, in an hour where the su
 **Fix:**
 1. Check how long since the last disinfection: look at the hot water sensor attributes or SEM debug logs for the hours-since-last-60C counter
 2. Verify the disinfection interval setting — if set to 168 hours (maximum), cycles will be infrequent
-3. Confirm the temperature sensor is accurate — if the sensor falsely reports temperatures above 60°C, SEM will reset the counter and skip the cycle
-4. Check that the hot water entity is available and controllable — SEM cannot force heating if the entity is unavailable or in an error state
-5. Enable debug logging (see below) and search for `legionella` or `hot_water` in the logs to trace the cycle state
+3. Check *Stop when* on the boiler: a stop on the tank's temperature below the Legionella target means the run can never finish. The card says so; raise the stop or lower the target.
+4. Confirm the temperature sensor is accurate — if the sensor falsely reports temperatures above 60°C, SEM will reset the counter and skip the cycle
+5. Check that the hot water entity is available and controllable — SEM cannot force heating if the entity is unavailable or in an error state
+6. Enable debug logging (see below) and search for `legionella` or `hot_water` in the logs to trace the cycle state
 
 ---
 

@@ -2738,10 +2738,26 @@ class UnifiedDeviceRegistry:
                     top = float(_t)
             except Exception:  # noqa: BLE001 — the typed top stands
                 pass
+        # (#1369) the user's own stop on the tank's temperature ends a run
+        # first when it is lower: the card names the real top
+        _stop_fn = getattr(live, "user_stop_c", None)
+        _stop = None
+        if callable(_stop_fn) and not cooling:
+            try:
+                _stop = _stop_fn()
+            except Exception:  # noqa: BLE001
+                _stop = None
+            if _stop is not None:
+                top = min(top, float(_stop))
         return {
             "keep_c": round(keep, 2),
             "start_c": round(keep + sign * gap, 2),
             "max_c": round(top, 2),
+            # (#1369) a stop below the Legionella target: no disinfection
+            "legionella_blocked": getattr(live, "legionella_blocked_by_stop", False) is True,
+            "stop_c": (round(float(_stop), 1) if _stop is not None else None),
+            "legionella_c": (round(float(getattr(live, "legionella_target_temp")), 1)
+                             if getattr(live, "legionella_target_temp", None) else None),
             "limit_c": round(limit, 2),
             # (#1102) the device's own run — the tank heats past Keep at
             "own_run": getattr(live, "runs_without_surplus", False) is True,
