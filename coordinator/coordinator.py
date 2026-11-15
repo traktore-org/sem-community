@@ -7099,7 +7099,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         able, unable = [], []
         for bid, ad in adapters:
             try:
-                ok = getattr(ad, "supports_forced_charge")
+                ok = ad.supports_forced_charge
             except Exception:  # noqa: BLE001 — could not ask
                 return None
             if not isinstance(ok, bool):
