@@ -354,7 +354,7 @@ test('(#1369) a warm tank in its minimum pause is warm, not paused', () => {
 
 
 test('(#1369) noise at Keep at and at the restart line does not flip the sentence', () => {
-    const say = (r, prev) => heaterSays({ comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: r, may_buy: false } }, { prevKey: prev }, false).key;
+    const say = (r, prev) => heaterSays({ comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: r, may_buy: true } }, { prevKey: prev }, false).key;
     // entering needs the line itself …
     assert.equal(say(51.9, ''), 'hq_st_warm_again');
     assert.equal(say(52.0, ''), 'hq_st_warm');
@@ -364,8 +364,8 @@ test('(#1369) noise at Keep at and at the restart line does not flip the sentenc
     assert.equal(say(51.7, 'hq_st_warm'), 'hq_st_warm_again');
     prev = 'hq_st_warm_again';
     for (const r of [50.9, 51.05, 50.85]) { prev = say(r, prev); assert.equal(prev, 'hq_st_warm_again', String(r)); }
-    assert.equal(say(50.7, 'hq_st_warm_again'), 'hq_st_waits_sun');
-    assert.equal(say(50.9, ''), 'hq_st_waits_sun');     // never "heats again below 51" when below it
+    assert.equal(say(50.7, 'hq_st_warm_again'), 'hq_st_below_none');
+    assert.equal(say(50.9, ''), 'hq_st_below_none');     // never "heats again below 51" when below it
 });
 
 test('(#1369) the pause is named only when SEM wants to start', () => {
@@ -391,4 +391,17 @@ test('(#1369) a short gap in the reading during a Legionella run keeps "Legionel
     assert.equal(heaterSays(row, {}, false).key, 'hq_st_legionella');
     const ended = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: null, own_run: false } };
     assert.equal(heaterSays(ended, {}, false).key, 'hq_st_no_reading');
+});
+
+
+test('(#1369) solar only between the restart line and Keep at is just warm', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 51.5, may_buy: false } };
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_warm');
+});
+
+test('(#1369) a too-cold run past its limit says it heats to Keep at', () => {
+    const cold = { comfort: { keep_c: 52, max_c: 56, start_c: 51, limit_c: 36, reading_c: 35.5, state: 'forced' }, intent: { code: 'comfort_floor' } };
+    assert.equal(heaterSays(cold, {}, true).key, 'hq_st_too_cold');
+    const past = { comfort: { keep_c: 52, max_c: 56, start_c: 51, limit_c: 36, reading_c: 50.5, state: 'willing' }, intent: { code: 'comfort_floor' } };
+    assert.equal(heaterSays(past, {}, true).key, 'hq_st_heating_to');
 });

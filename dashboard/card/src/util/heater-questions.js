@@ -78,7 +78,14 @@ export function heaterSays(row, live = {}, running = false) {
     if (running) {
         if (c.own_run_early === true || code === 'legionella_early') return p('hq_st_legionella_early', {}, 'ok');
         if (c.own_run || code === 'legionella') return p('hq_st_legionella', {}, 'ok');
-        if (code === 'comfort_floor' || code === 'comfort_floor_away' || c.state === 'forced') return p('hq_st_too_cold', {}, 'warn');
+        if (code === 'comfort_floor' || code === 'comfort_floor_away' || c.state === 'forced') {
+            // (#1369) too cold only while it is: past the limit the same run
+            // heats on to Keep at, and says that
+            const lim = num(c.limit_c);
+            const past = c.state !== 'forced' && lim !== null && reading !== null
+                && (cool ? reading < lim : reading > lim);
+            return past ? p('hq_st_heating_to', { keep: T(keep) }, 'ok') : p('hq_st_too_cold', {}, 'warn');
+        }
         if (code === 'comfort_goal_battery' || (code !== 'comfort_goal' && intent.source === 'tier2_battery')) {
             return p('hq_st_heating_battery', { keep: T(keep) }, 'ok');
         }
@@ -119,7 +126,11 @@ export function heaterSays(row, live = {}, running = false) {
     if (cool ? reading <= keep + kStick : reading >= keep - kStick) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
     const line = start === null ? keep : start;
     const lStick = stick(['hq_st_warm_again', 'hq_st_warm', 'hq_st_cool_again', 'hq_st_cool']);
-    if (cool ? reading < line + lStick : reading > line - lStick) return withSoon(idle('hq_st_warm_again', { start: T(line) }));
+    if (cool ? reading < line + lStick : reading > line - lStick) {
+        // (#1369) solar only: nothing "heats again" at a line — the sun does
+        if (c.may_buy === false && c.may_use_battery !== true) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
+        return withSoon(idle('hq_st_warm_again', { start: T(line) }));
+    }
     if (live.plannedAt) return withSoon(idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt }));
     // (#1349) the house battery reaches Keep at tonight — or is at its reserve
     if (c.may_use_battery === true) {

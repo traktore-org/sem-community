@@ -1271,6 +1271,18 @@ def compute_load_intent(
                           RC.LOAD_COMFORT_GOAL,
                           command_w=paid_command if _full is None else _full)
 
+    # (#1369) A goal run its block started goes on to Keep at while the hour
+    # is still cheap. The block is an ESTIMATE made at plan time (a learned
+    # rate or one hour, times the configured rating): when it was too short
+    # the run ended a few degrees under Keep at — the reporter's 50 °C for
+    # Keep at 52 (#1102). Never into an hour that is not cheap.
+    if (active and band is not None and band[0] == "willing" and band[1]
+            and getattr(device, "_comfort_goal_run", False) is True
+            and price_is_cheap and _goal_may_buy(device)):
+        return LoadIntent(True, _heater_claim(device, True, held), "cheap_grid",
+                          "heats on to its keep-at temperature in the cheap hour",
+                          RC.LOAD_COMFORT_GOAL)
+
     # (#1349) Keep at from the house battery: "Finish overnight from:
     # Battery" on a heater whose thermometer leads. The run-time clause
     # below is closed to it (the band leads, so it has no deficit), so the
@@ -1397,6 +1409,9 @@ def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> N
     device._comfort_floor_run = bool(
         intent.on and intent.code in (RC.LOAD_COMFORT_FLOOR,
                                       RC.LOAD_COMFORT_FLOOR_AWAY))
+    # (#1369) …and one the plan's comfort block started
+    device._comfort_goal_run = bool(
+        intent.on and intent.code == RC.LOAD_COMFORT_GOAL)
 
 
 def _clear_source_markers(device: "ControllableDevice") -> None:
@@ -1405,6 +1420,7 @@ def _clear_source_markers(device: "ControllableDevice") -> None:
     device._offpeak_forced = False
     device._offpeak_forced_date = None
     device._comfort_floor_run = False
+    device._comfort_goal_run = False
 
 
 def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
