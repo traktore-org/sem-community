@@ -11050,11 +11050,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if expected_consumption <= 0:
             expected_consumption = 12.0
 
-        # Break-even rates: derive from the actual day-ahead series.
-        # The legacy code sampled get_price_at(today 02:00 / 14:00) — both
-        # already in the past at the 21:00 trigger, so dynamic tariffs fed
-        # the break-even with stale morning prices (or None once the slots
-        # rolled off, crashing the scheduler's division).
+        # Break-even rates: the next charge window and the next daytime,
+        # from the provider. (#1362) Never a sample of today's clock: the
+        # old get_price_at(today 02:00 / 14:00) read the day just gone at
+        # the 21:00 trigger, and 14:00 is off-peak in a Polish G12w
+        # tariff, so a calendar or static tariff asked the wrong hour of
+        # the wrong day. Every provider answers both questions now (the
+        # base class asks get_price_at hour by hour); one that cannot
+        # answers None and the configured rates stand in.
         off_peak_rate = None
         peak_rate = None
         if hasattr(self._tariff_provider, "get_charge_window_rate"):
@@ -11063,17 +11066,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             )
         if hasattr(self._tariff_provider, "get_next_daytime_rate"):
             peak_rate = self._tariff_provider.get_next_daytime_rate()
-        if off_peak_rate is None and hasattr(self._tariff_provider, "get_price_at"):
-            # Static rule-based providers price purely by time-of-day, so
-            # the date does not matter; dynamic providers without data
-            # return None and fall through to the config rates.
-            off_peak_rate = self._tariff_provider.get_price_at(
-                now.replace(hour=2, minute=0)
-            )
-        if peak_rate is None and hasattr(self._tariff_provider, "get_price_at"):
-            peak_rate = self._tariff_provider.get_price_at(
-                now.replace(hour=14, minute=0)
-            )
         if off_peak_rate is None:
             off_peak_rate = _cfg_rate(
                 self.config, "electricity_off_peak_rate", "electricity_nt_rate",

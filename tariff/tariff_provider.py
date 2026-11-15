@@ -505,6 +505,66 @@ class TariffProvider(ABC):
     # gate's answer per slot. An override does not carry it.
     get_rate_level_at.same_as_price_level = True
 
+    #: (#1362) The two break-even rates below ask ``get_price_at`` once per
+    #: quarter hour: a calendar's windows start on the quarter hour.
+    RATE_STEP = timedelta(minutes=15)
+
+    def _next_steps(self, now: datetime, hours: float):
+        """(#1362) Local moments, one per ``RATE_STEP``, from the first step
+        after ``now`` for ``hours``. Stepped in UTC, so a clock change
+        neither skips nor repeats an hour."""
+        step_s = int(self.RATE_STEP.total_seconds())
+        start = dt_util.as_utc(now)
+        start = start - timedelta(seconds=start.timestamp() % step_s)
+        if start < dt_util.as_utc(now):
+            start += self.RATE_STEP
+        for i in range(int(hours * 3600 // step_s)):
+            yield dt_util.as_local(start + i * self.RATE_STEP)
+
+    def get_charge_window_rate(
+        self, hours: float = 4.0, within_hours: int = 12,
+    ) -> Optional[float]:
+        """(#1362) Average price of the cheapest ``hours`` of the next
+        ``within_hours`` — the rate a night charge pays.
+
+        The same question ``DynamicTariffProvider`` answers from its
+        series, asked here of ``get_price_at`` for a static or calendar
+        tariff. ``None`` when no hour in the window has a known price.
+        """
+        prices = [p for p in (self.get_price_at(t) for t in
+                              self._next_steps(dt_util.now(), within_hours))
+                  if p is not None]
+        if not prices:
+            return None
+        n = max(1, math.ceil(hours * 3600 / self.RATE_STEP.total_seconds()))
+        cheapest = sorted(prices)[:n]
+        return sum(cheapest) / len(cheapest)
+
+    def get_next_daytime_rate(
+        self, peak_start: int = 7, peak_end: int = 20,
+    ) -> Optional[float]:
+        """(#1362) Average price over the next daytime window, the hours a
+        night charge is stored for: tomorrow's from an evening, today's
+        from after midnight.
+
+        It read ``get_price_at`` at today's 14:00 before. At 21:00 that is
+        the day just gone, and in a Polish G12w tariff 14:00 is off-peak on
+        every day, so a night charge never paid. ``None`` when an hour of
+        the window has no known price: half a window is not its average.
+        """
+        prices: List[float] = []
+        for t in self._next_steps(dt_util.now(), 48):
+            if peak_start <= t.hour < peak_end:
+                price = self.get_price_at(t)
+                if price is None:
+                    return None
+                prices.append(price)
+            elif prices:
+                break       # the first daytime window is over
+        if not prices:
+            return None
+        return sum(prices) / len(prices)
+
 
 class StaticTariffProvider(TariffProvider):
     """Static HT/NT tariff rates.

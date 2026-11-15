@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **On a peak/off-peak tariff, SEM charges your battery at night before a day with peak hours** (#1362). It checked the wrong day.
+
 # [2.3.0-beta.15] — 14.11.2026
 
 - 🐛 **The plan chart shows one car as one row** (#1321). Tomorrow's preview named it differently from tonight's plan.
