@@ -32,6 +32,10 @@ DEFAULT_LEGIONELLA_INTERVAL_HOURS = 72  # Max hours between cycles
 #: (#1369) In the last day before a run is due, a sunny or cheap hour may
 #: start it EARLY. Never later: at the due time it runs as before.
 LEGIONELLA_EARLY_WINDOW_H = 24.0
+#: (#1369) the good hour must hold this long before an early start, and be
+#: gone this long before an early run pauses — no start/stop on a passing cloud
+LEGIONELLA_EARLY_START_HOLD_MIN = 10.0
+LEGIONELLA_EARLY_PAUSE_HOLD_MIN = 15.0
 #: (#1369) A tank that draws power this long without warming this much has
 #: a fault (element, thermostat, a heat pump that is not heating the tank).
 #: two hours: a tank heated from the bottom can hold a top sensor flat for
@@ -62,14 +66,14 @@ _BOOST_SETPOINT_MATCH_K = 0.5
 
 
 class HotWaterController(SwitchDevice):
-    #: (#1369) what the "does not warm" repair quotes
-    HEAT_CHECK_MINUTES_USED = int(HEAT_CHECK_MINUTES)
-
     """Hot water controller with multi-entity support and Legionella prevention.
 
     Supports water_heater, climate, and switch entities.
     The Legionella cycle is mandatory and cannot be disabled.
     """
+
+    #: (#1369) what the "does not warm" repair quotes
+    HEAT_CHECK_MINUTES_USED = int(HEAT_CHECK_MINUTES)
 
     def __init__(
         self,
@@ -842,6 +846,22 @@ class HotWaterController(SwitchDevice):
         first post-vacation cycle (run-on-return). An in-flight cycle ends
         once and re-runs on return via the same overdue path.
         """
+        # (#1369) how long the good hour has held, or been gone: the early
+        # start and the early pause both wait it out
+        now = dt_util.now()
+        if good_hour:
+            self._bad_since = None
+            if getattr(self, "_good_since", None) is None:
+                self._good_since = now
+        else:
+            self._good_since = None
+            if getattr(self, "_bad_since", None) is None:
+                self._bad_since = now
+        good_held = (getattr(self, "_good_since", None) is not None and
+                     (now - self._good_since).total_seconds() >= LEGIONELLA_EARLY_START_HOLD_MIN * 60)
+        bad_held = (getattr(self, "_bad_since", None) is not None and
+                    (now - self._bad_since).total_seconds() >= LEGIONELLA_EARLY_PAUSE_HOLD_MIN * 60)
+
         # (#1335) An end the engine already acted on (or that a user beat
         # it to) is done.
         if self._legionella_end_pending and not self.is_active:
@@ -909,7 +929,7 @@ class HotWaterController(SwitchDevice):
                 # (#1369) an EARLY run lives on its good hour: when the sun or
                 # the cheap price goes before it is due, it stops — not a
                 # disinfection, no block — and runs again at the due time
-                if (getattr(self, "_legionella_early", False) and not good_hour
+                if (getattr(self, "_legionella_early", False) and bad_held
                         and not self.legionella_overdue):
                     self._end_legionella_run()
                     self._legionella_early = False
@@ -921,7 +941,7 @@ class HotWaterController(SwitchDevice):
 
         # 3. Check if overdue — the run is due. (#1369) In the last day
         # before that, a sunny or cheap hour (``good_hour``) starts it early.
-        early = (not self.legionella_overdue and good_hour
+        early = (not self.legionella_overdue and good_held
                  and self.legionella_early_window)
         if self.legionella_overdue or early:
             if temp is None and early:

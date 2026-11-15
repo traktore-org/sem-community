@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- ✨ **A hot water tank with a thermometer heats to its own Keep at + Extra** (#1369). The Solar Heating Target no longer caps it below that.
+- ✨ **A hot water tank with a thermometer heats to its Keep at + Extra** (#1369), at most the Legionella target. Solar Heating Target: only without one.
 - ✨ **The Legionella run may start up to a day early, in a sunny or cheap hour** (#1369). Never later than before.
 - ✨ **A repair warns when the hot water tank draws power for two hours but does not warm** (#1369).
 - 🐛 **On a peak/off-peak tariff, SEM charges your battery at night before a day with peak hours** (#1362). It checked the wrong day.

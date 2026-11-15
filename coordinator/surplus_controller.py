@@ -1109,6 +1109,10 @@ def compute_load_intent(
     #     so the run is SEM's own command (Mode Off and teardown stop it).
     if getattr(device, "runs_without_surplus", False) is True:
         if active:
+            if getattr(device, "_legionella_early", False) is True:
+                return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
+                                  "Legionella run, started early — ends at its own target",
+                                  RC.LOAD_LEGIONELLA_EARLY)
             return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
                               "Legionella run — ends at its own target",
                               RC.LOAD_LEGIONELLA)

@@ -8303,7 +8303,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     hw_controller, "HEAT_CHECK_MINUTES_USED", 120)),
                                 temp_c=float(getattr(hw_controller, "heating_fault_temp", 0.0)))
                             _LOGGER.warning(
-                                "%s drew power for an hour and did not warm",
+                                "%s drew power for two hours and did not warm",
                                 getattr(hw_controller, "name", did))
                         else:
                             clear_heater_no_rise(self.hass, did)

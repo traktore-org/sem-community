@@ -178,13 +178,25 @@ def _since(dev, hours):
     dev._last_legionella_time = hwc.dt_util.now() - timedelta(hours=hours)
 
 
+_T0 = hwc.dt_util.now()
+
+
+async def _chk(dev, good, minute):
+    """One Legionella check ``minute`` minutes into the test."""
+    with patch.object(hwc.dt_util, "now", return_value=_T0 + timedelta(minutes=minute)):
+        return await dev.check_legionella_cycle(good_hour=good)
+
+
 class TestLegionellaEarly:
     @pytest.mark.asyncio
     async def test_a_good_hour_in_the_last_day_starts_it_early(self):
         dev = _tank(_Hass(), 48.0)
         _since(dev, dev.legionella_interval_hours - 10)
         assert dev.legionella_early_window and not dev.legionella_overdue
-        assert await dev.check_legionella_cycle(good_hour=True) == "legionella_started"
+        # the good hour must hold 10 minutes first
+        assert await _chk(dev, True, 0) is None
+        assert await _chk(dev, True, 5) is None
+        assert await _chk(dev, True, 10) == "legionella_started"
         assert dev._last_legionella_path == "early_start"
         assert dev.runs_without_surplus is True
 
@@ -301,9 +313,14 @@ class TestReviewRound2:
     async def test_an_early_run_stops_when_its_good_hour_ends(self):
         dev = _tank(_Hass(), 48.0)
         _since(dev, dev.legionella_interval_hours - 10)
-        assert await dev.check_legionella_cycle(good_hour=True) == "legionella_started"
-        assert await dev.check_legionella_cycle(good_hour=True) == "legionella_heating"
-        assert await dev.check_legionella_cycle(good_hour=False) == "legionella_early_paused"
+        await _chk(dev, True, 0)
+        assert await _chk(dev, True, 10) == "legionella_started"
+        assert await _chk(dev, True, 11) == "legionella_heating"
+        # a passing cloud does not stop it: the good hour must be gone 15 min
+        assert await _chk(dev, False, 12) == "legionella_heating"
+        assert await _chk(dev, True, 14) == "legionella_heating"
+        assert await _chk(dev, False, 15) == "legionella_heating"
+        assert await _chk(dev, False, 31) == "legionella_early_paused"
         assert dev.runs_without_surplus is False
         assert dev._legionella_blocked_until is None      # no penalty
         # and at the due time it runs as before
@@ -344,7 +361,8 @@ class TestEverythingIsSaid:
             compute_load_intent)
         dev = _tank(_Hass(), 48.0)
         _since(dev, dev.legionella_interval_hours - 10)
-        await dev.check_legionella_cycle(good_hour=True)
+        await _chk(dev, True, 0)
+        await _chk(dev, True, 10)
         intent = compute_load_intent(dev, remaining_surplus_w=0.0, tier1_headroom_w=0.0,
                                      price_is_cheap=False, peak_freeze=False, is_night=True)
         assert intent.on is True
@@ -374,3 +392,40 @@ class TestEverythingIsSaid:
         for lang, table in d.items():
             for k in keys:
                 assert table.get(k), (lang, k)
+
+
+class TestReviewRound3:
+    @pytest.mark.asyncio
+    async def test_a_flickering_good_hour_never_starts_it(self):
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        for m in range(0, 60, 3):
+            out = await _chk(dev, m % 6 == 0, m)   # good, bad, good, bad …
+            assert out is None, m
+
+    @pytest.mark.asyncio
+    async def test_a_running_early_run_keeps_its_reason(self):
+        from custom_components.solar_energy_management.coordinator import reason_codes as RC
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            compute_load_intent)
+        hass = _Hass()
+        dev = _tank(hass, 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        await _chk(dev, True, 0)
+        await _chk(dev, True, 10)
+        with patch.object(type(dev), "is_active", new=True):
+            intent = compute_load_intent(dev, remaining_surplus_w=0.0, is_night=True)
+        assert intent.code == RC.LOAD_LEGIONELLA_EARLY
+
+    @pytest.mark.asyncio
+    async def test_a_restart_drops_an_early_run_it_does_not_relabel_it(self):
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        await _chk(dev, True, 0)
+        await _chk(dev, True, 10)
+        # a restart: a new controller with only the stored last-run time
+        again = _tank(_Hass(), 48.0)
+        again._last_legionella_time = dev._last_legionella_time
+        assert again.runs_without_surplus is False
+        assert getattr(again, "_legionella_early", False) is False
+        assert await _chk(again, False, 11) is None      # not due: no run

@@ -681,9 +681,9 @@ The repair clears by itself once a later run warms the tank again. Only heaters 
 
 **Cause:** The Legionella disinfection cycle triggers only when the configured interval (default 72 hours) has elapsed since the water last reached the disinfection target temperature (default 65°C).
 
-**Fix:**
-Since 2.3 a run due within the next day may start early, in an hour where the sun alone can carry the tank or the price is cheap. If that hour ends before the run is due, the early run stops and the run happens at the due time as before. It never starts later than before.
+Since 2.3 a run due within the next day may start early, in an hour where the sun alone can carry the tank or the price is cheap. If that hour ends before the run is due, the early run stops and the run happens at the due time as before. It never starts later than before. In that hour it takes the sun before the car, the battery and the grid. The hour must hold 10 minutes before the start, and be gone 15 minutes before the pause.
 
+**Fix:**
 1. Check how long since the last disinfection: look at the hot water sensor attributes or SEM debug logs for the hours-since-last-60C counter
 2. Verify the disinfection interval setting — if set to 168 hours (maximum), cycles will be infrequent
 3. Confirm the temperature sensor is accurate — if the sensor falsely reports temperatures above 60°C, SEM will reset the counter and skip the cycle
