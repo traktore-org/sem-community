@@ -607,7 +607,7 @@ Hot water devices are controlled through one of three HA entity types:
 
 ### Temperature Logic
 
-The `solar_target_temp` (Solar Boost Target) is the cutoff temperature for solar surplus heating. When the water reaches this temperature, SEM stops heating and releases surplus for other devices. There is no separate "max temperature" — the solar boost target is the ceiling for SEM-controlled heating.
+The `solar_target_temp` (Solar Boost Target) is the cutoff temperature for solar surplus heating. When the water reaches this temperature, SEM stops heating and releases surplus for other devices. There is no separate "max temperature" — the solar boost target is the ceiling for SEM-controlled heating, **unless the tank has a comfort band** (#1369): then `normal_target_temp()` is the band's top (Keep at + Extra) and the band decides alone, as on the my-PV and evcc controllers. A band with a silent thermometer is disengaged and the solar boost target applies again. Legionella and the vacation dump keep their own targets.
 
 If the solar boost target is set at or above 60°C, the Legionella requirement is naturally satisfied during sunny days without a forced cycle.
 

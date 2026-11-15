@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **A hot water tank with a thermometer heats to its own Keep at + Extra** (#1369). The Solar Heating Target no longer caps it below that.
 - 🐛 **On a peak/off-peak tariff, SEM charges your battery at night before a day with peak hours** (#1362). It checked the wrong day.
 - 🐛 **The plan no longer shows a battery charge SEM cannot send** (#1367). It says the battery needs its charge control set.
 

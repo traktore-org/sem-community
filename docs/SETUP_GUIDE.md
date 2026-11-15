@@ -1393,7 +1393,7 @@ path, the hot-water boiler is a simple on/off device controlled by SEM.
 |---|---|
 | Boiler control entity | The `switch.`, `water_heater.`, or `climate.` entity that turns the boiler on/off |
 | Temperature sensor (optional) | A `sensor.` reporting current water temperature in °C |
-| Solar target | Boiler runs on surplus until water reaches this, then SEM stops it (default 50 °C). It is the highest temperature SEM heats to, except for the Legionella cycle |
+| Solar target | Boiler runs on surplus until water reaches this, then SEM stops it (default 50 °C). It is the highest temperature SEM heats to, except for the Legionella cycle. With a thermometer on the Control tab, the four questions there set the top instead |
 | Legionella target | Target temperature for the periodic Legionella cycle (default 65 °C) |
 
 Mode, priority, and when to stop or force heating are set on the **Control
@@ -1401,8 +1401,8 @@ tab**, in the boiler's row, as four questions:
 
 - **Keep it at** — the temperature SEM keeps.
 - **Never colder than** — below it SEM heats at once, at any price.
-- **With spare sun, heat up to** — how hot free sun may heat it. This also
-  sets the Solar target above, so both stops agree.
+- **With spare sun, heat up to** — how hot free sun may heat it. With a
+  thermometer this is the top: the Solar target above no longer caps it.
 - **May SEM buy power for it?** — *No, sun only*, or *Yes, in cheap hours*.
 
 One line above them says what the boiler does now and next. The order SEM

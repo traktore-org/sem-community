@@ -203,7 +203,9 @@ class HotWaterController(SwitchDevice):
             return False
         return any(
             abs(target - boost) <= _BOOST_SETPOINT_MATCH_K
-            for boost in (self.solar_target_temp, self.legionella_target_temp)
+            # (#1369) a band tank's boost is sent at the band's top
+            for boost in (self.solar_target_temp, self.legionella_target_temp,
+                          self.band_top_c() or self.solar_target_temp)
         )
 
     def adopt_if_running(self) -> bool:
@@ -299,6 +301,26 @@ class HotWaterController(SwitchDevice):
                 return LEGIONELLA_HOLD_MINUTES[temp]
         return 3  # 80°C+ = 3 minutes
 
+    def band_top_c(self) -> Optional[float]:
+        """(#1369) The top a comfort band sets — Keep at + Extra, in °C —
+        or None when the tank has no usable band (fields unset, the band
+        misconfigured, or its thermometer silent: then it is disengaged and
+        the old Solar Heating Target caps the tank as before)."""
+        state_fn = getattr(self, "_comfort_band_state", None)
+        if not callable(state_fn) or state_fn() == "disengaged":
+            return None
+        if getattr(self, "_comfort_direction", lambda: "heat")() != "heat":
+            return None
+        target_c, offset_c, _limit_c = self._comfort_thresholds_c()
+        return float(target_c) + max(0.0, float(offset_c or 0.0))
+
+    def normal_target_temp(self) -> float:
+        """(#1369) The cutoff outside Legionella and the vacation dump: the
+        band's top when the tank has a band — the band decides alone, as on
+        the my-PV and evcc controllers — else the Solar Heating Target."""
+        top = self.band_top_c()
+        return top if top is not None else self.solar_target_temp
+
     def _active_target_temp(self) -> float:
         """The temperature target for the CURRENT operating context (#594).
 
@@ -306,13 +328,14 @@ class HotWaterController(SwitchDevice):
         run during vacation — the coordinator pauses cycles, see
         ``check_legionella_cycle``). Vacation surplus dump →
         ``min_temperature`` (free solar energy without comfort heating).
-        Normal solar boost → ``solar_target_temp``.
+        Normal solar boost → ``normal_target_temp()`` (#1369: the band's
+        top when there is a band, else ``solar_target_temp``).
         """
         if self._legionella_cycle_active:
             return self.legionella_target_temp
         if self.vacation and self.vacation_dhw_surplus:
             return self.min_temperature
-        return self.solar_target_temp
+        return self.normal_target_temp()
 
     def get_current_temperature(self) -> Optional[float]:
         """Read water temperature from sensor or entity attributes.
@@ -421,6 +444,15 @@ class HotWaterController(SwitchDevice):
                 self._last_temperature_safety_path = "vacation_below_min_target"
                 return True
             self._last_temperature_safety_path = "vacation_at_min_target"
+            return False
+        # (#1369) a band decides the top alone; the Solar Heating Target
+        # caps only a tank without one
+        top = self.band_top_c()
+        if top is not None:
+            if temp < top:
+                self._last_temperature_safety_path = "normal_below_band_top"
+                return True
+            self._last_temperature_safety_path = "normal_at_band_top"
             return False
         if temp < self.solar_target_temp:
             self._last_temperature_safety_path = "normal_below_solar_target"
