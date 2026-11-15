@@ -1035,7 +1035,14 @@ def compute_load_intent(
     #     energy for the planned block instead of letting the run bleed on.
     #     ONLY paid, plan-owned runs: solar runs are never plan-gated (the
     #     sun is spending itself), and user-started runs are not SEM's to cut.
-    if (active and plan_hold
+    # (#1369) …except a Keep at run its block started, still below Keep at
+    # in a cheap hour: the block was an estimate, the goal is the tank's
+    # temperature — it heats on (clause below), never into a dearer hour.
+    _goal_band = _heater_band(device)
+    _goal_goes_on = (active and getattr(device, "_comfort_goal_run", False) is True
+                     and _goal_band is not None and _goal_band[0] == "willing"
+                     and _goal_band[1] and price_is_cheap and _goal_may_buy(device))
+    if (active and plan_hold and not _goal_goes_on
             and (getattr(device, "_batt_overnight_forced", False)
                  or getattr(device, "_offpeak_forced", False))):
         return LoadIntent(False, 0.0, None,
@@ -1659,6 +1666,12 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         # 2–3 °C past the top the user set.
         heater_stop = (intent.code in (RC.LOAD_STOP_CONDITION, RC.LOAD_LEGIONELLA_END)
                        and _is_heater(device))
+        # (#1369) a bought Keep at run that reached Keep at stops there: the
+        # minimum run carried it 2–4 K further on bought power
+        if (not heater_stop and _is_heater(device)
+                and getattr(device, "_comfort_goal_run", False) is True):
+            _b = _heater_band(device)
+            heater_stop = _b is not None and _b[1] is False
         if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED) or heater_stop:
             # (class-17 sibling / #644 / #1335) The user's own Off (or
             # disabling the load) beats the minimum run: a deliberate command beats flicker protection.

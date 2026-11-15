@@ -405,3 +405,13 @@ test('(#1369) a too-cold run past its limit says it heats to Keep at', () => {
     const past = { comfort: { keep_c: 52, max_c: 56, start_c: 51, limit_c: 36, reading_c: 50.5, state: 'willing' }, intent: { code: 'comfort_floor' } };
     assert.equal(heaterSays(past, {}, true).key, 'hq_st_heating_to');
 });
+
+
+test('(#1369) the boiler\'s own thermostat is named with its temperature', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 50, own_thermostat_c: 50 }, intent: { code: 'comfort_goal' } };
+    const said = heaterSays(row, {}, true);
+    assert.equal(said.key, 'hq_st_own_thermostat');
+    assert.equal(said.params.temp, '50 °C');
+    const warm = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 52.5, own_thermostat_c: 50 } };
+    assert.equal(heaterSays(warm, {}, false).key, 'hq_st_warm');
+});

@@ -59,6 +59,9 @@ LEGIONELLA_EARLY_PAUSE_HOLD_MIN = 30.0   # a cloudy spell, not a passing cloud
 #: an hour after a big draw-off
 HEAT_CHECK_MINUTES = 120.0
 HEAT_MIN_RISE_K = 1.0
+#: (#1369) SEM has the heater on, it draws nothing and the tank is below its
+#: target for this long: the boiler's own thermostat has cut it off
+OWN_THERMOSTAT_MINUTES = 10.0
 DEFAULT_LEGIONELLA_MIN_TEMP = 60.0  # Absolute minimum allowed
 # (#1102) A run that has not reached its target after this long ends: a 300 l
 # tank heats 40 → 65 °C on 3 kW in about 3 h, so 6 h means it cannot.
@@ -154,6 +157,8 @@ class HotWaterController(SwitchDevice):
         self._legionella_cycle_active: bool = False
         # (#1369) heating that does not warm the tank
         self._heat_check = None
+        self._cutout_since = None
+        self.own_thermostat_c: Optional[float] = None
         self.heating_fault: bool = False
         self.heating_fault_temp: Optional[float] = None
         self._legionella_hold_start: Optional[datetime] = None
@@ -333,6 +338,21 @@ class HotWaterController(SwitchDevice):
                 watts = self.observed_power_w()
             except Exception:  # noqa: BLE001 — an unread draw counts nothing
                 watts = None
+        # (#1369) on, but drawing nothing below its target: the boiler's own
+        # thermostat cut it off — the user is told at which temperature
+        idle_on = (self._entity_domain not in _SETPOINT_DOMAINS
+                   and self.is_active and temp is not None and rated > 0
+                   and watts is not None and watts < max(50.0, 0.05 * rated)
+                   and float(temp) < self._active_target_temp() - 1.0)
+        if idle_on:
+            if getattr(self, "_cutout_since", None) is None:
+                self._cutout_since = now
+            elif (now - self._cutout_since).total_seconds() >= OWN_THERMOSTAT_MINUTES * 60:
+                self.own_thermostat_c = round(float(temp), 1)
+        else:
+            self._cutout_since = None
+            if watts is not None and rated > 0 and watts >= 0.5 * rated:
+                self.own_thermostat_c = None     # it heats again
         running = (self._entity_domain not in _SETPOINT_DOMAINS
                    and self.is_active and temp is not None and rated > 0
                    and watts is not None and watts >= 0.5 * rated)

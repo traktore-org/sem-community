@@ -31,6 +31,8 @@ from custom_components.solar_energy_management.tests.test_1062_hot_water_fields 
 
 SENSOR, SWITCH, DID = "sensor.tank", "switch.boiler", "hot_water"
 BLOCK = PlanVerdict(in_block=True, comfort_in_block=True, reason="comfort block open")
+#: what a real plan says once the block is over: hold, the window closed
+CLOSED = PlanVerdict(hold=True, reason="joint energy plan: window closed")
 
 
 def _boiler(temp, *, buy=True, stop=None):
@@ -58,7 +60,9 @@ async def _cycle(sc, *, surplus=-400.0, price="normal", night=True, block=False,
     await sc.update(
         surplus, price_level=price, is_night=night, battery_soc=None,
         battery_reserve_soc=10.0, daylight_remaining_s=0.0 if night else 7200.0,
-        solar_w=solar, plan_windows={DID: BLOCK} if block else {})
+        solar_w=solar,
+        plan_windows=({DID: BLOCK} if block is True
+                      else {DID: CLOSED} if block == "closed" else {}))
 
 
 def _past_minimums(dev):
@@ -94,11 +98,12 @@ async def test_2_a_cheap_hour_heats_to_keep_at_not_to_the_blocks_end():
     assert dev.is_active
     hass.set(SENSOR, "50.1", unit_of_measurement="°C")
     _past_minimums(dev)
-    await _cycle(sc, price="cheap", block=False)          # the block is over
-    assert dev.is_active, "the run ended at the block's end, under Keep at"
+    for verdict in (False, "closed"):        # no opinion, or the plan's hold
+        await _cycle(sc, price="cheap", block=verdict)   # the block is over
+        assert dev.is_active, f"the run ended at the block's end ({verdict})"
     hass.set(SENSOR, "52.0", unit_of_measurement="°C")
-    await _cycle(sc, price="cheap", block=False)
-    await _cycle(sc, price="cheap", block=False)
+    await _cycle(sc, price="cheap", block="closed")
+    await _cycle(sc, price="cheap", block="closed")
     assert not dev.is_active                              # Keep at reached
 
 
@@ -108,8 +113,8 @@ async def test_2b_it_never_runs_on_into_an_hour_that_is_not_cheap():
     await _cycle(sc, price="cheap", block=True)
     hass.set(SENSOR, "50.1", unit_of_measurement="°C")
     _past_minimums(dev)
-    await _cycle(sc, price="normal", block=False, night=False)
-    await _cycle(sc, price="normal", block=False, night=False)
+    await _cycle(sc, price="normal", block="closed", night=False)
+    await _cycle(sc, price="normal", block="closed", night=False)
     assert not dev.is_active
 
 
@@ -230,3 +235,54 @@ def test_7_the_solar_target_has_one_degree_steps():
     desc = next(d for d in number_mod.NUMBER_TYPES
                 if d.key == "hot_water_solar_target")
     assert desc.native_step == 1
+
+
+# ── 8. found by running the real planner (ruflo use-case round) ────────────
+
+@pytest.mark.asyncio
+async def test_8_a_bought_run_stops_at_keep_at_inside_its_minimum_run():
+    """A 30 min minimum run carried a bought run 2–4 K past Keep at."""
+    hass, dev, sc = _boiler(51.0)
+    await _cycle(sc, price="cheap", block=True)
+    assert dev.is_active and dev.can_deactivate() is False
+    hass.set(SENSOR, "52.1", unit_of_measurement="°C")
+    await _cycle(sc, price="cheap", block=True)
+    assert not dev.is_active
+
+
+def test_8b_a_tank_that_cools_after_the_plan_was_made_replans():
+    """A shower at 22:30: the plan made at 14:00 had no block. The plan's
+    signature now carries the Keep at goal, with no learned model needed."""
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        demand_signature_changed)
+    from custom_components.solar_energy_management.tests.test_638_demand_replan import (
+        _coord, _power)
+    hass, dev, sc = _boiler(55.0)
+    warm = _coord(devices=(dev,))._energy_plan_demand_signature(_power())
+    hass.set(SENSOR, "47.0", unit_of_measurement="°C")
+    cold = _coord(devices=(dev,))._energy_plan_demand_signature(_power())
+    assert demand_signature_changed(warm, cold) is True
+    hass.set(SENSOR, "46.0", unit_of_measurement="°C")       # cooling on: silence
+    colder = _coord(devices=(dev,))._energy_plan_demand_signature(_power())
+    assert demand_signature_changed(cold, colder) is False
+
+
+def test_8c_the_boilers_own_thermostat_is_named():
+    """SEM has it on, it draws nothing, the tank sits at 50 °C: the boiler's
+    own thermostat stopped it. The card says so with the temperature."""
+    from custom_components.solar_energy_management.features.device_registry import (
+        UnifiedDeviceRegistry)
+    hass, dev, sc = _boiler(50.0)
+    dev.power_entity_id = "sensor.boiler_power"
+    hass.set("sensor.boiler_power", "0", unit_of_measurement="W")
+    t0 = hwc.dt_util.now()
+    for minute in (0, 5, 11):
+        with patch.object(hwc.dt_util, "now", return_value=t0 + timedelta(minutes=minute)), \
+                patch.object(type(dev), "is_active", new=True):
+            dev.check_heating_works()
+    assert dev.own_thermostat_c == 50.0
+    assert UnifiedDeviceRegistry._band_lines(dev)["own_thermostat_c"] == 50.0
+    hass.set("sensor.boiler_power", "3200", unit_of_measurement="W")
+    with patch.object(type(dev), "is_active", new=True):
+        dev.check_heating_works()
+    assert dev.own_thermostat_c is None                      # it heats again

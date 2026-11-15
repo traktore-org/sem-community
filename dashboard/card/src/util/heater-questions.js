@@ -75,6 +75,11 @@ export function heaterSays(row, live = {}, running = false) {
     const reading = num(c.reading_c);
     // (#1369) a heater that does not warm says so first, running or not
     if (c.heating_fault === true) return p('hq_st_no_rise', {}, 'warn');
+    // (#1369) the boiler's own thermostat stopped it below Keep at: say so,
+    // running or not, until it heats again
+    if (num(c.own_thermostat_c) !== null && !cool && reading !== null && reading < keep) {
+        return p('hq_st_own_thermostat', { temp: T(num(c.own_thermostat_c)) }, 'warn');
+    }
     if (running) {
         if (c.own_run_early === true || code === 'legionella_early') return p('hq_st_legionella_early', {}, 'ok');
         if (c.own_run || code === 'legionella') return p('hq_st_legionella', {}, 'ok');

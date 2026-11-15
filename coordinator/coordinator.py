@@ -12015,6 +12015,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if not _sem_may_switch(dev):
                         continue  # the band of a device SEM may not switch
                     _fn = getattr(dev, "comfort_plan_demand", None)
+                    # (#1369) the plan asks the GOAL (Keep at): a tank that
+                    # cools below its start line after the stamp must re-plan
+                    # — the drift ask needs a learned model a fresh install
+                    # or a restart does not have. Presence only: a running
+                    # goal's shrinking kWh must not re-plan every minute.
+                    try:
+                        goal = _fn(_now_sig, goal=True) if callable(_fn) else None
+                    except TypeError:
+                        goal = None
+                    if goal:
+                        sig.append(("comfort", str(dev.device_id), "goal"))
+                        continue
                     ask = _fn(_now_sig) if callable(_fn) else None
                     if not ask:
                         continue
