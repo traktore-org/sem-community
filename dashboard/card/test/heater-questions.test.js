@@ -343,27 +343,33 @@ test('(#1369) no "Legionella due" second line while the thermometer reads nothin
 });
 
 
-test('(#1369) sensor noise around Keep at does not flip the line', () => {
-    for (const r of [51.8, 51.9, 52.0, 52.1]) {
-        const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: r } };
-        assert.equal(heaterSays(row, {}, false).key, 'hq_st_warm', String(r));
-    }
-});
-
-test('(#1369) right after a stop, a pause while the tank wants heat is named at once', () => {
-    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 48, pause_until: '12:36', may_buy: false }, intent: {} };
-    assert.equal(heaterSays(row, {}, false).key, 'hq_st_paused');
-});
 
 
-test('(#1369) noise at the restart line does not flip the line', () => {
-    for (const r of [50.8, 50.9, 51.0, 51.1, 51.2]) {
-        const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: r, may_buy: false } };
-        assert.equal(heaterSays(row, {}, false).key, 'hq_st_warm_again', String(r));
-    }
-});
+
 
 test('(#1369) a warm tank in its minimum pause is warm, not paused', () => {
     const row = { comfort: { keep_c: 52, max_c: 56, start_c: 50, reading_c: 51.5, pause_until: '13:20' }, intent: {} };
     assert.notEqual(heaterSays(row, {}, false).key, 'hq_st_paused');
+});
+
+
+test('(#1369) noise at Keep at and at the restart line does not flip the sentence', () => {
+    const say = (r, prev) => heaterSays({ comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: r, may_buy: false } }, { prevKey: prev }, false).key;
+    // entering needs the line itself …
+    assert.equal(say(51.9, ''), 'hq_st_warm_again');
+    assert.equal(say(52.0, ''), 'hq_st_warm');
+    // … leaving needs 0.2 K beyond it
+    let prev = 'hq_st_warm';
+    for (const r of [51.9, 51.85, 52.05, 51.9]) { prev = say(r, prev); assert.equal(prev, 'hq_st_warm', String(r)); }
+    assert.equal(say(51.7, 'hq_st_warm'), 'hq_st_warm_again');
+    prev = 'hq_st_warm_again';
+    for (const r of [50.9, 51.05, 50.85]) { prev = say(r, prev); assert.equal(prev, 'hq_st_warm_again', String(r)); }
+    assert.equal(say(50.7, 'hq_st_warm_again'), 'hq_st_waits_sun');
+    assert.equal(say(50.9, ''), 'hq_st_waits_sun');     // never "heats again below 51" when below it
+});
+
+test('(#1369) the pause is named only when SEM wants to start', () => {
+    const base = { keep_c: 52, max_c: 56, start_c: 51, reading_c: 48, pause_until: '14:29', may_buy: false };
+    assert.equal(heaterSays({ comfort: base, intent: { source: 'solar' } }, {}, false).key, 'hq_st_paused');
+    assert.equal(heaterSays({ comfort: base, intent: {} }, {}, false).key, 'hq_st_waits_sun');
 });

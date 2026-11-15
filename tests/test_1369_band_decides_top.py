@@ -748,6 +748,7 @@ class TestRufloRound7:
         await _chk(dev, False, 1)
         dev.hass.set(SENSOR, "unavailable")
         await _chk(dev, False, 20)
+        await _chk(dev, False, 23)                      # unread over the 2 min grace
         assert dev._legionella_hold_start is None
         dev.hass.set(SENSOR, "60.1", unit_of_measurement="°C")
         assert await _chk(dev, False, 40) != "legionella_complete"
@@ -763,3 +764,45 @@ class TestRufloRound7:
         await _chk(dev, True, end + 1)
         assert await _chk(dev, True, end + 15) is None     # no chained early run
         assert dev.runs_without_surplus is False
+
+
+class TestRufloRound8:
+    @pytest.mark.asyncio
+    async def test_a_run_without_a_reading_ends_after_15_minutes(self):
+        dev = _tank(_Hass(), 50.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        assert await _chk(dev, False, 0) == "legionella_started"
+        dev.hass.set(SENSOR, "unavailable")
+        assert await _chk(dev, False, 1) == "legionella_heating"
+        assert await _chk(dev, False, 10) == "legionella_heating"
+        assert await _chk(dev, False, 17) == "legionella_no_sensor"
+        assert dev.runs_without_surplus is False
+        assert dev._legionella_blocked_until is None          # runs again when read
+        assert dev._last_legionella_time != hwc.dt_util.now() # not disinfected
+
+    @pytest.mark.asyncio
+    async def test_one_missed_reading_does_not_restart_the_hold(self):
+        dev = _tank(_Hass(), 58.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        await _chk(dev, False, 0)
+        dev.hass.set(SENSOR, "60.2", unit_of_measurement="°C")
+        await _chk(dev, False, 1)
+        start = dev._legionella_hold_start
+        dev.hass.set(SENSOR, "unavailable")
+        await _chk(dev, False, 20)
+        dev.hass.set(SENSOR, "60.2", unit_of_measurement="°C")
+        await _chk(dev, False, 21)
+        assert dev._legionella_hold_start == start
+
+    @pytest.mark.asyncio
+    async def test_an_early_run_keeps_going_while_half_the_sun_holds(self):
+        dev = _tank(_Hass(), 48.0)
+        _since(dev, dev.legionella_interval_hours - 10)
+        with patch.object(hwc.dt_util, "now", return_value=_T0):
+            await dev.check_legionella_cycle(good_hour=True, sun_holds=True)
+        with patch.object(hwc.dt_util, "now", return_value=_T0 + timedelta(minutes=10)):
+            assert await dev.check_legionella_cycle(good_hour=True, sun_holds=True) == "legionella_started"
+        # 75 % of the rating: not good enough to start, good enough to go on
+        for m in (20, 60, 90):
+            with patch.object(hwc.dt_util, "now", return_value=_T0 + timedelta(minutes=m)):
+                assert await dev.check_legionella_cycle(good_hour=False, sun_holds=True) == "legionella_heating"

@@ -47,6 +47,11 @@ LEGIONELLA_HOLD_DIP_K = 0.3
 #: (#1369) an early run does not pause this close to its due time — the
 #: minimum run would hold it on anyway, and it is due right after
 LEGIONELLA_EARLY_PAUSE_MIN_LEAD_H = 1.0
+#: (#1369) SEM does not heat blind: a run with no reading this long ends
+#: (no disinfection, no block — it runs again when the tank reads)
+LEGIONELLA_UNREAD_END_MIN = 15.0
+#: (#1369) a missed reading this short is a glitch, not a broken hold
+LEGIONELLA_UNREAD_HOLD_GRACE_MIN = 2.0
 LEGIONELLA_EARLY_PAUSE_HOLD_MIN = 30.0   # a cloudy spell, not a passing cloud
 #: (#1369) A tank that draws power this long without warming this much has
 #: a fault (element, thermostat, a heat pump that is not heating the tank).
@@ -914,7 +919,8 @@ class HotWaterController(SwitchDevice):
 
     # ─── Legionella Prevention ───────────────────────────────
 
-    async def check_legionella_cycle(self, good_hour: bool = False) -> Optional[str]:
+    async def check_legionella_cycle(self, good_hour: bool = False,
+                                     sun_holds: Optional[bool] = None) -> Optional[str]:
         """Advance the Legionella prevention cycle. Never switches the tank.
 
         Called every coordinator cycle. Returns a status message or None.
@@ -947,14 +953,18 @@ class HotWaterController(SwitchDevice):
         # (#1369) how long the good hour has held, or been gone: the early
         # start and the early pause both wait it out
         now = dt_util.now()
+        # (#1369) an early run STARTS on a good hour (80 % of the rating)
+        # and keeps going while the sun holds (half the rating)
+        holds = good_hour if sun_holds is None else bool(sun_holds)
         if good_hour:
-            self._bad_since = None
             if getattr(self, "_good_since", None) is None:
                 self._good_since = now
         else:
             self._good_since = None
-            if getattr(self, "_bad_since", None) is None:
-                self._bad_since = now
+        if holds:
+            self._bad_since = None
+        elif getattr(self, "_bad_since", None) is None:
+            self._bad_since = now
         good_held = (getattr(self, "_good_since", None) is not None and
                      (now - self._good_since).total_seconds() >= LEGIONELLA_EARLY_START_HOLD_MIN * 60)
         bad_held = (getattr(self, "_bad_since", None) is not None and
@@ -992,9 +1002,23 @@ class HotWaterController(SwitchDevice):
         if self._legionella_cycle_active:
             # (#1369) once the hold runs, a reading inside the noise margin is
             # still the hold — so it also completes there
-            if temp is None and self._legionella_hold_start is not None:
-                # (#1369) an unread tank is no hold: it starts over when read
-                self._legionella_hold_start = None
+            if temp is None:
+                if getattr(self, "_unread_since", None) is None:
+                    self._unread_since = now
+                unread_min = (now - self._unread_since).total_seconds() / 60.0
+                if unread_min > LEGIONELLA_UNREAD_END_MIN:
+                    # (#1369) SEM does not heat blind: end the run, no block
+                    self._end_legionella_run()
+                    self._legionella_early = False
+                    self._unread_since = None
+                    self._last_legionella_path = "no_reading"
+                    return "legionella_no_sensor"
+                if (self._legionella_hold_start is not None
+                        and unread_min > LEGIONELLA_UNREAD_HOLD_GRACE_MIN):
+                    # an unread tank is no hold: it starts over when read
+                    self._legionella_hold_start = None
+            else:
+                self._unread_since = None
             in_hold = temp is not None and (
                 temp >= self.legionella_target_temp
                 or (self._legionella_hold_start is not None

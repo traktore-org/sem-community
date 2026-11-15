@@ -7127,7 +7127,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                  else len(able) / len(adapters))
         return share, unable
 
-    def _legionella_good_hour_now(self, true_surplus_w, tariff_data) -> bool:
+    def _legionella_good_hour_now(self, true_surplus_w, tariff_data,
+                                  share: float = 0.8) -> bool:
         """(#1369) A sunny hour for the hot water tank: the loads' free
         surplus (which already counts what running loads draw) covers its
         rating. Free sun only — a cheap hour bought the run at night while
@@ -7142,7 +7143,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return False
             # the loads' surplus already adds back what running loads draw;
             # 80 % will do: the run buys all of it anyway once it is due
-            return float(true_surplus_w) >= 0.8 * rated
+            return float(true_surplus_w) >= share * rated
         except Exception:  # noqa: BLE001 — a wrong read is "not a good hour"
             return False
 
@@ -7477,6 +7478,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         # (#1369) "no" until this cycle's surplus pass says otherwise
         self._legionella_good_hour = False
+        self._legionella_sun_holds = False
         # Forecast (Phase 0.3)
         forecast_data = ForecastSensorData()
         try:
@@ -7918,6 +7920,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # in an hour the sun alone could carry it, or a cheap one.
             self._legionella_good_hour = self._legionella_good_hour_now(
                 true_surplus_w, tariff_data)
+            self._legionella_sun_holds = self._legionella_good_hour_now(
+                true_surplus_w, tariff_data, share=0.5)
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
             surplus_data.surplus_regulation_offset_w = allocation.regulation_offset_w
@@ -8281,7 +8285,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 try:
                     # (#1335) state only — layer 1 switches the run
                     await hw_controller.check_legionella_cycle(
-                        good_hour=bool(getattr(self, "_legionella_good_hour", False)))
+                        good_hour=bool(getattr(self, "_legionella_good_hour", False)),
+                        sun_holds=bool(getattr(self, "_legionella_sun_holds", False)))
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
             # (#1369) a due Legionella run skipped under the user's own stop:

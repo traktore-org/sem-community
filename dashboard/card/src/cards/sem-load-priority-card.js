@@ -1185,10 +1185,15 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
     _heaterSays(device) {
         const running = device.isOn || device.power > 0.01;
-        return heaterSays(
+        // (#1369) the last sentence keeps sensor noise from flipping it
+        this._heaterPrev = this._heaterPrev || {};
+        const said = heaterSays(
             { comfort: device.comfort, intent: device.intent, mergedMode: this._mergedMode(device) },
-            { fmtTemp: (c) => this._displayTemp(c), plannedAt: this._plannedAt(device) },
+            { fmtTemp: (c) => this._displayTemp(c), plannedAt: this._plannedAt(device),
+              prevKey: this._heaterPrev[device.id] },
             running);
+        this._heaterPrev[device.id] = said ? said.key : '';
+        return said;
     }
 
     _setGoal(device, key, value) {

@@ -107,14 +107,16 @@ export function heaterSays(row, live = {}, running = false) {
         return withSoon(idle('hq_st_paused', { time: c.pause_until }));
     }
     // (#1369) the minimum pause holds a start while the tank wants heat
-    const startLine = start === null ? keep : start;
-    if (c.pause_until && (cool ? reading > startLine + 0.3 : reading < startLine - 0.3)) {
-        return withSoon(idle('hq_st_paused', { time: c.pause_until }));
-    }
-    // past Keep at (within sensor noise), on the comfortable side
-    if (cool ? reading <= keep + 0.3 : reading >= keep - 0.3) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
+    // (#1369) sensor noise must not flip the sentence: a boundary is
+    // crossed at the line itself, and left only 0.2 K beyond it
+    const prev = live.prevKey || '';
+    const stick = (keys) => (keys.includes(prev) ? 0.2 : 0);
+    // past Keep at, on the comfortable side
+    const kStick = stick(['hq_st_warm']);
+    if (cool ? reading <= keep + kStick : reading >= keep - kStick) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
     const line = start === null ? keep : start;
-    if (cool ? reading < line + 0.3 : reading > line - 0.3) return withSoon(idle('hq_st_warm_again', { start: T(line) }));
+    const lStick = stick(['hq_st_warm_again', 'hq_st_warm']);
+    if (cool ? reading < line + lStick : reading > line - lStick) return withSoon(idle('hq_st_warm_again', { start: T(line) }));
     if (live.plannedAt) return withSoon(idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt }));
     // (#1349) the house battery reaches Keep at tonight — or is at its reserve
     if (c.may_use_battery === true) {
