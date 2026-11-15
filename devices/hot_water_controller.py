@@ -47,7 +47,7 @@ LEGIONELLA_HOLD_DIP_K = 0.3
 #: (#1369) an early run does not pause this close to its due time — the
 #: minimum run would hold it on anyway, and it is due right after
 LEGIONELLA_EARLY_PAUSE_MIN_LEAD_H = 1.0
-LEGIONELLA_EARLY_PAUSE_HOLD_MIN = 15.0
+LEGIONELLA_EARLY_PAUSE_HOLD_MIN = 30.0   # a cloudy spell, not a passing cloud
 #: (#1369) A tank that draws power this long without warming this much has
 #: a fault (element, thermostat, a heat pump that is not heating the tank).
 #: two hours: a tank heated from the bottom can hold a top sensor flat for
@@ -659,7 +659,12 @@ class HotWaterController(SwitchDevice):
         if not self._legionella_cycle_active:
             return False
         temp = self.get_current_temperature()
-        return temp is None or temp < float(self.legionella_target_temp)
+        if temp is None:
+            return True
+        floor = float(self.legionella_target_temp)
+        if self._legionella_hold_start is not None:
+            floor -= LEGIONELLA_HOLD_DIP_K   # the hold's own noise margin
+        return temp < floor
 
     @property
     def runs_without_surplus(self) -> bool:
@@ -985,7 +990,13 @@ class HotWaterController(SwitchDevice):
 
         # 2. Cycle in progress — check hold
         if self._legionella_cycle_active:
-            if temp is not None and temp >= self.legionella_target_temp:
+            # (#1369) once the hold runs, a reading inside the noise margin is
+            # still the hold — so it also completes there
+            in_hold = temp is not None and (
+                temp >= self.legionella_target_temp
+                or (self._legionella_hold_start is not None
+                    and temp >= float(self.legionella_target_temp) - LEGIONELLA_HOLD_DIP_K))
+            if in_hold:
                 if self._legionella_hold_start is None:
                     self._legionella_hold_start = dt_util.now()
                     _LOGGER.info(
@@ -1021,6 +1032,15 @@ class HotWaterController(SwitchDevice):
                         and temp < float(self.legionella_target_temp) - LEGIONELLA_HOLD_DIP_K):
                     self._legionella_hold_start = None
                 started = self._legionella_started_at
+                if (started is not None and getattr(self, "_legionella_early", False)
+                        and not self.legionella_overdue
+                        and (dt_util.now() - started) > timedelta(hours=LEGIONELLA_MAX_RUN_HOURS)):
+                    # (#1369) an early run that cannot finish ends WITHOUT a
+                    # block: the due run still comes at its due time
+                    self._end_legionella_run()
+                    self._legionella_early = False
+                    self._last_legionella_path = "early_timed_out"
+                    return "legionella_early_paused"
                 if started is not None and (dt_util.now() - started) > timedelta(hours=LEGIONELLA_MAX_RUN_HOURS):
                     return await self._end_unreachable_legionella(
                         "timed_out", f"still below it after {LEGIONELLA_MAX_RUN_HOURS:g} h")

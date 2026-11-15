@@ -245,7 +245,9 @@ class TestTheGoodHour:
     def test_enough_sun_for_the_tank(self):
         f = self._coord(_tank(_Hass(), 48.0))
         assert f(3300.0) is True
-        assert f(3100.0) is False   # rated 3200: the surplus alone decides
+        assert f(3100.0) is True    # 97 % of the 3.2 kW: good enough
+        assert f(2600.0) is True    # 80 %
+        assert f(2500.0) is False
         assert f(1500.0) is False
         assert f(None) is False
 
@@ -318,11 +320,12 @@ class TestReviewRound2:
         await _chk(dev, True, 0)
         assert await _chk(dev, True, 10) == "legionella_started"
         assert await _chk(dev, True, 11) == "legionella_heating"
-        # a passing cloud does not stop it: the good hour must be gone 15 min
+        # a passing cloud does not stop it: the sun must be gone 30 min
         assert await _chk(dev, False, 12) == "legionella_heating"
         assert await _chk(dev, True, 14) == "legionella_heating"
         assert await _chk(dev, False, 15) == "legionella_heating"
-        assert await _chk(dev, False, 31) == "legionella_early_paused"
+        assert await _chk(dev, False, 35) == "legionella_heating"   # a 20 min dip
+        assert await _chk(dev, False, 46) == "legionella_early_paused"
         assert dev.runs_without_surplus is False
         assert dev._legionella_blocked_until is None      # no penalty
         # and at the due time it runs as before
@@ -706,3 +709,30 @@ class TestRufloRound5:
         # an aware stamp does not break it
         dev._last_deactivated = dt_util.now() - timedelta(minutes=5)
         assert UnifiedDeviceRegistry._band_lines(dev)["pause_until"] is not None
+
+
+class TestRufloRound6:
+    @pytest.mark.asyncio
+    async def test_an_early_run_that_times_out_does_not_delay_the_due_run(self):
+        dev = _tank(_Hass(), 45.0)
+        _since(dev, dev.legionella_interval_hours - 20)
+        await _chk(dev, True, 0)
+        assert await _chk(dev, True, 10) == "legionella_started"
+        out = await _chk(dev, True, 10 + int(hwc.LEGIONELLA_MAX_RUN_HOURS * 60) + 5)
+        assert out == "legionella_early_paused"
+        assert dev._last_legionella_path == "early_timed_out"
+        assert dev._legionella_blocked_until is None      # the due run still comes
+        _since(dev, dev.legionella_interval_hours + 1)
+        assert dev.legionella_overdue is True
+
+    @pytest.mark.asyncio
+    async def test_a_hold_that_ran_its_time_completes_inside_the_noise_margin(self):
+        dev = _tank(_Hass(), 58.0, band=False)
+        _since(dev, dev.legionella_interval_hours + 1)
+        await _chk(dev, False, 0)
+        dev.hass.set(SENSOR, "60.2", unit_of_measurement="°C")
+        await _chk(dev, False, 1)
+        dev.hass.set(SENSOR, "59.8", unit_of_measurement="°C")
+        assert dev.own_run_needs_heat is False            # inside the margin: no restart
+        out = await _chk(dev, False, 1 + dev.legionella_hold_minutes + 5)
+        assert out == "legionella_complete"

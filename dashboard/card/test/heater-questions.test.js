@@ -341,3 +341,16 @@ test('(#1369) no "Legionella due" second line while the thermometer reads nothin
     assert.equal(said.key, 'hq_st_no_reading');
     assert.ok(!said.why);
 });
+
+
+test('(#1369) sensor noise around Keep at does not flip the line', () => {
+    for (const r of [51.8, 51.9, 52.0, 52.1]) {
+        const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: r } };
+        assert.equal(heaterSays(row, {}, false).key, 'hq_st_warm', String(r));
+    }
+});
+
+test('(#1369) right after a stop, a pause while the tank wants heat is named at once', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 48, pause_until: '12:36', may_buy: false }, intent: {} };
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_paused');
+});

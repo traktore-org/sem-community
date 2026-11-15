@@ -106,8 +106,12 @@ export function heaterSays(row, live = {}, running = false) {
     if (c.pause_until && (intent.on === true || intent.source === 'solar' || intent.source === 'tier1_battery')) {
         return withSoon(idle('hq_st_paused', { time: c.pause_until }));
     }
-    // past Keep at, on the comfortable side
-    if (cool ? reading <= keep : reading >= keep) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
+    // (#1369) the minimum pause holds a start while the tank wants heat
+    if (c.pause_until && (cool ? reading > keep : reading < keep)) {
+        return withSoon(idle('hq_st_paused', { time: c.pause_until }));
+    }
+    // past Keep at (within sensor noise), on the comfortable side
+    if (cool ? reading <= keep + 0.3 : reading >= keep - 0.3) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
     const line = start === null ? keep : start;
     if (cool ? reading < line : reading > line) return withSoon(idle('hq_st_warm_again', { start: T(line) }));
     if (live.plannedAt) return withSoon(idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt }));

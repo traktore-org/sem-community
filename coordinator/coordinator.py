@@ -7140,8 +7140,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
             if rated <= 0 or true_surplus_w is None:
                 return False
-            # the loads' surplus already adds back what running loads draw
-            return float(true_surplus_w) >= rated
+            # the loads' surplus already adds back what running loads draw;
+            # 80 % will do: the run buys all of it anyway once it is due
+            return float(true_surplus_w) >= 0.8 * rated
         except Exception:  # noqa: BLE001 — a wrong read is "not a good hour"
             return False
 
