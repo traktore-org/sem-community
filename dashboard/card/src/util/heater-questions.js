@@ -101,9 +101,10 @@ export function heaterSays(row, live = {}, running = false) {
     // line — it never hides what the tank does now
     const withSoon = (said) => (c.own_run_soon === true && !cool && said && !said.why
         ? { ...said, why: 'hq_st_legionella_soon' } : said);
-    if (reading === null) return idle('hq_st_no_reading', {}, 'warn');
-    // (#1369) a Legionella run holding its temperature with the heater off
+    // (#1369) a Legionella run (heater off in its hold, or a short gap in
+    // the reading): it goes on — "no reading" shows once the run has ended
     if (c.own_run === true && !cool) return idle('hq_st_legionella', {}, 'ok');
+    if (reading === null) return idle('hq_st_no_reading', {}, 'warn');
     // (#1369) the minimum pause holds a start the sun or the plan wants
     if (c.pause_until && (intent.on === true || intent.source === 'solar' || intent.source === 'tier1_battery')) {
         return withSoon(idle('hq_st_paused', { time: c.pause_until }));

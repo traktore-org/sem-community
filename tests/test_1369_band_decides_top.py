@@ -604,7 +604,10 @@ class TestRufloRound3:
         heat = SwitchDevice.__new__(SwitchDevice)
         heat.comfort_target, heat.comfort_limit = 52.0, 36.0
         heat._comfort_direction = lambda: "heat"
-        assert _is_heater(heat) is True
+        # (round 10) a band load may be a heat pump: its compressor keeps
+        # the minimum run; only a hot water tank stops inside it
+        assert _is_heater(heat) is False
+        assert _is_heater(_tank(_Hass(), 50.0)) is True
 
 
 class TestRufloRound4:
@@ -865,3 +868,19 @@ class TestRufloRound9:
         assert seen == ["at_target"] * 5
         hass.set(SENSOR, "54.7", unit_of_measurement="°C")
         assert dev.start_refusal is None
+
+
+class TestRufloRound10:
+    def test_an_idle_tank_at_its_stop_reports_one_code(self):
+        from custom_components.solar_energy_management.coordinator import reason_codes as RC
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            compute_load_intent)
+        hass = _Hass()
+        dev = _tank(hass, 53.0)
+        dev.stop_entity, dev.stop_at = SENSOR, 53.0
+        codes = []
+        for t in (53.0, 52.9, 53.05, 52.95, 53.1):
+            hass.set(SENSOR, str(t), unit_of_measurement="°C")
+            codes.append(compute_load_intent(dev, remaining_surplus_w=4000.0,
+                                             is_night=False).code)
+        assert set(codes) == {RC.LOAD_AT_TARGET}, codes

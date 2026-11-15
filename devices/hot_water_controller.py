@@ -665,6 +665,7 @@ class HotWaterController(SwitchDevice):
                         return "at_target"   # (#1369) too close to its top to start
             self._margin_refused = False
             return None
+        self._margin_refused = False
         if self._last_temperature_safety_path == "configured_sensor_broken":
             return "sensor"
         return "at_target"

@@ -384,3 +384,11 @@ test('(#1369) a cooling band keeps its sentence on noise too', () => {
     const say = (r, prev) => heaterSays({ comfort: { hvac: 'cool', keep_c: 24, max_c: 22, start_c: 25, reading_c: r } }, { prevKey: prev }, false).key;
     assert.equal(say(24.1, 'hq_st_cool'), 'hq_st_cool');
 });
+
+
+test('(#1369) a short gap in the reading during a Legionella run keeps "Legionella run"', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: null, own_run: true } };
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_legionella');
+    const ended = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: null, own_run: false } };
+    assert.equal(heaterSays(ended, {}, false).key, 'hq_st_no_reading');
+});
