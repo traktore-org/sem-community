@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **On a peak/off-peak tariff, SEM charges your battery at night before a day with peak hours** (#1362). It checked the wrong day.
+- 🐛 **The plan no longer shows a battery charge SEM cannot send** (#1367). It says the battery needs its charge control set.
 - ✨ **SEM-dashboard Now shows where power comes from in percent, the next 24 hours of price, and a chip per device** (#1321).
 - ✨ **SEM-dashboard System shows each source's value and the entity SEM reads** (#1321), to check a setup.
 - 🔧 **The two dashboards are named SEM-dashboard and SEM-classic in the sidebar** (#1321). The names change at the next "generate dashboard".
@@ -20,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **SEM Next shows a charger by its own name in every language, not as "ev charger 1"** (#1321).
 - 🔧 **SEM Next asks the peak limit, battery levels and charger targets with the same words and logic as the classic dashboard** (#1354).
 - ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
+
+# [2.3.0-beta.15] — 14.11.2026
+
 - 🐛 **The plan chart shows one car as one row** (#1321). Tomorrow's preview named it differently from tonight's plan.
 - ✨ **Each planned device says why its hours were chosen**: cheapest hours, sun, battery, before leaving or one rate (#1321).
 - ✨ **On a dynamic tariff, the cost sensors show the average price paid per bought kWh and the average price of all hours** (#1321).

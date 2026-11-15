@@ -2960,7 +2960,8 @@
     "hp_heat_costs": "teplo stojí {price}",
     "hp_cop_point_is": "venku je COP",
     "next_cop_fixed": "Pevný COP",
-    "hp_cop_looks_electric": "Tento měřič počítá elektřinu, ne teplo. Vyberte měřič tepla."
+    "hp_cop_looks_electric": "Tento měřič počítá elektřinu, ne teplo. Vyberte měřič tepla.",
+    "energy_plan_why_no_charge_control": "SEM ji nemůže nabíjet. Nastavte řízení nabíjení."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5923,7 +5924,8 @@
     "hp_heat_costs": "varme koster {price}",
     "hp_cop_point_is": "ude er COP",
     "next_cop_fixed": "Én fast COP",
-    "hp_cop_looks_electric": "Denne måler tæller strøm, ikke varme. Vælg varmemåleren."
+    "hp_cop_looks_electric": "Denne måler tæller strøm, ikke varme. Vælg varmemåleren.",
+    "energy_plan_why_no_charge_control": "SEM kan ikke lade det. Indstil ladestyringen."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8886,7 +8888,8 @@
     "hp_heat_costs": "Wärme kostet {price}",
     "hp_cop_point_is": "draußen ist der COP",
     "next_cop_fixed": "Ein fester COP",
-    "hp_cop_looks_electric": "Dieser Zähler misst Strom, nicht Wärme. Wähle den Wärmezähler."
+    "hp_cop_looks_electric": "Dieser Zähler misst Strom, nicht Wärme. Wähle den Wärmezähler.",
+    "energy_plan_why_no_charge_control": "SEM kann ihn nicht laden. Lade-Steuerung einstellen."
   },
   "en": {
     "% of limit": "% of limit",
@@ -11849,7 +11852,8 @@
     "hp_heat_costs": "heat costs {price}",
     "hp_cop_point_is": "outside the COP is",
     "next_cop_fixed": "One fixed COP",
-    "hp_cop_looks_electric": "This meter counts electricity, not heat. Pick the heat meter."
+    "hp_cop_looks_electric": "This meter counts electricity, not heat. Pick the heat meter.",
+    "energy_plan_why_no_charge_control": "SEM can't charge it. Set its charge control."
   },
   "es": {
     "% of limit": "% del límite",
@@ -14812,7 +14816,8 @@
     "hp_heat_costs": "el calor cuesta {price}",
     "hp_cop_point_is": "fuera, el COP es",
     "next_cop_fixed": "Un COP fijo",
-    "hp_cop_looks_electric": "Este contador mide electricidad, no calor. Elige el contador de calor."
+    "hp_cop_looks_electric": "Este contador mide electricidad, no calor. Elige el contador de calor.",
+    "energy_plan_why_no_charge_control": "SEM no puede cargarla. Configura su control de carga."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -17775,7 +17780,8 @@
     "hp_heat_costs": "lämpö maksaa {price}",
     "hp_cop_point_is": "COP on",
     "next_cop_fixed": "Kiinteä COP",
-    "hp_cop_looks_electric": "Tämä mittari laskee sähköä, ei lämpöä. Valitse lämpömittari."
+    "hp_cop_looks_electric": "Tämä mittari laskee sähköä, ei lämpöä. Valitse lämpömittari.",
+    "energy_plan_why_no_charge_control": "SEM ei voi ladata sitä. Aseta latauksen ohjaus."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -20738,7 +20744,8 @@
     "hp_heat_costs": "la chaleur coûte {price}",
     "hp_cop_point_is": "dehors, le COP est",
     "next_cop_fixed": "Un COP fixe",
-    "hp_cop_looks_electric": "Ce compteur mesure l'électricité, pas la chaleur. Choisissez le compteur de chaleur."
+    "hp_cop_looks_electric": "Ce compteur mesure l'électricité, pas la chaleur. Choisissez le compteur de chaleur.",
+    "energy_plan_why_no_charge_control": "SEM ne peut pas la charger. Réglez sa commande de charge."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -23701,7 +23708,8 @@
     "hp_heat_costs": "a hő ára {price}",
     "hp_cop_point_is": "esetén a COP",
     "next_cop_fixed": "Fix COP",
-    "hp_cop_looks_electric": "Ez a mérő áramot mér, nem hőt. Válaszd a hőmennyiségmérőt."
+    "hp_cop_looks_electric": "Ez a mérő áramot mér, nem hőt. Válaszd a hőmennyiségmérőt.",
+    "energy_plan_why_no_charge_control": "A SEM nem tudja tölteni. Állítsd be a töltésvezérlést."
   },
   "it": {
     "% of limit": "% del limite",
@@ -26664,7 +26672,8 @@
     "hp_heat_costs": "il calore costa {price}",
     "hp_cop_point_is": "fuori il COP è",
     "next_cop_fixed": "Un COP fisso",
-    "hp_cop_looks_electric": "Questo contatore misura elettricità, non calore. Scegli il contatore di calore."
+    "hp_cop_looks_electric": "Questo contatore misura elettricità, non calore. Scegli il contatore di calore.",
+    "energy_plan_why_no_charge_control": "SEM non può caricarla. Imposta il comando di carica."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -29627,7 +29636,8 @@
     "hp_heat_costs": "warmte kost {price}",
     "hp_cop_point_is": "buiten is de COP",
     "next_cop_fixed": "Eén vaste COP",
-    "hp_cop_looks_electric": "Deze meter telt stroom, geen warmte. Kies de warmtemeter."
+    "hp_cop_looks_electric": "Deze meter telt stroom, geen warmte. Kies de warmtemeter.",
+    "energy_plan_why_no_charge_control": "SEM kan hem niet laden. Stel de laadsturing in."
   },
   "no": {
     "% of limit": "% av grense",
@@ -32590,7 +32600,8 @@
     "hp_heat_costs": "varme koster {price}",
     "hp_cop_point_is": "ute er COP",
     "next_cop_fixed": "Én fast COP",
-    "hp_cop_looks_electric": "Denne måleren teller strøm, ikke varme. Velg varmemåleren."
+    "hp_cop_looks_electric": "Denne måleren teller strøm, ikke varme. Velg varmemåleren.",
+    "energy_plan_why_no_charge_control": "SEM kan ikke lade det. Still inn ladestyringen."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -35553,7 +35564,8 @@
     "hp_heat_costs": "ciepło kosztuje {price}",
     "hp_cop_point_is": "na zewnątrz COP wynosi",
     "next_cop_fixed": "Stały COP",
-    "hp_cop_looks_electric": "Ten licznik mierzy prąd, nie ciepło. Wybierz licznik ciepła."
+    "hp_cop_looks_electric": "Ten licznik mierzy prąd, nie ciepło. Wybierz licznik ciepła.",
+    "energy_plan_why_no_charge_control": "SEM nie może jej ładować. Ustaw sterowanie ładowaniem."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -38516,7 +38528,8 @@
     "hp_heat_costs": "o calor custa {price}",
     "hp_cop_point_is": "lá fora o COP é",
     "next_cop_fixed": "Um COP fixo",
-    "hp_cop_looks_electric": "Este contador mede eletricidade, não calor. Escolha o contador de calor."
+    "hp_cop_looks_electric": "Este contador mede eletricidade, não calor. Escolha o contador de calor.",
+    "energy_plan_why_no_charge_control": "O SEM não a consegue carregar. Defina o controlo de carga."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -41479,7 +41492,8 @@
     "hp_heat_costs": "căldura costă {price}",
     "hp_cop_point_is": "afară, COP este",
     "next_cop_fixed": "Un COP fix",
-    "hp_cop_looks_electric": "Acest contor măsoară curent, nu căldură. Alege contorul de căldură."
+    "hp_cop_looks_electric": "Acest contor măsoară curent, nu căldură. Alege contorul de căldură.",
+    "energy_plan_why_no_charge_control": "SEM nu o poate încărca. Setează controlul încărcării."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -44442,7 +44456,8 @@
     "hp_heat_costs": "värme kostar {price}",
     "hp_cop_point_is": "ute är COP",
     "next_cop_fixed": "Ett fast COP",
-    "hp_cop_looks_electric": "Den här mätaren räknar el, inte värme. Välj värmemätaren."
+    "hp_cop_looks_electric": "Den här mätaren räknar el, inte värme. Välj värmemätaren.",
+    "energy_plan_why_no_charge_control": "SEM kan inte ladda det. Ställ in laddstyrningen."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -47405,6 +47420,7 @@
     "hp_heat_costs": "热量价格 {price}",
     "hp_cop_point_is": "时 COP 为",
     "next_cop_fixed": "固定 COP",
-    "hp_cop_looks_electric": "此电表计量的是电，不是热量。请选择热量表。"
+    "hp_cop_looks_electric": "此电表计量的是电，不是热量。请选择热量表。",
+    "energy_plan_why_no_charge_control": "SEM 无法为其充电。请设置充电控制。"
   }
 }

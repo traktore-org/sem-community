@@ -685,7 +685,7 @@ class SEMNextPlanCard extends SEMNextBase {
         return this._devRow('mdi:car-electric', C.ev, this._chargerName(cid), rest, bits.join(' · '), btns);
     }
 
-    _batteryRow(plan, blocks, demands) {
+    _batteryRow(plan, blocks, demands, notSched = []) {
         const t = (k) => this._t(k);
         const obs = this._obs();
         const floor = this._num('sensor.sem_battery_dynamic_floor_pct');
@@ -703,7 +703,10 @@ class SEMNextPlanCard extends SEMNextBase {
         if (first && last) parts.push(`${t('next_to_house')} ${this._hhmm(first.start)} – ${this._hhmm(last.end)}`);
         const d = demands.find((x) => String(x.id).startsWith('battery'));
         const arb = plan.arbitrage;
-        const sub = d?.note || d?.notes ? (planNoteText(d, (k) => this._t(k)) || '') : (this._whyCodes(plan) || (arb && arb.enabled && arb.reason ? String(arb.reason) : ''));
+        // (#1367) a battery SEM cannot charge says so, instead of nothing
+        const left = notSched.filter((n) => n && String(n.id).startsWith('battery'));
+        const sub = left.length ? this._whyText(left[0])
+            : d?.note || d?.notes ? (planNoteText(d, (k) => this._t(k)) || '') : (this._whyCodes(plan) || (arb && arb.enabled && arb.reason ? String(arb.reason) : ''));
         const mode = this._str('select.sem_battery_mode');
         const options = this._attrs('select.sem_battery_mode').options || [];
         const btns = [];
@@ -750,7 +753,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const rows = this._chargers.map((cid) => this._chargerRow(cid, plan, blocks, demands, notSched));
         const hasBattery = plan.has_battery !== false
             && (this._has('select.sem_battery_mode') || blocks.some((b) => String(b.id).startsWith('battery')) || (Array.isArray(plan.batt_runs) && plan.batt_runs.length > 0));
-        if (hasBattery) rows.push(this._batteryRow(plan, blocks, demands));
+        if (hasBattery) rows.push(this._batteryRow(plan, blocks, demands, notSched));
         const loadIds = new Set();
         // (#1321) a heater's Keep at run (comfort:<id>) is listed like its run time
         const isLoad = (x) => String(x.id).startsWith('load:') || String(x.id).startsWith('comfort:');

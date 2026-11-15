@@ -96,6 +96,14 @@ test('battery row: no raw planner text, honest floor, no Back to plan for a stan
     assert.doesNotMatch(out.replace(/title=[^>]*/, ''), /battery_deficit=/);
 });
 
+test('battery row: a battery SEM cannot charge says so (#1367)', () => {
+    const el = makeCard();
+    const plan = { why_codes: ['battery_no_deficit'], slots: [], batt_runs: [] };
+    const out = text(el._batteryRow(plan, [], [], [{ id: 'battery', why: 'no_charge_control', label: null }]));
+    assert.match(out, /energy_plan_why_no_charge_control/);
+    assert.doesNotMatch(out, /battery_no_deficit/);
+});
+
 test('battery row: a forced mode is an override and gets Back to plan', () => {
     const el = makeCard({ 'select.sem_battery_mode': S('force_charge', { options: ['auto', 'force_charge'] }) });
     const out = text(el._batteryRow({ slots: [], batt_runs: [] }, [], []));

@@ -586,7 +586,11 @@ class TestCoordinatorRateDerivation:
         assert kwargs["off_peak_rate"] == pytest.approx(0.22)
         assert kwargs["peak_rate"] == pytest.approx(0.30)
 
-    async def test_static_provider_uses_time_of_day_rates(self):
+    async def test_a_provider_without_the_rate_questions_uses_the_config(self):
+        """(#1362) No clock sample: ``get_price_at(today 02:00 / 14:00)``
+        read the day just gone. Every real provider answers the two rate
+        questions (tests/test_1362_break_even_next_day.py); one that does
+        not gets the configured rates."""
         now = _local(21, 0)
         provider = MagicMock(spec=["get_price_at", "find_cheapest_hours"])
         provider.get_price_at = MagicMock(side_effect=[0.18, 0.34])
@@ -598,8 +602,8 @@ class TestCoordinatorRateDerivation:
             await coord._maybe_run_scheduler_evaluation(MagicMock(battery_soc=50.0))
 
         kwargs = scheduler.evaluate.call_args.kwargs
-        assert kwargs["off_peak_rate"] == pytest.approx(0.18)
-        assert kwargs["peak_rate"] == pytest.approx(0.34)
+        assert kwargs["off_peak_rate"] == pytest.approx(0.22)
+        assert kwargs["peak_rate"] == pytest.approx(0.30)
 
     async def test_evening_evaluation_plans_for_tomorrow(self):
         now = _local(21, 0)
