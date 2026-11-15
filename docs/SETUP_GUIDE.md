@@ -1205,6 +1205,10 @@ the day rate is 0.30/kWh, charging overnight saves 0.133/kWh. If the rates
 are similar, the scheduler skips charging and lets solar fill the battery
 the next day.
 
+The day rate is the price of the coming day from 07:00 to 20:00. On a
+peak/off-peak tariff, SEM charges at night before a day with peak hours. A day
+with only the off-peak price, such as a weekend, gets no night charge.
+
 ### Scheduler state sensor
 
 `sensor.sem_battery_scheduler_state` shows:

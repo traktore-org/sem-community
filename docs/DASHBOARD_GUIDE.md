@@ -522,6 +522,9 @@ see what SEM intends to do tonight. See
 
 A battery charge from the grid shows only in night hours, and only when SEM
 will do it.
+If SEM has no way to charge your battery, the plan shows no charge for it and
+says *SEM can't charge it. Set its charge control.* Check **Configure →
+Battery Charge Scheduler → Battery charge platform**.
 
 Hover a price slot to see its time and price. If your grid CO₂ sensor has a
 forecast, the slot also shows its CO₂ in g/kWh.
