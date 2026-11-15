@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **A hot water tank with a thermometer heats to its Keep at + Extra** (#1369), at most the Legionella target. Solar Heating Target: only without one.
 - ✨ **The Legionella run may start up to a day early, in a sunny or cheap hour** (#1369). Never later than before.
 - ✨ **A repair warns when the hot water tank draws power for two hours but does not warm** (#1369).
+- 🐛 **A Legionella run your own stop keeps below its target no longer heats for nothing** (#1369). The card says why.
 
 # [2.3.0-beta.16] — 15.11.2026
 
