@@ -4143,7 +4143,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             states[did] = _cl.observe(
                 states.get(did), hour_id=hour_id, elec_kwh=elec,
                 heat_kwh=heat, outdoor_c=outdoor, running=running,
-                meter=str(meter))
+                meter=str(meter),
+                outdoor_age_s=(getattr(self, "_outdoor_temp_age_s", None)
+                               if outdoor is not None else None))
             dev.cop_learned = _cl.learned_points(states[did])
             dev.cop_learn_summary = _cl.summary(states[did], has_meter=True)
 
@@ -17508,9 +17510,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if temp is not None:
                 self._outdoor_temp_status = {"source": kind, "celsius": round(temp, 1),
                                              "candidates": len(found or [])}
+                # (#1081) how long ago the source last reported: the COP
+                # learner tells a live thermometer from a stuck one by it
+                try:
+                    _rep = getattr(st, "last_reported", None) or st.last_updated
+                    self._outdoor_temp_age_s = max(
+                        0.0, (dt_util.utcnow() - _rep).total_seconds())
+                except Exception:  # noqa: BLE001 — not known
+                    self._outdoor_temp_age_s = None
                 return temp
         self._outdoor_temp_status = {"source": "none", "celsius": None,
                                      "candidates": len(found or [])}
+        self._outdoor_temp_age_s = None
         return None
 
     #: (#1082) temperature forecast refresh interval
