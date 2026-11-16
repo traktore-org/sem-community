@@ -7877,6 +7877,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             allocation = await self._surplus_controller.update(
                 true_surplus_w,
                 price_level=tariff_data.tariff_price_level,
+                import_price=getattr(tariff_data, "tariff_current_import_rate", None),
                 peak_state=peak_state,
                 reclaim_w=reclaim_w,
                 battery_priority=battery_priority,

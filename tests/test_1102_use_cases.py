@@ -56,9 +56,14 @@ def _boiler(temp, *, buy=True, stop=None):
     return hass, dev, sc
 
 
-async def _cycle(sc, *, surplus=-400.0, price="normal", night=True, block=False, solar=0.0):
+PRICES = {"cheap": 0.20, "normal": 0.30, "expensive": 0.50}
+
+
+async def _cycle(sc, *, surplus=-400.0, price="normal", night=True, block=False, solar=0.0,
+                 rate=None):
     await sc.update(
-        surplus, price_level=price, is_night=night, battery_soc=None,
+        surplus, price_level=price, import_price=rate or PRICES[price],
+        is_night=night, battery_soc=None,
         battery_reserve_soc=10.0, daylight_remaining_s=0.0 if night else 7200.0,
         solar_w=solar,
         plan_windows=({DID: BLOCK} if block is True
@@ -346,10 +351,12 @@ def test_9b_never_in_a_sun_hour_and_not_when_a_cheap_hour_exists():
                       peak_limit_w=8000.0)
     assert plan.allocations
     assert all(a.start.hour not in (18, 19) for a in plan.allocations)
-    # a night that HAS a cheap hour keeps using only that
+    # a night that HAS a cheaper hour keeps using only that
     for s in ledger:
         if s.start.hour == 2:
             s.level_cheap = True
+        else:
+            s.price = 0.9
     plan = pack_night([_keep_at_demand(end, one_price_ok=True)], ledger,
                       peak_limit_w=8000.0)
     assert {a.start.hour for a in plan.allocations} == {2}
@@ -364,9 +371,10 @@ async def test_9c_on_a_one_price_day_the_run_also_heats_on_to_keep_at():
     _past_minimums(dev)
     await _cycle(sc, price="normal", block="closed")
     assert dev.is_active
-    # the price goes up: it stops
-    await _cycle(sc, price="expensive", block="closed", night=False)
-    await _cycle(sc, price="expensive", block="closed", night=False)
+    # a dearer hour that still reads "normal" (Monday's high tariff after a
+    # flat Sunday, or a pricier hour of a dynamic tariff): it stops
+    await _cycle(sc, price="normal", rate=0.34, block="closed", night=False)
+    await _cycle(sc, price="normal", rate=0.34, block="closed", night=False)
     assert not dev.is_active
 
 
@@ -379,3 +387,25 @@ async def test_9d_a_run_started_cheap_stops_when_the_cheap_hours_end():
     await _cycle(sc, price="normal", block="closed", night=False)   # 07:00, high tariff
     await _cycle(sc, price="normal", block="closed", night=False)
     assert not dev.is_active
+
+
+def test_9e_a_flat_sunday_evening_does_not_wait_for_mondays_low_tariff():
+    """Sunday costs what Monday 00:00 costs: the tank sat cold until
+    midnight. A dark hour at the cheap price is as good as a cheap hour."""
+    from custom_components.solar_energy_management.coordinator.energy_planner import pack_night
+    t0, ledger = _one_price_night()
+    for s_ in ledger:                       # 00:00 on: the weekday low tariff
+        if s_.start.day != t0.day:
+            s_.level_cheap = True
+    end = t0 + timedelta(hours=14)
+    plan = pack_night([_keep_at_demand(end, one_price_ok=True)], ledger,
+                      peak_limit_w=8000.0)
+    assert plan.allocations
+    assert min(a.start for a in plan.allocations).hour == 18     # at once
+    # a dearer evening still waits for the cheap hours
+    for s_ in ledger:
+        if s_.start.day == t0.day:
+            s_.price = 0.9
+    plan = pack_night([_keep_at_demand(end, one_price_ok=True)], ledger,
+                      peak_limit_w=8000.0)
+    assert all(a.start.day != t0.day for a in plan.allocations)

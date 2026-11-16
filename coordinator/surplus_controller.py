@@ -850,13 +850,18 @@ def _away_heats(device: "ControllableDevice", active: bool) -> bool:
 
 def _goal_hour_holds(device, price_is_cheap: bool) -> bool:
     """(#1369) May a Keep at run go on this hour? In a cheap hour, or while
-    the price level is still the one it started on and not expensive (a day
-    with one price). Never into a dearer hour."""
+    the PRICE is no higher than the one it started on (a day with one
+    price). Never into a dearer hour: a level word is not enough — two
+    "normal" hours can differ, and a flat Sunday and Monday's high tariff
+    both read "normal". No price known = no."""
     if price_is_cheap:
         return True
-    now = getattr(device, "_cycle_price_tag", None)
-    started = getattr(device, "_comfort_goal_level", None)
-    return (isinstance(now, str) and now == started and now != "expensive")
+    if getattr(device, "_cycle_price_tag", None) == "expensive":
+        return False
+    now = getattr(device, "_cycle_price", None)
+    started = getattr(device, "_comfort_goal_price", None)
+    real = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
+    return real(now) and real(started) and now <= started + 1e-6
 
 
 def _goal_may_buy(device: "ControllableDevice") -> bool:
@@ -1439,8 +1444,8 @@ def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> N
     # (#1369) …and one the plan's comfort block started
     _goal = bool(intent.on and intent.code == RC.LOAD_COMFORT_GOAL)
     if _goal and getattr(device, "_comfort_goal_run", False) is not True:
-        # the price level the run started on
-        device._comfort_goal_level = getattr(device, "_cycle_price_tag", None)
+        # the price the run started on
+        device._comfort_goal_price = getattr(device, "_cycle_price", None)
     device._comfort_goal_run = _goal
 
 
@@ -2305,6 +2310,10 @@ class SurplusController:
             _lvl = device_price_level(device, price_level)
             device._cycle_price_tag = ("cheap" if is_cheap_name(_lvl) else
                                        "expensive" if is_expensive_name(_lvl) else "normal")
+            # the house's price now; a device on its own tariff has no
+            # number here, so its run holds in its cheap hours only
+            device._cycle_price = (None if isinstance(getattr(device, "_tariff_level", None), str)
+                                   else getattr(self, "_import_price", None))
             intent = compute_load_intent(
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 # (#812) the device's own tariff when it has one
@@ -2560,6 +2569,7 @@ class SurplusController:
         self,
         available_power_w: float,
         price_level: Optional[str] = None,
+        import_price: Optional[float] = None,
         peak_state: Optional[str] = None,
         reclaim_w: float = 0.0,
         battery_priority: Optional[int] = None,
@@ -2671,6 +2681,10 @@ class SurplusController:
         # (#638 G4) stamp this cycle's joint-plan window verdicts for the
         # intent path.
         self._plan_windows = dict(plan_windows or {})
+        # (#1369) the house's import price now, for "never into a dearer hour"
+        self._import_price = (float(import_price) if isinstance(import_price, (int, float))
+                              and not isinstance(import_price, bool) and import_price > 0
+                              else None)
         # (#864/#1335) the billing slot a grid start must fit, for layer 2
         self._peak_slot_allowed_w = peak_slot_allowed_w
         self._grid_import_w = float(grid_import_w or 0.0)

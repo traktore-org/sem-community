@@ -378,6 +378,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         return s.price if own is None else own
 
     _one_price_memo: dict = {}
+    _cheap_ref_memo: dict = {}
 
     def _cheap(d, i):
         """(#812) Is the slot cheap for THIS demand — the live gate's rule."""
@@ -449,14 +450,27 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 _cheap(d, i) for i in idx if _in_time(d, i))
         return _one_price_memo[d.id]
 
+    def _as_cheap_as_cheap(d, i):
+        """(#1369) Does slot ``i`` cost no more than the cheapest cheap slot
+        of this demand's horizon?"""
+        if d.id not in _cheap_ref_memo:
+            ps = [_price(d, j) for j in idx if _in_time(d, j) and _cheap(d, j)]
+            ps = [p for p in ps if p is not None]
+            _cheap_ref_memo[d.id] = min(ps) if ps else None
+        ref, p = _cheap_ref_memo[d.id], _price(d, i)
+        return ref is not None and p is not None and p <= ref + 1e-9
+
     def _eligible(d, i):
         if not _in_time(d, i):
             return False
         if (d.needs_cheap_level and not _cheap(d, i)
                 and not (d.unpriced_ok and _price(d, i) is None)):
-            # (#1369) a goal on a one-price day: a dark hour will do
-            if not (d.one_price_ok and _one_price(d)
-                    and float(getattr(ledger[i], "solar_w", 0.0) or 0.0) <= 0.0):
+            # (#1369) a goal: a dark hour will do on a one-price day — and
+            # any dark hour that costs no more than the cheapest cheap hour
+            # (a flat Sunday before Monday's low tariff: same price, no wait)
+            if not (d.one_price_ok
+                    and float(getattr(ledger[i], "solar_w", 0.0) or 0.0) <= 0.0
+                    and (_one_price(d) or _as_cheap_as_cheap(d, i))):
                 return False
         start = _begin(d, i)
         prev = last_block_end.get(d.id)
