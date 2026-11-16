@@ -1752,7 +1752,7 @@
         "name": "Prag eveniment surplus"
       },
       "daily_ev_target": {
-        "name": "{charger} Țintă de noapte"
+        "name": "{charger} Garantează cel puțin (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Amperaj minim"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Amperaj minim vehicul"
       },
       "ev_target_soc": {
-        "name": "{charger} SOC țintă"
+        "name": "{charger} Consideră plin la (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Maxim solar"
+        "name": "{charger} Nu încărca niciodată peste (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} SOC maxim solar"
+        "name": "{charger} Nu încărca niciodată peste (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Capacitatea bateriei"

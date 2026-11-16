@@ -878,12 +878,18 @@ class SEMConfigCard extends SEMLitBase {
               done: !!this._hass?.states['sensor.sem_charging_state'] },
             { key: 'ev', labelKey: 'config_overview_chargers', icon: 'mdi:ev-station',
               color: '#5BC8D8', sectionId: 'ev_chargers',
+              // (#1371) not every house has one: it never holds the bar down
+              optional: true,
               done: this._chargersList().length > 0 },
             { key: 'hp', labelKey: 'heat_pump_title', icon: 'mdi:heat-pump',
               color: '#4db6ac', sectionId: 'heat_pump',
+              // (#1371) not every house has one: it never holds the bar down
+              optional: true,
               done: this._bin('heat_pump_registered') },
             { key: 'hw', labelKey: 'config_section_hot_water', icon: 'mdi:water-boiler',
               color: '#5BC8D8', sectionId: 'hot_water',
+              // (#1371) not every house has one: it never holds the bar down
+              optional: true,
               done: !!opts.hot_water_entity },
             // (#830) The overview stopped at four subsystems while the Config
             // tab has fourteen sections, so "all set up" could read 100% with
@@ -906,6 +912,8 @@ class SEMConfigCard extends SEMLitBase {
                        : !!opts.electricity_import_rate) },
             { key: 'battery', labelKey: 'config_section_battery_zones', icon: 'mdi:battery-charging',
               color: '#4db6ac', sectionId: 'battery_zones',
+              // (#1371) not every house has one: it never holds the bar down
+              optional: true,
               // (#842, a #830 addition) opts.has_battery is an
               // Energy-Dashboard reader flag, never an option key —
               // _hasBattery() is what the rest of the card trusts.
@@ -1976,6 +1984,18 @@ class SEMConfigCard extends SEMLitBase {
         const registered = this._bin('hot_water_registered');
         const currentTemp = this._val('hot_water_current_temperature');
         const solarTarget = this._val('hot_water_solar_target');
+        // (#1371) a tank with a thermometer band heats to its own Keep at +
+        // Extra (#1369): the Solar Heating Target is not used there, so it
+        // is neither shown as the target nor offered
+        const hwBand = this._hass?.states?.['sensor.sem_controllable_devices_count']
+            ?.attributes?.devices?.hot_water?.comfort;
+        // …only while the band really decides: with a silent thermometer,
+        // away, or a band whose limit is not below Keep at, the engine falls
+        // back to the Solar Heating Target, and that control must stay
+        const hwBandUsed = hwBand && hwBand.keep_c != null && hwBand.state !== 'disengaged'
+            && !(hwBand.limit_c != null && Number(hwBand.limit_c) >= Number(hwBand.keep_c));
+        const hwBandTop = hwBandUsed
+            ? (hwBand.max_c != null ? hwBand.max_c : hwBand.keep_c) : null;
         const legHours = this._val('hot_water_hours_since_legionella');
         const legActive = this._bin('hot_water_legionella_cycle_active');
         const tempReadingPath = this._val('hot_water_temperature_reading_path');
@@ -1990,7 +2010,8 @@ class SEMConfigCard extends SEMLitBase {
                 </div>
                 <div class="readonly-row">
                     <span class="ctrl-label">${this._t('hot_water_solar_target')}</span>
-                    <span class="readonly-value">${solarTarget ? `${parseFloat(solarTarget).toFixed(0)} °C` : '—'}</span>
+                    <span class="readonly-value">${hwBandTop != null ? `${parseFloat(hwBandTop).toFixed(0)} °C`
+                        : solarTarget ? `${parseFloat(solarTarget).toFixed(0)} °C` : '—'}</span>
                 </div>
                 <div class="readonly-row">
                     <span class="ctrl-label">${this._t('hot_water_hours_since_legionella')}</span>
@@ -2042,10 +2063,13 @@ class SEMConfigCard extends SEMLitBase {
                 ${/* #602 — rated power (W); config-only before, now settable here. */ ''}
                 ${this._renderOptionNumberInput('hot_water_rated_power', 'config_hw_rated_power',
                     { min: 100, max: 30000, step: 50, unit: 'W', default: 2500 }, opts, 'config_help_hw_rated_power')}
-                ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
-                    T, 'config_help_hw_solar_target')}
+                ${hwBandTop != null
+                    ? html`<div class="help-text">${this._t('config_hw_solar_target_band')}</div>`
+                    : this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
+                        T, 'config_help_hw_solar_target')}
+                ${/* (#1371) SEM never disinfects below 60 °C: the slider no longer offers it */ ''}
                 ${this._renderOptionSlider('hot_water_legionella_target', 'config_hw_legionella_target',
-                    { min: 55, max: 80, step: 1, unit: '°C', default: 65 }, opts, 'config_help_hw_legionella_target')}
+                    { min: 60, max: 80, step: 1, unit: '°C', default: 65 }, opts, 'config_help_hw_legionella_target')}
                 ${/* (#1062) "Max temperature" and "Minimum temperature" retired: no
                       decision read either. The solar target is the ceiling;
                       forcing is the Control tab's "Run now past". */ ''}

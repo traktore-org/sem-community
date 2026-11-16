@@ -1752,7 +1752,7 @@
         "name": "Überschuss-Ereignis Schwelle"
       },
       "daily_ev_target": {
-        "name": "{charger} Nachtziel"
+        "name": "{charger} Mindestens garantieren (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. Ampere"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Fahrzeug Min. Ampere"
       },
       "ev_target_soc": {
-        "name": "{charger} Ziel-SOC"
+        "name": "{charger} Als voll gelten ab (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solar-Maximum"
+        "name": "{charger} Nie mehr laden als (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Solar-Max-SOC"
+        "name": "{charger} Nie über (%) laden"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Akkukapazität"

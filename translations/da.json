@@ -1752,7 +1752,7 @@
         "name": "Overskudshændelse tærskel"
       },
       "daily_ev_target": {
-        "name": "{charger} Natmål"
+        "name": "{charger} Garantér mindst (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. ampere"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Køretøjets min. ampere"
       },
       "ev_target_soc": {
-        "name": "{charger} Mål-SOC"
+        "name": "{charger} Betragt som fuld ved (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solmaksimum"
+        "name": "{charger} Lad aldrig ud over (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Maks. sol-SOC"
+        "name": "{charger} Lad aldrig ud over (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Batterikapacitet"

@@ -1752,7 +1752,7 @@
         "name": "Overschot-event drempel"
       },
       "daily_ev_target": {
-        "name": "{charger} Nachtdoel"
+        "name": "{charger} Minimaal garanderen (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. ampère"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Voertuig min. ampère"
       },
       "ev_target_soc": {
-        "name": "{charger} Doel-SOC"
+        "name": "{charger} Beschouw als vol bij (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Zonne-maximum"
+        "name": "{charger} Nooit verder laden dan (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Zonne-max SOC"
+        "name": "{charger} Nooit verder laden dan (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Accucapaciteit"

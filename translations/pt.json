@@ -1752,7 +1752,7 @@
         "name": "Limiar de evento de excedente"
       },
       "daily_ev_target": {
-        "name": "{charger} Meta noturna"
+        "name": "{charger} Garantir pelo menos (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Amperes mín."
@@ -1764,13 +1764,13 @@
         "name": "{charger} Amperes mín. do veículo"
       },
       "ev_target_soc": {
-        "name": "{charger} SOC alvo"
+        "name": "{charger} Considerar cheio a (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Máximo solar"
+        "name": "{charger} Nunca carregar além de (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} SOC máx. solar"
+        "name": "{charger} Nunca carregar além de (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Capacidade da bateria"

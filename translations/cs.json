@@ -1752,7 +1752,7 @@
         "name": "Práh události přebytku"
       },
       "daily_ev_target": {
-        "name": "{charger} Noční cíl"
+        "name": "{charger} Zaručit alespoň (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. proud"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Min. proud vozidla"
       },
       "ev_target_soc": {
-        "name": "{charger} Cílový SOC"
+        "name": "{charger} Považovat za plné při (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solární maximum"
+        "name": "{charger} Nikdy nenabíjet nad (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Max. solární SOC"
+        "name": "{charger} Nikdy nenabíjet nad (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Kapacita baterie"

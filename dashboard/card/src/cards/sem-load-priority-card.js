@@ -1217,8 +1217,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _onSunMaxChange(device, q, e) {
+        const leg = parseFloat(this.hass?.states?.['number.sem_legionella_target_temp']?.state);
         const res = sunMaxWrites({ id: device.id, keep: q.keep, cooling: q.cooling }, e.target.value,
-            this._solarTargetBounds());
+            this._solarTargetBounds(),
+            Number.isFinite(leg) && (this.hass?.config?.unit_system?.temperature || '°C') === '°C' ? leg : null);
         this._hqError = { ...(this._hqError || {}) };
         if (res.error) {
             this._hqError[device.id] = this._tf(res.error, res.params);

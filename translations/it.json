@@ -1752,7 +1752,7 @@
         "name": "Soglia evento surplus"
       },
       "daily_ev_target": {
-        "name": "{charger} Obiettivo notturno"
+        "name": "{charger} Garantire almeno (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Ampere min."
@@ -1764,13 +1764,13 @@
         "name": "{charger} Ampere min. veicolo"
       },
       "ev_target_soc": {
-        "name": "{charger} SOC obiettivo"
+        "name": "{charger} Considera pieno al (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Massimo solare"
+        "name": "{charger} Non caricare oltre (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} SOC max solare"
+        "name": "{charger} Non caricare oltre (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Capacità batteria"

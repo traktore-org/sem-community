@@ -1752,7 +1752,7 @@
         "name": "Próg zdarzenia nadwyżki"
       },
       "daily_ev_target": {
-        "name": "{charger} Cel nocny"
+        "name": "{charger} Zagwarantuj co najmniej (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. amperaż"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Min. amperaż pojazdu"
       },
       "ev_target_soc": {
-        "name": "{charger} Docelowy SOC"
+        "name": "{charger} Uznaj za pełny przy (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Maksimum słoneczne"
+        "name": "{charger} Nigdy nie ładuj powyżej (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Maks. SOC słoneczny"
+        "name": "{charger} Nigdy nie ładuj powyżej (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Pojemność akumulatora"

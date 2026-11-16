@@ -408,9 +408,9 @@
         "description": "Configure the 4-zone SOC strategy. Zone 1 (< Priority): battery first. Zone 2 (Priority–Buffer): surplus only. Zone 3 (Buffer–Auto-start): battery assists EV. Zone 4 (≥ Auto-start): full battery assist.",
         "data": {
           "update_interval": "Update interval (seconds)",
-          "battery_priority_soc": "Zone 1 ceiling — Battery priority SOC (%)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
+          "battery_priority_soc": "Below this the battery fills first (%)",
+          "battery_buffer_soc": "From this the battery may help the car (%)",
+          "battery_auto_start_soc": "From this the battery may help the car fully (%)",
           "min_solar_power": "Minimum solar power — raw PV production (W)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "battery_assist_max_power": "Battery assist maximum power (W)",
@@ -1662,7 +1662,7 @@
         "name": "Update Interval"
       },
       "battery_priority_soc": {
-        "name": "Battery Priority SOC (Zone 1 floor)"
+        "name": "Battery Priority SOC"
       },
       "minimum_solar_power": {
         "name": "Minimum Solar Power"
@@ -1752,7 +1752,7 @@
         "name": "Surplus Event Threshold"
       },
       "daily_ev_target": {
-        "name": "{charger} Night Target"
+        "name": "{charger} Guarantee at least (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min Amps"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Vehicle Min Amps"
       },
       "ev_target_soc": {
-        "name": "{charger} Target SOC"
+        "name": "{charger} Consider full at (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solar Max"
+        "name": "{charger} Never charge past (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Solar Max SOC"
+        "name": "{charger} Never charge past (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Battery Capacity"

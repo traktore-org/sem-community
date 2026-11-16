@@ -373,7 +373,7 @@ async def async_setup_entry(
             for base_desc, config_key, default_val in [
                 (NumberEntityDescription(
                     key=f"charger_{cid}_daily_ev_target",
-                    name=f"{cname} Night Target",
+                    name=f"{cname} Guarantee at least (kWh)",
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                     # #355: max raised 100 → 200 so the slider has drag room
                     # when the user (or default) has Solar Max sitting at the
@@ -440,7 +440,7 @@ async def async_setup_entry(
                     full_config.get("ev_min_current", 6)),
                 (NumberEntityDescription(
                     key=f"charger_{cid}_target_soc",
-                    name=f"{cname} Target SOC",
+                    name=f"{cname} Consider full at (%)",
                     native_unit_of_measurement=PERCENTAGE,
                     # 0 = no overnight floor → never grid-charges at night (#680,
                     # onkelfu #627). The "At least" floor is the single night-charge
@@ -454,7 +454,7 @@ async def async_setup_entry(
                 # defaults to full (charge freely from sun) until the user caps it (#245).
                 (NumberEntityDescription(
                     key=f"charger_{cid}_daily_ev_target_max",
-                    name=f"{cname} Solar Max",
+                    name=f"{cname} Never charge past (kWh)",
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                     # #355: max raised 100 → 200 — same reason as the Min slider
                     # above. With both defaulting to 100 (full charge intent),
@@ -466,7 +466,7 @@ async def async_setup_entry(
                     charger_cfg.get("daily_ev_target_max", 100)),
                 (NumberEntityDescription(
                     key=f"charger_{cid}_target_soc_max",
-                    name=f"{cname} Solar Max SOC",
+                    name=f"{cname} Never charge past (%)",
                     native_unit_of_measurement=PERCENTAGE,
                     # 0–100 on both handles, matching the kWh target (#680). The
                     # runtime clamps the effective ceiling to >= floor

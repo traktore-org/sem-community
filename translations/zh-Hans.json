@@ -1752,7 +1752,7 @@
         "name": "富余功率事件触发阈值"
       },
       "daily_ev_target": {
-        "name": "{charger}夜间充电目标"
+        "name": "{charger}至少保证 (kWh)"
       },
       "ev_min_current": {
         "name": "{charger}最小电流"
@@ -1764,13 +1764,13 @@
         "name": "{charger}车辆最小电流"
       },
       "ev_target_soc": {
-        "name": "{charger}目标电量"
+        "name": "{charger}达到此值视为充满 (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger}绿电充电上限"
+        "name": "{charger}充电不超过 (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger}绿电充电目标电量上限"
+        "name": "{charger}充电不超过 (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger}车辆电池容量"

@@ -1752,7 +1752,7 @@
         "name": "Többlet esemény küszöb"
       },
       "daily_ev_target": {
-        "name": "{charger} Éjszakai cél"
+        "name": "{charger} Legalább ennyit garantálj (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. áramerősség"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Jármű min. áramerőssége"
       },
       "ev_target_soc": {
-        "name": "{charger} Cél-SOC"
+        "name": "{charger} Tekintsd tele ennél (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Napelemes maximum"
+        "name": "{charger} Soha ne töltsön ennél többet (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Max. napelemes SOC"
+        "name": "{charger} Soha ne tölts (%) fölé"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Akkumulátor kapacitása"

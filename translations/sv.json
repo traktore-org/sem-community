@@ -1752,7 +1752,7 @@
         "name": "Överskottshändelse tröskel"
       },
       "daily_ev_target": {
-        "name": "{charger} Nattmål"
+        "name": "{charger} Garantera minst (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. ampere"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Fordonets min. ampere"
       },
       "ev_target_soc": {
-        "name": "{charger} Mål-SOC"
+        "name": "{charger} Betrakta som full vid (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solmaximum"
+        "name": "{charger} Ladda aldrig förbi (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Max sol-SOC"
+        "name": "{charger} Ladda aldrig förbi (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Batterikapacitet"
