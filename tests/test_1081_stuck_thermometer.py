@@ -74,6 +74,20 @@ def test_good_samples_from_before_it_stuck_are_kept():
     assert pts and abs(pts[0][1] - 3.0) < 0.05, pts   # the cop 2.0 hours are gone
 
 
+def test_an_older_good_day_at_the_same_value_is_kept():
+    s, e, h = _feed(None, 5, t=5.0, age=60.0)
+    s, e, h = _feed(s, 3, t=6.3, start=5, e0=e, h0=h, age=60.0)
+    s, _, _ = _feed(s, 14, t=5.0, start=8, e0=e, h0=h, age=20 * 3600.0, cop=2.0)
+    # the five good hours at 5.0 stay; none of the stuck run's hours do
+    assert [c for t, c in s["bins"]["4"] if t == 5.0] == [3.0] * 5
+
+
+def test_the_same_value_on_both_sides_of_a_gap_is_not_one_run():
+    s, e, h = _feed(None, 8, t=5.0, age=20 * 3600.0)
+    s, _, _ = _feed(s, 8, t=5.0, start=30, e0=e, h0=h, age=20 * 3600.0)
+    assert not cl.summary(s, has_meter=True)["rejected"].get("temperature_stuck")
+
+
 def test_a_store_with_a_bad_counter_starts_fresh():
     s, _, _ = _feed(None, 3, t=5.0)
     s["t_same"] = "many"

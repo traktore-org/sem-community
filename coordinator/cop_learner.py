@@ -88,7 +88,7 @@ def _valid(state: Any) -> Dict[str, Any]:
 
 
 def _same_ok(state: Dict[str, Any]) -> bool:
-    for k in ("t_last", "t_same"):
+    for k in ("t_last", "t_same", "t_added"):
         v = state.get(k)
         if v is not None and (isinstance(v, bool)
                               or not isinstance(v, (int, float))
@@ -198,6 +198,7 @@ def _close_hour(state: Dict[str, Any], hour: Dict[str, Any]) -> None:
     t = hour["sum_temp"] / hour["n_temp"]
     samples = state["bins"].setdefault(bin_key(t), [])
     samples.append([round(t, 1), round(cop, 3)])
+    state["t_added"] = int(state.get("t_added", 0) or 0) + 1
     if len(samples) > MAX_SAMPLES_PER_BIN:
         del samples[: len(samples) - MAX_SAMPLES_PER_BIN]
 
@@ -210,7 +211,7 @@ def _temperature_stuck(state: Dict[str, Any], hour: Dict[str, Any]) -> bool:
         return False
     t = round(hour["sum_temp"] / hour["n_temp"], 1)
     if hour.get("fresh") or state.get("t_last") != t:
-        state["t_last"], state["t_same"] = t, 0
+        state["t_last"], state["t_same"], state["t_added"] = t, 0, 0
         return False
     state["t_same"] = int(state.get("t_same", 0) or 0) + 1
     if state["t_same"] < STUCK_HOURS - 1:
@@ -218,9 +219,11 @@ def _temperature_stuck(state: Dict[str, Any], hour: Dict[str, Any]) -> bool:
     if state["t_same"] == STUCK_HOURS - 1:
         samples = state["bins"].get(bin_key(t), [])
         drop = 0
-        # every trailing sample at this exact value: also the ones an
-        # older version stored before it could tell
-        while drop < len(samples) and samples[-1 - drop][0] == t:
+        # only the samples THIS run added: an older good day at the same
+        # value stays
+        added = int(state.get("t_added", 0) or 0)
+        while (drop < added and drop < len(samples)
+               and samples[-1 - drop][0] == t):
             drop += 1
         if drop:
             del samples[len(samples) - drop:]
@@ -268,6 +271,9 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
         if (isinstance(old_id, int) and isinstance(hour_id, int)
                 and hour_id != old_id + 1):
             state.pop("stalled", None)
+            # the same value on both sides of a gap is not one run
+            state.pop("t_last", None)
+            state["t_same"] = state["t_added"] = 0
             _reject(state, "gap")
         elif hour is not None:
             # the reading at the turn is the closing value of the old hour
