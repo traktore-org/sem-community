@@ -32,10 +32,16 @@ DEFAULT_LEGIONELLA_INTERVAL_HOURS = 72  # Max hours between cycles
 #: (#1369) In the last day before a run is due, a sunny hour may
 #: start it EARLY. Never later: at the due time it runs as before.
 LEGIONELLA_EARLY_WINDOW_H = 24.0
-#: (#1368) …and in the last 12 h a CHEAP hour may start it too: the sun
-#: gets the first half of the window, the low tariff the second — so a run
-#: due in a high-tariff hour has run in the low tariff before it.
+#: (#1368) …and a CHEAP hour may start it too, as late as it can: when the
+#: cheap hours still left before the run is due are just enough for it
+#: (its last run time × 1.5 + half an hour). So a run due in a high-tariff
+#: hour has run in the low tariff before it, and is not much earlier than
+#: it must be. Without a view of the coming prices: in the last 12 h.
 LEGIONELLA_CHEAP_WINDOW_H = 12.0
+LEGIONELLA_CHEAP_MARGIN = 1.5
+LEGIONELLA_CHEAP_SLACK_H = 0.5
+#: How long a run takes while none has been timed yet (h).
+LEGIONELLA_DEFAULT_RUN_H = 3.0
 #: (#1369) the good hour must hold this long before an early start, and be
 #: gone this long before an early run pauses — no start/stop on a passing cloud
 LEGIONELLA_EARLY_START_HOLD_MIN = 10.0
@@ -966,7 +972,8 @@ class HotWaterController(SwitchDevice):
 
     async def check_legionella_cycle(self, good_hour: bool = False,
                                      sun_holds: Optional[bool] = None,
-                                     cheap_hour: bool = False) -> Optional[str]:
+                                     cheap_hour: bool = False,
+                                     cheap_hours_left: Optional[float] = None) -> Optional[str]:
         """Advance the Legionella prevention cycle. Never switches the tank.
 
         Called every coordinator cycle. Returns a status message or None.
@@ -1002,14 +1009,26 @@ class HotWaterController(SwitchDevice):
         # (#1369) an early run STARTS on a good hour (80 % of the rating)
         # and keeps going while the sun holds (half the rating)
         holds = good_hour if sun_holds is None else bool(sun_holds)
-        # (#1368) a cheap hour counts in the last 12 h before the run is
-        # due, and a run goes on through cheap hours
-        if cheap_hour:
-            holds = True
-            if (self._last_legionella_time is not None
-                    and (self.legionella_interval_hours - self.hours_since_legionella)
-                    <= LEGIONELLA_CHEAP_WINDOW_H):
-                good_hour = True
+        # (#1368) a cheap hour counts when the cheap hours left before the
+        # run is due are just enough for it — the latest cheap start
+        cheap_ok = False
+        if cheap_hour and self._last_legionella_time is not None:
+            left_h = self.legionella_interval_hours - self.hours_since_legionella
+            if cheap_hours_left is None:
+                cheap_ok = left_h <= LEGIONELLA_CHEAP_WINDOW_H
+            else:
+                need_h = (float(getattr(self, "_legionella_last_run_h", None)
+                                or LEGIONELLA_DEFAULT_RUN_H) * LEGIONELLA_CHEAP_MARGIN
+                          + LEGIONELLA_CHEAP_SLACK_H)
+                cheap_ok = (left_h <= LEGIONELLA_EARLY_WINDOW_H
+                            and float(cheap_hours_left) <= need_h)
+        if cheap_ok:
+            good_hour = holds = True
+        elif getattr(self, "_cheap_held", False) and not holds:
+            # a tariff does not flicker: when the cheap hour ends the run
+            # pauses at once, not after the 30 min a cloud gets
+            self._bad_since = now - timedelta(minutes=LEGIONELLA_EARLY_PAUSE_HOLD_MIN)
+        self._cheap_held = cheap_ok
         if good_hour:
             if getattr(self, "_good_since", None) is None:
                 self._good_since = now
@@ -1094,6 +1113,14 @@ class HotWaterController(SwitchDevice):
                            - float(getattr(self, "_hold_unread_min", 0.0)))
                 if elapsed >= self.legionella_hold_minutes:
                     # Cycle complete
+                    # (#1368) how long this run took, pauses left out: the
+                    # next cheap start is timed by it
+                    _st = self._legionella_started_at
+                    if _st is not None:
+                        self._legionella_last_run_h = round(
+                            float(getattr(self, "_legionella_run_s", 0.0))
+                            / 3600.0 + (dt_util.now() - _st).total_seconds() / 3600.0, 2)
+                    self._legionella_run_s = 0.0
                     self._end_legionella_run()
                     self._legionella_blocked_until = None
                     self._last_legionella_time = dt_util.now()
@@ -1140,6 +1167,10 @@ class HotWaterController(SwitchDevice):
                 if (getattr(self, "_legionella_early", False) and bad_held
                         and not self.legionella_overdue
                         and hours_left > LEGIONELLA_EARLY_PAUSE_MIN_LEAD_H):
+                    if started is not None:
+                        self._legionella_run_s = (
+                            float(getattr(self, "_legionella_run_s", 0.0))
+                            + (dt_util.now() - started).total_seconds())
                     self._end_legionella_run()
                     self._legionella_early = False
                     self._last_legionella_path = "early_paused"

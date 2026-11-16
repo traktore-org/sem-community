@@ -7127,13 +7127,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                  else len(able) / len(adapters))
         return share, unable
 
+    def _legionella_cheap_hours_left(self, hw) -> Optional[float]:
+        """(#1368) The cheap hours between now and the Legionella run's due
+        time, from the tariff's own schedule or forecast. None = not known
+        (no provider, a tank on its own tariff, no run yet, due later than
+        a day): the tank then uses its plain 12-hour rule."""
+        try:
+            from .day_ledger import tariff_cheap_at
+            prov = getattr(self, "_tariff_provider", None)
+            dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
+            if (prov is None or not hasattr(prov, "get_price_level_at")
+                    or getattr(hw, "_last_legionella_time", None) is None
+                    or any(getattr(dev, k, None) for k in
+                           ("tariff_rate", "tariff_entity", "tariff_meter"))):
+                return None
+            left_h = float(hw.legionella_interval_hours) - float(hw.hours_since_legionella)
+            if not 0.0 < left_h <= 24.0:
+                return None
+            now = dt_util.now()
+            steps = int(left_h * 4)
+            return 0.25 * sum(
+                1 for i in range(steps)
+                if tariff_cheap_at(prov, now + timedelta(minutes=15 * i)))
+        except Exception:  # noqa: BLE001 — not known
+            return None
+
     def _legionella_good_hour_now(self, true_surplus_w, tariff_data,
                                   share: float = 0.8) -> bool:
         """(#1369) A sunny hour for the hot water tank: the loads' free
         surplus (which already counts what running loads draw) covers its
-        rating. Free sun only — a cheap hour bought the run at night while
-        the noon sun could have carried it; a due run still runs from any
-        source at its due time. Anything unread is no."""
+        rating. This is the sun's half; a cheap hour is asked apart
+        (#1368). A due run still runs from any source at its due time.
+        Anything unread is no."""
         try:
             dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
             if dev is None:
@@ -8298,7 +8323,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     await hw_controller.check_legionella_cycle(
                         good_hour=bool(getattr(self, "_legionella_good_hour", False)),
                         sun_holds=bool(getattr(self, "_legionella_sun_holds", False)),
-                        cheap_hour=bool(getattr(self, "_legionella_cheap_hour", False)))
+                        cheap_hour=bool(getattr(self, "_legionella_cheap_hour", False)),
+                        cheap_hours_left=self._legionella_cheap_hours_left(hw_controller))
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
             # (#1369) a due Legionella run skipped under the user's own stop:
