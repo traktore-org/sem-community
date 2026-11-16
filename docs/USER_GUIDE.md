@@ -459,7 +459,9 @@ the opened row.
 | **May SEM buy power for it?** (was *Finish overnight from*) | *No, sun only*: only the sun heats it. *Yes, in cheap hours*: SEM buys the rest in the cheapest hours. *Yes, from the house battery at night* (only with a house battery): at night it heats to *Keep it at* from the battery, while the battery is above its reserve. At the reserve it stops and waits for the sun; it never turns into a bought run |
 
 Above the questions one line says what the heater does now and what comes
-next, for example "45.8 °C now. Heats to 52 °C at 23:00." Everything else —
+next, for example "45.8 °C now. Heats to 52 °C at 23:00." When the boiler's
+own thermostat stops it below SEM's target, the line says so and at which temperature;
+raise that thermostat on the boiler. Everything else —
 the thermometer, minimum on and off time, its own tariff, *Stop when* — sits
 under **More**.
 
