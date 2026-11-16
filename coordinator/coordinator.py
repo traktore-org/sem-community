@@ -17639,8 +17639,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 name = (getattr(state, "attributes", None) or {}).get("friendly_name")
             dark[entity_id] = (str(name or entity_id), max(0.0, now_mono - float(t0)))
 
-        from .price_signal import is_cheap_name
-        price_cheap = is_cheap_name(getattr(tariff_data, "tariff_price_level", None))
+        from .price_view import answer_for_level
+        price_cheap = answer_for_level(
+            getattr(tariff_data, "tariff_price_level", None)).is_cheap
         dynamic = str(cfg.get("tariff_mode") or "") == "dynamic"
 
         idle: list = []
