@@ -1407,6 +1407,8 @@ tab**, in the boiler's row, as four questions:
 - **Never colder than** — below it SEM heats at once, at any price.
 - **With spare sun, heat up to** — how hot free sun may heat it. With a
   thermometer this is the top: the Solar target above no longer caps it.
+- **Also in the cheapest-heat hours** — off by default; with it, a planned
+  cheap hour heats on to the top, not only to *Keep it at*.
 - **May SEM buy power for it?** — *No, sun only*, or *Yes, in cheap hours*.
 
 One line above them says what the boiler does now and next. The order SEM

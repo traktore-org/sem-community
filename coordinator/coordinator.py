@@ -12077,7 +12077,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     except TypeError:
                         goal = None
                     if goal:
-                        sig.append(("comfort", str(dev.device_id), "goal"))
+                        # (#1081) the pre-heat tick changes what is asked
+                        _pre = getattr(dev, "comfort_preheat_on", None)
+                        _top = callable(_pre) and _pre() is True
+                        sig.append(("comfort", str(dev.device_id),
+                                    "goal-preheat" if _top else "goal"))
                         continue
                     ask = _fn(_now_sig) if callable(_fn) else None
                     if not ask:
