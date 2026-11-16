@@ -2687,13 +2687,16 @@ class UnifiedDeviceRegistry:
         now = time.monotonic()
         hit = cache.get(device_id)
         if hit is None or now - hit[0] > self._THERMO_RESCAN_S:
-            bound = {str(g.get("comfort_entity")) for d, g in self._device_goals.items()
+            bound = {str(g.get("comfort_entity"))
+                     for d, g in (getattr(self, "_device_goals", None) or {}).items()
                      if d != device_id and g.get("comfort_entity")}
             own = [getattr(live, a, None) for a in ("entity_id", "power_entity_id")]
             # (#1353 review) a sensor in the same ROOM is offered only to a
             # hot water tank; any other load takes one on its own device
             is_tank = getattr(type(live), "check_legionella_cycle", None) is not None
-            found = find_heater_thermometer(self.hass, own, bound, area_ok=is_tank)
+            # a payload must never break the sensor: no hass is no proposal
+            found = find_heater_thermometer(getattr(self, "hass", None), own, bound,
+                                            area_ok=is_tank)
             hit = (now, found[0] if found else None)
             cache[device_id] = hit
         best = hit[1]
