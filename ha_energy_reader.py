@@ -459,6 +459,18 @@ def unit_soc_sensor(ed_config: Any, unit: Optional[str]) -> Optional[str]:
     return soc if isinstance(soc, str) and soc else None
 
 
+def unpowered_battery_socs(ed_config: Any) -> List[str]:
+    """(#1373) With no battery power read at all, each battery's pick, once.
+    Two of them are two batteries: the home's level is their average, not
+    the first one's."""
+    if battery_units(ed_config):
+        return []
+    picks = getattr(ed_config, "battery_soc_list", None)
+    if not isinstance(picks, (list, tuple)):
+        return []
+    return list(dict.fromkeys(p for p in picks if isinstance(p, str) and p))
+
+
 def one_battery_soc(ed_config: Any) -> Optional[str]:
     """The SOC sensor of a home read as one battery (#1373), or None.
 
@@ -476,9 +488,7 @@ def one_battery_soc(ed_config: Any) -> Optional[str]:
     if not units:
         # No battery power read: the first pick, unless two batteries
         # have one (the first is then one battery of two, not the home's).
-        picks = getattr(ed_config, "battery_soc_list", None)
-        many = isinstance(picks, (list, tuple)) and len(set(picks)) > 1
-        return None if many else first
+        return None if len(unpowered_battery_socs(ed_config)) > 1 else first
     own = unit_soc_sensor(ed_config, units[0])
     # A pick the parser recorded for no battery at all (a config built
     # without the record) is no answer about whose it is: the first stays.

@@ -583,6 +583,7 @@ async def test_the_diagnostics_name_each_batterys_soc_sensor(hass, tmp_path):
 DECLARED_SOC_FIELD_READERS = {
     "_extract_battery_config": "the parser fills them",
     "one_battery_soc": "the rule: the first only when no battery is read",
+    "unpowered_battery_socs": "no battery power read: every pick, for the average",
     "_wired": "lists every SOC sensor of the dashboard, for no battery",
 }
 _SOC_FIELDS = {"battery_soc", "battery_soc_list"}
@@ -593,7 +594,7 @@ _CONFIG_NAME = re.compile(
 
 
 def _is_config(node) -> bool:
-    return ((isinstance(node, ast.Name) and _CONFIG_NAME.match(node.id))
+    return ((isinstance(node, ast.Name) and _CONFIG_NAME.search(node.id))
             or (isinstance(node, ast.Attribute)
                 and node.attr == "_energy_dashboard_config"))
 
@@ -666,10 +667,15 @@ async def test_b2_never_takes_b1s_level_through_a_shared_name(hass):
     hass.states.async_set(HOME1_SOC, "80", _PCT)
     r = _reader(hass, _homes(hass, HOME1, HOME2))
     assert r._auto_detect_battery_soc(HOME2) is None
-    assert _read(r).batteries["b2"].soc_pct is None
+    readings = _read(r)
+    assert readings.batteries["b2"].soc_pct is None
+    # the stem is b1's own: its name adds one word to it, b2's two
+    assert readings.batteries["b1"].soc_pct == pytest.approx(80)
     hass.states.async_set(HOME2_SOC, "60", _PCT)
     assert r._auto_detect_battery_soc(HOME2) == HOME2_SOC
-    assert _read(r).batteries["b2"].soc_pct == pytest.approx(60)
+    readings = _read(r)
+    assert readings.batteries["b2"].soc_pct == pytest.approx(60)
+    assert readings.batteries["b1"].soc_pct == pytest.approx(80)
 
 
 async def test_listed_the_other_way_b1_never_takes_b2s_level(hass):
@@ -677,6 +683,26 @@ async def test_listed_the_other_way_b1_never_takes_b2s_level(hass):
     r = _reader(hass, _homes(hass, HOME2, HOME1))
     assert r._auto_detect_battery_soc(HOME2) is None
     assert not r._soc_candidate_exists(HOME2)
+    assert r._auto_detect_battery_soc(HOME1) == HOME1_SOC
+
+
+async def test_ha_numbered_twins_keep_the_first_level_for_b1(hass):
+    """HA numbers a second entity of the same name: ``…_power_2``."""
+    hass.states.async_set(HOME1_SOC, "80", _PCT)
+    twin = "sensor.home_battery_power_2"
+    r = _reader(hass, _homes(hass, HOME1, twin))
+    assert r._auto_detect_battery_soc(HOME1) == HOME1_SOC
+    assert r._auto_detect_battery_soc(twin) is None
+
+
+async def test_a_guess_from_a_one_battery_home_is_dropped_when_b1_comes(hass):
+    """Alone, b2's short name found ``home_battery_soc``; once b1 is added,
+    that sensor is b1's."""
+    hass.states.async_set(HOME1_SOC, "80", _PCT)
+    r = _reader(hass, _homes(hass, HOME2))
+    assert r._auto_detect_battery_soc(HOME2) == HOME1_SOC
+    r.set_energy_dashboard_config(_homes(hass, HOME1, HOME2))
+    assert r._auto_detect_battery_soc(HOME2) is None
 
 
 async def test_on_their_own_devices_both_find_their_level(hass):
@@ -732,6 +758,23 @@ async def test_a_pick_that_names_no_sensor_is_not_waited_for(hass):
     assert readings.battery_soc_partial is False
 
 
+async def test_a_yaml_pick_is_waited_for_until_ha_has_started(hass):
+    """No registry entry and no state yet: while HA starts it may still
+    come (a YAML sensor), so the fleet waits; once HA runs it is gone."""
+    from homeassistant.core import CoreState
+    _edge(hass, 80)
+    _flow(hass, 60)
+    ed = _ed(hass, _edge_src(), _flow_src(soc="sensor.yaml_level"))
+    r = _reader(hass, ed)
+    hass.set_state(CoreState.starting)
+    try:
+        assert r._auto_detect_battery_soc(FLOW_TO) == "sensor.yaml_level"
+        assert _read(r).battery_soc_units_expected == 2
+    finally:
+        hass.set_state(CoreState.running)
+    assert r._auto_detect_battery_soc(FLOW_TO) is None
+
+
 async def test_a_pick_known_to_the_registry_is_waited_for(hass):
     """Registered and no state yet: a sensor coming up, not a gone one."""
     _edge(hass, 80)
@@ -754,3 +797,27 @@ def test_two_picks_and_no_power_give_no_home_soc():
     assert one_battery_soc(cfg) is None
     cfg.battery_soc_list = ["sensor.a_soc"]
     assert one_battery_soc(cfg) == "sensor.a_soc"
+
+
+async def test_two_picks_and_no_power_read_give_their_average(hass):
+    """Counters only, no power sensor found: the home's level is the
+    average of the two picks, and one down is a wait."""
+    hass.states.async_set("sensor.a_soc", "80", _PCT)
+    hass.states.async_set("sensor.b_soc", "40", _PCT)
+    ed = _ed(hass,
+             {"type": "battery", "stat_energy_to": "sensor.a_in",
+              "stat_energy_from": "sensor.a_out", "stat_soc": "sensor.a_soc"},
+             {"type": "battery", "stat_energy_to": "sensor.b_in",
+              "stat_energy_from": "sensor.b_out", "stat_soc": "sensor.b_soc"})
+    assert battery_units(ed) == []
+    r = _reader(hass, ed)
+    assert _read(r).battery_soc == pytest.approx(60)
+    from custom_components.solar_energy_management.setup_check import (
+        build_setup_check,
+    )
+    assert build_setup_check(hass, ed).soc == pytest.approx(60)
+    hass.states.async_set("sensor.b_soc", "unavailable", {})
+    assert _read(r).battery_soc == pytest.approx(60)    # held, not a's 80
+    r2 = _reader(hass, ed)
+    _read(r2)
+    assert r2._last_valid_soc is None                   # never read

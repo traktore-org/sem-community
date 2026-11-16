@@ -38,7 +38,8 @@ from .units import (
 
 from ..ha_energy_reader import (
     battery_units, energy_counters, left_alone_counters, one_battery_soc,
-    unit_energy_counters, unit_soc_sensor, unsourced_counters,
+    unit_energy_counters, unit_soc_sensor, unpowered_battery_socs,
+    unsourced_counters,
 )
 from ..utils.log_gate import log_on_change
 from ..utils.own_entity import is_sem_entity
@@ -89,8 +90,9 @@ def _soc_shaped(device_class: Any, unit: Optional[str]) -> bool:
 # Matched as whole words of the id (``reset`` holds no ``set``).
 _SOC_SETTING_WORDS = frozenset((
     "min", "max", "minimum", "maximum", "target", "set", "setpoint",
-    "limit", "reserve", "cutoff", "end", "eod", "backup", "floor", "health",
-    "soh", "lower", "upper", "hold",
+    "limit", "soclimit", "reserve", "cutoff", "cut", "end", "eod", "backup",
+    "floor", "health", "soh", "lower", "upper", "hold", "low", "shutdown",
+    "restart",
 ))
 
 
@@ -108,14 +110,17 @@ def _picked_soc_present(hass: Any, pick: str) -> bool:
     """(#1373) Is the SOC sensor picked in HA's battery dialog there: a
     state, or a registry entry not disabled? A sensor still coming up is
     there; a renamed or removed one is not, and a fleet that counted it
-    would wait for it for ever."""
+    would wait for it for ever. Until HA has started, a sensor with no
+    registry entry (YAML, no unique_id) may still come: it counts."""
     if hass.states.get(pick) is not None:
         return True
     try:
         entry = er.async_get(hass).async_get(pick)
     except Exception:  # noqa: BLE001 — no usable registry (stub hass)
-        return False
-    return bool(entry and not entry.disabled_by)
+        entry = None
+    if entry is not None:
+        return not entry.disabled_by
+    return getattr(hass, "state", CoreState.running) is not CoreState.running
 
 
 def _own_stems(ed_config: Any, battery_power_entity: str) -> list:
@@ -124,8 +129,10 @@ def _own_stems(ed_config: Any, battery_power_entity: str) -> list:
     too is not this battery's, and nor is any shorter one: ``home_battery``
     is the stem of ``home_battery_power`` and of ``home_battery_2_power``,
     and b2 found b1's ``home_battery_soc`` through it while its own level
-    was not up yet. A battery its name cannot tell apart is left to its
-    device (strategy 2)."""
+    was not up yet. A shared stem stays with the one battery whose name
+    adds the fewest words to it (``home_battery`` + ``power`` is b1's);
+    a tie gives it to none, and that battery is left to its device
+    (strategy 2)."""
     parts = battery_power_entity.split(".", 1)[1].split("_")
     units = battery_units(ed_config)
     others = ([u.split(".", 1)[1].split("_") for u in units
@@ -133,8 +140,9 @@ def _own_stems(ed_config: Any, battery_power_entity: str) -> list:
               if battery_power_entity in units else [])
     stems = []
     for k in range(len(parts), 1, -1):
-        if any(o[:k] == parts[:k] for o in others):
-            break
+        mine = len(parts) - k
+        if any(o[:k] == parts[:k] and len(o) - k <= mine for o in others):
+            break           # a shorter stem is shared the same way
         stems.append("_".join(parts[:k]))
     return stems
 
@@ -1184,6 +1192,12 @@ class SensorReader:
 
     def set_energy_dashboard_config(self, ed_config) -> None:
         """Set energy dashboard configuration for alternative sensor reading."""
+        # (#1373) A SOC sensor guessed while the home had other batteries is
+        # no answer once they change: ``home_battery_soc`` found for
+        # ``home_battery_2_power`` alone is b1's once b1 is added.
+        old_units = battery_units(getattr(self, "_energy_dashboard_config", None))
+        if battery_units(ed_config) != old_units:
+            getattr(self, "_soc_entity_by_power", {}).clear()
         self._energy_dashboard_config = ed_config
         # #647 — drop per-battery audits for units that no longer exist. A
         # flagged ``b2`` whose battery has since been removed from the Energy
@@ -3831,6 +3845,7 @@ class SensorReader:
         # (#1373) the one battery read: its own pick, never another
         # source's (the first source may be a battery with no power sensor)
         ed_soc = one_battery_soc(ed)
+        unpowered = unpowered_battery_socs(ed)
         if self.config.battery_soc_sensor:
             soc_val = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc", allow_none=True,
@@ -3853,6 +3868,14 @@ class SensorReader:
             readings.battery_soc_partial = bool(
                 soc_val is not None
                 and 0 < self._soc_units_read < self._soc_units_expected)
+        elif len(unpowered) > 1:
+            # (#1373) Batteries with no power read and a pick each: their
+            # average, once every pick that is there reads. One down is a
+            # wait, not the other battery's level.
+            levels = [self._read_sensor(e, "battery_soc", allow_none=True)
+                      for e in unpowered if _picked_soc_present(self.hass, e)]
+            if levels and all(v is not None for v in levels):
+                soc_val = sum(levels) / len(levels)
         elif ed_soc:
             soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
         elif ed.battery_power:
