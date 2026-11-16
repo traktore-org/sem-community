@@ -333,3 +333,22 @@ export function asSentence(text) {
     const up = s.charAt(0).toUpperCase() + s.slice(1);
     return /[.!?]$/.test(up) ? up : up + '.';
 }
+
+/**
+ * (#1353) The crawler's thermometer proposal for a heater, or null. Shown
+ * only while the heater has NO thermometer set (`goals.comfort_entity`
+ * empty) and the engine published one. The confirm writes the SAME setting
+ * the manual picker writes (`comfort_entity`); nothing is written before.
+ */
+export function thermometerProposal(device) {
+    const p = device && device.thermometerProposal;
+    const g = (device && device.goals) || {};
+    if (!p || typeof p !== 'object' || !p.entity_id || g.comfort_entity) return null;
+    // a name that ends with a full stop would print "Name.. Use it?"
+    return { entity: String(p.entity_id), name: String(p.name || p.entity_id).replace(/[.\s]+$/, ''), why: String(p.why || '') };
+}
+
+/** The one write the confirm sends: `{property, value}` — the picker's own. */
+export function useThermometerWrite(proposal) {
+    return { property: 'comfort_entity', value: proposal.entity };
+}

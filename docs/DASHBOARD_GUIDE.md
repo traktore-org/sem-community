@@ -633,7 +633,10 @@ thermometer opens one line that says what it does now and next, then four
 questions: *Keep it at*, *Never colder than*, *With spare sun, heat up to* and
 *May SEM buy power for it?*. A load without a thermometer is asked *Run it
 each day for* and the same buy question. Thermometer, minimum on/off time,
-own tariff and *Stop when* sit under **More**. The chip under the row says the
+own tariff and *Stop when* sit under **More**. For a heater with no thermometer,
+SEM looks for one on the same device, else in the same area, whose name says
+tank, boiler or hot water. If it finds one, the editor asks *SEM found a
+thermometer: … Use it?*. It is set only when you press **Use it**. SEM proposes a sensor whose own name says tank, boiler or hot water; one in the same room is offered only to a hot water tank, and when two fit equally well it proposes none. The chip under the row says the
 same in short, for example "45.8 °C · heats to 52 °C at 23:00". See
 [A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
 
