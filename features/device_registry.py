@@ -617,6 +617,8 @@ class UnifiedDeviceRegistry:
         # (#705) thermal comfort band — Phase 1 consumes them on climate
         # devices; stored against any device (Phase 2 opens switch loads).
         "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+        # (#1081) heat on to the top in the planned cheap hours (default off)
+        "preheat",
         # (#1020) a Schedule helper that sets the mode while it is on —
         # applied to switch loads only.
         "schedule_entity", "schedule_mode",
@@ -704,6 +706,9 @@ class UnifiedDeviceRegistry:
         if "behind_operator_relay" in goals:
             device.behind_operator_relay = _goal_bool(
                 goals.get("behind_operator_relay"))
+        # (#1081) key-present-only; the device decides whether it counts
+        if "preheat" in goals:
+            device.preheat = _goal_bool(goals.get("preheat"))
         # (#812) key-present-only, like the phase: a heat pump's config row
         # seeds its tariff, a stored goal overrides the fields it names.
         from ..coordinator.device_tariff import TARIFF_KEYS, apply_tariff
@@ -2645,6 +2650,9 @@ class UnifiedDeviceRegistry:
                 "comfort_target": goals.get("comfort_target", 0),
                 "comfort_offset": goals.get("comfort_offset", 0),
                 "comfort_limit": goals.get("comfort_limit", 0),
+                # (#1081) the pre-heat tick: present only when ticked, so a
+                # device without it publishes what it always did
+                **({"preheat": True} if _goal_bool(goals.get("preheat")) else {}),
                 # (#1020) the schedule, and whether it is running now
                 "schedule_entity": goals.get("schedule_entity", ""),
                 "schedule_mode": goals.get("schedule_mode", ""),
@@ -2842,6 +2850,12 @@ class UnifiedDeviceRegistry:
             # at IS that setpoint, the typed limit only gives its distance.
             # The card shows these lines, not the typed numbers.
             "anchored": UnifiedDeviceRegistry._anchored(live),
+            # (#1081) the pre-heat tick: what is stored (only when true) and
+            # whether this load can do it (only when it can). An absent key
+            # reads as off / not offered, so every other load publishes what
+            # it always did.
+            **({"preheat": True} if getattr(live, "preheat", False) is True else {}),
+            **({"preheat_ok": True} if UnifiedDeviceRegistry._preheat_ok(live) else {}),
         }
 
     @staticmethod
@@ -2871,6 +2885,14 @@ class UnifiedDeviceRegistry:
         try:
             return ask() is True if callable(ask) else False
         except Exception:  # noqa: BLE001 — an unreadable rule buys nothing
+            return False
+
+    @staticmethod
+    def _preheat_ok(live) -> bool:
+        ask = getattr(live, "comfort_preheat_supported", None)
+        try:
+            return ask() is True if callable(ask) else False
+        except Exception:  # noqa: BLE001 — an unreadable rule offers nothing
             return False
 
     @staticmethod

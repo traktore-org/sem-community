@@ -820,6 +820,53 @@ def _heater_band(device: "ControllableDevice"):
     return state, below
 
 
+def _preheat_open(device: "ControllableDevice") -> bool:
+    """(#1081) Does a pre-heat run still have room? The pre-heat tick counts
+    for this load and the reading is short of the top (Keep at + Extra). A
+    load without the rule, or with the tick off, is never open: every
+    decision below is then what it was before."""
+    rule = getattr(device, "comfort_preheat_open", None)
+    if not callable(rule):
+        return False
+    try:
+        return rule() is True
+    except Exception:  # noqa: BLE001 — an unreadable rule stops at Keep at
+        return False
+
+
+def _preheat_on(device: "ControllableDevice") -> bool:
+    """(#1081) Does the pre-heat tick count for this load (ticked, supported,
+    may buy)? Only used to word the stop at the top."""
+    rule = getattr(device, "comfort_preheat_on", None)
+    try:
+        return callable(rule) and rule() is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _preheat_goes_on(device: "ControllableDevice", active: bool,
+                     price_is_cheap: bool, plan: "PlanVerdict") -> bool:
+    """(#1081) A running PLANNED run (not the sun's, not the floor's) goes on
+    past Keep at to the top, only while ITS planned block is open and the
+    hour is cheap for this device. Outside its block the cheap hours belong
+    to what the plan gave them to (the car, the battery); on a day with one
+    price nothing above Keep at is bought. A fresh start still needs the
+    reading below Keep at."""
+    return (active and getattr(device, "_comfort_goal_run", False) is True
+            and price_is_cheap is True and plan.comfort_in_block is True
+            and _preheat_open(device))
+
+
+def _at_target_text(device) -> str:
+    """(#1081) Why a goal run stopped at its target: the top, the end of its
+    pre-heat block above Keep at, or Keep at itself."""
+    if getattr(device, "_comfort_goal_run", False) is not True or not _preheat_on(device):
+        return "reached its keep-at temperature"
+    if _preheat_open(device):
+        return "pre-heat block over — held at its keep-at temperature"
+    return "reached its top temperature"
+
+
 def _away_pauses(device: "ControllableDevice") -> bool:
     """(#594/#1344) Is this device paused because the house is away? The
     device's own rule (a heater with its band set up, or a comfort
@@ -1057,7 +1104,8 @@ def compute_load_intent(
     _goal_band = _heater_band(device)
     _goal_goes_on = (active and getattr(device, "_comfort_goal_run", False) is True
                      and _goal_band is not None and _goal_band[0] == "willing"
-                     and _goal_band[1] and _goal_hour_holds(device, price_is_cheap)
+                     and _goal_band[1]
+                     and _goal_hour_holds(device, price_is_cheap)
                      and _goal_may_buy(device))
     if (active and plan_hold and not _goal_goes_on
             and (getattr(device, "_batt_overnight_forced", False)
@@ -1255,10 +1303,13 @@ def compute_load_intent(
 
     # (#1369) A run SEM started FOR Keep at (too cold, or the plan's block)
     # that has reached it ends there, and says so — not "no spare sun".
+    # (#1081) a pre-heat run goes on to the top; at the top it ends here.
     if (active and band is not None and band[1] is False
             and (getattr(device, "_comfort_floor_run", False) is True
-                 or getattr(device, "_comfort_goal_run", False) is True)):
-        return LoadIntent(False, 0.0, None, "reached its keep-at temperature",
+                 or getattr(device, "_comfort_goal_run", False) is True)
+            and not _preheat_goes_on(device, active, price_is_cheap, plan)):
+        return LoadIntent(False, 0.0, None,
+                          _at_target_text(device),
                           RC.LOAD_AT_TARGET)
 
     # (#1102) Too cold: at or past the limit it heats NOW on any tariff, and
@@ -1293,7 +1344,9 @@ def compute_load_intent(
     # Bought power needs the user's word for the grid on this load: solar
     # only is solar only, as for a car.
     if (plan.comfort_in_block and can_start and band is not None
-            and band[0] == "willing" and band[1]
+            and band[0] == "willing"
+            and (band[1] or _preheat_goes_on(
+                device, active, price_is_cheap, plan))
             and _goal_may_buy(device)
             and (active or (grid_start_fits and _goal_wants_start(device)))):
         # (#1344) a watt setpoint is sent its full power for this run
@@ -1308,7 +1361,8 @@ def compute_load_intent(
     # rate or one hour, times the configured rating): when it was too short
     # the run ended a few degrees under Keep at — the reporter's 50 °C for
     # Keep at 52 (#1102). Never into an hour that is not cheap.
-    if (active and band is not None and band[0] == "willing" and band[1]
+    if (active and band is not None and band[0] == "willing"
+            and band[1]
             and getattr(device, "_comfort_goal_run", False) is True
             and _goal_hour_holds(device, price_is_cheap) and _goal_may_buy(device)):
         return LoadIntent(True, _heater_claim(device, True, held), "cheap_grid",

@@ -12085,7 +12085,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     except TypeError:
                         goal = None
                     if goal:
-                        sig.append(("comfort", str(dev.device_id), "goal"))
+                        # (#1081) the pre-heat tick changes what is asked
+                        _pre = getattr(dev, "comfort_preheat_on", None)
+                        _top = callable(_pre) and _pre() is True
+                        sig.append(("comfort", str(dev.device_id),
+                                    "goal-preheat" if _top else "goal"))
                         continue
                     ask = _fn(_now_sig) if callable(_fn) else None
                     if not ask:
@@ -13383,6 +13387,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # The Keep at GOAL only (it carries no deadline of
                         # its own) — banking never buys at the plain rate.
                         one_price_ok=ask.get("deadline") is None,
+                        # (#1081) the pre-heat part is for cheap hours only
+                        cheap_only_kwh=float(ask.get("cheap_only_kwh") or 0.0),
                         cop_at=_plan_cop_at(dev),     # (#1081)
                     ))
                 except Exception:  # noqa: BLE001 — one bad band won't kill the plan

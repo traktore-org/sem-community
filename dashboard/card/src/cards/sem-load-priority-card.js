@@ -38,7 +38,7 @@ import { curveRows, curveToSend, heatCostNow, heatCostLine,
 import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
 import { PEAK_KW, PEAK_TEXT, sliderAnswer } from '../util/peak-questions.js';
 import {
-    heaterSays, heaterSub, heaterQuestions, sunMaxWrites, limitWrites, nextBlock,
+    heaterSays, heaterSub, heaterQuestions, sunMaxWrites, limitWrites, preheatWrites, nextBlock,
     asSentence, BUY_LABEL, thermometerProposal, useThermometerWrite,
 } from '../util/heater-questions.js';
 
@@ -1297,7 +1297,36 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 }))}
             ${ask(this._t(q.keys.sunMax), this._t(q.keys.sunMaxSub),
                 numIn(q.sunMax, (e) => this._onSunMaxChange(device, q, e)))}
+            ${this._renderPreheatTick(device, q)}
             ${err ? html`<div class="ge-hint" style="color:#f44336;font-style:normal">${err}</div>` : nothing}`;
+    }
+
+    /** (#1081) The tick under the sun row. While SEM may not buy power for the
+     *  load it stays CHECKED if stored on, but disabled, with the no-buy words:
+     *  switching back to grid then does not re-arm it unseen. */
+    _renderPreheatTick(device, q) {
+        const pre = q.preheat;
+        if (!pre || !pre.offered) return nothing;
+        const limit = device.comfort && device.comfort.limit_c != null
+            ? this._displayTemp(device.comfort.limit_c) : '';
+        const onTick = (e) => {
+            for (const w of preheatWrites(e.target.checked)) this._setGoal(device, w.property, w.value === 'true');
+            this.requestUpdate();
+        };
+        return html`
+            <div class="ge-row">
+                <span class="ge-label">${this._t('hq_preheat')}</span>
+                <span class="ge-ctl">
+                    <input type="checkbox" class="hq-preheat" data-device="${device.id}"
+                           .checked=${pre.on}
+                           ?disabled=${!pre.enabled}
+                           @change=${onTick}
+                           @click=${(e) => e.stopPropagation()}>
+                </span>
+            </div>
+            <div class="ge-hint">${pre.enabled
+                ? this._t('hq_preheat_sub')
+                : this._tf('hq_sub_no_buy', { limit })}</div>`;
     }
 
     _renderBuyQuestion(device, q) {
