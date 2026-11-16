@@ -912,6 +912,9 @@ EV charger card — one place, per charger, no config-flow round-trips:
     using the vehicle's live SOC sensor. The unit selector
     (`select.sem_charger_<id>_ev_target_type`) only offers **%** when that charger has a
     **vehicle SOC entity** configured — otherwise it shows kWh only.
+  - In Home Assistant these entities carry the settings dialog's names:
+    *Guarantee at least (kWh)* and *Consider full at (%)*. Their entity IDs
+    did not change.
 - **Never charge past** (`number.sem_charger_<id>_daily_ev_target_max` / `_target_soc_max`): the
   Max handle of the range slider — charging stops once this ceiling is
   reached, in every mode (the night top-up to *Guarantee at least* still runs). Defaults to full (charge freely from sun); lower it to cap surplus. (Replaces
