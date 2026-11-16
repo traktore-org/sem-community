@@ -151,7 +151,7 @@ const ALLOWED_OUT = {
     'sem-battery-zones-card': [],
     'sem-charger-status-card': ['1'],                          // chargers found
     'sem-chart-card': [],
-    'sem-config-card': ['0', '33', '0'],                       // counts, setup steps done
+    'sem-config-card': ['0', '50', '0'],                       // counts, setup steps done (#1371: only what every house needs counts)
     'sem-control-card': [],   // (#1354) the hot-water norms print only with a boiler set up
     'sem-costs-card': [],
     'sem-costs-detail-card': [],

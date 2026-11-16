@@ -178,7 +178,11 @@ export function loadBody(card, row) {
                 temp('comfort_limit', q.floor, (v) => { for (const w of limitWrites(q, v).writes) send(w.property, w.value); }), t(q.keys.floorSub)));
             rows.push(card._row('mdi:white-balance-sunny', t(q.keys.sunMax),
                 temp('sun_max', q.sunMax, (v) => {
-                    const res = sunMaxWrites({ id, keep: q.keep, cooling: q.cooling }, v, solarTarget);
+                    // (#1371) never above the Legionella target: the engine caps it there
+                    const leg = hotWater && tUnit === '°C' && card._has('number.sem_legionella_target_temp')
+                        ? parseFloat(card._hass?.states?.['number.sem_legionella_target_temp']?.state) : NaN;
+                    const res = sunMaxWrites({ id, keep: q.keep, cooling: q.cooling }, v, solarTarget,
+                        Number.isFinite(leg) ? leg : null);
                     if (res.error) { card._showError(new Error(tf(res.error, res.params))); return; }
                     for (const w of res.writes) send(w.property, w.value);
                 }), t(q.keys.sunMaxSub)));
@@ -285,7 +289,9 @@ export function loadBody(card, row) {
             numVal('rate', rate > 0 ? card._money(rate) : t('next_house_tariff'), { value: rate || null, min: 0, step: 0.001, onCommit: (v) => send('tariff_rate', String(v > 0 ? v : 0)) }),
             '', { more: true }));
     }
-    rows.push(card._row('mdi:toggle-switch-outline', t('next_may_switch'),
+    // (#1371) with the mode Off SEM acts on nothing: "SEM may switch it: on"
+    // under "Off — SEM won't act" read as a contradiction
+    if (row.mergedMode !== 'off') rows.push(card._row('mdi:toggle-switch-outline', t('next_may_switch'),
         card._val(row.isControllable ? t('next_on') : t('next_off'), () => send('controllable', String(!row.isControllable)), { disabled: dis }),
         html`${t('critical')}: ${card._val(row.isCritical ? t('next_yes') : t('next_no'), () => send('critical', String(!row.isCritical)), { disabled: dis })}${row.controlEntity ? ' · ' + row.controlEntity : ''} · ${card._val(t('configure'), () => card._showConfigureModal(id, row.name))}`,
         { more: true }));

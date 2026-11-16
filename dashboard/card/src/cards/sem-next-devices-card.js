@@ -769,7 +769,9 @@ class SEMNextDevicesCard extends SEMNextBase {
         const month = this._kwSensorW('sensor.sem_monthly_consecutive_peak');
         if (month !== null) sent.push(this._tf('next_sent_month_peak', { kw: this._kw(month) }));
         const shed = this._kwSensorW('sensor.sem_available_load_reduction');
-        if (shed !== null) sent.push(this._tf('next_sent_can_shed', { kw: this._kw(shed), n: rows.filter((r) => r.type === 'load' && r.hasControlHandle && r.isControllable).length }));
+        // (#1371) only what SEM could really shed: nothing is said when that
+        // is nothing (load management off), and a device in mode Off is not counted
+        if (shed !== null && shed > 0) sent.push(this._tf('next_sent_can_shed', { kw: this._kw(shed), n: rows.filter((r) => r.type === 'load' && r.hasControlHandle && r.isControllable && r.mergedMode !== 'off').length }));
         const status = this._valLabel('load_management_status');
         const recRaw = this._str('sensor.sem_load_management_recommendation');
         const rec = recRaw ? (this._t(recRaw) || recRaw) : '';

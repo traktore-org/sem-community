@@ -457,13 +457,14 @@ export function setupItems(states, options) {
     const on = (id) => st(states, id)?.state === 'on';
     const tariffDone = o.tariff_mode === 'dynamic' ? !!o.dynamic_tariff_entity
         : o.tariff_mode === 'calendar' ? !!o.tariff_schedule_entity : !!o.electricity_import_rate;
+    // (#1371) only what every house needs counts; the rest is optional
     return [
         { key: 'energy', labelKey: 'config_overview_energy_dashboard', done: !!st(states, 'sensor.sem_charging_state') },
-        { key: 'ev', labelKey: 'config_overview_chargers', done: chargers },
-        { key: 'hp', labelKey: 'heat_pump_title', done: on('binary_sensor.sem_heat_pump_registered') },
-        { key: 'hw', labelKey: 'config_section_hot_water', done: !!o.hot_water_entity },
+        { key: 'ev', labelKey: 'config_overview_chargers', done: chargers, optional: true },
+        { key: 'hp', labelKey: 'heat_pump_title', done: on('binary_sensor.sem_heat_pump_registered'), optional: true },
+        { key: 'hw', labelKey: 'config_section_hot_water', done: !!o.hot_water_entity, optional: true },
         { key: 'tariff', labelKey: 'config_section_tariff', done: tariffDone },
-        { key: 'battery', labelKey: 'config_section_battery_zones', done: hasBattery(states) },
+        { key: 'battery', labelKey: 'config_section_battery_zones', done: hasBattery(states), optional: true },
         { key: 'loads', labelKey: 'config_section_load_management', done: !!o.load_management_enabled, optional: true },
     ];
 }

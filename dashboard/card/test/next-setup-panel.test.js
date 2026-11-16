@@ -89,13 +89,15 @@ test('check model: progress counts only required items, reads what SEM reads', (
         'sensor.sem_home_consumption_power': S(400),
     };
     const m = checkModel(states, { tariff_mode: 'static', electricity_import_rate: 0.3 });
-    assert.equal(m.total, 6);
+    // (#1371) only the energy source and the tariff are needed by every house
+    assert.equal(m.total, 2);
+    assert.equal(m.items.find((i) => i.key === 'hp').optional, true);
     assert.equal(m.items.find((i) => i.key === 'loads').optional, true);
     assert.ok(m.items.find((i) => i.key === 'ev').done);
     assert.ok(m.items.find((i) => i.key === 'tariff').done);
     assert.equal(m.hasBattery, true);
     assert.equal(m.sources.find((r) => r.key === 'grid').dir, 'sending');
-    assert.equal(m.pct, Math.round(m.done / 6 * 100));
+    assert.equal(m.pct, Math.round(m.done / 2 * 100));
 });
 
 test('proposal model: a click saves what proposalWrite says, a saved one offers no button', () => {

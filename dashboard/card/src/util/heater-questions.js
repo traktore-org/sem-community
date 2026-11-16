@@ -291,7 +291,7 @@ export const BUY_LABEL = { off: 'hq_buy_no', grid: 'hq_buy_cheap', battery: 'hq_
  * copied (`option` is always null). `solarTarget` = {min, max} of that
  * option's number entity, when known: still the highest a tank may be set.
  */
-export function sunMaxWrites({ id, keep, cooling = false }, x, solarTarget = null) {
+export function sunMaxWrites({ id, keep, cooling = false }, x, solarTarget = null, legionellaC = null) {
     const k = num(keep), v = num(x);
     const wrong = cooling ? 'hq_err_above_keep' : 'hq_err_below_keep';
     if (k === null || v === null) return { error: wrong, params: { keep: k === null ? '' : String(k) } };
@@ -299,6 +299,11 @@ export function sunMaxWrites({ id, keep, cooling = false }, x, solarTarget = nul
     const isHotWater = !cooling && /^hot_water/.test(String(id || ''));
     if (isHotWater && solarTarget && num(solarTarget.max) !== null && v > Number(solarTarget.max)) {
         return { error: 'hq_err_above_max', params: { max: String(solarTarget.max) } };
+    }
+    // (#1371) the engine never heats a tank past its Legionella target on
+    // sun: a higher value was saved and then silently not used
+    if (isHotWater && num(legionellaC) !== null && v > Number(legionellaC)) {
+        return { error: 'hq_err_above_max', params: { max: String(Number(legionellaC)) } };
     }
     const offset = Math.round(Math.abs(v - k) * 2) / 2;
     return {
