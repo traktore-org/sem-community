@@ -7578,7 +7578,9 @@ class SensorReader:
         for prefix in _own_stems(
                 getattr(self, "_energy_dashboard_config", None),
                 battery_power_entity):
-            result = self._try_soc_candidates(prefix, soc_keywords, skip=taken)
+            result = self._try_soc_candidates(prefix, [
+                kw for kw in soc_keywords
+                if f"sensor.{prefix}_{kw}" not in taken])
             if result:
                 self._soc_entity_by_power[battery_power_entity] = result
                 return result
@@ -7837,14 +7839,10 @@ class SensorReader:
 
         return False
 
-    def _try_soc_candidates(self, prefix: str, soc_keywords: list,
-                            skip: Any = ()) -> Optional[str]:
-        """Try prefix + keyword combinations to find SOC entity. A name in
-        ``skip`` (another battery's pick, #1373) is not a candidate."""
+    def _try_soc_candidates(self, prefix: str, soc_keywords: list) -> Optional[str]:
+        """Try prefix + keyword combinations to find SOC entity."""
         for keyword in soc_keywords:
             candidate = f"sensor.{prefix}_{keyword}"
-            if candidate in skip:
-                continue
             state = self.hass.states.get(candidate)
             if state and state.state not in ("unknown", "unavailable", None):
                 try:
