@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **SEM proposes a thermometer for a heater** (#1353). It looks on the same device or in the same area. You confirm with one click.
+- ✨ **Night Latest End can be set from 03:00** (#1320), for an off-peak that ends before 05:00. It was 05:00 at the earliest.
 - 🔧 **One place decides what a cheap hour is** (#1372). No change in what SEM does; a test keeps price checks in that place.
 - ✨ **A grid charge can start through a select** (#1346), for inverters with no switch. Off until you set it up.
 - 🐛 **Set-up is clearer** (#1371): the Solar Heating Target hides for a tank with a thermometer, and Setup counts only what every house needs.

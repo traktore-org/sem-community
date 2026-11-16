@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
@@ -48,7 +49,7 @@ from ..devices.power_setpoint import (   # (#880) ONE producer, over there
 from ..devices.base import _MAX_PLAUSIBLE_LOAD_W
 from ..devices.held_power import held_power_from_states
 from ..consts.core import RATED_POWER_RULE, RATED_POWER_START_PEAK_RATIO
-from ..hardware_detection import discover_ev_charger_from_registry
+from ..hardware_detection import discover_ev_charger_from_registry, find_heater_thermometer
 from ..const import DOMAIN
 from ..const import LOAD_PRIORITY_BASE as _LOAD_PRIORITY_BASE
 from ..consts.devices import load_phase
@@ -2660,7 +2661,48 @@ class UnifiedDeviceRegistry:
             "locked_by_operator": bool(
                 live is not None
                 and getattr(live, "locked_by_operator", False) is True),
-        } | self._comfort_payload(live) | self._intent_payload(device_id)
+        } | self._comfort_payload(live) | self._intent_payload(device_id) \
+          | self._thermometer_proposal_payload(device_id, goals, live)
+
+    #: (#1353) seconds a heater's thermometer proposal is kept before the
+    #: crawler looks again (a registry walk is not free; the payload is
+    #: built every cycle)
+    _THERMO_RESCAN_S = 300
+
+    def _thermometer_proposal_payload(self, device_id: str, goals: Dict[str, Any],
+                                      live) -> Dict[str, Any]:
+        """(#1353) ``{"thermometer_proposal": {entity_id, name, why}}`` for a
+        heater that has no thermometer yet, else ``{}``. The card shows it
+        and the user confirms; nothing is bound here."""
+        if live is None or not hasattr(live, "comfort_state"):
+            return {}
+        if goals.get("comfort_entity") or getattr(live, "temperature_entity_id", None):
+            return {}
+        try:
+            if live._comfort_reading() is not None:   # it has its own thermometer
+                return {}
+        except Exception:  # noqa: BLE001
+            return {}
+        cache = self.__dict__.setdefault("_thermo_cache", {})
+        now = time.monotonic()
+        hit = cache.get(device_id)
+        if hit is None or now - hit[0] > self._THERMO_RESCAN_S:
+            bound = {str(g.get("comfort_entity"))
+                     for d, g in (getattr(self, "_device_goals", None) or {}).items()
+                     if d != device_id and g.get("comfort_entity")}
+            own = [getattr(live, a, None) for a in ("entity_id", "power_entity_id")]
+            # (#1353 review) a sensor in the same ROOM is offered only to a
+            # hot water tank; any other load takes one on its own device
+            is_tank = getattr(type(live), "check_legionella_cycle", None) is not None
+            # a payload must never break the sensor: no hass is no proposal
+            found = find_heater_thermometer(getattr(self, "hass", None), own, bound,
+                                            area_ok=is_tank)
+            hit = (now, found[0] if found else None)
+            cache[device_id] = hit
+        best = hit[1]
+        if not best or best["entity_id"] == goals.get("comfort_entity"):
+            return {}
+        return {"thermometer_proposal": {k: best[k] for k in ("entity_id", "name", "why")}}
 
     def _intent_payload(self, device_id: str) -> Dict[str, Any]:
         """(#1321) What the load engine decided for this load THIS cycle:
