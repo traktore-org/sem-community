@@ -766,7 +766,11 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                     int(command.target_soc))
             await self.hass.services.async_call(
                 "select", "select_option",
-                {"entity_id": entity, "option": wanted})
+                # (#1039) the option as the select lists it (mapped again
+                # here: it is the same value, and the write is then safe
+                # whoever calls this)
+                {"entity_id": entity,
+                 "option": listed_option(self.hass, entity, wanted)})
         except Exception as exc:  # noqa: BLE001
             await self._release_target()
             await self._note_failed_start()
