@@ -329,3 +329,102 @@ def test_a_device_without_one_or_an_unreadable_one_asks_the_house():
     tariffs.plan_tariff.return_value = None     # unreadable or not set
     assert PriceView.for_device(object(), house, tariffs).cheap_at(FRI) is False
     assert PriceView.for_device(object(), _Fake(PriceLevel.CHEAP)).cheap_at(FRI)
+
+
+# ── the Legionella count keeps its numbers ────────────────────────────────
+
+def _ref_cheap_hours_left(prov, dev, hw, now):
+    """FROZEN copy of ``SEMCoordinator._legionella_cheap_hours_left`` as it
+    was before the view (#1368): the private price list and the plan rule."""
+    try:
+        if (prov is None or not hasattr(prov, "get_price_level_at")
+                or getattr(hw, "_last_legionella_time", None) is None
+                or any(getattr(dev, k, None) for k in
+                       ("tariff_rate", "tariff_entity", "tariff_meter"))):
+            return None
+        left_h = float(hw.legionella_interval_hours) - float(hw.hours_since_legionella)
+        if not 0.0 < left_h <= 24.0:
+            return None
+        reader = getattr(prov, "_read_prices_list", None)
+        if callable(reader):
+            prices = reader() or []
+            if not prices or max(p.timestamp for p in prices) < (
+                    now + timedelta(hours=left_h - 1.0)):
+                return None
+        steps = int(left_h * 4)
+        return 0.25 * sum(
+            1 for i in range(steps)
+            if _ref_plan(prov, now + timedelta(minutes=15 * i)))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _left_now(prov, left_h, monkeypatch, *, now, own=False, run=True):
+    from custom_components.solar_energy_management.coordinator import (
+        coordinator as coord_mod,
+    )
+    dev = SimpleNamespace(tariff_rate=0.1 if own else 0.0, tariff_entity="",
+                          tariff_meter="")
+    hw = SimpleNamespace(
+        _last_legionella_time=object() if run else None,
+        legionella_interval_hours=168.0, hours_since_legionella=168.0 - left_h)
+    fake = SimpleNamespace(
+        _tariff_provider=prov,
+        _surplus_controller=SimpleNamespace(_devices={"hot_water": dev}))
+    monkeypatch.setattr(coord_mod, "dt_util", SimpleNamespace(now=lambda: now))
+    got = coord_mod.SEMCoordinator._legionella_cheap_hours_left(fake, hw)
+    return got, _ref_cheap_hours_left(prov, dev, hw, now)
+
+
+def _local(h, d=9):
+    return datetime(2026, 11, d, h, 0, tzinfo=dt_util.DEFAULT_TIME_ZONE)
+
+
+def test_legionella_hours_on_a_static_tariff_are_the_same(monkeypatch):
+    prov = StaticTariffProvider(peak_rate=0.35, off_peak_rate=0.22)
+    got, ref = _left_now(prov, 12.0, monkeypatch, now=_local(14))
+    # Monday 14:00 -> 02:00: cheap 20:00-24:00 and 00:00-02:00
+    assert got == ref == pytest.approx(6.0)
+    got, ref = _left_now(prov, 10.3, monkeypatch, now=_local(14))
+    assert got == ref and got > 0
+
+
+def test_legionella_hours_on_a_dynamic_curve_are_the_same(monkeypatch):
+    curve = [0.10 + 0.02 * (i % 24) for i in range(48)]
+    prov = _dynamic(curve)
+    got, ref = _left_now(prov, 9.5, monkeypatch, now=NOW0)
+    assert got == ref and got is not None and got > 0
+
+
+def test_a_forecast_that_ends_before_the_due_time_is_not_known(monkeypatch):
+    prov = _dynamic([0.1, 0.5, 0.1, 0.5, 0.1, 0.5])        # 6 h of prices
+    got, ref = _left_now(prov, 9.0, monkeypatch, now=NOW0)
+    assert got is None and ref is None
+    # and it IS known when the curve covers the span
+    got, ref = _left_now(prov, 5.0, monkeypatch, now=NOW0)
+    assert got == ref and got is not None
+
+
+def test_a_curve_ending_up_to_an_hour_early_still_counts(monkeypatch):
+    """Kept on purpose (#1372): the last point may START up to 1 h before
+    the due time — hourly and 15-minute curves alike."""
+    hourly = _dynamic([0.1, 0.5, 0.1, 0.5, 0.1, 0.5])       # last starts +5 h
+    got, ref = _left_now(hourly, 6.0, monkeypatch, now=NOW0)
+    assert got == ref and got is not None
+    got, ref = _left_now(hourly, 6.5, monkeypatch, now=NOW0)
+    assert got is None and ref is None
+    quarter = _dynamic([0.10 + 0.01 * (i % 8) for i in range(24)],
+                       step_min=15)                          # last starts +5.75 h
+    got, ref = _left_now(quarter, 6.5, monkeypatch, now=NOW0)
+    assert got == ref and got is not None
+    got, ref = _left_now(quarter, 7.0, monkeypatch, now=NOW0)
+    assert got is None and ref is None
+
+
+def test_a_tank_with_its_own_tariff_or_no_run_or_a_far_due_time_is_not_known(
+        monkeypatch):
+    prov = StaticTariffProvider(peak_rate=0.35, off_peak_rate=0.22)
+    for kw, left in (({"own": True}, 12.0), ({"run": False}, 12.0), ({}, 30.0),
+                     ({}, 0.0)):
+        got, ref = _left_now(prov, left, monkeypatch, now=_local(14), **kw)
+        assert got is None and ref is None, (kw, left)

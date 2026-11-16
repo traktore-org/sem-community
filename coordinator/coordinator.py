@@ -7139,7 +7139,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         (no provider, a tank on its own tariff, no run yet, due later than
         a day): the tank then uses its plain 12-hour rule."""
         try:
-            from .day_ledger import tariff_cheap_at
+            from .price_view import PriceView
             prov = getattr(self, "_tariff_provider", None)
             dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
             if (prov is None or not hasattr(prov, "get_price_level_at")
@@ -7152,17 +7152,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return None
             now = dt_util.now()
             # a price forecast that ends before the due time (tomorrow's
-            # prices are not out yet) would count too few cheap hours
-            reader = getattr(prov, "_read_prices_list", None)
-            if callable(reader):
-                prices = reader() or []
-                if not prices or max(p.timestamp for p in prices) < (
-                        now + timedelta(hours=left_h - 1.0)):
-                    return None
-            steps = int(left_h * 4)
-            return 0.25 * sum(
-                1 for i in range(steps)
-                if tariff_cheap_at(prov, now + timedelta(minutes=15 * i)))
+            # prices are not out yet) would count too few cheap hours.
+            # (#1372) Kept as it was: a curve whose last point starts up to
+            # an hour before the due time still counts as complete, so the
+            # tolerance is 1 h minus the slot length (0 on an hourly curve).
+            slot_h = getattr(prov, "detect_slot_hours", None)
+            slot_h = (slot_h() if callable(slot_h) else None) or 1.0
+            return PriceView(prov, now=now, rule="plan").cheap_hours(
+                now, now + timedelta(hours=left_h), step_min=15,
+                tolerance_h=1.0 - float(slot_h))
         except Exception:  # noqa: BLE001 — not known
             return None
 
@@ -7966,10 +7964,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1368) the tank's own price level is cheap this cycle
             try:
                 from .device_tariff import device_price_level as _dpl
-                from .price_signal import is_cheap_name as _icn
+                from .price_view import answer_for_level as _afl
                 _hw = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
-                self._legionella_cheap_hour = bool(_hw is not None and _icn(
-                    _dpl(_hw, getattr(tariff_data, "tariff_price_level", None))))
+                self._legionella_cheap_hour = bool(_hw is not None and _afl(
+                    _dpl(_hw, getattr(tariff_data, "tariff_price_level", None))).is_cheap)
             except Exception:  # noqa: BLE001 — unread is "not cheap"
                 self._legionella_cheap_hour = False
             surplus_data.surplus_total_w = allocation.total_surplus_w
