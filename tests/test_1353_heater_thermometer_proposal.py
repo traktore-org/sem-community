@@ -109,11 +109,43 @@ class TestTheFinder:
                      {HEATER: (None, "cellar"), "sensor.t1": (None, "cellar")})
         assert _eids(find_heater_thermometer(hass, [HEATER])) == ["sensor.t1"]
 
-    def test_the_device_name_can_carry_the_word(self, house):
-        hass = house([_st("sensor.temperature", name="Temperature")],
-                     {HEATER: ("d1", None), "sensor.temperature": ("d1", None)},
-                     {"d1": ("Hot water tank", None)})
-        assert _eids(find_heater_thermometer(hass, [HEATER])) == ["sensor.temperature"]
+    def test_the_device_name_alone_is_not_enough(self, house):
+        """(review) A plug named for the tank it switches has a chip
+        temperature on the same device: the SENSOR must say tank."""
+        hass = house([_st("sensor.temperature", name="Temperature"),
+                      _st("sensor.boiler_plug_device_temperature",
+                          name="Boiler Plug Device temperature")],
+                     {HEATER: ("d1", None), "sensor.temperature": ("d1", None),
+                      "sensor.boiler_plug_device_temperature": ("d1", None)},
+                     {"d1": ("Boiler Plug", None)})
+        assert find_heater_thermometer(hass, [HEATER]) == []
+
+    @pytest.mark.parametrize("name", [
+        "Boiler plug temperature", "Boiler relay temperature",
+        "Tank freezer temperature", "Boiler battery temperature",
+    ])
+    def test_a_switch_chip_or_a_cold_thing_is_never_proposed(self, house, name):
+        eid = "sensor." + name.lower().replace(" ", "_")
+        hass = house([_st(eid, name=name)],
+                     {HEATER: ("d1", "a"), eid: ("d1", "a")})
+        assert find_heater_thermometer(hass, [HEATER]) == []
+
+    def test_a_sensor_in_the_room_is_only_for_a_tank(self, house):
+        """(review) A washer on a plug in the tank's room is not offered
+        the tank's thermometer; a sensor on its OWN device still is."""
+        hass = house([_st("sensor.tank_temp", name="Tank temperature")],
+                     {HEATER: ("d1", "a"), "sensor.tank_temp": ("d2", "a")})
+        assert _eids(find_heater_thermometer(hass, [HEATER])) == ["sensor.tank_temp"]
+        assert find_heater_thermometer(hass, [HEATER], area_ok=False) == []
+        same = house([_st("sensor.tank_temp", name="Tank temperature")],
+                     {HEATER: ("d1", "a"), "sensor.tank_temp": ("d1", "a")})
+        assert _eids(find_heater_thermometer(same, [HEATER], area_ok=False)) == ["sensor.tank_temp"]
+
+    def test_two_that_fit_equally_well_are_not_guessed(self, house):
+        hass = house([_st("sensor.tank_a"), _st("sensor.tank_b")],
+                     {HEATER: ("d1", "a"), "sensor.tank_a": ("d2", "a"),
+                      "sensor.tank_b": ("d3", "a")})
+        assert find_heater_thermometer(hass, [HEATER]) == []
 
     @pytest.mark.parametrize("name", [
         "Outdoor boiler temperature",      # outside
@@ -150,13 +182,12 @@ class TestTheFinder:
                      {HEATER: ("d1", "cellar"), "sensor.tank_temp": ("d2", "attic")})
         assert find_heater_thermometer(hass, [HEATER]) == []
 
-    def test_a_reading_sensor_comes_before_a_dead_one_and_order_is_stable(self, house):
-        hass = house([_st("sensor.tank_a", "unavailable"), _st("sensor.tank_c"),
-                      _st("sensor.tank_b")],
+    def test_a_reading_sensor_comes_before_a_dead_one(self, house):
+        hass = house([_st("sensor.tank_a", "unavailable"), _st("sensor.tank_b")],
                      {HEATER: ("d1", "a"), "sensor.tank_a": ("d1", "a"),
-                      "sensor.tank_b": ("d1", "a"), "sensor.tank_c": ("d1", "a")})
+                      "sensor.tank_b": ("d1", "a")})
         assert _eids(find_heater_thermometer(hass, [HEATER])) == [
-            "sensor.tank_b", "sensor.tank_c", "sensor.tank_a"]
+            "sensor.tank_b", "sensor.tank_a"]
 
     def test_a_non_temperature_sensor_is_skipped(self, house):
         hass = house([_st("sensor.tank_energy", unit="kWh", dc="energy")],

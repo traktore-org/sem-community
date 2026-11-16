@@ -344,7 +344,8 @@ export function thermometerProposal(device) {
     const p = device && device.thermometerProposal;
     const g = (device && device.goals) || {};
     if (!p || typeof p !== 'object' || !p.entity_id || g.comfort_entity) return null;
-    return { entity: String(p.entity_id), name: String(p.name || p.entity_id), why: String(p.why || '') };
+    // a name that ends with a full stop would print "Name.. Use it?"
+    return { entity: String(p.entity_id), name: String(p.name || p.entity_id).replace(/[.\s]+$/, ''), why: String(p.why || '') };
 }
 
 /** The one write the confirm sends: `{property, value}` — the picker's own. */

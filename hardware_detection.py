@@ -3798,7 +3798,13 @@ NOT_TANK_READING: Tuple[str, ...] = tuple(
     w for w in NOT_OUTDOOR_READING
     if w not in ("water", "wasser", "warmwasser", "tank", "dhw")
 ) + OUTDOOR_STRONG + ("weather", "wetter", "intern", "internal", "interne",
-                      "setpoint", "ambient", "umgebung")
+                      "setpoint", "ambient", "umgebung",
+                      # (#1353 review) the switch's own chip, and things that
+                      # are cold or not water: never a tank reading
+                      "device", "plug", "socket", "steckdose", "stekker",
+                      "relay", "relais", "switch", "schalter", "mcu",
+                      "overheat", "fridge", "freezer", "kühlschrank",
+                      "gefrier", "battery", "batterie", "akku")
 
 
 def _says_tank(words: List[str], joined: str) -> bool:
@@ -3824,11 +3830,15 @@ def find_heater_thermometer(
     hass: Optional[HomeAssistant],
     heater_entities: Any,
     exclude: Any = (),
+    area_ok: bool = True,
 ) -> List[Dict[str, Any]]:
     """(#1353) Temperature sensors that look like a heater's tank
     thermometer, best first: ``[{entity_id, name, why, reads}]``, ``why`` =
-    ``device`` (same device as the heater) or ``area`` (same area). The
-    sensor's own or device name must say tank / boiler / hot water. Never
+    ``device`` (same device as the heater) or ``area`` (same area; only with
+    ``area_ok`` — a water tank, not any load in the room). The sensor's OWN
+    name must say tank / boiler / hot water: a plug named "Boiler plug"
+    has a chip temperature, not a tank's. When more than one fits equally
+    well nothing is proposed — a guess between two tanks is no proposal. Never
     SEM's own sensors, never one in ``exclude`` (bound to another device),
     never one whose own name says outside, room or electronics. Same device
     before same area, then a sensor that reads now, then entity id. A
@@ -3860,20 +3870,23 @@ def find_heater_thermometer(
             dev_id, area, dev_name = _device_and_area(ent_reg, dev_reg, eid)
             why = "device" if (dev_id and dev_id in h_devs) else (
                 "area" if (area and area in h_areas) else None)
-            if why is None:
+            if why is None or (why == "area" and not area_ok):
                 continue
             own = _words_of(f"{eid} {attrs.get('friendly_name', '')}")
             own_j = "".join(own)
             if _says(own, own_j, NOT_TANK_READING):
                 continue
-            dev = _words_of(dev_name)
-            if not _says_tank(own + dev, own_j + "".join(dev)):
+            if not _says_tank(own, own_j):
                 continue
             out.append({"entity_id": eid,
                         "name": str(attrs.get("friendly_name") or eid),
                         "why": why,
                         "reads": temperature_c(st) is not None})
         out.sort(key=lambda r: (r["why"] != "device", not r["reads"], r["entity_id"]))
+        # two that fit equally well (two tanks in one room, an upper and a
+        # lower sensor): the user picks, SEM does not guess
+        if len(out) > 1 and (out[0]["why"], out[0]["reads"]) == (out[1]["why"], out[1]["reads"]):
+            return []
         return out
     except Exception:  # noqa: BLE001 — a crawl never breaks the caller
         return []

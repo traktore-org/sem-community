@@ -7687,7 +7687,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${this._renderCopCurve(e)}
                     ${this._renderStopCondition(e)}
                 </details>
-            </div>`}_renderThermometerProposal(e){const t=function(e){const t=e&&e.thermometerProposal,s=e&&e.goals||{};return t&&"object"==typeof t&&t.entity_id&&!s.comfort_entity?{entity:String(t.entity_id),name:String(t.name||t.entity_id),why:String(t.why||"")}:null}(e);return t?H`
+            </div>`}_renderThermometerProposal(e){const t=function(e){const t=e&&e.thermometerProposal,s=e&&e.goals||{};return t&&"object"==typeof t&&t.entity_id&&!s.comfort_entity?{entity:String(t.entity_id),name:String(t.name||t.entity_id).replace(/[.\s]+$/,""),why:String(t.why||"")}:null}(e);return t?H`
             <div class="ge-row hq-found">
                 <span class="ge-label">${this._tf("hq_found_thermometer",{name:t.name})}</span>
                 <span class="ge-ctl">

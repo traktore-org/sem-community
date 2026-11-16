@@ -2690,7 +2690,10 @@ class UnifiedDeviceRegistry:
             bound = {str(g.get("comfort_entity")) for d, g in self._device_goals.items()
                      if d != device_id and g.get("comfort_entity")}
             own = [getattr(live, a, None) for a in ("entity_id", "power_entity_id")]
-            found = find_heater_thermometer(self.hass, own, bound)
+            # (#1353 review) a sensor in the same ROOM is offered only to a
+            # hot water tank; any other load takes one on its own device
+            is_tank = getattr(type(live), "check_legionella_cycle", None) is not None
+            found = find_heater_thermometer(self.hass, own, bound, area_ok=is_tank)
             hit = (now, found[0] if found else None)
             cache[device_id] = hit
         best = hit[1]
