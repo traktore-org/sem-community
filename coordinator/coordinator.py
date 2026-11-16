@@ -6055,7 +6055,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if _leg_t is not None:
                     try:
                         self._storage.set_legionella_time(_leg_t.isoformat())
-                    except (AttributeError, ValueError):
+                        # (#1368) and how long the last run took
+                        _run_h = getattr(_hw, "_legionella_last_run_h", None)
+                        if _run_h:
+                            self._storage.set_legionella_run_hours(float(_run_h))
+                    except (AttributeError, TypeError, ValueError):
                         pass
                 # (#1252) a real write, at most every 5 min: the delayed
                 # one re-arms each cycle and only lands at a clean stop.
@@ -7145,6 +7149,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if not 0.0 < left_h <= 24.0:
                 return None
             now = dt_util.now()
+            # a price forecast that ends before the due time (tomorrow's
+            # prices are not out yet) would count too few cheap hours
+            reader = getattr(prov, "_read_prices_list", None)
+            if callable(reader):
+                prices = reader() or []
+                if not prices or max(p.timestamp for p in prices) < (
+                        now + timedelta(hours=left_h - 1.0)):
+                    return None
             steps = int(left_h * 4)
             return 0.25 * sum(
                 1 for i in range(steps)

@@ -161,6 +161,40 @@ async def test_with_cheap_hours_to_spare_a_cheap_hour_does_not_start_it():
     assert await _chk(dev, now + timedelta(minutes=130), cheap=True, left=5.0) == "legionella_started"
 
 
+@pytest.mark.asyncio
+async def test_more_cheap_hours_showing_up_mid_run_do_not_pause_it():
+    """Tomorrow's prices come out at 13:00: a run a cheap hour started
+    goes on through that hour."""
+    now = hwc.dt_util.now()
+    dev = _tank(_Hass(), 48.0)
+    _due_in(dev, now, 10)
+    await _chk(dev, now, cheap=True, left=4.0)
+    assert await _chk(dev, now + timedelta(minutes=10), cheap=True, left=4.0) == "legionella_started"
+    assert await _chk(dev, now + timedelta(minutes=20), cheap=True, left=9.0) == "legionella_heating"
+    assert await _chk(dev, now + timedelta(minutes=60), cheap=True, left=9.0) == "legionella_heating"
+
+
+@pytest.mark.asyncio
+async def test_a_very_short_last_run_does_not_make_the_next_one_late():
+    now = hwc.dt_util.now()
+    dev = _tank(_Hass(), 48.0)
+    dev._legionella_last_run_h = 0.05          # the tank was nearly hot
+    _due_in(dev, now, 6)
+    await _chk(dev, now, cheap=True, left=2.0)  # 1 h × 1.5 + 0.5
+    assert await _chk(dev, now + timedelta(minutes=10), cheap=True, left=2.0) == "legionella_started"
+
+
+def test_the_run_time_is_stored_and_read_back():
+    from custom_components.solar_energy_management.coordinator.storage import SEMStorage
+    st = SEMStorage.__new__(SEMStorage)
+    st._energy_data = {}
+    assert st.get_legionella_run_hours() is None
+    st.set_legionella_run_hours(4.42)
+    assert st.get_legionella_run_hours() == 4.42
+    st._energy_data["legionella_run_hours"] = "soon"
+    assert st.get_legionella_run_hours() is None
+
+
 def test_the_texts_name_the_cheap_hour_in_every_language():
     import json
     import pathlib

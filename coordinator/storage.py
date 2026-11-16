@@ -774,6 +774,15 @@ class SEMStorage:
         """Get the persisted last-legionella ISO timestamp, or None."""
         return self._energy_data.get("legionella_last_time")
 
+    def get_legionella_run_hours(self) -> Optional[float]:
+        """(#1368) How long the last Legionella run took (h), or None."""
+        v = self._energy_data.get("legionella_run_hours")
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < 24 else None
+
+    def set_legionella_run_hours(self, hours: float) -> None:
+        if 0 < float(hours) < 24:
+            self._energy_data["legionella_run_hours"] = round(float(hours), 2)
+
     def set_legionella_time(self, iso_ts: Optional[str]) -> None:
         """Persist the last-legionella ISO timestamp."""
         if iso_ts:

@@ -40,8 +40,11 @@ LEGIONELLA_EARLY_WINDOW_H = 24.0
 LEGIONELLA_CHEAP_WINDOW_H = 12.0
 LEGIONELLA_CHEAP_MARGIN = 1.5
 LEGIONELLA_CHEAP_SLACK_H = 0.5
-#: How long a run takes while none has been timed yet (h).
+#: How long a run takes while none has been timed yet (h), and the bounds
+#: a timed one is kept in: a tank that was nearly hot gave a short time
+#: once, and no run is longer than the limit it is given up at.
 LEGIONELLA_DEFAULT_RUN_H = 3.0
+LEGIONELLA_MIN_RUN_H = 1.0
 #: (#1369) the good hour must hold this long before an early start, and be
 #: gone this long before an early run pauses — no start/stop on a passing cloud
 LEGIONELLA_EARLY_START_HOLD_MIN = 10.0
@@ -1014,12 +1017,18 @@ class HotWaterController(SwitchDevice):
         cheap_ok = False
         if cheap_hour and self._last_legionella_time is not None:
             left_h = self.legionella_interval_hours - self.hours_since_legionella
-            if cheap_hours_left is None:
+            if self._legionella_cycle_active and getattr(self, "_cheap_run", False):
+                # a run the cheap hour started goes on through it: a price
+                # forecast that arrives mid-run must not pause it
+                cheap_ok = True
+            elif cheap_hours_left is None:
                 cheap_ok = left_h <= LEGIONELLA_CHEAP_WINDOW_H
             else:
-                need_h = (float(getattr(self, "_legionella_last_run_h", None)
-                                or LEGIONELLA_DEFAULT_RUN_H) * LEGIONELLA_CHEAP_MARGIN
-                          + LEGIONELLA_CHEAP_SLACK_H)
+                run_h = min(float(LEGIONELLA_MAX_RUN_HOURS), max(
+                    LEGIONELLA_MIN_RUN_H,
+                    float(getattr(self, "_legionella_last_run_h", None)
+                          or LEGIONELLA_DEFAULT_RUN_H)))
+                need_h = run_h * LEGIONELLA_CHEAP_MARGIN + LEGIONELLA_CHEAP_SLACK_H
                 cheap_ok = (left_h <= LEGIONELLA_EARLY_WINDOW_H
                             and float(cheap_hours_left) <= need_h)
         if cheap_ok:
@@ -1117,10 +1126,15 @@ class HotWaterController(SwitchDevice):
                     # next cheap start is timed by it
                     _st = self._legionella_started_at
                     if _st is not None:
+                        # earlier parts count only when they belong to
+                        # this interval (not a run given up before)
+                        _before = (float(getattr(self, "_legionella_run_s", 0.0))
+                                   if getattr(self, "_legionella_run_for", None)
+                                   == self._last_legionella_time else 0.0)
                         self._legionella_last_run_h = round(
-                            float(getattr(self, "_legionella_run_s", 0.0))
-                            / 3600.0 + (dt_util.now() - _st).total_seconds() / 3600.0, 2)
+                            (_before + (dt_util.now() - _st).total_seconds()) / 3600.0, 2)
                     self._legionella_run_s = 0.0
+                    self._cheap_run = False
                     self._end_legionella_run()
                     self._legionella_blocked_until = None
                     self._last_legionella_time = dt_util.now()
@@ -1168,9 +1182,16 @@ class HotWaterController(SwitchDevice):
                         and not self.legionella_overdue
                         and hours_left > LEGIONELLA_EARLY_PAUSE_MIN_LEAD_H):
                     if started is not None:
+                        if getattr(self, "_legionella_run_for", None) != self._last_legionella_time:
+                            self._legionella_run_s = 0.0
+                            self._legionella_run_for = self._last_legionella_time
+                        # the wait for the sun to come back is not run time
+                        _waited = ((dt_util.now() - self._bad_since).total_seconds()
+                                   if getattr(self, "_bad_since", None) else 0.0)
                         self._legionella_run_s = (
                             float(getattr(self, "_legionella_run_s", 0.0))
-                            + (dt_util.now() - started).total_seconds())
+                            + max(0.0, (dt_util.now() - started).total_seconds() - _waited))
+                    self._cheap_run = False
                     self._end_legionella_run()
                     self._legionella_early = False
                     self._last_legionella_path = "early_paused"
@@ -1225,6 +1246,7 @@ class HotWaterController(SwitchDevice):
             # (#1335) The run is due; layer 1 starts it regardless of sun
             # (``runs_without_surplus``) and ``reconcile_load`` switches it.
             self._legionella_early = bool(early)
+            self._cheap_run = bool(early and cheap_ok)
             self._last_legionella_path = "early_start" if early else "overdue_start"
             return "legionella_started"
 
