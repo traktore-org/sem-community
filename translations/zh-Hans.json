@@ -2107,6 +2107,14 @@
     "external_write_seen": {
       "title": "第三方正在写入 {name}",
       "description": "SEM 之外的某方不断更改 **{name}**，SEM 与该方互相抵消对方的操作。请在 SEM 的“配置”选项卡中将此设备设为*是，SEM 让出控制*，并选择能显示对方何时控制的实体。"
+    },
+    "heater_no_rise": {
+      "title": "热水器不升温",
+      "description": "{name} 用电 {minutes} 分钟后仍停留在 {temp} °C。请检查加热元件以及热水器的恒温器或安全断路器。热水器再次升温后此提示会消失。"
+    },
+    "legionella_below_stop": {
+      "title": "防军团菌运行无法达到目标",
+      "description": "{name}：你设置的停止温度 {stop} °C 低于防军团菌目标 {target} °C，SEM 无法对水箱消毒并会跳过此次运行。请提高停止温度或降低目标。此提示会自动消失。"
     }
   },
   "selector": {

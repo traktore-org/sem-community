@@ -2107,6 +2107,14 @@
     "external_write_seen": {
       "title": "Un terzo scrive su {name}",
       "description": "Qualcosa di diverso da SEM cambia di continuo **{name}**, e SEM e quel terzo si annullano a vicenda. Nella scheda Configurazione di SEM imposta questo dispositivo su *Sì, SEM cede* e scegli l'entità che mostra quando il terzo ha il controllo."
+    },
+    "heater_no_rise": {
+      "title": "Il bollitore non si scalda",
+      "description": "{name} ha assorbito corrente per {minutes} minuti ed è rimasto a {temp} °C. Controlla la resistenza e il termostato o la sicurezza del bollitore. Il messaggio sparisce quando il bollitore si scalda di nuovo."
+    },
+    "legionella_below_stop": {
+      "title": "Il ciclo antilegionella non raggiunge l'obiettivo",
+      "description": "{name}: il tuo stop a {stop} °C è sotto l'obiettivo antilegionella {target} °C. SEM non può disinfettare il bollitore e salta il ciclo. Alza lo stop o abbassa l'obiettivo. Sparisce da solo."
     }
   },
   "selector": {

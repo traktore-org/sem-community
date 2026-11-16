@@ -100,9 +100,10 @@ test('a value below Keep at is refused, with the reason', () => {
     assert.equal(sunMaxWrites({ id: 'x', keep: 52 }, '').error, 'hq_err_below_keep');
 });
 
-test('a hot-water tank also sets the Solar target, so both stops agree', () => {
+test('(#1369) a hot-water tank no longer copies into the Solar target: the band decides', () => {
     const res = sunMaxWrites({ id: 'hot_water', keep: 52 }, 56, { min: 30, max: 80 });
-    assert.deepEqual(res.option, { key: 'hot_water_solar_target', value: 56 });
+    assert.equal(res.option, null);
+    assert.deepEqual(res.writes, [{ property: 'comfort_offset', value: '4' }]);
     assert.deepEqual(sunMaxWrites({ id: 'hot_water', keep: 52 }, 85, { min: 30, max: 80 }),
         { error: 'hq_err_above_max', params: { max: '80' } });
     assert.equal(sunMaxWrites({ id: 'energy_dashboard_rod', keep: 52 }, 85, { max: 80 }).option, null);
@@ -282,4 +283,135 @@ test('a load\'s mode says who runs it — no "Solar only" beside the buy questio
     }
     // a car's charge modes keep their names
     assert.equal(words.en.charge_mode_solar_only !== undefined, true);
+});
+
+
+// ── (#1369) every reason the tank heats is said ──────────────────────────
+test('(#1369) an early Legionella run says it started early', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 50, own_run: true, own_run_early: true }, intent: { code: 'legionella_early' } };
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_legionella_early');
+    const plain = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 50, own_run: true }, intent: { code: 'legionella' } };
+    assert.equal(heaterSays(plain, {}, true).key, 'hq_st_legionella');
+});
+
+test('(#1369) a Legionella run due within a day rides along, it never hides the tank', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 53, own_run_soon: true } };
+    const said = heaterSays(row, {}, false);
+    assert.equal(said.key, 'hq_st_warm');
+    assert.equal(said.why, 'hq_st_legionella_soon');
+    const cold = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 41, own_run_soon: true, may_buy: false } };
+    assert.equal(heaterSays(cold, {}, false).key, 'hq_st_waits_sun');
+    assert.equal(heaterSays(cold, {}, false).why, 'hq_st_legionella_soon');
+});
+
+test('(#1369) the minimum pause is named, not "waits for sun"', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 48, pause_until: '13:21', may_buy: false }, intent: { source: 'solar' } };
+    const said = heaterSays(row, {}, false);
+    assert.equal(said.key, 'hq_st_paused');
+    assert.equal(said.params.time, '13:21');
+});
+
+test('(#1369) a heater that does not warm says so first', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 40, heating_fault: true }, intent: { code: 'comfort_goal' } };
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_no_rise');
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_no_rise');
+});
+
+test('(#1369) a stop below the Legionella target does not hide what the tank does, and the sun top is the stop', () => {
+    const idle = { comfort: { keep_c: 52, max_c: 53, start_c: 51, reading_c: 53, legionella_blocked: true, stop_c: 53, legionella_c: 60 } };
+    assert.equal(heaterSays(idle, {}, false).key, 'hq_st_warm');   // a repair says the rest
+    const sun = { comfort: { keep_c: 52, max_c: 53, start_c: 51, reading_c: 50 }, intent: { source: 'solar' } };
+    assert.equal(heaterSays(sun, {}, true).params.max, '53 °C');
+});
+
+test('(#1369) a heater still on for a moment after its stop says it is warm, not nothing', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 56.2 }, intent: { code: 'stop_condition' } };
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_warm');
+});
+
+
+test('(#1369) held on below Keep at by its minimum run: "switching off", never "warm"', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 43.3 }, intent: { code: 'legionella_end' } };
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_stopping');
+});
+
+test('(#1369) no "Legionella due" second line while the thermometer reads nothing', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: null, own_run_soon: true } };
+    const said = heaterSays(row, {}, false);
+    assert.equal(said.key, 'hq_st_no_reading');
+    assert.ok(!said.why);
+});
+
+
+
+
+
+
+test('(#1369) a warm tank in its minimum pause is warm, not paused', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 50, reading_c: 51.5, pause_until: '13:20' }, intent: {} };
+    assert.notEqual(heaterSays(row, {}, false).key, 'hq_st_paused');
+});
+
+
+test('(#1369) noise at Keep at and at the restart line does not flip the sentence', () => {
+    const say = (r, prev) => heaterSays({ comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: r, may_buy: true } }, { prevKey: prev }, false).key;
+    // entering needs the line itself …
+    assert.equal(say(51.9, ''), 'hq_st_warm_again');
+    assert.equal(say(52.0, ''), 'hq_st_warm');
+    // … leaving needs 0.2 K beyond it
+    let prev = 'hq_st_warm';
+    for (const r of [51.9, 51.85, 52.05, 51.9]) { prev = say(r, prev); assert.equal(prev, 'hq_st_warm', String(r)); }
+    assert.equal(say(51.7, 'hq_st_warm'), 'hq_st_warm_again');
+    prev = 'hq_st_warm_again';
+    for (const r of [50.9, 51.05, 50.85]) { prev = say(r, prev); assert.equal(prev, 'hq_st_warm_again', String(r)); }
+    assert.equal(say(50.7, 'hq_st_warm_again'), 'hq_st_below_none');
+    assert.equal(say(50.9, ''), 'hq_st_below_none');     // never "heats again below 51" when below it
+});
+
+test('(#1369) the pause is named only when SEM wants to start', () => {
+    const base = { keep_c: 52, max_c: 56, start_c: 51, reading_c: 48, pause_until: '14:29', may_buy: false };
+    assert.equal(heaterSays({ comfort: base, intent: { source: 'solar' } }, {}, false).key, 'hq_st_paused');
+    assert.equal(heaterSays({ comfort: base, intent: {} }, {}, false).key, 'hq_st_waits_sun');
+});
+
+
+test('(#1369) a Legionella hold with the heater off still says Legionella run', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 60.5, own_run: true } };
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_legionella');
+});
+
+test('(#1369) a cooling band keeps its sentence on noise too', () => {
+    const say = (r, prev) => heaterSays({ comfort: { hvac: 'cool', keep_c: 24, max_c: 22, start_c: 25, reading_c: r } }, { prevKey: prev }, false).key;
+    assert.equal(say(24.1, 'hq_st_cool'), 'hq_st_cool');
+});
+
+
+test('(#1369) a short gap in the reading during a Legionella run keeps "Legionella run"', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: null, own_run: true } };
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_legionella');
+    const ended = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: null, own_run: false } };
+    assert.equal(heaterSays(ended, {}, false).key, 'hq_st_no_reading');
+});
+
+
+test('(#1369) solar only between the restart line and Keep at is just warm', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 51.5, may_buy: false } };
+    assert.equal(heaterSays(row, {}, false).key, 'hq_st_warm');
+});
+
+test('(#1369) a too-cold run past its limit says it heats to Keep at', () => {
+    const cold = { comfort: { keep_c: 52, max_c: 56, start_c: 51, limit_c: 36, reading_c: 35.5, state: 'forced' }, intent: { code: 'comfort_floor' } };
+    assert.equal(heaterSays(cold, {}, true).key, 'hq_st_too_cold');
+    const past = { comfort: { keep_c: 52, max_c: 56, start_c: 51, limit_c: 36, reading_c: 50.5, state: 'willing' }, intent: { code: 'comfort_floor' } };
+    assert.equal(heaterSays(past, {}, true).key, 'hq_st_heating_to');
+});
+
+
+test('(#1369) the boiler\'s own thermostat is named with its temperature', () => {
+    const row = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 50, own_thermostat_c: 50 }, intent: { code: 'comfort_goal' } };
+    const said = heaterSays(row, {}, true);
+    assert.equal(said.key, 'hq_st_own_thermostat');
+    assert.equal(said.params.temp, '50 °C');
+    const warm = { comfort: { keep_c: 52, max_c: 56, start_c: 51, reading_c: 52.5, own_thermostat_c: 50 } };
+    assert.equal(heaterSays(warm, {}, false).key, 'hq_st_warm');
 });

@@ -2744,13 +2744,58 @@ class UnifiedDeviceRegistry:
         except Exception:  # noqa: BLE001 — an unreadable band publishes no lines
             return {}
         sign = 1.0 if cooling else -1.0
+        top = keep - sign * extra
+        # (#1369) the engine's own top: Keep at + Extra, capped at the
+        # Legionella target on a hot water tank
+        _top_fn = getattr(live, "_band_fields_top_c", None)
+        if callable(_top_fn) and not cooling:
+            try:
+                _t = _top_fn()
+                if _t is not None:
+                    top = float(_t)
+            except Exception:  # noqa: BLE001 — the typed top stands
+                pass
+        # (#1369) the user's own stop on the tank's temperature ends a run
+        # first when it is lower: the card names the real top
+        _stop_fn = getattr(live, "user_stop_c", None)
+        _stop = None
+        if callable(_stop_fn) and not cooling:
+            try:
+                _stop = _stop_fn()
+            except Exception:  # noqa: BLE001
+                _stop = None
+            if _stop is not None:
+                top = min(top, float(_stop))
         return {
             "keep_c": round(keep, 2),
             "start_c": round(keep + sign * gap, 2),
-            "max_c": round(keep - sign * extra, 2),
+            "max_c": round(top, 2),
+            # (#1369) a stop below the Legionella target: no disinfection
+            # only while a run is due within a day: the rest of the time the
+            # card says what the tank does next, not this
+            "legionella_blocked": (getattr(live, "legionella_blocked_by_stop", False) is True
+                                   and getattr(live, "legionella_due_within_a_day", False) is True),
+            "stop_c": (round(float(_stop), 1) if _stop is not None else None),
+            "legionella_c": (round(float(live.legionella_target_temp), 1)
+                             if getattr(live, "legionella_target_temp", None) else None),
             "limit_c": round(limit, 2),
             # (#1102) the device's own run — the tank heats past Keep at
             "own_run": getattr(live, "runs_without_surplus", False) is True,
+            # (#1369) that run started early, in a sunny hour
+            "own_run_early": (getattr(live, "runs_without_surplus", False) is True
+                              and getattr(live, "_legionella_early", False) is True
+                              and getattr(live, "legionella_overdue", False) is not True),
+            # (#1369) the minimum pause holds the next start: until when
+            "pause_until": UnifiedDeviceRegistry._pause_until(live),
+            # (#1369) a Legionella run is due within a day: it may start in
+            # the next sunny hour
+            "own_run_soon": getattr(live, "legionella_early_window", False) is True,
+            # (#1369) the tank drew power for two hours and did not warm
+            "heating_fault": getattr(live, "heating_fault", False) is True,
+            # (#1369) the boiler's own thermostat cut it off at this reading
+            "own_thermostat_c": (float(live.own_thermostat_c)
+                                 if isinstance(getattr(live, "own_thermostat_c", None), (int, float))
+                                 else None),
             # (#1102) may a planned hour be BOUGHT to reach Keep at? The
             # device's own rule; without it only the sun keeps the tank.
             "may_buy": UnifiedDeviceRegistry._may_buy(live),
@@ -2761,6 +2806,27 @@ class UnifiedDeviceRegistry:
             # The card shows these lines, not the typed numbers.
             "anchored": UnifiedDeviceRegistry._anchored(live),
         }
+
+    @staticmethod
+    def _pause_until(live):
+        """(#1369) "HH:MM" the minimum pause ends, or None when no pause
+        holds the next start."""
+        try:
+            from datetime import datetime, timedelta
+            from homeassistant.util import dt as dt_util
+            off = getattr(live, "_last_deactivated", None)
+            secs = float(getattr(live, "min_off_seconds", 0) or 0)
+            if not isinstance(off, datetime) or secs <= 0 or getattr(live, "is_active", False):
+                return None
+            end = off + timedelta(seconds=secs)
+            now = datetime.now(end.tzinfo) if end.tzinfo else datetime.now()
+            if end <= now:
+                return None
+            # the min-run clock is the process's local time: shown in HA's zone
+            aware = end if end.tzinfo else end.astimezone()
+            return dt_util.as_local(aware).strftime("%H:%M")
+        except Exception:  # noqa: BLE001
+            return None
 
     @staticmethod
     def _may_buy(live) -> bool:

@@ -289,7 +289,7 @@ NUMBER_TYPES = [
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         native_min_value=40,
         native_max_value=80,
-        native_step=5,
+        native_step=1,   # (#1369) any whole degree, not only 50/55/60
         mode=NumberMode.SLIDER,
     ),
     NumberEntityDescription(

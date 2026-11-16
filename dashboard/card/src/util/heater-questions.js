@@ -73,9 +73,24 @@ export function heaterSays(row, live = {}, running = false) {
     const intent = row.intent || {};
     const code = String(intent.code || '');
     const reading = num(c.reading_c);
+    // (#1369) a heater that does not warm says so first, running or not
+    if (c.heating_fault === true) return p('hq_st_no_rise', {}, 'warn');
+    // (#1369) the boiler's own thermostat stopped it below Keep at: say so,
+    // running or not, until it heats again
+    if (num(c.own_thermostat_c) !== null && !cool && reading !== null && reading < keep) {
+        return p('hq_st_own_thermostat', { temp: T(num(c.own_thermostat_c)) }, 'warn');
+    }
     if (running) {
+        if (c.own_run_early === true || code === 'legionella_early') return p('hq_st_legionella_early', {}, 'ok');
         if (c.own_run || code === 'legionella') return p('hq_st_legionella', {}, 'ok');
-        if (code === 'comfort_floor' || code === 'comfort_floor_away' || c.state === 'forced') return p('hq_st_too_cold', {}, 'warn');
+        if (code === 'comfort_floor' || code === 'comfort_floor_away' || c.state === 'forced') {
+            // (#1369) too cold only while it is: past the limit the same run
+            // heats on to Keep at, and says that
+            const lim = num(c.limit_c);
+            const past = c.state !== 'forced' && lim !== null && reading !== null
+                && (cool ? reading < lim : reading > lim);
+            return past ? p('hq_st_heating_to', { keep: T(keep) }, 'ok') : p('hq_st_too_cold', {}, 'warn');
+        }
         if (code === 'comfort_goal_battery' || (code !== 'comfort_goal' && intent.source === 'tier2_battery')) {
             return p('hq_st_heating_battery', { keep: T(keep) }, 'ok');
         }
@@ -83,28 +98,56 @@ export function heaterSays(row, live = {}, running = false) {
         if (intent.source === 'solar' || intent.source === 'tier1_battery') {
             return p('hq_st_heating_sun', { max: T(max === null ? keep : max) }, 'ok');
         }
+        // (#1369) still on for a moment after its stop or end: say so — warm
+        // only when it is; otherwise its minimum run holds it on
+        if (['stop_condition', 'at_target', 'legionella_end', 'overnight_end'].includes(code)) {
+            if (reading !== null && (cool ? reading <= keep : reading >= keep)) return p('hq_st_warm', { reading: T(reading) });
+            return p('hq_st_stopping');
+        }
         return null;
     }
     if (row.mergedMode === 'off') return null;
     // idle: these say what comes NEXT
     const idle = (key, params = {}, cls = '', why = '') => ({ ...p(key, params, cls, why), next: true });
+    // (#1369) a Legionella run due within a day rides along as the second
+    // line — it never hides what the tank does now
+    const withSoon = (said) => (c.own_run_soon === true && !cool && said && !said.why
+        ? { ...said, why: 'hq_st_legionella_soon' } : said);
+    // (#1369) a Legionella run (heater off in its hold, or a short gap in
+    // the reading): it goes on — "no reading" shows once the run has ended
+    if (c.own_run === true && !cool) return idle('hq_st_legionella', {}, 'ok');
     if (reading === null) return idle('hq_st_no_reading', {}, 'warn');
+    // (#1369) the minimum pause holds a start the sun or the plan wants
+    if (c.pause_until && (intent.on === true || intent.source === 'solar' || intent.source === 'tier1_battery')) {
+        return withSoon(idle('hq_st_paused', { time: c.pause_until }));
+    }
+    // (#1369) the minimum pause holds a start while the tank wants heat
+    // (#1369) sensor noise must not flip the sentence: a boundary is
+    // crossed at the line itself, and left only 0.2 K beyond it
+    const prev = live.prevKey || '';
+    const stick = (keys) => (keys.includes(prev) ? 0.2 : 0);
     // past Keep at, on the comfortable side
-    if (cool ? reading <= keep : reading >= keep) return idle('hq_st_warm', { reading: T(reading) });
+    const kStick = stick(['hq_st_warm', 'hq_st_cool']);
+    if (cool ? reading <= keep + kStick : reading >= keep - kStick) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
     const line = start === null ? keep : start;
-    if (cool ? reading < line : reading > line) return idle('hq_st_warm_again', { start: T(line) });
-    if (live.plannedAt) return idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt });
+    const lStick = stick(['hq_st_warm_again', 'hq_st_warm', 'hq_st_cool_again', 'hq_st_cool']);
+    if (cool ? reading < line + lStick : reading > line - lStick) {
+        // (#1369) solar only: nothing "heats again" at a line — the sun does
+        if (c.may_buy === false && c.may_use_battery !== true) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
+        return withSoon(idle('hq_st_warm_again', { start: T(line) }));
+    }
+    if (live.plannedAt) return withSoon(idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt }));
     // (#1349) the house battery reaches Keep at tonight — or is at its reserve
     if (c.may_use_battery === true) {
         if (code === 'battery_reserve') {
-            return { ...idle('hq_st_waits_battery', { keep: T(keep) }, 'warn'), battery: true };
+            return withSoon({ ...idle('hq_st_waits_battery', { keep: T(keep) }, 'warn'), battery: true });
         }
-        return { ...idle('hq_st_heats_tonight_battery', { keep: T(keep) }), battery: true };
+        return withSoon({ ...idle('hq_st_heats_tonight_battery', { keep: T(keep) }), battery: true });
     }
     // (#1102) Solar only buys nothing: no hour will ever be planned.
-    if (c.may_buy === false) return { ...idle('hq_st_waits_sun', { keep: T(keep) }), noBuy: true };
+    if (c.may_buy === false) return withSoon({ ...idle('hq_st_waits_sun', { keep: T(keep) }), noBuy: true });
     const why = becauseKey(row.intent);
-    return idle('hq_st_below_none', { keep: T(keep) }, 'warn', why === 'hq_because_no_sun' ? '' : why);
+    return withSoon(idle('hq_st_below_none', { keep: T(keep) }, 'warn', why === 'hq_because_no_sun' ? '' : why));
 }
 
 /** The cooling words of each heating text. */
@@ -243,10 +286,10 @@ export const BUY_LABEL = { off: 'hq_buy_no', grid: 'hq_buy_cheap', battery: 'hq_
 /**
  * "With spare sun, heat up to X" (cooling: "cool down to X") → the writes,
  * or `{error, params}`. X is absolute; stored is the offset from Keep at —
- * above it for a heater, below it for a cooler. On a hot-water row the
- * Configuration tab's Solar target also stops the sun ("SEM stops at the
- * lower of the two"), so it is set to the same value: `option`.
- * `solarTarget` = {min, max} of that option's number entity, when known.
+ * above it for a heater, below it for a cooler. (#1369) The band decides
+ * the top alone now, so the Configuration tab's Solar target is no longer
+ * copied (`option` is always null). `solarTarget` = {min, max} of that
+ * option's number entity, when known: still the highest a tank may be set.
  */
 export function sunMaxWrites({ id, keep, cooling = false }, x, solarTarget = null) {
     const k = num(keep), v = num(x);
@@ -260,7 +303,7 @@ export function sunMaxWrites({ id, keep, cooling = false }, x, solarTarget = nul
     const offset = Math.round(Math.abs(v - k) * 2) / 2;
     return {
         writes: [{ property: 'comfort_offset', value: String(offset) }],
-        option: isHotWater ? { key: 'hot_water_solar_target', value: Math.round((k + offset) * 10) / 10 } : null,
+        option: null,
     };
 }
 

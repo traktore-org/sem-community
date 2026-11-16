@@ -132,6 +132,8 @@ LOAD_LEGIONELLA = "legionella"
 # (#1321) the user's one-off on a load: run now / not now
 LOAD_OVERRIDE_RUN = "load_override_run"
 LOAD_OVERRIDE_STOP = "load_override_stop"
+# (#1369) the Legionella run started early, in a sunny hour
+LOAD_LEGIONELLA_EARLY = "legionella_early"
 # (#1335) a stop or a no-start says its own cause, never a start's sentence
 LOAD_LEGIONELLA_END = "legionella_end"
 LOAD_AT_TARGET = "at_target"

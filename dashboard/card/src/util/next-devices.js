@@ -31,6 +31,9 @@ export const PHONE_MAX_PX = 720;
  * folded (its pill is the one-line summary); on a wider screen chargers and
  * batteries open, loads fold. A tap is remembered either way.
  */
+/** (#1369) device id → the heater sentence it showed last. */
+const _heaterPrev = new Map();
+
 export function defaultOpen(type, narrow) {
     if (narrow) return false;
     return type !== 'load';
@@ -222,7 +225,9 @@ export function statePill(row, live = {}) {
     }
     if (row.blockedBy) return p('next_st_waiting_for', { parent: live.parentName || row.blockedBy });
     const running = row.isOn || (w !== null && w > 10);
-    const heater = heaterSays(row, live, running);
+    // (#1369) the last sentence per device keeps sensor noise from flipping it
+    const heater = heaterSays(row, { ...live, prevKey: _heaterPrev.get(row.id) }, running);
+    _heaterPrev.set(row.id, heater ? heater.key : '');
     if (heater) return heater;
     if (running) return p('next_st_on', {}, 'ok');
     if (row.mergedMode === 'off') return p('next_st_off_mode');

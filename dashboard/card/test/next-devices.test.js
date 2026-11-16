@@ -618,9 +618,8 @@ test('the buy question and "heat up to" write the stored settings', async () => 
     await Promise.resolve();
     const cfg = calls.filter((c) => c[0] === 'update_device_config').map((c) => c[1].property + '=' + c[1].value);
     assert.deepEqual(cfg, ['battery_eligible_overnight=false', 'top_up_policy=solar_only', 'comfort_offset=6']);
-    // a hot-water tank also sets the Solar target, so both stops agree
-    const opt = calls.find((c) => c[0] === 'set_option');
-    assert.deepEqual(opt[1], { options: { hot_water_solar_target: 58 } });
+    // (#1369) the band decides the top: the Solar target is not copied
+    assert.equal(calls.find((c) => c[0] === 'set_option'), undefined);
 });
 
 // (#1354) in Off and Peak only SEM does not run a load: its stop, thermometer,

@@ -248,6 +248,10 @@ _ENTITY_ID_RE = re.compile(
 #: tests/test_831_repair_next_step.py — every anchor must resolve to a real
 #: heading, the #219 lesson shape.
 _DOCS_ANCHORS = {
+    # (#1369) the tank draws power but does not warm
+    "heater_no_rise": "the-hot-water-tank-draws-power-but-does-not-warm",
+    # (#1369) the user's stop sits below the Legionella target
+    "legionella_below_stop": "legionella-cycle-not-running",
     "sensor_unavailable": "a-configured-sensor-is-unavailable",
     # (#900) the options wizard pinned a brand install to the generic adapter
     "battery_platform_pinned_generic": "the-battery-platform-is-pinned-to-generic",
@@ -1505,6 +1509,10 @@ def clear_orphan_hot_water_repairs(
                 eid = issue_id[len("hot_water_temperature_sensor_unavailable_"):]
                 if eid not in keep_temp:
                     candidates.append(issue_id)
+            elif (issue_id.startswith("heater_no_rise_")
+                  or issue_id.startswith("legionella_below_stop_")) and not keep_entity:
+                # (#1369) no tank left in the settings: nothing to warm
+                candidates.append(issue_id)
         for issue_id in candidates:
             try:
                 ir.async_delete_issue(hass, DOMAIN, issue_id)
@@ -2042,3 +2050,63 @@ def clear_external_write_seen(hass: HomeAssistant, device: str) -> None:
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete (external_write_seen_%s) "
                       "failed: %s", device, e)
+
+
+def _heater_issue_id(tank_id: str) -> str:
+    return f"heater_no_rise_{tank_id}"
+
+
+def raise_heater_no_rise(hass: HomeAssistant, tank_id: str, *, name: str,
+                         minutes: int, temp_c: float) -> None:
+    """(#1369) The tank drew power for ``minutes`` and did not warm."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN, issue_id=_heater_issue_id(tank_id),
+            is_fixable=False, is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="heater_no_rise",
+            learn_more_url=next_step_url("docs", "heater_no_rise", **_versions(hass)),
+            translation_placeholders={
+                "name": name, "minutes": str(minutes), "temp": f"{temp_c:.1f}"},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for heater %s: %s", tank_id, e)
+
+
+def clear_heater_no_rise(hass: HomeAssistant, tank_id: str) -> None:
+    """(#1369) A later run warmed the tank: the fault is gone."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _heater_issue_id(tank_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for heater %s: %s", tank_id, e)
+
+
+def _legionella_stop_issue_id(tank_id: str) -> str:
+    return f"legionella_below_stop_{tank_id}"
+
+
+def raise_legionella_below_stop(hass: HomeAssistant, tank_id: str, *, name: str,
+                                stop_c: float, target_c: float) -> None:
+    """(#1369) A due Legionella run was skipped: the user's own stop on the
+    tank's temperature sits below the Legionella target."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN, issue_id=_legionella_stop_issue_id(tank_id),
+            is_fixable=False, is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="legionella_below_stop",
+            learn_more_url=next_step_url("docs", "legionella_below_stop", **_versions(hass)),
+            translation_placeholders={
+                "name": name, "stop": f"{stop_c:.0f}", "target": f"{target_c:.0f}"},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for legionella stop %s: %s", tank_id, e)
+
+
+def clear_legionella_below_stop(hass: HomeAssistant, tank_id: str) -> None:
+    """(#1369) The stop no longer blocks the run (raised, removed, or the
+    target lowered): the repair is gone."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _legionella_stop_issue_id(tank_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for legionella stop %s: %s", tank_id, e)

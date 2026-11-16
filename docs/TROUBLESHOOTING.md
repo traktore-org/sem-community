@@ -665,16 +665,31 @@ SEM reads whether your car charges from the "Charger mode" sensor. The "Charger"
 
 ---
 
+## The hot water tank draws power but does not warm
+
+**Cause:** SEM ran the tank's heater for two hours, a power sensor or energy counter showed it drawing at least half its rating, and the water rose less than 1 °C while still below its target. Something between the power and the water is not working.
+
+**Fix:**
+1. Check the heating element and the tank's own thermostat or safety cut-out.
+2. Check that the thermometer SEM reads sits in the tank, not next to it.
+
+The repair clears by itself once a later run warms the tank again. Only heaters SEM switches on and off are checked; a tank driven by a setpoint (usually a heat pump) and tanks without a power sensor or energy counter are not.
+
+---
+
 ## Legionella cycle not running
 
 **Cause:** The Legionella disinfection cycle triggers only when the configured interval (default 72 hours) has elapsed since the water last reached the disinfection target temperature (default 65°C).
 
+Since 2.3 a run due within the next day may start early, in an hour where the sun alone can carry the tank. If that hour ends before the run is due, the early run stops and the run happens at the due time as before. It never starts later than before. In that hour it takes the sun before the car, the battery and the grid. A cheap hour does not start it early. The hour must hold 10 minutes before the start, and be gone 30 minutes before the pause.
+
 **Fix:**
 1. Check how long since the last disinfection: look at the hot water sensor attributes or SEM debug logs for the hours-since-last-60C counter
 2. Verify the disinfection interval setting — if set to 168 hours (maximum), cycles will be infrequent
-3. Confirm the temperature sensor is accurate — if the sensor falsely reports temperatures above 60°C, SEM will reset the counter and skip the cycle
-4. Check that the hot water entity is available and controllable — SEM cannot force heating if the entity is unavailable or in an error state
-5. Enable debug logging (see below) and search for `legionella` or `hot_water` in the logs to trace the cycle state
+3. Check *Stop when* on the boiler: a stop on the tank's temperature below the Legionella target means the run can never finish. SEM then skips the run and raises a repair; raise the stop or lower the target.
+4. Confirm the temperature sensor is accurate — if the sensor falsely reports temperatures above 60°C, SEM will reset the counter and skip the cycle
+5. Check that the hot water entity is available and controllable — SEM cannot force heating if the entity is unavailable or in an error state
+6. Enable debug logging (see below) and search for `legionella` or `hot_water` in the logs to trace the cycle state
 
 ---
 
