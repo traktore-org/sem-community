@@ -38,8 +38,8 @@ from .units import (
 
 from ..ha_energy_reader import (
     battery_units, energy_counters, left_alone_counters, one_battery_soc,
-    unit_energy_counters, unit_soc_sensor, unpowered_battery_socs,
-    unsourced_counters,
+    other_battery_socs, unit_energy_counters, unit_soc_sensor,
+    unpowered_battery_socs, unsourced_counters,
 )
 from ..utils.log_gate import log_on_change
 from ..utils.own_entity import is_sem_entity
@@ -3872,9 +3872,11 @@ class SensorReader:
             # (#1373) Batteries with no power read and a pick each: their
             # average, once every pick that is there reads. One down is a
             # wait, not the other battery's level.
-            levels = [self._read_sensor(e, "battery_soc", allow_none=True)
+            # Each pick is checked as a fleet unit is (#1202, #1284).
+            levels = [self._accept_unit_soc(e, self._read_sensor(
+                          e, "battery_soc", allow_none=True))
                       for e in unpowered if _picked_soc_present(self.hass, e)]
-            if levels and all(v is not None for v in levels):
+            if levels and all(v is not None and v >= 0 for v in levels):
                 soc_val = sum(levels) / len(levels)
         elif ed_soc:
             soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
@@ -7545,7 +7547,13 @@ class SensorReader:
             # gap: no SOC for this battery, and still no guess.
             return own if _picked_soc_present(self.hass, own) else None
 
+        # (#1373) another battery's pick is never this one's guess
+        taken = other_battery_socs(
+            getattr(self, "_energy_dashboard_config", None), battery_power_entity)
         cached = self._soc_entity_by_power.get(battery_power_entity)
+        if cached in taken:
+            self._soc_entity_by_power.pop(battery_power_entity, None)
+            cached = None
         if cached:
             # Still a real entity? Then it is ours, readable or not. Only a
             # vanished entity (renamed, integration removed) earns a re-detect.
@@ -7570,7 +7578,7 @@ class SensorReader:
         for prefix in _own_stems(
                 getattr(self, "_energy_dashboard_config", None),
                 battery_power_entity):
-            result = self._try_soc_candidates(prefix, soc_keywords)
+            result = self._try_soc_candidates(prefix, soc_keywords, skip=taken)
             if result:
                 self._soc_entity_by_power[battery_power_entity] = result
                 return result
@@ -7596,6 +7604,8 @@ class SensorReader:
                     if entity_entry.domain != "sensor":
                         continue
                     eid = entity_entry.entity_id
+                    if eid in taken:                       # (#1373)
+                        continue
                     eid_lower = eid.lower()
                     state = self.hass.states.get(eid)
                     # Accept by name keyword OR by the canonical SOC signature:
@@ -7679,6 +7689,8 @@ class SensorReader:
                 # this scan is looking for. Counted, it made every house with
                 # a real SOC sensor two candidates, and so none.
                 if is_sem_entity(self.hass, eid, registry):
+                    continue
+                if eid in taken:            # (#1373) another battery's pick
                     continue
                 # Accept by SOC-keyword name OR by the canonical battery SOC
                 # signature (device_class=battery + %). The signature path is
@@ -7767,12 +7779,16 @@ class SensorReader:
             getattr(self, "_energy_dashboard_config", None), battery_power_entity)
         if own:
             return _picked_soc_present(self.hass, own)
+        taken = other_battery_socs(
+            getattr(self, "_energy_dashboard_config", None), battery_power_entity)
 
         # Same longest-stem-first walk as detection's strategy 1.
         for prefix in _own_stems(
                 getattr(self, "_energy_dashboard_config", None),
                 battery_power_entity):
             for keyword in _SOC_NAME_KEYWORDS:
+                if f"sensor.{prefix}_{keyword}" in taken:
+                    continue
                 if _present(f"sensor.{prefix}_{keyword}"):
                     _note_read(self, f"sensor.{prefix}_{keyword}")  # (#1140)
                     return True
@@ -7786,6 +7802,8 @@ class SensorReader:
                     for entry in er.async_entries_for_device(
                             registry, power_entry.device_id):
                         if entry.domain != "sensor" or entry.disabled_by:
+                            continue
+                        if entry.entity_id in taken:       # (#1373)
                             continue
                         eid_lower = entry.entity_id.lower()
                         # (#1373) the same rule as detection: a name that
@@ -7819,10 +7837,14 @@ class SensorReader:
 
         return False
 
-    def _try_soc_candidates(self, prefix: str, soc_keywords: list) -> Optional[str]:
-        """Try prefix + keyword combinations to find SOC entity."""
+    def _try_soc_candidates(self, prefix: str, soc_keywords: list,
+                            skip: Any = ()) -> Optional[str]:
+        """Try prefix + keyword combinations to find SOC entity. A name in
+        ``skip`` (another battery's pick, #1373) is not a candidate."""
         for keyword in soc_keywords:
             candidate = f"sensor.{prefix}_{keyword}"
+            if candidate in skip:
+                continue
             state = self.hass.states.get(candidate)
             if state and state.state not in ("unknown", "unavailable", None):
                 try:

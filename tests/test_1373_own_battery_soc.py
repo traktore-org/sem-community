@@ -584,6 +584,7 @@ DECLARED_SOC_FIELD_READERS = {
     "_extract_battery_config": "the parser fills them",
     "one_battery_soc": "the rule: the first only when no battery is read",
     "unpowered_battery_socs": "no battery power read: every pick, for the average",
+    "other_battery_socs": "every pick but this battery's: no guess may take one",
     "_wired": "lists every SOC sensor of the dashboard, for no battery",
 }
 _SOC_FIELDS = {"battery_soc", "battery_soc_list"}
@@ -641,9 +642,12 @@ def test_the_guard_finds_the_old_read():
         "    return self._energy_dashboard_config.battery_soc_list[1]\n"
         "def cycles(self, _ed):\n"
         "    return getattr(_ed, 'battery_soc', None) if _ed else None\n"
+        "def suffix(old_ed):\n"
+        "    return old_ed.battery_soc_list\n"
         "def fine(readings):\n"
         "    return readings.battery_soc\n")
-    assert _soc_field_readers(old) == {"read_power", "setup", "other", "cycles"}
+    assert _soc_field_readers(old) == {
+        "read_power", "setup", "other", "cycles", "suffix"}
 
 
 # ── 7. review round 2: a name two batteries share, settings, gone picks ──
@@ -821,3 +825,37 @@ async def test_two_picks_and_no_power_read_give_their_average(hass):
     r2 = _reader(hass, ed)
     _read(r2)
     assert r2._last_valid_soc is None                   # never read
+
+
+async def test_a_battery_with_no_power_keeps_its_pick_from_b2s_guess(hass):
+    """b1 has counters only (no power sensor, so SEM reads b2 alone) and
+    its own pick; b2 has no pick and its level is not up yet. b2 never
+    takes b1's pick: not by the whole-house scan, not by a name."""
+    hass.states.async_set(HOME1_SOC, "15", _PCT)
+    hass.states.async_set(HOME2, "0", _W)
+    ed = _ed(hass,
+             {"type": "battery", "stat_energy_to": "sensor.old_in",
+              "stat_energy_from": "sensor.old_out", "stat_soc": HOME1_SOC},
+             {"type": "battery", "stat_rate": HOME2})
+    assert battery_units(ed) == [HOME2]
+    r = _reader(hass, ed)
+    assert r._auto_detect_battery_soc(HOME2) is None
+    assert not r._soc_candidate_exists(HOME2)
+    r._soc_entity_by_power[HOME2] = HOME1_SOC          # an older build's
+    assert r._auto_detect_battery_soc(HOME2) is None
+    hass.states.async_set(HOME2_SOC, "60", _PCT)
+    assert r._auto_detect_battery_soc(HOME2) == HOME2_SOC
+
+
+async def test_the_unpowered_average_checks_each_pick_like_a_unit(hass):
+    """A pick that reads below 0 % is no reading, as for a fleet unit."""
+    hass.states.async_set("sensor.a_soc", "40", _PCT)
+    hass.states.async_set("sensor.b_soc", "-1", _PCT)
+    ed = _ed(hass,
+             {"type": "battery", "stat_energy_to": "sensor.a_in",
+              "stat_energy_from": "sensor.a_out", "stat_soc": "sensor.a_soc"},
+             {"type": "battery", "stat_energy_to": "sensor.b_in",
+              "stat_energy_from": "sensor.b_out", "stat_soc": "sensor.b_soc"})
+    r = _reader(hass, ed)
+    _read(r)
+    assert r._last_valid_soc is None

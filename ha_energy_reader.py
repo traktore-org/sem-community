@@ -459,6 +459,18 @@ def unit_soc_sensor(ed_config: Any, unit: Optional[str]) -> Optional[str]:
     return soc if isinstance(soc, str) and soc else None
 
 
+def other_battery_socs(ed_config: Any, unit: Optional[str]) -> set:
+    """(#1373) The SOC sensors other batteries were given in HA's battery
+    dialog: every source's pick but this battery's own. No guess for this
+    battery may land on one of them, even when the other battery has no
+    power sensor and so is no ``battery_units`` entry."""
+    picks = getattr(ed_config, "battery_soc_list", None)
+    if not isinstance(picks, (list, tuple)):
+        return set()
+    return {p for p in picks if isinstance(p, str) and p} - {
+        unit_soc_sensor(ed_config, unit)}
+
+
 def unpowered_battery_socs(ed_config: Any) -> List[str]:
     """(#1373) With no battery power read at all, each battery's pick, once.
     Two of them are two batteries: the home's level is their average, not
