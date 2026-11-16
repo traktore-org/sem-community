@@ -12,13 +12,19 @@ states: CHEAP, DEAR, ONE_PRICE (the prices do not differ, so "cheap" means
 nothing) or UNKNOWN (nobody can say). Only CHEAP is cheap; UNKNOWN is never
 the cheap bucket (#925).
 
-Steps 1-5 of #1372 are a pure refactor, so TWO rules still exist and are
-kept bit for bit until the engine moves to one:
+Two QUESTIONS, not two rules (#1372 step 8):
 
-* ``rule="plan"`` — what ``tariff_cheap_at`` returned: the provider's raw
-  level for the hour, cheap when its word is a cheap one.
-* ``rule="gate"`` — what the live gate reads: ``price_signal.is_cheap``, a
-  level only where a comparison stands behind it.
+* **"Is hour T at a cheap level?"** — ``cheap_at(t)``, ``at(t)``. The
+  planners' question. The provider answers for that hour's own day: it
+  refuses a day with one rate and a tariff whose rates are equal (#994).
+* **"Is it worth acting now?"** — ``cheap_now()``, ``now()``. The live
+  gate's question: the level now, and only while the prices SEM can still
+  act on differ (``price_signal.comparative_level``).
+
+They must not be merged: the second looks at the prices from NOW on, so
+asked about Monday on a Sunday evening it hides Monday's cheap hours — the
+plan could not plan ahead. (``cheap_seen_from_now`` is that mix, kept for
+the one caller that has always asked it.)
 
 The sun is NOT part of a price view: a sunny hour is cheap for the packer
 (``LedgerSlot.level_cheap``), but the tariff may still be at its peak.
@@ -43,11 +49,9 @@ from .price_signal import (
 __all__ = [
     "PriceState", "PriceAnswer", "PriceView", "answer_for_level", "answer_for_device",
     "day_has_cheaper", "price_no_dearer", "price_blocks_bridge",
-    "CHEAP_WORDS", "PEAK_WORDS", "RULE_PLAN", "RULE_GATE",
+    "CHEAP_WORDS", "PEAK_WORDS",
 ]
 
-RULE_PLAN = "plan"
-RULE_GATE = "gate"
 
 #: Two prices are "no dearer" when they differ by no more than this
 #: (float noise). The planner's own tolerance, moved here unchanged.
@@ -129,23 +133,22 @@ class PriceView:
 
     def __init__(self, provider: Any, own: Any = None,
                  now: Union[datetime, Callable[[], datetime], None] = None,
-                 rule: str = RULE_GATE) -> None:
+                 ) -> None:
         # The device's own tariff answers when it has one; else the house's.
         self._p = own if own is not None else provider
         self._clock = now
-        self.rule = rule
 
     @classmethod
     def for_device(cls, device: Any, house_provider: Any,
                    device_tariffs: Any = None, now: Any = None,
-                   rule: str = RULE_GATE) -> "PriceView":
+                   ) -> "PriceView":
         """The view a device reads: its own tariff when it has one and it is
         readable (``DeviceTariffs.plan_tariff``), else the house's."""
         own = None
         if device_tariffs is not None:
             plan = device_tariffs.plan_tariff(device)
             own = None if plan is None else plan.provider
-        return cls(house_provider, own=own, now=now, rule=rule)
+        return cls(house_provider, own=own, now=now)
 
     # ── time ──────────────────────────────────────────────────────────
 
@@ -190,18 +193,32 @@ class PriceView:
             except TypeError:  # naive vs aware: ask the provider
                 pass
         raw = self._raw_level(t)
+        if t is not None:
+            # the hour question: the provider's word for that hour
+            if _name(raw):
+                return answer_for_level(raw)
+            # no level: a priced hour with nothing to compare is ONE_PRICE
+            return PriceAnswer(PriceState.ONE_PRICE if self._priced(t)
+                               else PriceState.UNKNOWN)
         if not _name(raw):
             return PriceAnswer(PriceState.UNKNOWN)
-        if self.rule == RULE_GATE:
-            level = comparative_level(self._p, t)
-            if level is None:
-                # the provider spoke but nothing compares: one price,
-                # unless it is a word nobody knows
-                known = variation_known(self._p)
-                return PriceAnswer(PriceState.UNKNOWN if known
-                                   else PriceState.ONE_PRICE)
-            raw = level
-        return answer_for_level(raw)
+        # the live question: a level only while prices still differ
+        level = comparative_level(self._p, None)
+        if level is None:
+            known = variation_known(self._p)
+            return PriceAnswer(PriceState.UNKNOWN if known
+                               else PriceState.ONE_PRICE)
+        return answer_for_level(level)
+
+    def _priced(self, t: datetime) -> bool:
+        """Does the provider have a price for hour ``t``?"""
+        reader = getattr(self._p, "get_price_at", None)
+        if not callable(reader):
+            return False
+        try:
+            return reader(t) is not None
+        except Exception:  # noqa: BLE001 — unpriced
+            return False
 
     def compared_level(self, t: Optional[datetime] = None) -> Any:
         """The provider's level where a comparison stands behind it, else
@@ -216,15 +233,14 @@ class PriceView:
         return getattr(self._p, "get_price_level_at", None)
 
     def now(self) -> PriceAnswer:
-        """The state now; the gate asks the provider's live level."""
-        if self.rule == RULE_GATE and self._clock is None:
-            return self.at(None)
-        return self.at(self._moment())
+        """The live question: the state now, for acting now."""
+        return self.at(None)
 
     def cheap_at(self, t: Optional[datetime]) -> bool:
-        """The exact bool today's callers get for hour ``t``."""
-        if self.rule == RULE_GATE:
-            return is_cheap(self._p, t)
+        """The hour question: is hour ``t`` at a cheap level? (None = now,
+        the live question.)"""
+        if t is None:
+            return self.cheap_now()
         if hasattr(self._p, "get_price_level_at"):
             try:
                 lvl = self._p.get_price_level_at(t)
@@ -232,6 +248,17 @@ class PriceView:
                 return False
             return is_cheap_name(lvl)
         return False
+
+    def cheap_now(self) -> bool:
+        """The live question: is it cheap now, while prices still differ?"""
+        return is_cheap(self._p, None)
+
+    def cheap_seen_from_now(self, t: Optional[datetime]) -> bool:
+        """Hour ``t`` at a cheap level AND prices differing from now on —
+        the live rule asked about a later hour. A device's own tariff has
+        always been planned with it (``PlanTariff.cheap_at``); it cannot
+        see cheap hours that start after a one-price stretch."""
+        return is_cheap(self._p, t)
 
     def rate_cheap_at(self, t: datetime) -> bool:
         """(#1310) Display: is the hour at the tariff's cheap RATE? Shown
@@ -243,7 +270,7 @@ class PriceView:
             except Exception:  # noqa: BLE001 — no level is not cheap
                 return False
             return is_cheap_name(lvl)
-        return PriceView(self._p, rule=RULE_PLAN).cheap_at(t)
+        return self.cheap_at(t)
 
     def rate_cheap_fn(self) -> Optional[Callable[[datetime], bool]]:
         """A builder's ``rate_cheap_at``, or None when the rate word IS the

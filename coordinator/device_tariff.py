@@ -219,8 +219,8 @@ class PlanTariff:
         return self.rate or None
 
     def cheap_at(self, when) -> bool:
-        # (#1372) the gate rule, asked through the price view
-        return PriceView(self.provider, rule="gate").cheap_at(when)
+        # (#1372) the live rule asked about a later hour, as it always was
+        return PriceView(self.provider).cheap_seen_from_now(when)
 
 
 class DeviceTariffs:

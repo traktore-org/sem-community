@@ -127,23 +127,25 @@ class _Fake:
 @pytest.mark.parametrize("name", list(_tariffs()))
 def test_plan_rule_is_what_tariff_cheap_at_was(name):
     prov = _tariffs()[name]
-    view = PriceView(prov, rule="plan")
+    view = PriceView(prov)
     got = [view.cheap_at(t) for t in _hours()]
     assert got == [_ref_plan(prov, t) for t in _hours()]
 
 
 @pytest.mark.parametrize("name", list(_tariffs()))
-def test_gate_rule_is_what_the_live_gate_reads(name):
+def test_the_live_rule_about_a_later_hour_is_what_the_gate_read(name):
     prov = _tariffs()[name]
-    view = PriceView(prov, rule="gate")
-    got = [view.cheap_at(t) for t in _hours()]
+    view = PriceView(prov)
+    got = [view.cheap_seen_from_now(t) for t in _hours()]
     assert got == [ps.is_cheap(prov, t) for t in _hours()]
+    assert view.cheap_now() == ps.is_cheap(prov)
+    assert view.cheap_at(None) == ps.is_cheap(prov)
 
 
 @pytest.mark.parametrize("name", list(_tariffs()))
 def test_rate_word_is_what_the_plan_card_read(name):
     prov = _tariffs()[name]
-    view = PriceView(prov, rule="plan")
+    view = PriceView(prov)
     assert [view.rate_cheap_at(t) for t in _hours()] == [
         _ref_rate(prov, t) for t in _hours()]
 
@@ -153,26 +155,27 @@ def test_the_parity_is_not_vacuous():
     one-rate weekend (the #1310 case), so equality above means something."""
     t = _tariffs()
     cal = t["calendar"]
-    plan = [PriceView(cal, rule="plan").cheap_at(x) for x in _hours()]
-    rate = [PriceView(cal, rule="plan").rate_cheap_at(x) for x in _hours()]
+    plan = [PriceView(cal).cheap_at(x) for x in _hours()]
+    rate = [PriceView(cal).rate_cheap_at(x) for x in _hours()]
     assert any(plan) and not all(plan)
     assert plan != rate
-    dyn = [PriceView(t["dynamic"], rule="gate").cheap_at(x) for x in _hours()]
+    dyn = [PriceView(t["dynamic"]).cheap_seen_from_now(x) for x in _hours()]
     assert any(dyn) and not all(dyn)
 
 
 def test_a_provider_that_raises_is_not_cheap_on_both_rules():
     bad = _Fake(PriceLevel.CHEAP, raises=True)
-    for rule in ("plan", "gate"):
-        assert PriceView(bad, rule=rule).cheap_at(FRI) is False
-    assert PriceView(bad, rule="plan").at(FRI).state is PriceState.UNKNOWN
+    view = PriceView(bad)
+    assert view.cheap_at(FRI) is False and view.cheap_now() is False
+    assert view.cheap_seen_from_now(FRI) is False
+    assert view.at(FRI).state is PriceState.UNKNOWN
 
 
 def test_no_provider_is_not_cheap():
-    for rule in ("plan", "gate"):
-        v = PriceView(None, rule=rule)
-        assert v.cheap_at(FRI) is False
-        assert v.at(FRI).state is PriceState.UNKNOWN
+    v = PriceView(None)
+    assert v.cheap_at(FRI) is False and v.cheap_now() is False
+    assert v.at(FRI).state is PriceState.UNKNOWN
+    assert v.now().state is PriceState.UNKNOWN
     assert v.rate_cheap_fn() is None
 
 
@@ -185,45 +188,63 @@ def test_the_day_ledger_wrappers_delegate_and_keep_their_answers():
 
 def test_rate_cheap_fn_is_none_for_a_dynamic_tariff_only():
     t = _tariffs()
-    assert PriceView(t["dynamic"], rule="plan").rate_cheap_fn() is None
-    assert callable(PriceView(t["calendar"], rule="plan").rate_cheap_fn())
-    assert callable(PriceView(t["static two rate"], rule="plan").rate_cheap_fn())
+    assert PriceView(t["dynamic"]).rate_cheap_fn() is None
+    assert callable(PriceView(t["calendar"]).rate_cheap_fn())
+    assert callable(PriceView(t["static two rate"]).rate_cheap_fn())
 
 
 # ── the four states ───────────────────────────────────────────────────────
 
 def test_cheap_and_dear():
-    cheap = PriceView(_Fake(PriceLevel.CHEAP), rule="gate").at(FRI)
-    assert cheap == PriceAnswer(PriceState.CHEAP) and cheap.is_cheap
-    dear = PriceView(_Fake(PriceLevel.VERY_EXPENSIVE), rule="gate").at(FRI)
-    assert dear.state is PriceState.DEAR and dear.peak and not dear.is_cheap
-    normal = PriceView(_Fake(PriceLevel.NORMAL), rule="gate").at(FRI)
-    assert normal.state is PriceState.DEAR and not normal.peak
+    for ask in (lambda v: v.at(FRI), lambda v: v.now()):     # both questions
+        cheap = ask(PriceView(_Fake(PriceLevel.CHEAP)))
+        assert cheap == PriceAnswer(PriceState.CHEAP) and cheap.is_cheap
+        dear = ask(PriceView(_Fake(PriceLevel.VERY_EXPENSIVE)))
+        assert dear.state is PriceState.DEAR and dear.peak and not dear.is_cheap
+        normal = ask(PriceView(_Fake(PriceLevel.NORMAL)))
+        assert normal.state is PriceState.DEAR and not normal.peak
 
 
-def test_one_price_is_a_state_on_the_gate_but_the_plan_reads_the_raw_word():
+def test_the_two_questions_differ_where_they_should():
+    """(#1372 step 8) A provider whose word is "cheap" while the prices SEM
+    can still act on are all the same: the HOUR is at a cheap level (the
+    plan may use it), but it is not worth acting NOW (the gate holds)."""
     flat_but_cheap = _Fake(PriceLevel.CHEAP, lo=0.3, hi=0.3)
-    gate = PriceView(flat_but_cheap, rule="gate")
-    assert gate.at(FRI).state is PriceState.ONE_PRICE
-    assert gate.cheap_at(FRI) is False
-    # the plan rule keeps today's answer: the raw word, cheap
-    assert PriceView(flat_but_cheap, rule="plan").cheap_at(FRI) is True
+    view = PriceView(flat_but_cheap)
+    assert view.cheap_at(FRI) is True and view.at(FRI).is_cheap
+    assert view.cheap_now() is False
+    assert view.now().state is PriceState.ONE_PRICE
+    assert view.cheap_seen_from_now(FRI) is False
+
+
+def test_a_one_rate_weekend_does_not_hide_mondays_cheap_hours():
+    """Why the two questions must not be merged: asked on a Sunday, Monday
+    00:00 is a cheap hour for the plan. The live rule about that hour looks
+    at the prices from now on and may not see it."""
+    prov = StaticTariffProvider(peak_rate=0.35, off_peak_rate=0.22)
+    monday_night = datetime(2026, 11, 9, 3, 0, tzinfo=UTC)
+    sunday_noon = datetime(2026, 11, 8, 12, 0, tzinfo=UTC)
+    view = PriceView(prov)
+    assert view.cheap_at(monday_night) is True
+    assert view.cheap_at(sunday_noon) is False          # a one-rate day
+    assert view.at(sunday_noon).state in (PriceState.ONE_PRICE, PriceState.UNKNOWN)
 
 
 def test_unknown_is_never_cheap():
-    v = PriceView(_Fake(None), rule="gate")
+    v = PriceView(_Fake(None))
     assert v.at(FRI).state is PriceState.UNKNOWN
-    assert not v.at(FRI).is_cheap and v.cheap_at(FRI) is False
+    assert v.now().state is PriceState.UNKNOWN
+    assert not v.at(FRI).is_cheap and v.cheap_at(FRI) is False and v.cheap_now() is False
 
 
-def test_now_uses_the_clock_it_was_given_and_the_live_level_on_the_gate():
-    prov = StaticTariffProvider(peak_rate=0.35, off_peak_rate=0.22)
-    night = datetime(2026, 11, 9, 3, 0, tzinfo=UTC)   # a Monday, off-peak
-    noon = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
-    assert PriceView(prov, now=night, rule="plan").now().is_cheap
-    assert not PriceView(prov, now=lambda: noon, rule="plan").now().is_cheap
+def test_now_is_the_live_level():
     live = _Fake(PriceLevel.CHEAP)
-    assert PriceView(live, rule="gate").now().is_cheap   # get_price_level()
+    assert PriceView(live).now().is_cheap                # get_price_level()
+    prov = StaticTariffProvider(peak_rate=0.35, off_peak_rate=0.22)
+    night = datetime(2026, 11, 9, 3, 0, tzinfo=UTC)      # a Monday, off-peak
+    noon = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
+    assert PriceView(prov).at(night).is_cheap
+    assert not PriceView(prov).at(noon).is_cheap
 
 
 def test_answer_for_level_reads_a_stamped_word():
@@ -252,12 +273,12 @@ def test_a_forecast_ends_where_its_last_point_ends():
 def test_a_forecast_with_no_prices_knows_nothing():
     p = _dynamic([])
     assert p.known_until() < NOW0 - timedelta(days=3650)
-    assert PriceView(p, rule="plan").at(NOW0).state is PriceState.UNKNOWN
+    assert PriceView(p).at(NOW0).state is PriceState.UNKNOWN
 
 
 def test_an_hour_past_the_forecast_is_unknown():
     p = _dynamic([0.1, 0.5, 0.1, 0.5, 0.1, 0.5])
-    v = PriceView(p, rule="plan")
+    v = PriceView(p)
     assert v.at(NOW0 + timedelta(hours=5, minutes=59)).state is not PriceState.UNKNOWN
     assert v.at(NOW0 + timedelta(hours=6)).state is PriceState.UNKNOWN
 
@@ -268,19 +289,19 @@ def test_cheap_hours_counts_quarter_hours_on_a_rule():
     prov = StaticTariffProvider(peak_rate=0.35, off_peak_rate=0.22)
     mon_0 = datetime(2026, 11, 9, 0, 0, tzinfo=UTC)
     # Monday 00:00-24:00: cheap outside 07:00-20:00 = 11 h
-    got = PriceView(prov, rule="plan").cheap_hours(
+    got = PriceView(prov).cheap_hours(
         mon_0, mon_0 + timedelta(hours=24))
     assert got == pytest.approx(11.0)
 
 
 def test_cheap_hours_is_none_when_the_span_is_not_fully_known():
     p = _dynamic([0.1, 0.5, 0.1, 0.5])
-    v = PriceView(p, rule="plan")
+    v = PriceView(p)
     assert v.cheap_hours(NOW0, NOW0 + timedelta(hours=4)) is not None
     assert v.cheap_hours(NOW0, NOW0 + timedelta(hours=5)) is None
     # a tolerance lets the curve end that much early
     assert v.cheap_hours(NOW0, NOW0 + timedelta(hours=5), tolerance_h=1.0) is not None
-    assert PriceView(_dynamic([]), rule="plan").cheap_hours(
+    assert PriceView(_dynamic([])).cheap_hours(
         NOW0, NOW0 + timedelta(hours=1)) is None
 
 
@@ -292,7 +313,7 @@ def test_price_no_dearer_and_day_has_cheaper_helpers():
     assert not price_no_dearer(None, 0.3) and not price_no_dearer(0.2, None)
     assert day_has_cheaper([False, True]) and not day_has_cheaper([])
     prov = StaticTariffProvider(peak_rate=0.35, off_peak_rate=0.22)
-    v = PriceView(prov, rule="plan")
+    v = PriceView(prov)
     mon = datetime(2026, 11, 9, tzinfo=UTC)
     assert v.day_has_cheaper([mon + timedelta(hours=h) for h in (9, 12, 23)])
     assert not v.day_has_cheaper([mon + timedelta(hours=h) for h in (9, 12)])
@@ -306,7 +327,7 @@ def test_a_device_with_its_own_readable_tariff_asks_that_tariff():
     tariffs = MagicMock()
     tariffs.plan_tariff.return_value = SimpleNamespace(provider=own)
     dev = object()
-    v = PriceView.for_device(dev, house, tariffs, rule="gate")
+    v = PriceView.for_device(dev, house, tariffs)
     assert v.cheap_at(FRI) is True
     tariffs.plan_tariff.assert_called_once_with(dev)
 

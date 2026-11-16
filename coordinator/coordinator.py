@@ -7159,7 +7159,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # tolerance is 1 h minus the slot length (0 on an hourly curve).
             slot_h = getattr(prov, "detect_slot_hours", None)
             slot_h = (slot_h() if callable(slot_h) else None) or 1.0
-            return PriceView(prov, now=now, rule="plan").cheap_hours(
+            return PriceView(prov, now=now).cheap_hours(
                 now, now + timedelta(hours=left_h), step_min=15,
                 tolerance_h=1.0 - float(slot_h))
         except Exception:  # noqa: BLE001 — not known
@@ -9819,7 +9819,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#820) the day's own house profile, not the night average
                 home_w_at=self._day_home_w_at(now), builder=build_day_slots,
                 price_at=lambda ts: tariff_price_at(prov, ts),
-                level_cheap_at=PriceView(prov, rule="plan").cheap_at,
+                level_cheap_at=PriceView(prov).cheap_at,
                 export_rate=self._export_rate_at(),   # (#924)
             )
         except Exception:  # noqa: BLE001 — no frame, no pacing
@@ -12647,7 +12647,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             sunrise=sunrise, sunset=sunset,
             home_w_at=_home_at_day,
             price_at=lambda ts: tariff_price_at(prov, ts),
-            level_cheap_at=PriceView(prov, rule="plan").cheap_at,
+            level_cheap_at=PriceView(prov).cheap_at,
             # (#1310) the cheap windows show the tariff's rate, not the
             # gate that refuses a day with one rate
             rate_cheap_at=rate_cheap_fn(prov),
@@ -12759,7 +12759,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     sunrise=sunrise, sunset=sunset,
                     home_w_at=self._day_home_w_at(day_start),   # (#820)
                     price_at=lambda ts: tariff_price_at(prov, ts),
-                    level_cheap_at=PriceView(prov, rule="plan").cheap_at,
+                    level_cheap_at=PriceView(prov).cheap_at,
                     rate_cheap_at=rate_cheap_fn(prov),
                     # (#924) These slots go to build_night_ledger and the
                     # REAL pack_night below — this is a packing site, and
@@ -13676,7 +13676,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from .price_view import PriceView
             prov = self._tariff_provider
             _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
-            _cheap_at = PriceView(prov, rule="plan").cheap_at
+            _cheap_at = PriceView(prov).cheap_at
             # (#1310) The rows' ``cheap``: the tariff's rate, asked of its
             # week. ``_cheap_at`` (the packer's) refuses a day with one rate,
             # so a whole off-peak Sunday was not cheap beside Monday 00:00.

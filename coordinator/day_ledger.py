@@ -288,7 +288,7 @@ def tariff_cheap_at(prov, ts):
     """The ONE cheap-level accessor (#638) — the same gate execution's
     cheap-hours loads fire on. (#1372) A thin wrapper: ``PriceView`` with
     the plan rule (the raw level; an unknown level is never cheap, #994)."""
-    return PriceView(prov, rule="plan").cheap_at(ts)
+    return PriceView(prov).cheap_at(ts)
 
 
 def tariff_rate_cheap_at(prov, ts):
@@ -297,7 +297,7 @@ def tariff_rate_cheap_at(prov, ts):
     ``tariff_cheap_at``, which also refuses a day that holds one rate
     (#994). A provider without the rate word answers with the gate's.
     (#1372) Asked through ``PriceView``; same answers."""
-    return PriceView(prov, rule="plan").rate_cheap_at(ts)
+    return PriceView(prov).rate_cheap_at(ts)
 
 
 def rate_cheap_fn(prov):
@@ -305,9 +305,10 @@ def rate_cheap_fn(prov):
     the tariff's rate word is its price level (a dynamic tariff): the slot
     then reuses the gate's answer instead of asking the same level twice,
     ~400 times on a 15-min curve. (#1372) Asked through ``PriceView``."""
-    if PriceView(prov, rule="plan").rate_cheap_fn() is None:
+    if PriceView(prov).rate_cheap_fn() is None:
         return None
-    return PriceView(prov, rule="plan").rate_cheap_at
+    # PRICE-ASK: this file's own thin wrapper over the price view
+    return lambda ts: tariff_rate_cheap_at(prov, ts)
 
 
 def provisional_soc_curve(ledger, *, capacity_kwh: float,
