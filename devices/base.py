@@ -1884,6 +1884,7 @@ class ComfortBandMixin:
         direction = self._comfort_direction()
         target_c, _offset_c, _limit_c = self._comfort_thresholds_c()
         on = learn_drift(list(getattr(self, "_comfort_on_samples", None) or ()))
+        keep_c = target_c
         if on is not None and self.comfort_preheat_on():
             # without a rate the ask stays as it is: one hour to Keep at
             # never below Keep at: a cap under it must not shrink the ask
@@ -1911,7 +1912,23 @@ class ComfortBandMixin:
             kwh = rated / 1000.0 * self.COMFORT_GOAL_FALLBACK_H
         if not kwh:
             return None
-        return {"energy_kwh": kwh, "deadline": None}
+        ask = {"energy_kwh": kwh, "deadline": None}
+        if target_c != keep_c:
+            # (#1081) the part above Keep at is bought in cheap hours only
+            ask["cheap_only_kwh"] = self._preheat_extra_kwh(
+                banking_energy_kwh, on, temp, keep_c, direction, rated, kwh)
+        return ask
+
+    def _preheat_extra_kwh(self, banking_energy_kwh, on, temp, keep_c,
+                           direction, rated, total_kwh) -> float:
+        """(#1081) The kWh of a pre-heat ask above Keep at: the whole ask less
+        what Keep at alone would take (nothing, once at or past Keep at)."""
+        below = temp > keep_c if direction == "cool" else temp < keep_c
+        base = (banking_energy_kwh(
+            current_c=temp, target_c=keep_c, direction=direction,
+            offset_c=0.0, active_rate_c_per_h=on.rate_c_per_h,
+            rated_power_w=rated) or 0.0) if below else 0.0
+        return max(0.0, float(total_kwh) - float(base))
     # The band speaks through the three generic properties every surplus
     # pass already reads — no new controller clauses; peak shed,
     # anti-cycling, priority and LIFO apply to comfort runs unchanged.

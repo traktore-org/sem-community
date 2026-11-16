@@ -13379,6 +13379,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # The Keep at GOAL only (it carries no deadline of
                         # its own) — banking never buys at the plain rate.
                         one_price_ok=ask.get("deadline") is None,
+                        # (#1081) the pre-heat part is for cheap hours only
+                        cheap_only_kwh=float(ask.get("cheap_only_kwh") or 0.0),
                         cop_at=_plan_cop_at(dev),     # (#1081)
                     ))
                 except Exception:  # noqa: BLE001 — one bad band won't kill the plan

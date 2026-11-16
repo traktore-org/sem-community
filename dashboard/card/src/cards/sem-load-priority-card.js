@@ -1301,8 +1301,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
             ${err ? html`<div class="ge-hint" style="color:#f44336;font-style:normal">${err}</div>` : nothing}`;
     }
 
-    /** (#1081) The tick under the sun row. Disabled, with the no-buy words,
-     *  while SEM may not buy power for the load. */
+    /** (#1081) The tick under the sun row. While SEM may not buy power for the
+     *  load it stays CHECKED if stored on, but disabled, with the no-buy words:
+     *  switching back to grid then does not re-arm it unseen. */
     _renderPreheatTick(device, q) {
         const pre = q.preheat;
         if (!pre || !pre.offered) return nothing;
@@ -1317,7 +1318,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 <span class="ge-label">${this._t('hq_preheat')}</span>
                 <span class="ge-ctl">
                     <input type="checkbox" class="hq-preheat" data-device="${device.id}"
-                           .checked=${pre.on && pre.enabled}
+                           .checked=${pre.on}
                            ?disabled=${!pre.enabled}
                            @change=${onTick}
                            @click=${(e) => e.stopPropagation()}>

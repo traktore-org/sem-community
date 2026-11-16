@@ -50,6 +50,7 @@ test('without buying allowed it is disabled', () => {
     const off = heaterQuestions({ goals: { ...GOALS, top_up_policy: 'solar_only', preheat: 'true' }, comfort: band(47, { may_buy: false }) });
     assert.equal(off.preheat.offered, true);
     assert.equal(off.preheat.enabled, false);
+    assert.equal(off.preheat.on, true, 'stored on is still on');
     const battery = heaterQuestions({ goals: { ...GOALS, battery_eligible_overnight: 'true' }, comfort: band(47) }, { hasBattery: true });
     assert.equal(battery.preheat.enabled, false);
 });
@@ -65,6 +66,7 @@ test('the card draws the tick under the sun row, disabled without buy, and write
     assert.ok(sun > 0 && tick > sun, 'the tick comes after the sun row');
     assert.ok(classic.includes('preheatWrites(e.target.checked)'));
     assert.ok(classic.includes('?disabled=${!pre.enabled}'));
+    assert.ok(classic.includes('.checked=${pre.on}'), 'stored on stays checked while disabled');
     assert.ok(classic.includes("'hq_sub_no_buy'"), 'the existing no-buy words');
     assert.ok(classic.includes("'hq_preheat_sub'"));
     // never a backtick inside the lit template of the tick

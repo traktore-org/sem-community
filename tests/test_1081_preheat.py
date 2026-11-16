@@ -24,6 +24,7 @@ from custom_components.solar_energy_management.devices.base import (
 from custom_components.solar_energy_management.tests.test_1102_use_cases import (
     BLOCK,
     CLOSED,
+    DID,
     SENSOR,
     _boiler,
     _cycle,
@@ -226,16 +227,62 @@ async def test_on_the_top_stops_it_at_once_inside_the_minimum_run():
 
 
 @pytest.mark.asyncio
-async def test_on_it_stops_when_the_block_ended_and_the_price_rose():
+async def test_on_it_stops_when_the_block_ends_even_in_a_cheap_hour():
+    """(#1081) Above Keep at only its own block counts: a cheap hour after
+    the block belongs to what the plan gave it to."""
     hass, dev, sc = _tank(47.6, preheat=True)
     await _cycle(sc, price="cheap", block=True)
     hass.set(SENSOR, "53.0", unit_of_measurement="°C")
     _past_minimums(dev)
-    await _cycle(sc, price="cheap", block="closed")          # still cheap: on
+    await _cycle(sc, price="cheap", block="closed")          # still cheap, block over
+    assert not dev.is_active
+
+
+@pytest.mark.asyncio
+async def test_on_reaching_keep_at_outside_the_block_keeps_the_1369_rule():
+    """Below Keep at a run its block started goes on in a cheap hour, as off."""
+    hass, dev, sc = _tank(47.6, preheat=True)
+    await _cycle(sc, price="cheap", block=True)
+    hass.set(SENSOR, "50.5", unit_of_measurement="°C")
+    _past_minimums(dev)
+    await _cycle(sc, price="cheap", block="closed")
     assert dev.is_active
+
+
+@pytest.mark.asyncio
+async def test_on_it_stops_when_the_block_ended_and_the_price_rose():
+    hass, dev, sc = _tank(47.6, preheat=True)
+    await _cycle(sc, price="cheap", block=True)
+    hass.set(SENSOR, "50.5", unit_of_measurement="°C")
+    _past_minimums(dev)
     await _cycle(sc, price="normal", block="closed", night=False)
     await _cycle(sc, price="normal", block="closed", night=False)
     assert not dev.is_active
+
+
+@pytest.mark.asyncio
+async def test_on_a_one_price_day_it_stops_at_keep_at():
+    """(#1081) Heat above Keep at is bought only in a cheap hour: a plain
+    price all day, block open, the same price as at the start."""
+    hass, dev, sc = _tank(47.6, preheat=True)
+    await _cycle(sc, price="normal", block=True)
+    assert dev.is_active                      # Keep at: its #1369 behaviour
+    hass.set(SENSOR, "52.1", unit_of_measurement="°C")
+    _past_minimums(dev)
+    await _cycle(sc, price="normal", block=True)
+    assert not dev.is_active
+    assert sc.decision_log.records()[-1]["reason_code"] == RC.LOAD_AT_TARGET
+
+
+def test_one_price_goes_on_needs_a_cheap_hour_and_an_open_block():
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        _preheat_goes_on)
+    _h, dev, _s = _tank(53.0, preheat=True)
+    dev._comfort_goal_run = True
+    assert _preheat_goes_on(dev, True, True, BLOCK) is True
+    assert _preheat_goes_on(dev, True, False, BLOCK) is False
+    assert _preheat_goes_on(dev, True, True, CLOSED) is False
+    assert _preheat_goes_on(dev, False, True, BLOCK) is False
 
 
 @pytest.mark.asyncio
@@ -332,6 +379,128 @@ def test_a_cooling_band_is_left_out():
     assert dev.comfort_preheat_supported() is False
 
 
+# ── heat pump minimum run, the packer, the keys ───────────────────────────
+
+def _pump(temp):
+    """A heat pump on a contact (not a tank) with the same band."""
+    from custom_components.solar_energy_management.devices.heat_pump_controller import (
+        HeatPumpController)
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        SurplusController)
+    hass = _Hass()
+    hass.set("switch.hp_relay", "off")
+    hass.set(SENSOR, str(temp), unit_of_measurement="°C")
+    dev = HeatPumpController(hass=hass, relay1_entity_id="switch.hp_relay",
+                             temperature_entity_id=SENSOR, rated_power=2500.0)
+    dev.control_mode = DeviceControlMode.SURPLUS
+    dev.comfort_entity = SENSOR
+    dev.comfort_target, dev.comfort_offset, dev.comfort_limit = 52.0, 4.0, 36.0
+    dev.top_up_policy = "cheap_hours"
+    dev.min_on_seconds = dev.min_off_seconds = 1800
+    dev.withheld_commands = []
+    dev.preheat = True
+    dev.device_id = DID                 # the cycle helper's plan is keyed by it
+    sc = SurplusController(hass)
+    sc.register_device(dev)
+    return hass, dev, sc
+
+
+@pytest.mark.asyncio
+async def test_a_heat_pump_at_the_top_keeps_its_minimum_run_a_tank_stops():
+    """(#1081) Same as tick off at Keep at: a compressor finishes its minimum
+    run, a tank stops at once (test_on_the_top_stops_it_at_once...)."""
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        _is_heater)
+    hass, dev, sc = _pump(47.6)
+    assert _is_heater(dev) is False and dev.comfort_preheat_on()
+    await _cycle(sc, price="cheap", block=True)
+    assert dev.is_active and dev.can_deactivate() is False
+    hass.set(SENSOR, "56.2", unit_of_measurement="°C")
+    await _cycle(sc, price="cheap", block=True)
+    assert dev.is_active                       # held by the minimum run
+    _past_minimums(dev)
+    await _cycle(sc, price="cheap", block=True)
+    assert not dev.is_active
+
+
+def test_the_larger_ask_takes_no_cheap_slot_from_a_higher_priority_demand():
+    """(#1081) The packer serves demands by priority: the car's floor and the
+    battery keep their blocks whatever the pre-heat ask grows to."""
+    from custom_components.solar_energy_management.coordinator.energy_planner import (
+        Demand, LedgerSlot, build_night_ledger, pack_night)
+    t0 = datetime(2026, 11, 14, 18, 0)
+
+    def plan(kwh):
+        slots = [LedgerSlot(
+            start=t0 + timedelta(hours=h), end=t0 + timedelta(hours=h + 1),
+            price=0.1 if h in (2, 3) else 0.3, level_cheap=h in (2, 3),
+            tariff_cheap=h in (2, 3), home_w=0.0, solar_w=0.0) for h in range(14)]
+        ledger = build_night_ledger(slots, soc_kwh=0.0, floor_kwh=0.0,
+                                    max_discharge_w=0.0, peak_limit_w=3000.0)
+        end = t0 + timedelta(hours=14)
+        car = Demand(id="ev", kind="ev", energy_kwh=2.5, max_power_w=2500.0,
+                     min_power_w=2500.0, deadline=end, priority=1,
+                     source="grid", needs_cheap_level=True)
+        tank = Demand(id="comfort:hot_water", kind="comfort", energy_kwh=kwh,
+                      max_power_w=2500.0, min_power_w=2500.0, deadline=end,
+                      priority=6, source="grid", needs_cheap_level=True,
+                      unpriced_ok=True, one_price_ok=True,
+                      cheap_only_kwh=max(0.0, kwh - 2.5))
+        p = pack_night([car, tank], ledger, peak_limit_w=3000.0)
+        return sorted((a.start, a.end) for a in p.allocations
+                      if a.demand_id == "ev")
+    assert plan(2.5) == plan(7.5) and plan(2.5)
+
+
+def test_a_one_price_day_plans_only_keep_at_the_part_above_needs_cheap_hours():
+    from custom_components.solar_energy_management.coordinator.energy_planner import (
+        Demand, LedgerSlot, build_night_ledger, pack_night)
+    t0 = datetime(2026, 11, 14, 18, 0)
+
+    def booked(cheap_hours):
+        slots = [LedgerSlot(
+            start=t0 + timedelta(hours=h), end=t0 + timedelta(hours=h + 1),
+            price=0.3, level_cheap=h in cheap_hours, tariff_cheap=h in cheap_hours,
+            home_w=0.0, solar_w=0.0) for h in range(14)]
+        ledger = build_night_ledger(slots, soc_kwh=0.0, floor_kwh=0.0,
+                                    max_discharge_w=0.0, peak_limit_w=8000.0)
+        p = pack_night([Demand(
+            id="comfort:hot_water", kind="comfort", energy_kwh=7.5,
+            max_power_w=2500.0, min_power_w=2500.0,
+            deadline=t0 + timedelta(hours=14), source="grid",
+            needs_cheap_level=True, unpriced_ok=True, one_price_ok=True,
+            cheap_only_kwh=5.0)], ledger, peak_limit_w=8000.0)
+        return sum(a.power_w / 1000.0 * (a.end - a.start).total_seconds() / 3600.0
+                   for a in p.allocations)
+    assert booked(set()) == pytest.approx(2.5)        # Keep at only
+    assert booked({2}) == pytest.approx(5.0)          # + the one cheap hour
+
+
+def test_the_ask_names_the_part_above_keep_at_only_when_it_has_one():
+    _h, off, _s = _tank(47.0)
+    _h, on, _s = _tank(47.0, preheat=True)
+    _learned(off), _learned(on)
+    assert "cheap_only_kwh" not in _ask(off)
+    assert 0 < _ask(on)["cheap_only_kwh"] < _ask(on)["energy_kwh"]
+    _h, past, _s = _tank(53.0, preheat=True)
+    _learned(past)
+    with patch.object(type(past), "is_active", new_callable=PropertyMock,
+                      return_value=True):               # a run already going
+        ask = _ask(past)
+    assert ask["cheap_only_kwh"] == pytest.approx(ask["energy_kwh"])
+
+
+def test_the_keys_are_absent_where_the_tick_is_off_or_not_offered():
+    from custom_components.solar_energy_management.features.device_registry import (
+        UnifiedDeviceRegistry)
+    _h, off, _s = _tank(47.0)
+    block = UnifiedDeviceRegistry._comfort_payload(off)["comfort"]
+    assert "preheat" not in block                 # off: nothing published
+    off._comfort_anchor_c = lambda: 50.0
+    block = UnifiedDeviceRegistry._comfort_payload(off)["comfort"]
+    assert "preheat" not in block and "preheat_ok" not in block
+
+
 # ── the goal and the payload ──────────────────────────────────────────────
 
 def test_the_goal_is_stored_validated_and_published():
@@ -344,7 +513,7 @@ def test_the_goal_is_stored_validated_and_published():
     assert block["max_c"] == 56.0
     dev._comfort_anchor_c = lambda: 50.0
     block = UnifiedDeviceRegistry._comfort_payload(dev)["comfort"]
-    assert block["preheat_ok"] is False and block["anchored"] is True
+    assert "preheat_ok" not in block and block["anchored"] is True
     assert _goal_bool("False") is False and _goal_bool("true") is True
 
 

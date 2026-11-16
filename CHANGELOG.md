@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ✨ **SEM proposes a thermometer for a heater** (#1353). It looks on the same device or in the same area. You confirm with one click.
 - ✨ **Night Latest End can be set from 03:00** (#1320), for an off-peak that ends before 05:00. It was 05:00 at the earliest.
-- ✨ **Heaters can pre-heat in the cheapest hours** (#1081). A tick heats on to the top, not only to Keep it at. Off by default.
+- ✨ **Heaters can pre-heat in cheap hours** (#1081). A tick heats on to the top inside the planned cheap block. Off by default.
 - 🔧 **One place decides what a cheap hour is** (#1372). No change in what SEM does; a test keeps price checks in that place.
 - 🐛 **Set-up is clearer** (#1371): the Solar Heating Target hides for a tank with a thermometer, and Setup counts only what every house needs.
 - 🐛 **The car's target entities carry the settings dialog's names** (#1371), such as "Guarantee at least" and "Never charge past". Entity IDs stay the same.

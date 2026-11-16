@@ -7744,7 +7744,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 <span class="ge-label">${this._t("hq_preheat")}</span>
                 <span class="ge-ctl">
                     <input type="checkbox" class="hq-preheat" data-device="${e.id}"
-                           .checked=${s.on&&s.enabled}
+                           .checked=${s.on}
                            ?disabled=${!s.enabled}
                            @change=${t=>{for(const i of(s=t.target.checked,[{property:"preheat",value:String(!0===s)}]))this._setGoal(e,i.property,"true"===i.value);var s;this.requestUpdate()}}
                            @click=${e=>e.stopPropagation()}>

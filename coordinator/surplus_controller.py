@@ -843,11 +843,27 @@ def _preheat_on(device: "ControllableDevice") -> bool:
         return False
 
 
-def _preheat_goes_on(device: "ControllableDevice", active: bool) -> bool:
+def _preheat_goes_on(device: "ControllableDevice", active: bool,
+                     price_is_cheap: bool, plan: "PlanVerdict") -> bool:
     """(#1081) A running PLANNED run (not the sun's, not the floor's) goes on
-    past Keep at to the top. A fresh start still needs the reading below Keep at."""
+    past Keep at to the top, only while ITS planned block is open and the
+    hour is cheap for this device. Outside its block the cheap hours belong
+    to what the plan gave them to (the car, the battery); on a day with one
+    price nothing above Keep at is bought. A fresh start still needs the
+    reading below Keep at."""
     return (active and getattr(device, "_comfort_goal_run", False) is True
+            and price_is_cheap is True and plan.comfort_in_block is True
             and _preheat_open(device))
+
+
+def _at_target_text(device) -> str:
+    """(#1081) Why a goal run stopped at its target: the top, the end of its
+    pre-heat block above Keep at, or Keep at itself."""
+    if getattr(device, "_comfort_goal_run", False) is not True or not _preheat_on(device):
+        return "reached its keep-at temperature"
+    if _preheat_open(device):
+        return "pre-heat block over — held at its keep-at temperature"
+    return "reached its top temperature"
 
 
 def _away_pauses(device: "ControllableDevice") -> bool:
@@ -1087,7 +1103,7 @@ def compute_load_intent(
     _goal_band = _heater_band(device)
     _goal_goes_on = (active and getattr(device, "_comfort_goal_run", False) is True
                      and _goal_band is not None and _goal_band[0] == "willing"
-                     and (_goal_band[1] or _preheat_open(device))
+                     and _goal_band[1]
                      and _goal_hour_holds(device, price_is_cheap)
                      and _goal_may_buy(device))
     if (active and plan_hold and not _goal_goes_on
@@ -1290,12 +1306,9 @@ def compute_load_intent(
     if (active and band is not None and band[1] is False
             and (getattr(device, "_comfort_floor_run", False) is True
                  or getattr(device, "_comfort_goal_run", False) is True)
-            and not _preheat_goes_on(device, active)):
+            and not _preheat_goes_on(device, active, price_is_cheap, plan)):
         return LoadIntent(False, 0.0, None,
-                          "reached its top temperature"
-                          if _preheat_on(device) and getattr(
-                              device, "_comfort_goal_run", False) is True
-                          else "reached its keep-at temperature",
+                          _at_target_text(device),
                           RC.LOAD_AT_TARGET)
 
     # (#1102) Too cold: at or past the limit it heats NOW on any tariff, and
@@ -1331,7 +1344,8 @@ def compute_load_intent(
     # only is solar only, as for a car.
     if (plan.comfort_in_block and can_start and band is not None
             and band[0] == "willing"
-            and (band[1] or _preheat_goes_on(device, active))
+            and (band[1] or _preheat_goes_on(
+                device, active, price_is_cheap, plan))
             and _goal_may_buy(device)
             and (active or (grid_start_fits and _goal_wants_start(device)))):
         # (#1344) a watt setpoint is sent its full power for this run
@@ -1347,7 +1361,7 @@ def compute_load_intent(
     # the run ended a few degrees under Keep at — the reporter's 50 °C for
     # Keep at 52 (#1102). Never into an hour that is not cheap.
     if (active and band is not None and band[0] == "willing"
-            and (band[1] or _preheat_goes_on(device, active))
+            and band[1]
             and getattr(device, "_comfort_goal_run", False) is True
             and _goal_hour_holds(device, price_is_cheap) and _goal_may_buy(device)):
         return LoadIntent(True, _heater_claim(device, True, held), "cheap_grid",
@@ -1739,8 +1753,7 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         if (not heater_stop and _is_heater(device)
                 and getattr(device, "_comfort_goal_run", False) is True):
             _b = _heater_band(device)
-            heater_stop = (_b is not None and _b[1] is False
-                           and not _preheat_open(device))
+            heater_stop = _b is not None and _b[1] is False
         if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED) or heater_stop:
             # (class-17 sibling / #644 / #1335) The user's own Off (or
             # disabling the load) beats the minimum run: a deliberate command beats flicker protection.

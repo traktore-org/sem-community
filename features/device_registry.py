@@ -2650,8 +2650,9 @@ class UnifiedDeviceRegistry:
                 "comfort_target": goals.get("comfort_target", 0),
                 "comfort_offset": goals.get("comfort_offset", 0),
                 "comfort_limit": goals.get("comfort_limit", 0),
-                # (#1081) the pre-heat tick
-                "preheat": _goal_bool(goals.get("preheat")),
+                # (#1081) the pre-heat tick: present only when ticked, so a
+                # device without it publishes what it always did
+                **({"preheat": True} if _goal_bool(goals.get("preheat")) else {}),
                 # (#1020) the schedule, and whether it is running now
                 "schedule_entity": goals.get("schedule_entity", ""),
                 "schedule_mode": goals.get("schedule_mode", ""),
@@ -2837,10 +2838,12 @@ class UnifiedDeviceRegistry:
             # at IS that setpoint, the typed limit only gives its distance.
             # The card shows these lines, not the typed numbers.
             "anchored": UnifiedDeviceRegistry._anchored(live),
-            # (#1081) the pre-heat tick: what is stored, and whether this
-            # load can do it at all (the card offers it only then)
-            "preheat": getattr(live, "preheat", False) is True,
-            "preheat_ok": UnifiedDeviceRegistry._preheat_ok(live),
+            # (#1081) the pre-heat tick: what is stored (only when true) and
+            # whether this load can do it (only when it can). An absent key
+            # reads as off / not offered, so every other load publishes what
+            # it always did.
+            **({"preheat": True} if getattr(live, "preheat", False) is True else {}),
+            **({"preheat_ok": True} if UnifiedDeviceRegistry._preheat_ok(live) else {}),
         }
 
     @staticmethod
