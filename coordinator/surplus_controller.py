@@ -1618,6 +1618,15 @@ async def _release_step_down(device) -> None:
                    text="step-down released")
 
 
+def _shadow_tank_goal(device) -> None:
+    """(#1369, step 1) A tank's goal object is built beside the decision just
+    made and compared with it; the counts are diagnostics, nothing reads them
+    to decide. Strict class read, like ``_is_heater``."""
+    compare = getattr(type(device), "compare_tank_goal", None)
+    if compare is not None and _is_heater(device):
+        compare(device)
+
+
 def _is_heater(device) -> bool:
     """(#1369) A hot water tank — read strictly (the class's own method), so
     a stand-in that answers every attribute is never taken for one. Only a
@@ -2337,6 +2346,7 @@ class SurplusController:
                 buying_w=(max(0.0, float(getattr(self, "_grid_import_w", 0.0) or 0.0))
                           if getattr(self, "_grid_import_known", True) else 0.0))
             intents[did] = intent
+            _shadow_tank_goal(device)
             spend[did] = debit = self._walk_debit(
                 device, intent, remaining=remaining, now=now)
             remaining -= debit

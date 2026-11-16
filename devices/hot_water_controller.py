@@ -19,6 +19,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .base import ComfortBandMixin, SwitchDevice, DeviceState
+from .tank_goal import TankGoal, TankInputs, build_tank_goal, differences
+from ..utils.log_gate import log_on_change
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -219,6 +221,12 @@ class HotWaterController(SwitchDevice):
         # (#914) One restart adoption per lifetime, decided on the first
         # READABLE observation after registration — see adopt_if_running.
         self._boot_adoption_pending: bool = True
+
+        # (#1369, step 1) the shadow goal: where it differs from today's
+        # decision, per field; nothing reads these to decide
+        self.tank_goal_diffs: Dict[str, int] = {}
+        self.tank_goal_last: Dict[str, Any] = {}
+        self.tank_goal_errors: int = 0
 
     # ─── Restart adoption (#914) ─────────────────────────────
 
@@ -764,6 +772,106 @@ class HotWaterController(SwitchDevice):
             return False
         temp = self.get_current_temperature()
         return temp is not None and temp >= self._active_target_temp()
+
+    # ─── The tank's goal, in the shadow (#1369, step 1) ──────────────
+
+    def _peek_tank_reading(self):
+        """(#1369) ``get_current_temperature`` without its writes: the tank's
+        own reading in °C and whether a missing one is fine (no sensor is set
+        up, the device's own thermostat rules). It leaves
+        ``_last_temperature_reading*`` alone."""
+        attribute_invalid = False
+        if self._entity_domain in _SETPOINT_DOMAINS and self.entity_id:
+            state = self.hass.states.get(self.entity_id)
+            raw = state.attributes.get("current_temperature") if state else None
+            if raw is not None:
+                value = self._attribute_temp_c(raw)
+                if value is not None:
+                    return value, False
+                attribute_invalid = True
+        if self.temperature_entity_id:
+            from ..coordinator.units import temperature_state_to_celsius
+            state = self.hass.states.get(self.temperature_entity_id)
+            value = None
+            if state and state.state not in ("unknown", "unavailable"):
+                value = temperature_state_to_celsius(state, None)
+            return value, False
+        return None, not attribute_invalid
+
+    def _goal_band_fields(self):
+        """(keep, extra, limit) in °C for a set heating band, else Nones.
+        ``_comfort_thresholds_c`` only reads."""
+        t, lim = getattr(self, "comfort_target", None), getattr(self, "comfort_limit", None)
+        if not (t and lim) or self._comfort_direction() != "heat":
+            return None, None, None
+        try:
+            keep, extra, limit = self._comfort_thresholds_c()
+            return float(keep), float(extra or 0.0), float(limit)
+        except (TypeError, ValueError, AttributeError):
+            return None, None, None
+
+    def tank_goal_inputs(self) -> TankInputs:
+        """(#1369) What the goal reads, from the controller's own fields.
+        Read-only. Getters AVOIDED because they write state:
+        ``get_current_temperature`` / ``is_temperature_safe`` /
+        ``own_run_needs_heat`` (``_last_temperature_*``), ``start_refusal``
+        (``_margin_refused``), ``stop_condition_met`` (``_hold_stopped``) and
+        ``comfort_away_heats`` / ``_comfort_band_state`` (the one-time
+        misconfiguration warning flag). Their stored fields are read raw."""
+        keep, extra, limit = self._goal_band_fields()
+        tank_c, blind_ok = self._peek_tank_reading()
+        user_stop = self.user_stop_c()
+        return TankInputs(
+            tank_c=tank_c, band_c=self._comfort_reading(),
+            keep_c=keep, extra_c=extra, too_cold_c=limit,
+            fallback_top_c=float(self.solar_target_temp),
+            min_temperature_c=float(self.min_temperature),
+            legionella_target_c=float(self.legionella_target_temp),
+            user_stop_c=user_stop,
+            # the base stop rule (the stop entity) is a plain read; a stop on
+            # the tank's or the band's sensor is the goal's own user stop
+            other_stop_met=(user_stop is None and bool(
+                super(ComfortBandMixin, self).stop_condition_met)),
+            legionella_active=self._legionella_cycle_active is True,
+            legionella_hold=self._legionella_hold_start is not None,
+            hold_stopped=bool(getattr(self, "_hold_stopped", False)),
+            margin_refused=bool(getattr(self, "_margin_refused", False)),
+            vacation=getattr(self, "vacation", False) is True,
+            vacation_dump=getattr(self, "vacation_dhw_surplus", False) is True,
+            may_buy=self.comfort_goal_may_buy(),
+            switched=self._entity_domain not in _SETPOINT_DOMAINS,
+            sensor_expected=not blind_ok, now=dt_util.now())
+
+    def tank_goal(self) -> TankGoal:
+        """(#1369) The tank's goal this cycle. Nothing decides by it yet."""
+        return build_tank_goal(self.tank_goal_inputs())
+
+    def _goal_seen(self) -> Dict[str, Any]:
+        """What today's code decided, per compared field. The top is the
+        cutoff the engine uses (active target, the user's stop below it)."""
+        keep, _extra, limit = self._goal_band_fields()
+        top = self._active_target_temp()
+        stop = self.user_stop_c()
+        if stop is not None and not self._legionella_cycle_active:
+            top = min(top, stop)
+        return {"top": top, "keep_at": keep, "too_cold_below": limit,
+                "band_state": self.comfort_state,
+                "must_stop": bool(self.stop_condition_met),
+                "legionella_blocked": self.legionella_blocked_by_stop}
+
+    def compare_tank_goal(self) -> None:
+        """(#1369) Once per cycle, after the engine decided for this tank:
+        count where the goal differs from today's decision. Never raises."""
+        try:
+            for name, pair in differences(self.tank_goal(), self._goal_seen()).items():
+                self.tank_goal_diffs[name] = self.tank_goal_diffs.get(name, 0) + 1
+                self.tank_goal_last[name] = pair
+                log_on_change(
+                    _LOGGER, f"tank_goal:{self.device_id}:{name}", logging.INFO,
+                    "%s: the tank goal differs from today's decision on %s "
+                    "(shadow only, nothing changed; #1369)", self.name, name)
+        except Exception:  # noqa: BLE001 — the shadow must never break a cycle
+            self.tank_goal_errors += 1
 
     # (#594/#1344) it heats for comfort by nature: away pauses it, band or
     # not. The band itself goes quiet while away in the shared mixin; the
