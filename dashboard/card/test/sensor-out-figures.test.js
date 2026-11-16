@@ -200,7 +200,7 @@ const DASHES_WITH_READINGS = {
     'sem-simulation-card': 2,
     // (#1321) charge-by time, target min and max, departures: settings
     // (time and number entities), which this hass does not carry
-    'sem-next-devices-card': 4,
+    'sem-next-devices-card': 3,   // (#1371) the weekday row shows only when days differ
     // drawn before the first update writes its labels (tested below)
     'sem-flow-card': 6,
 };

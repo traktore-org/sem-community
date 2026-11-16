@@ -225,8 +225,10 @@ export function chargerBody(card, row) {
     const lateMin = Number(dep.late_min) || 0;
     const lateOpts = LATE.includes(lateMin) ? LATE : [...LATE, lateMin].sort((a, b) => a - b);
     const rows = [];
-    rows.push(card._row('mdi:calendar-repeat', t(CHARGER_TEXT.departure), runText || depDefault || '—',
-        nextDep ? tf('next_next_departure', { time: nextDep }) : (hasOwnDays ? t('ev_dep_most_days') : ''), { onClick: () => card._toggleDep(cid) }));
+    // (#1371) with one time for every day the tile above already says it
+    // (its "every day" opens the day editor): this row is for days that differ
+    if (hasOwnDays) rows.push(card._row('mdi:calendar-repeat', t(CHARGER_TEXT.departure), runText || depDefault || '—',
+        nextDep ? tf('next_next_departure', { time: nextDep }) : t('ev_dep_most_days'), { onClick: () => card._toggleDep(cid) }));
     if (depEditor !== nothing) rows.push(depEditor);
     rows.push(card._row('mdi:view-agenda', t('ev_dep_one_block'),
         card._val(oneBlock ? t('next_on') : t('next_off'), () => card._svc('set_charger_departure', { charger_id: cid, one_block: !oneBlock }), { disabled: dis }),
