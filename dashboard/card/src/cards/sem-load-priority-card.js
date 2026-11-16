@@ -39,7 +39,7 @@ import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
 import { PEAK_KW, PEAK_TEXT, sliderAnswer } from '../util/peak-questions.js';
 import {
     heaterSays, heaterSub, heaterQuestions, sunMaxWrites, limitWrites, nextBlock,
-    asSentence, BUY_LABEL,
+    asSentence, BUY_LABEL, thermometerProposal, useThermometerWrite,
 } from '../util/heater-questions.js';
 
 // (#1200) A load's live power in kW from its own entity, or null while that
@@ -512,6 +512,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     goals: info.goals || null,
                     progress: info.progress || null,
                     comfort: info.comfort || null,   // (#705) live band verdict
+                    // (#1353) a thermometer the crawler found for this heater
+                    thermometerProposal: info.thermometer_proposal || null,
                     // (#1349) what the load engine decided this cycle
                     intent: (info.intent && typeof info.intent === 'object') ? info.intent : null,
                     blockedBy: info.blocked_by || null,
@@ -1089,6 +1091,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         if (q.view === 'band') {
             return html`
             <div class="goal-editor">
+                ${this._renderThermometerProposal(device)}
                 ${this._renderHeaterQuestions(device, q)}
                 ${this._renderBuyQuestion(device, q)}
                 <details class="hq-more" @click=${(e) => e.stopPropagation()}>
@@ -1103,6 +1106,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         }
         return html`
             <div class="goal-editor">
+                ${this._renderThermometerProposal(device)}
                 <div class="ge-title">
                     <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
                     ${this._t('hq_run_each_day')}
@@ -1119,6 +1123,27 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._renderStopCondition(device)}
                 </details>
             </div>`;
+    }
+
+    /** (#1353) "SEM found a thermometer. Use it?" — the click is the only write. */
+    _renderThermometerProposal(device) {
+        const p = thermometerProposal(device);
+        if (!p) return nothing;
+        return html`
+            <div class="ge-row hq-found">
+                <span class="ge-label">${this._tf('hq_found_thermometer', { name: p.name })}</span>
+                <span class="ge-ctl">
+                    <button class="ov-opt on" data-action="use-thermometer"
+                            @click=${(e) => { e.stopPropagation(); this._useThermometer(device, p); }}>
+                        ${this._t('hq_use_thermometer')}</button>
+                </span>
+            </div>`;
+    }
+
+    _useThermometer(device, proposal) {
+        const w = useThermometerWrite(proposal);
+        this._setGoal(device, w.property, w.value);
+        this.requestUpdate();
     }
 
     _renderStopCondition(device) {
