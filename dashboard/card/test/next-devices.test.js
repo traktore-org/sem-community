@@ -610,7 +610,7 @@ test('the buy question and "heat up to" write the stored settings', async () => 
     const realSeg = el._seg.bind(el), realNum = el._numEdit.bind(el), realInline = el._inline.bind(el);
     el._seg = (items, cur, onPick, o) => { if (items.some((i) => i.key === 'grid' && i.label === 'hq_buy_cheap')) seen.push(['buy', onPick]); return realSeg(items, cur, onPick, o); };
     el._inline = (key, textv, editor, o) => { if (key === 'sun_max:hot_water') seen.push(['sun', editor]); return realInline(key, textv, editor, o); };
-    el._numEdit = (key, o) => { if (key === 'sun_max:hot_water') seen.push(['commit', o.onCommit]); return realNum(key, o); };
+    el._numEdit = (key, o) => { if (key === 'sun_max:hot_water') seen.push(['commit', o.onCommit]); if (key === 'comfort_target:hot_water') seen.push(['keep', o.onCommit]); return realNum(key, o); };
     loadBody(el, row);
     seen.find((s) => s[0] === 'buy')[1]('off');
     seen.find((s) => s[0] === 'sun')[1]();
@@ -618,7 +618,11 @@ test('the buy question and "heat up to" write the stored settings', async () => 
     await Promise.resolve();
     const cfg = calls.filter((c) => c[0] === 'update_device_config').map((c) => c[1].property + '=' + c[1].value);
     assert.deepEqual(cfg, ['battery_eligible_overnight=false', 'top_up_policy=solar_only', 'comfort_offset=6']);
-    // (#1369) the band decides the top: the Solar target is not copied
+    // (#1369) the band decides the top: the Solar target is not copied —
+    // not by "heat up to", and not by a Keep at edit
+    const keep = seen.find((x) => x[0] === 'keep');
+    if (keep) keep[1](53);
+    await Promise.resolve();
     assert.equal(calls.find((c) => c[0] === 'set_option'), undefined);
 });
 

@@ -159,22 +159,17 @@ export function loadBody(card, row) {
             tf(q.buySubKey, { keep: band ? q.keep + ' ' + tUnit : '' })
                 + (band && q.buySubBatteryKey ? ' ' + tf(q.buySubBatteryKey, { keep: q.keep + ' ' + tUnit }) : ''));
         if (band) {
-            // On a hot-water tank the Configuration tab's Solar target also
-            // stops the sun; keep it on the same value so both stops agree.
+            // (#1369) the band decides the tank's top alone: the Solar target
+            // is not copied any more. Its range still bounds what is typed.
             const hotWater = !q.cooling && /^hot_water/.test(String(id));
             const solarTarget = hotWater && tUnit === '°C' && card._has('number.sem_hot_water_solar_target')
                 ? card._attrs('number.sem_hot_water_solar_target') : null;
-            const syncSolar = (v) => {
-                if (!hotWater || !Number.isFinite(Number(v))) return;
-                const c = tUnit === '°F' ? (Number(v) - 32) * 5 / 9 : Number(v);
-                card._callService(DOMAIN, 'set_option', { options: { hot_water_solar_target: Math.round(c * 10) / 10 } });
-            };
             const temp = (key, val, onCommit) => numVal(key, val === null || val === undefined ? '—' : val + ' ' + tUnit,
                 { value: val, step: 0.5, unit: tUnit, onCommit });
             // Keep at of an anchored unit IS the unit's own setpoint: shown, not edited here
             rows.push(card._row('mdi:thermometer', t('hq_keep'),
                 q.keepReadOnly ? html`<span>${q.keep + ' ' + tUnit}</span>`
-                    : temp('comfort_target', q.keep, (v) => { send('comfort_target', String(v)); syncSolar(Number(v) + q.offset); }),
+                    : temp('comfort_target', q.keep, (v) => { send('comfort_target', String(v)); }),
                 t(q.keys.keepSub) + (q.season ? ' ' + t(q.season) + '.' : '')
                     + (q.keepNoteKey ? ' ' + t(q.keepNoteKey) : '')));
             // (#1349) a cooling band asks the same, turned round: its words
@@ -186,7 +181,6 @@ export function loadBody(card, row) {
                     const res = sunMaxWrites({ id, keep: q.keep, cooling: q.cooling }, v, solarTarget);
                     if (res.error) { card._showError(new Error(tf(res.error, res.params))); return; }
                     for (const w of res.writes) send(w.property, w.value);
-                    if (res.option) syncSolar(res.option.value);
                 }), t(q.keys.sunMaxSub)));
             rows.push(buyRow());
         } else if (q.view === 'time') {

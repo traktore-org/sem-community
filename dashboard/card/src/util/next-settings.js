@@ -783,9 +783,14 @@ export function groups(states, t, ctx = {}) {
             frag(t, 'next_hp_boost', { boost }),
             frag(t, 'next_hp_tariff', { rate: hpRateSet }),
         ]) : [];
+        // (#1369) a tank with a thermometer band heats to its own Keep at +
+        // Extra: the Solar target caps only a tank without one, so it is
+        // not offered as "heats to" there
+        const hwBand = states?.['sensor.sem_controllable_devices_count']?.attributes
+            ?.devices?.hot_water?.comfort?.keep_c != null;
         const hw = hwSet ? clause([
             frag(t, 'next_hw_rated', { rated: optNum(o, 'hot_water_rated_power', { min: 100, max: 30000, step: 50, unit: 'W', default: 2500 }) }),
-            frag(t, 'next_hw_target', { target: numSlot(states, 'number.sem_hot_water_solar_target') }),
+            ...(hwBand ? [] : [frag(t, 'next_hw_target', { target: numSlot(states, 'number.sem_hot_water_solar_target') })]),
             frag(t, 'next_hw_legionella', { temp: numSlot(states, 'number.sem_legionella_target_temp'),
                                            hours: numSlot(states, 'number.sem_legionella_interval_hours') }),
         ]) : [];
