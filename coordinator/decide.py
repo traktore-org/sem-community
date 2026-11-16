@@ -48,10 +48,11 @@ from .charger_types import (
     rewrite,
 )
 from .energy_reclaim import ev_reclaims_battery_charge
-from .price_signal import (
-    CHEAP_LEVELS, EXPENSIVE_LEVELS as _EXPENSIVE_LEVELS, is_cheap_name,
+from .price_view import (  # (#1372) one place judges a price level
+    NOT_CHEAP_LEVELS as _NOT_CHEAP_LEVELS,  # noqa: F401 (#994 test)
+    answer_for_level,
+    price_blocks_bridge,
 )
-from ..tariff.tariff_provider import PriceLevel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -511,10 +512,8 @@ def effective_min_amps(cfg: dict, fallback: int = 6) -> int:
 # exist to avoid (#524). ``cheap`` / ``very_cheap`` and unknown/static
 # (tariff_level None) are bridgeable. Canonical here (decide owns tariff
 # classification); charge_stability reads the resulting ``bridgeable`` flag.
-#: (#994) everything that is NOT one of the cheap words — derived from the
-#: one vocabulary, so a seventh level cannot appear on one side only.
-_NOT_CHEAP_LEVELS = frozenset(
-    lv.value for lv in PriceLevel if lv not in CHEAP_LEVELS)
+# (#1372) the not-cheap level set lives in price_view; _NOT_CHEAP_LEVELS
+# stays importable here for the #994 test.
 
 
 def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
@@ -568,7 +567,7 @@ def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
     # forbidden from assisting rather than merely below its buffer.
     from ..consts.ev_charge_modes import MODE_USES_TARIFF
     if (view.mode in MODE_USES_TARIFF
-            and f.tariff_level in _NOT_CHEAP_LEVELS):
+            and price_blocks_bridge(f.tariff_level)):
         return False, f"not-cheap tariff ({f.tariff_level})"
     cfg = view.config if isinstance(view.config, dict) else {}
     min_amps = effective_min_amps(cfg, 6)
@@ -1213,8 +1212,6 @@ class SolarPlusCheapMode(ModeStrategy):
     cheapest hours only (#247).
     """
 
-    EXPENSIVE_LEVELS = frozenset(lv.value for lv in _EXPENSIVE_LEVELS)
-
     def decide(self, view: ChargerView) -> ChargerDecision:
         f = view.fleet
         cid = view.power.charger_id
@@ -1229,7 +1226,7 @@ class SolarPlusCheapMode(ModeStrategy):
 
         # Day during expensive tariff window → fall back to pure
         # solar_only behaviour (the #247 daytime pause).
-        if not f.is_night and f.tariff_level in self.EXPENSIVE_LEVELS:
+        if not f.is_night and answer_for_level(f.tariff_level).peak:
             return _relabel(
                 _SOLAR_ONLY.decide(view), "solar_plus_cheap",
                 f"solar_plus_cheap day: tariff={f.tariff_level} "
@@ -1255,7 +1252,7 @@ class SolarPlusCheapMode(ModeStrategy):
         # on a flat tariff SEM would have topped the car up from the grid
         # believing it a cheap hour, which is this issue's own disease. Ask
         # the vocabulary the question it exists to answer.
-        if not f.is_night and is_cheap_name(f.tariff_level):
+        if not f.is_night and answer_for_level(f.tariff_level).is_cheap:
             solar = _relabel(
                 _SOLAR_ONLY.decide(view), "solar_plus_cheap",
                 f"solar_plus_cheap day: tariff={f.tariff_level}",

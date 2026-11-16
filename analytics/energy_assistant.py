@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from ..coordinator.price_signal import is_expensive_name
 from ..coordinator.price_view import answer_for_level
 from ..utils.helpers import solar_export, solar_share_pct
 
@@ -337,7 +336,7 @@ class EnergyAssistant:
                 priority=3,
                 created=datetime.now(),
             ))
-        elif is_expensive_name(price_level):
+        elif answer_for_level(price_level).peak:
             self._tips.append(EnergyTip(
                 category="price",
                 title=_t("tip_expensive_price_title", "Expensive electricity"),

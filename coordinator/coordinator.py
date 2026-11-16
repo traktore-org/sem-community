@@ -12,6 +12,7 @@ This is a slim orchestrator that delegates to specialized modules:
 
 from __future__ import annotations
 
+from .price_view import PriceView  # (#1372)
 from ..utils.device_names import charger_display_name, charger_own_name  # (#1053)
 
 import logging
@@ -882,8 +883,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _dt.house_rate = inputs["import_price"]
             provider = getattr(self, "_tariff_provider", None)
             if provider is not None and getattr(provider, "available", True):
-                from .price_signal import comparative_level
-                level = comparative_level(provider)
+                from .price_view import PriceView
+                level = PriceView(provider).compared_level()
                 inputs["price_level"] = getattr(level, "value", level)
             # DARK-SOC: record — a blink leaves the log row without a SOC
             if (not getattr(power, "battery_soc_unavailable", False)
@@ -6790,8 +6791,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # (#967) and the preview holds through an expensive
                                 # window open exactly as the night will (D3), so the
                                 # strip never promises a start in the peak band.
-                                _lvl = getattr(getattr(self, "_tariff_provider", None),
-                                               "get_price_level_at", None)
+                                _lvl = PriceView(getattr(
+                                    self, "_tariff_provider", None)).level_at_fn()  # (#1372)
                                 if (self._tariff_optimized_for(_pcfg) and _lvl is not None
                                         and _night_start and _ev_deadline_dt
                                         and _ev_rate_kw > 0):
@@ -7142,7 +7143,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from .price_view import PriceView
             prov = getattr(self, "_tariff_provider", None)
             dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
-            if (prov is None or not hasattr(prov, "get_price_level_at")
+            if (prov is None or PriceView(prov).level_at_fn() is None
                     or getattr(hw, "_last_legionella_time", None) is None
                     or any(getattr(dev, k, None) for k in
                            ("tariff_rate", "tariff_entity", "tariff_meter"))):
@@ -15310,8 +15311,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # when a comparison stands behind it, so a flat tariff
                 # threads None and every comparative consumer sees "unknown"
                 # rather than "cheap".
-                from .price_signal import comparative_level
-                level = comparative_level(provider)
+                from .price_view import PriceView
+                level = PriceView(provider).compared_level()
                 level = getattr(level, "value", level)  # PriceLevel enum → str
                 if isinstance(level, str):
                     tariff_level = level

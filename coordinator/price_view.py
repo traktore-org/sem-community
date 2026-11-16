@@ -34,14 +34,16 @@ from typing import Any, Callable, Iterable, Optional, Union
 
 from homeassistant.util import dt as dt_util
 
+from ..tariff.tariff_provider import PriceLevel
 from .price_signal import (
-    _name, comparative_level, is_cheap, is_cheap_name,
+    CHEAP_LEVELS, EXPENSIVE_LEVELS, _name, comparative_level, is_cheap, is_cheap_name,
     is_expensive_name, variation_known,
 )
 
 __all__ = [
     "PriceState", "PriceAnswer", "PriceView", "answer_for_level", "answer_for_device",
-    "day_has_cheaper", "price_no_dearer", "RULE_PLAN", "RULE_GATE",
+    "day_has_cheaper", "price_no_dearer", "price_blocks_bridge",
+    "CHEAP_WORDS", "PEAK_WORDS", "RULE_PLAN", "RULE_GATE",
 ]
 
 RULE_PLAN = "plan"
@@ -90,6 +92,25 @@ def answer_for_device(device: Any, house_level: Any) -> PriceAnswer:
     Exactly ``device_tariff.device_price_level``, then ``answer_for_level``."""
     from .device_tariff import device_price_level  # device_tariff imports us
     return answer_for_level(device_price_level(device, house_level))
+
+
+#: (#994) every real level word that is NOT a cheap one. A flat or
+#: no-prices word, None and "" are not in it: unknown is not "dear".
+NOT_CHEAP_LEVELS = frozenset(
+    lv.value for lv in PriceLevel if lv not in CHEAP_LEVELS)
+
+
+#: The level words of the cheap and the peak (expensive) bands, for code
+#: that groups a stamped curve by band (the plan rows, the sink verdicts).
+CHEAP_WORDS = tuple(lv.value for lv in CHEAP_LEVELS)
+PEAK_WORDS = tuple(lv.value for lv in EXPENSIVE_LEVELS)
+
+
+def price_blocks_bridge(level: Any) -> bool:
+    """(#524) Would holding the charger through a dip at this level import
+    dear grid? Only a REAL not-cheap level says yes; an unknown, flat or
+    unpriced level is bridgeable (nothing cheaper to wait for)."""
+    return level in NOT_CHEAP_LEVELS
 
 
 def day_has_cheaper(cheap_flags: Iterable[bool]) -> bool:
@@ -181,6 +202,18 @@ class PriceView:
                                    else PriceState.ONE_PRICE)
             raw = level
         return answer_for_level(raw)
+
+    def compared_level(self, t: Optional[datetime] = None) -> Any:
+        """The provider's level where a comparison stands behind it, else
+        None (``price_signal.comparative_level``): what is threaded to the
+        engine as the cycle's price level."""
+        return comparative_level(self._p, t)
+
+    def level_at_fn(self) -> Optional[Callable[[datetime], Any]]:
+        """The provider's raw ``get_price_level_at`` (None = it has none),
+        for the planners that take a ``level_at`` callable and judge the
+        words through ``answer_for_level`` themselves."""
+        return getattr(self._p, "get_price_level_at", None)
 
     def now(self) -> PriceAnswer:
         """The state now; the gate asks the provider's live level."""

@@ -25,7 +25,7 @@ import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from .price_signal import is_expensive_name
+from .price_view import answer_for_level  # (#1372)
 
 
 @dataclass
@@ -173,7 +173,7 @@ def _is_expensive(level) -> bool:
     ``very_expensive`` cannot fall out of a tuple the way it did in
     ``surplus_controller``.
     """
-    return is_expensive_name(level)
+    return answer_for_level(level).peak
 
 
 _LEVEL_RANK = {"negative": 0, "very_cheap": 1, "cheap": 2, "normal": 3,

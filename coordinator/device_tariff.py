@@ -42,7 +42,7 @@ from ..tariff.tariff_provider import (
     DynamicTariffProvider, PriceLevel, StaticTariffProvider,
 )
 from ..utils.log_gate import log_on_change
-from .price_signal import absence_word, comparative_level
+from .price_signal import absence_word
 from .price_view import PriceView
 
 _LOGGER = logging.getLogger(__name__)
@@ -307,7 +307,7 @@ class DeviceTariffs:
             return None
         # The house rule, unchanged: a level only where a comparison stands
         # behind it. A fixed rate is one flat price, so this is None for it.
-        lvl = comparative_level(provider)
+        lvl = PriceView(provider).compared_level()  # (#1372)
         if lvl is not None:
             return lvl.value
         if not tariff_of(device).entity:

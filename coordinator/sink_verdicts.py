@@ -22,9 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Optional, Tuple
-from .price_signal import (
-    CHEAP_LEVELS as _CHEAP_LEVELS, is_cheap_name, is_expensive_name,
-)
+from .price_view import CHEAP_WORDS, answer_for_level  # (#1372)
 from ..tariff.value_layer import DEFAULT_EXPORT_VALUE_THRESHOLD, export_not_worth
 from . import reason_codes as RC
 
@@ -37,7 +35,7 @@ SINKS = ("grid_export", "battery", "house", "ev")
 #: Tariff levels under which the pack is KEPT rather than spent on the house.
 #: (#994) the ONE vocabulary — see coordinator/price_signal.py. An unknown
 #: level is not cheap, so a flat tariff never holds the pack.
-_KEEP_LEVELS = tuple(lv.value for lv in _CHEAP_LEVELS)
+_KEEP_LEVELS = CHEAP_WORDS
 
 
 @dataclass(frozen=True)
@@ -152,7 +150,7 @@ def peak_hold_verdict(*, level: str, target_w: Optional[float],
                            "this quarter hour's import budget is not known — "
                            "not holding without it",
                            reason_params={"peak_hold": "no_reading"})
-    if is_expensive_name(level):
+    if answer_for_level(level).peak:
         return SinkVerdict("house", OPEN,
                            f"{level} hour — the pack may cover the house",
                            reason_params={"peak_hold": "dear_hour"})
@@ -274,7 +272,7 @@ def sink_verdicts(*, now: datetime, tariff_level: Optional[str], upcoming,
         allowance_known=peak_allowance_known, pack_soc=pack_soc,
         release_soc=peak_hold_release_soc, sun_refills_pack=sun_refills_pack,
         released=peak_hold_released) if peak_hold_enabled else None)
-    if house_sink_enabled and is_cheap_name(level):
+    if house_sink_enabled and answer_for_level(level).is_cheap:
         out["house"] = SinkVerdict(
             "house", HELD, f"{level} hour — let the house import, keep the pack")
     elif _peak is not None:

@@ -307,7 +307,7 @@ def rate_cheap_fn(prov):
     ~400 times on a 15-min curve. (#1372) Asked through ``PriceView``."""
     if PriceView(prov, rule="plan").rate_cheap_fn() is None:
         return None
-    return lambda ts: tariff_rate_cheap_at(prov, ts)
+    return PriceView(prov, rule="plan").rate_cheap_at
 
 
 def provisional_soc_curve(ledger, *, capacity_kwh: float,
