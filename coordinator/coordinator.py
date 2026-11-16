@@ -13530,6 +13530,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "price": s.price,
                     # (#1310) the tariff's word, not the packer's: a sun
                     # slot is cheap for the packer at any tariff.
+                    # PRICE-ASK: a field name of the published slot, not a level
                     "cheap": bool(s.tariff_cheap),
                     **({"sun": True} if s.cap_override_w is not None
                        else {}),

@@ -59,6 +59,7 @@ HEAT_PUMP_TARIFF_KEYS = {
 }
 
 #: A fixed rate compares with nothing: neither cheap nor expensive.
+# PRICE-ASK: the one word a fixed rate is given; nothing is judged here
 LEVEL_FIXED = PriceLevel.NORMAL.value
 
 #: A meter ticks in whole steps (often 0.01 or 0.1 kWh): one tick on top of

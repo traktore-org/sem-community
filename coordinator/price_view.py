@@ -38,8 +38,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Iterable, Optional, Union
 
-from homeassistant.util import dt as dt_util
-
 from ..tariff.tariff_provider import PriceLevel
 from .price_signal import (
     CHEAP_LEVELS, EXPENSIVE_LEVELS, _name, comparative_level, is_cheap, is_cheap_name,
@@ -49,13 +47,19 @@ from .price_signal import (
 __all__ = [
     "PriceState", "PriceAnswer", "PriceView", "answer_for_level", "answer_for_device",
     "day_has_cheaper", "price_no_dearer", "price_blocks_bridge",
-    "CHEAP_WORDS", "PEAK_WORDS",
+    "CHEAP_WORDS", "PEAK_WORDS", "LEVEL_RANK",
 ]
 
 
 #: Two prices are "no dearer" when they differ by no more than this
 #: (float noise). The planner's own tolerance, moved here unchanged.
 _PRICE_EPS = 1e-9
+
+
+#: (#1372) The level words in price order, cheapest first: what a planner
+#: ranks hours by. One list, here, beside the words it orders.
+LEVEL_RANK = {"negative": 0, "very_cheap": 1, "cheap": 2, "normal": 3,
+              "expensive": 4, "very_expensive": 5}
 
 
 class PriceState(str, Enum):
@@ -129,14 +133,14 @@ def price_no_dearer(price: Optional[float], ref: Optional[float]) -> bool:
 
 
 class PriceView:
-    """Every price question about one device (or the house), one rule."""
+    """Every price question about one device (or the house)."""
 
     def __init__(self, provider: Any, own: Any = None,
                  now: Union[datetime, Callable[[], datetime], None] = None,
                  ) -> None:
         # The device's own tariff answers when it has one; else the house's.
         self._p = own if own is not None else provider
-        self._clock = now
+        self._clock = now      # kept for callers that pin a moment
 
     @classmethod
     def for_device(cls, device: Any, house_provider: Any,
@@ -152,14 +156,8 @@ class PriceView:
 
     # ── time ──────────────────────────────────────────────────────────
 
-    def _moment(self) -> datetime:
-        clock = self._clock
-        if callable(clock):
-            return clock()
-        return clock if clock is not None else dt_util.now()
-
     def known_until(self) -> Optional[datetime]:
-        """The end of what the provider knows; None = no limit (a rule)."""
+        """The end of what the provider knows; None = no limit (a fixed tariff)."""
         reader = getattr(self._p, "known_until", None)
         if not callable(reader):
             return None
@@ -237,10 +235,8 @@ class PriceView:
         return self.at(None)
 
     def cheap_at(self, t: Optional[datetime]) -> bool:
-        """The hour question: is hour ``t`` at a cheap level? (None = now,
-        the live question.)"""
-        if t is None:
-            return self.cheap_now()
+        """The hour question: is hour ``t`` at a cheap level? ``t`` goes to
+        the provider as given (also None) — for now, ask ``cheap_now``."""
         if hasattr(self._p, "get_price_level_at"):
             try:
                 lvl = self._p.get_price_level_at(t)

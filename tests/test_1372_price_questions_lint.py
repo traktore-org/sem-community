@@ -12,8 +12,11 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ALLOWED = {"coordinator/price_view.py", "coordinator/price_signal.py"}
-ALLOWED_DIRS = ("tariff/",)
+# The providers decide levels; value_layer and anything new under tariff/
+# are consumers and are linted like the rest.
+ALLOWED = {"coordinator/price_view.py", "coordinator/price_signal.py",
+           "tariff/tariff_provider.py", "tariff/calendar_provider.py"}
+ALLOWED_DIRS = ()
 NAMES = frozenset({
     "is_cheap", "is_expensive", "is_cheap_name", "is_expensive_name",
     "comparative_level", "CHEAP_LEVELS", "EXPENSIVE_LEVELS",
@@ -54,6 +57,13 @@ def violations(source: str) -> list[tuple[int, str, bool]]:
               and isinstance(node.args[1], ast.Constant)
               and node.args[1].value in CALLS):
             add(node, f"{node.func.id}({node.args[1].value!r})")
+        elif (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+              and node.value.id == "PriceLevel"):
+            add(node, "PriceLevel." + node.attr)     # a level judged by hand
+        elif isinstance(node, ast.Dict):
+            for key in node.keys:
+                if isinstance(key, ast.Constant) and key.value in WORDS:
+                    add(key, f"dict key {key.value!r}")
         elif isinstance(node, ast.alias) and node.name in NAMES:
             add(node, "import " + node.name)
         elif isinstance(node, ast.Compare):

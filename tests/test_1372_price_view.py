@@ -139,7 +139,6 @@ def test_the_live_rule_about_a_later_hour_is_what_the_gate_read(name):
     got = [view.cheap_seen_from_now(t) for t in _hours()]
     assert got == [ps.is_cheap(prov, t) for t in _hours()]
     assert view.cheap_now() == ps.is_cheap(prov)
-    assert view.cheap_at(None) == ps.is_cheap(prov)
 
 
 @pytest.mark.parametrize("name", list(_tariffs()))
