@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
           "ev_charger_efficiency": "Ladewirkungsgrad (%)",
           "ev_target_soc": "Als voll gelten ab (%)",
-          "daily_ev_target_max": "Nie mehr laden als (kWh)",
-          "ev_target_soc_max": "Nie über (%) laden",
+          "daily_ev_target_max": "Solarladen stoppt bei (kWh)",
+          "ev_target_soc_max": "Solarladen stoppt bei (%)",
           "vehicle_range_entity": "Fahrzeug-Reichweitensensor",
           "ev_kwh_per_100km": "Fahrzeugverbrauch (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Überschuss-Priorität (1=höchste)",
           "ev_battery_may_assist": "Batterie darf diese Wallbox unterstützen",
           "ev_current_control_entity": "Entität zur Stromsteuerung (Number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Nie mehr laden als (kWh)",
-          "ev_target_soc_max": "Nie über (%) laden",
+          "daily_ev_target_max": "Solarladen stoppt bei (kWh)",
+          "ev_target_soc_max": "Solarladen stoppt bei (%)",
           "daily_ev_target": "Mindestens garantieren (kWh)",
           "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
           "vehicle_range_entity": "Fahrzeug-Reichweitensensor",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Überschuss-Priorität (1=höchste)",
           "ev_battery_may_assist": "Batterie darf diese Wallbox unterstützen",
           "ev_current_control_entity": "Entität zur Stromsteuerung (Number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Nie mehr laden als (kWh)",
-          "ev_target_soc_max": "Nie über (%) laden",
+          "daily_ev_target_max": "Solarladen stoppt bei (kWh)",
+          "ev_target_soc_max": "Solarladen stoppt bei (%)",
           "daily_ev_target": "Mindestens garantieren (kWh)",
           "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
           "vehicle_range_entity": "Fahrzeug-Reichweitensensor",
@@ -1752,7 +1752,7 @@
         "name": "Überschuss-Ereignis Schwelle"
       },
       "daily_ev_target": {
-        "name": "{charger} Nachtziel"
+        "name": "{charger} Mindestens garantieren (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. Ampere"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Fahrzeug Min. Ampere"
       },
       "ev_target_soc": {
-        "name": "{charger} Ziel-SOC"
+        "name": "{charger} Als voll gelten ab (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solar-Maximum"
+        "name": "{charger} Solarladen stoppt bei (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Solar-Max-SOC"
+        "name": "{charger} Solarladen stoppt bei (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Akkukapazität"

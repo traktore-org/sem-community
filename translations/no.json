@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
           "ev_charger_efficiency": "Laderens virkningsgrad (%)",
           "ev_target_soc": "Regn som full ved (%)",
-          "daily_ev_target_max": "Lad aldri utover (kWh)",
-          "ev_target_soc_max": "Lad aldri utover (%)",
+          "daily_ev_target_max": "Sollading stopper ved (kWh)",
+          "ev_target_soc_max": "Sollading stopper ved (%)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
           "ev_kwh_per_100km": "Kjøretøyets forbruk (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Overskuddsprioritet (1=høyeste)",
           "ev_battery_may_assist": "Batteriet kan bistå denne laderen",
           "ev_current_control_entity": "Strømkontroll-entitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Lad aldri utover (kWh)",
-          "ev_target_soc_max": "Lad aldri utover (%)",
+          "daily_ev_target_max": "Sollading stopper ved (kWh)",
+          "ev_target_soc_max": "Sollading stopper ved (%)",
           "daily_ev_target": "Garanter minst (kWh)",
           "vehicle_soc_entity": "SOC-sensor for kjøretøyets batteri (valgfri)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Overskuddsprioritet (1=høyeste)",
           "ev_battery_may_assist": "Batteriet kan bistå denne laderen",
           "ev_current_control_entity": "Strømkontroll-entitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Lad aldri utover (kWh)",
-          "ev_target_soc_max": "Lad aldri utover (%)",
+          "daily_ev_target_max": "Sollading stopper ved (kWh)",
+          "ev_target_soc_max": "Sollading stopper ved (%)",
           "daily_ev_target": "Garanter minst (kWh)",
           "vehicle_soc_entity": "SOC-sensor for kjøretøyets batteri (valgfri)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
@@ -1752,7 +1752,7 @@
         "name": "Overskuddshendelse terskel"
       },
       "daily_ev_target": {
-        "name": "{charger} Nattmål"
+        "name": "{charger} Garanter minst (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. ampere"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Kjøretøyets min. ampere"
       },
       "ev_target_soc": {
-        "name": "{charger} Mål-SOC"
+        "name": "{charger} Regn som full ved (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solmaksimum"
+        "name": "{charger} Sollading stopper ved (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Maks. sol-SOC"
+        "name": "{charger} Sollading stopper ved (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Batterikapasitet"

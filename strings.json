@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "ev_charger_efficiency": "Charger efficiency (%)",
           "ev_target_soc": "Consider full at (%)",
-          "daily_ev_target_max": "Never charge past (kWh)",
-          "ev_target_soc_max": "Never charge past (%)",
+          "daily_ev_target_max": "Sun charging stops at (kWh)",
+          "ev_target_soc_max": "Sun charging stops at (%)",
           "vehicle_range_entity": "Vehicle range sensor",
           "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)"
         },
@@ -275,8 +275,8 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "ev_battery_may_assist": "Battery may assist this charger",
-          "daily_ev_target_max": "Never charge past (kWh)",
-          "ev_target_soc_max": "Never charge past (%)",
+          "daily_ev_target_max": "Sun charging stops at (kWh)",
+          "ev_target_soc_max": "Sun charging stops at (%)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
@@ -342,8 +342,8 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "ev_battery_may_assist": "Battery may assist this charger",
-          "daily_ev_target_max": "Never charge past (kWh)",
-          "ev_target_soc_max": "Never charge past (%)",
+          "daily_ev_target_max": "Sun charging stops at (kWh)",
+          "ev_target_soc_max": "Sun charging stops at (%)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
@@ -408,9 +408,9 @@
         "description": "Configure the 4-zone SOC strategy. Zone 1 (< Priority): battery first. Zone 2 (Priority–Buffer): surplus only. Zone 3 (Buffer–Auto-start): battery assists EV. Zone 4 (≥ Auto-start): full battery assist.",
         "data": {
           "update_interval": "Update interval (seconds)",
-          "battery_priority_soc": "Zone 1 ceiling — Battery priority SOC (%)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
+          "battery_priority_soc": "Below this the battery fills first (%)",
+          "battery_buffer_soc": "From this the battery may help the car (%)",
+          "battery_auto_start_soc": "From this the battery may help the car fully (%)",
           "min_solar_power": "Minimum solar power — raw PV production (W)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "battery_assist_max_power": "Battery assist maximum power (W)",
@@ -1662,7 +1662,7 @@
         "name": "Update Interval"
       },
       "battery_priority_soc": {
-        "name": "Battery Priority SOC (Zone 1 floor)"
+        "name": "Battery Priority SOC"
       },
       "minimum_solar_power": {
         "name": "Minimum Solar Power"
@@ -1752,7 +1752,7 @@
         "name": "Surplus Event Threshold"
       },
       "daily_ev_target": {
-        "name": "{charger} Night Target"
+        "name": "{charger} Guarantee at least (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min Amps"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Vehicle Min Amps"
       },
       "ev_target_soc": {
-        "name": "{charger} Target SOC"
+        "name": "{charger} Consider full at (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solar Max"
+        "name": "{charger} Sun charging stops at (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Solar Max SOC"
+        "name": "{charger} Sun charging stops at (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Battery Capacity"

@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
           "ev_charger_efficiency": "Laddarens verkningsgrad (%)",
           "ev_target_soc": "Betrakta som full vid (%)",
-          "daily_ev_target_max": "Ladda aldrig förbi (kWh)",
-          "ev_target_soc_max": "Ladda aldrig förbi (%)",
+          "daily_ev_target_max": "Solladdning stoppar vid (kWh)",
+          "ev_target_soc_max": "Solladdning stoppar vid (%)",
           "vehicle_range_entity": "Fordonets räckviddssensor",
           "ev_kwh_per_100km": "Fordonsförbrukning (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Överskottsprioritet (1=högst)",
           "ev_battery_may_assist": "Batteriet får assistera denna laddare",
           "ev_current_control_entity": "Strömstyrningsentitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Ladda aldrig förbi (kWh)",
-          "ev_target_soc_max": "Ladda aldrig förbi (%)",
+          "daily_ev_target_max": "Solladdning stoppar vid (kWh)",
+          "ev_target_soc_max": "Solladdning stoppar vid (%)",
           "daily_ev_target": "Garantera minst (kWh)",
           "vehicle_soc_entity": "Sensor för fordonets batteri-SOC (valfri)",
           "vehicle_range_entity": "Fordonets räckviddssensor",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Överskottsprioritet (1=högst)",
           "ev_battery_may_assist": "Batteriet får assistera denna laddare",
           "ev_current_control_entity": "Strömstyrningsentitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Ladda aldrig förbi (kWh)",
-          "ev_target_soc_max": "Ladda aldrig förbi (%)",
+          "daily_ev_target_max": "Solladdning stoppar vid (kWh)",
+          "ev_target_soc_max": "Solladdning stoppar vid (%)",
           "daily_ev_target": "Garantera minst (kWh)",
           "vehicle_soc_entity": "Sensor för fordonets batteri-SOC (valfri)",
           "vehicle_range_entity": "Fordonets räckviddssensor",
@@ -1752,7 +1752,7 @@
         "name": "Överskottshändelse tröskel"
       },
       "daily_ev_target": {
-        "name": "{charger} Nattmål"
+        "name": "{charger} Garantera minst (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. ampere"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Fordonets min. ampere"
       },
       "ev_target_soc": {
-        "name": "{charger} Mål-SOC"
+        "name": "{charger} Betrakta som full vid (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solmaximum"
+        "name": "{charger} Solladdning stoppar vid (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Max sol-SOC"
+        "name": "{charger} Solladdning stoppar vid (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Batterikapacitet"

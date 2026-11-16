@@ -2213,7 +2213,7 @@ Energy Management), off by default, so Assist can always explain but
 never acts unless you say so:
 
 - "charge the car to 80 percent" — a standing change, the same as
-  moving the Target SOC slider yourself.
+  moving the "Consider full at" slider yourself.
 - "don't charge the car tonight" — a one-off: tomorrow charges as
   normal, untouched. Held until the car's own next departure.
 - "charge the car now, for 30 minutes" — also a one-off, at full
