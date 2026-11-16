@@ -2758,7 +2758,19 @@ class UnifiedDeviceRegistry:
         except Exception:  # noqa: BLE001 — a payload must never break the sensor
             return {}
         out.update(UnifiedDeviceRegistry._band_lines(live))
-        return {"comfort": out}
+        return {"comfort": out} | UnifiedDeviceRegistry._goal_shadow(live)
+
+    @staticmethod
+    def _goal_shadow(live) -> Dict[str, Any]:
+        """(#1369, step 1) Where a tank's goal object differed from today's
+        decision — diagnostics only, and absent while there is nothing to say."""
+        diffs = getattr(live, "tank_goal_diffs", None)
+        errors = getattr(live, "tank_goal_errors", 0)
+        if not isinstance(diffs, dict) or not isinstance(errors, int):
+            return {}
+        if not (diffs or errors):
+            return {}
+        return {"goal_shadow": {"diffs": dict(diffs), "errors": errors}}
 
     @staticmethod
     def _band_lines(live) -> Dict[str, Any]:

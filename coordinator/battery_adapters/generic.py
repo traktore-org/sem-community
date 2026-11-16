@@ -19,6 +19,7 @@ from ..power_control import (
     prepare_power_setpoint,
 )
 from .base import BatteryControlAdapter
+from .charge_select import select_setup
 from ...utils.select_option import listed_option
 
 _LOGGER = logging.getLogger(__name__)
@@ -435,10 +436,20 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         return self._max_discharge_w
 
     @property
+    def charge_refused(self) -> bool:
+        """(#1346) The inverter did not take the charge command lately: the
+        plan leaves this pack's charge out and says why."""
+        return bool(getattr(self._charge_adapter, "charge_refused", False))
+
+    @property
     def supports_forced_charge(self) -> bool:
         # A bidirectional setpoint can charge via a negative value on the
         # same entity — no charge switch needed (#523, Sessy).
         if self._setpoint_bidirectional and self._force_discharge_entity:
+            return True
+        # (#1346) a grid charge set by a select: no target entity needed,
+        # SEM ends it itself (the plan's target or block end)
+        if select_setup(self._config):
             return True
         return bool(self._force_charge_switch and self._target_soc_entity)
 
@@ -518,6 +529,11 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         # the charge switch off, so a forced charge SEM started stops first.
         # A failed stop records no NORMAL; the rest still goes out.
         stopped = await self._stop_own_charge()
+        # (#1346) the block is over: a select that refused may be asked
+        # again in the next block (at most two writes each)
+        _ca = self._charge_adapter
+        if _ca is not None and not getattr(_ca, "_active", False) and hasattr(_ca, "_forget_attempt"):
+            _ca._forget_attempt()
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         # AC-coupled (Sessy): self-consumption is its OWN power strategy
         # (``nom`` = zero-on-meter), NOT the setpoint. Actively set it so a
@@ -605,6 +621,11 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if status.status is ChargeCommandStatus.FAILED:
             self._last_error = f"start_forced_charge failed: {status.message}"
             # _last_intent intentionally NOT updated — retry next cycle (#589)
+            if (select_setup(self._config)
+                    and not self._charge_adapter.is_active):
+                # (#1346) a select that refused or flipped back: an earlier
+                # write left FORCE_CHARGE here, and nothing may count it
+                self._last_intent = None
         else:
             self._last_error = None
             self._last_intent = BatteryIntent.FORCE_CHARGE

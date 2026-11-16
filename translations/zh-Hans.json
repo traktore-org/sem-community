@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "防军团菌运行无法达到目标",
       "description": "{name}：你设置的停止温度 {stop} °C 低于防军团菌目标 {target} °C，SEM 无法对水箱消毒并会跳过此次运行。请提高停止温度或降低目标。此提示会自动消失。"
+    },
+    "charge_select_stuck": {
+      "title": "电网充电选项仍处于开启：{entity}",
+      "description": "选项 **{entity}** 仍为 **{option}**，SEM 无法改回：之前的选项已不在列表中。请手动改回。在此之前，电池可能继续从电网充电。选项更改后此提示消失。"
     }
   },
   "selector": {

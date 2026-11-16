@@ -1660,36 +1660,50 @@ class ComfortBandMixin:
         behaves byte-for-byte like a device without a band: a dead
         sensor never forces a run and never parks the device.
         """
+        state, misconfigured = self._comfort_band_peek()
+        if misconfigured and not getattr(self, "_comfort_misconfig_warned", False):
+            self._comfort_misconfig_warned = True
+            _LOGGER.warning(
+                "%s: comfort band misconfigured (direction=%s target=%.1f "
+                "limit=%.1f) — cool needs limit > target, heat needs "
+                "limit < target; band disengaged",
+                self.name,
+                "cool" if self._comfort_direction() == "cool" else "heat",
+                self.comfort_target, self.comfort_limit,
+            )
+        return state
+
+    def _comfort_band_peek(self):
+        """(#1369) ``(state, misconfigured)`` — the band state with NO write
+        and no log: the shadow goal comparison reads it, the one-time warning
+        stays in ``_comfort_band_state``."""
         if not (self.comfort_target and self.comfort_limit):
-            return "disengaged"
+            return "disengaged", False
         cooling = self._comfort_direction() == "cool"
         if ((cooling and self.comfort_limit <= self.comfort_target)
                 or (not cooling and self.comfort_limit >= self.comfort_target)):
-            if not getattr(self, "_comfort_misconfig_warned", False):
-                self._comfort_misconfig_warned = True
-                _LOGGER.warning(
-                    "%s: comfort band misconfigured (direction=%s target=%.1f "
-                    "limit=%.1f) — cool needs limit > target, heat needs "
-                    "limit < target; band disengaged",
-                    self.name, "cool" if cooling else "heat",
-                    self.comfort_target, self.comfort_limit,
-                )
-            return "disengaged"
+            return "disengaged", True
         temp = self._comfort_reading()
         if temp is None:
-            return "disengaged"
+            return "disengaged", False
         target_c, offset_c, limit_c = self._comfort_thresholds_c()
         if cooling:
             if temp >= limit_c:
-                return "forced"
+                return "forced", False
             if temp <= target_c - offset_c:
-                return "banked"
+                return "banked", False
         else:
             if temp <= limit_c:
-                return "forced"
+                return "forced", False
             if temp >= target_c + offset_c:
-                return "banked"
-        return "willing"
+                return "banked", False
+        return "willing", False
+
+    def _peek_comfort_state(self) -> str:
+        """(#1369) ``comfort_state`` without the warning flag's write."""
+        if getattr(self, "vacation", False) is True:
+            return "disengaged"
+        return self._comfort_band_peek()[0]
 
     # ── (#638 Phase 3) the band becomes PLANNABLE ──────────────────────
     # The drift learners eat one reading per cycle, split by whether the

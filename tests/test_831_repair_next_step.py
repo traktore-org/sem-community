@@ -69,6 +69,8 @@ DOCS_SIDE = {
     "charger_control_entity_broken", "keba_failsafe_active",
     # (#915) the write landed nowhere — the register, not SEM, is the next step
     "battery_control_write_not_taken",
+    # (#1346) the select is the user's to set back; the docs say how
+    "charge_select_stuck",
     "charger_failsafe_suspected", "battery_force_discharge_unsupported",
     # (#872) The same raiser files a second, different story when the
     # evidence says the ENTITY is flaky rather than the device unable.

@@ -657,6 +657,11 @@ async def async_get_config_entry_diagnostics(
                     "battery_grid_arbitrage_enabled", False),
                 "inverter_device_id_set": bool(full_cfg.get("inverter_device_id")),
                 "battery_charge_platform": full_cfg.get("battery_charge_platform"),
+                # (#1346) a grid charge started by a select
+                "battery_charge_select_entity": full_cfg.get(
+                    "battery_charge_select_entity") or None,
+                "battery_charge_select_option": full_cfg.get(
+                    "battery_charge_select_option") or None,
                 "battery_force_discharge_control_entity": full_cfg.get(
                     "battery_force_discharge_control_entity") or None,
                 "battery_force_discharge_entities": full_cfg.get(

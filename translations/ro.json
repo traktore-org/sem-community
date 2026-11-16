@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Ciclul anti-legionella nu își atinge ținta",
       "description": "{name}: oprirea ta la {stop} °C e sub ținta anti-legionella {target} °C. SEM nu poate dezinfecta boilerul și sare peste ciclu. Ridică oprirea sau coboară ținta. Dispare singur."
+    },
+    "charge_select_stuck": {
+      "title": "Selecția pentru încărcarea din rețea e încă activă: {entity}",
+      "description": "Selecția **{entity}** e încă pe **{option}**, iar SEM nu o poate readuce: opțiunea de dinainte nu mai e în listă. Readu-o manual. Până atunci bateria poate continua să se încarce din rețea. Dispare când selecția se schimbă."
     }
   },
   "selector": {
