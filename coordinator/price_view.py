@@ -40,7 +40,7 @@ from .price_signal import (
 )
 
 __all__ = [
-    "PriceState", "PriceAnswer", "PriceView", "answer_for_level",
+    "PriceState", "PriceAnswer", "PriceView", "answer_for_level", "answer_for_device",
     "day_has_cheaper", "price_no_dearer", "RULE_PLAN", "RULE_GATE",
 ]
 
@@ -82,6 +82,14 @@ def answer_for_level(level: Any) -> PriceAnswer:
     if is_cheap_name(level):
         return PriceAnswer(PriceState.CHEAP)
     return PriceAnswer(PriceState.DEAR, peak=is_expensive_name(level))
+
+
+def answer_for_device(device: Any, house_level: Any) -> PriceAnswer:
+    """(#1372) The answer a device's gate reads: its own tariff's level when
+    it has one (stamped by ``DeviceTariffs.stamp``), else the house level.
+    Exactly ``device_tariff.device_price_level``, then ``answer_for_level``."""
+    from .device_tariff import device_price_level  # device_tariff imports us
+    return answer_for_level(device_price_level(device, house_level))
 
 
 def day_has_cheaper(cheap_flags: Iterable[bool]) -> bool:

@@ -416,3 +416,54 @@ def test_a_tank_with_its_own_tariff_or_no_run_or_a_far_due_time_is_not_known(
                      ({}, 0.0)):
         got, ref = _left_now(prov, left, monkeypatch, now=_local(14), **kw)
         assert got is None and ref is None, (kw, left)
+
+
+# ── (#1372 step 6) a device's gate: parity with device_price_level ─────────
+
+def _dev(**tariff):
+    d = SimpleNamespace(device_id="d1", tariff_rate=0.0, tariff_entity="",
+                        tariff_meter="", _tariff_level=None,
+                        tariff_inputs=None)
+    d.__dict__.update(tariff)
+    return d
+
+
+def _stamped_devices():
+    from custom_components.solar_energy_management.coordinator.device_tariff import (
+        DeviceTariffs,
+    )
+    now = dt_util.now().replace(minute=0, second=0, microsecond=0)
+    raw = [{"start": (now + timedelta(hours=i)).isoformat(), "value": v}
+           for i, v in enumerate([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])]
+    live = SimpleNamespace(state="0.1", attributes={"raw_today": raw})
+    states = {"sensor.own": live,
+              "sensor.gone": SimpleNamespace(state="unavailable",
+                                             attributes={})}
+    hass = MagicMock()
+    hass.states.get = lambda eid: states.get(eid)
+    devs = {
+        "none": _dev(),
+        "fixed": _dev(tariff_rate=0.21),
+        "entity": _dev(tariff_entity="sensor.own"),
+        "meter": _dev(tariff_rate=0.19, tariff_meter="sensor.m"),
+        "unread": _dev(tariff_entity="sensor.gone"),
+    }
+    DeviceTariffs(hass).stamp(list(devs.values()))
+    return devs
+
+
+@pytest.mark.parametrize("house", ["very_cheap", "cheap", "normal",
+                                   "expensive", "very_expensive", "flat", None])
+def test_a_devices_answer_is_the_level_its_gate_reads_today(house):
+    from custom_components.solar_energy_management.coordinator.device_tariff import (
+        device_price_level,
+    )
+    from custom_components.solar_energy_management.coordinator.price_view import (
+        answer_for_device,
+    )
+    for name, d in _stamped_devices().items():
+        lvl = device_price_level(d, house)
+        got = answer_for_device(d, house)
+        assert got.is_cheap == ps.is_cheap_name(lvl), (name, house)
+        assert got.peak == ps.is_expensive_name(lvl), (name, house)
+        assert got == answer_for_level(lvl), (name, house)

@@ -27,8 +27,7 @@ from . import reason_codes as RC  # (#1174)
 from .plan_verdict import NO_OPINION, PlanVerdict
 
 from ..utils.log_gate import log_on_change
-from .device_tariff import device_price_level  # (#812)
-from .price_signal import is_cheap_name, is_expensive_name
+from .price_view import answer_for_device, answer_for_level  # (#812, #1372)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -672,7 +671,7 @@ def price_damped_pool(distributable: float, price_level: str) -> float:
     damped = distributable
     # (#994) was ``== "expensive"`` — very_expensive silently did not damp
     # the pool, the one drift the six hand-typed copies had already produced.
-    if is_expensive_name(price_level):
+    if answer_for_level(price_level).peak:
         damped = max(0.0, distributable - 500)
     return min(damped, distributable)
 
@@ -856,7 +855,7 @@ def _goal_hour_holds(device, price_is_cheap: bool) -> bool:
     both read "normal". No price known = no."""
     if price_is_cheap:
         return True
-    if getattr(device, "_cycle_price_tag", None) == "expensive":
+    if answer_for_level(getattr(device, "_cycle_price_tag", None)).peak:
         return False
     now = getattr(device, "_cycle_price", None)
     started = getattr(device, "_comfort_goal_price", None)
@@ -2307,9 +2306,9 @@ class SurplusController:
             tier1 = self._tier1_headroom_w(device)
             # (#1369) this cycle's price level for the device, for the Keep
             # at run's "never into a dearer hour"
-            _lvl = device_price_level(device, price_level)
-            device._cycle_price_tag = ("cheap" if is_cheap_name(_lvl) else
-                                       "expensive" if is_expensive_name(_lvl) else "normal")
+            _ans = answer_for_device(device, price_level)  # (#1372)
+            device._cycle_price_tag = ("cheap" if _ans.is_cheap else
+                                       "expensive" if _ans.peak else "normal")
             # the house's price now; a device on its own tariff has no
             # number here, so its run holds in its cheap hours only
             device._cycle_price = (None if isinstance(getattr(device, "_tariff_level", None), str)
@@ -2317,8 +2316,7 @@ class SurplusController:
             intent = compute_load_intent(
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 # (#812) the device's own tariff when it has one
-                price_is_cheap=is_cheap_name(
-                    device_price_level(device, price_level)),
+                price_is_cheap=_ans.is_cheap,
                 peak_freeze=peak_freeze,
                 is_night=getattr(self, "_is_night_cycle", True),
                 # (#953) same cycle context as is_night — stamped by update()
@@ -2335,8 +2333,7 @@ class SurplusController:
                 grid_start_fits=self._grid_start_fits(device),
                 # (#1323) the step-down's two facts: this load's price level
                 # and what the house buys now (0 when the meter is unread)
-                price_is_expensive=is_expensive_name(
-                    device_price_level(device, price_level)),
+                price_is_expensive=_ans.peak,
                 buying_w=(max(0.0, float(getattr(self, "_grid_import_w", 0.0) or 0.0))
                           if getattr(self, "_grid_import_known", True) else 0.0))
             intents[did] = intent
