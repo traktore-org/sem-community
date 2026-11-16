@@ -8832,7 +8832,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 ${this._renderPicker("heat_pump_tariff_meter","device_tariff_meter","sensor","energy",s,"config_help_hp_tariff_meter")}
                 ${""}
             </div>
-        `}_renderHotWater(e){const t=this._options||{},s=this._bin("hot_water_registered"),i=this._val("hot_water_current_temperature"),r=this._val("hot_water_solar_target"),a=this._hass?.states?.["sensor.sem_controllable_devices_count"]?.attributes?.devices?.hot_water?.comfort,n=a&&null!=a.keep_c?null!=a.max_c?a.max_c:a.keep_c:null,o=this._val("hot_water_hours_since_legionella"),l=this._bin("hot_water_legionella_cycle_active"),c=this._val("hot_water_temperature_reading_path"),d=this._val("hot_water_temperature_safety_path"),p=this._val("hot_water_activation_path"),_=s?H`
+        `}_renderHotWater(e){const t=this._options||{},s=this._bin("hot_water_registered"),i=this._val("hot_water_current_temperature"),r=this._val("hot_water_solar_target"),a=this._hass?.states?.["sensor.sem_controllable_devices_count"]?.attributes?.devices?.hot_water?.comfort,n=a&&null!=a.keep_c&&"disengaged"!==a.state&&!(null!=a.limit_c&&Number(a.limit_c)>=Number(a.keep_c))?null!=a.max_c?a.max_c:a.keep_c:null,o=this._val("hot_water_hours_since_legionella"),l=this._bin("hot_water_legionella_cycle_active"),c=this._val("hot_water_temperature_reading_path"),d=this._val("hot_water_temperature_safety_path"),p=this._val("hot_water_activation_path"),_=s?H`
             <div class="hp-status">
                 <div class="readonly-row">
                     <span class="ctrl-label">${this._t("hot_water_current_temperature")}</span>

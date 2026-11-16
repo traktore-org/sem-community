@@ -1989,7 +1989,12 @@ class SEMConfigCard extends SEMLitBase {
         // is neither shown as the target nor offered
         const hwBand = this._hass?.states?.['sensor.sem_controllable_devices_count']
             ?.attributes?.devices?.hot_water?.comfort;
-        const hwBandTop = hwBand && hwBand.keep_c != null
+        // …only while the band really decides: with a silent thermometer,
+        // away, or a band whose limit is not below Keep at, the engine falls
+        // back to the Solar Heating Target, and that control must stay
+        const hwBandUsed = hwBand && hwBand.keep_c != null && hwBand.state !== 'disengaged'
+            && !(hwBand.limit_c != null && Number(hwBand.limit_c) >= Number(hwBand.keep_c));
+        const hwBandTop = hwBandUsed
             ? (hwBand.max_c != null ? hwBand.max_c : hwBand.keep_c) : null;
         const legHours = this._val('hot_water_hours_since_legionella');
         const legActive = this._bin('hot_water_legionella_cycle_active');

@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
           "ev_charger_efficiency": "Töltő hatásfoka (%)",
           "ev_target_soc": "Tekintsd tele ennél (%)",
-          "daily_ev_target_max": "A napelemes töltés megáll ennél (kWh)",
-          "ev_target_soc_max": "A napelemes töltés megáll ennél (%)",
+          "daily_ev_target_max": "Soha ne töltsön ennél többet (kWh)",
+          "ev_target_soc_max": "Soha ne tölts (%) fölé",
           "vehicle_range_entity": "Jármű hatótáv-érzékelő",
           "ev_kwh_per_100km": "Jármű fogyasztás (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Többlet prioritás (1=legmagasabb)",
           "ev_battery_may_assist": "Az akkumulátor segítheti ezt a töltőt",
           "ev_current_control_entity": "Áramszabályozó entitás (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "A napelemes töltés megáll ennél (kWh)",
-          "ev_target_soc_max": "A napelemes töltés megáll ennél (%)",
+          "daily_ev_target_max": "Soha ne töltsön ennél többet (kWh)",
+          "ev_target_soc_max": "Soha ne tölts (%) fölé",
           "daily_ev_target": "Legalább ennyit garantálj (kWh)",
           "vehicle_soc_entity": "Jármű akkumulátor SOC érzékelő (opcionális)",
           "vehicle_range_entity": "Jármű hatótáv-érzékelő",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Többlet prioritás (1=legmagasabb)",
           "ev_battery_may_assist": "Az akkumulátor segítheti ezt a töltőt",
           "ev_current_control_entity": "Áramszabályozó entitás (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "A napelemes töltés megáll ennél (kWh)",
-          "ev_target_soc_max": "A napelemes töltés megáll ennél (%)",
+          "daily_ev_target_max": "Soha ne töltsön ennél többet (kWh)",
+          "ev_target_soc_max": "Soha ne tölts (%) fölé",
           "daily_ev_target": "Legalább ennyit garantálj (kWh)",
           "vehicle_soc_entity": "Jármű akkumulátor SOC érzékelő (opcionális)",
           "vehicle_range_entity": "Jármű hatótáv-érzékelő",
@@ -1767,10 +1767,10 @@
         "name": "{charger} Tekintsd tele ennél (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} A napelemes töltés megáll ennél (kWh)"
+        "name": "{charger} Soha ne töltsön ennél többet (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} A napelemes töltés megáll ennél (%)"
+        "name": "{charger} Soha ne tölts (%) fölé"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Akkumulátor kapacitása"
