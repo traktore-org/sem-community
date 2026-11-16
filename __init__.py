@@ -797,6 +797,11 @@ def _seed_legionella_time(coordinator, hw_device) -> None:
             if getattr(coordinator, "_storage", None) else None
         ts = dt_util.parse_datetime(stored) if stored else None
         hw_device.record_legionella_cycle(ts or dt_util.now())
+        # (#1368) how long its last run took times the next cheap start
+        try:
+            hw_device._legionella_last_run_h = coordinator._storage.get_legionella_run_hours()
+        except Exception:  # noqa: BLE001 — not stored: the default
+            pass
     except (ValueError, TypeError):
         hw_device.record_legionella_cycle(dt_util.now())
 
