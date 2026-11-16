@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Night Latest End can be set from 03:00** (#1320), for an off-peak that ends before 05:00. It was 05:00 at the earliest.
 - 🔧 **One place decides what a cheap hour is** (#1372). No change in what SEM does; a test keeps price checks in that place.
 - 🐛 **Set-up is clearer** (#1371): the Solar Heating Target hides for a tank with a thermometer, and Setup counts only what every house needs.
 - 🐛 **The car's target entities carry the settings dialog's names** (#1371), such as "Guarantee at least" and "Never charge past". Entity IDs stay the same.
