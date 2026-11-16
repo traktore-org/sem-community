@@ -1037,6 +1037,7 @@ class HotWaterController(SwitchDevice):
             # a tariff does not flicker: when the cheap hour ends the run
             # pauses at once, not after the 30 min a cloud gets
             self._bad_since = now - timedelta(minutes=LEGIONELLA_EARLY_PAUSE_HOLD_MIN)
+            self._bad_forced = True
         self._cheap_held = cheap_ok
         if good_hour:
             if getattr(self, "_good_since", None) is None:
@@ -1045,6 +1046,7 @@ class HotWaterController(SwitchDevice):
             self._good_since = None
         if holds:
             self._bad_since = None
+            self._bad_forced = False
         elif getattr(self, "_bad_since", None) is None:
             self._bad_since = now
         good_held = (getattr(self, "_good_since", None) is not None and
@@ -1186,8 +1188,10 @@ class HotWaterController(SwitchDevice):
                             self._legionella_run_s = 0.0
                             self._legionella_run_for = self._last_legionella_time
                         # the wait for the sun to come back is not run time
+                        # (a pause at the end of a cheap hour waited nothing)
                         _waited = ((dt_util.now() - self._bad_since).total_seconds()
-                                   if getattr(self, "_bad_since", None) else 0.0)
+                                   if getattr(self, "_bad_since", None)
+                                   and not getattr(self, "_bad_forced", False) else 0.0)
                         self._legionella_run_s = (
                             float(getattr(self, "_legionella_run_s", 0.0))
                             + max(0.0, (dt_util.now() - started).total_seconds() - _waited))

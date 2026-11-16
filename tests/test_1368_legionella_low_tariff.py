@@ -78,6 +78,8 @@ async def test_a_run_goes_on_through_cheap_hours_and_stops_when_they_end():
     # a tariff does not flicker like a cloud
     assert await _chk(dev, now + timedelta(minutes=121)) == "legionella_early_paused"
     assert dev._legionella_blocked_until is None
+    # the whole 111 min count as run time: the pause waited for nothing
+    assert 6500 <= dev._legionella_run_s <= 6700
 
 
 @pytest.mark.asyncio
