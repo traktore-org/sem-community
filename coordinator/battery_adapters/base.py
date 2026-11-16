@@ -862,7 +862,7 @@ class BatteryControlAdapter(ABC):
             self._last_error = None
             self._last_intent = BatteryIntent.OFF
 
-    async def async_adopt_running_charge(self) -> None:
+    async def async_adopt_running_charge(self, observer: bool = False) -> None:
         """(#1181) Before this adapter's decisions: take over a forced
         charge SEM started and has not seen stop, in the last lifetime too.
 
@@ -888,6 +888,11 @@ class BatteryControlAdapter(ABC):
         if adopt is None:
             return
         try:
+            # (#1346) a select left on its charge option with the setting
+            # cleared; its restore is a write, so it answers to the observer
+            orphan = getattr(charge, "restore_orphan_select", None)
+            if orphan is not None:
+                await orphan(observer)
             adopted = await adopt()
             # (#1281) The record was read whole and does not name this
             # battery: SEM started no charge here, so the first stop after a

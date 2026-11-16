@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Cykl antylegionella nie osiąga celu",
       "description": "{name}: twój stop przy {stop} °C jest poniżej celu antylegionella {target} °C. SEM nie może zdezynfekować zasobnika i pomija cykl. Podnieś stop lub obniż cel. Zniknie samo."
+    },
+    "charge_select_stuck": {
+      "title": "Wybór ładowania z sieci nadal jest włączony: {entity}",
+      "description": "Wybór **{entity}** nadal ma wartość **{option}**, a SEM nie może go cofnąć: poprzedniej opcji nie ma już na liście. Cofnij go ręcznie. Do tego czasu bateria może dalej ładować się z sieci. Znika po zmianie wyboru."
     }
   },
   "selector": {

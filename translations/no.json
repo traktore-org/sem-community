@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Legionellakjøringen når ikke målet",
       "description": "{name}: stoppet ditt ved {stop} °C er under legionellamålet {target} °C. SEM kan ikke desinfisere berederen og hopper over kjøringen. Hev stoppet eller senk målet. Forsvinner av seg selv."
+    },
+    "charge_select_stuck": {
+      "title": "Valget for nettlading står fortsatt på: {entity}",
+      "description": "Valget **{entity}** står fortsatt på **{option}**, og SEM kan ikke sette det tilbake: det tidligere alternativet finnes ikke lenger i listen. Sett det tilbake for hånd. Til da kan batteriet fortsette å lade fra nettet. Forsvinner når valget endres."
     }
   },
   "selector": {

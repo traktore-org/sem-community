@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Legionellakierto ei saavuta tavoitettaan",
       "description": "{name}: pysäytyksesi {stop} °C on legionellatavoitteen {target} °C alapuolella. SEM ei voi desinfioida varaajaa ja ohittaa kierron. Nosta pysäytystä tai laske tavoitetta. Poistuu itsestään."
+    },
+    "charge_select_stuck": {
+      "title": "Verkkolatauksen valinta on yhä päällä: {entity}",
+      "description": "Valinta **{entity}** on yhä arvossa **{option}**, eikä SEM voi palauttaa sitä: aiempaa vaihtoehtoa ei enää ole luettelossa. Palauta se käsin. Siihen asti akku voi jatkaa latausta verkosta. Poistuu, kun valintaa muutetaan."
     }
   },
   "selector": {

@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Il ciclo antilegionella non raggiunge l'obiettivo",
       "description": "{name}: il tuo stop a {stop} °C è sotto l'obiettivo antilegionella {target} °C. SEM non può disinfettare il bollitore e salta il ciclo. Alza lo stop o abbassa l'obiettivo. Sparisce da solo."
+    },
+    "charge_select_stuck": {
+      "title": "La selezione di carica da rete è ancora attiva: {entity}",
+      "description": "La selezione **{entity}** è ancora su **{option}**, e SEM non può rimetterla: l'opzione precedente non è più nell'elenco. Rimettila a mano. Fino ad allora la batteria può continuare a caricarsi dalla rete. Scompare quando la selezione cambia."
     }
   },
   "selector": {

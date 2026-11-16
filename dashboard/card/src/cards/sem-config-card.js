@@ -329,6 +329,8 @@ const STRUCTURAL_KEYS = new Set([
     'heat_pump_tariff_rate', 'heat_pump_tariff_entity', 'heat_pump_tariff_meter',
     'hot_water_entity', 'hot_water_power_sensor', 'hot_water_temperature_sensor',
     'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
+    // (#1346) the select that starts a grid charge, and its charge option
+    'battery_charge_select_entity', 'battery_charge_select_option',
     'battery_discharge_control_entity',  // #528 — discharge-limit (protection) entity
     // (#1166) the end-of-charge level of the battery: read from the config
     // snapshot, which only a reload rebuilds.
@@ -1827,6 +1829,13 @@ class SEMConfigCard extends SEMLitBase {
                         ${this._renderPicker('battery_strategy_control_entity',
                             'config_strategy_entity', 'select', null, opts,
                             'config_help_strategy_entity')}
+                        ${this._renderPicker('battery_charge_select_entity',
+                            'config_charge_select_entity', ['select', 'input_select'], null, opts,
+                            'config_help_charge_select_entity')}
+                        ${this._renderSelectOptionPicker('battery_charge_select_option',
+                            'config_charge_select_option', 'battery_charge_select_entity',
+                            opts, 'config_help_charge_select_option')}
+                        ${this._renderChargeSelectHint(opts)}
                         ${opts['battery_strategy_control_entity'] ? html`
                             ${this._renderTextOption('battery_strategy_active_value',
                                 'config_strategy_val_active', opts,
@@ -2498,6 +2507,11 @@ class SEMConfigCard extends SEMLitBase {
         const onChange = (val) => {
             if (structural) {
                 this._pending = { ...this._pending, [optionKey]: val || '' };
+                // (#1346) a cleared select takes its option with it, so no
+                // stale option stays stored
+                if (optionKey === 'battery_charge_select_entity' && !val) {
+                    this._pending['battery_charge_select_option'] = '';
+                }
                 this.requestUpdate();
             } else {
                 this._saveOption(optionKey, val, optionKey);
@@ -2520,6 +2534,49 @@ class SEMConfigCard extends SEMLitBase {
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
                 ${status && status !== 'saving' && status !== 'ok' ? html`<div class="save-status err">⚠ ${status}</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // (#1346) One line when only half of the select pair is set: the pair
+    // does nothing until both are, and a silent half is a trap.
+    _renderChargeSelectHint(opts) {
+        const val = (k) => String(Object.prototype.hasOwnProperty.call(this._pending, k)
+            ? this._pending[k] : (opts[k] || '')).trim();
+        const sel = val('battery_charge_select_entity');
+        const opt = val('battery_charge_select_option');
+        if (!!sel === !!opt) return nothing;
+        const key = sel ? 'config_charge_select_need_option' : 'config_charge_select_need_select';
+        return html`<div class="setting-help-text">${this._t(key)}</div>`;
+    }
+
+    // (#1346) The option of a chosen select that means "charge from the
+    // grid", picked from the options THAT select lists. Structural like its
+    // picker: staged, written on Apply. Shows once a select is chosen.
+    _renderSelectOptionPicker(optionKey, labelKey, selectKey, opts, helpKey) {
+        if (!this._gate(optionKey)) return nothing;
+        this._regPending(optionKey);
+        const pendingSel = Object.prototype.hasOwnProperty.call(this._pending, selectKey);
+        const selectId = pendingSel ? this._pending[selectKey] : (opts[selectKey] || '');
+        if (!selectId) return nothing;
+        const listed = this._hass?.states?.[selectId]?.attributes?.options;
+        const choices = Array.isArray(listed) ? listed.map(String) : [];
+        const staged = Object.prototype.hasOwnProperty.call(this._pending, optionKey);
+        const cur = staged ? this._pending[optionKey] : (opts[optionKey] || '');
+        return html`
+            <div class="picker-cell">
+                <div class="picker-row">
+                    <span class="picker-label">${this._t(labelKey)}${staged ? html`<span class="pending-dot" title="${this._t('config_pending_hint')}">●</span>` : nothing}</span>
+                    <select class="sem-select" .value=${cur}
+                            @change=${(e) => {
+                                this._pending = { ...this._pending, [optionKey]: e.target.value || '' };
+                                this.requestUpdate();
+                            }}>
+                        <option value="" ?selected=${!cur}>-</option>
+                        ${choices.map(o => html`<option value="${o}" ?selected=${o === cur}>${o}</option>`)}
+                    </select>
+                </div>
                 ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
         `;

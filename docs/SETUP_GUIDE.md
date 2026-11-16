@@ -1191,6 +1191,31 @@ When the charge stops, SEM puts your own value back.
 > `switch.sem_energy_plan_actuation` **off** there is no planned pre-charge at
 > all — the switch is the kill-switch for the whole night.
 
+### Inverters with a select instead of a switch (#1346)
+
+**Your inverter has no limit of its own in this mode. If Home Assistant stops
+during a charge, the battery charges from the grid until it is full.**
+
+Some inverters have no switch for charging from the grid, only a select with
+an option such as *Solar and mains* (against *Solar only*). Set it in the
+Configuration tab, All settings, Battery control:
+
+1. **Grid-charge select**: pick the select.
+2. **Option that charges from the grid**: pick it from the list of options
+   that select offers, then Apply.
+
+To start a grid charge SEM sets that option. To stop it, SEM puts the select
+back to what it showed before, also after Off, an unload or a restart. If you
+change the select by hand during a charge, SEM leaves your choice alone. SEM
+writes nothing while the select is unavailable or does not list the option,
+and nothing in observer mode. A select that keeps its old option gets one
+more try, then SEM says so and stops writing for that charge. Off until both
+are set. A charge switch, when set, wins. No target SOC entity is needed: SEM
+ends the charge itself.
+
+Without the SEM dashboard, set both values with the service
+`solar_energy_management.set_option`.
+
 ### Break-even logic
 
 The scheduler charges overnight only when:

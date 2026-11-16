@@ -78,6 +78,9 @@ BATTERY_WIRING_KEYS: tuple[str, ...] = (
     # bound one proves a battery like the SOC sensor does
     "battery_charge_end_soc_entity",
     "battery_charge_end_soc_entities",
+    # (#1346) the select SEM sets to start a grid charge: only a battery
+    # has one
+    "battery_charge_select_entity",
     # (#1358) the inverter's own end-of-discharge level, read every plan
     "battery_discharge_end_soc_entity",
     # (#923, ruflo) seeded by the config flow when it finds a battery-mode
