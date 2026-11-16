@@ -1157,7 +1157,7 @@ def compute_load_intent(
             if getattr(device, "_legionella_early", False) is True:
                 # (#1369) started early: a sunny hour before it is due
                 return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
-                                  "Legionella run, early in a sunny hour",
+                                  "Legionella run, early in a sunny or cheap hour",
                                   RC.LOAD_LEGIONELLA_EARLY)
             return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
                               "Legionella run due", RC.LOAD_LEGIONELLA)

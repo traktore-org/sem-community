@@ -32,6 +32,10 @@ DEFAULT_LEGIONELLA_INTERVAL_HOURS = 72  # Max hours between cycles
 #: (#1369) In the last day before a run is due, a sunny hour may
 #: start it EARLY. Never later: at the due time it runs as before.
 LEGIONELLA_EARLY_WINDOW_H = 24.0
+#: (#1368) …and in the last 12 h a CHEAP hour may start it too: the sun
+#: gets the first half of the window, the low tariff the second — so a run
+#: due in a high-tariff hour has run in the low tariff before it.
+LEGIONELLA_CHEAP_WINDOW_H = 12.0
 #: (#1369) the good hour must hold this long before an early start, and be
 #: gone this long before an early run pauses — no start/stop on a passing cloud
 LEGIONELLA_EARLY_START_HOLD_MIN = 10.0
@@ -961,7 +965,8 @@ class HotWaterController(SwitchDevice):
     # ─── Legionella Prevention ───────────────────────────────
 
     async def check_legionella_cycle(self, good_hour: bool = False,
-                                     sun_holds: Optional[bool] = None) -> Optional[str]:
+                                     sun_holds: Optional[bool] = None,
+                                     cheap_hour: bool = False) -> Optional[str]:
         """Advance the Legionella prevention cycle. Never switches the tank.
 
         Called every coordinator cycle. Returns a status message or None.
@@ -997,6 +1002,14 @@ class HotWaterController(SwitchDevice):
         # (#1369) an early run STARTS on a good hour (80 % of the rating)
         # and keeps going while the sun holds (half the rating)
         holds = good_hour if sun_holds is None else bool(sun_holds)
+        # (#1368) a cheap hour counts in the last 12 h before the run is
+        # due, and a run goes on through cheap hours
+        if cheap_hour:
+            holds = True
+            if (self._last_legionella_time is not None
+                    and (self.legionella_interval_hours - self.hours_since_legionella)
+                    <= LEGIONELLA_CHEAP_WINDOW_H):
+                good_hour = True
         if good_hour:
             if getattr(self, "_good_since", None) is None:
                 self._good_since = now

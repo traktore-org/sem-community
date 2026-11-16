@@ -7479,6 +7479,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1369) "no" until this cycle's surplus pass says otherwise
         self._legionella_good_hour = False
         self._legionella_sun_holds = False
+        self._legionella_cheap_hour = False
         # Forecast (Phase 0.3)
         forecast_data = ForecastSensorData()
         try:
@@ -7923,6 +7924,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 true_surplus_w, tariff_data)
             self._legionella_sun_holds = self._legionella_good_hour_now(
                 true_surplus_w, tariff_data, share=0.5)
+            # (#1368) the tank's own price level is cheap this cycle
+            try:
+                from .device_tariff import device_price_level as _dpl
+                from .price_signal import is_cheap_name as _icn
+                _hw = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
+                self._legionella_cheap_hour = bool(_hw is not None and _icn(
+                    _dpl(_hw, getattr(tariff_data, "tariff_price_level", None))))
+            except Exception:  # noqa: BLE001 — unread is "not cheap"
+                self._legionella_cheap_hour = False
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
             surplus_data.surplus_regulation_offset_w = allocation.regulation_offset_w
@@ -8287,7 +8297,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (#1335) state only — layer 1 switches the run
                     await hw_controller.check_legionella_cycle(
                         good_hour=bool(getattr(self, "_legionella_good_hour", False)),
-                        sun_holds=bool(getattr(self, "_legionella_sun_holds", False)))
+                        sun_holds=bool(getattr(self, "_legionella_sun_holds", False)),
+                        cheap_hour=bool(getattr(self, "_legionella_cheap_hour", False)))
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
             # (#1369) a due Legionella run skipped under the user's own stop:
