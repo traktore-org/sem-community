@@ -1193,6 +1193,9 @@ When the charge stops, SEM puts your own value back.
 
 ### Inverters with a select instead of a switch (#1346)
 
+**Your inverter has no limit of its own in this mode. If Home Assistant stops
+during a charge, the battery charges from the grid until it is full.**
+
 Some inverters have no switch for charging from the grid, only a select with
 an option such as *Solar and mains* (against *Solar only*). Set it in the
 Configuration tab, All settings, Battery control:
@@ -1205,9 +1208,13 @@ To start a grid charge SEM sets that option. To stop it, SEM puts the select
 back to what it showed before, also after Off, an unload or a restart. If you
 change the select by hand during a charge, SEM leaves your choice alone. SEM
 writes nothing while the select is unavailable or does not list the option,
-and nothing in observer mode. Off until both are set. A charge switch, when
-set, wins. No target SOC entity is needed: SEM ends the charge itself, so if
-SEM stops running mid-charge the inverter has no limit of its own.
+and nothing in observer mode. A select that keeps its old option gets one
+more try, then SEM says so and stops writing for that charge. Off until both
+are set. A charge switch, when set, wins. No target SOC entity is needed: SEM
+ends the charge itself.
+
+Without the SEM dashboard, set both values with the service
+`solar_energy_management.set_option`.
 
 ### Break-even logic
 

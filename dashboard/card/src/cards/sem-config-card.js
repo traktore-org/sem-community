@@ -1835,6 +1835,7 @@ class SEMConfigCard extends SEMLitBase {
                         ${this._renderSelectOptionPicker('battery_charge_select_option',
                             'config_charge_select_option', 'battery_charge_select_entity',
                             opts, 'config_help_charge_select_option')}
+                        ${this._renderChargeSelectHint(opts)}
                         ${opts['battery_strategy_control_entity'] ? html`
                             ${this._renderTextOption('battery_strategy_active_value',
                                 'config_strategy_val_active', opts,
@@ -2506,6 +2507,11 @@ class SEMConfigCard extends SEMLitBase {
         const onChange = (val) => {
             if (structural) {
                 this._pending = { ...this._pending, [optionKey]: val || '' };
+                // (#1346) a cleared select takes its option with it, so no
+                // stale option stays stored
+                if (optionKey === 'battery_charge_select_entity' && !val) {
+                    this._pending['battery_charge_select_option'] = '';
+                }
                 this.requestUpdate();
             } else {
                 this._saveOption(optionKey, val, optionKey);
@@ -2531,6 +2537,18 @@ class SEMConfigCard extends SEMLitBase {
                 ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
         `;
+    }
+
+    // (#1346) One line when only half of the select pair is set: the pair
+    // does nothing until both are, and a silent half is a trap.
+    _renderChargeSelectHint(opts) {
+        const val = (k) => String(Object.prototype.hasOwnProperty.call(this._pending, k)
+            ? this._pending[k] : (opts[k] || '')).trim();
+        const sel = val('battery_charge_select_entity');
+        const opt = val('battery_charge_select_option');
+        if (!!sel === !!opt) return nothing;
+        const key = sel ? 'config_charge_select_need_option' : 'config_charge_select_need_select';
+        return html`<div class="setting-help-text">${this._t(key)}</div>`;
     }
 
     // (#1346) The option of a chosen select that means "charge from the

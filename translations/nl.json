@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Legionella-run haalt zijn doel niet",
       "description": "{name}: je stop op {stop} °C ligt onder het legionelladoel {target} °C. SEM kan de boiler niet desinfecteren en slaat de run over. Verhoog de stop of verlaag het doel. Dit verdwijnt vanzelf."
+    },
+    "charge_select_stuck": {
+      "title": "De selectie voor netladen staat nog aan: {entity}",
+      "description": "De selectie **{entity}** staat nog op **{option}**, en SEM kan haar niet terugzetten: de eerdere optie staat niet meer in de lijst. Zet haar met de hand terug. Tot dan laadt de batterij mogelijk door vanaf het net. Verdwijnt zodra de selectie verandert."
     }
   },
   "selector": {

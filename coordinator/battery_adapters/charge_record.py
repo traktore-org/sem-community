@@ -59,12 +59,16 @@ class ForcedChargeRecord:
         self._running: dict[str, set[str]] = {}
         #: (#1346) entity → the option a select showed before SEM's start
         self._prior: dict[str, str] = {}
+        #: (#1346) entity → the option SEM set, so a restart with the
+        #: setting cleared still knows what to look for
+        self._option: dict[str, str] = {}
         self._loaded = store is None
         self._readable = store is not None
         self._lock = asyncio.Lock()
 
     async def started(self, entity_id: str, battery_id: str = "",
-                      prior: "str | None" = None) -> bool:
+                      prior: "str | None" = None,
+                      option: "str | None" = None) -> bool:
         """Before the start's write. False: the name was not saved, so
         the start must not go out. ``prior`` (#1346): the option a select
         shows now; kept once per entity, the first start's."""
@@ -80,10 +84,13 @@ class ForcedChargeRecord:
             new_prior = prior is not None and entity_id not in self._prior
             if new_prior:
                 self._prior[entity_id] = str(prior)
+                if option is not None:
+                    self._option[entity_id] = str(option)
             if await self._save():
                 return True
             if new_prior:
                 self._prior.pop(entity_id, None)
+                self._option.pop(entity_id, None)
             if owners is None:
                 self._running.pop(entity_id, None)
             else:
@@ -96,6 +103,39 @@ class ForcedChargeRecord:
             await self._load()
             return self._prior.get(str(entity_id or ""))
 
+    async def select_records(self, battery_id: str) -> list:
+        """(#1346) ``(entity, prior, option)`` for each select this battery
+        helped turn to a charge option and has not seen put back."""
+        async with self._lock:
+            await self._load()
+            return [(e, self._prior[e], self._option.get(e, ""))
+                    for e in sorted(self._prior)
+                    if str(battery_id or "") in self._running.get(e, ())]
+
+    async def others(self, entity_id: str, battery_id: str) -> bool:
+        """(#1346) Does another battery's charge also hold ``entity_id``?
+        A shared select goes back only when the LAST owner leaves."""
+        async with self._lock:
+            await self._load()
+            owners = self._running.get(str(entity_id or ""), set())
+            return bool(owners - {str(battery_id or "")})
+
+    async def left(self, entity_id: str, battery_id: str) -> None:
+        """(#1346) This battery's charge on ``entity_id`` is over. Its name
+        goes; the entity's own (prior, option) go with the last name."""
+        entity_id, battery_id = str(entity_id or ""), str(battery_id or "")
+        async with self._lock:
+            await self._load()
+            owners = self._running.get(entity_id)
+            if owners is None:
+                return
+            owners.discard(battery_id)
+            if not owners:
+                self._running.pop(entity_id, None)
+                self._prior.pop(entity_id, None)
+                self._option.pop(entity_id, None)
+            await self._save()
+
     async def stopped(self, entity_id: str) -> None:
         """The entity is back: a stop landed, or it reads that no charge
         runs. Every battery's name for it goes. Never raises: a name left
@@ -104,6 +144,7 @@ class ForcedChargeRecord:
         async with self._lock:
             await self._load()
             gone = self._running.pop(entity_id, None)
+            self._option.pop(entity_id, None)
             if self._prior.pop(entity_id, None) is None and gone is None:
                 return
             await self._save()
@@ -161,8 +202,13 @@ class ForcedChargeRecord:
                             "for a grid charge is damaged — it puts none "
                             "back (#1346)")
             return
+        option = record.get("option", {})
+        if not isinstance(option, dict):
+            option = {}                 # (#1346) only a restore hint
         self._running = {e: set(b) for e, b in running.items() if e and b}
         self._prior = {e: o for e, o in prior.items() if e in self._running}
+        self._option = {e: str(o) for e, o in option.items()
+                        if e in self._prior and isinstance(o, str)}
         if self._running:
             _LOGGER.info("Battery: SEM started a forced charge on %s and has "
                          "not seen it stop (#1181)",
@@ -175,6 +221,8 @@ class ForcedChargeRecord:
             record: dict = {"running": self.snapshot()}
             if self._prior:         # (#1346) old files stay as they were
                 record["prior"] = dict(self._prior)
+                if self._option:
+                    record["option"] = dict(self._option)
             await self._store.async_save(record)
         except Exception as exc:  # noqa: BLE001
             log_on_change(_LOGGER, "forced_charge_record:save", logging.WARNING,

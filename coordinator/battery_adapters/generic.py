@@ -610,6 +610,11 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if status.status is ChargeCommandStatus.FAILED:
             self._last_error = f"start_forced_charge failed: {status.message}"
             # _last_intent intentionally NOT updated — retry next cycle (#589)
+            if (select_setup(self._config)
+                    and not self._charge_adapter.is_active):
+                # (#1346) a select that refused or flipped back: an earlier
+                # write left FORCE_CHARGE here, and nothing may count it
+                self._last_intent = None
         else:
             self._last_error = None
             self._last_intent = BatteryIntent.FORCE_CHARGE

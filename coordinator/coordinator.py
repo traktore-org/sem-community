@@ -7209,6 +7209,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         "battery_strategy_entities",
         "battery_operating_mode_entity",
         "deye_system_work_mode_entity",
+        "battery_charge_select_entity",       # (#1346)
     )
 
     def _sweep_orphan_repairs(self) -> None:
@@ -10984,7 +10985,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # to stop. Asked every cycle until the actuator can be read, then
             # a no-op; reads only, so observer mode too. Never raises.
             try:
-                await adapter.async_adopt_running_charge()
+                await adapter.async_adopt_running_charge(
+                    observer=bool(self._observer_mode))
             except Exception:  # noqa: BLE001 — a stand-in adapter in tests
                 pass
             _forced = ((False, False) if self._observer_mode

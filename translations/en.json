@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Legionella run cannot reach its target",
       "description": "{name}: your Stop when at {stop} °C is below the Legionella target {target} °C, so SEM cannot disinfect the tank and skips the run. Raise the stop or lower the target. This clears by itself."
+    },
+    "charge_select_stuck": {
+      "title": "The grid charge select is still on: {entity}",
+      "description": "The select **{entity}** is still on **{option}**, and SEM cannot put it back: the option it showed before is gone from the list. Set it back by hand. Until then the battery may keep charging from the grid. Clears when the select is changed."
     }
   },
   "selector": {
