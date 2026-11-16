@@ -34,6 +34,7 @@ from . import reason_codes as RC  # (#1174)
 from .types import PowerReadings, PowerFlows, SessionData
 from .departure import departure_for, departure_hhmm
 from .ev_tariff_planner import NightChargePlan, plan_night_charge
+from .price_view import PriceView  # (#1372)
 from .units import power_state_to_watts
 
 _LOGGER = logging.getLogger(__name__)
@@ -488,8 +489,8 @@ class EVControlMixin:
             # a cheap-hours mode holds through an expensive hour instead of
             # starting at the window open. The overlay still wins when the
             # joint plan covers the car.
-            level_at=getattr(getattr(self, "_tariff_provider", None),
-                             "get_price_level_at", None),
+            level_at=PriceView(
+                getattr(self, "_tariff_provider", None)).level_at_fn(),  # (#1372)
             # (#1023) The next departure as a moment: a weekday's time may
             # be more than a day away.
             deadline_at=departure_for(

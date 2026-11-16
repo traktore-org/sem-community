@@ -12,6 +12,7 @@ This is a slim orchestrator that delegates to specialized modules:
 
 from __future__ import annotations
 
+from .price_view import PriceView  # (#1372)
 from ..utils.device_names import charger_display_name, charger_own_name  # (#1053)
 
 import logging
@@ -882,8 +883,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _dt.house_rate = inputs["import_price"]
             provider = getattr(self, "_tariff_provider", None)
             if provider is not None and getattr(provider, "available", True):
-                from .price_signal import comparative_level
-                level = comparative_level(provider)
+                from .price_view import PriceView
+                level = PriceView(provider).compared_level()
                 inputs["price_level"] = getattr(level, "value", level)
             # DARK-SOC: record — a blink leaves the log row without a SOC
             if (not getattr(power, "battery_soc_unavailable", False)
@@ -6790,8 +6791,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # (#967) and the preview holds through an expensive
                                 # window open exactly as the night will (D3), so the
                                 # strip never promises a start in the peak band.
-                                _lvl = getattr(getattr(self, "_tariff_provider", None),
-                                               "get_price_level_at", None)
+                                _lvl = PriceView(getattr(
+                                    self, "_tariff_provider", None)).level_at_fn()  # (#1372)
                                 if (self._tariff_optimized_for(_pcfg) and _lvl is not None
                                         and _night_start and _ev_deadline_dt
                                         and _ev_rate_kw > 0):
@@ -7139,10 +7140,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         (no provider, a tank on its own tariff, no run yet, due later than
         a day): the tank then uses its plain 12-hour rule."""
         try:
-            from .day_ledger import tariff_cheap_at
+            from .price_view import PriceView
             prov = getattr(self, "_tariff_provider", None)
             dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
-            if (prov is None or not hasattr(prov, "get_price_level_at")
+            if (prov is None or PriceView(prov).level_at_fn() is None
                     or getattr(hw, "_last_legionella_time", None) is None
                     or any(getattr(dev, k, None) for k in
                            ("tariff_rate", "tariff_entity", "tariff_meter"))):
@@ -7152,17 +7153,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return None
             now = dt_util.now()
             # a price forecast that ends before the due time (tomorrow's
-            # prices are not out yet) would count too few cheap hours
-            reader = getattr(prov, "_read_prices_list", None)
-            if callable(reader):
-                prices = reader() or []
-                if not prices or max(p.timestamp for p in prices) < (
-                        now + timedelta(hours=left_h - 1.0)):
-                    return None
-            steps = int(left_h * 4)
-            return 0.25 * sum(
-                1 for i in range(steps)
-                if tariff_cheap_at(prov, now + timedelta(minutes=15 * i)))
+            # prices are not out yet) would count too few cheap hours.
+            # (#1372) Kept as it was: a curve whose last point starts up to
+            # an hour before the due time still counts as complete, so the
+            # tolerance is 1 h minus the slot length (0 on an hourly curve).
+            slot_h = getattr(prov, "detect_slot_hours", None)
+            slot_h = (slot_h() if callable(slot_h) else None) or 1.0
+            return PriceView(prov, now=now).cheap_hours(
+                now, now + timedelta(hours=left_h), step_min=15,
+                tolerance_h=1.0 - float(slot_h))
         except Exception:  # noqa: BLE001 — not known
             return None
 
@@ -7966,10 +7965,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1368) the tank's own price level is cheap this cycle
             try:
                 from .device_tariff import device_price_level as _dpl
-                from .price_signal import is_cheap_name as _icn
+                from .price_view import answer_for_level as _afl
                 _hw = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
-                self._legionella_cheap_hour = bool(_hw is not None and _icn(
-                    _dpl(_hw, getattr(tariff_data, "tariff_price_level", None))))
+                self._legionella_cheap_hour = bool(_hw is not None and _afl(
+                    _dpl(_hw, getattr(tariff_data, "tariff_price_level", None))).is_cheap)
             except Exception:  # noqa: BLE001 — unread is "not cheap"
                 self._legionella_cheap_hour = False
             surplus_data.surplus_total_w = allocation.total_surplus_w
@@ -9782,7 +9781,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         without a forecast. Same sun frame and home-draw fallback the
         tomorrow preview uses, same day builder the planner uses."""
         from .charge_pacing import today_remaining_slots
-        from .day_ledger import build_day_slots, tariff_cheap_at, tariff_price_at
+        from .day_ledger import build_day_slots, tariff_price_at
+        from .price_view import PriceView
         try:
             now = dt_util.now()
             sr_s = self.time_manager.get_sunrise_time()
@@ -9819,7 +9819,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#820) the day's own house profile, not the night average
                 home_w_at=self._day_home_w_at(now), builder=build_day_slots,
                 price_at=lambda ts: tariff_price_at(prov, ts),
-                level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+                level_cheap_at=PriceView(prov).cheap_at,
                 export_rate=self._export_rate_at(),   # (#924)
             )
         except Exception:  # noqa: BLE001 — no frame, no pacing
@@ -12637,7 +12637,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             day_kwh = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
         except Exception:  # noqa: BLE001 — no forecast, dark preview
             day_kwh = 0.0
-        from .day_ledger import rate_cheap_fn, tariff_cheap_at, tariff_price_at
+        from .day_ledger import rate_cheap_fn, tariff_price_at
+        from .price_view import PriceView
         prov = self._tariff_provider
         # (#820) tomorrow's hours, read off the weekday profile
         _home_at_day = self._day_home_w_at(day_start)
@@ -12646,7 +12647,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             sunrise=sunrise, sunset=sunset,
             home_w_at=_home_at_day,
             price_at=lambda ts: tariff_price_at(prov, ts),
-            level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+            level_cheap_at=PriceView(prov).cheap_at,
             # (#1310) the cheap windows show the tariff's rate, not the
             # gate that refuses a day with one rate
             rate_cheap_at=rate_cheap_fn(prov),
@@ -12758,7 +12759,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     sunrise=sunrise, sunset=sunset,
                     home_w_at=self._day_home_w_at(day_start),   # (#820)
                     price_at=lambda ts: tariff_price_at(prov, ts),
-                    level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+                    level_cheap_at=PriceView(prov).cheap_at,
                     rate_cheap_at=rate_cheap_fn(prov),
                     # (#924) These slots go to build_night_ledger and the
                     # REAL pack_night below — this is a packing site, and
@@ -13529,6 +13530,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "price": s.price,
                     # (#1310) the tariff's word, not the packer's: a sun
                     # slot is cheap for the packer at any tariff.
+                    # PRICE-ASK: a field name of the published slot, not a level
                     "cheap": bool(s.tariff_cheap),
                     **({"sun": True} if s.cap_override_w is not None
                        else {}),
@@ -13671,11 +13673,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # day slots, the tomorrow preview) — a second copy is how a
             # parallel price path starts (day_ledger.tariff_price_at).
             from .day_ledger import (align_to_step, market_step_s,
-                                     rate_cheap_fn, tariff_cheap_at,
-                                     tariff_price_at)
+                                     rate_cheap_fn, tariff_price_at)
+            from .price_view import PriceView
             prov = self._tariff_provider
             _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
-            _cheap_at = lambda ts: tariff_cheap_at(prov, ts)  # noqa: E731
+            _cheap_at = PriceView(prov).cheap_at
             # (#1310) The rows' ``cheap``: the tariff's rate, asked of its
             # week. ``_cheap_at`` (the packer's) refuses a day with one rate,
             # so a whole off-peak Sunday was not cheap beside Monday 00:00.
@@ -15310,8 +15312,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # when a comparison stands behind it, so a flat tariff
                 # threads None and every comparative consumer sees "unknown"
                 # rather than "cheap".
-                from .price_signal import comparative_level
-                level = comparative_level(provider)
+                from .price_view import PriceView
+                level = PriceView(provider).compared_level()
                 level = getattr(level, "value", level)  # PriceLevel enum → str
                 if isinstance(level, str):
                     tariff_level = level
@@ -17639,8 +17641,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 name = (getattr(state, "attributes", None) or {}).get("friendly_name")
             dark[entity_id] = (str(name or entity_id), max(0.0, now_mono - float(t0)))
 
-        from .price_signal import is_cheap_name
-        price_cheap = is_cheap_name(getattr(tariff_data, "tariff_price_level", None))
+        from .price_view import answer_for_level
+        price_cheap = answer_for_level(
+            getattr(tariff_data, "tariff_price_level", None)).is_cheap
         dynamic = str(cfg.get("tariff_mode") or "") == "dynamic"
 
         idle: list = []

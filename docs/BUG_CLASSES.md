@@ -6924,3 +6924,23 @@ the sun reading nor a band turning forced, so such a change waits for the next r
 tomorrow preview packs load asks into any cheap hour (a curve, no blocks on the card). (5) The comfort
 banking flap of #1330 (class 47, above) needs a choice.
 Refs #1308 #1309 #246 #967 #1023 #501 #1330 #953 #1311.
+
+### 182. One word, several meanings, each decided where it is used — "cheap" — GUARDED
+
+**What happens.** Many places asked a tariff "is this hour cheap?" and each read a different part of
+the answer: the plan's hour list read the hour's level, the live gates read the level only while
+prices still differ from now on, the plan card read the rate word, the tank counted quarter hours on
+a private price list. A new case got a new local rule each time: a flat tariff called cheap (#994),
+a weekend at the low rate and a sunny peak hour drawn as cheap (#1310, three rounds), a night price
+compared with an hour that was itself off-peak (#1362), a day with one price (#1369), cheap hours
+before a run is due (#1368).
+**The rule.** One module, `coordinator/price_view.py`, answers every price question with four
+states: cheap, dear, one price, unknown. It names two questions and keeps them apart: *is hour T at
+a cheap level* (the planners) and *is it worth acting now* (the live gates — it looks at the prices
+from now on, so asked about a later hour it hides cheap hours behind a one-price stretch).
+**The guard.** `tests/test_1372_price_questions_lint.py`: outside the price view, the price signal
+and the two provider files, no code may call a level accessor, use `PriceLevel.<NAME>`, or compare
+with a level word. An exception carries `# PRICE-ASK: <reason>`.
+**Left open:** a device with its own tariff is still planned with the live question about later
+hours (`PlanTariff.cheap_at` → `cheap_seen_from_now`). No real data to prove a change on.
+Refs #1372 #994 #1310 #1362 #1368 #1369.

@@ -25,6 +25,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
+from .price_view import day_has_cheaper, price_no_dearer
+
 FIT_EPS = 0.999          # "fits" = this share of the need; the plan wait accepts the same (#1289)
 _W_EPS = 1.0              # grants below 1 W are noise
 
@@ -446,7 +448,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
     def _one_price(d):
         """(#1369) No slot of this demand's horizon is cheap: one price."""
         if d.id not in _one_price_memo:
-            _one_price_memo[d.id] = not any(
+            # (#1372) asked of the price view's helper, same answer
+            _one_price_memo[d.id] = not day_has_cheaper(
                 _cheap(d, i) for i in idx if _in_time(d, i))
         return _one_price_memo[d.id]
 
@@ -458,7 +461,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             ps = [p for p in ps if p is not None]
             _cheap_ref_memo[d.id] = min(ps) if ps else None
         ref, p = _cheap_ref_memo[d.id], _price(d, i)
-        return ref is not None and p is not None and p <= ref + 1e-9
+        return price_no_dearer(p, ref)    # (#1372) the view's helper
 
     def _eligible(d, i):
         if not _in_time(d, i):

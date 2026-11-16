@@ -208,6 +208,7 @@ def _energy_plan_attrs(
         "demands": plan.get("demands") or [],
         "slots": [{
             "start": s.get("start"), "end": s.get("end"),
+            # PRICE-ASK: a field name of the published slot, not a level
             "price": s.get("price"), "cheap": s.get("cheap"),
             "home_grid_w": s.get("home_grid_w"),
             # (#1085) only when the slot has a reading: no key, no bytes
