@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **Set-up is clearer** (#1371): the Solar Heating Target hides for a tank with a thermometer, and Setup counts only what every house needs.
+- 🐛 **The car's target entities carry the settings dialog's names** (#1371), such as "Guarantee at least" and "Never charge past". Entity IDs stay the same.
 - 🐛 **The COP learner no longer learns from an outdoor thermometer that is stuck** (#1081). The heat pump card says so.
 - ✨ **A hot water tank with a thermometer heats to its Keep at + Extra** (#1369), at most the Legionella target. Solar Heating Target: only without one.
 - ✨ **The Legionella run may start up to a day early, in a sunny hour** (#1369). Never later than before.
