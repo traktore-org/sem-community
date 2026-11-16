@@ -18,6 +18,9 @@ from typing import Any, Dict, Optional, Tuple
 
 from .coordinator.units import power_state_to_watts
 from .coordinator.units import finite_float
+from .ha_energy_reader import (
+    battery_units, one_battery_soc, unit_soc_sensor, unpowered_battery_socs,
+)
 
 # Below this a meter's sign says nothing: a house at rest reads a few watts
 # either way.
@@ -148,7 +151,18 @@ def build_setup_check(hass, cfg: Any,
         if out_w is not None and in_w is not None:
             parts.append(out_w - in_w)
     check.battery_w = _sum(parts)
-    check.soc = _percent(hass, getattr(cfg, "battery_soc", None))
+    # (#1373) each battery's own pick: the first source's is one battery of
+    # two. A fleet shows the average only when every battery has a pick that
+    # reads; a part of the fleet is not its level.
+    units = battery_units(cfg)
+    unpowered = unpowered_battery_socs(cfg)
+    if len(units) > 1 or len(unpowered) > 1:
+        levels = ([_percent(hass, unit_soc_sensor(cfg, u)) for u in units]
+                  or [_percent(hass, e) for e in unpowered])
+        check.soc = (sum(levels) / len(levels)
+                     if all(v is not None for v in levels) else None)
+    else:
+        check.soc = _percent(hass, one_battery_soc(cfg))
 
     hit = (proposals or {}).get("grid_import_power_sensor") or {}
     other = hit.get("entity")
