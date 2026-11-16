@@ -1650,7 +1650,10 @@ def _shadow_tank_goal(device, intent) -> None:
     to decide. Strict class read, like ``_is_heater``."""
     compare = getattr(type(device), "compare_tank_goal", None)
     if compare is not None and _is_heater(device):
-        compare(device, _engine_stop_verdict(device, intent))
+        try:
+            compare(device, _engine_stop_verdict(device, intent))
+        except Exception:  # noqa: BLE001 — a diagnostic never costs a cycle
+            _LOGGER.debug("tank goal comparison failed", exc_info=True)
 
 
 def _is_heater(device) -> bool:
