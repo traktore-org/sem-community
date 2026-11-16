@@ -436,6 +436,12 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         return self._max_discharge_w
 
     @property
+    def charge_refused(self) -> bool:
+        """(#1346) The inverter did not take the charge command lately: the
+        plan leaves this pack's charge out and says why."""
+        return bool(getattr(self._charge_adapter, "charge_refused", False))
+
+    @property
     def supports_forced_charge(self) -> bool:
         # A bidirectional setpoint can charge via a negative value on the
         # same entity — no charge switch needed (#523, Sessy).
@@ -523,6 +529,11 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         # the charge switch off, so a forced charge SEM started stops first.
         # A failed stop records no NORMAL; the rest still goes out.
         stopped = await self._stop_own_charge()
+        # (#1346) the block is over: a select that refused may be asked
+        # again in the next block (at most two writes each)
+        _ca = self._charge_adapter
+        if _ca is not None and not getattr(_ca, "_active", False) and hasattr(_ca, "_forget_attempt"):
+            _ca._forget_attempt()
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         # AC-coupled (Sessy): self-consumption is its OWN power strategy
         # (``nom`` = zero-on-meter), NOT the setpoint. Actively set it so a

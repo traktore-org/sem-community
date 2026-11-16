@@ -352,6 +352,86 @@ class TestRefusal:
 
 
 # ── a prior the select no longer lists ──────────────────────────────────
+class TestRefusalRound2:
+    """(#1346 review, second round)"""
+
+    async def test_the_next_block_may_try_again_without_a_stop(self):
+        """A refused start, the block ends (NORMAL), a new block: two more
+        writes at most — the planner need not send a STOP between."""
+        hass = _Hass()
+        hass.refuse = True
+        a = _adapter(hass, _Store())
+        for _ in range(50):
+            await actuate_battery(_charge(), a)
+        assert len(hass.writes()) == 2
+        for _ in range(5):
+            await actuate_battery(BatteryDecision(battery_id="b1", intent=BatteryIntent.NORMAL), a)
+        for _ in range(50):
+            await actuate_battery(_charge(), a)
+        assert len(hass.writes()) == 4
+
+    async def test_a_refusal_is_remembered_for_the_plan_and_cleared_by_a_start(self):
+        hass = _Hass()
+        hass.refuse = True
+        a = _adapter(hass, _Store())
+        assert a.charge_refused is False
+        for _ in range(3):
+            await actuate_battery(_charge(), a)
+        assert a.charge_refused is True
+        await actuate_battery(_stop(), a)
+        assert a.charge_refused is True            # the plan still knows
+        hass.refuse = False
+        await actuate_battery(_charge(), a)        # this one is taken
+        await actuate_battery(_charge(), a)
+        assert a.charge_refused is False
+
+    def test_the_plan_says_refused_not_no_control(self, monkeypatch):
+        import types
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+        ad = types.SimpleNamespace(charge_command_configured=True, charge_refused=True)
+        coord = types.SimpleNamespace(_live_battery_adapters=lambda: [("b1", ad)])
+        share, unable = SEMCoordinator._charge_command_share(coord, None)
+        assert share == 0 and unable == ["b1"] and coord._charge_refused_ids == {"b1"}
+        ok = types.SimpleNamespace(charge_command_configured=True, charge_refused=False)
+        coord2 = types.SimpleNamespace(_live_battery_adapters=lambda: [("b1", ok)])
+        assert SEMCoordinator._charge_command_share(coord2, None)[1] == []
+
+    def test_the_refused_text_exists_in_every_language(self):
+        import pathlib
+        root = pathlib.Path(__file__).resolve().parent.parent
+        d = json.loads((root / "dashboard" / "translations.json").read_text())
+        key = "energy_plan_why_" + "charge_refused"
+        assert all(d[lang].get(key) for lang in d)
+
+
+class TestOldRecord:
+    async def test_a_record_older_than_two_days_is_dropped_without_a_write(self):
+        hass, store = _Hass("Utility first"), _Store()
+        await actuate_battery(_charge(), _adapter(hass, store))
+        assert hass.read() == CHARGE
+        rec = json.loads(store.raw)
+        assert rec["since"][SELECT] > 0
+        rec["since"][SELECT] -= 49 * 3600
+        store.raw = json.dumps(rec)
+        n = len(hass.calls)
+        fresh = GenericBatteryAdapter(hass, {
+            "forced_charge_record": ForcedChargeRecord(store), "battery_id": "b1"})
+        await fresh.async_adopt_running_charge()
+        assert len(hass.calls) == n and hass.read() == CHARGE     # left as it is
+        assert json.loads(store.raw).get("running", {}) == {}
+
+    async def test_a_record_without_a_time_is_still_restored(self):
+        hass, store = _Hass("Utility first"), _Store()
+        await actuate_battery(_charge(), _adapter(hass, store))
+        rec = json.loads(store.raw)
+        rec.pop("since", None)
+        store.raw = json.dumps(rec)
+        fresh = GenericBatteryAdapter(hass, {
+            "forced_charge_record": ForcedChargeRecord(store), "battery_id": "b1"})
+        await fresh.async_adopt_running_charge()
+        assert hass.read() == "Utility first"
+
+
 class TestPriorGone:
     def _spy(self, monkeypatch):
         from custom_components.solar_energy_management.coordinator import (

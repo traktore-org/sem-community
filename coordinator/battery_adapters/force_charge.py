@@ -11,6 +11,7 @@ scans production packages only. Tests import them directly on purpose.
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -676,6 +677,19 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     SELECT_WRITES_PER_ATTEMPT = 2
     #: failed stops, in a row on one options list, before the Repair
     SELECT_STOP_STRIKES = 3
+    #: a record older than this is not acted on after a restart: the select
+    #: may long since serve another purpose
+    ORPHAN_MAX_AGE_H = 48.0
+    #: how long a refusal is remembered for the plan (the plan must not
+    #: promise a charge the inverter just refused)
+    REFUSAL_MEMORY_S = 24 * 3600.0
+    _sel_refused_at: "float | None" = None
+
+    @property
+    def charge_refused(self) -> bool:
+        """(#1346) The inverter did not take the charge option lately."""
+        at = self._sel_refused_at
+        return at is not None and (time.monotonic() - at) < self.REFUSAL_MEMORY_S
     #: this attempt's writes, whether the option was ever read back, why it
     #: ended (a message), and the stop's (failed cycles, options listed)
     _sel_writes: int = 0
@@ -701,6 +715,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         (a select the inverter flips back is its own logic, not a fight)."""
         self._active, self._target_soc = False, 0.0
         self._sel_spent = why
+        self._sel_refused_at = time.monotonic()
         await self._release_target()
         await self.charge_record.left(entity, self._battery())
         return self._select_failed(why)
@@ -720,6 +735,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             return self._select_failed(f"{entity} does not list '{option}'")
         if state == wanted:
             self._sel_seen = self._sel_seen or self._sel_writes > 0
+            self._sel_refused_at = None            # it took the option
             return await self._join_select_charge(entity, command)
         if self._sel_spent:
             return self._select_failed(self._sel_spent)
@@ -867,6 +883,14 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         state, options = read_select(self.hass, entity)
         if state is None or observer:
             return False
+        age = await self.charge_record.age_h(entity)
+        if age is not None and age > self.ORPHAN_MAX_AGE_H:
+            # too old to trust: the select may serve another purpose now
+            _LOGGER.warning("Battery: SEM's record for %s is %.0f h old — it "
+                            "is dropped and the select is left as it is "
+                            "(#1346)", entity, age)
+            await self.charge_record.stopped(entity)
+            return True
         if await self.charge_record.others(entity, self._battery()):
             await self.charge_record.left(entity, self._battery())
             return True

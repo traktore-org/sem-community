@@ -2216,7 +2216,8 @@
     "config_charge_select_need_option": "Vyberte možnost, která spustí nabíjení ze sítě.",
     "config_charge_select_need_select": "Nejprve vyberte volbu.",
     "config_help_charge_select_entity": "Pro střídač bez spínače nabíjení ze sítě: výběr s možností, která nabíjí baterii ze sítě (například Solár a síť). SEM tuto možnost nastaví pro zahájení nabíjení ze sítě a pro ukončení vrátí výběr na původní hodnotu. Vypnuto, dokud nejsou nastaveny toto pole i možnost níže.",
-    "config_help_charge_select_option": "Možnost tohoto výběru, která nabíjí baterii ze sítě. SEM výběr vrátí jen dokud stále ukazuje tuto možnost; změna provedená ručně zůstane beze změny."
+    "config_help_charge_select_option": "Možnost tohoto výběru, která nabíjí baterii ze sítě. SEM výběr vrátí jen dokud stále ukazuje tuto možnost; změna provedená ručně zůstane beze změny.",
+    "energy_plan_why_charge_refused": "Váš střídač nepřijal příkaz k nabíjení."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4435,7 +4436,8 @@
     "config_charge_select_need_option": "Vælg den mulighed, der starter netopladning.",
     "config_charge_select_need_select": "Vælg først valget.",
     "config_help_charge_select_entity": "Til en inverter uden kontakt til netopladning: en valgliste med en mulighed, der oplader batteriet fra nettet (for eksempel Sol og net). SEM sætter den mulighed for at starte en netopladning og sætter listen tilbage til den gamle værdi for at stoppe den. Slået fra, indtil dette felt og muligheden nedenfor begge er sat.",
-    "config_help_charge_select_option": "Den mulighed i listen, der oplader batteriet fra nettet. SEM sætter listen kun tilbage, så længe den stadig viser denne mulighed; en ændring, du selv har lavet, bliver stående."
+    "config_help_charge_select_option": "Den mulighed i listen, der oplader batteriet fra nettet. SEM sætter listen kun tilbage, så længe den stadig viser denne mulighed; en ændring, du selv har lavet, bliver stående.",
+    "energy_plan_why_charge_refused": "Din inverter tog ikke imod ladekommandoen."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6654,7 +6656,8 @@
     "config_charge_select_need_option": "Wähle die Option, die eine Netzladung startet.",
     "config_charge_select_need_select": "Wähle zuerst die Auswahl.",
     "config_help_charge_select_entity": "Für einen Wechselrichter ohne Schalter zum Netzladen: eine Auswahl mit einer Option, die die Batterie aus dem Netz lädt (zum Beispiel Solar und Netz). SEM setzt diese Option, um das Netzladen zu starten, und stellt die Auswahl zum Beenden auf den früheren Wert zurück. Aus, bis diese und die Option darunter gesetzt sind.",
-    "config_help_charge_select_option": "Die Option dieser Auswahl, die die Batterie aus dem Netz lädt. SEM stellt die Auswahl nur zurück, solange sie noch diese Option zeigt; eine Änderung von Hand bleibt unberührt."
+    "config_help_charge_select_option": "Die Option dieser Auswahl, die die Batterie aus dem Netz lädt. SEM stellt die Auswahl nur zurück, solange sie noch diese Option zeigt; eine Änderung von Hand bleibt unberührt.",
+    "energy_plan_why_charge_refused": "Dein Wechselrichter hat den Ladebefehl nicht angenommen."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8873,7 +8876,8 @@
     "config_charge_select_need_option": "Pick the option that starts a grid charge.",
     "config_charge_select_need_select": "Pick the select first.",
     "config_help_charge_select_entity": "For an inverter with no grid-charge switch: a select that has an option which charges the battery from the grid (for example Solar and mains). SEM sets that option to start a grid charge and puts the select back to what it was to stop it. Off until this and the option below are both set.",
-    "config_help_charge_select_option": "The option of that select that charges the battery from the grid. SEM puts the select back only while it still shows this option; a change you make by hand is left alone."
+    "config_help_charge_select_option": "The option of that select that charges the battery from the grid. SEM puts the select back only while it still shows this option; a change you make by hand is left alone.",
+    "energy_plan_why_charge_refused": "Your inverter did not take the charge command."
   },
   "es": {
     "% of limit": "% del límite",
@@ -11092,7 +11096,8 @@
     "config_charge_select_need_option": "Elige la opción que inicia una carga de red.",
     "config_charge_select_need_select": "Elige primero el selector.",
     "config_help_charge_select_entity": "Para un inversor sin interruptor de carga de red: un selector con una opción que carga la batería desde la red (por ejemplo Solar y red). SEM fija esa opción para iniciar una carga de red y devuelve el selector a su valor anterior para detenerla. Desactivado hasta que se definan este campo y la opción de abajo.",
-    "config_help_charge_select_option": "La opción de ese selector que carga la batería desde la red. SEM solo devuelve el selector mientras siga mostrando esta opción; un cambio hecho a mano se respeta."
+    "config_help_charge_select_option": "La opción de ese selector que carga la batería desde la red. SEM solo devuelve el selector mientras siga mostrando esta opción; un cambio hecho a mano se respeta.",
+    "energy_plan_why_charge_refused": "Tu inversor no aceptó la orden de carga."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13311,7 +13316,8 @@
     "config_charge_select_need_option": "Valitse vaihtoehto, joka aloittaa verkkolatauksen.",
     "config_charge_select_need_select": "Valitse ensin valinta.",
     "config_help_charge_select_entity": "Vaihtosuuntaajalle, jolla ei ole verkkolatauksen kytkintä: valinta, jossa on vaihtoehto, joka lataa akkua verkosta (esimerkiksi Aurinko ja verkko). SEM asettaa tämän vaihtoehdon verkkolatauksen aloittamiseksi ja palauttaa valinnan aiempaan arvoon sen lopettamiseksi. Pois päältä, kunnes tämä kenttä ja alla oleva vaihtoehto on asetettu.",
-    "config_help_charge_select_option": "Tämän valinnan vaihtoehto, joka lataa akkua verkosta. SEM palauttaa valinnan vain niin kauan kuin se näyttää yhä tätä vaihtoehtoa; käsin tehty muutos jätetään rauhaan."
+    "config_help_charge_select_option": "Tämän valinnan vaihtoehto, joka lataa akkua verkosta. SEM palauttaa valinnan vain niin kauan kuin se näyttää yhä tätä vaihtoehtoa; käsin tehty muutos jätetään rauhaan.",
+    "energy_plan_why_charge_refused": "Invertterisi ei hyväksynyt latauskomentoa."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15530,7 +15536,8 @@
     "config_charge_select_need_option": "Choisissez l'option qui lance une charge réseau.",
     "config_charge_select_need_select": "Choisissez d'abord la sélection.",
     "config_help_charge_select_entity": "Pour un onduleur sans interrupteur de charge réseau : un sélecteur avec une option qui charge la batterie depuis le réseau (par exemple Solaire et secteur). SEM règle cette option pour démarrer une charge réseau et remet le sélecteur comme avant pour l'arrêter. Inactif tant que ce champ et l'option ci-dessous ne sont pas tous deux définis.",
-    "config_help_charge_select_option": "L'option de ce sélecteur qui charge la batterie depuis le réseau. SEM ne remet le sélecteur en place que s'il affiche encore cette option ; un changement fait à la main est laissé tel quel."
+    "config_help_charge_select_option": "L'option de ce sélecteur qui charge la batterie depuis le réseau. SEM ne remet le sélecteur en place que s'il affiche encore cette option ; un changement fait à la main est laissé tel quel.",
+    "energy_plan_why_charge_refused": "Votre onduleur n'a pas accepté la commande de charge."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17749,7 +17756,8 @@
     "config_charge_select_need_option": "Válaszd ki a hálózati töltést indító opciót.",
     "config_charge_select_need_select": "Előbb válaszd ki a választót.",
     "config_help_charge_select_entity": "Hálózati töltés kapcsoló nélküli inverterhez: egy választó, amelynek van olyan opciója, amely a hálózatról tölti az akkumulátort (például Napelem és hálózat). A SEM ezt az opciót állítja be a hálózati töltés indításához, és a leállításhoz visszaállítja a választót a korábbi értékre. Kikapcsolva, amíg ez a mező és az alatta lévő opció nincs beállítva.",
-    "config_help_charge_select_option": "A választó azon opciója, amely a hálózatról tölti az akkumulátort. A SEM csak addig állítja vissza a választót, amíg az még ezt az opciót mutatja; a kézzel végzett módosítást érintetlenül hagyja."
+    "config_help_charge_select_option": "A választó azon opciója, amely a hálózatról tölti az akkumulátort. A SEM csak addig állítja vissza a választót, amíg az még ezt az opciót mutatja; a kézzel végzett módosítást érintetlenül hagyja.",
+    "energy_plan_why_charge_refused": "Az invertered nem fogadta el a töltési parancsot."
   },
   "it": {
     "% of limit": "% del limite",
@@ -19968,7 +19976,8 @@
     "config_charge_select_need_option": "Scegli l'opzione che avvia una carica da rete.",
     "config_charge_select_need_select": "Scegli prima il selettore.",
     "config_help_charge_select_entity": "Per un inverter senza interruttore di carica da rete: un selettore con un'opzione che carica la batteria dalla rete (ad esempio Solare e rete). SEM imposta quell'opzione per avviare la carica dalla rete e rimette il selettore com'era per fermarla. Disattivato finché questo campo e l'opzione sotto non sono entrambi impostati.",
-    "config_help_charge_select_option": "L'opzione di quel selettore che carica la batteria dalla rete. SEM rimette il selettore a posto solo finché mostra ancora questa opzione; una modifica fatta a mano viene lasciata com'è."
+    "config_help_charge_select_option": "L'opzione di quel selettore che carica la batteria dalla rete. SEM rimette il selettore a posto solo finché mostra ancora questa opzione; una modifica fatta a mano viene lasciata com'è.",
+    "energy_plan_why_charge_refused": "Il tuo inverter non ha accettato il comando di carica."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -22187,7 +22196,8 @@
     "config_charge_select_need_option": "Kies de optie die het netladen start.",
     "config_charge_select_need_select": "Kies eerst de keuzelijst.",
     "config_help_charge_select_entity": "Voor een omvormer zonder schakelaar voor netladen: een keuzelijst met een optie die de batterij van het net laadt (bijvoorbeeld Zon en net). SEM zet die optie om het netladen te starten en zet de keuzelijst terug naar de oude waarde om te stoppen. Uit totdat dit veld en de optie hieronder allebei zijn ingesteld.",
-    "config_help_charge_select_option": "De optie van die keuzelijst die de batterij van het net laadt. SEM zet de keuzelijst alleen terug zolang die nog deze optie toont; een wijziging die u met de hand maakt blijft staan."
+    "config_help_charge_select_option": "De optie van die keuzelijst die de batterij van het net laadt. SEM zet de keuzelijst alleen terug zolang die nog deze optie toont; een wijziging die u met de hand maakt blijft staan.",
+    "energy_plan_why_charge_refused": "Je omvormer heeft de laadopdracht niet aangenomen."
   },
   "no": {
     "% of limit": "% av grense",
@@ -24406,7 +24416,8 @@
     "config_charge_select_need_option": "Velg alternativet som starter nettlading.",
     "config_charge_select_need_select": "Velg først valget.",
     "config_help_charge_select_entity": "For en vekselretter uten bryter for nettlading: en valgliste med et valg som lader batteriet fra nettet (for eksempel Sol og nett). SEM setter det valget for å starte nettlading og setter listen tilbake til den gamle verdien for å stoppe den. Av til dette feltet og valget under begge er satt.",
-    "config_help_charge_select_option": "Valget i listen som lader batteriet fra nettet. SEM setter listen bare tilbake så lenge den fortsatt viser dette valget; en endring du gjør selv blir stående."
+    "config_help_charge_select_option": "Valget i listen som lader batteriet fra nettet. SEM setter listen bare tilbake så lenge den fortsatt viser dette valget; en endring du gjør selv blir stående.",
+    "energy_plan_why_charge_refused": "Vekselretteren din tok ikke imot ladekommandoen."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26625,7 +26636,8 @@
     "config_charge_select_need_option": "Wybierz opcję, która uruchamia ładowanie z sieci.",
     "config_charge_select_need_select": "Najpierw wybierz pole wyboru.",
     "config_help_charge_select_entity": "Dla falownika bez przełącznika ładowania z sieci: lista wyboru z opcją, która ładuje baterię z sieci (na przykład Solar i sieć). SEM ustawia tę opcję, aby rozpocząć ładowanie z sieci, i przywraca poprzednią wartość listy, aby je zakończyć. Wyłączone, dopóki to pole i opcja poniżej nie są ustawione.",
-    "config_help_charge_select_option": "Opcja tej listy, która ładuje baterię z sieci. SEM przywraca listę tylko dopóki nadal pokazuje tę opcję; zmiana wykonana ręcznie zostaje nienaruszona."
+    "config_help_charge_select_option": "Opcja tej listy, która ładuje baterię z sieci. SEM przywraca listę tylko dopóki nadal pokazuje tę opcję; zmiana wykonana ręcznie zostaje nienaruszona.",
+    "energy_plan_why_charge_refused": "Twój falownik nie przyjął polecenia ładowania."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28844,7 +28856,8 @@
     "config_charge_select_need_option": "Escolha a opção que inicia uma carga da rede.",
     "config_charge_select_need_select": "Escolha primeiro o seletor.",
     "config_help_charge_select_entity": "Para um inversor sem interruptor de carga da rede: um seletor com uma opção que carrega a bateria da rede (por exemplo Solar e rede). O SEM define essa opção para iniciar uma carga da rede e repõe o seletor no valor anterior para a parar. Desligado até este campo e a opção abaixo estarem ambos definidos.",
-    "config_help_charge_select_option": "A opção desse seletor que carrega a bateria da rede. O SEM só repõe o seletor enquanto ele ainda mostrar esta opção; uma alteração feita à mão é respeitada."
+    "config_help_charge_select_option": "A opção desse seletor que carrega a bateria da rede. O SEM só repõe o seletor enquanto ele ainda mostrar esta opção; uma alteração feita à mão é respeitada.",
+    "energy_plan_why_charge_refused": "O seu inversor não aceitou o comando de carga."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -31063,7 +31076,8 @@
     "config_charge_select_need_option": "Alege opțiunea care pornește încărcarea din rețea.",
     "config_charge_select_need_select": "Alege mai întâi selecția.",
     "config_help_charge_select_entity": "Pentru un invertor fără comutator de încărcare din rețea: un selector cu o opțiune care încarcă bateria din rețea (de exemplu Solar și rețea). SEM setează acea opțiune pentru a porni o încărcare din rețea și readuce selectorul la valoarea anterioară pentru a o opri. Dezactivat până când acest câmp și opțiunea de mai jos sunt ambele setate.",
-    "config_help_charge_select_option": "Opțiunea acelui selector care încarcă bateria din rețea. SEM readuce selectorul doar cât timp acesta arată încă această opțiune; o modificare făcută manual este lăsată neschimbată."
+    "config_help_charge_select_option": "Opțiunea acelui selector care încarcă bateria din rețea. SEM readuce selectorul doar cât timp acesta arată încă această opțiune; o modificare făcută manual este lăsată neschimbată.",
+    "energy_plan_why_charge_refused": "Invertorul tău nu a acceptat comanda de încărcare."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -33282,7 +33296,8 @@
     "config_charge_select_need_option": "Välj alternativet som startar nätladdning.",
     "config_charge_select_need_select": "Välj först valet.",
     "config_help_charge_select_entity": "För en växelriktare utan brytare för nätladdning: en lista med ett alternativ som laddar batteriet från nätet (till exempel Sol och nät). SEM sätter det alternativet för att starta nätladdning och sätter tillbaka listan till det gamla värdet för att stoppa den. Av tills detta fält och alternativet nedan båda är satta.",
-    "config_help_charge_select_option": "Alternativet i listan som laddar batteriet från nätet. SEM sätter bara tillbaka listan så länge den fortfarande visar detta alternativ; en ändring du gör själv lämnas orörd."
+    "config_help_charge_select_option": "Alternativet i listan som laddar batteriet från nätet. SEM sätter bara tillbaka listan så länge den fortfarande visar detta alternativ; en ändring du gör själv lämnas orörd.",
+    "energy_plan_why_charge_refused": "Din växelriktare tog inte emot laddkommandot."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -35501,6 +35516,7 @@
     "config_charge_select_need_option": "请选择启动电网充电的选项。",
     "config_charge_select_need_select": "请先选择该选择项。",
     "config_help_charge_select_entity": "适用于没有电网充电开关的逆变器：一个选择项，其中有一个选项可让电池从电网充电（例如“太阳能和市电”）。SEM 设置该选项以开始电网充电，并将选择项恢复为原来的值以停止充电。在此项和下方的选项都设置之前保持关闭。",
-    "config_help_charge_select_option": "该选择项中让电池从电网充电的选项。仅当选择项仍显示此选项时，SEM 才会将其恢复；你手动做出的更改不会被覆盖。"
+    "config_help_charge_select_option": "该选择项中让电池从电网充电的选项。仅当选择项仍显示此选项时，SEM 才会将其恢复；你手动做出的更改不会被覆盖。",
+    "energy_plan_why_charge_refused": "你的逆变器没有接受充电指令。"
   }
 }

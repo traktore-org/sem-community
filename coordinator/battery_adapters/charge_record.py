@@ -42,6 +42,7 @@ Home Assistant imports.
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 from typing import Any
 
@@ -62,6 +63,9 @@ class ForcedChargeRecord:
         #: (#1346) entity → the option SEM set, so a restart with the
         #: setting cleared still knows what to look for
         self._option: dict[str, str] = {}
+        #: (#1346) entity → when SEM changed it (epoch seconds): a record
+        #: older than two days is not acted on after a restart
+        self._since: dict[str, float] = {}
         self._loaded = store is None
         self._readable = store is not None
         self._lock = asyncio.Lock()
@@ -86,11 +90,13 @@ class ForcedChargeRecord:
                 self._prior[entity_id] = str(prior)
                 if option is not None:
                     self._option[entity_id] = str(option)
+                self._since[entity_id] = time.time()
             if await self._save():
                 return True
             if new_prior:
                 self._prior.pop(entity_id, None)
                 self._option.pop(entity_id, None)
+                self._since.pop(entity_id, None)
             if owners is None:
                 self._running.pop(entity_id, None)
             else:
@@ -111,6 +117,14 @@ class ForcedChargeRecord:
             return [(e, self._prior[e], self._option.get(e, ""))
                     for e in sorted(self._prior)
                     if str(battery_id or "") in self._running.get(e, ())]
+
+    async def age_h(self, entity_id: str) -> "float | None":
+        """(#1346) Hours since SEM changed this select; None = not known
+        (a record from before the time was stored)."""
+        async with self._lock:
+            await self._load()
+            at = self._since.get(str(entity_id or ""))
+            return None if at is None else max(0.0, (time.time() - at) / 3600.0)
 
     async def others(self, entity_id: str, battery_id: str) -> bool:
         """(#1346) Does another battery's charge also hold ``entity_id``?
@@ -134,6 +148,7 @@ class ForcedChargeRecord:
                 self._running.pop(entity_id, None)
                 self._prior.pop(entity_id, None)
                 self._option.pop(entity_id, None)
+                self._since.pop(entity_id, None)
             await self._save()
 
     async def stopped(self, entity_id: str) -> None:
@@ -145,6 +160,7 @@ class ForcedChargeRecord:
             await self._load()
             gone = self._running.pop(entity_id, None)
             self._option.pop(entity_id, None)
+            self._since.pop(entity_id, None)
             if self._prior.pop(entity_id, None) is None and gone is None:
                 return
             await self._save()
@@ -209,6 +225,10 @@ class ForcedChargeRecord:
         self._prior = {e: o for e, o in prior.items() if e in self._running}
         self._option = {e: str(o) for e, o in option.items()
                         if e in self._prior and isinstance(o, str)}
+        since = record.get("since", {})
+        self._since = {e: float(t) for e, t in (since.items() if isinstance(since, dict) else ())
+                       if e in self._prior and isinstance(t, (int, float))
+                       and not isinstance(t, bool)}
         if self._running:
             _LOGGER.info("Battery: SEM started a forced charge on %s and has "
                          "not seen it stop (#1181)",
@@ -223,6 +243,8 @@ class ForcedChargeRecord:
                 record["prior"] = dict(self._prior)
                 if self._option:
                     record["option"] = dict(self._option)
+                if self._since:
+                    record["since"] = dict(self._since)
             await self._store.async_save(record)
         except Exception as exc:  # noqa: BLE001
             log_on_change(_LOGGER, "forced_charge_record:save", logging.WARNING,
