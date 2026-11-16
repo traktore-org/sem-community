@@ -718,7 +718,7 @@ def test_the_engine_decides_the_same_with_the_shadow_on_or_off(name):
     with_shadow = _run(_SEQUENCES[name], True)
     without = _run(_SEQUENCES[name], False)
     assert len(with_shadow) == len(without) > 3
-    for i, (a, b) in enumerate(zip(with_shadow, without)):
+    for i, (a, b) in enumerate(zip(with_shadow, without, strict=True)):
         assert a[0] == b[0], f"{name} cycle {i}: the decision changed"
         assert a[1].keys() == b[1].keys()
         moved = {k for k in a[1] if a[1][k] != b[1][k]}
