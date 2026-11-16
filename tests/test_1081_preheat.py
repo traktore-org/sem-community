@@ -424,8 +424,10 @@ async def test_a_heat_pump_at_the_top_keeps_its_minimum_run_a_tank_stops():
 
 
 def test_the_larger_ask_takes_no_cheap_slot_from_a_higher_priority_demand():
-    """(#1081) The packer serves demands by priority: the car's floor and the
-    battery keep their blocks whatever the pre-heat ask grows to."""
+    """(#1081) The packer serves demands by priority: the car's floor keeps
+    its blocks whatever the pre-heat ask grows to. This checks the ORDER
+    only (the car is packed first by its priority); a load with a LOWER
+    priority than the heater can lose a cheap hour to the larger ask."""
     from custom_components.solar_energy_management.coordinator.energy_planner import (
         Demand, LedgerSlot, build_night_ledger, pack_night)
     t0 = datetime(2026, 11, 14, 18, 0)
