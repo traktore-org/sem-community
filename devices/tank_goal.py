@@ -18,14 +18,23 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Tuple
 
-#: a start needs the tank this far below its top (no flip on sensor noise)
+# (#1369) The shared numbers live HERE, once: the controller imports them, so
+# today's rules and the goal cannot drift apart. No Home Assistant import.
+
+#: a new start needs this much room below the top (or the user's stop): no
+#: one-minute run for a tenth of a degree
 START_MARGIN_K = 1.0
-#: once refused, it waits this much more
-MARGIN_STICKY_K = 0.2
-#: a switched tank in its Legionella hold goes off this far above the target…
-HOLD_BAND_K = 0.5
-#: …and stays off until it dips this far below it
-HOLD_DIP_K = 0.3
+#: once a start was refused, it waits this much more: no flip on noise
+START_MARGIN_STICKY_K = 0.2
+#: a switched tank holding its Legionella temperature switches off this far
+#: above the target; the tank holds the heat through the hold
+LEGIONELLA_HOLD_BAND_K = 0.5
+#: a reading this far under the target is noise, not a dip: the hold goes on
+LEGIONELLA_HOLD_DIP_K = 0.3
+
+#: (#1369) ``compare_tank_goal(engine_stop=RECOMPUTE)``: the engine did not
+#: say whether it stopped the tank, so today's stop rule is asked in its pure form
+RECOMPUTE = object()
 
 
 @dataclass(frozen=True)
@@ -149,8 +158,8 @@ def _hold_stop(i: TankInputs, reading: Optional[float]) -> bool:
     if reading is None:
         return i.hold_stopped
     target = i.legionella_target_c
-    return reading >= target + HOLD_BAND_K or (
-        i.hold_stopped and reading >= target - HOLD_DIP_K)
+    return reading >= target + LEGIONELLA_HOLD_BAND_K or (
+        i.hold_stopped and reading >= target - LEGIONELLA_HOLD_DIP_K)
 
 
 def _must_stop(i: TankInputs, reading: Optional[float], state: str,
@@ -187,7 +196,7 @@ def _may_start(i: TankInputs, reading: Optional[float], state: str,
     if lines and state != "forced":
         edge = min(lines) - START_MARGIN_K
         if i.margin_refused:
-            edge -= MARGIN_STICKY_K
+            edge -= START_MARGIN_STICKY_K
         return reading <= edge
     return True
 
@@ -197,7 +206,7 @@ def _needs_heat(i: TankInputs, reading: Optional[float], may_start: bool,
     if i.legionella_active:
         if reading is None:
             return True
-        floor = i.legionella_target_c - (HOLD_DIP_K if i.legionella_hold else 0.0)
+        floor = i.legionella_target_c - (LEGIONELLA_HOLD_DIP_K if i.legionella_hold else 0.0)
         return reading < floor
     return may_start and not must_stop and _too_cold(i)
 

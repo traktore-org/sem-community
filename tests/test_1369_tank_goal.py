@@ -194,9 +194,12 @@ class TestTheGoalAlone:
         assert replace(inp(), may_buy=True).may_buy is True
 
     def test_the_constants_are_the_controllers(self):
-        assert tg.START_MARGIN_K == hwc.START_MARGIN_K
-        assert tg.HOLD_BAND_K == hwc.LEGIONELLA_HOLD_BAND_K
-        assert tg.HOLD_DIP_K == hwc.LEGIONELLA_HOLD_DIP_K
+        # (#1369) one definition: the controller imports tank_goal's numbers
+        for name in ("START_MARGIN_K", "START_MARGIN_STICKY_K",
+                     "LEGIONELLA_HOLD_BAND_K", "LEGIONELLA_HOLD_DIP_K"):
+            assert getattr(hwc, name) is getattr(tg, name)
+        src = open(hwc.__file__).read()
+        assert "edge -= 0." not in src and "0.2" not in src.split("def start_refusal")[1][:2000]
 
 
 # ── the controller's inputs ────────────────────────────────────────────────
@@ -492,3 +495,370 @@ class TestTheShadowChangesNothing:
     def test_a_stand_in_without_the_counters_publishes_nothing(self):
         from unittest.mock import MagicMock
         assert UnifiedDeviceRegistry._goal_shadow(MagicMock()) == {}
+
+
+# ── the shadow writes nothing (#1369) ───────────────────────────────────────
+# A review ran the engine with the shadow on and patched out and found a
+# changed decision: the shadow read the stop rule (which stores the Legionella
+# hold's off/on) in cycles where the engine returns before it ever does.
+
+import asyncio  # noqa: E402
+from contextlib import ExitStack  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from freezegun import freeze_time  # noqa: E402
+
+from custom_components.solar_energy_management.consts.states import (  # noqa: E402
+    LoadManagementState,
+)
+from custom_components.solar_energy_management.coordinator import (  # noqa: E402
+    reason_codes as RC,
+    surplus_controller as sc_mod,
+)
+
+_APART = ("hass", "_controller")     # per-run objects; every other field must match
+_NOW = "2026-11-10 22:00:00"
+_SUN = dict(surplus=4000.0, night=False, solar=5000.0)
+
+
+def _hold(dev, *, hold_stopped=False):
+    """A switched tank in its Legionella hold (the run reached its target)."""
+    dev._legionella_cycle_active = True
+    dev._legionella_hold_start = hwc.dt_util.now()
+    dev._hold_stopped = hold_stopped
+
+
+def _reading(hass, value):
+    hass.set(uc1102.SENSOR, str(value), unit_of_measurement="°C")
+
+
+async def _cyc(sc, *, peak=None, **kw):
+    kw.setdefault("price", "normal")
+    price = kw.pop("price")
+    block = kw.pop("block", False)
+    surplus = kw.pop("surplus", -400.0)
+    night = kw.pop("night", True)
+    solar = kw.pop("solar", 0.0)
+    await sc.update(
+        surplus, price_level=price, import_price=uc1102.PRICES[price],
+        is_night=night, battery_soc=None, battery_reserve_soc=10.0,
+        daylight_remaining_s=0.0 if night else 7200.0, solar_w=solar,
+        peak_state=peak,
+        plan_windows=({uc1102.DID: uc1102.BLOCK} if block is True
+                      else {uc1102.DID: uc1102.CLOSED} if block == "closed" else {}))
+
+
+def _lock(on):
+    def go(hass, dev, sc):
+        dev.behind_operator_relay = True
+        sc.shed_signal = SimpleNamespace(active=on)
+    return go
+
+
+def _set(value, *more):
+    def go(hass, dev, sc):
+        _reading(hass, value)
+        for fn in more:
+            fn(hass, dev, sc)
+    return go
+
+
+def _do(fn):
+    return lambda hass, dev, sc: fn(dev)
+
+
+def _steps(*pairs):
+    return list(pairs)
+
+
+def _seq_lock():
+    """The review's sequence: the hold at 60.6, an early return (operator
+    lock), then 59.9 — the hold's hysteresis decides whether it stops."""
+    return dict(temp=45.0, steps=_steps(
+        (None, _SUN),
+        (_set(60.6, _do(_hold), _lock(True)), {}),
+        (_set(60.6), {}),
+        (_set(59.9, _lock(False)), {}),
+        (_set(59.9), {}),
+        (_set(60.6), {})))
+
+
+def _seq_shed():
+    return dict(temp=45.0, steps=_steps(
+        (None, _SUN),
+        (_set(60.6, _do(_hold)), dict(peak=LoadManagementState.EMERGENCY)),
+        (_set(59.9), {}),
+        (_set(59.9), dict(peak=LoadManagementState.EMERGENCY)),
+        (_set(59.9), {}),
+        (_set(60.7), {})))
+
+
+def _seq_plan_hold():
+    return dict(temp=45.0, steps=_steps(
+        (None, dict(price="cheap", block=True)),
+        (_set(60.6, _do(_hold), _do(lambda d: setattr(d, "_offpeak_forced", True))),
+         dict(price="cheap", block="closed")),
+        (_set(59.9), dict(price="cheap", block=False)),
+        (_set(60.6), dict(price="cheap", block="closed")),
+        (_set(59.9), dict(price="cheap", block=False))))
+
+
+def _seq_unread():
+    return dict(temp=45.0, steps=_steps(
+        (None, _SUN),
+        (lambda h, d, s: h.set(uc1102.SENSOR, "unavailable"), _SUN),
+        (lambda h, d, s: h.set(uc1102.SENSOR, "unknown"), _SUN),
+        (_set(50.0), _SUN),
+        (_set(56.0), _SUN)))
+
+
+def _seq_top_in_min_run():
+    return dict(temp=47.6, steps=_steps(
+        (None, dict(price="cheap", block=True)),
+        (_set(52.0), dict(price="cheap")),         # at Keep at, inside the minimum run
+        (_set(56.0), dict(price="cheap")),
+        (_set(57.0, _do(lambda d: setattr(d, "stop_entity", uc1102.SENSOR)),
+              _do(lambda d: setattr(d, "stop_at", 56.5))), dict(price="cheap"))))
+
+
+def _seq_away_dump():
+    return dict(temp=40.0, steps=_steps(
+        (_do(lambda d: (setattr(d, "vacation", True),
+                        setattr(d, "vacation_dhw_surplus", True))), _SUN),
+        (_set(30.0), _SUN),
+        (_set(36.5), _SUN),
+        (_set(40.0), _SUN),
+        (_set(47.0), _SUN),
+        (_do(lambda d: setattr(d, "vacation", False)), _SUN)))
+
+
+def _seq_1102_night():
+    """tests/test_1102_use_cases.py test_2: a cheap block, 50.1, the plan's
+    hold, Keep at reached."""
+    return dict(temp=47.6, steps=_steps(
+        (None, dict(price="cheap", block=True)),
+        (_set(50.1, _do(uc1102._past_minimums)), dict(price="cheap", block=False)),
+        (None, dict(price="cheap", block="closed")),
+        (_set(52.0), dict(price="cheap", block="closed")),
+        (None, dict(price="cheap", block="closed")),
+        (_set(35.5), dict(price="expensive", night=False))))
+
+
+_SEQUENCES = {
+    "legionella_hold_then_lock": _seq_lock, "peak_shed": _seq_shed,
+    "plan_hold": _seq_plan_hold, "unread_sensor": _seq_unread,
+    "top_inside_min_run": _seq_top_in_min_run, "away_dump": _seq_away_dump,
+    "boiler_night": _seq_1102_night}
+
+
+def _canon(v, seen=None):
+    """A value as plain data, so two runs compare by CONTENT (an object with
+    no ``__eq__`` — the held-power tracker — would else differ by identity)."""
+    if isinstance(v, (str, int, float, bool, bytes, type(None))) or hasattr(v, "isoformat"):
+        return v
+    seen = set() if seen is None else seen
+    if id(v) in seen:                  # a shared or circular reference
+        return "<again>"
+    seen.add(id(v))
+    if isinstance(v, dict):
+        return {str(k): _canon(x, seen) for k, x in v.items()}
+    if isinstance(v, (list, tuple, set, frozenset)) or hasattr(v, "maxlen"):
+        return [_canon(x, seen) for x in v]
+    if type(v).__module__.startswith("unittest.mock") or callable(v):
+        return f"<{type(v).__name__}>"
+    if hasattr(v, "__dict__"):
+        return (type(v).__name__, _canon(vars(v), seen))
+    return repr(v)
+
+
+def _public(dev):
+    block = UnifiedDeviceRegistry._comfort_payload(dev)
+    block = {k: v for k, v in block.items() if k != "goal_shadow"}
+    return {"comfort": block,
+            "path": getattr(dev, "_last_temperature_reading_path", None),
+            "reading": getattr(dev, "_last_temperature_reading", None)}
+
+
+def _run(build, shadow):
+    """One pass of a sequence through the REAL engine and tank. Time stands
+    still (one tick per cycle), so every timer is comparable."""
+    seq = build()
+    trace, codes = [], []
+    real = sc_mod.compute_load_intent
+
+    def spy(device, **kw):
+        out = real(device, **kw)
+        codes.append((out.on, out.source, out.code, out.reason))
+        return out
+
+    async def go():
+        hass, dev, sc = uc1102._boiler(seq["temp"])
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(sc_mod, "compute_load_intent", spy))
+            if not shadow:
+                stack.enter_context(patch.object(
+                    HotWaterController, "compare_tank_goal", lambda *a, **k: None))
+            for setup, cycle in seq["steps"]:
+                if setup is not None:
+                    setup(hass, dev, sc)
+                n = len(codes)
+                await _cyc(sc, **cycle)
+                clock.tick(60)
+                state = {k: v for k, v in dev.__dict__.items()
+                         if k not in COUNTERS + ("tank_goal_skipped",) + _APART}
+                trace.append((codes[n:], _canon(state), _canon(_public(dev))))
+        return trace
+
+    with freeze_time(_NOW, real_asyncio=True) as clock:
+        return asyncio.run(go())
+
+
+@pytest.mark.parametrize("name", sorted(_SEQUENCES))
+def test_the_engine_decides_the_same_with_the_shadow_on_or_off(name):
+    with_shadow = _run(_SEQUENCES[name], True)
+    without = _run(_SEQUENCES[name], False)
+    assert len(with_shadow) == len(without) > 3
+    for i, (a, b) in enumerate(zip(with_shadow, without)):
+        assert a[0] == b[0], f"{name} cycle {i}: the decision changed"
+        assert a[1].keys() == b[1].keys()
+        moved = {k for k in a[1] if a[1][k] != b[1][k]}
+        assert not moved, f"{name} cycle {i}: the shadow wrote {sorted(moved)}"
+        assert a[2] == b[2], f"{name} cycle {i}: a published value changed"
+
+
+def test_the_sequences_really_reach_the_early_returns():
+    """Not vacuous: the lock, the shed and the plan hold each return early
+    (an empty engine verdict list would pass the test above for nothing)."""
+    def seen(name):
+        codes = []
+        real = sc_mod.compute_load_intent
+
+        def spy(device, **kw):
+            out = real(device, **kw)
+            codes.append(out.code)
+            return out
+
+        async def go():
+            seq = _SEQUENCES[name]()
+            hass, dev, sc = uc1102._boiler(seq["temp"])
+            with patch.object(sc_mod, "compute_load_intent", spy):
+                for setup, cycle in seq["steps"]:
+                    if setup is not None:
+                        setup(hass, dev, sc)
+                    await _cyc(sc, **cycle)
+            return dev
+        with freeze_time(_NOW, real_asyncio=True):
+            return asyncio.run(go()), codes
+    dev, codes = seen("peak_shed")
+    assert RC.LOAD_PEAK_SHED in codes
+    dev, codes = seen("plan_hold")
+    assert RC.LOAD_PLAN_CLOSED in codes
+    dev, codes = seen("legionella_hold_then_lock")
+    assert dev.locked_by_operator is False and dev._legionella_cycle_active
+
+
+def test_the_lock_then_59_9_sequence_keeps_the_tank_heating():
+    """The review's exact case, pinned on its own: the shadow ran on the
+    locked cycle and used to leave ``_hold_stopped`` True, so 59.9 stopped a
+    tank that is not stopped when the shadow is off."""
+    seq = _seq_lock()
+    for shadow in (True, False):
+        trace = _run(lambda: seq, shadow)
+        last_locked = trace[2][1]
+        assert last_locked["_hold_stopped"] is False, f"shadow={shadow}"
+        after = trace[3][0]
+        assert all(code != RC.LOAD_STOP_CONDITION for _on, _src, code, _r in after)
+
+
+# ── E. the only attributes the comparison ever writes ──────────────────────
+
+class _Tracer:
+    """Records every attribute set on the controller while it is armed."""
+
+    def __init__(self):
+        self.written = set()
+        self.armed = False
+
+
+def _trace_writes(dev_cls, tracer):
+    orig = dev_cls.__setattr__
+
+    def spy(self, name, value):
+        if tracer.armed:
+            tracer.written.add(name)
+        orig(self, name, value)
+    return patch.object(dev_cls, "__setattr__", spy)
+
+
+_OWN = {"tank_goal_diffs", "tank_goal_last", "tank_goal_errors", "tank_goal_skipped"}
+
+
+def _grid_states():
+    for temp, band, entity, vac, dump, leg, hold, hstop, cl, lim in itertools.product(
+            (None, 30.0, 45.0, 52.0, 56.5, 59.9, 60.6),
+            (True, False), (SWITCH, "water_heater.dhw"),
+            (False, True), (False, True), (False, True), (False, True), (False, True),
+            (52.0, 60.0), (36.0, 60.0)):
+        if hold and not leg:
+            continue
+        yield temp, band, entity, vac, dump, leg, hold, hstop, cl, lim
+
+
+def test_the_comparison_writes_nothing_but_its_own_counters():
+    """A guard over a grid: misconfigured bands, a silent sensor, away with the
+    dump, a Legionella hold with and without its flag, a switch and a setpoint
+    tank — every attribute set while ``compare_tank_goal`` runs is a counter."""
+    tracer, written, runs = _Tracer(), set(), 0
+    with _trace_writes(HotWaterController, tracer):
+        for i, (temp, band, entity, vac, dump, leg, hold, hstop, top, lim) in enumerate(_grid_states()):
+            if i % 3:                   # a third of the grid is plenty and fast
+                continue
+            dev = _tank(_Hass(), temp if temp is not None else 45.0, band=band,
+                        entity_id=entity)
+            if temp is None:
+                dev.hass.set(SENSOR, "unavailable")
+            dev.comfort_target, dev.comfort_limit = (top, lim) if band else (0.0, 0.0)
+            dev.vacation, dev.vacation_dhw_surplus = vac, dump
+            if leg:
+                dev._legionella_cycle_active = True
+                dev._legionella_hold_start = hwc.dt_util.now() if hold else None
+                dev._hold_stopped = hstop
+            for verdict in (RECOMPUTE_, True, False, None):
+                tracer.armed = True
+                dev.compare_tank_goal(verdict)
+                tracer.armed = False
+                runs += 1
+            written |= tracer.written
+    assert runs > 100
+    assert written <= _OWN, sorted(written - _OWN)
+    assert "tank_goal_errors" not in written    # nothing broke on the way
+
+
+RECOMPUTE_ = tg.RECOMPUTE
+
+
+class TestTheOneStopRule:
+    def test_the_pure_rule_writes_nothing_and_the_property_stores_it(self):
+        dev = _tank(_Hass(), 60.6)
+        _hold(dev)
+        before = dict(dev.__dict__)
+        met, hold = dev._stop_condition(
+            False, read=lambda: 60.6, band_state=lambda: "willing",
+            target=lambda: 60.0)
+        assert (met, hold) == (True, True) and dev.__dict__ == before
+        assert dev.stop_condition_met is True and dev._hold_stopped is True
+        assert dev._last_temperature_reading_path          # the property still records it
+
+    def test_the_hold_flag_is_left_alone_outside_the_hold(self):
+        dev = _tank(_Hass(), 45.0)
+        assert dev._stop_condition(
+            True, read=lambda: 45.0, band_state=lambda: "willing",
+            target=lambda: 56.0) == (False, None)
+
+    def test_the_engines_own_answer_is_used_and_an_early_return_is_skipped(self):
+        dev = _tank(_Hass(), 45.0)
+        dev.compare_tank_goal(None)
+        assert dev.tank_goal_skipped == 1 and dev.tank_goal_diffs == {}
+        dev.compare_tank_goal(True)             # the engine stopped it; the goal does not
+        assert dev.tank_goal_diffs == {"must_stop": 1}
+        assert dev.tank_goal_skipped == 1
