@@ -18,6 +18,7 @@ Two faults, both driven here for real:
 from __future__ import annotations
 
 import ast
+import re
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -585,11 +586,14 @@ DECLARED_SOC_FIELD_READERS = {
     "_wired": "lists every SOC sensor of the dashboard, for no battery",
 }
 _SOC_FIELDS = {"battery_soc", "battery_soc_list"}
-_CONFIG_NAMES = {"ed", "cfg", "ed_config", "config", "ed_cfg", "dashboard"}
+# Any name a dashboard config goes by: ``ed``, ``_ed``, ``ed_config``,
+# ``cfg``, ``dashboard`` … (review: ``_ed`` in the coordinator was missed).
+_CONFIG_NAME = re.compile(
+    r"^_*(?:ed|cfg|config|dashboard)(?:_\w+)?$|_ed$|_cfg$|_config$")
 
 
 def _is_config(node) -> bool:
-    return ((isinstance(node, ast.Name) and node.id in _CONFIG_NAMES)
+    return ((isinstance(node, ast.Name) and _CONFIG_NAME.match(node.id))
             or (isinstance(node, ast.Attribute)
                 and node.attr == "_energy_dashboard_config"))
 
@@ -634,6 +638,119 @@ def test_the_guard_finds_the_old_read():
         "    return getattr(cfg, 'battery_soc', None)\n"
         "def other(self):\n"
         "    return self._energy_dashboard_config.battery_soc_list[1]\n"
+        "def cycles(self, _ed):\n"
+        "    return getattr(_ed, 'battery_soc', None) if _ed else None\n"
         "def fine(readings):\n"
         "    return readings.battery_soc\n")
-    assert _soc_field_readers(old) == {"read_power", "setup", "other"}
+    assert _soc_field_readers(old) == {"read_power", "setup", "other", "cycles"}
+
+
+# ── 7. review round 2: a name two batteries share, settings, gone picks ──
+
+HOME1 = "sensor.home_battery_power"
+HOME1_SOC = "sensor.home_battery_soc"
+HOME2 = "sensor.home_battery_2_power"
+HOME2_SOC = "sensor.home_battery_2_soc"
+
+
+def _homes(hass, *units):
+    for unit in units:
+        hass.states.async_set(unit, "0", _W)
+    return _ed(hass, *({"type": "battery", "stat_rate": u} for u in units))
+
+
+async def test_b2_never_takes_b1s_level_through_a_shared_name(hass):
+    """``home_battery`` is the stem of both names. b2's own level is not up
+    yet: b2 has no SOC, then its own. Before: b2 took b1's 80 % through the
+    shorter stem and kept it."""
+    hass.states.async_set(HOME1_SOC, "80", _PCT)
+    r = _reader(hass, _homes(hass, HOME1, HOME2))
+    assert r._auto_detect_battery_soc(HOME2) is None
+    assert _read(r).batteries["b2"].soc_pct is None
+    hass.states.async_set(HOME2_SOC, "60", _PCT)
+    assert r._auto_detect_battery_soc(HOME2) == HOME2_SOC
+    assert _read(r).batteries["b2"].soc_pct == pytest.approx(60)
+
+
+async def test_listed_the_other_way_b1_never_takes_b2s_level(hass):
+    hass.states.async_set(HOME1_SOC, "80", _PCT)
+    r = _reader(hass, _homes(hass, HOME2, HOME1))
+    assert r._auto_detect_battery_soc(HOME2) is None
+    assert not r._soc_candidate_exists(HOME2)
+
+
+async def test_on_their_own_devices_both_find_their_level(hass):
+    """A name both share is left to the device: b1 still finds its level."""
+    e1, d1 = _device(hass, "home1")
+    _entity(hass, e1, d1, HOME1, _W, 0)
+    _entity(hass, e1, d1, HOME1_SOC, _PCT, 80)
+    e2, d2 = _device(hass, "home2")
+    _entity(hass, e2, d2, HOME2, _W, 0)
+    _entity(hass, e2, d2, HOME2_SOC, _PCT, 60)
+    r = _reader(hass, _homes(hass, HOME1, HOME2))
+    assert r._auto_detect_battery_soc(HOME1) == HOME1_SOC
+    assert r._auto_detect_battery_soc(HOME2) == HOME2_SOC
+
+
+async def test_one_battery_still_finds_its_level_by_the_short_name(hass):
+    hass.states.async_set(HOME1_SOC, "80", _PCT)
+    r = _reader(hass, _homes(hass, HOME2))
+    assert r._auto_detect_battery_soc(HOME2) == HOME1_SOC
+
+
+async def test_a_declared_setting_never_beats_the_declared_level(hass):
+    """``min_soc`` declared a battery level in %, registered first; the
+    word ``max`` in the device's name is no setting."""
+    entry, dev = _device(hass, "inv_max")
+    _entity(hass, entry, dev, "sensor.inv_max_min_soc", _PCT, 10)
+    _entity(hass, entry, dev, "sensor.inv_max_bms_soc", _PCT, 55)
+    _entity(hass, entry, dev, "sensor.inv_max_pbattery", _W, 0)
+    assert _bare(hass)._auto_detect_battery_soc("sensor.inv_max_pbattery") == (
+        "sensor.inv_max_bms_soc")
+
+
+async def test_a_setting_alone_is_still_found_as_before(hass):
+    entry, dev = _device(hass, "pk")
+    _entity(hass, entry, dev, "sensor.pk_target_soc", _PCT, 90)
+    _entity(hass, entry, dev, "sensor.pk_pwr", _W, 0)
+    assert _bare(hass)._auto_detect_battery_soc("sensor.pk_pwr") == (
+        "sensor.pk_target_soc")
+
+
+async def test_a_pick_that_names_no_sensor_is_not_waited_for(hass):
+    """b2's pick was renamed away: no SOC for b2, no guess from its device,
+    and the fleet does not wait for it."""
+    _edge(hass, 80)
+    _flow(hass, 60)
+    ed = _ed(hass, _edge_src(), _flow_src(soc="sensor.gone_level"))
+    r = _reader(hass, ed)
+    assert r._auto_detect_battery_soc(FLOW_TO) is None
+    assert not r._soc_candidate_exists(FLOW_TO)
+    readings = _read(r)
+    assert readings.batteries["b2"].soc_pct is None
+    assert readings.battery_soc_units_expected == 1
+    assert readings.battery_soc_partial is False
+
+
+async def test_a_pick_known_to_the_registry_is_waited_for(hass):
+    """Registered and no state yet: a sensor coming up, not a gone one."""
+    _edge(hass, 80)
+    _flow(hass, level_loaded=False)
+    r = _reader(hass, _ed(hass, _edge_src(), _flow_src()))
+    assert r._auto_detect_battery_soc(FLOW_TO) == FLOW_LEVEL
+    assert _read(r).battery_soc_units_expected == 2
+
+
+def test_two_picks_and_no_power_give_no_home_soc():
+    """No battery power read and two batteries picked a SOC: the first
+    pick is one battery of two, not the home's level."""
+    from custom_components.solar_energy_management.ha_energy_reader import (
+        EnergyDashboardConfig,
+        one_battery_soc,
+    )
+    cfg = EnergyDashboardConfig()
+    cfg.battery_soc = "sensor.a_soc"
+    cfg.battery_soc_list = ["sensor.a_soc", "sensor.b_soc"]
+    assert one_battery_soc(cfg) is None
+    cfg.battery_soc_list = ["sensor.a_soc"]
+    assert one_battery_soc(cfg) == "sensor.a_soc"

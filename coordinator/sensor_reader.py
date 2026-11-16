@@ -83,6 +83,61 @@ def _soc_shaped(device_class: Any, unit: Optional[str]) -> bool:
     were read as an empty battery."""
     return (unit or "").strip() == "%" or device_class == "battery"
 
+
+# (#1373) Words of a SOC setting, not of the level: ``min_soc``,
+# ``soc_set``, ``target_soc``, ``end_of_discharge_soc``, ``state_of_health``.
+# Matched as whole words of the id (``reset`` holds no ``set``).
+_SOC_SETTING_WORDS = frozenset((
+    "min", "max", "minimum", "maximum", "target", "set", "setpoint",
+    "limit", "reserve", "cutoff", "end", "eod", "backup", "floor", "health",
+    "soh", "lower", "upper", "hold",
+))
+
+
+def _soc_setting(entity_id: str, beside: str = "") -> bool:
+    """(#1373) Does the id name a SOC setting rather than the level?
+
+    A word the battery's power sensor id holds too is the device's name
+    (a Growatt ``max`` inverter), not a setting."""
+    words = set(entity_id.split(".", 1)[-1].lower().split("_"))
+    words -= set(beside.split(".", 1)[-1].lower().split("_"))
+    return bool(words & _SOC_SETTING_WORDS)
+
+
+def _picked_soc_present(hass: Any, pick: str) -> bool:
+    """(#1373) Is the SOC sensor picked in HA's battery dialog there: a
+    state, or a registry entry not disabled? A sensor still coming up is
+    there; a renamed or removed one is not, and a fleet that counted it
+    would wait for it for ever."""
+    if hass.states.get(pick) is not None:
+        return True
+    try:
+        entry = er.async_get(hass).async_get(pick)
+    except Exception:  # noqa: BLE001 — no usable registry (stub hass)
+        return False
+    return bool(entry and not entry.disabled_by)
+
+
+def _own_stems(ed_config: Any, battery_power_entity: str) -> list:
+    """(#1373) The name stems the SOC search tries for this battery,
+    longest first. In a fleet, a stem another battery's name starts with
+    too is not this battery's, and nor is any shorter one: ``home_battery``
+    is the stem of ``home_battery_power`` and of ``home_battery_2_power``,
+    and b2 found b1's ``home_battery_soc`` through it while its own level
+    was not up yet. A battery its name cannot tell apart is left to its
+    device (strategy 2)."""
+    parts = battery_power_entity.split(".", 1)[1].split("_")
+    units = battery_units(ed_config)
+    others = ([u.split(".", 1)[1].split("_") for u in units
+               if u != battery_power_entity and "." in u]
+              if battery_power_entity in units else [])
+    stems = []
+    for k in range(len(parts), 1, -1):
+        if any(o[:k] == parts[:k] for o in others):
+            break
+        stems.append("_".join(parts[:k]))
+    return stems
+
 _CAPACITY_KEYWORDS = (
     "akkukapazit", "rated_capacity", "battery_capacity",
     "rated_energy", "nennkapazit", "usable_capacity",
@@ -7463,7 +7518,9 @@ class SensorReader:
         own = unit_soc_sensor(
             getattr(self, "_energy_dashboard_config", None), battery_power_entity)
         if own:
-            return own
+            # A pick that names no sensor (renamed, removed) is a config
+            # gap: no SOC for this battery, and still no guess.
+            return own if _picked_soc_present(self.hass, own) else None
 
         cached = self._soc_entity_by_power.get(battery_power_entity)
         if cached:
@@ -7486,11 +7543,10 @@ class SensorReader:
         # ``sensor.battery_1_batterieladung``. The 2-part-only heuristic
         # missed any ``<vendor>_<name>_<index>_power`` battery (#523 —
         # per-battery tiles showed 0% SOC on multi-battery installs).
-        entity_name = battery_power_entity.split(".", 1)[1]
-        parts = entity_name.split("_")
-
-        for k in range(len(parts), 1, -1):
-            prefix = "_".join(parts[:k])
+        # (#1373) In a fleet, only the stems no other battery's name shares.
+        for prefix in _own_stems(
+                getattr(self, "_energy_dashboard_config", None),
+                battery_power_entity):
             result = self._try_soc_candidates(prefix, soc_keywords)
             if result:
                 self._soc_entity_by_power[battery_power_entity] = result
@@ -7510,7 +7566,8 @@ class SensorReader:
                 # (#1373) Ranked, not first in registry order: a sensor HA
                 # declares a battery level (device class battery, %) beats
                 # one found by its name, and a name match counts only in %.
-                # Rank 0: both; 1: declared only; 2: name in % only.
+                # Rank 0: both; 1: declared only; 2: name in % only;
+                # 3: a setting (``min_soc``, ``soc_set``), declared or not.
                 best: Optional[tuple[int, str, float]] = None
                 for entity_entry in device_entities:
                     if entity_entry.domain != "sensor":
@@ -7535,7 +7592,8 @@ class SensorReader:
                                   and _soc_shaped(dc, unit))
                     if not (by_keyword or by_signature):
                         continue
-                    rank = (0 if by_keyword and by_signature
+                    rank = (3 if _soc_setting(eid, battery_power_entity)
+                            else 0 if by_keyword and by_signature
                             else 1 if by_signature else 2)
                     if best is not None and best[0] <= rank:
                         continue
@@ -7680,10 +7738,17 @@ class SensorReader:
             entry = registry.async_get(eid)
             return bool(entry and not entry.disabled_by)
 
+        # (#1373) A battery's own pick is its SOC sensor: it is there, or
+        # there is nothing to wait for. No name is asked for it.
+        own = unit_soc_sensor(
+            getattr(self, "_energy_dashboard_config", None), battery_power_entity)
+        if own:
+            return _picked_soc_present(self.hass, own)
+
         # Same longest-stem-first walk as detection's strategy 1.
-        parts = battery_power_entity.split(".", 1)[1].split("_")
-        for k in range(len(parts), 1, -1):
-            prefix = "_".join(parts[:k])
+        for prefix in _own_stems(
+                getattr(self, "_energy_dashboard_config", None),
+                battery_power_entity):
             for keyword in _SOC_NAME_KEYWORDS:
                 if _present(f"sensor.{prefix}_{keyword}"):
                     _note_read(self, f"sensor.{prefix}_{keyword}")  # (#1140)

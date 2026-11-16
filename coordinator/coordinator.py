@@ -76,8 +76,8 @@ from ..const import (
 from ..utils.time_manager import TimeManager
 from ..ha_energy_reader import (
     read_energy_dashboard_config_outcome, EnergyDashboardConfig, battery_units,
-    battery_units_before_derive, energy_counters, unit_energy_counters,
-    yield_found_units_to_picks,
+    battery_units_before_derive, energy_counters, one_battery_soc,
+    unit_energy_counters, yield_found_units_to_picks,
 )
 from .install_modules import Module, Presence, module_reload_due, module_verdict, presence_of
 from .battery_controls import (  # (#1071, #1195)
@@ -5804,7 +5804,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _anchor = (
                     self.config.get("battery_power_sensor")
                     or (getattr(_ed, "battery_power", None) if _ed else None)
-                    or (getattr(_ed, "battery_soc", None) if _ed else None)
+                    # (#1373) a fleet's first pick is one battery of two
+                    or (one_battery_soc(_ed) if _ed else None)
                 )
                 cycles_sensor = self._sensor_reader.detect_battery_cycles_sensor(_anchor)
             if cycles_sensor:

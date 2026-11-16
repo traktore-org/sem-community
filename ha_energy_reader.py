@@ -464,8 +464,9 @@ def one_battery_soc(ed_config: Any) -> Optional[str]:
 
     With one battery read, its own pick: the first source's ``stat_soc`` may
     belong to a battery with no power sensor, listed first. With no battery
-    power read at all, the first source's, as before. A fleet has none: its
-    SOC is the average of its batteries.
+    power read at all, the first source's, as before, but only when no
+    other source has a pick. A fleet has none: its SOC is the average of
+    its batteries.
     """
     units = battery_units(ed_config)
     if len(units) > 1:
@@ -473,7 +474,11 @@ def one_battery_soc(ed_config: Any) -> Optional[str]:
     soc = getattr(ed_config, "battery_soc", None)
     first = soc if isinstance(soc, str) and soc else None
     if not units:
-        return first
+        # No battery power read: the first pick, unless two batteries
+        # have one (the first is then one battery of two, not the home's).
+        picks = getattr(ed_config, "battery_soc_list", None)
+        many = isinstance(picks, (list, tuple)) and len(set(picks)) > 1
+        return None if many else first
     own = unit_soc_sensor(ed_config, units[0])
     # A pick the parser recorded for no battery at all (a config built
     # without the record) is no answer about whose it is: the first stays.
