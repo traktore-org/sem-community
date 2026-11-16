@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.17] — 16.11.2026
+
 - 🐛 **A second battery read 0 % charge** (#1373). Each battery now reads its own charge sensor from the Energy Dashboard, never a status code.
 - 🔧 **A hot water tank's goal is now also worked out in one place** (#1369). Nothing changes for you; differences are only counted.
 - ✨ **SEM proposes a thermometer for a heater** (#1353). It looks on the same device or in the same area. You confirm with one click.
