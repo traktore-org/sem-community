@@ -100,7 +100,7 @@ def _soc_setting(entity_id: str, beside: str = "") -> bool:
     """(#1373) Does the id name a SOC setting rather than the level?
 
     A word the battery's power sensor id holds too is the device's name
-    (a Growatt ``max`` inverter), not a setting."""
+    (an inverter model ``max``), not a setting."""
     words = set(entity_id.split(".", 1)[-1].lower().split("_"))
     words -= set(beside.split(".", 1)[-1].lower().split("_"))
     return bool(words & _SOC_SETTING_WORDS)
