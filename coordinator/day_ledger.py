@@ -30,7 +30,6 @@ import math
 from datetime import datetime, timedelta
 
 from .energy_planner import LedgerSlot
-from .price_signal import is_cheap_name
 from .price_view import PriceView
 
 # Below this computed surplus a "free window" is forecast noise, not a
@@ -287,15 +286,9 @@ def export_rate_fn(rate):
 
 def tariff_cheap_at(prov, ts):
     """The ONE cheap-level accessor (#638) — the same gate execution's
-    cheap-hours loads fire on."""
-    if hasattr(prov, "get_price_level_at"):
-        try:
-            lvl = prov.get_price_level_at(ts)
-        except Exception:  # noqa: BLE001 — no level is not cheap
-            return False
-        # (#994) one vocabulary; an unknown level is never cheap.
-        return is_cheap_name(lvl)
-    return False
+    cheap-hours loads fire on. (#1372) A thin wrapper: ``PriceView`` with
+    the plan rule (the raw level; an unknown level is never cheap, #994)."""
+    return PriceView(prov, rule="plan").cheap_at(ts)
 
 
 def tariff_rate_cheap_at(prov, ts):

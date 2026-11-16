@@ -9780,7 +9780,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         without a forecast. Same sun frame and home-draw fallback the
         tomorrow preview uses, same day builder the planner uses."""
         from .charge_pacing import today_remaining_slots
-        from .day_ledger import build_day_slots, tariff_cheap_at, tariff_price_at
+        from .day_ledger import build_day_slots, tariff_price_at
+        from .price_view import PriceView
         try:
             now = dt_util.now()
             sr_s = self.time_manager.get_sunrise_time()
@@ -9817,7 +9818,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#820) the day's own house profile, not the night average
                 home_w_at=self._day_home_w_at(now), builder=build_day_slots,
                 price_at=lambda ts: tariff_price_at(prov, ts),
-                level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+                level_cheap_at=PriceView(prov, rule="plan").cheap_at,
                 export_rate=self._export_rate_at(),   # (#924)
             )
         except Exception:  # noqa: BLE001 — no frame, no pacing
@@ -12635,7 +12636,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             day_kwh = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
         except Exception:  # noqa: BLE001 — no forecast, dark preview
             day_kwh = 0.0
-        from .day_ledger import rate_cheap_fn, tariff_cheap_at, tariff_price_at
+        from .day_ledger import rate_cheap_fn, tariff_price_at
+        from .price_view import PriceView
         prov = self._tariff_provider
         # (#820) tomorrow's hours, read off the weekday profile
         _home_at_day = self._day_home_w_at(day_start)
@@ -12644,7 +12646,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             sunrise=sunrise, sunset=sunset,
             home_w_at=_home_at_day,
             price_at=lambda ts: tariff_price_at(prov, ts),
-            level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+            level_cheap_at=PriceView(prov, rule="plan").cheap_at,
             # (#1310) the cheap windows show the tariff's rate, not the
             # gate that refuses a day with one rate
             rate_cheap_at=rate_cheap_fn(prov),
@@ -12756,7 +12758,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     sunrise=sunrise, sunset=sunset,
                     home_w_at=self._day_home_w_at(day_start),   # (#820)
                     price_at=lambda ts: tariff_price_at(prov, ts),
-                    level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+                    level_cheap_at=PriceView(prov, rule="plan").cheap_at,
                     rate_cheap_at=rate_cheap_fn(prov),
                     # (#924) These slots go to build_night_ledger and the
                     # REAL pack_night below — this is a packing site, and
@@ -13669,11 +13671,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # day slots, the tomorrow preview) — a second copy is how a
             # parallel price path starts (day_ledger.tariff_price_at).
             from .day_ledger import (align_to_step, market_step_s,
-                                     rate_cheap_fn, tariff_cheap_at,
-                                     tariff_price_at)
+                                     rate_cheap_fn, tariff_price_at)
+            from .price_view import PriceView
             prov = self._tariff_provider
             _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
-            _cheap_at = lambda ts: tariff_cheap_at(prov, ts)  # noqa: E731
+            _cheap_at = PriceView(prov, rule="plan").cheap_at
             # (#1310) The rows' ``cheap``: the tariff's rate, asked of its
             # week. ``_cheap_at`` (the packer's) refuses a day with one rate,
             # so a whole off-peak Sunday was not cheap beside Monday 00:00.
