@@ -97,6 +97,10 @@ test('"heat up to" is absolute; the stored value stays the offset above Keep at'
 
 test('a value below Keep at is refused, with the reason', () => {
     assert.deepEqual(sunMaxWrites({ id: 'x', keep: 52 }, 50), { error: 'hq_err_below_keep', params: { keep: '52' } });
+    // (#1371) a hot water tank's sun limit cannot pass its Legionella target
+    assert.deepEqual(sunMaxWrites({ id: 'hot_water', keep: 52 }, 66, null, 65), { error: 'hq_err_above_max', params: { max: '65' } });
+    assert.equal(sunMaxWrites({ id: 'hot_water', keep: 52 }, 65, null, 65).writes[0].value, '13');
+    assert.equal(sunMaxWrites({ id: 'heat_pump', keep: 21 }, 70, null, 65).writes[0].value, '49');
     assert.equal(sunMaxWrites({ id: 'x', keep: 52 }, '').error, 'hq_err_below_keep');
 });
 
