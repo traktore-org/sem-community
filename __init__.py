@@ -333,6 +333,10 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # at adapter construction.
     "battery_strategy_entities",
     "battery_strategy_control_entity",
+    # (#1346) the select that starts a grid charge and its charge option —
+    # read at adapter construction like the entities above.
+    "battery_charge_select_entity",
+    "battery_charge_select_option",
     # #523 AC-coupled bidirectional setpoint (charge = negative on the
     # force-discharge entity) — read at adapter construction.
     "battery_setpoint_bidirectional",

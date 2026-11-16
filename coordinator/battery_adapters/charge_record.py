@@ -24,6 +24,9 @@ charge turned it on:
   for an entity that still reads on has a charge SEM started and has not
   seen stop, so the stop goes out unless the plan still wants the charge.
   Until the entity can be read, nothing is adopted and nothing is dropped;
+* (#1346) a select that starts the charge (instead of a switch) also keeps
+  the option it showed BEFORE SEM changed it, under ``prior``, saved with
+  the name and dropped with it: the stop writes it back, in any lifetime;
 * a record that cannot be read names nothing: SEM cannot tell its own
   charge from the user's, so it stops none. The next start writes over it.
 
@@ -54,13 +57,17 @@ class ForcedChargeRecord:
         self._store = store
         #: entity → the batteries whose charge turned it on
         self._running: dict[str, set[str]] = {}
+        #: (#1346) entity → the option a select showed before SEM's start
+        self._prior: dict[str, str] = {}
         self._loaded = store is None
         self._readable = store is not None
         self._lock = asyncio.Lock()
 
-    async def started(self, entity_id: str, battery_id: str = "") -> bool:
+    async def started(self, entity_id: str, battery_id: str = "",
+                      prior: "str | None" = None) -> bool:
         """Before the start's write. False: the name was not saved, so
-        the start must not go out."""
+        the start must not go out. ``prior`` (#1346): the option a select
+        shows now; kept once per entity, the first start's."""
         entity_id, battery_id = str(entity_id or ""), str(battery_id or "")
         if not entity_id:
             return True
@@ -70,13 +77,24 @@ class ForcedChargeRecord:
             if owners is not None and battery_id in owners:
                 return True
             self._running.setdefault(entity_id, set()).add(battery_id)
+            new_prior = prior is not None and entity_id not in self._prior
+            if new_prior:
+                self._prior[entity_id] = str(prior)
             if await self._save():
                 return True
+            if new_prior:
+                self._prior.pop(entity_id, None)
             if owners is None:
                 self._running.pop(entity_id, None)
             else:
                 owners.discard(battery_id)
             return False
+
+    async def prior_of(self, entity_id: str) -> "str | None":
+        """(#1346) The option a select showed before SEM's start, or None."""
+        async with self._lock:
+            await self._load()
+            return self._prior.get(str(entity_id or ""))
 
     async def stopped(self, entity_id: str) -> None:
         """The entity is back: a stop landed, or it reads that no charge
@@ -85,7 +103,8 @@ class ForcedChargeRecord:
         entity_id = str(entity_id or "")
         async with self._lock:
             await self._load()
-            if self._running.pop(entity_id, None) is None:
+            gone = self._running.pop(entity_id, None)
+            if self._prior.pop(entity_id, None) is None and gone is None:
                 return
             await self._save()
 
@@ -133,7 +152,17 @@ class ForcedChargeRecord:
                             "started is damaged — it stops none it may have "
                             "started before the restart (#1181)")
             return
+        prior = record.get("prior", {})
+        if not isinstance(prior, dict) or not all(
+                isinstance(e, str) and isinstance(o, str)
+                for e, o in prior.items()):
+            self._readable = False
+            _LOGGER.warning("Battery: SEM's record of the options it changed "
+                            "for a grid charge is damaged — it puts none "
+                            "back (#1346)")
+            return
         self._running = {e: set(b) for e, b in running.items() if e and b}
+        self._prior = {e: o for e, o in prior.items() if e in self._running}
         if self._running:
             _LOGGER.info("Battery: SEM started a forced charge on %s and has "
                          "not seen it stop (#1181)",
@@ -143,7 +172,10 @@ class ForcedChargeRecord:
         if self._store is None:
             return True
         try:
-            await self._store.async_save({"running": self.snapshot()})
+            record: dict = {"running": self.snapshot()}
+            if self._prior:         # (#1346) old files stay as they were
+                record["prior"] = dict(self._prior)
+            await self._store.async_save(record)
         except Exception as exc:  # noqa: BLE001
             log_on_change(_LOGGER, "forced_charge_record:save", logging.WARNING,
                           "Battery: SEM could not save its record of the "

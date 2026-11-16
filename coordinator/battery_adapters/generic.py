@@ -19,6 +19,7 @@ from ..power_control import (
     prepare_power_setpoint,
 )
 from .base import BatteryControlAdapter
+from .charge_select import select_setup
 from ...utils.select_option import listed_option
 
 _LOGGER = logging.getLogger(__name__)
@@ -439,6 +440,10 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         # A bidirectional setpoint can charge via a negative value on the
         # same entity — no charge switch needed (#523, Sessy).
         if self._setpoint_bidirectional and self._force_discharge_entity:
+            return True
+        # (#1346) a grid charge set by a select: no target entity needed,
+        # SEM ends it itself (the plan's target or block end)
+        if select_setup(self._config):
             return True
         return bool(self._force_charge_switch and self._target_soc_entity)
 

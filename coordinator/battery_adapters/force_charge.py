@@ -19,6 +19,8 @@ from homeassistant.core import HomeAssistant
 
 from ...utils.log_gate import log_on_change
 from .charge_record import ForcedChargeRecord
+from .charge_select import charge_option, read_select, select_setup
+from ...utils.select_option import listed_option
 from .charge_target import ChargeTargetHold
 from ..units import finite_float
 
@@ -217,12 +219,14 @@ class BatteryChargeAdapter(ABC):
         if self.actuator_charging() is False:
             await self._note_stopped()
 
-    async def _note_started(self) -> "ChargeStatus | None":
+    async def _note_started(self, prior: "str | None" = None
+                            ) -> "ChargeStatus | None":
         """(#1181) Before the start's write: the actuator goes in the
-        record. A FAILED status when it could not: no start goes out."""
+        record. A FAILED status when it could not: no start goes out.
+        ``prior`` (#1346): the option a select shows before SEM's start."""
         try:
             saved = await self.charge_record.started(
-                self.charge_actuator(), self._battery())
+                self.charge_actuator(), self._battery(), prior=prior)
         except Exception:  # noqa: BLE001
             saved = False
         if saved:
@@ -563,13 +567,21 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     """
 
     def charge_actuator(self) -> str:
+        chosen = select_setup(self.config)
+        if chosen:                                        # (#1346)
+            return chosen[0]
         return str(self.config.get("battery_force_charge_switch", "") or "")
 
     def _charging_state(self, state: str) -> bool:
+        chosen = select_setup(self.config)
+        if chosen:                                        # (#1346)
+            return state == charge_option(self.hass, *chosen)
         return state == "on"
 
     async def start_forced_charge(self, command: ChargeCommand) -> ChargeStatus:
         """Enable forced charge switch and set SOC target."""
+        if select_setup(self.config):                     # (#1346)
+            return await self._start_by_select(command)
         charge_switch = self.config.get("battery_force_charge_switch", "")
         soc_target_entity = self.config.get("battery_target_soc_entity", "")
 
@@ -625,6 +637,8 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         rejected by Home Assistant, and a FAILED stop is retried every cycle
         for the life of the install (see the class note below).
         """
+        if select_setup(self.config):                     # (#1346)
+            return await self._stop_by_select()
         charge_switch = self.config.get("battery_force_charge_switch", "")
         if not charge_switch:
             self._active = False
@@ -654,6 +668,93 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 status=ChargeCommandStatus.FAILED,
                 message=f"Stop failed: {exc}",
             )
+
+    # ── (#1346) the select path ──────────────────────────────────────
+    def _select_failed(self, why: str) -> ChargeStatus:
+        log_on_change(_LOGGER, f"select_charge:{self.charge_actuator()}",
+                      logging.WARNING, "Battery: grid charge by select: %s "
+                      "(#1346)", why)
+        return ChargeStatus(status=ChargeCommandStatus.FAILED, message=why)
+
+    async def _start_by_select(self, command: ChargeCommand) -> ChargeStatus:
+        """Set the select to the charge option. Nothing goes out when the
+        select cannot be read or does not list the option; a select that
+        already shows it is not written again."""
+        entity, option = select_setup(self.config)
+        state, options = read_select(self.hass, entity)
+        if state is None:
+            return self._select_failed(f"{entity} is unavailable — SEM cannot "
+                                       "ask it, so no charge is started")
+        wanted = listed_option(self.hass, entity, option)   # (#1039)
+        if wanted not in options:
+            return self._select_failed(f"{entity} does not list '{option}'")
+        if state == wanted:
+            return await self._join_select_charge(entity, command)
+        # a name left from a charge that has ended (the select no longer
+        # shows the option) must not hand its old prior to this one
+        await self.charge_record.stopped(entity)
+        unsaved = await self._note_started(prior=state)   # before the write
+        if unsaved is not None:
+            return unsaved
+        try:
+            if self.config.get("battery_target_soc_entity", ""):
+                await self.target_hold.write(
+                    self.config["battery_target_soc_entity"],
+                    int(command.target_soc))
+            await self.hass.services.async_call(
+                "select", "select_option",
+                {"entity_id": entity, "option": wanted})
+        except Exception as exc:  # noqa: BLE001
+            await self._release_target()
+            await self._note_failed_start()
+            return self._select_failed(f"start failed: {exc}")
+        self._active, self._target_soc = True, command.target_soc
+        return ChargeStatus(status=ChargeCommandStatus.CHARGING,
+                            target_soc=command.target_soc,
+                            message="Charge option set")
+
+    async def _join_select_charge(self, entity: str,
+                                  command: ChargeCommand) -> ChargeStatus:
+        """The select already shows the charge option: nothing to write. A
+        charge SEM's record names (another pack's start) gains this pack as
+        an owner; any other is the user's or the inverter's, left alone."""
+        if await self.charge_record.prior_of(entity) is not None:
+            if not await self.charge_record.started(entity, self._battery()):
+                return self._select_failed("SEM could not save its record")
+            self._active, self._target_soc = True, command.target_soc
+        return ChargeStatus(status=ChargeCommandStatus.CHARGING,
+                            target_soc=command.target_soc,
+                            message="Select already shows the charge option")
+
+    async def _stop_by_select(self) -> ChargeStatus:
+        """Put the select back to what it showed before SEM's start, but
+        only while it still shows the charge option: a choice made by hand
+        since is the user's and is never written over."""
+        entity, option = select_setup(self.config)
+        prior = await self.charge_record.prior_of(entity)
+        if prior is None:
+            self._active, self._target_soc = False, 0.0
+            await self._put_target_back()
+            return _say_nothing_to_stop(self, f"SEM changed no option of {entity}")
+        state, options = read_select(self.hass, entity)
+        if state is None:
+            return self._select_failed(f"{entity} is unavailable — the charge "
+                                       "option is put back when it answers")
+        if state == charge_option(self.hass, entity, option):
+            if prior not in options:
+                return self._select_failed(f"{entity} no longer lists '{prior}'")
+            try:
+                await self.hass.services.async_call(
+                    "select", "select_option",
+                    {"entity_id": entity,
+                     "option": listed_option(self.hass, entity, prior)})
+            except Exception as exc:  # noqa: BLE001
+                return self._select_failed(f"stop failed: {exc}")
+        self._active, self._target_soc = False, 0.0
+        await self._note_stopped(True)
+        await self._put_target_back()
+        return ChargeStatus(status=ChargeCommandStatus.IDLE,
+                            message="Select put back")
 
     async def get_status(self) -> ChargeStatus:
         """Read SOC from battery entity."""
