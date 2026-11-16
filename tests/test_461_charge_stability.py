@@ -549,10 +549,10 @@ class TestWiring:
         """
         from .ast_contracts import call_sites
 
-        sites = call_sites("comparative_level")
+        sites = call_sites("compared_level")  # (#1372) PriceView -> comparative_level
         assert any(f == "coordinator/coordinator.py" for f, _, _ in sites), (
             "#524/#994 anchor — the fleet tariff_level must come from "
-            f"price_signal.comparative_level. Call sites: {sites}")
+            f"PriceView.compared_level. Call sites: {sites}")
 
         body = (Path(__file__).parent.parent / "coordinator"
                 / "coordinator.py").read_text()

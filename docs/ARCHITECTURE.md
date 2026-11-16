@@ -1243,6 +1243,7 @@ Each charger has independent:
 
 ```
 tariff/tariff_provider.py       — StaticTariffProvider, DynamicTariffProvider
+coordinator/price_view.py       — the one place that decides what a cheap hour is (cheap / dear / one price / unknown); two questions: the hour, and now (#1372)
 analytics/pv_performance.py     — PVPerformanceAnalyzer
 analytics/energy_assistant.py   — EnergyAssistant (tips, optimization score)
 utils/time_manager.py           — TimeManager (sunrise, night mode/end, meter day)

@@ -1228,8 +1228,10 @@ on the charger itself puts a `Solar only` charger into the night lane.
 
 Night charging starts when night mode activates: at sunset plus the offset you
 set in **Night start offset** (0–400 minutes, default 30), in every season. It
-ends at sunrise or at **Night Latest End** (default 07:00), whichever comes
-first. Without a sun reading the start falls back to 20:30.
+ends at sunrise or at **Night Latest End** (default 07:00, from 03:00 to 09:00), whichever comes
+first. You find it under Settings → Devices → SEM → Controls. If your cheap tariff ends at
+04:00, set it to 4. The mode *Solar + cheapest hours* follows your tariff by itself; the other
+modes charge through the whole night window. Without a sun reading the start falls back to 20:30.
 
 ### How it works
 

@@ -42,7 +42,8 @@ from ..tariff.tariff_provider import (
     DynamicTariffProvider, PriceLevel, StaticTariffProvider,
 )
 from ..utils.log_gate import log_on_change
-from .price_signal import absence_word, comparative_level, is_cheap
+from .price_signal import absence_word
+from .price_view import PriceView
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ HEAT_PUMP_TARIFF_KEYS = {
 }
 
 #: A fixed rate compares with nothing: neither cheap nor expensive.
+# PRICE-ASK: the one word a fixed rate is given; nothing is judged here
 LEVEL_FIXED = PriceLevel.NORMAL.value
 
 #: A meter ticks in whole steps (often 0.01 or 0.1 kWh): one tick on top of
@@ -218,7 +220,8 @@ class PlanTariff:
         return self.rate or None
 
     def cheap_at(self, when) -> bool:
-        return is_cheap(self.provider, when)
+        # (#1372) the live rule asked about a later hour, as it always was
+        return PriceView(self.provider).cheap_seen_from_now(when)
 
 
 class DeviceTariffs:
@@ -305,7 +308,7 @@ class DeviceTariffs:
             return None
         # The house rule, unchanged: a level only where a comparison stands
         # behind it. A fixed rate is one flat price, so this is None for it.
-        lvl = comparative_level(provider)
+        lvl = PriceView(provider).compared_level()  # (#1372)
         if lvl is not None:
             return lvl.value
         if not tariff_of(device).entity:
