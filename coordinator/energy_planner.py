@@ -88,6 +88,10 @@ class Demand:
     #: two-rate tariff, a flat tariff): no hour is cheaper than another, so
     #: the goal is met in a night hour without sun instead of not at all.
     one_price_ok: bool = False
+    #: (#1081) Of ``energy_kwh``, the part above a goal's Keep at (a pre-heat
+    #: top): bought only in a CHEAP hour, never through ``one_price_ok``.
+    #: 0 = the whole ask is the goal, exactly as before.
+    cheap_only_kwh: float = 0.0
     #: (#1081) A heat pump with a COP curve: ``cop_at(slot start)`` → the
     #: COP at that hour. Its grid slots are RANKED by price ÷ COP (the price
     #: of heat); the kWh asked and the cost reported stay electricity. None
@@ -535,6 +539,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
     for d in sorted(demands, key=lambda d: (d.priority, d.id)):
         need = max(0.0, float(d.energy_kwh))
         planned = 0.0
+        relaxed_kwh = 0.0               # (#1081) booked in not-cheap hours
         cost = 0.0
         cost_known = True               # (#1102) false once an unpriced slot is used
         note = ""
@@ -642,6 +647,11 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             else:
                 grant = min(float(d.max_power_w), s.headroom_w)
                 want = need - planned
+                if d.cheap_only_kwh > 0 and not _cheap(d, i):
+                    # (#1081) an hour that is not cheap serves Keep at only
+                    want = min(want, need - d.cheap_only_kwh - relaxed_kwh)
+                    if want <= 1e-9:
+                        continue
             if grant < max(_W_EPS, float(d.min_power_w)):
                 continue
             power = min(grant, max(float(d.min_power_w), want / h * 1000.0))
@@ -680,6 +690,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 demand_id=d.id, start=begin, end=end, power_w=power,
                 price=price, reason=why))
             last_block_end[d.id] = end
+            if d.cheap_only_kwh > 0 and not _cheap(d, i):
+                relaxed_kwh += e_kwh
             planned += e_kwh
             cost += e_kwh * (price or 0.0)
         if (need > 1e-9 and planned < need * FIT_EPS and unpriced
