@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The COP learner no longer learns from an outdoor thermometer that is stuck** (#1081). The heat pump card says so.
 - ✨ **A hot water tank with a thermometer heats to its Keep at + Extra** (#1369), at most the Legionella target. Solar Heating Target: only without one.
 - ✨ **The Legionella run may start up to a day early, in a sunny hour** (#1369). Never later than before.
 - ✨ **A repair warns when the hot water tank draws power for two hours but does not warm** (#1369).

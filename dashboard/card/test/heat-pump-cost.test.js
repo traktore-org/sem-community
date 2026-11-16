@@ -84,6 +84,8 @@ test('(#1081) the learner line', () => {
     const tl = (k) => L[k] || k;
     assert.equal(copLearnLine(null, tl), '');
     assert.equal(copLearnLine({ state: 'no_meter' }, tl), '');
+    // (#1081) a stuck thermometer is said before any hour count
+    assert.equal(copLearnLine({ state: 'not_enough', hours: 0, temp_stuck: true }, (k) => k), 'hp_cop_temp_stuck');
     assert.equal(copLearnLine({ state: 'not_enough', hours: 4 }, tl), 'Learning: 4 h');
     // (#1081 review) a meter that counts electricity is named, not learned
     assert.equal(copLearnLine({ state: 'looks_electric', hours: 30 }, (k) => k), 'hp_cop_looks_electric');

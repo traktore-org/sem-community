@@ -130,6 +130,8 @@ export function copSourceOptions(goals) {
 export function copLearnLine(learn, t) {
     if (!learn || learn.state === 'no_meter') return '';
     if (learn.state === 'looks_electric') return t('hp_cop_looks_electric');
+    // a thermometer that does not move teaches nothing: say so first
+    if (learn.temp_stuck) return t('hp_cop_temp_stuck');
     const hours = String(Math.round(num(learn.hours) || 0));
     if (learn.state === 'learned') {
         return t('hp_cop_learned_from').replace('{hours}', hours)

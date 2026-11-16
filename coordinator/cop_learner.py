@@ -41,6 +41,13 @@ ELECTRIC_COP = 1.2
 ELECTRIC_LIKE_MIN = 0.85
 #: a running hour that used this much and moved no heat = a lagging counter
 STALL_ELEC_KWH = 0.05
+#: An outdoor thermometer whose hour mean is the same for this many hours in
+#: a row, without one fresh report, is stuck: every hour would land in one
+#: temperature bin and the "learned" COP there would be a mix of all weather.
+STUCK_HOURS = 12
+#: A report this recent says the thermometer is alive (a weather service
+#: that rounds to whole degrees repeats a value for hours, and reports).
+FRESH_REPORT_S = 2 * 3600.0
 
 #: an outdoor reading outside this band is a broken sensor
 OUTDOOR_MIN_C, OUTDOOR_MAX_C = -40.0, 50.0
@@ -74,9 +81,20 @@ def _valid(state: Any) -> Dict[str, Any]:
                        for v in bins.values())
             or not isinstance(state["rejected"], dict)
             or not (state["hour"] is None or _hour_ok(state["hour"]))
-            or not _res_ok(state.get("heat_res", 1.0))):
+            or not _res_ok(state.get("heat_res", 1.0))
+            or not _same_ok(state)):
         return new_state()
     return state
+
+
+def _same_ok(state: Dict[str, Any]) -> bool:
+    for k in ("t_last", "t_same"):
+        v = state.get(k)
+        if v is not None and (isinstance(v, bool)
+                              or not isinstance(v, (int, float))
+                              or not math.isfinite(v)):
+            return False
+    return True
 
 
 def _res_ok(v: Any) -> bool:
@@ -85,7 +103,7 @@ def _res_ok(v: Any) -> bool:
 
 
 _HOUR_NUMS = ("elec0", "elec1", "heat0", "heat1", "sum_temp", "n_temp",
-              "n", "n_run")
+              "n", "n_run", "fresh")
 
 
 def _hour_ok(hour: Any) -> bool:
@@ -134,8 +152,12 @@ def _close_hour(state: Dict[str, Any], hour: Dict[str, Any]) -> None:
     if hour.get("bad"):
         _reject(state, "unread")
         return
+    stuck = _temperature_stuck(state, hour)
     e0, e1 = hour.get("elec0"), hour.get("elec1")
     h0, h1 = hour.get("heat0"), hour.get("heat1")
+    if stuck:
+        _reject(state, "temperature_stuck")
+        return
     if None in (e0, e1, h0, h1) or not hour.get("n_temp"):
         _reject(state, "unread")
         return
@@ -180,9 +202,37 @@ def _close_hour(state: Dict[str, Any], hour: Dict[str, Any]) -> None:
         del samples[: len(samples) - MAX_SAMPLES_PER_BIN]
 
 
+def _temperature_stuck(state: Dict[str, Any], hour: Dict[str, Any]) -> bool:
+    """Count hours whose mean temperature repeats with no fresh report.
+    From the 12th on the hour is not a sample, and the samples the run
+    left behind at that value are taken out again."""
+    if not hour.get("n_temp"):
+        return False
+    t = round(hour["sum_temp"] / hour["n_temp"], 1)
+    if hour.get("fresh") or state.get("t_last") != t:
+        state["t_last"], state["t_same"] = t, 0
+        return False
+    state["t_same"] = int(state.get("t_same", 0) or 0) + 1
+    if state["t_same"] < STUCK_HOURS - 1:
+        return False
+    if state["t_same"] == STUCK_HOURS - 1:
+        samples = state["bins"].get(bin_key(t), [])
+        drop = 0
+        # every trailing sample at this exact value: also the ones an
+        # older version stored before it could tell
+        while drop < len(samples) and samples[-1 - drop][0] == t:
+            drop += 1
+        if drop:
+            del samples[len(samples) - drop:]
+        if not samples:
+            state["bins"].pop(bin_key(t), None)
+    return True
+
+
 def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
             outdoor_c: Any, running: bool,
-            meter: Optional[str] = None) -> Dict[str, Any]:
+            meter: Optional[str] = None,
+            outdoor_age_s: Any = None) -> Dict[str, Any]:
     """Feed one reading (any cadence). ``hour_id`` names the clock hour; a
     new id closes the previous hour into a sample. The coordinator passes
     whole hours since the epoch (an int — no DST double hour): an id that
@@ -194,7 +244,10 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
     (a new meter, a new pump — its samples are not this one's).
 
     ``elec_kwh`` / ``heat_kwh`` are the counters' readings (kWh, rising);
-    ``running`` says the pump drew power at this reading. An unread value spoils the hour, never guesses."""
+    ``running`` says the pump drew power at this reading. An unread value spoils the hour, never guesses.
+
+    ``outdoor_age_s`` is how long ago the thermometer last reported (None =
+    not known): a recent report marks the hour as read from a live one."""
     state = _valid(state)
     if meter is not None:
         if state.get("meter") not in (None, meter):
@@ -203,6 +256,8 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
     e, h, t = _num(elec_kwh), _num(heat_kwh), _num(outdoor_c)
     if t is not None and not OUTDOOR_MIN_C <= t <= OUTDOOR_MAX_C:
         t = None
+    age = _num(outdoor_age_s)
+    fresh = t is not None and age is not None and 0 <= age <= FRESH_REPORT_S
     if h is not None:
         # the finest step the heat counter has ever shown = its resolution
         state["heat_res"] = min(float(state.get("heat_res", 1.0)),
@@ -223,6 +278,7 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
             _close_hour(state, hour)
         hour = {"id": hour_id, "elec0": e, "heat0": h, "elec1": e, "heat1": h,
                 "sum_temp": 0.0, "n_temp": 0, "n": 0, "n_run": 0,
+                "fresh": 1 if fresh else 0,
                 "bad": e is None or h is None}
         state["hour"] = hour
         if t is not None:
@@ -237,6 +293,8 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
         if hour.get("elec0") is None or hour.get("heat0") is None:
             hour["bad"] = True
         hour["elec1"], hour["heat1"] = e, h
+    if fresh:
+        hour["fresh"] = 1
     if t is not None:
         hour["sum_temp"] += t
         hour["n_temp"] += 1
@@ -282,4 +340,6 @@ def summary(state: Any, *, has_meter: bool, need: int = TRUST_HOURS) -> Dict[str
     }
     if pts:
         out["tmin"], out["tmax"] = pts[0][0], pts[-1][0]
+    if int(state.get("t_same", 0) or 0) >= STUCK_HOURS - 1:
+        out["temp_stuck"] = True
     return out
