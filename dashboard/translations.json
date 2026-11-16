@@ -1455,7 +1455,7 @@
     "state_charging_allowed": "Nabíjení povoleno",
     "state_error": "Chyba",
     "state_night_charging": "Noční nabíjení aktivní",
-    "state_night_disabled": "Noční nabíjení vypnuto",
+    "state_night_disabled": "Noční nabíjení je pro tuto nabíječku vypnuté",
     "state_night_expired": "Okno nočního nabíjení vypršelo",
     "state_night_ready": "Noční režim - Připraven",
     "state_night_target": "Noční režim - Cíl dosažen",
@@ -2157,8 +2157,8 @@
     "bq_discharge_max_sub": "Dům a auto dohromady. SEM to zapíše do střídače.",
     "bq_may_export": "Smí baterie prodávat do sítě?",
     "bq_may_export_sub": "Při vysoké ceně se smí prodat energie baterie, která na dnešní noc přebývá.",
-    "bq_may_assist": "Smí baterie večer nabíjet auto?",
-    "bq_may_assist_sub": "Energie baterie, která na dnešní noc přebývá, smí jít do auta.",
+    "bq_may_assist": "Smí baterie pomáhat nabíjet auto?",
+    "bq_may_assist_sub": "V kteroukoli hodinu, ve dne i v noci. Vypnuto: baterie autu nedá nic.",
     "bq_pacing": "Rozložit nabíjení přes den?",
     "bq_pacing_sub": "Baterie je plná kolem západu slunce, ne dopoledne. Vyžaduje limit nabíjecího výkonu a ustálenou předpověď.",
     "bq_reserve": "SEM prodává nejníže do",
@@ -2209,7 +2209,8 @@
     "hq_st_paused": "Krátká pauza, znovu začne v {time}.",
     "hq_st_stopping": "Vypne se po minimální době chodu.",
     "hq_st_own_thermostat": "Vlastní termostat ho zastavil na {temp}. Zvyšte termostat na zásobníku.",
-    "hp_cop_temp_stuck": "Venkovní teplota se 12 hodin nezměnila, proto se SEM neučí. Zkontrolujte venkovní teploměr v Konfiguraci."
+    "hp_cop_temp_stuck": "Venkovní teplota se 12 hodin nezměnila, proto se SEM neučí. Zkontrolujte venkovní teploměr v Konfiguraci.",
+    "config_hw_solar_target_band": "Tento zásobník má teploměr. Nejvyšší teplotu určují Udržovat na a Navíc na kartě zařízení, takže solární cíl ohřevu se nepoužívá."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3667,7 +3668,7 @@
     "state_charging_allowed": "Opladning tilladt",
     "state_error": "Fejl",
     "state_night_charging": "Natopladning aktiv",
-    "state_night_disabled": "Natopladning deaktiveret",
+    "state_night_disabled": "Natopladning er slået fra for denne lader",
     "state_night_expired": "Natopladningsvindue udløbet",
     "state_night_ready": "Nattilstand - Klar",
     "state_night_target": "Nattilstand - Mål nået",
@@ -4369,8 +4370,8 @@
     "bq_discharge_max_sub": "Hus og bil tilsammen. SEM skriver det til inverteren.",
     "bq_may_export": "Må batteriet sælge til nettet?",
     "bq_may_export_sub": "Når prisen er høj, må batteriets overskud til i nat sælges.",
-    "bq_may_assist": "Må batteriet lade bilen om aftenen?",
-    "bq_may_assist_sub": "Batteriets overskud til i nat må gå til bilen.",
+    "bq_may_assist": "Må batteriet hjælpe med at lade bilen?",
+    "bq_may_assist_sub": "Når som helst, dag og nat. Fra: batteriet giver bilen ingenting.",
     "bq_pacing": "Fordel opladningen over dagen?",
     "bq_pacing_sub": "Batteriet er fuldt omkring solnedgang, ikke midt på formiddagen. Kræver en ladeeffektgrænse og en stabil prognose.",
     "bq_reserve": "SEM sælger ikke længere ned end",
@@ -4421,7 +4422,8 @@
     "hq_st_paused": "Kort pause, starter igen kl. {time}.",
     "hq_st_stopping": "Slukker efter sin mindste driftstid.",
     "hq_st_own_thermostat": "Dens egen termostat stoppede den ved {temp}. Skru op for termostaten på beholderen.",
-    "hp_cop_temp_stuck": "Udetemperaturen har ikke ændret sig i 12 timer, så SEM lærer ikke. Tjek udetermometeret under Konfiguration."
+    "hp_cop_temp_stuck": "Udetemperaturen har ikke ændret sig i 12 timer, så SEM lærer ikke. Tjek udetermometeret under Konfiguration.",
+    "config_hw_solar_target_band": "Denne tank har et termometer. Hold på og Ekstra på enhedskortet bestemmer den højeste temperatur, så solvarmemålet bruges ikke."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -5879,7 +5881,7 @@
     "state_charging_allowed": "Laden erlaubt",
     "state_error": "Fehler",
     "state_night_charging": "Nachtladung aktiv",
-    "state_night_disabled": "Nachtladung deaktiviert",
+    "state_night_disabled": "Nachtladen ist für diese Ladestation aus",
     "state_night_expired": "Nachtladefenster abgelaufen",
     "state_night_ready": "Nachtmodus - Bereit",
     "state_night_target": "Nachtmodus - Ziel erreicht",
@@ -6581,8 +6583,8 @@
     "bq_discharge_max_sub": "Haus und Auto zusammen. SEM schreibt das in den Wechselrichter.",
     "bq_may_export": "Darf die Batterie ins Netz verkaufen?",
     "bq_may_export_sub": "Bei hohem Preis darf die überzählige Energie für heute Nacht verkauft werden.",
-    "bq_may_assist": "Darf die Batterie das Auto am Abend laden?",
-    "bq_may_assist_sub": "Die überzählige Batterieenergie für heute Nacht darf ins Auto gehen.",
+    "bq_may_assist": "Darf die Batterie beim Laden des Autos helfen?",
+    "bq_may_assist_sub": "Zu jeder Stunde, Tag und Nacht. Aus: Die Batterie gibt dem Auto nichts.",
     "bq_pacing": "Ladung über den Tag verteilen?",
     "bq_pacing_sub": "Die Batterie ist gegen Sonnenuntergang voll, nicht am Vormittag. Braucht ein Ladeleistungslimit und eine stabile Prognose.",
     "bq_reserve": "SEM verkauft höchstens bis hinunter auf",
@@ -6633,7 +6635,8 @@
     "hq_st_paused": "Kurze Pause, startet wieder um {time}.",
     "hq_st_stopping": "Schaltet nach seiner Mindestlaufzeit aus.",
     "hq_st_own_thermostat": "Sein eigener Thermostat hat ihn bei {temp} gestoppt. Stelle den Thermostat am Boiler höher.",
-    "hp_cop_temp_stuck": "Die Aussentemperatur hat sich seit 12 Stunden nicht geändert, darum lernt SEM nicht. Prüfe das Aussenthermometer unter Konfiguration."
+    "hp_cop_temp_stuck": "Die Aussentemperatur hat sich seit 12 Stunden nicht geändert, darum lernt SEM nicht. Prüfe das Aussenthermometer unter Konfiguration.",
+    "config_hw_solar_target_band": "Dieser Speicher hat ein Thermometer. «Halten bei» und «Extra» auf der Gerätekarte bestimmen die höchste Temperatur, das Solar-Heizziel wird nicht verwendet."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8091,7 +8094,7 @@
     "state_charging_allowed": "Charging allowed",
     "state_error": "Error",
     "state_night_charging": "Night charging active",
-    "state_night_disabled": "Night charging disabled",
+    "state_night_disabled": "Night charging is off for this charger",
     "state_night_expired": "Night charging window expired",
     "state_night_ready": "Night mode - Ready",
     "state_night_target": "Night mode - Target reached",
@@ -8793,8 +8796,8 @@
     "bq_discharge_max_sub": "House and car together. SEM writes this to the inverter.",
     "bq_may_export": "May the battery sell to the grid?",
     "bq_may_export_sub": "When the price is high, tonight's spare battery energy may be sold.",
-    "bq_may_assist": "May the battery charge the car in the evening?",
-    "bq_may_assist_sub": "Tonight's spare battery energy may go to the car.",
+    "bq_may_assist": "May the battery help charge the car?",
+    "bq_may_assist_sub": "At any hour, day or night. Off: the battery gives the car nothing.",
     "bq_pacing": "Spread the charge over the day?",
     "bq_pacing_sub": "The battery is full near sunset, not at mid-morning. Needs a charge-power limit and a settled forecast.",
     "bq_reserve": "SEM sells down to no lower than",
@@ -8845,7 +8848,8 @@
     "hq_st_paused": "Short pause, starts again at {time}.",
     "hq_st_stopping": "Switching off after its minimum run time.",
     "hq_st_own_thermostat": "Its own thermostat stopped it at {temp}. Raise the thermostat on the boiler.",
-    "hp_cop_temp_stuck": "The outdoor temperature has not changed for 12 hours, so SEM is not learning. Check the outdoor thermometer under Configuration."
+    "hp_cop_temp_stuck": "The outdoor temperature has not changed for 12 hours, so SEM is not learning. Check the outdoor thermometer under Configuration.",
+    "config_hw_solar_target_band": "This tank has a thermometer. Its Keep at and Extra on the device card set the top temperature, so the Solar Heating Target is not used."
   },
   "es": {
     "% of limit": "% del límite",
@@ -10303,7 +10307,7 @@
     "state_charging_allowed": "Carga permitida",
     "state_error": "Error",
     "state_night_charging": "Carga nocturna activa",
-    "state_night_disabled": "Carga nocturna desactivada",
+    "state_night_disabled": "La carga nocturna está apagada para este cargador",
     "state_night_expired": "Ventana nocturna expirada",
     "state_night_ready": "Modo nocturno - Listo",
     "state_night_target": "Modo nocturno - Objetivo alcanzado",
@@ -11005,8 +11009,8 @@
     "bq_discharge_max_sub": "Casa y coche juntos. SEM lo escribe en el inversor.",
     "bq_may_export": "¿Puede la batería vender a la red?",
     "bq_may_export_sub": "Con el precio alto, la energía de batería que sobra para esta noche se puede vender.",
-    "bq_may_assist": "¿Puede la batería cargar el coche por la tarde?",
-    "bq_may_assist_sub": "La energía de batería que sobra para esta noche puede ir al coche.",
+    "bq_may_assist": "¿Puede la batería ayudar a cargar el coche?",
+    "bq_may_assist_sub": "A cualquier hora, de día y de noche. Apagado: la batería no da nada al coche.",
     "bq_pacing": "¿Repartir la carga a lo largo del día?",
     "bq_pacing_sub": "La batería está llena hacia la puesta de sol, no a media mañana. Necesita un límite de potencia de carga y una previsión estable.",
     "bq_reserve": "SEM vende sin bajar de",
@@ -11057,7 +11061,8 @@
     "hq_st_paused": "Pausa corta, vuelve a empezar a las {time}.",
     "hq_st_stopping": "Se apaga tras su tiempo mínimo de marcha.",
     "hq_st_own_thermostat": "Su propio termostato lo paró a {temp}. Sube el termostato del termo.",
-    "hp_cop_temp_stuck": "La temperatura exterior no ha cambiado en 12 horas, así que SEM no aprende. Revisa el termómetro exterior en Configuración."
+    "hp_cop_temp_stuck": "La temperatura exterior no ha cambiado en 12 horas, así que SEM no aprende. Revisa el termómetro exterior en Configuración.",
+    "config_hw_solar_target_band": "Este depósito tiene termómetro. Mantener a y Extra en la tarjeta del dispositivo fijan la temperatura máxima; el objetivo de calentamiento solar no se usa."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -12515,7 +12520,7 @@
     "state_charging_allowed": "Lataus sallittu",
     "state_error": "Virhe",
     "state_night_charging": "Yölataus aktiivinen",
-    "state_night_disabled": "Yölataus pois käytöstä",
+    "state_night_disabled": "Yölataus on pois päältä tälle laturille",
     "state_night_expired": "Yölatausikkuna umpeutunut",
     "state_night_ready": "Yötila - Valmis",
     "state_night_target": "Yötila - Tavoite saavutettu",
@@ -13217,8 +13222,8 @@
     "bq_discharge_max_sub": "Talo ja auto yhteensä. SEM kirjoittaa tämän invertterille.",
     "bq_may_export": "Saako akku myydä verkkoon?",
     "bq_may_export_sub": "Kun hinta on korkea, akun ylimääräinen energia tälle yölle saa myydä.",
-    "bq_may_assist": "Saako akku ladata auton illalla?",
-    "bq_may_assist_sub": "Akun ylimääräinen energia tälle yölle saa mennä autoon.",
+    "bq_may_assist": "Saako akku auttaa auton latauksessa?",
+    "bq_may_assist_sub": "Mihin aikaan tahansa, päivällä ja yöllä. Pois: akku ei anna autolle mitään.",
     "bq_pacing": "Jaa lataus päivän ajalle?",
     "bq_pacing_sub": "Akku on täynnä auringonlaskun aikaan, ei aamupäivällä. Vaatii latausteholle rajan ja vakaan ennusteen.",
     "bq_reserve": "SEM myy enintään tasolle",
@@ -13269,7 +13274,8 @@
     "hq_st_paused": "Lyhyt tauko, alkaa taas klo {time}.",
     "hq_st_stopping": "Sammuu vähimmäiskäyntiajan jälkeen.",
     "hq_st_own_thermostat": "Sen oma termostaatti pysäytti sen lämpötilassa {temp}. Nosta varaajan termostaattia.",
-    "hp_cop_temp_stuck": "Ulkolämpötila ei ole muuttunut 12 tuntiin, joten SEM ei opi. Tarkista ulkolämpömittari kohdasta Määritykset."
+    "hp_cop_temp_stuck": "Ulkolämpötila ei ole muuttunut 12 tuntiin, joten SEM ei opi. Tarkista ulkolämpömittari kohdasta Määritykset.",
+    "config_hw_solar_target_band": "Tässä säiliössä on lämpömittari. Laitekortin Pidä ja Lisä määräävät ylimmän lämpötilan, joten aurinkolämmitystavoitetta ei käytetä."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -14727,7 +14733,7 @@
     "state_charging_allowed": "Charge autorisée",
     "state_error": "Erreur",
     "state_night_charging": "Charge nocturne active",
-    "state_night_disabled": "Charge nocturne désactivée",
+    "state_night_disabled": "La charge de nuit est désactivée pour cette borne",
     "state_night_expired": "Fenêtre de charge nocturne expirée",
     "state_night_ready": "Mode nuit - Prêt",
     "state_night_target": "Mode nuit - Objectif atteint",
@@ -15429,8 +15435,8 @@
     "bq_discharge_max_sub": "Maison et voiture ensemble. SEM l'écrit dans l'onduleur.",
     "bq_may_export": "La batterie peut-elle vendre au réseau ?",
     "bq_may_export_sub": "Quand le prix est élevé, l'énergie de batterie en trop pour ce soir peut être vendue.",
-    "bq_may_assist": "La batterie peut-elle charger la voiture le soir ?",
-    "bq_may_assist_sub": "L'énergie de batterie en trop pour ce soir peut aller dans la voiture.",
+    "bq_may_assist": "La batterie peut-elle aider à charger la voiture ?",
+    "bq_may_assist_sub": "À toute heure, jour et nuit. Désactivé : la batterie ne donne rien à la voiture.",
     "bq_pacing": "Répartir la charge sur la journée ?",
     "bq_pacing_sub": "La batterie est pleine vers le coucher du soleil, pas en milieu de matinée. Il faut une limite de puissance de charge et une prévision stable.",
     "bq_reserve": "SEM vend sans descendre sous",
@@ -15481,7 +15487,8 @@
     "hq_st_paused": "Courte pause, redémarre à {time}.",
     "hq_st_stopping": "S'arrête après sa durée minimale de marche.",
     "hq_st_own_thermostat": "Son propre thermostat l'a arrêté à {temp}. Montez le thermostat du ballon.",
-    "hp_cop_temp_stuck": "La température extérieure n'a pas changé depuis 12 heures, SEM n'apprend donc pas. Vérifiez le thermomètre extérieur sous Configuration."
+    "hp_cop_temp_stuck": "La température extérieure n'a pas changé depuis 12 heures, SEM n'apprend donc pas. Vérifiez le thermomètre extérieur sous Configuration.",
+    "config_hw_solar_target_band": "Ce ballon a un thermomètre. Maintenir à et Extra sur la carte de l'appareil fixent la température maximale ; la cible de chauffage solaire n'est pas utilisée."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -16939,7 +16946,7 @@
     "state_charging_allowed": "Töltés engedélyezve",
     "state_error": "Hiba",
     "state_night_charging": "Éjszakai töltés aktív",
-    "state_night_disabled": "Éjszakai töltés kikapcsolva",
+    "state_night_disabled": "Az éjszakai töltés ki van kapcsolva ennél a töltőnél",
     "state_night_expired": "Éjszakai töltési ablak lejárt",
     "state_night_ready": "Éjszakai mód - Kész",
     "state_night_target": "Éjszakai mód - Célérték elérve",
@@ -17641,8 +17648,8 @@
     "bq_discharge_max_sub": "A ház és az autó együtt. A SEM ezt az inverterbe írja.",
     "bq_may_export": "Eladhat az akkumulátor a hálózatra?",
     "bq_may_export_sub": "Magas árnál az akkumulátor ma éjjelre fölösleges energiája eladható.",
-    "bq_may_assist": "Töltheti az akkumulátor este az autót?",
-    "bq_may_assist_sub": "Az akkumulátor ma éjjelre fölösleges energiája az autóba mehet.",
+    "bq_may_assist": "Segíthet az akkumulátor az autó töltésében?",
+    "bq_may_assist_sub": "Bármely órában, nappal és éjjel. Ki: az akkumulátor semmit sem ad az autónak.",
     "bq_pacing": "Elossza a töltést a napra?",
     "bq_pacing_sub": "Az akkumulátor napnyugta körül telik meg, nem délelőtt. Töltési teljesítménykorlát és stabil előrejelzés kell hozzá.",
     "bq_reserve": "A SEM legfeljebb eddig ad el",
@@ -17693,7 +17700,8 @@
     "hq_st_paused": "Rövid szünet, újra indul: {time}.",
     "hq_st_stopping": "A minimális üzemidő után kikapcsol.",
     "hq_st_own_thermostat": "A saját termosztátja {temp} értéknél leállította. Állítsd feljebb a tároló termosztátját.",
-    "hp_cop_temp_stuck": "A külső hőmérséklet 12 órája nem változott, ezért a SEM nem tanul. Ellenőrizd a külső hőmérőt a Konfigurációban."
+    "hp_cop_temp_stuck": "A külső hőmérséklet 12 órája nem változott, ezért a SEM nem tanul. Ellenőrizd a külső hőmérőt a Konfigurációban.",
+    "config_hw_solar_target_band": "Ennek a tartálynak van hőmérője. A legmagasabb hőmérsékletet az eszközkártya Tartás és Extra értéke adja, a napfűtési cél nincs használatban."
   },
   "it": {
     "% of limit": "% del limite",
@@ -19151,7 +19159,7 @@
     "state_charging_allowed": "Carica consentita",
     "state_error": "Errore",
     "state_night_charging": "Carica notturna attiva",
-    "state_night_disabled": "Carica notturna disattivata",
+    "state_night_disabled": "La ricarica notturna è spenta per questa colonnina",
     "state_night_expired": "Finestra notturna scaduta",
     "state_night_ready": "Modo notte - Pronto",
     "state_night_target": "Modo notte - Obiettivo raggiunto",
@@ -19853,8 +19861,8 @@
     "bq_discharge_max_sub": "Casa e auto insieme. SEM lo scrive nell'inverter.",
     "bq_may_export": "La batteria può vendere alla rete?",
     "bq_may_export_sub": "Quando il prezzo è alto, l'energia della batteria in più per stanotte può essere venduta.",
-    "bq_may_assist": "La batteria può caricare l'auto la sera?",
-    "bq_may_assist_sub": "L'energia della batteria in più per stanotte può andare all'auto.",
+    "bq_may_assist": "La batteria può aiutare a caricare l'auto?",
+    "bq_may_assist_sub": "A qualsiasi ora, giorno e notte. Spento: la batteria non dà nulla all'auto.",
     "bq_pacing": "Distribuire la carica nella giornata?",
     "bq_pacing_sub": "La batteria è piena verso il tramonto, non a metà mattina. Servono un limite di potenza di carica e una previsione stabile.",
     "bq_reserve": "SEM vende senza scendere sotto",
@@ -19905,7 +19913,8 @@
     "hq_st_paused": "Breve pausa, riparte alle {time}.",
     "hq_st_stopping": "Si spegne dopo il tempo minimo di funzionamento.",
     "hq_st_own_thermostat": "Il suo termostato lo ha fermato a {temp}. Alza il termostato del bollitore.",
-    "hp_cop_temp_stuck": "La temperatura esterna non cambia da 12 ore, quindi SEM non impara. Controlla il termometro esterno in Configurazione."
+    "hp_cop_temp_stuck": "La temperatura esterna non cambia da 12 ore, quindi SEM non impara. Controlla il termometro esterno in Configurazione.",
+    "config_hw_solar_target_band": "Questo serbatoio ha un termometro. Mantieni a ed Extra sulla scheda del dispositivo fissano la temperatura massima; l'obiettivo di riscaldamento solare non è usato."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -21363,7 +21372,7 @@
     "state_charging_allowed": "Laden toegestaan",
     "state_error": "Fout",
     "state_night_charging": "Nachtladen actief",
-    "state_night_disabled": "Nachtladen uitgeschakeld",
+    "state_night_disabled": "Nachtladen staat uit voor deze lader",
     "state_night_expired": "Nachtlaadvenster verlopen",
     "state_night_ready": "Nachtmodus - Gereed",
     "state_night_target": "Nachtmodus - Doel bereikt",
@@ -22065,8 +22074,8 @@
     "bq_discharge_max_sub": "Huis en auto samen. SEM schrijft dit naar de omvormer.",
     "bq_may_export": "Mag de accu aan het net verkopen?",
     "bq_may_export_sub": "Bij een hoge prijs mag de accu-energie die vannacht over is verkocht worden.",
-    "bq_may_assist": "Mag de accu 's avonds de auto laden?",
-    "bq_may_assist_sub": "De accu-energie die vannacht over is mag naar de auto.",
+    "bq_may_assist": "Mag de batterij helpen de auto te laden?",
+    "bq_may_assist_sub": "Op elk uur, dag en nacht. Uit: de batterij geeft de auto niets.",
     "bq_pacing": "Laden over de dag spreiden?",
     "bq_pacing_sub": "De accu is vol rond zonsondergang, niet halverwege de ochtend. Vraagt een laadvermogenslimiet en een stabiele voorspelling.",
     "bq_reserve": "SEM verkoopt tot niet lager dan",
@@ -22117,7 +22126,8 @@
     "hq_st_paused": "Korte pauze, start weer om {time}.",
     "hq_st_stopping": "Schakelt uit na zijn minimale looptijd.",
     "hq_st_own_thermostat": "Zijn eigen thermostaat stopte hem op {temp}. Zet de thermostaat op de boiler hoger.",
-    "hp_cop_temp_stuck": "De buitentemperatuur is 12 uur niet veranderd, dus SEM leert niet. Controleer de buitenthermometer onder Configuratie."
+    "hp_cop_temp_stuck": "De buitentemperatuur is 12 uur niet veranderd, dus SEM leert niet. Controleer de buitenthermometer onder Configuratie.",
+    "config_hw_solar_target_band": "Deze boiler heeft een thermometer. Houden op en Extra op de apparaatkaart bepalen de hoogste temperatuur, dus het zonneverwarmingsdoel wordt niet gebruikt."
   },
   "no": {
     "% of limit": "% av grense",
@@ -23575,7 +23585,7 @@
     "state_charging_allowed": "Lading tillatt",
     "state_error": "Feil",
     "state_night_charging": "Nattlading aktiv",
-    "state_night_disabled": "Nattlading deaktivert",
+    "state_night_disabled": "Nattlading er av for denne laderen",
     "state_night_expired": "Nattladevindu utløpt",
     "state_night_ready": "Nattmodus - Klar",
     "state_night_target": "Nattmodus - Mål nådd",
@@ -24277,8 +24287,8 @@
     "bq_discharge_max_sub": "Hus og bil til sammen. SEM skriver det til omformeren.",
     "bq_may_export": "Kan batteriet selge til nettet?",
     "bq_may_export_sub": "Når prisen er høy, kan batteriets overskudd til i natt selges.",
-    "bq_may_assist": "Kan batteriet lade bilen om kvelden?",
-    "bq_may_assist_sub": "Batteriets overskudd til i natt kan gå til bilen.",
+    "bq_may_assist": "Kan batteriet hjelpe til med å lade bilen?",
+    "bq_may_assist_sub": "Når som helst, dag og natt. Av: batteriet gir bilen ingenting.",
     "bq_pacing": "Fordele ladingen over dagen?",
     "bq_pacing_sub": "Batteriet er fullt rundt solnedgang, ikke midt på formiddagen. Krever en ladeeffektgrense og en stabil prognose.",
     "bq_reserve": "SEM selger ikke lenger ned enn",
@@ -24329,7 +24339,8 @@
     "hq_st_paused": "Kort pause, starter igjen kl. {time}.",
     "hq_st_stopping": "Slår seg av etter minste driftstid.",
     "hq_st_own_thermostat": "Dens egen termostat stoppet den ved {temp}. Skru opp termostaten på berederen.",
-    "hp_cop_temp_stuck": "Utetemperaturen har ikke endret seg på 12 timer, så SEM lærer ikke. Sjekk utetermometeret under Konfigurasjon."
+    "hp_cop_temp_stuck": "Utetemperaturen har ikke endret seg på 12 timer, så SEM lærer ikke. Sjekk utetermometeret under Konfigurasjon.",
+    "config_hw_solar_target_band": "Denne tanken har et termometer. Hold på og Ekstra på enhetskortet bestemmer høyeste temperatur, så solvarmemålet brukes ikke."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -25787,7 +25798,7 @@
     "state_charging_allowed": "Ładowanie dozwolone",
     "state_error": "Błąd",
     "state_night_charging": "Ładowanie nocne aktywne",
-    "state_night_disabled": "Ładowanie nocne wyłączone",
+    "state_night_disabled": "Ładowanie nocne jest wyłączone dla tej ładowarki",
     "state_night_expired": "Okno ładowania nocnego wygasło",
     "state_night_ready": "Tryb nocny - Gotowy",
     "state_night_target": "Tryb nocny - Cel osiągnięty",
@@ -26489,8 +26500,8 @@
     "bq_discharge_max_sub": "Dom i auto razem. SEM zapisuje to w falowniku.",
     "bq_may_export": "Czy akumulator może sprzedawać do sieci?",
     "bq_may_export_sub": "Przy wysokiej cenie nadmiar energii akumulatora na tę noc może zostać sprzedany.",
-    "bq_may_assist": "Czy akumulator może ładować auto wieczorem?",
-    "bq_may_assist_sub": "Nadmiar energii akumulatora na tę noc może trafić do auta.",
+    "bq_may_assist": "Czy bateria może pomagać w ładowaniu auta?",
+    "bq_may_assist_sub": "O każdej porze, w dzień i w nocy. Wyłączone: bateria nie daje autu nic.",
     "bq_pacing": "Rozłożyć ładowanie na cały dzień?",
     "bq_pacing_sub": "Akumulator jest pełny przed zachodem słońca, a nie w połowie przedpołudnia. Wymaga limitu mocy ładowania i stabilnej prognozy.",
     "bq_reserve": "SEM sprzedaje nie niżej niż do",
@@ -26541,7 +26552,8 @@
     "hq_st_paused": "Krótka przerwa, wznowi o {time}.",
     "hq_st_stopping": "Wyłączy się po minimalnym czasie pracy.",
     "hq_st_own_thermostat": "Własny termostat zatrzymał go przy {temp}. Podnieś termostat na zasobniku.",
-    "hp_cop_temp_stuck": "Temperatura zewnętrzna nie zmieniła się od 12 godzin, więc SEM się nie uczy. Sprawdź termometr zewnętrzny w Konfiguracji."
+    "hp_cop_temp_stuck": "Temperatura zewnętrzna nie zmieniła się od 12 godzin, więc SEM się nie uczy. Sprawdź termometr zewnętrzny w Konfiguracji.",
+    "config_hw_solar_target_band": "Ten zbiornik ma termometr. Utrzymuj i Dodatek na karcie urządzenia wyznaczają najwyższą temperaturę, więc cel ogrzewania słonecznego nie jest używany."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -27999,7 +28011,7 @@
     "state_charging_allowed": "Carregamento permitido",
     "state_error": "Erro",
     "state_night_charging": "Carregamento noturno ativo",
-    "state_night_disabled": "Carregamento noturno desativado",
+    "state_night_disabled": "O carregamento noturno está desligado para este carregador",
     "state_night_expired": "Janela de carregamento noturno expirou",
     "state_night_ready": "Modo noturno - Pronto",
     "state_night_target": "Modo noturno - Meta atingida",
@@ -28701,8 +28713,8 @@
     "bq_discharge_max_sub": "Casa e carro juntos. O SEM escreve isto no inversor.",
     "bq_may_export": "A bateria pode vender à rede?",
     "bq_may_export_sub": "Com o preço alto, a energia da bateria que sobra para esta noite pode ser vendida.",
-    "bq_may_assist": "A bateria pode carregar o carro ao fim do dia?",
-    "bq_may_assist_sub": "A energia da bateria que sobra para esta noite pode ir para o carro.",
+    "bq_may_assist": "A bateria pode ajudar a carregar o carro?",
+    "bq_may_assist_sub": "A qualquer hora, de dia e de noite. Desligado: a bateria não dá nada ao carro.",
     "bq_pacing": "Distribuir a carga ao longo do dia?",
     "bq_pacing_sub": "A bateria fica cheia perto do pôr do sol, não a meio da manhã. Precisa de um limite de potência de carga e de uma previsão estável.",
     "bq_reserve": "O SEM vende sem descer abaixo de",
@@ -28753,7 +28765,8 @@
     "hq_st_paused": "Pausa curta, volta a começar às {time}.",
     "hq_st_stopping": "Desliga após o tempo mínimo de funcionamento.",
     "hq_st_own_thermostat": "O seu próprio termóstato parou-o a {temp}. Suba o termóstato do depósito.",
-    "hp_cop_temp_stuck": "A temperatura exterior não muda há 12 horas, por isso o SEM não aprende. Verifique o termómetro exterior em Configuração."
+    "hp_cop_temp_stuck": "A temperatura exterior não muda há 12 horas, por isso o SEM não aprende. Verifique o termómetro exterior em Configuração.",
+    "config_hw_solar_target_band": "Este depósito tem termómetro. Manter a e Extra no cartão do dispositivo definem a temperatura máxima; o objetivo de aquecimento solar não é usado."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30211,7 +30224,7 @@
     "state_charging_allowed": "Încărcare permisă",
     "state_error": "Eroare",
     "state_night_charging": "Încărcare nocturnă activă",
-    "state_night_disabled": "Încărcare nocturnă dezactivată",
+    "state_night_disabled": "Încărcarea de noapte este oprită pentru acest încărcător",
     "state_night_expired": "Fereastra de încărcare nocturnă a expirat",
     "state_night_ready": "Mod nocturn - Pregătit",
     "state_night_target": "Mod nocturn - Țintă atinsă",
@@ -30913,8 +30926,8 @@
     "bq_discharge_max_sub": "Casa și mașina împreună. SEM scrie asta în invertor.",
     "bq_may_export": "Poate bateria vinde în rețea?",
     "bq_may_export_sub": "Când prețul e mare, energia din baterie care prisosește pentru la noapte poate fi vândută.",
-    "bq_may_assist": "Poate bateria încărca mașina seara?",
-    "bq_may_assist_sub": "Energia din baterie care prisosește pentru la noapte poate merge în mașină.",
+    "bq_may_assist": "Poate bateria să ajute la încărcarea mașinii?",
+    "bq_may_assist_sub": "La orice oră, zi și noapte. Oprit: bateria nu dă nimic mașinii.",
     "bq_pacing": "Repartizezi încărcarea pe parcursul zilei?",
     "bq_pacing_sub": "Bateria e plină spre apus, nu la mijlocul dimineții. Are nevoie de o limită de putere de încărcare și de o prognoză stabilă.",
     "bq_reserve": "SEM vinde fără să coboare sub",
@@ -30965,7 +30978,8 @@
     "hq_st_paused": "Pauză scurtă, pornește din nou la {time}.",
     "hq_st_stopping": "Se oprește după timpul minim de funcționare.",
     "hq_st_own_thermostat": "Termostatul propriu l-a oprit la {temp}. Ridică termostatul boilerului.",
-    "hp_cop_temp_stuck": "Temperatura exterioară nu s-a schimbat de 12 ore, așa că SEM nu învață. Verifică termometrul exterior în Configurare."
+    "hp_cop_temp_stuck": "Temperatura exterioară nu s-a schimbat de 12 ore, așa că SEM nu învață. Verifică termometrul exterior în Configurare.",
+    "config_hw_solar_target_band": "Acest rezervor are termometru. Menține la și Extra de pe cardul dispozitivului stabilesc temperatura maximă, deci ținta de încălzire solară nu este folosită."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -32423,7 +32437,7 @@
     "state_charging_allowed": "Laddning tillåten",
     "state_error": "Fel",
     "state_night_charging": "Nattladdning aktiv",
-    "state_night_disabled": "Nattladdning inaktiverad",
+    "state_night_disabled": "Nattladdning är av för den här laddaren",
     "state_night_expired": "Nattladdningsfönster utgånget",
     "state_night_ready": "Nattläge - Redo",
     "state_night_target": "Nattläge - Mål uppnått",
@@ -33125,8 +33139,8 @@
     "bq_discharge_max_sub": "Hus och bil tillsammans. SEM skriver det till växelriktaren.",
     "bq_may_export": "Får batteriet sälja till nätet?",
     "bq_may_export_sub": "När priset är högt får batteriets överskott för i natt säljas.",
-    "bq_may_assist": "Får batteriet ladda bilen på kvällen?",
-    "bq_may_assist_sub": "Batteriets överskott för i natt får gå till bilen.",
+    "bq_may_assist": "Får batteriet hjälpa till att ladda bilen?",
+    "bq_may_assist_sub": "När som helst, dag och natt. Av: batteriet ger bilen ingenting.",
     "bq_pacing": "Sprida laddningen över dagen?",
     "bq_pacing_sub": "Batteriet är fullt runt solnedgången, inte mitt på förmiddagen. Kräver en laddeffektgräns och en stabil prognos.",
     "bq_reserve": "SEM säljer inte längre ner än",
@@ -33177,7 +33191,8 @@
     "hq_st_paused": "Kort paus, startar igen kl. {time}.",
     "hq_st_stopping": "Stängs av efter sin minsta drifttid.",
     "hq_st_own_thermostat": "Dess egen termostat stoppade den vid {temp}. Höj termostaten på beredaren.",
-    "hp_cop_temp_stuck": "Utetemperaturen har inte ändrats på 12 timmar, så SEM lär sig inte. Kontrollera utetermometern under Konfiguration."
+    "hp_cop_temp_stuck": "Utetemperaturen har inte ändrats på 12 timmar, så SEM lär sig inte. Kontrollera utetermometern under Konfiguration.",
+    "config_hw_solar_target_band": "Den här tanken har en termometer. Håll vid och Extra på enhetskortet bestämmer högsta temperaturen, så solvärmemålet används inte."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -34635,7 +34650,7 @@
     "state_charging_allowed": "允许充电",
     "state_error": "错误",
     "state_night_charging": "夜间充电进行中",
-    "state_night_disabled": "夜间充电已禁用",
+    "state_night_disabled": "此充电桩的夜间充电已关闭",
     "state_night_expired": "夜间充电时段已结束",
     "state_night_ready": "夜间模式 - 就绪",
     "state_night_target": "夜间模式 - 已达目标",
@@ -35337,8 +35352,8 @@
     "bq_discharge_max_sub": "房屋与汽车合计。SEM 将其写入逆变器。",
     "bq_may_export": "电池可以向电网售电吗？",
     "bq_may_export_sub": "电价高时，今晚多余的电池电量可以售出。",
-    "bq_may_assist": "电池可以在傍晚为汽车充电吗？",
-    "bq_may_assist_sub": "今晚多余的电池电量可以给汽车。",
+    "bq_may_assist": "电池可以帮助给汽车充电吗？",
+    "bq_may_assist_sub": "任何时段，白天和夜间。关闭：电池不给汽车供电。",
     "bq_pacing": "将充电分散到全天？",
     "bq_pacing_sub": "电池在日落前后充满，而不是上午就满。需要充电功率限制和稳定的预测。",
     "bq_reserve": "SEM 售电时不低于",
@@ -35389,6 +35404,7 @@
     "hq_st_paused": "短暂暂停，将在 {time} 重新开始。",
     "hq_st_stopping": "最短运行时间结束后关闭。",
     "hq_st_own_thermostat": "其自身的恒温器在 {temp} 时停止了加热。请调高热水器上的恒温器。",
-    "hp_cop_temp_stuck": "室外温度已 12 小时没有变化，因此 SEM 没有在学习。请在配置中检查室外温度计。"
+    "hp_cop_temp_stuck": "室外温度已 12 小时没有变化，因此 SEM 没有在学习。请在配置中检查室外温度计。",
+    "config_hw_solar_target_band": "此水箱有温度计。设备卡片上的“保持”和“额外”决定最高温度，因此不使用太阳能加热目标。"
   }
 }
