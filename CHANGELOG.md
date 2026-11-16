@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **SEM proposes a thermometer for a heater** (#1353). It looks on the same device or in the same area. You confirm with one click.
 - 🐛 **Set-up is clearer** (#1371): the Solar Heating Target hides for a tank with a thermometer, and Setup counts only what every house needs.
 - 🐛 **The car's target entities carry the settings dialog's names** (#1371), such as "Guarantee at least" and "Never charge past". Entity IDs stay the same.
 - 🐛 **The COP learner no longer learns from an outdoor thermometer that is stuck** (#1081). The heat pump card says so.

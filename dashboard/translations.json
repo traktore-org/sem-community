@@ -2210,7 +2210,9 @@
     "hq_st_stopping": "Vypne se po minimální době chodu.",
     "hq_st_own_thermostat": "Vlastní termostat ho zastavil na {temp}. Zvyšte termostat na zásobníku.",
     "hp_cop_temp_stuck": "Venkovní teplota se 12 hodin nezměnila, proto se SEM neučí. Zkontrolujte venkovní teploměr v Konfiguraci.",
-    "config_hw_solar_target_band": "Tento zásobník má teploměr. Nejvyšší teplotu určují jeho teploty na kartě zařízení, takže solární cíl ohřevu se nepoužívá."
+    "config_hw_solar_target_band": "Tento zásobník má teploměr. Nejvyšší teplotu určují jeho teploty na kartě zařízení, takže solární cíl ohřevu se nepoužívá.",
+    "hq_found_thermometer": "SEM našel teploměr: {name}. Použít ho?",
+    "hq_use_thermometer": "Použít"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4423,7 +4425,9 @@
     "hq_st_stopping": "Slukker efter sin mindste driftstid.",
     "hq_st_own_thermostat": "Dens egen termostat stoppede den ved {temp}. Skru op for termostaten på beholderen.",
     "hp_cop_temp_stuck": "Udetemperaturen har ikke ændret sig i 12 timer, så SEM lærer ikke. Tjek udetermometeret under Konfiguration.",
-    "config_hw_solar_target_band": "Denne tank har et termometer. Dens temperaturer på enhedskortet bestemmer den højeste temperatur, så solvarmemålet bruges ikke."
+    "config_hw_solar_target_band": "Denne tank har et termometer. Dens temperaturer på enhedskortet bestemmer den højeste temperatur, så solvarmemålet bruges ikke.",
+    "hq_found_thermometer": "SEM fandt et termometer: {name}. Skal det bruges?",
+    "hq_use_thermometer": "Brug det"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6636,7 +6640,9 @@
     "hq_st_stopping": "Schaltet nach seiner Mindestlaufzeit aus.",
     "hq_st_own_thermostat": "Sein eigener Thermostat hat ihn bei {temp} gestoppt. Stelle den Thermostat am Boiler höher.",
     "hp_cop_temp_stuck": "Die Aussentemperatur hat sich seit 12 Stunden nicht geändert, darum lernt SEM nicht. Prüfe das Aussenthermometer unter Konfiguration.",
-    "config_hw_solar_target_band": "Dieser Speicher hat ein Thermometer. Seine Temperaturen auf der Gerätekarte bestimmen die höchste Temperatur, das Solar-Heizziel wird nicht verwendet."
+    "config_hw_solar_target_band": "Dieser Speicher hat ein Thermometer. Seine Temperaturen auf der Gerätekarte bestimmen die höchste Temperatur, das Solar-Heizziel wird nicht verwendet.",
+    "hq_found_thermometer": "SEM hat ein Thermometer gefunden: {name}. Verwenden?",
+    "hq_use_thermometer": "Verwenden"
   },
   "en": {
     "% of limit": "% of limit",
@@ -8849,7 +8855,9 @@
     "hq_st_stopping": "Switching off after its minimum run time.",
     "hq_st_own_thermostat": "Its own thermostat stopped it at {temp}. Raise the thermostat on the boiler.",
     "hp_cop_temp_stuck": "The outdoor temperature has not changed for 12 hours, so SEM is not learning. Check the outdoor thermometer under Configuration.",
-    "config_hw_solar_target_band": "This tank has a thermometer. Its temperatures on the device card set the top, so the Solar Heating Target is not used."
+    "config_hw_solar_target_band": "This tank has a thermometer. Its temperatures on the device card set the top, so the Solar Heating Target is not used.",
+    "hq_found_thermometer": "SEM found a thermometer: {name}. Use it?",
+    "hq_use_thermometer": "Use it"
   },
   "es": {
     "% of limit": "% del límite",
@@ -11062,7 +11070,9 @@
     "hq_st_stopping": "Se apaga tras su tiempo mínimo de marcha.",
     "hq_st_own_thermostat": "Su propio termostato lo paró a {temp}. Sube el termostato del termo.",
     "hp_cop_temp_stuck": "La temperatura exterior no ha cambiado en 12 horas, así que SEM no aprende. Revisa el termómetro exterior en Configuración.",
-    "config_hw_solar_target_band": "Este depósito tiene termómetro. Sus temperaturas en la tarjeta del dispositivo fijan el máximo; el objetivo de calentamiento solar no se usa."
+    "config_hw_solar_target_band": "Este depósito tiene termómetro. Sus temperaturas en la tarjeta del dispositivo fijan el máximo; el objetivo de calentamiento solar no se usa.",
+    "hq_found_thermometer": "SEM encontró un termómetro: {name}. ¿Usarlo?",
+    "hq_use_thermometer": "Usar"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -13275,7 +13285,9 @@
     "hq_st_stopping": "Sammuu vähimmäiskäyntiajan jälkeen.",
     "hq_st_own_thermostat": "Sen oma termostaatti pysäytti sen lämpötilassa {temp}. Nosta varaajan termostaattia.",
     "hp_cop_temp_stuck": "Ulkolämpötila ei ole muuttunut 12 tuntiin, joten SEM ei opi. Tarkista ulkolämpömittari kohdasta Määritykset.",
-    "config_hw_solar_target_band": "Tässä säiliössä on lämpömittari. Laitekortin lämpötilat määräävät ylimmän lämpötilan, joten aurinkolämmitystavoitetta ei käytetä."
+    "config_hw_solar_target_band": "Tässä säiliössä on lämpömittari. Laitekortin lämpötilat määräävät ylimmän lämpötilan, joten aurinkolämmitystavoitetta ei käytetä.",
+    "hq_found_thermometer": "SEM löysi lämpömittarin: {name}. Käytetäänkö sitä?",
+    "hq_use_thermometer": "Käytä"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -15488,7 +15500,9 @@
     "hq_st_stopping": "S'arrête après sa durée minimale de marche.",
     "hq_st_own_thermostat": "Son propre thermostat l'a arrêté à {temp}. Montez le thermostat du ballon.",
     "hp_cop_temp_stuck": "La température extérieure n'a pas changé depuis 12 heures, SEM n'apprend donc pas. Vérifiez le thermomètre extérieur sous Configuration.",
-    "config_hw_solar_target_band": "Ce ballon a un thermomètre. Ses températures sur la carte de l'appareil fixent le maximum ; la cible de chauffage solaire n'est pas utilisée."
+    "config_hw_solar_target_band": "Ce ballon a un thermomètre. Ses températures sur la carte de l'appareil fixent le maximum ; la cible de chauffage solaire n'est pas utilisée.",
+    "hq_found_thermometer": "SEM a trouvé un thermomètre : {name}. L'utiliser ?",
+    "hq_use_thermometer": "Utiliser"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -17701,7 +17715,9 @@
     "hq_st_stopping": "A minimális üzemidő után kikapcsol.",
     "hq_st_own_thermostat": "A saját termosztátja {temp} értéknél leállította. Állítsd feljebb a tároló termosztátját.",
     "hp_cop_temp_stuck": "A külső hőmérséklet 12 órája nem változott, ezért a SEM nem tanul. Ellenőrizd a külső hőmérőt a Konfigurációban.",
-    "config_hw_solar_target_band": "Ennek a tartálynak van hőmérője. A legmagasabb hőmérsékletet az eszközkártyán megadott hőmérsékletei adják, a napfűtési cél nincs használatban."
+    "config_hw_solar_target_band": "Ennek a tartálynak van hőmérője. A legmagasabb hőmérsékletet az eszközkártyán megadott hőmérsékletei adják, a napfűtési cél nincs használatban.",
+    "hq_found_thermometer": "Az SEM talált egy hőmérőt: {name}. Használja?",
+    "hq_use_thermometer": "Használom"
   },
   "it": {
     "% of limit": "% del limite",
@@ -19914,7 +19930,9 @@
     "hq_st_stopping": "Si spegne dopo il tempo minimo di funzionamento.",
     "hq_st_own_thermostat": "Il suo termostato lo ha fermato a {temp}. Alza il termostato del bollitore.",
     "hp_cop_temp_stuck": "La temperatura esterna non cambia da 12 ore, quindi SEM non impara. Controlla il termometro esterno in Configurazione.",
-    "config_hw_solar_target_band": "Questo serbatoio ha un termometro. Le sue temperature sulla scheda del dispositivo fissano il massimo; l'obiettivo di riscaldamento solare non è usato."
+    "config_hw_solar_target_band": "Questo serbatoio ha un termometro. Le sue temperature sulla scheda del dispositivo fissano il massimo; l'obiettivo di riscaldamento solare non è usato.",
+    "hq_found_thermometer": "SEM ha trovato un termometro: {name}. Usarlo?",
+    "hq_use_thermometer": "Usa"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -22127,7 +22145,9 @@
     "hq_st_stopping": "Schakelt uit na zijn minimale looptijd.",
     "hq_st_own_thermostat": "Zijn eigen thermostaat stopte hem op {temp}. Zet de thermostaat op de boiler hoger.",
     "hp_cop_temp_stuck": "De buitentemperatuur is 12 uur niet veranderd, dus SEM leert niet. Controleer de buitenthermometer onder Configuratie.",
-    "config_hw_solar_target_band": "Deze boiler heeft een thermometer. De temperaturen op de apparaatkaart bepalen de hoogste temperatuur, dus het zonneverwarmingsdoel wordt niet gebruikt."
+    "config_hw_solar_target_band": "Deze boiler heeft een thermometer. De temperaturen op de apparaatkaart bepalen de hoogste temperatuur, dus het zonneverwarmingsdoel wordt niet gebruikt.",
+    "hq_found_thermometer": "SEM vond een thermometer: {name}. Gebruiken?",
+    "hq_use_thermometer": "Gebruiken"
   },
   "no": {
     "% of limit": "% av grense",
@@ -24340,7 +24360,9 @@
     "hq_st_stopping": "Slår seg av etter minste driftstid.",
     "hq_st_own_thermostat": "Dens egen termostat stoppet den ved {temp}. Skru opp termostaten på berederen.",
     "hp_cop_temp_stuck": "Utetemperaturen har ikke endret seg på 12 timer, så SEM lærer ikke. Sjekk utetermometeret under Konfigurasjon.",
-    "config_hw_solar_target_band": "Denne tanken har et termometer. Temperaturene på enhetskortet bestemmer høyeste temperatur, så solvarmemålet brukes ikke."
+    "config_hw_solar_target_band": "Denne tanken har et termometer. Temperaturene på enhetskortet bestemmer høyeste temperatur, så solvarmemålet brukes ikke.",
+    "hq_found_thermometer": "SEM fant et termometer: {name}. Bruke det?",
+    "hq_use_thermometer": "Bruk det"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -26553,7 +26575,9 @@
     "hq_st_stopping": "Wyłączy się po minimalnym czasie pracy.",
     "hq_st_own_thermostat": "Własny termostat zatrzymał go przy {temp}. Podnieś termostat na zasobniku.",
     "hp_cop_temp_stuck": "Temperatura zewnętrzna nie zmieniła się od 12 godzin, więc SEM się nie uczy. Sprawdź termometr zewnętrzny w Konfiguracji.",
-    "config_hw_solar_target_band": "Ten zbiornik ma termometr. Jego temperatury na karcie urządzenia wyznaczają najwyższą temperaturę, więc cel ogrzewania słonecznego nie jest używany."
+    "config_hw_solar_target_band": "Ten zbiornik ma termometr. Jego temperatury na karcie urządzenia wyznaczają najwyższą temperaturę, więc cel ogrzewania słonecznego nie jest używany.",
+    "hq_found_thermometer": "SEM znalazł termometr: {name}. Użyć go?",
+    "hq_use_thermometer": "Użyj"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -28766,7 +28790,9 @@
     "hq_st_stopping": "Desliga após o tempo mínimo de funcionamento.",
     "hq_st_own_thermostat": "O seu próprio termóstato parou-o a {temp}. Suba o termóstato do depósito.",
     "hp_cop_temp_stuck": "A temperatura exterior não muda há 12 horas, por isso o SEM não aprende. Verifique o termómetro exterior em Configuração.",
-    "config_hw_solar_target_band": "Este depósito tem termómetro. As suas temperaturas no cartão do dispositivo definem o máximo; o objetivo de aquecimento solar não é usado."
+    "config_hw_solar_target_band": "Este depósito tem termómetro. As suas temperaturas no cartão do dispositivo definem o máximo; o objetivo de aquecimento solar não é usado.",
+    "hq_found_thermometer": "O SEM encontrou um termómetro: {name}. Usar?",
+    "hq_use_thermometer": "Usar"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -30979,7 +31005,9 @@
     "hq_st_stopping": "Se oprește după timpul minim de funcționare.",
     "hq_st_own_thermostat": "Termostatul propriu l-a oprit la {temp}. Ridică termostatul boilerului.",
     "hp_cop_temp_stuck": "Temperatura exterioară nu s-a schimbat de 12 ore, așa că SEM nu învață. Verifică termometrul exterior în Configurare.",
-    "config_hw_solar_target_band": "Acest rezervor are termometru. Temperaturile lui de pe cardul dispozitivului stabilesc maximul, deci ținta de încălzire solară nu este folosită."
+    "config_hw_solar_target_band": "Acest rezervor are termometru. Temperaturile lui de pe cardul dispozitivului stabilesc maximul, deci ținta de încălzire solară nu este folosită.",
+    "hq_found_thermometer": "SEM a găsit un termometru: {name}. Îl folosești?",
+    "hq_use_thermometer": "Folosește"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -33192,7 +33220,9 @@
     "hq_st_stopping": "Stängs av efter sin minsta drifttid.",
     "hq_st_own_thermostat": "Dess egen termostat stoppade den vid {temp}. Höj termostaten på beredaren.",
     "hp_cop_temp_stuck": "Utetemperaturen har inte ändrats på 12 timmar, så SEM lär sig inte. Kontrollera utetermometern under Konfiguration.",
-    "config_hw_solar_target_band": "Den här tanken har en termometer. Dess temperaturer på enhetskortet bestämmer högsta temperaturen, så solvärmemålet används inte."
+    "config_hw_solar_target_band": "Den här tanken har en termometer. Dess temperaturer på enhetskortet bestämmer högsta temperaturen, så solvärmemålet används inte.",
+    "hq_found_thermometer": "SEM hittade en termometer: {name}. Använda den?",
+    "hq_use_thermometer": "Använd"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -35405,6 +35435,8 @@
     "hq_st_stopping": "最短运行时间结束后关闭。",
     "hq_st_own_thermostat": "其自身的恒温器在 {temp} 时停止了加热。请调高热水器上的恒温器。",
     "hp_cop_temp_stuck": "室外温度已 12 小时没有变化，因此 SEM 没有在学习。请在配置中检查室外温度计。",
-    "config_hw_solar_target_band": "此水箱有温度计。设备卡片上的温度设置决定最高温度，因此不使用太阳能加热目标。"
+    "config_hw_solar_target_band": "此水箱有温度计。设备卡片上的温度设置决定最高温度，因此不使用太阳能加热目标。",
+    "hq_found_thermometer": "SEM 找到了一个温度计：{name}。要使用吗？",
+    "hq_use_thermometer": "使用"
   }
 }

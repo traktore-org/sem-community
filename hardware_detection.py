@@ -3772,6 +3772,113 @@ def find_outdoor_temperature_sensors(hass: Optional[HomeAssistant]) -> List[Dict
     return out
 
 
+# ── (#1353) a heater's thermometer — proposed, never bound ──
+#
+# The outdoor finder above skips tank and boiler sensors. A heater wants
+# exactly those: a sensor on its own device (else in its own area) that says
+# tank, boiler or hot water. Words only; the user confirms the pick.
+
+#: single words that say "this measures a water tank" (whole-word; a word
+#: of 6+ letters also matches inside a joined name)
+TANK_WORDS: Tuple[str, ...] = (
+    "tank", "dhw", "boiler", "bojler", "ballon", "speicher", "warmwasser",
+    "brauchwasser", "warmwater", "hotwater", "cylinder", "ecs", "cwu", "tuv",
+    "hmv", "varmvatten", "varmtvand", "varmtvann", "käyttövesi", "kayttovesi",
+    "zasobnik", "zásobník", "bereder",
+)
+#: two words that together say it ("hot water", "eau chaude", "agua caliente")
+TANK_PAIRS: Tuple[Tuple[str, str], ...] = (
+    ("hot", "water"), ("warm", "water"), ("eau", "chaude"),
+    ("acqua", "calda"), ("agua", "caliente"), ("água", "quente"),
+    ("apa", "calda"), ("warmes", "wasser"), ("heet", "water"),
+)
+#: in the sensor's OWN name: a tank sensor is none of these (the outdoor
+#: skip list minus its tank words, plus every word that says outside)
+NOT_TANK_READING: Tuple[str, ...] = tuple(
+    w for w in NOT_OUTDOOR_READING
+    if w not in ("water", "wasser", "warmwasser", "tank", "dhw")
+) + OUTDOOR_STRONG + ("weather", "wetter", "intern", "internal", "interne",
+                      "setpoint", "ambient", "umgebung")
+
+
+def _says_tank(words: List[str], joined: str) -> bool:
+    if _says(words, joined, TANK_WORDS):
+        return True
+    return any(a in words and b in words for a, b in TANK_PAIRS)
+
+
+def _device_and_area(ent_reg, dev_reg, eid: str):
+    """(device id, area id, device name) of one entity; any may be None."""
+    reg = ent_reg.async_get(eid) if ent_reg is not None else None
+    if reg is None:
+        return None, None, ""
+    dev = dev_reg.async_get(reg.device_id) if (dev_reg is not None and reg.device_id) else None
+    area = reg.area_id or (getattr(dev, "area_id", None) if dev is not None else None)
+    name = " ".join(str(x) for x in (
+        getattr(dev, "name_by_user", None), getattr(dev, "name", None),
+        getattr(dev, "model", None)) if x) if dev is not None else ""
+    return reg.device_id, area, name
+
+
+def find_heater_thermometer(
+    hass: Optional[HomeAssistant],
+    heater_entities: Any,
+    exclude: Any = (),
+) -> List[Dict[str, Any]]:
+    """(#1353) Temperature sensors that look like a heater's tank
+    thermometer, best first: ``[{entity_id, name, why, reads}]``, ``why`` =
+    ``device`` (same device as the heater) or ``area`` (same area). The
+    sensor's own or device name must say tank / boiler / hot water. Never
+    SEM's own sensors, never one in ``exclude`` (bound to another device),
+    never one whose own name says outside, room or electronics. Same device
+    before same area, then a sensor that reads now, then entity id. A
+    registry that cannot be read gives ``[]``, never an error."""
+    try:
+        if hass is None or not hasattr(hass, "states"):
+            return []
+        ids = [str(e) for e in (heater_entities or []) if e]
+        if not ids:
+            return []
+        from homeassistant.helpers import device_registry as _dr
+        ent_reg = entity_registry.async_get(hass)
+        dev_reg = _dr.async_get(hass)
+        heater = [_device_and_area(ent_reg, dev_reg, e) for e in ids]
+        h_devs = {d for d, _a, _n in heater if d}
+        h_areas = {a for _d, a, _n in heater if a}
+        if not (h_devs or h_areas):
+            return []
+        skip = {str(e) for e in (exclude or ()) if e} | set(ids)
+        from .coordinator.units import is_temperature_unit
+        out: List[Dict[str, Any]] = []
+        for st in hass.states.async_all("sensor"):
+            eid = str(st.entity_id)
+            attrs = getattr(st, "attributes", {}) or {}
+            if eid in skip or is_sem_entity(hass, eid):
+                continue
+            if attrs.get("device_class") != "temperature" and not is_temperature_unit(st):
+                continue
+            dev_id, area, dev_name = _device_and_area(ent_reg, dev_reg, eid)
+            why = "device" if (dev_id and dev_id in h_devs) else (
+                "area" if (area and area in h_areas) else None)
+            if why is None:
+                continue
+            own = _words_of(f"{eid} {attrs.get('friendly_name', '')}")
+            own_j = "".join(own)
+            if _says(own, own_j, NOT_TANK_READING):
+                continue
+            dev = _words_of(dev_name)
+            if not _says_tank(own + dev, own_j + "".join(dev)):
+                continue
+            out.append({"entity_id": eid,
+                        "name": str(attrs.get("friendly_name") or eid),
+                        "why": why,
+                        "reads": temperature_c(st) is not None})
+        out.sort(key=lambda r: (r["why"] != "device", not r["reads"], r["entity_id"]))
+        return out
+    except Exception:  # noqa: BLE001 — a crawl never breaks the caller
+        return []
+
+
 def weather_entities(hass: Optional[HomeAssistant]) -> List[str]:
     """(#1082) Real weather entities, sorted. ``weather.forecast_*`` is
     HA's own auto-made twin of an integration's entity and is never used
