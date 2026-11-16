@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
           "ev_charger_efficiency": "Randamentul încărcătorului (%)",
           "ev_target_soc": "Consideră plin la (%)",
-          "daily_ev_target_max": "Încărcarea solară se oprește la (kWh)",
-          "ev_target_soc_max": "Încărcarea solară se oprește la (%)",
+          "daily_ev_target_max": "Nu încărca niciodată peste (kWh)",
+          "ev_target_soc_max": "Nu încărca niciodată peste (%)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
           "ev_kwh_per_100km": "Consum vehicul (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Prioritate surplus (1=cea mai mare)",
           "ev_battery_may_assist": "Bateria poate asista acest încărcător",
           "ev_current_control_entity": "Entitate de control al curentului (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Încărcarea solară se oprește la (kWh)",
-          "ev_target_soc_max": "Încărcarea solară se oprește la (%)",
+          "daily_ev_target_max": "Nu încărca niciodată peste (kWh)",
+          "ev_target_soc_max": "Nu încărca niciodată peste (%)",
           "daily_ev_target": "Garantează cel puțin (kWh)",
           "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Prioritate surplus (1=cea mai mare)",
           "ev_battery_may_assist": "Bateria poate asista acest încărcător",
           "ev_current_control_entity": "Entitate de control al curentului (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Încărcarea solară se oprește la (kWh)",
-          "ev_target_soc_max": "Încărcarea solară se oprește la (%)",
+          "daily_ev_target_max": "Nu încărca niciodată peste (kWh)",
+          "ev_target_soc_max": "Nu încărca niciodată peste (%)",
           "daily_ev_target": "Garantează cel puțin (kWh)",
           "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
@@ -1767,10 +1767,10 @@
         "name": "{charger} Consideră plin la (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Încărcarea solară se oprește la (kWh)"
+        "name": "{charger} Nu încărca niciodată peste (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Încărcarea solară se oprește la (%)"
+        "name": "{charger} Nu încărca niciodată peste (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Capacitatea bateriei"

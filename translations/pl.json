@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "ev_charger_efficiency": "Sprawność ładowarki (%)",
           "ev_target_soc": "Uznaj za pełny przy (%)",
-          "daily_ev_target_max": "Ładowanie ze słońca kończy się przy (kWh)",
-          "ev_target_soc_max": "Ładowanie ze słońca kończy się przy (%)",
+          "daily_ev_target_max": "Nigdy nie ładuj powyżej (kWh)",
+          "ev_target_soc_max": "Nigdy nie ładuj powyżej (%)",
           "vehicle_range_entity": "Czujnik zasięgu pojazdu",
           "ev_kwh_per_100km": "Zużycie pojazdu (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Priorytet nadwyżki (1=najwyższy)",
           "ev_battery_may_assist": "Akumulator może wspomagać tę ładowarkę",
           "ev_current_control_entity": "Encja sterowania prądem (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Ładowanie ze słońca kończy się przy (kWh)",
-          "ev_target_soc_max": "Ładowanie ze słońca kończy się przy (%)",
+          "daily_ev_target_max": "Nigdy nie ładuj powyżej (kWh)",
+          "ev_target_soc_max": "Nigdy nie ładuj powyżej (%)",
           "daily_ev_target": "Zagwarantuj co najmniej (kWh)",
           "vehicle_soc_entity": "Czujnik SOC akumulatora pojazdu (opcjonalny)",
           "vehicle_range_entity": "Czujnik zasięgu pojazdu",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Priorytet nadwyżki (1=najwyższy)",
           "ev_battery_may_assist": "Akumulator może wspomagać tę ładowarkę",
           "ev_current_control_entity": "Encja sterowania prądem (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Ładowanie ze słońca kończy się przy (kWh)",
-          "ev_target_soc_max": "Ładowanie ze słońca kończy się przy (%)",
+          "daily_ev_target_max": "Nigdy nie ładuj powyżej (kWh)",
+          "ev_target_soc_max": "Nigdy nie ładuj powyżej (%)",
           "daily_ev_target": "Zagwarantuj co najmniej (kWh)",
           "vehicle_soc_entity": "Czujnik SOC akumulatora pojazdu (opcjonalny)",
           "vehicle_range_entity": "Czujnik zasięgu pojazdu",
@@ -1767,10 +1767,10 @@
         "name": "{charger} Uznaj za pełny przy (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Ładowanie ze słońca kończy się przy (kWh)"
+        "name": "{charger} Nigdy nie ładuj powyżej (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Ładowanie ze słońca kończy się przy (%)"
+        "name": "{charger} Nigdy nie ładuj powyżej (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Pojemność akumulatora"

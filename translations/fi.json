@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "ev_charger_efficiency": "Latauslaitteen hyötysuhde (%)",
           "ev_target_soc": "Katso täydeksi kohdassa (%)",
-          "daily_ev_target_max": "Aurinkolataus pysähtyy kohdassa (kWh)",
-          "ev_target_soc_max": "Aurinkolataus pysähtyy kohdassa (%)",
+          "daily_ev_target_max": "Älä koskaan lataa yli (kWh)",
+          "ev_target_soc_max": "Älä koskaan lataa yli (%)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
           "ev_kwh_per_100km": "Ajoneuvon kulutus (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Ylijäämäprioriteetti (1=korkein)",
           "ev_battery_may_assist": "Akku saa avustaa tätä latauslaitetta",
           "ev_current_control_entity": "Virranhallintaentiteetti (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Aurinkolataus pysähtyy kohdassa (kWh)",
-          "ev_target_soc_max": "Aurinkolataus pysähtyy kohdassa (%)",
+          "daily_ev_target_max": "Älä koskaan lataa yli (kWh)",
+          "ev_target_soc_max": "Älä koskaan lataa yli (%)",
           "daily_ev_target": "Takaa vähintään (kWh)",
           "vehicle_soc_entity": "Ajoneuvon akun SOC-anturi (valinnainen)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Ylijäämäprioriteetti (1=korkein)",
           "ev_battery_may_assist": "Akku saa avustaa tätä latauslaitetta",
           "ev_current_control_entity": "Virranhallintaentiteetti (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Aurinkolataus pysähtyy kohdassa (kWh)",
-          "ev_target_soc_max": "Aurinkolataus pysähtyy kohdassa (%)",
+          "daily_ev_target_max": "Älä koskaan lataa yli (kWh)",
+          "ev_target_soc_max": "Älä koskaan lataa yli (%)",
           "daily_ev_target": "Takaa vähintään (kWh)",
           "vehicle_soc_entity": "Ajoneuvon akun SOC-anturi (valinnainen)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
@@ -1767,10 +1767,10 @@
         "name": "{charger} Katso täydeksi kohdassa (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Aurinkolataus pysähtyy kohdassa (kWh)"
+        "name": "{charger} Älä koskaan lataa yli (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Aurinkolataus pysähtyy kohdassa (%)"
+        "name": "{charger} Älä koskaan lataa yli (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Akun kapasiteetti"

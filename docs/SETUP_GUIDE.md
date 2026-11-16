@@ -912,9 +912,9 @@ EV charger card — one place, per charger, no config-flow round-trips:
     using the vehicle's live SOC sensor. The unit selector
     (`select.sem_charger_<id>_ev_target_type`) only offers **%** when that charger has a
     **vehicle SOC entity** configured — otherwise it shows kWh only.
-- **Solar max** (`number.sem_charger_<id>_daily_ev_target_max` / `_target_soc_max`): the
-  Max handle of the range slider — solar-surplus charging stops once this ceiling is
-  reached. Defaults to full (charge freely from sun); lower it to cap surplus. (Replaces
+- **Never charge past** (`number.sem_charger_<id>_daily_ev_target_max` / `_target_soc_max`): the
+  Max handle of the range slider — charging stops once this ceiling is
+  reached, in every mode (the night top-up to *Guarantee at least* still runs). Defaults to full (charge freely from sun); lower it to cap surplus. (Replaces
   the former *Limit surplus* switch.)
 - **Charge mode** (`select.sem_charger_<id>_charge_mode`, v1.6.3): the per-charger
   intent that carries the night-charging + tariff-window decision. *Min + Solar*

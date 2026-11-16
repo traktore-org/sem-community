@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "ev_charger_efficiency": "Charger efficiency (%)",
           "ev_target_soc": "Consider full at (%)",
-          "daily_ev_target_max": "Sun charging stops at (kWh)",
-          "ev_target_soc_max": "Sun charging stops at (%)",
+          "daily_ev_target_max": "Never charge past (kWh)",
+          "ev_target_soc_max": "Never charge past (%)",
           "vehicle_range_entity": "Vehicle range sensor",
           "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "ev_battery_may_assist": "Battery may assist this charger",
           "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Sun charging stops at (kWh)",
-          "ev_target_soc_max": "Sun charging stops at (%)",
+          "daily_ev_target_max": "Never charge past (kWh)",
+          "ev_target_soc_max": "Never charge past (%)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "ev_battery_may_assist": "Battery may assist this charger",
           "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Sun charging stops at (kWh)",
-          "ev_target_soc_max": "Sun charging stops at (%)",
+          "daily_ev_target_max": "Never charge past (kWh)",
+          "ev_target_soc_max": "Never charge past (%)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
@@ -1767,10 +1767,10 @@
         "name": "{charger} Consider full at (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Sun charging stops at (kWh)"
+        "name": "{charger} Never charge past (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Sun charging stops at (%)"
+        "name": "{charger} Never charge past (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Battery Capacity"

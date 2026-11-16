@@ -290,9 +290,11 @@ export function loadBody(card, row) {
             '', { more: true }));
     }
     // (#1371) with the mode Off SEM acts on nothing: "SEM may switch it: on"
-    // under "Off — SEM won't act" read as a contradiction
-    if (row.mergedMode !== 'off') rows.push(card._row('mdi:toggle-switch-outline', t('next_may_switch'),
-        card._val(row.isControllable ? t('next_on') : t('next_off'), () => send('controllable', String(!row.isControllable)), { disabled: dis }),
+    // under "Off — SEM won't act" read as a contradiction. The row stays
+    // (Critical and Configure live here); only its answer says the mode.
+    rows.push(card._row('mdi:toggle-switch-outline', t('next_may_switch'),
+        row.mergedMode === 'off' ? html`<span class="muted">${t('control_verdict_off')}</span>`
+            : card._val(row.isControllable ? t('next_on') : t('next_off'), () => send('controllable', String(!row.isControllable)), { disabled: dis }),
         html`${t('critical')}: ${card._val(row.isCritical ? t('next_yes') : t('next_no'), () => send('critical', String(!row.isCritical)), { disabled: dis })}${row.controlEntity ? ' · ' + row.controlEntity : ''} · ${card._val(t('configure'), () => card._showConfigureModal(id, row.name))}`,
         { more: true }));
 

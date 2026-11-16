@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "ev_charger_efficiency": "充电桩效率 (%)",
           "ev_target_soc": "达到此值视为充满 (%)",
-          "daily_ev_target_max": "绿电充电停止于 (kWh)",
-          "ev_target_soc_max": "绿电充电停止于 (%)",
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
           "vehicle_range_entity": "车辆续航里程传感器",
           "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "绿电/富余功率优先级 (1=最高)",
           "ev_battery_may_assist": "允许电池辅助此充电器",
           "ev_current_control_entity": "电流控制实体（number 实体 — Wallbox, go-eCharger 等）",
-          "daily_ev_target_max": "绿电充电停止于 (kWh)",
-          "ev_target_soc_max": "绿电充电停止于 (%)",
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
           "daily_ev_target": "至少保证 (kWh)",
           "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
           "vehicle_range_entity": "车辆续航里程传感器",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "绿电/富余功率优先级 (1=最高)",
           "ev_battery_may_assist": "允许电池辅助此充电器",
           "ev_current_control_entity": "电流控制实体（number 实体 — Wallbox, go-eCharger 等）",
-          "daily_ev_target_max": "绿电充电停止于 (kWh)",
-          "ev_target_soc_max": "绿电充电停止于 (%)",
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
           "daily_ev_target": "至少保证 (kWh)",
           "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
           "vehicle_range_entity": "车辆续航里程传感器",
@@ -1767,10 +1767,10 @@
         "name": "{charger}达到此值视为充满 (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger}绿电充电停止于 (kWh)"
+        "name": "{charger}充电不超过 (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger}绿电充电停止于 (%)"
+        "name": "{charger}充电不超过 (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger}车辆电池容量"

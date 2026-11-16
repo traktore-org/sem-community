@@ -177,7 +177,7 @@ export function chargerBody(card, row) {
         <div><span class="lbl">${t('next_charge')}</span><div class="big num">${soc === null ? '—' : (isEstimate ? '~' : '') + Math.round(soc) + ' %'}</div>
             <div class="sub2">${soc === null ? t('next_no_soc') : html`${kmNow === null ? '' : tf('next_km', { km: kmNow }) + ' · '}${isEstimate ? t('next_estimate') : t('next_measured')}`}</div></div>
         <div><span class="lbl">${t(CHARGER_TEXT.departure)}</span><div class="big num">${timeVal}</div>
-            <div class="sub2">${daysVal}${plannedKwh > 0 ? ' · ' + tf('next_kwh_planned', { kwh: card._fmt(plannedKwh, 1) }) : ''}</div></div>
+            <div class="sub2">${daysVal}${!hasOwnDays && dep.next ? ' · ' + tf('next_next_departure', { time: card._hhmm(dep.next) }) : ''}${plannedKwh > 0 ? ' · ' + tf('next_kwh_planned', { kwh: card._fmt(plannedKwh, 1) }) : ''}</div></div>
         <div><span class="lbl">${t(CHARGER_TEXT.target)}</span><div class="big num">${targetVal}</div>
             <div class="sub2">${typeVal} ↔ ${isSoc ? 'kWh' : t('next_soc')}${kmAdd ? ' · ' + tf('next_plus_km', { km: kmAdd }) : ''}</div></div>
     </div>`;

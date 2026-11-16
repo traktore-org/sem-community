@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
           "ev_charger_efficiency": "Laderrendement (%)",
           "ev_target_soc": "Beschouw als vol bij (%)",
-          "daily_ev_target_max": "Laden op zon stopt bij (kWh)",
-          "ev_target_soc_max": "Laden op zon stopt bij (%)",
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
           "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
           "ev_battery_may_assist": "Accu mag deze lader ondersteunen",
           "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Laden op zon stopt bij (kWh)",
-          "ev_target_soc_max": "Laden op zon stopt bij (%)",
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
           "daily_ev_target": "Minimaal garanderen (kWh)",
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
           "ev_battery_may_assist": "Accu mag deze lader ondersteunen",
           "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Laden op zon stopt bij (kWh)",
-          "ev_target_soc_max": "Laden op zon stopt bij (%)",
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
           "daily_ev_target": "Minimaal garanderen (kWh)",
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
@@ -1767,10 +1767,10 @@
         "name": "{charger} Beschouw als vol bij (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Laden op zon stopt bij (kWh)"
+        "name": "{charger} Nooit verder laden dan (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Laden op zon stopt bij (%)"
+        "name": "{charger} Nooit verder laden dan (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Accucapaciteit"
