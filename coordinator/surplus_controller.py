@@ -23,6 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
+from ..devices.tank_goal import RECOMPUTE
 from . import reason_codes as RC  # (#1174)
 from .plan_verdict import NO_OPINION, PlanVerdict
 
@@ -1618,6 +1619,43 @@ async def _release_step_down(device) -> None:
                    text="step-down released")
 
 
+#: (#1369) the verdicts that return BEFORE clause 3 reads the stop rule
+_BEFORE_THE_STOP_RULE = frozenset({
+    RC.LOAD_DISABLED, RC.LOAD_MODE_OFF, RC.LOAD_PEAK_SHED, RC.LOAD_PHASE_GUARD,
+    RC.LOAD_PLAN_CLOSED, RC.LOAD_LEGIONELLA_END, RC.LOAD_DAILY_MAX})
+
+
+def _engine_stop_verdict(device, intent):
+    """(#1369) Did the engine stop this tank by its stop rule THIS cycle?
+    True / False from the intent it just made; None when it returned before
+    clause 3 (shed, lock, plan hold, disabled, off…) and never asked;
+    ``RECOMPUTE`` for an idle tank at its target, where clause 3 and the
+    start refusal give the same code. Reads only, never the stop rule."""
+    if (getattr(device, "is_enabled", True) is False
+            or getattr(device, "control_mode", DeviceControlMode.SURPLUS)
+            != DeviceControlMode.SURPLUS
+            or getattr(device, "locked_by_operator", False) is True
+            or intent.code in _BEFORE_THE_STOP_RULE):
+        return None
+    if intent.code == RC.LOAD_STOP_CONDITION:
+        return True
+    if intent.code == RC.LOAD_AT_TARGET and not device.is_active:
+        return RECOMPUTE
+    return False
+
+
+def _shadow_tank_goal(device, intent) -> None:
+    """(#1369, step 1) A tank's goal object is built beside the decision just
+    made and compared with it; the counts are diagnostics, nothing reads them
+    to decide. Strict class read, like ``_is_heater``."""
+    compare = getattr(type(device), "compare_tank_goal", None)
+    if compare is not None and _is_heater(device):
+        try:
+            compare(device, _engine_stop_verdict(device, intent))
+        except Exception:  # noqa: BLE001 — a diagnostic never costs a cycle
+            _LOGGER.debug("tank goal comparison failed", exc_info=True)
+
+
 def _is_heater(device) -> bool:
     """(#1369) A hot water tank — read strictly (the class's own method), so
     a stand-in that answers every attribute is never taken for one. Only a
@@ -2337,6 +2375,7 @@ class SurplusController:
                 buying_w=(max(0.0, float(getattr(self, "_grid_import_w", 0.0) or 0.0))
                           if getattr(self, "_grid_import_known", True) else 0.0))
             intents[did] = intent
+            _shadow_tank_goal(device, intent)
             spend[did] = debit = self._walk_debit(
                 device, intent, remaining=remaining, now=now)
             remaining -= debit
