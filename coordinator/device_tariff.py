@@ -42,7 +42,8 @@ from ..tariff.tariff_provider import (
     DynamicTariffProvider, PriceLevel, StaticTariffProvider,
 )
 from ..utils.log_gate import log_on_change
-from .price_signal import absence_word, comparative_level, is_cheap
+from .price_signal import absence_word, comparative_level
+from .price_view import PriceView
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -218,7 +219,8 @@ class PlanTariff:
         return self.rate or None
 
     def cheap_at(self, when) -> bool:
-        return is_cheap(self.provider, when)
+        # (#1372) the gate rule, asked through the price view
+        return PriceView(self.provider, rule="gate").cheap_at(when)
 
 
 class DeviceTariffs:

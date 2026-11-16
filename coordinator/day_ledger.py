@@ -305,7 +305,9 @@ def rate_cheap_fn(prov):
     the tariff's rate word is its price level (a dynamic tariff): the slot
     then reuses the gate's answer instead of asking the same level twice,
     ~400 times on a 15-min curve. (#1372) Asked through ``PriceView``."""
-    return PriceView(prov, rule="plan").rate_cheap_fn()
+    if PriceView(prov, rule="plan").rate_cheap_fn() is None:
+        return None
+    return lambda ts: tariff_rate_cheap_at(prov, ts)
 
 
 def provisional_soc_curve(ledger, *, capacity_kwh: float,

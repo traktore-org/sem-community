@@ -215,17 +215,6 @@ class PriceView:
 
     # ── comparing hours ───────────────────────────────────────────────
 
-    def _price(self, t: datetime) -> Optional[float]:
-        try:
-            p = self._p.get_price_at(t)
-            return float(p) if p is not None else None
-        except Exception:  # noqa: BLE001 — unpriced, honestly
-            return None
-
-    def no_dearer(self, t: datetime, t0: datetime) -> bool:
-        """Does hour ``t`` cost no more than hour ``t0``? Unpriced = no."""
-        return price_no_dearer(self._price(t), self._price(t0))
-
     def day_has_cheaper(self, hours: Iterable[datetime]) -> bool:
         """Is any of ``hours`` cheap?"""
         return day_has_cheaper(self.cheap_at(t) for t in hours)

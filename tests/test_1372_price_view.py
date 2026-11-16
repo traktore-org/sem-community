@@ -286,18 +286,6 @@ def test_cheap_hours_is_none_when_the_span_is_not_fully_known():
 
 # ── comparing hours ───────────────────────────────────────────────────────
 
-def test_no_dearer_compares_two_hours_of_the_same_tariff():
-    prov = StaticTariffProvider(peak_rate=0.35, off_peak_rate=0.22)
-    v = PriceView(prov, rule="plan")
-    night = datetime(2026, 11, 9, 3, 0, tzinfo=UTC)
-    night2 = datetime(2026, 11, 9, 23, 0, tzinfo=UTC)
-    noon = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
-    assert v.no_dearer(night2, night) is True       # same rate
-    assert v.no_dearer(noon, night) is False        # dearer
-    assert v.no_dearer(night, noon) is True         # cheaper
-    assert PriceView(None, rule="plan").no_dearer(night, noon) is False
-
-
 def test_price_no_dearer_and_day_has_cheaper_helpers():
     assert price_no_dearer(0.2, 0.2) and price_no_dearer(0.2, 0.3)
     assert not price_no_dearer(0.31, 0.3)
