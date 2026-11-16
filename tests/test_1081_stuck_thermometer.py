@@ -110,10 +110,12 @@ def test_the_state_survives_json_with_held_hours():
     assert again.get("t_pending") == s["t_pending"] and again["bins"] == s["bins"]
 
 
-def test_the_same_value_on_both_sides_of_a_gap_is_not_one_run():
+def test_an_outage_does_not_let_a_stuck_thermometer_teach():
+    """Stuck for 16 hours with a missed hour in the middle: still no sample."""
     s, e, h = _feed(None, 8, t=5.0, age=20 * 3600.0)
-    s, _, _ = _feed(s, 8, t=5.0, start=30, e0=e, h0=h, age=20 * 3600.0)
-    assert not cl.summary(s, has_meter=True)["rejected"].get("temperature_stuck")
+    s, _, _ = _feed(s, 8, t=5.0, start=10, e0=e, h0=h, age=20 * 3600.0)
+    out = cl.summary(s, has_meter=True)
+    assert out["hours"] == 0 and out.get("temp_stuck")
 
 
 def test_a_store_with_a_bad_counter_starts_fresh():

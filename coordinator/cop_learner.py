@@ -286,10 +286,9 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
         if (isinstance(old_id, int) and isinstance(hour_id, int)
                 and hour_id != old_id + 1):
             state.pop("stalled", None)
-            # the same value on both sides of a gap is not one run
-            state.pop("t_last", None)
-            state["t_same"] = 0
-            _flush_pending(state)
+            # the stuck count and the held hours stay: a thermometer
+            # that reads the same before and after an outage, with no
+            # fresh report, is still the same suspect
             _reject(state, "gap")
         elif hour is not None:
             # the reading at the turn is the closing value of the old hour
