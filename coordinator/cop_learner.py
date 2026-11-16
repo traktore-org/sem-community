@@ -88,13 +88,17 @@ def _valid(state: Any) -> Dict[str, Any]:
 
 
 def _same_ok(state: Dict[str, Any]) -> bool:
-    for k in ("t_last", "t_same", "t_added"):
+    for k in ("t_last", "t_same"):
         v = state.get(k)
         if v is not None and (isinstance(v, bool)
                               or not isinstance(v, (int, float))
                               or not math.isfinite(v)):
             return False
-    return True
+    pend = state.get("t_pending")
+    return pend is None or (
+        isinstance(pend, list) and len(pend) <= STUCK_HOURS
+        and all(isinstance(x, (list, tuple)) and len(x) == 3
+                and isinstance(x[0], str) and _pair_ok(x[1:]) for x in pend))
 
 
 def _res_ok(v: Any) -> bool:
@@ -103,7 +107,7 @@ def _res_ok(v: Any) -> bool:
 
 
 _HOUR_NUMS = ("elec0", "elec1", "heat0", "heat1", "sum_temp", "n_temp",
-              "n", "n_run", "fresh")
+              "n", "n_run", "fresh", "aged")
 
 
 def _hour_ok(hour: Any) -> bool:
@@ -196,39 +200,49 @@ def _close_hour(state: Dict[str, Any], hour: Dict[str, Any]) -> None:
         _reject(state, "implausible")
         return
     t = hour["sum_temp"] / hour["n_temp"]
-    samples = state["bins"].setdefault(bin_key(t), [])
-    samples.append([round(t, 1), round(cop, 3)])
-    state["t_added"] = int(state.get("t_added", 0) or 0) + 1
+    if hour.get("aged") and not hour.get("fresh"):
+        # no fresh report in this hour: hold it back until the value
+        # moves (it was real) or has stood for 12 hours (it is stuck)
+        state.setdefault("t_pending", []).append(
+            [bin_key(t), round(t, 1), round(cop, 3)])
+        return
+    _add_sample(state, bin_key(t), round(t, 1), round(cop, 3))
+
+
+def _flush_pending(state: Dict[str, Any]) -> None:
+    """The held hours were real after all: they become samples."""
+    for key, t, cop in state.pop("t_pending", None) or []:
+        _add_sample(state, key, t, cop)
+
+
+def _add_sample(state: Dict[str, Any], key: str, t: float, cop: float) -> None:
+    samples = state["bins"].setdefault(key, [])
+    samples.append([t, cop])
     if len(samples) > MAX_SAMPLES_PER_BIN:
         del samples[: len(samples) - MAX_SAMPLES_PER_BIN]
 
 
 def _temperature_stuck(state: Dict[str, Any], hour: Dict[str, Any]) -> bool:
     """Count hours whose mean temperature repeats with no fresh report.
-    From the 12th on the hour is not a sample, and the samples the run
-    left behind at that value are taken out again."""
+    While the count runs, the hours' samples are held back; from the 12th
+    hour on they are dropped, and when the value moves first they are
+    kept. Nothing learned before the run is ever touched."""
     if not hour.get("n_temp"):
         return False
     t = round(hour["sum_temp"] / hour["n_temp"], 1)
+    if not hour.get("aged"):
+        # no report time to judge by: never called stuck
+        state["t_last"], state["t_same"] = None, 0
+        _flush_pending(state)
+        return False
     if hour.get("fresh") or state.get("t_last") != t:
-        state["t_last"], state["t_same"], state["t_added"] = t, 0, 0
+        state["t_last"], state["t_same"] = t, 0
+        _flush_pending(state)
         return False
     state["t_same"] = int(state.get("t_same", 0) or 0) + 1
     if state["t_same"] < STUCK_HOURS - 1:
         return False
-    if state["t_same"] == STUCK_HOURS - 1:
-        samples = state["bins"].get(bin_key(t), [])
-        drop = 0
-        # only the samples THIS run added: an older good day at the same
-        # value stays
-        added = int(state.get("t_added", 0) or 0)
-        while (drop < added and drop < len(samples)
-               and samples[-1 - drop][0] == t):
-            drop += 1
-        if drop:
-            del samples[len(samples) - drop:]
-        if not samples:
-            state["bins"].pop(bin_key(t), None)
+    state.pop("t_pending", None)
     return True
 
 
@@ -261,6 +275,7 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
         t = None
     age = _num(outdoor_age_s)
     fresh = t is not None and age is not None and 0 <= age <= FRESH_REPORT_S
+    aged = t is not None and age is not None
     if h is not None:
         # the finest step the heat counter has ever shown = its resolution
         state["heat_res"] = min(float(state.get("heat_res", 1.0)),
@@ -273,7 +288,8 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
             state.pop("stalled", None)
             # the same value on both sides of a gap is not one run
             state.pop("t_last", None)
-            state["t_same"] = state["t_added"] = 0
+            state["t_same"] = 0
+            _flush_pending(state)
             _reject(state, "gap")
         elif hour is not None:
             # the reading at the turn is the closing value of the old hour
@@ -284,7 +300,7 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
             _close_hour(state, hour)
         hour = {"id": hour_id, "elec0": e, "heat0": h, "elec1": e, "heat1": h,
                 "sum_temp": 0.0, "n_temp": 0, "n": 0, "n_run": 0,
-                "fresh": 1 if fresh else 0,
+                "fresh": 1 if fresh else 0, "aged": 1 if aged else 0,
                 "bad": e is None or h is None}
         state["hour"] = hour
         if t is not None:
@@ -301,6 +317,8 @@ def observe(state: Any, *, hour_id: Any, elec_kwh: Any, heat_kwh: Any,
         hour["elec1"], hour["heat1"] = e, h
     if fresh:
         hour["fresh"] = 1
+    if aged:
+        hour["aged"] = 1
     if t is not None:
         hour["sum_temp"] += t
         hour["n_temp"] += 1

@@ -37,9 +37,10 @@ def test_a_thermometer_that_never_moves_teaches_nothing():
     assert out["hours"] == 0                       # the first 11 were taken out
 
 
-def test_an_unknown_report_age_is_judged_by_the_value_alone():
+def test_without_a_report_time_it_is_never_called_stuck():
     s, _, _ = _feed(None, 30, t=11.8, age=None)
-    assert cl.learned_points(s) == []
+    assert cl.learned_points(s) == [(11.8, 3.0)]
+    assert "temp_stuck" not in cl.summary(s, has_meter=True)
 
 
 def test_a_live_source_that_repeats_whole_degrees_still_teaches():
@@ -80,6 +81,33 @@ def test_an_older_good_day_at_the_same_value_is_kept():
     s, _, _ = _feed(s, 14, t=5.0, start=8, e0=e, h0=h, age=20 * 3600.0, cop=2.0)
     # the five good hours at 5.0 stay; none of the stuck run's hours do
     assert [c for t, c in s["bins"]["4"] if t == 5.0] == [3.0] * 5
+
+
+def test_a_full_bin_loses_nothing_to_a_stuck_run():
+    s, e, h = _feed(None, 30, t=lambda i: 5.0 if i % 2 else 5.1, age=60.0)
+    before = [list(x) for x in s["bins"]["4"]]
+    assert len(before) == cl.MAX_SAMPLES_PER_BIN
+    s, _, _ = _feed(s, 20, t=5.0, start=30, e0=e, h0=h, age=20 * 3600.0, cop=2.0)
+    after = s["bins"]["4"]
+    # the hour the run began in had a fresh report and is one real sample;
+    # none of the stuck hours (cop 2.0) is in, and no older sample left for them
+    assert after[:-1] == before[1:] and not [x for x in after[:-1] if x[1] < 2.5]
+
+
+def test_a_calm_night_that_ends_keeps_its_hours():
+    """Eight equal hours without a fresh report, then the value moves: the
+    held hours were real and become samples."""
+    s, e, h = _feed(None, 8, t=2.0, age=20 * 3600.0)
+    s, _, _ = _feed(s, 3, t=lambda i: 2.4 + (i - 8) * 0.5, start=8, e0=e, h0=h, age=20 * 3600.0)
+    assert len(s["bins"]["2"]) >= 8 and len(s.get("t_pending") or []) <= 1
+
+
+def test_the_state_survives_json_with_held_hours():
+    import json
+    s, _, _ = _feed(None, 6, t=2.0, age=20 * 3600.0)
+    assert s.get("t_pending")
+    again = cl._valid(json.loads(json.dumps(s)))
+    assert again.get("t_pending") == s["t_pending"] and again["bins"] == s["bins"]
 
 
 def test_the_same_value_on_both_sides_of_a_gap_is_not_one_run():
