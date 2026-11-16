@@ -37,8 +37,8 @@ from .units import (
 )
 
 from ..ha_energy_reader import (
-    battery_units, energy_counters, left_alone_counters, unit_energy_counters,
-    unsourced_counters,
+    battery_units, energy_counters, left_alone_counters, one_battery_soc,
+    unit_energy_counters, unit_soc_sensor, unsourced_counters,
 )
 from ..utils.log_gate import log_on_change
 from ..utils.own_entity import is_sem_entity
@@ -74,6 +74,14 @@ _CYCLES_UNSET = object()  # cache sentinel distinct from a None result
 # comparable answers (#638 finding #3).
 _SOC_NAME_KEYWORDS = ("soc", "state_of_charge", "batterieladung",
                       "battery_level", "charge_level")
+
+
+def _soc_shaped(device_class: Any, unit: Optional[str]) -> bool:
+    """(#1373) Can a sensor whose NAME holds a SOC word be a level? Only in
+    % (or as a battery level). A name holds letters, not a quantity:
+    ``soc_status`` and ``soc_limit`` are codes, 0 while all is well, and
+    were read as an empty battery."""
+    return (unit or "").strip() == "%" or device_class == "battery"
 
 _CAPACITY_KEYWORDS = (
     "akkukapazit", "rated_capacity", "battery_capacity",
@@ -3765,7 +3773,9 @@ class SensorReader:
         # deterministic, no guessing) > device-registry auto-detect.
         # Use allow_none so 0% SOC is distinguishable from "unavailable"
         soc_val = None
-        ed_soc = ed.battery_soc
+        # (#1373) the one battery read: its own pick, never another
+        # source's (the first source may be a battery with no power sensor)
+        ed_soc = one_battery_soc(ed)
         if self.config.battery_soc_sensor:
             soc_val = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc", allow_none=True,
@@ -7442,9 +7452,18 @@ class SensorReader:
         downstream able to tell. Once resolved, the mapping is remembered and
         a later unavailable state is what it actually is: a read failure of a
         known sensor.
+
+        (#1373) A battery the user gave a SOC sensor in HA's battery dialog
+        (``stat_soc``) reads that sensor, readable or not. Nothing is
+        guessed for it: the guess read a status code on its device as 0 %.
         """
         if not battery_power_entity or "." not in battery_power_entity:
             return None
+
+        own = unit_soc_sensor(
+            getattr(self, "_energy_dashboard_config", None), battery_power_entity)
+        if own:
+            return own
 
         cached = self._soc_entity_by_power.get(battery_power_entity)
         if cached:
@@ -7488,6 +7507,11 @@ class SensorReader:
                 device_entities = er.async_entries_for_device(
                     registry, power_entry.device_id
                 )
+                # (#1373) Ranked, not first in registry order: a sensor HA
+                # declares a battery level (device class battery, %) beats
+                # one found by its name, and a name match counts only in %.
+                # Rank 0: both; 1: declared only; 2: name in % only.
+                best: Optional[tuple[int, str, float]] = None
                 for entity_entry in device_entities:
                     if entity_entry.domain != "sensor":
                         continue
@@ -7499,28 +7523,39 @@ class SensorReader:
                     # integrations that name SOC unconventionally — e.g. SolaX
                     # solax-modbus calls it "Battery Capacity"
                     # (sensor.*_battery_capacity), which no SOC keyword matches (#250).
-                    by_keyword = any(kw in eid_lower for kw in soc_keywords)
-                    by_signature = False
-                    if state is not None:
-                        dc = state.attributes.get("device_class")
-                        unit = (state.attributes.get("unit_of_measurement") or "").strip()
-                        by_signature = dc == "battery" and unit == "%"
-                    if by_keyword or by_signature:
-                        if state and state.state not in ("unknown", "unavailable", None):
-                            try:
-                                val = finite_float(state.state)
-                                if 0 <= val <= 100:
-                                    if not getattr(self, '_battery_soc_logged', False):
-                                        _LOGGER.info(
-                                            "Auto-detected battery SOC via device registry: %s = %.0f%%",
-                                            eid, val,
-                                        )
-                                        self._battery_soc_logged = True
-                                    self._soc_entity_by_power[
-                                        battery_power_entity] = eid
-                                    return eid
-                            except (ValueError, TypeError):
-                                _LOGGER.debug("Battery SOC candidate %s not numeric: %r (#259)", eid, state.state)
+                    if state is None or state.state in ("unknown", "unavailable", None):
+                        continue
+                    dc = state.attributes.get("device_class")
+                    unit = (state.attributes.get("unit_of_measurement") or "").strip()
+                    by_signature = dc == "battery" and unit == "%"
+                    # (#1373) "soc" in a name is a level only in %: a
+                    # ``soc_status`` / ``soc_limit`` code (no unit, 0 = normal)
+                    # was taken first and read as 0 %.
+                    by_keyword = (any(kw in eid_lower for kw in soc_keywords)
+                                  and _soc_shaped(dc, unit))
+                    if not (by_keyword or by_signature):
+                        continue
+                    rank = (0 if by_keyword and by_signature
+                            else 1 if by_signature else 2)
+                    if best is not None and best[0] <= rank:
+                        continue
+                    try:
+                        val = finite_float(state.state)
+                    except (ValueError, TypeError):
+                        _LOGGER.debug("Battery SOC candidate %s not numeric: %r (#259)", eid, state.state)
+                        continue
+                    if 0 <= val <= 100:
+                        best = (rank, eid, val)
+                if best is not None:
+                    _rank, eid, val = best
+                    if not getattr(self, '_battery_soc_logged', False):
+                        _LOGGER.info(
+                            "Auto-detected battery SOC via device registry: %s = %.0f%%",
+                            eid, val,
+                        )
+                        self._battery_soc_logged = True
+                    self._soc_entity_by_power[battery_power_entity] = eid
+                    return eid
         except Exception as e:
             _LOGGER.debug("Device registry SOC lookup failed: %s", e)
 
@@ -7533,6 +7568,11 @@ class SensorReader:
         # commit when EXACTLY ONE sensor is an unambiguous HOME-battery SOC —
         # a name SOC-keyword AND a ``%`` unit, excluding EV/vehicle/phone
         # batteries. Zero or multiple matches → return None (never guess).
+        # (#1373) Never for one battery of a fleet: the one SOC sensor in the
+        # house cannot be the level of two batteries. b2, its own level not
+        # up yet, took b1's and kept it.
+        if len(battery_units(getattr(self, "_energy_dashboard_config", None))) > 1:
+            return None
         try:
             # "charger"/"wallbox" (#695): an EV charger that exposes the
             # CAR's SOC (Easee, Zaptec, OpenWB — and the rig's
@@ -7660,10 +7700,22 @@ class SensorReader:
                         if entry.domain != "sensor" or entry.disabled_by:
                             continue
                         eid_lower = entry.entity_id.lower()
-                        if any(kw in eid_lower
-                               for kw in _SOC_NAME_KEYWORDS):
-                            _note_read(self, entry.entity_id)   # (#1140)
-                            return True
+                        # (#1373) the same rule as detection: a name that
+                        # holds "soc" counts only in %. Its unit is the
+                        # state's, else the registry's; with neither, it
+                        # may still come up as a level, so it counts.
+                        if any(kw in eid_lower for kw in _SOC_NAME_KEYWORDS):
+                            st = self.hass.states.get(entry.entity_id)
+                            attrs = st.attributes if st is not None else {}
+                            st_unit = (attrs.get("unit_of_measurement")
+                                       or entry.unit_of_measurement)
+                            st_dc = (attrs.get("device_class")
+                                     or getattr(entry, "device_class", None)
+                                     or entry.original_device_class)
+                            if ((st is None and st_unit is None)
+                                    or _soc_shaped(st_dc, st_unit)):
+                                _note_read(self, entry.entity_id)  # (#1140)
+                                return True
                         # Looser than detection's signature check on purpose:
                         # the registry may carry no unit for an entity that
                         # has never been added, and this probe only decides

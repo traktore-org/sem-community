@@ -72,6 +72,7 @@ from .coordinator.battery_controls import (
 )
 from .ha_energy_reader import (
     battery_units, read_energy_dashboard_config, EnergyDashboardConfig,
+    one_battery_soc,
 )
 from .setup_check import (
     ASK_GUESSED, ASK_MISSING, answer_updates, build_setup_check, fmt_w,
@@ -1039,7 +1040,9 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "grid_power_sensor": self._check().grid_entity,
             "battery_power_sensor": (cfg.battery_power
                                      if self._one_combined_battery() else None),
-            "battery_soc_sensor": cfg.battery_soc,
+            # (#1373) a fleet's SOC is the average of its batteries: no one
+            # sensor is what SEM reads, so none is offered as found
+            "battery_soc_sensor": one_battery_soc(cfg),
         }
 
     # A home with two inverters or two batteries sums them, and one picker

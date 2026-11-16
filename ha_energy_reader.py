@@ -140,6 +140,15 @@ class EnergyDashboardConfig:
     # instead of guessing via device-registry heuristics.
     battery_soc: Optional[str] = None
     battery_soc_list: List[str] = field(default_factory=list)
+    #: (#1373) Each battery's own ``stat_soc``, by its ``battery_units``
+    #: entry. ``battery_soc_list`` skips a battery with none, so entry N of
+    #: it is not battery bN. Read through ``unit_soc_sensor``.
+    battery_unit_soc: Dict[str, str] = field(default_factory=dict)
+    #: (#1373) The ``stat_soc`` of a battery with counters and no power
+    #: sensor, by its ``(charge, discharge)`` counters: the derive gives it
+    #: to the power sensor it finds for that battery.
+    battery_energy_only_soc: Dict[Tuple[Optional[str], Optional[str]], str] = field(
+        default_factory=dict)
 
     # Energy sensors (for cumulative tracking)
     solar_energy: Optional[str] = None
@@ -383,6 +392,7 @@ def yield_found_units_to_picks(ed_config: Any, *, solar_pick: Any = None,
                 u for u in ed_config.battery_power_list if u not in dropped]
             for unit in dropped:
                 ed_config.battery_unit_counters.pop(unit, None)
+                ed_config.battery_unit_soc.pop(unit, None)       # (#1373)
                 found.pop(unit, None)
             if ed_config.battery_power in dropped:
                 ed_config.battery_power = (ed_config.battery_power_list[0]
@@ -429,6 +439,47 @@ def unit_energy_counters(
     if isinstance(pair, (list, tuple)) and len(pair) == 2:
         return pair[0] or None, pair[1] or None
     return None
+
+
+def unit_soc_sensor(ed_config: Any, unit: Optional[str]) -> Optional[str]:
+    """The SOC sensor the user picked for this battery in HA's battery
+    dialog (``stat_soc``), or None when it has none (#1373).
+
+    ``unit`` is the battery's ``battery_units`` entry. The parser records the
+    SOC of the dashboard source that gave the battery its power sensor, so a
+    battery never reads another battery's SOC. SEM read only the first
+    source's ``stat_soc``, and only on a one-battery home; each battery of a
+    fleet took a guess from its device, and a ``soc_status`` code (0) on
+    that device read as 0 %.
+    """
+    socs = getattr(ed_config, "battery_unit_soc", None)
+    if not unit or not isinstance(socs, dict):
+        return None
+    soc = socs.get(unit)
+    return soc if isinstance(soc, str) and soc else None
+
+
+def one_battery_soc(ed_config: Any) -> Optional[str]:
+    """The SOC sensor of a home read as one battery (#1373), or None.
+
+    With one battery read, its own pick: the first source's ``stat_soc`` may
+    belong to a battery with no power sensor, listed first. With no battery
+    power read at all, the first source's, as before. A fleet has none: its
+    SOC is the average of its batteries.
+    """
+    units = battery_units(ed_config)
+    if len(units) > 1:
+        return None
+    soc = getattr(ed_config, "battery_soc", None)
+    first = soc if isinstance(soc, str) and soc else None
+    if not units:
+        return first
+    own = unit_soc_sensor(ed_config, units[0])
+    # A pick the parser recorded for no battery at all (a config built
+    # without the record) is no answer about whose it is: the first stays.
+    recorded = (getattr(ed_config, "battery_unit_soc", None)
+                or getattr(ed_config, "battery_energy_only_soc", None))
+    return own if (own or recorded) else first
 
 
 def _parse_prefs(
@@ -866,10 +917,16 @@ def _extract_battery_config(source: Dict[str, Any], config: EnergyDashboardConfi
     if unit:
         config.battery_unit_counters.setdefault(
             unit, (charge_energy or None, discharge_energy or None))
+        if soc:
+            # (#1373) its own SOC, by the same entry
+            config.battery_unit_soc.setdefault(unit, soc)
     elif charge_energy or discharge_energy:
         # (#1226) no power at all: the derive looks for one on its device
         config.battery_energy_only.append(
             (charge_energy or None, discharge_energy or None))
+        if soc:
+            config.battery_energy_only_soc.setdefault(
+                (charge_energy or None, discharge_energy or None), soc)
 
     config.has_battery = bool(
         config.battery_discharge_energy_list
@@ -929,6 +986,10 @@ def _derive_battery_power_if_unrepresented(hass, config) -> None:
         config.derived_units[found] = charge or discharge
         # (#1193) found on this battery's counter device: its counters
         config.battery_unit_counters.setdefault(found, (charge, discharge))
+        # (#1373) …and the SOC sensor the user picked for this battery
+        soc = config.battery_energy_only_soc.get((charge, discharge))
+        if soc:
+            config.battery_unit_soc.setdefault(found, soc)
         _LOGGER.info(
             "Derived battery power sensor %s from energy device of %s "
             "(no stat_rate in Energy Dashboard)", found, charge or discharge,

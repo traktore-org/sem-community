@@ -14,7 +14,7 @@ from .const import DOMAIN
 from .coordinator import SEMCoordinator
 from .coordinator.install_modules import presence_of, presence_summary
 from .features.device_axes import has_control_handle, may_actuate, user_hands_off
-from .ha_energy_reader import unsourced_counters
+from .ha_energy_reader import battery_units, unit_soc_sensor, unsourced_counters
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -421,6 +421,11 @@ async def async_get_config_entry_diagnostics(
             "unsourced_counters": {
                 kind: unsourced_counters(ed_config, kind)
                 for kind in ("solar", "battery")},
+            # (#1373) each battery's SOC sensor picked in HA's battery dialog
+            "battery_unit_soc": {
+                unit: unit_soc_sensor(ed_config, unit)
+                for unit in battery_units(ed_config)
+                if unit_soc_sensor(ed_config, unit)},
         }
         per_source_readings = {
             "solar": {eid: _read_state(eid) for eid in per_source_lists["solar_power_list"]},
@@ -429,6 +434,18 @@ async def async_get_config_entry_diagnostics(
                 + [e for pair in battery_pairs for e in pair])},
             "grid": {eid: _read_state(eid) for eid in per_source_lists["grid_power_list"]},
         }
+        # (#1373) the SOC sensor each battery is read from: the one picked in
+        # HA, else the one SEM found on its device (None: none found yet)
+        _found_soc = getattr(getattr(coordinator, "_sensor_reader", None),
+                             "_soc_entity_by_power", None)
+        _found_soc = _found_soc if isinstance(_found_soc, dict) else {}
+        per_source_readings["battery_soc"] = {}
+        for unit in battery_units(ed_config):
+            picked = unit_soc_sensor(ed_config, unit)
+            eid = picked or _found_soc.get(unit)
+            per_source_readings["battery_soc"][unit] = {
+                "entity": eid, "picked_in_ha": bool(picked),
+                **(_read_state(eid) or {})}
 
         ed_info = {
             "has_solar": ed_config.has_solar,
