@@ -557,7 +557,9 @@ counts in steps too coarse for one hour (it needs 0.1 kWh or finer). SEM
 takes the middle value of each band, so a few defrost hours do not move
 it. SEM cannot tell a hot-water hour: a meter that also counts hot water
 gives a mixed COP. If the COP stays near 1, the card says the meter counts
-electricity, not heat, and nothing is learned.
+electricity, not heat, and nothing is learned. If the outdoor temperature
+has not changed for 12 hours, SEM learns nothing and the card asks you to
+check the outdoor thermometer.
 After 6 good hours in a 2 °C band, the band is learned. The load list shows "Learned from
 the heat meter: N hours, X to Y °C". Nothing changes until you set **COP
 used** to **Learned**. Outside the temperatures it has seen, SEM uses your
