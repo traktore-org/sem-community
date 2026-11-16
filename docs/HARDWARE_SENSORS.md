@@ -23,7 +23,7 @@ autodetect map so the next person gets it for free.
 | **Solar power** | W, ≥ 0 | Energy-Dashboard solar power; else a `pv_power`/`solar_power`/`production_power` sensor on the solar device | **Solar power sensor** (`solar_production_sensor`) |
 | **Grid power** | W, − = import, + = export | Energy-Dashboard grid power; split import/export supported | **Grid import / export** sensors |
 | **Battery power** | W, − = discharge, + = charge | `battery_power` / `charge_discharge_power` / `lade_entladeleistung` (EN+DE) on the battery device | **Battery power sensor** (`battery_power_sensor`) |
-| **Battery SOC** | %, 0–100 | `soc` / `state_of_charge` / `batterieladung`, or device_class `battery` + `%` | **Battery SOC sensor** (`battery_soc_sensor`) |
+| **Battery SOC** | %, 0–100 | Each battery's own charge sensor from the Energy Dashboard battery dialog; else on the battery device a sensor HA marks as battery level in `%`, or one named `soc` / `state_of_charge` / `batterieladung` in `%` | **Battery SOC sensor** (`battery_soc_sensor`) |
 | **Battery cycles** | count | `cycles` / `zyklen` / `ladezyklen` / `full_cycles` on the battery device | **Battery cycles sensor** (`battery_cycles_sensor`) — else SEM estimates from throughput |
 | **Load device power** (heat pump / hot water / switch) | W, ≥ 0 | a companion power sensor on the device | **…power sensor**, or a **kWh energy sensor** (SEM derives power) |
 
