@@ -2107,6 +2107,14 @@
     "external_write_seen": {
       "title": "Un tiers écrit sur {name}",
       "description": "Autre chose que SEM modifie sans cesse **{name}**, et SEM et ce tiers s'annulent l'un l'autre. Dans l'onglet Configuration de SEM, réglez cet appareil sur *Oui, SEM s'efface* et choisissez l'entité qui indique quand le tiers a la main."
+    },
+    "heater_no_rise": {
+      "title": "Le ballon d'eau chaude ne chauffe pas",
+      "description": "{name} a consommé du courant pendant {minutes} minutes et est resté à {temp} °C. Vérifiez la résistance et le thermostat ou la sécurité du ballon. Ce message disparaît dès que le ballon chauffe de nouveau."
+    },
+    "legionella_below_stop": {
+      "title": "Le cycle anti-légionelles n'atteint pas sa cible",
+      "description": "{name} : votre arrêt à {stop} °C est sous la cible anti-légionelles {target} °C. SEM ne peut pas désinfecter le ballon et saute le cycle. Relevez l'arrêt ou baissez la cible. Ce message disparaît tout seul."
     }
   },
   "selector": {

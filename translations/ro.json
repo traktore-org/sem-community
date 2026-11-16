@@ -2107,6 +2107,14 @@
     "external_write_seen": {
       "title": "O altă parte scrie în {name}",
       "description": "Altceva decât SEM schimbă mereu **{name}**, iar SEM și acea parte își anulează reciproc munca. În fila Configurare a SEM, setează acest dispozitiv pe *Da, SEM se retrage* și alege entitatea care arată când cealaltă parte are controlul."
+    },
+    "heater_no_rise": {
+      "title": "Boilerul nu se încălzește",
+      "description": "{name} a consumat curent {minutes} minute și a rămas la {temp} °C. Verifică rezistența și termostatul sau siguranța boilerului. Mesajul dispare când boilerul se încălzește din nou."
+    },
+    "legionella_below_stop": {
+      "title": "Ciclul anti-legionella nu își atinge ținta",
+      "description": "{name}: oprirea ta la {stop} °C e sub ținta anti-legionella {target} °C. SEM nu poate dezinfecta boilerul și sare peste ciclu. Ridică oprirea sau coboară ținta. Dispare singur."
     }
   },
   "selector": {

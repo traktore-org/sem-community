@@ -2107,6 +2107,14 @@
     "external_write_seen": {
       "title": "Un tercero escribe en {name}",
       "description": "Algo distinto de SEM cambia **{name}** una y otra vez, y SEM y ese tercero se deshacen el trabajo. En la pestaña Configuración de SEM, pon este dispositivo en *Sí, SEM cede* y elige la entidad que muestra cuándo el tercero tiene el control."
+    },
+    "heater_no_rise": {
+      "title": "El termo no se calienta",
+      "description": "{name} consumió corriente durante {minutes} minutos y se quedó en {temp} °C. Revisa la resistencia y el termostato o la seguridad del termo. Esto desaparece cuando el termo vuelve a calentarse."
+    },
+    "legionella_below_stop": {
+      "title": "El ciclo antilegionela no alcanza su objetivo",
+      "description": "{name}: tu parada en {stop} °C está por debajo del objetivo antilegionela {target} °C. SEM no puede desinfectar el termo y omite el ciclo. Sube la parada o baja el objetivo. Desaparece solo."
     }
   },
   "selector": {

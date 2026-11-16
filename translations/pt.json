@@ -2107,6 +2107,14 @@
     "external_write_seen": {
       "title": "Um terceiro escreve em {name}",
       "description": "Algo diferente do SEM altera **{name}** repetidamente, e o SEM e esse terceiro desfazem o trabalho um do outro. No separador Configuração do SEM, defina este dispositivo como *Sim, o SEM cede* e escolha a entidade que mostra quando o terceiro tem o controlo."
+    },
+    "heater_no_rise": {
+      "title": "O depósito de água quente não aquece",
+      "description": "{name} consumiu energia durante {minutes} minutos e ficou em {temp} °C. Verifique a resistência e o termóstato ou a proteção do depósito. Isto desaparece quando o depósito voltar a aquecer."
+    },
+    "legionella_below_stop": {
+      "title": "O ciclo anti-legionela não atinge o objetivo",
+      "description": "{name}: a tua paragem em {stop} °C está abaixo do objetivo anti-legionela {target} °C. O SEM não pode desinfetar o depósito e salta o ciclo. Sobe a paragem ou baixa o objetivo. Desaparece sozinho."
     }
   },
   "selector": {

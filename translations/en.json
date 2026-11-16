@@ -2107,6 +2107,14 @@
     "external_write_seen": {
       "title": "Another party writes to {name}",
       "description": "Something other than SEM keeps changing **{name}**, and SEM and that party undo each other. In SEM's Configuration tab, set this device to *Yes, SEM yields* and pick the entity that shows when the other party is in control."
+    },
+    "heater_no_rise": {
+      "title": "Hot water tank does not warm",
+      "description": "{name} drew power for {minutes} minutes and stayed at {temp} °C. Check the heating element and the tank's own thermostat or safety cut-out. This clears when the tank warms again."
+    },
+    "legionella_below_stop": {
+      "title": "Legionella run cannot reach its target",
+      "description": "{name}: your Stop when at {stop} °C is below the Legionella target {target} °C, so SEM cannot disinfect the tank and skips the run. Raise the stop or lower the target. This clears by itself."
     }
   },
   "selector": {

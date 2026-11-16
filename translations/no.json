@@ -2107,6 +2107,14 @@
     "external_write_seen": {
       "title": "En annen part skriver til {name}",
       "description": "Noe annet enn SEM endrer hele tiden **{name}**, og SEM og den parten angrer hverandres arbeid. Sett enheten til *Ja, SEM viker* i SEMs fane Konfigurasjon, og velg entiteten som viser når den andre parten har styringen."
+    },
+    "heater_no_rise": {
+      "title": "Varmtvannsberederen blir ikke varm",
+      "description": "{name} brukte strøm i {minutes} minutter og ble stående på {temp} °C. Sjekk varmeelementet og berederens termostat eller sikring. Dette forsvinner når berederen blir varm igjen."
+    },
+    "legionella_below_stop": {
+      "title": "Legionellakjøringen når ikke målet",
+      "description": "{name}: stoppet ditt ved {stop} °C er under legionellamålet {target} °C. SEM kan ikke desinfisere berederen og hopper over kjøringen. Hev stoppet eller senk målet. Forsvinner av seg selv."
     }
   },
   "selector": {

@@ -82,6 +82,10 @@ class Demand:
     #: sun slots first, then the hours closest to its deadline. Its cost is
     #: then unknown (None), never 0.
     unpriced_ok: bool = False
+    #: (#1369) A Keep at goal on a day with ONE price (a weekend on a
+    #: two-rate tariff, a flat tariff): no hour is cheaper than another, so
+    #: the goal is met in a night hour without sun instead of not at all.
+    one_price_ok: bool = False
     #: (#1081) A heat pump with a COP curve: ``cop_at(slot start)`` → the
     #: COP at that hour. Its grid slots are RANKED by price ÷ COP (the price
     #: of heat); the kWh asked and the cost reported stay electricity. None
@@ -373,6 +377,9 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         own = d.tariff.price_at(s.start)
         return s.price if own is None else own
 
+    _one_price_memo: dict = {}
+    _cheap_ref_memo: dict = {}
+
     def _cheap(d, i):
         """(#812) Is the slot cheap for THIS demand — the live gate's rule."""
         s = ledger[i]
@@ -436,12 +443,35 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         return not (begin > s.start and d.min_run_s > 0
                     and (s.end - begin).total_seconds() < d.min_run_s)
 
+    def _one_price(d):
+        """(#1369) No slot of this demand's horizon is cheap: one price."""
+        if d.id not in _one_price_memo:
+            _one_price_memo[d.id] = not any(
+                _cheap(d, i) for i in idx if _in_time(d, i))
+        return _one_price_memo[d.id]
+
+    def _as_cheap_as_cheap(d, i):
+        """(#1369) Does slot ``i`` cost no more than the cheapest cheap slot
+        of this demand's horizon?"""
+        if d.id not in _cheap_ref_memo:
+            ps = [_price(d, j) for j in idx if _in_time(d, j) and _cheap(d, j)]
+            ps = [p for p in ps if p is not None]
+            _cheap_ref_memo[d.id] = min(ps) if ps else None
+        ref, p = _cheap_ref_memo[d.id], _price(d, i)
+        return ref is not None and p is not None and p <= ref + 1e-9
+
     def _eligible(d, i):
         if not _in_time(d, i):
             return False
         if (d.needs_cheap_level and not _cheap(d, i)
                 and not (d.unpriced_ok and _price(d, i) is None)):
-            return False
+            # (#1369) a goal: a dark hour will do on a one-price day — and
+            # any dark hour that costs no more than the cheapest cheap hour
+            # (a flat Sunday before Monday's low tariff: same price, no wait)
+            if not (d.one_price_ok
+                    and float(getattr(ledger[i], "solar_w", 0.0) or 0.0) <= 0.0
+                    and (_one_price(d) or _as_cheap_as_cheap(d, i))):
+                return False
         start = _begin(d, i)
         prev = last_block_end.get(d.id)
         if (prev is not None and d.min_gap_s > 0 and start > prev
@@ -655,7 +685,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     f"day-ahead series lands")
             codes = [("unpriced_slots", {"count": unpriced})]
         elif (d.needs_cheap_level and d.tariff is None and need > 1e-9
-              and planned < need * FIT_EPS
+              and planned < need * FIT_EPS and not d.one_price_ok
               and any(ledger[i].tariff_cheap and not ledger[i].level_cheap
                       and _in_time(d, i) for i in idx)):
             # (#1310) The card's band shows the tariff's rate, so a day with

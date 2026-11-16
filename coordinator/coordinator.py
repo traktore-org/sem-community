@@ -7127,6 +7127,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                  else len(able) / len(adapters))
         return share, unable
 
+    def _legionella_good_hour_now(self, true_surplus_w, tariff_data,
+                                  share: float = 0.8) -> bool:
+        """(#1369) A sunny hour for the hot water tank: the loads' free
+        surplus (which already counts what running loads draw) covers its
+        rating. Free sun only — a cheap hour bought the run at night while
+        the noon sun could have carried it; a due run still runs from any
+        source at its due time. Anything unread is no."""
+        try:
+            dev = (getattr(self._surplus_controller, "_devices", {}) or {}).get("hot_water")
+            if dev is None:
+                return False
+            rated = float(getattr(dev, "rated_power", 0.0) or 0.0)
+            if rated <= 0 or true_surplus_w is None:
+                return False
+            # the loads' surplus already adds back what running loads draw;
+            # 80 % will do: the run buys all of it anyway once it is due
+            return float(true_surplus_w) >= share * rated
+        except Exception:  # noqa: BLE001 — a wrong read is "not a good hour"
+            return False
+
     def _live_battery_adapters(self):
         """(#1124) ``(battery_id, adapter)`` for the batteries of the last
         cycle — every cached adapter before the first one has run."""
@@ -7456,6 +7476,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         Extracted from _async_update_data to reduce cyclomatic complexity.
         Each phase is independent and fails gracefully.
         """
+        # (#1369) "no" until this cycle's surplus pass says otherwise
+        self._legionella_good_hour = False
+        self._legionella_sun_holds = False
         # Forecast (Phase 0.3)
         forecast_data = ForecastSensorData()
         try:
@@ -7854,6 +7877,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             allocation = await self._surplus_controller.update(
                 true_surplus_w,
                 price_level=tariff_data.tariff_price_level,
+                import_price=getattr(tariff_data, "tariff_current_import_rate", None),
                 peak_state=peak_state,
                 reclaim_w=reclaim_w,
                 battery_priority=battery_priority,
@@ -7893,6 +7917,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     (getattr(self, "_sink_verdicts", None) or {}).get("grid_export"),
                     "state", "open") == "closed"),
             )
+            # (#1369) May a Legionella run due within a day start now? Only
+            # in an hour the sun alone could carry it, or a cheap one.
+            self._legionella_good_hour = self._legionella_good_hour_now(
+                true_surplus_w, tariff_data)
+            self._legionella_sun_holds = self._legionella_good_hour_now(
+                true_surplus_w, tariff_data, share=0.5)
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
             surplus_data.surplus_regulation_offset_w = allocation.regulation_offset_w
@@ -8255,9 +8285,55 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if hasattr(hw_controller, "check_legionella_cycle"):
                 try:
                     # (#1335) state only — layer 1 switches the run
-                    await hw_controller.check_legionella_cycle()
+                    await hw_controller.check_legionella_cycle(
+                        good_hour=bool(getattr(self, "_legionella_good_hour", False)),
+                        sun_holds=bool(getattr(self, "_legionella_sun_holds", False)))
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Legionella cycle check failed: %s", e)
+            # (#1369) a due Legionella run skipped under the user's own stop:
+            # say it once in Repairs, clear it when the stop no longer blocks
+            try:
+                from .repair_issues import (
+                    clear_legionella_below_stop, raise_legionella_below_stop)
+                _did = str(getattr(hw_controller, "device_id", "hot_water"))
+                _blocked = (getattr(hw_controller, "legionella_blocked_by_stop", False) is True
+                            and getattr(hw_controller, "_last_legionella_path", "") == "blocked_by_stop")
+                _up = getattr(self, "_legionella_stop_repair_up", None)
+                if _blocked and _up is not True:
+                    raise_legionella_below_stop(
+                        self.hass, _did,
+                        name=str(getattr(hw_controller, "name", _did)),
+                        stop_c=float(hw_controller.user_stop_c() or 0.0),
+                        target_c=float(hw_controller.legionella_target_temp))
+                    self._legionella_stop_repair_up = True
+                elif (getattr(hw_controller, "legionella_blocked_by_stop", False) is not True
+                      and _up is not False):
+                    clear_legionella_below_stop(self.hass, _did)
+                    self._legionella_stop_repair_up = False
+            except Exception as e:  # noqa: BLE001 — never break the cycle
+                _LOGGER.debug("Legionella stop repair failed: %s", e)
+            # (#1369) heating that does not warm the tank is a fault
+            if hasattr(hw_controller, "check_heating_works"):
+                try:
+                    changed = hw_controller.check_heating_works()
+                    if changed is not None:
+                        from .repair_issues import (
+                            clear_heater_no_rise, raise_heater_no_rise)
+                        did = str(getattr(hw_controller, "device_id", "hot_water"))
+                        if changed:
+                            raise_heater_no_rise(
+                                self.hass, did,
+                                name=str(getattr(hw_controller, "name", did)),
+                                minutes=int(getattr(
+                                    hw_controller, "HEAT_CHECK_MINUTES_USED", 120)),
+                                temp_c=float(getattr(hw_controller, "heating_fault_temp", 0.0)))
+                            _LOGGER.warning(
+                                "%s drew power for two hours and did not warm",
+                                getattr(hw_controller, "name", did))
+                        else:
+                            clear_heater_no_rise(self.hass, did)
+                except Exception as e:  # noqa: BLE001 — never break the cycle
+                    _LOGGER.debug("Heating check failed: %s", e)
             try:
                 t = hw_controller.get_current_temperature() if hasattr(hw_controller, "get_current_temperature") else None
                 hw_current_temp = float(t) if t is not None else None
@@ -11940,6 +12016,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if not _sem_may_switch(dev):
                         continue  # the band of a device SEM may not switch
                     _fn = getattr(dev, "comfort_plan_demand", None)
+                    # (#1369) the plan asks the GOAL (Keep at): a tank that
+                    # cools below its start line after the stamp must re-plan
+                    # — the drift ask needs a learned model a fresh install
+                    # or a restart does not have. Presence only: a running
+                    # goal's shrinking kWh must not re-plan every minute.
+                    try:
+                        goal = _fn(_now_sig, goal=True) if callable(_fn) else None
+                    except TypeError:
+                        goal = None
+                    if goal:
+                        sig.append(("comfort", str(dev.device_id), "goal"))
+                        continue
                     ask = _fn(_now_sig) if callable(_fn) else None
                     if not ask:
                         continue
@@ -13231,6 +13319,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         tariff=_plan_tariff(dev),     # (#812)
                         # (#1102) a goal is placed even with no price published
                         unpriced_ok=True,
+                        # (#1369) …and on a day with one price: a dark hour.
+                        # The Keep at GOAL only (it carries no deadline of
+                        # its own) — banking never buys at the plain rate.
+                        one_price_ok=ask.get("deadline") is None,
                         cop_at=_plan_cop_at(dev),     # (#1081)
                     ))
                 except Exception:  # noqa: BLE001 — one bad band won't kill the plan

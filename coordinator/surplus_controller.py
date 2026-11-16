@@ -848,6 +848,22 @@ def _away_heats(device: "ControllableDevice", active: bool) -> bool:
         return False
 
 
+def _goal_hour_holds(device, price_is_cheap: bool) -> bool:
+    """(#1369) May a Keep at run go on this hour? In a cheap hour, or while
+    the PRICE is no higher than the one it started on (a day with one
+    price). Never into a dearer hour: a level word is not enough — two
+    "normal" hours can differ, and a flat Sunday and Monday's high tariff
+    both read "normal". No price known = no."""
+    if price_is_cheap:
+        return True
+    if getattr(device, "_cycle_price_tag", None) == "expensive":
+        return False
+    now = getattr(device, "_cycle_price", None)
+    started = getattr(device, "_comfort_goal_price", None)
+    real = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
+    return real(now) and real(started) and now <= started + 1e-6
+
+
 def _goal_may_buy(device: "ControllableDevice") -> bool:
     """(#1102) May this load's Keep at run be bought from the grid? The
     device's own rule; a device without it follows its top-up policy."""
@@ -1035,7 +1051,15 @@ def compute_load_intent(
     #     energy for the planned block instead of letting the run bleed on.
     #     ONLY paid, plan-owned runs: solar runs are never plan-gated (the
     #     sun is spending itself), and user-started runs are not SEM's to cut.
-    if (active and plan_hold
+    # (#1369) …except a Keep at run its block started, still below Keep at
+    # in a cheap hour: the block was an estimate, the goal is the tank's
+    # temperature — it heats on (clause below), never into a dearer hour.
+    _goal_band = _heater_band(device)
+    _goal_goes_on = (active and getattr(device, "_comfort_goal_run", False) is True
+                     and _goal_band is not None and _goal_band[0] == "willing"
+                     and _goal_band[1] and _goal_hour_holds(device, price_is_cheap)
+                     and _goal_may_buy(device))
+    if (active and plan_hold and not _goal_goes_on
             and (getattr(device, "_batt_overnight_forced", False)
                  or getattr(device, "_offpeak_forced", False))):
         return LoadIntent(False, 0.0, None,
@@ -1059,6 +1083,11 @@ def compute_load_intent(
         return LoadIntent(False, 0.0, None, "daily max cap reached",
                           RC.LOAD_DAILY_MAX)
     if getattr(device, "stop_condition_met", False):
+        if not active and _is_heater(device):
+            # (#1369) an idle tank at its stop simply does not start: one
+            # code with the start margin's, no flip on sensor noise
+            return LoadIntent(False, 0.0, None, "at its target temperature",
+                              RC.LOAD_AT_TARGET)
         return LoadIntent(False, 0.0, None, "stop condition met",
                           RC.LOAD_STOP_CONDITION)
     # 3c. (#1335) What the device's own start would refuse is decided here,
@@ -1109,6 +1138,11 @@ def compute_load_intent(
     #     so the run is SEM's own command (Mode Off and teardown stop it).
     if getattr(device, "runs_without_surplus", False) is True:
         if active:
+            if (getattr(device, "_legionella_early", False) is True
+                    and getattr(device, "legionella_overdue", False) is not True):
+                return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
+                                  "Legionella run, started early — ends at its own target",
+                                  RC.LOAD_LEGIONELLA_EARLY)
             return LoadIntent(True, _heater_claim(device, True, held), OWN_RUN_SOURCE,
                               "Legionella run — ends at its own target",
                               RC.LOAD_LEGIONELLA)
@@ -1117,7 +1151,14 @@ def compute_load_intent(
         # long as the peak lasted. It waits — the rungs below decide as if
         # it were not due, and none of them starts a load into a peak. A run
         # already going is kept, as above.
-        if not peak_freeze:
+        # (#1369) a tank holding its Legionella temperature needs no heat:
+        # no restart for the hold
+        if not peak_freeze and getattr(device, "own_run_needs_heat", True) is not False:
+            if getattr(device, "_legionella_early", False) is True:
+                # (#1369) started early: a sunny hour before it is due
+                return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
+                                  "Legionella run, early in a sunny hour",
+                                  RC.LOAD_LEGIONELLA_EARLY)
             return LoadIntent(True, _heater_claim(device, False, held), OWN_RUN_SOURCE,
                               "Legionella run due", RC.LOAD_LEGIONELLA)
 
@@ -1212,6 +1253,14 @@ def compute_load_intent(
                if tier1_headroom_w > 0 and remaining_surplus_w < threshold
                else "solar")
 
+    # (#1369) A run SEM started FOR Keep at (too cold, or the plan's block)
+    # that has reached it ends there, and says so — not "no spare sun".
+    if (active and band is not None and band[1] is False
+            and (getattr(device, "_comfort_floor_run", False) is True
+                 or getattr(device, "_comfort_goal_run", False) is True)):
+        return LoadIntent(False, 0.0, None, "reached its keep-at temperature",
+                          RC.LOAD_AT_TARGET)
+
     # (#1102) Too cold: at or past the limit it heats NOW on any tariff, and
     # a run the floor started goes on to Keep at, not just past the limit.
     # Peak shed (clause 2) and the operator's lock (1b) still outrank it.
@@ -1253,6 +1302,18 @@ def compute_load_intent(
                           plan.reason or "joint plan: heats to its keep-at temperature",
                           RC.LOAD_COMFORT_GOAL,
                           command_w=paid_command if _full is None else _full)
+
+    # (#1369) A goal run its block started goes on to Keep at while the hour
+    # is still cheap. The block is an ESTIMATE made at plan time (a learned
+    # rate or one hour, times the configured rating): when it was too short
+    # the run ended a few degrees under Keep at — the reporter's 50 °C for
+    # Keep at 52 (#1102). Never into an hour that is not cheap.
+    if (active and band is not None and band[0] == "willing" and band[1]
+            and getattr(device, "_comfort_goal_run", False) is True
+            and _goal_hour_holds(device, price_is_cheap) and _goal_may_buy(device)):
+        return LoadIntent(True, _heater_claim(device, True, held), "cheap_grid",
+                          "heats on to its keep-at temperature in the cheap hour",
+                          RC.LOAD_COMFORT_GOAL)
 
     # (#1349) Keep at from the house battery: "Finish overnight from:
     # Battery" on a heater whose thermometer leads. The run-time clause
@@ -1380,6 +1441,12 @@ def _apply_source_markers(device: "ControllableDevice", intent: LoadIntent) -> N
     device._comfort_floor_run = bool(
         intent.on and intent.code in (RC.LOAD_COMFORT_FLOOR,
                                       RC.LOAD_COMFORT_FLOOR_AWAY))
+    # (#1369) …and one the plan's comfort block started
+    _goal = bool(intent.on and intent.code == RC.LOAD_COMFORT_GOAL)
+    if _goal and getattr(device, "_comfort_goal_run", False) is not True:
+        # the price the run started on
+        device._comfort_goal_price = getattr(device, "_cycle_price", None)
+    device._comfort_goal_run = _goal
 
 
 def _clear_source_markers(device: "ControllableDevice") -> None:
@@ -1388,6 +1455,7 @@ def _clear_source_markers(device: "ControllableDevice") -> None:
     device._offpeak_forced = False
     device._offpeak_forced_date = None
     device._comfort_floor_run = False
+    device._comfort_goal_run = False
 
 
 def _reconcile_load_observe(device: "ControllableDevice", intent: LoadIntent,
@@ -1551,6 +1619,15 @@ async def _release_step_down(device) -> None:
                    text="step-down released")
 
 
+def _is_heater(device) -> bool:
+    """(#1369) A hot water tank — read strictly (the class's own method), so
+    a stand-in that answers every attribute is never taken for one. Only a
+    tank: a heat pump's compressor needs its minimum run even at its band's
+    top (round 10)."""
+    return getattr(type(device), "check_legionella_cycle", None) is not None
+
+
+
 async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
                          *, observer: bool = False, controller=None) -> float:
     """(desired-state, phase 2) The EXECUTION layer: make the load's reality match
@@ -1611,7 +1688,20 @@ async def reconcile_load(device: "ControllableDevice", intent: LoadIntent,
         return consumed
 
     if not intent.on and active:
-        if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED):
+        # (#1369) a heater at its own stop or target is a thermostat
+        # clicking off: it beats the minimum run too (the minimum pause still
+        # holds the next start). Before, a 30 min minimum carried a tank
+        # 2–3 °C past the top the user set.
+        heater_stop = (intent.code in (RC.LOAD_STOP_CONDITION, RC.LOAD_LEGIONELLA_END,
+                                       RC.LOAD_AT_TARGET)
+                       and _is_heater(device))
+        # (#1369) a bought Keep at run that reached Keep at stops there: the
+        # minimum run carried it 2–4 K further on bought power
+        if (not heater_stop and _is_heater(device)
+                and getattr(device, "_comfort_goal_run", False) is True):
+            _b = _heater_band(device)
+            heater_stop = _b is not None and _b[1] is False
+        if intent.code in (RC.LOAD_MODE_OFF, RC.LOAD_DISABLED) or heater_stop:
             # (class-17 sibling / #644 / #1335) The user's own Off (or
             # disabling the load) beats the minimum run: a deliberate command beats flicker protection.
             # The anti-cycle rule lives here, so its one exception does too
@@ -2215,6 +2305,15 @@ class SurplusController:
                 remaining = reclaim_handed_back(remaining, reclaim_w)
                 reclaim_handed = True
             tier1 = self._tier1_headroom_w(device)
+            # (#1369) this cycle's price level for the device, for the Keep
+            # at run's "never into a dearer hour"
+            _lvl = device_price_level(device, price_level)
+            device._cycle_price_tag = ("cheap" if is_cheap_name(_lvl) else
+                                       "expensive" if is_expensive_name(_lvl) else "normal")
+            # the house's price now; a device on its own tariff has no
+            # number here, so its run holds in its cheap hours only
+            device._cycle_price = (None if isinstance(getattr(device, "_tariff_level", None), str)
+                                   else getattr(self, "_import_price", None))
             intent = compute_load_intent(
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 # (#812) the device's own tariff when it has one
@@ -2470,6 +2569,7 @@ class SurplusController:
         self,
         available_power_w: float,
         price_level: Optional[str] = None,
+        import_price: Optional[float] = None,
         peak_state: Optional[str] = None,
         reclaim_w: float = 0.0,
         battery_priority: Optional[int] = None,
@@ -2581,6 +2681,10 @@ class SurplusController:
         # (#638 G4) stamp this cycle's joint-plan window verdicts for the
         # intent path.
         self._plan_windows = dict(plan_windows or {})
+        # (#1369) the house's import price now, for "never into a dearer hour"
+        self._import_price = (float(import_price) if isinstance(import_price, (int, float))
+                              and not isinstance(import_price, bool) and import_price > 0
+                              else None)
         # (#864/#1335) the billing slot a grid start must fit, for layer 2
         self._peak_slot_allowed_w = peak_slot_allowed_w
         self._grid_import_w = float(grid_import_w or 0.0)

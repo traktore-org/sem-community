@@ -497,23 +497,33 @@ async def test_a_legionella_run_heats_to_its_own_target_and_ends_once(cls):
     hass.set(TANK, 58.0, unit_of_measurement="°C")
     await cycles(5)
     assert dev.is_active, "the band's ceiling ended the Legionella run"
-    hass.set(TANK, dev.legionella_target_temp + 0.5, unit_of_measurement="°C")
+    hass.set(TANK, dev.legionella_target_temp + 0.2, unit_of_measurement="°C")
     await cycles(2)
     assert dev.is_active, "it must hold at its target, not stop on reaching it"
+    assert dev._legionella_cycle_active
+    # (#1369) a switched tank holds like a thermostat: off a little above the
+    # target, the run itself goes on until the hold is over
+    hass.set(TANK, dev.legionella_target_temp + 0.6, unit_of_measurement="°C")
+    await cycles(2)
+    assert not dev.is_active, "it heated on past its target during the hold"
+    assert dev._legionella_cycle_active, "the run ended before its hold"
     # the hold is over (its length comes from the target temperature)
     dev._legionella_hold_start -= timedelta(hours=2)
     await cycles(5)
     assert not dev.is_active
+    assert not dev._legionella_cycle_active
     records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
     assert [r["reason_code"] for r in records] == [
-        RC.LOAD_LEGIONELLA, RC.LOAD_LEGIONELLA_END], records
+        RC.LOAD_LEGIONELLA, RC.LOAD_STOP_CONDITION], records
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cls", LEGIONELLA_CLASSES, ids=lambda c: c.__name__)
 async def test_your_own_stop_under_the_target_ends_a_legionella_run_once(cls):
-    """(#1102) It cannot finish: it ends, and does not start again when the
-    tank cools under the stop."""
+    """(#1102) It cannot finish: it never heats for it on the grid.
+    (#1369) A stop on the tank's own temperature below the target is known
+    before the run: no run starts at all (it would only buy power up to the
+    stop). It stays off when the tank cools under the stop."""
     hass, sc, dev = _build(cls, "solar_only", "below_start", "night_no_block")
     dev.stop_entity, dev.stop_at = TANK, 53.0
     kw = _inputs("night_no_block")
@@ -525,15 +535,12 @@ async def test_your_own_stop_under_the_target_ends_a_legionella_run_once(cls):
             await sc.update(power, **kw)
 
     await cycles(5)
-    assert dev.is_active
-    hass.set(TANK, 53.5, unit_of_measurement="°C")
-    await cycles(5)
-    assert not dev.is_active
+    assert not dev.is_active, "a run that cannot disinfect heated on grid power"
     hass.set(TANK, 52.0, unit_of_measurement="°C")
     await cycles(10)
-    assert not dev.is_active, "the run started again under your stop"
+    assert not dev.is_active, "the run started under your stop"
     records = [r for r in sc.decision_log.records() if r["device_id"] == DID]
-    assert len([r for r in records if str(r["new"]).startswith("on")]) == 1
+    assert not [r for r in records if str(r["new"]).startswith("on")]
 
 
 # ── the watt and ampere loads, beyond on and off ──────────────────────────

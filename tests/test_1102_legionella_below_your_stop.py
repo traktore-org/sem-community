@@ -60,51 +60,60 @@ async def _overdue_run_started(hass, dev):
 
 @pytest.mark.asyncio
 class TestTheReportersBoiler:
+    """(#1369) A stop on the tank's own temperature below the target is
+    known before the run, so no run starts: before, it heated on grid power
+    up to the stop and then ended. What #1102 asked for still holds: no
+    reheating on grid power, no false disinfection, one interval to the
+    next try."""
 
-    async def test_the_run_ends_when_your_stop_fires_below_the_target(self):
+    async def _blocked(self, hass, dev):
+        sc = SurplusController(hass)
+        sc.register_device(dev)
+        hass.set("switch.boiler", "off")
+        hass.set("sensor.boiler_temp", "45.0")
+        assert await dev.check_legionella_cycle() == "legionella_blocked_by_stop"
+        await sc.update(-3000.0)
+        return sc
+
+    async def test_a_run_your_stop_keeps_below_the_target_never_starts(self):
         hass = _Hass()
         dev = _boiler(hass)
-        sc = await _overdue_run_started(hass, dev)
-        hass.set("sensor.boiler_temp", "53.2")
-        assert await dev.check_legionella_cycle() == "legionella_blocked_by_stop"
+        await self._blocked(hass, dev)
         assert not dev._legionella_cycle_active
-        await sc.update(-3000.0)          # (#1335) the engine stops it
         assert not dev.is_active
+        assert not hass.calls("turn_on")
 
     async def test_it_is_not_switched_on_again_on_grid_power_when_it_cools(self):
         hass = _Hass()
         dev = _boiler(hass)
-        sc = await _overdue_run_started(hass, dev)
-        hass.set("sensor.boiler_temp", "53.2")
-        await dev.check_legionella_cycle()
-        _past_min_times(dev)
-        hass.set("sensor.boiler_temp", "50.0")       # cooled below the stop
+        sc = await self._blocked(hass, dev)
+        hass.set("sensor.boiler_temp", "40.0")
         for _ in range(6):                           # importing, no sun
             await dev.check_legionella_cycle()
             await sc.update(-3000.0)
-        assert not dev.is_active, "the boiler heats on grid power again (#1102)"
-        assert not hass.calls("turn_on")[1:], "switched on again after the stop"
+        assert not dev.is_active, "the boiler heats on grid power (#1102)"
+        assert not hass.calls("turn_on")
 
     async def test_it_is_not_counted_as_a_disinfection(self):
         hass = _Hass()
         dev = _boiler(hass)
-        await _overdue_run_started(hass, dev)
-        hass.set("sensor.boiler_temp", "53.2")
-        await dev.check_legionella_cycle()
+        await self._blocked(hass, dev)
         assert dev._last_legionella_time is None
         assert dev.hours_since_legionella == 999.0
 
     async def test_the_next_try_waits_one_interval(self):
         hass = _Hass()
         dev = _boiler(hass)
-        await _overdue_run_started(hass, dev)
-        hass.set("sensor.boiler_temp", "53.2")
-        await dev.check_legionella_cycle()
-        hass.set("sensor.boiler_temp", "45.0")
+        await self._blocked(hass, dev)
         assert not dev.legionella_overdue
         assert await dev.check_legionella_cycle() is None
         dev._legionella_blocked_until = dt_util.now() - timedelta(minutes=1)
         assert dev.legionella_overdue
+        # the stop is still there: still no heating for it
+        assert await dev.check_legionella_cycle() == "legionella_blocked_by_stop"
+        # once the user raises the stop above the target, the run starts
+        dev._legionella_blocked_until = dt_util.now() - timedelta(minutes=1)
+        dev.stop_at = 70.0
         assert await dev.check_legionella_cycle() == "legionella_started"
 
     async def test_a_stop_already_met_does_not_start_a_run(self):
@@ -116,6 +125,19 @@ class TestTheReportersBoiler:
         assert await dev.check_legionella_cycle() == "legionella_blocked_by_stop"
         assert not dev.is_active
         assert not hass.calls("turn_on")
+
+    async def test_a_stop_on_another_sensor_still_ends_the_run_at_the_stop(self):
+        """A stop SEM cannot compare with the tank (another sensor): the run
+        starts and ends when that stop fires, as #1102 fixed it."""
+        hass = _Hass()
+        dev = _boiler(hass)
+        dev.stop_entity = "sensor.other"
+        hass.set("sensor.other", "10.0")
+        sc = await _overdue_run_started(hass, dev)
+        hass.set("sensor.other", "60.0")
+        assert await dev.check_legionella_cycle() == "legionella_blocked_by_stop"
+        await sc.update(-3000.0)
+        assert not dev.is_active
 
 
 @pytest.mark.asyncio
