@@ -907,6 +907,17 @@ export function slotsOf(groupList) {
  * → { entityWrites: [{domain, service, data}], options: {...}, reload }.
  * A number written to an entity is clamped to the entity's own min / max.
  */
+/** (#1371) A typed number, held inside the slot's own range: the input's
+ *  min/max do not stop typing, and the engine stored whatever came. */
+function inRange(slot, value) {
+    let v = Number(value);
+    if (!Number.isFinite(v)) return v;
+    const mn = num(slot.min), mx = num(slot.max);
+    if (mn !== null) v = Math.max(mn, v);
+    if (mx !== null) v = Math.min(mx, v);
+    return v;
+}
+
 export function applyPlan(pending, states) {
     const entityWrites = [];
     const options = {};
@@ -945,12 +956,12 @@ export function applyPlan(pending, states) {
             reload = true;
         } else if (slot.option === 'ev_chargers' && slot.charger) {
             if (!chargers[slot.charger]) chargers[slot.charger] = { id: slot.charger };
-            chargers[slot.charger][slot.key] = value;
+            chargers[slot.charger][slot.key] = slot.kind === 'number' ? inRange(slot, value) : value;
             reload = true;
         } else if (slot.peak) {
             Object.assign(options, peakWrites(value === 'limit', null));
         } else if (slot.option) {
-            options[slot.option] = slot.kind === 'number' ? Number(value) : value;
+            options[slot.option] = slot.kind === 'number' ? inRange(slot, value) : value;
             if (STRUCTURAL_KEYS.has(slot.option)) reload = true;
         }
     }

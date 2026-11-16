@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "EV-batterikapacitet (kWh)",
           "ev_charger_efficiency": "Laderens virkningsgrad (%)",
           "ev_target_soc": "Betragt som fuld ved (%)",
-          "daily_ev_target_max": "Lad aldrig ud over (kWh)",
-          "ev_target_soc_max": "Lad aldrig ud over (%)",
+          "daily_ev_target_max": "Solopladning stopper ved (kWh)",
+          "ev_target_soc_max": "Solopladning stopper ved (%)",
           "vehicle_range_entity": "Køretøjets rækkeviddesensor",
           "ev_kwh_per_100km": "Køretøjets forbrug (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Overskudsprioritet (1=højeste)",
           "ev_battery_may_assist": "Batteriet må assistere denne lader",
           "ev_current_control_entity": "Strømstyringsentitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Lad aldrig ud over (kWh)",
-          "ev_target_soc_max": "Lad aldrig ud over (%)",
+          "daily_ev_target_max": "Solopladning stopper ved (kWh)",
+          "ev_target_soc_max": "Solopladning stopper ved (%)",
           "daily_ev_target": "Garantér mindst (kWh)",
           "vehicle_soc_entity": "Køretøjets batteri-SOC-sensor (valgfri)",
           "vehicle_range_entity": "Køretøjets rækkeviddesensor",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Overskudsprioritet (1=højeste)",
           "ev_battery_may_assist": "Batteriet må assistere denne lader",
           "ev_current_control_entity": "Strømstyringsentitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Lad aldrig ud over (kWh)",
-          "ev_target_soc_max": "Lad aldrig ud over (%)",
+          "daily_ev_target_max": "Solopladning stopper ved (kWh)",
+          "ev_target_soc_max": "Solopladning stopper ved (%)",
           "daily_ev_target": "Garantér mindst (kWh)",
           "vehicle_soc_entity": "Køretøjets batteri-SOC-sensor (valgfri)",
           "vehicle_range_entity": "Køretøjets rækkeviddesensor",
@@ -1752,7 +1752,7 @@
         "name": "Overskudshændelse tærskel"
       },
       "daily_ev_target": {
-        "name": "{charger} Natmål"
+        "name": "{charger} Garantér mindst (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min. ampere"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Køretøjets min. ampere"
       },
       "ev_target_soc": {
-        "name": "{charger} Mål-SOC"
+        "name": "{charger} Betragt som fuld ved (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solmaksimum"
+        "name": "{charger} Solopladning stopper ved (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Maks. sol-SOC"
+        "name": "{charger} Solopladning stopper ved (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Batterikapacitet"

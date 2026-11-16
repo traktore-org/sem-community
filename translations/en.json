@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "ev_charger_efficiency": "Charger efficiency (%)",
           "ev_target_soc": "Consider full at (%)",
-          "daily_ev_target_max": "Never charge past (kWh)",
-          "ev_target_soc_max": "Never charge past (%)",
+          "daily_ev_target_max": "Sun charging stops at (kWh)",
+          "ev_target_soc_max": "Sun charging stops at (%)",
           "vehicle_range_entity": "Vehicle range sensor",
           "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)"
         },
@@ -207,7 +207,7 @@
         "description": "Update your SEM optimization parameters",
         "data": {
           "update_interval": "Update Interval (seconds)",
-          "battery_priority_soc": "Battery Priority SOC (%)",
+          "battery_priority_soc": "Below this the battery fills first (%)",
           "min_solar_power": "Minimum solar power — raw PV production (W)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "battery_assist_max_power": "Battery Assist Max Power (W)",
@@ -223,8 +223,8 @@
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
           "ev_target_soc": "Consider full at (%)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
+          "battery_buffer_soc": "From this the battery may help the car (%)",
+          "battery_auto_start_soc": "From this the battery may help the car fully (%)",
           "battery_discharge_control_entity": "Battery discharge control entity (optional)",
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "ev_battery_may_assist": "Battery may assist this charger",
           "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Never charge past (kWh)",
-          "ev_target_soc_max": "Never charge past (%)",
+          "daily_ev_target_max": "Sun charging stops at (kWh)",
+          "ev_target_soc_max": "Sun charging stops at (%)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "ev_battery_may_assist": "Battery may assist this charger",
           "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Never charge past (kWh)",
-          "ev_target_soc_max": "Never charge past (%)",
+          "daily_ev_target_max": "Sun charging stops at (kWh)",
+          "ev_target_soc_max": "Sun charging stops at (%)",
           "daily_ev_target": "Guarantee at least (kWh)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
@@ -1752,7 +1752,7 @@
         "name": "Surplus Event Threshold"
       },
       "daily_ev_target": {
-        "name": "{charger} Night Target"
+        "name": "{charger} Guarantee at least (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Min Amps"
@@ -1764,13 +1764,13 @@
         "name": "{charger} Vehicle Min Amps"
       },
       "ev_target_soc": {
-        "name": "{charger} Target SOC"
+        "name": "{charger} Consider full at (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Solar Max"
+        "name": "{charger} Sun charging stops at (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} Solar Max SOC"
+        "name": "{charger} Sun charging stops at (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Battery Capacity"

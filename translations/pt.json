@@ -180,8 +180,8 @@
           "ev_battery_capacity_kwh": "Capacidade da bateria do VE (kWh)",
           "ev_charger_efficiency": "Eficiência do carregador (%)",
           "ev_target_soc": "Considerar cheio a (%)",
-          "daily_ev_target_max": "Nunca carregar além de (kWh)",
-          "ev_target_soc_max": "Nunca carregar além de (%)",
+          "daily_ev_target_max": "A carga solar para em (kWh)",
+          "ev_target_soc_max": "A carga solar para em (%)",
           "vehicle_range_entity": "Sensor de autonomia do veículo",
           "ev_kwh_per_100km": "Consumo do veículo (kWh/100km)"
         },
@@ -446,8 +446,8 @@
           "ev_surplus_priority": "Prioridade de excedente (1=máxima)",
           "ev_battery_may_assist": "A bateria pode assistir este carregador",
           "ev_current_control_entity": "Entidade de controlo de corrente (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Nunca carregar além de (kWh)",
-          "ev_target_soc_max": "Nunca carregar além de (%)",
+          "daily_ev_target_max": "A carga solar para em (kWh)",
+          "ev_target_soc_max": "A carga solar para em (%)",
           "daily_ev_target": "Garantir pelo menos (kWh)",
           "vehicle_soc_entity": "Sensor de SOC da bateria do veículo (opcional)",
           "vehicle_range_entity": "Sensor de autonomia do veículo",
@@ -515,8 +515,8 @@
           "ev_surplus_priority": "Prioridade de excedente (1=máxima)",
           "ev_battery_may_assist": "A bateria pode assistir este carregador",
           "ev_current_control_entity": "Entidade de controlo de corrente (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Nunca carregar além de (kWh)",
-          "ev_target_soc_max": "Nunca carregar além de (%)",
+          "daily_ev_target_max": "A carga solar para em (kWh)",
+          "ev_target_soc_max": "A carga solar para em (%)",
           "daily_ev_target": "Garantir pelo menos (kWh)",
           "vehicle_soc_entity": "Sensor de SOC da bateria do veículo (opcional)",
           "vehicle_range_entity": "Sensor de autonomia do veículo",
@@ -1752,7 +1752,7 @@
         "name": "Limiar de evento de excedente"
       },
       "daily_ev_target": {
-        "name": "{charger} Meta noturna"
+        "name": "{charger} Garantir pelo menos (kWh)"
       },
       "ev_min_current": {
         "name": "{charger} Amperes mín."
@@ -1764,13 +1764,13 @@
         "name": "{charger} Amperes mín. do veículo"
       },
       "ev_target_soc": {
-        "name": "{charger} SOC alvo"
+        "name": "{charger} Considerar cheio a (%)"
       },
       "daily_ev_target_max": {
-        "name": "{charger} Máximo solar"
+        "name": "{charger} A carga solar para em (kWh)"
       },
       "ev_target_soc_max": {
-        "name": "{charger} SOC máx. solar"
+        "name": "{charger} A carga solar para em (%)"
       },
       "ev_battery_capacity_kwh": {
         "name": "{charger} Capacidade da bateria"

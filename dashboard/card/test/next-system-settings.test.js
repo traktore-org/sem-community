@@ -207,3 +207,12 @@ test('the System card never sends the user to the classic dashboard', () => {
     assert.ok(src.includes("'remove_charger'"));
     assert.ok(src.includes('_setupPanel(kind)'));
 });
+
+test('(#1371) a number typed outside its range is saved at the range end', () => {
+    const slot = { option: 'warning_peak_level', kind: 'number', value: 4.5, min: 1, max: 50 };
+    assert.equal(applyPlan({ a: { slot, value: '900' } }, {}).options.warning_peak_level, 50);
+    assert.equal(applyPlan({ a: { slot, value: '-3' } }, {}).options.warning_peak_level, 1);
+    assert.equal(applyPlan({ a: { slot, value: '7.5' } }, {}).options.warning_peak_level, 7.5);
+    const ch = { option: 'ev_chargers', charger: 'keba', key: 'ev_max_current', kind: 'number', min: 6, max: 32 };
+    assert.equal(applyPlan({ b: { slot: ch, value: '80' } }, {}).options.ev_chargers[0].ev_max_current, 32);
+});
