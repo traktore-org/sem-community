@@ -310,22 +310,64 @@ def test_the_producer_on_a_device_with_nothing_to_ask():
     assert dev.charger_service == "zaptec.limit_current"
 
 
+# ── a charger whose only control was the site's ─────────────────────────
+
+async def test_nothing_left_to_act_is_a_failed_write_not_a_set_one(hass):
+    """Dropped after the build with no number and no start/stop: the write
+    fails (the Repair at three), it is never claimed as set. With a way to
+    start and stop it is a start/stop charger, as the builder makes it."""
+    from custom_components.solar_energy_management.devices.base import (
+        CurrentControlDevice,
+    )
+    await replay(hass, load_capture("zaptec"))
+    bare = CurrentControlDevice(hass=hass, device_id="z", name="z",
+                                charger_service="zaptec.limit_current")
+    sent = []
+    with patch.object(bare, "send", side_effect=_recorder(sent)), \
+            patch("custom_components.solar_energy_management.coordinator."
+                  "repair_issues.raise_charger_actuation_failed") as repair:
+        for amps in (10, 10, 10):
+            await bare._set_current(amps)
+    assert bare.charger_service is None
+    assert sent == []
+    assert bare._current_setpoint == 0
+    assert bare._actuation_failures == 3
+    assert repair.call_count == 1
+    assert "#1376" in repair.call_args.kwargs["error"]
+
+    stops = CurrentControlDevice(hass=hass, device_id="s", name="s",
+                                 charger_service="zaptec.limit_current")
+    stops.start_stop_entity = RESUME
+    with patch.object(stops, "send", side_effect=_recorder([])):
+        await stops._set_current(10)
+    assert stops.charger_service is None
+    assert stops._actuation_failures == 0
+
+
 # ── guard: no write through the charger service without asking ──────────
 
 def test_every_write_through_the_charger_service_asks_first():
-    """A method that sends ``charger_service`` itself (``domain, service =
-    self.charger_service.split(...)``) asks ``_settle_charger_service``
+    """A method that takes ``charger_service`` apart for more than its
+    domain (``domain, service = …split(...)``, a whole split kept or passed
+    on) can send the service itself, so it asks ``_settle_charger_service``
     before it. A new write path that forgets would write a site's limit."""
     src = (Path(hd.__file__).resolve().parent / "devices" / "base.py").read_text()
     tree = ast.parse(src)
+    parent = {c: p for p in ast.walk(tree) for c in ast.iter_child_nodes(p)}
+
+    def domain_only(call):
+        up = parent.get(call)
+        return (isinstance(up, ast.Subscript) and up.value is call
+                and ast.unparse(up.slice) == "0")
+
     writers = []
     for fn in ast.walk(tree):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        splits = [n for n in ast.walk(fn) if isinstance(n, ast.Assign)
-                  and isinstance(n.targets[0], ast.Tuple)
-                  and len(n.targets[0].elts) == 2
-                  and "self.charger_service" in ast.unparse(n.value)]
+        splits = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                  and isinstance(n.func, ast.Attribute) and n.func.attr == "split"
+                  and "self.charger_service" in ast.unparse(n.func.value)
+                  and not domain_only(n)]
         if not splits:
             continue
         writers.append(fn.name)

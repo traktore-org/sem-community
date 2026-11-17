@@ -2047,7 +2047,13 @@ def service_fields(hass, service) -> Optional[list]:
         return None
     domain, name = service.split(".", 1)
     try:
-        svc = ((hass.services.async_services() or {}).get(domain) or {}).get(name)
+        reg = hass.services
+        # one domain, not a copy of every service: asked before each write
+        # while it cannot tell (``refuse_site_limit_service``)
+        own = (reg.async_services_for_domain(domain)
+               if hasattr(reg, "async_services_for_domain")
+               else (reg.async_services() or {}).get(domain))
+        svc = (own or {}).get(name)
         fields = _schema_fields(hass, domain, name, svc) if svc is not None else []
     except Exception:  # noqa: BLE001 — unknown, never "no"
         return None
@@ -6363,14 +6369,14 @@ def wire_current_entity(hass, device, charger_id: str, current_entity_id) -> Non
 
 def refuse_site_limit_service(hass, device, charger_id: str) -> Optional[bool]:
     """(#1376) Take a service that sets a whole site's current off a built
-    charger device — the ONE producer, called by the builder and asked again
-    by the device before it writes (``_settle_charger_service``).
+    charger device — asked by the device before each write through its
+    service (``_settle_charger_service``) until this can tell.
 
-    The builder's own check (``site_limit_controls``) reads the saved field
-    name, and asks the service only once Home Assistant has started. A save
-    with no field name (SEM then writes "current") kept Zaptec's
-    ``limit_current``: every write went to the site's service, which
-    refused it, and the charger's own current number was never used.
+    The builder and the refs step ask the same of the save
+    (``site_limit_controls``), but at boot the service's fields may not be
+    readable yet. A save with no field name (SEM then writes "current")
+    kept Zaptec's ``limit_current``: every write went to the site's
+    service, which refused it, and the charger's own number was never used.
 
     True: the service was the site's and is gone (SEM writes the device's
     current number, if it has one). False: it is not, or there is none.
@@ -6386,6 +6392,7 @@ def refuse_site_limit_service(hass, device, charger_id: str) -> Optional[bool]:
     device.charger_service = None
     device.charger_service_entity_id = None
     device.service_param_name = "current"
+    device._site_service_refused = True
     _LOGGER.warning(
         "Charger '%s': %s sets a whole site's current limit, not this "
         "charger's; SEM does not write it and uses %s (#804, #1376).",

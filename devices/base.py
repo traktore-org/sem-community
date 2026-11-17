@@ -3542,6 +3542,17 @@ class CurrentControlDevice(ControllableDevice):
             elif self.current_entity_id:
                 # Number entity control
                 await self.send("number", "set_value", {"entity_id": self.current_entity_id, "value": current})
+            elif getattr(self, "_site_service_refused", False) and not (
+                    self.start_stop_entity or self.start_service
+                    or self.stop_service or getattr(self, "charge_mode_entity", None)):
+                # (#1376) its only control was a whole site's limit, taken
+                # off after the build: nothing here can act. Said as a
+                # failed write (the Repair at three), never claimed as set —
+                # the builder's gate skips such a charger when it can tell.
+                raise RuntimeError(
+                    "its saved current service sets a whole site's limit, which "
+                    "SEM does not write, and it has no current control of its "
+                    "own (#1376)")
 
             self._clear_actuation_failure()
 
