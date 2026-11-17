@@ -6,107 +6,62 @@
 
 Get Solar Energy Management (SEM) running in your Home Assistant in about 10 minutes.
 
+> **SEM starts by only watching.** After install, SEM sends no commands to your hardware. It shows what it would do. When the dashboard looks right, turn off **`switch.sem_observer_mode`** (watch-only mode). Until then, SEM changes nothing. Step 6 tells you how.
+
 ---
 
 ## Prerequisites
-
-Complete these before installing SEM:
 
 **1. Home Assistant 2026.8 or newer**
 
 Check your version under **Settings > System > About**. On an older version, update Home Assistant first. HACS offers no new SEM releases for it.
 
-**2. Home Assistant Energy Dashboard configured (recommended)**
-
-Since 2.1 this is no longer required: if the Energy Dashboard is empty, SEM asks the energy integrations you run what they create and offers those sensors for you to confirm.
-
-Go to **Settings > Dashboards > Energy**. You must have at least a solar production sensor and a grid sensor set up. SEM reads all sensor configuration from here automatically.
-
-**3. HACS installed**
+**2. HACS, or Marketplace on Home Assistant 2026.11+**
 
 SEM is distributed through HACS. If you have not installed HACS, follow the [HACS installation guide](https://hacs.xyz/docs/use/download/download/) first. On Home Assistant 2026.11 or newer, HACS is built in as **Settings → Marketplace**, so there is nothing to install.
 
+**3. Solar and grid sensors (power, in watts)**
+
+SEM needs a solar production sensor and a grid sensor. It reads them from the Energy Dashboard if that is set up. If not, it asks the energy integrations you run and offers the sensors it finds. The Energy Dashboard is **not required**.
+
 **4. No EV charger? That is fine**
 
-EV charger setup is optional. SEM works as a monitoring and battery management system without one.
+The charger is optional. SEM works as a monitoring and battery management system without one.
+
+No extra dashboard cards are needed. Every card SEM uses is included.
 
 ---
 
-## Step 1: Install SEM via HACS
+## Step 1: Install SEM
 
 1. Open **HACS** in the Home Assistant sidebar.
 2. Go to **Integrations**.
 3. Search for **Solar Energy Management** (SEM is in the default HACS store — no
    custom repository needed) and click **Download**.
-4. When prompted, restart Home Assistant: **Settings > System > Restart**.
 
-On Home Assistant 2026.11 or newer, open **Settings > Marketplace** instead of HACS in step 1. The other steps are the same.
+On Home Assistant 2026.11 or newer, open **Settings > Marketplace** instead of HACS. The other steps are the same.
 
 ![SEM on the HACS page](images/sem_hacs_page.png)
 
-**What you should see:** After restart, "Solar Energy Management" appears as an available integration and HACS shows it as installed.
+## Step 2: Restart Home Assistant
 
----
+Go to **Settings > System > Restart** and wait 30–60 seconds for it to come back.
 
-## Step 2: Run the Setup Wizard
+## Step 3: Add the Integration and Confirm the Sensors
 
-1. Go to **Settings > Devices & Services**.
-2. Click **+ Add Integration** and search for **Solar Energy Management**.
-3. Select it to open the setup wizard.
-
-The wizard has 2 steps.
-
-### Step 2a: SEM found your system
-
-SEM shows the solar, grid and battery power it found in your Energy Dashboard, in watts.
-
-- They match your inverter or app: press **Submit**.
-- One is wrong: open **Choose sensors myself**, pick the right sensor, press **Submit**.
-- SEM may ask one question about your grid meter ("buying or sending right now?"). Answer it, or choose **I don't know**. Nothing breaks if you skip it.
-
-SEM starts in watch-only mode: it commands no hardware. Turn that off later on the **Configuration** tab. Details and screenshots: [Step 1](SETUP_GUIDE.md#step-1-sem-found-your-system), [the grid question](SETUP_GUIDE.md#when-sem-asks-one-more-question), [watch-only mode](SETUP_GUIDE.md#watch-only-mode). Wrong sensor later: [Sensor source overrides](SETUP_GUIDE.md#sensor-source-overrides).
-
-### Step 2b: Hardware
-
-| Setting | Default | What it means |
-|---------|---------|---------------|
-| Battery capacity | 10 kWh | Your home battery size |
-| Generate dashboard | ON | Auto-create the SEM dashboard — leave this on |
-
-Click **Submit**. SEM starts at a 5 kW target peak limit with load shedding
-**off**; tune the limit later from the Control tab's slider (up to 80 kW, or
-**Uncapped**) and enable shedding on the Configuration tab — see
-[Load Management Settings](USER_GUIDE.md#load-management-settings).
-
-EV charger configuration is available after install via the **Configuration tab** or **Settings > Devices & Services > Solar Energy Management > Configure**.
-
-SEM pre-fills a charger from what its integration offers — buttons, a
-charge-mode select, a car's own charging amps — and you confirm. A field it
-cannot fill stays empty.
+1. Go to **Settings > Devices & Services > + Add Integration**.
+2. Search for **Solar Energy Management** and select it.
+3. **Confirm the sensors SEM found.** It shows the solar, grid and battery power, in watts.
+   - They match your inverter or app: press **Submit**.
+   - One is wrong: open **Choose sensors myself**, pick the right sensor, press **Submit**.
+   - SEM may ask one question about your grid meter ("buying or sending right now?"). Answer it, or choose **I don't know**. Nothing breaks if you skip it.
+4. **Hardware:** set your battery capacity (default 10 kWh) and keep **Generate dashboard** on. Press **Submit**.
 
 **What you should see:** A success message and the integration listed under **Devices & Services**.
 
+Details and screenshots: [Step 1](SETUP_GUIDE.md#step-1-sem-found-your-system), [the grid question](SETUP_GUIDE.md#when-sem-asks-one-more-question). Wrong sensor later: [Sensor source overrides](SETUP_GUIDE.md#sensor-source-overrides).
+
 ![SEM integration detail page](images/sem_integration_detail.png)
-
----
-
-## Step 3: Dashboard cards (all bundled — optional extras only)
-
-**No extra HACS frontend cards are required** — every card the SEM dashboard
-uses is bundled with the integration or native Home Assistant.
-
-Optional (auto-detected if installed via **HACS > Frontend**):
-
-| Card | What it adds |
-|------|--------------|
-| **sankey-chart** | A richer SEM-entity energy-flow sankey on the Energy tab (native `energy-sankey` is used otherwise) |
-| **k-flow-card** | An animated flow visualization as an alternative Home-tab diagram (opt-in) |
-
-After updating SEM or installing an optional card, hard-refresh your browser: **Ctrl+Shift+R** (Windows/Linux) or **Cmd+Shift+R** (Mac).
-
-**What you should see:** The SEM dashboard entry in the sidebar.
-
----
 
 ## Step 4: Open the Dashboard
 
@@ -127,23 +82,43 @@ The dashboard has 8 tabs:
 | **Costs** | Financial breakdown — savings, feed-in revenue, costs |
 | **System** | Integration health, sensor status, coordinator info |
 
-**What you should see:** Live power values on the Home tab. The illustrated system diagram shows real-time energy flowing between solar panels, inverter, battery, grid, house, and EV charger with animated spark flow paths. The sun tracks its real position on the arc from sunrise to sunset, with golden energy particles flowing from sun to panels during production. Tap any component to open its HA statistics dialog.
+**What you should see:** Live power values on the Home tab. If the dashboard looks blank, hard-refresh your browser (**Ctrl+Shift+R**, or **Cmd+Shift+R** on Mac).
+
+Optional extras: `sankey-chart` and `k-flow-card` (HACS > Frontend) add richer views. See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
+
+## Step 5: Add Your EV Charger (Optional)
+
+The charger is **not** in the setup wizard. Add it after install:
+
+- Open the **Configuration** tab, or
+- Go to **Settings > Devices & Services > Solar Energy Management > Configure**.
+
+SEM pre-fills a charger from what its integration offers (buttons, a charge-mode select, the car's own charging amps). You confirm the values. A field it cannot fill stays empty.
+
+Supported chargers and what each field means: [Setup Guide, EV charger](SETUP_GUIDE.md#step-2-ev-charger-optional).
+
+## Step 6: Optional Forecast and Tariff, then Turn Watch-Only Off
+
+**Solar forecast (optional).** Add one of Solcast, Forecast.Solar, Open-Meteo Solar Forecast or Helios Forecast. SEM then plans around tomorrow's sun: on a sunny day it charges less from the grid.
+
+**Dynamic tariff (optional).** Add Tibber, Nordpool, ENTSO-e or aWATTar. SEM can then charge in the cheapest hours.
+
+**When the dashboard looks right, turn watch-only off:**
+
+1. Check the Home and EV tabs. Do the would-decisions look right?
+2. Turn off **`switch.sem_observer_mode`**. Find it in **Settings > Entities** by searching for `sem_observer_mode`.
+
+Until you do this, SEM changes nothing. Once it is off, SEM sends commands to your charger and battery.
+
+Watch-only details: [Setup Guide, watch-only mode](SETUP_GUIDE.md#watch-only-mode).
+
+## Step 7: Where Problems Show
+
+Problems appear in **Settings > Repairs**. Use the **System** tab on the dashboard for sensor health and diagnostics. Before you file an issue, run the `solar_energy_management.diagnose` action and paste its result.
 
 ---
 
-## Step 5: Verify the Integration is Working
-
-Go to **Developer Tools > States** and type `sem_` in the filter box.
-
-**What you should see:** 200 or more entities with the `sensor.sem_*`, `switch.sem_*`, and `number.sem_*` prefix — all populated with values, not `unavailable`.
-
-If sensors show `unavailable`, check the System tab on the SEM dashboard for diagnostic information.
-
----
-
-## What SEM Does Automatically
-
-Once installed, SEM runs without manual intervention:
+## What SEM Does Once It Controls Hardware
 
 - **Solar surplus appears** — EV charging current increases automatically to use it (6–32 A range)
 - **Clouds roll in** — EV charging reduces or pauses, resumes when surplus returns
@@ -163,7 +138,7 @@ The controls that matter most:
 |--------|---------|---------|
 | `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger charging mode: **Solar only** / **Solar + battery** (surplus plus the home battery, down to the level the house still needs overnight) / **Solar + cheapest hours** / **Min + Solar** (grid minimum 6A + surplus) / **Always max** / **Off** (hands-off — SEM sends nothing). Pick based on your needs; see [Charging Modes](SETUP_GUIDE.md#8-ev-charging-modes) in the Setup Guide. |
 | `number.sem_battery_assist_min_surplus` | 1200 W | **Solar Gate**: minimum real solar surplus to enable battery assist for the EV. Set to 0 W to allow battery support everywhere (previous behaviour). Prevents battery drain into the car at night. |
-| `switch.sem_observer_mode` | **ON** (new installs) | Monitor-only — turn it OFF to let SEM control hardware |
+| `switch.sem_observer_mode` | **ON** (new installs) | Watch-only — SEM shows what it would do and sends no commands. Turn it OFF to let SEM control hardware |
 | `select.sem_hints` | `off` | Hints (2.2): a sentence when something is off, and a weekly note. **Weekly note** or **All hints** to turn on |
 
 Everything else is automatic.
@@ -182,7 +157,7 @@ For details, see the [Dashboard Guide](DASHBOARD_GUIDE.md).
 
 **The dashboard is blank or shows white tabs**
 
-Usually a stale browser/service-worker cache after an update — hard-refresh (Ctrl+Shift+R), or clear the Companion app's frontend cache. No HACS card is required since v1.7.5.
+Usually a stale browser/service-worker cache after an update — hard-refresh (Ctrl+Shift+R), or clear the Companion app's frontend cache.
 
 **Some tabs show an error card**
 
@@ -190,15 +165,15 @@ If the error names a `sem-*` element, SEM's card bundle didn't register — rest
 
 **Sensors show `unavailable`**
 
-SEM reads sensors from your Energy Dashboard. Go to **Settings > Dashboards > Energy** and confirm your solar and grid sensors are configured and currently reporting values. Then open the SEM **System tab** and look for any red indicators.
+Go to **Settings > Dashboards > Energy** and confirm your solar and grid sensors are configured and currently reporting values. Then open the SEM **System tab** and look for any red indicators.
 
 **The sidebar entry does not appear after install**
 
-Restart Home Assistant again (**Settings > System > Restart**), then hard-refresh your browser. The sidebar entry is registered on startup.
+Reload the browser first. If it is still missing, restart Home Assistant once. The sidebar entry is registered when SEM starts.
 
-**Energy Dashboard was not configured before installing SEM**
+**I set the wrong sensor**
 
-Go to **Settings > Dashboards > Energy** and add your solar and grid sensors. Then go to **Settings > Devices & Services > Solar Energy Management**, click the 3-dot menu, and select **Reconfigure** to re-run the setup wizard.
+Open **Settings > Devices & Services > Solar Energy Management > Configure** and pick the right sensor. See [Sensor source overrides](SETUP_GUIDE.md#sensor-source-overrides).
 
 ---
 

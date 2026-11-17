@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📝 **One short start path** (#1371). The docs say SEM starts by only watching.
 - 🐛 **SEM finds more charger current and solar power sensors by name** (#915). GARO, Heidelberg, V2C, Fronius, Powerwall, Enphase, Growatt.
 - 📝 **The hardware list shows each brand's real status** (#1377). Powerwall needs a setup step for grid charge; Zaptec is partly working.
 - 🐛 **Grid-charge fields show with two batteries; charge switch and target now have fields** (#1362). The select pair no longer hides.

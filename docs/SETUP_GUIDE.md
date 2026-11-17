@@ -137,8 +137,8 @@ it), and it will not overwrite what you chose.
 
 Each brand's status (tested live, implemented or requested) and its evidence are in [SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md). Check that list before you install.
 
-**Solar forecasts (optional):** Solcast, Forecast.Solar, Open-Meteo Solar Forecast, Helios Forecast. Required for smart
-night charging and battery charge scheduling.
+**Solar forecasts (optional):** Solcast, Forecast.Solar, Open-Meteo Solar Forecast, Helios Forecast. A forecast lets SEM
+plan around tomorrow's sun: less grid charging on a sunny day, and a battery charge schedule. SEM installs without one.
 
 > **Easee note:** Easee's charging power sensor is disabled by default in HA.
 > Go to **Settings > Devices > Easee** and enable the power sensor before
