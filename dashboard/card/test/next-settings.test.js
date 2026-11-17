@@ -313,3 +313,13 @@ test('the load management arm switch and the peak ceiling are reachable on the S
     assert.ok(keys.includes('load_management_enabled'), keys.join(','));
     assert.ok(keys.includes('target_peak_limit') || keys.includes('peak_limit_unlimited'), keys.join(','));
 });
+
+test('the System screen offers no hot-water minimum (#1062)', () => {
+    const states = { ...fullStates(), 'number.sem_legionella_target_temp': { state: '60', attributes: { min: 50, max: 70, step: 1 } },
+        'number.sem_legionella_interval_hours': { state: '168', attributes: { min: 24, max: 336, step: 1 } } };
+    const g = groups(states, t, { ...CTX, options: { ...OPTS, hot_water_entity: 'switch.boiler' } });
+    const slots = slotsOf(g);
+    const names = JSON.stringify(slots);
+    assert.match(names, /hot_water_temperature_sensor/);  // the hot-water slots are there
+    assert.doesNotMatch(names, /hot_water_minimum_temperature/);
+});

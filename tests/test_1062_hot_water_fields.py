@@ -323,14 +323,9 @@ class TestTheDeadFieldsAreGone:
         with pytest.raises(TypeError):
             HotWaterController(hass=_Hass(), max_temperature=60.0)
 
-    def test_the_settings_screen_offers_no_minimum(self):
-        """(#1321) The SEM dashboard's System screen (the classic Configuration
-        card is gone) holds the legionella target and no minimum."""
-        import pathlib
-        src = (pathlib.Path(__file__).resolve().parent.parent / "dashboard" / "card"
-               / "src" / "util" / "next-settings.js").read_text()
-        assert "number.sem_legionella_target_temp" in src  # the check reads the screen
-        assert "hot_water_minimum_temperature" not in src
+    # (#1321) "The settings screen offers no minimum" moved to
+    # dashboard/card/test/next-settings.test.js (the classic Configuration
+    # card this test read is gone).
 
     def test_the_removed_entity_is_swept_from_the_registry(self):
         """An install that has the entity from an older version loses it on
