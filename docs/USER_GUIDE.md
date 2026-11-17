@@ -292,6 +292,16 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 | `warning_peak_level` | 90% of target | Warning threshold — must be **below** the target (1–80 kW) |
 | `emergency_peak_level` | 120% of target | Emergency shedding threshold — must be **above** the target (1–80 kW) |
 
+**Restore after a restart.** When SEM switches a load off, it writes that down
+first. If SEM is reloaded, Home Assistant stops, or SEM crashes, the load is
+switched back on at the next start. A load you changed by hand since stays as
+you left it.
+
+**Never switch off.** Each load has a *Never switch off* box; SEM then never
+sheds it. A switch whose name or area says router, modem, NAS, server or
+Home Assistant gets the box ticked for you, with a warning, and stays ticked
+until you tick *Allow SEM to switch it off*.
+
 `target_peak_limit` is your **grid connection ceiling**, not a tariff preference —
 take it from your supply contract or main breaker. Around 3–5 kW on a
 demand-based European tariff; about 38 kW for a 200 A North-American service

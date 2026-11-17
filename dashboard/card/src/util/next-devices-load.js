@@ -304,8 +304,16 @@ export function loadBody(card, row) {
     rows.push(card._row('mdi:toggle-switch-outline', t('next_may_switch'),
         row.mergedMode === 'off' ? html`<span class="muted">${t('control_verdict_off')}</span>`
             : card._val(row.isControllable ? t('next_on') : t('next_off'), () => send('controllable', String(!row.isControllable)), { disabled: dis }),
-        html`${t('critical')}: ${card._val(row.isCritical ? t('next_yes') : t('next_no'), () => send('critical', String(!row.isCritical)), { disabled: dis })}${row.controlEntity ? ' · ' + row.controlEntity : ''} · ${card._val(t('configure'), () => card._showConfigureModal(id, row.name))}`,
+        html`${t('never_switch_off')}: ${card._val(row.isCritical ? t('next_yes') : t('next_no'), () => send('critical', String(!row.isCritical)), { disabled: dis })}${row.controlEntity ? ' · ' + row.controlEntity : ''} · ${card._val(t('configure'), () => card._showConfigureModal(id, row.name))}`,
         { more: true }));
+    // (#896) the name says it powers the network or HA: never switched off
+    // until the user allows it
+    if (row.hostGuard && row.isCritical) {
+        rows.push(card._row('mdi:router-network', t('never_switch_off'),
+            html`<span class="muted">${t('host_guard_warning')}</span>`,
+            card._val(t('host_guard_allow'), () => send('critical', 'false'), { disabled: dis }),
+            { more: true }));
+    }
 
     return html`
         ${saysLine(card, row)}

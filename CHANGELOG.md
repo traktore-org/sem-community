@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Loads SEM switched off come back after a restart** (#896). Also on unload, stop or crash; hand changes are left alone.
+- 🐛 **A switch named router, NAS or server is never switched off** (#896). A warning shows; you can allow it.
 - 🐛 **A charging current set through a select picks an offered step** (#1376). Never more current than SEM asked for.
 - 📝 **Repair texts name menus that exist** (#1371). A test checks every path against the real menus and dashboard sections.
 - 🐛 **Night battery charge counts the whole next day and the battery's floor** (#1377). An empty battery now charges before dear hours.

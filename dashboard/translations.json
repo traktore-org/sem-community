@@ -3035,7 +3035,10 @@
     "setup_check_n": "Věcí ke kontrole: {n}",
     "setup_ai_hint": "Používáte AI asistenta? Zeptejte se: \"Co SEM chybí?\"",
     "setup_chip_control": "SEM řídí",
-    "setup_chip_setup": "Nastavení {done} z {total}"
+    "setup_chip_setup": "Nastavení {done} z {total}",
+    "never_switch_off": "Nikdy nevypínat",
+    "host_guard_warning": "Vypadá to, že napájí vaši síť nebo Home Assistant. SEM to nikdy nevypne, pokud to nepovolíte.",
+    "host_guard_allow": "Povolit SEM vypnutí"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -6073,7 +6076,10 @@
     "setup_check_n": "{n} ting at tjekke",
     "setup_ai_hint": "Bruger du en AI-assistent? Spørg den: \"Hvad mangler SEM?\"",
     "setup_chip_control": "SEM styrer",
-    "setup_chip_setup": "Opsætning {done} af {total}"
+    "setup_chip_setup": "Opsætning {done} af {total}",
+    "never_switch_off": "Aldrig sluk",
+    "host_guard_warning": "Det ser ud til at forsyne dit netværk eller Home Assistant. SEM slukker det aldrig, medmindre du tillader det.",
+    "host_guard_allow": "Tillad SEM at slukke"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -9111,7 +9117,10 @@
     "setup_check_n": "{n} Punkte zu prüfen",
     "setup_ai_hint": "Sie nutzen einen KI-Assistenten? Fragen Sie: \"Was fehlt SEM noch?\"",
     "setup_chip_control": "SEM steuert",
-    "setup_chip_setup": "Einrichtung {done} von {total}"
+    "setup_chip_setup": "Einrichtung {done} von {total}",
+    "never_switch_off": "Nie ausschalten",
+    "host_guard_warning": "Das sieht nach der Stromversorgung von Netzwerk oder Home Assistant aus. SEM schaltet es nie aus, ausser du erlaubst es.",
+    "host_guard_allow": "SEM darf ausschalten"
   },
   "en": {
     "% of limit": "% of limit",
@@ -12149,7 +12158,10 @@
     "setup_check_n": "{n} things to check",
     "setup_ai_hint": "Using an AI assistant? Ask it: \"What is SEM missing?\"",
     "setup_chip_control": "SEM is in control",
-    "setup_chip_setup": "Setup {done} of {total}"
+    "setup_chip_setup": "Setup {done} of {total}",
+    "never_switch_off": "Never switch off",
+    "host_guard_warning": "This looks like it powers your network or Home Assistant. SEM will never switch it off unless you allow it.",
+    "host_guard_allow": "Allow SEM to switch it off"
   },
   "es": {
     "% of limit": "% del límite",
@@ -15187,7 +15199,10 @@
     "setup_check_n": "{n} cosas por revisar",
     "setup_ai_hint": "¿Usa un asistente de IA? Pregúntele: \"¿Qué le falta a SEM?\"",
     "setup_chip_control": "SEM tiene el control",
-    "setup_chip_setup": "Configuración {done} de {total}"
+    "setup_chip_setup": "Configuración {done} de {total}",
+    "never_switch_off": "Nunca apagar",
+    "host_guard_warning": "Parece que alimenta tu red o Home Assistant. SEM nunca lo apagará a menos que lo permitas.",
+    "host_guard_allow": "Permitir que SEM lo apague"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -18225,7 +18240,10 @@
     "setup_check_n": "{n} asiaa tarkistettavana",
     "setup_ai_hint": "Käytätkö tekoälyavustajaa? Kysy siltä: \"Mitä SEM:ltä puuttuu?\"",
     "setup_chip_control": "SEM ohjaa",
-    "setup_chip_setup": "Asetukset {done}/{total}"
+    "setup_chip_setup": "Asetukset {done}/{total}",
+    "never_switch_off": "Älä koskaan sammuta",
+    "host_guard_warning": "Tämä näyttää syöttävän verkkoasi tai Home Assistantia. SEM ei koskaan sammuta sitä, ellet salli sitä.",
+    "host_guard_allow": "Salli SEM:n sammuttaa"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -21263,7 +21281,10 @@
     "setup_check_n": "{n} points à vérifier",
     "setup_ai_hint": "Vous utilisez un assistant IA ? Demandez-lui : \"Que manque-t-il à SEM ?\"",
     "setup_chip_control": "SEM pilote",
-    "setup_chip_setup": "Configuration {done} sur {total}"
+    "setup_chip_setup": "Configuration {done} sur {total}",
+    "never_switch_off": "Ne jamais éteindre",
+    "host_guard_warning": "Cela semble alimenter votre réseau ou Home Assistant. SEM ne l'éteindra jamais sans votre accord.",
+    "host_guard_allow": "Autoriser SEM à l'éteindre"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -24301,7 +24322,10 @@
     "setup_check_n": "{n} ellenőrizendő dolog",
     "setup_ai_hint": "MI-asszisztenst használ? Kérdezze meg: \"Mi hiányzik a SEM-nek?\"",
     "setup_chip_control": "A SEM irányít",
-    "setup_chip_setup": "Beállítás {done} / {total}"
+    "setup_chip_setup": "Beállítás {done} / {total}",
+    "never_switch_off": "Soha ne kapcsolja ki",
+    "host_guard_warning": "Úgy tűnik, ez táplálja a hálózatot vagy a Home Assistantot. A SEM soha nem kapcsolja ki, hacsak nem engedélyezi.",
+    "host_guard_allow": "A SEM kikapcsolhatja"
   },
   "it": {
     "% of limit": "% del limite",
@@ -27339,7 +27363,10 @@
     "setup_check_n": "{n} cose da controllare",
     "setup_ai_hint": "Usi un assistente IA? Chiedigli: \"Cosa manca a SEM?\"",
     "setup_chip_control": "SEM ha il controllo",
-    "setup_chip_setup": "Configurazione {done} di {total}"
+    "setup_chip_setup": "Configurazione {done} di {total}",
+    "never_switch_off": "Non spegnere mai",
+    "host_guard_warning": "Sembra alimentare la tua rete o Home Assistant. SEM non lo spegnerà mai se non lo consenti.",
+    "host_guard_allow": "Consenti a SEM di spegnere"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -30377,7 +30404,10 @@
     "setup_check_n": "{n} dingen om te controleren",
     "setup_ai_hint": "Gebruikt u een AI-assistent? Vraag: \"Wat mist SEM nog?\"",
     "setup_chip_control": "SEM heeft de leiding",
-    "setup_chip_setup": "Instellen {done} van {total}"
+    "setup_chip_setup": "Instellen {done} van {total}",
+    "never_switch_off": "Nooit uitschakelen",
+    "host_guard_warning": "Dit lijkt je netwerk of Home Assistant van stroom te voorzien. SEM schakelt het nooit uit tenzij je het toestaat.",
+    "host_guard_allow": "SEM mag uitschakelen"
   },
   "no": {
     "% of limit": "% av grense",
@@ -33415,7 +33445,10 @@
     "setup_check_n": "{n} ting å sjekke",
     "setup_ai_hint": "Bruker du en AI-assistent? Spør den: \"Hva mangler SEM?\"",
     "setup_chip_control": "SEM styrer",
-    "setup_chip_setup": "Oppsett {done} av {total}"
+    "setup_chip_setup": "Oppsett {done} av {total}",
+    "never_switch_off": "Aldri slå av",
+    "host_guard_warning": "Dette ser ut til å drive nettverket eller Home Assistant. SEM slår det aldri av med mindre du tillater det.",
+    "host_guard_allow": "La SEM slå av"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -36453,7 +36486,10 @@
     "setup_check_n": "Rzeczy do sprawdzenia: {n}",
     "setup_ai_hint": "Korzystasz z asystenta AI? Zapytaj: \"Czego brakuje SEM?\"",
     "setup_chip_control": "SEM steruje",
-    "setup_chip_setup": "Konfiguracja {done} z {total}"
+    "setup_chip_setup": "Konfiguracja {done} z {total}",
+    "never_switch_off": "Nigdy nie wyłączaj",
+    "host_guard_warning": "To wygląda na zasilanie sieci lub Home Assistant. SEM nigdy tego nie wyłączy, chyba że na to pozwolisz.",
+    "host_guard_allow": "Zezwól SEM na wyłączanie"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -39491,7 +39527,10 @@
     "setup_check_n": "{n} coisas a verificar",
     "setup_ai_hint": "Usa um assistente de IA? Pergunte-lhe: \"O que falta ao SEM?\"",
     "setup_chip_control": "O SEM tem o controlo",
-    "setup_chip_setup": "Configuração {done} de {total}"
+    "setup_chip_setup": "Configuração {done} de {total}",
+    "never_switch_off": "Nunca desligar",
+    "host_guard_warning": "Isto parece alimentar a sua rede ou o Home Assistant. O SEM nunca o desliga, a menos que o permita.",
+    "host_guard_allow": "Permitir que o SEM desligue"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -42529,7 +42568,10 @@
     "setup_check_n": "{n} lucruri de verificat",
     "setup_ai_hint": "Folosiți un asistent AI? Întrebați-l: \"Ce îi lipsește lui SEM?\"",
     "setup_chip_control": "SEM are controlul",
-    "setup_chip_setup": "Configurare {done} din {total}"
+    "setup_chip_setup": "Configurare {done} din {total}",
+    "never_switch_off": "Nu opri niciodată",
+    "host_guard_warning": "Pare să alimenteze rețeaua sau Home Assistant. SEM nu îl va opri niciodată dacă nu permiți.",
+    "host_guard_allow": "Permite SEM să oprească"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -45567,7 +45609,10 @@
     "setup_check_n": "{n} saker att kontrollera",
     "setup_ai_hint": "Använder du en AI-assistent? Fråga: \"Vad saknar SEM?\"",
     "setup_chip_control": "SEM styr",
-    "setup_chip_setup": "Inställning {done} av {total}"
+    "setup_chip_setup": "Inställning {done} av {total}",
+    "never_switch_off": "Stäng aldrig av",
+    "host_guard_warning": "Det här verkar driva ditt nätverk eller Home Assistant. SEM stänger aldrig av det om du inte tillåter det.",
+    "host_guard_allow": "Tillåt SEM att stänga av"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -48605,6 +48650,9 @@
     "setup_check_n": "{n} 项待检查",
     "setup_ai_hint": "在用 AI 助手？问它：“SEM 还缺什么？”",
     "setup_chip_control": "SEM 已接管",
-    "setup_chip_setup": "设置 {done} / {total}"
+    "setup_chip_setup": "设置 {done} / {total}",
+    "never_switch_off": "永不关闭",
+    "host_guard_warning": "这看起来像是为你的网络或 Home Assistant 供电。除非你允许，SEM 绝不会关闭它。",
+    "host_guard_allow": "允许 SEM 关闭"
   }
 }

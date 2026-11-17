@@ -502,6 +502,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         ? info.user_hands_off !== true
                         : info.is_controllable !== false,
                     isCritical: info.is_critical || false,
+                    hostGuard: info.host_guard === true,
                     deviceType: info.device_type || 'unknown',
                     isAvailable: info.is_available || false,
                     hasManualMapping: info.has_manual_mapping || false,
@@ -712,6 +713,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
                             <option value="solar_battery" ?selected="${this._mergedMode(device) === 'solar_battery'}">${this._t('load_mode_sem_battery')}</option>
                         </select>
                     </label>`}
+                    ${isBattery || device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' ? nothing : html`
+                    <label class="toggle-label">
+                        <input type="checkbox" data-action="critical" data-device="${device.id}" ?checked="${device.isCritical}">
+                        <span class="dim">${this._t('never_switch_off')}</span>
+                    </label>`}
                     ${isBattery ? nothing : html`
                     <label class="toggle-label" title="${this._t('requires_tooltip')}">
                         <span class="dim">${this._t('requires')}</span>
@@ -736,6 +742,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:16px;pointer-events:none"></ha-icon>
                     </button>`}
                 </div>
+                ${device.hostGuard && device.isCritical ? html`
+                <div class="host-guard" style="font-size:13px;color:#ff9800;padding:2px 0 0 28px">
+                    &#9888; ${this._t('host_guard_warning')}
+                    <span class="configure-btn" data-action="critical-allow" data-device="${device.id}">${this._t('host_guard_allow')}</span>
+                </div>` : nothing}
                 ${this._renderComfortChip(device)}
                 ${this._renderGoalProgress(device)}
                 ${this._goalOpen[device.id] ? this._renderGoalEditor(device) : nothing}
@@ -1865,6 +1876,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     this._sendDeviceUpdate(deviceId, 'controllable', device.isControllable);
                     this.requestUpdate();
                 }
+            } else if (action === 'critical-allow') {
+                this._setCritical(deviceId, false);
             } else if (action === 'move-up' || action === 'move-down') {
                 this._moveDevice(deviceId, action === 'move-up' ? -1 : 1);
             } else if (action === 'configure') {
@@ -1882,6 +1895,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
         };
 
         const delegateChange = (e) => {
+            const critTarget = e.target.closest('[data-action="critical"]');
+            if (critTarget) {
+                this._setCritical(critTarget.dataset.device, critTarget.checked);
+                return;
+            }
             const modeTarget = e.target.closest('[data-action="combined_mode"]');
             if (modeTarget) {
                 const deviceId = modeTarget.dataset.device;
@@ -1983,6 +2001,15 @@ class SEMLoadPriorityCard extends SEMLitBase {
         // symptom. 15 s comfortably covers the ~10 s cycle; a fresh drag resets
         // it, and the sensor (now with the new order) takes over on expiry.
         this._priorityFrozenUntil = Date.now() + 15000;
+    }
+
+    /** (#896) "Never switch off": the load manager skips it on every path. */
+    _setCritical(deviceId, on) {
+        const device = this.devices.find(d => d.id === deviceId);
+        if (!device) return;
+        device.isCritical = !!on;
+        this._sendDeviceUpdate(deviceId, 'critical', String(!!on));
+        this.requestUpdate();
     }
 
     _sendDeviceUpdate(deviceId, property, value) {

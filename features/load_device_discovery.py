@@ -15,6 +15,7 @@ from ..ha_energy_reader import (
     _find_load_power_sensor,
 )
 from ..coordinator.units import finite_float
+from .host_guard import looks_like_host
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -258,7 +259,7 @@ class LoadDeviceDiscovery:
                             "power_rating": self._get_device_power_rating(power_entity),
                             "is_available": self._is_device_available(switch_entity, power_entity),
                             "priority": 5,  # Default medium priority
-                            "is_critical": False,  # Default not critical
+                            "is_critical": looks_like_host(switch_entity, power_entity),  # (#896) host guard
                             # (#780) we found the switch — that IS the handle.
                             "has_control_handle": True,
                             "user_hands_off": False,
@@ -399,7 +400,7 @@ class LoadDeviceDiscovery:
                 "power_rating": self._get_device_power_rating(power_sensor) if power_sensor else 0.0,
                 "is_available": True,
                 "priority": 8 if is_ev else 5,  # EV chargers higher priority (shed first)
-                "is_critical": False,
+                "is_critical": looks_like_host(name, energy_sensor),  # (#896)
                 # (#780) capability, stated by the only thing that knows it.
                 "has_control_handle": control is not None,
                 "user_hands_off": False,
