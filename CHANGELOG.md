@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **"Why now" and forecast history no longer read silence as fact** (#1086). A device never commanded answers with its live reason; a stored day with no reading is skipped, not counted as 0.
+- 🐛 **"Why" answers from what a device does now** (#1086). A missing reading counts as unknown, never as 0.
 
 # [2.3.0-beta.18] — 17.11.2026
 
