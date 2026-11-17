@@ -82,13 +82,16 @@ async def test_why_charger_with_no_chargers_configured(hass):
     assert "don't have an answer" in response.speech["plain"]["speech"]
 
 
-async def test_why_charger_unknown_name_declines_rather_than_guesses(hass):
+async def test_why_charger_unknown_name_answers_for_every_charger(hass):
+    """(#1379) a question, not a command: "my car" fits no charger, so each
+    charger's answer is given, named — never a guess about one of them."""
     coordinator = _fake_coordinator(
-        hass, ev_chargers=[{"id": "c1", "name": "Carport"}])
+        hass, ev_chargers=[{"id": "c1", "name": "Carport"}, {"id": "c2", "name": "Garage"}])
     _add_entry(hass, coordinator)
     response = await intent.async_handle(
-        hass, "test", INTENT_WHY_CHARGER, {"name": {"value": "Garage"}})
-    assert "don't know which charger" in response.speech["plain"]["speech"]
+        hass, "test", INTENT_WHY_CHARGER, {"name": {"value": "my car"}})
+    speech = response.speech["plain"]["speech"]
+    assert "Carport:" in speech and "Garage:" in speech
 
 
 async def test_tonight_cost_reads_the_stamped_plan(hass):
@@ -275,9 +278,11 @@ async def test_a_name_that_fits_two_chargers_declines(hass):
         assert "don't know which charger" in response.speech["plain"]["speech"]
     coordinator.set_plan_override.assert_not_called()
     coordinator.clear_plan_override.assert_not_called()
+    # (#1379) the question answers for both, named; the commands above refuse
     response = await intent.async_handle(
         hass, "test", INTENT_WHY_CHARGER, {"name": {"value": "Carport"}})
-    assert "don't know which charger" in response.speech["plain"]["speech"]
+    speech = response.speech["plain"]["speech"]
+    assert "Carport left:" in speech and "Carport right:" in speech
 
 
 async def test_a_change_without_a_name_needs_one_with_two_chargers(hass):

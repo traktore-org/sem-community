@@ -202,11 +202,17 @@ class WhyChargerIntent(intent.IntentHandler):
         slots = self.async_validate_slots(intent_obj.slots)
         name = slots.get("name", {}).get("value")
         charger_id = _first_charger_id(coordinator, name)
+        chargers = coordinator.config.get("ev_chargers") or []
+        if charger_id is None and chargers:
+            # (#1379) a question, not a command: a name that fits no charger
+            # ("my car") gets every charger's answer instead of a question back
+            lines = [f"{c.get('name') or c.get('id')}: "
+                     f"{_why_sentence(coordinator, KIND_CHARGER, c.get('id'))}"
+                     for c in chargers if c.get("id")]
+            response.async_set_speech(" ".join(lines) or _NO_ANSWER)
+            return response
         if charger_id is None:
-            response.async_set_speech(
-                "I don't know which charger you mean — say its name."
-                if name or len(coordinator.config.get("ev_chargers") or []) > 1
-                else _NO_ANSWER)
+            response.async_set_speech(_NO_ANSWER)
             return response
         response.async_set_speech(_why_sentence(coordinator, KIND_CHARGER, charger_id))
         return response

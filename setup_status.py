@@ -73,9 +73,22 @@ def setup_facts(hass: HomeAssistant, coordinator: Any) -> dict[str, Any]:
 
 def _hardware_domains(hass: HomeAssistant, coordinator: Any) -> list[str]:
     """Integrations behind the entities SEM reads (what the crawler found)."""
-    try:
-        eids = coordinator._configured_entity_ids()
-    except Exception:  # noqa: BLE001 — a half-started SEM has none yet
+    # (#1379) only what SEM reads as solar, grid and battery power: the
+    # whole configured list also holds helpers, price and weather sources
+    ed = getattr(getattr(coordinator, "_sensor_reader", None), "_energy_dashboard_config", None)
+    eids = []
+    for attr in ("solar_power", "grid_import_power", "grid_export_power", "grid_power",
+                 "battery_power", "battery_power_from", "battery_power_to",
+                 "grid_power_from", "grid_power_to"):
+        v = getattr(ed, attr, None)
+        if isinstance(v, str) and v:
+            eids.append(v)
+    for v in (getattr(ed, "battery_power_list", None) or []):
+        if isinstance(v, str) and v:
+            eids.append(v)
+    for pair in (getattr(ed, "battery_power_pairs", None) or []):
+        eids.extend(x for x in (pair or ()) if isinstance(x, str) and x)
+    if not eids:
         return []
     reg = er.async_get(hass)
     found = {getattr(reg.async_get(e), "platform", None) for e in eids}
