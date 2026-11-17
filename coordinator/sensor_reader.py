@@ -4053,32 +4053,40 @@ class SensorReader:
     def _migrate_legacy_battery_flip(self, ed, per_battery: bool) -> None:
         """(#1375) The old one-for-all flag on a home of several batteries.
 
-        It names no battery now, so a battery it had been set for would read
-        wrong with nothing to correct it. On the first read of each battery
-        on its own, every combined battery is judged again by its own
-        counters (about 4 cycles of 100 W or more with moving counters: one
-        to set the baselines, 3 votes; a restart adds the 12 warm-up cycles),
-        and the flag is cleared (``legacy_flip_cleared``: the coordinator
-        saves it). A two-sensor battery has no lock to judge.
+        It names no battery now. Each combined battery starts from the sign it
+        READ with the flag (the lock turned over), so no battery reads
+        differently in any cycle; its own counters then judge it again and
+        confirm or change that sign. An idle battery keeps what it read. A
+        two-sensor battery has no lock: it reads its declared direction at
+        once, which is the fix. The flag itself is cleared by the coordinator
+        once saved (``legacy_flip_cleared``); this runs once per start.
+        (Counters judge it in about 4 cycles of 100 W or more.)
         """
         raw = getattr(self, "_raw_config", None) or {}
         if not (per_battery and ed is not None
+                and not getattr(self, "_legacy_flip_migrated", False)
                 and raw.get("battery_sign_user_flip")
                 and self.BATTERY_FLIP_SENSORS_KEY not in raw):
             return
+        self._legacy_flip_migrated = True
         bids = [f"b{i + 1}" for i in range(len(
             getattr(ed, "battery_power_list", None) or []))]
         for bid in bids:
+            self._battery_sign_inverted[bid] = not self._battery_sign_inverted.get(
+                bid, False)
             if self._battery_sign_detected.get(bid):
+                kept = self._battery_sign_inverted[bid]
                 self._judge_battery_sign_again(bid)
-        raw["battery_sign_user_flip"] = False
-        raw[self.BATTERY_FLIP_SENSORS_KEY] = []
+                self._battery_sign_inverted[bid] = kept
+            else:
+                self._battery_brand_seed_done[bid] = True   # no seed over it
         self.legacy_flip_cleared = True
         _LOGGER.info(
             "Battery sign: Fix battery sign was set when the home had one "
-            "battery and now names none. Each battery (%s) is judged again "
-            "by its own counters; it keeps its sign until they say otherwise. "
-            "Tap the button of the battery that reads wrong to flip it. (#1375)",
+            "battery and now names none. Each battery (%s) keeps the sign it "
+            "read and is judged again by its own counters; a two-sensor "
+            "battery reads its declared direction. Tap the button of the "
+            "battery that reads wrong to flip it. (#1375)",
             ", ".join(bids))
 
     def _drop_locks_on_other_counters(self, ed, per_battery: bool) -> None:

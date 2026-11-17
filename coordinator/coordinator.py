@@ -3113,20 +3113,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             "failed (#1195)", exc_info=True)
 
     def _save_cleared_battery_flip(self) -> None:
-        """(#1375) The reader dropped an old one-for-all battery flip on a home
-        of several batteries: save that in the entry, once, as the flip service
-        does (the reload skip armed first, so nothing restarts)."""
+        """(#1375) The reader moved an old one-for-all battery flip off a home
+        of several batteries: save that in the entry, as the flip service does
+        (the reload skip armed first, so nothing restarts). The flag is
+        cleared in memory only once the write is made; with no entry the
+        request stays and is asked again next cycle."""
         reader = self._sensor_reader
         entry = self.config_entry
         if getattr(reader, "legacy_flip_cleared", False) is not True:
             return
-        reader.legacy_flip_cleared = False
         if entry is None:
             return
         new_options = {**(entry.options or {}), "battery_sign_user_flip": False,
                        BATTERY_FLIP_SENSORS_KEY: []}
         self._skip_options_reload = dict(new_options)
         self.hass.config_entries.async_update_entry(entry, options=new_options)
+        raw = getattr(reader, "_raw_config", None)
+        if isinstance(raw, dict):
+            raw["battery_sign_user_flip"] = False
+            raw[BATTERY_FLIP_SENSORS_KEY] = []
+        reader.legacy_flip_cleared = False
 
     async def _retry_energy_dashboard_resolution(self) -> None:
         """Re-derive Energy Dashboard power sensors after a cold start (#274).

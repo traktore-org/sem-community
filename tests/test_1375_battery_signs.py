@@ -69,11 +69,18 @@ def _one_battery(hass, entity, raw, *, locked_negate=None, **config):
 
 async def test_the_old_global_flag_no_longer_turns_both_over(hass):
     """Before: b1 +472 (reads charging, its discharge counter rises) and
-    b2 −256 (reads discharging, its charge counter rises)."""
+    b2 −256 (reads discharging, its charge counter rises). Now the pair reads
+    its declared direction at once; b1 keeps what it read until its own
+    counters vote, then follows them."""
     r = _two_batteries(hass, **LEGACY)
-    out = _read(r)
-    assert out.batteries["b1"].power_w == pytest.approx(-472)    # discharging
+    out = _read(r, 1)
     assert out.batteries["b2"].power_w == pytest.approx(256)     # charging
+    assert out.batteries["b1"].power_w == pytest.approx(472)     # as before
+    for n in range(8):                       # b1's discharge counter rises
+        hass.states.async_set(EDGE_COUNTERS[1], str(100 + 0.1 * (n + 1)), _KWH)
+        out = _read(r, 1)
+    assert out.batteries["b1"].power_w == pytest.approx(-472)    # discharging
+    assert out.batteries["b2"].power_w == pytest.approx(256)
     assert out.battery_power == pytest.approx(-216)
     assert out.home_consumption_power >= 0
 
@@ -282,49 +289,78 @@ async def test_a_bare_soc_name_is_not_taken_for_one_of_a_fleet(hass):
 # ── 5. review: migration, stale flag, renamed sensor, whole-word SOC ────
 
 
-def _learned_wrong_home(config):
+def _home(config, inverted, **w):
     """Both batteries DISCHARGE 1500 W (a shows +1500, b shows -1500, so a
-    must be negated and b not). The saved locks are the wrong way round, as
-    a one-for-all flag set for one of them could leave them."""
-    from .test_1205_sign_follows_its_battery import _Home
+    needs "negate" and b does not) unless ``w`` sets a sensor's watts. The
+    saved locks are ``inverted`` (a, b)."""
+    from .test_1205_sign_follows_its_battery import _Home, _w
     store = {"battery_detected": {"b1": True, "b2": True},
-             "battery_inverted": {"b1": False, "b2": True},
+             "battery_inverted": {"b1": inverted[0], "b2": inverted[1]},
              "battery_basis": "sensor", "battery_counters": "own",
              "battery_learned_on": {"b1": "sensor.a_power",
                                     "b2": "sensor.b_power"}}
-    return _Home(["a", "b"], store=store, config=config)
+    home = _Home(["a", "b"], store=store, config=config)
+    for name, watts in w.items():
+        home.states[f"sensor.{name}_power"] = _w(watts)
+    return home
 
 
-def test_the_old_flag_on_several_batteries_judges_each_again(caplog):
-    """After the first read both batteries are judged by their own counters.
-    It takes the baseline cycle plus 3 votes: 4 cycles (about 40 s at 10 s)
-    with 100 W or more and moving counters; a restart adds 12 warm-up cycles."""
+def _watts(home, cycles):
+    out = []
+    for _ in range(cycles):
+        p = home.cycle()
+        out.append((p.batteries["b1"].power_w, p.batteries["b2"].power_w))
+    return out
+
+
+def test_the_migration_changes_no_battery_in_any_cycle(caplog):
+    """Locks wrong the way round, flag on: develop read (-1500, -1500) every
+    cycle (right). So does this build, from the first cycle, and the
+    counters then confirm it."""
     caplog.set_level("INFO")
-    home = _learned_wrong_home(dict(LEGACY))
-    first = home.cycle()
-    assert home.reader.legacy_flip_cleared is True
-    assert home.reader._raw_config["battery_sign_user_flip"] is False
-    assert home.reader._raw_config["battery_sign_user_flip_sensors"] == []
-    assert first.batteries["b1"].power_w == pytest.approx(1500)   # start value
-    cycles = 1
-    while home.signs() != {"b1": True, "b2": False} and cycles < 12:
-        out = home.cycle()
-        cycles += 1
+    home = _home(dict(LEGACY), (False, True))
+    assert _watts(home, 8) == [(-1500, -1500)] * 8
     assert home.signs() == {"b1": True, "b2": False}
-    assert cycles == 4
-    assert out.batteries["b1"].power_w == pytest.approx(-1500)
-    assert out.batteries["b2"].power_w == pytest.approx(-1500)
     said = [r.getMessage() for r in caplog.records if "#1375" in r.getMessage()]
     assert len(said) == 1 and "judged again" in said[0]
 
 
+def test_a_sign_the_counters_contradict_is_kept_then_follows_them():
+    """Locks right, flag on: develop read (+1500, +1500), wrong. This build
+    reads that too until the counters vote (the baseline cycle and 3 votes:
+    4 cycles, about 40 s), then follows them."""
+    home = _home(dict(LEGACY), (True, False))
+    cycles = _watts(home, 8)
+    assert cycles[:3] == [(1500, 1500)] * 3
+    assert cycles[3:] == [(-1500, -1500)] * 5
+    assert home.signs() == {"b1": True, "b2": False}
+
+
+def test_an_idle_battery_keeps_what_it_read_over_50_cycles():
+    """Under 100 W nothing votes: before the update a read -50, so it reads
+    -50 for good, never the opposite."""
+    home = _home(dict(LEGACY), (False, True), a=50, b=-50)
+    assert set(_watts(home, 50)) == {(-50, -50)}
+
+
+def test_a_pair_reads_its_declared_direction_from_the_first_cycle():
+    from .test_1205_sign_follows_its_battery import _Home, _w
+    home = _Home(["a"], pair=True, config=dict(LEGACY))
+    home.states["sensor.verto_discharge_power"] = _w(300)
+    home.states["sensor.verto_charge_power"] = _w(0)
+    for _ in range(6):
+        out = home.cycle()
+        assert out.batteries["b2"].power_w == pytest.approx(-300)
+        assert out.batteries["b1"].power_w == pytest.approx(-1500)  # as before
+
+
 def test_the_migration_runs_once_and_not_with_a_list_or_one_battery():
-    home = _learned_wrong_home(dict(LEGACY))
+    home = _home(dict(LEGACY), (False, True))
     home.cycle()
     home.reader.legacy_flip_cleared = False
     home.cycle(3)
     assert home.reader.legacy_flip_cleared is False
-    listed = _learned_wrong_home({**LEGACY, **NAMED_B1})
+    listed = _home({**LEGACY, **NAMED_B1}, (False, True))
     listed.cycle()
     assert listed.reader.legacy_flip_cleared is False
     assert listed.reader._raw_config["battery_sign_user_flip"] is True
@@ -343,6 +379,7 @@ def test_the_coordinator_saves_the_cleared_flag_once_without_a_reload():
     )
     fake = MagicMock()
     fake._sensor_reader.legacy_flip_cleared = True
+    fake._sensor_reader._raw_config = {"battery_sign_user_flip": True}
     fake.config_entry.options = {"battery_sign_user_flip": True, "x": 1}
     SEMCoordinator._save_cleared_battery_flip(fake)
     saved = fake.hass.config_entries.async_update_entry.call_args.kwargs["options"]
@@ -350,9 +387,36 @@ def test_the_coordinator_saves_the_cleared_flag_once_without_a_reload():
                      "battery_sign_user_flip_sensors": [], "x": 1}
     assert fake._skip_options_reload == saved
     assert fake._sensor_reader.legacy_flip_cleared is False
+    assert fake._sensor_reader._raw_config == {
+        "battery_sign_user_flip": False, "battery_sign_user_flip_sensors": []}
     fake.hass.config_entries.async_update_entry.reset_mock()
     SEMCoordinator._save_cleared_battery_flip(fake)
     fake.hass.config_entries.async_update_entry.assert_not_called()
+
+
+def test_no_entry_to_write_keeps_the_flag_and_the_request():
+    """(#1375) Cleared in memory only once saved: with no entry the request
+    stays and the flag is not touched (the migration runs once a start)."""
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    fake = MagicMock()
+    fake.config_entry = None
+    fake._sensor_reader.legacy_flip_cleared = True
+    fake._sensor_reader._raw_config = {"battery_sign_user_flip": True}
+    SEMCoordinator._save_cleared_battery_flip(fake)
+    assert fake._sensor_reader.legacy_flip_cleared is True
+    assert fake._sensor_reader._raw_config == {"battery_sign_user_flip": True}
+
+
+def test_the_migration_runs_once_a_start_though_the_flag_stays():
+    home = _home(dict(LEGACY), (False, True))
+    home.cycle()
+    assert home.reader.legacy_flip_cleared is True
+    home.reader.legacy_flip_cleared = False           # nothing wrote it
+    home.cycle(3)
+    assert home.reader.legacy_flip_cleared is False
+    assert home.reader._raw_config["battery_sign_user_flip"] is True
 
 
 @pytest.mark.parametrize("named,expected", [
