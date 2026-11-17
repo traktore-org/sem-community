@@ -1492,3 +1492,7 @@ Czech (cs), Danish (da), German (de), English (en), Spanish (es), Finnish (fi), 
 1. Add the key to **all 16 languages** in `translations.json`
 2. Regenerate `sem-localize.js`
 3. Use `_t('key_name')` in custom card JS, or use the English text directly in dashboard template YAML (server-side translation handles the lookup)
+
+## AI assistant tools (#1086)
+
+`llm.py` is a Home Assistant LLM platform: `async_get_tools(hass, llm_context, api_id)` returns SEM's tools for the Assist tool set, so any AI agent allowed to control Home Assistant — and HA's MCP Server — sees them. It wraps the intent handlers in `assist_intents.py` (four explain, four write) and adds two read-only tools: `SemSetupStatus` and `SemDraftIssue` (`issue_draft.py`, a redacted bug-report draft that the user posts). Write tools exist only while the Voice commands switch is on; `write_intents_enabled()` is the one check, read again at call time.
