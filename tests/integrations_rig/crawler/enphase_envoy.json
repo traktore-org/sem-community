@@ -2,6 +2,13 @@
  "chargers": [],
  "meters": [],
  "near_misses": [],
- "proposals": [],
+ "proposals": [
+  {
+   "solar_power": [
+    "sensor.envoy_1234_current_power_production",
+    "set_option"
+   ]
+  }
+ ],
  "vehicles": []
 }

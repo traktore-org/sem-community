@@ -222,8 +222,12 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         # charger it is the current it offers the car; on an inverter it is
         # the battery's charge limit — the #809 trap — so it is never in
         # the general list above.
+        # (#915) The same holds for the bare ``current_limit`` (GARO),
+        # ``virtual_current`` (Heidelberg) and ``current_intensity`` (V2C):
+        # nothing else names its current without saying what it limits.
         "charger_only_any": (r"^amp$", r"^charge_rate$",
-                             r"^charging_current$"),
+                             r"^charging_current$", r"^current_limit$",
+                             r"^virtual_current$", r"^current_intensity$"),
         # (#1141) ``available_current`` is a whole site's limit: Zaptec's
         # installation current, which every charger on the site shares and
         # the owner sets as a grid guard (#804, 3x25 A). It is never one
@@ -276,7 +280,14 @@ READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         "any": (r"^(pv|solar|input)_power$", r"^power_pv", r"pv_active_power",
                 r"^solar_generation", r"^inverter_input_power$",
                 # the sum of all strings, named "total" (#810, EG4)
-                r"^(pv|solar)_total_power$", r"^total_(pv|solar)_power$"),
+                r"^(pv|solar)_total_power$", r"^total_(pv|solar)_power$",
+                # (#915) word order and the "instant" family of real
+                # integrations: Fronius ``power_photovoltaics``, Powerwall
+                # ``solar_instant_power``, Enphase ``current_power_production``
+                # (NOT the bare ``power_production``: a smart meter's export),
+                # Growatt ``mix_wattage_pv_all`` (the sum of all strings).
+                r"^power_photovoltaics?$", r"^(pv|solar)_instant_power$",
+                r"^current_power_production$", r"(^|_)wattage_pv_all$"),
         "not": (r"^(?!(pv|solar)_total_power$|total_(pv|solar)_power$).*total",
                 r"today", r"daily", r"yesterday", r"month",
                 r"forecast", r"string", r"pv\d", r"mppt"),
@@ -297,7 +308,8 @@ READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
                 r"^grid_power_signed$",       # anker_solix
                 r"^site_grid_power$",         # enphase_ev
                 r"^input_grid_power$",        # silla_prism
-                r"^power_flow_grid$"),        # tibber
+                r"^power_flow_grid$",         # tibber
+                r"^site_instant_power$"),     # powerwall (the site meter)
         "not": (r"today", r"daily", r"total", r"phase", r"l1", r"l2", r"l3",
                 r"import_energy", r"export_energy"),
     },

@@ -264,10 +264,12 @@ class TestTheClosedHardwareIssuesAgree:
         assert not roster.ROLE_VOCAB.get("tesla_wall_connector")
 
     def test_garo_is_named_and_still_manual(self):
-        """#816: GARO proven live, still manual-only."""
+        """#816: GARO proven live. (#915) Its bare ``current_limit`` number
+        is learned now, so the roster derives the control; it offers no
+        solar or grid sensor."""
         row = roster.ROSTER.get("garo_wallbox")
         assert row and row["kind"] == "charger"
-        assert not roster.ROLE_VOCAB.get("garo_wallbox")
+        assert set(roster.ROLE_VOCAB.get("garo_wallbox", {})) == {"ev_current_control"}
 
     def test_a_brands_sub_integrations_are_not_hidden(self):
         """Tesla carries `powerwall`, `tesla_wall_connector` and
@@ -587,11 +589,6 @@ class TestTheMatrixControlClaimsAgreeWithTheRoster:
         "Fronius / go-e Wattpilot": "HACS custom repo, not in the store index",
         "go-eCharger (HTTP)": "declares no number keys (names set in code)",
         "ChargePoint": "declares no number keys",
-        "Heidelberg Energy Control": "declares `virtual_current` and "
-                                     "`failsafe_current_command`; SEM's own "
-                                     "discovery uses `requested_current`/"
-                                     "`_amp` — no evidence which is the "
-                                     "live control",
         "OpenWB 2.x": "HACS custom repo, not in the store index",
         "Ohme": "declares only `state_of_charge_input` as a number; current "
                 "is set through its own path",
