@@ -544,9 +544,10 @@ class TestTheRepairNamesARealPlace:
         cards = json.loads((_ROOT / "dashboard" / "translations.json").read_text(
             encoding="utf-8"))
         labels = {**cards["en"], **cards["zh" if lang == "zh-Hans" else lang]}
-        for label_key in ("Configuration", "config_advanced_label",
-                          "config_section_sensor_sources", "config_grid_power_sensor",
-                          "config_section_tariff", "config_grid_import_entity",
+        # The labels the new dashboard shows: System screen → All settings →
+        # What SEM reads (#1321; the classic Configuration tab is gone).
+        for label_key in ("System", "next_all_settings", "next_g_reads",
+                          "config_grid_power_sensor", "config_grid_import_entity",
                           "config_grid_export_entity"):
             want = labels.get(label_key) or label_key
             assert f"**{want}**" in text, (lang, label_key)

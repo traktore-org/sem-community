@@ -33,6 +33,19 @@ class TestClassify:
     def test_a_generated_classic_is_unedited(self):
         assert dm.classify(_classic()) == "classic"
 
+    def test_the_real_last_classic_template_is_unedited(self):
+        # The template exactly as the last release shipped it, and the shape
+        # the generator stored on a test machine (sankey swapped in). A
+        # hand-made fixture missed the PV health tile and every untouched
+        # classic was judged edited.
+        import yaml
+        path = os.path.join(ROOT, "tests", "fixtures", "classic_dashboard_last.yaml")
+        with open(path, encoding="utf-8") as fh:
+            real = yaml.safe_load(fh)
+        assert dm.classify(real) == "classic"
+        real["views"][0]["cards"].append({"type": "custom:sankey-chart"})
+        assert dm.classify(real) == "classic"
+
     def test_a_foreign_card_means_edited(self):
         assert dm.classify(_classic({"type": "entities", "entities": []})) == "edited"
         assert dm.classify(_classic({"type": "custom:mushroom-chips-card"})) == "edited"

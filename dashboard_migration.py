@@ -42,11 +42,13 @@ CLASSIC_VIEWS = frozenset({
     "simulation", "overview", "peak-load-management",
 })
 NEXT_VIEWS = frozenset({"now", "plan", "devices", "insights", "system"})
-# Layout cards, and the cards the classic generator swapped in for a missing
-# sankey, a K-Flow diagram and a weather card.
+# Every non-SEM card the last classic template held (tile: PV health) plus
+# the cards its generator swapped in (sankey, K-Flow, weather). Pinned
+# against the real template in tests/fixtures/classic_dashboard_last.yaml —
+# a missing type made every untouched classic look edited (#1321).
 _GENERATED_TYPES = frozenset({
     "vertical-stack", "horizontal-stack", "grid", "conditional", "markdown",
-    "energy-sankey", "custom:sankey-chart", "custom:k-flow-card",
+    "tile", "energy-sankey", "custom:sankey-chart", "custom:k-flow-card",
     "custom:clock-weather-card",
 })
 

@@ -1,0 +1,478 @@
+# ============================================================
+# SEM Dashboard v6.1 — Solar Energy Management
+# ============================================================
+# Version: 6.1 (2026-04)
+#
+# 9 views: Home, Energy, Battery, EV, Control, Configuration, Costs, System,
+# Simulation (only while the Simulation tab switch is on, #1083)
+# Dark glassmorphism theme, mobile-first responsive design
+#
+# Required HACS cards: NONE (#617 — zero-prerequisite dashboard).
+#   Everything on this dashboard is a bundled SEM card, a native HA card,
+#   or degrades gracefully. The former "required 4" are retired:
+#     mushroom         — 0 uses (vestigial since the bundled-card era)
+#     apexcharts-card  — 0 uses (sem-chart-card renders via vendored Chart.js)
+#     card-mod         — glass chrome now baked into the SEM cards' own CSS
+#     sankey-chart     — OPTIONAL (see below)
+#
+# Optional HACS cards (auto-detected by the generator):
+#   sankey-chart     — richer SEM-entity sankey on the Energy tab;
+#                      falls back to HA's native energy-sankey when absent.
+#   k-flow-card      — animated energy flow visualization (#206)
+#                      Auto-configured by dashboard generator when installed.
+#                      Falls back to sem-system-diagram-card when absent.
+#
+# Bundled SEM cards (auto-registered, no HACS needed):
+#   sem-flow-card            — schematic flow diagram, dual-mode (SEM prefix OR arbitrary entities)
+#   sem-system-diagram-card  — illustrated SVG system diagram, SEM-native (default on Home tab)
+#   sem-solar-summary-card   — solar yield summary
+#   sem-weather-card         — weather + clock header
+#   sem-chart-card           — cost / savings charts (vendored Chart.js, offline-capable)
+#   sem-why-card             — why SEM changed a device, row by row (#1084)
+#   sem-period-selector-card — period selector for Costs tab
+#   sem-load-priority-card   — drag-and-drop device priority (inlined SortableJS)
+# ============================================================
+
+title: SEM-classic
+views:
+  # ============================================================
+  # VIEW 0: HOME — At-a-glance power flow & status
+  # ============================================================
+  - title: Home
+    path: home
+    icon: mdi:home-lightning-bolt
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          # ── Lumina Tab Header ──
+          - type: custom:sem-tab-header
+            tab: home
+
+          # ── Solar hero lives in the tab header (#556 → merged into
+          # sem-tab-header per maintainer UI review; the standalone
+          # sem-solar-kpi-card remains available for manual dashboards) ──
+          # ── First-run banner + checklist (#1379) ── says when SEM only
+          # watches; shrinks to a chip once SEM is in control and set up.
+          - type: custom:sem-setup-checklist-card
+
+          # ── Configuration tab welcome banner (#442) ──
+          # Self-hides via localStorage once dismissed (one-time only)
+          - type: custom:sem-onboarding-banner
+
+          # ── Dynamic price chip (#257) ── self-hides on static tariffs
+          - type: custom:sem-price-card
+            entity: sensor.sem_tariff_current_import_rate
+            compact: true
+
+          # ── Today's plan (#282) ── forward-looking schedule, self-hides
+          # until coordinator has computed at least one transition row.
+          - type: custom:sem-today-plan-card
+            entity: sensor.sem_charging_state
+
+          # ── System Diagram (animated power flow) ──
+          - type: custom:sem-system-diagram-card
+            entity_prefix: sensor.sem_
+
+          # ── Home Status Card ──
+          - type: custom:sem-home-status-card
+            entity_prefix: sensor.sem_
+
+          # ── Solar Summary ── (glass chrome lives in the cards' own CSS since #617)
+          - type: custom:sem-solar-card
+            entity_prefix: sensor.sem_
+          # ── Weather & Clock ──
+          - type: custom:sem-weather-card
+            entity: weather.home
+
+          # ── 7-Day Summary (sem-chart-card replaces apexcharts) ──
+          # The card's SUBTITLE already carries the period ("Last 7 Days")
+          # from the preset's defaultPeriod, so the title says WHAT is
+          # plotted, not WHEN — it read "Last 7 Days / Last 7 Days" on PROD.
+          - type: custom:sem-chart-card
+            preset: energy
+            title: Energy Balance
+
+          # power-sources-graph removed — redundant with system diagram + 7-day chart
+
+  # ============================================================
+  # VIEW 1: ENERGY — Sankey, charts, daily breakdown
+  # ============================================================
+  - title: Energy
+    path: energy
+    icon: mdi:lightning-bolt
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: energy
+          # ── Sankey Energy Flow ──
+          # #555 — wrapped so a missing sankey-chart HACS install shows a
+          # friendly "install via HACS" notice instead of HA's cryptic
+          # collapsed "Configuration error" bar. Renders sankey unchanged
+          # when the card is present.
+          - type: custom:sem-require
+            requires: sankey-chart
+            name: Sankey Chart
+            card:
+              type: custom:sankey-chart
+              show_names: true
+              show_icons: true
+              show_states: true
+              wide: true
+              height: 280
+              unit_prefix: k
+              round: 2
+              sections:
+              - entities:
+                  - entity_id: sensor.sem_daily_solar_energy
+                    color: "#ff9800"
+                    name: Solar
+                    children:
+                      - sensor.sem_flow_solar_to_home_energy
+                      - sensor.sem_flow_solar_to_ev_energy
+                      - sensor.sem_flow_solar_to_battery_energy
+                      - sensor.sem_flow_solar_to_grid_energy
+                  - entity_id: sensor.sem_daily_grid_import_energy
+                    color: "#488fc2"
+                    name: Grid
+                    children:
+                      - sensor.sem_flow_grid_to_home_energy
+                      - sensor.sem_flow_grid_to_ev_energy
+                      - sensor.sem_flow_grid_to_battery_energy
+                  - entity_id: sensor.sem_daily_battery_discharge_energy
+                    color: "#4db6ac"
+                    name: Battery
+                    children:
+                      - sensor.sem_flow_battery_to_home_energy
+                      - sensor.sem_flow_battery_to_ev_energy
+                      - sensor.sem_flow_battery_to_grid_energy
+              - entities:
+                  - entity_id: sensor.sem_flow_solar_to_home_energy
+                    color: "#ff9800"
+                    name: Sol>Home
+                    children:
+                      - sensor.sem_daily_home_energy
+                  - entity_id: sensor.sem_flow_solar_to_ev_energy
+                    color: "#ff9800"
+                    name: Sol>EV
+                    children:
+                      - sensor.sem_daily_ev_energy
+                  - entity_id: sensor.sem_flow_solar_to_battery_energy
+                    color: "#ff9800"
+                    name: Sol>Bat
+                    children:
+                      - sensor.sem_daily_battery_charge_energy
+                  - entity_id: sensor.sem_flow_solar_to_grid_energy
+                    color: "#ff9800"
+                    name: Sol>Grid
+                    children:
+                      - sensor.sem_daily_grid_export_energy
+                  - entity_id: sensor.sem_flow_grid_to_home_energy
+                    color: "#488fc2"
+                    name: Grid>Home
+                    children:
+                      - sensor.sem_daily_home_energy
+                  - entity_id: sensor.sem_flow_grid_to_ev_energy
+                    color: "#488fc2"
+                    name: Grid>EV
+                    children:
+                      - sensor.sem_daily_ev_energy
+                  - entity_id: sensor.sem_flow_grid_to_battery_energy
+                    color: "#488fc2"
+                    name: Grid>Bat
+                    children:
+                      - sensor.sem_daily_battery_charge_energy
+                  - entity_id: sensor.sem_flow_battery_to_home_energy
+                    color: "#4db6ac"
+                    name: Bat>Home
+                    children:
+                      - sensor.sem_daily_home_energy
+                  - entity_id: sensor.sem_flow_battery_to_ev_energy
+                    color: "#4db6ac"
+                    name: Bat>EV
+                    children:
+                      - sensor.sem_daily_ev_energy
+                  - entity_id: sensor.sem_flow_battery_to_grid_energy
+                    color: "#4db6ac"
+                    name: Bat>Grid
+                    children:
+                      - sensor.sem_daily_grid_export_energy
+              - entities:
+                  - entity_id: sensor.sem_daily_home_energy
+                    color: "#5BC8D8"
+                    name: House
+                  - entity_id: sensor.sem_daily_ev_energy
+                    color: "#8DC892"
+                    name: EV
+                  - entity_id: sensor.sem_daily_battery_charge_energy
+                    color: "#f06292"
+                    name: Battery
+                  - entity_id: sensor.sem_daily_grid_export_energy
+                    color: "#8353d1"
+                    name: Export
+
+          # ── Self-Consumption & Autarky Gauges ──
+          - type: horizontal-stack
+            cards:
+              - type: custom:sem-gauge-card
+                entity: sensor.sem_self_consumption_rate
+                name: Self-consumption
+                color: '#4db6ac'
+              - type: custom:sem-gauge-card
+                entity: sensor.sem_autarky_rate
+                name: Autarky
+                color: '#8DC892'
+
+          # ── PV health (#1022): one line — does the plant do what the
+          # forecast said? A core tile card (zero prerequisites, #617): the
+          # state is the colour, tap opens the numbers (7-day ratio, dark
+          # minutes, snow) as attributes.
+          - type: tile
+            entity: sensor.sem_pv_health
+            name: PV health
+            icon: mdi:solar-panel
+            tap_action:
+              action: more-info
+
+          # ── 24h Power Curves (sem-chart-card replaces apexcharts) ──
+          - type: custom:sem-chart-card
+            preset: power
+            title: Power
+
+          # ── Energy Impact Card ──
+          - type: custom:sem-energy-impact-card
+            entity_prefix: sensor.sem_
+
+          # ── Self-Consumption Trend (sem-chart-card replaces apexcharts) ──
+          # The ``energy`` preset is fixed at defaultPeriod '7d', so a title
+          # promising 30 days described a chart that plots 7 — the card even
+          # rendered "30 Day Trend" above a "Last 7 Days" subtitle on PROD.
+          # Say what it shows; the subtitle carries the period.
+          - type: custom:sem-chart-card
+            preset: energy
+            title: Self-Consumption Trend
+
+  # ============================================================
+  # VIEW 2: BATTERY — SOC zones, charge/discharge, health
+  # ============================================================
+  - title: Battery
+    path: battery
+    icon: mdi:battery-charging-80
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: battery
+          # ── Battery Hero (Lumina) ──
+          - type: custom:sem-battery-card
+            entity_prefix: sensor.sem_
+
+          # ── Battery 24h Chart (sem-chart-card replaces apexcharts) ──
+          - type: custom:sem-chart-card
+            preset: battery
+            title: Battery Power
+
+          # ── SOC Zone Settings ──
+          - type: custom:sem-battery-zones-card
+
+  # ============================================================
+  # VIEW 3: EV — Charging session, lifetime, schedule
+  # ============================================================
+  - title: EV
+    path: ev
+    icon: mdi:car-electric
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: ev
+          # ── EV Hero (Lumina) ──
+          # Each charger section already shows its own SOC gauge on the left, so
+          # a separate global "Vehicle Battery" gauge here was redundant (#245).
+          - type: custom:sem-ev-status-card
+            entity_prefix: sensor.sem_
+
+          # ── EV Power Chart (sem-chart-card replaces apexcharts) ──
+          - type: custom:sem-chart-card
+            preset: ev
+            title: EV Charging Power
+
+          # ── EV Intelligence + Charging Settings ──
+          # Handled by sem-ev-status-card per-charger sections (#193)
+          # The card shows SOC gauge, charge tonight, nights until charge,
+          # night charging toggle, target kWh, and amps for every charger.
+
+          # ── EV Progress Card (daily progress + lifetime stats) ──
+          - type: custom:sem-ev-progress-card
+            entity_prefix: sensor.sem_
+
+  # ============================================================
+  # VIEW 4: CONTROL — Settings & device management
+  # ============================================================
+  - title: Control
+    path: control
+    icon: mdi:tune-vertical
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: control
+          # ── Consolidated Control Card ──
+          # Replaces all mushroom cards with a single interactive card
+          # featuring collapsible sections, toggles, steppers, and selects
+          - type: custom:sem-control-card
+            entity_prefix: sensor.sem_
+
+          # ── Energy Plan (#638) ── the joint planner's answer for the
+          # whole energy day (daylight + the coming night in one ledger).
+          # It absorbed the old Schedule Timeline (consolidation, 2026-08-08):
+          # night shading, the now marker and the Today|Tomorrow toggle all
+          # render from the plan entity — one timeline, one data source.
+          # Self-hides until a plan is stamped; live chips while actuation is
+          # on. Placed between the schedule and load management by
+          # decision (2026-08-05) — it belongs with the control surfaces, not
+          # the diagnostics.
+          - type: custom:sem-energy-plan-card
+
+          # ── Why? (#1084) ── each command SEM changed on a device, the
+          # reason in plain words and the numbers behind it. Below the plan
+          # (what SEM means to do), above the devices it acted on.
+          - type: custom:sem-why-card
+            entity_prefix: sensor.sem_
+
+          # ── Load Priority (drag-and-drop device management) ──
+          - type: custom:sem-title-card
+            title: Load Management
+            subtitle: Device priority
+          - type: custom:sem-load-priority-card
+            entity_prefix: sensor.sem_
+
+  # ============================================================
+  # VIEW 5b: CONFIGURATION — In-dashboard SEM setup (#442)
+  # ============================================================
+  - title: Configuration
+    path: config
+    icon: mdi:cog-outline
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: config
+          - type: custom:sem-config-card
+            entity_prefix: sensor.sem_
+
+  # ============================================================
+  # VIEW 6: COSTS — Financial tracking
+  # ============================================================
+  - title: Costs
+    path: costs
+    icon: mdi:cash-multiple
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: costs
+
+          # ══════════════════════════════════════════════════════
+          # 0. DYNAMIC ELECTRICITY PRICE (#257) — full panel with chart
+          #    self-hides on static tariffs (no curve to show)
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-price-card
+            entity: sensor.sem_tariff_current_import_rate
+
+          # ══════════════════════════════════════════════════════
+          # 1. CONSOLIDATED COSTS CARD
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-costs-card
+
+          # ══════════════════════════════════════════════════════
+          # 1. PERIOD SELECTOR
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-period-selector-card
+            default_period: week
+
+          # ══════════════════════════════════════════════════════
+          # 3. COSTS CHART (reacts to period selector)
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-chart-card
+            preset: costs
+
+          # ══════════════════════════════════════════════════════
+          # 3. SAVINGS CHART (reacts to period selector)
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-chart-card
+            preset: savings
+
+          # ══════════════════════════════════════════════════════
+          # 6. COSTS DETAIL CARD
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-costs-detail-card
+            entity_prefix: sensor.sem_
+
+  # ============================================================
+  # VIEW 6: SYSTEM HEALTH — Diagnostics & debug
+  # ============================================================
+  - title: System
+    path: system
+    icon: mdi:heart-pulse
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: system
+
+          # ══════════════════════════════════════════════════════
+          # 0. SYSTEM CARD — health, diagnostics, quick actions
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-system-card
+            entity_prefix: sensor.sem_
+
+          # (#1321) SEM Next: create or open the second dashboard.
+          - type: custom:sem-next-link-card
+
+          # (#638: Tonight's Plan moved to the Control tab, between
+          # Today's Schedule and Load Management — decision 2026-08-05.)
+
+          # (2026-08-09 System-tab challenge: the grid card is
+          # GONE — all six of its sections had grown better homes and it
+          # was read-only echo: hero + today totals → Home/Energy/Costs,
+          # peak + load control + surplus + tariff → the Control card's
+          # own sections (same sensors, plus the controls to act).
+          # System = health & diagnostics only. sem-grid-card stays in
+          # the bundle for hand-placed copies; retires at 1.8.)
+
+          # ══════════════════════════════════════════════════════
+          # 3. FORECAST QUALITY (the one surface showing forecast
+          #    vs actual — "is my forecast trustworthy" is a health
+          #    question, so it lives here)
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-chart-card
+            preset: forecast
+            title: Forecast vs Actual
+
+  # ============================================================
+  # VIEW 8: SIMULATION — replay recorded days (#1083)
+  # Shown only while the Simulation tab switch is on: the generator's
+  # _prune_sleeping_tabs drops this view otherwise. Keep it last.
+  # ============================================================
+  - title: Simulation
+    path: simulation
+    icon: mdi:flask-outline
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: simulation
+
+          - type: custom:sem-simulation-card
+            entity_prefix: sensor.sem_
+            header: false   # the tab header above already shows it
