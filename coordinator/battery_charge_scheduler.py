@@ -899,7 +899,9 @@ def bridge_slots(
         if sun > 0 and sun >= cons:
             break
         price = price_at(start + timedelta(hours=i)) if price_at else None
-        out.append((price, cons / 1000.0))
+        # only what the sun does not cover: in the hour it rises the battery
+        # carries the gap, not the whole load (#1377 review)
+        out.append((price, max(0.0, cons - max(0.0, sun)) / 1000.0))
     return out
 
 

@@ -223,3 +223,13 @@ class TestBothSidesAreThePlanDay:
                                   "bridge_slots")})
         assert d.state == SchedulerState.SCHEDULED
         assert d.target_soc >= 20.0
+
+
+def test_the_hour_the_sun_rises_counts_only_the_gap():
+    """(#1377 review) load 1000 W, sun 900 W: the battery carries 0.1 kWh,
+    not 1.0 — buying the whole hour would charge more than needed."""
+    from datetime import datetime, timezone
+    from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import bridge_slots
+    start = datetime(2026, 11, 18, 4, 0, tzinfo=timezone.utc)
+    slots = bridge_slots(start, [1000.0, 1000.0, 1000.0, 1000.0], [0.0, 0.0, 900.0, 1500.0], lambda t: 0.30)
+    assert [round(k, 2) for _, k in slots] == [1.0, 1.0, 0.1]
