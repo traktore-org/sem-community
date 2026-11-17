@@ -1151,7 +1151,8 @@ A forecast that runs high is exactly the case where spending the battery hurts:
 you sell tonight, tomorrow underdelivers, and you buy it back at the evening
 price. So SEM keeps a per-horizon ledger of what it forecast versus what the day
 delivered, and only trusts a horizon after seven settled days. Until then the
-budget is zero and the card says so.
+budget is zero and the card says so. A day your solar sensor gave no reading
+for more than 30 minutes of daylight does not count.
 
 It scores that record against its **bad days, not its average one**. A forecast
 can be perfectly unbiased over a season and still be wrong by half in either
