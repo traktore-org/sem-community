@@ -3427,6 +3427,26 @@ class CurrentControlDevice(ControllableDevice):
             return
         self._charger_service_settled = known is not None
 
+    def _select_amp_option(self, entity_id: str, amps: float) -> str:
+        """(forum #42, ChargePoint Cloud) a current select may offer only some
+        steps (8, 10, 12 … A or "16 A"): the largest offered option at or
+        below ``amps`` — never above what SEM asked for. When the select's
+        options cannot be read, or none is at or below, the plain amp string
+        as before (the write then says whether the charger takes it)."""
+        plain = str(int(amps))
+        state = self.hass.states.get(entity_id) if entity_id else None
+        options = (state.attributes.get("options") if state is not None else None) or []
+        best: tuple[float, str] | None = None
+        for opt in options:
+            digits = "".join(ch for ch in str(opt) if ch.isdigit() or ch == ".")
+            try:
+                value = float(digits)
+            except ValueError:
+                continue
+            if value <= amps + 1e-9 and (best is None or value > best[0]):
+                best = (value, str(opt))
+        return best[1] if best is not None else plain
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)
@@ -3536,7 +3556,8 @@ class CurrentControlDevice(ControllableDevice):
             elif _entity_svc_domain == "select":
                 # Amps exposed as a select: options are amp strings.
                 target = self.current_entity_id or self.charger_service_entity_id
-                await self.send("select", "select_option", {"entity_id": target, "option": str(int(current))})
+                await self.send("select", "select_option",
+                                {"entity_id": target, "option": self._select_amp_option(target, current)})
             elif self._phase_command(current) is not None:
                 # (#1015) one current per phase: the phase choice and the
                 # amps are ONE write. Never for a stop — see _phase_command.
