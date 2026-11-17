@@ -334,6 +334,24 @@ class TestReview:
         assert "did not turn on" in a.last_error
         assert a.last_intent is not BatteryIntent.FORCE_CHARGE
 
+    async def test_a_slow_permit_is_given_a_minute_not_two_cycles(self):
+        """(#1377 review 2) a cloud switch that shows "on" after 30 s is a
+        charge, not a refusal: no give-up within ~60 s, one re-send."""
+        hass = _Hass()
+        hass.refuse_permit = True
+        a = _adapter(hass, _Store(), _Store())
+        for _ in range(4):                               # ~40 s of "off"
+            await actuate_battery(_charge(), a)
+        assert a.charge_refused is False
+        assert hass.read(MODE) == "autonomous"
+        assert len(hass.writes("switch")) == 2           # the start + one re-send
+        hass.refuse_permit = False
+        hass.put(PERMIT, "on")                           # it shows on, late
+        for _ in range(5):
+            await actuate_battery(_charge(), a)
+        assert a.charge_refused is False and a.last_intent is BatteryIntent.FORCE_CHARGE
+        assert len(hass.writes("switch")) == 2
+
     async def test_a_crash_before_the_select_write_puts_the_permit_back(self):
         hass, rec, hold = _Hass(), _Store(), _Store()
         await actuate_battery(_charge(), _adapter(hass, rec, hold))

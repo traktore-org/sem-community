@@ -695,6 +695,12 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     #: ended (a message), and the stop's (failed cycles, options listed)
     _sel_writes: int = 0
     _permit_writes: int = 0     # (#1377) turn_on writes of this attempt
+    #: (#1377) cycles the permit has read OFF since SEM turned it on. A
+    #: cloud-backed switch may take 20–40 s to show the new state: re-send
+    #: "on" once at the 3rd off read, give up at the 6th (~60 s at 10 s)
+    _permit_off_reads: int = 0
+    PERMIT_RESEND_AT = 3
+    PERMIT_GIVE_UP_AT = 6
     _sel_seen: bool = False
     _sel_spent: "str | None" = None
     _sel_stop_miss: tuple = (0, ())
@@ -708,7 +714,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     def _forget_attempt(self) -> None:
         """(#1346) A stop ends the attempt: the next start may try again."""
         self._sel_writes, self._sel_seen = 0, False
-        self._permit_writes = 0
+        self._permit_writes = self._permit_off_reads = 0
         self._sel_spent = None
         self._sel_stop_miss = (0, ())
 
@@ -816,8 +822,11 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if (not permit or self._permit_state(permit) != "off"
                 or await self.charge_record.prior_of(permit) is None):
             return None
-        if self._permit_writes < self.SELECT_WRITES_PER_ATTEMPT:
-            await self._permit_on()
+        self._permit_off_reads += 1
+        if self._permit_off_reads < self.PERMIT_GIVE_UP_AT:
+            if (self._permit_off_reads == self.PERMIT_RESEND_AT
+                    and self._permit_writes < self.SELECT_WRITES_PER_ATTEMPT):
+                await self._permit_on()
             return None
         why = (f"{permit} did not turn on — could not start the charge, no "
                "more writes for it")
