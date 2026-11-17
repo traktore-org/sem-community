@@ -878,3 +878,105 @@ def role_for(platform: str, key: str, domain: str = "") -> str | None:
 #: ``(domain, <name>)``), never with a guess; without one the service stays
 #: a proposal to wire by hand.
 DEVICE_NAME_FIELDS: Final[tuple] = ("charger_name", "charger", "device_name")
+
+
+# ── (#1362) roles read from a select's OPTIONS ─────────────────────────────
+# A select has no declared meaning beyond its option words. The roles below
+# are decided by those words (never by integration domain), on the device of
+# a battery / solar / grid power reading. Matching is on whole word tokens.
+
+#: role -> (select setting, option setting) it fills
+OPTION_ROLE_KEYS: Final[Dict[str, tuple]] = {
+    "battery_charge_select": ("battery_charge_select_entity",
+                              "battery_charge_select_option"),
+    "battery_hold_select": ("battery_hold_select_entity",
+                            "battery_hold_select_option"),
+}
+
+#: roles whose settings exist in this build; the rest are found and shown
+#: with no button until their settings land (the hold select, #1362)
+OPTION_ROLES_WIRED: Final = frozenset({"battery_charge_select"})
+
+_SOLAR_WORDS: Final = frozenset({"solar", "pv", "photovoltaic"})
+_GRID_WORDS: Final = frozenset({"grid", "mains", "utility", "ac", "line"})
+_BATTERY_WORDS: Final = frozenset({"battery", "bat"})
+#: a select that drives something else: never a battery select
+_SELECT_VETO: Final = frozenset({"ev", "wallbox", "loadpoint", "vehicle",
+                                 "heat", "pump", "boiler", "thermostat"})
+
+
+def option_tokens(text: str) -> list:
+    """Lower-case word tokens of an option or a name."""
+    return _re.findall(r"[a-z0-9]+", str(text).lower())
+
+
+#: words that may sit in a mode option beside the source words; any other
+#: word (``import``, ``power``, ``to``) means it is not a mode name
+_FILLER: Final = frozenset({"and", "plus", "with", "or", "then", "only",
+                            "first", "priority", "mode", "charging", "charge"})
+_WORDS: Final = _SOLAR_WORDS | _GRID_WORDS | _BATTERY_WORDS | _FILLER
+
+
+def _modeish(tokens: list) -> bool:
+    return bool(tokens) and len(tokens) <= 5 and set(tokens) <= _WORDS
+
+
+def _charge_options(options) -> tuple:
+    """``(grid option, has a solar-only option)`` of a charge-source select."""
+    grid, solar_only = None, False
+    for opt in options:
+        t = option_tokens(opt)
+        s, g = bool(_SOLAR_WORDS & set(t)), bool(_GRID_WORDS & set(t))
+        if t == ["snu"] or (s and g and _modeish(t)):
+            grid = grid or opt
+        elif t == ["oso"] or (s and "only" in t and _modeish(t)):
+            solar_only = True
+    return grid, solar_only
+
+
+def _grid_first(tokens: list) -> bool:
+    if tokens == ["usb"]:
+        return True
+    if not _modeish(tokens):
+        return False
+    first = next((w for w in tokens
+                  if w in _GRID_WORDS | _SOLAR_WORDS | _BATTERY_WORDS), None)
+    return first in _GRID_WORDS
+
+
+def _battery_mode(tokens: list) -> bool:
+    if tokens == ["sbu"]:
+        return True
+    hit = [i for i, w in enumerate(tokens) if w in _BATTERY_WORDS]
+    gi = [i for i, w in enumerate(tokens) if w in _GRID_WORDS]
+    return (bool(hit) and _modeish(tokens)
+            and not (gi and gi[0] < hit[0]))
+
+
+def _hold_option(options) -> str | None:
+    """The grid-first option of a select that also has a battery mode."""
+    if not any(_battery_mode(option_tokens(o)) for o in options):
+        return None
+    return next((o for o in options if _grid_first(option_tokens(o))
+                 and not _battery_mode(option_tokens(o))), None)
+
+
+def option_roles(options, name: str = "") -> Dict[str, str]:
+    """(#1362) The option roles a select plays, ``{role: option SEM would
+    write}``. Empty for a select that is not one of them. A select that fits
+    both is split by its name (``charg``), else it is ambiguous: empty."""
+    opts = [str(o) for o in (options or ()) if str(o).strip()]
+    if len(opts) < 2 or _SELECT_VETO & set(option_tokens(name)):
+        return {}
+    out: Dict[str, str] = {}
+    grid, solar_only = _charge_options(opts)
+    if grid and solar_only:
+        out["battery_charge_select"] = grid
+    hold = _hold_option(opts)
+    if hold:
+        out["battery_hold_select"] = hold
+    if len(out) == 2:
+        keep = ("battery_charge_select" if "charg" in str(name).lower()
+                else "battery_hold_select")
+        return {keep: out[keep]}
+    return out

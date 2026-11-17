@@ -13,7 +13,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
     chargerAddPlan, detectRowLabelKey, isCo2IntensityEntity, isPowerEntity,
-    isWatchOnlyCharger, nearMissAction, watchOnlyHelpKey,
+    isWatchOnlyCharger, nearMissAction, proposalWrite, watchOnlyHelpKey,
 } from '../src/util/detect-rows.js';
 import { readFileSync } from 'node:fs';
 
@@ -140,4 +140,13 @@ test('(#1137) the card offers no report link for a watch-only row', () => {
     const body = src.slice(src.indexOf('_reportNearMissUrl(m) {'));
     assert.match(body.slice(0, 200), /nearMissAction\(m\) !== 'report'\) return ''/);
     assert.match(src, /nearMissAction\(m\) === 'watch' \? html`/);
+});
+
+// (#1362) a select proposal writes the select and the option that means it
+test('proposalWrite adds the option a select proposal carries', () => {
+    const p = { config_key: 'battery_charge_select_entity',
+                write_extra: { battery_charge_select_option: 'Solar and mains' } };
+    assert.deepEqual(proposalWrite(p, 'select.charge_source', {}),
+        { battery_charge_select_entity: 'select.charge_source',
+          battery_charge_select_option: 'Solar and mains' });
 });

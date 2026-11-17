@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ✨ **An AI assistant can tell you how to set up a grid charge** (#1362). It names the battery's selects and options to pick.
 - 🐛 **The heat pump reads its climate entity's room temperature** (#1380). A picked thermometer still comes first, on every device.
+- ✨ **SEM finds a grid-charge and a hold select by their options** (#1362). Any inverter; the card offers it with the right option.
 
 # [2.3.0-beta.18] — 17.11.2026
 
