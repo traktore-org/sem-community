@@ -153,6 +153,13 @@ def _why_sentence(coordinator: SEMCoordinator, kind: str, device_id: str) -> str
         return _NO_ANSWER
     rec = log.last(kind, device_id)
     if rec is None:
+        # (#1379) the log holds a charger only once SEM SENT it something; a
+        # car that waits for its window has no entry. Its live reason does.
+        if kind == KIND_CHARGER:
+            live = (getattr(coordinator, "data", None) or {}).get(
+                f"charger_{device_id}_strategy")
+            if isinstance(live, str) and live.strip():
+                return live.strip()
         return _NO_ANSWER
     catalogue = coordinator.hass.data.get(PLAIN_REASONS_DATA_KEY, {})
     lang = getattr(coordinator.hass.config, "language", "en")

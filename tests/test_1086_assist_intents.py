@@ -323,3 +323,13 @@ async def test_a_short_skip_says_minutes_not_zero_hours(hass):
     assert ai._duration_words(1) == "1 minute"
     assert ai._duration_words(60) == "1 hour"
     assert ai._duration_words(8 * 60) == "8 hours"
+
+
+async def test_a_waiting_charger_without_a_log_entry_gives_its_live_reason(hass):
+    """(#1379) .175: a car waiting for its window had no log entry, so the AI
+    said it had no information; the charger's live reason answers."""
+    coordinator = _fake_coordinator(hass, ev_chargers=[{"id": "c1", "name": "Carport"}])
+    coordinator.data = {"charger_c1_strategy": "min_plus_solar night: remaining 10.0 kWh"}
+    _add_entry(hass, coordinator)
+    response = await intent.async_handle(hass, "test", INTENT_WHY_CHARGER, {})
+    assert "remaining 10.0 kWh" in response.speech["plain"]["speech"]
