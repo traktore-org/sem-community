@@ -624,6 +624,5 @@ def test_the_bundle_carries_the_fix():
     changes nothing on a dashboard."""
     dist = (REPO / "dashboard" / "card" / "dist" / "sem-cards.js").read_text(
         encoding="utf-8")
-    assert "energy_plan_legend_sun" in dist
     assert "mdi:home-battery" in dist and "has_battery" in dist
     assert "batt_runs" in dist

@@ -13,6 +13,7 @@
 
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { planIdName } from '../util/plan-ids.js';
+import { reviewRows } from '../util/next-review.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { whyLines, batteryEnd } from '../util/plan-why.js';
 import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
@@ -339,6 +340,22 @@ class SEMNextPlanCard extends SEMNextBase {
                 <span class="t"><b>${name}</b> · ${when}${why ? html`<br><span class="sm muted">${why}</span>` : nothing}</span></div></div>`;
         });
         return this._sec(t('next_why_plan'), html`<div class="rows">${rows}</div>`);
+    }
+
+    /** (#755, #800) What last night's record shows: one sentence per demand, the battery, the sun. */
+    _reviewSec() {
+        const t = (k) => this._t(k);
+        const say = (key, params) => { const v = this._tf(key, params); return v && v !== key ? v : ''; };
+        const clock = (ms) => this._hhmm(new Date(ms));
+        const rows = reviewRows(this._plan().review, say, clock);
+        if (!rows.length) return nothing;
+        const devices = this._devices();
+        const look = { ev: [KIND_ICON.ev, KIND_COLOR.ev], load: [KIND_ICON.load, KIND_COLOR.load],
+                       battery: ['mdi:battery-arrow-down', C.battery_out], sun: ['mdi:solar-power-variant', C.solar] };
+        const name = (r) => (r.kind === 'sun' ? '' : r.kind === 'battery' ? t('next_src_battery') : planIdName(r.id || '', {
+            charger: (cid) => this._chargerName(cid), load: (k) => devices[k]?.name, label: () => r.label }));
+        return this._sec(t('energy_plan_review_title'), html`<div class="rows">${rows.map((r) => html`<div class="row" style="--c:${look[r.kind][1]}"><div class="k">${this._icon(look[r.kind][0])}
+            <span class="t">${name(r) ? html`<b>${name(r)}</b> · ` : nothing}${r.text}</span></div></div>`)}</div>`);
     }
 
     /** (#1321) The engine's `why` code in words: `plan_why_<code>`, times as HH:MM. */
@@ -923,6 +940,7 @@ class SEMNextPlanCard extends SEMNextBase {
         return this._frame(this._lead(plan, m), html`<div class="grid">
             ${this._stripSec(plan)}
             ${this._whySec(plan)}
+            ${this._reviewSec()}
             ${this._deviceSec(plan)}
             ${this._expectedSec(plan, m)}
             ${this._decisionsSec()}

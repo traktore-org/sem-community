@@ -100,16 +100,15 @@ def test_the_quiet_face_shows_the_arbitrage_verdict():
     line, called from BOTH faces: two copies is how the busy night and the
     quiet night came to disagree in the first place.
     """
+    # (#1321) The SEM dashboard's plan card has ONE face: the arbitrage row
+    # sits in "expected" and is built from the plan's `arbitrage`, never from
+    # the demand list, so a quiet night cannot hide it.
     card = (pathlib.Path(__file__).resolve().parent.parent / "dashboard"
-            / "card" / "src" / "cards" / "sem-energy-plan-card.js").read_text()
-    assert "_renderArb(" in card, "no single arbitrage renderer"
-    idle_face, _, full_face = card.partition("    render() {")
-    assert "this._renderArb(" in idle_face, "the quiet face drops the verdict"
-    assert "this._renderArb(" in full_face, "the busy face lost the verdict"
-    # …and the quiet branch has to HAND it the verdict.
-    call = full_face.split("verdict === 'idle' || !demands.length", 1)[1] \
-        .split(");", 1)[0]
-    assert "a.arbitrage" in call, f"quiet call site: {call}"
+            / "card" / "src" / "cards" / "sem-next-plan-card.js").read_text()
+    body = card.split("_expectedSec(plan, m) {", 1)[1].split("return this._sec(", 1)[0]
+    assert "plan.arbitrage" in body, "the verdict is not read from the plan"
+    assert "demands" not in body.split("plan.arbitrage", 1)[1].split("rows.push", 1)[0], (
+        "the verdict must not depend on the demand list")
 
 
 def test_the_quiet_night_still_says_nothing_planned(no_ev_targets):
