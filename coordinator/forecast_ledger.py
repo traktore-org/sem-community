@@ -271,7 +271,7 @@ class ForecastLedger:
 
 # ── (#822) option 2: recommend the source that has been closest ───────────
 
-#: A challenger must have at least this much LESS mean absolute error than
+#: A challenger must have at least this much LESS scaled error than
 #: the source in use. Under it, two sources are one weather apart, not two
 #: skills apart, and a hint would flip back and forth.
 RECOMMEND_MARGIN: float = 0.15
@@ -281,9 +281,32 @@ RECOMMEND_MARGIN: float = 0.15
 RECOMMEND_MIN_DAYS: int = 14
 
 
+def _loo_scaled_error(pairs, days) -> Optional[float]:
+    """Mean leave-one-out scaled error (kWh) of one source over ``days``.
+
+    SEM scales a forecast by its own learned factor, so a source is judged on
+    how well it follows the day-to-day SHAPE after scaling, not on its raw
+    size (#822: an 8 kWp source on a 16 kWp roof looked 38 % better only
+    because its wrong size cancelled another source's overshoot). Per day d:
+    k = sum(actual, other days) / sum(forecast, other days), error =
+    |k * forecast_d - actual_d|. Leaving d out keeps the day from tuning its
+    own scale.
+    """
+    tot_f = sum(pairs[d][0] for d in days)
+    tot_a = sum(pairs[d][1] for d in days)
+    errs = []
+    for d in days:
+        fc, act = pairs[d]
+        rest_f = tot_f - fc
+        if rest_f <= 0:
+            return None
+        errs.append(abs((tot_a - act) / rest_f * fc - act))
+    return sum(errs) / len(errs)
+
+
 def _shared_mae(a: "ForecastLedger", b: "ForecastLedger", horizon: int,
                 skip: Optional[str]):
-    """Mean absolute error (kWh) of each ledger over the SAME settled days.
+    """Scaled error of each ledger over the SAME settled days.
 
     Like with like: a day only counts when BOTH had a forecast and the actual
     is known, so a source that was down on a bad day is not rewarded for it.
@@ -291,11 +314,12 @@ def _shared_mae(a: "ForecastLedger", b: "ForecastLedger", horizon: int,
     """
     pa, pb = a.settled_pairs(horizon), b.settled_pairs(horizon)
     days = [d for d in pa if d in pb and d != skip]
-    if not days:
-        return None, 0
-    err_a = sum(abs(pa[d][0] - pa[d][1]) for d in days) / len(days)
-    err_b = sum(abs(pb[d][0] - pb[d][1]) for d in days) / len(days)
-    return (err_a, err_b), len(days)
+    if len(days) < 2:
+        return None, len(days)
+    ea, eb = _loo_scaled_error(pa, days), _loo_scaled_error(pb, days)
+    if ea is None or eb is None:
+        return None, len(days)
+    return (ea, eb), len(days)
 
 
 def _less_error_pct(current_ledger, other_ledger, horizon, skip):
@@ -316,8 +340,8 @@ def recommend_source(ledgers, current, min_days: int = RECOMMEND_MIN_DAYS,
     nothing to compare with. It never switches anything (#822: the correction
     factor learns on the source in use, so only the user may move it).
 
-    Measure: mean absolute error against the day's real production at today's
-    horizon (h=0), on days both sources have settled. Tomorrow's horizon
+    Measure: leave-one-out scaled error against the day's real production at
+    today's horizon (h=0), on days both sources have settled. Tomorrow's horizon
     (h=1) rides along as ``tomorrow_by_pct`` when both have enough days.
     """
     cur = (ledgers or {}).get(current)
