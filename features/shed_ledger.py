@@ -17,9 +17,13 @@ from typing import Any, Dict, Optional, Tuple
 
 from homeassistant.util import dt as dt_util
 
+from ..const import DOMAIN
 from ..coordinator.units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
+
+#: the store file's key (one name for the manager and the stand-alone helper)
+LEDGER_KEY = "load_shed_ledger"
 
 #: A record older than this is still acted on (an off fridge is worse than a
 #: stale record) but says so in the log.
@@ -128,3 +132,77 @@ class ShedLedger:
             self._store.async_delay_save(lambda: {"records": self.records}, 2)
         except Exception:  # noqa: BLE001
             _LOGGER.debug("shed ledger delayed save failed", exc_info=True)
+
+
+class OrphanRecovery:
+    """(#896) Restoring is not shedding: it runs whenever a record exists,
+    with load management on or off. When no load manager is built (it is off),
+    this does the same job on its own — start-up passes, HA stop, unload —
+    through the same hand-change rule, and writes nothing in observer mode."""
+
+    PASSES = 20
+    PAUSE_S = 30
+
+    def __init__(self, hass: Any, observer: Any = False) -> None:
+        from homeassistant.helpers.storage import Store
+        self.hass = hass
+        self._observer = observer if callable(observer) else (lambda: bool(observer))
+        self.ledger = ShedLedger(Store(hass, 1, f"{DOMAIN}_{LEDGER_KEY}"))
+        self._task = None
+        self._unsub = None
+
+    async def async_start(self) -> bool:
+        """True when records exist and recovery is under way."""
+        await self.ledger.async_load()
+        if not self.ledger.records:
+            return False
+        from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+        self._unsub = self.hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STOP, self._on_stop)
+        self._task = self.hass.async_create_task(self._loop())
+        return True
+
+    async def async_pass(self) -> int:
+        """One sweep; returns the records still waiting."""
+        for device_id, rec in list(self.ledger.records.items()):
+            try:
+                await self._one(device_id, rec)
+            except Exception:  # noqa: BLE001 — one load must not stop the rest
+                _LOGGER.warning("Shed recovery failed for %s", device_id, exc_info=True)
+        return len(self.ledger.records)
+
+    async def _one(self, device_id: str, rec: Dict[str, Any]) -> None:
+        verdict, call = resolve(rec, self.hass.states.get(rec.get("entity")))
+        if verdict == WAIT:
+            return
+        if verdict == RESTORE and call is not None:
+            if self._observer():
+                return    # watching only: nothing written, record kept
+            age = age_of(rec)
+            if age is not None and age > STALE_AFTER:
+                _LOGGER.warning("Restoring %s from a shed record %s old",
+                                rec.get("entity"), age)
+            domain, service, data = call
+            await self.hass.services.async_call(domain, service, dict(data), blocking=True)
+            _LOGGER.info("Restored %s from the shed ledger", rec.get("entity"))
+        await self.ledger.async_drop(device_id)
+
+    async def _loop(self) -> None:
+        import asyncio
+        for _ in range(self.PASSES):
+            if not await self.async_pass():
+                return
+            await asyncio.sleep(self.PAUSE_S)
+
+    async def _on_stop(self, _event=None) -> None:
+        self._unsub = None
+        await self.async_pass()
+
+    async def async_shutdown(self) -> None:
+        if self._unsub is not None:
+            self._unsub()
+            self._unsub = None
+        task, self._task = self._task, None
+        if task is not None and hasattr(task, "cancel"):
+            task.cancel()
+        await self.async_pass()

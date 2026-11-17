@@ -4041,6 +4041,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
                     await _lm.async_shutdown()
                 except Exception as exc:  # noqa: BLE001 — teardown must finish
                     _LOGGER.warning("shed loads not restored on unload: %s", exc)
+            _so = getattr(coordinator, "_shed_orphans", None)
+            if _so is not None:
+                try:
+                    await _so.async_shutdown()
+                except Exception as exc:  # noqa: BLE001 — teardown must finish
+                    _LOGGER.warning("shed loads not restored on unload: %s", exc)
             # The re-adoption hook goes with the lifetime that owns it: it
             # closes over this entry and this coordinator, and a hook left on
             # a coordinator HA is done with keeps both alive.

@@ -254,3 +254,89 @@ async def test_never_switch_off_on_every_shed_path(lm):
     assert lm._ledger.records == {} and lm.states[ENT].state == "on"
     assert lm._get_devices_for_shedding() == []
     assert lm._shed_plan()["candidates"] == []
+
+
+# ── load management OFF must not strand what SEM shed ──────────────────────
+
+
+@pytest.mark.asyncio
+async def test_lm_on_shed_then_off_and_restart_restores(lm, mock_hass):
+    """LM on -> shed -> LM off + restart: no manager exists; the stand-alone
+    helper reads the same file and puts the load back."""
+    await _shed(lm)
+    with patch("homeassistant.helpers.storage.Store", return_value=lm.disk):
+        helper = SL.OrphanRecovery(mock_hass, observer=False)
+    mock_hass.async_create_task = lambda coro: coro.close()
+    assert await helper.async_start() is True
+    assert await helper.async_pass() == 0
+    assert lm.calls == [("switch", "turn_on", ENT)]
+    assert lm.disk.data["records"] == {}
+
+
+@pytest.mark.asyncio
+async def test_orphan_helper_obeys_hand_change_and_observer(lm, mock_hass):
+    await _shed(lm)
+    with patch("homeassistant.helpers.storage.Store", return_value=lm.disk):
+        watching = SL.OrphanRecovery(mock_hass, observer=True)
+    await watching.ledger.async_load()
+    await watching.async_pass()
+    assert lm.calls == [] and "fridge" in lm.disk.data["records"]
+    lm.states[ENT] = _state("on")                    # changed by hand
+    with patch("homeassistant.helpers.storage.Store", return_value=lm.disk):
+        helper = SL.OrphanRecovery(mock_hass, observer=False)
+    await helper.ledger.async_load()
+    await helper.async_pass()
+    assert lm.calls == [] and lm.disk.data["records"] == {}
+
+
+@pytest.mark.asyncio
+async def test_lm_switched_off_at_runtime_restores_everything(lm):
+    await _shed(lm)
+    await lm.async_sync_enabled(False)
+    assert lm.calls == [("switch", "turn_on", ENT)]
+    assert lm._enabled is False and lm.disk.data["records"] == {}
+
+
+@pytest.mark.asyncio
+async def test_runtime_off_in_observer_writes_nothing(lm):
+    await _shed(lm)
+    lm._observer_mode = True
+    await lm.async_sync_enabled(False)
+    assert lm.calls == [] and "fridge" in lm.disk.data["records"]
+
+
+@pytest.mark.asyncio
+async def test_unload_restores_shed_loads_before_batteries_and_chargers():
+    """async_unload_entry calls the shed restore first."""
+    from custom_components.solar_energy_management import async_unload_entry
+    order = []
+    coord = MagicMock()
+    coord._observer_mode = False
+    coord._load_manager.async_shutdown = AsyncMock(
+        side_effect=lambda: order.append("shed"))
+    coord._shed_orphans.async_shutdown = AsyncMock(
+        side_effect=lambda: order.append("orphans"))
+    coord.async_release_export_guard = AsyncMock(
+        side_effect=lambda **k: order.append("export"))
+    coord.export_release_recipes = MagicMock(return_value=[])
+    coord._ev_devices = {}
+
+    async def batteries(_c):
+        order.append("batteries")
+        return {}
+    hass = MagicMock()
+    hass.data = {"solar_energy_management": {"e1": coord}}
+    hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
+    entry = MagicMock(entry_id="e1", disabled_by=None)
+    base = "custom_components.solar_energy_management"
+    with patch(f"{base}.coordinator.battery_adapters.base.async_release_batteries_on_unload",
+               batteries), patch(f"{base}._async_end_store", AsyncMock()), \
+            patch(f"{base}._async_say_the_park_is_unpaid", AsyncMock()), \
+            patch(f"{base}.async_pending_pacing_release", AsyncMock(return_value=None),
+                  create=True):
+        try:
+            await async_unload_entry(hass, entry)
+        except Exception:  # noqa: BLE001 — only the order matters here
+            pass
+    assert order[:2] == ["shed", "orphans"]
+    assert "batteries" in order and order.index("shed") < order.index("batteries")

@@ -47,7 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 STORAGE_KEY = "load_management_devices"
-LEDGER_KEY = "load_shed_ledger"
+LEDGER_KEY = SL.LEDGER_KEY
 
 
 def resolved_control_type(control: Optional[Mapping]) -> str:
@@ -1790,6 +1790,13 @@ class LoadManagementCoordinator:
         self._phase_shed_ids.pop(device_id, None)
         _LOGGER.info("Restored %s from the shed ledger",
                      (self._devices.get(device_id) or {}).get("friendly_name", device_id))
+
+    async def async_sync_enabled(self, enabled: bool) -> None:
+        """(#896) Load management switched OFF at runtime: shedding stops, and
+        what SEM already shed goes back — same hand-change rule, same gate."""
+        was, self._enabled = self._enabled, bool(enabled)
+        if not self._enabled and (was or self._ledger.records):
+            await self.async_restore_all_shed()
 
     async def async_recover_pass(self) -> int:
         """One sweep after a start. Returns the records still waiting."""
