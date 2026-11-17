@@ -104,3 +104,36 @@ class TestShape:
             "ratio_7d": 0.9, "settled_days": 3, "downtime_min_today": 12,
             "days_since_full_yield": 0, "snow": False,
         }
+
+
+class TestForecastOvershootIsNoFault:
+    """(#1022) A grey November week: the forecast overshot most days, yet
+    the plant delivered a full day yesterday — the panels work. Real PROD
+    numbers, 08.–16.11.2026."""
+
+    WEEK = [(11.94, 2.86), (11.608, 8.62), (11.41, 6.22), (11.362, 4.7),
+            (25.977, 16.13), (28.569, 13.98), (29.228, 14.02), (10.547, 10.15)]
+
+    def test_a_recent_full_day_keeps_it_yellow(self):
+        h = pv_health(self.WEEK, 0, None, 0, 0, None)
+        assert h.ratio_7d < 0.65 and h.days_since_full_yield == 0
+        assert h.state == "yellow"
+
+    def test_without_a_recent_full_day_it_still_warns(self):
+        assert pv_health(_days(0.5, 0.5, 0.5, 0.5), 0, None, 0, 0, None).state == "orange"
+        # the full day is three settled days back: too old to vouch
+        assert pv_health(_days(0.95, 0.5, 0.5, 0.5), 0, None, 0, 0, None).state == "orange"
+
+    def test_a_dead_string_turns_orange_two_days_after_the_last_full_day(self):
+        # half the plant gone after a full day: two days later it warns
+        before = pv_health(_days(0.95, 0.3, 0.3), 0, None, 0, 0, None)
+        after = pv_health(_days(0.95, 0.3, 0.3, 0.3), 0, None, 0, 0, None)
+        assert before.ratio_7d < 0.65 and before.state == "yellow"
+        assert after.state == "orange"
+
+    def test_red_is_capped_the_same_way(self):
+        assert pv_health(_days(0.2, 0.2, 0.2, 0.2, 0.95), 0, None, 0, 0, None).state == "yellow"
+
+    def test_green_and_yellow_are_untouched(self):
+        assert pv_health(_days(0.9, 0.9, 0.9), 0, None, 0, 0, None).state == "green"
+        assert pv_health(_days(0.7, 0.7, 0.95), 0, None, 0, 0, None).state == "yellow"
