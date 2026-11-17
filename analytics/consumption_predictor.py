@@ -279,6 +279,12 @@ class ConsumptionPredictor:
         remaining_hours = 24 - from_dt.hour
         return sum(hourly[:remaining_hours]) / 1000.0
 
+    def predict_consumption_for_day_kwh(self, day_start: datetime) -> float:
+        """(#1377) Home consumption for the WHOLE day that starts at
+        ``day_start`` (kWh). The remaining-today figure above is the wrong
+        side of a sum against tomorrow's solar forecast."""
+        return sum(self.predict_consumption_24h(day_start)) / 1000.0
+
     def predict_surplus_window(self, from_dt: datetime) -> str:
         """Predict the best surplus window based on learned patterns.
 

@@ -533,6 +533,10 @@ def _build_rate_coordinator(provider, now, forecast_today=4.0, forecast_tomorrow
     coord._forecast_tracker = MagicMock(correction_factor=1.0)
     coord._predictor = MagicMock()
     coord._predictor.predict_consumption_today_kwh = MagicMock(return_value=12.0)
+    # (#1377) the evening plans tomorrow's whole day; no profile = no bridge
+    coord._predictor.predict_consumption_for_day_kwh = MagicMock(return_value=12.0)
+    coord._predictor.predict_consumption_24h = MagicMock(return_value=[])
+    coord._predictor.predict_solar_24h = MagicMock(return_value=[])
     coord._tariff_provider = provider
     coord._ev_devices = {}
     coord.config = {

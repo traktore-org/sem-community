@@ -23,7 +23,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Optional
+from typing import Callable, List, Optional, Tuple
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -341,6 +341,8 @@ class BatteryChargeScheduler:
         forecast_available: bool = True,
         forecast_age_hours: float = 0.0,
         current_price: float = 0.0,
+        floor_soc: float = 0.0,
+        bridge_slots: Optional[List[Tuple[Optional[float], float]]] = None,
     ) -> SchedulerDecision:
         """Run the daily charge evaluation.
 
@@ -355,6 +357,10 @@ class BatteryChargeScheduler:
             forecast_available: Whether a solar forecast is available
             forecast_age_hours: How old the forecast is (hours since last update)
             current_price: Current electricity price (for negative tariff detection)
+            floor_soc: The floor the plan reports (reserve / end of discharge)
+            bridge_slots: (price, kWh) per hour from the window's end until
+                solar covers the load; the hours dearer than a charge are
+                what the battery must carry (#1377)
 
         Returns:
             SchedulerDecision with the charge plan
@@ -439,6 +445,19 @@ class BatteryChargeScheduler:
             deficit_kwh,
         )
 
+        # (#1377) The battery must also carry the dear hours before solar
+        # takes over, from the floor up. A full-day sum cannot see them:
+        # tomorrow's sun may cover tomorrow's use and still leave 04:00-09:00
+        # on the grid at the dear rate.
+        bridge_kwh = self._bridge_kwh(bridge_slots, off_peak_rate)
+        bridge_driven = False
+        if bridge_kwh > 0:
+            usable = self._config.battery_usable_capacity_kwh
+            need_kwh = (floor_soc + bridge_kwh / usable * 100 - anchor_soc) / 100 * usable
+            if need_kwh > deficit_kwh:
+                deficit_kwh = need_kwh
+                bridge_driven = True
+
         # No deficit — solar covers consumption
         if deficit_kwh <= 0:
             self._decision = SchedulerDecision(
@@ -499,6 +518,13 @@ class BatteryChargeScheduler:
             self._config.max_target_soc,
             anchor_soc + soc_increase_needed,
         )
+        # (#1377) A plan that charges never ends below the floor it reports.
+        if target_soc < floor_soc:
+            target_soc = min(self._config.max_target_soc, floor_soc)
+            deficit_kwh = max(
+                deficit_kwh,
+                (target_soc - anchor_soc) / 100 * self._config.battery_usable_capacity_kwh,
+            )
 
         # Already at or above target
         if current_soc >= target_soc - 1.0:  # 1% tolerance
@@ -541,6 +567,8 @@ class BatteryChargeScheduler:
                 f"Charge {actual_charge_kwh:.1f} kWh "
                 f"({current_soc:.0f}% → {target_soc:.0f}%) "
                 f"in {hours_needed}h"
+                + (f" (dear hours before solar need {bridge_kwh:.1f} kWh)"
+                   if bridge_driven else "")
             ),
             evaluated_at=now,
         )
@@ -549,6 +577,16 @@ class BatteryChargeScheduler:
             self._decision.reason,
         )
         return self._decision
+
+    def _bridge_kwh(self, slots, off_peak_rate: Optional[float]) -> float:
+        """(#1377) kWh of the hours a charge beats: the ones priced above
+        what a stored kWh costs. Unknown price = not counted, so a missing
+        price never buys energy."""
+        if not slots or off_peak_rate is None:
+            return 0.0
+        cost = (off_peak_rate / self._config.roundtrip_efficiency
+                + self._config.battery_cycle_cost * 2)
+        return sum(k for p, k in slots if p is not None and p > cost)
 
     def evaluate_arbitrage(
         self,
@@ -844,6 +882,26 @@ class BatteryChargeScheduler:
 # ─────────────────────────────────────────────────────────────────
 # (#638 one-gate C4c) — plan-derived entity view + verdict persistence
 # ─────────────────────────────────────────────────────────────────
+
+def bridge_slots(
+    start: datetime,
+    consumption_w: List[float],
+    solar_w: List[float],
+    price_at: Optional[Callable[[datetime], Optional[float]]],
+) -> List[Tuple[Optional[float], float]]:
+    """(#1377) (price, kWh) per hour from ``start`` until the sun covers the
+    house. Empty when the sun profile is unknown: no profile, no bridge, so
+    nothing is bought on a guess."""
+    out: List[Tuple[Optional[float], float]] = []
+    if not consumption_w or not solar_w:
+        return out
+    for i, (cons, sun) in enumerate(zip(consumption_w, solar_w, strict=False)):
+        if sun > 0 and sun >= cons:
+            break
+        price = price_at(start + timedelta(hours=i)) if price_at else None
+        out.append((price, cons / 1000.0))
+    return out
+
 
 def schedule_view_from_plan(plan, now) -> dict:
     """The ``battery_scheduler_schedule`` entity payload, read from the
