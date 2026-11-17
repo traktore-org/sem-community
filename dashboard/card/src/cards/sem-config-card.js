@@ -31,6 +31,7 @@ import { taxesApply } from '../util/settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
 import { BATTERY_QUESTIONS, batteryLevels, zoneBands } from '../util/battery-questions.js';
 import { CHARGER_TEXT, targetEntities } from '../util/charger-questions.js';
+import { applyRecommendation, recommendationFrom, recommendationText } from '../util/forecast-recommend.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
@@ -3213,9 +3214,27 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderPlanesToday(attrs)}
             ${this._renderOptionSelect('solar_forecast_source', 'config_solar_forecast_source',
                 sourceOptions, opts, 'config_help_solar_forecast_source', 'auto')}
+            ${this._renderForecastRecommendation(attrs, raw)}
             ${this._renderForecastComparison(attrs, raw)}
             ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
         `;
+    }
+
+    // (#822) One sentence when another installed source has clearly been
+    // closest for this roof. The tap writes the same option the picker does;
+    // nothing switches on its own. The sentence also says the correction
+    // learns again, because its history is not kept per source.
+    _renderForecastRecommendation(attrs, active) {
+        const rec = recommendationFrom(attrs, active);
+        if (!rec) return nothing;
+        return html`
+            <div class="overview-help sem-forecast-recommend">
+                ${recommendationText(rec, (n) => this._forecastProviderLabel(n), (k) => this._t(k))}
+                <a href="#" @click=${(e) => {
+                    e.preventDefault();
+                    applyRecommendation((k, v) => this._saveOption(k, v), rec);
+                }}>${this._t('forecast_recommend_use')}</a>
+            </div>`;
     }
 
     // (#822) Side-by-side is not the feature — the SCORE is.

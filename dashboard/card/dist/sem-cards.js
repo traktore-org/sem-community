@@ -9985,9 +9985,14 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             </div>
             ${this._renderPlanesToday(l)}
             ${this._renderOptionSelect("solar_forecast_source","config_solar_forecast_source",o,i,"config_help_solar_forecast_source","auto")}
+            ${this._renderForecastRecommendation(l,t)}
             ${this._renderForecastComparison(l,t)}
             ${"none"===t?q`<div class="overview-help">${this._t("config_forecast_install_hint")}</div>`:H}
-        `}_renderForecastComparison(e,t){const s=e.sources_now||{},i=e.source_accuracy||{},r=Object.keys(s);if(r.length<2)return H;const a=e=>null==e?this._t("forecast_still_learning"):`${Math.round(100*Number(e))}%`;return q`
+        `}_renderForecastRecommendation(e,t){const s=function(e,t){const s=e||{},i=s.recommended_source,r=Number(s.recommended_by_pct),a=Number(s.recommended_days);return i&&i!==t?!Number.isFinite(r)||r<=0||!Number.isFinite(a)||a<=0?null:{source:i,pct:Math.round(r),days:Math.round(a)}:null}(e,t);return s?q`
+            <div class="overview-help sem-forecast-recommend">
+                ${function(e,t,s){return s("forecast_recommend_text").replace("{provider}",t(e.source)).replace("{days}",String(e.days)).replace("{pct}",String(e.pct))}(s,e=>this._forecastProviderLabel(e),e=>this._t(e))}
+                <a href="#" @click=${e=>{e.preventDefault(),function(e,t){e("solar_forecast_source",t.source)}((e,t)=>this._saveOption(e,t),s)}}>${this._t("forecast_recommend_use")}</a>
+            </div>`:H}_renderForecastComparison(e,t){const s=e.sources_now||{},i=e.source_accuracy||{},r=Object.keys(s);if(r.length<2)return H;const a=e=>null==e?this._t("forecast_still_learning"):`${Math.round(100*Number(e))}%`;return q`
             <div class="readonly-row" style="margin-top:8px">
                 <span class="ctrl-label">${this._t("forecast_compare_title")}</span>
             </div>

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **A day without a solar reading no longer counts as 0 kWh** (#1022). Forecast scores and correction skip days dark over 30 minutes.
+- ✨ **SEM recommends the forecast source closest for your roof** (#822). After 14 days, with a tap to switch. Nothing switches by itself.
 - 🐛 **SEM finds more charger current and solar power sensors by name** (#915). GARO, Heidelberg, V2C, Fronius, Powerwall, Enphase, Growatt.
 - 📝 **The hardware list shows each brand's real status** (#1377). Powerwall needs a setup step for grid charge; Zaptec is partly working.
 - 🐛 **Grid-charge fields show with two batteries; charge switch and target now have fields** (#1362). The select pair no longer hides.

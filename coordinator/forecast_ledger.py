@@ -140,25 +140,30 @@ class ForecastLedger:
     def days(self) -> list:
         return sorted(self._days)
 
-    def _ratios(self, horizon_days) -> list:
-        """Every settled actual/forecast ratio at this horizon.
+    def settled_pairs(self, horizon_days) -> Dict[str, tuple]:
+        """``{date: (forecast, actual)}`` for every settled day at a horizon.
 
-        One extractor for accuracy, trust and the sample count, so the number a
-        user is shown as progress and the evidence a decision is made from can
-        never be counted differently.
+        The one extractor behind accuracy, trust, the sample count and the
+        source recommendation (#822), so what a user is shown and what a
+        decision is made from can never be counted differently. A day with
+        no forecast, no actual or a forecast of 0 is not a sample.
         """
         try:
             h = int(horizon_days)
         except (TypeError, ValueError):
-            return []
-        ratios = []
-        for rec in self._days.values():
+            return {}
+        pairs = {}
+        for date, rec in self._days.items():
             actual = rec.get("actual")
             fc = rec.get("f", {}).get(h)
             if actual is None or fc is None or fc <= 0:
                 continue
-            ratios.append(actual / fc)
-        return ratios
+            pairs[date] = (fc, actual)
+        return pairs
+
+    def _ratios(self, horizon_days) -> list:
+        """Every settled actual/forecast ratio at this horizon."""
+        return [a / fc for fc, a in self.settled_pairs(horizon_days).values()]
 
     def accuracy(self, horizon_days: int) -> Optional[HorizonAccuracy]:
         """How this horizon has performed on AVERAGE, or None while evidence
@@ -302,3 +307,99 @@ class ForecastLedger:
             return
         for stale in sorted(self._days)[: len(self._days) - self._max_days]:
             self._days.pop(stale, None)
+
+
+# ── (#822) option 2: recommend the source that has been closest ───────────
+
+#: A challenger must have at least this much LESS scaled error than
+#: the source in use. Under it, two sources are one weather apart, not two
+#: skills apart, and a hint would flip back and forth.
+RECOMMEND_MARGIN: float = 0.15
+
+#: Shared settled days before a source may be recommended. Two weeks: both
+#: a clear and a grey spell, so one freak day cannot decide.
+RECOMMEND_MIN_DAYS: int = 14
+
+
+def _loo_scaled_error(pairs, days) -> Optional[float]:
+    """Mean leave-one-out scaled error (kWh) of one source over ``days``.
+
+    SEM scales a forecast by its own learned factor, so a source is judged on
+    how well it follows the day-to-day SHAPE after scaling, not on its raw
+    size (#822: an 8 kWp source on a 16 kWp roof looked 38 % better only
+    because its wrong size cancelled another source's overshoot). Per day d:
+    k = sum(actual, other days) / sum(forecast, other days), error =
+    |k * forecast_d - actual_d|. Leaving d out keeps the day from tuning its
+    own scale.
+    """
+    tot_f = sum(pairs[d][0] for d in days)
+    tot_a = sum(pairs[d][1] for d in days)
+    errs = []
+    for d in days:
+        fc, act = pairs[d]
+        rest_f = tot_f - fc
+        if rest_f <= 0:
+            return None
+        errs.append(abs((tot_a - act) / rest_f * fc - act))
+    return sum(errs) / len(errs)
+
+
+def _shared_mae(a: "ForecastLedger", b: "ForecastLedger", horizon: int,
+                skip: Optional[str]):
+    """Scaled error of each ledger over the SAME settled days.
+
+    Like with like: a day only counts when BOTH had a forecast and the actual
+    is known, so a source that was down on a bad day is not rewarded for it.
+    ``skip`` is today, whose actual is still growing.
+    """
+    pa, pb = a.settled_pairs(horizon), b.settled_pairs(horizon)
+    days = [d for d in pa if d in pb and d != skip]
+    if len(days) < 2:
+        return None, len(days)
+    ea, eb = _loo_scaled_error(pa, days), _loo_scaled_error(pb, days)
+    if ea is None or eb is None:
+        return None, len(days)
+    return (ea, eb), len(days)
+
+
+def _less_error_pct(current_ledger, other_ledger, horizon, skip):
+    """(percent less error, days) of ``other`` vs ``current``, or (None, n)."""
+    errs, n = _shared_mae(current_ledger, other_ledger, horizon, skip)
+    if errs is None or errs[0] <= 0:
+        return None, n
+    return (1.0 - errs[1] / errs[0]) * 100.0, n
+
+
+def recommend_source(ledgers, current, min_days: int = RECOMMEND_MIN_DAYS,
+                     margin: float = RECOMMEND_MARGIN,
+                     today: Optional[str] = None) -> Optional[dict]:
+    """The source that has clearly been closest for THIS roof, or None.
+
+    None means "no hint": the source in use is already best, the lead is
+    inside the margin, the shared evidence is under ``min_days``, or there is
+    nothing to compare with. It never switches anything (#822: the correction
+    factor learns on the source in use, so only the user may move it).
+
+    Measure: leave-one-out scaled error against the day's real production at
+    today's horizon (h=0), on days both sources have settled. Tomorrow's horizon
+    (h=1) rides along as ``tomorrow_by_pct`` when both have enough days.
+    """
+    cur = (ledgers or {}).get(current)
+    if cur is None:
+        return None
+    best = None
+    for name, led in ledgers.items():
+        if name == current:
+            continue
+        pct, days = _less_error_pct(cur, led, 0, today)
+        if pct is None or days < min_days or pct < margin * 100.0:
+            continue
+        if best is None or pct > best["by_pct"]:
+            best = {"source": name, "by_pct": round(pct, 1), "days": days}
+    if best is None:
+        return None
+    t_pct, t_days = _less_error_pct(cur, ledgers[best["source"]], 1, today)
+    best["tomorrow_by_pct"] = (round(t_pct, 1)
+                               if t_pct is not None and t_days >= min_days
+                               else None)
+    return best
