@@ -563,6 +563,28 @@ async def async_setup_entry(
             coordinator, desc, entry, idx, len(batt_slugs), float(cur),
         ))
 
+    # (#1373) Each battery's size, beside its reserve: weights the total
+    # charge level. One battery keeps the global ``battery_capacity``.
+    size_cfg = full_config.get("battery_capacity_kwhs") or []
+    for idx, bid in enumerate(batt_slugs):
+        cur = size_cfg[idx] if idx < len(size_cfg) else None
+        desc = NumberEntityDescription(
+            key=f"battery_{bid}_capacity_kwh",
+            native_min_value=0.5,
+            native_max_value=100,
+            native_step=0.1,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_category=EntityCategory.CONFIG,
+            mode=NumberMode.BOX,
+        )
+        per_battery_descriptions.append(desc)
+        entities.append(SEMPerBatteryNumber(
+            coordinator, desc, entry, idx, len(batt_slugs),
+            float(cur) if cur not in (None, "") else None,
+            slot_list="battery_capacity_kwhs",
+            translation="battery_unit_capacity", name="Capacity",
+        ))
+
     # SINGLE-battery install (#523): global ``number.sem_battery_reserve_soc``.
     if not batt_slugs and _has_battery(coordinator):
         desc = _reserve_desc("battery_reserve_soc")
@@ -921,13 +943,18 @@ class SEMPerBatteryNumber(CoordinatorEntity, NumberEntity):
         entry: ConfigEntry,
         idx: int,
         count: int,
-        initial_value: float,
+        initial_value: float | None,
+        *,
+        slot_list: str = "battery_reserve_socs",
+        translation: str = "battery_reserve_soc",
+        name: str = "Reserve SOC",
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
+        self._list_key = slot_list
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_translation_key = "battery_reserve_soc"
-        self._attr_name = "Reserve SOC"
+        self._attr_translation_key = translation
+        self._attr_name = name
         self._attr_suggested_object_id = f"sem_{description.key}"
         self.entity_id = f"number.sem_{description.key}"
         self._entry = entry
@@ -958,9 +985,9 @@ class SEMPerBatteryNumber(CoordinatorEntity, NumberEntity):
             from . import persist_per_battery_option
             persist_per_battery_option(
                 self.hass, self._entry, self.coordinator,
-                self._idx, "battery_reserve_socs", value, self._count,
+                self._idx, self._list_key, value, self._count,
                 read_units=getattr(self.coordinator, "battery_control_units", None),
             )
-            _LOGGER.info("Updated battery %d reserve SOC to %s", self._idx, value)
+            _LOGGER.info("Updated battery %d %s to %s", self._idx, self._list_key, value)
         self._attr_native_value = value
         self.async_write_ha_state()

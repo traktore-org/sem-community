@@ -421,7 +421,8 @@ async def test_the_start_lifts_a_removed_batterys_cap_and_holds_while_a_reload_i
 
 # ── Guards ─────────────────────────────────────────────────────────────────
 
-_LIST_KEY_RE = re.compile(r"^battery_[a-z_]+_(entities|socs)$|^battery_modes$")
+_LIST_KEY_RE = re.compile(
+    r"^battery_[a-z_]+_(entities|socs)$|^battery_modes$|^battery_capacity_kwhs$")
 
 
 def _package_sources():

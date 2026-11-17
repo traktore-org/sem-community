@@ -49,6 +49,8 @@ PER_BATTERY_ENTITY_LISTS: tuple[tuple[str, str], ...] = (
 PER_BATTERY_SETTING_LISTS: tuple[tuple[str, str], ...] = (
     ("battery_modes", "battery_mode"),
     ("battery_reserve_socs", "battery_reserve_soc"),
+    # (#1373) each battery's size: weights the total charge level only
+    ("battery_capacity_kwhs", "battery_capacity_kwh"),
 )
 PER_BATTERY_LIST_KEYS: tuple[str, ...] = tuple(
     key for key, _ in PER_BATTERY_ENTITY_LISTS + PER_BATTERY_SETTING_LISTS)

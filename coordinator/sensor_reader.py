@@ -6176,6 +6176,22 @@ class SensorReader:
             _LOGGER.debug("Device lookup failed for %s: %s (#259)", entity_id, e)
             return None
 
+    def _unit_size_kwh(self, power_entity: str, slot: int) -> float:
+        """(#1373) A battery's size for the total level: its own setting
+        (slot N of ``battery_capacity_kwhs`` is battery bN's), else the
+        size sensor on its device, else 0.0 (unknown). Weights the total
+        level ONLY: the scheduler and every other reader keep the global
+        ``battery_capacity_kwh``."""
+        lst = (getattr(self, "_raw_config", None) or {}).get(
+            "battery_capacity_kwhs")
+        if isinstance(lst, list) and slot < len(lst):
+            try:
+                if float(lst[slot]) > 0:
+                    return float(lst[slot])
+            except (TypeError, ValueError):
+                pass
+        return self._unit_capacity_kwh(power_entity)
+
     def _soc_by_size(self, levels: list, sizes: list) -> float:
         """(#1373) The home's level of several batteries: each level counts
         by its battery's kWh, so a small pack at 17 % does not pull a large
@@ -6241,7 +6257,8 @@ class SensorReader:
                 soc_entity, "battery_soc", allow_none=True))
             if val is not None and val >= 0:
                 soc_values.append(val)
-                sizes.append(self._unit_capacity_kwh(batt_power))
+                sizes.append(self._unit_size_kwh(
+                    batt_power, battery_power_entities.index(batt_power)))
         self._soc_units_configured = len(battery_power_entities)
         self._soc_units_expected = known
         self._soc_units_read = len(soc_values)

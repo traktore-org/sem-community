@@ -1780,6 +1780,9 @@
       },
       "ev_phases": {
         "name": "{charger} Faser"
+      },
+      "battery_unit_capacity": {
+        "name": "Batterikapasitet"
       }
     },
     "select": {

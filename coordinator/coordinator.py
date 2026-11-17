@@ -8913,6 +8913,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             shown_defaults = {"battery_mode": DEFAULT_BATTERY_MODE,
                               "battery_reserve_soc": DEFAULT_BATTERY_RESERVE_SOC}
             for list_key, single_key in PER_BATTERY_SETTING_LISTS:
+                if single_key not in shown_defaults:
+                    # (#1373) a size weights the total level only; the
+                    # global capacity stays what every other reader sees
+                    continue
                 shown_default = shown_defaults[single_key]
                 lst = cfg.get(list_key)
                 if isinstance(lst, list) and idx < len(lst) and lst[idx] not in (None, ""):

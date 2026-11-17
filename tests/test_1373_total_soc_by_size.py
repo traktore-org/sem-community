@@ -133,3 +133,112 @@ async def test_the_no_power_path_weights_by_size(hass):
 async def test_the_no_power_path_with_one_size_unknown_is_plain(hass):
     r = _two_unpowered(hass, None)
     assert _read(r).battery_soc == pytest.approx(27.5)
+
+
+# ── Each battery's own size, set by the user ──────────────────────────────
+
+SENSORS = ["sensor.a_power", "sensor.b_power"]
+
+
+def _set_sizes(r, sizes):
+    r._raw_config = {**r._raw_config, "battery_capacity_kwhs": sizes}
+
+
+def test_the_reporters_sizes_set_per_battery_give_30_6(hass, monkeypatch):
+    """No size sensor anywhere: the two settings alone weigh the total."""
+    r = _fleet(hass, monkeypatch, [38, 17], [0.0, 0.0])
+    _set_sizes(r, [9.8, 5.28])
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
+
+
+def test_the_setting_beats_the_size_sensor(hass, monkeypatch):
+    r = _fleet(hass, monkeypatch, [38, 17], [5.0, 5.0])     # sensors: equal
+    _set_sizes(r, [9.8, 5.28])
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
+
+
+def test_an_unset_slot_falls_back_to_its_sensor(hass, monkeypatch):
+    r = _fleet(hass, monkeypatch, [38, 17], [9.8, 5.28])
+    _set_sizes(r, [None, ""])
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
+    _set_sizes(r, [9.8])                                    # slot 2 absent
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
+
+
+def test_one_slot_set_and_the_other_unknown_is_the_plain_average(
+        hass, monkeypatch):
+    r = _fleet(hass, monkeypatch, [38, 17], [0.0, 0.0])
+    _set_sizes(r, [9.8, None])
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(27.5)
+
+
+def test_changing_a_setting_changes_the_total(hass, monkeypatch):
+    r = _fleet(hass, monkeypatch, [38, 17], [0.0, 0.0])
+    _set_sizes(r, [9.8, 5.28])
+    a = r._read_battery_soc_average(UNITS)
+    _set_sizes(r, [9.8, 20.0])
+    assert r._read_battery_soc_average(UNITS) < a - 3
+
+
+def test_the_slot_follows_its_battery_when_the_order_changes():
+    from custom_components.solar_energy_management.coordinator.battery_controls import (
+        BATTERY_SLOT_UNITS_KEY, PER_BATTERY_LIST_KEYS, realign_battery_slots,
+    )
+    assert "battery_capacity_kwhs" in PER_BATTERY_LIST_KEYS
+    saved = {BATTERY_SLOT_UNITS_KEY: ["sensor.a", "sensor.b"],
+             "battery_capacity_kwhs": [9.8, 5.28]}
+    changes, _ = realign_battery_slots(saved, ["sensor.c", "sensor.b", "sensor.a"])
+    assert changes["battery_capacity_kwhs"] == [None, 5.28, 9.8]
+
+
+def test_the_global_capacity_is_left_alone_by_the_per_battery_config():
+    """The size weights the total level only: nothing else sees it."""
+    from types import SimpleNamespace
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    stub = SimpleNamespace(
+        config={"battery_capacity_kwh": 9.8, "battery_capacity_kwhs": [9.8, 5.28]},
+        battery_control_slugs=("b1", "b2"))
+    cfg = SEMCoordinator._per_battery_config(stub, 1, 2)
+    assert cfg["battery_capacity_kwh"] == 9.8
+
+
+async def _numbers(hass, slugs, options):
+    from custom_components.solar_energy_management import number
+    from .test_1071_battery_mode_follows_its_control import (
+        _coordinator, _entry,
+    )
+    entry = _entry(hass, options)
+    _coordinator(hass, entry, slugs)
+    added: list = []
+    await number.async_setup_entry(hass, entry, added.extend)
+    return {e.entity_description.key: e for e in added}
+
+
+async def test_two_batteries_get_a_size_number_each(hass):
+    made = await _numbers(hass, ("b1", "b2"),
+                          {"battery_capacity_kwhs": [9.8, 5.28]})
+    assert made["battery_b1_capacity_kwh"].native_value == 9.8
+    assert made["battery_b2_capacity_kwh"].native_value == 5.28
+
+
+async def test_an_unset_size_shows_no_value(hass):
+    made = await _numbers(hass, ("b1", "b2"), {})
+    assert made["battery_b2_capacity_kwh"].native_value is None
+
+
+async def test_one_battery_has_no_new_entity(hass):
+    made = await _numbers(hass, (), {})
+    assert not [k for k in made
+                if k.startswith("battery_b") and k.endswith("capacity_kwh")]
+    assert "battery_capacity" in made
+
+
+async def test_a_size_number_writes_its_own_slot(hass):
+    made = await _numbers(hass, ("b1", "b2"), {})
+    ent = made["battery_b2_capacity_kwh"]
+    ent.hass = hass
+    ent.async_write_ha_state = lambda: None
+    await ent.async_set_native_value(5.28)
+    assert ent._entry.options["battery_capacity_kwhs"] == [None, 5.28]

@@ -1780,6 +1780,9 @@
       },
       "ev_phases": {
         "name": "{charger} Fasen"
+      },
+      "battery_unit_capacity": {
+        "name": "Batterijcapaciteit"
       }
     },
     "select": {
