@@ -723,6 +723,10 @@ def _plan_cop_fn(coord, dev, t_now_cache: list):
     return _at
 
 
+#: (#1375) seconds between two tries of the immediate store save that
+#: moves an old battery flip (a disk that refuses is not asked every cycle)
+_FLIP_STORE_RETRY_S = 300.0
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -3125,6 +3129,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         storage = self._storage
         if entry is None or storage is None:
             return
+        # (#1375) a disk that refuses the write (full, read-only) is asked
+        # again at most every 5 min, not every cycle: an immediate save is no
+        # per-cycle write
+        now = time.monotonic()
+        last = vars(self).get("_flip_store_try_at")     # never a stand-in's attribute
+        if isinstance(last, float) and now - last < _FLIP_STORE_RETRY_S:
+            return
+        self._flip_store_try_at = now
         # (#1375) The migrated locks and the marker reach the disk FIRST. The
         # flag goes only after that: a restart between the two must find the
         # flag set (and migrate once), never the flag gone with the old locks.

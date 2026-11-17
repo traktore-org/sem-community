@@ -574,3 +574,39 @@ def test_a_restart_before_the_store_was_saved_migrates_once_and_reads_the_same()
     run2 = _restart(old_store, dict(LEGACY))
     assert _watts(run2, 6) == first
     assert run2.reader.legacy_flip_cleared is True
+
+
+async def test_a_refusing_disk_is_asked_again_at_most_every_five_minutes(monkeypatch):
+    """(#1375 review 5) a store save that keeps failing must not run every
+    cycle: the next try waits 5 min, then the flag is still cleared once the
+    disk takes it."""
+    import types
+    from custom_components.solar_energy_management.coordinator import coordinator as cmod
+    from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+    clock = [1000.0]
+    monkeypatch.setattr(cmod.time, "monotonic", lambda: clock[0])
+    saves = []
+    ok = [False]
+
+    async def save_now():
+        saves.append(clock[0])
+        return ok[0]
+
+    storage = types.SimpleNamespace(set_sign_state=lambda s: None,
+                                    set_battery_sign_basis=lambda b: None,
+                                    async_save_energy_now=save_now)
+    reader = types.SimpleNamespace(legacy_flip_cleared=True, export_sign_state=lambda: {},
+                                   export_battery_basis=lambda: None, _raw_config={})
+    updates = []
+    hass = types.SimpleNamespace(config_entries=types.SimpleNamespace(
+        async_update_entry=lambda e, options: updates.append(options)))
+    coord = types.SimpleNamespace(_sensor_reader=reader, config_entry=types.SimpleNamespace(options={}),
+                                  _storage=storage, hass=hass)
+    for _ in range(30):                      # 30 cycles of 10 s, disk refusing
+        await SEMCoordinator._save_cleared_battery_flip(coord)
+        clock[0] += 10.0
+    assert len(saves) == 1 and not updates and reader.legacy_flip_cleared is True
+    clock[0] += 300.0
+    ok[0] = True
+    await SEMCoordinator._save_cleared_battery_flip(coord)
+    assert len(saves) == 2 and len(updates) == 1 and reader.legacy_flip_cleared is False
