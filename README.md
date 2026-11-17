@@ -55,7 +55,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Brand icons** — native HA 2026.3+ brand support (no submission to home-assistant/brands needed)
 - **EV Intelligence** — detects BMS charge tapering, estimates SOC without car API, learns daily consumption per weekday, temperature-corrected predictions
 - **EV battery health** — tracks capacity degradation from partial charge sessions over months
-- **Hardware compatibility test suite** — 150+ automated tests covering all supported hardware — every inverter + charger combination verified in CI
+- **Hardware test suite** — automated tests for many brands. Each brand's status (tested live, implemented or requested) is in the [hardware list](docs/SUPPORTED_HARDWARE.md)
 - **Transparent auto-detection (#814)** — the dashboard **Configuration → Detected hardware** section shows every device SEM found with the evidence for each role, and names *near-misses* (a brand almost supported) instead of silently detecting nothing. The full support matrix with an honest per-brand status is generated and CI-guarded: [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md)
 - **Hardware SEM has never met (2.1, #915)** — SEM reads each integration's own list of entities and services, so a brand nobody reported is recognised and proposed on the Configuration tab. You confirm; SEM binds nothing it guessed.
 - **Your inverter's house figure (2.1, #891)** — name the house power sensor your inverter reports and SEM shows it beside its own, with the difference.
@@ -84,7 +84,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Local-first** — everything runs inside Home Assistant. No cloud, no subscription, no account.
 - **No extra moving parts** — no separate services, no Docker containers, no YAML config files, no AppDaemon.
 - **Works out of the box** — SEM auto-detects your inverter, battery, grid, and charger from the Energy Dashboard, then exposes every knob on its own dashboard when you want to tune it.
-- **Built for real hardware** — every supported inverter and charger combination is verified in CI, and the whole system is designed around locally-controlled devices.
+- **Built for real hardware** — each brand's status (tested live, implemented or requested) is in the [hardware list](docs/SUPPORTED_HARDWARE.md), and the whole system is designed around locally-controlled devices.
 
 If you can see it in your Home Assistant Energy Dashboard, SEM can orchestrate it.
 
@@ -336,7 +336,7 @@ SEM creates 70+ sensors organized by category:
 
 **Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe, Tesla Powerwall, Kostal Plenticore, Sungrow, Victron, Sonnenbatterie, E3DC, GivEnergy, Fox ESS, Alpha ESS, Senec, RCT Power, KSTAR, FENECON Home — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
 
-**Batteries:** Any battery exposed through a supported inverter integration, plus standalone systems: Sessy (NL), Huawei LUNA2000, Tesla Powerwall, Sonnen, BYD and others work automatically. Battery capacity is auto-detected from the inverter.. Since 2.1 the generic adapter also writes a mirrored setpoint (Victron ESS) or a direction select plus watts (Anker Solix).
+**Batteries:** Any battery exposed through a supported inverter integration, plus standalone systems. Sessy (NL), Huawei LUNA2000 and Sonnen work automatically and are tested live. Tesla Powerwall reads automatically; its grid charge needs a setup step (see the note below). BYD and others: see the [hardware list](docs/SUPPORTED_HARDWARE.md). Battery capacity is auto-detected from the inverter. Since 2.1 the generic adapter also writes a mirrored setpoint (Victron ESS) or a direction select plus watts (Anker Solix).
 
 **Battery discharge control auto-detected for:** Huawei Solar, SolaX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis, GoodWe, SolarEdge (solaredge-modbus-multi), Enphase (IQ Battery), Tesla Powerwall, Victron, Kostal Plenticore, Sungrow
 
