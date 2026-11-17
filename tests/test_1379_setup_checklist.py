@@ -24,6 +24,10 @@ def _coord(hass, *, watch_only=True, entities=(), report=None, **config):
         _forecast_reader=SimpleNamespace(source=None),
         source_recommendation=MagicMock(return_value=None),
         _configured_entity_ids=lambda: set(entities),
+        # (#1379) the hardware row reads only the solar/grid/battery entities
+        _sensor_reader=SimpleNamespace(_energy_dashboard_config=SimpleNamespace(
+            solar_power=(list(entities) or [None])[0], battery_power_list=[],
+            battery_power_pairs=[])),
         _detection_report=report)
 
 
@@ -117,3 +121,17 @@ def test_the_card_reads_the_checklist_off_the_charger_control_sensor(mock_coordi
         description=SensorEntityDescription(key="diag_charger_control", name="x"),
         entry_id="e")
     assert sensor.extra_state_attributes["setup_checklist"] == checklist
+
+
+async def test_helpers_price_and_weather_are_not_hardware(sem_real_hass):
+    """(#1379) .175 showed 'Huawei Solar · Input Boolean · Nordpool · …':
+    only what SEM reads as solar, grid and battery power counts."""
+    from homeassistant.helpers import entity_registry as er
+    reg = er.async_get(sem_real_hass)
+    reg.async_get_or_create("sensor", "huawei_solar", "pv2", suggested_object_id="pv2")
+    reg.async_get_or_create("sensor", "nordpool", "price", suggested_object_id="price")
+    reg.async_get_or_create("input_boolean", "input_boolean", "x", suggested_object_id="x")
+    coord = _coord(sem_real_hass, entities=["sensor.pv2"])
+    coord._configured_entity_ids = lambda: {"sensor.pv2", "sensor.price", "input_boolean.x"}
+    out = await build_setup_checklist(sem_real_hass, coord)
+    assert _by_key(out)["hardware"]["brands"] == ["huawei_solar"]
