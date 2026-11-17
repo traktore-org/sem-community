@@ -15,7 +15,15 @@
 
 SEM monitors your solar production, battery, grid, EV charger, and household devices every 10 seconds and distributes surplus power by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
 
-![SEM Dashboard Overview](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_home_tab.png)
+![SEM dashboard: the Now screen](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_now.png)
+
+### New in 2.3
+
+- **A new dashboard** with five screens, one per question: *Now*, *Plan*, *Devices*, *Insights*, *System*. The old dashboard stays.
+- **A first-run checklist** on the Home screen: it says when SEM only watches, and what is left to set up.
+- **Ask your AI assistant** about SEM — local or cloud, see [below](#ask-your-ai-assistant).
+- **Better forecasts**: SEM recommends the forecast source that has predicted your roof best.
+
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_system_diagram_animated.gif" alt="System Diagram Animation" width="400">
@@ -160,7 +168,29 @@ Detail for each step is in the [Quick Start](docs/QUICK_START.md).
 9. **Turn watch-only off** when the dashboard looks right: switch off `switch.sem_observer_mode`. SEM starts in watch-only mode, so **until you do this, SEM changes nothing**. It only shows what it would do.
 10. **Check Repairs** (**Settings → Repairs**) when SEM needs your attention.
 
-![SEM Integration Page](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_integration_detail.png)
+After install the Home screen shows what SEM sees, what is left, and one button to let SEM take control:
+
+![First-run checklist](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_checklist.png)
+
+---
+
+## Ask your AI assistant
+
+If an AI assistant in Home Assistant may control your home — OpenAI, Claude, Gemini, or a **local model** through Ollama or llama.cpp — it can use SEM's tools. Nothing to install, no sentence file.
+
+| | |
+|---|---|
+| ![What is SEM missing?](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_assist_missing.png) | ![Why is my car not charging?](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_assist_car.png) |
+
+Both answers above come from a local model on a home server.
+
+- **Ask why:** why the battery or the car does what it does, what tonight's charging costs, whether now is a cheap hour.
+- **Ask what is missing:** watch-only mode, chargers, battery, forecast, price, open Repairs.
+- **Report a problem:** the AI prepares a bug report for this project — versions, detected hardware, recent SEM warnings, no private data. You read it and post it yourself.
+- **Change a plan** (charge target, skip tonight, charge now) only after you switch on **Voice commands** in SEM.
+
+**AI apps outside Home Assistant** (Claude Desktop, Claude Code, claude.ai, other MCP clients): add Home Assistant's built-in **Model Context Protocol Server** integration, then connect the app to `http://<your-ha>:8123/api/mcp` with a long-lived token. SEM's tools appear next to Home Assistant's own.
+
 
 ---
 
@@ -224,7 +254,15 @@ When the battery SOC is above the buffer threshold (default 70%), SEM supplement
 
 ## Dashboard
 
-SEM includes a built-in dashboard with 8 views and a unified glassmorphism dark theme:
+SEM makes two dashboards. **SEM Next** (new in 2.3) has five screens, one per question:
+
+| | |
+|---|---|
+| ![Now](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_now.png) | ![Plan](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_plan.png) |
+| ![Devices](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_devices.png) | ![Insights](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_insights.png) |
+| ![System](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_system.png) | ![On a phone](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_now_mobile.png) |
+
+The **classic dashboard** keeps its 8 views:
 
 | View | Description |
 |------|-------------|
