@@ -174,7 +174,7 @@ def tank_commands(run: DayRun, base: Optional[DayRun] = None) -> Result:
     that cannot replay one, has ``evidence_n`` 0 and says so — it is never a
     pass by silence."""
     if run.tank is None:
-        return Result("tank_commands", "exact", True, "no tank recorded — skipped")
+        return Result("tank_commands", "exact", True, "no tank to replay — skipped")
     if base is None or base.tank is None:
         return Result("tank_commands", "exact", True,
                       f"{len(run.tank)} would-send rows (no base to compare)",
@@ -197,7 +197,7 @@ def tank_sanity(run: DayRun, base: Optional[DayRun] = None) -> Result:
     shows too is listed, never blamed on the branch (a recorded cold start
     of the day can look like one)."""
     if run.tank is None:
-        return Result("tank_sanity", "relative", True, "no tank recorded — skipped")
+        return Result("tank_sanity", "relative", True, "no tank to replay — skipped")
     theirs = {(f["kind"], f["t"]) for f in (base.tank_faults if base and base.tank else [])}
     new = [f for f in run.tank_faults if (f["kind"], f["t"]) not in theirs]
     return Result("tank_sanity", "relative", not new,

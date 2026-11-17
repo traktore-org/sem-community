@@ -70,12 +70,20 @@ is a price under 90 % of the day's top. Its clock is the day's own. The
 corpus holds no tank settings, so this compares the same inputs through both
 trees; it is not what PROD's tank did.
 
-**The corpus has no tank yet.** The replay reads one role, `tank_temp`
-(SEM's `hot_water_current_temperature`), and SEM publishes that value only
-inside the coordinator, not as an entity the exporter can read. Until an
-entity carries it, every real day is skipped for the tank ("no tank
-recorded"); days exported after one exists will have it. The tank is proven
-on synthetic days (`tests/test_replay_tank.py`) until then.
+**The tank is SIMULATED on this corpus.** The install the corpus comes from
+has no hot water tank, so no day records a tank temperature. For such a day
+the replay runs a small model (`tools/replay/tank.py`): 300 L (0.35 kWh/K),
+the element at 3.2 kW while the controller has it on, about 1.5 K a day of
+standing loss toward a 20 °C room, two draws of 15 °C cold water (40 L at
+07:00, 60 L at 20:00), starting the day at Keep at minus 2 K. The controller
+is fed the simulated water and its on/off heats the model (closed loop).
+Base and branch share the model and the day, so `tank_commands` compares
+**decisions under one physics**; the physics is a plain estimate, not a
+measurement, and real sun, price and house load are the only real part. The
+output says "tank simulated". A future install whose day holds a `tank_temp`
+role (SEM's `hot_water_current_temperature`, not yet an entity) uses its
+recorded temperature instead and says "tank recorded". A day with no grid
+reading at all (an empty export) is skipped.
 
 ## Checks
 
@@ -85,8 +93,8 @@ on synthetic days (`tests/test_replay_tank.py`) until then.
 | `home_spike` | relative | the branch shows a one-cycle home spike develop did not show |
 | `no_writes` | exact | the branch would command the car or the battery differently from develop (a row changed, added or dropped), a decider raised, or the replayed code made a real service call |
 
-| `tank_commands` | exact | the branch would switch the hot water tank differently from develop (first differing row is named); a day with no tank is skipped |
-| `tank_sanity` | relative | against the recorded water temperature, the replayed tank stays ON at or above its top, or OFF below its too-cold limit, for over 20 minutes where develop did not |
+| `tank_commands` | exact | the branch would switch the hot water tank differently from develop (first differing row is named); a day with nothing to replay is skipped |
+| `tank_sanity` | relative | against the recorded or simulated water temperature, the replayed tank stays ON at or above its top, or OFF below its too-cold limit, for over 20 minutes where develop did not |
 | `cost_identity` | modelled | the day re-priced hourly by the Simulation tab's model is more than 0.01 off its 10-s cost |
 
 Only `exact` and `relative` checks block, and only on a non-gap day. An
@@ -117,9 +125,10 @@ without the model (develop before #1083) skips it.
   decisions run with default settings and no tariff, so a branch that
   changes only a tariff path shows no difference. Other loads (heat pump,
   switched devices) are not replayed.
-- The tank's water temperature is the RECORDED one: when a branch switches
-  the element differently, the water does not warm or cool differently. The
-  replay judges decisions, not heat. Legionella is not replayed (its last
+- On a day with a recorded tank temperature, that temperature is used as it
+  is: a different decision does not warm or cool the water. On the
+  simulated tank the water does follow the decisions, but by the model's
+  physics. Either way the replay judges decisions, not heat. Legionella is not replayed (its last
   run is not recorded), nor is the tank's own band, which the corpus does
   not hold.
 - The forecast tracker starts each replayed day with no history: its

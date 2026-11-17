@@ -64,6 +64,8 @@ class DayRun:
     tank: Optional[List[list]] = None
     #: (#1369) over-top / too-cold stretches of the replayed tank
     tank_faults: List[dict] = field(default_factory=list)
+    #: (#1369) "recorded" (the day's own temperature) or "simulated"
+    tank_mode: str = ""
     notes: List[str] = field(default_factory=list)
     #: (net cost priced every 10 s, the same day re-priced hourly by the
     #: simulation model); None = no price recorded or no model in the tree
@@ -195,9 +197,9 @@ def replay_tank_decisions(day: RecordedDay, run: DayRun) -> None:
         run.notes.append(f"tank: raised — {type(err).__name__}: {err}")
         return
     if res is None:
-        run.notes.append("tank: no tank temperature recorded — skipped")
+        run.notes.append("tank: nothing recorded to simulate on — skipped")
         return
-    run.tank, run.tank_faults = res
+    run.tank, run.tank_faults, run.tank_mode = res
 
 
 def replay_decisions(day: RecordedDay, run: DayRun) -> None:

@@ -83,12 +83,48 @@ def test_a_changed_rule_shows_the_first_differing_row():
     assert r.evidence[0]["branch"] != r.evidence[0]["base"]
 
 
-def test_a_day_without_a_tank_is_skipped_cleanly():
+def test_a_day_without_a_tank_simulates_one():
     run = replay_day(_day(tank=False))
+    assert run.tank_mode == "simulated" and run.tank and run.decision_error == ""
+    assert any(r[2] == "on" for r in run.tank), "real sun heats the simulated tank"
+    assert replay_day(_day(tank=False)).tank == run.tank
+    assert inv.tank_commands(run, replay_day(_day(tank=False))).detail.endswith("same as base")
+
+
+def test_a_recorded_temperature_still_uses_the_recorded_path():
+    run = replay_day(_day())
+    assert run.tank_mode == "recorded"
+
+
+def test_a_day_with_nothing_to_simulate_on_is_skipped_cleanly():
+    day = _day(tank=False)
+    day.series.pop("grid_power")
+    run = replay_day(day)
     assert run.tank is None and run.decision_error == ""
-    assert any("no tank temperature" in n for n in run.notes)
     for r in (inv.tank_commands(run, run), inv.tank_sanity(run, run)):
         assert r.ok and r.evidence_n == 0 and "skipped" in r.detail
+
+
+def test_the_simulated_tank_heats_cools_and_stays_bounded():
+    from custom_components.solar_energy_management.tools.replay import tank as T
+    t = 40.0
+    for _ in range(360):                       # one hour on
+        t = T.sim_step(t, True, 10.0)
+    assert 40.0 + 8.0 < t < 40.0 + 9.2, t        # 3.2 kWh / 0.35 kWh/K ~ 9 K, less loss
+    hot = T.sim_step(55.0, False, 3600.0)
+    assert hot < 55.0 and 55.0 - hot < 0.2      # loss only, a slow fall
+    assert T.sim_draw(55.0, 60.0) < 55.0 - 7.0  # a draw cools it
+    assert T.SIM_COLD_C <= T.sim_draw(55.0, 300.0) <= 55.0
+    run = replay_day(_day(tank=False))
+    assert run.tank_faults == [], run.tank_faults
+
+
+def test_a_changed_rule_shows_a_difference_on_a_simulated_day():
+    base = replay_day(_day(tank=False))
+    with patch.object(hwc.HotWaterController, "band_top_c", return_value=50.0):
+        branch = replay_day(_day(tank=False))
+    r = inv.tank_commands(branch, base)
+    assert not r.ok and "first at row" in r.detail
 
 
 def test_a_tank_that_stays_on_above_its_top_is_caught():

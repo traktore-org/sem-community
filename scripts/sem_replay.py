@@ -128,12 +128,14 @@ def main() -> int:
                       cost=tuple(d["cost"]) if d.get("cost") else None,
                       commands=d.get("commands"),
                       tank=d.get("tank"), tank_faults=d.get("tank_faults") or [],
+                      tank_mode=d.get("tank_mode", ""),
                       decision_error=d.get("decision_error", ""))
 
     report = {"branch": str(a.branch), "base": str(a.base), "days": [], "refused": False}
     lines = []
     with_commands = 0
     with_tank = 0
+    modes: dict = {}
     tank_rows = 0
     for day in sorted(branch):
         b = _run(branch[day])
@@ -159,6 +161,9 @@ def main() -> int:
         report["refused"] |= bool(block)
         with_commands += bool(res["no_writes"].evidence_n) if "no_writes" in res else 0
         tk = res.get("tank_commands")
+        if tk is not None and b.tank_mode:
+            tk.detail = f"tank {b.tank_mode}: {tk.detail}"
+        modes[b.tank_mode] = modes.get(b.tank_mode, 0) + bool(b.tank_mode)
         with_tank += bool(tk and tk.evidence_n)
         tank_rows += tk.evidence_n if tk else 0
         mark = "REFUSED" if block else "ok"
@@ -168,10 +173,11 @@ def main() -> int:
     report["days_with_command_evidence"] = with_commands
     report["days_with_tank_evidence"] = with_tank
     report["tank_rows_compared"] = tank_rows
+    report["tank_days_by_mode"] = {k: v for k, v in modes.items() if k}
     print(f"\n{len(branch)} days — {'REFUSED' if report['refused'] else 'all checks pass'}; "
           f"would-send commands compared on {with_commands} of {len(branch)} days; "
           f"hot water tank: {tank_rows} rows compared on {with_tank} of {len(branch)} days"
-          + ("" if with_tank else " (no day records a tank temperature yet)"))
+          + (f" ({', '.join(f'{v} {k}' for k, v in modes.items() if k)})" if with_tank else ""))
     if a.report:
         a.report.expanduser().write_text(json.dumps(report, indent=1))
     return 1 if report["refused"] else 0

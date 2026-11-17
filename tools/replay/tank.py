@@ -12,6 +12,12 @@ decision does not warm or cool it — the replay judges decisions, not heat.
 The corpus holds no tank settings, so the band is fixed (below). Legionella
 is not replayed: its last-run time is not recorded, so no run is ever due.
 OFFLINE and READ-ONLY: no service is ever called.
+
+(#1369) The owner's install has no tank, so a day with no recorded tank
+temperature SIMULATES one (``SIM_*``, below) and feeds the controller the
+simulated water, closed loop: its on/off heats the model. Base and branch
+share the model, so the comparison is of decisions under ONE physics; the
+physics itself is a plain estimate, not a measurement.
 """
 from __future__ import annotations
 
@@ -32,6 +38,14 @@ SENSOR = "sensor.replay_tank_temp"
 #: Keep at 52 °C, Extra 4 °C, too cold below 36 °C, Solar Heating Target 50
 RATED_W = 3200.0
 KEEP_AT_C, EXTRA_C, TOO_COLD_C, SOLAR_TARGET_C = 52.0, 4.0, 36.0, 50.0
+#: the simulated tank (#1369): 300 L, ~0.35 kWh/K, the element at RATED_W,
+#: ~1.5 K/day lost toward a 20 C room when at Keep at, two draws of cold water
+SIM_CAPACITY_WH_PER_K = 350.0
+SIM_ROOM_C, SIM_COLD_C, SIM_VOLUME_L = 20.0, 15.0, 300.0
+SIM_LOSS_PER_S = 1.5 / (86400.0 * (KEEP_AT_C - SIM_ROOM_C))   # K/s per K above room
+SIM_DRAWS = ((7.0, 40.0), (20.0, 60.0))                       # (local hour, litres)
+SIM_START_C = KEEP_AT_C - 2.0
+MODE_RECORDED, MODE_SIMULATED = "recorded", "simulated"
 #: the sanity check allows this long to react (min run / rest times)
 GRACE_S = 20 * 60
 #: a price this far under the day's top counts as cheap
@@ -115,17 +129,32 @@ def _cheap(price: Optional[float], top: Optional[float]) -> bool:
     return price is not None and top is not None and top > 0 and price < CHEAP_BELOW * top
 
 
+def sim_step(temp: float, on: bool, dt_s: float) -> float:
+    """(#1369) One step of the model: heat in, minus the standing loss."""
+    heat = (RATED_W * dt_s / 3600.0 if on else 0.0) / SIM_CAPACITY_WH_PER_K
+    loss = SIM_LOSS_PER_S * (temp - SIM_ROOM_C) * dt_s
+    return temp + heat - loss
+
+
+def sim_draw(temp: float, litres: float) -> float:
+    """Cold water mixed in for a draw of ``litres``."""
+    return temp - (litres / SIM_VOLUME_L) * (temp - SIM_COLD_C)
+
+
 def _fault(kind: str, since: float, temp: float, limit: float) -> dict:
     return {"kind": kind, "t": round(since), "temp_c": round(temp, 1), "limit_c": limit}
 
 
 def replay_tank(day: RecordedDay, daylight: Optional[Tuple[float, float]]
-                ) -> Optional[Tuple[List[list], List[dict]]]:
-    """``(rows, faults)``. Rows: ``[epoch_s, "tank", "on"|"off", code]``, one
+                ) -> Optional[Tuple[List[list], List[dict], str]]:
+    """``(rows, faults, mode)``. Mode ``recorded`` feeds the controller the
+    day's own tank temperature, ``simulated`` the model above (#1369). Rows: ``[epoch_s, "tank", "on"|"off", code]``, one
     per change. Faults: the replayed tank ran ``over_top`` or stayed off
     ``too_cold`` for longer than ``GRACE_S`` against the RECORDED water
-    temperature. None when the day records no tank temperature."""
-    if not day.series.get("tank_temp"):
+    temperature. None when there is nothing to replay (no tank recorded and
+    no grid reading to simulate on)."""
+    recorded = bool(day.series.get("tank_temp"))
+    if not recorded and not day.series.get("grid_power"):
         return None
     from custom_components.solar_energy_management.coordinator import surplus_controller as sc
     from custom_components.solar_energy_management.devices import base
@@ -151,14 +180,24 @@ def replay_tank(day: RecordedDay, daylight: Optional[Tuple[float, float]]
         dev._last_legionella_time = clock.aware() - timedelta(hours=1)  # never due
         dev._last_deactivated = clock.naive() - timedelta(days=1)
         last = None
+        sim, prev_t, drawn, on_now = SIM_START_C, None, set(), False
         for c in day.cycles():
-            temp = c.get("tank_temp")
             clock.t = c.t
+            hour = day.local_hour(c.t)
+            if recorded:
+                temp = c.get("tank_temp")
+            else:
+                if prev_t is not None:
+                    sim = sim_step(sim, on_now, c.t - prev_t)
+                for h, litres in SIM_DRAWS:
+                    if hour >= h and h not in drawn:
+                        drawn.add(h)
+                        sim = sim_draw(sim, litres)
+                prev_t, temp = c.t, sim
             if temp is None:
                 hass.set(SENSOR, "unavailable")
             else:
                 hass.set(SENSOR, f"{temp}", unit_of_measurement="°C")
-            hour = day.local_hour(c.t)
             night = daylight is None or not (daylight[0] <= hour <= daylight[1])
             left = None if night or daylight is None else (daylight[1] - hour) * 3600.0
             intent = sc.compute_load_intent(
@@ -168,6 +207,7 @@ def replay_tank(day: RecordedDay, daylight: Optional[Tuple[float, float]]
             row = ("on" if intent.on else "off", str(intent.code or intent.source or ""))
             if bool(intent.on) != bool(dev.is_active):
                 _believe(dev, hass, bool(intent.on), clock)
+            on_now = bool(dev.is_active)
             if row != last:
                 last = row
                 out.append([round(c.t), "tank", *row])
@@ -183,4 +223,4 @@ def replay_tank(day: RecordedDay, daylight: Optional[Tuple[float, float]]
                 if c.t - since >= GRACE_S and (kind, since) not in flagged:
                     flagged.add((kind, since))
                     faults.append(_fault(kind, since, temp, lim))
-    return out, faults
+    return out, faults, MODE_RECORDED if recorded else MODE_SIMULATED
