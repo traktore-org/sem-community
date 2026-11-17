@@ -107,7 +107,9 @@ class TestADarkUnitPublishesNoPower:
     def test_the_sign_flip_does_not_turn_a_dark_unit_into_a_number(self):
         out = _published({"sensor.b1_power": _state(250, "W"),
                           "sensor.b2_power": _state("unavailable", "W")},
-                         combined=TWO, config={"battery_sign_user_flip": True})
+                         combined=TWO, config={  # (#1375) the tap names each battery
+                             "battery_sign_user_flip_sensors": [
+                                 "sensor.b1_power", "sensor.b2_power"]})
         assert out["battery_b1_power"] == -250.0, "the flip ran"
         assert out["battery_b2_power"] is None
 

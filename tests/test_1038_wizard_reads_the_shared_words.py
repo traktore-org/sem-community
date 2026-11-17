@@ -327,6 +327,8 @@ def _status_word_lists(tree):
 _NOT_A_CHARGER_LIST = {
     # SEM's own home-battery status labels (battery_status_map)
     ("sensor.py", frozenset({"charging", "discharging"})),
+    # (#1375) words of a battery SOC sensor's name that mark a code, not a level
+    ("coordinator/sensor_reader.py", frozenset({"error", "fault"})),
 }
 
 

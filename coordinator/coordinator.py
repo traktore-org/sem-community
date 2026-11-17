@@ -59,6 +59,7 @@ from ..consts.core import (CONF_OUTDOOR_TEMPERATURE_ENTITY,
 from ..consts.core import (CONF_SHED_SIGNAL_ENTITY, CONF_SHED_SIGNAL_LIMIT,
                            DEFAULT_SHED_SIGNAL_LIMIT)
 from ..const import (
+    BATTERY_FLIP_SENSORS_KEY,
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
@@ -721,6 +722,10 @@ def _plan_cop_fn(coord, dev, t_now_cache: list):
         return device_cop_at(dev, t)[0]
     return _at
 
+
+#: (#1375) seconds between two tries of the immediate store save that
+#: moves an old battery flip (a disk that refuses is not asked every cycle)
+_FLIP_STORE_RETRY_S = 300.0
 
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
@@ -3111,6 +3116,54 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _LOGGER.warning("keeping battery settings with their batteries "
                             "failed (#1195)", exc_info=True)
 
+    async def _save_cleared_battery_flip(self) -> None:
+        """(#1375) The reader moved an old one-for-all battery flip off a home
+        of several batteries: save that in the entry, as the flip service does
+        (the reload skip armed first, so nothing restarts). The flag is
+        cleared in memory only once the write is made; with no entry the
+        request stays and is asked again next cycle."""
+        reader = self._sensor_reader
+        entry = self.config_entry
+        if getattr(reader, "legacy_flip_cleared", False) is not True:
+            return
+        storage = self._storage
+        if entry is None or storage is None:
+            return
+        # (#1375) a disk that refuses the write (full, read-only) is asked
+        # again at most every 5 min, not every cycle: an immediate save is no
+        # per-cycle write
+        now = time.monotonic()
+        last = vars(self).get("_flip_store_try_at")     # never a stand-in's attribute
+        if isinstance(last, float) and now - last < _FLIP_STORE_RETRY_S:
+            return
+        self._flip_store_try_at = now
+        # (#1375) The migrated locks and the marker reach the disk FIRST. The
+        # flag goes only after that: a restart between the two must find the
+        # flag set (and migrate once), never the flag gone with the old locks.
+        storage.set_sign_state(reader.export_sign_state())
+        basis = reader.export_battery_basis()
+        if basis is not None:
+            storage.set_battery_sign_basis(basis)
+        if await storage.async_save_energy_now() is not True:
+            return
+        new_options = {**(entry.options or {}), "battery_sign_user_flip": False,
+                       BATTERY_FLIP_SENSORS_KEY: []}
+        self._skip_options_reload = dict(new_options)
+        try:
+            self.hass.config_entries.async_update_entry(entry, options=new_options)
+        except Exception:  # noqa: BLE001 — a settings write never costs a cycle
+            self._skip_options_reload = None
+            if not getattr(self, "_flip_save_failed_said", False):
+                self._flip_save_failed_said = True
+                _LOGGER.warning("saving the cleared battery flip failed; "
+                                "asking again next cycle (#1375)", exc_info=True)
+            return
+        raw = getattr(reader, "_raw_config", None)
+        if isinstance(raw, dict):
+            raw["battery_sign_user_flip"] = False
+            raw[BATTERY_FLIP_SENSORS_KEY] = []
+        reader.legacy_flip_cleared = False
+
     async def _retry_energy_dashboard_resolution(self) -> None:
         """Re-derive Energy Dashboard power sensors after a cold start (#274).
 
@@ -4429,6 +4482,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()
+            await self._save_cleared_battery_flip()      # (#1375)
 
             # Self-healing sign inversion: if balance goes negative with real
             # grid activity, the grid sign is wrong — auto-correct by flipping

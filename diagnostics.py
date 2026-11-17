@@ -293,6 +293,8 @@ REDACT_CONFIG_KEYS = {
     # ``notify.mobile_app_<device name>`` and the Companion App names the
     # device after its owner — a person's name in every diagnostics file.
     "mobile_notification_service",
+    # (#1375) the power sensors of the batteries the user turned over
+    "battery_sign_user_flip_sensors",
 }
 
 
@@ -300,6 +302,7 @@ REDACT_CONFIG_KEYS = {
 REDACT_BATTERY_SIGN_KEYS = {
     "battery_power_sensor", "sensor", "counters",
     "charge_counters", "discharge_counters",
+    "user_flip_sensors",               # (#1375) the batteries the user flipped
 }
 
 # (#1294) …and in the grid-sign block. ``grid_source_kind`` keeps the shape.

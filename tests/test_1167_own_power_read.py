@@ -133,7 +133,8 @@ class TestTheReaderGivesEachUnitItsOwnFlag:
         p = _ed_reader({"sensor.b1_power": _state(250, "W"),
                         "sensor.b2_power": _state("unavailable", "W")},
                        combined=["sensor.b1_power", "sensor.b2_power"],
-                       config={"battery_sign_user_flip": True}).read_power()
+                       config={"battery_sign_user_flip_sensors": [  # (#1375)
+                           "sensor.b1_power", "sensor.b2_power"]}).read_power()
         assert p.batteries["b1"].power_w == -250.0, "the flip ran"
         assert p.batteries["b1"].power_read is True
         assert p.batteries["b2"].power_read is False
