@@ -2234,7 +2234,8 @@ SEM answers these questions through Home Assistant Assist — the same
 sentence the logbook already shows, spoken instead of read:
 
 - "why is the battery doing that"
-- "why is the car charging" / "why is the car not charging"
+- "why is the car charging" / "why is the car not charging" — with
+  several chargers, name one; otherwise you get an answer for each
 - "what will tonight cost"
 - "is now a good time to charge"
 

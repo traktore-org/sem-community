@@ -900,7 +900,7 @@ as *At least 10 · Up to 40 kWh*, pause, battery boost, phases, set-once
 values, this month, lifetime. Battery: mode, a line that says what it does
 now and next (*Giving 0.8 kW. Tonight it keeps 40 % for the morning.*),
 zone bar, its levels, help for the car, charge pacing, sell window,
-per-battery mode and reserve, evidence and health. The battery's levels and
+per-battery mode, reserve and size in kWh (tap to set), evidence and health. The battery's levels and
 permissions are asked here only. Load: one mode control, *Off / Peak only /
 SEM runs it / SEM runs it, battery may help*, and a *Boost for 30/60/120
 min* button; goal, min run / pause, Requires, phase, comfort, tariff,
