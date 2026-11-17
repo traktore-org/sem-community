@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Rapportera detta till SEM",
-            "description": "**{name}** är inställd på ett laddmål i procent, men fordonet rapporterar just nu ingen laddningsnivå — SEM kan därför inte stanna *exakt* vid **{target}%**.\n\nDet laddar ändå inte blint: från den senaste riktiga avläsningen under den här sessionen räknar det den energi som faktiskt levererats och stannar när den uppmätta summan når ditt mål — överskridandet är bara det bilen tagit sedan avläsningen. Om ingen riktig avläsning alls har kommit in under sessionen (eller om SEM startades om mitt i laddningen) saknas referenspunkt, och laddningen pågår tills bilen själv drar ner effekten nära fullt.\n\nFör en gräns som träffar rätt, koppla en **riktig SOC-sensor för fordonet** till den här laddaren (Konfiguration → EV → Fordons-SOC-entitet). Batteriprocenten på instrumentpanelen är SEM:s *uppskattade* SOC, som medvetet ignoreras för den hårda gränsen (den kan driva). Den här reparationen försvinner automatiskt så snart en riktig SOC-avläsning finns igen.\n\nSEM tror att felet är dess eget. Om du kan, öppna en felrapport med knappen i aviseringen — formuläret är redan ifyllt. Om du hellre vill kan du kopiera sammanhanget nedan till ett e-postmeddelande eller ett foruminlägg. Den här dialogen skickar ingenting någonstans.\n\n```\n{context}\n```\n\nBekräfta för att stänga aviseringen."
+            "description": "**{name}** är inställd på ett laddmål i procent, men fordonet rapporterar just nu ingen laddningsnivå — SEM kan därför inte stanna *exakt* vid **{target}%**.\n\nDet laddar ändå inte blint: från den senaste riktiga avläsningen under den här sessionen räknar det den energi som faktiskt levererats och stannar när den uppmätta summan når ditt mål — överskridandet är bara det bilen tagit sedan avläsningen. Om ingen riktig avläsning alls har kommit in under sessionen (eller om SEM startades om mitt i laddningen) saknas referenspunkt, och laddningen pågår tills bilen själv drar ner effekten nära fullt.\n\nFör en gräns som träffar rätt, koppla en **riktig SOC-sensor för fordonet** till den här laddaren (Konfiguration → EV-laddare). Batteriprocenten på instrumentpanelen är SEM:s *uppskattade* SOC, som medvetet ignoreras för den hårda gränsen (den kan driva). Den här reparationen försvinner automatiskt så snart en riktig SOC-avläsning finns igen.\n\nSEM tror att felet är dess eget. Om du kan, öppna en felrapport med knappen i aviseringen — formuläret är redan ifyllt. Om du hellre vill kan du kopiera sammanhanget nedan till ett e-postmeddelande eller ett foruminlägg. Den här dialogen skickar ingenting någonstans.\n\n```\n{context}\n```\n\nBekräfta för att stänga aviseringen."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Laddboxens styrentitet fungerar inte: {name}",
-      "description": "SEM använder **`{entity_id}`** för att {capability} på **{name}**, men den entiteten är `{reason}` — varje kommando försvinner. Kontrollera entiteten i **Utvecklarverktyg → Tillstånd** och åtgärda vid källan, eller peka om SEM via **Inställningar → Enheter och tjänster → SEM → Konfigurera → Laddbox → Redigera**."
+      "description": "SEM använder **`{entity_id}`** för att {capability} på **{name}**, men den entiteten är `{reason}` — varje kommando försvinner. Kontrollera entiteten i **Utvecklarverktyg → Tillstånd** och åtgärda vid källan, eller peka om SEM via **Konfiguration → EV-laddare**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Batteriets effektbörvärde kan inte skrivas: {entity_id}",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Batteriplattformen är låst till Generic på en {brand}-installation",
-      "description": "SEM:s batteriplattform är satt till **Generic / annan**, men {brand}-integrationen är laddad. Tidigare versioner av inställningsguiden erbjöd bara Generic och Deye och valde Generic som standard, så att klicka igenom den sidan en gång degraderade en {brand}-installation till den generiska adaptern — ingen tvingad laddning, ingen idempotent registerskrivning. Öppna **Inställningar → Enheter och tjänster → SEM → Konfigurera → Batterischemaläggare** och sätt **Batteriets laddplattform** till **Autodetektera**. Om Generic är ett medvetet val (ett batteri med egna styrentiteter), ange den entiteten så försvinner meddelandet."
+      "description": "SEM:s batteriplattform är satt till **Generic / annan**, men {brand}-integrationen är laddad. Tidigare versioner av inställningsguiden erbjöd bara Generic och Deye och valde Generic som standard, så att klicka igenom den sidan en gång degraderade en {brand}-installation till den generiska adaptern — ingen tvingad laddning, ingen idempotent registerskrivning. Öppna **Konfiguration → Batterischemaläggare** och sätt **Batteriets laddplattform** till **Autodetektera**. Om Generic är ett medvetet val (ett batteri med egna styrentiteter), ange den entiteten så försvinner meddelandet."
     },
     "split_grid_guessed": {
       "title": "SEM kontrollerar två gissade nätmätare",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Batteriets SOC-zoner ligger i fel ordning",
-      "description": "Dina batterizoner läser **Prioritet {priority}% · Buffert {buffer}% · Autostart {auto_start}%**, men SEM förväntar sig att de stiger i den ordningen: Prioritet är reserven du aldrig spenderar, Buffert är där batteristödet slutar, och Autostart är där paketet är fullt nog för att ge fritt.\n\nSEM använder **{used}** som gränser — samma tre tal, sorterade — så att ingen zon hoppas över och inget beter sig oförutsägbart. Den berättar detta för dig eftersom layouten du skrev nästan säkert inte är den du menade.\n\nFixa det i **Inställningar → Enheter och tjänster → SEM → Konfigurera → Batteri** eller på instrumentpanelens Konfiguration-flik. Alla värden är tillåtna så länge de stiger; breda zoner är bra — 20 / 30 / 50 är en fullt godtagbar layout på ett stort batteri."
+      "description": "Dina batterizoner läser **Prioritet {priority}% · Buffert {buffer}% · Autostart {auto_start}%**, men SEM förväntar sig att de stiger i den ordningen: Prioritet är reserven du aldrig spenderar, Buffert är där batteristödet slutar, och Autostart är där paketet är fullt nog för att ge fritt.\n\nSEM använder **{used}** som gränser — samma tre tal, sorterade — så att ingen zon hoppas över och inget beter sig oförutsägbart. Den berättar detta för dig eftersom layouten du skrev nästan säkert inte är den du menade.\n\nFixa det i **Konfiguration → Batterizoner**. Alla värden är tillåtna så länge de stiger; breda zoner är bra — 20 / 30 / 50 är en fullt godtagbar layout på ett stort batteri."
     },
     "previous_install_leftovers": {
       "title": "Filer från en tidigare SEM-installation hittades",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready-kontakt {contact} kan inte styras",
-      "description": "**{entity_id}** är inställd som SG-Ready {contact}, men det är en text-/number-/select-entitet och dess **{missing}**-värde är inte konfigurerat — så SEM har inget att skriva och varje SG-Ready-kommando för den här värmepumpen misslyckas. Öppna **Inställningar → Enheter och tjänster → SEM → Konfigurera → Värmepump** (eller instrumentpanelens Konfiguration-flik) och fyll i både PÅ- och AV-värdet för den här kontakten, eller peka den mot en switch-entitet istället."
+      "description": "**{entity_id}** är inställd som SG-Ready {contact}, men det är en text-/number-/select-entitet och dess **{missing}**-värde är inte konfigurerat — så SEM har inget att skriva och varje SG-Ready-kommando för den här värmepumpen misslyckas. Öppna **Konfiguration → Värmepump** och fyll i både PÅ- och AV-värdet för den här kontakten, eller peka den mot en switch-entitet istället."
     },
     "split_grid_rejected": {
       "title": "SEM kunde inte hitta dina nätmätare",

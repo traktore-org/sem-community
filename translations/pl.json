@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Zgłoś to do SEM",
-            "description": "**{name}** ma ustawiony procentowy cel ładowania, ale pojazd w tej chwili nie raportuje stanu naładowania, więc SEM nie może zatrzymać się *dokładnie* przy **{target}%**.\n\nNie ładuje jednak na ślepo: od ostatniego rzeczywistego odczytu w tej sesji zlicza faktycznie dostarczoną energię i zatrzymuje ładowanie, gdy ta zmierzona suma osiągnie cel — przekroczenie to tylko to, co auto pobrało od tamtego odczytu. Jeśli w tej sesji nie dotarł żaden rzeczywisty odczyt (albo SEM uruchomił się ponownie w trakcie ładowania), nie ma punktu odniesienia i ładowanie trwa, aż samo auto zredukuje moc tuż przed pełnym.\n\nAby limit trafiał w punkt, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → EV → Encja SOC pojazdu). Procent baterii na pulpicie to *szacowany* SOC SEM, celowo pomijany przy twardym limicie (może się rozjeżdżać). Ta naprawa znika automatycznie, gdy tylko znów pojawi się rzeczywisty odczyt SOC.\n\nSEM uważa, że to jego własny błąd. Jeśli możesz, zgłoś błąd przyciskiem w powiadomieniu — formularz będzie już wypełniony. Jeśli wolisz, skopiuj poniższy kontekst do e-maila lub wpisu na forum. To okno niczego nigdzie nie wysyła.\n\n```\n{context}\n```\n\nPotwierdź, aby zamknąć powiadomienie."
+            "description": "**{name}** ma ustawiony procentowy cel ładowania, ale pojazd w tej chwili nie raportuje stanu naładowania, więc SEM nie może zatrzymać się *dokładnie* przy **{target}%**.\n\nNie ładuje jednak na ślepo: od ostatniego rzeczywistego odczytu w tej sesji zlicza faktycznie dostarczoną energię i zatrzymuje ładowanie, gdy ta zmierzona suma osiągnie cel — przekroczenie to tylko to, co auto pobrało od tamtego odczytu. Jeśli w tej sesji nie dotarł żaden rzeczywisty odczyt (albo SEM uruchomił się ponownie w trakcie ładowania), nie ma punktu odniesienia i ładowanie trwa, aż samo auto zredukuje moc tuż przed pełnym.\n\nAby limit trafiał w punkt, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → Ładowarki EV). Procent baterii na pulpicie to *szacowany* SOC SEM, celowo pomijany przy twardym limicie (może się rozjeżdżać). Ta naprawa znika automatycznie, gdy tylko znów pojawi się rzeczywisty odczyt SOC.\n\nSEM uważa, że to jego własny błąd. Jeśli możesz, zgłoś błąd przyciskiem w powiadomieniu — formularz będzie już wypełniony. Jeśli wolisz, skopiuj poniższy kontekst do e-maila lub wpisu na forum. To okno niczego nigdzie nie wysyła.\n\n```\n{context}\n```\n\nPotwierdź, aby zamknąć powiadomienie."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Encja sterująca ładowarki nie działa: {name}",
-      "description": "SEM używa **`{entity_id}`**, aby {capability} na **{name}**, ale ta encja jest `{reason}` — każde polecenie przepada. Sprawdź encję w **Narzędziach dewelopera → Stany** i napraw ją u źródła lub wskaż SEM inną w **Ustawienia → Urządzenia i usługi → SEM → Konfiguruj → Ładowarka → Edytuj**."
+      "description": "SEM używa **`{entity_id}`**, aby {capability} na **{name}**, ale ta encja jest `{reason}` — każde polecenie przepada. Sprawdź encję w **Narzędziach dewelopera → Stany** i napraw ją u źródła lub wskaż SEM inną w **Konfiguracja → Ładowarki EV**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Nie można zapisać nastawy mocy baterii: {entity_id}",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Platforma baterii przypięta do Generic w instalacji {brand}",
-      "description": "Platforma baterii SEM jest ustawiona na **Generic / inna**, ale załadowana jest integracja {brand}. Wcześniejsze wersje kreatora opcji oferowały tylko Generic i Deye i domyślnie wybierały Generic, więc jednorazowe przejście przez tę stronę zdegradowało instalację {brand} do ogólnego adaptera — bez wymuszonego ładowania, bez idempotentnych zapisów rejestru. Otwórz **Ustawienia → Integracje → SEM → Konfiguruj → Harmonogram baterii** i ustaw **Platforma ładowania baterii** na **Autodetekcja**. Jeśli Generic jest zamierzonym wyborem (bateria z własnymi encjami sterującymi), ustaw tę encję, a to powiadomienie zniknie."
+      "description": "Platforma baterii SEM jest ustawiona na **Generic / inna**, ale załadowana jest integracja {brand}. Wcześniejsze wersje kreatora opcji oferowały tylko Generic i Deye i domyślnie wybierały Generic, więc jednorazowe przejście przez tę stronę zdegradowało instalację {brand} do ogólnego adaptera — bez wymuszonego ładowania, bez idempotentnych zapisów rejestru. Otwórz **Konfiguracja → Harmonogram baterii** i ustaw **Platforma ładowania baterii** na **Autodetekcja**. Jeśli Generic jest zamierzonym wyborem (bateria z własnymi encjami sterującymi), ustaw tę encję, a to powiadomienie zniknie."
     },
     "split_grid_guessed": {
       "title": "SEM sprawdza dwa odgadnięte liczniki sieci",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Strefy SOC baterii są w złej kolejności",
-      "description": "Twoje strefy baterii odczytują **Priorytet {priority}% · Bufor {buffer}% · Autostart {auto_start}%**, ale SEM oczekuje, że będą rosnąć w tej kolejności: Priorytet to rezerwa, której nigdy nie wydajesz, Bufor to miejsce, w którym wsparcie baterii się zatrzymuje, a Autostart to miejsce, w którym pakiet jest wystarczająco pełny, aby oddawać swobodnie.\n\nSEM używa **{used}** jako granic — te same trzy liczby, posortowane — więc żadna strefa nie jest pomijana i nic nie zachowuje się nieprzewidywalnie. Informuje Cię o tym, ponieważ układ, który wpisałeś, niemal na pewno nie jest tym, co miałeś na myśli.\n\nNapraw to w **Ustawienia → Urządzenia i usługi → SEM → Konfiguruj → Bateria** lub na karcie Konfiguracja panelu. Dowolne wartości są dozwolone, o ile rosną; szerokie strefy są w porządku — 20 / 30 / 50 to całkiem dobry układ przy dużym pakiecie."
+      "description": "Twoje strefy baterii odczytują **Priorytet {priority}% · Bufor {buffer}% · Autostart {auto_start}%**, ale SEM oczekuje, że będą rosnąć w tej kolejności: Priorytet to rezerwa, której nigdy nie wydajesz, Bufor to miejsce, w którym wsparcie baterii się zatrzymuje, a Autostart to miejsce, w którym pakiet jest wystarczająco pełny, aby oddawać swobodnie.\n\nSEM używa **{used}** jako granic — te same trzy liczby, posortowane — więc żadna strefa nie jest pomijana i nic nie zachowuje się nieprzewidywalnie. Informuje Cię o tym, ponieważ układ, który wpisałeś, niemal na pewno nie jest tym, co miałeś na myśli.\n\nNapraw to w **Konfiguracja → Strefy baterii**. Dowolne wartości są dozwolone, o ile rosną; szerokie strefy są w porządku — 20 / 30 / 50 to całkiem dobry układ przy dużym pakiecie."
     },
     "previous_install_leftovers": {
       "title": "Znaleziono pliki z poprzedniej instalacji SEM",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "Styk SG-Ready {contact} nie może być sterowany",
-      "description": "**{entity_id}** jest ustawiona jako SG-Ready {contact}, ale to encja text/number/select, a jej wartość **{missing}** nie jest skonfigurowana — więc SEM nie ma czego zapisać i każde polecenie SG-Ready dla tej pompy ciepła zawodzi. Otwórz **Ustawienia → Integracje → SEM → Konfiguruj → Pompa ciepła** (lub kartę Konfiguracja panelu) i wypełnij zarówno wartość ZAŁ, jak i WYŁ dla tego styku, albo skieruj go na encję typu switch."
+      "description": "**{entity_id}** jest ustawiona jako SG-Ready {contact}, ale to encja text/number/select, a jej wartość **{missing}** nie jest skonfigurowana — więc SEM nie ma czego zapisać i każde polecenie SG-Ready dla tej pompy ciepła zawodzi. Otwórz **Konfiguracja → Pompa ciepła** i wypełnij zarówno wartość ZAŁ, jak i WYŁ dla tego styku, albo skieruj go na encję typu switch."
     },
     "split_grid_rejected": {
       "title": "SEM nie mógł znaleźć Twoich liczników mocy sieci",

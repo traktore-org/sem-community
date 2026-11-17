@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Ilmoita tästä SEM:lle",
-            "description": "**{name}** on asetettu prosentuaaliseen lataustavoitteeseen, mutta ajoneuvo ei juuri nyt raportoi varaustasoaan, joten SEM ei voi pysähtyä *tarkalleen* kohtaan **{target}%**.\n\nSe ei silti lataa sokkona: viimeisimmästä tämän istunnon todellisesta lukemasta lähtien se laskee tosiasiassa toimitetun energian ja pysäyttää latauksen, kun mitattu summa saavuttaa tavoitteesi — ylitys on vain se, minkä auto on ottanut kyseisen lukeman jälkeen. Jos tässä istunnossa ei ole saapunut yhtään todellista lukemaa (tai SEM käynnistyi uudelleen kesken latauksen), vertailukohtaa ei ole ja lataus jatkuu, kunnes auto itse laskee tehoa lähellä täyttä.\n\nJotta raja osuisi kohdalleen, määritä tälle latausasemalle **todellinen ajoneuvon SOC-anturi** (Määritykset → EV → Ajoneuvon SOC-entiteetti). Koontinäytön akkuprosentti on SEM:n *arvioitu* varaustaso, joka jätetään tarkoituksella huomiotta kovassa rajassa (se voi ajautua). Tämä korjaus poistuu automaattisesti heti, kun todellinen SOC-lukema on taas saatavilla.\n\nSEM arvelee, että tämä vika on sen oma. Jos voit, avaa vikaraportti ilmoituksen painikkeella — lomake on jo valmiiksi täytetty. Voit myös kopioida alla olevan kontekstin sähköpostiin tai foorumiviestiin. Tämä ikkuna ei lähetä mitään minnekään.\n\n```\n{context}\n```\n\nVahvista, niin ilmoitus suljetaan."
+            "description": "**{name}** on asetettu prosentuaaliseen lataustavoitteeseen, mutta ajoneuvo ei juuri nyt raportoi varaustasoaan, joten SEM ei voi pysähtyä *tarkalleen* kohtaan **{target}%**.\n\nSe ei silti lataa sokkona: viimeisimmästä tämän istunnon todellisesta lukemasta lähtien se laskee tosiasiassa toimitetun energian ja pysäyttää latauksen, kun mitattu summa saavuttaa tavoitteesi — ylitys on vain se, minkä auto on ottanut kyseisen lukeman jälkeen. Jos tässä istunnossa ei ole saapunut yhtään todellista lukemaa (tai SEM käynnistyi uudelleen kesken latauksen), vertailukohtaa ei ole ja lataus jatkuu, kunnes auto itse laskee tehoa lähellä täyttä.\n\nJotta raja osuisi kohdalleen, määritä tälle latausasemalle **todellinen ajoneuvon SOC-anturi** (Asetukset → EV-laturit). Koontinäytön akkuprosentti on SEM:n *arvioitu* varaustaso, joka jätetään tarkoituksella huomiotta kovassa rajassa (se voi ajautua). Tämä korjaus poistuu automaattisesti heti, kun todellinen SOC-lukema on taas saatavilla.\n\nSEM arvelee, että tämä vika on sen oma. Jos voit, avaa vikaraportti ilmoituksen painikkeella — lomake on jo valmiiksi täytetty. Voit myös kopioida alla olevan kontekstin sähköpostiin tai foorumiviestiin. Tämä ikkuna ei lähetä mitään minnekään.\n\n```\n{context}\n```\n\nVahvista, niin ilmoitus suljetaan."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Latauslaitteen ohjausentiteetti ei toimi: {name}",
-      "description": "SEM käyttää entiteettiä **`{entity_id}`** toimintoon {capability} laitteella **{name}**, mutta entiteetti on `{reason}` — jokainen komento katoaa. Tarkista entiteetti kohdassa **Kehittäjätyökalut → Tilat** ja korjaa se lähteessä tai osoita SEM uudelleen: **Asetukset → Laitteet ja palvelut → SEM → Määritä → Latauslaite → Muokkaa**."
+      "description": "SEM käyttää entiteettiä **`{entity_id}`** toimintoon {capability} laitteella **{name}**, mutta entiteetti on `{reason}` — jokainen komento katoaa. Tarkista entiteetti kohdassa **Kehittäjätyökalut → Tilat** ja korjaa se lähteessä tai osoita SEM uudelleen: **Asetukset → EV-laturit**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Akun tehon asetusarvoa ei voi kirjoittaa: {entity_id}",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Akkualusta on lukittu Genericiin {brand}-asennuksessa",
-      "description": "SEM:n akkualustaksi on asetettu **Generic / muu**, mutta {brand}-integraatio on ladattu. Asetusvelhon aiemmat versiot tarjosivat vain Generic- ja Deye-vaihtoehdot ja valitsivat oletuksena Genericin, joten kyseisen sivun läpikäynti kerran alensi {brand}-asennuksen yleiseen sovittimeen — ei pakkolatausta, ei idempotentteja rekisterikirjoituksia. Avaa **Asetukset → Laitteet ja palvelut → SEM → Määritä → Akun latausajastin** ja aseta **Akun latausalusta** arvoon **Automaattinen tunnistus**. Jos Generic on tarkoituksellinen valinta (akku, jolla on omat ohjausentiteettinsä), aseta kyseinen entiteetti, niin ilmoitus poistuu."
+      "description": "SEM:n akkualustaksi on asetettu **Generic / muu**, mutta {brand}-integraatio on ladattu. Asetusvelhon aiemmat versiot tarjosivat vain Generic- ja Deye-vaihtoehdot ja valitsivat oletuksena Genericin, joten kyseisen sivun läpikäynti kerran alensi {brand}-asennuksen yleiseen sovittimeen — ei pakkolatausta, ei idempotentteja rekisterikirjoituksia. Avaa **Asetukset → Akun latausajastin** ja aseta **Akun latausalusta** arvoon **Automaattinen tunnistus**. Jos Generic on tarkoituksellinen valinta (akku, jolla on omat ohjausentiteettinsä), aseta kyseinen entiteetti, niin ilmoitus poistuu."
     },
     "split_grid_guessed": {
       "title": "SEM tarkistaa kahta arvattua verkkomittaria",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Akun SOC-vyöhykkeet ovat väärässä järjestyksessä",
-      "description": "Akkusi vyöhykkeet lukevat **Prioriteetti {priority}% · Puskuri {buffer}% · Autokäynnistys {auto_start}%**, mutta SEM odottaa niiden nousevan tässä järjestyksessä: Prioriteetti on reservi, jota et koskaan kuluta, Puskuri on raja, jossa akkutuki päättyy, ja Autokäynnistys on raja, jossa akku on tarpeeksi täynnä antaakseen vapaasti.\n\nSEM käyttää arvoja **{used}** rajoina — samat kolme lukua, järjestettynä — jotta mikään vyöhyke ei jää väliin eikä mikään käyttäydy arvaamattomasti. Se kertoo tästä, koska kirjoittamasi järjestys ei lähes varmasti ole se, mitä tarkoitit.\n\nKorjaa se kohdassa **Asetukset → Laitteet ja palvelut → SEM → Määritä → Akku** tai koontinäytön Asetukset-välilehdellä. Mikä tahansa arvo käy, kunhan ne nousevat; leveät vyöhykkeet ovat ihan hyviä — 20 / 30 / 50 on täysin toimiva järjestys suurelle akulle."
+      "description": "Akkusi vyöhykkeet lukevat **Prioriteetti {priority}% · Puskuri {buffer}% · Autokäynnistys {auto_start}%**, mutta SEM odottaa niiden nousevan tässä järjestyksessä: Prioriteetti on reservi, jota et koskaan kuluta, Puskuri on raja, jossa akkutuki päättyy, ja Autokäynnistys on raja, jossa akku on tarpeeksi täynnä antaakseen vapaasti.\n\nSEM käyttää arvoja **{used}** rajoina — samat kolme lukua, järjestettynä — jotta mikään vyöhyke ei jää väliin eikä mikään käyttäydy arvaamattomasti. Se kertoo tästä, koska kirjoittamasi järjestys ei lähes varmasti ole se, mitä tarkoitit.\n\nKorjaa se kohdassa **Asetukset → Akun vyöhykkeet**. Mikä tahansa arvo käy, kunhan ne nousevat; leveät vyöhykkeet ovat ihan hyviä — 20 / 30 / 50 on täysin toimiva järjestys suurelle akulle."
     },
     "previous_install_leftovers": {
       "title": "Aiemman SEM-asennuksen jäänteitä löytyi",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready-koskettimen {contact} ohjaus epäonnistuu",
-      "description": "**{entity_id}** on asetettu SG-Readyn koskettimeksi {contact}, mutta se on teksti-/number-/select-entiteetti eikä sen **{missing}**-arvoa ole määritetty — joten SEM:llä ei ole mitään kirjoitettavaa, ja jokainen tämän lämpöpumpun SG-Ready-komento epäonnistuu. Avaa **Asetukset → Laitteet ja palvelut → SEM → Määritä → Lämpöpumppu** (tai koontinäytön Asetukset-välilehti) ja täytä sekä PÄÄLLÄ- että POIS-arvo tälle koskettimelle, tai osoita se kytkinentiteettiin sen sijaan."
+      "description": "**{entity_id}** on asetettu SG-Readyn koskettimeksi {contact}, mutta se on teksti-/number-/select-entiteetti eikä sen **{missing}**-arvoa ole määritetty — joten SEM:llä ei ole mitään kirjoitettavaa, ja jokainen tämän lämpöpumpun SG-Ready-komento epäonnistuu. Avaa **Asetukset → Lämpöpumppu** ja täytä sekä PÄÄLLÄ- että POIS-arvo tälle koskettimelle, tai osoita se kytkinentiteettiin sen sijaan."
     },
     "split_grid_rejected": {
       "title": "SEM ei löytänyt verkkomittareitasi",

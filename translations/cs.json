@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Nahlásit toto SEM",
-            "description": "**{name}** má nastavený procentní cíl nabíjení, ale vozidlo právě teď nehlásí stav nabití, takže SEM nemůže zastavit *přesně* na **{target}%**.\n\nNenabíjí ale naslepo: od posledního skutečného odečtu v této relaci počítá skutečně dodanou energii a zastaví, jakmile tento naměřený součet dosáhne vašeho cíle — překročení je jen to, co si auto od onoho odečtu vzalo. Pokud v této relaci nedorazil žádný skutečný odečet (nebo se SEM restartoval během nabíjení), není se od čeho odrazit a nabíjí se, dokud auto samo krátce před plným nesníží výkon.\n\nAby limit padl přesně, nastavte pro tuto nabíječku **skutečný senzor SOC vozidla** (Konfigurace → EV → Entita SOC vozidla). Procenta baterie na nástěnce jsou *odhadovaný* SOC od SEM, který se pro tvrdý limit záměrně ignoruje (může se rozejít). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečný odečet SOC.\n\nSEM se domnívá, že jde o jeho vlastní chybu. Pokud můžete, otevřete hlášení chyby tlačítkem v upozornění — formulář už bude vyplněný. Případně zkopírujte níže uvedený kontext do e-mailu nebo příspěvku na fóru. Tento dialog nic nikam neodesílá.\n\n```\n{context}\n```\n\nPotvrzením upozornění zavřete."
+            "description": "**{name}** má nastavený procentní cíl nabíjení, ale vozidlo právě teď nehlásí stav nabití, takže SEM nemůže zastavit *přesně* na **{target}%**.\n\nNenabíjí ale naslepo: od posledního skutečného odečtu v této relaci počítá skutečně dodanou energii a zastaví, jakmile tento naměřený součet dosáhne vašeho cíle — překročení je jen to, co si auto od onoho odečtu vzalo. Pokud v této relaci nedorazil žádný skutečný odečet (nebo se SEM restartoval během nabíjení), není se od čeho odrazit a nabíjí se, dokud auto samo krátce před plným nesníží výkon.\n\nAby limit padl přesně, nastavte pro tuto nabíječku **skutečný senzor SOC vozidla** (Konfigurace → Nabíječky EV). Procenta baterie na nástěnce jsou *odhadovaný* SOC od SEM, který se pro tvrdý limit záměrně ignoruje (může se rozejít). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečný odečet SOC.\n\nSEM se domnívá, že jde o jeho vlastní chybu. Pokud můžete, otevřete hlášení chyby tlačítkem v upozornění — formulář už bude vyplněný. Případně zkopírujte níže uvedený kontext do e-mailu nebo příspěvku na fóru. Tento dialog nic nikam neodesílá.\n\n```\n{context}\n```\n\nPotvrzením upozornění zavřete."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Ovládací entita nabíječky nefunguje: {name}",
-      "description": "SEM používá **`{entity_id}`** k {capability} na **{name}**, ale tato entita je `{reason}` — každý příkaz zmizí. Zkontrolujte entitu ve **Vývojářských nástrojích → Stavy** a opravte ji u zdroje, nebo SEM přesměrujte v **Nastavení → Zařízení a služby → SEM → Konfigurovat → Nabíječka → Upravit**."
+      "description": "SEM používá **`{entity_id}`** k {capability} na **{name}**, ale tato entita je `{reason}` — každý příkaz zmizí. Zkontrolujte entitu ve **Vývojářských nástrojích → Stavy** a opravte ji u zdroje, nebo SEM přesměrujte v **Konfigurace → Nabíječky EV**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Nastavenou hodnotu výkonu baterie nelze zapsat: {entity_id}",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Platforma baterie je uzamčena na Generic na instalaci {brand}",
-      "description": "Platforma baterie SEM je nastavena na **Generic / jiná**, ale je načtena integrace {brand}. Starší verze průvodce nastavením nabízely jen Generic a Deye a výchozí byla Generic, takže jediný průchod touto stránkou degradoval instalaci {brand} na obecný adaptér — bez vynuceného nabíjení, bez idempotentních zápisů registru. Otevřete **Nastavení → Integrace → SEM → Konfigurovat → Plánovač baterie** a nastavte **Platforma nabíjení baterie** na **Automatická detekce**. Pokud je Generic záměrná volba (baterie s vlastními řídicími entitami), nastavte tuto entitu a upozornění zmizí."
+      "description": "Platforma baterie SEM je nastavena na **Generic / jiná**, ale je načtena integrace {brand}. Starší verze průvodce nastavením nabízely jen Generic a Deye a výchozí byla Generic, takže jediný průchod touto stránkou degradoval instalaci {brand} na obecný adaptér — bez vynuceného nabíjení, bez idempotentních zápisů registru. Otevřete **Konfigurace → Plánovač baterie** a nastavte **Platforma nabíjení baterie** na **Automatická detekce**. Pokud je Generic záměrná volba (baterie s vlastními řídicími entitami), nastavte tuto entitu a upozornění zmizí."
     },
     "split_grid_guessed": {
       "title": "SEM kontroluje dva odhadnuté elektroměry sítě",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Zóny SOC baterie jsou v nesprávném pořadí",
-      "description": "Vaše zóny baterie čtou **Priorita {priority}% · Vyrovnávací {buffer}% · Automatický start {auto_start}%**, ale SEM očekává, že porostou v tomto pořadí: Priorita je rezerva, kterou nikdy neutratíte, Vyrovnávací je bod, kde podpora baterie končí, a Automatický start je bod, kdy je pack dost plný, aby dával energii volně.\n\nSEM používá jako hranice **{used}** — stejná tři čísla, seřazená — takže žádná zóna se nepřeskočí a nic se nechová nepředvídatelně. Upozorňuje vás proto, že rozložení, které jste zadali, téměř jistě není to, co jste chtěli.\n\nOpravte to v **Nastavení → Zařízení a služby → SEM → Konfigurovat → Baterie** nebo na kartě Konfigurace panelu. Libovolné hodnoty jsou v pořádku, pokud rostou; široké zóny nevadí — 20 / 30 / 50 je naprosto dobré rozložení u velkého packu."
+      "description": "Vaše zóny baterie čtou **Priorita {priority}% · Vyrovnávací {buffer}% · Automatický start {auto_start}%**, ale SEM očekává, že porostou v tomto pořadí: Priorita je rezerva, kterou nikdy neutratíte, Vyrovnávací je bod, kde podpora baterie končí, a Automatický start je bod, kdy je pack dost plný, aby dával energii volně.\n\nSEM používá jako hranice **{used}** — stejná tři čísla, seřazená — takže žádná zóna se nepřeskočí a nic se nechová nepředvídatelně. Upozorňuje vás proto, že rozložení, které jste zadali, téměř jistě není to, co jste chtěli.\n\nOpravte to v **Konfigurace → Zóny baterie**. Libovolné hodnoty jsou v pořádku, pokud rostou; široké zóny nevadí — 20 / 30 / 50 je naprosto dobré rozložení u velkého packu."
     },
     "previous_install_leftovers": {
       "title": "Nalezeny soubory z předchozí instalace SEM",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "Kontakt SG-Ready {contact} nelze ovládat",
-      "description": "**{entity_id}** je nastaven jako SG-Ready {contact}, ale je to entita typu text/number/select a jeho hodnota **{missing}** není nastavena — SEM tedy nemá co zapsat a každý příkaz SG-Ready pro toto tepelné čerpadlo selže. Otevřete **Nastavení → Integrace → SEM → Konfigurovat → Tepelné čerpadlo** (nebo kartu Konfigurace panelu) a vyplňte u tohoto kontaktu obě hodnoty, ZAP i VYP, nebo ho nasměrujte na entitu typu switch."
+      "description": "**{entity_id}** je nastaven jako SG-Ready {contact}, ale je to entita typu text/number/select a jeho hodnota **{missing}** není nastavena — SEM tedy nemá co zapsat a každý příkaz SG-Ready pro toto tepelné čerpadlo selže. Otevřete **Konfigurace → Tepelné čerpadlo** a vyplňte u tohoto kontaktu obě hodnoty, ZAP i VYP, nebo ho nasměrujte na entitu typu switch."
     },
     "split_grid_rejected": {
       "title": "SEM nemohl najít vaše elektroměry sítě",

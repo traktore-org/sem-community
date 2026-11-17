@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Jelentés a SEM-nek",
-            "description": "A(z) **{name}** százalékos töltési célra van állítva, de a jármű jelenleg nem jelenti a töltöttségi szintjét, ezért a SEM nem tud *pontosan* **{target}%**-nál megállni.\n\nNem vakon tölt azonban: a munkamenet utolsó valós leolvasásától kezdve számolja a ténylegesen leadott energiát, és leáll, amint ez a mért összeg eléri a célt — a túllépés csak annyi, amennyit az autó az óta a leolvasás óta felvett. Ha ebben a munkamenetben egyáltalán nem érkezett valós leolvasás (vagy a SEM töltés közben újraindult), nincs mihez viszonyítani, és a töltés addig tart, amíg maga az autó nem csökkenti a teljesítményt, majdnem tele állapotban.\n\nA pontos korláthoz állítson be **valós jármű-SOC-érzékelőt** ehhez a töltőhöz (Konfiguráció → EV → Jármű SOC entitás). Az irányítópulton látható akkumulátorszázalék a SEM *becsült* SOC-értéke, amelyet a kemény korlátnál szándékosan figyelmen kívül hagy (elcsúszhat). Ez a javítás automatikusan eltűnik, amint ismét elérhető valós SOC-leolvasás.\n\nA SEM úgy véli, hogy ez a hiba az övé. Ha teheti, nyisson hibajelentést az értesítés gombjával — az űrlap már ki van töltve. Ha inkább így szeretné, másolja az alábbi kontextust egy e-mailbe vagy fórumbejegyzésbe. Ez a párbeszédablak semmit nem küld el sehova.\n\n```\n{context}\n```\n\nAz értesítés a megerősítéssel bezárul."
+            "description": "A(z) **{name}** százalékos töltési célra van állítva, de a jármű jelenleg nem jelenti a töltöttségi szintjét, ezért a SEM nem tud *pontosan* **{target}%**-nál megállni.\n\nNem vakon tölt azonban: a munkamenet utolsó valós leolvasásától kezdve számolja a ténylegesen leadott energiát, és leáll, amint ez a mért összeg eléri a célt — a túllépés csak annyi, amennyit az autó az óta a leolvasás óta felvett. Ha ebben a munkamenetben egyáltalán nem érkezett valós leolvasás (vagy a SEM töltés közben újraindult), nincs mihez viszonyítani, és a töltés addig tart, amíg maga az autó nem csökkenti a teljesítményt, majdnem tele állapotban.\n\nA pontos korláthoz állítson be **valós jármű-SOC-érzékelőt** ehhez a töltőhöz (Konfiguráció → EV töltők). Az irányítópulton látható akkumulátorszázalék a SEM *becsült* SOC-értéke, amelyet a kemény korlátnál szándékosan figyelmen kívül hagy (elcsúszhat). Ez a javítás automatikusan eltűnik, amint ismét elérhető valós SOC-leolvasás.\n\nA SEM úgy véli, hogy ez a hiba az övé. Ha teheti, nyisson hibajelentést az értesítés gombjával — az űrlap már ki van töltve. Ha inkább így szeretné, másolja az alábbi kontextust egy e-mailbe vagy fórumbejegyzésbe. Ez a párbeszédablak semmit nem küld el sehova.\n\n```\n{context}\n```\n\nAz értesítés a megerősítéssel bezárul."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "A töltő vezérlő entitása nem működik: {name}",
-      "description": "A SEM a **`{entity_id}`** entitást használja ehhez: {capability} a **{name}** eszközön, de az entitás `{reason}` — minden parancs elvész. Ellenőrizd az entitást a **Fejlesztői eszközök → Állapotok** alatt, és javítsd a forrásnál, vagy állítsd át a SEM-et: **Beállítások → Eszközök és szolgáltatások → SEM → Konfigurálás → Töltő → Szerkesztés**."
+      "description": "A SEM a **`{entity_id}`** entitást használja ehhez: {capability} a **{name}** eszközön, de az entitás `{reason}` — minden parancs elvész. Ellenőrizd az entitást a **Fejlesztői eszközök → Állapotok** alatt, és javítsd a forrásnál, vagy állítsd át a SEM-et: **Konfiguráció → EV töltők**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Az akkumulátor teljesítmény-alapjele nem írható: {entity_id}",
@@ -2008,7 +2008,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "A Deye exportvezérlés nem használható: {entity_id}",
-      "description": "A SEM nem tudja a(z) {entity_id} entitást exportvezérlésre használni: {reason}. Ellenőrizze a select entitást és a három opciócímkét a Configuration → Battery intelligence alatt."
+      "description": "A SEM nem tudja a(z) {entity_id} entitást exportvezérlésre használni: {reason}. Ellenőrizze a select entitást és a három opciócímkét a Konfiguráció → Akkumulátor-intelligencia alatt."
     },
     "battery_operating_mode_unexpected": {
       "title": "Az akkumulátor „{mode}” módban van — a SEM úgy tervez, mintha „{expected}” lenne",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Az akkumulátor-platform Generic-re van rögzítve egy {brand} telepítésen",
-      "description": "A SEM akkumulátor-platformja **Általános / egyéb** értékre van állítva, de a(z) {brand} integráció be van töltve. Az opciós varázsló korábbi verziói csak az Általános és a Deye lehetőséget kínálták, alapértelmezetten az Általánost, ezért az az oldal egyszeri végiglépkedése egy {brand} telepítést leminősített az általános adapterre — nincs kényszerített töltés, nincs idempotens regiszterírás. Nyissa meg a **Beállítások → Eszközök és szolgáltatások → SEM → Konfigurálás → Akkumulátor töltésütemező** menüt, és állítsa az **Akkumulátor töltési platform** értékét **Automatikus (ajánlott)** értékre. Ha az Általános szándékos választás (saját vezérlőentitásokkal rendelkező akkumulátor), állítsa be azt az entitást, és ez az üzenet eltűnik."
+      "description": "A SEM akkumulátor-platformja **Általános / egyéb** értékre van állítva, de a(z) {brand} integráció be van töltve. Az opciós varázsló korábbi verziói csak az Általános és a Deye lehetőséget kínálták, alapértelmezetten az Általánost, ezért az az oldal egyszeri végiglépkedése egy {brand} telepítést leminősített az általános adapterre — nincs kényszerített töltés, nincs idempotens regiszterírás. Nyissa meg a **Konfiguráció → Akkumulátor-ütemező** menüt, és állítsa az **Akkumulátor töltési platform** értékét **Automatikus (ajánlott)** értékre. Ha az Általános szándékos választás (saját vezérlőentitásokkal rendelkező akkumulátor), állítsa be azt az entitást, és ez az üzenet eltűnik."
     },
     "split_grid_guessed": {
       "title": "A SEM két kitalált hálózati mérőt ellenőriz",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Az akkumulátor SOC-zónák sorrendje hibás",
-      "description": "Az akkumulátor-zónák így olvashatók: **Prioritás {priority}% · Puffer {buffer}% · Automatikus indítás {auto_start}%**, de a SEM azt várja, hogy ebben a sorrendben emelkedjenek: a Prioritás az a tartalék, amit sosem költ el, a Puffer az, ahol az akkumulátoros rásegítés leáll, az Automatikus indítás pedig az, ahol az akkumulátor elég teli ahhoz, hogy szabadon adjon.\n\nA SEM a **{used}** értékeket használja határként — ugyanaz a három szám, rendezve —, így egyetlen zóna sem marad ki, és semmi nem viselkedik kiszámíthatatlanul. Azért jelzi ezt, mert a begépelt elrendezés szinte biztosan nem az, amit szeretett volna.\n\nJavítsa a **Beállítások → Eszközök és szolgáltatások → SEM → Konfigurálás → Akkumulátor** menüben, vagy az irányítópult Konfiguráció fülén. Bármilyen érték megengedett, amíg emelkedő sorrendben van; a széles zónák is rendben vannak — a 20 / 30 / 50 egy nagy akkumulátoron tökéletesen jó elrendezés."
+      "description": "Az akkumulátor-zónák így olvashatók: **Prioritás {priority}% · Puffer {buffer}% · Automatikus indítás {auto_start}%**, de a SEM azt várja, hogy ebben a sorrendben emelkedjenek: a Prioritás az a tartalék, amit sosem költ el, a Puffer az, ahol az akkumulátoros rásegítés leáll, az Automatikus indítás pedig az, ahol az akkumulátor elég teli ahhoz, hogy szabadon adjon.\n\nA SEM a **{used}** értékeket használja határként — ugyanaz a három szám, rendezve —, így egyetlen zóna sem marad ki, és semmi nem viselkedik kiszámíthatatlanul. Azért jelzi ezt, mert a begépelt elrendezés szinte biztosan nem az, amit szeretett volna.\n\nJavítsa a **Konfiguráció → Akkumulátor-zónák** menüben. Bármilyen érték megengedett, amíg emelkedő sorrendben van; a széles zónák is rendben vannak — a 20 / 30 / 50 egy nagy akkumulátoron tökéletesen jó elrendezés."
     },
     "previous_install_leftovers": {
       "title": "Egy korábbi SEM-telepítésből származó fájlok találhatók",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "Az SG-Ready {contact} érintkező nem vezérelhető",
-      "description": "A(z) **{entity_id}** SG-Ready {contact} érintkezőként van beállítva, de ez egy text/number/select entitás, és a **{missing}** értéke nincs megadva — így a SEM-nek nincs mit írnia, és minden SG-Ready parancs meghiúsul ennél a hőszivattyúnál. Nyissa meg a **Beállítások → Eszközök és szolgáltatások → SEM → Konfigurálás → Hőszivattyú** menüt (vagy az irányítópult Konfiguráció fülét), és töltse ki mind a BE, mind a KI értéket ehhez az érintkezőhöz, vagy állítsa be helyette egy switch entitásra."
+      "description": "A(z) **{entity_id}** SG-Ready {contact} érintkezőként van beállítva, de ez egy text/number/select entitás, és a **{missing}** értéke nincs megadva — így a SEM-nek nincs mit írnia, és minden SG-Ready parancs meghiúsul ennél a hőszivattyúnál. Nyissa meg a **Konfiguráció → Hőszivattyú** menüt, és töltse ki mind a BE, mind a KI értéket ehhez az érintkezőhöz, vagy állítsa be helyette egy switch entitásra."
     },
     "split_grid_rejected": {
       "title": "A SEM nem találta meg a hálózati teljesítménymérőket",

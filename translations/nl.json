@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Aan SEM melden",
-            "description": "**{name}** heeft een laaddoel in procenten, maar uw voertuig meldt op dit moment geen laadtoestand — SEM kan daardoor niet *precies* bij **{target}%** stoppen.\n\nBlind laden doet SEM echter niet: vanaf de laatste echte meting van deze sessie telt het de werkelijk geleverde energie mee en stopt het zodra dat gemeten totaal uw doel bereikt — de overschrijding is alleen wat de auto sinds die meting heeft opgenomen. Is er in deze sessie helemaal geen echte meting binnengekomen (of is SEM tijdens het laden herstart), dan ontbreekt het ankerpunt en wordt er geladen tot de auto zelf bijna vol terugregelt.\n\nVoor een limiet die exact uitkomt, koppelt u een **echte voertuig-SOC-sensor** aan deze laadpaal (Configuratie → EV → Voertuig-SOC-entiteit). Het batterijpercentage op het dashboard is SEM's *geschatte* SOC, die het voor de harde limiet bewust negeert (die kan afwijken). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-meting beschikbaar is.\n\nSEM denkt dat deze fout bij SEM zelf ligt. Open als het kan een bugmelding met de knop in de melding — het formulier is dan al ingevuld. Kopieer anders de context hieronder in een e-mail of forumbericht. Dit venster verstuurt nergens iets naartoe.\n\n```\n{context}\n```\n\nBevestig om de melding te sluiten."
+            "description": "**{name}** heeft een laaddoel in procenten, maar uw voertuig meldt op dit moment geen laadtoestand — SEM kan daardoor niet *precies* bij **{target}%** stoppen.\n\nBlind laden doet SEM echter niet: vanaf de laatste echte meting van deze sessie telt het de werkelijk geleverde energie mee en stopt het zodra dat gemeten totaal uw doel bereikt — de overschrijding is alleen wat de auto sinds die meting heeft opgenomen. Is er in deze sessie helemaal geen echte meting binnengekomen (of is SEM tijdens het laden herstart), dan ontbreekt het ankerpunt en wordt er geladen tot de auto zelf bijna vol terugregelt.\n\nVoor een limiet die exact uitkomt, koppelt u een **echte voertuig-SOC-sensor** aan deze laadpaal (Configuratie → EV-laadpalen). Het batterijpercentage op het dashboard is SEM's *geschatte* SOC, die het voor de harde limiet bewust negeert (die kan afwijken). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-meting beschikbaar is.\n\nSEM denkt dat deze fout bij SEM zelf ligt. Open als het kan een bugmelding met de knop in de melding — het formulier is dan al ingevuld. Kopieer anders de context hieronder in een e-mail of forumbericht. Dit venster verstuurt nergens iets naartoe.\n\n```\n{context}\n```\n\nBevestig om de melding te sluiten."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Besturingsentiteit van de laadpaal werkt niet: {name}",
-      "description": "SEM gebruikt **`{entity_id}`** om {capability} op **{name}**, maar die entiteit is `{reason}` — elke opdracht komt nergens aan. Controleer de entiteit in **Ontwikkelhulpmiddelen → Statussen** en herstel deze bij de bron, of wijs SEM opnieuw aan via **Instellingen → Apparaten & diensten → SEM → Configureren → Laadpaal → Bewerken**."
+      "description": "SEM gebruikt **`{entity_id}`** om {capability} op **{name}**, maar die entiteit is `{reason}` — elke opdracht komt nergens aan. Controleer de entiteit in **Ontwikkelhulpmiddelen → Statussen** en herstel deze bij de bron, of wijs SEM opnieuw aan via **Configuratie → EV-laadpalen**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Batterij-vermogensinstelpunt kan niet worden geschreven: {entity_id}",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Batterijplatform vastgezet op Algemeen bij een {brand}-installatie",
-      "description": "SEM's batterijplatform staat op **Algemeen / anders**, maar de {brand}-integratie is geladen. Eerdere versies van de optiewizard boden alleen Algemeen en Deye aan en kozen standaard Algemeen, waardoor het eenmalig doorlopen van die pagina een {brand}-installatie degradeerde naar de algemene adapter — geen geforceerd laden, geen idempotente registerschrijfacties. Open **Instellingen → Apparaten & Diensten → SEM → Configureren → Batterij laadschema** en zet **Batterij-laadplatform** op **Automatisch (aanbevolen)**. Als Algemeen een bewuste keuze is (een batterij met eigen besturingsentiteiten), stel die entiteit dan in en verdwijnt deze melding."
+      "description": "SEM's batterijplatform staat op **Algemeen / anders**, maar de {brand}-integratie is geladen. Eerdere versies van de optiewizard boden alleen Algemeen en Deye aan en kozen standaard Algemeen, waardoor het eenmalig doorlopen van die pagina een {brand}-installatie degradeerde naar de algemene adapter — geen geforceerd laden, geen idempotente registerschrijfacties. Open **Configuratie → Batterijplanner** en zet **Batterij-laadplatform** op **Automatisch (aanbevolen)**. Als Algemeen een bewuste keuze is (een batterij met eigen besturingsentiteiten), stel die entiteit dan in en verdwijnt deze melding."
     },
     "split_grid_guessed": {
       "title": "SEM controleert twee geraden netmeters",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Batterij-SOC-zones staan in de verkeerde volgorde",
-      "description": "Je batterijzones tonen **Prioriteit {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, maar SEM verwacht dat ze in die volgorde oplopen: Prioriteit is de reserve die je nooit verbruikt, Buffer is waar batterijondersteuning stopt, en Auto-start is waar het pakket vol genoeg is om vrij te geven.\n\nSEM gebruikt **{used}** als grenzen — dezelfde drie getallen, gesorteerd — zodat geen zone wordt overgeslagen en niets onvoorspelbaar gedraagt. Dit wordt gemeld omdat de ingevoerde indeling vrijwel zeker niet de bedoelde is.\n\nLos het op via **Instellingen → Apparaten & Diensten → SEM → Configureren → Batterij** of op het Configuratie-tabblad van het dashboard. Elke waarde is toegestaan zolang ze oplopen; brede zones zijn prima — 20 / 30 / 50 is bij een groot pakket een prima indeling."
+      "description": "Je batterijzones tonen **Prioriteit {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, maar SEM verwacht dat ze in die volgorde oplopen: Prioriteit is de reserve die je nooit verbruikt, Buffer is waar batterijondersteuning stopt, en Auto-start is waar het pakket vol genoeg is om vrij te geven.\n\nSEM gebruikt **{used}** als grenzen — dezelfde drie getallen, gesorteerd — zodat geen zone wordt overgeslagen en niets onvoorspelbaar gedraagt. Dit wordt gemeld omdat de ingevoerde indeling vrijwel zeker niet de bedoelde is.\n\nLos het op via **Configuratie → Batterijzones**. Elke waarde is toegestaan zolang ze oplopen; brede zones zijn prima — 20 / 30 / 50 is bij een groot pakket een prima indeling."
     },
     "previous_install_leftovers": {
       "title": "Bestanden van een eerdere SEM-installatie gevonden",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready-contact {contact} kan niet worden aangestuurd",
-      "description": "**{entity_id}** is ingesteld als SG-Ready {contact}, maar het is een tekst-/getal-/select-entiteit en de **{missing}**-waarde is niet geconfigureerd — SEM heeft dus niets om te schrijven, en elk SG-Ready-commando voor deze warmtepomp mislukt. Open **Instellingen → Apparaten & Diensten → SEM → Configureren → Warmtepomp** (of het Configuratie-tabblad van het dashboard) en vul zowel de AAN- als de UIT-waarde voor dit contact in, of wijs in plaats daarvan een schakelaar-entiteit aan."
+      "description": "**{entity_id}** is ingesteld als SG-Ready {contact}, maar het is een tekst-/getal-/select-entiteit en de **{missing}**-waarde is niet geconfigureerd — SEM heeft dus niets om te schrijven, en elk SG-Ready-commando voor deze warmtepomp mislukt. Open **Configuratie → Warmtepomp** en vul zowel de AAN- als de UIT-waarde voor dit contact in, of wijs in plaats daarvan een schakelaar-entiteit aan."
     },
     "split_grid_rejected": {
       "title": "SEM kon je netvermogensmeters niet vinden",
