@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Die Netzladung-Auswahl steht noch auf Laden: {entity}",
       "description": "Die Auswahl **{entity}** steht noch auf **{option}**, und SEM kann sie nicht zurücksetzen: die frühere Option fehlt in der Liste. Stelle sie von Hand zurück. Bis dahin lädt die Batterie womöglich weiter aus dem Netz. Verschwindet, sobald die Auswahl geändert wird."
+    },
+    "classic_dashboard_kept": {
+      "title": "Das alte SEM-Dashboard ist noch da",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Das alte SEM-Dashboard ist noch da",
+            "description": "Das alte SEM-Dashboard unter `/{path}` ist abgelöst, seine Karten funktionieren nicht mehr. Du hast es geändert, daher hat SEM es nicht angefasst. Das neue SEM-Dashboard ersetzt es. Bestätige, um das alte zu löschen."
+          }
+        }
+      }
     }
   },
   "selector": {

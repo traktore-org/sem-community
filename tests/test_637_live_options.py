@@ -39,11 +39,6 @@ STRUCTURAL_RELOAD = {"tariff_mode", "tariff_classification_mode",
                      "feed_in_fee_model"}
 
 
-def _card_option_keys():
-    src = (REPO / "dashboard/card/src/cards/sem-config-card.js").read_text()
-    return set(re.findall(r"_renderOption(?:Slider|Switch|Select)\('([a-z_0-9]+)'", src))
-
-
 def _entity_backed_keys():
     """Keys reachable via a number entity — directly or through the #542 map."""
     src = (REPO / "number.py").read_text()
@@ -54,28 +49,24 @@ def _entity_backed_keys():
 
 
 class TestClassificationGuard637:
-    def test_every_card_key_is_classified(self):
-        keys = _card_option_keys()
-        assert keys, "card key extraction broke — fix the regex, not the guard"
-        entity_backed = _entity_backed_keys()
-        unclassified = []
-        for k in keys:
-            if (k in LM_LIVE or k in LIVE_CONFIG or k in STRUCTURAL_RELOAD
-                    or k in entity_backed):
-                continue
-            # direct-named entity keys can't be verified without hass;
-            # accept keys that ship a number/select/switch entity by key name
-            # in the entity platforms' sources.
-            plat = "".join((REPO / f).read_text() for f in
-                           ("number.py", "select.py", "switch.py") if (REPO / f).exists())
-            if f'"{k}"' in plat or f"'{k}'" in plat:
-                continue
-            unclassified.append(k)
-        assert not unclassified, (
-            f"card option(s) {unclassified} are not classified: add each to "
-            "LM_LIVE / LIVE_CONFIG (+ set_option routing) / STRUCTURAL_RELOAD "
-            "(deliberate), or back it with an entity — do not let it silently "
-            "reload the coordinator per tweak (#637)")
+    def test_every_reloading_key_the_screen_writes_is_staged(self):
+        """(#1321) The System screen stages a key behind Apply when writing it
+        reloads the entry (its STRUCTURAL_KEYS). A key the backend reloads on
+        that the screen did not stage would reload per tweak (#637). The
+        per-battery list options are the exception: they carry their own
+        reload (``listEdits``)."""
+        src = (REPO / "dashboard/card/src/util/next-settings.js").read_text()
+        code = re.sub(r"//[^\n]*", "", src)
+        staged = set(re.findall(r"'([^']+)'", re.search(
+            r"export const STRUCTURAL_KEYS = new Set\(\[(.*?)\]\)", code, re.S).group(1)))
+        init = (REPO / "__init__.py").read_text()
+        py = set(re.findall(r'"([^"]+)"', re.search(
+            r"_SET_OPTION_STRUCTURAL_KEYS:[^=]*=\s*frozenset\(\{(.*?)\}\)", init, re.S).group(1)))
+        written = set(re.findall(r"""['"]([a-z][a-z0-9_]+)['"]""", src))
+        loose = sorted(k for k in (py & written) - staged if not k.endswith("_entities"))
+        assert not loose, (
+            f"the System screen writes {loose}, which reload the entry, without staging "
+            "them: add each to STRUCTURAL_KEYS in next-settings.js (#637)")
 
     def test_live_config_keys_are_runtime_read(self):
         """Every LIVE_CONFIG key must have a per-cycle consumer reading

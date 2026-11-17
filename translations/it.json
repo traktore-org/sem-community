@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "La selezione di carica da rete è ancora attiva: {entity}",
       "description": "La selezione **{entity}** è ancora su **{option}**, e SEM non può rimetterla: l'opzione precedente non è più nell'elenco. Rimettila a mano. Fino ad allora la batteria può continuare a caricarsi dalla rete. Scompare quando la selezione cambia."
+    },
+    "classic_dashboard_kept": {
+      "title": "La vecchia dashboard SEM è ancora presente",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "La vecchia dashboard SEM è ancora presente",
+            "description": "La vecchia dashboard SEM in `/{path}` è stata ritirata e le sue schede non funzionano più. L'hai modificata, quindi SEM l'ha lasciata com'era. La nuova dashboard SEM la sostituisce. Conferma per eliminare la vecchia."
+          }
+        }
+      }
     }
   },
   "selector": {

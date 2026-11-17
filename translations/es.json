@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "La selección de carga de red sigue activa: {entity}",
       "description": "La selección **{entity}** sigue en **{option}**, y SEM no puede devolverla: la opción anterior ya no está en la lista. Vuélvela a poner a mano. Hasta entonces la batería puede seguir cargando desde la red. Desaparece cuando se cambia la selección."
+    },
+    "classic_dashboard_kept": {
+      "title": "El panel antiguo de SEM sigue ahí",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "El panel antiguo de SEM sigue ahí",
+            "description": "El panel antiguo de SEM en `/{path}` se ha retirado y sus tarjetas ya no funcionan. Lo cambiaste, así que SEM lo dejó como estaba. El nuevo panel de SEM lo reemplaza. Confirma para borrar el antiguo."
+          }
+        }
+      }
     }
   },
   "selector": {

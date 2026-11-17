@@ -1,7 +1,5 @@
-"""#1321 — SEM Next, the second dashboard.
-
-Five screens by question, one bundled card each, created on request at
-/sem-next beside the classic dashboard, which is never touched.
+"""#1321 — the SEM dashboard: five screens by question, one bundled card each,
+at /sem-next. It is the only dashboard; "classic" is a deprecated alias.
 """
 import json
 import os
@@ -61,9 +59,9 @@ class TestNextTemplate:
                 assert card["type"].startswith("custom:sem-next-")
                 assert card["type"][len("custom:"):] in tags, card["type"]
 
-    def test_classic_template_offers_the_link(self):
-        with open(os.path.join(ROOT, "dashboard", "sem_dashboard_template.yaml"), encoding="utf-8") as f:
-            assert "custom:sem-next-link-card" in f.read()
+    def test_the_classic_templates_are_gone(self):
+        for name in ("sem_dashboard_template.yaml", "basic_template.yaml"):
+            assert not os.path.exists(os.path.join(ROOT, "dashboard", name)), name
 
 
 @pytest.mark.unit
@@ -79,38 +77,30 @@ class TestGeneratorNext:
         assert config["icon"] == NEXT_DASHBOARD_ICON
 
     @pytest.mark.asyncio
-    async def test_classic_is_untouched_by_next(self, mock_hass, tmp_path):
+    async def test_it_is_saved_and_registered_at_its_path(self, mock_hass, tmp_path):
         gen = DashboardGenerator(mock_hass)
-        storage = tmp_path / ".storage"
-        storage.mkdir()
-        classic = storage / "lovelace.sem-dashboard"
-        classic.write_text('{"data": {"config": {"views": ["classic"]}}}', encoding="utf-8")
-        (storage / "lovelace_dashboards").write_text(json.dumps({
-            "version": 1, "minor_version": 1, "key": "lovelace_dashboards",
-            "data": {"items": [{"id": "sem-dashboard", "url_path": "sem-dashboard",
-                                 "title": "Solar Energy Management", "icon": "mdi:solar-power",
-                                 "mode": "storage", "show_in_sidebar": True, "require_admin": False}]},
-        }), encoding="utf-8")
-
         assert await gen.create_dashboard(
-            dashboard_title="Solar Energy Management", dashboard_path="sem-next", template="next") == "sem-next"
-
-        assert json.loads(classic.read_text(encoding="utf-8"))["data"]["config"]["views"] == ["classic"]
+            dashboard_title="Solar Energy Management", dashboard_path="sem-next") == "sem-next"
+        storage = tmp_path / ".storage"
         saved = json.loads((storage / "lovelace.sem-next").read_text(encoding="utf-8"))
         assert [v["path"] for v in saved["data"]["config"]["views"]] == EXPECTED_PATHS
         items = json.loads((storage / "lovelace_dashboards").read_text(encoding="utf-8"))["data"]["items"]
-        by_path = {i["url_path"]: i for i in items}
-        assert by_path["sem-dashboard"]["title"] == "Solar Energy Management"
-        assert by_path["sem-dashboard"]["icon"] == "mdi:solar-power"
-        assert by_path["sem-next"]["title"] == "Solar Energy Management"
-        assert by_path["sem-next"]["icon"] == NEXT_DASHBOARD_ICON
+        assert [i["url_path"] for i in items] == ["sem-next"]
+        assert items[0]["icon"] == NEXT_DASHBOARD_ICON
 
     @pytest.mark.asyncio
-    async def test_classic_default_is_unchanged(self, mock_hass):
-        gen = DashboardGenerator(mock_hass)
-        config = await gen.generate_dashboard()
-        assert len(config["views"]) >= 8
-        assert config["path"] == "sem-dashboard"
+    async def test_the_default_is_the_new_dashboard(self, mock_hass):
+        config = await DashboardGenerator(mock_hass).generate_dashboard()
+        assert [v["path"] for v in config["views"]] == EXPECTED_PATHS
+
+    @pytest.mark.asyncio
+    async def test_classic_is_an_alias_that_warns_once(self, mock_hass, caplog):
+        import logging
+        with caplog.at_level(logging.WARNING):
+            config = await DashboardGenerator(mock_hass).generate_dashboard(template="classic")
+        assert [v["path"] for v in config["views"]] == EXPECTED_PATHS
+        warns = [r for r in caplog.records if "classic" in r.getMessage() and r.levelno == logging.WARNING]
+        assert len(warns) == 1
 
 
 @pytest.mark.unit
@@ -124,35 +114,23 @@ def test_service_accepts_the_template_field():
         src = f.read()
     assert 'vol.Optional("template", default="next"): vol.In(["classic", "next"])' in src
     assert 'template = call.data.get("template", "next")' in src
+    assert "retired" in field["description"]
 
 
 @pytest.mark.unit
-def test_the_rebuild_switch_names_each_live_dashboard():
-    """The service defaults to SEM Next, so a live classic dashboard must be
-    rebuilt by name, never by the default."""
-    import asyncio
+def test_links_follow_the_dashboard_url():
     from types import SimpleNamespace
-    from unittest.mock import AsyncMock, MagicMock
-    from custom_components.solar_energy_management.switch import regenerate_dashboard
-
-    calls = []
-    hass = MagicMock()
-    hass.data = {"lovelace": SimpleNamespace(dashboards={"sem-dashboard": object(), "sem-next": object()})}
-    hass.services.async_call = AsyncMock(side_effect=lambda d, s, data, blocking=True: calls.append(data))
-    tasks = []
-    hass.async_create_task = lambda coro, name=None: tasks.append(coro)
-    regenerate_dashboard(hass)
-    asyncio.run(tasks[0])
-    assert calls == [{"template": "classic"}, {"template": "next"}]
+    from custom_components.solar_energy_management.features.dashboard_generator import sem_dashboard_path
+    for paths, want in (({"sem-next": 1}, "sem-next"), ({"sem-dashboard": 1}, "sem-dashboard"),
+                        ({"sem-next": 1, "sem-dashboard": 1}, "sem-next"), ({}, "sem-next")):
+        hass = MagicMock()
+        hass.data = {"lovelace": SimpleNamespace(dashboards=paths)}
+        assert sem_dashboard_path(hass) == want
+    from custom_components.solar_energy_management import build_welcome_message
+    assert "(/my-energy/now)" in build_welcome_message({}, None, "my-energy")
 
 
 @pytest.mark.unit
-def test_the_default_takes_the_main_name_and_the_old_one_is_classic():
-    from custom_components.solar_energy_management.features.dashboard_generator import (
-        CLASSIC_DASHBOARD_TITLE, NEXT_DASHBOARD_TITLE,
-    )
-    assert NEXT_DASHBOARD_TITLE == "SEM-dashboard"
-    assert CLASSIC_DASHBOARD_TITLE == "SEM-classic"
-    with open(os.path.join(ROOT, "__init__.py"), encoding="utf-8") as f:
-        src = f.read()
-    assert "dashboard_title = CLASSIC_DASHBOARD_TITLE" in src
+def test_the_notifications_do_not_hard_code_the_old_path():
+    with open(os.path.join(ROOT, "coordinator", "notifications.py"), encoding="utf-8") as f:
+        assert "/sem-dashboard" not in f.read()

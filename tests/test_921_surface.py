@@ -62,30 +62,24 @@ class TestSensor:
 
 
 class TestTheDashboardCarriesThem:
-    """Every setting in the GUI (20.08): the Config tab's card renders
-    the toggles and numbers; the grid card shows the guard's state. Checked
-    against the cards' PARSED entity registrations, not their source text (#925)."""
+    """Every setting in the GUI (20.08): the System screen renders the
+    toggles and numbers (#1321). Checked against the parsed entity ids, not
+    free text (#925)."""
     ROOT = Path(__file__).resolve().parent.parent
 
     @staticmethod
     def _registered(card: str) -> set:
         import re
-        text = (Path(__file__).resolve().parent.parent / "dashboard" / "card" / "src" / "cards"
-                / card).read_text(encoding="utf-8")
+        from ._dashboard_src import dashboard_src
+        text = dashboard_src()
         return set(re.findall(r"'((?:switch|number|sensor|select)\.sem_[a-z0-9_]+)'", text))
 
-    def test_every_new_entity_is_on_the_config_card(self):
-        registered = self._registered("sem-config-card.js")
+    def test_every_new_entity_is_on_the_dashboard(self):
+        registered = self._registered("dashboard")
         for k in SWITCHES:
             assert f"switch.sem_{k}" in registered, k
         for k in NUMBERS:
             assert f"number.sem_{k}" in registered, k
-
-    def test_the_grid_card_shows_the_guard_state(self):
-        import re
-        text = (self.ROOT / "dashboard" / "card" / "src" / "cards" / "sem-grid-card.js").read_text(encoding="utf-8")
-        keys = set(re.findall(r"'([a-z0-9_]+)'", text))
-        assert "export_guard_state" in keys
 
 
 class TestTheVerdictsReachTheCard:

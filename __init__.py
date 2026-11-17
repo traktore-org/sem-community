@@ -3577,6 +3577,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             # Non-critical — never fail the setup over a notification.
             _LOGGER.debug("Welcome notification skipped: %s", err)
 
+    # (#1321) once per install: the classic dashboard is retired. Waits for
+    # Home Assistant to be started (the lovelace registry exists) and for this
+    # setup to finish (the flag write must not reload an entry still starting).
+    async def _retire_classic_dashboard(_now=None) -> None:
+        from .dashboard_migration import async_retire_classic
+        try:
+            await async_retire_classic(hass, entry)
+        except Exception as err:  # noqa: BLE001 — never fail the setup over a dashboard
+            _LOGGER.warning("Classic dashboard retirement failed: %s", err)
+
+    if not entry.options.get("_classic_retired"):
+        from homeassistant.helpers.event import async_call_later as _later
+        from homeassistant.helpers.start import async_at_started
+
+        @callback
+        def _schedule_retirement(_hass=None) -> None:
+            entry.async_on_unload(_later(hass, 10, _retire_classic_dashboard))
+
+        entry.async_on_unload(async_at_started(hass, _schedule_retirement))
+
     # Schedule post-startup tasks (non-blocking)
     _schedule_post_startup_tasks(hass, entry, full_config, coordinator)
 

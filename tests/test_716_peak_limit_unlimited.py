@@ -395,12 +395,8 @@ class TestConfigSurface:
         assert not missing, missing
 
     def test_config_card_renders_the_toggle(self):
-        src = (
-            _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js"
-        ).read_text()
-        # (#1354) the answer's writes live in one shared module
-        src += (_ROOT / "dashboard" / "card" / "src" / "util"
-                / "peak-questions.js").read_text()
+        from ._dashboard_src import dashboard_src
+        src = dashboard_src()
         assert "peak_limit_unlimited" in src
         assert "peak_q_choice_none" in src       # the "No limit" answer
 

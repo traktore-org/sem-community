@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Volba nabíjení ze sítě je stále zapnutá: {entity}",
       "description": "Volba **{entity}** je stále na **{option}** a SEM ji nemůže vrátit: dřívější možnost už v seznamu není. Vraťte ji ručně. Do té doby se baterie může dál nabíjet ze sítě. Zmizí, jakmile se volba změní."
+    },
+    "classic_dashboard_kept": {
+      "title": "Starý panel SEM stále existuje",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Starý panel SEM stále existuje",
+            "description": "Starý panel SEM na `/{path}` byl vyřazen a jeho karty už nefungují. Upravili jste ho, proto ho SEM nechal beze změny. Nový panel SEM ho nahrazuje. Potvrzením starý panel smažete."
+          }
+        }
+      }
     }
   },
   "selector": {

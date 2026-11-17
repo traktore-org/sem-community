@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Verkkolatauksen valinta on yhä päällä: {entity}",
       "description": "Valinta **{entity}** on yhä arvossa **{option}**, eikä SEM voi palauttaa sitä: aiempaa vaihtoehtoa ei enää ole luettelossa. Palauta se käsin. Siihen asti akku voi jatkaa latausta verkosta. Poistuu, kun valintaa muutetaan."
+    },
+    "classic_dashboard_kept": {
+      "title": "Vanha SEM-näkymä on yhä olemassa",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Vanha SEM-näkymä on yhä olemassa",
+            "description": "Vanha SEM-näkymä osoitteessa `/{path}` on poistettu käytöstä, eivätkä sen kortit enää toimi. Muokkasit sitä, joten SEM jätti sen ennalleen. Uusi SEM-näkymä korvaa sen. Vahvista, niin vanha poistetaan."
+          }
+        }
+      }
     }
   },
   "selector": {

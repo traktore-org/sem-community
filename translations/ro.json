@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Selecția pentru încărcarea din rețea e încă activă: {entity}",
       "description": "Selecția **{entity}** e încă pe **{option}**, iar SEM nu o poate readuce: opțiunea de dinainte nu mai e în listă. Readu-o manual. Până atunci bateria poate continua să se încarce din rețea. Dispare când selecția se schimbă."
+    },
+    "classic_dashboard_kept": {
+      "title": "Vechiul panou SEM mai există",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Vechiul panou SEM mai există",
+            "description": "Vechiul panou SEM de la `/{path}` a fost retras, iar cardurile lui nu mai funcționează. L-ai modificat, așa că SEM l-a lăsat neschimbat. Noul panou SEM îl înlocuiește. Confirmă pentru a-l șterge pe cel vechi."
+          }
+        }
+      }
     }
   },
   "selector": {

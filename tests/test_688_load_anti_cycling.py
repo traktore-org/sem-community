@@ -115,7 +115,7 @@ class TestSurfaceExists:
             assert src.count(f'"{key}"') >= 2, f"{key} not wired into update_device_config"
 
     def test_load_card_has_anti_cycle_control(self):
-        card = (_ROOT / "dashboard" / "card" / "src" / "cards"
-                / "sem-load-priority-card.js").read_text()
+        from ._dashboard_src import dashboard_src
+        card = dashboard_src()
         assert "min_on_time_min" in card, "no min-run control on the load card"
         assert "min_off_time_min" in card, "no min-pause control on the load card"

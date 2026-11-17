@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "电网充电选项仍处于开启：{entity}",
       "description": "选项 **{entity}** 仍为 **{option}**，SEM 无法改回：之前的选项已不在列表中。请手动改回。在此之前，电池可能继续从电网充电。选项更改后此提示消失。"
+    },
+    "classic_dashboard_kept": {
+      "title": "旧的 SEM 仪表板仍然存在",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "旧的 SEM 仪表板仍然存在",
+            "description": "`/{path}` 上的旧 SEM 仪表板已停用，其卡片不再可用。你修改过它，所以 SEM 没有改动。新的 SEM 仪表板将取代它。确认后删除旧的。"
+          }
+        }
+      }
     }
   },
   "selector": {

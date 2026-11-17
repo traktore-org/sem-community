@@ -324,7 +324,7 @@ function more(t, items) {
     return { parts: out, count: n };
 }
 
-// ── option vocabularies (labels are keys from sem-config-card.js) ──
+// ── option vocabularies (labels are translation keys) ──
 
 const TARIFF_MODES = [
     { value: 'static', labelKey: 'next_tariff_static' },
@@ -349,9 +349,8 @@ const HINT_LABEL = (v) => ({ off: 'off', weekly: 'weekly', all: 'all' }[v] || nu
 const HP_STEP_DOWN = ['off', 'setpoint', 'block'].map((v) => ({ value: v, labelKey: 'config_hp_step_down_' + v }));
 const SETPOINT_MODELS = ['signed', 'inverted', 'direction_select'].map((v) => ({ value: v, label: v }));
 
-// Entity fields of the classic setup card (sem-config-card.js _renderPicker /
-// _renderPickerNested): the same option key, domains and device class, so a
-// pick here is the same pick there. 'power', 'co2_intensity' and
+// Entity fields: the option key, the domains and the device class an entity
+// picker is filtered by. 'power', 'co2_intensity' and
 // 'outdoor_temperature' are filters (util/detect-rows.js), not device classes.
 const CONTACT_DOMAINS = ['switch', 'input_boolean', 'text', 'input_text', 'number', 'input_number', 'select', 'input_select'];
 const VALUE_CONTACT_DOMAINS = new Set(['text', 'input_text', 'number', 'input_number', 'select', 'input_select']);
@@ -458,7 +457,7 @@ export function pvStrings(states) {
     return out;
 }
 
-/** The Setup check rows, as sem-config-card.js builds them (its _setupItems). */
+/** The Setup check rows. */
 export function setupItems(states, options) {
     const o = options || {};
     const chargers = Object.keys(states || {}).some((id) => /^number\.sem_charger_.+_minimum_current$/.test(id));

@@ -83,12 +83,3 @@ def test_the_copy_is_in_every_language_and_names_the_roles():
     assert not re.search(r"no role matched|please report", en, re.I), en
 
 
-def test_the_card_offers_no_report_for_a_watch_only_row():
-    src = (_ROOT / "dashboard" / "card" / "src" / "cards"
-           / "sem-config-card.js").read_text(encoding="utf-8")
-    body = src[src.index("_reportNearMissUrl(m) {"):][:200]
-    assert "nearMissAction(m) !== 'report') return ''" in body
-    assert "nearMissAction(m) === 'watch'" in src
-    bundle = (_ROOT / "dashboard" / "card" / "dist" / "sem-cards.js").read_text(
-        encoding="utf-8")
-    assert "config_detect_watch_only" in bundle

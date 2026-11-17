@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "A hálózati töltés választója még be van kapcsolva: {entity}",
       "description": "A(z) **{entity}** választó még mindig **{option}** értéken áll, és a SEM nem tudja visszaállítani: a korábbi opció már nincs a listában. Állítsd vissza kézzel. Addig az akku tovább tölthet a hálózatból. Eltűnik, ha a választó megváltozik."
+    },
+    "classic_dashboard_kept": {
+      "title": "A régi SEM irányítópult még megvan",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "A régi SEM irányítópult még megvan",
+            "description": "A régi SEM irányítópult a `/{path}` címen megszűnt, a kártyái már nem működnek. Módosítottad, ezért a SEM békén hagyta. Az új SEM irányítópult leváltja. Erősítsd meg a régi törléséhez."
+          }
+        }
+      }
     }
   },
   "selector": {

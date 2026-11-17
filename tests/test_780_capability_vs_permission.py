@@ -365,7 +365,6 @@ class TestNoRedriftToTheMixedKey780:
         )
 
     def test_the_card_reads_the_capability_key(self):
-        from pathlib import Path
-        src = (Path(__file__).resolve().parent.parent / "dashboard" / "card"
-               / "src" / "cards" / "sem-load-priority-card.js").read_text()
+        from ._dashboard_src import dashboard_src
+        src = dashboard_src()
         assert "has_control_handle" in src

@@ -280,9 +280,8 @@ class TestTheSetting:
         assert KEY in OPTIONS_FLOW_OWNED_KEYS
         assert BOUNDS[KEY].min < 0 < BOUNDS[KEY].max
         assert f'"{KEY}"' in (root / "__init__.py").read_text(encoding="utf-8")
-        card = (root / "dashboard" / "card" / "src" / "cards"
-                / "sem-config-card.js").read_text(encoding="utf-8")
-        assert f"'{KEY}'" in card
+        from ._dashboard_src import dashboard_src
+        assert f"'{KEY}'" in dashboard_src()
         for f in [root / "strings.json", *sorted((root / "translations").glob("*.json"))]:
             step = json.loads(f.read_text(encoding="utf-8"))["options"]["step"]["settings_tariff"]
             assert step["data"].get(KEY) and step["data_description"].get(KEY), f.name

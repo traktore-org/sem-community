@@ -67,43 +67,6 @@ def test_forecast_power_now_localized():
     assert _SENSOR in strings["entity"]["sensor"]
 
 
-def test_forecast_card_uses_forecast_preset_not_power():
-    """The bug itself: the 'Forecast vs Actual' card must plot a forecast.
-
-    Before the fix it used ``preset: power`` — a duplicate of the "24h Power"
-    chart with a misleading title and no forecast series.
-    """
-    path = os.path.join(_ROOT, "dashboard", "sem_dashboard_template.yaml")
-
-    # Locate the card block titled "Forecast vs Actual" and read the preset that
-    # immediately precedes it (same list item).
-    with open(path, encoding="utf-8") as f:
-        raw_lines = f.readlines()
-    title_idx = next(
-        i for i, ln in enumerate(raw_lines) if "title: Forecast vs Actual" in ln
-    )
-    window = "".join(raw_lines[max(0, title_idx - 3):title_idx + 1])
-    assert "preset: forecast" in window, window
-    assert "preset: power" not in window, window
-
-
-def test_forecast_preset_defined_in_card_bundle():
-    """The 'forecast' preset must reference the forecast + actual series."""
-    src = os.path.join(
-        _ROOT, "dashboard", "card", "src", "cards", "sem-chart-card.js"
-    )
-    with open(src, encoding="utf-8") as f:
-        js = f.read()
-    assert "forecast:" in js
-    assert _SENSOR in js
-    assert "'solar_power'" in js or '"solar_power"' in js
-
-    # And the built bundle that actually ships must contain it too.
-    dist = os.path.join(_ROOT, "dashboard", "card", "dist", "sem-cards.js")
-    with open(dist, encoding="utf-8") as f:
-        assert _SENSOR in f.read()
-
-
 # ──────────────────────────────────────────────────────────────────────
 # #575 (round 2) — spurious dawn/dusk spikes in "Forecast vs Actual"
 #

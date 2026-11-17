@@ -29,13 +29,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
-
-_CARD_FILES = (
-    "dashboard/card/src/cards/sem-ev-status-card.js",
-    "dashboard/card/src/cards/sem-charger-status-card.js",
-)
 
 
 def _project_root() -> Path:
@@ -46,42 +39,6 @@ def _project_root() -> Path:
         if (parent / "manifest.json").exists():
             return parent
     raise RuntimeError("project root not found")
-
-
-@pytest.mark.parametrize("rel_path", _CARD_FILES)
-def test_card_discovery_skips_flow_sensors(rel_path: str) -> None:
-    """Both card files must contain a guard that filters per-charger flow
-    sensors out of the auto-discovery loop. Pre-fix the discovery
-    regex matched both the real charger and the 3 per-charger flow
-    sensors, spawning ghost sections.
-
-    Anchor strings:
-      * ``_flow_`` — substring that uniquely identifies a flow sensor
-        (every per-charger flow sensor in ``sensor.py:1639-1695`` uses
-        the ``charger_{cid}_flow_*_power`` naming convention).
-      * The original regex must still be present — the guard is in
-        addition to, not in place of, the regex.
-    """
-    src = (_project_root() / rel_path).read_text()
-    assert "_flow_" in src, (
-        f"#356 regression — {rel_path} missing the '_flow_' guard that "
-        f"filters per-charger flow sensors out of the charger discovery "
-        f"loop. Without it the discovery regex picks up "
-        f"sensor.sem_charger_<id>_flow_*_power entities as ghost "
-        f"chargers, spawning 'Solar → EV' / 'Grid → EV' / "
-        f"'Battery → EV' sections per real charger."
-    )
-    # The guard must appear inside / before the discovery regex. We
-    # check it appears within 400 chars of the regex (the guarded
-    # block is short).
-    regex_idx = src.find("sem_charger_(")
-    assert regex_idx > 0, f"discovery regex missing in {rel_path}"
-    window = src[max(0, regex_idx - 400):regex_idx]
-    assert "_flow_" in window, (
-        f"#356 regression — {rel_path} has '_flow_' somewhere in the "
-        f"file but NOT inside the discovery loop's guard window. The "
-        f"guard must come before the regex match."
-    )
 
 
 def test_regex_with_guard_rejects_flow_sensors() -> None:

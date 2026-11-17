@@ -304,3 +304,12 @@ test('every group keeps its settings reachable: the full list holds what the sen
         assert.ok(x.sentence.length > 0, `${x.key} says something`);
     }
 });
+
+// (#897, #1321) Next keeps the arm switch under All settings of "What SEM may
+// do"; the old rule (Everyday) is a design question for the polish step.
+test('the load management arm switch and the peak ceiling are reachable on the System screen (#897)', () => {
+    const may = groups(fullStates(), t, CTX).find((x) => x.key === 'may');
+    const keys = slotsOf([may]).map((s) => s.option || s.id);
+    assert.ok(keys.includes('load_management_enabled'), keys.join(','));
+    assert.ok(keys.includes('target_peak_limit') || keys.includes('peak_limit_unlimited'), keys.join(','));
+});

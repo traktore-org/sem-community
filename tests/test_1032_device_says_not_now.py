@@ -531,10 +531,9 @@ def test_every_control_check_asks_the_device():
 
 def _card_picker_domains(field):
     import re
-    src = (ROOT / "dashboard/card/src/cards/sem-config-card.js").read_text(
+    src = (ROOT / "dashboard/card/src/util/next-settings.js").read_text(
         encoding="utf-8")
-    m = re.search(r"_renderPickerNested\(idx, cid, '" + field
-                  + r"', '[a-z_]+',\s*(\[[^\]]*\]|'[a-z_]+')", src)
+    m = re.search(r"\b" + field + r": \{ domain: (\[[^\]]*\]|'[a-z_]+')", src)
     assert m, field
     return set(re.findall(r"'([a-z_]+)'", m.group(1)))
 

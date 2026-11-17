@@ -443,11 +443,10 @@ def test_every_per_battery_list_is_one_the_alignment_moves():
             if (isinstance(node, ast.Constant) and isinstance(node.value, str)
                     and _LIST_KEY_RE.match(node.value)):
                 found.setdefault(node.value, rel)
-    card = (ROOT / "dashboard/card/src/cards/sem-config-card.js").read_text(encoding="utf-8")
-    for key in re.findall(r"_renderBatteryListPicker\(\s*'([a-z_]+)'", card):
-        found.setdefault(key, "sem-config-card.js")
+    from ._dashboard_src import dashboard_src
+    card = dashboard_src()
     for m in re.finditer(r"'(battery_[a-z_]+_entities)'", card):
-        found.setdefault(m.group(1), "sem-config-card.js")
+        found.setdefault(m.group(1), "next-settings.js")
     assert set(found) >= set(PER_BATTERY_LIST_KEYS)          # the scan sees them
     unknown = {k: v for k, v in found.items() if k not in PER_BATTERY_LIST_KEYS}
     assert not unknown, f"add to PER_BATTERY_LIST_KEYS: {unknown}"

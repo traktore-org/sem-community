@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Valet för nätladdning står kvar på: {entity}",
       "description": "Valet **{entity}** står kvar på **{option}**, och SEM kan inte sätta tillbaka det: det tidigare alternativet finns inte längre i listan. Sätt tillbaka det för hand. Tills dess kan batteriet fortsätta ladda från nätet. Försvinner när valet ändras."
+    },
+    "classic_dashboard_kept": {
+      "title": "Den gamla SEM-panelen finns kvar",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Den gamla SEM-panelen finns kvar",
+            "description": "Den gamla SEM-panelen på `/{path}` är borttagen och dess kort fungerar inte längre. Du ändrade den, så SEM lät den vara. Den nya SEM-panelen ersätter den. Bekräfta för att ta bort den gamla."
+          }
+        }
+      }
     }
   },
   "selector": {

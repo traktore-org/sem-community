@@ -17,9 +17,6 @@ from unittest.mock import MagicMock
 
 import yaml
 
-from custom_components.solar_energy_management.coordinator.install_modules import (
-    Module, Presence,
-)
 from custom_components.solar_energy_management.features.dashboard_generator import (
     DashboardGenerator,
 )
@@ -80,32 +77,6 @@ def _flow_keys():
     return keys
 
 
-def test_every_published_flow_has_its_sankey_line():
-    sources, middle, targets = _columns(_sankey(_template()))
-    missing = []
-    for key in _flow_keys():
-        src, dst = FLOW_KEY.match(key).groups()
-        flow = f"sensor.sem_{key}"
-        source, target = SOURCE_TOTAL[src], TARGET_TOTAL[dst]
-        if flow not in sources[source].get("children", []):
-            missing.append(f"{source} has no child {flow}")
-        if flow not in middle:
-            missing.append(f"no middle node {flow}")
-        elif middle[flow].get("children") != [target]:
-            missing.append(f"{flow} leads to {middle[flow].get('children')}, not {target}")
-        if target not in targets:
-            missing.append(f"no target node {target}")
-    assert not missing, missing
-
-
-def test_the_battery_sells_into_export():
-    sources, middle, _ = _columns(_sankey(_template()))
-    flow = "sensor.sem_flow_battery_to_grid_energy"
-    assert flow in sources["sensor.sem_daily_battery_discharge_energy"]["children"]
-    assert middle[flow]["children"] == ["sensor.sem_daily_grid_export_energy"]
-    assert middle[flow]["name"] == "Bat>Grid"
-
-
 def test_the_new_label_is_translated_in_every_language():
     tables = json.loads(TRANSLATIONS.read_text(encoding="utf-8"))
     assert len(tables) >= 16
@@ -127,26 +98,6 @@ def _generator(presence, language="en"):
     gen = DashboardGenerator(hass)
     gen._cached_translations = json.loads(TRANSLATIONS.read_text(encoding="utf-8"))
     return gen
-
-
-def test_a_home_without_a_battery_has_no_battery_line():
-    tpl = _template()
-    presence = {m: Presence.PRESENT for m in Module}
-    presence[Module.BATTERY] = Presence.ABSENT
-    _generator(presence)._prune_absent_modules(tpl)
-    sources, middle, _ = _columns(_sankey(tpl))
-    assert "sensor.sem_daily_battery_discharge_energy" not in sources
-    assert "sensor.sem_flow_battery_to_grid_energy" not in middle
-    # Solar still leads into Export.
-    assert middle["sensor.sem_flow_solar_to_grid_energy"]["children"] == [
-        "sensor.sem_daily_grid_export_energy"]
-
-
-def test_the_battery_line_is_named_in_the_home_language():
-    gen = _generator({m: Presence.PRESENT for m in Module}, language="de")
-    tpl = gen._translate_dashboard(_template())
-    _, middle, _ = _columns(_sankey(tpl))
-    assert middle["sensor.sem_flow_battery_to_grid_energy"]["name"] == "Bat>Netz"
 
 
 def test_no_cyrillic_letters_in_the_tables():

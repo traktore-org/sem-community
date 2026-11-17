@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Valget til netopladning er stadig tændt: {entity}",
       "description": "Valget **{entity}** står stadig på **{option}**, og SEM kan ikke sætte det tilbage: den tidligere mulighed findes ikke mere på listen. Sæt det tilbage i hånden. Indtil da kan batteriet blive ved med at lade fra nettet. Forsvinder, når valget ændres."
+    },
+    "classic_dashboard_kept": {
+      "title": "Det gamle SEM-dashboard findes stadig",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Det gamle SEM-dashboard findes stadig",
+            "description": "Det gamle SEM-dashboard på `/{path}` er udgået, og kortene virker ikke mere. Du har ændret det, så SEM lod det være. Det nye SEM-dashboard erstatter det. Bekræft for at slette det gamle."
+          }
+        }
+      }
     }
   },
   "selector": {

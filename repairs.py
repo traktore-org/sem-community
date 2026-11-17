@@ -118,10 +118,30 @@ class SEMBatteryFixFlow(RepairsFlow):
         return self.async_create_entry(data={})
 
 
+class SEMClassicDashboardFlow(RepairsFlow):
+    """(#1321) Offer to delete the classic dashboard the user had edited."""
+
+    def __init__(self, data: dict | None) -> None:
+        self._path = str((data or {}).get("path") or "sem-dashboard")
+
+    async def async_step_init(self, user_input=None) -> data_entry_flow.FlowResult:
+        return await self.async_step_confirm()
+
+    async def async_step_confirm(self, user_input=None) -> data_entry_flow.FlowResult:
+        if user_input is not None:
+            from .cleanup import async_remove_dashboard
+            await async_remove_dashboard(self.hass, self._path)
+            return self.async_create_entry(data={})
+        return self.async_show_form(
+            step_id="confirm", description_placeholders={"path": self._path})
+
+
 async def async_create_fix_flow(
     hass: HomeAssistant, issue_id: str, data: dict | None,
 ) -> RepairsFlow:
     """HA's entry point — every SEM fixable issue routes here."""
+    if issue_id == "classic_dashboard_kept":
+        return SEMClassicDashboardFlow(data)
     if issue_id.startswith("power_sensor_not_found_"):
         return SEMBatteryFixFlow(data)
     return SEMContextCopyFlow(data)

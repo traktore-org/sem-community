@@ -148,9 +148,8 @@ class TestTheSettingIsActuallyWired:
         )
 
     def test_the_dashboard_offers_it_too(self):
-        from pathlib import Path
-        card = (Path(__file__).resolve().parent.parent / "dashboard" / "card"
-                / "src" / "cards" / "sem-config-card.js").read_text()
+        from ._dashboard_src import dashboard_src
+        card = dashboard_src()
         assert "solar_forecast_source" in card, (
             "Standing rule: every setting is reachable on the SEM "
             "dashboard, not only in the options flow"
@@ -215,28 +214,6 @@ class TestTheGuiShowsWhatIsActuallyInstalled:
         assert r.detect_source() == "open_meteo"
         r.available_sources()
         assert r.source == "open_meteo"
-
-    def test_the_card_reads_it_from_somewhere_it_can_actually_see(self):
-        """This nearly shipped inert. The card's ``_val(suffix)`` resolves
-        ``sensor.sem_<suffix>.state`` — there is no entity for a list, so it
-        returned '' and the picker silently offered every source again. The
-        list has to ride an ATTRIBUTE of a real entity, and the test has to
-        check HOW it is read, not merely that the name appears somewhere."""
-        from pathlib import Path
-        root = Path(__file__).resolve().parent.parent
-        card = (root / "dashboard" / "card" / "src" / "cards"
-                / "sem-config-card.js").read_text()
-        assert "attributes?.sources_available" in card, (
-            "the card is not reading the list from an entity attribute"
-        )
-        assert "_val('forecast_sources_available')" not in card, (
-            "_val() reads an entity STATE — for a list it always returns '' "
-            "and the guard silently passes"
-        )
-        sensors = (root / "sensor.py").read_text()
-        assert 'attrs["sources_available"]' in sensors, (
-            "nothing puts the list on an entity, so the card reads nothing"
-        )
 
 
 @pytest.mark.unit

@@ -1,8 +1,6 @@
 /**
- * (#1321) SEM Next: the Setup check and the Detected-hardware review, in
- * the new dashboard. Same reads and writes as the classic Setup card
- * (sem-config-card.js _renderOverview / _renderSourceCheck /
- * _renderDetectedHardware): get_config to read the options, set_option to
+ * (#1321) The Setup check and the Detected-hardware review of the SEM
+ * dashboard: get_config to read the options, set_option to
  * save a proposal, chargerAddPlan for "Add this charger", flip_*_sign for a
  * wrong direction. The System screen mounts it with kind 'check' or
  * 'hardware' and listens for 'sem-next-close' (detail.goto names the setup

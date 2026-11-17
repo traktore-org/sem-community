@@ -51,26 +51,6 @@ class TestPerChargerPlanSurfaces:
             "plans."
         )
 
-    def test_card_strip_reads_its_chargers_plan(self) -> None:
-        body = (REPO / "dashboard" / "card" / "src" / "cards"
-                / "sem-ev-status-card.js").read_text()
-        assert "_renderPlanStrip(id)" in body, (
-            "#464 regression — the charger section renders the plan "
-            "strip without passing its charger id."
-        )
-        assert "per_charger_plans" in body, (
-            "#464 regression — the strip no longer reads "
-            "per_charger_plans; both chargers show the fleet plan."
-        )
-
-    def test_card_strip_has_title_and_help(self) -> None:
-        # The reporter's literal question was "what is this bar for?" —
-        # the strip now carries a title and a ?-toggle help text.
-        body = (REPO / "dashboard" / "card" / "src" / "cards"
-                / "sem-ev-status-card.js").read_text()
-        assert "plan_strip_title" in body
-        assert "plan_strip_help" in body
-        assert "_showHelp" in body
 
     def test_translations_cover_strip_title_and_help(self) -> None:
         import json

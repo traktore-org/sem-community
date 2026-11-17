@@ -1733,8 +1733,6 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "deye_system_work_mode_zero_load_option",
     "deye_work_mode_entity",
     "deye_work_mode_load_first_option",
-    # (#1321) the classic dashboard is gone; kept so a stored value is cleared on the next save
-    "diagram_style",
     "dynamic_feedin_entity",
     "dynamic_forecast_entity",
     "dynamic_tariff_entity",

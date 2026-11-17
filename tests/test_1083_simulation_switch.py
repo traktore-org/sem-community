@@ -58,61 +58,30 @@ def test_switch_is_config_and_defaults_off():
 
 
 @pytest.mark.asyncio
-async def test_turn_on_persists_regenerates_once_and_notifies():
+async def test_turn_on_persists_and_starts_the_backfill():
     sw, coordinator, entry = _switch()
-    with patch.object(sw_mod, "regenerate_dashboard") as regen, \
-            patch.object(sw_mod, "notify_simulation_tab") as note, \
-            patch.object(day_tag_store, "start_backfill") as backfill:
+    with patch.object(day_tag_store, "start_backfill") as backfill:
         await sw.async_turn_on()
     opts = sw.hass.config_entries.async_update_entry.call_args.kwargs["options"]
     assert opts[KEY] is True
     assert coordinator.config[KEY] is True
-    regen.assert_called_once_with(sw.hass)
-    note.assert_called_once_with(sw.hass, True)
     backfill.assert_called_once_with(sw.hass, coordinator)
 
 
 @pytest.mark.asyncio
-async def test_turn_off_persists_regenerates_and_stops_the_backfill():
+async def test_turn_off_persists_and_stops_the_backfill():
     sw, coordinator, _ = _switch({KEY: True})
-    with patch.object(sw_mod, "regenerate_dashboard") as regen, \
-            patch.object(sw_mod, "notify_simulation_tab") as note, \
-            patch.object(day_tag_store, "cancel_backfill") as cancel:
+    with patch.object(day_tag_store, "cancel_backfill") as cancel:
         await sw.async_turn_off()
     opts = sw.hass.config_entries.async_update_entry.call_args.kwargs["options"]
     assert opts[KEY] is False
-    regen.assert_called_once_with(sw.hass)
-    note.assert_called_once_with(sw.hass, False)
     cancel.assert_called_once_with(coordinator)
 
 
-@pytest.mark.asyncio
-async def test_other_switches_do_not_regenerate():
-    desc = next(s for s in sw_mod.SWITCH_TYPES if s.key == "vacation_mode")
-    coordinator = MagicMock()
-    coordinator.config = {}
-    coordinator.config_entry = MagicMock(options={}, data={})
-    sw = sw_mod.SEMSolarSwitch(coordinator, desc, "entry")
-    sw.hass = MagicMock()
-    sw.async_write_ha_state = MagicMock()
-    with patch.object(sw_mod, "regenerate_dashboard") as regen:
-        await sw.async_turn_on()
-    regen.assert_not_called()
-
-
-def test_regenerate_skips_when_no_live_sem_dashboard():
-    hass = MagicMock()
-    hass.data = {}
-    sw_mod.regenerate_dashboard(hass)
-    hass.async_create_task.assert_not_called()
-
-
-def test_regenerate_uses_the_generate_dashboard_service():
-    hass = MagicMock()
-    hass.data = {"lovelace": SimpleNamespace(dashboards={"sem-dashboard": object()})}
-    sw_mod.regenerate_dashboard(hass)
-    assert hass.async_create_task.call_count == 1
-    hass.async_create_task.call_args.args[0].close()
+def test_the_switch_no_longer_rebuilds_the_dashboard():
+    # (#1321) the Insights screen shows or hides the tab itself, live
+    assert not hasattr(sw_mod, "regenerate_dashboard")
+    assert not hasattr(sw_mod, "notify_simulation_tab")
 
 
 # ── simulation_tab_on / day_tags_on ───────────────────────────────────────

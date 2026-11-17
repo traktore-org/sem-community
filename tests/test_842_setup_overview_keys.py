@@ -29,7 +29,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CARD = (ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js").read_text()
+SETTINGS = (ROOT / "dashboard" / "card" / "src" / "util" / "next-settings.js").read_text()
 BASELINE = json.loads((ROOT / "tests" / "option_surface_baseline.json").read_text())
 INIT = (ROOT / "__init__.py").read_text()
 
@@ -47,30 +47,22 @@ REAL_KEYS = set(BASELINE["config_fields"]) | _set_option_keys()
 
 
 def _done_conditions() -> list[tuple[str, str]]:
-    """(row key, the done: expression) for every overview checklist row."""
-    lines = CARD.split("\n")
-    out, current = [], "?"
-    for i, line in enumerate(lines):
-        m = re.search(r"\{ key: '([a-z_]+)', labelKey:", line)
-        if m:
-            current = m.group(1)
-        if line.strip().startswith("done:"):
-            # read to the row's closing "}," — the expression may span lines
-            j = i
-            while j < len(lines) and "}," not in lines[j] and "}" not in lines[j].rstrip()[-2:]:
-                j += 1
-            expr = " ".join(lines[i:j + 1])
-            out.append((current, expr))
-    return out
+    """(row key, the done: expression) for every Setup check row (#1321: the
+    System screen's ``setupItems``)."""
+    body = SETTINGS[SETTINGS.index("export function setupItems("):]
+    body = body[:body.index("\n}\n")]
+    rows = re.findall(r"\{ key: '([a-z_]+)', labelKey: '[a-z_]+', done: (.*?)(?:, optional: true)? \},?\n", body)
+    tariff = body[:body.index("return [")]
+    return [(k, e + (" " + tariff if k == "tariff" else "")) for k, e in rows]
 
 
 class TestTheChecklistCanActuallyBeCompleted:
     def test_every_option_key_it_tests_exists(self):
         bad = []
         for row, expr in _done_conditions():
-            for key in re.findall(r"opts\.([a-z_0-9]+)", expr):
+            for key in re.findall(r"\bo\.([a-z_0-9]+)", expr):
                 if key not in REAL_KEYS:
-                    bad.append(f"{row}: opts.{key}")
+                    bad.append(f"{row}: o.{key}")
         assert not bad, (
             "Setup overview rows testing option keys that do not exist — the "
             f"row can never tick, on any install (#842): {sorted(bad)}"
@@ -90,16 +82,16 @@ class TestTheChecklistCanActuallyBeCompleted:
         assert "dynamic_tariff_entity" in expr
         assert "electricity_import_rate" in expr
 
-    def test_battery_uses_the_helper_the_card_already_has(self):
+    def test_battery_uses_the_helper_the_screen_already_has(self):
         expr = dict(_done_conditions())["battery"]
-        assert "_hasBattery()" in expr, (
-            "the card already knows how to detect a battery — _hasBattery() "
+        assert "hasBattery(" in expr, (
+            "the screen already knows how to detect a battery — hasBattery() "
             "checks the per-battery count and the SOC/power sensors"
         )
 
     def test_the_pre_830_rows_are_untouched_and_loads_uses_its_flag(self):
         rows = dict(_done_conditions())
-        assert "opts.hot_water_entity" in rows["hw"], (
+        assert "o.hot_water_entity" in rows["hw"], (
             "hot_water_entity is a real set-option key — the pre-#830 row was right"
         )
         assert "hot_water_entity" in _set_option_keys()

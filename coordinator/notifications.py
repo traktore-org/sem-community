@@ -377,7 +377,6 @@ class NotificationManager:
             return
 
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         service_call: Dict[str, Any] = {
             "message": message,
             "title": get_text(self.hass, "notif_title", "Solar Energy Management"),
@@ -446,7 +445,6 @@ class NotificationManager:
             remaining_needed = max(0, daily_ev_target - daily_ev_energy)
 
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
 
         if state == ChargingState.SOLAR_CHARGING_ACTIVE:
@@ -597,7 +595,6 @@ class NotificationManager:
             return
 
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
 
         # (#1315) Name the phase that is over the limit, not the first one
         # in the reason.
@@ -825,7 +822,6 @@ class NotificationManager:
         tomorrow = data.get("forecast_tomorrow", 0)
 
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         currency = self.hass.config.currency or "EUR"
         msg = get_text(self.hass, "notif_daily_summary",
             "Today: {solar:.1f} kWh solar · {autarky:.0f}% autarky · "
@@ -860,7 +856,6 @@ class NotificationManager:
         channel when mobile notifications are on. The engine already made
         sure this key fires once."""
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         message = get_text(self.hass, hint.text_key, _HINT_DEFAULTS.get(hint.text_key, ""),
                            **hint.params)
         self.hass.bus.async_fire(f"{DOMAIN}_notification", {
@@ -893,7 +888,6 @@ class NotificationManager:
         })
 
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         await self._send_mobile_notification(
             get_text(self.hass, "notif_low_forecast",
                 "Low solar forecast tomorrow: {tomorrow_kwh:.1f} kWh. Consider charging EV tonight.",
@@ -922,7 +916,6 @@ class NotificationManager:
             "minutes_remaining": round(minutes_remaining, 0),
         })
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         await self._send_mobile_notification(
             get_text(self.hass, "notif_ev_nearly_full",
                 "{name} nearly full — ~{minutes:.0f} min remaining",
@@ -966,7 +959,6 @@ class NotificationManager:
             "sensor_age_min": round(sensor_age_min),
         })
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         await self._send_mobile_notification(
             get_text(self.hass, "notif_ev_estimate_stop",
                 "{name}: stopped at ~{target:.0f}% (estimated) — car sensor is "
@@ -1009,7 +1001,6 @@ class NotificationManager:
             "sensor_soc": round(sensor_soc),
         })
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         await self._send_mobile_notification(
             get_text(self.hass, "notif_ev_estimate_resume",
                 "{name}: car reported {sensor:.0f}% — topping up to your "
@@ -1062,7 +1053,6 @@ class NotificationManager:
             "deadline": deadline,
         })
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         await self._send_mobile_notification(
             get_text(self.hass, "notif_ev_deadline_unreachable",
                 "{name} can't reach its target by {deadline} — "
@@ -1096,7 +1086,6 @@ class NotificationManager:
                                self.config.get("enable_keba_notifications", True)):
             return
         from ..utils.translate import get_text
-        from ..features.dashboard_generator import sem_dashboard_path
         await self._send_charger_notification(
             get_text(self.hass, "notif_charger_stood_down", "SEM stood down"))
 

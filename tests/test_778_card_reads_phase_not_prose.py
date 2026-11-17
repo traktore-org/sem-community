@@ -56,16 +56,10 @@ def test_the_battery_card_does_switch_on_the_token():
     """The inverse pin. Without this the rule above is satisfied by a card
     that reads neither — which is how the states became indistinguishable in
     the first place."""
-    src = (CARDS / "cards" / "sem-battery-card.js").read_text(encoding="utf-8")
+    src = (CARDS / "util" / "next-devices-battery.js").read_text(encoding="utf-8")
     assert "a.phase" in src or "attrs.phase" in src, (
         "the battery card no longer reads the published phase token")
     assert "planning_phase_" in src, (
         "the phase pill no longer resolves a per-phase translation key")
 
 
-def test_the_zones_card_gates_the_floor_on_the_token():
-    """A dynamic-floor marker drawn while the budget is still learning would
-    claim a floor SEM has not computed."""
-    src = (CARDS / "cards" / "sem-battery-zones-card.js").read_text(encoding="utf-8")
-    assert "phase !== 'spending'" in src, (
-        "the zones card no longer gates tonight's floor on the spending phase")

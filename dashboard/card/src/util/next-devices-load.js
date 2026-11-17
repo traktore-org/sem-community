@@ -297,6 +297,16 @@ export function loadBody(card, row) {
         rows.push(card._row('mdi:cash-multiple', t('next_device_tariff'),
             numVal('rate', rate > 0 ? card._money(rate) : t('next_house_tariff'), { value: rate || null, min: 0, step: 0.001, onCommit: (v) => send('tariff_rate', String(v > 0 ? v : 0)) }),
             '', { more: true }));
+        // (#1321) the load's own price entity and energy meter, as the old Load list had
+        const tariffEnt = g.tariff_entity || '', tariffMeter = g.tariff_meter || '';
+        rows.push(card._row('mdi:cash-clock', t('device_tariff_entity'),
+            card._inline('tariffent:' + id, tariffEnt ? card._name(tariffEnt) : t('action_none'), () => card._entEdit('tariffent:' + id, {
+                value: tariffEnt, domains: ['sensor', 'input_number'], onCommit: (v) => send('tariff_entity', v) })),
+            '', { more: true }));
+        rows.push(card._row('mdi:meter-electric-outline', t('device_tariff_meter'),
+            card._inline('tariffmeter:' + id, tariffMeter ? card._name(tariffMeter) : t('action_none'), () => card._entEdit('tariffmeter:' + id, {
+                value: tariffMeter, domains: ['sensor'], onCommit: (v) => send('tariff_meter', v) })),
+            t('device_tariff_hint'), { more: true }));
     }
     // (#1371) with the mode Off SEM acts on nothing: "SEM may switch it: on"
     // under "Off — SEM won't act" read as a contradiction. The row stays

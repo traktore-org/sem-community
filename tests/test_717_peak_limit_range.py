@@ -29,7 +29,6 @@ the tests below for what that leaves in ``config_flow.py`` and the cards.
 """
 from __future__ import annotations
 
-import ast
 import json
 import re
 from pathlib import Path
@@ -157,46 +156,6 @@ def test_the_service_yaml_selector_matches_the_shared_range():
     )
     assert selector["min"] == MIN_PEAK_LIMIT_KW
     assert selector["max"] == MAX_PEAK_LIMIT_KW
-
-
-@pytest.mark.parametrize(
-    "card,anchor,positive",
-    [
-        # The three config-card fields. Number inputs, not sliders: 791 stops
-        # at 0.1 kW is not a control, it is a hazard.
-        ("sem-config-card.js",
-         r"'(?:target_peak_limit|warning_peak_level|emergency_peak_level)'",
-         r"max:\s*80(?:\.0)?\b"),
-        # The load-priority card's Control-tab slider (#717 redesign — the
-        # old inline "Set" number box is gone, this is the one live editable
-        # peak-limit control).
-        ("sem-load-priority-card.js",
-         r"range-handle-peak",
-         # (#1354) the ceiling lives in util/peak-questions.js
-         r"MAX_KW\s*=\s*80\b|max:\s*80\b"),
-    ],
-)
-def test_no_card_hard_codes_the_old_ceiling(card, anchor, positive):
-    """The cards are a separate copy of the same bound, and they are what most
-    users actually touch — the load-priority card used to silently *discard*
-    a value over 20 kW, so the user typed their real service size, pressed
-    Set and nothing at all happened. #717 replaced that box with a slider
-    that reaches 80 kW ("Unlimited") at the top."""
-    source = (_CARDS / card).read_text(encoding="utf-8")
-    if "util/peak-questions.js" in source:      # (#1354) shared bound
-        source += (_CARDS.parent / "util" / "peak-questions.js").read_text(
-            encoding="utf-8")
-    assert re.search(anchor, source), f"{card}: anchor gone — retarget this scan"
-    for stale in (r"max:\s*(?:15|20)(?:\.0)?\b", r'max="(?:15|20)"',
-                  r"val\s*<=\s*20\b", r"Math\.min\(\s*(?:15|20)\s*,",
-                  r"MAX_KW\s*=\s*(?:15|20)\b",
-                  r'id="targetInput"', r'id="setTargetBtn"'):
-        assert not re.search(stale, source), (
-            f"{card} still carries the retired {stale!r} peak ceiling (#717)"
-        )
-    assert re.search(positive, source), (
-        f"{card} does not carry the {MAX_PEAK_LIMIT_KW:g} kW ceiling (#717)"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -371,16 +330,3 @@ def test_the_constants_are_a_usable_range():
     assert WARNING_PEAK_RATIO < 1.0 < EMERGENCY_PEAK_RATIO
 
 
-def test_this_file_scans_real_sources():
-    """Every regex above reads a file from disk; if one moved, the assertions
-    would pass on an empty string."""
-    for path in (_ROOT / "config_flow.py", _ROOT / "__init__.py",
-                 _CARDS / "sem-config-card.js",
-                 _CARDS / "sem-load-priority-card.js"):
-        assert path.is_file() and path.stat().st_size > 1000, path
-    # and async_step_hardware is really still the method the scans above slice
-    source = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    names = {n.name for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)}
-    assert "async_step_hardware" in names
-    assert "async_step_reconfigure" in names

@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "The grid charge select is still on: {entity}",
       "description": "The select **{entity}** is still on **{option}**, and SEM cannot put it back: the option it showed before is gone from the list. Set it back by hand. Until then the battery may keep charging from the grid. Clears when the select is changed."
+    },
+    "classic_dashboard_kept": {
+      "title": "Old SEM dashboard is still there",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Old SEM dashboard is still there",
+            "description": "The old SEM dashboard at `/{path}` is retired and its cards no longer work. You changed it, so SEM left it as it was. The new SEM dashboard replaces it. Confirm to delete the old one."
+          }
+        }
+      }
     }
   },
   "selector": {

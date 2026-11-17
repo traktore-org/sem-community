@@ -454,10 +454,6 @@ class TestAnUnsavedRateIsTheShownRate:
         return SEMCoordinator(mock_hass, {"tariff_mode": mode,
                                           "update_interval": 30, **cfg})._tariff_provider
 
-    def test_calendar_starts_at_the_card_defaults(self, mock_hass):
-        p = self._coord_provider(mock_hass, "calendar", tariff_schedule_entity=HELPER)
-        assert p.peak_rate == _card_default("electricity_import_rate")
-        assert p.off_peak_rate == _card_default("electricity_off_peak_rate")
 
     def test_calendar_and_static_agree(self, mock_hass):
         cal = self._coord_provider(mock_hass, "calendar", tariff_schedule_entity=HELPER)
@@ -515,15 +511,6 @@ class TestAnUnsavedRateIsTheShownRate:
                                  electricity_off_peak_rate=0.0)
         assert p.off_peak_rate == 0.0
 
-    @pytest.mark.asyncio
-    async def test_the_tariff_page_shows_the_same_defaults(self, mock_hass, config_entry):
-        for key in ("electricity_import_rate", "electricity_off_peak_rate",
-                    "electricity_nt_rate"):
-            config_entry.data.pop(key, None)
-        result = await _step(_flow(mock_hass, config_entry, {}), config_entry)
-        for key in ("electricity_import_rate", "electricity_off_peak_rate"):
-            marker = next(m for m in result["data_schema"].schema if m.schema == key)
-            assert marker.default() == _card_default(key), key
 
     @pytest.mark.asyncio
     async def test_the_tariff_page_shows_the_import_rate_for_an_unsaved_night(
@@ -556,13 +543,6 @@ class TestTheDefaultViewSetsUpCalendar:
     def _src(self):
         return CARD.read_text(encoding="utf-8")
 
-    def test_the_off_peak_rate_is_essential_in_calendar_only(self):
-        import re
-        src = self._src()
-        m = re.search(r"const ESSENTIAL_IN_MODE = \{(.*?)\};", src, re.DOTALL)
-        assert m and "electricity_off_peak_rate: 'calendar'" in m.group(1)
-        m = re.search(r"const ESSENTIAL_CONTROLS = new Set\(\[(.*?)\]\)", src, re.DOTALL)
-        assert "'electricity_off_peak_rate'" in m.group(1)
 
     def test_the_help_names_the_fields_the_user_sees(self):
         tr = json.loads((ROOT / "dashboard" / "translations.json")

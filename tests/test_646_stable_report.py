@@ -8,9 +8,7 @@
 """
 from __future__ import annotations
 
-from pathlib import Path
 
-import pytest
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 
@@ -63,52 +61,3 @@ class TestRoiPaybackUnknown646:
         )
         data = SEMData()
         assert data.to_dict()["roi_payback_years"] is None
-
-
-class TestChartAdapterLoader646:
-    """The loader must not skip the date adapter when window.Chart pre-exists
-    (another card's bundle defining Chart.js without an adapter was the #646
-    root cause)."""
-
-    SRC = (
-        Path(__file__).resolve().parents[1]
-        / "dashboard" / "card" / "src" / "cards" / "sem-chart-card.js"
-    ).read_text()
-
-    def test_preexisting_chart_still_loads_adapter(self):
-        # the bare early-exit `if (window.Chart) { resolve(...); return; }`
-        # must be gone
-        assert "if (window.Chart) { resolve(window.Chart); return; }" not in self.SRC
-        assert "hasDateAdapter" in self.SRC
-
-    def test_bundle_is_rebuilt(self):
-        dist = (
-            Path(__file__).resolve().parents[1]
-            / "dashboard" / "card" / "dist" / "sem-cards.js"
-        ).read_text()
-        # identifiers are minified — assert on the property access that
-        # survives terser
-        assert "_adapters._date" in dist, "dist/sem-cards.js not rebuilt after the loader fix"
-
-
-class TestDiagramLightTheme646:
-    """The four low-contrast labels must use the theme-aware fills."""
-
-    SRC = (
-        Path(__file__).resolve().parents[1]
-        / "dashboard" / "card" / "src" / "cards" / "sem-system-diagram-card.js"
-    ).read_text()
-
-    @pytest.mark.parametrize(
-        "hardcoded",
-        [
-            'fill="#FCD170" opacity="0.45"',   # sunrise/sunset
-            'fill="#ff9800" opacity="0.4" font-weight="500"',  # forecast label
-            'fill="#96CAEE" opacity="0.35"',   # inverter status text
-        ],
-    )
-    def test_dark_only_fills_removed(self, hardcoded):
-        assert hardcoded not in self.SRC
-
-    def test_theme_switch_present(self):
-        assert "semTheme(this).isDark" in self.SRC

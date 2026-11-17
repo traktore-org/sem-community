@@ -126,7 +126,7 @@ async def test_owned_keys_keep_replace_semantics(mock_hass, config_entry):
     forward only applies to keys the dialog doesn't own."""
     flow = _flow(
         mock_hass, config_entry,
-        options={"diagram_style": "kflow", "grid_sign_user_flip": True},
+        options={"dynamic_tariff_entity": "sensor.price", "grid_sign_user_flip": True},
         accumulated={},
     )
     with patch.object(type(flow), "config_entry", config_entry):
@@ -134,7 +134,7 @@ async def test_owned_keys_keep_replace_semantics(mock_hass, config_entry):
             {"enable_charger_notifications": True},
         )
     data = result["data"]
-    assert "diagram_style" not in data      # owned + omitted → cleared
+    assert "dynamic_tariff_entity" not in data      # owned + omitted → cleared
     assert data["grid_sign_user_flip"] is True  # non-owned → carried
 
 

@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "A seleção de carga da rede continua ativa: {entity}",
       "description": "A seleção **{entity}** continua em **{option}**, e o SEM não a consegue repor: a opção anterior já não está na lista. Reponha-a à mão. Até lá, a bateria pode continuar a carregar da rede. Desaparece quando a seleção mudar."
+    },
+    "classic_dashboard_kept": {
+      "title": "O painel antigo do SEM ainda existe",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "O painel antigo do SEM ainda existe",
+            "description": "O painel antigo do SEM em `/{path}` foi retirado e os seus cartões já não funcionam. Você o alterou, por isso o SEM deixou-o como estava. O novo painel do SEM substitui-o. Confirme para apagar o antigo."
+          }
+        }
+      }
     }
   },
   "selector": {

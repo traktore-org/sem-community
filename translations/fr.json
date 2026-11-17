@@ -2118,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "La sélection de charge réseau est toujours active : {entity}",
       "description": "La sélection **{entity}** est toujours sur **{option}**, et SEM ne peut pas la remettre : l'ancienne option n'est plus dans la liste. Remettez-la à la main. D'ici là, la batterie peut continuer à charger depuis le réseau. Disparaît quand la sélection change."
+    },
+    "classic_dashboard_kept": {
+      "title": "L'ancien tableau de bord SEM est toujours là",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "L'ancien tableau de bord SEM est toujours là",
+            "description": "L'ancien tableau de bord SEM à `/{path}` est retiré et ses cartes ne fonctionnent plus. Vous l'aviez modifié, SEM l'a donc laissé tel quel. Le nouveau tableau de bord SEM le remplace. Confirmez pour supprimer l'ancien."
+          }
+        }
+      }
     }
   },
   "selector": {
