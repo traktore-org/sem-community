@@ -182,7 +182,8 @@ test('All settings still shows every row', () => {
     // (#1358) +1: the inverter's own end-of-discharge level, read only.
     // (#1346) +1: the select that starts a grid charge (its option row shows
     // only once a select is chosen).
-    assert.equal(total, 107, `All settings drew ${total} rows`);
+    // (#1362) +2: the charge switch and the charge target (one battery).
+    assert.equal(total, 109, `All settings drew ${total} rows`);
     assert.ok(per.battery_zones >= 6, 'battery knobs and pickers');
     assert.ok(per.ev_chargers >= 15, 'every per-charger row');
     assert.ok(total > everyday * 5);

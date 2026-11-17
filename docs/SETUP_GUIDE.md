@@ -1237,12 +1237,17 @@ tab, All settings, Battery control, set:
 3. **Charge switch**: a switch that must be on for a grid charge ("allow grid
    charging"). Set next to the select, it is a permit, not the start.
 
+The select pair shows with one battery or several. **Charge switch** and
+**Charge target SOC entity** show with one battery only: with two packs one
+pack's stop would put them back while the other still charges.
+
 Example, Tesla Powerwall (HA's own Powerwall integration): select =
 `select.<site>_operating_mode`, option = `autonomous`, target =
 `number.<site>_backup_reserve`, switch = `switch.<site>_allow_grid_charging`.
 This is the order the Powerwall's owner confirmed by hand: reserve, switch,
-mode. SEM writes in that order, and puts back the mode, the switch, then the
-reserve.
+mode. SEM writes in that order. At the stop it puts the reserve back first,
+then the mode and the switch. Each is tried on its own, so one that cannot be
+read never keeps the reserve high.
 
 Each old value is saved to disk before SEM changes it, so the stop, Off, an
 unload and a restart all put it back. A value you change by hand during a

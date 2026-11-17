@@ -2995,7 +2995,12 @@
     "energy_plan_hc_preheat": "Předehřev",
     "energy_plan_hc_load": "Doba chodu",
     "battery_size_label": "Velikost (kWh)",
-    "battery_size_sub": "Počítá se do celkové úrovně nabití"
+    "battery_size_sub": "Počítá se do celkové úrovně nabití",
+    "config_charge_switch_entity": "Spínač nabíjení",
+    "config_help_charge_switch_entity": "Spínač, který zapne nabíjení ze sítě. Vedle výběru nabíjení ze sítě je to povolení (například povolit nabíjení ze sítě): SEM ho zapne s nabíjením a potom vypne.",
+    "config_charge_target_entity": "Entita cílové úrovně nabíjení",
+    "config_help_charge_target_entity": "Číslo, které určuje úroveň, do které se nabíjí, například záložní rezerva. SEM tam zapíše cíl plánu a vrátí původní hodnotu.",
+    "config_charge_switch_one_battery": "Spínač nabíjení a cílová úroveň se zobrazují jen u jedné baterie. Dvě baterie by je sdílely a zastavení jedné by je vrátilo, zatímco druhá ještě nabíjí."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5993,7 +5998,12 @@
     "energy_plan_hc_preheat": "Forvarmning",
     "energy_plan_hc_load": "Driftstid",
     "battery_size_label": "Størrelse (kWh)",
-    "battery_size_sub": "Tæller med i det samlede ladeniveau"
+    "battery_size_sub": "Tæller med i det samlede ladeniveau",
+    "config_charge_switch_entity": "Opladningskontakt",
+    "config_help_charge_switch_entity": "En kontakt, der starter en netopladning. Ved siden af valget til netopladning er den en tilladelse (for eksempel tillad netopladning): SEM tænder den med opladningen og slukker den bagefter.",
+    "config_charge_target_entity": "Entitet for opladningens målniveau",
+    "config_help_charge_target_entity": "Et tal, der holder det niveau, der oplades til, for eksempel en backupreserve. SEM skriver planens mål ddér og sætter den gamle værdi tilbage.",
+    "config_charge_switch_one_battery": "Opladningskontakten og målniveauet vises kun ved ét batteri. To batterier ville dele dem, og det enes stop ville sætte dem tilbage, mens det andet stadig oplader."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8991,7 +9001,12 @@
     "energy_plan_hc_preheat": "Vorheizen",
     "energy_plan_hc_load": "Laufzeit",
     "battery_size_label": "Größe (kWh)",
-    "battery_size_sub": "Zählt für den Gesamt-Ladestand"
+    "battery_size_sub": "Zählt für den Gesamt-Ladestand",
+    "config_charge_switch_entity": "Lade-Schalter",
+    "config_help_charge_switch_entity": "Ein Schalter, der ein Netzladen einschaltet. Neben der Netzladen-Auswahl ist er eine Freigabe (zum Beispiel Netzladen erlauben): SEM schaltet ihn mit dem Laden ein und danach aus.",
+    "config_charge_target_entity": "Lade-Ziel-Entität (SOC)",
+    "config_help_charge_target_entity": "Eine Zahl, die den Ladestand hält, bis zu dem geladen wird, zum Beispiel eine Notstrom-Reserve. SEM schreibt dort das Ziel des Plans und stellt den alten Wert zurück.",
+    "config_charge_switch_one_battery": "Lade-Schalter und Lade-Ziel erscheinen nur bei einer Batterie. Zwei Speicher würden sie teilen, und der Stopp des einen würde sie zurückstellen, während der andere noch lädt."
   },
   "en": {
     "% of limit": "% of limit",
@@ -11989,7 +12004,12 @@
     "energy_plan_hc_preheat": "Pre-heat",
     "energy_plan_hc_load": "Runtime",
     "battery_size_label": "Size (kWh)",
-    "battery_size_sub": "Counts toward the total charge level"
+    "battery_size_sub": "Counts toward the total charge level",
+    "config_charge_switch_entity": "Charge switch",
+    "config_help_charge_switch_entity": "A switch that turns on a grid charge. Beside the grid-charge select it is a permit (for example allow grid charging): SEM turns it on with the charge and off after.",
+    "config_charge_target_entity": "Charge target SOC entity",
+    "config_help_charge_target_entity": "A number that holds the level to charge to, such as a backup reserve. SEM writes the plan's target there and puts the old value back.",
+    "config_charge_switch_one_battery": "The charge switch and charge target show with one battery only. Two packs would share them, and one pack's stop would put them back while the other still charges."
   },
   "es": {
     "% of limit": "% del límite",
@@ -14987,7 +15007,12 @@
     "energy_plan_hc_preheat": "Precalentar",
     "energy_plan_hc_load": "Tiempo de funcionamiento",
     "battery_size_label": "Tamaño (kWh)",
-    "battery_size_sub": "Cuenta para el nivel de carga total"
+    "battery_size_sub": "Cuenta para el nivel de carga total",
+    "config_charge_switch_entity": "Interruptor de carga",
+    "config_help_charge_switch_entity": "Un interruptor que activa una carga de red. Junto al selector de carga de red es un permiso (por ejemplo permitir carga de red): SEM lo activa con la carga y lo desactiva después.",
+    "config_charge_target_entity": "Entidad del nivel objetivo de carga",
+    "config_help_charge_target_entity": "Un número que fija el nivel hasta el que se carga, como una reserva de respaldo. SEM escribe ahí el objetivo del plan y devuelve el valor anterior.",
+    "config_charge_switch_one_battery": "El interruptor y el nivel objetivo de carga solo se muestran con una batería. Dos baterías los compartirían, y la parada de una los devolvería mientras la otra aún carga."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -17985,7 +18010,12 @@
     "energy_plan_hc_preheat": "Esilämmitys",
     "energy_plan_hc_load": "Käyntiaika",
     "battery_size_label": "Koko (kWh)",
-    "battery_size_sub": "Vaikuttaa kokonaisvaraustasoon"
+    "battery_size_sub": "Vaikuttaa kokonaisvaraustasoon",
+    "config_charge_switch_entity": "Latauskytkin",
+    "config_help_charge_switch_entity": "Kytkin, joka käynnistää verkkolatauksen. Verkkolatauksen valinnan vieressä se on lupa (esimerkiksi salli verkkolataus): SEM kytkee sen päälle latauksen ajaksi ja pois sen jälkeen.",
+    "config_charge_target_entity": "Latauksen tavoitetason entiteetti",
+    "config_help_charge_target_entity": "Luku, joka pitää tason, johon ladataan, esimerkiksi varavoimavaranto. SEM kirjoittaa siihen suunnitelman tavoitteen ja palauttaa vanhan arvon.",
+    "config_charge_switch_one_battery": "Latauskytkin ja tavoitetaso näkyvät vain yhdellä akulla. Kaksi akkua jakaisi ne, ja toisen pysäytys palauttaisi ne, vaikka toinen vielä lataa."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -20983,7 +21013,12 @@
     "energy_plan_hc_preheat": "Préchauffage",
     "energy_plan_hc_load": "Durée de marche",
     "battery_size_label": "Taille (kWh)",
-    "battery_size_sub": "Compte dans le niveau de charge total"
+    "battery_size_sub": "Compte dans le niveau de charge total",
+    "config_charge_switch_entity": "Interrupteur de charge",
+    "config_help_charge_switch_entity": "Un interrupteur qui lance une charge réseau. À côté du sélecteur de charge réseau, c'est une autorisation (par exemple autoriser la charge réseau) : SEM l'active avec la charge et le désactive après.",
+    "config_charge_target_entity": "Entité du niveau cible de charge",
+    "config_help_charge_target_entity": "Un nombre qui fixe le niveau de charge visé, comme une réserve de secours. SEM y écrit la cible du plan et remet l'ancienne valeur.",
+    "config_charge_switch_one_battery": "L'interrupteur et le niveau cible de charge ne s'affichent qu'avec une seule batterie. Deux batteries les partageraient, et l'arrêt de l'une les remettrait pendant que l'autre charge encore."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -23981,7 +24016,12 @@
     "energy_plan_hc_preheat": "Előfűtés",
     "energy_plan_hc_load": "Üzemidő",
     "battery_size_label": "Méret (kWh)",
-    "battery_size_sub": "Beleszámít az összesített töltöttségbe"
+    "battery_size_sub": "Beleszámít az összesített töltöttségbe",
+    "config_charge_switch_entity": "Töltés kapcsoló",
+    "config_help_charge_switch_entity": "Kapcsoló, amely elindítja a hálózati töltést. A hálózati töltés választó mellett engedély (például hálózati töltés engedélyezése): az SEM bekapcsolja a töltéssel, utána kikapcsolja.",
+    "config_charge_target_entity": "Töltési célszint entitás",
+    "config_help_charge_target_entity": "Szám, amely a töltés célszintjét tartja, például tartalék szint. Az SEM ide írja a terv célját, és visszaállítja a régi értéket.",
+    "config_charge_switch_one_battery": "A töltés kapcsoló és a célszint csak egy akkumulátornál látszik. Két akkumulátor osztozna rajtuk, és az egyik leállítása visszaállítaná őket, míg a másik még tölt."
   },
   "it": {
     "% of limit": "% del limite",
@@ -26979,7 +27019,12 @@
     "energy_plan_hc_preheat": "Preriscaldamento",
     "energy_plan_hc_load": "Tempo di funzionamento",
     "battery_size_label": "Dimensione (kWh)",
-    "battery_size_sub": "Conta nel livello di carica totale"
+    "battery_size_sub": "Conta nel livello di carica totale",
+    "config_charge_switch_entity": "Interruttore di carica",
+    "config_help_charge_switch_entity": "Un interruttore che avvia una carica da rete. Accanto al selettore di carica da rete è un permesso (per esempio consenti carica da rete): SEM lo attiva con la carica e lo disattiva dopo.",
+    "config_charge_target_entity": "Entità del livello obiettivo di carica",
+    "config_help_charge_target_entity": "Un numero che fissa il livello fino a cui caricare, come una riserva di backup. SEM vi scrive l'obiettivo del piano e rimette il valore precedente.",
+    "config_charge_switch_one_battery": "L'interruttore e il livello obiettivo di carica compaiono solo con una batteria. Due batterie li condividerebbero, e l'arresto di una li rimetterebbe mentre l'altra carica ancora."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -29977,7 +30022,12 @@
     "energy_plan_hc_preheat": "Voorverwarmen",
     "energy_plan_hc_load": "Looptijd",
     "battery_size_label": "Grootte (kWh)",
-    "battery_size_sub": "Telt mee in het totale laadniveau"
+    "battery_size_sub": "Telt mee in het totale laadniveau",
+    "config_charge_switch_entity": "Laadschakelaar",
+    "config_help_charge_switch_entity": "Een schakelaar die een netlading start. Naast de netladen-keuzelijst is het een toestemming (bijvoorbeeld netladen toestaan): SEM zet hem aan met de lading en daarna uit.",
+    "config_charge_target_entity": "Entiteit voor het laaddoelniveau",
+    "config_help_charge_target_entity": "Een getal dat het niveau bepaalt tot waar wordt geladen, zoals een back-upreserve. SEM schrijft daar het doel van het plan en zet de oude waarde terug.",
+    "config_charge_switch_one_battery": "De laadschakelaar en het laaddoel worden alleen bij één batterij getoond. Twee accu's zouden ze delen, en de stop van één zou ze terugzetten terwijl de ander nog laadt."
   },
   "no": {
     "% of limit": "% av grense",
@@ -32975,7 +33025,12 @@
     "energy_plan_hc_preheat": "Forvarming",
     "energy_plan_hc_load": "Driftstid",
     "battery_size_label": "Størrelse (kWh)",
-    "battery_size_sub": "Teller med i totalt ladenivå"
+    "battery_size_sub": "Teller med i totalt ladenivå",
+    "config_charge_switch_entity": "Ladebryter",
+    "config_help_charge_switch_entity": "En bryter som starter nettlading. Ved siden av valget for nettlading er den en tillatelse (for eksempel tillat nettlading): SEM slår den på med ladingen og av etterpå.",
+    "config_charge_target_entity": "Entitet for ladingens målnivå",
+    "config_help_charge_target_entity": "Et tall som holder nivået det lades til, for eksempel en reserve. SEM skriver planens mål der og setter den gamle verdien tilbake.",
+    "config_charge_switch_one_battery": "Ladebryteren og målnivået vises bare ved ett batteri. To batterier ville delt dem, og stoppen til det ene ville satt dem tilbake mens det andre fortsatt lader."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -35973,7 +36028,12 @@
     "energy_plan_hc_preheat": "Podgrzewanie wstępne",
     "energy_plan_hc_load": "Czas pracy",
     "battery_size_label": "Rozmiar (kWh)",
-    "battery_size_sub": "Liczy się do łącznego poziomu naładowania"
+    "battery_size_sub": "Liczy się do łącznego poziomu naładowania",
+    "config_charge_switch_entity": "Przełącznik ładowania",
+    "config_help_charge_switch_entity": "Przełącznik, który włącza ładowanie z sieci. Obok wyboru ładowania z sieci jest zezwoleniem (na przykład zezwól na ładowanie z sieci): SEM włącza go z ładowaniem i wyłącza po nim.",
+    "config_charge_target_entity": "Encja docelowego poziomu ładowania",
+    "config_help_charge_target_entity": "Liczba, która trzyma poziom, do którego się ładuje, na przykład rezerwa awaryjna. SEM zapisuje tam cel planu i przywraca starą wartość.",
+    "config_charge_switch_one_battery": "Przełącznik ładowania i poziom docelowy pokazują się tylko przy jednej baterii. Dwie baterie dzieliłyby je, a zatrzymanie jednej przywróciłoby je, gdy druga jeszcze ładuje."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -38971,7 +39031,12 @@
     "energy_plan_hc_preheat": "Pré-aquecimento",
     "energy_plan_hc_load": "Tempo de funcionamento",
     "battery_size_label": "Tamanho (kWh)",
-    "battery_size_sub": "Conta para o nível de carga total"
+    "battery_size_sub": "Conta para o nível de carga total",
+    "config_charge_switch_entity": "Interruptor de carga",
+    "config_help_charge_switch_entity": "Um interruptor que liga uma carga da rede. Ao lado do seletor de carga da rede é uma permissão (por exemplo permitir carga da rede): o SEM liga-o com a carga e desliga-o depois.",
+    "config_charge_target_entity": "Entidade do nível alvo de carga",
+    "config_help_charge_target_entity": "Um número que guarda o nível até ao qual se carrega, como uma reserva de backup. O SEM escreve aí o alvo do plano e repõe o valor antigo.",
+    "config_charge_switch_one_battery": "O interruptor e o nível alvo de carga só aparecem com uma bateria. Duas baterias partilhá-los-iam, e a paragem de uma repô-los-ia enquanto a outra ainda carrega."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -41969,7 +42034,12 @@
     "energy_plan_hc_preheat": "Preîncălzire",
     "energy_plan_hc_load": "Timp de funcționare",
     "battery_size_label": "Dimensiune (kWh)",
-    "battery_size_sub": "Contează în nivelul total de încărcare"
+    "battery_size_sub": "Contează în nivelul total de încărcare",
+    "config_charge_switch_entity": "Comutator de încărcare",
+    "config_help_charge_switch_entity": "Un comutator care pornește o încărcare din rețea. Lângă selectorul de încărcare din rețea este o permisiune (de exemplu permite încărcarea din rețea): SEM îl pornește odată cu încărcarea și îl oprește după.",
+    "config_charge_target_entity": "Entitatea nivelului țintă de încărcare",
+    "config_help_charge_target_entity": "Un număr care ține nivelul până la care se încarcă, de exemplu o rezervă de siguranță. SEM scrie acolo ținta planului și pune înapoi vechea valoare.",
+    "config_charge_switch_one_battery": "Comutatorul și nivelul țintă apar doar la o baterie. Două baterii le-ar împărți, iar oprirea uneia le-ar pune înapoi cât timp cealaltă încă se încarcă."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -44967,7 +45037,12 @@
     "energy_plan_hc_preheat": "Förvärmning",
     "energy_plan_hc_load": "Drifttid",
     "battery_size_label": "Storlek (kWh)",
-    "battery_size_sub": "Räknas med i den totala laddnivån"
+    "battery_size_sub": "Räknas med i den totala laddnivån",
+    "config_charge_switch_entity": "Laddningsbrytare",
+    "config_help_charge_switch_entity": "En brytare som startar en nätladdning. Vid sidan av valet för nätladdning är den ett tillstånd (till exempel tillåt nätladdning): SEM slår på den med laddningen och av efteråt.",
+    "config_charge_target_entity": "Entitet för laddningens målnivå",
+    "config_help_charge_target_entity": "Ett tal som håller nivån det laddas till, till exempel en reserv. SEM skriver planens mål där och sätter tillbaka det gamla värdet.",
+    "config_charge_switch_one_battery": "Laddningsbrytaren och målnivån visas bara vid ett batteri. Två batterier skulle dela dem, och det enas stopp skulle sätta tillbaka dem medan det andra fortfarande laddar."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -47965,6 +48040,11 @@
     "energy_plan_hc_preheat": "预热",
     "energy_plan_hc_load": "运行时间",
     "battery_size_label": "容量 (kWh)",
-    "battery_size_sub": "计入总电量水平"
+    "battery_size_sub": "计入总电量水平",
+    "config_charge_switch_entity": "充电开关",
+    "config_help_charge_switch_entity": "用于开启电网充电的开关。与电网充电选择项并用时，它是许可（例如允许电网充电）：SEM 在充电时打开它，结束后关闭。",
+    "config_charge_target_entity": "充电目标 SOC 实体",
+    "config_help_charge_target_entity": "保存充电目标电量的数值，例如备用电量。SEM 把计划的目标写入其中，并恢复原值。",
+    "config_charge_switch_one_battery": "充电开关和充电目标仅在只有一块电池时显示。两个电池组会共用它们，其中一个停止时会在另一个仍在充电时将其复原。"
   }
 }
