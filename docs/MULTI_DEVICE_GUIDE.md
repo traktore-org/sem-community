@@ -56,7 +56,7 @@ This guide covers setting up SEM with different hardware combinations. SEM auto-
 
 - **Grid sensor**: Combined or split depending on model
 - **SEM handling**: Auto-detection via Energy Dashboard
-- **Troubleshooting**: Check the System tab on the SEM dashboard for sensor diagnostics
+- **Troubleshooting**: Check the System screen on the SEM dashboard for sensor diagnostics
 
 ---
 
@@ -107,7 +107,7 @@ Each configured charger creates its own sensor entities:
 
 ### Surplus Priority
 
-Each charger's surplus priority is its position in the **unified priority list** on the Control tab — drag its row up or down relative to loads and the battery (#576). The highest-priority charger gets surplus first; when it's full or at minimum power, the remainder flows down the list.
+Each charger's surplus priority is its position in the **unified priority list** on the Devices screen — drag its row up or down relative to loads and the battery (#576). The highest-priority charger gets surplus first; when it's full or at minimum power, the remainder flows down the list.
 
 ### Night Charging
 
@@ -119,7 +119,7 @@ Each charger charges independently at night:
 
 ### Dashboard
 
-The `sem-ev-status-card` on the EV tab automatically shows per-charger sections when chargers are configured:
+The `sem-ev-status-card` on the Devices screen automatically shows per-charger sections when chargers are configured:
 - **Connected status** — per-charger CONNECTED/DISCONNECTED indicator (reads each charger's plug sensor independently)
 - **Battery SOC gauge** — shows real vehicle SOC when `vehicle_soc_entity` is configured per charger, otherwise estimated SOC from taper detection
 - **Per-charger metrics** — power, session energy, solar share
@@ -149,7 +149,7 @@ SEM uses this convention:
 
 ### Checking Your Setup
 
-On the **System tab** of the dashboard, the Diagnostics section shows:
+On the **System screen** of the dashboard, the Diagnostics section shows:
 - **Grid mode**: `combined` or `split`
 - **Grid sign**: `normal` or `negated`
 - **Sensors unavailable**: Number of sensors currently offline
@@ -159,7 +159,7 @@ On the **System tab** of the dashboard, the Diagnostics section shows:
 ## Troubleshooting
 
 ### Import/export values seem swapped
-- Check the **System tab → Diagnostics** for grid mode and sign
+- Check the **System screen → Diagnostics** for grid mode and sign
 - Verify your Energy Dashboard has BOTH import and export energy sensors configured
 - For Growatt: ensure `*_import_from_grid` and `*_export_to_grid` power sensors exist
 
@@ -245,7 +245,7 @@ added at all.
 
 ### The mode ladder — who is in charge
 
-Every device row on the Control tab has **one mode picker** — a 3-step
+Every device row on the Devices screen has **one mode picker** — a 3-step
 ladder:
 
 | Mode (UI) | Behavior |
@@ -328,7 +328,7 @@ automation:
 
 ### Daily targets — the goal engine
 
-A surplus-mode device can be given a **daily goal**. On the Control tab
+A surplus-mode device can be given a **daily goal**. On the Devices screen
 each surplus device row has a target 🞋 button opening the **Daily Target**
 panel — the same look as the EV charger's Charge Target:
 

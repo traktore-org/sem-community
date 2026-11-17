@@ -67,7 +67,7 @@ Details and screenshots: [Step 1](SETUP_GUIDE.md#step-1-sem-found-your-system), 
 
 Click **Solar Energy Management** in the Home Assistant sidebar.
 
-![SEM Home tab](images/sem_home_tab.png)
+![SEM Now screen](images/sem_next_now.png)
 
 The dashboard has 8 tabs:
 
@@ -82,7 +82,7 @@ The dashboard has 8 tabs:
 | **Costs** | Financial breakdown — savings, feed-in revenue, costs |
 | **System** | Integration health, sensor status, coordinator info |
 
-**What you should see:** Live power values on the Home tab. At the top, a banner says SEM is only watching, with a short checklist of what is left to set up. If the dashboard looks blank, hard-refresh your browser (**Ctrl+Shift+R**, or **Cmd+Shift+R** on Mac).
+**What you should see:** Live power values on the Now screen. At the top, a banner says SEM is only watching, with a short checklist of what is left to set up. If the dashboard looks blank, hard-refresh your browser (**Ctrl+Shift+R**, or **Cmd+Shift+R** on Mac).
 
 Optional extras: `sankey-chart` and `k-flow-card` (HACS > Frontend) add richer views. See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 
@@ -95,7 +95,7 @@ The charger is **not** in the setup wizard. Add it after install:
 
 SEM pre-fills a charger from what its integration offers (buttons, a charge-mode select, the car's own charging amps). You confirm the values. A field it cannot fill stays empty.
 
-The checklist at the top of the Home tab names a charger SEM found. Its **Use it** button opens this place.
+The checklist at the top of the Now screen names a charger SEM found. Its **Use it** button opens this place.
 
 Supported chargers and what each field means: [Setup Guide, EV charger](SETUP_GUIDE.md#step-2-ev-charger-optional).
 
@@ -108,7 +108,7 @@ Supported chargers and what each field means: [Setup Guide, EV charger](SETUP_GU
 **When the dashboard looks right, turn watch-only off:**
 
 1. Check the Home and EV tabs. Do the would-decisions look right?
-2. Press **Let SEM take control** in the banner on the Home tab and confirm. Or turn off **`switch.sem_observer_mode`** in **Settings > Entities**.
+2. Press **Let SEM take control** in the banner on the Now screen and confirm. Or turn off **`switch.sem_observer_mode`** in **Settings > Entities**.
 
 Until you do this, SEM changes nothing. Once it is off, SEM sends commands to your charger and battery.
 
@@ -131,8 +131,8 @@ Problems appear in **Settings > Repairs**. Use the **System** tab on the dashboa
 - **The battery's overnight floor is measured** (2.1) — SEM learns what your house uses at night and spends only what tonight can spare
 - **The pack fills across the day** (2.1) — charge pacing follows the forecast so the battery lands full at sunset, not by 11:30
 - **The 15-minute peak is guarded** (2.1) — on a demand tariff SEM keeps every slot's average under your limit, across all devices
-- **Sessions are kept** (2.2) — every finished charge, per charger, on the EV tab with a CSV button. The energy is the charger's own meter
-- **PV health** (2.2) — one tile on the Energy tab says green, yellow, orange or red from a week of yield against forecast
+- **Sessions are kept** (2.2) — every finished charge, per charger, on the Devices screen with a CSV button. The energy is the charger's own meter
+- **PV health** (2.2) — one tile on the Insights screen says green, yellow, orange or red from a week of yield against forecast
 
 The controls that matter most:
 
@@ -167,7 +167,7 @@ If the error names a `sem-*` element, SEM's card bundle didn't register — rest
 
 **Sensors show `unavailable`**
 
-Go to **Settings > Dashboards > Energy** and confirm your solar and grid sensors are configured and currently reporting values. Then open the SEM **System tab** and look for any red indicators.
+Go to **Settings > Dashboards > Energy** and confirm your solar and grid sensors are configured and currently reporting values. Then open the SEM **System screen** and look for any red indicators.
 
 **The sidebar entry does not appear after install**
 

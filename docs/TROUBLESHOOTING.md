@@ -246,7 +246,7 @@ read-only by design — SEM can't suppress it), but the cards will load.
 
 On a solar install a second voter runs first: solar production has no sign ambiguity, so when solar jumps by ≥ 500 W and the meter **answers** in the same cycle (moves at least a quarter of the swing, battery idle), the direction of that answer reveals the convention. A cycle in which the meter did not move is not an observation and casts no vote (2.1, #889): on polled inverters — Huawei modbus in particular — the inverter and meter registers are read seconds apart, so the solar step and the meter's answer often land in *different* 10-s cycles, and a solar sensor that goes `unavailable` reads as 0 W, which looks like a 4 kW swing while the meter holds still. Before #889 every such cycle was a full-weight "normal" vote and four of them locked SEM convention on an HA-convention meter. When no clean co-movement is ever seen, the solar voter simply stays silent and the counter voter above decides.
 
-**If SEM locked the wrong sign before 2.1** (you upgraded from a version that voted on stale cycles): the lock is persisted, so tap **Reset sign detection** once (Control tab → Advanced → Grid Sign). Detection re-runs with the corrected voter; if you had set the **Grid sign flip** switch as a workaround, turn it off afterwards so auto-detection is in charge again.
+**If SEM locked the wrong sign before 2.1** (you upgraded from a version that voted on stale cycles): the lock is persisted, so tap **Reset sign detection** once (Devices screen → Advanced → Grid Sign). Detection re-runs with the corrected voter; if you had set the **Grid sign flip** switch as a workaround, turn it off afterwards so auto-detection is in charge again.
 
 **HomeWizard P1 and other known meters:** SEM takes the sign from the meter model on every read, also right after a restart and when the meter's integration loads after SEM. The **Grid sign flip** switch still works.
 
@@ -391,7 +391,7 @@ blind on grid is the honest reading, not a fault to work around.
 
 **Symptom:** a Repair says *No power sensor for* a kWh counter of your grid, solar or battery. That source reads 0 W on every SEM card, and the energy flows and the surplus are wrong.
 
-**Fix:** pick the sensor in the Configuration tab: [Sensor source overrides](SETUP_GUIDE.md#sensor-source-overrides). During a new setup, SEM asks for it on its own screen: [Step 1](SETUP_GUIDE.md#when-sem-asks-one-more-question).
+**Fix:** pick the sensor in the System screen: [Sensor source overrides](SETUP_GUIDE.md#sensor-source-overrides). During a new setup, SEM asks for it on its own screen: [Step 1](SETUP_GUIDE.md#when-sem-asks-one-more-question).
 
 **Cause (#1188):** the Energy Dashboard entry counts energy (kWh) but has no power sensor (W), and SEM found none on the counter's own device. For the grid, SEM also looked for an import and export pair. SEM reads power, not kWh, to steer, so it reads 0 W. Before, only the HA log said `No grid power sensor found`. SEM waits 5 minutes after Home Assistant has started, so a meter that loads late does not raise it.
 
@@ -401,7 +401,7 @@ If the device has no power sensor at all (some cloud integrations publish only k
 
 **A battery sensor is gone:** open the Repair. It lists every battery sensor and control SEM uses that is missing, and you can pick a new one for each. The battery keeps its SEM settings, such as reserve and mode. When the old sensor comes back, its settings join the battery again.
 
-**Two inverters or batteries (#1226):** SEM looks for a power sensor for each entry on its own. When one entry has none, SEM adds up only the others, and the Repair names that entry's counter. Add its power sensor to that entry in the Energy Dashboard. The pick on SEM's Configuration tab stands for all of solar (or the battery), so it would drop the entries that read. SEM does not take a second sensor from a device it already reads power from, because it could count the same power twice.
+**Two inverters or batteries (#1226):** SEM looks for a power sensor for each entry on its own. When one entry has none, SEM adds up only the others, and the Repair names that entry's counter. Add its power sensor to that entry in the Energy Dashboard. The pick on SEM's System screen stands for all of solar (or the battery), so it would drop the entries that read. SEM does not take a second sensor from a device it already reads power from, because it could count the same power twice.
 
 **Two grid meters:** SEM looks for the import and export power sensors of each meter and adds both meters up. A meter with no such pair is noted in the HA log.
 
@@ -644,7 +644,7 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 
 ## Zaptec: which current control SEM uses
 
-SEM never writes your Zaptec installation's "Available current". It limits every charger on your site, not one. A setup that saved it loses it when SEM starts; the log says so. SEM then uses the charger's own "Charger max current", or only its start and stop buttons. Open the charger's settings in SEM's Configuration tab and check its current control.
+SEM never writes your Zaptec installation's "Available current". It limits every charger on your site, not one. A setup that saved it loses it when SEM starts; the log says so. SEM then uses the charger's own "Charger max current", or only its start and stop buttons. Open the charger's settings in SEM's System screen and check its current control.
 
 ---
 
@@ -947,7 +947,7 @@ SEM reads a sensor you named during setup and Home Assistant reports it
 that needs this value is degraded. **Fix:** check the integration that
 provides the sensor (Settings → Devices & Services) — restart it if it shows
 an error; if you renamed or removed the entity, point SEM at the replacement
-in the Configuration tab. The notice clears itself when the sensor returns —
+in the System screen. The notice clears itself when the sensor returns —
 or, once you point SEM at another sensor, about five minutes after you save
 (within the hour when you changed it in the Energy Dashboard).
 
@@ -989,7 +989,7 @@ SEM plans night charging and battery budgets against tomorrow's solar
 forecast, and no supported forecast integration is installed. Everything
 reactive still works; everything *forecast-led* is off. **Fix:** install one
 of Forecast.Solar (no account needed), Open-Meteo Solar Forecast, or Solcast,
-then reload SEM. The Configuration tab's Solar forecast section shows what
+then reload SEM. The System screen's Solar forecast section shows what
 SEM detected.
 
 ## The recorder is not available
@@ -1088,7 +1088,7 @@ select changes. Until then the battery may keep charging from the grid.
 
 ## The battery charge limit does not follow SEM's pacing (2.2, #820)
 
-Press **Diagnose** in the Battery section of the Configuration tab. The
+Press **Diagnose** in the Battery section of the System screen. The
 `pacing_actuation` block shows:
 
 - `register` — what the limit entity holds now, and its min, max and step.
@@ -1128,7 +1128,7 @@ decided is on `sensor.sem_diag_ed_config` (attribute `install_modules`).
 A number/switch SEM uses to command your wallbox exists in the registry but
 rejects writes or reports unavailable — commonly after the charger's
 integration was reinstalled and entity ids changed. **Fix:** open the
-charger's settings in SEM's Configuration tab and re-select the current
+charger's settings in SEM's System screen and re-select the current
 control entity. The repair names the exact entity it means.
 
 A control the charger turns off on purpose, for example while no car is
@@ -1386,7 +1386,7 @@ recorded history — so it needs a **cumulative energy counter**, in kWh, that
 only ever goes up. A power sensor in watts is a different thing and cannot be
 used: it says what the battery is doing *now*, not what it has done.
 
-The button lives on the Battery tab, under the nights-collected progress:
+The button lives on the Devices screen, under the nights-collected progress:
 
 ![The Rebuild from history action on the battery
 card](screenshots/battery-rebuild-from-history.png)
@@ -1508,7 +1508,7 @@ one. With Auto-start at 50% and Buffer at 80%, a pack at 60% would answer
 you set at 80%.
 
 **To fix it:** Settings → Devices & Services → SEM → Configure → Battery,
-or the Configuration tab on the SEM dashboard. Any values are fine as long
+or the System screen on the SEM dashboard. Any values are fine as long
 as Priority ≤ Buffer ≤ Auto-start.
 
 ### Files from a previous SEM install

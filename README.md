@@ -19,15 +19,12 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 
 ### New in 2.3
 
-- **A new dashboard** with five screens, one per question: *Now*, *Plan*, *Devices*, *Insights*, *System*. The old dashboard stays.
-- **A first-run checklist** on the Home screen: it says when SEM only watches, and what is left to set up.
+- **A new dashboard** with five screens, one per question: *Now*, *Plan*, *Devices*, *Insights*, *System*. It replaces the old one.
+- **A first-run checklist** on the Now screen: it says when SEM only watches, and what is left to set up.
 - **Ask your AI assistant** about SEM — local or cloud, see [below](#ask-your-ai-assistant).
 - **Better forecasts**: SEM recommends the forecast source that has predicted your roof best.
 
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_system_diagram_animated.gif" alt="System Diagram Animation" width="400">
-</p>
 
 ---
 
@@ -65,7 +62,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **EV battery health** — tracks capacity degradation from partial charge sessions over months
 - **Hardware test suite** — automated tests for many brands. Each brand's status (tested live, implemented or requested) is in the [hardware list](docs/SUPPORTED_HARDWARE.md)
 - **Transparent auto-detection (#814)** — the dashboard **Configuration → Detected hardware** section shows every device SEM found with the evidence for each role, and names *near-misses* (a brand almost supported) instead of silently detecting nothing. The full support matrix with an honest per-brand status is generated and CI-guarded: [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md)
-- **Hardware SEM has never met (2.1, #915)** — SEM reads each integration's own list of entities and services, so a brand nobody reported is recognised and proposed on the Configuration tab. You confirm; SEM binds nothing it guessed.
+- **Hardware SEM has never met (2.1, #915)** — SEM reads each integration's own list of entities and services, so a brand nobody reported is recognised and proposed on the System screen. You confirm; SEM binds nothing it guessed.
 - **Your inverter's house figure (2.1, #891)** — name the house power sensor your inverter reports and SEM shows it beside its own, with the difference.
 - **Pause a charger (2.1, #980)** — pick a time, press Pause: the charge mode goes Off and comes back on its own.
 - **Loads set by watts (2.1, #880)** — a load with a watt number (my-PV AC-THOR and similar) is given the watts it should draw, not just switched on.
@@ -73,12 +70,12 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Modules (2.1, #923)** — SEM shows what your install has. A solar-only house gets no battery entities.
 - **Removal hands the house back (2.1, #935)** — a load SEM switched on is switched off, a parked wallbox is released, and nothing else is touched.
 - **Controls only where they can act (2.2, #996)** — a flat tariff gets no price knobs, a house without an export limit no export guard. Wire the thing and the control appears.
-- **Charging sessions, kept (2.2, #1024)** — the last 400 sessions per charger on the EV tab, with month totals and a CSV button. The energy is the charger's own meter.
+- **Charging sessions, kept (2.2, #1024)** — the last 400 sessions per charger on the Devices screen, with month totals and a CSV button. The energy is the charger's own meter.
 - **PV health (2.2, #1022)** — one sensor, green to red, from a week of yield against forecast. With downtime minutes and a snow flag.
 - **Hints (2.2, #1019)** — one setting, off by default: a sentence when an input goes silent, a load runs all night, grid use rises, or power is cheap while the car waits. And a weekly note.
 - **Chargers found by what they offer (2.2, #1032)** — start/stop buttons, a charge-mode select, a car's own charging amps. SEM reads any integration's controls and offers the charger in setup.
-- **Simulation tab (2.2, #1083)** — replay your own recorded days with a different battery, solar size, peak limit or price, and see what they would have cost. Off until you switch it on; see [Simulation tab](docs/USER_GUIDE.md#simulation-tab-1083).
-- **Why did SEM do that? (2.2, #1084)** — each time SEM changes a device, the logbook and the *Why?* card on the Control tab say what changed and why.
+- **Simulation (Insights screen) (2.2, #1083)** — replay your own recorded days with a different battery, solar size, peak limit or price, and see what they would have cost. Off until you switch it on; see [Simulation (Insights screen)](docs/USER_GUIDE.md#simulation-tab-1083).
+- **Why did SEM do that? (2.2, #1084)** — each time SEM changes a device, the logbook and the *Why?* card on the Devices screen say what changed and why.
 - **Taxes, markup and feed-in fee (2.2, #1077)** — SEM decides on what a kWh is worth to you, with a Netherlands 2027 preset. Nothing changes until you set a field.
 - **Stop exporting below a price (2.2, #1090)** — when a sold kWh is worth less than your limit, the battery and loads take the sun instead.
 - **A tariff per device (2.2, #812)** — a heat pump (or any load) on its own meter and price, with its own cost.
@@ -162,13 +159,13 @@ Detail for each step is in the [Quick Start](docs/QUICK_START.md).
 3. Go to **Settings → Devices & Services → + Add Integration** and add **Solar Energy Management**.
 4. **Confirm the sensors SEM found** (solar, grid and battery power, in watts). Pick your own if one is wrong.
 5. Open **Solar Energy Management** in the sidebar. SEM made the dashboard for you.
-6. **Add your EV charger** under **Configure** on the integration, or on the dashboard's Configuration tab. The wizard does not ask for it.
+6. **Add your EV charger** under **Configure** on the integration, or on the dashboard's System screen. The wizard does not ask for it.
 7. *Optional:* **Solar forecast** (Solcast, Forecast.Solar, Open-Meteo or Helios). SEM then plans grid charging around tomorrow's sun.
 8. *Optional:* **Dynamic tariff** (Tibber, Nordpool, ENTSO-e or aWATTar). SEM then charges in the cheapest hours.
 9. **Turn watch-only off** when the dashboard looks right: switch off `switch.sem_observer_mode`. SEM starts in watch-only mode, so **until you do this, SEM changes nothing**. It only shows what it would do.
 10. **Check Repairs** (**Settings → Repairs**) when SEM needs your attention.
 
-After install the Home screen shows what SEM sees, what is left, and one button to let SEM take control:
+After install the Now screen shows what SEM sees, what is left, and one button to let SEM take control:
 
 ![First-run checklist](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_checklist.png)
 
@@ -254,7 +251,7 @@ When the battery SOC is above the buffer threshold (default 70%), SEM supplement
 
 ## Dashboard
 
-SEM makes two dashboards. **SEM Next** (new in 2.3) has five screens, one per question:
+The SEM dashboard has five screens, one per question. The dashboard has 5 screens: *Now*, *Plan*, *Devices*, *Insights*, *System*.
 
 | | |
 |---|---|
@@ -262,34 +259,22 @@ SEM makes two dashboards. **SEM Next** (new in 2.3) has five screens, one per qu
 | ![Devices](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_devices.png) | ![Insights](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_insights.png) |
 | ![System](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_system.png) | ![On a phone](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_next_now_mobile.png) |
 
-The **classic dashboard** keeps its 8 views:
-
-| View | Description |
-|------|-------------|
-| **Home** | Illustrated system diagram with SVG component drawings, spark flow animations, sun arc, solar summary, 7-day chart, weather, smart recommendations |
-| **Energy** | Sankey diagram, self-consumption/autarky gauges, donut chart, 24h power, CO2 avoided, trees saved |
-| **Battery** | SOC radial gauge, 24h charge/discharge chart, zone configuration |
-| **EV** | Charging status, session stats, solar share gauge, lifetime totals, EV Intelligence (taper trend, virtual SOC, charge skip reasoning, battery health) |
-| **Control** | Live surplus allocation, load-priority drag-and-drop, per-device control modes, today's schedule |
-| **Configuration** | All post-setup configuration in one place — staged **Apply/Revert per section** (nothing saves on an accidental tap), a ⓘ on every setting with its explanation, **factory default and one-tap ↺ reset**, an **Explain settings** toggle that opens all help at once, and a 📖 link on each section header straight to the matching [docs](docs/SETUP_GUIDE.md) chapter. Rarely need HA's native config flow |
-| **Costs** | Today/month/year KPIs, period selector, cost & savings charts, demand charge, tariff rates |
-| **System** | Health diagnostics, sensor status, charging state, peak management |
-
-| | |
-|---|---|
-| ![Energy](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_energy_tab.png) | ![Costs](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_costs_tab.png) |
-| ![Battery](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_battery_tab.png) | ![EV](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_ev_tab.png) |
-| ![Control](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_control_tab.png) | ![System](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_system_tab.png) |
-| ![Configuration](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_config_tab.png) | |
+| Screen | What it shows |
+|--------|---------------|
+| **Now** | What SEM does right now and why: power bar, today's totals, the Today list, money, signals |
+| **Plan** | The day as a timeline with sun, price and every planned block, with the reason for each |
+| **Devices** | Battery, cars, heat pumps, tanks and other loads, each with its own settings and drag-and-drop priority |
+| **Insights** | History, charging sessions with a CSV button, costs, forecast accuracy, and the Simulation replay |
+| **System** | Setup check, what SEM reads, how fresh it is, and every setting written as a sentence (*Everyday* or *All settings*) |
 
 ### Dashboard Features
-- **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects
-- **Illustrated system diagram** — sem-system-diagram-card with detailed SVG illustrations (solar panels, house, battery, grid pole, EV charger), K-Flow-inspired spark flow animations, time-based sun arc with golden sine wave particles, clickable nodes, individual device display on desktop, responsive layouts. Optional K-Flow card via `diagram_style: "kflow"` config
-- **Animated energy flow** — sem-flow-card with real-time power flows, daily energy totals, autarky gauge, config editor, tap/hold/double-tap actions
-- **Custom SEM cards** — flow card, solar summary (glow ring), weather (clock + forecast), chart card (Chart.js), period selector
-- **Drag-and-drop load priority** — reorder device shedding priorities visually
-- **Environmental impact** — CO2 avoided and trees-equivalent with growing icon (sprout/tree/pine/forest)
-- **Yearly KPIs** — year-to-date costs, savings, revenue on the Costs tab (auto-seeded from HA recorder on mid-year install)
+- **No card install** — every card ships inside the integration
+- **Follows your hardware** — a row for something you do not have is left out
+- **Every setting in the dashboard** — no need to open the options flow
+- **Works at any address** — the screens link to each other from the page you opened
+- **16 languages**, with the dashboard in the language Home Assistant uses
+
+Coming from the classic dashboard? An unedited one is replaced on the first start after the update. One you edited stays, and a Repair offers to delete it. See the [Dashboard Guide](docs/DASHBOARD_GUIDE.md#coming-from-the-classic-dashboard).
 
 For dashboard setup instructions, see the [Dashboard Guide](docs/DASHBOARD_GUIDE.md).
 
@@ -485,7 +470,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 **Try it before it happens**
 
-- **Simulation tab**: replay your own recorded days with another battery, reserve, peak limit or price (#1083). Swipe days on a phone, pick the newest with a slider, try a battery up to 150 kWh — a car pack fits.
+- **Simulation (Insights screen)**: replay your own recorded days with another battery, reserve, peak limit or price (#1083). Swipe days on a phone, pick the newest with a slider, try a battery up to 150 kWh — a car pack fits.
 - **One period at a time**: last 30/90/365 days, a month, or the newest days (#1083). The battery carries its charge across short gaps; a counter-jump day is skipped and said how many were.
 - **Results that add up**: net including stored energy, per month, a day you tap for why it differs from another (#1083). The Excel export has the per-day numbers.
 
@@ -659,7 +644,6 @@ The 2.0 line adds almost nothing you have to learn. It makes what SEM already di
 - **Individual device display** — top 3 devices by power consumption shown on desktop with arced connections to house
 - **SEM color scheme on flows** — pink battery charge, teal discharge, purple grid export, blue import
 - **Time-based sun position** — sun moves along arc from sunrise to sunset, moon + stars at night
-- **K-Flow option** — `diagram_style: "kflow"` config option to use K-Flow card instead
 - **Self-consumption %** added to home tab header as 4th stat
 
 ### v1.5.6 — Dynamic Tariff & Load Management

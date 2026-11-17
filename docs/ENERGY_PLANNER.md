@@ -470,7 +470,7 @@ override, peak shed, reserve SOC, anti-cycle timers, deadline forcing.
 
 ## How to read tonight's plan
 
-The **Energy Plan** card (Control tab) is the one answer:
+The **Energy Plan** card (Devices screen) is the one answer:
 
 - **A row per demand** — the window strip shows *when*, the tooltip shows
   the blocks with power and price (*why this window: it was the cheapest

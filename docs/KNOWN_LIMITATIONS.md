@@ -113,7 +113,7 @@ Forecast-based features (charging recommendations, battery-assist decisions) req
 The budget is measured, not assumed, so it will not offer a figure until it
 has the measurements. Two clocks run independently: **five recorded nights**
 of overnight battery use, and **seven settled days** of forecast accuracy for
-the horizon it wants to trust. Until both are met the Battery tab reads
+the horizon it wants to trust. Until both are met the Devices screen reads
 *Learning* and nothing is spent — which is the intended behaviour, not a
 fault.
 
@@ -169,7 +169,7 @@ freely. Two further limits worth knowing:
   the gap. An install whose meter is blind for minutes at a time still relies
   on the reactive EMERGENCY stop for that window.
 
-Set the Control tab's Limit grid draw to slider to MAX (*No limit*) to disable
+Set the Devices screen's Limit grid draw to slider to MAX (*No limit*) to disable
 peak management entirely, guard included.
 
 
@@ -377,7 +377,7 @@ but neither will be optimised for.
 ## A recognised brand is a proposal, not a binding (2.1, #915, #956)
 
 SEM reads what an integration declares about itself and proposes entities
-and services on the Configuration tab. It binds nothing you did not confirm.
+and services on the System screen. It binds nothing you did not confirm.
 Two limits follow:
 
 - **A service SEM cannot drive as-is is named, not offered.** go-eCharger's
@@ -458,9 +458,9 @@ SEM's arming is turned off (`keba_arm_failsafe: false` via `set_option`)
 and the box's own `Curr FS` is set to 0. A plan override with `skip` (#1085) stops
 the same way, so it holds the same 10 minutes on a KEBA.
 
-## Simulation tab: estimates from hourly averages (#1083)
+## Simulation (Insights screen): estimates from hourly averages (#1083)
 
-The Simulation tab gives estimates, not measurements:
+The Simulation (Insights screen) gives estimates, not measurements:
 
 - **Hourly averages.** It reads Home Assistant's hourly history. 15-minute
   prices and short power peaks inside an hour are averaged away, and the

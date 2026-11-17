@@ -67,7 +67,7 @@ picker.
 
 ## What SEM detected — and how to correct it
 
-After setup, the dashboard **Configuration tab → Detected hardware** shows
+After setup, the dashboard **System screen → Detected hardware** shows
 every charger SEM auto-detected, with the evidence for each role (the entity
 and what it is — e.g. `binary_sensor/plug` → connected), the entities on that
 device it left unmapped, and **near-misses**: integrations whose entities SEM
@@ -183,7 +183,7 @@ Two cards are **optional** and auto-detected — install them via
 
 | Card | What it adds when installed |
 |------|-----------------------------|
-| `sankey-chart` | A richer SEM-entity energy-flow sankey on the Energy tab (otherwise HA's native `energy-sankey` card is used) |
+| `sankey-chart` | A richer SEM-entity energy-flow sankey on the Insights screen (otherwise HA's native `energy-sankey` card is used) |
 | `k-flow-card` | An animated flow visualization replacing the built-in system diagram (opt-in via the *Diagram style* setting) |
 
 See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full card list and
@@ -314,11 +314,6 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 | Field | Default | Description |
 |-------|---------|-------------|
 | **Generate dashboard** | On | Creates the SEM Lovelace dashboard in your sidebar immediately after setup. Leave this on unless you want to build your own dashboard |
-| **System diagram style** | SEM | Choose which system diagram card appears on the Home tab. **SEM** uses the built-in illustrated diagram with SVG animations. **K-Flow** uses the third-party K-Flow card (must be installed via HACS separately) |
-
-> **Diagram style:** You can switch between SEM and K-Flow at any time via
-> **Configure** without reinstalling. The dashboard regenerates automatically
-> with the selected style.
 
 Click **Submit**. SEM starts running immediately. The SEM dashboard appears
 in your sidebar within a few seconds if dashboard generation is enabled.
@@ -326,7 +321,7 @@ in your sidebar within a few seconds if dashboard generation is enabled.
 Every install starts with a 5.0 kW target peak limit — SEM no longer asks for
 your grid ceiling during setup. The ceiling only *sizes* what SEM offers (the
 EV charger above all); load **shedding** stays off until you enable it on the
-Configuration tab. Tune it afterward from the **Control** tab's
+System screen. Tune it afterward from the **Control** tab's
 Load Management card (drag the slider up to **80 kW**, or all the way to
 **No limit** if the connection has no limit worth defending), or answer
 **Limit grid draw to** with an exact kW value on the **Configuration** tab. See
@@ -339,9 +334,9 @@ From v1.7.0-beta.15 onward, the very first install fires a one-shot
 **persistent notification** with a deep link to the SEM dashboard and a
 three-item starter checklist:
 
-1. Confirm solar is reporting on the Energy tab
-2. Pick an EV charge mode on the EV tab
-3. Set your battery reserve on the Battery tab
+1. Confirm solar is reporting on the Insights screen
+2. Pick an EV charge mode on the Devices screen
+3. Set your battery reserve on the Devices screen
 
 The notification only fires once per install (gated by
 `_welcome_notification_fired` in the entry options), survives HA restarts, and
@@ -377,7 +372,7 @@ online.
 
 Open the **SEM** dashboard from your sidebar.
 
-![SEM Home tab with system diagram](images/sem_home_tab.png)
+![SEM Now screen](images/sem_next_now.png)
 
 The illustrated system diagram should show energy flows between your solar
 panels, inverter, battery, grid, house, and EV charger with animated spark
@@ -396,7 +391,7 @@ load — check **Settings > System > Logs** (filter for
 
 ### Sensor source overrides
 
-![Configuration tab, Sensor sources: what SEM reads right now](screenshots/setup-flow/04-sensor-sources-check.png)
+![System screen, Sensor sources: what SEM reads right now](screenshots/setup-flow/04-sensor-sources-check.png)
 
 The top of **Sensor sources** shows what SEM reads right now, in watts: solar,
 grid, battery and what your home uses. Compare it with your meter or energy
@@ -410,7 +405,7 @@ Dashboard — that stays the primary path, and fixing a wrong mapping there
 isn't enough — a sensor the inverter stops feeding (e.g. CT clamps dark
 when running off-grid), or you want SEM on a different meter than the
 HA-wide Energy Dashboard uses — the **Sensor sources** section on the
-dashboard's ⚙ Configuration tab lets you pin an explicit entity per source:
+dashboard's ⚙ System screen lets you pin an explicit entity per source:
 
 | Picker | Overrides | Blank means |
 |---|---|---|
@@ -437,8 +432,8 @@ Notes:
 
 ## 5. Options Flow
 
-**The dashboard Configuration tab is the primary place to change settings** —
-open your SEM dashboard and switch to the ⚙ Configuration tab. Everything below
+**The dashboard System screen is the primary place to change settings** —
+open your SEM dashboard and switch to the ⚙ System screen. Everything below
 is editable there, organized in the same sections as this guide, with:
 
 - **Staged changes with Apply/Revert per section** — nothing saves while you
@@ -465,7 +460,7 @@ generated yet. It is organized into these pages:
 4. **Tariff & Advanced** — electricity rates, tariff mode, update interval
 5. **Load Management** — peak limit, device shedding, critical device protection
 6. **Notifications** — charger display, mobile push, notification types
-7. **Dashboard** — diagram style (SEM/K-Flow), dashboard regeneration
+7. **Dashboard** — dashboard regeneration
 8. **Heat Pump** *(if configured)* — SG-Ready relay entities, temperature targets
 9. **EV Charger Management** — add/edit/remove individual chargers
 
@@ -485,7 +480,7 @@ generated yet. It is organized into these pages:
 
 Night charging and smart night charging are **not settings here** — since v1.6.3
 (#277) both are carried by the per-charger **Charge mode**
-(`select.sem_charger_<id>_charge_mode`, on the EV tab). See
+(`select.sem_charger_<id>_charge_mode`, on the Devices screen). See
 [Setting an EV charge target](#setting-an-ev-charge-target) below.
 
 ### Battery SOC Zone settings
@@ -496,10 +491,10 @@ Night charging and smart night charging are **not settings here** — since v1.6
 | Buffer SOC (%) | 70% | Zone 2/3 boundary. Above this, battery can supplement solar for EV charging. Lower it if you have limited solar and want battery assist to start earlier. |
 | Auto-start SOC (%) | 90% | Zone 3/4 boundary. From here the battery may give the car its full help, still only with spare sun past the Solar Gate. Lower it if your battery rarely reaches 90% and you still want battery-assisted charging. |
 | Assist floor SOC (%) | 60% | Once battery assist starts, it stays on until SOC drops here. This prevents rapid on/off cycling. Raise it if the battery cycles too often. |
-| Battery capacity (kWh) | The size SEM finds, else 15 kWh | Your battery's usable capacity (1–100 kWh). Used for SOC target calculations and cost attribution. Until you set it, the field shows the size SEM uses. With two or more batteries, set each one's size in its **Capacity** number (Battery tab, or Settings → Devices → SEM) so the total charge level counts big batteries more than small ones. |
+| Battery capacity (kWh) | The size SEM finds, else 15 kWh | Your battery's usable capacity (1–100 kWh). Used for SOC target calculations and cost attribution. Until you set it, the field shows the size SEM uses. With two or more batteries, set each one's size in its **Capacity** number (Devices screen, or Settings → Devices → SEM) so the total charge level counts big batteries more than small ones. |
 | Max assist power (W) | 4500 W | Maximum battery discharge power allowed for EV charging. Set it to the lower of your battery's rated discharge power and your charger's maximum input. |
 | Assist gate / Solar Gate (v1.7.3) (W) | 1200 W | **Battery assist threshold** — battery only supplements EV charging when real solar surplus is at least this value (0–5000 W). Set to 0 to allow battery assist everywhere, including overnight. Prevents battery draining into the car at dusk/dawn. |
-| Grid sign flip | Off | Manual override for grid power polarity (v1.7.3). SEM auto-detects at startup whether `positive = import` or `positive = export`. Flip this on only if import/export are inverted in your system diagram. Use the **Fix grid sign** button on the Control tab (simpler). When enabled, auto-detect is bypassed. |
+| Grid sign flip | Off | Manual override for grid power polarity (v1.7.3). SEM auto-detects at startup whether `positive = import` or `positive = export`. Flip this on only if import/export are inverted in your system diagram. Use the **Fix grid sign** button on the Devices screen (simpler). When enabled, auto-detect is bypassed. |
 | Battery sign flip | Off | Manual override for battery power polarity (v1.7.5, #588). SEM auto-detects whether `positive = charge` or `positive = discharge` — from your inverter's brand (deterministic for known brands) and from the Energy-Dashboard charge/discharge counters. Flip this on only if charge/discharge look inverted (battery shows charging when it's really discharging). Use the **Fix battery sign** button in Config → Advanced (simpler — it also copies a paste-ready report for the GitHub issue). `Reset` re-learns and clears both grid and battery flips. When enabled, auto-detect is bypassed. |
 
 ### Tariff and Pricing settings
@@ -752,7 +747,6 @@ needed. The current factor is exposed on the forecast sensor's attributes.
 
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|
-| System diagram style | SEM | Choose the system diagram card on the Home tab. **SEM** uses the built-in illustrated SVG diagram with detailed component drawings, animated spark flows, time-based sun arc, and clickable nodes. **K-Flow** uses the third-party K-Flow HACS card with PV string details, cell temperatures, and BMS data. K-Flow must be installed separately via HACS. |
 | Generate dashboard | — | Recreates the SEM Lovelace dashboard. Safe to run at any time — rebuilds all tabs with current settings and language. |
 | Dashboard title | Solar Energy Management | Display name shown in the sidebar. |
 | Dashboard path | sem-dashboard | URL path (lowercase, dashes). Change if you have a naming conflict. |
@@ -947,7 +941,7 @@ Priority controls the order in which devices are activated and shed:
 - During peak shedding: lower-priority devices are shed first (high-priority
   devices are preserved as long as possible)
 
-Drag and drop devices on the Control tab of the SEM dashboard to change
+Drag and drop devices on the Devices screen of the SEM dashboard to change
 their priority.
 
 ### Dependencies (Requires)
@@ -965,7 +959,7 @@ pool pump to be running.
 
 Check these in order:
 
-1. **Check the device's mode** on the Control tab. If it is "Surplus", SEM
+1. **Check the device's mode** on the Devices screen. If it is "Surplus", SEM
    will turn it off whenever solar surplus drops. Switch to "Peak Only" if
    you only want peak protection.
 
@@ -1072,7 +1066,7 @@ Once the night window opens the mode still never grid-charges without an
 A hybrid mode for overcast days. The charger runs at minimum current (using
 a small amount of grid power if needed) and uses any available solar on top.
 This keeps the car charging slowly rather than waiting for surplus that may
-never arrive. Enable it via the "Min+PV" toggle on the Control tab.
+never arrive. Enable it via the "Min+PV" toggle on the Devices screen.
 
 Use Min+PV when: the daily target needs to be reached but solar is
 consistently below the minimum threshold for solar-only mode.
@@ -1194,7 +1188,7 @@ during a charge, the battery charges from the grid until it is full.**
 
 Some inverters have no switch for charging from the grid, only a select with
 an option such as *Solar and mains* (against *Solar only*). Set it in the
-Configuration tab, All settings, Battery control:
+System screen, All settings, Battery control:
 
 1. **Grid-charge select**: pick the select.
 2. **Option that charges from the grid**: pick it from the list of options
@@ -1307,7 +1301,7 @@ their `climate` entity (setpoint boost on surplus).
 
 **Their place in the surplus order:** since v1.7.5 the heat pump and hot
 water device appear as **draggable rows in the ONE device-priority list** on
-the Control tab — their surplus priority is simply their list position
+the Devices screen — their surplus priority is simply their list position
 (there is no separate priority slider anymore). See
 [LOAD_PRIORITY.md](LOAD_PRIORITY.md).
 
@@ -1316,7 +1310,7 @@ field at a cumulative energy counter (e.g. a Viessmann ViCare kWh total) —
 SEM derives a smooth live power signal from it, or autodetects a companion
 power sensor on the same device. Set *Rated power (W)* so surplus sizing
 works before the first live reading. Both fields live in the dashboard
-Configuration tab's Heat Pump / Hot Water sections.
+System screen's Heat Pump / Hot Water sections.
 
 ### What is SG-Ready?
 
@@ -1457,14 +1451,14 @@ safety requirements are met.
 A standalone hot-water boiler (electric heater, heat-pump water heater
 that exposes a `switch`/`water_heater`/`climate` entity, or any other
 HA-controllable heater) can be configured independently via the
-**Configuration tab → Hot Water** section. Unlike the heat-pump SG-Ready
+**System screen → Hot Water** section. Unlike the heat-pump SG-Ready
 path, the hot-water boiler is a simple on/off device controlled by SEM.
 
 | Config field | What to set |
 |---|---|
 | Boiler control entity | The `switch.`, `water_heater.`, or `climate.` entity that turns the boiler on/off |
 | Temperature sensor (optional) | A `sensor.` reporting current water temperature in °C |
-| Solar target | Boiler runs on surplus until water reaches this, then SEM stops it (default 50 °C). It is the highest temperature SEM heats to, except for the Legionella cycle. With a thermometer on the Control tab, the four questions there set the top instead |
+| Solar target | Boiler runs on surplus until water reaches this, then SEM stops it (default 50 °C). It is the highest temperature SEM heats to, except for the Legionella cycle. With a thermometer on the Devices screen, the four questions there set the top instead |
 | Legionella target | Target temperature for the periodic Legionella cycle (default 65 °C) |
 
 Mode, priority, and when to stop or force heating are set on the **Control
@@ -1571,7 +1565,7 @@ SEM reads source sensors from the Energy Dashboard. Check that your inverter
 is online, verify that **Settings > Dashboards > Energy** has sensors
 assigned and that those sensors currently report values, then review logs at
 **Settings > System > Logs** (filter for `solar_energy_management`). Also
-check the SEM System tab, which shows a diagnostic summary of sensor health.
+check the SEM System screen, which shows a diagnostic summary of sensor health.
 
 **Can I change settings after the initial setup?**
 
@@ -1581,7 +1575,7 @@ one coordinator cycle (default 10 seconds).
 
 **SEM sent a command to a device I did not want it to touch.**
 
-Set that device's control mode to Off via the Control tab on the SEM
+Set that device's control mode to Off via the Devices screen on the SEM
 dashboard, or call `solar_energy_management.update_device_config` with
 `mode: off`. In Off mode SEM monitors but never controls the device.
 

@@ -117,7 +117,7 @@ sold kWh are different money. SEM can work with both:
     bought kWh = (price + markup + energy tax) × (1 + VAT) + network fee
     sold kWh   = export price − feed-in fee
 
-Set it under Tariff & Advanced, or on the Config tab (All settings). The
+Set it under Tariff & Advanced, or on the System screen (All settings). The
 preset *Netherlands from 2027* fills energy tax (the 2026 rate, 0.0916 per
 kWh excl. VAT — check your bill) and 21 % VAT, and sets the price to *Spot
 price*. It is for a raw market price (Nord Pool, ENTSO-e); a price that

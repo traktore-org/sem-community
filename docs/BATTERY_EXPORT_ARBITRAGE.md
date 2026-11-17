@@ -152,7 +152,7 @@ it never touches your reserve SOC.
 
 ## Enabling it
 
-Configuration tab → **Tariff & pricing** (visible only on a *dynamic* tariff):
+System screen → **Tariff & pricing** (visible only on a *dynamic* tariff):
 
 ![Battery export arbitrage settings](screenshots/battery-export-arbitrage-config.png)
 

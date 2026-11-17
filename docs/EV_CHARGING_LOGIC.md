@@ -1,6 +1,6 @@
 # EV Charging Logic — How SEM decides
 
-![New EV card (v1.6.3) — single Charge mode selector replaces the legacy night/smart-night/tariff switches](images/sem_ev_tab.png)
+![Charger on the Devices screen: one Charge mode selector](images/sem_next_devices.png)
 
 > This is the **current** reference (rewritten 2026-07 for the v1.6.3+
 > single-selector model, #618). If you're migrating automations off the
@@ -103,8 +103,8 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 | `number.sem_charger_<id>_target_soc` / `_max` | *Minimum SoC* floor / *Up to* ceiling (% target); both **0–100 %** (#680) — floor 0 = no overnight charge |
 | *(picker)* `ev_start_stop_entity` | The `switch`/`button` SEM uses to open the contactor — set on the config card or the Add/Edit-charger dialog (#627). Without it, a `number.*`-only charger may be un-stoppable |
 | `time.sem_charger_<id>_target_time` | *Charge by* deadline (earlier than window end = forcing; later than window end = the night still ends at the window's end, #1308) |
-| *(toggle)* `finish_by_departure` | *Finish by departure* (#1308), off by default. On: after the night end the deadline floor keeps charging from the grid at day price, at the current that just makes the *Charge by* time; the sun still wins when it offers more. Config tab → charger, or the Edit-charger dialog |
-| `number.sem_charger_<id>_minimum_current` / `_maximum_current` | The current **range** SEM may offer — floor (most cars need ≥ 6 A) and ceiling (**6–80 A**, #746). Both on the Config tab's charger block; see below |
+| *(toggle)* `finish_by_departure` | *Finish by departure* (#1308), off by default. On: after the night end the deadline floor keeps charging from the grid at day price, at the current that just makes the *Charge by* time; the sun still wins when it offers more. System screen → charger, or the Edit-charger dialog |
+| `number.sem_charger_<id>_minimum_current` / `_maximum_current` | The current **range** SEM may offer — floor (most cars need ≥ 6 A) and ceiling (**6–80 A**, #746). Both on the System screen's charger block; see below |
 | `sensor.sem_charging_strategy` | The live reason string — every decision explains itself here |
 
 ## How a decision becomes amps
@@ -337,8 +337,8 @@ Each charger has its own daily energy bucket (`daily_ev` for that charger). The 
 | Multi-charger: one stays idle | Shared peak budget allocated to higher-priority charger first | Surplus priority + `daily_ev_target` per charger; check coordinator logs for peak-budget allocation |
 | Daytime Min+PV not pulling grid on cloudy day | Cheapest hours ON + price = EXPENSIVE | Either accept the pause or turn Cheapest hours OFF |
 | Daily target counter shows yesterday's number into the morning | Working as intended — bucket only resets at *Charge by* time | `sensor.sem_charger_*_daily_energy`. Pre-#280 reset at sunrise; now at deadline to prevent double-charge race. Note: the FLEET total (`sensor.sem_daily_ev_energy`) behaves this way only while all chargers share one deadline — with differing deadlines it resets at midnight (#724) |
-| EV plugged in, SEM says *"Charging active"*, but real draw is ~0 W with `commanded_current > 0` | **Fixed in #446 (v1.7.1-beta.16+).** Pre-#446 if you had `ev_target_type="soc"` saved without a vehicle SOC sensor, SEM substituted an estimated SOC into the kWh budget which could go to 0 and idle the charger. The v10 → v11 migration auto-resets these to `"kwh"` on first restart after upgrade. If you're seeing this on an OLDER version, manually set `ev_target_type` back to `"kwh"` in the Configuration tab, or upgrade. | Configuration tab → EV chargers → Target type (the SOC option is now disabled when no vehicle SOC sensor is configured) |
-| Heat pump section in dashboard says "No heat pump configured" even though `heat_pump_relay1_entity` / `heat_pump_relay2_entity` are filled | **v1.7.1-beta.17+ exposes the diagnostic surface.** Check `sensor.sem_heat_pump_registration_status` — its state + attributes tell you which of the six possible failure modes applies (`partial_sg_ready_only_relay1`, `entity_missing`, `unavailable`, etc.). When a configured relay entity stays `unavailable` for 5+ minutes a Repair issue files at **Settings → System → Repairs** naming the specific entity. For users wiring SG-Ready via Nibe Modbus rather than physical relays, see "Heat pump — two valid wiring paths" below. | Configuration tab → Heat pump section → status sensor; Settings → System → Repairs |
+| EV plugged in, SEM says *"Charging active"*, but real draw is ~0 W with `commanded_current > 0` | **Fixed in #446 (v1.7.1-beta.16+).** Pre-#446 if you had `ev_target_type="soc"` saved without a vehicle SOC sensor, SEM substituted an estimated SOC into the kWh budget which could go to 0 and idle the charger. The v10 → v11 migration auto-resets these to `"kwh"` on first restart after upgrade. If you're seeing this on an OLDER version, manually set `ev_target_type` back to `"kwh"` in the System screen, or upgrade. | System screen → EV chargers → Target type (the SOC option is now disabled when no vehicle SOC sensor is configured) |
+| Heat pump section in dashboard says "No heat pump configured" even though `heat_pump_relay1_entity` / `heat_pump_relay2_entity` are filled | **v1.7.1-beta.17+ exposes the diagnostic surface.** Check `sensor.sem_heat_pump_registration_status` — its state + attributes tell you which of the six possible failure modes applies (`partial_sg_ready_only_relay1`, `entity_missing`, `unavailable`, etc.). When a configured relay entity stays `unavailable` for 5+ minutes a Repair issue files at **Settings → System → Repairs** naming the specific entity. For users wiring SG-Ready via Nibe Modbus rather than physical relays, see "Heat pump — two valid wiring paths" below. | System screen → Heat pump section → status sensor; Settings → System → Repairs |
 | Strategy sensor says *"start backoff — car declined N start ladders; next offer in X min"* | **Working as intended (#610).** The car is plugged in with an offer available, but it declined several complete start-offer ladders (gentle 6 A start, auto-raised to ~10 A, held 90 s) without drawing. Instead of re-offering every few minutes all afternoon, SEM waits ~20 min between offers, and says how much it is withholding meanwhile. SEM cannot make a car accept — check the car's own charge limit and departure timer, and the charger app (a Wallbox in Eco-Smart/Scheduled mode holds its own contactor). The backoff ends instantly when the car draws (e.g. after cabin preconditioning frees headroom), when you unplug/re-plug, or when you change the charge mode. Before 2.1.0-beta.30 this line read *"full-car backoff"* and said "typically a full battery" — SEM has no instrument for that and no longer claims it (#983). | `sensor.sem_charging_strategy` reason text; nothing to configure |
 
 ---
@@ -353,7 +353,7 @@ For Nibe units without Modbus, or any heat pump whose only SG-Ready interface is
 
 1. Wire two physical relays (e.g. Shelly 1 Mini × 2, an ESP relay board, or any HA-supported `switch`) to the heat pump's AUX1 / AUX2 inputs.
 2. In HA: confirm both switches appear under Developer Tools → States and toggle correctly.
-3. In SEM: open Configuration tab → Heat pump section → set `heat_pump_relay1_entity` and `heat_pump_relay2_entity` to those two switches.
+3. In SEM: open System screen → Heat pump section → set `heat_pump_relay1_entity` and `heat_pump_relay2_entity` to those two switches.
 
 SEM commands the SG-Ready four states by driving the two switches to the contact
 pairs the standard defines, exactly as a hardware utility-signal box would — see
@@ -406,7 +406,7 @@ three layers — observation, manual control, and automatic switching:
   measure.
 * **The switch capability is an entity you name, never guessed.** If your
   wallbox has a phase‑switch control, set **Phase Switch Entity** in the
-  charger's block on the dashboard **Configuration tab** (or in the options
+  charger's block on the dashboard **System screen** (or in the options
   flow: Settings → SEM → Configure → EV charger → edit). SEM
   validates that it exists and is a `select`/`number`/`switch`, and surfaces
   the verdict (`switch_valid`) beside the estimate. For a `select` you must
