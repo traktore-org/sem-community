@@ -31,6 +31,13 @@ generate_dashboard:
           options:
             - "classic"
             - "next"
+    restart:
+      name: Restart on first install
+      description: "When the dashboard cannot appear live (Home Assistant has not loaded it yet), restart Home Assistant 5 seconds later. Turn off to leave the restart to you."
+      required: false
+      default: true
+      selector:
+        boolean:
 
 sync_priorities_from_dashboard:
   name: Sync Priorities from Dashboard

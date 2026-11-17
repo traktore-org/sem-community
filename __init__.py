@@ -4745,6 +4745,8 @@ async def _async_register_services(
         if dashboard_title == "Solar Energy Management":
             dashboard_title = NEXT_DASHBOARD_TITLE
         dashboard_icon = NEXT_DASHBOARD_ICON
+        # (#1321) a migration passes restart=False: it never restarts HA.
+        allow_restart = call.data.get("restart", True)
 
         try:
             from .dashboard_generator import DashboardGenerator
@@ -5085,7 +5087,7 @@ async def _async_register_services(
                     "Dashboard updated live: %s at /%s — no restart needed",
                     dashboard_title, dashboard_path,
                 )
-            else:
+            elif allow_restart:
                 await hass.services.async_call(
                     "persistent_notification", "create",
                     {
@@ -5109,6 +5111,25 @@ async def _async_register_services(
 
                 from homeassistant.helpers.event import async_call_later
                 async_call_later(hass, 5, _delayed_restart)
+            else:
+                # Saved and registered, but Lovelace has not loaded it yet.
+                await hass.services.async_call(
+                    "persistent_notification", "create",
+                    {
+                        "title": "SEM Dashboard Created",
+                        "message": (
+                            f"Dashboard **{dashboard_title}** is ready with {len(views)} views.\n\n"
+                            f"It appears in the sidebar after the next Home Assistant restart. "
+                            f"SEM does not restart it for you.\n\n"
+                            f"Address: /lovelace/{dashboard_path}"
+                        ),
+                        "notification_id": "sem_dashboard_success",
+                    },
+                )
+                _LOGGER.info(
+                    "Dashboard created: %s at /%s — visible after the next restart",
+                    dashboard_title, dashboard_path,
+                )
 
         except Exception as e:
             _LOGGER.error("Dashboard generation failed: %s", e, exc_info=True)
@@ -5125,7 +5146,8 @@ async def _async_register_services(
             schema=vol.Schema({
                 vol.Optional("dashboard_title", default="Solar Energy Management"): cv.string,
                 vol.Optional("dashboard_path", default="sem-dashboard"): cv.string,
-                vol.Optional("template", default="next"): vol.In(["classic", "next"])  # "classic" = deprecated alias (#1321),
+                vol.Optional("template", default="next"): vol.In(["classic", "next"]),  # "classic" = deprecated alias (#1321)
+                vol.Optional("restart", default=True): cv.boolean,
             }),
         )
         _LOGGER.debug("Registered service: %s.generate_dashboard", DOMAIN)

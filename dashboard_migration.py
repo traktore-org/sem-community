@@ -8,7 +8,8 @@ handled once per install, flagged in the entry options:
 * generated and never edited, no SEM dashboard yet: rewritten in place with
   the SEM dashboard, so the URL and the sidebar entry stay;
 * edited by the user: left alone, a Repair offers to delete it, and the SEM
-  dashboard is created beside it.
+  dashboard is created beside it, live when Lovelace runs it, else on the
+  next normal restart (a notification says so). Never an automatic restart.
 
 "Never edited" means every view path is a classic path and every card is a
 SEM card (or a layout card or one of the cards the generator swapped in).
@@ -140,7 +141,9 @@ async def async_retire_classic(hass: HomeAssistant, entry) -> str:
     elif verdict == "edited":
         _raise_repair(hass, CLASSIC_PATH)
         if NEXT_DASHBOARD_PATH not in await _registered_paths(hass):
-            await hass.services.async_call(DOMAIN, "generate_dashboard", {}, blocking=True)
+            # (#1321) restart=False: a migration never restarts Home Assistant.
+            await hass.services.async_call(
+                DOMAIN, "generate_dashboard", {"restart": False}, blocking=True)
         result = "kept"
     new_options = {**entry.options, RETIRED_FLAG: True}
     coordinator = getattr(entry, "runtime_data", None)

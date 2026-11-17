@@ -154,6 +154,7 @@ async def test_an_edited_dashboard_is_kept_with_a_repair_and_the_new_one_is_made
     assert kwargs["is_fixable"] is True and kwargs["data"] == {"path": "sem-dashboard"}
     hass.services.async_call.assert_awaited_once()
     assert hass.services.async_call.call_args.args[:2] == ("solar_energy_management", "generate_dashboard")
+    assert hass.services.async_call.call_args.args[2] == {"restart": False}
 
 
 @pytest.mark.asyncio
@@ -221,3 +222,23 @@ def test_the_repair_is_translated_in_every_language():
         step = issue["fix_flow"]["step"]["confirm"]
         assert issue["title"] and step["title"] and "{path}" in step["description"], name
         assert "description" not in issue, f"{name}: a fixable issue carries its text in the flow"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("classic,next_registered", [
+    (None, False),
+    (_classic(), True),
+    (_classic(), False),
+    (_classic({"type": "entities"}), False),
+    (_classic({"type": "entities"}), True),
+])
+async def test_no_migration_branch_restarts_home_assistant(classic, next_registered):
+    """(#1321) A migration never restarts HA, directly or through the service."""
+    hass = _hass()
+    with patch.object(dm, "Store", _stores(classic, next_registered)), patch.object(dm, "ir"), \
+            patch("custom_components.solar_energy_management.cleanup.async_remove_dashboard", AsyncMock()):
+        await dm.async_retire_classic(hass, _entry())
+    for call in hass.services.async_call.call_args_list:
+        assert call.args[:2] != ("homeassistant", "restart")
+        if call.args[1] == "generate_dashboard":
+            assert call.args[2].get("restart") is False
