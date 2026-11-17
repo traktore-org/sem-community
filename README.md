@@ -81,6 +81,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 
 **One integration, your whole energy system.** Install SEM and you get EV charging, battery strategy, multi-device surplus distribution, tariff optimization, peak-load management, cost analytics, and a full dashboard — all from a single HACS download.
 
+- **Ask an AI assistant** — an AI in Home Assistant (OpenAI, Anthropic, Google, Ollama ...) sees SEM's tools by itself, no sentence file. Changes need the Voice commands switch.
 - **Local-first** — everything runs inside Home Assistant. No cloud, no subscription, no account.
 - **No extra moving parts** — no separate services, no Docker containers, no YAML config files, no AppDaemon.
 - **Works out of the box** — SEM auto-detects your inverter, battery, grid, and charger from the Energy Dashboard, then exposes every knob on its own dashboard when you want to tune it.
