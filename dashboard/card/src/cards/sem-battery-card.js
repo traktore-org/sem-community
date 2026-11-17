@@ -123,6 +123,7 @@ class SEMBatteryCard extends SEMLitBase {
                 const ctrl = [
                     `select.sem_battery_${bid}_mode`,
                     `number.sem_battery_${bid}_reserve_soc`,
+                    `number.sem_battery_${bid}_capacity_kwh`,
                 ].map(e => hass?.states[e]?.state || '').join(':');
                 return sensors + ':' + ctrl;
             }).join('|');
@@ -390,6 +391,28 @@ class SEMBatteryCard extends SEMLitBase {
         `;
     }
 
+    // (#1373) This battery's size, set beside its reserve. It weights the
+    // total charge level; an unset size reads blank.
+    _renderSizeSetting(entityId) {
+        const st = this._hass?.states[entityId];
+        if (!st) return nothing;
+        const n = Number(st.state);
+        const val = Number.isFinite(n) && st.state !== '' ? n : '';
+        return html`
+            <div class="battery-section-controls">
+                <div class="bsc-row">
+                    <span class="bsc-label">${this._t('battery_size_label')}</span>
+                    <input class="bsc-select" type="number" min="0.5" max="100"
+                        step="0.1" style="width:80px" .value=${String(val)}
+                        @click=${(e) => e.stopPropagation()}
+                        @change=${(e) => this._hass.callService('number', 'set_value',
+                            { entity_id: entityId, value: Number(e.target.value) })}>
+                </div>
+                <div class="bsc-sub">${this._t('battery_size_sub')}</div>
+            </div>
+        `;
+    }
+
     _renderBatterySection(bid, idx) {
         const color = BATTERY_COLORS[idx % BATTERY_COLORS.length];
         // (#1170) null, not 0, when this battery's sensor is out: the row
@@ -465,6 +488,7 @@ class SEMBatteryCard extends SEMLitBase {
                     `select.sem_battery_${bid}_mode`,
                     `number.sem_battery_${bid}_reserve_soc`,
                 )}
+                ${this._renderSizeSetting(`number.sem_battery_${bid}_capacity_kwh`)}
             </div>
         `;
     }

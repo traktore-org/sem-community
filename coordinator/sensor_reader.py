@@ -3953,11 +3953,12 @@ class SensorReader:
             # average, once every pick that is there reads. One down is a
             # wait, not the other battery's level.
             # Each pick is checked as a fleet unit is (#1202, #1284).
+            # (#1373) No battery slot to hold a size here: the plain average.
+            picked = [e for e in unpowered if _picked_soc_present(self.hass, e)]
             levels = [self._accept_unit_soc(e, self._read_sensor(
-                          e, "battery_soc", allow_none=True))
-                      for e in unpowered if _picked_soc_present(self.hass, e)]
+                          e, "battery_soc", allow_none=True)) for e in picked]
             if levels and all(v is not None and v >= 0 for v in levels):
-                soc_val = sum(levels) / len(levels)
+                soc_val = self._soc_by_size(levels, [0.0] * len(levels))
         elif ed_soc:
             soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
         elif ed.battery_power:
@@ -6173,6 +6174,43 @@ class SensorReader:
             _LOGGER.debug("Device lookup failed for %s: %s (#259)", entity_id, e)
             return None
 
+    def _unit_size_kwh(self, power_entity: str, slot: int) -> float:
+        """(#1373) A battery's size for the total level: its own setting
+        (slot N of ``battery_capacity_kwhs`` is battery bN's), else 0.0
+        (unknown → the plain average). Weights the total level ONLY: the
+        scheduler and every other reader keep the global
+        ``battery_capacity_kwh``.
+
+        Never a size SENSOR found on the device: a review proved the device
+        scan takes "remaining capacity" (falls with the level) and gives two
+        batteries on one inverter the same size — a wrong weight would move
+        the total for users who set nothing."""
+        lst = (getattr(self, "_raw_config", None) or {}).get(
+            "battery_capacity_kwhs")
+        if isinstance(lst, list) and slot < len(lst):
+            try:
+                if float(lst[slot]) > 0:
+                    return float(lst[slot])
+            except (TypeError, ValueError):
+                pass
+        return 0.0
+
+    def _soc_by_size(self, levels: list, sizes: list) -> float:
+        """(#1373) The home's level of several batteries: each level counts
+        by its battery's kWh, so a small pack at 17 % does not pull a large
+        one at 38 % to the middle. One size unknown is no weight at all: the
+        plain average, said once."""
+        if len(levels) > 1 and all(c > 0 for c in sizes):
+            self._soc_plain_logged = False
+            total = sum(sizes)
+            return sum(v * c for v, c in zip(levels, sizes, strict=True)) / total
+        if len(levels) > 1 and not getattr(self, "_soc_plain_logged", False):
+            _LOGGER.info(
+                "Total battery level is the plain average: not every battery "
+                "has a known size in kWh (#1373)")
+            self._soc_plain_logged = True
+        return sum(levels) / len(levels)
+
     def _read_battery_soc_average(
         self, battery_power_entities: list,
     ) -> Optional[float]:
@@ -6200,6 +6238,7 @@ class SensorReader:
         signal exists to catch.
         """
         soc_values = []
+        sizes = []
         known = 0
         for batt_power in battery_power_entities:
             soc_entity = self._auto_detect_battery_soc(batt_power)
@@ -6221,6 +6260,10 @@ class SensorReader:
                 soc_entity, "battery_soc", allow_none=True))
             if val is not None and val >= 0:
                 soc_values.append(val)
+                # (#1373) a reader without sizes (a stand-in) knows none
+                size_of = getattr(self, "_unit_size_kwh", None)
+                sizes.append(size_of(batt_power, battery_power_entities.index(batt_power))
+                             if callable(size_of) else 0.0)
         self._soc_units_configured = len(battery_power_entities)
         self._soc_units_expected = known
         self._soc_units_read = len(soc_values)
@@ -6254,7 +6297,9 @@ class SensorReader:
                     self._soc_partial_logged = True
             else:
                 self._soc_partial_logged = False
-            return sum(soc_values) / len(soc_values)
+            by_size = getattr(self, "_soc_by_size", None)
+            return (by_size(soc_values, sizes) if callable(by_size)
+                    else sum(soc_values) / len(soc_values))
         # Nothing readable at all is the SOC-None shape, not a partial one —
         # clear the one-shot so a later re-entry into partial is heard again.
         self._soc_partial_logged = False

@@ -2993,7 +2993,9 @@
     "energy_plan_hc_cheapest_heat": "Nejlevnější teplo",
     "energy_plan_hc_comfort_goal": "Udržovat",
     "energy_plan_hc_preheat": "Předehřev",
-    "energy_plan_hc_load": "Doba chodu"
+    "energy_plan_hc_load": "Doba chodu",
+    "battery_size_label": "Velikost (kWh)",
+    "battery_size_sub": "Počítá se do celkové úrovně nabití"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -5989,7 +5991,9 @@
     "energy_plan_hc_cheapest_heat": "Billigste varme",
     "energy_plan_hc_comfort_goal": "Hold på",
     "energy_plan_hc_preheat": "Forvarmning",
-    "energy_plan_hc_load": "Driftstid"
+    "energy_plan_hc_load": "Driftstid",
+    "battery_size_label": "Størrelse (kWh)",
+    "battery_size_sub": "Tæller med i det samlede ladeniveau"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -8985,7 +8989,9 @@
     "energy_plan_hc_cheapest_heat": "Günstigste Wärme",
     "energy_plan_hc_comfort_goal": "Halten auf",
     "energy_plan_hc_preheat": "Vorheizen",
-    "energy_plan_hc_load": "Laufzeit"
+    "energy_plan_hc_load": "Laufzeit",
+    "battery_size_label": "Größe (kWh)",
+    "battery_size_sub": "Zählt für den Gesamt-Ladestand"
   },
   "en": {
     "% of limit": "% of limit",
@@ -11981,7 +11987,9 @@
     "energy_plan_hc_cheapest_heat": "Cheapest heat",
     "energy_plan_hc_comfort_goal": "Keep at",
     "energy_plan_hc_preheat": "Pre-heat",
-    "energy_plan_hc_load": "Runtime"
+    "energy_plan_hc_load": "Runtime",
+    "battery_size_label": "Size (kWh)",
+    "battery_size_sub": "Counts toward the total charge level"
   },
   "es": {
     "% of limit": "% del límite",
@@ -14977,7 +14985,9 @@
     "energy_plan_hc_cheapest_heat": "Calor más barato",
     "energy_plan_hc_comfort_goal": "Mantener en",
     "energy_plan_hc_preheat": "Precalentar",
-    "energy_plan_hc_load": "Tiempo de funcionamiento"
+    "energy_plan_hc_load": "Tiempo de funcionamiento",
+    "battery_size_label": "Tamaño (kWh)",
+    "battery_size_sub": "Cuenta para el nivel de carga total"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -17973,7 +17983,9 @@
     "energy_plan_hc_cheapest_heat": "Edullisin lämpö",
     "energy_plan_hc_comfort_goal": "Pidä lämpötilassa",
     "energy_plan_hc_preheat": "Esilämmitys",
-    "energy_plan_hc_load": "Käyntiaika"
+    "energy_plan_hc_load": "Käyntiaika",
+    "battery_size_label": "Koko (kWh)",
+    "battery_size_sub": "Vaikuttaa kokonaisvaraustasoon"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -20969,7 +20981,9 @@
     "energy_plan_hc_cheapest_heat": "Chaleur la moins chère",
     "energy_plan_hc_comfort_goal": "Maintenir à",
     "energy_plan_hc_preheat": "Préchauffage",
-    "energy_plan_hc_load": "Durée de marche"
+    "energy_plan_hc_load": "Durée de marche",
+    "battery_size_label": "Taille (kWh)",
+    "battery_size_sub": "Compte dans le niveau de charge total"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -23965,7 +23979,9 @@
     "energy_plan_hc_cheapest_heat": "Legolcsóbb hő",
     "energy_plan_hc_comfort_goal": "Tartás",
     "energy_plan_hc_preheat": "Előfűtés",
-    "energy_plan_hc_load": "Üzemidő"
+    "energy_plan_hc_load": "Üzemidő",
+    "battery_size_label": "Méret (kWh)",
+    "battery_size_sub": "Beleszámít az összesített töltöttségbe"
   },
   "it": {
     "% of limit": "% del limite",
@@ -26961,7 +26977,9 @@
     "energy_plan_hc_cheapest_heat": "Calore più economico",
     "energy_plan_hc_comfort_goal": "Mantenere a",
     "energy_plan_hc_preheat": "Preriscaldamento",
-    "energy_plan_hc_load": "Tempo di funzionamento"
+    "energy_plan_hc_load": "Tempo di funzionamento",
+    "battery_size_label": "Dimensione (kWh)",
+    "battery_size_sub": "Conta nel livello di carica totale"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -29957,7 +29975,9 @@
     "energy_plan_hc_cheapest_heat": "Goedkoopste warmte",
     "energy_plan_hc_comfort_goal": "Houden op",
     "energy_plan_hc_preheat": "Voorverwarmen",
-    "energy_plan_hc_load": "Looptijd"
+    "energy_plan_hc_load": "Looptijd",
+    "battery_size_label": "Grootte (kWh)",
+    "battery_size_sub": "Telt mee in het totale laadniveau"
   },
   "no": {
     "% of limit": "% av grense",
@@ -32953,7 +32973,9 @@
     "energy_plan_hc_cheapest_heat": "Billigste varme",
     "energy_plan_hc_comfort_goal": "Hold på",
     "energy_plan_hc_preheat": "Forvarming",
-    "energy_plan_hc_load": "Driftstid"
+    "energy_plan_hc_load": "Driftstid",
+    "battery_size_label": "Størrelse (kWh)",
+    "battery_size_sub": "Teller med i totalt ladenivå"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -35949,7 +35971,9 @@
     "energy_plan_hc_cheapest_heat": "Najtańsze ciepło",
     "energy_plan_hc_comfort_goal": "Utrzymuj",
     "energy_plan_hc_preheat": "Podgrzewanie wstępne",
-    "energy_plan_hc_load": "Czas pracy"
+    "energy_plan_hc_load": "Czas pracy",
+    "battery_size_label": "Rozmiar (kWh)",
+    "battery_size_sub": "Liczy się do łącznego poziomu naładowania"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -38945,7 +38969,9 @@
     "energy_plan_hc_cheapest_heat": "Calor mais barato",
     "energy_plan_hc_comfort_goal": "Manter em",
     "energy_plan_hc_preheat": "Pré-aquecimento",
-    "energy_plan_hc_load": "Tempo de funcionamento"
+    "energy_plan_hc_load": "Tempo de funcionamento",
+    "battery_size_label": "Tamanho (kWh)",
+    "battery_size_sub": "Conta para o nível de carga total"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -41941,7 +41967,9 @@
     "energy_plan_hc_cheapest_heat": "Cea mai ieftină căldură",
     "energy_plan_hc_comfort_goal": "Menține la",
     "energy_plan_hc_preheat": "Preîncălzire",
-    "energy_plan_hc_load": "Timp de funcționare"
+    "energy_plan_hc_load": "Timp de funcționare",
+    "battery_size_label": "Dimensiune (kWh)",
+    "battery_size_sub": "Contează în nivelul total de încărcare"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -44937,7 +44965,9 @@
     "energy_plan_hc_cheapest_heat": "Billigaste värmen",
     "energy_plan_hc_comfort_goal": "Håll på",
     "energy_plan_hc_preheat": "Förvärmning",
-    "energy_plan_hc_load": "Drifttid"
+    "energy_plan_hc_load": "Drifttid",
+    "battery_size_label": "Storlek (kWh)",
+    "battery_size_sub": "Räknas med i den totala laddnivån"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -47933,6 +47963,8 @@
     "energy_plan_hc_cheapest_heat": "最便宜的热量",
     "energy_plan_hc_comfort_goal": "保持在",
     "energy_plan_hc_preheat": "预热",
-    "energy_plan_hc_load": "运行时间"
+    "energy_plan_hc_load": "运行时间",
+    "battery_size_label": "容量 (kWh)",
+    "battery_size_sub": "计入总电量水平"
   }
 }
