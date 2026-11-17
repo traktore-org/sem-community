@@ -422,7 +422,7 @@ class SEMNextNowCard extends SEMNextBase {
         if (!chips.length) return nothing;
         const stateKey = { charging: 'next_st_charging', plugged: 'next_st_plugged', unplugged: 'next_st_unplugged', on: 'next_st_on', off: 'next_st_off' };
         const icon = { battery: 'mdi:home-battery-outline', car: 'mdi:car-electric', heater: 'mdi:water-boiler' };
-        const go = () => this._go('/sem-next/devices');
+        const go = () => this._go(this._screen('devices'));
         const text = (c) => [c.kind === 'battery' ? this._t('next_src_battery') : c.label,
             c.state ? this._t(stateKey[c.state]) : '', c.soc === null ? '' : `${c.soc} %`].filter(Boolean).join(' · ');
         return this._sec(this._t('next_devices_summary'), html`<div class="devrow">${chips.map((c) => html`<span class="chip" role="button" tabindex="0"
@@ -566,7 +566,7 @@ class SEMNextNowCard extends SEMNextBase {
                 r.late ? html`<span class="late">${when(r)}</span>` : (r.until ? `${when(r)} – ${this._hhmm(new Date(r.until))}` : when(r)),
                 r.detail ? this._tf(r.detail, r.values) : '', { color: C[r.color] || C.home }))}</div>`
             : html`<p class="help">${this._t('next_nothing_planned')}</p>`;
-        return this._sec(this._t('next_today'), body, { extra: this._link(this._t('next_plan_link'), () => this._go('/sem-next/plan')) });
+        return this._sec(this._t('next_today'), body, { extra: this._link(this._t('next_plan_link'), () => this._go(this._screen('plan'))) });
     }
 
     _why() {
@@ -623,7 +623,7 @@ class SEMNextNowCard extends SEMNextBase {
         }
         if (!rows.length) return nothing;
         return this._sec(this._t('next_why_now'), html`<div class="rows">${rows}</div>`,
-            { extra: this._link(this._t('next_decisions_link'), () => this._go('/sem-next/plan')) });
+            { extra: this._link(this._t('next_decisions_link'), () => this._go(this._screen('plan'))) });
     }
 
     /** Named apart from the base's _money(v) formatter, which the tiles use. */
@@ -662,7 +662,7 @@ class SEMNextNowCard extends SEMNextBase {
         return this._sec(this._t('next_money'), html`${tiles.length ? this._tiles(tiles, { three: tiles.length === 3 }) : nothing}
             ${sum.length ? html`<div class="sumrow">${sum}</div>` : nothing}
             ${this._priceStrip()}`,
-            { extra: this._link(this._t('next_insights_link'), () => this._go('/sem-next/insights')) });
+            { extra: this._link(this._t('next_insights_link'), () => this._go(this._screen('insights'))) });
     }
 
     _signals() {
@@ -726,7 +726,7 @@ class SEMNextNowCard extends SEMNextBase {
         if (!this._hass) return nothing;
         const lead = this._lead();
         // (#1379) first-run banner + checklist on top; only a chip once done
-        return this._frame(lead, html`<sem-setup-checklist-card .hass=${this._hass} .layout=${'next'}></sem-setup-checklist-card><div class="grid">
+        return this._frame(lead, html`<sem-setup-checklist-card .hass=${this._hass}></sem-setup-checklist-card><div class="grid">
             ${this._hintBox()}
             ${this._sec(this._t('next_power_now'), this._powerNow(), { cls: 'span2', extra: this._updatedPill() })}
             ${this._todayTiles()}

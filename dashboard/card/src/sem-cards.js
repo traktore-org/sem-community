@@ -5,57 +5,17 @@
  * into a single sem-cards.js file for Lovelace resource registration.
  */
 
-// Display cards
-import './cards/sem-title-card.js';
-import './cards/sem-require-card.js';
-import './cards/sem-tab-header.js';
-import './cards/sem-weather-card.js';
-import './cards/sem-period-selector-card.js';
-import './cards/sem-energy-impact-card.js';
-import './cards/sem-ev-progress-card.js';
-import './cards/sem-gauge-card.js';
-
-// Hero / SVG cards
-import './cards/sem-solar-card.js';
-import './cards/sem-solar-kpi-card.js';
-import './cards/sem-solar-summary-card.js';
-import './cards/sem-battery-card.js';
-import './cards/sem-grid-card.js';
-import './cards/sem-schedule-card.js';
-
-// Interactive cards
-import './cards/sem-battery-zones-card.js';
-import './cards/sem-costs-card.js';
-import './cards/sem-costs-detail-card.js';
-import './cards/sem-charger-status-card.js';
-
-// SEM Next (#1321) — the second dashboard, five screens by question
-import './cards/sem-next-link-card.js';
+// The SEM dashboard (#1321): five screens by question
 import './cards/sem-next-now-card.js';
 import './cards/sem-next-plan-card.js';
 import './cards/sem-next-devices-card.js';
 import './cards/sem-next-insights-card.js';
 import './cards/sem-next-system-card.js';
-import './cards/sem-ev-status-card.js';
-import './cards/sem-home-status-card.js';
-import './cards/sem-price-card.js';
-import './cards/sem-system-card.js';
-import './cards/sem-today-plan-card.js';
-import './cards/sem-energy-plan-card.js';
-import './cards/sem-simulation-card.js';
-import './cards/sem-why-card.js';
-
-// Complex cards (observers, animations, external libs)
-import './cards/sem-flow-card.js';
-import './cards/sem-system-diagram-card.js';
-import './cards/sem-chart-card.js';
-import './cards/sem-load-priority-card.js';
-import './cards/sem-control-card.js';
-import './elements/sem-entity-picker.js';
-import './cards/sem-config-card.js';
-import './cards/sem-onboarding-banner.js';
 import './cards/sem-setup-checklist-card.js';
-import './cards/sem-diagnose-button.js';
+import './cards/sem-simulation-card.js';
+
+// Tags of removed cards: a small notice instead of a red error card
+import './cards/sem-retired-card.js';
 
 // Version info
 console.info(

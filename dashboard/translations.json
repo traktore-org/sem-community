@@ -3038,7 +3038,9 @@
     "setup_chip_setup": "Nastavení {done} z {total}",
     "never_switch_off": "Nikdy nevypínat",
     "host_guard_warning": "Vypadá to, že napájí vaši síť nebo Home Assistant. SEM to nikdy nevypne, pokud to nepovolíte.",
-    "host_guard_allow": "Povolit SEM vypnutí"
+    "host_guard_allow": "Povolit SEM vypnutí",
+    "retired_card": "Tato karta SEM byla vyřazena. Použijte panel SEM.",
+    "retired_card_open": "Otevřít panel SEM"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -6079,7 +6081,9 @@
     "setup_chip_setup": "Opsætning {done} af {total}",
     "never_switch_off": "Aldrig sluk",
     "host_guard_warning": "Det ser ud til at forsyne dit netværk eller Home Assistant. SEM slukker det aldrig, medmindre du tillader det.",
-    "host_guard_allow": "Tillad SEM at slukke"
+    "host_guard_allow": "Tillad SEM at slukke",
+    "retired_card": "Dette SEM-kort er udgået. Brug SEM-dashboardet.",
+    "retired_card_open": "Åbn SEM-dashboardet"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -9120,7 +9124,9 @@
     "setup_chip_setup": "Einrichtung {done} von {total}",
     "never_switch_off": "Nie ausschalten",
     "host_guard_warning": "Das sieht nach der Stromversorgung von Netzwerk oder Home Assistant aus. SEM schaltet es nie aus, ausser du erlaubst es.",
-    "host_guard_allow": "SEM darf ausschalten"
+    "host_guard_allow": "SEM darf ausschalten",
+    "retired_card": "Diese SEM-Karte wurde entfernt. Nutze das SEM-Dashboard.",
+    "retired_card_open": "SEM-Dashboard öffnen"
   },
   "en": {
     "% of limit": "% of limit",
@@ -12161,7 +12167,9 @@
     "setup_chip_setup": "Setup {done} of {total}",
     "never_switch_off": "Never switch off",
     "host_guard_warning": "This looks like it powers your network or Home Assistant. SEM will never switch it off unless you allow it.",
-    "host_guard_allow": "Allow SEM to switch it off"
+    "host_guard_allow": "Allow SEM to switch it off",
+    "retired_card": "This SEM card was retired. Use the SEM dashboard.",
+    "retired_card_open": "Open the SEM dashboard"
   },
   "es": {
     "% of limit": "% del límite",
@@ -15202,7 +15210,9 @@
     "setup_chip_setup": "Configuración {done} de {total}",
     "never_switch_off": "Nunca apagar",
     "host_guard_warning": "Parece que alimenta tu red o Home Assistant. SEM nunca lo apagará a menos que lo permitas.",
-    "host_guard_allow": "Permitir que SEM lo apague"
+    "host_guard_allow": "Permitir que SEM lo apague",
+    "retired_card": "Esta tarjeta de SEM se ha retirado. Usa el panel de SEM.",
+    "retired_card_open": "Abrir el panel de SEM"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -18243,7 +18253,9 @@
     "setup_chip_setup": "Asetukset {done}/{total}",
     "never_switch_off": "Älä koskaan sammuta",
     "host_guard_warning": "Tämä näyttää syöttävän verkkoasi tai Home Assistantia. SEM ei koskaan sammuta sitä, ellet salli sitä.",
-    "host_guard_allow": "Salli SEM:n sammuttaa"
+    "host_guard_allow": "Salli SEM:n sammuttaa",
+    "retired_card": "Tämä SEM-kortti on poistettu. Käytä SEM-näkymää.",
+    "retired_card_open": "Avaa SEM-näkymä"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -21284,7 +21296,9 @@
     "setup_chip_setup": "Configuration {done} sur {total}",
     "never_switch_off": "Ne jamais éteindre",
     "host_guard_warning": "Cela semble alimenter votre réseau ou Home Assistant. SEM ne l'éteindra jamais sans votre accord.",
-    "host_guard_allow": "Autoriser SEM à l'éteindre"
+    "host_guard_allow": "Autoriser SEM à l'éteindre",
+    "retired_card": "Cette carte SEM a été retirée. Utilisez le tableau de bord SEM.",
+    "retired_card_open": "Ouvrir le tableau de bord SEM"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -24325,7 +24339,9 @@
     "setup_chip_setup": "Beállítás {done} / {total}",
     "never_switch_off": "Soha ne kapcsolja ki",
     "host_guard_warning": "Úgy tűnik, ez táplálja a hálózatot vagy a Home Assistantot. A SEM soha nem kapcsolja ki, hacsak nem engedélyezi.",
-    "host_guard_allow": "A SEM kikapcsolhatja"
+    "host_guard_allow": "A SEM kikapcsolhatja",
+    "retired_card": "Ez az SEM kártya megszűnt. Használd az SEM irányítópultot.",
+    "retired_card_open": "SEM irányítópult megnyitása"
   },
   "it": {
     "% of limit": "% del limite",
@@ -27366,7 +27382,9 @@
     "setup_chip_setup": "Configurazione {done} di {total}",
     "never_switch_off": "Non spegnere mai",
     "host_guard_warning": "Sembra alimentare la tua rete o Home Assistant. SEM non lo spegnerà mai se non lo consenti.",
-    "host_guard_allow": "Consenti a SEM di spegnere"
+    "host_guard_allow": "Consenti a SEM di spegnere",
+    "retired_card": "Questa scheda SEM è stata rimossa. Usa la dashboard SEM.",
+    "retired_card_open": "Apri la dashboard SEM"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -30407,7 +30425,9 @@
     "setup_chip_setup": "Instellen {done} van {total}",
     "never_switch_off": "Nooit uitschakelen",
     "host_guard_warning": "Dit lijkt je netwerk of Home Assistant van stroom te voorzien. SEM schakelt het nooit uit tenzij je het toestaat.",
-    "host_guard_allow": "SEM mag uitschakelen"
+    "host_guard_allow": "SEM mag uitschakelen",
+    "retired_card": "Deze SEM-kaart is verwijderd. Gebruik het SEM-dashboard.",
+    "retired_card_open": "SEM-dashboard openen"
   },
   "no": {
     "% of limit": "% av grense",
@@ -33448,7 +33468,9 @@
     "setup_chip_setup": "Oppsett {done} av {total}",
     "never_switch_off": "Aldri slå av",
     "host_guard_warning": "Dette ser ut til å drive nettverket eller Home Assistant. SEM slår det aldri av med mindre du tillater det.",
-    "host_guard_allow": "La SEM slå av"
+    "host_guard_allow": "La SEM slå av",
+    "retired_card": "Dette SEM-kortet er fjernet. Bruk SEM-dashbordet.",
+    "retired_card_open": "Åpne SEM-dashbordet"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -36489,7 +36511,9 @@
     "setup_chip_setup": "Konfiguracja {done} z {total}",
     "never_switch_off": "Nigdy nie wyłączaj",
     "host_guard_warning": "To wygląda na zasilanie sieci lub Home Assistant. SEM nigdy tego nie wyłączy, chyba że na to pozwolisz.",
-    "host_guard_allow": "Zezwól SEM na wyłączanie"
+    "host_guard_allow": "Zezwól SEM na wyłączanie",
+    "retired_card": "Ta karta SEM została wycofana. Użyj panelu SEM.",
+    "retired_card_open": "Otwórz panel SEM"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -39530,7 +39554,9 @@
     "setup_chip_setup": "Configuração {done} de {total}",
     "never_switch_off": "Nunca desligar",
     "host_guard_warning": "Isto parece alimentar a sua rede ou o Home Assistant. O SEM nunca o desliga, a menos que o permita.",
-    "host_guard_allow": "Permitir que o SEM desligue"
+    "host_guard_allow": "Permitir que o SEM desligue",
+    "retired_card": "Este cartão SEM foi retirado. Use o painel SEM.",
+    "retired_card_open": "Abrir o painel SEM"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -42571,7 +42597,9 @@
     "setup_chip_setup": "Configurare {done} din {total}",
     "never_switch_off": "Nu opri niciodată",
     "host_guard_warning": "Pare să alimenteze rețeaua sau Home Assistant. SEM nu îl va opri niciodată dacă nu permiți.",
-    "host_guard_allow": "Permite SEM să oprească"
+    "host_guard_allow": "Permite SEM să oprească",
+    "retired_card": "Acest card SEM a fost retras. Folosește panoul SEM.",
+    "retired_card_open": "Deschide panoul SEM"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -45612,7 +45640,9 @@
     "setup_chip_setup": "Inställning {done} av {total}",
     "never_switch_off": "Stäng aldrig av",
     "host_guard_warning": "Det här verkar driva ditt nätverk eller Home Assistant. SEM stänger aldrig av det om du inte tillåter det.",
-    "host_guard_allow": "Tillåt SEM att stänga av"
+    "host_guard_allow": "Tillåt SEM att stänga av",
+    "retired_card": "Det här SEM-kortet är borttaget. Använd SEM-panelen.",
+    "retired_card_open": "Öppna SEM-panelen"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -48653,6 +48683,8 @@
     "setup_chip_setup": "设置 {done} / {total}",
     "never_switch_off": "永不关闭",
     "host_guard_warning": "这看起来像是为你的网络或 Home Assistant 供电。除非你允许，SEM 绝不会关闭它。",
-    "host_guard_allow": "允许 SEM 关闭"
+    "host_guard_allow": "允许 SEM 关闭",
+    "retired_card": "此 SEM 卡片已停用。请使用 SEM 仪表板。",
+    "retired_card_open": "打开 SEM 仪表板"
   }
 }

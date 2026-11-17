@@ -8,8 +8,6 @@
 export const CHECKLIST_ENTITY = 'sensor.sem_diag_charger_control';
 export const OBSERVER_SWITCH = 'switch.sem_observer_mode';
 export const HIDE_KEY = 'sem-setup-checklist-hidden-v1';
-/** sessionStorage: the Configuration section the classic Configuration tab opens. */
-export const OPEN_SECTION_KEY = 'sem-config-open-section';
 /** sessionStorage: the panel the SEM Next System screen opens. */
 export const OPEN_PANEL_KEY = 'sem-next-open-panel';
 
@@ -45,25 +43,21 @@ export function brandLabel(domain) {
     return String(domain).split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-function sibling(pathname, view) {
+/** The sibling screen of the page we are on: the dashboard URL is never assumed (#1321). */
+export function sibling(pathname, view) {
     const parts = String(pathname || '').split('/').filter(Boolean);
     if (parts.length) parts[parts.length - 1] = view; else parts.push(view);
     return '/' + parts.join('/');
 }
 
 /**
- * Where a row's button goes. Classic: the Configuration tab, opened on the
- * section. Next: the Devices screen for a charger, the System screen's setup
- * panel for forecast and price. Things to check: HA's Repairs page.
+ * Where a row's button goes: the Devices screen for a charger, the System
+ * screen's setup panel for forecast and price. Things to check: HA's Repairs page.
  */
-export function rowTarget(key, layout, pathname) {
+export function rowTarget(key, pathname) {
     if (key === 'repairs') return { path: '/config/repairs' };
-    if (layout === 'next') {
-        if (key === 'charger') return { path: sibling(pathname, 'devices') };
-        return { path: sibling(pathname, 'system'), store: [OPEN_PANEL_KEY, 'setup'] };
-    }
-    const section = { charger: 'ev_chargers', forecast: 'forecast', price: 'tariff' }[key];
-    return { path: sibling(pathname, 'config'), store: [OPEN_SECTION_KEY, section] };
+    if (key === 'charger') return { path: sibling(pathname, 'devices') };
+    return { path: sibling(pathname, 'system'), store: [OPEN_PANEL_KEY, 'setup'] };
 }
 
 export function readHidden() {

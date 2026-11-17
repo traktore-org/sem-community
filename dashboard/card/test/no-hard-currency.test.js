@@ -17,8 +17,3 @@ test('no card names a currency of its own in a unit', () => {
     }
     assert.deepEqual(bad, []);
 });
-
-test('the demand charge unit is a translated text with the currency filled in', () => {
-    const src = fs.readFileSync(new URL('sem-config-card.js', dir), 'utf8');
-    assert.ok(src.includes("this._t('config_unit_per_kw_month').replace('{currency}', currency)"));
-});

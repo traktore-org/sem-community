@@ -790,7 +790,7 @@ class SEMNextPlanCard extends SEMNextBase {
     /** Open the charger's charge plan on the Devices screen. */
     _openChargePlan(cid) {
         try { window.sessionStorage.setItem(OPEN_CHARGE_PLAN_KEY, String(cid)); } catch (e) { /* private window: the screen still opens */ }
-        this._go('/sem-next/devices');
+        this._go(this._screen('devices'));
     }
 
     async _overrideClear(deviceId) {

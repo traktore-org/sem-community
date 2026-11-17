@@ -17,8 +17,6 @@ import {
 
 const here = new URL('.', import.meta.url);
 const words = JSON.parse(fs.readFileSync(new URL('../../translations.json', here), 'utf8'));
-const classic = fs.readFileSync(new URL('../src/cards/sem-load-priority-card.js', here), 'utf8');
-const planCard = fs.readFileSync(new URL('../src/cards/sem-energy-plan-card.js', here), 'utf8');
 
 const band = (reading, over = {}) => ({
     state: 'willing', hvac: 'heat', reading_c: reading,
@@ -263,32 +261,6 @@ test('every text of the model exists in every language', () => {
         for (const key of keys) assert.ok(table[key], lang + ' lacks ' + key);
     }
 });
-
-test('the classic card asks the shared model, and the old chip words are gone for heaters', () => {
-    assert.ok(classic.includes("from '../util/heater-questions.js'"));
-    for (const fn of ['heaterSays(', 'heaterQuestions(', 'sunMaxWrites(', 'heaterSub(']) assert.ok(classic.includes(fn), fn);
-    // one band view for heating and cooling; the words come from the model
-    assert.ok(classic.includes("q.view === 'band'") && !classic.includes("q.view === 'cool'"));
-    assert.ok(classic.includes('q.keys.floor') && classic.includes('q.keys.sunMax') && classic.includes('cooling: q.cooling'));
-    // (#705) a unit that rides its own setpoint: effective values, Keep at read-only, the limit as a distance
-    assert.ok(classic.includes('limitWrites(q,') && classic.includes('q.keepReadOnly') && classic.includes('q.keepNoteKey') && classic.includes('toUnit:'));
-    // the run-time progress is hidden when the thermometer leads
-    assert.ok(classic.includes("this._questions(device).view === 'band'"));
-    assert.ok(planCard.includes('coldHeaters('));
-});
-
-test('a load\'s mode says who runs it — no "Solar only" beside the buy question', () => {
-    for (const old of ["'mode_solar_only'", "'mode_solar_battery'", "'mode_tooltip'", "'help_mode_surplus'", "'battery_overnight_hint'"]) {
-        assert.ok(!classic.includes(old), old + ' is still on the load card');
-    }
-    for (const k of ['load_mode_sem', 'load_mode_sem_battery', 'load_mode_help_sem', 'load_mode_help_sem_battery', 'load_mode_tooltip']) {
-        assert.ok(classic.includes("'" + k + "'"), k);
-        for (const [lang, table] of Object.entries(words)) assert.ok(table[k], lang + ' lacks ' + k);
-    }
-    // a car's charge modes keep their names
-    assert.equal(words.en.charge_mode_solar_only !== undefined, true);
-});
-
 
 // ── (#1369) every reason the tank heats is said ──────────────────────────
 test('(#1369) an early Legionella run says it started early', () => {

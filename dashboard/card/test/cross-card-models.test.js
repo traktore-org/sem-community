@@ -74,8 +74,7 @@ function text(part) {
 const words = (s) => s.replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 
-const TAGS = ['sem-battery-zones-card', 'sem-battery-card', 'sem-load-priority-card', 'sem-ev-status-card',
-    'sem-next-devices-card', 'sem-next-system-card', 'sem-next-now-card'];
+const TAGS = ['sem-next-devices-card', 'sem-next-system-card', 'sem-next-now-card'];
 for (const c of TAGS) await import(`../src/cards/${c}.js`);
 const { PEAK_TEXT, peakQuestion } = await import('../src/util/peak-questions.js');
 const { BATTERY_LEVELS, batteryLevels, batterySaysFromStates } = await import('../src/util/battery-questions.js');
@@ -111,39 +110,35 @@ function draw(tag, states) {
     return words(text(el.render()));
 }
 
-test('peak: both cards ask "Limit grid draw to" with the value the shared model reads', () => {
+test('peak: the card asks "Limit grid draw to" with the value the shared model reads', () => {
     const st = baseStates();
     const q = peakQuestion({ unlimited: false, limitKw: 6.5 });
-    const classic = draw('sem-load-priority-card', st);
     const next = draw('sem-next-devices-card', st);
-    for (const [name, out] of [['classic', classic], ['next', next]]) {
+    for (const [name, out] of [['next', next]]) {
         assert.match(out, new RegExp(`${PEAK_TEXT.label} ${q.kw.toFixed(1)} kW`), `${name}: ${out.slice(0, 400)}`);
         assert.ok(out.includes(PEAK_TEXT.sub), `${name}: the limit says what it does`);
         assert.ok(!out.includes('unlimited'), `${name}: no second name for "no limit"`);
     }
 });
 
-test('peak: with no limit both cards say "No limit" and what that means', () => {
+test('peak: with no limit the card says "No limit" and what that means', () => {
     const st = baseStates({ 'sensor.sem_target_peak_limit': S(6.5, { unit_of_measurement: 'kW', peak_limit_unlimited: true }) });
-    for (const tag of ['sem-load-priority-card', 'sem-next-devices-card']) {
+    for (const tag of ['sem-next-devices-card']) {
         const out = draw(tag, st);
         assert.ok(out.includes(PEAK_TEXT.none), `${tag}: ${out.slice(0, 400)}`);
         assert.ok(out.includes(PEAK_TEXT.subNone), tag);
     }
 });
 
-test('battery: both cards show the three levels the shared model reads, and the same now/next words', () => {
+test('battery: the card shows the three levels the shared model reads, and the same now/next words', () => {
     const st = baseStates();
     const lv = batteryLevels(st);
     const says = batterySaysFromStates(st);
-    const zones = draw('sem-battery-zones-card', st);
-    const classic = draw('sem-battery-card', st);
     const next = draw('sem-next-devices-card', st);
     for (const id of ['priority', 'buffer', 'autostart']) {
-        assert.ok(zones.includes(`${lv[id]}%`), `classic levels: ${id}`);
         assert.match(next, new RegExp(`next_zone_\\w+ ${lv[id]}\\b`), `next levels: ${id}`);
     }
-    for (const [name, out] of [['classic', classic], ['next', next]]) {
+    for (const [name, out] of [['next', next]]) {
         assert.ok(out.includes(says.now.key), `${name}: ${says.now.key}`);
         assert.ok(out.includes(says.next.key), `${name}: ${says.next.key}`);
     }
@@ -152,7 +147,7 @@ test('battery: both cards show the three levels the shared model reads, and the 
         ['number.sem_battery_priority_soc', 'number.sem_battery_buffer_soc', 'number.sem_battery_auto_start_soc']);
 });
 
-test('charger: both cards name the target pair "At least / Up to" and the departure "Charge by"', () => {
+test('charger: the card names the target pair "At least / Up to" and the departure "Charge by"', () => {
     const cid = 'keba';
     const te = targetEntities(cid, 'kwh');
     const st = baseStates({
@@ -162,9 +157,8 @@ test('charger: both cards name the target pair "At least / Up to" and the depart
         'time.sem_charger_keba_target_time': S('07:00:00'),
         'binary_sensor.sem_charger_keba_connected': S('on'),
     });
-    const classic = draw('sem-ev-status-card', st);
     const next = draw('sem-next-devices-card', st);
-    for (const [name, out] of [['classic', classic], ['next', next]]) {
+    for (const [name, out] of [['next', next]]) {
         assert.ok(out.includes(CHARGER_TEXT.atLeast) && out.includes(CHARGER_TEXT.upTo), `${name}: the pair`);
         assert.match(out, new RegExp(`${CHARGER_TEXT.atLeast}[^0-9]{0,40}10\\b`), `${name}: at least 10`);
         assert.match(out, new RegExp(`${CHARGER_TEXT.upTo}[^0-9]{0,40}40\\b`), `${name}: up to 40`);
@@ -186,7 +180,6 @@ test('hide rules: one module answers for both cards', async () => {
     }
     assert.equal(loadRunsBySem('peak_only'), false);
     const src = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
-    assert.ok(src('../src/cards/sem-config-card.js').includes("from '../util/settings-applies.js'"));
     assert.ok(src('../src/util/next-settings.js').includes("from './settings-applies.js'"));
     assert.ok(src('../src/util/next-devices-load.js').includes("from './settings-applies.js'"));
 });
@@ -198,7 +191,7 @@ test('plan notes: both plan cards translate the planner\'s codes through one hel
     const d = { note: '13 slot(s) unpriced — replans when the day-ahead series lands', notes: [{ code: 'unpriced_slots', params: { count: 13 } }] };
     assert.equal(planNoteText(d, t), '13 hours have no price yet');
     const src = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
-    for (const f of ['../src/cards/sem-energy-plan-card.js', '../src/cards/sem-next-plan-card.js']) {
+    for (const f of ['../src/cards/sem-next-plan-card.js']) {
         const s = src(f);
         assert.ok(s.includes("from '../util/plan-notes.js'"), f);
         assert.ok(!s.includes('String(d.note)'), `${f}: no English planner note printed as is`);
@@ -214,7 +207,7 @@ test('charger: both cards take the "why" line from the shared chargerSays', asyn
     assert.deepEqual(chargerSays(st, t, plainReason), { title: 'Min + Solar', text: 'It runs on spare sun.' });
     assert.equal(chargerSays({}, t, plainReason), null);
     const src = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
-    for (const f of ['../src/cards/sem-ev-status-card.js', '../src/cards/sem-next-now-card.js']) {
+    for (const f of ['../src/cards/sem-next-now-card.js']) {
         assert.ok(src(f).includes('chargerSays('), f);
     }
     assert.ok(!src('../src/cards/sem-next-now-card.js').includes('strategyWords('), 'no second path in the new Now card');

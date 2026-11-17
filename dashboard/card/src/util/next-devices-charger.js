@@ -210,7 +210,7 @@ export function chargerBody(card, row) {
                 onCommit: (v) => { card._boostFloor = { ...(card._boostFloor || {}), [cid]: Number(v) }; } }))}</span>`);
         }
     }
-    btns.push(card._btn(t('next_sessions'), () => card._go('/sem-next/insights#car'), { small: true, icon: 'mdi:history' }));
+    btns.push(card._btn(t('next_sessions'), () => card._go(card._screen('insights') + '#car'), { small: true, icon: 'mdi:history' }));
 
     // ── sheet rows ──
     const runs = weekdaySummary(own, depDefault);

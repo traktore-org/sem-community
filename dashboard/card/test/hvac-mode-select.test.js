@@ -8,7 +8,6 @@ import { HVAC_MODE_LABELS, hvacModeOptions } from '../src/util/load-sections.js'
 
 const here = new URL('.', import.meta.url);
 const words = JSON.parse(fs.readFileSync(new URL('../../translations.json', here), 'utf8'));
-const card = fs.readFileSync(new URL('../src/cards/sem-load-priority-card.js', here), 'utf8');
 
 test('the editor offers heat, cool and by forecast', () => {
     assert.deepEqual(hvacModeOptions('heat'), ['heat', 'cool', 'by_forecast']);
@@ -26,9 +25,4 @@ test('every mode label is translated in every language', () => {
     for (const [lang, table] of Object.entries(words)) {
         for (const key of keys) assert.ok(table[key], lang + ' lacks ' + key);
     }
-});
-
-test('the select saves through the goal path the other fields use', () => {
-    assert.ok(card.includes('data-goal="hvac_mode"'));
-    assert.ok(card.includes('hvacModeOptions(g.hvac_mode)'));
 });

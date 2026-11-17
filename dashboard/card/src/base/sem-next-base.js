@@ -21,6 +21,7 @@ import { hhmmIn } from '../util/next-time.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { chargerNameOf } from '../util/charger-name.js';
+import { sibling } from '../util/setup-checklist.js';
 
 export { html, css, svg, nothing };
 
@@ -345,6 +346,8 @@ export class SEMNextBase extends SEMLitBase {
         return (Math.round(v * 10) / 10) + ' ' + unit;
     }
     _moreInfo(entityId) { this._fireMoreInfo(entityId); }
+    /** The path of another screen of this dashboard, from the page we are on (#1321). */
+    _screen(view) { return sibling(window.location.pathname, view); }
     /** Navigate inside HA without a reload. */
     _go(path) {
         window.history.pushState(null, '', path);

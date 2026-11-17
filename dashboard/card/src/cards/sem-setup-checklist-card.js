@@ -29,7 +29,6 @@ class SEMSetupChecklistCard extends SEMLitBase {
     static get properties() {
         return {
             ...super.properties,
-            layout: { type: String },
             _hidden: { state: true },
             _reopened: { state: true },
             _confirming: { state: true },
@@ -38,15 +37,9 @@ class SEMSetupChecklistCard extends SEMLitBase {
 
     constructor() {
         super();
-        this.layout = 'classic';
         this._hidden = readHidden();
         this._reopened = false;
         this._confirming = false;
-    }
-
-    setConfig(config) {
-        super.setConfig(config);
-        if (config.layout === 'next') this.layout = 'next';
     }
 
     _hide() { this._reopened = false; this._hidden = true; writeHidden(true); }
@@ -59,7 +52,7 @@ class SEMSetupChecklistCard extends SEMLitBase {
     }
 
     _go(key) {
-        const target = rowTarget(key, this.layout, window.location.pathname);
+        const target = rowTarget(key, window.location.pathname);
         try { if (target.store) window.sessionStorage.setItem(target.store[0], target.store[1]); } catch (e) { /* the page still opens */ }
         window.history.pushState(null, '', target.path);
         window.dispatchEvent(new CustomEvent('location-changed', { bubbles: true, composed: true }));

@@ -44,7 +44,7 @@ const session = new Map();
 globalThis.sessionStorage = { getItem: (k) => (session.has(k) ? session.get(k) : null), setItem: (k, v) => session.set(k, String(v)), removeItem: (k) => session.delete(k) };
 const pushed = [];
 globalThis.history = { pushState: (_a, _b, url) => pushed.push(url) };
-globalThis.location = { pathname: '/sem-dashboard/home' };
+globalThis.location = { pathname: '/my-energy/now' };
 const registry = new Map();
 globalThis.customElements = { get: (t) => registry.get(t), define: (t, c) => registry.set(t, c) };
 globalThis.semLocalize = (key) => key;
@@ -208,35 +208,26 @@ test('things to check shows the count, the first title and an Open button', () =
     assert.match(shown(card(states({ repairs: { count: 0, first: null } }))), /^(?!.*setup_check_)/s);
 });
 
-test('classic targets: Configuration tab on the section, Repairs for things to check', () => {
-    assert.deepEqual(util.rowTarget('charger', 'classic', '/sem-dashboard/home'),
-        { path: '/sem-dashboard/config', store: [util.OPEN_SECTION_KEY, 'ev_chargers'] });
-    assert.deepEqual(util.rowTarget('forecast', 'classic', '/sem-dashboard/home').store, [util.OPEN_SECTION_KEY, 'forecast']);
-    assert.deepEqual(util.rowTarget('price', 'classic', '/sem-dashboard/home').store, [util.OPEN_SECTION_KEY, 'tariff']);
-    assert.deepEqual(util.rowTarget('repairs', 'classic', '/sem-dashboard/home'), { path: '/config/repairs' });
-});
-
-test('next targets: Devices for the charger, System setup check for forecast and price', () => {
-    assert.deepEqual(util.rowTarget('charger', 'next', '/sem-next/now'), { path: '/sem-next/devices' });
-    assert.deepEqual(util.rowTarget('forecast', 'next', '/sem-next/now'),
-        { path: '/sem-next/system', store: [util.OPEN_PANEL_KEY, 'setup'] });
-    assert.deepEqual(util.rowTarget('price', 'next', '/sem-next/now').path, '/sem-next/system');
-    assert.deepEqual(util.rowTarget('repairs', 'next', '/sem-next/now'), { path: '/config/repairs' });
+test('targets: Devices for the charger, System setup check for forecast and price, on any dashboard URL', () => {
+    for (const base of ['/sem-next', '/my-energy']) {
+        assert.deepEqual(util.rowTarget('charger', base + '/now'), { path: base + '/devices' });
+        assert.deepEqual(util.rowTarget('forecast', base + '/now'),
+            { path: base + '/system', store: [util.OPEN_PANEL_KEY, 'setup'] });
+        assert.deepEqual(util.rowTarget('price', base + '/now').path, base + '/system');
+        assert.deepEqual(util.rowTarget('repairs', base + '/now'), { path: '/config/repairs' });
+    }
 });
 
 test('a row button navigates and leaves its hint; Repairs leaves none', () => {
     const c = card(states());
     c._go('charger');
-    assert.deepEqual(pushed, ['/sem-dashboard/config']);
-    assert.equal(util.takeStored(util.OPEN_SECTION_KEY), 'ev_chargers');
-    assert.equal(util.takeStored(util.OPEN_SECTION_KEY), '', 'taken once');
+    assert.deepEqual(pushed, ['/my-energy/devices']);
+    c._go('forecast');
+    assert.equal(pushed.at(-1), '/my-energy/system');
+    assert.equal(util.takeStored(util.OPEN_PANEL_KEY), 'setup');
+    assert.equal(util.takeStored(util.OPEN_PANEL_KEY), '', 'taken once');
     c._go('repairs');
     assert.equal(pushed.at(-1), '/config/repairs');
-    const n = card(states(), 'next');
-    globalThis.location = { pathname: '/sem-next/now' };
-    n._go('forecast');
-    globalThis.location = { pathname: '/sem-dashboard/home' };
-    assert.equal(pushed.at(-1), '/sem-next/system');
 });
 
 test('brand domains read as words', () => {
