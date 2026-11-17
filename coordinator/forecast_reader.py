@@ -327,6 +327,12 @@ class ForecastReader:
     def source(self) -> Optional[str]:
         return self._source
 
+    @property
+    def platform(self) -> Optional[str]:
+        """(#1321) The integration domain behind the chosen source, or None
+        (a custom entity, or nothing found yet)."""
+        return getattr(self, "_platform", None) if self._source not in (None, "custom") else None
+
     def _clear_no_forecast_repair(self) -> None:
         """Reset detection-failure state + drop the Repair issue when
         a forecast integration appears after a previous absence.
@@ -468,6 +474,7 @@ class ForecastReader:
         primary guarantees the groups and ``_entities`` describe the same
         source — they cannot drift.
         """
+        self._platform = platform
         groups = self._registry_entity_groups(platform)
         primary = groups.get("forecast_today") or []
         if primary and self._entities.get("forecast_today") == primary[0]:

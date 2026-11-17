@@ -17,6 +17,7 @@ import { SEMLitBase, html, css, nothing, semGlassCss } from '../base/sem-lit-bas
 import { semTheme, semGetCurrency, semDefineCard, SEM_COLORS } from '../base/sem-shared.js';
 import { startOfDayInHaTz } from '../util/time-zone.js';
 import { formatLegendLabels } from '../util/legend-format.js';
+import { chargerNameOf } from '../util/charger-name.js';
 
 /* ── Chart.js singleton loader — LOCAL first, CDN fallback (#617) ──
    The library ships vendored under dashboard/card/vendor/ and is served
@@ -446,11 +447,8 @@ class SEMChartCard extends SEMLitBase {
             const m = eid.match(re);
             if (!m) continue;
             const id = m[1];
-            // (#1053) the charger's own name first, in the user's language
-            const friendly = states[eid]?.attributes?.charger_name
-                || states[eid]?.attributes?.friendly_name
-                ?.replace(/^SEM\s+/i, '').replace(/\s+Power$/i, '')
-                || id.replace(/_/g, ' ');
+            // (#1053/#1321) the configured name, never the translated friendly name
+            const friendly = chargerNameOf(states, id);
             found.push({ id, eid, friendly });
         }
         found.sort((a, b) => a.id.localeCompare(b.id));

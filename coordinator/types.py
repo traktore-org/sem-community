@@ -1229,6 +1229,8 @@ class SEMData:
     charging_state: str = "idle"
     charging_strategy: str = "idle"
     charging_strategy_reason: str = ""
+    charging_strategy_reason_code: str = ""
+    charging_strategy_reason_params: Dict[str, Any] = field(default_factory=dict)
     available_power: float = 0.0
     calculated_current: float = 0.0
     # (#657) The "why is my car not charging" flags. All three are decided
@@ -1522,6 +1524,8 @@ class SEMData:
             "charging_state": self.charging_state,
             "charging_strategy": self.charging_strategy,
             "charging_strategy_reason": self.charging_strategy_reason,
+            "charging_strategy_reason_code": self.charging_strategy_reason_code,
+            "charging_strategy_reason_params": dict(self.charging_strategy_reason_params or {}),
             "available_power": int(round(self.available_power or 0)),
             "calculated_current": self.calculated_current,
             # (#657) EV block reasons + budget internals.

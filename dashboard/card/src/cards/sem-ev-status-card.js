@@ -20,8 +20,10 @@ import { readNumber } from '../util/missing-value.js';
 import {
     sessionMonth, shiftMonth, rowsForMonth, monthTotals, sessionRowView,
 } from '../util/sessions.js';
-import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey } from '../util/charger-questions.js';
+import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, chargerSays } from '../util/charger-questions.js';
+import { plainReason } from '../util/why-rows.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
+import { chargerNameOf } from '../util/charger-name.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -413,16 +415,11 @@ class SEMEVStatusCard extends SEMLitBase {
     }
 
     _chargerName(id) {
-        const entity = this._hass?.states[`${this._prefix}charger_${id}_power`];
-        let name = id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        // (#1053) the charger's own name, in the user's language
-        if (entity?.attributes?.charger_name) return entity.attributes.charger_name;
-        if (entity?.attributes?.friendly_name) {
-            name = entity.attributes.friendly_name
-                .replace(/^SEM\s+/i, '')
-                .replace(/\s+Power$/i, '');
-        }
-        return name;
+        // (#1053/#1321) the configured name; the translated friendly name
+        // is never parsed. Without it, the id in title case.
+        const name = chargerNameOf(this._hass?.states, id, this._prefix);
+        return name === String(id).replace(/_/g, ' ')
+            ? name.replace(/\b\w/g, c => c.toUpperCase()) : name;
     }
 
     _renderSocGauge(soc, isEstimate = false) {
@@ -1066,6 +1063,15 @@ class SEMEVStatusCard extends SEMLitBase {
         window.addEventListener('pointercancel', onUp);  // mobile scroll-interrupt cleanup
     }
 
+    /** (#1354) Why the charger does what it does, the same words as the new
+     *  dashboard. The engine publishes one reason for the fleet, so it shows
+     *  only when SEM runs one charger. */
+    _chargerWhy() {
+        if ((this._chargers || []).length !== 1) return nothing;
+        const said = chargerSays(this._hass?.states, (k) => this._t(k), plainReason);
+        return said && said.text ? html`<div class="charger-why">${said.text}</div>` : nothing;
+    }
+
     _renderChargerSection(id, idx) {
         const color = CHARGER_COLORS[idx % CHARGER_COLORS.length];
         // (#1200) null when out: the tile prints "— W", not the 0 W of a car
@@ -1444,6 +1450,7 @@ class SEMEVStatusCard extends SEMLitBase {
                     <span class="charger-name">${name}</span>
                     <span class="charger-status" style="color:${isCharging ? color : ''}">${statusText}${all && commandedAmps > 0 ? html` <span class="charger-set">(${Math.round(commandedAmps)}&nbsp;A)</span>` : nothing}</span>
                 </div>
+                ${this._chargerWhy()}
 
                 <div class="charger-body">
                     <div class="charger-soc" title="${socIsEstimate ? this._t('soc_estimated_hint') : ''}">
@@ -1983,6 +1990,9 @@ class SEMEVStatusCard extends SEMLitBase {
                 border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
                 border-radius: 12px;
                 padding: 12px 14px;
+            }
+            .charger-why {
+                font-size: 12.5px; opacity: .75; margin: -4px 0 10px;
             }
             .charger-header {
                 display: flex; align-items: center; gap: 8px;

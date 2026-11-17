@@ -1,0 +1,45 @@
+# ============================================================
+# SEM Next — the second dashboard (#1321)
+# ============================================================
+# Five screens, each named by the question a user has. Every screen is one
+# bundled SEM card that opens with a line in words, then shows the detail.
+# This dashboard is created on request (service generate_dashboard with
+# template: next) and never replaces the classic one at /sem-dashboard.
+# ============================================================
+
+title: SEM-dashboard
+views:
+  - title: Now
+    path: now
+    icon: mdi:lightning-bolt
+    type: panel
+    cards:
+      - type: custom:sem-next-now-card
+
+  - title: Plan
+    path: plan
+    icon: mdi:calendar-clock
+    type: panel
+    cards:
+      - type: custom:sem-next-plan-card
+
+  - title: Devices
+    path: devices
+    icon: mdi:power-plug-outline
+    type: panel
+    cards:
+      - type: custom:sem-next-devices-card
+
+  - title: Insights
+    path: insights
+    icon: mdi:chart-bar
+    type: panel
+    cards:
+      - type: custom:sem-next-insights-card
+
+  - title: System
+    path: system
+    icon: mdi:cog-outline
+    type: panel
+    cards:
+      - type: custom:sem-next-system-card

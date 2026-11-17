@@ -57,6 +57,8 @@ class TestBlocksDriveTheRows:
         done = [r for r in rows if r["kind"] == KIND_EV_MIN_REACHED]
         assert len(done) == 1
         assert done[0]["when"] == b2[1].isoformat()  # the plan's promise
+        # (#1321) the label says "Min reached ({kwh} kWh)": the value rides along
+        assert done[0]["values"] == {"kwh": "5.0"}
 
     def test_the_reactive_night_row_is_suppressed_when_blocks_exist(self):
         b1 = (NOW + timedelta(hours=2), NOW + timedelta(hours=3))

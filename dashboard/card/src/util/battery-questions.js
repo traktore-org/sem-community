@@ -5,10 +5,11 @@
  * The stored settings do not change. Every question names the entity it
  * shows and writes, exactly the entity the old control wrote.
  *
- * The battery zones (docs/USER_GUIDE.md "Battery zones"): below the priority
- * level the battery fills first and the car waits; up to the buffer the car
- * gets spare sun only; above the buffer the battery may help the car; above
- * auto-start the car may start without spare sun.
+ * The battery zones (coordinator/decide.py `soc_zone`, flow_calculator.py
+ * `battery_assist_potential_w`): below the priority level the battery fills
+ * first and the car waits; up to the buffer the car gets spare sun only; from
+ * the buffer the battery may help the car; from auto-start it may help fully,
+ * still only with enough spare sun.
  */
 
 const finite = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -93,4 +94,36 @@ export function batterySaysFromStates(states) {
         schedulerTarget: s('sensor.sem_battery_scheduler_target_soc'),
         floorPct: s('sensor.sem_battery_dynamic_floor_pct'),
     });
+}
+
+/**
+ * (#1321) The battery's floor in %: the plan's own floor when it publishes one
+ * (`battery_floor_pct`), else the reserve setting. null when neither is known.
+ */
+export function batteryFloorPct(states, plan) {
+    const p = plan ? Number(plan.battery_floor_pct) : NaN;
+    if (plan && plan.battery_floor_pct !== null && plan.battery_floor_pct !== undefined && Number.isFinite(p)) return p;
+    const st = states ? states['number.sem_battery_reserve_soc'] : null;
+    const r = st ? Number(st.state) : NaN;
+    return Number.isFinite(r) ? r : null;
+}
+
+/** (#1321) kWh above the floor, or null without a level, a floor or a size. */
+export function kwhAboveFloor(soc, floorPct, capKwh) {
+    if (![soc, floorPct, capKwh].every((v) => v !== null && v !== undefined && Number.isFinite(Number(v)))) return null;
+    if (Number(capKwh) <= 0) return null;
+    return Math.max(0, (Number(soc) - Number(floorPct)) / 100 * Number(capKwh));
+}
+
+/** (#1321) Each battery's own level and power: [{bid, soc, powerW, status}] from sensor.sem_battery_<bid>_*. */
+export function batteryUnits(states, bids) {
+    const st = states || {};
+    const num = (id) => { const s = st[id]; const n = s ? Number(s.state) : NaN; return Number.isFinite(n) ? n : null; };
+    return (Array.isArray(bids) ? bids : []).map((bid) => {
+        const p = 'sensor.sem_battery_' + bid + '_';
+        const pw = st[p + 'power'];
+        const unit = pw && pw.attributes ? String(pw.attributes.unit_of_measurement || '').toLowerCase() : '';
+        const w = num(p + 'power');
+        return { bid, soc: num(p + 'soc'), powerW: w === null ? null : (unit === 'kw' ? w * 1000 : w), status: st[p + 'status'] ? String(st[p + 'status'].state) : '' };
+    }).filter((u) => u.soc !== null || u.powerW !== null);
 }

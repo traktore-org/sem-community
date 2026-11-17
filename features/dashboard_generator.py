@@ -12,6 +12,16 @@ from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
+# (#1321) The SEM Next dashboard's sidebar icon; the classic one keeps
+# mdi:solar-power so the two are told apart at a glance.
+NEXT_DASHBOARD_ICON = "mdi:view-dashboard-variant-outline"
+NEXT_DASHBOARD_PATH = "sem-next"
+NEXT_DASHBOARD_TITLE = "SEM-dashboard"
+# (#1321) the classic dashboard, kept for one release beside the default.
+# The names cross the URL paths (the classic one keeps /sem-dashboard so
+# bookmarks keep working); the sidebar name is what a user reads.
+CLASSIC_DASHBOARD_TITLE = "SEM-classic"
+
 
 class DashboardGenerator:
     """Generate Lovelace dashboard configuration for SEM."""
@@ -31,6 +41,8 @@ class DashboardGenerator:
         else:
             self._dashboard_template_path = basic_path
             self._is_premium = False
+        # (#1321) SEM Next: the second dashboard, five screens by question.
+        self._next_template_path = os.path.join(dashboard_dir, "sem_next_template.yaml")
 
     def _load_dashboard_translations_sync(self) -> dict:
         """Load translations from dashboard/translations.json (single source of truth).
@@ -128,16 +140,20 @@ class DashboardGenerator:
         )
         return config
 
-    async def _load_comprehensive_dashboard_template(self) -> Optional[Dict[str, Any]]:
-        """Load the comprehensive dashboard template from YAML file.
+    async def _load_comprehensive_dashboard_template(
+        self, path: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Load a dashboard template from its YAML file (the classic one by
+        default; #1321 passes the SEM Next template).
 
         For stable releases, strips the beta diagnostics section
         (between SEM_BETA_START and SEM_BETA_END markers).
         """
+        template_path = path or self._dashboard_template_path
         try:
-            if os.path.exists(self._dashboard_template_path):
+            if os.path.exists(template_path):
                 def _read():
-                    with open(self._dashboard_template_path, "r", encoding="utf-8") as f:
+                    with open(template_path, "r", encoding="utf-8") as f:
                         content = f.read()
                     # Strip beta section for stable releases
                     import re as _re
@@ -156,10 +172,10 @@ class DashboardGenerator:
                         _LOGGER.debug("Beta strip skipped: %s", strip_err)
                     return yaml.safe_load(content)
                 template = await self.hass.async_add_executor_job(_read)
-                _LOGGER.info("Loaded comprehensive dashboard template from %s", self._dashboard_template_path)
+                _LOGGER.info("Loaded dashboard template from %s", template_path)
                 return template
             else:
-                _LOGGER.warning("Dashboard template not found at %s", self._dashboard_template_path)
+                _LOGGER.warning("Dashboard template not found at %s", template_path)
                 return None
         except Exception as e:
             _LOGGER.error("Failed to load dashboard template: %s", e, exc_info=True)
@@ -169,20 +185,27 @@ class DashboardGenerator:
         self,
         dashboard_title: str = "Solar Energy Management",
         dashboard_path: str = "sem-dashboard",
+        template: str = "classic",
     ) -> Dict[str, Any]:
         """Generate complete SEM v6.0 dashboard configuration.
 
         Args:
             dashboard_title: Title for the dashboard
             dashboard_path: URL path for accessing the dashboard
+            template: ``classic`` (the nine-tab dashboard) or ``next``
+                (#1321, five screens by question). ``next`` is translated
+                and titled like the classic one; the classic-only passes
+                (device injection, pruning, sankey/k-flow substitution)
+                do not apply, its cards read the install themselves.
 
         Returns:
             Dashboard configuration dictionary
         """
         _LOGGER.info(
-            "Generating SEM dashboard: %s (path: %s)",
+            "Generating SEM dashboard: %s (path: %s, template: %s)",
             dashboard_title,
             dashboard_path,
+            template,
         )
 
         # Store dashboard path for use in sync button
@@ -192,6 +215,22 @@ class DashboardGenerator:
         self._cached_translations = await self.hass.async_add_executor_job(
             self._load_dashboard_translations_sync
         )
+
+        if template == "next":
+            next_template = await self._load_comprehensive_dashboard_template(
+                self._next_template_path)
+            if not next_template or "views" not in next_template:
+                raise FileNotFoundError(
+                    f"SEM Next template not found: {self._next_template_path}")
+            next_template = self._translate_dashboard(next_template)
+            next_template["title"] = dashboard_title
+            next_template["path"] = dashboard_path
+            next_template["icon"] = NEXT_DASHBOARD_ICON
+            next_template["show_in_sidebar"] = True
+            next_template["require_admin"] = False
+            _LOGGER.info("SEM Next dashboard generated with %d views",
+                         len(next_template["views"]))
+            return next_template
 
         # Try to load comprehensive template first
         template = await self._load_comprehensive_dashboard_template()
@@ -1074,6 +1113,7 @@ class DashboardGenerator:
         self,
         dashboard_title: str = "Solar Energy Management",
         dashboard_path: str = "sem-dashboard",
+        template: str = "classic",
     ) -> Optional[str]:
         """Generate and save dashboard in one step.
 
@@ -1085,6 +1125,7 @@ class DashboardGenerator:
             config = await self.generate_dashboard(
                 dashboard_title=dashboard_title,
                 dashboard_path=dashboard_path,
+                template=template,
             )
 
             # Save to storage

@@ -13,6 +13,7 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { MISSING, allOut, fmtValue, readNumber } from '../util/missing-value.js';
+import { chargerNameOf } from '../util/charger-name.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -102,16 +103,11 @@ class SEMChargerStatusCard extends SEMLitBase {
     }
 
     _chargerName(id) {
-        const entity = this._hass?.states[`${this._prefix}charger_${id}_power`];
-        let name = id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        // (#1053) the charger's own name, in the user's language
-        if (entity?.attributes?.charger_name) return entity.attributes.charger_name;
-        if (entity?.attributes?.friendly_name) {
-            name = entity.attributes.friendly_name
-                .replace(/^SEM\s+/i, '')
-                .replace(/\s+Power$/i, '');
-        }
-        return name;
+        // (#1053/#1321) the configured name; the translated friendly name
+        // is never parsed. Without it, the id in title case.
+        const name = chargerNameOf(this._hass?.states, id, this._prefix);
+        return name === String(id).replace(/_/g, ' ')
+            ? name.replace(/\b\w/g, c => c.toUpperCase()) : name;
     }
 
     _renderChargerTile(id) {

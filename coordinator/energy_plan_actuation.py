@@ -113,6 +113,10 @@ def plan_blocks(allocations) -> list:
         "price": a.price,
         # (#1023) only on the top-up: the strip hatches it
         **({"late": True} if a.late else {}),
+        # (#1321) why the packer put it here; the card says it in words
+        **({"reason": a.code} if getattr(a, "code", "") else {}),
+        **({"reason_params": dict(a.params)}
+           if getattr(a, "code", "") and a.params else {}),
     } for a in allocations]
 
 

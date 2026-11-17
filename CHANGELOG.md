@@ -42,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **On a peak/off-peak tariff, SEM charges your battery at night before a day with peak hours** (#1362). It checked the wrong day.
 - 🐛 **The plan no longer shows a battery charge SEM cannot send** (#1367). It says the battery needs its charge control set.
+- ✨ **SEM-dashboard Now shows where power comes from in percent, the next 24 hours of price, and a chip per device** (#1321).
+- ✨ **SEM-dashboard System shows each source's value and the entity SEM reads** (#1321), to check a setup.
+- 🔧 **The two dashboards are named SEM-dashboard and SEM-classic in the sidebar** (#1321). The names change at the next "generate dashboard".
+- ✨ **SEM Next: the plan says why per device, each charger shows its charge plan, the battery its reserve** (#1321). Phones get no sideways scroll.
+- 🐛 **SEM Next shows a charger by its own name in every language, not as "ev charger 1"** (#1321).
+- 🔧 **SEM Next asks the peak limit, battery levels and charger targets with the same words and logic as the classic dashboard** (#1354).
+- ✨ **SEM Next: a heater says what it does and what comes next** (#1321), like "heats to 52 °C at 23:00".
 
 # [2.3.0-beta.15] — 14.11.2026
 
@@ -94,6 +101,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🔧 **Heaters with a thermometer and Keep at now join the shared plan on every install** (#1335). Cheap hours for the car and battery can shift.
 - 🐛 **A load SEM started on sun now stops when solar production ends, even when its power sensor reads 0 W** (#1335).
 - 🐛 **A planned comfort block now runs through without switching the load on and off** (#1334), also with Grid set to Off.
+- ✨ **The new dashboard is the default, named Solar Energy Management** (#1321). The old one is now SEM Classic, kept for one release.
+- 🐛 **Energy flows add up to your meters** (#1324). A missed reading no longer shortens the split or shows export the meter never counted.
+- 🐛 **The night plan's cost now counts what the house buys after the battery runs out** (#1325). It showed empty before.
+- 🐛 **A load SEM never saw running says "not measured yet"** instead of a made-up 1 kW (#1326).
+- ✨ **SEM Next**: a new dashboard, five screens — one power bar, the plan on the price strip, devices you can reorder, settings as sentences (#1321).
+- ✨ **The plan says why each block sits where it does, and what waiting saves against buying now** (#1321).
+- ✨ **Loads get Boost: run now for 30, 60 or 120 minutes, then back to Smart** (#1321). A grid peak still stops it.
 - 📝 **The load card's Comfort hint now says how Keep at is reached**: in the planned hour from any source, sun may go further (#1334).
 - 📝 **The guides now explain Keep at, Extra from surplus and Run now past, and the order SEM follows** (#1334).
 - 🐛 **EG4 Web Monitor: solar power is found and grid import reads right from the start** (#810). The charge-start SOC is no longer the target.
