@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **SEM finds a grid-charge and a hold select by their options** (#1362). Any inverter; the card offers it with the right option.
+
 # [2.3.0-beta.18] — 17.11.2026
 
 - 📝 **README shows 2.3: new dashboard, first-run checklist and the AI assistant** (#1086). All screenshots retaken.
