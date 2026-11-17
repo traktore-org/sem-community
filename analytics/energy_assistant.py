@@ -536,7 +536,10 @@ class EnergyAssistant:
         if len(recent) < 3:
             return "stable"
 
-        values = [d.get(metric, 0) for d in recent]
+        # (#1022) a day without this metric is skipped, not counted as 0
+        values = [d[metric] for d in recent if d.get(metric) is not None]
+        if len(values) < 3:
+            return "stable"
         first_half = sum(values[:len(values)//2]) / max(1, len(values)//2)
         second_half = sum(values[len(values)//2:]) / max(1, len(values) - len(values)//2)
 

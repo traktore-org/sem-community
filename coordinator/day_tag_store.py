@@ -355,12 +355,16 @@ class DayTagger:
         tracker = getattr(self.coordinator, "_forecast_tracker", None)
         history = list(getattr(tracker, "_history", None) or [])
         rec = next((r for r in history if getattr(r, "date", None) == iso), None)
+        # (#1022) a stored day with no actual is no yield, not a 0 kWh day
         prior = [float(r.actual_kwh) for r in history
-                 if getattr(r, "date", "") < iso][-30:]
+                 if getattr(r, "date", "") < iso
+                 and getattr(r, "actual_kwh", None) is not None][-30:]
         clear = max(prior) if prior else None
         if rec is None:
             return None, None, clear
-        return float(rec.actual_kwh), float(rec.forecast_kwh), clear
+        return (None if rec.actual_kwh is None else float(rec.actual_kwh),
+                None if rec.forecast_kwh is None else float(rec.forecast_kwh),
+                clear)
 
     def _sessions(self, iso: str) -> List[float]:
         out = []
