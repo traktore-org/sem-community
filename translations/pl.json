@@ -1969,14 +1969,14 @@
         "step": {
           "confirm": {
             "title": "Zgłoś to do SEM",
-            "description": "**{name}** ma ustawiony procentowy cel ładowania, ale pojazd w tej chwili nie raportuje stanu naładowania, więc SEM nie może zatrzymać się *dokładnie* przy **{target}%**.\n\nNie ładuje jednak na ślepo: od ostatniego rzeczywistego odczytu w tej sesji zlicza faktycznie dostarczoną energię i zatrzymuje ładowanie, gdy ta zmierzona suma osiągnie cel — przekroczenie to tylko to, co auto pobrało od tamtego odczytu. Jeśli w tej sesji nie dotarł żaden rzeczywisty odczyt (albo SEM uruchomił się ponownie w trakcie ładowania), nie ma punktu odniesienia i ładowanie trwa, aż samo auto zredukuje moc tuż przed pełnym.\n\nAby limit trafiał w punkt, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → Ładowarki EV). Procent baterii na pulpicie to *szacowany* SOC SEM, celowo pomijany przy twardym limicie (może się rozjeżdżać). Ta naprawa znika automatycznie, gdy tylko znów pojawi się rzeczywisty odczyt SOC.\n\nSEM uważa, że to jego własny błąd. Jeśli możesz, zgłoś błąd przyciskiem w powiadomieniu — formularz będzie już wypełniony. Jeśli wolisz, skopiuj poniższy kontekst do e-maila lub wpisu na forum. To okno niczego nigdzie nie wysyła.\n\n```\n{context}\n```\n\nPotwierdź, aby zamknąć powiadomienie."
+            "description": "**{name}** ma ustawiony procentowy cel ładowania, ale pojazd w tej chwili nie raportuje stanu naładowania, więc SEM nie może zatrzymać się *dokładnie* przy **{target}%**.\n\nNie ładuje jednak na ślepo: od ostatniego rzeczywistego odczytu w tej sesji zlicza faktycznie dostarczoną energię i zatrzymuje ładowanie, gdy ta zmierzona suma osiągnie cel — przekroczenie to tylko to, co auto pobrało od tamtego odczytu. Jeśli w tej sesji nie dotarł żaden rzeczywisty odczyt (albo SEM uruchomił się ponownie w trakcie ładowania), nie ma punktu odniesienia i ładowanie trwa, aż samo auto zredukuje moc tuż przed pełnym.\n\nAby limit trafiał w punkt, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (System → Ładowarki). Procent baterii na pulpicie to *szacowany* SOC SEM, celowo pomijany przy twardym limicie (może się rozjeżdżać). Ta naprawa znika automatycznie, gdy tylko znów pojawi się rzeczywisty odczyt SOC.\n\nSEM uważa, że to jego własny błąd. Jeśli możesz, zgłoś błąd przyciskiem w powiadomieniu — formularz będzie już wypełniony. Jeśli wolisz, skopiuj poniższy kontekst do e-maila lub wpisu na forum. To okno niczego nigdzie nie wysyła.\n\n```\n{context}\n```\n\nPotwierdź, aby zamknąć powiadomienie."
           }
         }
       }
     },
     "unmanaged_charger_found": {
       "title": "SEM znalazł ładowarkę, którą nie zarządza",
-      "description": "Urządzenie **{name}** wygląda na ładowarkę EV, ale w SEM nie skonfigurowano żadnej — SEM jej nie dotyka ({count} kandydat(ów)).\n\nAby SEM optymalizował ładowanie energią słoneczną i tanimi taryfami, dodaj ją w Ustawienia → Urządzenia i usługi → SEM → Konfiguruj. Pojawi się też zakładka EV z trybami ładowania.\n\nJeśli to nie ładowarka, zignoruj tę informację — SEM i tak nie będzie nią sterować."
+      "description": "Urządzenie **{name}** wygląda na ładowarkę EV, ale w SEM nie skonfigurowano żadnej — SEM jej nie dotyka ({count} kandydat(ów)).\n\nAby SEM optymalizował ładowanie energią słoneczną i tanimi taryfami, dodaj ją w Ustawienia → Urządzenia i usługi → SEM → Konfiguruj. Pojawi się też na ekranie Devices z trybami ładowania.\n\nJeśli to nie ładowarka, zignoruj tę informację — SEM i tak nie będzie nią sterować."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace w trybie YAML — dodaj zasoby kart SEM",
@@ -1984,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Encja sterująca ładowarki nie działa: {name}",
-      "description": "SEM używa **`{entity_id}`**, aby {capability} na **{name}**, ale ta encja jest `{reason}` — każde polecenie przepada. Sprawdź encję w **Narzędziach dewelopera → Stany** i napraw ją u źródła lub wskaż SEM inną w **Konfiguracja → Ładowarki EV**."
+      "description": "SEM używa **`{entity_id}`**, aby {capability} na **{name}**, ale ta encja jest `{reason}` — każde polecenie przepada. Sprawdź encję w **Narzędziach dewelopera → Stany** i napraw ją u źródła lub wskaż SEM inną w **System → Ładowarki**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Nie można zapisać nastawy mocy baterii: {entity_id}",
@@ -2004,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Nie można użyć sterowania eksportem Deye: {entity_id}",
-      "description": "SEM nie może użyć {entity_id} do sterowania eksportem: {reason}. Sprawdź encję select i trzy etykiety opcji w Konfiguracja → Inteligencja baterii."
+      "description": "SEM nie może użyć {entity_id} do sterowania eksportem: {reason}. Sprawdź encję select i trzy etykiety opcji w System → Zasady baterii."
     },
     "battery_operating_mode_unexpected": {
       "title": "Bateria jest w trybie „{mode}” — SEM planuje tak, jakby był to „{expected}”",
@@ -2016,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "Nie można odtworzyć historii nocnej baterii",
-      "description": "SEM nie mógł odtworzyć historii nocnej, ponieważ ta instalacja nie ma czujnika **{missing}**.\n\nSEM uczy się, ile z baterii można bezpiecznie wydać, obserwując, ile dom pobiera z niej nocą, i chce pięciu dobrych nocy, zanim poda liczbę. Odtwarzanie czyta *własną* zapisaną historię licznika, żebyś nie musiał czekać — ale ten licznik musi istnieć.\n\n**Co zrobić:** dodaj czujnik energii skumulowanej (kWh, nie waty) dla **{missing}** do panelu Energia w Home Assistant, a następnie ponownie naciśnij **Odtwórz z historii** na karcie Bateria. Czekanie nic nie kosztuje — SEM czyta historię licznika, więc później zadziała tak samo dobrze. W międzyczasie rejestracja trwa, jedna noc dziennie."
+      "description": "SEM nie mógł odtworzyć historii nocnej, ponieważ ta instalacja nie ma czujnika **{missing}**.\n\nSEM uczy się, ile z baterii można bezpiecznie wydać, obserwując, ile dom pobiera z niej nocą, i chce pięciu dobrych nocy, zanim poda liczbę. Odtwarzanie czyta *własną* zapisaną historię licznika, żebyś nie musiał czekać — ale ten licznik musi istnieć.\n\n**Co zrobić:** dodaj czujnik energii skumulowanej (kWh, nie waty) dla **{missing}** do panelu Energia w Home Assistant, a następnie ponownie naciśnij **Odtwórz z historii** na ekranie Devices. Czekanie nic nie kosztuje — SEM czyta historię licznika, więc później zadziała tak samo dobrze. W międzyczasie rejestracja trwa, jedna noc dziennie."
     },
     "battery_night_backfill_incomplete": {
       "title": "Odtworzone noce nie widzą udziału sieci",
@@ -2032,19 +2032,19 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Platforma baterii przypięta do Generic w instalacji {brand}",
-      "description": "Platforma baterii SEM jest ustawiona na **Generic / inna**, ale załadowana jest integracja {brand}. Wcześniejsze wersje kreatora opcji oferowały tylko Generic i Deye i domyślnie wybierały Generic, więc jednorazowe przejście przez tę stronę zdegradowało instalację {brand} do ogólnego adaptera — bez wymuszonego ładowania, bez idempotentnych zapisów rejestru. Otwórz **Konfiguracja → Harmonogram baterii** i ustaw **Platforma ładowania baterii** na **Autodetekcja**. Jeśli Generic jest zamierzonym wyborem (bateria z własnymi encjami sterującymi), ustaw tę encję, a to powiadomienie zniknie."
+      "description": "Platforma baterii SEM jest ustawiona na **Generic / inna**, ale załadowana jest integracja {brand}. Wcześniejsze wersje kreatora opcji oferowały tylko Generic i Deye i domyślnie wybierały Generic, więc jednorazowe przejście przez tę stronę zdegradowało instalację {brand} do ogólnego adaptera — bez wymuszonego ładowania, bez idempotentnych zapisów rejestru. Otwórz **Ustawienia → Urządzenia i usługi → SEM → Konfiguruj → Harmonogram ładowania baterii** i ustaw **Platforma ładowania baterii** na **Autodetekcja**. Jeśli Generic jest zamierzonym wyborem (bateria z własnymi encjami sterującymi), ustaw tę encję, a to powiadomienie zniknie."
     },
     "split_grid_guessed": {
       "title": "SEM sprawdza dwa odgadnięte liczniki sieci",
-      "description": "SEM nie ma czujnika mocy sieci, więc zgadł po nazwie: **{import_entity}** dla poboru z sieci i **{export_entity}** dla oddawania do sieci. SEM nie używa ich, dopóki nie zgadzają się z Twoimi licznikami energii sieci, więc na razie moc sieci wynosi 0. Jak wybrać licznik: otwórz pulpit SEM, kartę ⚙ **Konfiguracja**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw **Moc sieci** w sekcji **Źródła czujników**. Jeśli Twój licznik ma jeden czujnik do poboru i jeden do oddawania, ustaw zamiast tego **Czujnik importu z sieci** i **Czujnik eksportu do sieci** w sekcji **Taryfa i ceny**."
+      "description": "SEM nie ma czujnika mocy sieci, więc zgadł po nazwie: **{import_entity}** dla poboru z sieci i **{export_entity}** dla oddawania do sieci. SEM nie używa ich, dopóki nie zgadzają się z Twoimi licznikami energii sieci, więc na razie moc sieci wynosi 0. Jak wybrać licznik: otwórz pulpit SEM, kartę **System**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw **Moc sieci** w sekcji **Co SEM odczytuje**. Jeśli Twój licznik ma jeden czujnik do poboru i jeden do oddawania, ustaw zamiast tego **Czujnik importu z sieci** i **Czujnik eksportu do sieci** w sekcji **Co SEM odczytuje**."
     },
     "battery_control_write_not_taken": {
       "title": "Zapis sterowania baterią nie został przyjęty: {entity_id}",
-      "description": "SEM ustawił **`{entity_id}`** na **{wanted}**; w kolejnych cyklach nadal odczytywał **{seen}**, {strikes} razy z rzędu. Wywołanie nie zakończyło się błędem — rejestr po prostu nie zachował wartości. **Rozwiązanie:** ustaw encję ręcznie w Narzędzia deweloperskie → Stany. Jeśli wartość nie zostaje, to niewłaściwa encja dla tej roli: wybierz inną w karcie Konfiguracja. Jeśli ręcznie zostaje, a dla SEM nie, podaj nam markę i encję. Znika, gdy zapis zostanie odzwierciedlony."
+      "description": "SEM ustawił **`{entity_id}`** na **{wanted}**; w kolejnych cyklach nadal odczytywał **{seen}**, {strikes} razy z rzędu. Wywołanie nie zakończyło się błędem — rejestr po prostu nie zachował wartości. **Rozwiązanie:** ustaw encję ręcznie w Narzędzia deweloperskie → Stany. Jeśli wartość nie zostaje, to niewłaściwa encja dla tej roli: wybierz inną w **System → Zasady baterii**. Jeśli ręcznie zostaje, a dla SEM nie, podaj nam markę i encję. Znika, gdy zapis zostanie odzwierciedlony."
     },
     "soc_zones_out_of_order": {
       "title": "Strefy SOC baterii są w złej kolejności",
-      "description": "Twoje strefy baterii odczytują **Priorytet {priority}% · Bufor {buffer}% · Autostart {auto_start}%**, ale SEM oczekuje, że będą rosnąć w tej kolejności: Priorytet to rezerwa, której nigdy nie wydajesz, Bufor to miejsce, w którym wsparcie baterii się zatrzymuje, a Autostart to miejsce, w którym pakiet jest wystarczająco pełny, aby oddawać swobodnie.\n\nSEM używa **{used}** jako granic — te same trzy liczby, posortowane — więc żadna strefa nie jest pomijana i nic nie zachowuje się nieprzewidywalnie. Informuje Cię o tym, ponieważ układ, który wpisałeś, niemal na pewno nie jest tym, co miałeś na myśli.\n\nNapraw to w **Konfiguracja → Strefy baterii**. Dowolne wartości są dozwolone, o ile rosną; szerokie strefy są w porządku — 20 / 30 / 50 to całkiem dobry układ przy dużym pakiecie."
+      "description": "Twoje strefy baterii odczytują **Priorytet {priority}% · Bufor {buffer}% · Autostart {auto_start}%**, ale SEM oczekuje, że będą rosnąć w tej kolejności: Priorytet to rezerwa, której nigdy nie wydajesz, Bufor to miejsce, w którym wsparcie baterii się zatrzymuje, a Autostart to miejsce, w którym pakiet jest wystarczająco pełny, aby oddawać swobodnie.\n\nSEM używa **{used}** jako granic — te same trzy liczby, posortowane — więc żadna strefa nie jest pomijana i nic nie zachowuje się nieprzewidywalnie. Informuje Cię o tym, ponieważ układ, który wpisałeś, niemal na pewno nie jest tym, co miałeś na myśli.\n\nNapraw to w **System → Zasady baterii**. Dowolne wartości są dozwolone, o ile rosną; szerokie strefy są w porządku — 20 / 30 / 50 to całkiem dobry układ przy dużym pakiecie."
     },
     "previous_install_leftovers": {
       "title": "Znaleziono pliki z poprzedniej instalacji SEM",
@@ -2052,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "Styk SG-Ready {contact} nie może być sterowany",
-      "description": "**{entity_id}** jest ustawiona jako SG-Ready {contact}, ale to encja text/number/select, a jej wartość **{missing}** nie jest skonfigurowana — więc SEM nie ma czego zapisać i każde polecenie SG-Ready dla tej pompy ciepła zawodzi. Otwórz **Konfiguracja → Pompa ciepła** i wypełnij zarówno wartość ZAŁ, jak i WYŁ dla tego styku, albo skieruj go na encję typu switch."
+      "description": "**{entity_id}** jest ustawiona jako SG-Ready {contact}, ale to encja text/number/select, a jej wartość **{missing}** nie jest skonfigurowana — więc SEM nie ma czego zapisać i każde polecenie SG-Ready dla tej pompy ciepła zawodzi. Otwórz **System → Pompa ciepła i ciepła woda** i wypełnij zarówno wartość ZAŁ, jak i WYŁ dla tego styku, albo skieruj go na encję typu switch."
     },
     "split_grid_rejected": {
       "title": "SEM nie mógł znaleźć Twoich liczników mocy sieci",
-      "description": "SEM nie ma czujnika mocy sieci, a czujniki zgadnięte po nazwie nie są Twoim licznikiem sieci: **{import_entity}** dla poboru, **{export_entity}** dla oddawania. Nie zgadzają się z Twoimi licznikami energii sieci albo brakuje jednego z nich. SEM woli nie pokazywać mocy sieci niż pokazywać błędną. Jak wybrać licznik: otwórz pulpit SEM, kartę ⚙ **Konfiguracja**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw **Moc sieci** w sekcji **Źródła czujników**. Jeśli Twój licznik ma jeden czujnik do poboru i jeden do oddawania, ustaw zamiast tego **Czujnik importu z sieci** i **Czujnik eksportu do sieci** w sekcji **Taryfa i ceny**."
+      "description": "SEM nie ma czujnika mocy sieci, a czujniki zgadnięte po nazwie nie są Twoim licznikiem sieci: **{import_entity}** dla poboru, **{export_entity}** dla oddawania. Nie zgadzają się z Twoimi licznikami energii sieci albo brakuje jednego z nich. SEM woli nie pokazywać mocy sieci niż pokazywać błędną. Jak wybrać licznik: otwórz pulpit SEM, kartę **System**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw **Moc sieci** w sekcji **Co SEM odczytuje**. Jeśli Twój licznik ma jeden czujnik do poboru i jeden do oddawania, ustaw zamiast tego **Czujnik importu z sieci** i **Czujnik eksportu do sieci** w sekcji **Co SEM odczytuje**."
     },
     "power_sensor_not_found": {
       "title": "Brak czujnika mocy dla {energy_entity}",
-      "description": "Pulpit Energia liczy **{energy_entity}** w kWh, ale SEM nie znalazł dla niego czujnika mocy (W). SEM odczytuje więc tę moc jako 0 W, a przepływy energii i nadwyżka są błędne. Aby to naprawić, dodaj czujnik mocy do tego wpisu w pulpicie Energia. Albo otwórz pulpit SEM, kartę ⚙ **Konfiguracja**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw czujnik w sekcji **Źródła czujników**. Jeśli czujnik mocy nie istnieje, możesz zignorować to powiadomienie."
+      "description": "Pulpit Energia liczy **{energy_entity}** w kWh, ale SEM nie znalazł dla niego czujnika mocy (W). SEM odczytuje więc tę moc jako 0 W, a przepływy energii i nadwyżka są błędne. Aby to naprawić, dodaj czujnik mocy do tego wpisu w pulpicie Energia. Albo otwórz pulpit SEM, kartę **System**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw czujnik w sekcji **Co SEM odczytuje**. Jeśli czujnik mocy nie istnieje, możesz zignorować to powiadomienie."
     },
     "power_sensor_not_found_unit": {
       "title": "Brak czujnika mocy dla {energy_entity}",
@@ -2085,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM nie widzi Twojego oddawania do sieci",
-      "description": "Ustawiony jest tylko czujnik importu z sieci **{import_entity}**, więc SEM odczytuje eksport jako 0 W. Ale Twój licznik eksportu **{export_entity}** pokazuje, że energia popłynęła do sieci. Aby to naprawić, otwórz pulpit SEM, kartę ⚙ **Konfiguracja**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw **Czujnik eksportu do sieci** w sekcji **Taryfa i ceny**. Albo wyczyść **Czujnik importu z sieci**, a SEM sam poszuka pary."
+      "description": "Ustawiony jest tylko czujnik importu z sieci **{import_entity}**, więc SEM odczytuje eksport jako 0 W. Ale Twój licznik eksportu **{export_entity}** pokazuje, że energia popłynęła do sieci. Aby to naprawić, otwórz pulpit SEM, kartę **System**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw **Czujnik eksportu do sieci** w sekcji **Co SEM odczytuje**. Albo wyczyść **Czujnik importu z sieci**, a SEM sam poszuka pary."
     },
     "unseen_power_row": {
       "title": "SEM nie widzi całej mocy z PV lub baterii",
@@ -2105,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "Ktoś inny zapisuje do {name}",
-      "description": "Coś innego niż SEM ciągle zmienia **{name}**, a SEM i ta strona wzajemnie cofają swoje zmiany. W zakładce Konfiguracja SEM ustaw to urządzenie na *Tak, SEM ustępuje* i wybierz encję pokazującą, kiedy kontrolę ma druga strona."
+      "description": "Coś innego niż SEM ciągle zmienia **{name}**, a SEM i ta strona wzajemnie cofają swoje zmiany. Na ekranie **System** włącz **Wszystkie ustawienia** i ustaw **sterowane przez kogoś innego** dla tego urządzenia (w **Zasady baterii** lub **Ładowarki**) na *Tak, SEM ustępuje* i wybierz encję pokazującą, kiedy kontrolę ma druga strona."
     },
     "heater_no_rise": {
       "title": "Zasobnik ciepłej wody się nie nagrzewa",

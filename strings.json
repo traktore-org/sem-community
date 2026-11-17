@@ -1965,7 +1965,7 @@
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop *exactly* at **{target}%**.\n\nIt isn't charging blind, though: from the last real reading this session it counts the energy actually delivered and stops once that measured total reaches your target — the overshoot is only what the car took since that reading. If no real reading has arrived at all this session (or SEM restarted mid-charge) there is nothing to count from, and charging runs until the car itself tapers near full.\n\nFor a cap that lands on the number, wire a **real vehicle SOC sensor** for this charger (Configuration → EV chargers). The battery % on the dashboard is SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). This repair clears automatically as soon as a real SOC reading is available again.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop *exactly* at **{target}%**.\n\nIt isn't charging blind, though: from the last real reading this session it counts the energy actually delivered and stops once that measured total reaches your target — the overshoot is only what the car took since that reading. If no real reading has arrived at all this session (or SEM restarted mid-charge) there is nothing to count from, and charging runs until the car itself tapers near full.\n\nFor a cap that lands on the number, wire a **real vehicle SOC sensor** for this charger (System → Chargers). The battery % on the dashboard is SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). This repair clears automatically as soon as a real SOC reading is available again.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1976,7 +1976,7 @@
     },
     "unmanaged_charger_found": {
       "title": "SEM found a charger it is not managing",
-      "description": "The device **{name}** looks like an EV charger, but no charger is configured in SEM — so SEM is leaving it alone ({count} candidate(s) found).\n\nTo let SEM optimise your charging with solar and cheap tariffs, add it under Settings → Devices & Services → SEM → Configure. That also unlocks the EV tab with the charge modes.\n\nIf this is not a car charger, ignore this notice — SEM will not control it either way."
+      "description": "The device **{name}** looks like an EV charger, but no charger is configured in SEM — so SEM is leaving it alone ({count} candidate(s) found).\n\nTo let SEM optimise your charging with solar and cheap tariffs, add it under Settings → Devices & Services → SEM → Configure. That also adds it to the Devices screen with the charge modes.\n\nIf this is not a car charger, ignore this notice — SEM will not control it either way."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace is in YAML mode — add SEM's card resources",
@@ -1984,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "EV charger control entity is not working: {name}",
-      "description": "SEM is configured to use **`{entity_id}`** to {capability} on **{name}**, but that entity is `{reason}` — so every command SEM sends lands nowhere. SEM will still show a commanded current; the charger is not actually following it.\n\nCommon causes: the entity was renamed or removed upstream, or a template entity failed to load (a template `number` with an unsupported option loads only as `restored` and silently swallows writes).\n\nCheck the entity in **Developer Tools → States**. If it is missing or unavailable there, fix it at the source; if it is gone for good, re-point SEM under **Configuration → EV chargers**."
+      "description": "SEM is configured to use **`{entity_id}`** to {capability} on **{name}**, but that entity is `{reason}` — so every command SEM sends lands nowhere. SEM will still show a commanded current; the charger is not actually following it.\n\nCommon causes: the entity was renamed or removed upstream, or a template entity failed to load (a template `number` with an unsupported option loads only as `restored` and silently swallows writes).\n\nCheck the entity in **Developer Tools → States**. If it is missing or unavailable there, fix it at the source; if it is gone for good, re-point SEM under **System → Chargers**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Battery power setpoint cannot be written: {entity_id}",
@@ -2004,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Deye export control cannot be used: {entity_id}",
-      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under System → Battery rules."
     },
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
@@ -2016,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "Battery-night history cannot be rebuilt",
-      "description": "SEM could not rebuild your battery-night history, because this install has no **{missing}** sensor.\n\nSEM learns how much of your battery is safe to spend by watching what your house draws from it overnight, and it wants five good nights before it offers a figure. Rebuilding reads the counter's *own* recorded history so you do not have to wait — but it needs that counter to exist.\n\n**What to do:** add a cumulative energy sensor (kWh, not watts) for **{missing}** to Home Assistant's Energy Dashboard, then press **Rebuild from history** on the Battery tab again. Nothing is lost by waiting — SEM reads the counter's history, so it works just as well later. Recording continues meanwhile, one night per day."
+      "description": "SEM could not rebuild your battery-night history, because this install has no **{missing}** sensor.\n\nSEM learns how much of your battery is safe to spend by watching what your house draws from it overnight, and it wants five good nights before it offers a figure. Rebuilding reads the counter's *own* recorded history so you do not have to wait — but it needs that counter to exist.\n\n**What to do:** add a cumulative energy sensor (kWh, not watts) for **{missing}** to Home Assistant's Energy Dashboard, then press **Rebuild from history** on the Devices screen again. Nothing is lost by waiting — SEM reads the counter's history, so it works just as well later. Recording continues meanwhile, one night per day."
     },
     "battery_night_backfill_incomplete": {
       "title": "Rebuilt nights cannot see the grid's share",
@@ -2032,19 +2032,19 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Battery platform pinned to Generic on a {brand} install",
-      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Configuration → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Devices & Services → SEM → Configure → Battery Charge Scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     },
     "split_grid_guessed": {
       "title": "SEM is checking two guessed grid meters",
-      "description": "SEM has no grid power sensor, so it guessed by name: **{import_entity}** for grid import and **{export_entity}** for grid export. SEM does not use them until they match your grid energy counters, so grid power reads 0 for now. To pick your meter: open the SEM dashboard, tab ⚙ **Configuration**, and pick **All settings** at the top. Then set **Grid power** in section **Sensor sources**. If your meter has one sensor for import and one for export, set **Grid import sensor** and **Grid export sensor** in section **Tariff & pricing** instead."
+      "description": "SEM has no grid power sensor, so it guessed by name: **{import_entity}** for grid import and **{export_entity}** for grid export. SEM does not use them until they match your grid energy counters, so grid power reads 0 for now. To pick your meter: open the SEM dashboard, **System** screen, and pick **All settings** at the top. Then set **Grid power** in **What SEM reads**. If your meter has one sensor for import and one for export, set **Grid import sensor** and **Grid export sensor** in **What SEM reads** instead."
     },
     "battery_control_write_not_taken": {
       "title": "A battery control write is not taken: {entity_id}",
-      "description": "SEM set **`{entity_id}`** to **{wanted}**; on the next cycles it still read **{seen}**, {strikes} times running. The call did not fail — the register did not keep the value. **Fix:** set the entity by hand in Developer Tools → States. If it does not hold, it is the wrong entity for this role: pick another in the Configuration card. If it holds by hand but not for SEM, tell us the brand and the entity. Clears once a write is reflected."
+      "description": "SEM set **`{entity_id}`** to **{wanted}**; on the next cycles it still read **{seen}**, {strikes} times running. The call did not fail — the register did not keep the value. **Fix:** set the entity by hand in Developer Tools → States. If it does not hold, it is the wrong entity for this role: pick another under **System → Battery rules**. If it holds by hand but not for SEM, tell us the brand and the entity. Clears once a write is reflected."
     },
     "soc_zones_out_of_order": {
       "title": "Battery SOC zones are out of order",
-      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Configuration → Battery zones**. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
+      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **System → Battery rules**. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
     },
     "previous_install_leftovers": {
       "title": "Files from a previous SEM install were found",
@@ -2052,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready contact {contact} cannot be driven",
-      "description": "**{entity_id}** is set as SG-Ready {contact}, but it is a text/number/select entity and its **{missing}** value is not configured — so SEM has nothing to write and every SG-Ready command for this heat pump fails. Open **Configuration → Heat pump** and fill both the ON and the OFF value for this contact, or point it at a switch entity instead."
+      "description": "**{entity_id}** is set as SG-Ready {contact}, but it is a text/number/select entity and its **{missing}** value is not configured — so SEM has nothing to write and every SG-Ready command for this heat pump fails. Open **System → Heat pump and hot water** and fill both the ON and the OFF value for this contact, or point it at a switch entity instead."
     },
     "split_grid_rejected": {
       "title": "SEM could not find your grid power meters",
-      "description": "SEM has no grid power sensor, and its guesses by name are not your grid meter: **{import_entity}** for import, **{export_entity}** for export. They do not match your grid energy counters, or one of the two is missing. SEM shows no grid power rather than a wrong one. To pick your meter: open the SEM dashboard, tab ⚙ **Configuration**, and pick **All settings** at the top. Then set **Grid power** in section **Sensor sources**. If your meter has one sensor for import and one for export, set **Grid import sensor** and **Grid export sensor** in section **Tariff & pricing** instead."
+      "description": "SEM has no grid power sensor, and its guesses by name are not your grid meter: **{import_entity}** for import, **{export_entity}** for export. They do not match your grid energy counters, or one of the two is missing. SEM shows no grid power rather than a wrong one. To pick your meter: open the SEM dashboard, **System** screen, and pick **All settings** at the top. Then set **Grid power** in **What SEM reads**. If your meter has one sensor for import and one for export, set **Grid import sensor** and **Grid export sensor** in **What SEM reads** instead."
     },
     "power_sensor_not_found": {
       "title": "No power sensor for {energy_entity}",
-      "description": "The Energy Dashboard counts **{energy_entity}** in kWh, but SEM found no power sensor (W) for it. SEM reads this power as 0 W, so the energy flows and the surplus are wrong. To fix it, add the power sensor to this entry in the Energy Dashboard. Or open the SEM dashboard, tab ⚙ **Configuration**, and pick **All settings** at the top. Then set the sensor in section **Sensor sources**. If there is no power sensor, you can ignore this notice."
+      "description": "The Energy Dashboard counts **{energy_entity}** in kWh, but SEM found no power sensor (W) for it. SEM reads this power as 0 W, so the energy flows and the surplus are wrong. To fix it, add the power sensor to this entry in the Energy Dashboard. Or open the SEM dashboard, **System** screen, and pick **All settings** at the top. Then set the sensor in **What SEM reads**. If there is no power sensor, you can ignore this notice."
     },
     "power_sensor_not_found_unit": {
       "title": "No power sensor for {energy_entity}",
@@ -2085,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM does not see your grid export",
-      "description": "Only the grid import sensor **{import_entity}** is set, so SEM reads grid export as 0 W. But your export counter **{export_entity}** shows power went to the grid. To fix it, open the SEM dashboard, tab ⚙ **Configuration**, and pick **All settings** at the top. Then set **Grid export sensor** in section **Tariff & pricing**. Or clear **Grid import sensor**, and SEM looks for the pair itself."
+      "description": "Only the grid import sensor **{import_entity}** is set, so SEM reads grid export as 0 W. But your export counter **{export_entity}** shows power went to the grid. To fix it, open the SEM dashboard, **System** screen, and pick **All settings** at the top. Then set **Grid export sensor** in **What SEM reads**. Or clear **Grid import sensor**, and SEM looks for the pair itself."
     },
     "unseen_power_row": {
       "title": "SEM does not see all your solar or battery power",
@@ -2105,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "Another party writes to {name}",
-      "description": "Something other than SEM keeps changing **{name}**, and SEM and that party undo each other. In SEM's Configuration tab, set this device to *Yes, SEM yields* and pick the entity that shows when the other party is in control."
+      "description": "Something other than SEM keeps changing **{name}**, and SEM and that party undo each other. On the **System** screen, switch on **All settings**, then set **steered by another party** for this device (in **Battery rules** or **Chargers**) to *Yes, SEM yields* and pick the entity that shows when the other party is in control."
     },
     "heater_no_rise": {
       "title": "Hot water tank does not warm",

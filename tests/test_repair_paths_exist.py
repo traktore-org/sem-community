@@ -1,10 +1,11 @@
-"""(#1371) A Repair text that names a menu path must name one that exists.
+"""(#1371, #1321) A Repair text that names a menu path must name one that exists.
 
 A user followed "Settings → Integrations → SEM → Configure → Sensors → Grid
 import power" to a place that was not there. Every "A → B" path in the issue
 texts is read from the shipped JSON and each step after the first is checked
-against the real names: HA's own fixed parts, the options-flow step titles
-and the dashboard Configuration tab sections.
+against the real names: HA's own fixed parts, the options-flow step titles,
+the System screen's group names, its "All settings" switch and the screens.
+The classic Configuration tab is gone, so no text may point to it.
 """
 from __future__ import annotations
 
@@ -58,11 +59,17 @@ def _titles(lang: str) -> set[str]:
     return {n for n in names if n and "{" not in n}
 
 
+GROUP_KEYS = tuple(f"next_g_{g}" for g in ("pay", "may", "battery", "chargers", "heat", "reads", "misc"))
+# View titles with no translation key stay English on every install.
+SCREENS = ("Now", "Plan", "Devices", "Insights", "System")
+
+
 def _sections(lang: str) -> set[str]:
-    """Titles of the dashboard Configuration tab sections."""
+    """Names a path step may start with on the SEM dashboard: the System
+    screen's group cards, its All settings switch and the screens."""
     table = DASHBOARD["zh" if lang == "zh-Hans" else lang]
-    return {v for k, v in table.items()
-            if k.startswith("config_section_") and "subtitle" not in k}
+    names = {table[k] for k in GROUP_KEYS} | {table["next_all_settings"], table["System"], table["Now"]}
+    return names | set(SCREENS)
 
 
 def _dashboard_key(lang: str) -> str:
@@ -97,13 +104,35 @@ def test_the_check_refuses_a_made_up_menu():
 def test_translated_paths_follow_english_and_name_real_sections(lang):
     en = _issue_texts(json.loads((ROOT / "strings.json").read_text("utf-8"))["issues"])
     local = _issue_texts(json.loads((TRANSLATIONS / f"{lang}.json").read_text("utf-8"))["issues"])
-    tab = DASHBOARD[_dashboard_key(lang)]["config_tab_title"]
+    system = DASHBOARD[_dashboard_key(lang)]["System"]
     names = tuple(_sections(lang) | _titles(lang))
     for key, text in en.items():
         assert _plain(local[key]).count(SEPARATOR) == _plain(text).count(SEPARATOR), key
         plain = _plain(local[key])
-        for hit in re.finditer(re.escape(tab) + SEPARATOR + r"([^→]+)", plain):
-            if plain[hit.end():].startswith("→ SEM"):
-                continue  # HA's own Settings path, not the Configuration tab
+        for hit in re.finditer(re.escape(system) + SEPARATOR + r"([^→]+)", plain):
             step = hit.group(1).strip()
             assert step.startswith(names), f"{lang} {key}: {step[:40]!r}"
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_no_text_points_to_the_retired_configuration_tab(lang):
+    """(#1321) The classic dashboard and its Configuration tab are gone."""
+    path = ROOT / "strings.json" if lang == "en" else TRANSLATIONS / f"{lang}.json"
+    texts = _issue_texts(json.loads(path.read_text("utf-8"))["issues"])
+    tab = DASHBOARD[_dashboard_key(lang)]["config_tab_title"]
+    for key, text in texts.items():
+        plain = _plain(text)
+        assert "⚙" not in plain, f"{lang} {key} names the Configuration tab icon"
+        for hit in re.finditer(re.escape(tab) + SEPARATOR, plain):
+            before, after = plain[:hit.start()], plain[hit.end():hit.end() + 60]
+            if before.endswith("SEM" + SEPARATOR) or "→ SEM" in after:
+                continue  # HA's own Settings path, which shares the word
+            raise AssertionError(f"{lang} {key} starts a path at the retired tab")
+
+
+def test_the_english_texts_name_the_new_screens_not_the_old_tabs():
+    texts = _issue_texts(json.loads((ROOT / "strings.json").read_text("utf-8"))["issues"])
+    joined = " ".join(_plain(t) for t in texts.values())
+    for old in ("Configuration tab", "Configuration card", "EV tab", "Battery tab", "Configuration →"):
+        assert old not in joined, old
+    assert "System → Chargers" in joined and "Devices screen" in joined
