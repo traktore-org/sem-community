@@ -109,7 +109,10 @@ class SetpointMemoMixin:
                 "and does what it did before (#1081)", self.name, entity_id)
             return
         # equal to the target too: the end then finds the unit at the value to
-        # restore and writes nothing
+        # restore and writes nothing.
+        # Known gap (#1081 review, low): when an earlier memo EXPIRED (48 h)
+        # while the unit still showed SEM's value, that value is taken here as
+        # the user's own. Same outcome as the expiry itself; not worth a store.
         self._sp_pending = live
 
     def _sp_commit(self, domain: str, entity_id: str, target: float,
