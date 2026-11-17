@@ -6747,6 +6747,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # read-only assembly extracted to publish_diag.build_diagnostics.
             from .publish_diag import build_diagnostics
             result.update(build_diagnostics(self))
+            # (#1379) the first-run checklist the Home card draws — the same
+            # facts as the AI setup tool, published beside the detection report.
+            try:
+                from ..setup_status import build_setup_checklist
+                result["setup_checklist"] = await build_setup_checklist(
+                    self.hass, self)
+            except Exception:  # noqa: BLE001 — a checklist must never cost a cycle
+                result["setup_checklist"] = None
 
             # Tariff schedule for dashboard card (#25)
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):

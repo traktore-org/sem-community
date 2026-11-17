@@ -3447,6 +3447,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # control diag sensor — the Config tab's Detected-hardware section
             # and bug reports read it here.
             attrs["detection_report"] = self.coordinator.data.get("detection_report")
+            # (#1379) first-run checklist (small; same facts as the AI tool)
+            attrs["setup_checklist"] = self.coordinator.data.get("setup_checklist")
             # (#824) Per-charger control-entity verdicts ride here too:
             # a verdict that lives only in coordinator.data is invisible
             # to the card AND to anyone reading a diagnostics download,
