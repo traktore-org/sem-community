@@ -507,7 +507,8 @@ at* run, nothing bought for it, no extra from the sun. Only the too-cold
 limit still heats, and only back to just above *Run now past*, so a house on
 holiday is kept from going cold but is not kept warm. A Legionella run waits
 until you are back. If you let the hot-water tank take surplus while away,
-it still takes free sun up to its minimum temperature. A load without these
+it still takes free sun up to its minimum temperature; a tank under its
+*Run now past* limit heats back above it first. A load without these
 fields is not touched by away.
 
 A Legionella run that is due does not start while the house is at its peak
@@ -629,6 +630,8 @@ The dashboard exposes exactly two sliders for hot water control:
 The temperature SEM heats to during solar surplus periods. When surplus power is available, SEM heats the water up to this target. Once reached, SEM stops heating and releases surplus for other devices (EV, battery, etc.).
 
 If you set the Solar Boost Target to 60°C or above, the Legionella prevention requirement (60°C) is naturally met during sunny days — no separate forced heating cycle is needed on those days.
+
+With a comfort band, the tank starts and stops on the band's thermometer; without one, on the tank's own.
 
 #### Legionella Target (60-80°C)
 

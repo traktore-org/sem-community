@@ -750,13 +750,42 @@ class HotWaterController(SwitchDevice):
         met, hold = self._stop_condition(
             getattr(self, "_hold_stopped", False),
             read=self.get_current_temperature,
+            read_goal=lambda: self._goal_reading(peek=False),
             band_state=lambda: self.comfort_state,
-            target=self._active_target_temp)
+            target=lambda: self._stop_target_temp(peek=False))
         if hold is not None:
             self._hold_stopped = hold
         return met
 
-    def _stop_condition(self, hold_stopped, *, read, band_state, target):
+    def _goal_reading(self, *, peek: bool):
+        """(#1369, C1) ONE thermometer for the start and the stop: the band's
+        sensor when a usable band is set, else the tank's. A switched tank's
+        stop read the tank sensor while its start read the band's."""
+        keep, _extra, limit = self._goal_band_fields()
+        # only while the band is engaged: away it is disengaged and the away
+        # dump's start compares the TANK sensor with the minimum temperature
+        if (keep is not None and limit is not None and limit < keep
+                and self._peek_comfort_state() != "disengaged"):
+            band = self._comfort_reading()
+            if band is not None:
+                return band
+        return self._peek_tank_reading()[0] if peek else self.get_current_temperature()
+
+    def _stop_target_temp(self, *, peek: bool) -> float:
+        """(#1369, C2) The stop's cutoff: ``_active_target_temp``, except that
+        away with the dump a too-cold tank heats back above its limit + the
+        start gap, not just to the minimum temperature. Setpoint writes keep
+        ``_active_target_temp``."""
+        base = self._active_target_temp(peek=peek)
+        if (self._legionella_cycle_active or getattr(self, "vacation", False) is not True
+                or getattr(self, "vacation_dhw_surplus", False) is not True):
+            return base
+        if not self.comfort_away_heats(self.is_active, peek=peek):
+            return base
+        limit_c = float(self._comfort_thresholds_c()[2])
+        return max(base, limit_c + self.comfort_goal_start_gap_c())
+
+    def _stop_condition(self, hold_stopped, *, read, band_state, target, read_goal=None):
         """(#1369) The stop rule, PURE: ``(met, new_hold_stopped)`` — the new
         hold flag is None when the rule leaves it alone. It writes nothing;
         what it reads comes in as callables (called lazily, in the order the
@@ -786,7 +815,7 @@ class HotWaterController(SwitchDevice):
             return True, None
         if self._entity_domain in _SETPOINT_DOMAINS:
             return False, None
-        temp = read()
+        temp = (read_goal or read)()
         return temp is not None and temp >= target(), None
 
     # ─── The tank's goal, in the shadow (#1369, step 1) ──────────────
@@ -857,7 +886,11 @@ class HotWaterController(SwitchDevice):
             vacation_dump=getattr(self, "vacation_dhw_surplus", False) is True,
             may_buy=self.comfort_goal_may_buy(),
             switched=self._entity_domain not in _SETPOINT_DOMAINS,
-            sensor_expected=not blind_ok, now=dt_util.now())
+            sensor_expected=not blind_ok,
+            start_gap_c=self.comfort_goal_start_gap_c(),
+            away_floor_open=(self.is_active and getattr(self, "_comfort_floor_run", False) is True
+                             and self.comfort_away_floor_open()),
+            now=dt_util.now())
 
     def tank_goal(self) -> TankGoal:
         """(#1369) The tank's goal this cycle. Nothing decides by it yet."""
@@ -871,7 +904,7 @@ class HotWaterController(SwitchDevice):
         the engine never asked this cycle (the field is left out and counted
         as skipped), ``RECOMPUTE`` to ask the pure stop rule."""
         keep, _extra, limit = self._goal_band_fields()
-        top = self._active_target_temp(peek=True)
+        top = self._stop_target_temp(peek=True)
         stop = self.user_stop_c()
         if stop is not None and not self._legionella_cycle_active:
             top = min(top, stop)
@@ -882,8 +915,9 @@ class HotWaterController(SwitchDevice):
             seen["must_stop"] = self._stop_condition(
                 getattr(self, "_hold_stopped", False),
                 read=lambda: self._peek_tank_reading()[0],
+                read_goal=lambda: self._goal_reading(peek=True),
                 band_state=self._peek_comfort_state,
-                target=lambda: self._active_target_temp(peek=True))[0]
+                target=lambda: self._stop_target_temp(peek=True))[0]
         elif engine_stop is not None:
             seen["must_stop"] = bool(engine_stop)
         return seen
@@ -1204,7 +1238,9 @@ class HotWaterController(SwitchDevice):
 
         temp = self.get_current_temperature()
 
-        # 1. Natural achievement: solar heated to ≥60°C
+        # 1. Natural achievement: solar heated to ≥60°C. (#1369) Deliberately
+        # 60 °C, not the user's target: 60 is the recognised bar; a higher target
+        # is the forced run's margin, and counting it would buy grid heat daily.
         if temp is not None and temp >= DEFAULT_LEGIONELLA_MIN_TEMP and not self._legionella_cycle_active:
             self._last_legionella_time = dt_util.now()
             self._last_legionella_path = "natural_achievement"
