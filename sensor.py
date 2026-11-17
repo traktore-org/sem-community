@@ -260,6 +260,10 @@ def _energy_plan_attrs(
         # the floor the plan drew it to — the Plan card's "Expected" tile
         "battery_end": plan.get("battery_end"),
     }
+    # (#1081) Diagnose: what heat costs per slot, per device. Only when a
+    # device has a COP shape or the pre-heat tick; read by no decision.
+    if plan.get("heat_cost"):
+        attrs["heat_cost"] = plan["heat_cost"]
     for key, value in (extra or {}).items():
         if value:
             attrs[key] = value
@@ -269,6 +273,10 @@ def _energy_plan_attrs(
         except (TypeError, ValueError):  # pragma: no cover — defensive
             return True
 
+    # (#1081) Diagnose goes first: a table is never worth the timeline.
+    if "heat_cost" in attrs and _too_big():
+        attrs.pop("heat_cost")
+        attrs["heat_cost_omitted"] = True
     if _too_big():
         attrs["slots"] = []
         attrs["blocks"] = []

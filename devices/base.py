@@ -1739,6 +1739,60 @@ class ComfortBandMixin:
             while b and b[0][0] < cutoff:
                 b.popleft()
 
+    def drift_fold(self, now, outdoor_fn=None) -> None:
+        """(#1081) Once per clock hour: every finished hour in which this
+        device never ran becomes one stored row (slope, mean, outdoor). RECORD
+        ONLY: nothing in the plan reads these rows (see ``drift_store``)."""
+        from ..coordinator import drift_store as ds
+        from ..coordinator.comfort_drift import learn_drift
+        hour = int(now.timestamp() // 3600)
+        if getattr(self, "_drift_seen_hour", None) == hour:
+            return
+        self._drift_seen_hour = hour
+        rows = list(getattr(self, "_drift_rows", None) or [])
+        last = rows[-1][0] if rows else hour - ds.KEEP_HOURS
+        by_hour = {}
+        for key, buf in (("on", getattr(self, "_comfort_on_samples", None)),
+                         ("off", getattr(self, "_comfort_off_samples", None))):
+            for ts, temp in (buf or ()):
+                h = int(ts.timestamp() // 3600)
+                if last < h < hour:
+                    by_hour.setdefault(h, {"on": [], "off": []})[key].append(
+                        (ts, temp))
+        outdoor = None
+        for h in sorted(by_hour):
+            off = by_hour[h]["off"]
+            est = None if by_hour[h]["on"] else learn_drift(off)
+            if est is None:
+                continue
+            if outdoor is None and callable(outdoor_fn):
+                outdoor = outdoor_fn()
+            rows.append(ds.make_row(
+                h, est.rate_c_per_h, sum(v for _, v in off) / len(off),
+                outdoor, len(off)))
+        self._drift_rows = ds.prune(rows, hour)
+
+    def drift_restore(self, stored, now) -> None:
+        """(#1081) Load the stored rows once per device; a damaged store is
+        a fresh start."""
+        from ..coordinator import drift_store as ds
+        self._drift_restored = True
+        hour = int(now.timestamp() // 3600)
+        mine = list(getattr(self, "_drift_rows", None) or [])
+        merged = {r[0]: r for r in ds.sanitize(stored, hour)}
+        merged.update({r[0]: r for r in mine})
+        self._drift_rows = [merged[h] for h in sorted(merged)]
+
+    def drift_memo(self):
+        """(#1081) The rows for the store; None when there are none."""
+        rows = getattr(self, "_drift_rows", None)
+        return {"hours": [list(r) for r in rows]} if rows else None
+
+    def drift_summary(self):
+        """(#1081) The Diagnose summary of the stored rows, or None."""
+        from ..coordinator import drift_store as ds
+        return ds.summarize(getattr(self, "_drift_rows", None) or [])
+
     #: (#1102) One hour at the rating when no heating rate is learned yet —
     #: the run stops at Keep at by itself, so too much is never bought.
     COMFORT_GOAL_FALLBACK_H = 1.0

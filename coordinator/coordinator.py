@@ -723,6 +723,41 @@ def _plan_cop_fn(coord, dev, t_now_cache: list):
     return _at
 
 
+def _plan_heat_cost(controller, demands, allocations, ledger, cop_fn) -> dict:
+    """(#1081) Diagnose only: ``{device_id: rows}`` of what a kWh of heat
+    costs per slot, for each device with a COP shape or the pre-heat tick,
+    and whether the plan chose the slot. Nothing reads it back. A module
+    function like ``_plan_cop_fn``: the plan runs against fakes. ``{}`` when
+    no device qualifies, so the plan is then exactly what it was."""
+    from .heat_cost_view import (REASON_GOAL, REASON_HEAT, REASON_LOAD,
+                                 REASON_PREHEAT, build_heat_cost, chosen_slots)
+    from .heat_cost import device_has_cop_shape
+    by_id = {d.id: d for d in demands}
+    entries = []
+    for dev in (controller.get_devices_sorted() if controller else []):
+        try:
+            on = getattr(dev, "comfort_preheat_on", None)
+            preheat = callable(on) and on() is True
+            cop_at = cop_fn(dev)
+            if not (device_has_cop_shape(dev) or preheat):
+                continue
+            did = dev.device_id
+            mine = {f"load:{did}", f"comfort:{did}"}
+
+            def _why(a, s, _by=by_id, _pre=preheat, _heat=cop_at is not None):
+                d = _by.get(a.demand_id)
+                if d is not None and d.kind == "comfort":
+                    return (REASON_PREHEAT if _pre and d.cheap_only_kwh > 0
+                            and s.tariff_cheap else REASON_GOAL)
+                return REASON_HEAT if _heat else REASON_LOAD
+            chosen = chosen_slots(
+                [a for a in allocations if a.demand_id in mine], ledger, _why)
+            entries.append({"id": did, "cop_at": cop_at, "chosen": chosen})
+        except Exception:  # noqa: BLE001 — a diagnose row never costs a plan
+            continue
+    return build_heat_cost(ledger, entries)
+
+
 #: (#1375) seconds between two tries of the immediate store save that
 #: moves an old battery flip (a disk that refuses is not asked every cycle)
 _FLIP_STORE_RETRY_S = 300.0
@@ -4203,6 +4238,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             dev.cop_learned = _cl.learned_points(states[did])
             dev.cop_learn_summary = _cl.summary(states[did], has_meter=True)
 
+    def _record_drift_rows(self, dev, now) -> None:
+        """(#1081) Restore a unit's stored drift rows once, then fold each
+        finished free-running hour into them. RECORD ONLY — the plan reads
+        none of it. A unit without a band has no such methods."""
+        fold = getattr(dev, "drift_fold", None)
+        if not callable(fold):
+            return
+        if getattr(dev, "_drift_restored", False) is not True:
+            states = getattr(self, "_drift_states", None)
+            if states is None:
+                try:
+                    states = self._storage.get_drift_state()
+                except Exception:  # noqa: BLE001 — no store is a fresh start
+                    states = {}
+                self._drift_states = states
+            dev.drift_restore(states.get(str(dev.device_id)), now)
+        fold(now, self._outdoor_temperature_or_none)
+
+    def _drift_memos(self) -> Dict[str, Any]:
+        """(#1081) ``{device_id: memo}`` for every unit with drift rows."""
+        out: Dict[str, Any] = {}
+        for did, dev in (getattr(self._surplus_controller, "_devices", {}) or {}).items():
+            memo_fn = getattr(dev, "drift_memo", None)
+            memo = memo_fn() if callable(memo_fn) else None
+            if isinstance(memo, dict):
+                out[str(did)] = memo
+        return out
+
     def _season_memos(self) -> Dict[str, Any]:
         """(#1323) ``{device_id: memo}`` for every unit with a season."""
         out: Dict[str, Any] = {}
@@ -6095,6 +6158,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._storage.set_season_state({
                         **self._storage.get_season_state(),
                         **self._season_memos()})
+                except (AttributeError, TypeError, ValueError):
+                    pass
+                # (#1081) each unit's free-running drift rows (record only),
+                # merged over what is stored: a unit not built yet keeps its rows
+                try:
+                    _dm = self._drift_memos()
+                    if _dm:
+                        self._storage.set_drift_state({
+                            **self._storage.get_drift_state(), **_dm})
                 except (AttributeError, TypeError, ValueError):
                     pass
                 # (#1081) each heat pump's COP learner, merged over what is
@@ -12942,6 +13014,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         _rec = getattr(_dev, "record_comfort_sample", None)
                         if callable(_rec):
                             _rec(_now_l)
+                        self._record_drift_rows(_dev, _now_l)    # (#1081)
                     except Exception:  # noqa: BLE001 — one device, not all
                         continue
             except Exception:  # noqa: BLE001 — sampling must never gate
@@ -14054,7 +14127,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             slot_rows = _slot_rows(ledger)
             from .energy_plan_actuation import plan_blocks
             blocks = plan_blocks(plan.allocations)
+            try:
+                heat_cost = _plan_heat_cost(
+                    controller, demands, plan.allocations, ledger,
+                    _plan_cop_at)
+            except Exception:  # noqa: BLE001 — Diagnose never costs a plan
+                heat_cost = {}
             self._energy_plan_shadow = {
+                **({"heat_cost": heat_cost} if heat_cost else {}),
                 "computed_at": now.isoformat(),
                 "fits": plan.fits,
                 "total_cost": plan.total_cost,

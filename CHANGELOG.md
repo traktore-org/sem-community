@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **The Energy plan shows heat cost per hour** (#1081). A closed table per heat pump: price, COP, heat price, why picked. Read only.
+- ✨ **SEM keeps how fast a room or tank cools for 14 days** (#1081), also across restarts. Diagnose shows it; nothing uses it yet.
 - 🐛 **The battery direction button flips one battery** (#1375). With several, you pick which. A two-sensor battery is never flipped.
 
 # [2.3.0-beta.17] — 16.11.2026

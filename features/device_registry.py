@@ -2758,6 +2758,12 @@ class UnifiedDeviceRegistry:
         except Exception:  # noqa: BLE001 — a payload must never break the sensor
             return {}
         out.update(UnifiedDeviceRegistry._band_lines(live))
+        # (#1081) Diagnose: the stored drift rows' summary (record only);
+        # no rows, no key
+        _ds = getattr(live, "drift_summary", None)
+        _drift = _ds() if callable(_ds) else None
+        if isinstance(_drift, dict) and _drift:
+            out["drift"] = _drift
         return {"comfort": out} | UnifiedDeviceRegistry._goal_shadow(live)
 
     @staticmethod
