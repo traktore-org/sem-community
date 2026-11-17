@@ -8113,16 +8113,20 @@ class SensorReader:
                     # (#1306, #1373 review) a name match alone took
                     # "remaining capacity" (kWh that fall with the level) as
                     # the pack's size; the role's own exclusions apply to it.
-                    named = (any(kw in e.entity_id.lower() for kw in _CAPACITY_KEYWORDS)
-                             and not any(w in e.entity_id.lower()
-                                         for w in _NOT_A_SIZE_WORDS))
+                    oid = e.entity_id.split(".", 1)[1].lower()
+                    named = (any(kw in oid for kw in _CAPACITY_KEYWORDS)
+                             and not any(w in key.lower() for w in _NOT_A_SIZE_WORDS))
                     if role_for("sensor", key) != "battery_capacity_spec" and not named:
                         continue
-                    if _capacity_kwh_of_state(self.hass.states.get(e.entity_id)) is not None:
-                        hits.append(e.entity_id)
+                    hits.append(e.entity_id)
                 # two size sensors on one device (two packs behind one
-                # inverter): which is this pack's cannot be told — none
-                found = hits[0] if len(hits) == 1 else None
+                # inverter): which is this pack's cannot be told — none.
+                # Counted BEFORE reading them: one still unavailable at a
+                # cold start must not make the other pack's size this one's.
+                if len(hits) == 1:
+                    if _capacity_kwh_of_state(self.hass.states.get(hits[0])) is None:
+                        return None          # not reading yet: ask again, no cache
+                    found = hits[0]
         except Exception:  # noqa: BLE001 — no registry is "none found"
             found = None
         self._capacity_entity_by_power[power_entity] = found

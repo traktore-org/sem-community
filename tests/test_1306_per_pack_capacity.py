@@ -162,6 +162,18 @@ class TestTheReaderReadsEachPack:
         assert p.batteries["b1"].capacity_kwh == 0.0
         assert p.batteries["b2"].capacity_kwh == 0.0
 
+    def test_a_shared_device_with_one_size_not_reading_yet_still_decides_nothing(self, monkeypatch):
+        """(#1306 review) cold start: b2's sensor unavailable must not hand
+        b1's size to both packs, and the answer is not cached."""
+        states = _states(cap2="unavailable", unit2="kWh")
+        shared = ("inv", [("sensor.b1", None), ("sensor.b2", None),
+                          ("sensor.b1_rated_capacity", "rated_ess_capacity"),
+                          ("sensor.b2_battery_capacity", None)])
+        r = _fleet(monkeypatch, states, {"sensor.b1": shared, "sensor.b2": shared})
+        p = r.read_power()
+        assert p.batteries["b1"].capacity_kwh == 0.0
+        assert p.batteries["b2"].capacity_kwh == 0.0
+
     def test_the_per_battery_setting_is_the_packs_size(self, monkeypatch):
         """(#1373) the user's size beats the sensor, for the scheduler too."""
         r = _fleet(monkeypatch, _states(), DEVICES)
