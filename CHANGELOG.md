@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **An AI assistant in Home Assistant sees SEM's tools** (#1086). No sentence file needed. Changes need the Voice commands switch.
 - 🐛 **A day without a solar reading no longer counts as 0 kWh** (#1022). Forecast scores and correction skip days dark over 30 minutes.
 - ✨ **SEM recommends the forecast source closest for your roof** (#822). After 14 days, with a tap to switch. Nothing switches by itself.
 - 📝 **One short start path** (#1371). The docs say SEM starts by only watching.

@@ -82,6 +82,12 @@ def _coordinator_for(hass: HomeAssistant) -> Optional[SEMCoordinator]:
     return None
 
 
+def write_intents_enabled(coordinator: SEMCoordinator) -> bool:
+    """The ONE gate for every write intent, here and in ``llm.py`` (#1086):
+    the "Voice commands" switch. Off by default."""
+    return bool(coordinator.config.get("assist_write_intents_enabled", False))
+
+
 def _first_charger_id(coordinator: SEMCoordinator, name: Optional[str],
                       write: bool = False) -> Optional[str]:
     """``name`` matched against a configured charger's own name
@@ -160,6 +166,8 @@ class WhyBatteryIntent(intent.IntentHandler):
     in the same plain sentence the logbook already shows."""
 
     intent_type = INTENT_WHY_BATTERY
+    # (#1086) the AI reads this to decide when to call the tool
+    description = "Explain in one sentence why the solar battery is charging, discharging or idle right now."
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
         response = intent_obj.create_response()
@@ -180,6 +188,8 @@ class WhyChargerIntent(intent.IntentHandler):
     charger's last decision."""
 
     intent_type = INTENT_WHY_CHARGER
+    # (#1086) the AI reads this to decide when to call the tool
+    description = "Explain why an EV charger is charging or not charging right now. Optional name picks the charger."
     slot_schema = {vol.Optional("name"): cv.string}
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
@@ -207,6 +217,8 @@ class TonightCostIntent(intent.IntentHandler):
     number, never recomputed here."""
 
     intent_type = INTENT_TONIGHT_COST
+    # (#1086) the AI reads this to decide when to call the tool
+    description = "Say what tonight's planned EV and battery charging will cost."
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
         response = intent_obj.create_response()
@@ -228,6 +240,8 @@ class GoodToChargeNowIntent(intent.IntentHandler):
     than invent a verdict the plan didn't already make (#925)."""
 
     intent_type = INTENT_GOOD_TO_CHARGE
+    # (#1086) the AI reads this to decide when to call the tool
+    description = "Say whether the current hour is a cheap time to charge the EV."
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
         response = intent_obj.create_response()
@@ -266,6 +280,8 @@ class SetChargerTargetSocIntent(intent.IntentHandler):
     ``assist_write_intents_enabled`` is on (default off)."""
 
     intent_type = INTENT_SET_TARGET_SOC
+    # (#1086) the AI reads this to decide when to call the tool
+    description = "Set an EV charger's standing target charge level in percent. Optional name picks the charger."
     slot_schema = {
         vol.Optional("name"): cv.string,
         vol.Required("percent"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
@@ -278,7 +294,7 @@ class SetChargerTargetSocIntent(intent.IntentHandler):
         if coordinator is None:
             response.async_set_speech(_NO_ANSWER)
             return response
-        if not bool(coordinator.config.get("assist_write_intents_enabled", False)):
+        if not write_intents_enabled(coordinator):
             response.async_set_speech(_WRITE_REFUSED)
             return response
         slots = self.async_validate_slots(intent_obj.slots)
@@ -310,6 +326,8 @@ class SkipChargerTonightIntent(intent.IntentHandler):
     built to guarantee."""
 
     intent_type = INTENT_SKIP_TONIGHT
+    # (#1086) the AI reads this to decide when to call the tool
+    description = "Skip EV charging tonight only. Tomorrow is normal. Optional name picks the charger."
     slot_schema = {vol.Optional("name"): cv.string}
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
@@ -318,7 +336,7 @@ class SkipChargerTonightIntent(intent.IntentHandler):
         if coordinator is None:
             response.async_set_speech(_NO_ANSWER)
             return response
-        if not bool(coordinator.config.get("assist_write_intents_enabled", False)):
+        if not write_intents_enabled(coordinator):
             response.async_set_speech(_WRITE_REFUSED)
             return response
         slots = self.async_validate_slots(intent_obj.slots)
@@ -346,6 +364,8 @@ class ForceChargeNowIntent(intent.IntentHandler):
     intent (``SetChargerTargetSocIntent``), not this one."""
 
     intent_type = INTENT_FORCE_CHARGE_NOW
+    # (#1086) the AI reads this to decide when to call the tool
+    description = "Charge the EV now at full power for a set time (default 1 hour), once."
     slot_schema = {
         vol.Optional("name"): cv.string,
         vol.Optional("minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=24 * 60)),
@@ -357,7 +377,7 @@ class ForceChargeNowIntent(intent.IntentHandler):
         if coordinator is None:
             response.async_set_speech(_NO_ANSWER)
             return response
-        if not bool(coordinator.config.get("assist_write_intents_enabled", False)):
+        if not write_intents_enabled(coordinator):
             response.async_set_speech(_WRITE_REFUSED)
             return response
         slots = self.async_validate_slots(intent_obj.slots)
@@ -382,6 +402,8 @@ class ClearPlanOverrideIntent(intent.IntentHandler):
     intents above."""
 
     intent_type = INTENT_CLEAR_OVERRIDE
+    # (#1086) the AI reads this to decide when to call the tool
+    description = "End a skip or charge-now once early and return the charger to normal."
     slot_schema = {vol.Optional("name"): cv.string}
 
     async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
@@ -390,7 +412,7 @@ class ClearPlanOverrideIntent(intent.IntentHandler):
         if coordinator is None:
             response.async_set_speech(_NO_ANSWER)
             return response
-        if not bool(coordinator.config.get("assist_write_intents_enabled", False)):
+        if not write_intents_enabled(coordinator):
             response.async_set_speech(_WRITE_REFUSED)
             return response
         slots = self.async_validate_slots(intent_obj.slots)
@@ -408,11 +430,14 @@ class ClearPlanOverrideIntent(intent.IntentHandler):
         return response
 
 
-_HANDLERS = (
-    WhyBatteryIntent, WhyChargerIntent, TonightCostIntent,
-    GoodToChargeNowIntent, SetChargerTargetSocIntent,
-    SkipChargerTonightIntent, ForceChargeNowIntent, ClearPlanOverrideIntent,
+EXPLAIN_HANDLERS = (
+    WhyBatteryIntent, WhyChargerIntent, TonightCostIntent, GoodToChargeNowIntent,
 )
+WRITE_HANDLERS = (
+    SetChargerTargetSocIntent, SkipChargerTonightIntent,
+    ForceChargeNowIntent, ClearPlanOverrideIntent,
+)
+_HANDLERS = EXPLAIN_HANDLERS + WRITE_HANDLERS
 
 
 def async_register_intents(hass: HomeAssistant) -> None:
