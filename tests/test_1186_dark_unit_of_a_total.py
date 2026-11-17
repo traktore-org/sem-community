@@ -275,7 +275,8 @@ class TestTheHeldUnitTakesTheFinalSign:
     def test_a_battery_flipped_by_the_user_holds_its_flipped_read(self):
         states = {"sensor.b1": _state(1000, "W"), "sensor.b2": _state(-400, "W")}
         r, clock = _built(states, ed=SHAPES[1][1]["ed"],
-                          config={"battery_sign_user_flip": True})
+                          config={"battery_sign_user_flip_sensors": [  # (#1375)
+                              "sensor.b1", "sensor.b2"]})
         assert r.read_power().battery_power == pytest.approx(-600.0)
         p = _read(r, clock, states, **{"sensor.b2": "unavailable"})
         assert p.battery_power == pytest.approx(-1000.0)

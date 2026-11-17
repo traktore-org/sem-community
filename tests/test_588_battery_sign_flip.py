@@ -144,8 +144,10 @@ class TestB1UserFlipFleet:
         )
 
     def test_flip_read_power_per_battery_mode(self):
-        """End-to-end: user flip applies to corrected_total in per_battery_mode."""
-        r = _make_reader(config={"battery_sign_user_flip": True})
+        """End-to-end: a user flip applies to the named batteries in per_battery_mode.
+        (#1375) The tap names each battery; the old one-for-all flag names none."""
+        r = _make_reader(config={"battery_sign_user_flip_sensors": [
+            "sensor.b1_power", "sensor.b2_power"]})
         ed = _make_ed()
         ed.battery_power_list = ["sensor.b1_power", "sensor.b2_power"]
         ed.battery_power_pairs = []

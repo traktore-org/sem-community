@@ -6862,9 +6862,11 @@ async def _async_register_phase_services(
         # actually set, so the common reset path stays reload-free.
         opts = target.options or {}
         grid_flip = bool(opts.get("grid_sign_user_flip", False))
-        batt_flip = bool(opts.get("battery_sign_user_flip", False))  # #588 H3
+        batt_flip = bool(opts.get("battery_sign_user_flip", False)  # #588 H3
+                         or opts.get("battery_sign_user_flip_sensors"))  # (#1375)
         if grid_flip or batt_flip:
             cleared = {**opts, "grid_sign_user_flip": False, "battery_sign_user_flip": False,
+                       "battery_sign_user_flip_sensors": [],
                        "grid_sign_user_flip_source": None}   # (#971) the binding goes with it
             cleared.pop("grid_sign_user_flip_on_fixed", None)   # (#1294) and its mark
             if coordinator is not None:
@@ -6992,20 +6994,42 @@ async def _async_register_phase_services(
             except Exception:  # noqa: BLE001 — diag must never block the flip
                 _LOGGER.debug("flip_battery_sign: diagnostics snapshot failed", exc_info=True)
 
-        current = bool((target.options or {}).get("battery_sign_user_flip", False))
-        new_flip = not current
-        new_options = {**(target.options or {}), "battery_sign_user_flip": new_flip}
+        opts = dict(target.options or {})
+        # (#1375) several batteries: the tap names ONE of them. A two-sensor
+        # battery is never turned over: its direction is declared.
+        ed = getattr(reader, "_energy_dashboard_config", None)
+        from .ha_energy_reader import battery_units
+        combined = list(getattr(ed, "battery_power_list", None) or [])
+        several = ed is not None and len(battery_units(ed)) >= 2
+        named = (call.data or {}).get("battery")
+        flips = list(opts.get("battery_sign_user_flip_sensors") or [])
+        if several:
+            if named not in combined:
+                return {"ok": False,
+                        "error": "not_flippable" if named else "battery_needed",
+                        "batteries": [{"sensor": e, "flipped": e in flips}
+                                      for e in combined],
+                        "diagnostics": diag}
+            new_flip = named not in flips
+            flips = [e for e in flips if e != named] + ([named] if new_flip else [])
+            # the old one-for-all flag names no battery on a home of several
+            new_options = {**opts, "battery_sign_user_flip_sensors": flips,
+                           "battery_sign_user_flip": False}
+        else:
+            new_flip = not bool(opts.get("battery_sign_user_flip", False))
+            new_options = {**opts, "battery_sign_user_flip": new_flip}
         # Suppress the update-listener reload; one explicit reload issued below.
         if coordinator is not None:
             coordinator._skip_options_reload = dict(new_options)
         hass.config_entries.async_update_entry(target, options=new_options)
         await hass.config_entries.async_reload(target.entry_id)
         _LOGGER.info(
-            "flip_battery_sign: user_flip %s -> %s on entry %s",
-            current, new_flip, target.entry_id,
+            "flip_battery_sign: user_flip %s on entry %s (battery %s)",
+            new_flip, target.entry_id, named or "the one battery",
         )
         diag["user_flip_now"] = new_flip
-        return {"ok": True, "user_flip": new_flip, "diagnostics": diag}
+        return {"ok": True, "user_flip": new_flip, "battery": named,
+                "diagnostics": diag}
 
     hass.services.async_register(
         DOMAIN,
@@ -7013,6 +7037,7 @@ async def _async_register_phase_services(
         async_flip_battery_sign,
         schema=vol.Schema({
             vol.Optional("entry_id"): cv.string,
+            vol.Optional("battery"): cv.string,   # (#1375) the battery's power sensor
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

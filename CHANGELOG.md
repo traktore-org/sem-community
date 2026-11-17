@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The battery direction button flips one battery** (#1375). With several, you pick which. A two-sensor battery is never flipped.
+
 # [2.3.0-beta.17] — 16.11.2026
 
 - 🐛 **A second battery read 0 % charge** (#1373). Each battery now reads its own charge sensor from the Energy Dashboard, never a status code.

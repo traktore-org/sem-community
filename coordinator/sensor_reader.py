@@ -106,6 +106,24 @@ def _soc_setting(entity_id: str, beside: str = "") -> bool:
     return bool(words & _SOC_SETTING_WORDS)
 
 
+# (#1375) Words of a code, not a level: ``soc_status`` is 0 while all is well.
+_SOC_CODE_WORDS = frozenset((
+    "status", "code", "mode", "flag", "error", "alarm", "warning", "fault",
+))
+
+
+def _soc_unitless_level(entity_id: str, device_class: Any,
+                        unit: Optional[str], beside: str = "") -> bool:
+    """(#1375) A sensor with a SOC word in its name but no unit and no class,
+    on a home with one battery: the last candidate, below every %-shaped
+    one. Not a setting (``soc_limit``) and not a code (``soc_status``): those
+    stay out, as #1373 has it."""
+    if (unit or "").strip() or device_class:
+        return False
+    words = set(entity_id.split(".", 1)[-1].lower().split("_"))
+    return not (words & _SOC_CODE_WORDS) and not _soc_setting(entity_id, beside)
+
+
 def _picked_soc_present(hass: Any, pick: str) -> bool:
     """(#1373) Is the SOC sensor picked in HA's battery dialog there: a
     state, or a registry entry not disabled? A sensor still coming up is
@@ -1416,18 +1434,21 @@ class SensorReader:
                     corrected_total += bp.power_w
             readings.battery_power = corrected_total
             readings.calculate_derived()
-            # #588 B1 — one-tap user battery sign flip. Applied AFTER the
-            # per-battery auto-detect loop so it corrects the corrected total.
-            # Mirrors the grid user flip at line ~431. Negates BOTH the fleet
-            # total AND every per-battery ``power_w`` (H-1): the battery
-            # actuator sources ``BatteryRuntime.last_known_w`` from the
-            # per-battery dict, not the fleet scalar — flipping only the total
-            # would desync the arbitrage/force-discharge direction on
-            # multi-battery installs.
-            if bool(self._raw_config.get("battery_sign_user_flip", False)):
-                for bid, bp in list(readings.batteries.items()):
-                    readings.batteries[bid] = replace(bp, power_w=-bp.power_w)
-                self._negate_total(readings, "battery")
+            # #588 B1 — one-tap user battery sign flip, per battery (#1375):
+            # only the batteries the user named, applied AFTER the auto-detect
+            # loop so it corrects the corrected value. Negates the battery's
+            # own ``power_w`` (the actuator reads that, not the total, H-1)
+            # and the total is summed again. A two-sensor battery is
+            # never flipped: its direction is declared, not guessed.
+            flipped = self._flipped_units(ed)
+            if flipped:
+                for idx, entity in enumerate(ed.battery_power_list):
+                    bp = readings.batteries.get(f"b{idx + 1}")
+                    if entity in flipped and bp is not None:
+                        readings.batteries[f"b{idx + 1}"] = replace(
+                            bp, power_w=-bp.power_w)
+                readings.battery_power = sum(
+                    b.power_w for b in readings.batteries.values())
                 readings.calculate_derived()
         else:
             from dataclasses import replace
@@ -1450,7 +1471,10 @@ class SensorReader:
                 readings.calculate_derived()
             # #588 B1 — one-tap user battery sign flip, same as per_battery_mode
             # branch. Sits on top of the auto-detect / manual-invert path.
-            if bool(self._raw_config.get("battery_sign_user_flip", False)):
+            # (#1375) several batteries not all read this cycle: no flip, the
+            # named ones cannot be told apart in a total
+            n_batt = len(battery_units(ed)) if ed is not None else 1
+            if n_batt < 2 and self._battery_flip_on(n_batt):
                 self._negate_total(readings, "battery")
                 _negate_per_battery()
                 readings.calculate_derived()
@@ -1486,6 +1510,35 @@ class SensorReader:
         self._hold_dark_units(readings)
 
         return readings
+
+    #: (#1375) the batteries the one-tap fix turned over, by power sensor
+    BATTERY_FLIP_SENSORS_KEY = "battery_sign_user_flip_sensors"
+
+    def _battery_flip_on(self, n_batteries: int) -> bool:
+        """(#1375) Is a user flip set for this home's batteries?
+
+        The tap names a battery on a home with several, saved as a list of
+        its power sensors. The one-battery tap is the old single flag. An old
+        flag on a home of several batteries names none: it was set for the one
+        battery the home had, and turning all of them over (a two-sensor
+        battery too) broke the ones it was not set for. Their own counters
+        judge them again.
+        """
+        raw = getattr(self, "_raw_config", None) or {}
+        if n_batteries < 2:
+            return bool(raw.get("battery_sign_user_flip", False))
+        named = raw.get(self.BATTERY_FLIP_SENSORS_KEY)
+        return isinstance(named, (list, tuple)) and bool(named)
+
+    def _flipped_units(self, ed) -> frozenset:
+        """(#1375) The combined batteries of a several-battery read that the
+        user turned over: the named power sensors, never a two-sensor one."""
+        named = (getattr(self, "_raw_config", None) or {}).get(
+            self.BATTERY_FLIP_SENSORS_KEY)
+        if not isinstance(named, (list, tuple)):
+            return frozenset()
+        own = getattr(ed, "battery_power_list", None) or []
+        return frozenset(e for e in named if e in own)
 
     def _negate_total(self, readings: PowerReadings, name: str) -> None:
         """(#1186) Turn the grid or battery total over, and with it the sign
@@ -1817,6 +1870,9 @@ class SensorReader:
             "brand_seeded": battery_platform in PLATFORM_BATTERY_SIGN_INVERT
             if battery_platform else False,
             "user_flip": bool(self._raw_config.get("battery_sign_user_flip", False)),
+            # (#1375) the batteries a several-battery home turned over
+            "user_flip_sensors": list(self._flipped_units(ed)) if ed is not None
+            else [],
             "per_bid": per_bid,
             "charge_counters": (
                 [ed.battery_charge_energy] if ed and ed.battery_charge_energy
@@ -2132,8 +2188,7 @@ class SensorReader:
         # is not bound to a sensor: a sign learned again under it would be
         # turned over. While it is on, a saved sign whose sensor SEM no longer
         # finds stays where it stands, as the #1193 check waits.
-        flip = bool((getattr(self, "_raw_config", None) or {}).get(
-            "battery_sign_user_flip", False))
+        flip = self._battery_flip_on(len(battery_units(ed)) if ed is not None else 1)
         waiting = {}
         combined = getattr(ed, "battery_power_list", None)
         units = list(combined) if isinstance(combined, (list, tuple)) else []
@@ -3989,8 +4044,7 @@ class SensorReader:
         pending = getattr(self, "_battery_locks_to_check", None)
         if not pending:
             return
-        if bool((getattr(self, "_raw_config", None) or {}).get(
-                "battery_sign_user_flip", False)):
+        if self._battery_flip_on(len(battery_units(ed)) if ed is not None else 1):
             return          # checked on the first read with the flip off
         if per_battery:
             charge_list = list(getattr(ed, "battery_charge_energy_list", None) or [])
@@ -7600,7 +7654,10 @@ class SensorReader:
                 # declares a battery level (device class battery, %) beats
                 # one found by its name, and a name match counts only in %.
                 # Rank 0: both; 1: declared only; 2: name in % only;
-                # 3: a setting (``min_soc``, ``soc_set``), declared or not.
+                # 3: a setting (``min_soc``, ``soc_set``), declared or not;
+                # 4 (#1375): a name with no unit, one battery only.
+                one_battery = len(battery_units(
+                    getattr(self, "_energy_dashboard_config", None))) < 2
                 best: Optional[tuple[int, str, float]] = None
                 for entity_entry in device_entities:
                     if entity_entry.domain != "sensor":
@@ -7623,13 +7680,18 @@ class SensorReader:
                     # (#1373) "soc" in a name is a level only in %: a
                     # ``soc_status`` / ``soc_limit`` code (no unit, 0 = normal)
                     # was taken first and read as 0 %.
-                    by_keyword = (any(kw in eid_lower for kw in soc_keywords)
-                                  and _soc_shaped(dc, unit))
-                    if not (by_keyword or by_signature):
+                    by_name = any(kw in eid_lower for kw in soc_keywords)
+                    by_keyword = by_name and _soc_shaped(dc, unit)
+                    # (#1375) one battery: a name with no unit, last of all
+                    by_bare = (by_name and not by_keyword and one_battery
+                               and _soc_unitless_level(
+                                   eid, dc, unit, battery_power_entity))
+                    if not (by_keyword or by_signature or by_bare):
                         continue
                     rank = (3 if _soc_setting(eid, battery_power_entity)
                             else 0 if by_keyword and by_signature
-                            else 1 if by_signature else 2)
+                            else 1 if by_signature
+                            else 2 if by_keyword else 4)
                     if best is not None and best[0] <= rank:
                         continue
                     try:
@@ -7795,6 +7857,8 @@ class SensorReader:
                     _note_read(self, f"sensor.{prefix}_{keyword}")  # (#1140)
                     return True
 
+        one_battery = len(battery_units(
+            getattr(self, "_energy_dashboard_config", None))) < 2   # (#1375)
         # Same-device scan, registry-only: an entity that has not published a
         # first state yet still carries its device class and unit here.
         try:
@@ -7821,7 +7885,10 @@ class SensorReader:
                                      or getattr(entry, "device_class", None)
                                      or entry.original_device_class)
                             if ((st is None and st_unit is None)
-                                    or _soc_shaped(st_dc, st_unit)):
+                                    or _soc_shaped(st_dc, st_unit)
+                                    or (one_battery and _soc_unitless_level(
+                                        entry.entity_id, st_dc, st_unit,
+                                        battery_power_entity))):
                                 _note_read(self, entry.entity_id)  # (#1140)
                                 return True
                         # Looser than detection's signature check on purpose:

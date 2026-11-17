@@ -89,6 +89,11 @@ def _kwh(value):
 RAW = {"a": 1500, "b": -1500, "c": -1500}
 
 
+# (#1375) A flip is per battery: the tap names each battery's power sensor.
+FLIP_BOTH_AB = {"battery_sign_user_flip_sensors": ["sensor.a_power", "sensor.b_power"]}
+FLIP_BOTH_CB = {"battery_sign_user_flip_sensors": ["sensor.c_power", "sensor.b_power"]}
+
+
 class _Home:
     def __init__(self, names, store=None, config=None, pair=False):
         self.ed = _ed(names, pair)
@@ -270,8 +275,7 @@ def test_the_waiting_and_kept_marks_are_saved_at_the_new_place():
              "battery_learned_on": {"b1": "sensor.a_power",
                                       "b2": "sensor.b_power",
                                       "b3": "sensor.c_power"}}
-    after = _Home(["c", "b"], store=store,
-                  config={"battery_sign_user_flip": True})   # the check waits
+    after = _Home(["c", "b"], store=store, config=FLIP_BOTH_CB)   # the check waits
     after.cycle()
     saved = after.reader.export_sign_state()
     assert {b for b, d in saved["battery_detected"].items() if d} == {"b2"}
@@ -409,7 +413,7 @@ def test_a_battery_sign_on_a_sensor_gone_waits_while_fix_battery_sign_is_on():
              "battery_basis": "sensor", "battery_counters": "own",
              "battery_learned_on": {"b1": "sensor.x_power",
                                     "b2": "sensor.y_power"}}
-    flip = {"battery_sign_user_flip": True}
+    flip = FLIP_BOTH_AB                  # (#1375) the tap names each battery
     after = _Home(["a", "b"], store=store, config=flip)
     p = after.cycle(9)
     assert after.signs() == {"b1": False, "b2": True}
@@ -433,8 +437,7 @@ def test_under_the_flip_a_gone_sensor_does_not_keep_another_battery_place():
              "battery_basis": "sensor", "battery_counters": "own",
              "battery_learned_on": {"b1": "sensor.x_power",
                                     "b2": "sensor.b_power"}}
-    after = _Home(["b"] + ["c"], store=store,
-                  config={"battery_sign_user_flip": True})
+    after = _Home(["b"] + ["c"], store=store, config=FLIP_BOTH_CB)
     after.cycle()
     assert after.signs() == {"b1": False}
     assert after.reader._battery_lock_sensors["b1"] == "sensor.b_power"

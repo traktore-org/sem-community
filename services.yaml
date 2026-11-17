@@ -528,11 +528,19 @@ flip_battery_sign:
     payload (raw battery value, configured counters, accumulator evidence)
     that the Config-tab button copies for a GitHub issue. Use when battery
     charge/discharge appears inverted and a re-learn can't fix it.
-    Calling it again flips back.
+    Calling it again flips back. With several batteries it flips ONE, the
+    one named in battery (its power sensor); a two-sensor battery is never
+    flipped.
   fields:
     entry_id:
       name: Config entry
       description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:
+    battery:
+      name: Battery
+      description: "Power sensor of the battery to flip (needed with several batteries)"
       required: false
       selector:
         text:
