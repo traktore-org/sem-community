@@ -3392,7 +3392,8 @@ class CurrentControlDevice(ControllableDevice):
 
     def _settle_charger_service(self) -> None:
         """(#1376) Before a write through ``charger_service``: is it a whole
-        site's current limit (Zaptec's ``limit_current``)? Then it is taken
+        site's current limit (a service whose only current field is the
+        site's, ``available_current``)? Then it is taken
         off and the charger's own current number is written instead — SEM
         never writes a site's limit (#804). The builder asks first; a
         service whose fields Home Assistant cannot tell yet (its
