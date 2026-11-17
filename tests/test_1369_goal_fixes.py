@@ -105,3 +105,49 @@ async def test_c3_natural_achievement_needs_the_own_target(target, temp, counted
     await dev.check_legionella_cycle(good_hour=False)
     assert (dev._last_legionella_time != before) is counted
     assert (dev._last_legionella_path == "natural_achievement") is counted
+
+
+# ── step 2: the registry reads the goal, the published block is the same ───
+
+def test_the_comfort_block_is_identical_when_read_from_the_goal():
+    """Over the step-1 grid (reading, Keep at, Extra, limit incl. a
+    misconfigured one, user stop, away modes, Legionella states, a silent
+    sensor) every key of the block equals what the old derivation gave.
+    No C1/C2/C3 case changes a published key."""
+    import itertools
+    from unittest.mock import patch
+
+    from custom_components.solar_energy_management.features.device_registry import (
+        UnifiedDeviceRegistry as R,
+    )
+    hass = _Hass()
+    dev = _tank(hass, 45.0)
+    n = 0
+    combos = itertools.product(
+        ("30", "45", "51", "56", "62", "unavailable"), (45.0, 52.0, 70.0),
+        (0.0, 4.0, 9.0), (36.0, 44.0, 52.0), (None, 44.0, 58.0, 65.0),
+        ("home", "dump", "nodump"), ("off", "run", "hold"))
+    for temp, keep, extra, limit, stop, away, leg in combos:
+        hass.set(SENSOR, temp, unit_of_measurement="°C")
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = keep, extra, limit
+        dev.stop_entity, dev.stop_at = (SENSOR, stop) if stop is not None else ("", 0.0)
+        dev.vacation = away != "home"
+        dev.vacation_dhw_surplus = away == "dump"
+        dev._legionella_cycle_active = leg != "off"
+        dev._legionella_hold_start = hwc.dt_util.now() if leg == "hold" else None
+        new = R._comfort_payload(dev)
+        with patch.object(R, "_tank_goal", staticmethod(lambda live: None)):
+            old = R._comfort_payload(dev)
+        assert new == old, (temp, keep, extra, limit, stop, away, leg)
+        n += 1
+    assert n > 5000
+
+
+def test_a_device_without_a_goal_keeps_its_own_block():
+    from unittest.mock import MagicMock
+
+    from custom_components.solar_energy_management.features.device_registry import (
+        UnifiedDeviceRegistry as R,
+    )
+    assert R._tank_goal(MagicMock()) is None
+    assert R._tank_goal(object()) is None

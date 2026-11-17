@@ -2742,9 +2742,12 @@ class UnifiedDeviceRegistry:
             rule = getattr(dev, "away_pauses", None)
             return callable(rule) and rule() is True
 
+        goal = UnifiedDeviceRegistry._tank_goal(live)
         try:
             out = {
-                "state": str(live.comfort_state),
+                # (#1369) a tank's state is the goal's; its band_state is the
+                # same reading and rules as ``comfort_state``
+                "state": goal.band_state if goal else str(live.comfort_state),
                 "reading_c": live._comfort_reading(),
                 # so the chip says cooling vs heating without guessing —
                 # from the band's own direction hook, not hvac_mode (a
@@ -2759,6 +2762,21 @@ class UnifiedDeviceRegistry:
             return {}
         out.update(UnifiedDeviceRegistry._band_lines(live))
         return {"comfort": out} | UnifiedDeviceRegistry._goal_shadow(live)
+
+    @staticmethod
+    def _tank_goal(live):
+        """(#1369, step 2) A hot water tank's goal object, or None for any
+        other device (or a goal that cannot be built): the block then keeps
+        its own derivation."""
+        ask = getattr(live, "tank_goal", None)
+        if not callable(ask):
+            return None
+        try:
+            goal = ask()
+        except Exception:  # noqa: BLE001 — a payload must never break the sensor
+            return None
+        from ..devices.tank_goal import TankGoal
+        return goal if isinstance(goal, TankGoal) else None
 
     @staticmethod
     def _goal_shadow(live) -> Dict[str, Any]:
@@ -2790,10 +2808,19 @@ class UnifiedDeviceRegistry:
             return {}
         sign = 1.0 if cooling else -1.0
         top = keep - sign * extra
+        # (#1369) a tank's lines come from its goal: Keep at, the limit and
+        # the band's top (Keep at + Extra, at most the Legionella target and
+        # the user's stop). Without a usable top the typed one stands.
+        goal, goal_top = UnifiedDeviceRegistry._tank_goal(live), False
+        if goal is not None and not cooling:
+            keep = goal.keep_at if goal.keep_at is not None else keep
+            limit = goal.too_cold_below if goal.too_cold_below is not None else limit
+            if goal.band_top is not None:
+                top, goal_top = goal.band_top, True
         # (#1369) the engine's own top: Keep at + Extra, capped at the
         # Legionella target on a hot water tank
         _top_fn = getattr(live, "_band_fields_top_c", None)
-        if callable(_top_fn) and not cooling:
+        if callable(_top_fn) and not cooling and not goal_top:
             try:
                 _t = _top_fn()
                 if _t is not None:

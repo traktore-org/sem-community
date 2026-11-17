@@ -83,6 +83,10 @@ class TankGoal:
     reason: str              # a short stable word, never user text
     reading_c: Optional[float] = None
     reading_source: Optional[str] = None   # band | tank | None
+    # (#1369, step 2) the top the BAND's fields set, the user's stop on it —
+    # what the cards show as the top, whatever the tank does now (away, a
+    # run). None without a heating band whose limit sits below Keep at.
+    band_top: Optional[float] = None
 
 
 def _band_set(i: TankInputs) -> bool:
@@ -141,6 +145,15 @@ def _band_top(i: TankInputs) -> Optional[float]:
     if not _band_usable(i) or i.vacation:
         return None
     return min(i.keep_c + max(0.0, i.extra_c or 0.0), i.legionella_target_c)
+
+
+def _fields_band_top(i: TankInputs) -> Optional[float]:
+    """The band's FIELDS' top (Keep at + Extra, at most the Legionella
+    target, at most the user's stop): needs no reading and ignores away."""
+    if not _band_set(i) or i.too_cold_c >= i.keep_c:
+        return None
+    top = min(i.keep_c + max(0.0, i.extra_c or 0.0), i.legionella_target_c)
+    return min(top, i.user_stop_c) if i.user_stop_c is not None else top
 
 
 def _ceiling(i: TankInputs) -> Tuple[float, str]:
@@ -256,7 +269,8 @@ def build_tank_goal(i: TankInputs) -> TankGoal:
         legionella_blocked=(i.user_stop_c is not None
                             and i.user_stop_c < i.legionella_target_c),
         reason=_reason(i, reading, may_start, must_stop),
-        reading_c=reading, reading_source=source)
+        reading_c=reading, reading_source=source,
+        band_top=_fields_band_top(i))
 
 
 #: the fields the shadow compares with today's decision

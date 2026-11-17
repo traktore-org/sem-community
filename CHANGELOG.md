@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **The tank's lines on the cards now come from its goal** (#1369). Same numbers as before.
 - 🐛 **Too cold wins while away** (#1369). With the dump on, a tank under its limit heats back above it, not only to the minimum.
 - 🐛 **A tank starts and stops on one thermometer** (#1369). With a comfort band, both use the band's sensor, not the tank's.
 - 🐛 **Legionella counts your own target** (#1369). A tank that warms itself to 60 °C no longer counts when your target is higher.
