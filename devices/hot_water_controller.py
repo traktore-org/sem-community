@@ -547,63 +547,27 @@ class HotWaterController(SwitchDevice):
             return self.min_temperature
         return self.normal_target_temp(peek=peek)
 
+    # (#1380) the owner's path names -> the ones the #420 telemetry kept
+    _TEMP_PATH_LABELS = {
+        "sensor": "separate_sensor",
+        "sensor_invalid": "separate_sensor_invalid",
+        "sensor_unavailable": "separate_sensor_unavailable",
+        "sensor_missing": "separate_sensor_missing",
+    }
+
+    @property
+    def own_temperature_entity_id(self) -> Optional[str]:
+        """A water_heater / climate tank reports its own temperature."""
+        return self.entity_id if self._entity_domain in _SETPOINT_DOMAINS else None
+
     def get_current_temperature(self) -> Optional[float]:
-        """Read water temperature from sensor or entity attributes.
-
-        Records which source produced the reading on
-        ``self._last_temperature_reading_path`` (#420 telemetry).
-        """
-        attribute_invalid = False
-
-        # For water_heater and climate: read from entity attributes
-        if self._entity_domain in ("water_heater", "climate") and self.entity_id:
-            state = self.hass.states.get(self.entity_id)
-            if state:
-                temp = state.attributes.get("current_temperature")
-                if temp is not None:
-                    # (#1118) in the install's unit — °C out
-                    val = self._attribute_temp_c(temp)
-                    if val is not None:
-                        self._last_temperature_reading_path = "entity_attribute"
-                        self._last_temperature_reading = val
-                        return val
-                    # Attribute present but non-numeric — fall
-                    # through to the separate sensor path so we
-                    # can still produce a reading. Remember that
-                    # we saw a bad attribute so the diagnostic
-                    # path captures it if the fallback also fails.
-                    attribute_invalid = True
-
-        # For switch or fallback: use separate temperature sensor
-        if self.temperature_entity_id:
-            state = self.hass.states.get(self.temperature_entity_id)
-            if state and state.state not in ("unknown", "unavailable"):
-                # (#1118) the sensor's own unit decides — °C out
-                from ..coordinator.units import temperature_state_to_celsius
-                val = temperature_state_to_celsius(state, None)
-                if val is not None:
-                    self._last_temperature_reading_path = "separate_sensor"
-                    self._last_temperature_reading = val
-                    return val
-                self._last_temperature_reading_path = "separate_sensor_invalid"
-            elif state:
-                self._last_temperature_reading_path = "separate_sensor_unavailable"
-            else:
-                self._last_temperature_reading_path = "separate_sensor_missing"
-        elif attribute_invalid:
-            # Entity attribute was unparseable and no separate sensor
-            # is configured to fall back to.
-            self._last_temperature_reading_path = "entity_attribute_invalid"
-        else:
-            # Neither entity attribute usable nor a separate sensor
-            # configured — we operate "blind" and rely on the device's
-            # own thermostat. Important to surface this state on every
-            # call, not just the first (the prior ``uninitialized``
-            # guard was too narrow — flagged by reviewer).
-            self._last_temperature_reading_path = "no_source_configured"
-
-        self._last_temperature_reading = None
-        return None
+        """Water temperature in °C via the one owner (#1380); records the
+        source on ``_last_temperature_reading_path`` (#420 telemetry)."""
+        from .temperature import temperature_reading
+        r = temperature_reading(self.hass, self)
+        self._last_temperature_reading_path = self._TEMP_PATH_LABELS.get(r.path, r.path)
+        self._last_temperature_reading = r.value
+        return r.value
 
     def is_temperature_safe(self) -> bool:
         """Check if temperature is below the active target.
@@ -822,26 +786,12 @@ class HotWaterController(SwitchDevice):
 
     def _peek_tank_reading(self):
         """(#1369) ``get_current_temperature`` without its writes: the tank's
-        own reading in °C and whether a missing one is fine (no sensor is set
+        own reading in °C and whether a missing one is fine (no source is set
         up, the device's own thermostat rules). It leaves
-        ``_last_temperature_reading*`` alone."""
-        attribute_invalid = False
-        if self._entity_domain in _SETPOINT_DOMAINS and self.entity_id:
-            state = self.hass.states.get(self.entity_id)
-            raw = state.attributes.get("current_temperature") if state else None
-            if raw is not None:
-                value = self._attribute_temp_c(raw)
-                if value is not None:
-                    return value, False
-                attribute_invalid = True
-        if self.temperature_entity_id:
-            from ..coordinator.units import temperature_state_to_celsius
-            state = self.hass.states.get(self.temperature_entity_id)
-            value = None
-            if state and state.state not in ("unknown", "unavailable"):
-                value = temperature_state_to_celsius(state, None)
-            return value, False
-        return None, not attribute_invalid
+        ``_last_temperature_reading*`` alone (#1380: the one owner reads)."""
+        from .temperature import PATH_NONE, temperature_reading
+        r = temperature_reading(self.hass, self)
+        return r.value, r.path == PATH_NONE
 
     def _goal_band_fields(self):
         """(keep, extra, limit) in °C for a set heating band, else Nones.
@@ -948,26 +898,13 @@ class HotWaterController(SwitchDevice):
     away_needs_band = False
 
     def _comfort_fallback_reading(self):
-        """(#1062) The band's thermometer when none is picked: the boiler's own
-        — the water_heater / climate ``current_temperature``, else the sensor
-        set on the Configuration tab — in °C, like every band reading. The
-        Control tab says "device's own thermometer"; without this the band
-        read nothing on a boiler and "Run now past" never forced a run."""
+        """(#1062) The band's thermometer when none is picked: the tank's own
+        reading in °C, from the one owner (#1380). The Control tab says
+        "device's own thermometer"."""
         if not self.hass:
             return None
-        if self._entity_domain in _SETPOINT_DOMAINS and self.entity_id:
-            state = self.hass.states.get(self.entity_id)
-            raw = (state.attributes or {}).get("current_temperature") if state else None
-            value = self._attribute_temp_c(raw)
-            if value is not None:
-                return value
-        if self.temperature_entity_id:
-            state = self.hass.states.get(self.temperature_entity_id)
-            if state is None:
-                return None
-            from ..coordinator.units import temperature_state_to_celsius
-            return temperature_state_to_celsius(state, None)
-        return None
+        from .temperature import read_device_temperature
+        return read_device_temperature(self.hass, self)
 
     @property
     def needs_offpeak_activation(self) -> bool:

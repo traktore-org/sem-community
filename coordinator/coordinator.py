@@ -101,6 +101,7 @@ from .health_check import (
     home_members, HealthCheck, sem_ev_chargers,
 )
 from .units import energy_state_to_kwh, power_state_to_watts, temperature_state_to_celsius
+from ..devices.temperature import asked_temperature  # (#1380)
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
 from .departure import (
@@ -8413,11 +8414,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         hp_current_temp: Optional[float] = None
         if hp_controller is not None:
-            try:
-                t = hp_controller.get_current_temperature() if hasattr(hp_controller, "get_current_temperature") else None
-                hp_current_temp = float(t) if t is not None else None
-            except (ValueError, TypeError, AttributeError):
-                hp_current_temp = None
+            hp_current_temp = asked_temperature(hp_controller)  # #1380
 
         # #570: wire the registered controller's LIVE SG-Ready state into
         # the sensor surface — the override the comment above promised but
@@ -8612,11 +8609,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             clear_heater_no_rise(self.hass, did)
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Heating check failed: %s", e)
-            try:
-                t = hw_controller.get_current_temperature() if hasattr(hw_controller, "get_current_temperature") else None
-                hw_current_temp = float(t) if t is not None else None
-            except (ValueError, TypeError, AttributeError):
-                hw_current_temp = None
+            hw_current_temp = asked_temperature(hw_controller)  # #1380
             try:
                 hw_hours_since_leg = float(hw_controller.hours_since_legionella) if hasattr(hw_controller, "hours_since_legionella") else None
             except (ValueError, TypeError, AttributeError):

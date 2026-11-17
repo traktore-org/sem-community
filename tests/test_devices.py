@@ -761,6 +761,7 @@ def test_heat_pump_get_current_temperature_unavailable(heat_pump):
     """Test returns None when sensor unavailable."""
     mock_state = MagicMock()
     mock_state.state = "unavailable"
+    mock_state.attributes = {}  # (#1380) the climate entity is read too; a bare MagicMock fakes one
     heat_pump.hass.states.get = MagicMock(return_value=mock_state)
     assert heat_pump.get_current_temperature() is None
 

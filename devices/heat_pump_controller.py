@@ -966,29 +966,22 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         _LOGGER.debug("SG-Ready state set to %s", state.name)
         return True
 
-    def get_current_temperature(self) -> Optional[float]:
-        """Read current temperature from sensor.
+    # (#1380) the owner's path names -> the ones the #421 telemetry kept
+    _TEMP_PATH_LABELS = {"no_source_configured": "no_sensor_configured"}
 
-        Records the source path on
-        ``self._last_temperature_reading_path`` (#421).
-        """
-        if self.temperature_entity_id:
-            state = self.hass.states.get(self.temperature_entity_id)
-            if state and state.state not in ("unknown", "unavailable"):
-                # (#1118) the sensor's own unit decides — °C out
-                from ..coordinator.units import temperature_state_to_celsius
-                val = temperature_state_to_celsius(state, None)
-                if val is not None:
-                    self._last_temperature_reading_path = "sensor"
-                    return val
-                self._last_temperature_reading_path = "sensor_invalid"
-            elif state:
-                self._last_temperature_reading_path = "sensor_unavailable"
-            else:
-                self._last_temperature_reading_path = "sensor_missing"
-        else:
-            self._last_temperature_reading_path = "no_sensor_configured"
-        return None
+    @property
+    def own_temperature_entity_id(self) -> Optional[str]:
+        """The pump's climate entity reports a room temperature (#1380)."""
+        return self.climate_entity_id
+
+    def get_current_temperature(self) -> Optional[float]:
+        """Temperature in °C via the one owner (#1380): the picked sensor,
+        else the climate entity's ``current_temperature``. Records the
+        source on ``_last_temperature_reading_path`` (#421)."""
+        from .temperature import temperature_reading
+        r = temperature_reading(self.hass, self)
+        self._last_temperature_reading_path = self._TEMP_PATH_LABELS.get(r.path, r.path)
+        return r.value
 
     def to_dict(self) -> Dict[str, Any]:
         d = super().to_dict()
