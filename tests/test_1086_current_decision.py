@@ -118,3 +118,15 @@ def test_trend_skips_days_without_the_metric():
     ea = EnergyAssistant.__new__(EnergyAssistant)
     ea._daily_stats = [{"date": str(i), "grid_import": 5.0} for i in range(5)]
     assert ea._get_trend("never_stored") == "stable"
+
+
+def test_a_withheld_watch_only_record_still_answers():
+    """(#1086 review) in watch-only mode the charger is never commanded, so
+    an idle car would always disagree with a withheld "charge" record; the
+    record (with its plain reason and observer flag) must still answer."""
+    from datetime import datetime, timezone
+    from custom_components.solar_energy_management.coordinator.decision_log import _record_is_current
+    rec = {"time": datetime.now(timezone.utc).isoformat(), "new": "charge 6 A", "observer": True}
+    assert _record_is_current(rec, {"verb": None, "active": False, "text": "x"}) is True
+    rec["observer"] = False
+    assert _record_is_current(rec, {"verb": None, "active": False, "text": "x"}) is False

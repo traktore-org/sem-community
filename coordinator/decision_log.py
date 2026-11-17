@@ -330,6 +330,10 @@ def _record_is_current(rec: Dict[str, Any], live: Dict[str, Any]) -> bool:
         return False
     if age > CURRENT_MAX_AGE_S:
         return False
+    # (#1086 review) a WITHHELD command (watch-only) never reaches the device,
+    # so the device cannot agree with it; it still says what SEM would do
+    if rec.get("observer"):
+        return True
     verb = str(rec.get("new") or "").split(" ")[0]
     if live["verb"] is not None:
         return verb == live["verb"]
