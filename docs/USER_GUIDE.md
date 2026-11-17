@@ -295,12 +295,12 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 **Restore after a restart.** When SEM switches a load off, it writes that down
 first. If SEM is reloaded, Home Assistant stops, or SEM crashes, the load is
 switched back on at the next start. A load you changed by hand since stays as
-you left it.
+you left it. A setpoint load whose own schedule sits at SEM's floor looks shed and is restored at start.
 
 **Never switch off.** Each load has a *Never switch off* box; SEM then never
 sheds it. A switch whose name or area says router, modem, NAS, server or
 Home Assistant gets the box ticked for you, with a warning, and stays ticked
-until you tick *Allow SEM to switch it off*.
+until you tick *Allow SEM to switch it off*. While guarded, mode "surplus" acts as "peak only".
 
 `target_peak_limit` is your **grid connection ceiling**, not a tariff preference —
 take it from your supply contract or main breaker. Around 3–5 kW on a

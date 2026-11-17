@@ -174,12 +174,58 @@ async def test_observer_on_at_unload_writes_nothing_and_keeps_the_record(lm):
 
 
 @pytest.mark.asyncio
-async def test_device_removed_since_drops_the_record(lm):
+async def test_device_removed_since_is_still_restored_from_the_record(lm):
     await _shed(lm)
     lm._devices_shed.clear()
     del lm._devices["fridge"]
     await lm.async_recover_pass()
-    assert lm.calls == [] and lm.disk.data["records"] == {}
+    assert lm.calls == [("switch", "turn_on", ENT)]
+    assert lm.disk.data["records"] == {}
+
+
+@pytest.mark.asyncio
+async def test_a_recovered_load_gets_the_anti_flicker_hold(lm):
+    await _shed(lm)
+    lm._devices_shed.clear()
+    await lm.async_recover_pass()
+    assert lm._last_restore_time is not None
+    assert (dt_util.now() - lm._devices["fridge"]["last_turned_on"]).total_seconds() < 5
+
+
+@pytest.mark.asyncio
+async def test_observer_off_runs_one_recovery_pass(lm):
+    await _shed(lm)
+    lm._devices_shed.clear()
+    lm._observer_mode = True
+    await lm.async_sync_observer(True)
+    assert lm.calls == []                       # still watching
+    await lm.async_sync_observer(False)         # the next cycle after it ends
+    assert lm.calls == [("switch", "turn_on", ENT)]
+    assert lm.disk.data["records"] == {}
+
+
+@pytest.mark.asyncio
+async def test_observer_says_a_held_restore_once_per_record(lm):
+    await _shed(lm)
+    lm._devices_shed.clear()
+    lm._observer_mode = True
+    for _ in range(4):
+        await lm.async_recover_pass()
+    assert len(lm.withheld_commands) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_hung_device_does_not_hold_the_rest(lm):
+    import asyncio
+    await _shed(lm)
+    lm._devices_shed.clear()
+    lm._WRITE_TIMEOUT_S = 0.05
+
+    async def hang(*a, **k):
+        await asyncio.sleep(5)
+    lm.hass.services.async_call = AsyncMock(side_effect=hang)
+    await lm.async_recover_pass()               # returns; record kept
+    assert "fridge" in lm._ledger.records
 
 
 @pytest.mark.asyncio

@@ -183,7 +183,13 @@ class OrphanRecovery:
                 _LOGGER.warning("Restoring %s from a shed record %s old",
                                 rec.get("entity"), age)
             domain, service, data = call
-            await self.hass.services.async_call(domain, service, dict(data), blocking=True)
+            import asyncio
+            try:
+                await asyncio.wait_for(self.hass.services.async_call(
+                    domain, service, dict(data), blocking=True), 10)
+            except asyncio.TimeoutError:
+                _LOGGER.warning("Restoring %s timed out", rec.get("entity"))
+                return
             _LOGGER.info("Restored %s from the shed ledger", rec.get("entity"))
         await self.ledger.async_drop(device_id)
 

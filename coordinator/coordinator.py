@@ -5900,6 +5900,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
+                try:
+                    await self._load_manager.async_sync_observer(self._observer_mode)
+                except Exception:  # noqa: BLE001 — never costs a cycle
+                    _LOGGER.debug("shed recovery on observer off failed", exc_info=True)
                 self._load_manager._observer_mode = self._observer_mode
                 # (#896) switched off at runtime: shed loads go back
                 try:

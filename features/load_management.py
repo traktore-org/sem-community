@@ -195,6 +195,7 @@ class LoadManagementCoordinator:
         # not leave a shed circuit off with nobody to restore it
         self._ledger = SL.ShedLedger(Store(hass, STORAGE_VERSION, f"{DOMAIN}_{LEDGER_KEY}"))
         self._shedding_now: set = set()   # ids with a shed write in flight
+        self._recover_noted: set = set()  # observer: a held restore, said once
         self._init_task = None
         self._unsub_stop = None
 
@@ -1722,6 +1723,7 @@ class LoadManagementCoordinator:
     #: (an entity's integration may come up minutes after SEM)
     _RECOVERY_PASSES = 20
     _RECOVERY_PAUSE_S = 30
+    _WRITE_TIMEOUT_S = 10   # one hung device must not delay the rest
 
     def _ledger_probe(self, device_info: Dict) -> Optional[Dict[str, Any]]:
         """The record for a shed about to happen, or None when there is
@@ -1764,9 +1766,9 @@ class LoadManagementCoordinator:
         if device_id in self._shedding_now or (
                 device_id in self._devices_shed and needs_device):
             return "held"     # a live shed owns it; a start-up pass leaves it
-        if needs_device and device_id not in self._devices:
-            await self._ledger.async_drop(device_id)
-            return "dropped"
+        # A device missing from the roster (removed since, or not rebuilt yet)
+        # is no reason to drop: the record holds the entity and the prior
+        # state, and an off load is worse than a stale record.
         verdict, call = SL.resolve(rec, self.hass.states.get(rec.get("entity")))
         if verdict == SL.WAIT:
             return "wait"
@@ -1777,8 +1779,19 @@ class LoadManagementCoordinator:
         if age is not None and age > SL.STALE_AFTER:
             _LOGGER.warning("Restoring %s from a shed record %s old — it still "
                             "shows the shed value", rec.get("entity"), age)
-        if not await self._send(device_id, *call):
+        if self._observer_mode and device_id in self._recover_noted:
+            return "held"     # said once already; nothing written, record kept
+        self._recover_noted.add(device_id)
+        try:
+            sent = await asyncio.wait_for(
+                self._send(device_id, *call), self._WRITE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            _LOGGER.warning("Restoring %s timed out — one hung device must "
+                            "not hold the rest", rec.get("entity"))
+            return "held"
+        if not sent:
             return "held"     # observer mode: nothing written, record kept
+        self._recover_noted.discard(device_id)
         self._after_recovered(device_id)
         await self._ledger.async_drop(device_id)
         return "restored"
@@ -1788,8 +1801,22 @@ class LoadManagementCoordinator:
         if device_id in self._devices_shed:
             self._devices_shed.remove(device_id)
         self._phase_shed_ids.pop(device_id, None)
+        # the normal restore's anti-flicker hold, for a recovered load too
+        self._last_restore_time = dt_util.now()
+        if device_id in self._devices:
+            self._devices[device_id]["last_turned_on"] = dt_util.now()
+            self._devices[device_id].pop("shed_reason", None)
+            self._devices[device_id].pop("_ran_since_shed", None)
         _LOGGER.info("Restored %s from the shed ledger",
                      (self._devices.get(device_id) or {}).get("friendly_name", device_id))
+
+    async def async_sync_observer(self, observer: bool) -> None:
+        """(#896) The cycle's observer flag. When watch-only ends, one
+        recovery pass puts back what SEM shed before it began."""
+        was, self._observer_mode = self._observer_mode, bool(observer)
+        if was and not self._observer_mode and self._ledger.records:
+            self._recover_noted.clear()
+            await self.async_recover_pass()
 
     async def async_sync_enabled(self, enabled: bool) -> None:
         """(#896) Load management switched OFF at runtime: shedding stops, and
