@@ -1,0 +1,242 @@
+{
+ "energy_dashboard": [
+  "INVERTERS/Alpha ESS",
+  "INVERTERS/DEYE / Sunsynk",
+  "INVERTERS/E3DC",
+  "INVERTERS/FENECON Home",
+  "INVERTERS/Fox ESS",
+  "INVERTERS/GivEnergy",
+  "INVERTERS/KSTAR",
+  "INVERTERS/RCT Power",
+  "INVERTERS/Senec",
+  "INVERTERS/Sofar",
+  "INVERTERS/Solis"
+ ],
+ "found": [
+  "CHARGERS/ABL eMH1",
+  "CHARGERS/KEBA P30/P40",
+  "CHARGERS/NRGkick",
+  "CHARGERS/OCPP-compatible (ABB Terra, Vestel, Grizzl-E, \u2026)",
+  "CHARGERS/OpenEVSE",
+  "CHARGERS/Peblar Rocksolid",
+  "CHARGERS/Wallbox Pulsar",
+  "CHARGERS/Zaptec",
+  "CHARGERS/go-eCharger (HTTP)",
+  "CHARGERS/go-eCharger (MQTT)",
+  "INVERTERS/EG4 / Flexboss",
+  "INVERTERS/Huawei Solar",
+  "INVERTERS/SMA",
+  "INVERTERS/SolarEdge",
+  "INVERTERS/Victron Multiplus II BESS",
+  "OTHER_DEVICES/DSMR / P1 smart meter",
+  "OTHER_DEVICES/Tibber Pulse",
+  "VEHICLES/Audi e-tron / Q8 e-tron"
+ ],
+ "missing": {
+  "CHARGERS/Blue Current": [
+   [
+    [
+     "ev_current_control"
+    ]
+   ]
+  ],
+  "CHARGERS/Easee": [
+   [
+    [
+     "ev_current_control"
+    ]
+   ]
+  ],
+  "CHARGERS/GARO": [
+   [
+    [
+     "ev_current_control"
+    ]
+   ]
+  ],
+  "CHARGERS/Heidelberg Energy Control": [
+   [
+    [
+     "ev_current_control"
+    ]
+   ]
+  ],
+  "CHARGERS/Ohme": [
+   [
+    [
+     "ev_current_control"
+    ]
+   ]
+  ],
+  "CHARGERS/V2C Trydan": [
+   [
+    [
+     "ev_current_control"
+    ]
+   ]
+  ],
+  "INVERTERS/Enphase": [
+   [
+    [
+     "solar_power"
+    ]
+   ],
+   [
+    [
+     "grid_power"
+    ],
+    [
+     "grid_export_power",
+     "grid_import_power"
+    ]
+   ]
+  ],
+  "INVERTERS/Fronius": [
+   [
+    [
+     "solar_power"
+    ]
+   ]
+  ],
+  "INVERTERS/GoodWe": [
+   [
+    [
+     "solar_power"
+    ]
+   ],
+   [
+    [
+     "grid_power"
+    ],
+    [
+     "grid_export_power",
+     "grid_import_power"
+    ]
+   ]
+  ],
+  "INVERTERS/Growatt": [
+   [
+    [
+     "solar_power"
+    ]
+   ],
+   [
+    [
+     "grid_power"
+    ],
+    [
+     "grid_export_power",
+     "grid_import_power"
+    ]
+   ]
+  ],
+  "INVERTERS/Sessy (battery)": [
+   [
+    [
+     "battery_soc"
+    ]
+   ],
+   [
+    [
+     "battery_power"
+    ]
+   ]
+  ],
+  "INVERTERS/Sungrow": [
+   [
+    [
+     "solar_power"
+    ]
+   ],
+   [
+    [
+     "grid_power"
+    ],
+    [
+     "grid_export_power",
+     "grid_import_power"
+    ]
+   ]
+  ],
+  "INVERTERS/Tesla Powerwall": [
+   [
+    [
+     "solar_power"
+    ]
+   ],
+   [
+    [
+     "grid_power"
+    ],
+    [
+     "grid_export_power",
+     "grid_import_power"
+    ]
+   ]
+  ],
+  "INVERTERS/Victron": [
+   [
+    [
+     "solar_power"
+    ]
+   ]
+  ],
+  "OTHER_DEVICES/HomeWizard Wi-Fi P1": [
+   [
+    [
+     "grid_power"
+    ],
+    [
+     "grid_export_power",
+     "grid_import_power"
+    ]
+   ]
+  ],
+  "OTHER_DEVICES/Sessy P1 dongle": [
+   [
+    [
+     "grid_power"
+    ],
+    [
+     "grid_export_power",
+     "grid_import_power"
+    ]
+   ]
+  ],
+  "OTHER_DEVICES/Viessmann Vitocal 250-A / 252-A": [
+   [
+    [
+     "heat_pump_heat_energy"
+    ]
+   ]
+  ]
+ },
+ "no_names": [
+  "CHARGERS/Alfen Eve",
+  "CHARGERS/ChargePoint",
+  "CHARGERS/Fronius / go-e Wattpilot",
+  "CHARGERS/Generic / manual",
+  "CHARGERS/JuiceBox 48",
+  "CHARGERS/OpenWB 2.x",
+  "CHARGERS/Wallbox (MQTT bridge)",
+  "INVERTERS/Kostal Plenticore",
+  "INVERTERS/SolaX",
+  "INVERTERS/Sonnen",
+  "OTHER_DEVICES/Buderus heat pump",
+  "OTHER_DEVICES/Echelon meter",
+  "OTHER_DEVICES/Ecobee (geothermal)",
+  "OTHER_DEVICES/NIBE heat pump",
+  "OTHER_DEVICES/Shelly (EM / PM / Plug)",
+  "VEHICLES/Chevrolet Blazer EV (2024)",
+  "VEHICLES/Kia Ceed PHEV",
+  "VEHICLES/Mercedes EV",
+  "VEHICLES/Mini Cooper SE",
+  "VEHICLES/Renault Zoe",
+  "VEHICLES/Tesla"
+ ],
+ "no_roles_needed": [
+  "OTHER_DEVICES/BYD (Battery-Box, behind another inverter)",
+  "OTHER_DEVICES/SwitchBot relay"
+ ],
+ "total": 69
+}
