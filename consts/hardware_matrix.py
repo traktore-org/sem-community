@@ -64,6 +64,14 @@ ROWS_WITH_NO_DOMAIN: dict = {
     "Tesla": "tesla_ble over ESPHome, amps behind an Easee",
     "BYD (Battery-Box, behind another inverter)":
         "read through generic sensor patterns, not an integration of its own",
+    "Anker Solix (generic adapter)":
+        "read through the generic battery adapter over an HA Modbus "
+        "integration, no domain of its own",
+    "DESS Monitor / Daxtromon":
+        "requested (#1346): SEM does not name the integration yet",
+    "Zendure SolarFlow":
+        "read through the HA sensors of its integration; SEM does not "
+        "name that integration (#1373)",
 }
 
 
@@ -117,7 +125,10 @@ INVERTERS = [
                  "#583 (nicoziptous) IQ 5P battery temperature"},
     {"brand": "Tesla Powerwall", "domains": ['powerwall'],
      "integration": "powerwall", "pattern": "B",
-     "discharge_control": True, "status": "implemented", "evidence": ""},
+     "discharge_control": True, "status": "implemented",
+     "evidence": "SEM reads SOC and power. A grid charge needs the 2.3 "
+                 "setup (SETUP_GUIDE, operating-mode section); #1377 "
+                 "(fburgod, open): the charge did not start"},
     {"brand": "Kostal Plenticore", "domains": ['kostal_plenticore'],
      "integration": "kostal_plenticore", "pattern": "B",
      "discharge_control": True, "status": "implemented", "evidence": ""},
@@ -202,6 +213,12 @@ INVERTERS = [
     {"brand": "Victron Multiplus II BESS", "domains": ['victron', 'victron_gx', 'victron_mqtt'],
      "integration": "victron (tbd)", "pattern": "-",
      "discharge_control": False, "status": "requested", "evidence": "#809"},
+    {"brand": "DESS Monitor / Daxtromon", "domains": [],
+     "integration": "none yet", "pattern": "-",
+     "discharge_control": False, "status": "requested",
+     "evidence": "#1346 asks for it. Grid charge through a select shipped in "
+                 "2.3 (fields fixed in #1362); no DESS install confirmed. "
+                 "SEM cannot limit discharge through the select"},
 ]
 
 CHARGERS = [
@@ -267,8 +284,9 @@ CHARGERS = [
      # and is the owner's grid guard: SEM never writes it.
      "control": "number entity (charger_max_current)",
      "status": "implemented",
-     "evidence": "disc. 103 (coppe218) reports a Zaptec Go2 under test; no "
-                 "entities or values shown yet"},
+     "evidence": "#869 (coppe218): the Anker + Zaptec system partly works. "
+                 "#1376 (open): a saved site-limit service blocked the "
+                 "charger's own current number on a Go 2"},
     {"brand": "ChargePoint", "domain_token": "chargepoint",
      "control": "number entity",
      "status": "implemented", "evidence": ""},
@@ -417,6 +435,17 @@ OTHER_DEVICES = [
      "status": "implemented",
      "evidence": "#564 bmu_temp pattern in hardware_detection.py and the "
                  "rated_capacity pattern in config_flow.py; no live report yet"},
+    {"brand": "Zendure SolarFlow", "domains": [],
+     "integration": "generic sensor patterns", "role": "battery pack",
+     "status": "implemented",
+     "evidence": "#1373 (BerndWilli60): second battery, a SolarFlow 2400 Pro, "
+                 "reads 0 % SOC with two batteries. Open. Signs: "
+                 "tests/test_1375_battery_signs.py"},
+    {"brand": "Anker Solix (generic adapter)", "domains": [],
+     "integration": "generic adapter (HA Modbus)", "role": "battery (Solarbank)",
+     "status": "implemented",
+     "evidence": "#869 (coppe218): forced discharge detected, forced charge "
+                 "not; partly works"},
 ]
 
 TABLES = {

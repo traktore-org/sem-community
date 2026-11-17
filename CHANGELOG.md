@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **SEM finds more charger current and solar power sensors by name** (#915). GARO, Heidelberg, V2C, Fronius, Powerwall, Enphase, Growatt.
+- 📝 **The hardware list shows each brand's real status** (#1377). Powerwall needs a setup step for grid charge; Zaptec is partly working.
 - 🐛 **Grid-charge fields show with two batteries; charge switch and target now have fields** (#1362). The select pair no longer hides.
+- 🐛 **A "remaining capacity" sensor is no longer read as a battery's size** (#1306). Each battery's size: your setting first, else its own size sensor.
 - 🐛 **The new dashboard shows each battery's size** (#1373). It sits beside the reserve on the Devices screen; tap it to set it.
 - 🐛 **PV health no longer turns orange when the forecast overshoots grey days** (#1022). A full day in the last two proves the panels work.
 - ✨ **A Powerwall can charge from the grid** (#1377). With a select pair set, a charge switch is now a permit, not the start.
