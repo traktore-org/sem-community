@@ -17268,7 +17268,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except (TypeError, ValueError):
             dark = 0.0
         led = getattr(self, "_forecast_ledger", None)
-        marked = led is not None and led.is_dark(str(dt_util.now().date()))
+        # (#645) SEM's own day clock, not a second one
+        _day = getattr(self, "_tracker_date", None)
+        marked = led is not None and _day is not None and led.is_dark(str(_day))
         return dark <= DARK_DAY_MAX_MIN and not marked
 
     def source_accuracy(self) -> dict:

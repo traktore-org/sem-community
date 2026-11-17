@@ -137,8 +137,9 @@ class TestCoordinator:
         led.settle_day(DAY, 0.0, 600.0)
         c = _coord()
         c._forecast_ledger = ForecastLedger.from_dict(led.to_dict())
-        now = datetime(2026, 11, 17, 15, 0, tzinfo=timezone.utc)
-        with patch("homeassistant.util.dt.now", return_value=now):
+        # (#645) the day is SEM's own day clock
+        c._tracker_date = datetime(2026, 11, 17, 15, 0, tzinfo=timezone.utc).date()
+        if True:
             assert c._solar_day_counts(SimpleNamespace(solar_downtime_min_today=0.0)) is False
             c._forecast_ledger = None
             assert c._solar_day_counts(SimpleNamespace(solar_downtime_min_today=0.0)) is True
