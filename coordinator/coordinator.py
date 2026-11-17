@@ -7793,6 +7793,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             else:
                 self._forecast_tracker.update(
                     forecast_data.forecast_today_kwh, energy.daily_solar, weather_condition,
+                    day_counts=self._solar_day_counts(power),
                 )
             tracker_data = self._forecast_tracker.get_data()
             # (#544) forecast_corrected_tomorrow removed — dead sensor.
@@ -17163,7 +17164,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # ``energy_since_full``), so this only bounds the loop and the log noise.
     MAX_DECAY_CATCHUP_DAYS = 7
 
-    def _record_source_ledgers(self, now_time, energy, today_s, today) -> None:
+    def _record_source_ledgers(
+        self, now_time, energy, today_s, today, dark_min=0.0,
+    ) -> None:
         """(#822) Score every installed forecast source against reality.
 
         One ``ForecastLedger`` per source, settled from the same actual as the
@@ -17199,8 +17202,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             led = ledgers.get(name)
             if led is None:
                 led = ledgers[name] = ForecastLedger()
-            if actual is not None:
-                led.settle(today_s, actual)
+            if actual is not None and led.settle_day(today_s, actual, dark_min):
+                self._persist_source_ledgers(ledgers)
 
         # Record the horizons once a day, and only once SUCCESSFULLY — the
         # same rule the active ledger learned the hard way (#778): marking the
@@ -17233,6 +17236,40 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             recorded, len(seen), today_s,
             {n: v.get("today_kwh") for n, v in seen.items()},
         )
+
+    def _persist_source_ledgers(self, ledgers) -> None:
+        """(#1022) A dark mark must survive a restart (the reader's count
+        does not), so it is written when set."""
+        if self._storage is None:
+            return
+        try:
+            self._storage.set_source_ledgers_state(
+                {n: l.to_dict() for n, l in ledgers.items()})
+        except (AttributeError, TypeError, ValueError) as err:
+            _LOGGER.warning("source ledgers not persisted: %s", err)
+
+    def _persist_forecast_ledger(self, led) -> None:
+        """(#1022) Same, for the active ledger."""
+        if self._storage is None:
+            return
+        try:
+            self._storage.set_forecast_ledger_state(led.to_dict())
+        except (AttributeError, TypeError, ValueError) as err:
+            _LOGGER.warning("forecast ledger not persisted: %s", err)
+
+    def _solar_day_counts(self, power) -> bool:
+        """(#1022) Does today still count for the learners? Same rule as
+        the ledgers: dark minutes over the limit, or a persisted dark mark
+        from before a restart, and it does not."""
+        from .forecast_ledger import DARK_DAY_MAX_MIN
+
+        try:
+            dark = float(getattr(power, "solar_downtime_min_today", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            dark = 0.0
+        led = getattr(self, "_forecast_ledger", None)
+        marked = led is not None and led.is_dark(str(dt_util.now().date()))
+        return dark <= DARK_DAY_MAX_MIN and not marked
 
     def source_accuracy(self) -> dict:
         """(#822) Per-source trust, for the card and the diagnostics.
@@ -17282,10 +17319,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         today = now_time.date()
         today_s = str(today)
 
-        # Settle today with what has actually arrived (idempotent).
+        # Settle today with what has actually arrived (idempotent). (#1022)
+        # A day the solar input was dark for is marked, not settled.
         actual = getattr(energy, "daily_solar", None)
-        if actual is not None:
-            led.settle(today_s, actual)
+        dark_min = getattr(power, "solar_downtime_min_today", 0.0)
+        if actual is not None and led.settle_day(today_s, actual, dark_min):
+            self._persist_forecast_ledger(led)
 
         # Record the horizons once a day — once SUCCESSFULLY, which is not the
         # same thing. The first version marked the day done before knowing
@@ -17346,7 +17385,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # source configured for the wrong array scores badly and says so, and
         # the answer is measured rather than assumed.
         try:
-            self._record_source_ledgers(now_time, energy, today_s, today)
+            self._record_source_ledgers(now_time, energy, today_s, today, dark_min)
         except Exception:  # noqa: BLE001 — comparison never costs a cycle
             _LOGGER.debug("source ledgers skipped", exc_info=True)
 

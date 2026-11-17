@@ -186,8 +186,13 @@ class ForecastTracker:
         forecast_today_kwh: float,
         actual_solar_kwh: float,
         weather_condition: str = "unknown",
+        day_counts: bool = True,
     ) -> None:
         """Update tracker with current forecast and actual values.
+
+        ``day_counts`` False (#1022): the solar input was dark for too much
+        of the day, so the day is not saved at rollover — a gap must not
+        teach the correction factor a 0 % day.
 
         Called every coordinator cycle (~10s). Handles day rollover
         by saving yesterday's record to history.
@@ -210,6 +215,7 @@ class ForecastTracker:
         self._today_date = today
         self._today_forecast = forecast_today_kwh
         self._today_actual = actual_solar_kwh
+        self._today_counts = bool(day_counts)
         self._weather_today = weather_condition
 
         # #416 follow-up (2026-06-07): eager weather-snapshot capture.
@@ -245,6 +251,10 @@ class ForecastTracker:
     def _save_day_record(self) -> None:
         """Save yesterday's forecast vs actual to history."""
         if not self._today_date or self._today_forecast < MIN_FORECAST_KWH:
+            return
+        if not getattr(self, "_today_counts", True):
+            _LOGGER.info("Forecast record skipped for %s: solar input was dark "
+                         "too long (#1022)", self._today_date)
             return
 
         # Outlier detection: cap actual at MAX_ACTUAL_RATIO × forecast

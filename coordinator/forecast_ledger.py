@@ -52,6 +52,12 @@ REFILL_TRUST_PERCENTILE: float = 0.2
 #: seasonal quantity; beyond that the sun has moved.
 DEFAULT_MAX_DAYS: int = 120
 
+#: (#1022) Daylight minutes the solar input may be unreadable and the day
+#: still count. The reader's dark counter only runs while the sun is up (an
+#: inverter asleep at night reads 0 W, not dark), so this is daylight time.
+#: A blip or a short integration reload is under it; a missing midday is not.
+DARK_DAY_MAX_MIN: float = 30.0
+
 
 @dataclass(frozen=True)
 class HorizonAccuracy:
@@ -97,6 +103,31 @@ class ForecastLedger:
         day = self._days.setdefault(str(target_date), {"actual": None, "f": {}})
         day["actual"] = actual
         self._prune()
+
+    def settle_day(self, target_date: str, actual_kwh, dark_min) -> bool:
+        """(#1022) THE rule: a day's actual counts only when the solar input
+        was readable for nearly all of its daylight. Past the limit the day
+        is marked dark, any earlier value is cleared and later settles are
+        refused, so a gap is never learned as a 0 kWh day. Returns True when
+        the day was newly marked (the caller persists). A snow day with a
+        readable input has no dark minutes and still settles as 0."""
+        key = str(target_date)
+        try:
+            dark = float(dark_min or 0.0)
+        except (TypeError, ValueError):
+            dark = 0.0
+        if dark > DARK_DAY_MAX_MIN or self.is_dark(key):
+            newly = not self.is_dark(key)
+            day = self._days.setdefault(key, {"actual": None, "f": {}})
+            day["actual"] = None
+            day["dark"] = True
+            self._prune()
+            return newly
+        self.settle(key, actual_kwh)
+        return False
+
+    def is_dark(self, target_date: str) -> bool:
+        return bool(self._days.get(str(target_date), {}).get("dark"))
 
     # ── reading ──────────────────────────────────────────────────────────
     def forecast_for(self, target_date: str, horizon_days: int) -> Optional[float]:
@@ -237,10 +268,16 @@ class ForecastLedger:
     def to_dict(self) -> dict:
         return {
             "max_days": self._max_days,
-            "days": {d: {"actual": r.get("actual"),
-                         "f": {str(k): v for k, v in r.get("f", {}).items()}}
-                     for d, r in self._days.items()},
+            "days": {d: self._day_dict(r) for d, r in self._days.items()},
         }
+
+    @staticmethod
+    def _day_dict(r: dict) -> dict:
+        out = {"actual": r.get("actual"),
+               "f": {str(k): v for k, v in r.get("f", {}).items()}}
+        if r.get("dark"):
+            out["dark"] = True
+        return out
 
     @classmethod
     def from_dict(cls, raw) -> "ForecastLedger":
@@ -253,6 +290,9 @@ class ForecastLedger:
                 except (TypeError, ValueError):
                     continue
             led._days[str(d)] = {"actual": r.get("actual"), "f": fc}
+            if r.get("dark"):
+                led._days[str(d)]["dark"] = True
+                led._days[str(d)]["actual"] = None
         led._prune()
         return led
 
