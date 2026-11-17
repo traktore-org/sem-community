@@ -1068,10 +1068,9 @@ class HotWaterController(SwitchDevice):
         the seam withheld (observer, yield) moved nothing."""
         try:
             target = self._active_target_temp()
-            sent = await self.send(
-                "water_heater", "set_temperature",
-                {"entity_id": self.entity_id, "temperature": target},
-                why="hot water heating")
+            # (#1081) remembers the tank's own setpoint before SEM moves it
+            sent = await self.sp_write_target(
+                "water_heater", self.entity_id, target, why="hot water heating")
             if not sent:
                 self._last_activation_path = "water_heater_withheld"
                 return 0.0
@@ -1090,6 +1089,8 @@ class HotWaterController(SwitchDevice):
     async def _deactivate_water_heater(self) -> None:
         """Deactivate via water_heater domain. A withheld write leaves the
         belief as it is (#1335): the tank did not move."""
+        # (#1081) the tank's own setpoint goes back first, while it can be read
+        await self.sp_restore("hot water off")
         try:
             sent = await self.send(
                 "water_heater", "turn_off",
@@ -1115,10 +1116,8 @@ class HotWaterController(SwitchDevice):
         """Activate via climate domain (#1335: only a sent write claims ACTIVE)."""
         try:
             target = self._active_target_temp()
-            sent = await self.send(
-                "climate", "set_temperature",
-                {"entity_id": self.entity_id, "temperature": target},
-                why="hot water heating")
+            sent = await self.sp_write_target(
+                "climate", self.entity_id, target, why="hot water heating")
             if not sent:
                 self._last_activation_path = "climate_withheld"
                 return 0.0
@@ -1133,6 +1132,7 @@ class HotWaterController(SwitchDevice):
 
     async def _deactivate_climate(self) -> None:
         """Deactivate via climate domain (#1335: a withheld write moves nothing)."""
+        await self.sp_restore("hot water off")   # (#1081) before it is turned off
         try:
             sent = await self.send(
                 "climate", "set_hvac_mode",

@@ -118,6 +118,7 @@ from ..consts.core import (
 )
 from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 from .held_power import HeldPower
+from .setpoint_memo import SetpointMemoMixin
 
 from homeassistant.core import HomeAssistant, callback
 
@@ -210,7 +211,7 @@ class DeviceStatus:
     activation_count: int = 0
 
 
-class ControllableDevice(ABC):
+class ControllableDevice(SetpointMemoMixin, ABC):
     """Base class for all controllable devices in the surplus management system.
 
     Each device has a priority (1=highest, 10=lowest) and a minimum power
@@ -1844,9 +1845,9 @@ class ComfortBandMixin:
 
     def comfort_preheat_supported(self) -> bool:
         """(#1081) Can this load pre-heat? A heating band on a load switched by
-        a contact, a switch or a boost. A unit that rides its own setpoint is
-        out: at the end of a run SEM writes back the configured setpoint, not
-        the one the unit had. That must be fixed before it can be offered."""
+        a contact, a switch or a boost, or a heat pump whose boost raises its
+        setpoint (the setpoint the unit had is put back at the end of a run).
+        A band that rides the unit's own live setpoint is out."""
         try:
             return (self._comfort_direction() == "heat"
                     and self._comfort_anchor_c() is None)
@@ -2517,9 +2518,11 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         self._comfort_limit_set = float(value or 0.0)
 
     def comfort_preheat_supported(self) -> bool:
-        """(#1081) Not offered: a climate unit takes its setpoint from SEM
-        (``set_temperature`` on start), so a pre-heat run would need the
-        one the unit had back at its end. Fix that first."""
+        """(#1081) Not offered. The setpoint write-back is fixed (the unit's
+        own setpoint is remembered and put back), but a pre-heat run heats to
+        Keep at + Extra and this unit's band IS its own setpoint: the unit
+        holds the setpoint SEM writes (the configured one, or its own), never
+        the top. Offering it needs SEM to write the top as the setpoint."""
         return False
 
     def _comfort_direction(self) -> str:
@@ -2623,11 +2626,17 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
             # (#1323) no season decided yet: nothing to send
             return 0.0
 
+        # (#1081) the setpoint the unit shows NOW, before the mode switch can
+        # move it; remembered once the setpoint write below goes out
+        if self.target_temperature is not None:
+            self._sp_begin(self.entity_id, self.target_temperature)
+
         # Set the mode first. If THIS fails the unit never turned on — report
         # ERROR and bail.
         try:
             await self.send("climate", "set_hvac_mode", {"entity_id": self.entity_id, "hvac_mode": self.hvac_mode})
         except Exception as e:
+            self._sp_pending = None
             _LOGGER.error("Failed to activate %s: %s", self.name, e)
             self._status.state = DeviceState.ERROR
             self._status.error_message = str(e)
@@ -2646,9 +2655,12 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
 
         if self.target_temperature is not None:
             try:
-                await self.send("climate", "set_temperature", {"entity_id": self.entity_id,
+                sent = await self.send("climate", "set_temperature", {"entity_id": self.entity_id,
                      "temperature": self.target_temperature})
+                self._sp_commit("climate", self.entity_id,
+                                self.target_temperature, bool(sent))
             except Exception as e:
+                self._sp_pending = None
                 # Non-fatal: the unit is running in the right mode, only the
                 # comfort setpoint didn't take. Stay ACTIVE.
                 _LOGGER.warning(
@@ -2679,6 +2691,10 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
             if elapsed < self.min_on_seconds:
                 return
 
+        # (#1081) the setpoint the unit had goes back BEFORE it is turned off:
+        # while it runs its setpoint can be read and written. A failed or
+        # withheld write keeps the memo; the coordinator's sweep tries again.
+        await self.sp_restore("setpoint restored")
         try:
             await self.send("climate", "set_hvac_mode", {"entity_id": self.entity_id, "hvac_mode": "off"})
             self._status.state = DeviceState.IDLE
@@ -4821,7 +4837,8 @@ class SetpointDevice(ControllableDevice):
 
         target = min(self.max_setpoint, self.normal_setpoint + self.boost_offset)
         try:
-            await self.send("climate", "set_temperature", {"entity_id": self.climate_entity_id, "temperature": target})
+            # (#1081) remembers the setpoint the unit shows before SEM moves it
+            await self.sp_write_target("climate", self.climate_entity_id, target)
             self._boosted = True
             self._status.state = DeviceState.ACTIVE
             self._status.current_consumption_w = self.rated_power
@@ -4838,18 +4855,25 @@ class SetpointDevice(ControllableDevice):
             return 0.0
 
     async def deactivate(self) -> None:
-        if not self.climate_entity_id or not self._boosted:
+        # (#1081) a memo outlives a restart that reset ``_boosted``
+        if not self.climate_entity_id or not (self._boosted or self._sp_memo):
             return
 
         try:
-            await self.send("climate", "set_temperature", {"entity_id": self.climate_entity_id, "temperature": self.normal_setpoint})
+            # (#1081) the setpoint the unit had, not the configured one; the
+            # configured one only when nothing was remembered
+            outcome = await self.sp_restore("setpoint restored")
+            if outcome == "none":
+                await self.send("climate", "set_temperature", {"entity_id": self.climate_entity_id, "temperature": self.normal_setpoint})
+            elif outcome in ("unreadable", "withheld", "failed"):
+                return   # the memo stays; the coordinator's sweep tries again
             self._boosted = False
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
             self._status.last_deactivated = datetime.now()
             self._last_deactivated = self._status.last_deactivated  # (#644) unified clock
-            _LOGGER.info("Restored %s setpoint to %.1f", self.name, self.normal_setpoint)
+            _LOGGER.info("Restored %s setpoint (%s)", self.name, outcome)
         except Exception as e:
             _LOGGER.error("Failed to restore %s setpoint: %s", self.name, e)
             self._status.state = DeviceState.ERROR

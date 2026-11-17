@@ -1994,6 +1994,14 @@ async def deactivate_devices(devices, reason: str = "teardown") -> int:
                 _LOGGER.warning("Could not release the step-down of %s (%s)",
                                 getattr(device, "name", "?"), reason, exc_info=True)
         if not getattr(device, "is_active", False):
+            # (#1081) a unit's own setpoint SEM moved goes back too
+            release = getattr(device, "sp_release_orphan", None)
+            if callable(release) and getattr(device, "_sp_memo", None):
+                try:
+                    await release(f"setpoint restored ({reason})")
+                except Exception:  # noqa: BLE001 — the rest must still be released
+                    _LOGGER.warning("Could not restore the setpoint of %s (%s)",
+                                    getattr(device, "name", "?"), reason, exc_info=True)
             continue
         # (#908) SEM only releases what SEM commanded. An adopted / external /
         # observer-mode load stays exactly as the user has it. (#1335) The
@@ -2242,6 +2250,7 @@ class SurplusController:
         "_observed_off_since", "_external_off_until",
         "_surplus_since",                          # activation debounce
         "_held_power",           # (#1067) a rating hold spans the rebuild
+        "_sp_memo", "_sp_seeded",  # (#1081) the setpoint the unit had
     )
     # _sem_owned is transplanted separately: only from an ACTIVE old object —
     # a stale False (reconciler cleared it while the entity flickered) must not

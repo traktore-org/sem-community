@@ -369,7 +369,11 @@ supports the same three control paths, in any combination:
 - **SG-Ready relays** — the standard two-relay table (NORMAL / BOOST /
   FORCE_ON), with NC-wiring inversion per unit.
 - **Climate entity** — setpoint boost on surplus for pumps that only
-  expose a thermostat (Nibe, Mitsubishi, Daikin …).
+  expose a thermostat (Nibe, Mitsubishi, Daikin …). SEM remembers the
+  setpoint the unit shows before it raises it, and puts that one back when
+  the run ends. If you change it by hand during the run, SEM leaves your
+  value (#1081). A climate unit or tank SEM turns on gets its setpoint back
+  the same way.
 - **Service call** (#801) — for pumps whose control surface is a
   *command*, like a Buderus behind EMS-ESP: configure
   `domain.service` (e.g. `ems_esp.send_command`) plus a JSON payload.

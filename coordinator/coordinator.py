@@ -4155,6 +4155,39 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 out[str(did)] = memo
         return out
 
+    def _setpoint_devices(self):
+        devs = getattr(self._surplus_controller, "_devices", None)
+        return devs.items() if isinstance(devs, dict) else ()
+
+    def _setpoint_memos(self) -> Dict[str, Any]:
+        """(#1081) ``{device_id: memo}`` for every unit whose own setpoint SEM
+        moved. A device not built yet keeps what is stored for it."""
+        out = dict(self._storage.get_setpoint_memo_state()) if self._storage else {}
+        for did, dev in self._setpoint_devices():
+            out.pop(str(did), None)
+            memo_fn = getattr(dev, "sp_memo", None)
+            memo = memo_fn() if callable(memo_fn) else None
+            if isinstance(memo, dict):
+                out[str(did)] = memo
+        return out
+
+    async def _sweep_setpoint_memos(self) -> None:
+        """(#1081) Seed each device's memo from the store once, then put back
+        the setpoint of a unit SEM believes idle (a restart in a run, a write
+        the seam held back). A failure here never costs a cycle."""
+        if not self._storage:
+            return
+        try:
+            stored = self._storage.get_setpoint_memo_state()
+            for did, dev in list(self._setpoint_devices()):
+                if getattr(dev, "_sp_seeded", True) is False:
+                    dev.sp_adopt_memo(stored.get(str(did)))
+                release = getattr(dev, "sp_release_orphan", None)
+                if callable(release) and getattr(dev, "_sp_memo", None):
+                    await release()
+        except Exception:  # noqa: BLE001 — a memo sweep must not stop a cycle
+            _LOGGER.debug("setpoint memo sweep skipped", exc_info=True)
+
     #: (#1323) the outlook is the mean over this many hours ahead
     _OUTLOOK_HOURS = 24
 
@@ -4491,6 +4524,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "longer in the Energy Dashboard (%s): %s (#1195)",
                         entity, err)
             self._dropped_battery_limit_entities = []
+
+        # (#1081) a unit's own setpoint, remembered across a restart, and the
+        # ones nobody's run is behind any more
+        await self._sweep_setpoint_memos()
 
         # (#1085 Part B) Drop any override whose time is up, every cycle —
         # so a device that just lapsed reads as clear everywhere below,
@@ -6191,6 +6228,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # know to take it back
                 try:
                     self._storage.set_step_down_state(self._step_down_memos())
+                except (AttributeError, TypeError, ValueError):
+                    pass
+                # (#1081) …and the setpoint each unit had before SEM moved it
+                try:
+                    self._storage.set_setpoint_memo_state(self._setpoint_memos())
                 except (AttributeError, TypeError, ValueError):
                     pass
                 # (#1323) …and each unit's season, merged over what is
