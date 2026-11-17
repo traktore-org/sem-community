@@ -11,6 +11,7 @@ theirs, and nothing is written to it.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
@@ -95,6 +96,7 @@ class ShedLedger:
     def __init__(self, store: Any) -> None:
         self._store = store
         self.records: Dict[str, Dict[str, Any]] = {}
+        self._pending: set = set()
 
     async def async_load(self) -> None:
         try:
@@ -125,13 +127,16 @@ class ShedLedger:
             await self._save()
 
     def drop_soon(self, device_id: str) -> None:
-        """Sync callers (the per-cycle sweep): in memory now, on disk soon."""
+        """Sync callers (the per-cycle sweep): in memory now, on disk as soon
+        as the loop runs (a plain save: only SEM's own store queues writes)."""
         if self.records.pop(device_id, None) is None:
             return
         try:
-            self._store.async_delay_save(lambda: {"records": self.records}, 2)
-        except Exception:  # noqa: BLE001
-            _LOGGER.debug("shed ledger delayed save failed", exc_info=True)
+            task = asyncio.get_running_loop().create_task(self._save())
+            self._pending.add(task)
+            task.add_done_callback(self._pending.discard)
+        except RuntimeError:
+            _LOGGER.debug("shed ledger: no loop to save on", exc_info=True)
 
 
 class OrphanRecovery:
