@@ -427,8 +427,10 @@ def test_the_1194_move_runs_first_and_its_value_is_kept():
 
 def test_fix_battery_sign_on_keeps_every_lock_until_it_is_off():
     """The user set the flip against what SEM showed; a new lock under it
-    would undo what they set. The check waits, and runs once it is off."""
-    home = _Home("pair_first", config={"battery_sign_user_flip": True},
+    would undo what they set. The check waits, and runs once it is off.
+    (#1375) The flip is per battery now: the tap names Sessy."""
+    home = _Home("pair_first",
+                 config={"battery_sign_user_flip_sensors": ["sensor.sessy_power"]},
                  store=dict(OLD_B1))
     home.cycle(3)
     assert home.reader._battery_sign_detected["b1"] is True

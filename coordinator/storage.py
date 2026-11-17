@@ -911,7 +911,7 @@ class SEMStorage:
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to schedule energy data save: %s", e)
 
-    async def async_save_energy_now(self) -> None:
+    async def async_save_energy_now(self) -> bool:
         """Write the energy store to disk immediately (#645).
 
         Deliberately NOT ``async_save_energy_delayed``: ``async_delay_save``
@@ -923,17 +923,22 @@ class SEMStorage:
 
         Only for rare, restart-critical writes — the decay date changes at most
         once a day. Do NOT reach for this in the per-cycle path.
+
+        Returns True only when the write was made (#1375: a caller that must
+        not go on before the data is on disk).
         """
         if self._ended("energy save"):
-            return
+            return False
         try:
             await self._energy_store.async_save({
                 **self._energy_data,
                 "last_update": dt_util.now().isoformat(),
             })
             _LOGGER.debug("Saved energy data immediately")
+            return True
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to save energy data: %s", e)
+            return False
 
     async def async_save_energy_throttled(self) -> None:
         """Write the energy store to disk, at most once per

@@ -365,6 +365,7 @@ class SEMConfigCard extends SEMLitBase {
             // #588 battery-sign fix button transient UI state.
             _battSignBusy: { state: true },
             _battSignMsg: { state: true },
+            _battChoices: { state: true },
             // #528 staged structural (entity-wiring) edits — committed in one
             // Apply so a reload fires once for the whole batch, not per field.
             _pending: { state: true },
@@ -416,6 +417,7 @@ class SEMConfigCard extends SEMLitBase {
         this._signBusy = false;
         this._signMsg = '';
         this._battSignBusy = false;
+        this._battChoices = null;
         this._battSignMsg = '';
         this._pending = {};   // { structuralKey: stagedValue }
         this._applying = false;
@@ -1507,6 +1509,7 @@ class SEMConfigCard extends SEMLitBase {
                 </div>
                 ${this._signMsg ? html`<div class="sign-feedback">${this._signMsg}</div>` : nothing}
                 ${this._battSignMsg ? html`<div class="sign-feedback">${this._battSignMsg}</div>` : nothing}
+                ${this._renderBatteryPick()}
                 <div class="setting-help-text" style="margin:2px 0 6px">
                     ${this._t('config_check_wrong_sensor')}</div>
             </div>
@@ -3504,11 +3507,22 @@ class SEMConfigCard extends SEMLitBase {
                 ${this._battSignMsg
                     ? html`<div class="sign-feedback">${this._battSignMsg}</div>`
                     : nothing}
+                ${this._renderBatteryPick()}
                 ${this._showHelp
                     ? html`<div class="setting-help-text">${this._t('fix_battery_sign_help')}</div>`
                     : nothing}
             </div>
         `;
+    }
+
+    // (#1375) One button per battery the tap can turn over.
+    _renderBatteryPick() {
+        if (!this._battChoices || !this._battChoices.length) return nothing;
+        return html`<div class="action-row">${this._battChoices.map((b) => html`
+            <button class="action-btn" ?disabled=${this._battSignBusy}
+                    @click=${() => this._flipBatterySign(b.sensor)}>
+                ${(this._hass?.states[b.sensor]?.attributes?.friendly_name) || b.sensor}
+            </button>`)}</div>`;
     }
 
     _resetSignDetection() {
@@ -3551,20 +3565,30 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     // #588 — battery charge/discharge sign flip, mirrors _flipGridSign.
-    async _flipBatterySign() {
+    // (#1375) With several batteries the service answers "battery_needed"
+    // with the list; the user then taps the one that is wrong.
+    async _flipBatterySign(battery) {
         if (!this._hass || this._battSignBusy) return;
         this._battSignBusy = true;
         this._battSignMsg = '';
+        this._battChoices = null;
         this.requestUpdate();
         let payload = null;
         try {
             const res = await this._hass.callService(
-                'solar_energy_management', 'flip_battery_sign', {},
-                undefined, false, true,
+                'solar_energy_management', 'flip_battery_sign',
+                battery ? { battery } : {}, undefined, false, true,
             );
             payload = (res && res.response) ? res.response : res;
         } catch (e) {
             payload = null;
+        }
+        if (payload && payload.error === 'battery_needed') {
+            this._battSignBusy = false;
+            this._battChoices = payload.batteries || [];
+            this._battSignMsg = this._t('config_check_battery_pick');
+            this.requestUpdate();
+            return;
         }
         const report = this._buildBatterySignReport(payload);
         let copied = false;

@@ -447,6 +447,8 @@ cycle.
 
 **Did you mark the battery "Inverted" in the Energy Dashboard?** Then it shows charging the right way from the start, with one or more batteries. A battery that showed the right way before an update still does.
 
+**One battery wrong, others right (several batteries):** the **Battery direction is wrong** button flips ONE battery. With several batteries SEM asks which one and flips only that. A battery read as two power sensors (charge and discharge) is never flipped: its direction is what you set in the Energy Dashboard, so fix a swapped pair there. An old flip from a one-battery home names no battery once you have several; each battery is then judged by its own counters.
+
 **Requirements:**
 - HA Energy Dashboard must be configured with battery charge AND discharge energy sensors
 - Both energy sensors must be available (not "unknown" or "unavailable")
