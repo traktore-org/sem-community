@@ -6260,8 +6260,10 @@ class SensorReader:
                 soc_entity, "battery_soc", allow_none=True))
             if val is not None and val >= 0:
                 soc_values.append(val)
-                sizes.append(self._unit_size_kwh(
-                    batt_power, battery_power_entities.index(batt_power)))
+                # (#1373) a reader without sizes (a stand-in) knows none
+                size_of = getattr(self, "_unit_size_kwh", None)
+                sizes.append(size_of(batt_power, battery_power_entities.index(batt_power))
+                             if callable(size_of) else 0.0)
         self._soc_units_configured = len(battery_power_entities)
         self._soc_units_expected = known
         self._soc_units_read = len(soc_values)
@@ -6295,7 +6297,9 @@ class SensorReader:
                     self._soc_partial_logged = True
             else:
                 self._soc_partial_logged = False
-            return self._soc_by_size(soc_values, sizes)
+            by_size = getattr(self, "_soc_by_size", None)
+            return (by_size(soc_values, sizes) if callable(by_size)
+                    else sum(soc_values) / len(soc_values))
         # Nothing readable at all is the SOC-None shape, not a partial one —
         # clear the one-shot so a later re-entry into partial is heard again.
         self._soc_partial_logged = False

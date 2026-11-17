@@ -124,6 +124,10 @@ def _runtime_translation_keys():
     # id, its translation key is set beside it — read off the source.
     keys |= {("sensor", k) for k in re.findall(
         r'translation_key="(per_device_[a-z_0-9]+)"', open(_path("sensor.py")).read())}
+    # (#1373) the per-battery numbers pass their translation key to
+    # SEMPerBatteryNumber at runtime (``translation="…"``)
+    keys |= {("number", k) for k in re.findall(
+        r'translation="(battery_[a-z_0-9]+)"', open(_path("number.py")).read())}
     return keys
 
 
