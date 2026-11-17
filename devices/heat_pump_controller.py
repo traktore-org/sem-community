@@ -221,6 +221,14 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         # action. Layer 1 decides (``compute_load_intent``), layer 3 switches
         # (``reconcile_load``); these fields are only what the device knows:
         # whether it is stepped down, since when, and the setpoint to put back.
+        # (#1081) Two memos on purpose, NOT merged into ``setpoint_memo``:
+        # this one is a STATE of the pump (stepped down: the layer-3 hold and
+        # gap, and ``block`` has no setpoint at all) and it is put back
+        # unconditionally, with no 48 h cap and no hand-change rule, so a
+        # step-down never stays on. ``setpoint_memo`` is a bounded courtesy
+        # (a hand change or a stale memo is never fought). The two compose:
+        # ``_sp_restore_hint`` makes a boost remember the user's setpoint,
+        # not the lowered one. Merging would change what a real pump sees.
         self.step_down_action = step_down_action(step_down)
         self._stepped_down: bool = False
         self._stepped_down_at: Optional[datetime] = None
