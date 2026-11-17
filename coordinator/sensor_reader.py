@@ -2060,6 +2060,11 @@ class SensorReader:
                 b: self._battery_sign_inverted.get(b, False)
                 for b in sorted(getattr(self, "_battery_sign_kept", ()))
                 if not self._battery_sign_detected.get(b)}) else {}),
+            # (#1375) the old one-for-all flag was already turned into these
+            # signs: saved WITH them, so a restart before the options write
+            # landed cannot turn them over a second time
+            **({"legacy_flip_migrated": True}
+               if getattr(self, "_legacy_flip_migrated", False) else {}),
             # (#1205) the sensor each saved sign was learned on
             "battery_learned_on": {
                 b: s for b, s in sorted(
@@ -2112,6 +2117,8 @@ class SensorReader:
                 "negating (HA convention)" if self._grid_sign_inverted
                 else "no correction (SEM convention)",
             )
+        if state.get("legacy_flip_migrated") is True:        # (#1375)
+            self._legacy_flip_migrated = True
         bd = state.get("battery_detected")
         bi = state.get("battery_inverted")
         if isinstance(bd, dict) and isinstance(bi, dict):
@@ -2367,6 +2374,7 @@ class SensorReader:
         Re-arms the startup warmup so the re-learn doesn't vote on the
         first ambiguous samples either.
         """
+        self._legacy_flip_migrated = False      # (#1375) the signs are gone
         self._grid_sign_inverted = False
         self._grid_sign_detected = False
         self._grid_sign_evidence = 0.0

@@ -3127,7 +3127,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         new_options = {**(entry.options or {}), "battery_sign_user_flip": False,
                        BATTERY_FLIP_SENSORS_KEY: []}
         self._skip_options_reload = dict(new_options)
-        self.hass.config_entries.async_update_entry(entry, options=new_options)
+        try:
+            self.hass.config_entries.async_update_entry(entry, options=new_options)
+        except Exception:  # noqa: BLE001 — a settings write never costs a cycle
+            self._skip_options_reload = None
+            if not getattr(self, "_flip_save_failed_said", False):
+                self._flip_save_failed_said = True
+                _LOGGER.warning("saving the cleared battery flip failed; "
+                                "asking again next cycle (#1375)", exc_info=True)
+            return
         raw = getattr(reader, "_raw_config", None)
         if isinstance(raw, dict):
             raw["battery_sign_user_flip"] = False

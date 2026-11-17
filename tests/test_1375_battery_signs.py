@@ -463,3 +463,57 @@ async def test_a_bare_name_must_hold_soc_as_a_word(hass, name):
 async def test_a_bare_name_with_the_word_is_found(hass, name):
     r = _soc_home(hass, [(f"sensor.{name}", {}, 47)])
     assert r._auto_detect_battery_soc("sensor.lone_pack_power") == f"sensor.{name}"
+
+
+# ── 6. a restart before the options write landed ────────────────────────
+
+
+def _restart(store, config):
+    """A new run restored from the saved sign store, as after a restart."""
+    from .test_1205_sign_follows_its_battery import _Home
+    return _Home(["a", "b"], store=store, config=config)
+
+
+def test_a_restart_before_the_write_does_not_turn_the_signs_over_twice():
+    """Run 1 migrates and saves its sign store; the options write never
+    lands, so run 2 starts with the old flag still on. It must read what run
+    1 read in every cycle (develop: -1500 throughout), and run 3, after the
+    write landed, the same."""
+    run1 = _home(dict(LEGACY), (False, True))
+    first = _watts(run1, 6)
+    assert first == [(-1500, -1500)] * 6
+    store = run1.reader.export_sign_state()
+    assert store["legacy_flip_migrated"] is True
+    run2 = _restart(store, dict(LEGACY))                 # flag still on
+    assert _watts(run2, 8) == first[:1] * 8
+    assert run2.reader.legacy_flip_cleared is False
+    store2 = run2.reader.export_sign_state()
+    run3 = _restart(store2, {"battery_sign_user_flip": False,
+                             "battery_sign_user_flip_sensors": []})
+    assert _watts(run3, 8) == first[:1] * 8
+
+
+def test_the_marker_goes_with_a_reset_and_a_damaged_store_is_ignored():
+    home = _home(dict(LEGACY), (False, True))
+    home.cycle()
+    assert home.reader.export_sign_state()["legacy_flip_migrated"] is True
+    home.reader.reset_sign_state()
+    assert "legacy_flip_migrated" not in home.reader.export_sign_state()
+    home.reader.restore_sign_state({"legacy_flip_migrated": "yes"})
+    assert "legacy_flip_migrated" not in home.reader.export_sign_state()
+
+
+def test_a_failed_options_write_leaves_the_flag_and_asks_again(caplog):
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    fake = MagicMock()
+    fake._sensor_reader.legacy_flip_cleared = True
+    fake._sensor_reader._raw_config = {"battery_sign_user_flip": True}
+    fake.config_entry.options = {}
+    fake.hass.config_entries.async_update_entry.side_effect = RuntimeError("x")
+    fake._flip_save_failed_said = False
+    SEMCoordinator._save_cleared_battery_flip(fake)          # does not raise
+    assert fake._sensor_reader.legacy_flip_cleared is True
+    assert fake._sensor_reader._raw_config == {"battery_sign_user_flip": True}
+    assert fake._skip_options_reload is None
