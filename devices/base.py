@@ -2817,6 +2817,9 @@ class CurrentControlDevice(ControllableDevice):
         self.charging_status_entity: str = ""
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
+        # (#1376) True once SEM could tell whether ``charger_service`` sets a
+        # whole site's current (``_settle_charger_service``)
+        self._charger_service_settled: bool = False
         # (#1054) static fields the current service needs beside the amps —
         # e.g. a service that takes the box's own name in a name field.
         # Set from the ``ev_charger_service_data`` the crawler offered.
@@ -3342,6 +3345,7 @@ class CurrentControlDevice(ControllableDevice):
         if not sent:
             return False
         self._phase_written = self.phase_target
+        self._settle_charger_service()
         if not self._own_limit_lifted and self.charger_service:
             # The charger's own limit was SEM's control before, and a stop
             # or anything else may have lowered it since. It caps the
@@ -3386,9 +3390,29 @@ class CurrentControlDevice(ControllableDevice):
         return phases_from_readback(getattr(st, "attributes", None),
                                     PHASE_READBACK_ATTR_ENDINGS)
 
+    def _settle_charger_service(self) -> None:
+        """(#1376) Before a write through ``charger_service``: is it a whole
+        site's current limit (Zaptec's ``limit_current``)? Then it is taken
+        off and the charger's own current number is written instead — SEM
+        never writes a site's limit (#804). The builder asks first; a
+        service whose fields Home Assistant cannot tell yet (its
+        services.yaml is read after start) is asked here, at each write,
+        until it can tell — then never again."""
+        if getattr(self, "_charger_service_settled", False) or not self.charger_service:
+            return
+        from ..hardware_detection import refuse_site_limit_service
+        try:
+            known = refuse_site_limit_service(self.hass, self, self.name)
+        except Exception:  # noqa: BLE001 — unknown: asked again next write
+            _LOGGER.debug("%s: charger service check failed", self.name,
+                          exc_info=True)
+            return
+        self._charger_service_settled = known is not None
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)
+        self._settle_charger_service()
 
         # (#545, reopened 2026-08-08) Min is a floor, enforced at the ONE
         # emit seam: the start ladder offered 6/8/9 A below a configured

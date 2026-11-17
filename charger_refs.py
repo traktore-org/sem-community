@@ -967,10 +967,17 @@ def async_reconcile(hass, entry) -> Optional[List[dict]]:
         ent = ereg.async_get(eid)
         return getattr(ent, "device_id", None) if ent else None
 
-    from .hardware_detection import link_as_charging, site_limit_controls
+    from .hardware_detection import (
+        link_as_charging,
+        service_fields,
+        site_limit_controls,
+    )
 
     def _refuse(card: Dict[str, Any]) -> Tuple[str, ...]:
-        return (site_limit_controls(card, ereg.async_get)
+        # (#1376) a service is the site's by its own fields too, when they
+        # can be read now (a save with no field name)
+        return (site_limit_controls(card, ereg.async_get,
+                                    lambda svc: service_fields(hass, svc))
                 + link_as_charging(card, ereg.async_get))
 
     # (#1144) the primary charger's old flat keys are read when its card
