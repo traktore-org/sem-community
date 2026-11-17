@@ -2261,6 +2261,12 @@ tools (target, skip tonight, charge now, back to normal) show up only
 while the **Voice commands** switch is on. With several SEM entries,
 the first loaded one answers.
 
+If you tell the AI about a problem with SEM, it can use `SemDraftIssue` to
+prepare a bug report: text, recent SEM warnings and a prefilled GitHub link.
+It posts nothing and holds no token; you open the link, check the text
+(tokens, emails, addresses and entity ids are removed), attach the
+diagnostics file and press Submit.
+
 **Without an AI assistant**, Home Assistant does not learn a new sentence on its own; you give it
 one, once. Create `config/custom_sentences/en/solar_energy_management.yaml`
 with:

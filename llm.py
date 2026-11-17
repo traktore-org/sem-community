@@ -12,11 +12,16 @@ first loaded entry answers (``_coordinator_for``).
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+import voluptuous as vol
 
 from homeassistant.components.llm import LLMTools
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import intent, issue_registry as ir
+from homeassistant.helpers import (
+    config_validation as cv, intent, issue_registry as ir,
+)
 from homeassistant.helpers.llm import (
     LLM_API_ASSIST, IntentTool, LLMContext, Tool, ToolInput,
 )
@@ -29,6 +34,18 @@ from .assist_intents import (
 from .const import DOMAIN
 
 TOOL_SETUP_STATUS = "SemSetupStatus"
+TOOL_DRAFT_ISSUE = "SemDraftIssue"
+_LOGGER = logging.getLogger(__name__)
+_NOT_READY = {"error": "SEM status is not available yet."}
+_logged_failure = False
+
+
+def _note_failure(what: str) -> None:
+    """Debug-log a tool failure once; a half-started SEM would repeat it."""
+    global _logged_failure
+    if not _logged_failure:
+        _logged_failure = True
+        _LOGGER.debug("(#1086) %s failed", what, exc_info=True)
 
 PROMPT = (
     "SEM (Solar Energy Management) steers solar, battery and EV charging. "
@@ -124,7 +141,44 @@ class SetupStatusTool(Tool):
         coordinator = _coordinator_for(hass)
         if coordinator is None:
             return {"error": "SEM is not running."}
-        return await build_setup_status(hass, coordinator)
+        try:
+            return await build_setup_status(hass, coordinator)
+        except Exception:  # noqa: BLE001 — a half-started SEM must not raise into the AI
+            _note_failure("SemSetupStatus")
+            return dict(_NOT_READY)
+
+
+class DraftIssueTool(Tool):
+    """Read-only: prepares a bug report for a person to post."""
+
+    name = TOOL_DRAFT_ISSUE
+    description = (
+        "Use when the user reports a problem with SEM and wants to tell its "
+        "developers. Only prepares a draft; SEM posts nothing. Show the draft "
+        "to the user and post it (repo, labels, title, body) only after the "
+        "user agrees. If you cannot post, give the user the url."
+    )
+    parameters = vol.Schema({
+        vol.Required("what_happened"): cv.string,
+        vol.Optional("expected"): cv.string,
+    })
+
+    async def async_call(
+        self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
+    ) -> dict:
+        coordinator = _coordinator_for(hass)
+        if coordinator is None:
+            return {"error": "SEM is not running."}
+        try:
+            from .issue_draft import build_draft
+            args = tool_input.tool_args
+            status = await build_setup_status(hass, coordinator)
+            return build_draft(
+                hass, coordinator.config, status,
+                str(args.get("what_happened") or ""), str(args.get("expected") or ""))
+        except Exception:  # noqa: BLE001 — never raise into the AI
+            _note_failure("SemDraftIssue")
+            return {"error": "Could not prepare a draft."}
 
 
 @callback
@@ -139,7 +193,7 @@ def async_get_tools(
     if coordinator is None:
         return None
     tools = _tools_for(hass, EXPLAIN_HANDLERS)
-    tools.append(SetupStatusTool())
+    tools += [SetupStatusTool(), DraftIssueTool()]
     if write_intents_enabled(coordinator):
         tools += _tools_for(hass, WRITE_HANDLERS)
     return LLMTools(tools=tools, prompt=PROMPT)
