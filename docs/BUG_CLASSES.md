@@ -6947,3 +6947,27 @@ with a level word. An exception carries `# PRICE-ASK: <reason>`.
 **Left open:** a device with its own tariff is still planned with the live question about later
 hours (`PlanTariff.cheap_at` → `cheap_seen_from_now`). No real data to prove a change on.
 Refs #1372 #994 #1310 #1362 #1368 #1369.
+
+### 183. Several things put back in one chain — the first that fails stops the rest — GUARDED
+
+**What happens.** A Powerwall charge changes three things: the backup reserve, the "allow grid charging" switch and the operating mode (#1377). The stop put them back one after another and returned at the first failure. A switch that did not answer left the reserve at 100 %, and a battery at a 100 % reserve gives nothing to the house. The same shape as the refusing select of #1346: a write that is never read back counts as done.
+**The rule.** Each value goes back on its own, the one that harms most first (the reserve); the first failure is returned only after all were tried, and retried next cycle. A write SEM depends on is read back, with time for a slow cloud device (about a minute), then given up and said.
+**Guard:** `tests/test_1377_powerwall_charge.py` — an unreadable switch or mode at the stop still puts the reserve back; a switch that ignores "on" is tried twice, given up, and the plan says refused; a switch that shows "on" after 40 s is a charge; a crash between two writes is undone at the next start.
+**Sweep question:** when a stop undoes several writes, can one failure leave another undone?
+Refs #1377 #1346.
+
+### 184. A value found by a sensor's name — a different quantity with a similar name is taken — GUARDED
+
+**What happens.** The total charge level of several batteries was to be weighted by size (#1373). A first build looked for a size sensor on each battery's device by its name. A review showed it took "remaining capacity" (kWh that fall with the level) as the size, and gave two batteries on one inverter the first one's size. Users who set nothing would have seen the total move.
+**The rule.** A number that changes what SEM shows or decides for everyone comes from a setting the user made, or from a role the crawler proved, never from a name match alone.
+**Guard:** `tests/test_1373_total_soc_by_size.py` — a misleading 99 kWh "capacity" sensor on every device never counts; only the per-battery size setting weighs the total; one size missing gives the plain average.
+**Sweep question:** could another sensor on the same device match the same words?
+Refs #1373 #1306.
+
+### 185. Put back to the configured value, not to what the unit had — GUARDED
+
+**What happens.** After a boost SEM wrote back the configured normal setpoint, not the one the unit showed before (#1081). A user's own setpoint, or the unit's schedule, was lost after every boost. Pre-heating and the away fix for setpoint tanks were kept off because of it.
+**The rule.** Before SEM moves a setpoint it remembers what the unit shows, stored with the device, and puts that back at the end — only while the unit still shows SEM's value (a hand change wins), never to a climate unit that is off, never after 48 h. A tank with no off is held at its minimum, as before.
+**Guard:** `tests/test_1081_setpoint_restore.py`.
+**Left open:** a memo that expired while the unit showed SEM's value: that value is later taken as the user's (rare, same outcome as the expiry).
+Refs #1081 #1323.
