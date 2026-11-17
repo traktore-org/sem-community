@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **"Why" answers from what a device does now** (#1086). A missing reading counts as unknown, never as 0.
+
 # [2.3.0-beta.18] — 17.11.2026
 
 - 📝 **README shows 2.3: new dashboard, first-run checklist and the AI assistant** (#1086). All screenshots retaken.

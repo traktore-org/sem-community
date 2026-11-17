@@ -333,3 +333,13 @@ async def test_a_waiting_charger_without_a_log_entry_gives_its_live_reason(hass)
     _add_entry(hass, coordinator)
     response = await intent.async_handle(hass, "test", INTENT_WHY_CHARGER, {})
     assert "remaining 10.0 kWh" in response.speech["plain"]["speech"]
+
+
+async def test_why_battery_never_commanded_reads_the_live_reason(hass):
+    """(#1086) no record, but the coordinator publishes a live reason."""
+    coordinator = _fake_coordinator(hass)
+    coordinator._last_battery_decisions = {
+        "primary": {"intent": "normal", "reason": "holding for the evening"}}
+    _add_entry(hass, coordinator)
+    response = await intent.async_handle(hass, "test", INTENT_WHY_BATTERY, {})
+    assert "holding for the evening" in response.speech["plain"]["speech"]

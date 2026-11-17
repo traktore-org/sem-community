@@ -521,6 +521,10 @@ class TestSensorAttributes:
     def _coord(self):
         log = _log()
         _rec(log, "charge", 8)
+        # (#1086) a record older than the "why now" window yields to the live
+        # reason; these rows stand for a command sent just now
+        for r in log._last_record.values():
+            object.__setattr__(r, "time", datetime.now(timezone.utc))
         _rec(log, "force_charge", 3000, kind=KIND_BATTERY, did="b1")
         _rec(log, "on", kind=KIND_LOAD, did="towel")
         return SimpleNamespace(

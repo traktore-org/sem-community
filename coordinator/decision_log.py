@@ -279,6 +279,101 @@ class DecisionLog:
         return len(self._records)
 
 
+# ── "why now": the record, or the live reason ────────────────────────
+# (#1086) A record exists only when a command was SENT, so a device that
+# was never commanded, or whose last command is old news, has no row. The
+# answer to "why is it doing that now" must not read that silence (or a
+# stale row) as the current state: it falls back to the reason the
+# coordinator publishes every cycle.
+
+#: A record older than this no longer says why the device does what it does
+#: now, when the live reason can.
+CURRENT_MAX_AGE_S = 6 * 3600
+_LIVE_W = 50.0
+
+
+def _num(value: Any) -> Optional[float]:
+    return float(value) if isinstance(value, (int, float)) \
+        and not isinstance(value, bool) else None
+
+
+def _live_reason(kind: str, device_id: str, coordinator) -> Optional[Dict[str, Any]]:
+    """(text, intent) the coordinator publishes for this device now."""
+    if kind == KIND_CHARGER:
+        data = getattr(coordinator, "data", None) or {}
+        text = data.get(f"charger_{device_id}_strategy")
+        amps = _num(data.get(f"charger_{device_id}_commanded_current"))
+        watts = _num(data.get(f"charger_{device_id}_power"))
+        active = (None if amps is None and watts is None
+                  else bool((amps or 0) > 0 or (watts or 0) > _LIVE_W))
+        verb = None
+    elif kind == KIND_BATTERY:
+        live = (getattr(coordinator, "_last_battery_decisions", None)
+                or {}).get(device_id)
+        if not isinstance(live, dict):
+            return None
+        text, verb, active = live.get("reason"), live.get("intent"), None
+    else:
+        return None
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return {"text": text.strip(), "verb": verb, "active": active}
+
+
+def _record_is_current(rec: Dict[str, Any], live: Dict[str, Any]) -> bool:
+    """The record still describes the device: not too old, and its command
+    agrees with what the device does now."""
+    try:
+        then = datetime.fromisoformat(str(rec["time"]))
+        age = (datetime.now(then.tzinfo) - then).total_seconds()
+    except Exception:  # noqa: BLE001 — an unreadable time is not current
+        return False
+    if age > CURRENT_MAX_AGE_S:
+        return False
+    # (#1086 review) a WITHHELD command (watch-only) never reaches the device,
+    # so the device cannot agree with it; it still says what SEM would do
+    if rec.get("observer"):
+        return True
+    verb = str(rec.get("new") or "").split(" ")[0]
+    if live["verb"] is not None:
+        return verb == live["verb"]
+    if live["active"] is not None:
+        return (verb not in RESTING_VERBS) == live["active"]
+    return True
+
+
+def current(kind: str, device_id: str, coordinator) -> Optional[Dict[str, Any]]:
+    """Why ``device_id`` does what it does NOW: its last record while that
+    still fits, else the live reason (``live: True``), else ``None``."""
+    log = getattr(coordinator, "decision_log", None)
+    rec = log.last(kind, device_id) if isinstance(log, DecisionLog) else None
+    live = _live_reason(kind, device_id, coordinator)
+    if live is None:
+        return rec
+    if rec is not None and _record_is_current(rec, live):
+        return rec
+    return {"time": None, "device_id": device_id, "device_kind": kind,
+            "name": device_id, "old": None, "new": live["verb"] or "",
+            "reason_code": "", "params": {}, "text": live["text"][:_TEXT_MAX],
+            "inputs": {}, "observer": False, "live": True}
+
+
+def current_by_kind(kind: str, coordinator) -> Dict[str, Dict[str, Any]]:
+    """:func:`current` for every device of ``kind`` that has a record or a
+    live reason."""
+    log = getattr(coordinator, "decision_log", None)
+    ids = set(log.last_by_kind(kind)) if isinstance(log, DecisionLog) else set()
+    data = getattr(coordinator, "data", None) or {}
+    if kind == KIND_CHARGER:
+        ids |= {k[len("charger_"):-len("_strategy")] for k in data
+                if isinstance(k, str) and k.startswith("charger_")
+                and k.endswith("_strategy")}
+    elif kind == KIND_BATTERY:
+        ids |= set(getattr(coordinator, "_last_battery_decisions", None) or {})
+    out = {i: current(kind, i, coordinator) for i in sorted(ids)}
+    return {i: v for i, v in out.items() if v is not None}
+
+
 # ── the three seams' adapters ────────────────────────────────────────
 # Each actuator calls ONE of these at its single dispatch point (chargers:
 # the reconciler's apply loop, where a write really leaves). They turn

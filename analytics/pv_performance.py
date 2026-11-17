@@ -318,10 +318,12 @@ class PVPerformanceAnalyzer:
                 restored.append(MonthlyPerformance(
                     year=int(row["year"]),
                     month=int(row["month"]),
-                    total_kwh=float(row.get("total_kwh", 0.0)),
-                    specific_yield=float(row.get("specific_yield", 0.0)),
-                    forecast_kwh=float(row.get("forecast_kwh", 0.0)),
-                    performance_ratio=float(row.get("performance_ratio", 0.0)),
+                    # (#1022) a row missing a reading is skipped (KeyError
+                    # below), not stored as a 0 kWh month
+                    total_kwh=float(row["total_kwh"]),
+                    specific_yield=float(row["specific_yield"]),
+                    forecast_kwh=float(row["forecast_kwh"]),
+                    performance_ratio=float(row["performance_ratio"]),
                 ))
             except (KeyError, TypeError, ValueError):
                 continue

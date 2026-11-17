@@ -70,10 +70,12 @@ DAYLIGHT_HOURS = SUNSET_HOUR - SUNRISE_HOUR  # 14
 class DailyForecastRecord:
     """One day's forecast vs actual record."""
     date: str  # YYYY-MM-DD
-    forecast_kwh: float = 0.0
-    actual_kwh: float = 0.0
+    # (#1022) ``None`` = the stored row has no such reading. Never 0: a
+    # learner would take a missing actual as a real dark day.
+    forecast_kwh: Optional[float] = None
+    actual_kwh: Optional[float] = None
     weather: str = "unknown"  # sunny, cloudy, rainy, etc.
-    accuracy_pct: float = 0.0  # actual/forecast * 100
+    accuracy_pct: Optional[float] = None  # actual/forecast * 100
     correction_factor: float = 1.0  # actual/forecast ratio
     # #416: end-of-day snapshot of the dampening pipeline so we can
     # reconstruct *why* a given day landed where it did. ``None`` on
@@ -81,6 +83,14 @@ class DailyForecastRecord:
     dampening_factor: Optional[float] = None
     confidence: Optional[float] = None
     live_ratio: Optional[float] = None
+
+    @property
+    def usable(self) -> bool:
+        """(#1022) Both readings exist and the forecast is big enough to
+        judge: the only rows a learner, a score or a trust figure may use."""
+        return (self.forecast_kwh is not None
+                and self.actual_kwh is not None
+                and self.forecast_kwh >= MIN_FORECAST_KWH)
 
 
 class ForecastTracker:
@@ -345,7 +355,7 @@ class ForecastTracker:
 
         if factor is None:
             factor = self._rolling_7d_factor()
-            n = sum(1 for r in list(self._history)[-7:] if r.forecast_kwh >= MIN_FORECAST_KWH)
+            n = sum(1 for r in list(self._history)[-7:] if r.usable)
             path = "rolling_7d_fallback"
 
         # Tighten bounds: ±40% max correction (industry standard is ±10-30%)
@@ -381,7 +391,7 @@ class ForecastTracker:
                 continue
             if month and record.date and int(record.date.split("-")[1]) != month:
                 continue
-            if record.forecast_kwh >= MIN_FORECAST_KWH:
+            if record.usable:
                 matching.append(record.correction_factor)
 
         n = len(matching)
@@ -402,7 +412,7 @@ class ForecastTracker:
     def _rolling_7d_factor(self) -> float:
         """Simple rolling 7-day weighted average fallback."""
         recent = list(self._history)[-7:]
-        valid = [r for r in recent if r.forecast_kwh >= MIN_FORECAST_KWH]
+        valid = [r for r in recent if r.usable]
         if not valid:
             return 1.0
 
@@ -465,7 +475,8 @@ class ForecastTracker:
     def accuracy_7d(self) -> float:
         """Average forecast accuracy over last 7 days."""
         recent = list(self._history)[-7:]
-        valid = [r.accuracy_pct for r in recent if r.forecast_kwh >= MIN_FORECAST_KWH]
+        valid = [r.accuracy_pct for r in recent
+                 if r.usable and r.accuracy_pct is not None]
         if not valid:
             return 0.0
         return round(sum(valid) / len(valid), 1)
@@ -756,10 +767,11 @@ class ForecastTracker:
         for record in state.get("history", []):
             self._history.append(DailyForecastRecord(
                 date=record["date"],
-                forecast_kwh=record.get("forecast", 0),
-                actual_kwh=record.get("actual", 0),
+                # (#1022) a row without a reading stays None, not 0
+                forecast_kwh=record.get("forecast"),
+                actual_kwh=record.get("actual"),
                 weather=record.get("weather", "unknown"),
-                accuracy_pct=record.get("accuracy", 0),
+                accuracy_pct=record.get("accuracy"),
                 correction_factor=record.get("factor", 1.0),
                 # #416: tolerate pre-beta.22 records that lack the
                 # dampening snapshot — leave ``None`` so downstream
