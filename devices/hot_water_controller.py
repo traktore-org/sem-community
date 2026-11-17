@@ -1068,10 +1068,9 @@ class HotWaterController(SwitchDevice):
         the seam withheld (observer, yield) moved nothing."""
         try:
             target = self._active_target_temp()
-            sent = await self.send(
-                "water_heater", "set_temperature",
-                {"entity_id": self.entity_id, "temperature": target},
-                why="hot water heating")
+            # (#1081) remembers the tank's own setpoint before SEM moves it
+            sent = await self.sp_write_target(
+                "water_heater", self.entity_id, target, why="hot water heating")
             if not sent:
                 self._last_activation_path = "water_heater_withheld"
                 return 0.0
@@ -1095,7 +1094,13 @@ class HotWaterController(SwitchDevice):
                 "water_heater", "turn_off",
                 {"entity_id": self.entity_id}, why="hot water off")
         except Exception:
-            # Not all support turn_off — set low temp instead
+            # (#1081) A tank with no off: its minimum IS SEM's off state, so
+            # the setpoint it had is not put back — SEM holds it at the minimum
+            self._sp_memo = None
+            log_on_change(
+                _LOGGER, f"tank-no-off:{self.device_id}", logging.INFO,
+                "%s: tank has no off; SEM holds it at its minimum (#1081)",
+                self.name)
             try:
                 sent = await self.send(
                     "water_heater", "set_temperature",
@@ -1104,6 +1109,10 @@ class HotWaterController(SwitchDevice):
             except Exception as e:
                 _LOGGER.error("Failed to deactivate water_heater: %s", e)
                 sent = True   # unchanged: a failed write still reads idle
+        else:
+            if sent:
+                # (#1081) off first: the tank's own setpoint goes back after
+                await self.sp_restore("hot water off")
         if not sent:
             self._last_deactivation_path = "water_heater_withheld"
             return
@@ -1115,10 +1124,8 @@ class HotWaterController(SwitchDevice):
         """Activate via climate domain (#1335: only a sent write claims ACTIVE)."""
         try:
             target = self._active_target_temp()
-            sent = await self.send(
-                "climate", "set_temperature",
-                {"entity_id": self.entity_id, "temperature": target},
-                why="hot water heating")
+            sent = await self.sp_write_target(
+                "climate", self.entity_id, target, why="hot water heating")
             if not sent:
                 self._last_activation_path = "climate_withheld"
                 return 0.0
@@ -1133,6 +1140,7 @@ class HotWaterController(SwitchDevice):
 
     async def _deactivate_climate(self) -> None:
         """Deactivate via climate domain (#1335: a withheld write moves nothing)."""
+        await self.sp_restore("hot water off")   # (#1081) before it is turned off
         try:
             sent = await self.send(
                 "climate", "set_hvac_mode",

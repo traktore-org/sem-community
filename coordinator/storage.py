@@ -797,6 +797,15 @@ class SEMStorage:
     def set_step_down_state(self, state: Dict[str, Any]) -> None:
         self._energy_data["step_down_state"] = dict(state or {})
 
+    # (#1081) The setpoint a unit showed before SEM moved it, by device id:
+    # what a restart needs to put it back.
+    def get_setpoint_memo_state(self) -> Dict[str, Any]:
+        value = self._energy_data.get("setpoint_memo_state")
+        return dict(value) if isinstance(value, dict) else {}
+
+    def set_setpoint_memo_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["setpoint_memo_state"] = dict(state or {})
+
     # (#1323) A climate unit that picks heat or cool itself: the season in
     # force and when it began, by device id — so a restart keeps the dead
     # band and the day's dwell instead of deciding anew.
