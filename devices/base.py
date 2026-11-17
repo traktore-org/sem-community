@@ -3428,7 +3428,7 @@ class CurrentControlDevice(ControllableDevice):
         self._charger_service_settled = known is not None
 
     def _select_amp_option(self, entity_id: str, amps: float) -> str:
-        """(forum #42, ChargePoint Cloud) a current select may offer only some
+        """(HA forum, a cloud charger) a current select may offer only some
         steps (8, 10, 12 … A or "16 A"): the largest offered option at or
         below ``amps`` — never above what SEM asked for. When the select's
         options cannot be read, or none is at or below, the plain amp string
