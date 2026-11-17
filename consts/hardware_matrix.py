@@ -226,7 +226,7 @@ CHARGERS = [
      "evidence": "#68/#283 (Brkie) with GoodWe; #415 (zlakes01) two boxes on "
                  "one install; disc. 103 (praun) beside a Deye Sun12k"},
     {"brand": "GARO", "domain_token": "garo_wallbox",
-     "control": "switch + 6 A-floor current entity",
+     "control": "switch + number entity (6 A floor)",
      "status": "tested-live",
      "evidence": "#700/#748 (jappish84) switch.garo_laddbox — its 6 A floor "
                  "drove the fix, confirmed on v1.7.6-beta.14; brand-detected "

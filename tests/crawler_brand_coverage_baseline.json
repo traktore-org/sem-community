@@ -14,6 +14,8 @@
  ],
  "found": [
   "CHARGERS/ABL eMH1",
+  "CHARGERS/GARO",
+  "CHARGERS/Heidelberg Energy Control",
   "CHARGERS/KEBA P30/P40",
   "CHARGERS/NRGkick",
   "CHARGERS/OCPP-compatible (ABB Terra, Vestel, Grizzl-E, \u2026)",
@@ -24,9 +26,11 @@
   "CHARGERS/go-eCharger (HTTP)",
   "CHARGERS/go-eCharger (MQTT)",
   "INVERTERS/EG4 / Flexboss",
+  "INVERTERS/Fronius",
   "INVERTERS/Huawei Solar",
   "INVERTERS/SMA",
   "INVERTERS/SolarEdge",
+  "INVERTERS/Tesla Powerwall",
   "INVERTERS/Victron Multiplus II BESS",
   "OTHER_DEVICES/DSMR / P1 smart meter",
   "OTHER_DEVICES/Tibber Pulse",
@@ -41,20 +45,6 @@
    ]
   ],
   "CHARGERS/Easee": [
-   [
-    [
-     "ev_current_control"
-    ]
-   ]
-  ],
-  "CHARGERS/GARO": [
-   [
-    [
-     "ev_current_control"
-    ]
-   ]
-  ],
-  "CHARGERS/Heidelberg Energy Control": [
    [
     [
      "ev_current_control"
@@ -78,23 +68,11 @@
   "INVERTERS/Enphase": [
    [
     [
-     "solar_power"
-    ]
-   ],
-   [
-    [
      "grid_power"
     ],
     [
      "grid_export_power",
      "grid_import_power"
-    ]
-   ]
-  ],
-  "INVERTERS/Fronius": [
-   [
-    [
-     "solar_power"
     ]
    ]
   ],
@@ -115,11 +93,6 @@
    ]
   ],
   "INVERTERS/Growatt": [
-   [
-    [
-     "solar_power"
-    ]
-   ],
    [
     [
      "grid_power"
@@ -143,22 +116,6 @@
    ]
   ],
   "INVERTERS/Sungrow": [
-   [
-    [
-     "solar_power"
-    ]
-   ],
-   [
-    [
-     "grid_power"
-    ],
-    [
-     "grid_export_power",
-     "grid_import_power"
-    ]
-   ]
-  ],
-  "INVERTERS/Tesla Powerwall": [
    [
     [
      "solar_power"

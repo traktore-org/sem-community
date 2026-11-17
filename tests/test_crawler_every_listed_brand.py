@@ -238,3 +238,37 @@ def test_brands_that_find_their_roles_never_stop_finding_them():
         "a brand with names now misses roles it was not listed as missing; "
         + REGEN)
     assert_not_loosened(BASELINE, lambda d: len(d["missing"]), "crawler brand coverage")
+
+
+# (#915) names the crawler learned from the integrations' own keys. Each one
+# must match; each near miss must not (an inverter's limit, a battery's
+# charge limit, a smart meter's export, a forecast).
+_LEARNED = (
+    ("number", "current_limit", "ev_current_control", True),
+    ("number", "virtual_current", "ev_current_control", True),
+    ("number", "current_intensity", "ev_current_control", True),
+    ("sensor", "power_photovoltaics", "solar_power", False),
+    ("sensor", "solar_instant_power", "solar_power", False),
+    ("sensor", "current_power_production", "solar_power", False),
+    ("sensor", "mix_wattage_pv_all", "solar_power", False),
+    ("sensor", "site_instant_power", "grid_power", False),
+)
+_NEAR_MISSES = (
+    ("number", "export_current_limit"), ("number", "charge_current_limit_battery"),
+    ("number", "ac_input_current_limit"), ("number", "inverter_current_limit"),
+    ("sensor", "power_production"), ("sensor", "power_production_next_hour"),
+    ("sensor", "mix_wattage_pv_1"), ("sensor", "load_instant_power"),
+    ("sensor", "battery_instant_power"), ("sensor", "photovoltaic_energy_production_today"),
+)
+
+
+def test_learned_names_are_found():
+    for platform, key, role, charger_only in _LEARNED:
+        assert role in _resolve(platform, key, "x"), (platform, key)
+        if charger_only:  # a charger-only word is never a general match
+            assert lex.role_for(platform, key) != role, key
+
+
+def test_near_misses_stay_unmatched():
+    for platform, key in _NEAR_MISSES:
+        assert not _resolve(platform, key, "x"), (platform, key)

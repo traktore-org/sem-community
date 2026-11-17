@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-13T22:43:16Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 72, 'roles_mined': 208}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-17T11:44:47Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 75, 'roles_mined': 215}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -72,7 +72,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'energytariff': {'name': 'EnergyTariff', 'repo': 'epaulsen/energytariff', 'origin': 'hacs', 'installs': 106, 'kind': 'energy', 'kind_from': 'keyword'},
     'energyzero': {'name': 'EnergyZero', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 2205, 'kind': 'energy', 'kind_from': 'keyword'},
     'enpal_webparser': {'name': 'Enpal Solar', 'repo': 'derolli1976/enpal', 'origin': 'hacs', 'installs': 460, 'kind': 'energy', 'kind_from': 'keyword'},
-    'enphase_envoy': {'name': 'Enphase Envoy', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 10437, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
+    'enphase_envoy': {'name': 'Enphase Envoy', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 10437, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'enphase_ev': {'name': 'Enphase Energy', 'repo': 'barneyonline/ha-enphase-energy', 'origin': 'hacs', 'installs': 347, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'entsoe': {'name': 'ENTSO-e Transparency Platform', 'repo': 'JaccoR/hass-entso-e', 'origin': 'hacs', 'installs': 1515, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'envertech_solar': {'name': 'Envertech Solar', 'repo': 'jimmybonesde/envertech_solar', 'origin': 'hacs', 'installs': 165, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -90,7 +90,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'fujitsu_fglair': {'name': 'FGLair', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 245, 'kind': 'other', 'kind_from': 'keyword'},
     'fusion_solar': {'name': 'Fusion Solar', 'repo': 'tijsverkoyen/HomeAssistant-FusionSolar', 'origin': 'hacs', 'installs': 2831, 'kind': 'energy', 'kind_from': 'keyword'},
     'fusionsolarplus': {'name': 'FusionSolarPlus', 'repo': 'JortvanSchijndel/FusionSolarPlus', 'origin': 'hacs', 'installs': 947, 'kind': 'energy', 'kind_from': 'keyword'},
-    'garo_wallbox': {'name': 'Garo Wallbox', 'repo': 'sockless-coding/garo_wallbox', 'origin': 'hacs', 'installs': 108, 'kind': 'charger', 'kind_from': 'vocabulary_name_only'},
+    'garo_wallbox': {'name': 'Garo Wallbox', 'repo': 'sockless-coding/garo_wallbox', 'origin': 'hacs', 'installs': 108, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'generic': {'name': 'generic', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 35054, 'kind': 'energy', 'kind_from': 'keyword'},
     'geo_home': {'name': 'Geo Home Smart Meter Integration', 'repo': 'mmillmor/geo_home', 'origin': 'hacs', 'installs': 119, 'kind': 'energy', 'kind_from': 'keyword'},
     'givenergy_local': {'name': 'GivEnergy Local', 'repo': 'dewet22/givenergy-hass', 'origin': 'hacs', 'installs': 190, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -104,7 +104,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'growatt_server': {'name': 'growatt_server', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 4480, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'ha_heliotherm': {'name': 'ha_heliotherm', 'repo': 'mbuchber/ha_heliotherm', 'origin': 'hacs', 'installs': 69, 'kind': 'energy', 'kind_from': 'keyword'},
     'ha_kia_hyundai': {'name': 'Kia/Hyundai/Genesis (USA)', 'repo': 'MarcusTaz/ha_kia_hyundai_USA', 'origin': 'hacs', 'installs': 335, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
-    'heidelberg_energy_control': {'name': 'Heidelberg Energy Control', 'repo': 'Schrolli91/heidelberg_energy_control', 'origin': 'hacs', 'installs': 32, 'kind': 'charger', 'kind_from': 'vocabulary_name_only'},
+    'heidelberg_energy_control': {'name': 'Heidelberg Energy Control', 'repo': 'Schrolli91/heidelberg_energy_control', 'origin': 'hacs', 'installs': 32, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'homematicip_local': {'name': 'Homematic(IP) Local for OpenCCU', 'repo': 'SukramJ/homematicip_local', 'origin': 'hacs', 'installs': 10162, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
     'homewizard': {'name': 'HomeWizard', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 19304, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
     'huawei_solar': {'name': 'Huawei Solar', 'repo': 'wlcrs/huawei_solar', 'origin': 'hacs', 'installs': 6133, 'kind': 'energy', 'kind_from': 'vocabulary'},
@@ -293,6 +293,9 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
         'solar_power': {'platform': 'sensor', 'keys': ('pv_total_power',), 'options': ()},
     },
+    'enphase_envoy': {
+        'solar_power': {'platform': 'sensor', 'keys': ('current_power_production',), 'options': ()},
+    },
     'enphase_ev': {
         'ev_charge_mode': {'platform': 'select', 'keys': ('charge_mode',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('site_grid_power',), 'options': ()},
@@ -313,6 +316,10 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_export_power': {'platform': 'sensor', 'keys': ('power_grid_export',), 'options': ()},
         'grid_import_power': {'platform': 'sensor', 'keys': ('power_grid_import',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('power_grid',), 'options': ()},
+        'solar_power': {'platform': 'sensor', 'keys': ('power_photovoltaics',), 'options': ()},
+    },
+    'garo_wallbox': {
+        'ev_current_control': {'platform': 'number', 'keys': ('current_limit',), 'options': ()},
     },
     'goecharger': {
         'ev_current_control': {'platform': 'service', 'keys': ('goecharger.set_max_current',), 'options': (), 'services': {'goecharger.set_max_current': {'fields': ('charger_name', 'max_current'), 'target': None}}},
@@ -337,10 +344,14 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_discharge_limit': {'platform': 'number', 'keys': ('battery_discharge_power_limit',), 'options': ()},
         'battery_force_charge': {'platform': 'switch', 'keys': ('ac_charge',), 'options': ()},
         'battery_target_soc': {'platform': 'number', 'keys': ('battery_charge_soc_limit',), 'options': ()},
+        'solar_power': {'platform': 'sensor', 'keys': ('mix_wattage_pv_all',), 'options': ()},
     },
     'ha_kia_hyundai': {
         'vehicle_range': {'platform': 'sensor', 'keys': ('ev_remaining_range_value', 'total_remaining_range_value'), 'options': ()},
         'vehicle_soc': {'platform': 'sensor', 'keys': ('ev_battery_level',), 'options': ()},
+    },
+    'heidelberg_energy_control': {
+        'ev_current_control': {'platform': 'number', 'keys': ('virtual_current',), 'options': ()},
     },
     'huawei_solar': {
         'battery_capacity_spec': {'platform': 'sensor', 'keys': ('rated_ess_capacity', 'storage_rated_capacity'), 'options': ()},
@@ -417,6 +428,8 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'powerwall': {
         'battery_capacity_spec': {'platform': 'sensor', 'keys': ('battery_capacity',), 'options': ()},
+        'grid_power': {'platform': 'sensor', 'keys': ('site_instant_power',), 'options': ()},
+        'solar_power': {'platform': 'sensor', 'keys': ('solar_instant_power',), 'options': ()},
     },
     'pysmaplus': {
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
