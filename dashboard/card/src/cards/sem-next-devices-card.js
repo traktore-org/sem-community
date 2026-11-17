@@ -164,7 +164,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         bats.sort();
         this._batteries = bats;
         for (const bid of bats) {
-            ids.push('select.sem_battery_' + bid + '_mode', 'number.sem_battery_' + bid + '_reserve_soc');
+            ids.push('select.sem_battery_' + bid + '_mode', 'number.sem_battery_' + bid + '_reserve_soc',
+                'number.sem_battery_' + bid + '_capacity_kwh');
             for (const s of ['soc', 'power', 'status']) if (st['sensor.sem_battery_' + bid + '_' + s]) ids.push('sensor.sem_battery_' + bid + '_' + s);
         }
         for (const id of ['sensor.sem_energy_plan', 'number.sem_battery_reserve_soc']) if (st[id]) ids.push(id);
