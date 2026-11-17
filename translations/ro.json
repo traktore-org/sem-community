@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Raportează aceasta către SEM",
-            "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Configurare → EV → Entitate SOC vehicul). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă.\n\nSEM crede că această eroare îi aparține. Dacă puteți, deschideți un raport de eroare cu butonul din notificare — formularul vine deja completat. Dacă preferați, copiați contextul de mai jos într-un e-mail sau o postare pe forum. Acest dialog nu trimite nimic nicăieri.\n\n```\n{context}\n```\n\nConfirmați pentru a închide notificarea."
+            "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Configurare → Încărcătoare EV). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă.\n\nSEM crede că această eroare îi aparține. Dacă puteți, deschideți un raport de eroare cu butonul din notificare — formularul vine deja completat. Dacă preferați, copiați contextul de mai jos într-un e-mail sau o postare pe forum. Acest dialog nu trimite nimic nicăieri.\n\n```\n{context}\n```\n\nConfirmați pentru a închide notificarea."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Entitatea de control a stației nu funcționează: {name}",
-      "description": "SEM folosește **`{entity_id}`** pentru a {capability} pe **{name}**, dar acea entitate este `{reason}` — fiecare comandă se pierde. Verifică entitatea în **Instrumente pentru dezvoltatori → Stări** și repar-o la sursă, sau reorientează SEM din **Setări → Dispozitive și servicii → SEM → Configurare → Stație → Editare**."
+      "description": "SEM folosește **`{entity_id}`** pentru a {capability} pe **{name}**, dar acea entitate este `{reason}` — fiecare comandă se pierde. Verifică entitatea în **Instrumente pentru dezvoltatori → Stări** și repar-o la sursă, sau reorientează SEM din **Configurare → Încărcătoare EV**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Valoarea de referință a puterii bateriei nu poate fi scrisă: {entity_id}",
@@ -2008,7 +2008,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Controlul exportului Deye nu poate fi folosit: {entity_id}",
-      "description": "SEM nu poate folosi {entity_id} pentru controlul exportului: {reason}. Verificați entitatea select și cele trei etichete de opțiuni din Configuration → Battery intelligence."
+      "description": "SEM nu poate folosi {entity_id} pentru controlul exportului: {reason}. Verificați entitatea select și cele trei etichete de opțiuni din Configurare → Inteligență baterie."
     },
     "battery_operating_mode_unexpected": {
       "title": "Bateria este în „{mode}” — SEM planifică ca și cum ar fi „{expected}”",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Platforma de baterie fixată pe Generic la o instalare {brand}",
-      "description": "Platforma de baterie a SEM este setată pe **Generic / altul**, dar integrarea {brand} este încărcată. Versiunile anterioare ale asistentului de opțiuni ofereau doar Generic și Deye, cu Generic implicit, așa că parcurgerea acelei pagini a retrogradat o dată o instalare {brand} la adaptorul generic — fără încărcare forțată, fără scrieri de registru idempotente. Deschideți **Setări → Dispozitive și servicii → SEM → Configurare → Planificator încărcare baterie** și setați **Platformă de încărcare a bateriei** pe **Automat (recomandat)**. Dacă Generic este o alegere deliberată (o baterie cu propriile entități de control), setați acea entitate și acest mesaj dispare."
+      "description": "Platforma de baterie a SEM este setată pe **Generic / altul**, dar integrarea {brand} este încărcată. Versiunile anterioare ale asistentului de opțiuni ofereau doar Generic și Deye, cu Generic implicit, așa că parcurgerea acelei pagini a retrogradat o dată o instalare {brand} la adaptorul generic — fără încărcare forțată, fără scrieri de registru idempotente. Deschideți **Configurare → Planificator baterie** și setați **Platformă de încărcare a bateriei** pe **Automat (recomandat)**. Dacă Generic este o alegere deliberată (o baterie cu propriile entități de control), setați acea entitate și acest mesaj dispare."
     },
     "split_grid_guessed": {
       "title": "SEM verifică două contoare de rețea ghicite",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Zonele SOC ale bateriei sunt în ordine greșită",
-      "description": "Zonele bateriei dvs. citesc **Prioritate {priority}% · Tampon {buffer}% · Pornire automată {auto_start}%**, dar SEM se așteaptă ca ele să crească în această ordine: Prioritate este rezerva pe care n-o cheltuiți niciodată, Tampon este unde se oprește asistența bateriei, iar Pornire automată este unde bateria e suficient de plină ca să cedeze liber.\n\nSEM folosește **{used}** ca limite — aceleași trei numere, sortate — astfel încât nicio zonă nu este omisă și nimic nu se comportă imprevizibil. Vă anunță pentru că aranjamentul introdus aproape sigur nu este cel dorit.\n\nCorectați în **Setări → Dispozitive și servicii → SEM → Configurare → Baterie** sau în fila Configurare a tabloului de bord. Sunt permise orice valori atât timp cât sunt crescătoare; zonele largi sunt în regulă — 20 / 30 / 50 este un aranjament perfect valid pe o baterie mare."
+      "description": "Zonele bateriei dvs. citesc **Prioritate {priority}% · Tampon {buffer}% · Pornire automată {auto_start}%**, dar SEM se așteaptă ca ele să crească în această ordine: Prioritate este rezerva pe care n-o cheltuiți niciodată, Tampon este unde se oprește asistența bateriei, iar Pornire automată este unde bateria e suficient de plină ca să cedeze liber.\n\nSEM folosește **{used}** ca limite — aceleași trei numere, sortate — astfel încât nicio zonă nu este omisă și nimic nu se comportă imprevizibil. Vă anunță pentru că aranjamentul introdus aproape sigur nu este cel dorit.\n\nCorectați în **Configurare → Zone baterie**. Sunt permise orice valori atât timp cât sunt crescătoare; zonele largi sunt în regulă — 20 / 30 / 50 este un aranjament perfect valid pe o baterie mare."
     },
     "previous_install_leftovers": {
       "title": "Au fost găsite fișiere de la o instalare SEM anterioară",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "Contactul SG-Ready {contact} nu poate fi comandat",
-      "description": "**{entity_id}** este setat ca SG-Ready {contact}, dar este o entitate text/number/select, iar valoarea sa **{missing}** nu este configurată — așa că SEM nu are ce scrie și fiecare comandă SG-Ready pentru această pompă de căldură eșuează. Deschideți **Setări → Dispozitive și servicii → SEM → Configurare → Pompă de căldură** (sau fila Configurare a tabloului de bord) și completați atât valoarea ON cât și OFF pentru acest contact, sau îndreptați-l către o entitate switch."
+      "description": "**{entity_id}** este setat ca SG-Ready {contact}, dar este o entitate text/number/select, iar valoarea sa **{missing}** nu este configurată — așa că SEM nu are ce scrie și fiecare comandă SG-Ready pentru această pompă de căldură eșuează. Deschideți **Configurare → Pompă de căldură** și completați atât valoarea ON cât și OFF pentru acest contact, sau îndreptați-l către o entitate switch."
     },
     "split_grid_rejected": {
       "title": "SEM nu a putut găsi contoarele dvs. de putere din rețea",

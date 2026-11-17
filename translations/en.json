@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop *exactly* at **{target}%**.\n\nIt isn't charging blind, though: from the last real reading this session it counts the energy actually delivered and stops once that measured total reaches your target — the overshoot is only what the car took since that reading. If no real reading has arrived at all this session (or SEM restarted mid-charge) there is nothing to count from, and charging runs until the car itself tapers near full.\n\nFor a cap that lands on the number, wire a **real vehicle SOC sensor** for this charger (Configuration → EV → Vehicle SOC entity). The battery % on the dashboard is SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). This repair clears automatically as soon as a real SOC reading is available again.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop *exactly* at **{target}%**.\n\nIt isn't charging blind, though: from the last real reading this session it counts the energy actually delivered and stops once that measured total reaches your target — the overshoot is only what the car took since that reading. If no real reading has arrived at all this session (or SEM restarted mid-charge) there is nothing to count from, and charging runs until the car itself tapers near full.\n\nFor a cap that lands on the number, wire a **real vehicle SOC sensor** for this charger (Configuration → EV chargers). The battery % on the dashboard is SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). This repair clears automatically as soon as a real SOC reading is available again.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "EV charger control entity is not working: {name}",
-      "description": "SEM is configured to use **`{entity_id}`** to {capability} on **{name}**, but that entity is `{reason}` — so every command SEM sends lands nowhere. SEM will still show a commanded current; the charger is not actually following it.\n\nCommon causes: the entity was renamed or removed upstream, or a template entity failed to load (a template `number` with an unsupported option loads only as `restored` and silently swallows writes).\n\nCheck the entity in **Developer Tools → States**. If it is missing or unavailable there, fix it at the source; if it is gone for good, re-point SEM under **Settings → Devices & Services → SEM → Configure → EV charger → Edit**."
+      "description": "SEM is configured to use **`{entity_id}`** to {capability} on **{name}**, but that entity is `{reason}` — so every command SEM sends lands nowhere. SEM will still show a commanded current; the charger is not actually following it.\n\nCommon causes: the entity was renamed or removed upstream, or a template entity failed to load (a template `number` with an unsupported option loads only as `restored` and silently swallows writes).\n\nCheck the entity in **Developer Tools → States**. If it is missing or unavailable there, fix it at the source; if it is gone for good, re-point SEM under **Configuration → EV chargers**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Battery power setpoint cannot be written: {entity_id}",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Battery platform pinned to Generic on a {brand} install",
-      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Configuration → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     },
     "split_grid_guessed": {
       "title": "SEM is checking two guessed grid meters",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Battery SOC zones are out of order",
-      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Settings → Devices & Services → SEM → Configure → Battery** or on the dashboard's Configuration tab. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
+      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Configuration → Battery zones**. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
     },
     "previous_install_leftovers": {
       "title": "Files from a previous SEM install were found",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready contact {contact} cannot be driven",
-      "description": "**{entity_id}** is set as SG-Ready {contact}, but it is a text/number/select entity and its **{missing}** value is not configured — so SEM has nothing to write and every SG-Ready command for this heat pump fails. Open **Settings → Integrations → SEM → Configure → Heat Pump** (or the dashboard's Configuration tab) and fill both the ON and the OFF value for this contact, or point it at a switch entity instead."
+      "description": "**{entity_id}** is set as SG-Ready {contact}, but it is a text/number/select entity and its **{missing}** value is not configured — so SEM has nothing to write and every SG-Ready command for this heat pump fails. Open **Configuration → Heat pump** and fill both the ON and the OFF value for this contact, or point it at a switch entity instead."
     },
     "split_grid_rejected": {
       "title": "SEM could not find your grid power meters",

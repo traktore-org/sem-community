@@ -1973,7 +1973,7 @@
         "step": {
           "confirm": {
             "title": "Segnala questo a SEM",
-            "description": "**{name}** è impostato su un obiettivo di carica in percentuale, ma il veicolo al momento non comunica il proprio stato di carica: SEM non può quindi fermarsi *esattamente* a **{target}%**.\n\nNon sta però caricando alla cieca: dall'ultima lettura reale di questa sessione conteggia l'energia effettivamente erogata e si ferma quando quel totale misurato raggiunge l'obiettivo — lo sforamento è solo ciò che l'auto ha assorbito da quella lettura in poi. Se in questa sessione non è arrivata alcuna lettura reale (o SEM è stato riavviato durante la carica) manca il riferimento e la carica prosegue finché è l'auto stessa a ridurre la potenza, quasi piena.\n\nPer un limite che cada sul numero esatto, collega un **sensore reale di SOC del veicolo** a questa stazione (Configurazione → EV → Entità SOC veicolo). La percentuale di batteria sulla dashboard è il SOC *stimato* di SEM, che viene deliberatamente ignorato per il limite rigido (può andare alla deriva). Questa riparazione si risolve automaticamente non appena torna disponibile una lettura reale del SOC.\n\nSEM ritiene che questo errore sia suo. Se puoi, apri una segnalazione di bug con il pulsante nell'avviso — il modulo arriva già compilato. Se preferisci, copia invece il contesto qui sotto in un'email o in un post del forum. Questa finestra non invia nulla da nessuna parte.\n\n```\n{context}\n```\n\nConferma per chiudere l'avviso."
+            "description": "**{name}** è impostato su un obiettivo di carica in percentuale, ma il veicolo al momento non comunica il proprio stato di carica: SEM non può quindi fermarsi *esattamente* a **{target}%**.\n\nNon sta però caricando alla cieca: dall'ultima lettura reale di questa sessione conteggia l'energia effettivamente erogata e si ferma quando quel totale misurato raggiunge l'obiettivo — lo sforamento è solo ciò che l'auto ha assorbito da quella lettura in poi. Se in questa sessione non è arrivata alcuna lettura reale (o SEM è stato riavviato durante la carica) manca il riferimento e la carica prosegue finché è l'auto stessa a ridurre la potenza, quasi piena.\n\nPer un limite che cada sul numero esatto, collega un **sensore reale di SOC del veicolo** a questa stazione (Configurazione → Caricatori VE). La percentuale di batteria sulla dashboard è il SOC *stimato* di SEM, che viene deliberatamente ignorato per il limite rigido (può andare alla deriva). Questa riparazione si risolve automaticamente non appena torna disponibile una lettura reale del SOC.\n\nSEM ritiene che questo errore sia suo. Se puoi, apri una segnalazione di bug con il pulsante nell'avviso — il modulo arriva già compilato. Se preferisci, copia invece il contesto qui sotto in un'email o in un post del forum. Questa finestra non invia nulla da nessuna parte.\n\n```\n{context}\n```\n\nConferma per chiudere l'avviso."
           }
         }
       }
@@ -1988,7 +1988,7 @@
     },
     "charger_control_entity_broken": {
       "title": "L'entità di controllo della wallbox non funziona: {name}",
-      "description": "SEM usa **`{entity_id}`** per {capability} su **{name}**, ma quell'entità è `{reason}` — ogni comando si perde. Controlla l'entità in **Strumenti per sviluppatori → Stati** e correggila all'origine, oppure riassegna SEM in **Impostazioni → Dispositivi e servizi → SEM → Configura → Wallbox → Modifica**."
+      "description": "SEM usa **`{entity_id}`** per {capability} su **{name}**, ma quell'entità è `{reason}` — ogni comando si perde. Controlla l'entità in **Strumenti per sviluppatori → Stati** e correggila all'origine, oppure riassegna SEM in **Configurazione → Caricatori VE**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Impossibile scrivere il setpoint di potenza della batteria: {entity_id}",
@@ -2036,7 +2036,7 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Piattaforma batteria bloccata su Generico su un'installazione {brand}",
-      "description": "La piattaforma batteria di SEM è impostata su **Generico / altro**, ma l'integrazione {brand} è caricata. Le versioni precedenti della procedura guidata delle opzioni offrivano solo Generico e Deye, con Generico come predefinito, quindi passare da quella pagina ha retrocesso un'installazione {brand} all'adattatore generico — nessuna carica forzata, nessuna scrittura di registro idempotente. Apri **Impostazioni → Integrazioni → SEM → Configura → Pianificatore batteria** e imposta **Piattaforma di carica batteria** su **Rilevamento automatico**. Se Generico è una scelta deliberata (una batteria con le proprie entità di controllo), imposta quell'entità e questo avviso scompare."
+      "description": "La piattaforma batteria di SEM è impostata su **Generico / altro**, ma l'integrazione {brand} è caricata. Le versioni precedenti della procedura guidata delle opzioni offrivano solo Generico e Deye, con Generico come predefinito, quindi passare da quella pagina ha retrocesso un'installazione {brand} all'adattatore generico — nessuna carica forzata, nessuna scrittura di registro idempotente. Apri **Configurazione → Pianificatore batteria** e imposta **Piattaforma di carica batteria** su **Rilevamento automatico**. Se Generico è una scelta deliberata (una batteria con le proprie entità di controllo), imposta quell'entità e questo avviso scompare."
     },
     "split_grid_guessed": {
       "title": "SEM sta controllando due contatori di rete indovinati",
@@ -2048,7 +2048,7 @@
     },
     "soc_zones_out_of_order": {
       "title": "Le zone SOC della batteria sono in disordine",
-      "description": "Le tue zone di batteria indicano **Priorità {priority}% · Buffer {buffer}% · Avvio auto {auto_start}%**, ma SEM si aspetta che salgano in quest'ordine: Priorità è la riserva che non spendi mai, Buffer è il punto in cui l'assistenza della batteria si ferma, e Avvio auto è il punto in cui il pacco è abbastanza pieno da dare liberamente.\n\nSEM sta usando **{used}** come confini — gli stessi tre numeri, ordinati — così nessuna zona viene saltata e nulla si comporta in modo imprevedibile. Te lo segnala perché la disposizione che hai digitato quasi certamente non è quella che intendevi.\n\nCorreggila in **Impostazioni → Dispositivi e servizi → SEM → Configura → Batteria** o nella scheda Configurazione della dashboard. Sono ammessi tutti i valori purché crescano; zone ampie vanno benissimo — 20 / 30 / 50 è una disposizione perfettamente valida su un pacco grande."
+      "description": "Le tue zone di batteria indicano **Priorità {priority}% · Buffer {buffer}% · Avvio auto {auto_start}%**, ma SEM si aspetta che salgano in quest'ordine: Priorità è la riserva che non spendi mai, Buffer è il punto in cui l'assistenza della batteria si ferma, e Avvio auto è il punto in cui il pacco è abbastanza pieno da dare liberamente.\n\nSEM sta usando **{used}** come confini — gli stessi tre numeri, ordinati — così nessuna zona viene saltata e nulla si comporta in modo imprevedibile. Te lo segnala perché la disposizione che hai digitato quasi certamente non è quella che intendevi.\n\nCorreggila in **Configurazione → Zone batteria**. Sono ammessi tutti i valori purché crescano; zone ampie vanno benissimo — 20 / 30 / 50 è una disposizione perfettamente valida su un pacco grande."
     },
     "previous_install_leftovers": {
       "title": "Sono stati trovati file di una precedente installazione di SEM",
@@ -2056,7 +2056,7 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "Il contatto SG-Ready {contact} non può essere pilotato",
-      "description": "**{entity_id}** è impostata come SG-Ready {contact}, ma è un'entità testo/numero/selettore e il suo valore **{missing}** non è configurato — SEM non ha quindi nulla da scrivere e ogni comando SG-Ready per questa pompa di calore fallisce. Apri **Impostazioni → Integrazioni → SEM → Configura → Pompa di calore** (o la scheda Configurazione della dashboard) e compila sia il valore ON sia il valore OFF per questo contatto, oppure puntalo su un'entità interruttore."
+      "description": "**{entity_id}** è impostata come SG-Ready {contact}, ma è un'entità testo/numero/selettore e il suo valore **{missing}** non è configurato — SEM non ha quindi nulla da scrivere e ogni comando SG-Ready per questa pompa di calore fallisce. Apri **Configurazione → Pompa di calore** e compila sia il valore ON sia il valore OFF per questo contatto, oppure puntalo su un'entità interruttore."
     },
     "split_grid_rejected": {
       "title": "SEM non è riuscito a trovare i tuoi contatori di potenza di rete",
