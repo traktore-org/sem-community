@@ -133,7 +133,7 @@ OPENMETEO = [18.2, 11.3, 6.7, 10.9, 12.9, 10.2, 12.0, 30.1, 2.9, 6.2, 5.4, 5.5, 
 
 def _series(fcs, actuals=ACTUAL):
     led = ForecastLedger()
-    for d, (f, a) in zip(_days(len(actuals)), zip(fcs, actuals)):
+    for d, f, a in zip(_days(len(actuals)), fcs, actuals, strict=True):
         led.record(d, 0, f)
         led.settle(d, a)
     return led
