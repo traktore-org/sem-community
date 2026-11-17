@@ -2259,7 +2259,9 @@ Ollama ...) that may control Home Assistant, SEM's tools are there
 automatically; no sentence file needed. Ask it the same questions in
 your own words. It also gets a read-only tool, `SemSetupStatus`, that
 tells it how SEM is set up: watch-only or not, chargers, battery,
-forecast source, tariff, open repairs and version. The four change
+forecast source, tariff, open repairs and version. When no grid charge is
+set up for the battery, it lists the selects on the battery and their options,
+so the AI can tell you which one to pick. The four change
 tools (target, skip tonight, charge now, back to normal) show up only
 while the **Voice commands** switch is on. With several SEM entries,
 the first loaded one answers.
