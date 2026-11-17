@@ -111,19 +111,8 @@ def test_the_coordinator_publishes_advice_and_repoints_nothing():
     assert SEMCoordinator.source_recommendation(coord) is None
 
 
-def test_the_sensor_carries_the_recommendation_attributes():
-    import inspect
-    from custom_components.solar_energy_management import sensor
-    src = inspect.getsource(sensor)
-    for key in ("recommended_source", "recommended_by_pct", "recommended_days"):
-        assert f'attrs["{key}"]' in src
-
-
-def test_the_config_card_renders_it_through_the_picker_save_path():
-    from pathlib import Path
-    card = (Path(__file__).parent.parent / "dashboard/card/src/cards/sem-config-card.js").read_text()
-    assert "_renderForecastRecommendation(attrs, raw)" in card
-    assert "applyRecommendation((k, v) => this._saveOption(k, v), rec)" in card
+# (#924) the sensor attributes and the card path are covered by behaviour:
+# dashboard/card/test/forecast-recommend.test.js, not by source text.
 
 
 ACTUAL = [12.5, 6.9, 2.5, 5.2, 5.4, 9.5, 12.2, 13.9, 2.9, 8.6, 6.2, 4.7, 16.1, 14.0, 14.0, 10.2]

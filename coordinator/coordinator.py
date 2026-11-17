@@ -17268,7 +17268,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return None
         try:
             return recommend_source(
-                ledgers, current, today=dt_util.now().date().isoformat())
+                # (#645) SEM's own day clock, not a second one
+                ledgers, current, today=str(getattr(self, "_tracker_date", "") or "") or None)
         except Exception:  # noqa: BLE001
             return None
 
