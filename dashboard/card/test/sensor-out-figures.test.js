@@ -177,6 +177,7 @@ const ALLOWED_OUT = {
     'sem-onboarding-banner': [],
     'sem-period-selector-card': [],
     'sem-price-card': [],
+    'sem-setup-checklist-card': [],
     'sem-schedule-card': ['00', '02', '04', '06', '08', '10', '12', '14', '16', '18', '20', '22', '24'],
     'sem-simulation-card': ['0'],                              // days stored, from its own query
     'sem-solar-card': [],

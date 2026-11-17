@@ -52,6 +52,10 @@ views:
           # ── Solar hero lives in the tab header (#556 → merged into
           # sem-tab-header per maintainer UI review; the standalone
           # sem-solar-kpi-card remains available for manual dashboards) ──
+          # ── First-run banner + checklist (#1379) ── says when SEM only
+          # watches; shrinks to a chip once SEM is in control and set up.
+          - type: custom:sem-setup-checklist-card
+
           # ── Configuration tab welcome banner (#442) ──
           # Self-hides via localStorage once dismissed (one-time only)
           - type: custom:sem-onboarding-banner

@@ -54,6 +54,7 @@ import './cards/sem-control-card.js';
 import './elements/sem-entity-picker.js';
 import './cards/sem-config-card.js';
 import './cards/sem-onboarding-banner.js';
+import './cards/sem-setup-checklist-card.js';
 import './cards/sem-diagnose-button.js';
 
 // Version info

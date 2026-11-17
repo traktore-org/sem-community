@@ -2725,7 +2725,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         # "State attributes … exceed maximum size of 16384 bytes". It is a
         # live-card helper rebuilt from the registry on demand: nothing about
         # it charts, and the diagnostics download carries the full report.
-        "detection_report",
+        "setup_checklist",  # (#1379) the card reads the live state
+            "detection_report",
         # (#1221) the Energy Impact card's line under the daily CO2 avoided
         # (0.1 kWh, 1 g/kWh) — the state is the record, these are its parts
         "solar_used_kwh",
@@ -3447,6 +3448,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # control diag sensor — the Config tab's Detected-hardware section
             # and bug reports read it here.
             attrs["detection_report"] = self.coordinator.data.get("detection_report")
+            # (#1379) first-run checklist (small; same facts as the AI tool)
+            attrs["setup_checklist"] = self.coordinator.data.get("setup_checklist")
             # (#824) Per-charger control-entity verdicts ride here too:
             # a verdict that lives only in coordinator.data is invisible
             # to the card AND to anyone reading a diagnostics download,

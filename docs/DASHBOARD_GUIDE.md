@@ -656,6 +656,22 @@ curve or Learned; the line under it says how many hours SEM has learned. See
 A one-time welcome banner pointing existing users at the Configuration tab.
 Dismisses itself permanently once clicked.
 
+#### sem-setup-checklist-card
+
+**SEM Setup Checklist** · *Home tab (classic), Now screen (SEM Next)*
+
+Top of Home. While SEM only watches it shows a banner and one button, **Let
+SEM take control**. The button asks first ("SEM will start controlling your
+battery and charger. Continue?") and only then turns watch-only off. Below it
+a checklist: hardware found, car charger, solar forecast and electricity price
+(both optional), and things to check (SEM's open Repairs). Each row opens the
+place that fixes it: the charger, forecast and price rows open the
+Configuration tab on that section (SEM Next: Devices, and System > Setup
+check); things to check opens **Settings > Repairs**. **Hide** folds the list
+for this browser. Once SEM is in control and a charger it found is set up,
+only a chip stays: "SEM is in control" and "Setup 5 of 5", which reopens the
+list. It reads the same facts as the AI setup tool.
+
 #### sem-period-selector-card
 
 **SEM Period Selector** · *Costs tab*

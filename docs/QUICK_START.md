@@ -82,7 +82,7 @@ The dashboard has 8 tabs:
 | **Costs** | Financial breakdown — savings, feed-in revenue, costs |
 | **System** | Integration health, sensor status, coordinator info |
 
-**What you should see:** Live power values on the Home tab. If the dashboard looks blank, hard-refresh your browser (**Ctrl+Shift+R**, or **Cmd+Shift+R** on Mac).
+**What you should see:** Live power values on the Home tab. At the top, a banner says SEM is only watching, with a short checklist of what is left to set up. If the dashboard looks blank, hard-refresh your browser (**Ctrl+Shift+R**, or **Cmd+Shift+R** on Mac).
 
 Optional extras: `sankey-chart` and `k-flow-card` (HACS > Frontend) add richer views. See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 
@@ -95,6 +95,8 @@ The charger is **not** in the setup wizard. Add it after install:
 
 SEM pre-fills a charger from what its integration offers (buttons, a charge-mode select, the car's own charging amps). You confirm the values. A field it cannot fill stays empty.
 
+The checklist at the top of the Home tab names a charger SEM found. Its **Use it** button opens this place.
+
 Supported chargers and what each field means: [Setup Guide, EV charger](SETUP_GUIDE.md#step-2-ev-charger-optional).
 
 ## Step 6: Optional Forecast and Tariff, then Turn Watch-Only Off
@@ -106,7 +108,7 @@ Supported chargers and what each field means: [Setup Guide, EV charger](SETUP_GU
 **When the dashboard looks right, turn watch-only off:**
 
 1. Check the Home and EV tabs. Do the would-decisions look right?
-2. Turn off **`switch.sem_observer_mode`**. Find it in **Settings > Entities** by searching for `sem_observer_mode`.
+2. Press **Let SEM take control** in the banner on the Home tab and confirm. Or turn off **`switch.sem_observer_mode`** in **Settings > Entities**.
 
 Until you do this, SEM changes nothing. Once it is off, SEM sends commands to your charger and battery.
 

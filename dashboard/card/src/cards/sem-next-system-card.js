@@ -16,6 +16,7 @@
  *   type: custom:sem-next-system-card
  */
 
+import { OPEN_PANEL_KEY, takeStored } from '../util/setup-checklist.js';
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
@@ -112,10 +113,22 @@ class SEMNextSystemCard extends SEMNextBase {
         this._confirmObs = false;
         this._diagBusy = false;
         this._optionsAsked = false;
-        this._panel = '';
+        // (#1379) the Home checklist can open the setup check directly
+        this._panel = takeStored(OPEN_PANEL_KEY);
         this._chargerBusy = false;
         this._confirmRemove = '';
         this._pickerReady = false;
+    }
+
+    // (#1379) a Home checklist tap while this screen is already built
+    connectedCallback() {
+        super.connectedCallback();
+        this._onRoute = () => setTimeout(() => { const p = takeStored(OPEN_PANEL_KEY); if (p) this._panel = p; }, 0);
+        window.addEventListener('location-changed', this._onRoute);
+    }
+    disconnectedCallback() {
+        window.removeEventListener('location-changed', this._onRoute);
+        super.disconnectedCallback();
     }
 
     set hass(hass) {

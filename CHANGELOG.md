@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Home says when SEM only watches** (#1379). A banner with a confirmed take-control button; a checklist opens each fix.
 - ✨ **An AI assistant in Home Assistant sees SEM's tools** (#1086). No sentence file needed. Changes need the Voice commands switch.
 - ✨ **An AI assistant can draft a SEM bug report** (#1086). It posts nothing; you check the link and press Submit.
 - 🐛 **A day without a solar reading no longer counts as 0 kWh** (#1022). Forecast scores and correction skip days dark over 30 minutes.

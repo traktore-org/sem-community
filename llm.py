@@ -19,19 +19,17 @@ import voluptuous as vol
 
 from homeassistant.components.llm import LLMTools
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import (
-    config_validation as cv, intent, issue_registry as ir,
-)
+from homeassistant.helpers import config_validation as cv, intent
 from homeassistant.helpers.llm import (
     LLM_API_ASSIST, IntentTool, LLMContext, Tool, ToolInput,
 )
 from homeassistant.loader import async_get_integration
-from homeassistant.helpers.translation import async_get_translations
 
 from .assist_intents import (
     EXPLAIN_HANDLERS, WRITE_HANDLERS, _coordinator_for, write_intents_enabled,
 )
 from .const import DOMAIN
+from .setup_status import issue_titles, setup_facts
 
 TOOL_SETUP_STATUS = "SemSetupStatus"
 TOOL_DRAFT_ISSUE = "SemDraftIssue"
@@ -66,48 +64,17 @@ def _tools_for(hass: HomeAssistant, classes: tuple) -> list[Tool]:
             for c in classes if c.intent_type in registered]
 
 
-def _open_issues(hass: HomeAssistant) -> list[ir.IssueEntry]:
-    reg = ir.async_get(hass)
-    return [i for i in reg.issues.values()
-            if i.domain == DOMAIN and not i.dismissed_version]
-
-
-async def _issue_titles(hass: HomeAssistant) -> list[str]:
-    issues = _open_issues(hass)
-    if not issues:
-        return []
-    texts = await async_get_translations(
-        hass, hass.config.language, "issues", [DOMAIN])
-    prefix = f"component.{DOMAIN}.issues."
-    return [texts.get(f"{prefix}{i.translation_key}.title") or i.issue_id
-            for i in issues]
-
-
-def _forecast_part(coordinator: Any) -> dict[str, Any]:
-    reader = getattr(coordinator, "_forecast_reader", None)
-    out: dict[str, Any] = {"in_use": getattr(reader, "source", None)}
-    try:
-        rec = coordinator.source_recommendation()
-    except Exception:  # noqa: BLE001 — advice is optional
-        rec = None
-    if rec:
-        out["recommended"] = rec.get("source")
-    return out
-
-
-def _tariff_configured(config: dict) -> bool:
-    """A dynamic or calendar tariff, or a price the owner typed in."""
-    if config.get("tariff_mode", "static") != "static":
-        return True
-    return config.get("electricity_import_rate") is not None
-
-
 async def build_setup_status(hass: HomeAssistant, coordinator: Any) -> dict:
-    """Small summary of how SEM is set up. Reads only; derives nothing."""
+    """Small summary of how SEM is set up. Reads only; derives nothing.
+
+    (#1379) The facts come from ``setup_status.setup_facts``, the same
+    reading the dashboard's first-run checklist is built from.
+    """
     from .coordinator.coordinator import battery_unseen
 
-    watch_only = bool(getattr(coordinator, "_observer_mode", False))
-    chargers = coordinator.config.get("ev_chargers") or []
+    facts = setup_facts(hass, coordinator)
+    chargers = facts["chargers"]
+    watch_only = facts["watch_only"]
     integration = await async_get_integration(hass, DOMAIN)
     return {
         "version": str(integration.version),
@@ -120,9 +87,9 @@ async def build_setup_status(hass: HomeAssistant, coordinator: Any) -> dict:
             "names": [str(c.get("name") or c.get("id")) for c in chargers],
         },
         "battery_seen": not battery_unseen(coordinator),
-        "forecast_source": _forecast_part(coordinator),
-        "tariff_configured": _tariff_configured(coordinator.config),
-        "open_repairs": await _issue_titles(hass),
+        "forecast_source": facts["forecast_source"],
+        "tariff_configured": facts["tariff_configured"],
+        "open_repairs": await issue_titles(hass, facts["issues"]),
     }
 
 
