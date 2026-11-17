@@ -373,15 +373,21 @@ async def test_one_battery_keeps_its_old_flag_untouched(hass):
     assert r._raw_config["battery_sign_user_flip"] is True
 
 
-def test_the_coordinator_saves_the_cleared_flag_once_without_a_reload():
+def _fake_coordinator(saved=True):
+    fake = MagicMock()
+    fake._storage.async_save_energy_now = AsyncMock(return_value=saved)
+    return fake
+
+
+async def test_the_coordinator_saves_the_cleared_flag_once_without_a_reload():
     from custom_components.solar_energy_management.coordinator.coordinator import (
         SEMCoordinator,
     )
-    fake = MagicMock()
+    fake = _fake_coordinator()
     fake._sensor_reader.legacy_flip_cleared = True
     fake._sensor_reader._raw_config = {"battery_sign_user_flip": True}
     fake.config_entry.options = {"battery_sign_user_flip": True, "x": 1}
-    SEMCoordinator._save_cleared_battery_flip(fake)
+    await SEMCoordinator._save_cleared_battery_flip(fake)
     saved = fake.hass.config_entries.async_update_entry.call_args.kwargs["options"]
     assert saved == {"battery_sign_user_flip": False,
                      "battery_sign_user_flip_sensors": [], "x": 1}
@@ -390,21 +396,21 @@ def test_the_coordinator_saves_the_cleared_flag_once_without_a_reload():
     assert fake._sensor_reader._raw_config == {
         "battery_sign_user_flip": False, "battery_sign_user_flip_sensors": []}
     fake.hass.config_entries.async_update_entry.reset_mock()
-    SEMCoordinator._save_cleared_battery_flip(fake)
+    await SEMCoordinator._save_cleared_battery_flip(fake)
     fake.hass.config_entries.async_update_entry.assert_not_called()
 
 
-def test_no_entry_to_write_keeps_the_flag_and_the_request():
+async def test_no_entry_to_write_keeps_the_flag_and_the_request():
     """(#1375) Cleared in memory only once saved: with no entry the request
     stays and the flag is not touched (the migration runs once a start)."""
     from custom_components.solar_energy_management.coordinator.coordinator import (
         SEMCoordinator,
     )
-    fake = MagicMock()
+    fake = _fake_coordinator()
     fake.config_entry = None
     fake._sensor_reader.legacy_flip_cleared = True
     fake._sensor_reader._raw_config = {"battery_sign_user_flip": True}
-    SEMCoordinator._save_cleared_battery_flip(fake)
+    await SEMCoordinator._save_cleared_battery_flip(fake)
     assert fake._sensor_reader.legacy_flip_cleared is True
     assert fake._sensor_reader._raw_config == {"battery_sign_user_flip": True}
 
@@ -503,17 +509,68 @@ def test_the_marker_goes_with_a_reset_and_a_damaged_store_is_ignored():
     assert "legacy_flip_migrated" not in home.reader.export_sign_state()
 
 
-def test_a_failed_options_write_leaves_the_flag_and_asks_again(caplog):
+async def test_a_failed_options_write_leaves_the_flag_and_asks_again(caplog):
     from custom_components.solar_energy_management.coordinator.coordinator import (
         SEMCoordinator,
     )
-    fake = MagicMock()
+    fake = _fake_coordinator()
     fake._sensor_reader.legacy_flip_cleared = True
     fake._sensor_reader._raw_config = {"battery_sign_user_flip": True}
     fake.config_entry.options = {}
     fake.hass.config_entries.async_update_entry.side_effect = RuntimeError("x")
     fake._flip_save_failed_said = False
-    SEMCoordinator._save_cleared_battery_flip(fake)          # does not raise
+    await SEMCoordinator._save_cleared_battery_flip(fake)          # does not raise
     assert fake._sensor_reader.legacy_flip_cleared is True
     assert fake._sensor_reader._raw_config == {"battery_sign_user_flip": True}
     assert fake._skip_options_reload is None
+
+
+# ── 7. the store first, the flag after ──────────────────────────────────
+
+
+async def test_the_flag_is_cleared_only_after_the_sign_store_is_saved():
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    order = []
+    fake = _fake_coordinator()
+    fake._storage.set_sign_state.side_effect = lambda st: order.append("state")
+    fake._storage.async_save_energy_now = AsyncMock(
+        side_effect=lambda: order.append("saved") or True)
+    fake.hass.config_entries.async_update_entry.side_effect = (
+        lambda *a, **k: order.append("options"))
+    fake._sensor_reader.legacy_flip_cleared = True
+    fake._sensor_reader._raw_config = {"battery_sign_user_flip": True}
+    fake.config_entry.options = {}
+    await SEMCoordinator._save_cleared_battery_flip(fake)
+    assert order == ["state", "saved", "options"]
+
+
+async def test_a_store_that_did_not_save_leaves_the_flag_and_retries():
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    fake = _fake_coordinator(saved=False)
+    fake._sensor_reader.legacy_flip_cleared = True
+    fake._sensor_reader._raw_config = {"battery_sign_user_flip": True}
+    fake.config_entry.options = {}
+    await SEMCoordinator._save_cleared_battery_flip(fake)
+    fake.hass.config_entries.async_update_entry.assert_not_called()
+    assert fake._sensor_reader.legacy_flip_cleared is True
+    assert fake._sensor_reader._raw_config == {"battery_sign_user_flip": True}
+
+
+def test_a_restart_before_the_store_was_saved_migrates_once_and_reads_the_same():
+    """Run 1 migrated in memory; the store holding it never reached the disk
+    and the flag is still set. Run 2 restores the OLD locks and migrates
+    them once: it reads what run 1 read in every cycle."""
+    run1 = _home(dict(LEGACY), (False, True))
+    first = _watts(run1, 6)
+    old_store = {"battery_detected": {"b1": True, "b2": True},
+                 "battery_inverted": {"b1": False, "b2": True},
+                 "battery_basis": "sensor", "battery_counters": "own",
+                 "battery_learned_on": {"b1": "sensor.a_power",
+                                        "b2": "sensor.b_power"}}
+    run2 = _restart(old_store, dict(LEGACY))
+    assert _watts(run2, 6) == first
+    assert run2.reader.legacy_flip_cleared is True

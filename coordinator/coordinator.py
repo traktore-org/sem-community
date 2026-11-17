@@ -3112,7 +3112,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _LOGGER.warning("keeping battery settings with their batteries "
                             "failed (#1195)", exc_info=True)
 
-    def _save_cleared_battery_flip(self) -> None:
+    async def _save_cleared_battery_flip(self) -> None:
         """(#1375) The reader moved an old one-for-all battery flip off a home
         of several batteries: save that in the entry, as the flip service does
         (the reload skip armed first, so nothing restarts). The flag is
@@ -3122,7 +3122,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         entry = self.config_entry
         if getattr(reader, "legacy_flip_cleared", False) is not True:
             return
-        if entry is None:
+        storage = self._storage
+        if entry is None or storage is None:
+            return
+        # (#1375) The migrated locks and the marker reach the disk FIRST. The
+        # flag goes only after that: a restart between the two must find the
+        # flag set (and migrate once), never the flag gone with the old locks.
+        storage.set_sign_state(reader.export_sign_state())
+        basis = reader.export_battery_basis()
+        if basis is not None:
+            storage.set_battery_sign_basis(basis)
+        if await storage.async_save_energy_now() is not True:
             return
         new_options = {**(entry.options or {}), "battery_sign_user_flip": False,
                        BATTERY_FLIP_SENSORS_KEY: []}
@@ -4460,7 +4470,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()
-            self._save_cleared_battery_flip()      # (#1375)
+            await self._save_cleared_battery_flip()      # (#1375)
 
             # Self-healing sign inversion: if balance goes negative with real
             # grid activity, the grid sign is wrong — auto-correct by flipping
