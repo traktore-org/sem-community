@@ -363,15 +363,14 @@ async def test_a_unit_that_rides_its_own_setpoint_is_left_out():
     assert not dev.is_active                             # stops as today
 
 
-def test_a_climate_unit_is_left_out_and_a_heat_pump_with_a_climate_entity_is_offered():
+def test_a_climate_unit_and_a_heat_pump_with_a_climate_entity_are_left_out():
     from custom_components.solar_energy_management.devices.heat_pump_controller import (
         HeatPumpController)
     assert ClimateDevice.comfort_preheat_supported(object()) is False
     contacts = HeatPumpController(hass=_Hass(), climate_entity_id=None)
     assert contacts.comfort_preheat_supported() is True
     riding = HeatPumpController(hass=_Hass(), climate_entity_id="climate.pump")
-    # (#1081) the setpoint it had is put back at the end of a run now
-    assert riding.comfort_preheat_supported() is True
+    assert riding.comfort_preheat_supported() is False
 
 
 def test_a_cooling_band_is_left_out():

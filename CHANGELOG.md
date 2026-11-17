@@ -22,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **SEM keeps how fast a room or tank cools for 14 days** (#1081), also across restarts. Diagnose shows it; nothing uses it yet.
 - 🐛 **The battery direction button flips one battery** (#1375). With several, you pick which. A two-sensor battery is never flipped.
 - 🐛 **A boost now puts back the setpoint the unit had** (#1081). Not the configured one. A hand change during the run stays.
-- ✨ **Pre-heat can be ticked for a heat pump with a climate entity** (#1081). Its own setpoint is put back after the run.
 - 🐛 **A saved Zaptec site-limit service no longer blocks the charger's own current number** (#1376). SEM now writes the number.
 
 # [2.3.0-beta.17] — 16.11.2026

@@ -373,7 +373,7 @@ supports the same three control paths, in any combination:
   setpoint the unit shows before it raises it, and puts that one back when
   the run ends. If you change it by hand during the run, SEM leaves your
   value (#1081). A climate unit or tank SEM turns on gets its setpoint back
-  the same way.
+  the same way. A tank that cannot be turned off stays at its minimum.
 - **Service call** (#801) — for pumps whose control surface is a
   *command*, like a Buderus behind EMS-ESP: configure
   `domain.service` (e.g. `ems_esp.send_command`) plus a JSON payload.

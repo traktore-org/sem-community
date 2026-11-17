@@ -68,6 +68,14 @@ class SetpointMemoMixin:
         attrs = getattr(state, "attributes", None) or {}
         return _num(attrs.get("temperature"))
 
+    def _sp_tol(self, entity_id: Optional[str]) -> float:
+        """How far a unit may round what SEM wrote: half a degree, or half
+        the unit's own step when that is larger (a 5 K step)."""
+        hass = getattr(self, "hass", None)
+        state = hass.states.get(entity_id) if (hass and entity_id) else None
+        step = _num((getattr(state, "attributes", None) or {}).get("target_temp_step"))
+        return max(SETPOINT_MATCH_K, (step or 0.0) / 2.0)
+
     def _sp_fresh(self, memo: Dict[str, Any]) -> bool:
         at = _num(memo.get("at"))
         return at is not None and 0 <= _now() - at <= SETPOINT_MEMO_MAX_AGE_S
@@ -87,7 +95,7 @@ class SetpointMemoMixin:
         memo = self._sp_memo
         self._sp_pending = None
         if memo and self._sp_fresh(memo) and live is not None \
-                and abs(live - float(memo["wrote"])) <= SETPOINT_MATCH_K:
+                and abs(live - float(memo["wrote"])) <= self._sp_tol(entity_id):
             self._sp_pending = float(memo["restore"])   # still SEM's own run
             return
         hint = _num(self._sp_restore_hint())
@@ -100,8 +108,9 @@ class SetpointMemoMixin:
                 "%s: setpoint of %s cannot be read — SEM cannot remember it "
                 "and does what it did before (#1081)", self.name, entity_id)
             return
-        if abs(live - float(target)) > SETPOINT_SAME_K:
-            self._sp_pending = live   # equal to the target: not told from SEM's
+        # equal to the target too: the end then finds the unit at the value to
+        # restore and writes nothing
+        self._sp_pending = live
 
     def _sp_commit(self, domain: str, entity_id: str, target: float,
                    sent: bool) -> None:
@@ -156,7 +165,7 @@ class SetpointMemoMixin:
         if abs(live - restore) <= SETPOINT_SAME_K:
             self._sp_memo = None
             return "unchanged"
-        if abs(live - float(memo["wrote"])) > SETPOINT_MATCH_K:
+        if abs(live - float(memo["wrote"])) > self._sp_tol(entity):
             self._sp_memo = None   # the user's own change: never fight it
             _LOGGER.info("%s: %s was changed by hand during the run — "
                          "its setpoint is left as it is (#1081)",
@@ -179,9 +188,17 @@ class SetpointMemoMixin:
 
     async def sp_release_orphan(self, why: str = "setpoint restored") -> str:
         """A memo with no run behind it (a restart, a withheld restore): the
-        coordinator calls this for a load SEM believes idle."""
-        if not self._sp_memo or getattr(self, "is_active", False):
+        coordinator calls this for a load SEM believes idle. A climate unit
+        that is off is not written to (some integrations switch on when given
+        a temperature): the memo waits, to the 48 h cap, until it runs again."""
+        memo = self._sp_memo
+        if not memo or getattr(self, "is_active", False):
             return "none"
+        hass = getattr(self, "hass", None)
+        state = hass.states.get(memo.get("entity")) if hass else None
+        if memo.get("domain") == "climate" and str(
+                getattr(state, "state", "")).lower() == "off":
+            return "off"
         return await self.sp_restore(why)
 
     # ── across a restart ────────────────────────────────────────────────

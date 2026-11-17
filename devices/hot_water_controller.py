@@ -1089,14 +1089,18 @@ class HotWaterController(SwitchDevice):
     async def _deactivate_water_heater(self) -> None:
         """Deactivate via water_heater domain. A withheld write leaves the
         belief as it is (#1335): the tank did not move."""
-        # (#1081) the tank's own setpoint goes back first, while it can be read
-        await self.sp_restore("hot water off")
         try:
             sent = await self.send(
                 "water_heater", "turn_off",
                 {"entity_id": self.entity_id}, why="hot water off")
         except Exception:
-            # Not all support turn_off — set low temp instead
+            # (#1081) A tank with no off: its minimum IS SEM's off state, so
+            # the setpoint it had is not put back — SEM holds it at the minimum
+            self._sp_memo = None
+            log_on_change(
+                _LOGGER, f"tank-no-off:{self.device_id}", logging.INFO,
+                "%s: tank has no off; SEM holds it at its minimum (#1081)",
+                self.name)
             try:
                 sent = await self.send(
                     "water_heater", "set_temperature",
@@ -1105,6 +1109,10 @@ class HotWaterController(SwitchDevice):
             except Exception as e:
                 _LOGGER.error("Failed to deactivate water_heater: %s", e)
                 sent = True   # unchanged: a failed write still reads idle
+        else:
+            if sent:
+                # (#1081) off first: the tank's own setpoint goes back after
+                await self.sp_restore("hot water off")
         if not sent:
             self._last_deactivation_path = "water_heater_withheld"
             return

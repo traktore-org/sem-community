@@ -321,13 +321,15 @@ async def test_a_unit_already_at_the_remembered_value_gets_no_write(hass):
 
 
 @pytest.mark.asyncio
-async def test_a_unit_already_at_sems_value_at_the_start_is_not_remembered(hass):
+async def test_a_unit_already_at_sems_value_at_the_start_keeps_it(hass):
     hass.unit(UNIT, "heat", temperature=22.0)       # = normal + offset
     dev = _pump(hass)
     await dev.activate(3000)
-    assert dev.sp_memo() is None                    # cannot tell it from SEM's
+    assert dev.sp_memo()["restore"] == 22.0
+    before = len(hass.setpoint_writes())
     await dev.deactivate()
-    assert hass.now(UNIT) == 20.0                   # today's behaviour
+    assert hass.now(UNIT) == 22.0                   # the user's value, not 20
+    assert len(hass.setpoint_writes()) == before
 
 
 # ── a heat pump keeps working through its own controller ──────────────────
@@ -397,3 +399,52 @@ async def test_a_boost_that_replaces_a_step_down_restores_the_users_setpoint(has
     await hp.activate(3000)
     await hp.deactivate()
     assert hass.now(UNIT) == 21.5                   # not the lowered 19.5
+
+
+@pytest.mark.asyncio
+async def test_a_tank_without_an_off_stays_at_its_minimum_and_is_not_restored(hass, caplog):
+    real = hass._call
+
+    async def _call(domain, service, data=None, **kw):
+        if service == "turn_off":
+            raise RuntimeError("no off")
+        await real(domain, service, data, **kw)
+    hass.services.async_call = AsyncMock(side_effect=_call)
+    dev = _tank(hass)
+    await dev._activate_water_heater()
+    with caplog.at_level(logging.INFO):
+        await dev._deactivate_water_heater()
+    assert hass.now(TANK) == dev.min_temperature     # SEM's off state
+    assert dev.sp_memo() is None
+    assert any("no off" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_the_sweep_never_writes_to_a_climate_unit_that_is_off(hass):
+    first = _pump(hass)
+    await first.activate(3000)
+    fresh = _pump(hass)
+    fresh.sp_adopt_memo(first.sp_memo())
+    hass._states[UNIT].state = "off"
+    writes = len(hass.setpoint_writes())
+    assert await fresh.sp_release_orphan() == "off"
+    assert len(hass.setpoint_writes()) == writes and fresh.sp_memo() is not None
+    hass._states[UNIT].state = "heat"                # running again
+    assert await fresh.sp_release_orphan() == "written"
+    assert hass.now(UNIT) == 21.5
+
+
+@pytest.mark.asyncio
+async def test_a_unit_with_big_steps_still_restores(hass):
+    hass.unit(UNIT, "heat", temperature=20.0, target_temp_step=5.0)
+    dev = _pump(hass)
+    await dev.activate(3000)                         # wrote 22.0
+    hass.hand(UNIT, 20.0)                            # the unit rounds 22 to 20
+    await dev.deactivate()
+    assert dev.sp_memo() is None
+    hass.hand(UNIT, 22.5)                            # 2.5 K off: within step / 2
+    dev2 = _pump(hass)
+    dev2.sp_adopt_memo({"restore": 15.0, "wrote": 22.0, "at": setpoint_memo._now(),
+                        "entity": UNIT, "domain": "climate"})
+    await dev2.deactivate()
+    assert hass.now(UNIT) == 15.0
