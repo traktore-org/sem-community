@@ -210,7 +210,7 @@ the car always needs enough spare sun first (the Solar Gate).
 | `battery_auto_start_soc` | 90% | From here: the battery may give the car its full help, still only with spare sun past the Solar Gate |
 | `battery_assist_max_power` | 4500W | Maximum battery discharge for EV (1000-10000W) |
 | `battery_assist_min_surplus` | 1200W | **Solar Gate (v1.7.3)** — battery only assists above this real solar surplus (0-5000W) |
-| `battery_capacity_kwh` | size SEM finds, else 15 kWh | Total battery capacity (1-100 kWh). Until you set it, the field shows the size SEM uses. With two or more batteries SEM reads each pack's own capacity sensor; a pack without one gets its share of this total, split by how much each pack can discharge. |
+| `battery_capacity_kwh` | size SEM finds, else 15 kWh | Total battery capacity (1-100 kWh). Until you set it, the field shows the size SEM uses. With two or more batteries each has its own **Capacity** (kWh) beside its reserve. SEM uses your value first, else the pack's own size sensor (never a "remaining" one); a pack with neither gets its share of this total, split by how much each pack can discharge. |
 | `battery_discharge_protection_enabled` | true | Protect battery during night charging |
 | `battery_max_discharge_power` | 5000W | Maximum battery discharge rate (500-10000W) |
 | `battery_discharge_control_entity` | — | Number entity to control inverter discharge limit |
@@ -1512,7 +1512,7 @@ SEM compares energy accepted during full-cycle vs partial-charge sessions over m
 
 SEM automatically reads **all sources** from the HA Energy Dashboard, not just the first:
 - **Multiple solar inverters** — power and energy are summed
-- **Multiple battery units** — power/energy summed, SOC averaged across units
+- **Multiple battery units** — power/energy summed; the total charge level counts each battery by its size. Until every battery has a size, it is the plain average.
 - **Multiple grid tariff entries** — collected separately
 
 Single-device setups are unaffected — this is fully backward compatible. The config flow shows device counts (e.g., "Solar (2 inverters)") when multiple sources are detected.
