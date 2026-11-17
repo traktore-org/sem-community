@@ -83,11 +83,9 @@ def _hardware_domains(hass: HomeAssistant, coordinator: Any) -> list[str]:
         v = getattr(ed, attr, None)
         if isinstance(v, str) and v:
             eids.append(v)
-    for v in (getattr(ed, "battery_power_list", None) or []):
-        if isinstance(v, str) and v:
-            eids.append(v)
-    for pair in (getattr(ed, "battery_power_pairs", None) or []):
-        eids.extend(x for x in (pair or ()) if isinstance(x, str) and x)
+    # one entity per battery, combined sensors and pairs alike (#1171)
+    from .ha_energy_reader import battery_units
+    eids.extend(v for v in battery_units(ed) if isinstance(v, str) and v)
     if not eids:
         return []
     reg = er.async_get(hass)
