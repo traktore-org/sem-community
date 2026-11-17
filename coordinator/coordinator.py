@@ -2175,18 +2175,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     def fleet_battery_capacity_kwh(self, power=None) -> float:
         """(#1306) The fleet's nameplate: with two or more packs read this
         cycle, the sum of their own capacities (own sensor, else their
-        share of the setting — ``_unit_capacity_kwh``); one pack or none
+        share of the setting — ``_pack_share_kwh``); one pack or none
         read is ``battery_capacity_kwh`` exactly as before."""
         units = getattr(power, "batteries", None) or {}
         if len(units) < 2:
             return float(self.battery_capacity_kwh or 0.0)
         total = 0.0
         for bid in units:
-            total += self._unit_capacity_kwh(bid, power)
+            total += self._pack_share_kwh(bid, power)
         return total if total > 0 else float(self.battery_capacity_kwh or 0.0)
 
-    def _unit_capacity_kwh(self, battery_id: str, power=None) -> float:
-        """(#1306) One pack's kWh: its own capacity sensor when it has one;
+    def _pack_share_kwh(self, battery_id: str, power=None) -> float:
+        """(#1306) One pack's kWh for the scheduler: its own size
+        (``BatteryPower.capacity_kwh``, the reader's ``_unit_size_kwh``) when it has one;
         else the configured total, minus what the other packs declare,
         split among the undeclared packs by their discharge ceilings (a
         pack that can give 5 kW is taken for twice one that can give 2.5)."""
@@ -7350,7 +7351,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         caps = {}
         for bid, _ad in adapters:
             try:
-                caps[bid] = float(self._unit_capacity_kwh(bid, power) or 0.0)
+                caps[bid] = float(self._pack_share_kwh(bid, power) or 0.0)
             except (TypeError, ValueError, AttributeError):
                 caps[bid] = 0.0
         total = sum(caps.values())
@@ -11028,7 +11029,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     last_known_soc=float(bp.soc_pct or 0.0),
                     last_known_w=float(bp.power_w or 0.0),
                     # (#1306) its own nameplate, else its share of the fleet
-                    capacity_kwh=self._unit_capacity_kwh(battery_id, power),
+                    capacity_kwh=self._pack_share_kwh(battery_id, power),
                     # (#932) "populated → it reported this cycle" was false:
                     # a HELD reading is populated too. Per-unit flag when the
                     # reading carries one, else the fleet's — never a bare

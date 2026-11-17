@@ -6197,7 +6197,7 @@ class SensorReader:
                     return float(lst[slot])
             except (TypeError, ValueError):
                 pass
-        return self._unit_capacity_kwh(power_entity)
+        return self._unit_size_sensor_kwh(power_entity)
 
     def _soc_by_size(self, levels: list, sizes: list) -> float:
         """(#1373) The home's level of several batteries: each level counts
@@ -8132,8 +8132,11 @@ class SensorReader:
         self._capacity_entity_by_power[power_entity] = found
         return found
 
-    def _unit_capacity_kwh(self, power_entity: str) -> float:
-        """(#1306) One pack's own nameplate kWh, 0.0 when it has none."""
+    def _unit_size_sensor_kwh(self, power_entity: str) -> float:
+        """(#1306) One pack's own size SENSOR in kWh, 0.0 when it has none.
+        Only ``_unit_size_kwh`` calls this (the setting comes first there);
+        everyone else reads ``BatteryPower.capacity_kwh``. Not the
+        coordinator's ``_pack_share_kwh`` (a split of the global setting)."""
         eid = self._auto_detect_unit_capacity(power_entity)
         if not eid:
             return 0.0
