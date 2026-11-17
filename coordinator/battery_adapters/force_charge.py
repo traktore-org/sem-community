@@ -20,7 +20,8 @@ from homeassistant.core import HomeAssistant
 
 from ...utils.log_gate import log_on_change
 from .charge_record import ForcedChargeRecord
-from .charge_select import charge_option, read_select, select_setup
+from .charge_select import (
+    charge_option, permit_switch, read_select, select_setup)
 from ...utils.select_option import listed_option
 from .charge_target import ChargeTargetHold
 from ..units import finite_float
@@ -717,6 +718,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         self._sel_spent = why
         self._sel_refused_at = time.monotonic()
         await self._release_target()
+        await self._put_permit_back()               # (#1377) best effort
         await self.charge_record.left(entity, self._battery())
         return self._select_failed(why)
 
@@ -759,11 +761,17 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             unsaved = await self._note_started(prior=state, option=wanted)
             if unsaved is not None:                    # before the write
                 return unsaved
+            unsaved = await self._note_permit_started()
+            if unsaved is not None:
+                await self._note_failed_start()
+                return unsaved
         try:
             if not retry and self.config.get("battery_target_soc_entity", ""):
                 await self.target_hold.write(
                     self.config["battery_target_soc_entity"],
                     int(command.target_soc))
+            if not retry:
+                await self._permit_on()                # (#1377)
             await self.hass.services.async_call(
                 "select", "select_option",
                 # (#1039) the option as the select lists it (mapped again
@@ -773,6 +781,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                  "option": listed_option(self.hass, entity, wanted)})
         except Exception as exc:  # noqa: BLE001
             await self._release_target()
+            await self._put_permit_back()              # (#1377) best effort
             await self._note_failed_start()
             return self._select_failed(f"start failed: {exc}")
         self._sel_writes += 1
@@ -804,6 +813,9 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if prior is None:
             self._active, self._target_soc = False, 0.0
             self._forget_attempt()
+            failed = await self._put_permit_back()     # (#1377)
+            if failed is not None:
+                return failed
             await self._put_target_back()
             return _say_nothing_to_stop(self, f"SEM changed no option of {entity}")
         state, options = read_select(self.hass, entity)
@@ -815,6 +827,9 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             failed = await self._put_select_back(entity, option, prior, options)
             if failed is not None:
                 return failed
+        failed = await self._put_permit_back()         # (#1377)
+        if failed is not None:
+            return failed
         self._active, self._target_soc = False, 0.0
         self._forget_attempt()
         self._clear_stuck_repair(entity)
@@ -825,6 +840,69 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         await self._put_target_back()
         return ChargeStatus(status=ChargeCommandStatus.IDLE,
                             message="Select put back")
+
+    # ── (#1377) the permit switch beside the select ──────────────────
+    def _permit_state(self, entity: str) -> "str | None":
+        """"on" / "off", or None when the switch cannot be read."""
+        try:
+            state = getattr(self.hass.states.get(entity), "state", None)
+        except Exception:  # noqa: BLE001
+            return None
+        return state if state in ("on", "off") else None
+
+    async def _note_permit_started(self) -> "ChargeStatus | None":
+        """Before any write: a permit that is OFF goes in the record with
+        its prior. One already ON is the user's and is left alone. A permit
+        that cannot be read or recorded means no start."""
+        entity = permit_switch(self.config)
+        if not entity:
+            return None
+        state = self._permit_state(entity)
+        if state is None:
+            return self._select_failed(f"{entity} is unavailable — SEM cannot "
+                                       "ask it, so no charge is started")
+        if state == "on":
+            return None
+        try:
+            saved = await self.charge_record.started(
+                entity, self._battery(), prior="off", option="on")
+        except Exception:  # noqa: BLE001
+            saved = False
+        if saved:
+            return None
+        return self._select_failed("SEM could not save its record")
+
+    async def _permit_on(self) -> None:
+        entity = permit_switch(self.config)
+        if (entity and self._permit_state(entity) == "off"
+                and await self.charge_record.prior_of(entity) is not None):
+            await self.hass.services.async_call(
+                "switch", "turn_on", {"entity_id": entity})
+
+    async def _put_permit_back(self) -> "ChargeStatus | None":
+        """The permit goes back OFF, with the last pack's stop, and only
+        while it still reads ON: a hand change since is the user's. None:
+        done or nothing to do. A status: the switch cannot be read, the
+        record stays and the next stop asks again."""
+        entity = permit_switch(self.config)
+        prior = await self.charge_record.prior_of(entity) if entity else None
+        if prior is None:
+            return None
+        if await self.charge_record.others(entity, self._battery()):
+            await self.charge_record.left(entity, self._battery())
+            return None
+        state = self._permit_state(entity)
+        if state is None:
+            return self._select_failed(f"{entity} is unavailable — it is put "
+                                       "back when it answers")
+        if state == "on" and prior == "off":
+            try:
+                await self.hass.services.async_call(
+                    "switch", "turn_off", {"entity_id": entity})
+            except Exception as exc:  # noqa: BLE001
+                return self._select_failed(f"stop failed: {exc}")
+        await self.charge_record.stopped(entity)
+        return None
 
     async def _put_select_back(self, entity: str, option: str, prior: str,
                                options: list) -> "ChargeStatus | None":
@@ -871,10 +949,12 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if getattr(self, "_orphans_settled", False):
             return
         try:
-            live = (select_setup(self.config) or ("",))[0]
+            # (#1377) the permit is live beside the select: not an orphan
+            live = {(select_setup(self.config) or ("",))[0],
+                    permit_switch(self.config)}
             for entity, prior, option in await self.charge_record.select_records(
                     self._battery()):
-                if entity != live and not await self._restore_one(
+                if entity not in live and not await self._restore_one(
                         entity, prior, option, observer):
                     return                      # asked again next cycle
             self._orphans_settled = True
@@ -898,7 +978,11 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if await self.charge_record.others(entity, self._battery()):
             await self.charge_record.left(entity, self._battery())
             return True
-        if option and state == charge_option(self.hass, entity, option):
+        if entity.startswith("switch."):                 # (#1377) the permit
+            if state == "on" and prior == "off":
+                await self.hass.services.async_call(
+                    "switch", "turn_off", {"entity_id": entity})
+        elif option and state == charge_option(self.hass, entity, option):
             if prior not in options:
                 self._select_failed(f"{entity} no longer lists '{prior}'")
                 return False

@@ -6,10 +6,14 @@ have a select with an option that means it ("Solar and mains" against
 charge. SEM starts the charge by setting that option and stops it by setting
 the select back to what it showed before SEM changed it.
 
-Asleep until BOTH settings are set, and only where no charge switch is set
-(a switch wins, as it always did). These helpers only read; the writes and
+Asleep until BOTH settings are set. These helpers only read; the writes and
 the record are the generic charge adapter's, through the same record the
 switch uses (``charge_record``), so a restart mid-charge is recovered.
+
+(#1377) A charge switch set BESIDE the pair is no longer the start: it is a
+PERMIT, turned on with the charge and put back after it. A Powerwall charges
+from the grid only with "allow grid charging" on, the reserve raised AND its
+operating mode changed — three entities, one charge.
 """
 from __future__ import annotations
 
@@ -24,13 +28,21 @@ _NO_STATE = ("", "unknown", "unavailable")
 
 def select_setup(config: dict) -> Optional[tuple]:
     """``(select entity, charge option)`` when the select path is set up:
-    both settings given and no charge switch beside them. Else None."""
+    both settings given. Else None."""
     config = config or {}
     entity = str(config.get(SELECT_KEY) or "").strip()
     option = str(config.get(OPTION_KEY) or "").strip()
-    if not entity or not option or config.get("battery_force_charge_switch"):
+    if not entity or not option:
         return None
     return entity, option
+
+
+def permit_switch(config: dict) -> str:
+    """(#1377) The switch that must be ON for the select's option to charge
+    from the grid, or "". Only beside a select pair: alone it is the start."""
+    if select_setup(config) is None:
+        return ""
+    return str((config or {}).get("battery_force_charge_switch") or "").strip()
 
 
 def read_select(hass: Any, entity: str) -> tuple:
