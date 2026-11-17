@@ -3124,16 +3124,18 @@ def propose_option_roles(registry, *, state_of=None,
         return []
     used = {str(e) for e in (configured_entities or ()) if e}
     devices = _power_device_ids(registry)
+    candidates = [e for e in registry.entities.values()
+                  if not e.disabled_by and str(e.entity_id).startswith("select.")
+                  and e.device_id in devices and str(e.entity_id) not in used]
+    # (#964) one physical unit per bucket, through the one grouping helper
     found: Dict[tuple, list] = {}
-    for e in registry.entities.values():
-        eid = str(e.entity_id)
-        if (e.disabled_by or not eid.startswith("select.")
-                or e.device_id not in devices or eid in used):
-            continue
-        name = " ".join(str(x or "") for x in (
-            eid, getattr(e, "translation_key", ""), getattr(e, "original_name", "")))
-        for role, opt in lex.option_roles(_live_options(state_of, eid), name).items():
-            found.setdefault((e.platform, e.device_id, role), []).append((eid, opt))
+    for unit, unit_entities in group_entities_by_unit(candidates).items():
+        for e in unit_entities:
+            eid = str(e.entity_id)
+            name = " ".join(str(x or "") for x in (
+                eid, getattr(e, "translation_key", ""), getattr(e, "original_name", "")))
+            for role, opt in lex.option_roles(_live_options(state_of, eid), name).items():
+                found.setdefault((e.platform, str(unit), role), []).append((eid, opt))
     rows: Dict[tuple, Dict[str, Any]] = {}
     for (dom, dev, role), hits in sorted(found.items(), key=str):
         if len(hits) != 1:
