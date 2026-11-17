@@ -6,6 +6,7 @@ from datetime import timedelta
 
 import pytest
 
+from custom_components.solar_energy_management.devices.base import DeviceState
 from custom_components.solar_energy_management.devices.tank_goal import differences
 from custom_components.solar_energy_management.tests.test_1062_hot_water_fields import (
     _Hass,
@@ -45,6 +46,50 @@ def test_c1_start_and_stop_use_one_reading_across_the_top():
         starts = dev.start_refusal is None
         stops = dev.stop_condition_met
         assert starts == (band <= 55.0) and stops == (band >= 56.0), band
+
+
+# ── C2: too cold wins while away ───────────────────────────────────────────
+
+def _away(temp, dump):
+    dev = _tank(_Hass(), temp)
+    dev.comfort_limit = 44.0          # above the minimum temperature (40)
+    dev.vacation, dev.vacation_dhw_surplus = True, dump
+    return dev
+
+
+@pytest.mark.parametrize("temp", [41.0, 43.0, 44.0])
+def test_c2_a_too_cold_tank_is_not_stopped_at_the_minimum_with_the_dump(temp):
+    dev = _away(temp, dump=True)
+    assert dev.stop_condition_met is False        # before: stopped at 40
+    assert _agrees(dev)
+
+
+def test_c2_a_too_cold_run_goes_on_to_limit_plus_gap_then_stops():
+    dev = _away(44.4, dump=True)
+    dev._status.state = DeviceState.ACTIVE
+    dev._comfort_floor_run = True
+    assert dev.stop_condition_met is False and _agrees(dev)   # 44.4 < 44 + 1
+    dev.hass.set(SENSOR, "45.0", unit_of_measurement="°C")
+    assert dev.stop_condition_met is True and _agrees(dev)
+
+
+def test_c2_a_warm_tank_still_stops_at_the_minimum_with_the_dump():
+    dev = _away(46.0, dump=True)                  # above limit + gap
+    assert dev.stop_condition_met is True and _agrees(dev)
+
+
+@pytest.mark.parametrize("temp", [41.0, 43.0])
+def test_c2_without_the_dump_nothing_changed(temp):
+    dev = _away(temp, dump=False)
+    assert dev.stop_condition_met is False        # the Solar Heating Target (50) rules
+    assert _agrees(dev)
+    assert _away(51.0, dump=False).stop_condition_met is True
+
+
+def test_c2_the_setpoint_written_stays_the_minimum():
+    dev = _away(43.0, dump=True)
+    assert dev._active_target_temp() == 40.0
+    assert dev._stop_target_temp(peek=False) == 45.0
 
 
 # ── C3: Legionella counts its own target ───────────────────────────────────

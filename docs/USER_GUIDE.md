@@ -507,7 +507,8 @@ at* run, nothing bought for it, no extra from the sun. Only the too-cold
 limit still heats, and only back to just above *Run now past*, so a house on
 holiday is kept from going cold but is not kept warm. A Legionella run waits
 until you are back. If you let the hot-water tank take surplus while away,
-it still takes free sun up to its minimum temperature. A load without these
+it still takes free sun up to its minimum temperature; a tank under its
+*Run now past* limit heats back above it first. A load without these
 fields is not touched by away.
 
 A Legionella run that is due does not start while the house is at its peak

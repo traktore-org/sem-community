@@ -60,6 +60,8 @@ class TankInputs:
     may_buy: bool = False              # carried for step 2; no rule here
     switched: bool = True              # a relay (SEM ends the run), not a setpoint
     sensor_expected: bool = False      # a sensor is set up: silent = not heated blind
+    start_gap_c: float = 0.0           # an away too-cold run heats this far above the limit
+    away_floor_open: bool = False      # that run is going and still inside the gap
     now: Optional[datetime] = None
 
 
@@ -123,6 +125,16 @@ def _away_dump(i: TankInputs) -> bool:
     return i.vacation and i.vacation_dump
 
 
+def _away_heats(i: TankInputs) -> bool:
+    """(C2) Away with the dump: a too-cold tank still heats back above its
+    limit, and a run it started goes on until it is past the limit + gap."""
+    if not (_away_dump(i) and _band_usable(i)):
+        return False
+    if i.band_c <= i.too_cold_c:
+        return True
+    return i.away_floor_open and i.band_c < i.keep_c + (i.extra_c or 0.0)
+
+
 def _band_top(i: TankInputs) -> Optional[float]:
     """Keep at + Extra, at most the Legionella target; None unless the band
     is engaged (in use and the house is home)."""
@@ -137,9 +149,9 @@ def _ceiling(i: TankInputs) -> Tuple[float, str]:
         return i.legionella_target_c, "legionella"
     if _away_dump(i):
         top = i.min_temperature_c
-        if _too_cold(i):
-            # (C2) too cold wins: the away dump still heats back above the limit
-            top = max(top, i.too_cold_c)
+        if _away_heats(i):
+            # (C2, #1369) too cold wins: the away dump heats back above the limit
+            top = max(top, i.too_cold_c + i.start_gap_c)
         return top, "away"
     band = _band_top(i)
     if band is not None:
@@ -178,8 +190,6 @@ def _must_stop(i: TankInputs, reading: Optional[float], state: str,
     # a setpoint tank ends its own run at the setpoint SEM wrote
     if not i.switched or reading is None:
         return False
-    if _away_dump(i) and _too_cold(i):
-        return False
     return reading >= top
 
 
@@ -193,7 +203,7 @@ def _may_start(i: TankInputs, reading: Optional[float], state: str,
         return not i.sensor_expected
     if i.legionella_active:
         return reading < i.legionella_target_c
-    if not (reading < ceiling or (_away_dump(i) and _too_cold(i))):
+    if not (reading < ceiling or _away_heats(i)):
         return False
     lines = _start_lines(i)
     if lines and state != "forced":

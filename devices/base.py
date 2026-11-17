@@ -1639,11 +1639,11 @@ class ComfortBandMixin:
             return float(temp) > limit_c - gap
         return float(temp) < limit_c + gap
 
-    def comfort_away_heats(self, running: bool = False) -> bool:
+    def comfort_away_heats(self, running: bool = False, *, peek: bool = False) -> bool:
         """(#1344) While away: does the too-cold limit heat now? At or past
         the limit it starts; a run it started goes on until the reading is
-        back above the limit by the start gap."""
-        state = self._comfort_band_state()
+        back above the limit by the start gap. (#1369) ``peek``: no write."""
+        state = self._comfort_band_peek()[0] if peek else self._comfort_band_state()
         if state == "forced":
             return True
         return bool(running and state == "willing"

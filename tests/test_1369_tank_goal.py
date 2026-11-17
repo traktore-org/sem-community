@@ -2,8 +2,8 @@
 
 Nothing decides by the goal yet. The controller builds it beside today's code
 each cycle and counts where the two differ. These tests pin that the goal
-agrees with today's decisions everywhere EXCEPT the two documented spots, and
-that the shadow changes and publishes nothing. C1 is FIXED (#1369):
+agrees with today's decisions everywhere EXCEPT the one documented spot (C2's start margin), and
+that the shadow changes and publishes nothing. C1 and C2 are FIXED (#1369):
 the live code now does what the goal says.
 
 The documented differences (the goal picks ONE side):
@@ -324,26 +324,21 @@ def _sweep_dev(hass):
 
 
 def _expected_c2(temp, limit, stop, away_dump, leg):
-    """The goal and today's code differ here, and only here, on (top, must_stop)."""
+    """The one difference left (#1369): away with the dump, a too-cold tank
+    at or above the Solar Heating Target (50) is still refused a START by
+    today's start rule while the goal lets it start. The stop (C2) and the
+    top now agree."""
     if not away_dump or leg or temp > limit:
         return set()
-    cap = lambda v: v if stop is None else min(v, stop)  # noqa: E731
-    out = set()
-    # today the start is also refused at the Solar Heating Target (50) while
-    # the goal lets a too-cold tank start; the margin to a stop still applies
     if temp >= 50.0 and (stop is None or temp <= stop - 1.0):
-        out.add("may_start")
-    if cap(max(40.0, limit)) != cap(40.0):
-        out.add("top")
-    if temp >= 40.0 and not (stop is not None and temp >= stop):
-        out.add("must_stop")
-    return out
+        return {"may_start"}
+    return set()
 
 
-def test_the_grid_sweep_differs_only_where_c2_says():
+def test_the_grid_sweep_differs_only_in_the_c2_start_margin():
     hass = _Hass()
     dev = _sweep_dev(hass)
-    c2_seen = {"top": 0, "must_stop": 0, "may_start": 0}
+    c2_seen = {"may_start": 0}
     points = 0
     combos = itertools.product(
         range(30, 71, 2), (45.0, 52.0), (0.0, 4.0, 9.0), (36.0, 44.0, 50.0),
@@ -360,12 +355,12 @@ def test_the_grid_sweep_differs_only_where_c2_says():
         dev._margin_refused = dev._hold_stopped = False
         usable = limit < keep
         want = _expected_c2(float(temp), limit, stop, away == "dump", leg != "off") if usable else set()
-        got = _agree(dev, allow=("top", "must_stop", "may_start"))
+        got = _agree(dev, allow=("may_start",))
         assert set(got) == want, (temp, keep, extra, limit, stop, away, leg, got, want)
         for name in got:
             c2_seen[name] += 1
         points += 1
-    # the sweep is not vacuous, and C2 really shows up in it
+    # the sweep is not vacuous, and the start-margin case really shows up in it
     assert points > 15000
     assert all(n > 0 for n in c2_seen.values()), c2_seen
 
