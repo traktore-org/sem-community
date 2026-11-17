@@ -277,3 +277,125 @@ async def test_a_bare_soc_name_is_not_taken_for_one_of_a_fleet(hass):
     ed = _ed(hass, _edge_src(soc=None), _flow_src())
     r = _reader(hass, ed)
     assert r._auto_detect_battery_soc(EDGE_POWER) != "sensor.seu25_soc_value"
+
+
+# ── 5. review: migration, stale flag, renamed sensor, whole-word SOC ────
+
+
+def _learned_wrong_home(config):
+    """Both batteries DISCHARGE 1500 W (a shows +1500, b shows -1500, so a
+    must be negated and b not). The saved locks are the wrong way round, as
+    a one-for-all flag set for one of them could leave them."""
+    from .test_1205_sign_follows_its_battery import _Home
+    store = {"battery_detected": {"b1": True, "b2": True},
+             "battery_inverted": {"b1": False, "b2": True},
+             "battery_basis": "sensor", "battery_counters": "own",
+             "battery_learned_on": {"b1": "sensor.a_power",
+                                    "b2": "sensor.b_power"}}
+    return _Home(["a", "b"], store=store, config=config)
+
+
+def test_the_old_flag_on_several_batteries_judges_each_again(caplog):
+    """After the first read both batteries are judged by their own counters.
+    It takes the baseline cycle plus 3 votes: 4 cycles (about 40 s at 10 s)
+    with 100 W or more and moving counters; a restart adds 12 warm-up cycles."""
+    caplog.set_level("INFO")
+    home = _learned_wrong_home(dict(LEGACY))
+    first = home.cycle()
+    assert home.reader.legacy_flip_cleared is True
+    assert home.reader._raw_config["battery_sign_user_flip"] is False
+    assert home.reader._raw_config["battery_sign_user_flip_sensors"] == []
+    assert first.batteries["b1"].power_w == pytest.approx(1500)   # start value
+    cycles = 1
+    while home.signs() != {"b1": True, "b2": False} and cycles < 12:
+        out = home.cycle()
+        cycles += 1
+    assert home.signs() == {"b1": True, "b2": False}
+    assert cycles == 4
+    assert out.batteries["b1"].power_w == pytest.approx(-1500)
+    assert out.batteries["b2"].power_w == pytest.approx(-1500)
+    said = [r.getMessage() for r in caplog.records if "#1375" in r.getMessage()]
+    assert len(said) == 1 and "judged again" in said[0]
+
+
+def test_the_migration_runs_once_and_not_with_a_list_or_one_battery():
+    home = _learned_wrong_home(dict(LEGACY))
+    home.cycle()
+    home.reader.legacy_flip_cleared = False
+    home.cycle(3)
+    assert home.reader.legacy_flip_cleared is False
+    listed = _learned_wrong_home({**LEGACY, **NAMED_B1})
+    listed.cycle()
+    assert listed.reader.legacy_flip_cleared is False
+    assert listed.reader._raw_config["battery_sign_user_flip"] is True
+
+
+async def test_one_battery_keeps_its_old_flag_untouched(hass):
+    r = _one_battery(hass, HUAWEI, 800, **LEGACY)
+    assert _read(r).battery_power == pytest.approx(-800)
+    assert r.legacy_flip_cleared is False
+    assert r._raw_config["battery_sign_user_flip"] is True
+
+
+def test_the_coordinator_saves_the_cleared_flag_once_without_a_reload():
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    fake = MagicMock()
+    fake._sensor_reader.legacy_flip_cleared = True
+    fake.config_entry.options = {"battery_sign_user_flip": True, "x": 1}
+    SEMCoordinator._save_cleared_battery_flip(fake)
+    saved = fake.hass.config_entries.async_update_entry.call_args.kwargs["options"]
+    assert saved == {"battery_sign_user_flip": False,
+                     "battery_sign_user_flip_sensors": [], "x": 1}
+    assert fake._skip_options_reload == saved
+    assert fake._sensor_reader.legacy_flip_cleared is False
+    fake.hass.config_entries.async_update_entry.reset_mock()
+    SEMCoordinator._save_cleared_battery_flip(fake)
+    fake.hass.config_entries.async_update_entry.assert_not_called()
+
+
+@pytest.mark.parametrize("named,expected", [
+    ([HUAWEI], -800), (["sensor.removed_battery"], 800)])
+async def test_a_named_battery_that_is_the_one_left_still_flips(
+        hass, named, expected):
+    """b2 was flipped on two batteries, b1 removed: the list applies to the
+    battery left when it names it, and to no other."""
+    r = _one_battery(hass, HUAWEI, 800, battery_sign_user_flip_sensors=named)
+    assert _read(r).battery_power == pytest.approx(expected)
+
+
+async def test_the_tap_on_the_battery_left_turns_its_old_flip_off(hass):
+    r = _one_battery(hass, HUAWEI, 800)
+    opts = {"battery_sign_user_flip": False,
+            "battery_sign_user_flip_sensors": [HUAWEI]}
+    result, saved = await _press(opts, r, {})
+    assert result["user_flip"] is False
+    assert saved["battery_sign_user_flip_sensors"] == []
+    assert saved["battery_sign_user_flip"] is False
+
+
+async def test_a_renamed_sensor_in_the_list_does_not_hold_the_check(hass):
+    gone = ["sensor.renamed_away"]
+    r = _two_batteries(hass, battery_sign_user_flip_sensors=gone)
+    ed = r._energy_dashboard_config
+    assert r._battery_flip_on(2, ed) is False
+    assert _read(r).batteries["b1"].power_w == pytest.approx(-472)
+    live = _two_batteries(hass, battery_sign_user_flip_sensors=[EDGE_POWER])
+    assert live._battery_flip_on(2, live._energy_dashboard_config) is True
+
+
+@pytest.mark.parametrize("name", [
+    "plug_socket_temperature", "pack_soc_state", "pack_soc_type",
+    "pack_socle_value", "pack_status_soc"])
+async def test_a_bare_name_must_hold_soc_as_a_word(hass, name):
+    r = _soc_home(hass, [(f"sensor.{name}", {}, 47)])
+    assert r._auto_detect_battery_soc("sensor.lone_pack_power") is None
+    assert r._soc_candidate_exists("sensor.lone_pack_power") is False
+
+
+@pytest.mark.parametrize("name", [
+    "lone_pack_soc", "lone_pack_battery_soc_value", "lone_pack_state_of_charge"])
+async def test_a_bare_name_with_the_word_is_found(hass, name):
+    r = _soc_home(hass, [(f"sensor.{name}", {}, 47)])
+    assert r._auto_detect_battery_soc("sensor.lone_pack_power") == f"sensor.{name}"

@@ -37,6 +37,7 @@ from homeassistant.helpers import config_validation as cv
 from .coordinator.charge_pause import forget_on_mode_write
 from .coordinator.install_modules import MODULE_EVIDENCE_KEYS
 from .const import (
+    BATTERY_FLIP_SENSORS_KEY,
     DOMAIN,
     MIN_PEAK_LIMIT_KW,
     MAX_PEAK_LIMIT_KW,
@@ -6863,10 +6864,10 @@ async def _async_register_phase_services(
         opts = target.options or {}
         grid_flip = bool(opts.get("grid_sign_user_flip", False))
         batt_flip = bool(opts.get("battery_sign_user_flip", False)  # #588 H3
-                         or opts.get("battery_sign_user_flip_sensors"))  # (#1375)
+                         or opts.get(BATTERY_FLIP_SENSORS_KEY))  # (#1375)
         if grid_flip or batt_flip:
             cleared = {**opts, "grid_sign_user_flip": False, "battery_sign_user_flip": False,
-                       "battery_sign_user_flip_sensors": [],
+                       BATTERY_FLIP_SENSORS_KEY: [],
                        "grid_sign_user_flip_source": None}   # (#971) the binding goes with it
             cleared.pop("grid_sign_user_flip_on_fixed", None)   # (#1294) and its mark
             if coordinator is not None:
@@ -7002,7 +7003,7 @@ async def _async_register_phase_services(
         combined = list(getattr(ed, "battery_power_list", None) or [])
         several = ed is not None and len(battery_units(ed)) >= 2
         named = (call.data or {}).get("battery")
-        flips = list(opts.get("battery_sign_user_flip_sensors") or [])
+        flips = list(opts.get(BATTERY_FLIP_SENSORS_KEY) or [])
         if several:
             if named not in combined:
                 return {"ok": False,
@@ -7013,8 +7014,15 @@ async def _async_register_phase_services(
             new_flip = named not in flips
             flips = [e for e in flips if e != named] + ([named] if new_flip else [])
             # the old one-for-all flag names no battery on a home of several
-            new_options = {**opts, "battery_sign_user_flip_sensors": flips,
+            new_options = {**opts, BATTERY_FLIP_SENSORS_KEY: flips,
                            "battery_sign_user_flip": False}
+        elif len(combined) == 1 and combined[0] in flips:
+            # (#1375) the one battery left was named on a home of several:
+            # the tap turns that flip off, not on again
+            new_flip = False
+            new_options = {**opts, "battery_sign_user_flip": False,
+                           BATTERY_FLIP_SENSORS_KEY: [
+                               e for e in flips if e != combined[0]]}
         else:
             new_flip = not bool(opts.get("battery_sign_user_flip", False))
             new_options = {**opts, "battery_sign_user_flip": new_flip}

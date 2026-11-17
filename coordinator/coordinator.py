@@ -59,6 +59,7 @@ from ..consts.core import (CONF_OUTDOOR_TEMPERATURE_ENTITY,
 from ..consts.core import (CONF_SHED_SIGNAL_ENTITY, CONF_SHED_SIGNAL_LIMIT,
                            DEFAULT_SHED_SIGNAL_LIMIT)
 from ..const import (
+    BATTERY_FLIP_SENSORS_KEY,
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
@@ -3111,6 +3112,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _LOGGER.warning("keeping battery settings with their batteries "
                             "failed (#1195)", exc_info=True)
 
+    def _save_cleared_battery_flip(self) -> None:
+        """(#1375) The reader dropped an old one-for-all battery flip on a home
+        of several batteries: save that in the entry, once, as the flip service
+        does (the reload skip armed first, so nothing restarts)."""
+        reader = self._sensor_reader
+        entry = self.config_entry
+        if getattr(reader, "legacy_flip_cleared", False) is not True:
+            return
+        reader.legacy_flip_cleared = False
+        if entry is None:
+            return
+        new_options = {**(entry.options or {}), "battery_sign_user_flip": False,
+                       BATTERY_FLIP_SENSORS_KEY: []}
+        self._skip_options_reload = dict(new_options)
+        self.hass.config_entries.async_update_entry(entry, options=new_options)
+
     async def _retry_energy_dashboard_resolution(self) -> None:
         """Re-derive Energy Dashboard power sensors after a cold start (#274).
 
@@ -4429,6 +4446,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()
+            self._save_cleared_battery_flip()      # (#1375)
 
             # Self-healing sign inversion: if balance goes negative with real
             # grid activity, the grid sign is wrong — auto-correct by flipping

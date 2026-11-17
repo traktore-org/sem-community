@@ -16,7 +16,7 @@ from homeassistant.helpers import entity_registry as er
 
 from . import repair_issues as _ri
 from .battery_sensor_check import battery_problems as _battery_problems
-from ..const import DOMAIN
+from ..const import BATTERY_FLIP_SENSORS_KEY, DOMAIN
 
 from .types import FleetEvPower, PowerReadings
 from .charger_adapters.status_enum import (
@@ -109,6 +109,7 @@ def _soc_setting(entity_id: str, beside: str = "") -> bool:
 # (#1375) Words of a code, not a level: ``soc_status`` is 0 while all is well.
 _SOC_CODE_WORDS = frozenset((
     "status", "code", "mode", "flag", "error", "alarm", "warning", "fault",
+    "state", "type",
 ))
 
 
@@ -116,11 +117,17 @@ def _soc_unitless_level(entity_id: str, device_class: Any,
                         unit: Optional[str], beside: str = "") -> bool:
     """(#1375) A sensor with a SOC word in its name but no unit and no class,
     on a home with one battery: the last candidate, below every %-shaped
-    one. Not a setting (``soc_limit``) and not a code (``soc_status``): those
-    stay out, as #1373 has it."""
+    one. The SOC word must be a whole word of the id (``plug_socket_temp``
+    holds ``soc`` and is no level). Not a setting (``soc_limit``) and not a
+    code (``soc_status``, ``soc_state``, ``soc_type``): those stay out, as
+    #1373 has it."""
     if (unit or "").strip() or device_class:
         return False
-    words = set(entity_id.split(".", 1)[-1].lower().split("_"))
+    obj = "_" + entity_id.split(".", 1)[-1].lower() + "_"
+    if not any(f"_{kw}_" in obj for kw in _SOC_NAME_KEYWORDS):
+        return False
+    # ``state_of_charge`` holds the code word ``state`` and is a level word
+    words = set(obj.replace("_state_of_charge_", "_").strip("_").split("_"))
     return not (words & _SOC_CODE_WORDS) and not _soc_setting(entity_id, beside)
 
 
@@ -650,6 +657,8 @@ class SensorReader:
         #: was judged by entry N of the counter lists and not checked yet.
         #: Each is checked once, on an Energy Dashboard read that uses it.
         self._battery_locks_to_check: set = set()
+        #: (#1375) the old flag was cleared in memory; the coordinator saves it
+        self.legacy_flip_cleared = False
         #: (#1193) Bids whose lock was judged again: their sign is a kept
         #: start value until the sign check locks again. Saved, so a restart
         #: in between keeps it.
@@ -1474,7 +1483,7 @@ class SensorReader:
             # (#1375) several batteries not all read this cycle: no flip, the
             # named ones cannot be told apart in a total
             n_batt = len(battery_units(ed)) if ed is not None else 1
-            if n_batt < 2 and self._battery_flip_on(n_batt):
+            if n_batt < 2 and self._battery_flip_on(n_batt, ed):
                 self._negate_total(readings, "battery")
                 _negate_per_battery()
                 readings.calculate_derived()
@@ -1512,23 +1521,28 @@ class SensorReader:
         return readings
 
     #: (#1375) the batteries the one-tap fix turned over, by power sensor
-    BATTERY_FLIP_SENSORS_KEY = "battery_sign_user_flip_sensors"
+    BATTERY_FLIP_SENSORS_KEY = BATTERY_FLIP_SENSORS_KEY
 
-    def _battery_flip_on(self, n_batteries: int) -> bool:
+    def _battery_flip_on(self, n_batteries: int, ed=None) -> bool:
         """(#1375) Is a user flip set for this home's batteries?
 
         The tap names a battery on a home with several, saved as a list of
-        its power sensors. The one-battery tap is the old single flag. An old
-        flag on a home of several batteries names none: it was set for the one
-        battery the home had, and turning all of them over (a two-sensor
-        battery too) broke the ones it was not set for. Their own counters
-        judge them again.
+        its power sensors. Only names still in the dashboard count: a renamed
+        sensor flips nothing and must not hold the counter check. On a home
+        of one battery the old single flag applies, and so does a named
+        battery that is the one left (the other was removed). An old flag on
+        a home of several names none (``_migrate_legacy_battery_flip``).
         """
         raw = getattr(self, "_raw_config", None) or {}
-        if n_batteries < 2:
-            return bool(raw.get("battery_sign_user_flip", False))
         named = raw.get(self.BATTERY_FLIP_SENSORS_KEY)
-        return isinstance(named, (list, tuple)) and bool(named)
+        named = list(named) if isinstance(named, (list, tuple)) else []
+        if ed is not None:
+            own = getattr(ed, "battery_power_list", None) or []
+            named = [e for e in named if e in own]
+        if n_batteries < 2:
+            return bool(raw.get("battery_sign_user_flip", False)) or (
+                ed is not None and bool(named))
+        return bool(named)
 
     def _flipped_units(self, ed) -> frozenset:
         """(#1375) The combined batteries of a several-battery read that the
@@ -2188,7 +2202,8 @@ class SensorReader:
         # is not bound to a sensor: a sign learned again under it would be
         # turned over. While it is on, a saved sign whose sensor SEM no longer
         # finds stays where it stands, as the #1193 check waits.
-        flip = self._battery_flip_on(len(battery_units(ed)) if ed is not None else 1)
+        flip = self._battery_flip_on(
+            len(battery_units(ed)) if ed is not None else 1, ed)
         waiting = {}
         combined = getattr(ed, "battery_power_list", None)
         units = list(combined) if isinstance(combined, (list, tuple)) else []
@@ -3887,6 +3902,8 @@ class SensorReader:
         self._signs_follow_their_battery(ed, alone_from)
         self._move_lock_learned_on_flip(ed, read_alone,
                                         per_battery=per_battery_total is not None)
+        self._migrate_legacy_battery_flip(
+            ed, per_battery=per_battery_total is not None)
         self._drop_locks_on_other_counters(
             ed, per_battery=per_battery_total is not None)
 
@@ -4019,6 +4036,51 @@ class SensorReader:
 
         return readings
 
+    def _judge_battery_sign_again(self, bid: str) -> None:
+        """(#1193, #1375) Drop one battery's lock so its own counters judge it
+        again. Its sign stays the start value, so nothing reads differently
+        before new evidence; a brand seed must not move it."""
+        self._battery_sign_detected[bid] = False
+        self._battery_sign_evidence[bid] = 0.0
+        self._battery_sign_total_mag[bid] = 0.0
+        self._battery_sign_samples[bid] = 0
+        self._battery_charge_baseline[bid] = None
+        self._battery_discharge_baseline[bid] = None
+        self._battery_brand_seed_done[bid] = True
+        self._battery_sign_kept.add(bid)
+        self._battery_sign_audits.pop(bid, None)
+
+    def _migrate_legacy_battery_flip(self, ed, per_battery: bool) -> None:
+        """(#1375) The old one-for-all flag on a home of several batteries.
+
+        It names no battery now, so a battery it had been set for would read
+        wrong with nothing to correct it. On the first read of each battery
+        on its own, every combined battery is judged again by its own
+        counters (about 4 cycles of 100 W or more with moving counters: one
+        to set the baselines, 3 votes; a restart adds the 12 warm-up cycles),
+        and the flag is cleared (``legacy_flip_cleared``: the coordinator
+        saves it). A two-sensor battery has no lock to judge.
+        """
+        raw = getattr(self, "_raw_config", None) or {}
+        if not (per_battery and ed is not None
+                and raw.get("battery_sign_user_flip")
+                and self.BATTERY_FLIP_SENSORS_KEY not in raw):
+            return
+        bids = [f"b{i + 1}" for i in range(len(
+            getattr(ed, "battery_power_list", None) or []))]
+        for bid in bids:
+            if self._battery_sign_detected.get(bid):
+                self._judge_battery_sign_again(bid)
+        raw["battery_sign_user_flip"] = False
+        raw[self.BATTERY_FLIP_SENSORS_KEY] = []
+        self.legacy_flip_cleared = True
+        _LOGGER.info(
+            "Battery sign: Fix battery sign was set when the home had one "
+            "battery and now names none. Each battery (%s) is judged again "
+            "by its own counters; it keeps its sign until they say otherwise. "
+            "Tap the button of the battery that reads wrong to flip it. (#1375)",
+            ", ".join(bids))
+
     def _drop_locks_on_other_counters(self, ed, per_battery: bool) -> None:
         """(#1193) Judge again a saved battery lock learned on another battery.
 
@@ -4044,7 +4106,8 @@ class SensorReader:
         pending = getattr(self, "_battery_locks_to_check", None)
         if not pending:
             return
-        if self._battery_flip_on(len(battery_units(ed)) if ed is not None else 1):
+        if self._battery_flip_on(
+                len(battery_units(ed)) if ed is not None else 1, ed):
             return          # checked on the first read with the flip off
         if per_battery:
             charge_list = list(getattr(ed, "battery_charge_energy_list", None) or [])
@@ -4069,16 +4132,7 @@ class SensorReader:
             pending.discard(bid)
             if not self._battery_sign_detected.get(bid) or old == now:
                 continue
-            self._battery_sign_detected[bid] = False
-            self._battery_sign_evidence[bid] = 0.0
-            self._battery_sign_total_mag[bid] = 0.0
-            self._battery_sign_samples[bid] = 0
-            self._battery_charge_baseline[bid] = None
-            self._battery_discharge_baseline[bid] = None
-            # the kept sign is the start value; a brand seed must not move it
-            self._battery_brand_seed_done[bid] = True
-            self._battery_sign_kept.add(bid)
-            self._battery_sign_audits.pop(bid, None)
+            self._judge_battery_sign_again(bid)
             _LOGGER.info(
                 "Battery sign: the saved sign of %s was learned on the energy "
                 "counters %s / %s, which are not its own (%s / %s). SEM keeps "

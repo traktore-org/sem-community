@@ -394,6 +394,16 @@ DECLARED_READERS = {
         "(#1210) only combined units take a sign lock; pairs have none",
     ("coordinator/sensor_reader.py", "_signs_follow_their_battery"):
         "(#1205) a sign lock's b<N> is its place among the combined units",
+    ("coordinator/sensor_reader.py", "_battery_flip_on"):
+        "(#1375) a flip names combined sensors only; a pair is never flipped",
+    ("coordinator/sensor_reader.py", "_flipped_units"):
+        "(#1375) a flip names combined sensors only; a pair is never flipped",
+    ("coordinator/sensor_reader.py", "_migrate_legacy_battery_flip"):
+        "(#1375) only combined units have a sign lock to judge again",
+    ("__init__.py", "async_flip_battery_sign"):
+        "(#1375) the tap names a combined sensor; a pair is refused",
+    ("__init__.py", "_async_register_phase_services"):
+        "(#1375) holds async_flip_battery_sign",
     ("setup_check.py", "build_setup_check"):
         "(#1213) the setup check adds each combined sensor's watts beside the pairs",
     ("diagnostics.py", "async_get_config_entry_diagnostics"):
