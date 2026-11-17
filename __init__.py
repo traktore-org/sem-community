@@ -4031,6 +4031,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             # "watching" for every install and silently stop handing hardware
             # back — with no log and no failing test.
             _was_observer = bool(getattr(coordinator, "_observer_mode", False))
+            # (#896) What the load shedder switched off goes back on first:
+            # a shed circuit may be the one feeding the router or this host,
+            # and nothing is left to restore it once this lifetime is gone.
+            # Through the shedder's own observer gate, one write per load.
+            _lm = getattr(coordinator, "_load_manager", None)
+            if _lm is not None:
+                try:
+                    await _lm.async_shutdown()
+                except Exception as exc:  # noqa: BLE001 — teardown must finish
+                    _LOGGER.warning("shed loads not restored on unload: %s", exc)
+            _so = getattr(coordinator, "_shed_orphans", None)
+            if _so is not None:
+                try:
+                    await _so.async_shutdown()
+                except Exception as exc:  # noqa: BLE001 — teardown must finish
+                    _LOGGER.warning("shed loads not restored on unload: %s", exc)
             # The re-adoption hook goes with the lifetime that owns it: it
             # closes over this entry and this coordinator, and a hook left on
             # a coordinator HA is done with keeps both alive.

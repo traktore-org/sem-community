@@ -137,6 +137,7 @@ function rowFromMap(id, info) {
         hasControlHandle: i.has_control_handle !== undefined ? i.has_control_handle !== false : i.is_controllable !== false,
         isControllable: i.user_hands_off !== undefined ? i.user_hands_off !== true : i.is_controllable !== false,
         isCritical: !!i.is_critical,
+        hostGuard: i.host_guard === true,
         isAvailable: !!i.is_available,
         hasManualMapping: !!i.has_manual_mapping,
         energySensor: i.energy_sensor || '',

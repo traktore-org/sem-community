@@ -1524,6 +1524,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # #589 3a — warn-once-per-episode flag for enrichment-tail degradation.
         self._enrich_degraded = False
         self._load_manager = None  # Load management coordinator (external)
+        self._shed_orphans = None  # (#896) restore-only helper while LM is off
         self._device_registry = None  # UnifiedDeviceRegistry (set by __init__.py)
 
         if self._observer_mode:
@@ -3287,6 +3288,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception as e:
                 _LOGGER.warning("Failed to initialize load management: %s", e)
                 self._load_manager = None
+        elif not load_management_enabled and self._shed_orphans is None:
+            # (#896) Off must not strand what SEM shed while it was on.
+            try:
+                from ..features.shed_ledger import OrphanRecovery
+                helper = OrphanRecovery(self.hass, lambda: self._observer_mode)
+                if await helper.async_start():
+                    self._shed_orphans = helper
+            except Exception as e:  # noqa: BLE001 — never costs a setup
+                _LOGGER.warning("Shed recovery could not start: %s", e)
 
     def _get_initial_data(self) -> Dict[str, Any]:
         """Get initial data with defaults."""
@@ -5890,7 +5900,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
+                try:
+                    await self._load_manager.async_sync_observer(self._observer_mode)
+                except Exception:  # noqa: BLE001 — never costs a cycle
+                    _LOGGER.debug("shed recovery on observer off failed", exc_info=True)
                 self._load_manager._observer_mode = self._observer_mode
+                # (#896) switched off at runtime: shed loads go back
+                try:
+                    await self._load_manager.async_sync_enabled(self.config.get(
+                        "load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED))
+                except Exception:  # noqa: BLE001 — never costs a cycle
+                    _LOGGER.debug("shed restore on LM off failed", exc_info=True)
                 # (#1084) its sheds and restores go to the decision log too
                 self._load_manager.decision_log = self.decision_log
                 try:

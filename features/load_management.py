@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -30,6 +31,7 @@ from ..const import (
 )
 from ..devices.power_setpoint import SETPOINT_DOMAINS, setpoint_domain
 from .device_axes import may_actuate
+from . import shed_ledger as SL
 from .load_device_discovery import LoadDeviceDiscovery
 from ..consts.devices import load_phase
 from .phase_shed import (
@@ -45,6 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 STORAGE_KEY = "load_management_devices"
+LEDGER_KEY = SL.LEDGER_KEY
 
 
 def resolved_control_type(control: Optional[Mapping]) -> str:
@@ -188,6 +191,13 @@ class LoadManagementCoordinator:
         self._device_discovery = LoadDeviceDiscovery(hass)
         self._devices: Dict[str, Dict] = {}
         self._devices_shed: List[str] = []
+        # (#896) what SEM switched off, on disk: a restart or a crash must
+        # not leave a shed circuit off with nobody to restore it
+        self._ledger = SL.ShedLedger(Store(hass, STORAGE_VERSION, f"{DOMAIN}_{LEDGER_KEY}"))
+        self._shedding_now: set = set()   # ids with a shed write in flight
+        self._recover_noted: set = set()  # observer: a held restore, said once
+        self._init_task = None
+        self._unsub_stop = None
 
         # State tracking
         self._state = LoadManagementState.NORMAL
@@ -262,6 +272,9 @@ class LoadManagementCoordinator:
         try:
             # Load device configuration from storage
             await self._load_device_configuration()
+            await self._ledger.async_load()
+            self._unsub_stop = self.hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STOP, self._async_on_ha_stop)
 
             # Schedule discovery with retry if result is incomplete
             async def _discovery_with_retry():
@@ -286,9 +299,10 @@ class LoadManagementCoordinator:
                     )
                     await asyncio.sleep(retry_delay)
                     await self._discover_devices()
+                await self._recovery_loop()
 
             # Start discovery in background
-            self.hass.async_create_task(_discovery_with_retry())
+            self._init_task = self.hass.async_create_task(_discovery_with_retry())
 
             _LOGGER.info(
                 "Load management initialized: %s devices loaded from storage, "
@@ -1083,11 +1097,15 @@ class LoadManagementCoordinator:
             device_state = self._device_discovery.get_device_current_state(device_info)
             if device_state["is_on"]:
                 device_info["_ran_since_shed"] = True
+                # (#896) somebody switched it back on: it is theirs now, and
+                # a later hand-off must not read as ours to restore
+                self._ledger.drop_soon(device_id)
             elif device_state["current_power"] <= 0 and device_info.get("_ran_since_shed"):
                 stale.append(device_id)
 
         for device_id in stale:
             self._devices_shed.remove(device_id)
+            self._ledger.drop_soon(device_id)
             self._phase_shed_ids.pop(device_id, None)   # (#1048)
             if device_id in self._devices:
                 self._devices[device_id].pop("_ran_since_shed", None)
@@ -1699,6 +1717,160 @@ class LoadManagementCoordinator:
         except Exception as e:  # noqa: BLE001
             _LOGGER.debug("phase shed notification dismiss failed: %s", e)
 
+    # ── (#896) restore what SEM shed: unload, HA stop, restart, crash ───
+
+    #: recovery after a start: how many passes, and the pause between them
+    #: (an entity's integration may come up minutes after SEM)
+    _RECOVERY_PASSES = 20
+    _RECOVERY_PAUSE_S = 30
+    _WRITE_TIMEOUT_S = 10   # one hung device must not delay the rest
+
+    def _ledger_probe(self, device_info: Dict) -> Optional[Dict[str, Any]]:
+        """The record for a shed about to happen, or None when there is
+        nothing a restart could put back (a charger: its own loop restores it;
+        a service call: no readable state to check against)."""
+        control = device_info.get("control")
+        if control:
+            kind = resolved_control_type(control)
+            entity = control.get("entity")
+            if not entity or kind not in ("switch", "input_boolean", "setpoint"):
+                return None
+            return self._probe_entity(kind, entity)
+        if device_info.get("control_type") in ("current", "start_stop"):
+            return None
+        entity = device_info.get("switch_entity")
+        return self._probe_entity("switch", entity, entity.split(".")[0]) if entity else None
+
+    def _probe_entity(self, kind: str, entity: str, domain: Optional[str] = None):
+        state = self.hass.states.get(entity)
+        if state is None:
+            return None
+        if kind == "setpoint":
+            try:
+                found = finite_float(state.state)
+            except (TypeError, ValueError):
+                return None
+            return SL.make_record(
+                SL.KIND_SETPOINT, setpoint_domain(entity), entity, found=found,
+                shed_value=setpoint_floor(getattr(state, "attributes", None)))
+        if str(state.state).lower() not in ("on", "true", "1"):
+            return None
+        return SL.make_record(SL.KIND_SWITCH, domain or kind, entity, found_on=True)
+
+    async def _recover_one(self, device_id: str, *, needs_device: bool) -> str:
+        """One record: put the load back if it still shows the shed value.
+        Returns "restored", "dropped", "wait" or "held". One write at most."""
+        rec = self._ledger.records.get(device_id)
+        if rec is None:
+            return "dropped"
+        if device_id in self._shedding_now or (
+                device_id in self._devices_shed and needs_device):
+            return "held"     # a live shed owns it; a start-up pass leaves it
+        # A device missing from the roster (removed since, or not rebuilt yet)
+        # is no reason to drop: the record holds the entity and the prior
+        # state, and an off load is worse than a stale record.
+        verdict, call = SL.resolve(rec, self.hass.states.get(rec.get("entity")))
+        if verdict == SL.WAIT:
+            return "wait"
+        if verdict == SL.DROP or call is None:
+            await self._ledger.async_drop(device_id)
+            return "dropped"
+        age = SL.age_of(rec)
+        if age is not None and age > SL.STALE_AFTER:
+            _LOGGER.warning("Restoring %s from a shed record %s old — it still "
+                            "shows the shed value", rec.get("entity"), age)
+        if self._observer_mode and device_id in self._recover_noted:
+            return "held"     # said once already; nothing written, record kept
+        self._recover_noted.add(device_id)
+        try:
+            sent = await asyncio.wait_for(
+                self._send(device_id, *call), self._WRITE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            _LOGGER.warning("Restoring %s timed out — one hung device must "
+                            "not hold the rest", rec.get("entity"))
+            return "held"
+        if not sent:
+            return "held"     # observer mode: nothing written, record kept
+        self._recover_noted.discard(device_id)
+        self._after_recovered(device_id)
+        await self._ledger.async_drop(device_id)
+        return "restored"
+
+    def _after_recovered(self, device_id: str) -> None:
+        self._log_shed(device_id, "RESTORE", shed=False)
+        if device_id in self._devices_shed:
+            self._devices_shed.remove(device_id)
+        self._phase_shed_ids.pop(device_id, None)
+        # the normal restore's anti-flicker hold, for a recovered load too
+        self._last_restore_time = dt_util.now()
+        if device_id in self._devices:
+            self._devices[device_id]["last_turned_on"] = dt_util.now()
+            self._devices[device_id].pop("shed_reason", None)
+            self._devices[device_id].pop("_ran_since_shed", None)
+        _LOGGER.info("Restored %s from the shed ledger",
+                     (self._devices.get(device_id) or {}).get("friendly_name", device_id))
+
+    async def async_sync_observer(self, observer: bool) -> None:
+        """(#896) The cycle's observer flag. When watch-only ends, one
+        recovery pass puts back what SEM shed before it began."""
+        was, self._observer_mode = self._observer_mode, bool(observer)
+        if was and not self._observer_mode and self._ledger.records:
+            self._recover_noted.clear()
+            await self.async_recover_pass()
+
+    async def async_sync_enabled(self, enabled: bool) -> None:
+        """(#896) Load management switched OFF at runtime: shedding stops, and
+        what SEM already shed goes back — same hand-change rule, same gate."""
+        was, self._enabled = self._enabled, bool(enabled)
+        if not self._enabled and (was or self._ledger.records):
+            await self.async_restore_all_shed()
+
+    async def async_recover_pass(self) -> int:
+        """One sweep after a start. Returns the records still waiting."""
+        for device_id in list(self._ledger.records):
+            try:
+                await self._recover_one(device_id, needs_device=True)
+            except Exception:  # noqa: BLE001 — one load must not stop the rest
+                _LOGGER.warning("Shed recovery failed for %s", device_id, exc_info=True)
+        return len(self._ledger.records)
+
+    async def _recovery_loop(self) -> None:
+        for _ in range(self._RECOVERY_PASSES):
+            if not self._ledger.records or not await self.async_recover_pass():
+                return
+            if not self._devices:
+                _LOGGER.debug("Shed recovery: no devices known yet")
+            await asyncio.sleep(self._RECOVERY_PAUSE_S)
+        if self._ledger.records:
+            _LOGGER.warning("Shed ledger: %d load(s) never became readable: %s",
+                            len(self._ledger.records), sorted(self._ledger.records))
+
+    async def async_restore_all_shed(self) -> int:
+        """Unload / HA stop: turn back on what SEM shed, one at a time,
+        through the observer gate. Returns how many were written."""
+        done = 0
+        for device_id in list(self._ledger.records):
+            try:
+                if await self._recover_one(device_id, needs_device=False) == "restored":
+                    done += 1
+            except Exception:  # noqa: BLE001 — teardown must finish
+                _LOGGER.warning("Could not restore %s on shutdown", device_id, exc_info=True)
+        return done
+
+    async def _async_on_ha_stop(self, _event=None) -> None:
+        self._unsub_stop = None
+        await self.async_restore_all_shed()
+
+    async def async_shutdown(self) -> int:
+        """Unload: stop the start-up tasks, then restore what SEM shed."""
+        if self._unsub_stop is not None:
+            self._unsub_stop()
+            self._unsub_stop = None
+        task, self._init_task = self._init_task, None
+        if task is not None and hasattr(task, "cancel"):
+            task.cancel()
+        return await self.async_restore_all_shed()
+
     async def _restore_loads(self):
         """Restore loads that were shed."""
         if not self._devices_shed:
@@ -1856,6 +2028,12 @@ class LoadManagementCoordinator:
 
         device_info = self._devices[device_id]
 
+        # (#896) "Never switch off" holds on EVERY path that reaches a
+        # write — normal, emergency, futility, phase — not just the pickers.
+        if device_info.get("is_critical", False):
+            _LOGGER.debug("Not shedding %s: marked never switch off", device_id)
+            return False
+
         # Check anti-flicker constraint
         if not self._can_shed_device(device_id, device_info):
             _LOGGER.debug("Cannot shed %s: anti-flicker protection active", device_id)
@@ -1876,8 +2054,16 @@ class LoadManagementCoordinator:
         # Get control config (new style) or fall back to legacy style
         control = device_info.get("control")
         success = False
+        rec = None
+        failed = False
 
+        self._shedding_now.add(device_id)
         try:
+            # (#896) On disk BEFORE the write: a crash between the write and
+            # the next line must still find this load off in the ledger.
+            rec = None if self._observer_mode else self._ledger_probe(device_info)
+            if rec is not None:
+                await self._ledger.async_remember(device_id, rec)
             if control:
                 # New unified control config from discover_control_for_energy_device().
                 # (#880) Resolved against the ENTITY, not taken on the dict's
@@ -2012,7 +2198,12 @@ class LoadManagementCoordinator:
                 )
 
         except Exception as e:
+            failed = True   # the write may have landed: keep the record
             _LOGGER.error("Failed to shed device %s: %s", device_id, e)
+        finally:
+            self._shedding_now.discard(device_id)
+        if rec is not None and not success and not failed:
+            await self._ledger.async_drop(device_id)   # nothing was switched
         return success
 
     def _log_shed(self, device_id: str, reason: str, *, shed: bool,
@@ -2059,6 +2250,7 @@ class LoadManagementCoordinator:
         # exactly the #649 all-night-on-grid failure.
         if self._peak_managed_elsewhere(device_info):
             self._devices_shed = [d for d in self._devices_shed if d != device_id]
+            await self._ledger.async_drop(device_id)
             return
 
         # Check anti-flicker constraint
@@ -2183,6 +2375,7 @@ class LoadManagementCoordinator:
             if success:
                 self._log_shed(device_id, "RESTORE", shed=False)
                 self._devices_shed.remove(device_id)
+                await self._ledger.async_drop(device_id)
                 self._last_restore_time = dt_util.now()
                 self._devices[device_id]["last_turned_on"] = dt_util.now()
                 self._devices[device_id].pop("shed_reason", None)

@@ -155,6 +155,11 @@ async def test_a_stale_saved_site_limit_is_cleared(caplog):
 def _shed_ready(lm):
     lm._observer_mode = False
     lm._devices_shed = []
+    # (#896) the shed ledger and its in-flight set, built in __init__
+    from custom_components.solar_energy_management.features.shed_ledger import ShedLedger
+    lm._ledger = ShedLedger(MagicMock(async_save=AsyncMock()))
+    lm._shedding_now = set()
+    lm._recover_noted = set()
     lm._last_shedding_time = None
     lm._last_restore_time = None
     lm._can_shed_device = MagicMock(return_value=True)

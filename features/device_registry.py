@@ -37,6 +37,7 @@ from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 # (#780/#888) the two axes, asked of the module that owns them. Imported
 # unaliased so a structural test can see the call.
 from .device_axes import user_hands_off
+from .host_guard import area_name_of, looks_like_host
 from ..devices.base import (
     BandedCurrentLoad,
     CLIMATE_HVAC_MODES,
@@ -123,6 +124,8 @@ class UnifiedDevice:
     is_ev: bool = False
     control: Optional[Dict[str, Any]] = None
     is_critical: bool = False
+    # (#896) its name or area says it powers the network / HA host
+    host_guard: bool = False
     has_manual_mapping: bool = False
     # (#650) "hands off this device" — the user's explicit opt-out, applied from
     # the registry's ``_controllable_overrides`` at build. Only ever RESTRICTS:
@@ -192,6 +195,7 @@ class UnifiedDevice:
             "user_hands_off": self.user_hands_off,
             "is_controllable": self.is_controllable,
             "is_critical": self.is_critical,
+            "host_guard": self.host_guard,
             "power_entity": self.power_sensor,
             "energy_sensor": self.energy_sensor,
             "control": self.control,
@@ -291,6 +295,9 @@ class UnifiedDeviceRegistry:
         # "un-mark it"); ``_controllable_overrides`` stores only False — a True
         # override can't invent controllability, so re-enabling deletes the key.
         self._critical_overrides: Dict[str, bool] = {}
+        # (#896) ids "never switch off" by the host/network guard alone (no
+        # explicit user flag): the guard's default, which the user may lift
+        self._host_guarded: set = set()
         self._controllable_overrides: Dict[str, bool] = {}
         # (#650) the legacy adoption must run EXACTLY ONCE. On any later refresh
         # the LoadManagement dict is the registry's OWN last sync, so re-reading
@@ -1087,6 +1094,9 @@ class UnifiedDeviceRegistry:
             seed = position if is_ev else position + _LOAD_PRIORITY_BASE
             priority = self._priority_overrides.get(device_id, seed)
 
+            _crit, _host = self._critical_for(
+                device_id, name, energy_sensor, power_sensor,
+                (control or {}).get("entity") if isinstance(control, dict) else None)
             device = UnifiedDevice(
                 energy_sensor=energy_sensor,
                 power_sensor=power_sensor,
@@ -1097,7 +1107,8 @@ class UnifiedDeviceRegistry:
                 has_manual_mapping=has_manual,
                 # (#650) re-apply the user's flags — the rebuild is exactly
                 # where they used to be lost.
-                is_critical=bool(self._critical_overrides.get(device_id, False)),
+                is_critical=_crit,
+                host_guard=_host,
                 controllable_override=self._controllable_overrides.get(device_id),
             )
             devices.append(device)
@@ -1502,9 +1513,32 @@ class UnifiedDeviceRegistry:
         # while running as "surplus" there.
         spec = self._service_registrations.get(device_id)
         if spec is not None:
-            return spec.get("control_mode", "surplus")
-        return self._control_mode_overrides.get(
-            device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
+            mode = spec.get("control_mode", "surplus")
+        else:
+            mode = self._control_mode_overrides.get(
+                device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
+        # (#896) The surplus engine stops a load when the surplus ends: for a
+        # router or HA host that is the same cut shedding would make. While
+        # the guard stands, "surplus" reads as peak-only (which never sheds
+        # it); lifting the guard gives the user's choice back.
+        if mode == "surplus" and device_id in getattr(self, "_host_guarded", ()):
+            return "peak_only"
+        return mode
+
+    def _critical_for(self, device_id: str, name: str, *entities) -> tuple:
+        """(#896) ``(is_critical, host_guard)``: the user's flag when they
+        set one (either way), else the host/network guard's default."""
+        ents = [e for e in entities if e]
+        host = looks_like_host(
+            device_id, name, *ents, *(area_name_of(self.hass, e) for e in ents))
+        explicit = self._critical_overrides.get(device_id)
+        # a registry built bare (tests, early boot) has no set yet
+        guarded = self.__dict__.setdefault("_host_guarded", set())
+        if explicit is None and host:
+            guarded.add(device_id)
+        else:
+            guarded.discard(device_id)
+        return (host if explicit is None else bool(explicit)), host
 
     def _sync_to_load_manager(self) -> bool:
         """Populate LoadManagement._devices dict from registry devices.
@@ -1582,6 +1616,7 @@ class UnifiedDeviceRegistry:
                 "is_available": True,
                 "priority": device.priority,
                 "is_critical": device.is_critical,
+                "host_guard": device.host_guard,
                 # (#780) the registry derives both axes; LoadManagement reads
                 # them rather than keeping its own idea of either. The mixed
                 # key is still written, derived, for readers on the old name.
@@ -2023,6 +2058,7 @@ class UnifiedDeviceRegistry:
                 "user_hands_off": device.user_hands_off,
                 "is_controllable": device.is_controllable,
                 "is_critical": device.is_critical,
+                "host_guard": device.host_guard,
                 # (#559) rated_power, not the raw live sensor: the live
                 # ControllableDevice carries a self-calibrating rated_power
                 # (snapped to the real draw when the load runs), so an OFF
@@ -2296,6 +2332,9 @@ class UnifiedDeviceRegistry:
         same axes the ED rows carry, read from the same resolvers (mode,
         priority, rating), so the shedder's roster matches the card's."""
         entity = spec.get("entity_id") or None
+        _crit, _host = self._critical_for(
+            device_id, self.name_for(device_id, spec.get("name", device_id)),
+            entity, spec.get("power_entity_id"))
         live = (
             self._surplus_controller.get_device(device_id)
             if self._surplus_controller is not None else None
@@ -2312,7 +2351,8 @@ class UnifiedDeviceRegistry:
             "power_rating": self._rated_power_for(device_id, spec.get("power_entity_id")),
             "is_available": True,
             "priority": self._service_device_priority(device_id, spec),
-            "is_critical": bool(self._critical_overrides.get(device_id, False)),
+            "is_critical": _crit,
+            "host_guard": _host,
             # (#780) an explicit registration IS the control handle.
             "has_control_handle": entity is not None,
             "user_hands_off": False,
@@ -3166,6 +3206,9 @@ class UnifiedDeviceRegistry:
             self._service_registrations[device_id]["control_mode"] = mode
 
         # Apply to running surplus device if registered
+        # (#896) the effective mode: the host guard may hold "surplus" back
+        control_mode = DeviceControlMode(self.control_mode_for(device_id))
+        mode = control_mode.value
         surplus_device = self._surplus_controller.get_device(device_id)
         if surplus_device:
             surplus_device.control_mode = control_mode

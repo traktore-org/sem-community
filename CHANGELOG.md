@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Loads SEM switched off come back after a restart** (#896). Also on unload, stop or crash; hand changes are left alone.
+- 🐛 **A switch named router, NAS or server is never switched off** (#896). A warning shows; “surplus” becomes “peak only”.
+
 # [2.3.0-beta.19] — 17.11.2026
 
 - 🐛 **A charging current set through a select picks an offered step** (#1376). Never more current than SEM asked for.
