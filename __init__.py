@@ -467,7 +467,9 @@ def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check,
     return missing
 
 
-def build_welcome_message(config: dict, presence: dict | None = None) -> str:
+def build_welcome_message(
+    config: dict, presence: dict | None = None, dashboard_path: str = "sem-next",
+) -> str:
     """The first-run checklist, describing THIS install (#805 fix 2).
 
     The old text told everyone to "pick an EV charge mode on the EV tab",
@@ -497,21 +499,21 @@ def build_welcome_message(config: dict, presence: dict | None = None) -> str:
 
     lines = ["1. Confirm solar is reporting on the Energy tab"]
     if has_ev:
-        lines.append("2. Pick a charge mode on the EV tab "
+        lines.append("2. Pick a charge mode on the Devices screen "
                      "(solar only, min + solar, solar + cheap, always max)")
     else:
         lines.append("2. Add your EV charger to let SEM manage charging — "
                      "Settings → Devices & Services → SEM → Configure. "
                      "Until then SEM leaves it alone.")
     if has_battery:
-        lines.append("3. Set your battery reserve on the Battery tab")
+        lines.append("3. Set your battery reserve on the Devices screen")
     else:
         lines.append("3. Add your home battery, if you have one — "
                      "same Configure screen")
 
     return (
         "👋 Welcome! Your SEM dashboard is ready at "
-        "[Open the SEM Dashboard](/sem-dashboard/home).\n\n"
+        f"[Open the SEM Dashboard](/{dashboard_path}/now).\n\n"
         "**First-day checklist:**\n"
         + "\n".join(lines)
         + "\n\n**What SEM does right now:** it watches, and it controls "
@@ -3554,13 +3556,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     _welcome_fired = entry.options.get("_welcome_notification_fired", False)
     if not _welcome_fired and not full_config.get("observer_mode"):
         try:
+            from .features.dashboard_generator import sem_dashboard_path
             await hass.services.async_call(
                 "persistent_notification",
                 "create",
                 {
                     "notification_id": "sem_first_install_welcome",
                     "title": "Solar Energy Management installed",
-                    "message": build_welcome_message(full_config, coordinator.setup_presence),
+                    "message": build_welcome_message(
+                        full_config, coordinator.setup_presence, sem_dashboard_path(hass)),
                 },
                 blocking=False,
             )
@@ -4709,22 +4713,18 @@ async def _async_register_services(
     async def async_generate_dashboard_service(call) -> None:
         """Generate and install the SEM dashboard with all assets."""
         from .features.dashboard_generator import (
-            CLASSIC_DASHBOARD_TITLE, NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
+            NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
         )
+        # (#1321) "classic" is a deprecated alias; the generator warns once.
         template = call.data.get("template", "next")
         dashboard_title = call.data.get("dashboard_title", "Solar Energy Management")
         dashboard_path = call.data.get("dashboard_path", "sem-dashboard")
-        # (#1321) SEM Next lives beside the classic dashboard: with the
-        # default title/path it lands at /sem-next, never over /sem-dashboard.
-        if template == "next":
-            if dashboard_path == "sem-dashboard":
-                dashboard_path = NEXT_DASHBOARD_PATH
-            if dashboard_title == "Solar Energy Management":
-                dashboard_title = NEXT_DASHBOARD_TITLE
-        elif dashboard_title == "Solar Energy Management":
-            # the main name belongs to the default dashboard now
-            dashboard_title = CLASSIC_DASHBOARD_TITLE
-        dashboard_icon = NEXT_DASHBOARD_ICON if template == "next" else "mdi:solar-power"
+        # With the default title/path the dashboard lands at /sem-next.
+        if dashboard_path == "sem-dashboard":
+            dashboard_path = NEXT_DASHBOARD_PATH
+        if dashboard_title == "Solar Energy Management":
+            dashboard_title = NEXT_DASHBOARD_TITLE
+        dashboard_icon = NEXT_DASHBOARD_ICON
 
         try:
             from .dashboard_generator import DashboardGenerator
@@ -5105,7 +5105,7 @@ async def _async_register_services(
             schema=vol.Schema({
                 vol.Optional("dashboard_title", default="Solar Energy Management"): cv.string,
                 vol.Optional("dashboard_path", default="sem-dashboard"): cv.string,
-                vol.Optional("template", default="next"): vol.In(["classic", "next"]),
+                vol.Optional("template", default="next"): vol.In(["classic", "next"])  # "classic" = deprecated alias (#1321),
             }),
         )
         _LOGGER.debug("Registered service: %s.generate_dashboard", DOMAIN)
@@ -6071,12 +6071,9 @@ async def _async_install_card_assets(
                     if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
                         shutil.copy2(src, dst)
                         cards.append(fname)
-        # Copy Lit bundle from dist/ + vendored chart libs from vendor/
-        # (#617 — sem-chart-card loads Chart.js from the local vendor path
-        # first; without this sync the file 404s under HA's /local→www
-        # route and the CDN fallback silently reintroduces the internet
-        # dependency).
-        for sub in ("dist", "vendor"):
+        # Copy the Lit bundle from dist/ (#1321: the vendored Chart.js went
+        # with the classic dashboard).
+        for sub in ("dist",):
             sub_src_dir = os.path.join(card_src_dir, sub)
             sub_www_dir = os.path.join(card_www_dir, sub)
             if os.path.isdir(sub_src_dir):

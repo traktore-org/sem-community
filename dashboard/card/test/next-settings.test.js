@@ -284,3 +284,23 @@ test('one battery shows no per-battery rows', async () => {
     const g = groups(states, (k) => k, { options: { battery_slot_units: ['u1'] } }).find((x) => x.key === 'battery');
     assert.equal(g.more.filter((p) => p && typeof p === 'object' && Number.isInteger(p.listIdx)).length, 0);
 });
+
+// (#830, #1321) Everyday stays small: the sentences of the System screen are
+// what a new user sees, All settings holds the rest. Raising a ceiling is a
+// decision, not a detail. Neither view may hide a setting the other has.
+const MAX_GROUPS = 7;
+const MAX_EVERYDAY_SLOTS = 20;
+
+test('Everyday is shrink-only: few groups, few value slots in the sentences', () => {
+    const g = groups(fullStates(), t, CTX);
+    const everyday = g.reduce((n, x) => n + slotsOf([{ sentence: x.sentence }]).length, 0);
+    assert.ok(g.length <= MAX_GROUPS, `${g.length} groups`);
+    assert.ok(everyday <= MAX_EVERYDAY_SLOTS, `Everyday grew to ${everyday} value slots`);
+});
+
+test('every group keeps its settings reachable: the full list holds what the sentence shows or more', () => {
+    for (const x of groups(fullStates(), t, CTX)) {
+        assert.ok(Array.isArray(x.more), x.key);
+        assert.ok(x.sentence.length > 0, `${x.key} says something`);
+    }
+});

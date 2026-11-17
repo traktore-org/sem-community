@@ -46,13 +46,11 @@
         "description": "Dernière étape ! SEM a détecté automatiquement l'entité de contrôle de décharge de votre onduleur : {discharge_entity}\n\nLaissez l'option tableau de bord ACTIVÉE pour que SEM crée son tableau de bord Lovelace pour vous. **Remarque : cela redémarre Home Assistant environ 5 secondes après la fin de l'installation.**\n\nTout le reste — y compris votre limite de pointe réseau — utilise des valeurs par défaut sûres que vous pouvez ajuster juste après l'installation : la limite de pointe avec le curseur de l'onglet **Contrôle**, tout le reste dans l'onglet **Configuration** du tableau de bord SEM — y compris les chargeurs VE, la pompe à chaleur, le tarif et les zones de batterie.",
         "data": {
           "battery_capacity_kwh": "Capacité de la batterie domestique (kWh)",
-          "generate_dashboard_on_install": "Générer le tableau de bord SEM maintenant (redémarre HA)",
-          "diagram_style": "Style du diagramme système"
+          "generate_dashboard_on_install": "Générer le tableau de bord SEM maintenant (redémarre HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacité utile totale de votre batterie domestique (PAS celle du VE) en kWh. Utilisée par la stratégie de charge pilotée par les prévisions pour estimer dans quelle mesure la batterie peut compenser un déficit solaire. Consultez la fiche technique de votre onduleur.",
-          "generate_dashboard_on_install": "Lorsque cette option est activée, SEM crée le tableau de bord Lovelace immédiatement après cette étape, puis redémarre Home Assistant environ 5 s plus tard afin que le nouveau tableau de bord devienne visible. Vous pouvez toujours le régénérer manuellement plus tard via le service solar_energy_management.generate_dashboard.",
-          "diagram_style": "Choisissez le diagramme système à utiliser sur l'onglet Accueil. 'SEM' utilise le diagramme animé intégré. 'K-Flow' utilise la carte K-Flow HACS (à installer séparément)."
+          "generate_dashboard_on_install": "Lorsque cette option est activée, SEM crée le tableau de bord Lovelace immédiatement après cette étape, puis redémarre Home Assistant environ 5 s plus tard afin que le nouveau tableau de bord devienne visible. Vous pouvez toujours le régénérer manuellement plus tard via le service solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -228,7 +226,6 @@
           "ev_battery_capacity_kwh": "Capacité batterie EV (kWh)",
           "ev_target_soc": "Considérer plein à (%)",
           "vehicle_soc_entity": "Capteur SOC véhicule",
-          "diagram_style": "Style du diagramme système",
           "battery_assist_min_surplus": "Assistance batterie – surplus solaire min. (W)",
           "grid_sign_invert": "Inverser le signe de la puissance réseau",
           "battery_operating_mode_entity": "Entité de mode de fonctionnement de la batterie (surveillée)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Tarif mensuel de puissance souscrite par kW de pointe (CHF/kW/mois). Réglez sur 0 si votre contrat ne comporte pas de tarif de puissance souscrite.",
           "observer_mode": "Lorsque cette option est ACTIVÉE, SEM surveille et calcule tout mais n'envoie jamais d'appel de service au matériel. À utiliser sur une instance HA de test/préproduction reproduisant une installation de production.",
           "battery_discharge_control_entity": "Entité Number qui contrôle la limite de puissance de décharge de l'onduleur (par ex. number.batteries_maximale_entladeleistung sur Huawei). Détectée automatiquement à l'installation ; remplacez-la ici si nécessaire.",
-          "diagram_style": "Choisissez le diagramme système à utiliser sur l'onglet Accueil. 'SEM' utilise le diagramme animé intégré. 'K-Flow' utilise la carte K-Flow HACS (à installer séparément).",
           "hot_water_solar_target": "Température cible (°C) pour le chauffage de l'eau chaude assisté par le solaire. SEM booste le ballon lorsqu'un surplus est disponible.",
           "legionella_target_temp": "Température (°C) que le système d'eau chaude doit atteindre pendant un cycle de désinfection anti-légionelle.",
           "legionella_interval_hours": "Nombre maximal d'heures entre deux cycles de désinfection anti-légionelle avant que SEM ne force une montée en température.",
@@ -2130,12 +2126,6 @@
         "disabled": "Désactivé",
         "grid_only": "Alimentation réseau seule",
         "hybrid_load_port": "Réseau + sortie Load/EPS de l'onduleur hybride"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (intégré)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

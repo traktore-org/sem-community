@@ -46,13 +46,11 @@
         "description": "Utolsó lépés! A SEM automatikusan felismerte az inverter kisütés-vezérlő entitását: {discharge_entity}\n\nHagyja BEKAPCSOLVA az irányítópult opciót, hogy a SEM elkészítse Önnek a Lovelace irányítópultját. **Megjegyzés: ez a telepítés befejezése után kb. 5 másodperccel újraindítja a Home Assistantot.**\n\nMinden más — a hálózati csúcsteljesítmény-korlátot is beleértve — biztonságos alapértékeket használ, amelyeket közvetlenül a beállítás után módosíthat: a csúcskorlátot a **Vezérlés** fül csúszkájával, minden mást a SEM irányítópult **Konfiguráció** fülén — beleértve az EV töltőket, a hőszivattyút, a tarifát és az akkumulátorzónákat.",
         "data": {
           "battery_capacity_kwh": "Házi akkumulátor kapacitása (kWh)",
-          "generate_dashboard_on_install": "SEM irányítópult létrehozása most (újraindítja a HA-t)",
-          "diagram_style": "Rendszerdiagram stílusa"
+          "generate_dashboard_on_install": "SEM irányítópult létrehozása most (újraindítja a HA-t)"
         },
         "data_description": {
           "battery_capacity_kwh": "A házi akkumulátor (NEM az EV) teljes hasznos kapacitása kWh-ban. Az előrejelzés-vezérelt töltési stratégia ez alapján becsli meg, mekkora napenergia-hiányt tud az akkumulátor áthidalni. Nézze meg az inverter műszaki adatait.",
-          "generate_dashboard_on_install": "Bekapcsolva a SEM közvetlenül e lépés befejezése után létrehozza a Lovelace irányítópultot, majd kb. 5 másodperccel később újraindítja a Home Assistantot, hogy az új irányítópult láthatóvá váljon. Ezt később bármikor újrafuttathatja kézzel a solar_energy_management.generate_dashboard szolgáltatással.",
-          "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő)."
+          "generate_dashboard_on_install": "Bekapcsolva a SEM közvetlenül e lépés befejezése után létrehozza a Lovelace irányítópultot, majd kb. 5 másodperccel később újraindítja a Home Assistantot, hogy az új irányítópult láthatóvá váljon. Ezt később bármikor újrafuttathatja kézzel a solar_energy_management.generate_dashboard szolgáltatással."
         }
       },
       "reconfigure": {
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Melegvíz napenergiás fűtési célhőmérséklete (°C)",
           "legionella_target_temp": "Legionella-fertőtlenítés célhőmérséklete (°C)",
           "legionella_interval_hours": "Max. óraszám a fertőtlenítési ciklusok között",
-          "diagram_style": "Rendszerdiagram stílusa",
           "battery_assist_min_surplus": "Akkumulátor-támogatás – min. napenergia-többlet (W)",
           "grid_sign_invert": "Hálózati teljesítmény előjelének megfordítása",
           "battery_operating_mode_entity": "Akkumulátor üzemmód entitás (figyelt)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Havi teljesítménydíj a csúcs kW-jára vetítve (CHF/kW/hó). Állítsa 0-ra, ha a szerződése nem tartalmaz teljesítménydíjat.",
           "observer_mode": "Bekapcsolva a SEM mindent figyel és számol, de soha nem küld szolgáltatáshívást a hardvernek. Éles telepítést tükröző teszt/staging HA-n használja.",
           "battery_discharge_control_entity": "Number entitás, amely az inverter kisütési teljesítménykorlátját vezérli (pl. number.batteries_maximale_entladeleistung Huawei esetén). Telepítéskor automatikusan felismerve; szükség esetén itt írható felül.",
-          "diagram_style": "Válassza ki a rendszerdiagramot a Kezdőlap fülön. 'SEM' a beépített animált diagramot használja. 'K-Flow' a K-Flow HACS kártyát használja (külön telepítendő).",
           "hot_water_solar_target": "Célhőmérséklet (°C) a napenergiával támogatott melegvíz-fűtéshez. A SEM megemeli a bojlert, amikor többlet áll rendelkezésre.",
           "legionella_target_temp": "Az a hőmérséklet (°C), amelyet a melegvízrendszernek el kell érnie a legionella-fertőtlenítési ciklus során.",
           "legionella_interval_hours": "A legionella-fertőtlenítési ciklusok közötti maximális óraszám, mielőtt a SEM kényszerfelfűtést indít.",
@@ -2130,12 +2126,6 @@
         "disabled": "Letiltva",
         "grid_only": "Csak hálózati ellátás",
         "hybrid_load_port": "Hálózat + hibrid inverter Load/EPS kimenete"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (beépített)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

@@ -46,13 +46,11 @@
         "description": "Sista steget! SEM hittade automatiskt växelriktarens entitet för urladdningsstyrning: {discharge_entity}\n\nLåt panelvalet vara PÅ så bygger SEM sin Lovelace-panel åt dig. **Obs: detta startar om Home Assistant cirka 5 sekunder efter att installationen är klar.**\n\nAllt annat — även din toppgräns mot nätet — använder säkra standardvärden som du kan justera direkt efter installationen: toppgränsen med reglaget på fliken **Kontroll**, allt annat på fliken **Konfiguration** i SEM-panelen — bland annat elbilsladdare, värmepump, tariff och batterizoner.",
         "data": {
           "battery_capacity_kwh": "Husbatteriets kapacitet (kWh)",
-          "generate_dashboard_on_install": "Skapa SEM-instrumentpanelen nu (startar om HA)",
-          "diagram_style": "Systemdiagram stil"
+          "generate_dashboard_on_install": "Skapa SEM-instrumentpanelen nu (startar om HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Total användbar kapacitet i ditt husbatteri (INTE elbilens) i kWh. Används av den prognosstyrda laddningsstrategin för att uppskatta hur mycket batteriet kan överbrygga ett solunderskott. Se växelriktarens specifikation.",
-          "generate_dashboard_on_install": "När detta är aktiverat skapar SEM Lovelace-instrumentpanelen direkt efter att det här steget är klart och startar sedan om Home Assistant ca 5 s senare så att den nya instrumentpanelen blir synlig. Du kan alltid köra det manuellt igen senare via tjänsten solar_energy_management.generate_dashboard.",
-          "diagram_style": "Välj systemdiagram på fliken Hem. 'SEM' använder det inbyggda animerade diagrammet. 'K-Flow' använder K-Flow HACS-kortet (måste installeras separat)."
+          "generate_dashboard_on_install": "När detta är aktiverat skapar SEM Lovelace-instrumentpanelen direkt efter att det här steget är klart och startar sedan om Home Assistant ca 5 s senare så att den nya instrumentpanelen blir synlig. Du kan alltid köra det manuellt igen senare via tjänsten solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Måltemperatur för solvärmt varmvatten (°C)",
           "legionella_target_temp": "Måltemperatur för legionelladesinfektion (°C)",
           "legionella_interval_hours": "Max antal timmar mellan desinfektionscykler",
-          "diagram_style": "Systemdiagram stil",
           "battery_assist_min_surplus": "Batteristöd – min. solöverskott (W)",
           "grid_sign_invert": "Invertera näteffektens tecken",
           "battery_operating_mode_entity": "Batteriets driftlägesentitet (bevakad)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Månatlig effektavgift per kW effekttopp (CHF/kW/månad). Sätt till 0 om ditt avtal inte har någon effektavgift.",
           "observer_mode": "När detta är PÅ övervakar och beräknar SEM allt men skickar aldrig något tjänstanrop till hårdvaran. Använd på en test-/staginginstans av HA som speglar en produktionsinstallation.",
           "battery_discharge_control_entity": "Number-entitet som styr växelriktarens urladdningseffektgräns (t.ex. number.batteries_maximale_entladeleistung på Huawei). Detekteras automatiskt vid installation; åsidosätt här vid behov.",
-          "diagram_style": "Välj systemdiagram på fliken Hem. 'SEM' använder det inbyggda animerade diagrammet. 'K-Flow' använder K-Flow HACS-kortet (måste installeras separat).",
           "hot_water_solar_target": "Måltemperatur (°C) för solstödd varmvattenberedning. SEM boostar beredaren när överskott finns.",
           "legionella_target_temp": "Temperatur (°C) som varmvattensystemet måste nå under en legionelladesinfektionscykel.",
           "legionella_interval_hours": "Maximalt antal timmar mellan legionelladesinfektionscykler innan SEM tvingar fram en uppvärmning.",
@@ -2130,12 +2126,6 @@
         "disabled": "Inaktiverad",
         "grid_only": "Endast elnät",
         "hybrid_load_port": "Elnät + hybridväxelriktarens Load-/EPS-utgång"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (inbyggd)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

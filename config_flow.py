@@ -1733,6 +1733,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "deye_system_work_mode_zero_load_option",
     "deye_work_mode_entity",
     "deye_work_mode_load_first_option",
+    # (#1321) the classic dashboard is gone; kept so a stored value is cleared on the next save
     "diagram_style",
     "dynamic_feedin_entity",
     "dynamic_forecast_entity",
@@ -2958,16 +2959,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         current_config.get("battery_operating_mode_entity")
                         or _suggest_battery_mode_entity(self.hass))},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
-                vol.Optional(
-                    "diagram_style",
-                    default=_c("diagram_style", "sem"),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=["sem", "kflow"],
-                        translation_key="diagram_style",
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
                 # #352 — Enphase + a handful of other installs report
                 # grid power with +import / -export polarity (opposite
                 # of SEM's convention). The Energy-Dashboard-counter

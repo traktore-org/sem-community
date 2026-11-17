@@ -46,13 +46,11 @@
         "description": "Ultimul pas! SEM a detectat automat entitatea de control al descărcării invertorului dvs.: {discharge_entity}\n\nLăsați opțiunea tabloului de bord PORNITĂ pentru ca SEM să vă creeze tabloul Lovelace. **Notă: aceasta repornește Home Assistant la aproximativ 5 secunde după terminarea instalării.**\n\nTot restul — inclusiv limita de vârf a rețelei — folosește valori implicite sigure pe care le puteți ajusta imediat după configurare: limita de vârf din glisorul filei **Control**, tot restul din fila **Configurare** a tabloului SEM — inclusiv încărcătoarele VE, pompa de căldură, tariful și zonele bateriei.",
         "data": {
           "battery_capacity_kwh": "Capacitatea bateriei casnice (kWh)",
-          "generate_dashboard_on_install": "Generează acum tabloul de bord SEM (repornește HA)",
-          "diagram_style": "Stilul diagramei de sistem"
+          "generate_dashboard_on_install": "Generează acum tabloul de bord SEM (repornește HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei casnice (NU a celei din EV), în kWh. Folosită de strategia de încărcare bazată pe prognoză pentru a estima cât poate acoperi bateria dintr-un deficit solar. Consultați specificațiile invertorului.",
-          "generate_dashboard_on_install": "Când este activat, SEM creează tabloul de bord Lovelace imediat după încheierea acestui pas și apoi repornește Home Assistant după circa 5 s, pentru ca noul tablou de bord să devină vizibil. Îl puteți regenera oricând manual mai târziu prin serviciul solar_energy_management.generate_dashboard.",
-          "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat)."
+          "generate_dashboard_on_install": "Când este activat, SEM creează tabloul de bord Lovelace imediat după încheierea acestui pas și apoi repornește Home Assistant după circa 5 s, pentru ca noul tablou de bord să devină vizibil. Îl puteți regenera oricând manual mai târziu prin serviciul solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Țintă de încălzire solară a apei calde (°C)",
           "legionella_target_temp": "Țintă dezinfecție anti-legionella (°C)",
           "legionella_interval_hours": "Ore maxime între ciclurile de dezinfecție",
-          "diagram_style": "Stilul diagramei de sistem",
           "battery_assist_min_surplus": "Asistență baterie – surplus solar min. (W)",
           "grid_sign_invert": "Inversează semnul puterii din rețea",
           "battery_operating_mode_entity": "Entitate mod de funcționare baterie (urmărită)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Taxa lunară de putere per kW de vârf (CHF/kW/lună). Setați 0 dacă în contractul dumneavoastră nu există o taxă de putere.",
           "observer_mode": "Când este ACTIV, SEM monitorizează și calculează totul, dar nu trimite niciodată un apel de serviciu către hardware. Folosiți-l pe un HA de test/staging care oglindește o instalare de producție.",
           "battery_discharge_control_entity": "Entitatea Number care controlează limita de putere de descărcare a invertorului (de ex. number.batteries_maximale_entladeleistung la Huawei). Detectată automat la instalare; suprascrieți-o aici dacă este nevoie.",
-          "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat).",
           "hot_water_solar_target": "Temperatura țintă (°C) pentru încălzirea apei calde asistată solar. SEM stimulează boilerul atunci când există surplus.",
           "legionella_target_temp": "Temperatura (°C) pe care sistemul de apă caldă trebuie să o atingă în timpul unui ciclu de dezinfecție anti-legionella.",
           "legionella_interval_hours": "Numărul maxim de ore între ciclurile de dezinfecție anti-legionella înainte ca SEM să forțeze o încălzire.",
@@ -2130,12 +2126,6 @@
         "disabled": "Dezactivat",
         "grid_only": "Doar alimentare din rețea",
         "hybrid_load_port": "Rețea + ieșire Load/EPS a invertorului hibrid"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (integrat)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

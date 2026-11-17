@@ -46,13 +46,11 @@
         "description": "Viimeinen vaihe! SEM tunnisti automaattisesti invertterisi purkuohjauksen entiteetin: {discharge_entity}\n\nJätä koontinäyttövalinta PÄÄLLE, niin SEM rakentaa Lovelace-koontinäyttönsä puolestasi. **Huomaa: tämä käynnistää Home Assistantin uudelleen noin 5 sekuntia asennuksen valmistumisen jälkeen.**\n\nKaikki muu — myös verkon huipputehon raja — käyttää turvallisia oletusarvoja, joita voit säätää heti asennuksen jälkeen: huipputehon rajan välilehden **Ohjaus** liukusäätimellä, kaiken muun SEM-koontinäytön välilehdellä **Asetukset** — mukaan lukien sähköauton laturit, lämpöpumppu, tariffi ja akkualueet.",
         "data": {
           "battery_capacity_kwh": "Kotiakun kapasiteetti (kWh)",
-          "generate_dashboard_on_install": "Luo SEM-koontinäyttö nyt (käynnistää HA:n uudelleen)",
-          "diagram_style": "Järjestelmäkaavion tyyli"
+          "generate_dashboard_on_install": "Luo SEM-koontinäyttö nyt (käynnistää HA:n uudelleen)"
         },
         "data_description": {
           "battery_capacity_kwh": "Kotiakkusi (EI sähköauton) käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Ennusteohjattu latausstrategia käyttää tätä arvioidakseen, kuinka paljon akku voi paikata aurinkovajetta. Tarkista invertterin tekniset tiedot.",
-          "generate_dashboard_on_install": "Kun tämä on käytössä, SEM luo Lovelace-koontinäytön heti tämän vaiheen päätyttyä ja käynnistää Home Assistantin uudelleen noin 5 s myöhemmin, jotta uusi koontinäyttö tulee näkyviin. Voit aina luoda sen myöhemmin uudelleen palvelulla solar_energy_management.generate_dashboard.",
-          "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen)."
+          "generate_dashboard_on_install": "Kun tämä on käytössä, SEM luo Lovelace-koontinäytön heti tämän vaiheen päätyttyä ja käynnistää Home Assistantin uudelleen noin 5 s myöhemmin, jotta uusi koontinäyttö tulee näkyviin. Voit aina luoda sen myöhemmin uudelleen palvelulla solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Käyttöveden aurinkolämmityksen tavoite (°C)",
           "legionella_target_temp": "Legionelladesinfioinnin tavoite (°C)",
           "legionella_interval_hours": "Enimmäisaika desinfiointijaksojen välillä (tuntia)",
-          "diagram_style": "Järjestelmäkaavion tyyli",
           "battery_assist_min_surplus": "Akkutuki – vähimmäisaurinkoylijäämä (W)",
           "grid_sign_invert": "Käännä verkkotehon etumerkki",
           "battery_operating_mode_entity": "Akun käyttötila-entiteetti (tarkkailtu)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Kuukausittainen tehomaksu huipputehon kilowattia kohti (CHF/kW/kk). Aseta arvoon 0, jos sopimuksessasi ei ole tehomaksua.",
           "observer_mode": "Kun tämä on PÄÄLLÄ, SEM seuraa ja laskee kaiken, mutta ei koskaan lähetä palvelukutsua laitteistolle. Käytä testi- tai staging-HA:ssa, joka jäljittelee tuotantoasennusta.",
           "battery_discharge_control_entity": "Number-entiteetti, joka ohjaa invertterin purkutehon rajaa (esim. number.batteries_maximale_entladeleistung Huaweilla). Tunnistetaan automaattisesti asennuksessa; ohita tässä tarvittaessa.",
-          "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen).",
           "hot_water_solar_target": "Tavoitelämpötila (°C) auringolla avustetulle käyttöveden lämmitykselle. SEM boostaa varaajaa, kun ylijäämää on saatavilla.",
           "legionella_target_temp": "Lämpötila (°C), johon käyttövesijärjestelmän on yllettävä legionelladesinfiointijakson aikana.",
           "legionella_interval_hours": "Enimmäistuntimäärä legionelladesinfiointijaksojen välillä, ennen kuin SEM pakottaa lämmityksen.",
@@ -2130,12 +2126,6 @@
         "disabled": "Poistettu käytöstä",
         "grid_only": "Vain verkkosyöttö",
         "hybrid_load_port": "Sähköverkko + hybridi-invertterin Load/EPS-lähtö"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (sisäänrakennettu)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

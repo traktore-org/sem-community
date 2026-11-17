@@ -46,13 +46,11 @@
         "description": "最后一步！SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置——包括电网峰值功率限制——都将使用安全默认值，您可以在安装完成后立即调整：峰值功率限制通过 **控制** 标签页的滑块调整，其余设置通过 SEM 看板的 **配置** 标签页调整——包括电动汽车充电桩、热泵、电价以及电池分区。",
         "data": {
           "battery_capacity_kwh": "家用蓄电池容量 (kWh)",
-          "generate_dashboard_on_install": "立即生成 SEM 看板（会重启 HA）",
-          "diagram_style": "系统拓扑图样式"
+          "generate_dashboard_on_install": "立即生成 SEM 看板（会重启 HA）"
         },
         "data_description": {
           "battery_capacity_kwh": "您家用蓄电池（非电动汽车）的总可用容量 (kWh)。由预测驱动的充电策略用于估算电池可在多大程度上弥补太阳能缺口。请检查您的逆变器规格说明书。",
-          "generate_dashboard_on_install": "启用时，SEM 将在完成此步骤后立即创建 Lovelace 看板，并在此后约 5 秒重启 Home Assistant，以便让新看板可见。您稍后随时可以通过 solar_energy_management.generate_dashboard 服务手动重新运行此操作。",
-          "diagram_style": "选择在“主页”标签页上使用哪种系统拓扑图卡片。“SEM” 使用内置的动效拓扑图。“K-Flow” 使用 K-Flow HACS 卡片（必须单独安装）。"
+          "generate_dashboard_on_install": "启用时，SEM 将在完成此步骤后立即创建 Lovelace 看板，并在此后约 5 秒重启 Home Assistant，以便让新看板可见。您稍后随时可以通过 solar_energy_management.generate_dashboard 服务手动重新运行此操作。"
         }
       },
       "reconfigure": {
@@ -229,7 +227,6 @@
           "hot_water_solar_target": "热水太阳能加热目标温度 (°C)",
           "legionella_target_temp": "军团菌消毒目标温度 (°C)",
           "legionella_interval_hours": "消毒周期最大间隔时间 (小时)",
-          "diagram_style": "系统图样式",
           "grid_sign_invert": "反转电网功率符号",
           "battery_operating_mode_entity": "电池运行模式实体（受监测）",
           "battery_charge_end_soc_entity": "蓄电池充电截止电量（可选）",
@@ -253,7 +250,6 @@
           "demand_charge_rate": "每月每 kW 峰值功率的需量电费 (CHF/kW/月)。如果您的合同中没有需量电费，请设置为 0。",
           "observer_mode": "启用后，SEM 会监控并计算所有内容，但绝不会向硬件发送服务调用。适用于镜像正式环境的测试/预发 HA 实例。",
           "battery_discharge_control_entity": "控制逆变器最大放电功率限制的数字实体（例如华为上的 number.batteries_maximale_entladeleistung）。安装时会自动检测；如果需要，可在此处覆盖。",
-          "diagram_style": "选择在主页标签页上使用哪种系统图卡片。“SEM”使用内置的动态图。“K-Flow”使用 K-Flow HACS 卡片（必须单独安装）。修改后需要重新运行 generate_dashboard。",
           "hot_water_solar_target": "太阳能辅助热水加热的目标温度 (°C)。当有富余电量时，SEM 会提高锅炉的加热目标。",
           "legionella_target_temp": "热水系统在军团菌消毒周期中必须达到的温度 (°C)。",
           "legionella_interval_hours": "在 SEM 强制启动加热之前，两次军团菌消毒周期之间的最大间隔时间（小时）。",
@@ -2130,12 +2126,6 @@
         "disabled": "已禁用",
         "grid_only": "仅电网供电",
         "hybrid_load_port": "电网 + 混合逆变器 Load/EPS 输出"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM（内置）",
-        "kflow": "K-Flow（HACS）"
       }
     },
     "tariff_mode": {

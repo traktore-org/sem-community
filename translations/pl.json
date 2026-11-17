@@ -46,13 +46,11 @@
         "description": "Ostatni krok! SEM automatycznie wykrył encję sterowania rozładowaniem Twojego falownika: {discharge_entity}\n\nZostaw opcję pulpitu WŁĄCZONĄ, a SEM zbuduje dla Ciebie swój pulpit Lovelace. **Uwaga: około 5 sekund po zakończeniu instalacji Home Assistant uruchomi się ponownie.**\n\nWszystko inne — w tym Twój limit szczytowy sieci — używa bezpiecznych wartości domyślnych, które możesz zmienić zaraz po konfiguracji: limit szczytowy suwakiem na karcie **Sterowanie**, wszystko inne na karcie **Konfiguracja** pulpitu SEM — w tym ładowarki EV, pompę ciepła, taryfę i strefy baterii.",
         "data": {
           "battery_capacity_kwh": "Pojemność baterii domowej (kWh)",
-          "generate_dashboard_on_install": "Wygeneruj teraz pulpit SEM (restartuje HA)",
-          "diagram_style": "Styl diagramu systemowego"
+          "generate_dashboard_on_install": "Wygeneruj teraz pulpit SEM (restartuje HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Całkowita użyteczna pojemność baterii domowej (NIE pojazdu EV) w kWh. Używana przez strategię ładowania opartą na prognozie do oszacowania, jak duży deficyt słoneczny bateria może zmostkować. Sprawdź specyfikację falownika.",
-          "generate_dashboard_on_install": "Gdy opcja jest włączona, SEM tworzy pulpit Lovelace natychmiast po zakończeniu tego kroku, a następnie ok. 5 s później restartuje Home Assistant, aby nowy pulpit stał się widoczny. Zawsze możesz uruchomić to ponownie ręcznie usługą solar_energy_management.generate_dashboard.",
-          "diagram_style": "Wybierz styl diagramu systemowego na karcie Strona główna. 'SEM' używa wbudowanego animowanego diagramu. 'K-Flow' używa karty K-Flow HACS (wymaga osobnej instalacji)."
+          "generate_dashboard_on_install": "Gdy opcja jest włączona, SEM tworzy pulpit Lovelace natychmiast po zakończeniu tego kroku, a następnie ok. 5 s później restartuje Home Assistant, aby nowy pulpit stał się widoczny. Zawsze możesz uruchomić to ponownie ręcznie usługą solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Cel solarnego podgrzewania ciepłej wody (°C)",
           "legionella_target_temp": "Cel dezynfekcji legionelli (°C)",
           "legionella_interval_hours": "Maks. liczba godzin między cyklami dezynfekcji",
-          "diagram_style": "Styl diagramu systemowego",
           "battery_assist_min_surplus": "Wsparcie baterii – min. nadwyżka solarna (W)",
           "grid_sign_invert": "Odwróć znak mocy sieci",
           "battery_operating_mode_entity": "Encja trybu pracy baterii (obserwowana)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Miesięczna opłata mocowa za kW szczytu (CHF/kW/miesiąc). Ustaw 0, jeśli Twoja umowa nie przewiduje opłaty mocowej.",
           "observer_mode": "Gdy WŁĄCZONE, SEM wszystko monitoruje i wylicza, ale nigdy nie wysyła wywołania usługi do sprzętu. Stosuj na testowej/stagingowej instancji HA odzwierciedlającej instalację produkcyjną.",
           "battery_discharge_control_entity": "Encja Number sterująca limitem mocy rozładowania falownika (np. number.batteries_maximale_entladeleistung w Huawei). Wykrywana automatycznie przy instalacji; w razie potrzeby nadpisz tutaj.",
-          "diagram_style": "Wybierz styl diagramu systemowego na karcie Strona główna. 'SEM' używa wbudowanego animowanego diagramu. 'K-Flow' używa karty K-Flow HACS (wymaga osobnej instalacji).",
           "hot_water_solar_target": "Docelowa temperatura (°C) dla podgrzewania ciepłej wody wspieranego słońcem. SEM podbija bojler, gdy dostępna jest nadwyżka.",
           "legionella_target_temp": "Temperatura (°C), jaką musi osiągnąć instalacja ciepłej wody podczas cyklu dezynfekcji przeciw legionelli.",
           "legionella_interval_hours": "Maksymalna liczba godzin między cyklami dezynfekcji przeciw legionelli, zanim SEM wymusi podgrzanie.",
@@ -2130,12 +2126,6 @@
         "disabled": "Wyłączone",
         "grid_only": "Tylko zasilanie z sieci",
         "hybrid_load_port": "Sieć + wyjście Load/EPS falownika hybrydowego"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (wbudowany)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

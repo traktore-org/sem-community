@@ -46,13 +46,11 @@
         "description": "Letzter Schritt! SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere — einschließlich Ihres Netz-Spitzenwert-Limits — verwendet sichere Standardwerte, die Sie direkt nach der Einrichtung anpassen können: das Spitzenwert-Limit über den Schieberegler im **Steuerung**-Tab, alles andere im **Konfiguration**-Tab des SEM-Dashboards — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
         "data": {
           "battery_capacity_kwh": "Hausbatterie-Kapazität (kWh)",
-          "generate_dashboard_on_install": "SEM-Dashboard jetzt erstellen (startet HA neu)",
-          "diagram_style": "Systemdiagramm-Stil"
+          "generate_dashboard_on_install": "SEM-Dashboard jetzt erstellen (startet HA neu)"
         },
         "data_description": {
           "battery_capacity_kwh": "Gesamte nutzbare Kapazität Ihrer Hausbatterie (NICHT des EV) in kWh. Wird von der prognosegesteuerten Ladestrategie verwendet, um abzuschätzen, wie viel Batterie ein Solardefizit überbrücken kann. Sehen Sie im Datenblatt Ihres Wechselrichters nach.",
-          "generate_dashboard_on_install": "Wenn aktiviert, erstellt SEM das Lovelace-Dashboard direkt nach Abschluss dieses Schritts und startet Home Assistant etwa 5 s später neu, damit das neue Dashboard sichtbar wird. Sie können es später jederzeit manuell über den Dienst solar_energy_management.generate_dashboard erneut ausführen.",
-          "diagram_style": "Wählen Sie das Systemdiagramm für den Haus-Tab. 'SEM' verwendet das integrierte animierte Diagramm. 'K-Flow' verwendet die K-Flow HACS-Karte (muss separat installiert werden)."
+          "generate_dashboard_on_install": "Wenn aktiviert, erstellt SEM das Lovelace-Dashboard direkt nach Abschluss dieses Schritts und startet Home Assistant etwa 5 s später neu, damit das neue Dashboard sichtbar wird. Sie können es später jederzeit manuell über den Dienst solar_energy_management.generate_dashboard erneut ausführen."
         }
       },
       "reconfigure": {
@@ -229,7 +227,6 @@
           "hot_water_solar_target": "Warmwasser Solar-Heizziel (°C)",
           "legionella_target_temp": "Legionellen-Desinfektionsziel (°C)",
           "legionella_interval_hours": "Max. Stunden zwischen Desinfektionszyklen",
-          "diagram_style": "Systemdiagramm-Stil",
           "grid_sign_invert": "Vorzeichen der Netzleistung umkehren",
           "battery_operating_mode_entity": "Batterie-Betriebsmodus-Entität (beobachtet)",
           "battery_charge_end_soc_entity": "Ladeende-Stand der Batterie (optional)",
@@ -253,7 +250,6 @@
           "demand_charge_rate": "Monatlicher Leistungspreis pro kW Spitzenlast (CHF/kW/Monat). Auf 0 setzen, wenn Ihr Vertrag keinen Leistungspreis hat.",
           "observer_mode": "Wenn EIN, überwacht und berechnet SEM alles, sendet aber nie einen Dienstaufruf an die Hardware. Auf einem Test-/Staging-HA verwenden, das eine Produktivinstallation spiegelt.",
           "battery_discharge_control_entity": "Number-Entität, die das Entladeleistungs-Limit des Wechselrichters steuert (z. B. number.batteries_maximale_entladeleistung bei Huawei). Wird bei der Installation automatisch erkannt; hier bei Bedarf überschreiben.",
-          "diagram_style": "Wählen Sie das Systemdiagramm für den Haus-Tab. 'SEM' verwendet das integrierte animierte Diagramm. 'K-Flow' verwendet die K-Flow HACS-Karte (muss separat installiert werden).",
           "hot_water_solar_target": "Zieltemperatur (°C) für die solarunterstützte Warmwasserbereitung. SEM heizt den Boiler auf, wenn Überschuss verfügbar ist.",
           "legionella_target_temp": "Temperatur (°C), die das Warmwassersystem während eines Legionellen-Desinfektionszyklus erreichen muss.",
           "legionella_interval_hours": "Maximale Anzahl Stunden zwischen Legionellen-Desinfektionszyklen, bevor SEM eine Aufheizung erzwingt.",
@@ -2130,12 +2126,6 @@
         "disabled": "Deaktiviert",
         "grid_only": "Nur Netzversorgung",
         "hybrid_load_port": "Stromnetz + Load/EPS-Ausgang des Hybridwechselrichters"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (integriert)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

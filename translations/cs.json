@@ -46,13 +46,11 @@
         "description": "Poslední krok! SEM automaticky zjistil entitu pro řízení vybíjení vašeho střídače: {discharge_entity}\n\nPonechte volbu panelu ZAPNUTOU a SEM pro vás vytvoří svůj panel Lovelace. **Poznámka: přibližně 5 sekund po dokončení instalace se Home Assistant restartuje.**\n\nVše ostatní — včetně limitu špičky ze sítě — používá bezpečné výchozí hodnoty, které můžete upravit hned po nastavení: limit špičky posuvníkem na kartě **Ovládání**, vše ostatní na kartě **Konfigurace** v panelu SEM — včetně nabíječek EV, tepelného čerpadla, tarifu a zón baterie.",
         "data": {
           "battery_capacity_kwh": "Kapacita domácí baterie (kWh)",
-          "generate_dashboard_on_install": "Vygenerovat nyní panel SEM (restartuje HA)",
-          "diagram_style": "Styl systémového diagramu"
+          "generate_dashboard_on_install": "Vygenerovat nyní panel SEM (restartuje HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Celková využitelná kapacita vaší domácí baterie (NIKOLI baterie EV) v kWh. Používá ji strategie nabíjení řízená předpovědí k odhadu, jak velký solární deficit dokáže baterie překlenout. Ověřte ve specifikaci svého měniče.",
-          "generate_dashboard_on_install": "Je-li zapnuto, SEM vytvoří panel Lovelace ihned po dokončení tohoto kroku a přibližně o 5 s později restartuje Home Assistant, aby se nový panel zobrazil. Kdykoli později jej můžete znovu vytvořit ručně pomocí služby solar_energy_management.generate_dashboard.",
-          "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť)."
+          "generate_dashboard_on_install": "Je-li zapnuto, SEM vytvoří panel Lovelace ihned po dokončení tohoto kroku a přibližně o 5 s později restartuje Home Assistant, aby se nový panel zobrazil. Kdykoli později jej můžete znovu vytvořit ručně pomocí služby solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Cíl solárního ohřevu teplé vody (°C)",
           "legionella_target_temp": "Cíl dezinfekce proti legionele (°C)",
           "legionella_interval_hours": "Max. počet hodin mezi dezinfekčními cykly",
-          "diagram_style": "Styl systémového diagramu",
           "battery_assist_min_surplus": "Podpora baterie – min. solární přebytek (W)",
           "grid_sign_invert": "Obrátit znaménko síťového výkonu",
           "battery_operating_mode_entity": "Entita provozního režimu baterie (sledovaná)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Měsíční poplatek za rezervovaný příkon na kW špičky (CHF/kW/měsíc). Nastavte 0, pokud vaše smlouva takový poplatek nemá.",
           "observer_mode": "Je-li ZAPNUTO, SEM vše sleduje a počítá, ale nikdy neodešle volání služby do hardwaru. Použijte na testovacím/přípravném HA, který zrcadlí produkční instalaci.",
           "battery_discharge_control_entity": "Entita Number, která řídí limit vybíjecího výkonu měniče (např. number.batteries_maximale_entladeleistung u Huawei). Při instalaci se zjistí automaticky; zde ji můžete v případě potřeby přepsat.",
-          "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť).",
           "hot_water_solar_target": "Cílová teplota (°C) pro ohřev teplé vody podporovaný sluncem. SEM přitopí bojler, když je k dispozici přebytek.",
           "legionella_target_temp": "Teplota (°C), které musí systém teplé vody dosáhnout během dezinfekčního cyklu proti legionele.",
           "legionella_interval_hours": "Maximální počet hodin mezi dezinfekčními cykly proti legionele, než SEM vynutí ohřev.",
@@ -2130,12 +2126,6 @@
         "disabled": "Zakázáno",
         "grid_only": "Pouze distribuční síť",
         "hybrid_load_port": "Distribuční síť + výstup Load/EPS hybridního střídače"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (vestavěný)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

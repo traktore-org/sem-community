@@ -1,16 +1,19 @@
 """(#1377) A setting the docs tell the user to set has a field in the GUI.
 
 The docs name option keys in backticks (`battery_charge_select_entity`).
-Each such key that is a real option must be settable from the dashboard:
-a field on the Configuration card, a SEM number/select/switch/time entity
-that writes it, or it is listed in ``GUI_EXEMPT`` with the reason. SETUP_GUIDE
-once said "set the charge switch in the Configuration tab" with no field (#1362).
+Each such key that is a real option must be settable from the SEM dashboard
+(#1321: the one dashboard, its System and Devices screens): a field in the
+card sources, a SEM number/select/switch/time entity that writes it, or it is
+listed in ``GUI_EXEMPT`` with the reason. SETUP_GUIDE once said "set the
+charge switch in the Configuration tab" with no field (#1362).
 
-Second pin: a key the card hides on a two-battery home must be declared in
-``SINGLE_BATTERY_ONLY`` with its reason, so hiding one by accident fails.
+Second pin: the keys the System screen hides on a two-battery home are the
+ones declared in ``SINGLE_BATTERY_ONLY`` with their reason, so hiding one by
+accident fails.
 
-Reading the card here means reading its field list, not asserting on text
-of code: the helper below is the one declared parser of the card.
+Reading the sources here means reading their key lists: the helpers below are
+the one declared parser. What the screens do with the keys is pinned by
+``dashboard/card/test/next-system-settings.test.js``.
 """
 from __future__ import annotations
 
@@ -23,7 +26,8 @@ from custom_components.solar_energy_management.number import CONFIG_KEY_MAP
 ROOT = Path(__file__).resolve().parent.parent
 DOC_FILES = ("README.md", "docs/SETUP_GUIDE.md", "docs/USER_GUIDE.md",
              "docs/QUICK_START.md")
-CARD = ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js"
+CARD_SRC = ROOT / "dashboard" / "card" / "src"
+SETTINGS = CARD_SRC / "util" / "next-settings.js"
 ENTITY_FILES = ("number.py", "switch.py", "select.py", "time.py", "button.py")
 
 # GUI-EXEMPT: key -> why it has no dashboard field. A key that gains a field
@@ -37,51 +41,37 @@ GUI_EXEMPT = {
     "vehicle_range_entity": "options flow only: the user guide says so; no card picker yet",
 }
 
-# Keys the card shows for ONE battery and not for several, with why.
+# Keys the System screen shows for ONE battery and not for several, with why.
+# (The four battery_strategy_*_value keys follow the single strategy select: set
+# on one battery they show, on several there is no select to follow.)
 SINGLE_BATTERY_ONLY = {
     "battery_force_discharge_control_entity": "replaced by one picker per battery (battery_force_discharge_entities)",
     "battery_strategy_control_entity": "replaced by one picker per battery (battery_strategy_entities)",
-    "battery_strategy_active_value": "GAP: shown only beside the single strategy select; none on two batteries",
-    "battery_strategy_idle_value": "GAP: shown only beside the single strategy select; none on two batteries",
-    "battery_strategy_self_consume_value": "GAP: shown only beside the single strategy select; none on two batteries",
-    "battery_strategy_off_value": "GAP: shown only beside the single strategy select; none on two batteries",
     "battery_force_charge_switch": "#1377: a stop by one pack puts it back while another still charges",
     "battery_target_soc_entity": "#1377: same shared target; one pack's stop undoes the other's charge",
 }
 
-# the first 160 characters after a render call hold its key, which may be the
-# 1st-3rd argument (_renderPickerNested(idx, cid, 'key', ...),
-# _renderStepper('number.x', 'key')); only quoted words that are real option
-# keys count, so labels and domains are ignored.
-_RENDER_CALL = re.compile(r"_render\w+\(([^\n]{0,160}(?:\n[^\n]{0,160})?)")
-_QUOTED = re.compile(r"'([a-z][a-z0-9_]+)'")
-_OPT_ID = re.compile(r"'opt:([a-z][a-z0-9_]+)'")
 # number.py pairs each per-charger entity with the option key it writes:
 # ``), "ev_target_soc", full_config.get(...)``
 _ENTITY_KEY = re.compile(
     r'key=f?"(?:charger_\{cid\}_)?([a-z][a-z0-9_]+)"|\),\s*"([a-z][a-z0-9_]+)",\s*(?:full_config|charger_cfg)')
+# An option whose number entity has another name: the System screen binds the
+# entity, so the entity id in the card sources is its field.
+ENTITY_FIELD_OF = {"min_solar_power": "number.sem_minimum_solar_power"}
+_QUOTED = re.compile(r"""['"`]([a-z][a-z0-9_]+)['"`]""")
+# ``items.push(e('a'), e('b'))`` on the single-battery branch
+_SINGLE_PUSH = re.compile(r"(?:if \(n < 2\)|else) items\.push\(([^;]*)\);")
+_E_CALL = re.compile(r"\be\('([a-z][a-z0-9_]+)'\)")
 
 
-def _card_text() -> str:
-    return CARD.read_text(encoding="utf-8")
-
-
-_DOMAINS = {"number", "select", "switch", "sensor", "binary_sensor", "button",
-            "input_number", "input_select", "input_boolean", "text", "time"}
-
-
-def _render_keys(region: str, only_known: bool = True) -> set:
-    found = set()
-    for call in _RENDER_CALL.findall(region):
-        found |= set(_QUOTED.findall(call))
-    if only_known:
-        return found & _known_keys()
-    return {k for k in found if not k.startswith(("config_", "opt_"))} - _DOMAINS
+def _source_text() -> str:
+    return "\n".join(p.read_text(encoding="utf-8") for p in sorted(CARD_SRC.rglob("*.js")))
 
 
 def _card_keys() -> set:
-    card_text = _card_text()
-    return _render_keys(card_text) | (set(_OPT_ID.findall(card_text)) & _known_keys())
+    text = _source_text()
+    named = {k for k, entity in ENTITY_FIELD_OF.items() if entity in text}
+    return (set(_QUOTED.findall(text)) & _known_keys()) | named
 
 
 def _entity_keys() -> set:
@@ -115,21 +105,12 @@ def _known_keys() -> set:
     return _option_keys() | {"battery_force_discharge_entities", "battery_strategy_entities"}
 
 
-def _branch_keys(region: str) -> set:
-    return _render_keys(region, only_known=False)
-
-
 def _single_only_keys() -> set:
-    """Keys the card renders only when there is one battery."""
-    card_text = _card_text()
-    start = card_text.index("const n = this._batteryCount();\n"
-                            "                    if (n > 1) {")
-    block = card_text[start:card_text.index("})()", start)]
-    multi, _, single = block.partition("\n                    }\n")
-    keys = _branch_keys(single) - _branch_keys(multi)
-    fn = card_text[card_text.index("_renderBatteryChargeFields(opts, n) {"):]
-    fn = fn[:fn.index("\n    }\n")]
-    keys |= _branch_keys(fn.split("nothing) : html`", 1)[1])
+    """Keys the System screen draws only when there is one battery."""
+    text = SETTINGS.read_text(encoding="utf-8")
+    keys = set()
+    for call in _SINGLE_PUSH.findall(text):
+        keys |= set(_E_CALL.findall(call))
     return keys
 
 

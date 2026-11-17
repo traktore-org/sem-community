@@ -46,13 +46,11 @@
         "description": "Último passo! O SEM detetou automaticamente a entidade de controlo de descarga do seu inversor: {discharge_entity}\n\nDeixe a opção do painel LIGADA para o SEM criar o painel Lovelace por si. **Nota: isto reinicia o Home Assistant cerca de 5 segundos após a instalação terminar.**\n\nTudo o resto — incluindo o seu limite de pico da rede — usa valores predefinidos seguros que pode ajustar logo após a configuração: o limite de pico no controlo deslizante do separador **Controlo**, tudo o resto no separador **Configuração** do painel do SEM — incluindo carregadores VE, bomba de calor, tarifa e zonas da bateria.",
         "data": {
           "battery_capacity_kwh": "Capacidade da bateria doméstica (kWh)",
-          "generate_dashboard_on_install": "Gerar agora o painel SEM (reinicia o HA)",
-          "diagram_style": "Estilo do diagrama do sistema"
+          "generate_dashboard_on_install": "Gerar agora o painel SEM (reinicia o HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacidade total utilizável da sua bateria doméstica (NÃO a do VE) em kWh. Usada pela estratégia de carregamento baseada na previsão para estimar quanto a bateria consegue compensar um défice solar. Consulte a ficha técnica do seu inversor.",
-          "generate_dashboard_on_install": "Quando ativado, o SEM cria o painel Lovelace imediatamente após a conclusão deste passo e reinicia o Home Assistant cerca de 5 s depois para que o novo painel fique visível. Pode sempre voltar a executá-lo manualmente mais tarde através do serviço solar_energy_management.generate_dashboard.",
-          "diagram_style": "Escolha qual diagrama do sistema usar na aba Início. 'SEM' usa o diagrama animado integrado. 'K-Flow' usa o cartão K-Flow HACS (deve ser instalado separadamente)."
+          "generate_dashboard_on_install": "Quando ativado, o SEM cria o painel Lovelace imediatamente após a conclusão deste passo e reinicia o Home Assistant cerca de 5 s depois para que o novo painel fique visível. Pode sempre voltar a executá-lo manualmente mais tarde através do serviço solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Temperatura alvo do aquecimento solar da água quente (°C)",
           "legionella_target_temp": "Temperatura alvo da desinfeção antilegionela (°C)",
           "legionella_interval_hours": "Máximo de horas entre ciclos de desinfeção",
-          "diagram_style": "Estilo do diagrama do sistema",
           "battery_assist_min_surplus": "Assistência bateria – excedente solar mín. (W)",
           "grid_sign_invert": "Inverter o sinal da potência da rede",
           "battery_operating_mode_entity": "Entidade de modo de funcionamento da bateria (observada)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Encargo mensal de potência por kW de pico (CHF/kW/mês). Defina 0 se o seu contrato não tiver encargo de potência.",
           "observer_mode": "Quando LIGADO, o SEM monitoriza e calcula tudo, mas nunca envia uma chamada de serviço ao hardware. Use num HA de teste/homologação que replique uma instalação de produção.",
           "battery_discharge_control_entity": "Entidade Number que controla o limite de potência de descarga do inversor (por ex. number.batteries_maximale_entladeleistung na Huawei). Detetada automaticamente na instalação; substitua aqui se necessário.",
-          "diagram_style": "Escolha qual diagrama do sistema usar na aba Início. 'SEM' usa o diagrama animado integrado. 'K-Flow' usa o cartão K-Flow HACS (deve ser instalado separadamente).",
           "hot_water_solar_target": "Temperatura alvo (°C) para o aquecimento da água quente com apoio solar. O SEM dá um boost à caldeira quando há excedente disponível.",
           "legionella_target_temp": "Temperatura (°C) que o sistema de água quente tem de atingir durante um ciclo de desinfeção antilegionela.",
           "legionella_interval_hours": "Número máximo de horas entre ciclos de desinfeção antilegionela antes de o SEM forçar um aquecimento.",
@@ -2130,12 +2126,6 @@
         "disabled": "Desativado",
         "grid_only": "Apenas fornecimento de rede",
         "hybrid_load_port": "Rede + saída Load/EPS do inversor híbrido"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (integrado)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

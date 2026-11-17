@@ -6,9 +6,8 @@
  * arrays of text and value slots. A slot is bound to an entity
  * (`number.*` / `select.*` / `switch.*`, written directly) or to an
  * integration option (`set_option`, several keys in one call). Field ids,
- * option keys, ranges and defaults are copied from `cards/sem-config-card.js`
- * (SECTIONS and its renderers), the structural keys from its STRUCTURAL_KEYS
- * (mirror of `__init__.py:_SET_OPTION_STRUCTURAL_KEYS`).
+ * option keys, ranges and defaults follow the options flow, the structural
+ * keys mirror `__init__.py:_SET_OPTION_STRUCTURAL_KEYS`.
  *
  * A missing entity or an unloaded option leaves its slot out: the fragment
  * that needs it is dropped, the sentence is built from the fragments that
@@ -27,8 +26,8 @@ import { priceAddOns } from './settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from './peak-questions.js';
 import { BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
 
-// (#528) option keys that reload the entry when written — copied from
-// cards/sem-config-card.js STRUCTURAL_KEYS.
+// (#528) option keys that reload the entry when written — a subset of
+// `__init__.py:_SET_OPTION_STRUCTURAL_KEYS` (tests/test_528).
 export const STRUCTURAL_KEYS = new Set([
     'battery_soc_sensor', 'tariff_schedule_entity',
     'grid_power_sensor', 'solar_production_sensor', 'battery_power_sensor', 'house_power_sensor',
@@ -42,6 +41,10 @@ export const STRUCTURAL_KEYS = new Set([
     'heat_pump_rated_power', 'hot_water_rated_power',
     'hot_water_entity', 'hot_water_power_sensor', 'hot_water_temperature_sensor',
     'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
+    // (#1346, #1362, #1358) read at adapter construction: the grid-charge select
+    // pair, the charge switch and target, the inverter's end-of-discharge level
+    'battery_charge_select_entity', 'battery_charge_select_option',
+    'battery_force_charge_switch', 'battery_target_soc_entity', 'battery_discharge_end_soc_entity',
     'battery_discharge_control_entity', 'battery_charge_end_soc_entity',
     'battery_discharge_protection_enabled', 'battery_setpoint_bidirectional',
     'battery_setpoint_model', 'battery_power_direction_entity',
@@ -343,6 +346,7 @@ const FORECAST_SOURCES = [
     { value: 'open_meteo', label: 'Open-Meteo' }, { value: 'helios', label: 'Helios' },
 ];
 const HINT_LABEL = (v) => ({ off: 'off', weekly: 'weekly', all: 'all' }[v] || null);
+const HP_STEP_DOWN = ['off', 'setpoint', 'block'].map((v) => ({ value: v, labelKey: 'config_hp_step_down_' + v }));
 const SETPOINT_MODELS = ['signed', 'inverted', 'direction_select'].map((v) => ({ value: v, label: v }));
 
 // Entity fields of the classic setup card (sem-config-card.js _renderPicker /
@@ -362,6 +366,10 @@ export const ENTITY_FIELDS = {
     battery_discharge_control_entity: { domain: 'number', labelKey: 'config_batt_discharge_entity' },
     battery_external_control_indicator: { domain: EXT_INDICATOR_DOMAINS, labelKey: 'config_ext_ctrl_entity' },
     battery_charge_end_soc_entity: { domain: ['number', 'sensor', 'input_number'], labelKey: 'config_batt_charge_end_entity' },
+    battery_discharge_end_soc_entity: { domain: ['number', 'sensor', 'input_number'], labelKey: 'config_batt_discharge_end_entity' },
+    battery_charge_select_entity: { domain: ['select', 'input_select'], labelKey: 'config_charge_select_entity' },
+    battery_force_charge_switch: { domain: ['switch', 'input_boolean'], labelKey: 'config_charge_switch_entity' },
+    battery_target_soc_entity: { domain: ['number', 'input_number'], labelKey: 'config_charge_target_entity' },
     battery_force_discharge_control_entity: { domain: 'number', labelKey: 'config_force_discharge_entity' },
     battery_strategy_control_entity: { domain: 'select', labelKey: 'config_strategy_entity' },
     battery_power_direction_entity: { domain: 'select', labelKey: 'config_direction_entity' },
@@ -492,7 +500,7 @@ export function unavailableCount(states) {
 }
 
 /** How SEM reaches the battery (classic Battery zones + Tariff "battery control"). */
-function batteryWiring(o, cur, n = 0) {
+function batteryWiring(o, cur, n = 0, states = null, t = (k) => k) {
     if (!o) return [];
     const e = (k) => [ENTITY_FIELDS[k].labelKey, optEntity(o, k)];
     const ext = optSelect(o, 'battery_external_control_mode', EXT_MODES, 'none');
@@ -501,8 +509,10 @@ function batteryWiring(o, cur, n = 0) {
         e('battery_cycles_sensor'),
         e('battery_discharge_control_entity'),
         e('battery_charge_end_soc_entity'),
+        e('battery_discharge_end_soc_entity'),
         ['config_ext_ctrl_mode', ext],
     ];
+    items.push(...chargeFields(o, n, states, t));
     if (ext && ext.value !== 'none') items.push(e('battery_external_control_indicator'));
     if (n < 2) items.push(e('battery_force_discharge_control_entity'), e('battery_strategy_control_entity'));
     if (o.battery_strategy_control_entity) {
@@ -531,6 +541,32 @@ function batteryWiring(o, cur, n = 0) {
             e('deye_system_work_mode_entity'),
         );
     }
+    return items;
+}
+
+/**
+ * (#1362) The grid-charge fields. The select pair is one shared setting, so it
+ * shows for one battery and for several. The switch and the target are shared
+ * too, but one pack's stop would undo another's charge: with several batteries
+ * a line says so instead (#1377).
+ */
+function chargeFields(o, n, states, t) {
+    const e = (k) => [ENTITY_FIELDS[k].labelKey, optEntity(o, k)];
+    const items = [e('battery_charge_select_entity')];
+    const listed = o.battery_charge_select_entity && states
+        ? states[o.battery_charge_select_entity]?.attributes?.options : null;
+    if (o.battery_charge_select_entity) {
+        const choices = Array.isArray(listed) ? listed.map((v) => ({ value: String(v), label: String(v) })) : [];
+        items.push(['config_charge_select_option',
+            optSelect(o, 'battery_charge_select_option', withCurrent([{ value: '', label: '-' }, ...choices], o.battery_charge_select_option), '')]);
+    }
+    const hasSel = !!o.battery_charge_select_entity, hasOpt = !!o.battery_charge_select_option;
+    if (hasSel !== hasOpt) {
+        items.push([hasSel ? 'config_charge_select_option' : 'config_charge_select_entity',
+            text(t(hasSel ? 'config_charge_select_need_option' : 'config_charge_select_need_select'))]);
+    }
+    if (n > 1) items.push(['config_charge_switch_entity', text(t('config_charge_switch_one_battery'))]);
+    else items.push(e('battery_force_charge_switch'), e('battery_target_soc_entity'));
     return items;
 }
 
@@ -698,8 +734,9 @@ export function groups(states, t, ctx = {}) {
             ['next_more_max_discharge', numSlot(states, BATTERY_QUESTIONS.discharge_max.entity)],
             ['next_more_drain_floor', numSlot(states, 'number.sem_battery_morning_drain_floor_soc')],
             ['next_more_house_sink', switchSlot(states, 'switch.sem_battery_house_sink_enabled')],
+            ['battery_peak_hold', switchSlot(states, 'switch.sem_battery_peak_hold_enabled')],
             ['next_more_protection', optSwitch(o, 'battery_discharge_protection_enabled', true)],
-            ...batteryWiring(o, cur, batteryCount(states)),
+            ...batteryWiring(o, cur, batteryCount(states), states, t),
             ...batteryListItems(o, batteryCount(states), t),
             ['next_more_scheduler', optSwitch(o, 'battery_charge_scheduler_enabled', false)],
             ...(o && o.battery_charge_scheduler_enabled ? batteryScheduler(o, cur) : []),
@@ -814,6 +851,8 @@ export function groups(states, t, ctx = {}) {
             e('heat_pump_temperature_sensor'),
             ['next_more_max_setpoint', hpSet ? optNum(o, 'heat_pump_max_setpoint', { min: 30, max: 80, step: 1, unit: '°C', default: 55 }) : null],
             ['next_more_invert_contacts', hpSet ? optSwitch(o, 'heat_pump_invert_sg_ready', false) : null],
+            // (#1323) step down in a shortfall: off unless picked, read each cycle
+            ['config_hp_step_down', hpSet ? optSelect(o, 'heat_pump_step_down', HP_STEP_DOWN, 'off') : null],
             ['next_more_own_tariff', hpSet && !hpRateSet ? hpRate : null],
             hpSet ? e('heat_pump_tariff_entity') : null,
             hpSet ? e('heat_pump_tariff_meter') : null,
@@ -965,6 +1004,8 @@ export function applyPlan(pending, states) {
             if (STRUCTURAL_KEYS.has(slot.option)) reload = true;
         }
     }
+    // (#1346) a cleared grid-charge select takes its option with it
+    if (options.battery_charge_select_entity === '') options.battery_charge_select_option = '';
     if (Object.keys(chargers).length) options.ev_chargers = Object.values(chargers);
     if (pvNames) options.pv_string_names = pvNames;
     return { entityWrites, options, listEdits, reload };
