@@ -17253,6 +17253,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 continue
         return out
 
+    def source_recommendation(self) -> Optional[dict]:
+        """(#822) The installed source closest for this roof, or None.
+
+        Advice only: the user's pick stays the lever, so nothing here
+        re-points the reader.
+        """
+        from .forecast_ledger import recommend_source
+
+        reader = getattr(self, "_forecast_reader", None)
+        current = getattr(reader, "source", None)
+        ledgers = getattr(self, "_source_ledgers", None) or {}
+        if not current or not ledgers:
+            return None
+        try:
+            return recommend_source(
+                ledgers, current, today=dt_util.now().date().isoformat())
+        except Exception:  # noqa: BLE001
+            return None
+
     def _record_forecast_horizons(
         self, forecast_data, energy, now_time, power=None,
     ) -> None:

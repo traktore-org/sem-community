@@ -1999,6 +1999,8 @@ Install [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forec
 - Forecast-based night target reduction
 - Smart battery redirect decisions in the flow calculator
 
+With two or more forecast integrations installed, SEM scores each against what your roof really made. After 14 shared days, if another source has at least 15 % less error than the one in use, the Configuration card says so and offers a tap to switch (#822). SEM never switches by itself; its own correction learns again for a few days after a switch.
+
 ### Charge pacing on a real inverter (2.2, #820)
 
 Pacing writes the battery charge-power limit you named. Since 2.2 it writes

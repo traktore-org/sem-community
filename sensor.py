@@ -3432,6 +3432,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 accuracy = self.coordinator.source_accuracy()
                 if accuracy:
                     attrs["source_accuracy"] = accuracy
+                # (#822) Advice, not an action: the user taps to switch.
+                rec = self.coordinator.source_recommendation()
+                if rec:
+                    attrs["recommended_source"] = rec["source"]
+                    attrs["recommended_by_pct"] = rec["by_pct"]
+                    attrs["recommended_days"] = rec["days"]
+                    attrs["recommended_tomorrow_by_pct"] = rec.get(
+                        "tomorrow_by_pct")
             except Exception:  # noqa: BLE001
                 pass
         elif self.entity_description.key == "diag_charger_control":

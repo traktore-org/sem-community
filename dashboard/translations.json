@@ -3000,7 +3000,9 @@
     "config_help_charge_switch_entity": "Spínač, který zapne nabíjení ze sítě. Vedle výběru nabíjení ze sítě je to povolení (například povolit nabíjení ze sítě): SEM ho zapne s nabíjením a potom vypne.",
     "config_charge_target_entity": "Entita cílové úrovně nabíjení",
     "config_help_charge_target_entity": "Číslo, které určuje úroveň, do které se nabíjí, například záložní rezerva. SEM tam zapíše cíl plánu a vrátí původní hodnotu.",
-    "config_charge_switch_one_battery": "Spínač nabíjení a cílová úroveň se zobrazují jen u jedné baterie. Dvě baterie by je sdílely a zastavení jedné by je vrátilo, zatímco druhá ještě nabíjí."
+    "config_charge_switch_one_battery": "Spínač nabíjení a cílová úroveň se zobrazují jen u jedné baterie. Dvě baterie by je sdílely a zastavení jedné by je vrátilo, zatímco druhá ještě nabíjí.",
+    "forecast_recommend_text": "{provider} byl pro vaši střechu nejblíž za {days} dní ({pct} % menší chyba). Vlastní korekce SEM se pak několik dní učí znovu.",
+    "forecast_recommend_use": "Použít"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -6003,7 +6005,9 @@
     "config_help_charge_switch_entity": "En kontakt, der starter en netopladning. Ved siden af valget til netopladning er den en tilladelse (for eksempel tillad netopladning): SEM tænder den med opladningen og slukker den bagefter.",
     "config_charge_target_entity": "Entitet for opladningens målniveau",
     "config_help_charge_target_entity": "Et tal, der holder det niveau, der oplades til, for eksempel en backupreserve. SEM skriver planens mål ddér og sætter den gamle værdi tilbage.",
-    "config_charge_switch_one_battery": "Opladningskontakten og målniveauet vises kun ved ét batteri. To batterier ville dele dem, og det enes stop ville sætte dem tilbage, mens det andet stadig oplader."
+    "config_charge_switch_one_battery": "Opladningskontakten og målniveauet vises kun ved ét batteri. To batterier ville dele dem, og det enes stop ville sætte dem tilbage, mens det andet stadig oplader.",
+    "forecast_recommend_text": "{provider} har ligget tættest på dit tag over {days} dage ({pct} % mindre fejl). SEMs egen korrektion lærer derefter igen i nogle dage.",
+    "forecast_recommend_use": "Brug den"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -9006,7 +9010,9 @@
     "config_help_charge_switch_entity": "Ein Schalter, der ein Netzladen einschaltet. Neben der Netzladen-Auswahl ist er eine Freigabe (zum Beispiel Netzladen erlauben): SEM schaltet ihn mit dem Laden ein und danach aus.",
     "config_charge_target_entity": "Lade-Ziel-Entität (SOC)",
     "config_help_charge_target_entity": "Eine Zahl, die den Ladestand hält, bis zu dem geladen wird, zum Beispiel eine Notstrom-Reserve. SEM schreibt dort das Ziel des Plans und stellt den alten Wert zurück.",
-    "config_charge_switch_one_battery": "Lade-Schalter und Lade-Ziel erscheinen nur bei einer Batterie. Zwei Speicher würden sie teilen, und der Stopp des einen würde sie zurückstellen, während der andere noch lädt."
+    "config_charge_switch_one_battery": "Lade-Schalter und Lade-Ziel erscheinen nur bei einer Batterie. Zwei Speicher würden sie teilen, und der Stopp des einen würde sie zurückstellen, während der andere noch lädt.",
+    "forecast_recommend_text": "{provider} lag auf deinem Dach über {days} Tage am nächsten ({pct} % weniger Fehler). SEMs eigene Korrektur lernt danach einige Tage neu.",
+    "forecast_recommend_use": "Verwenden"
   },
   "en": {
     "% of limit": "% of limit",
@@ -12009,7 +12015,9 @@
     "config_help_charge_switch_entity": "A switch that turns on a grid charge. Beside the grid-charge select it is a permit (for example allow grid charging): SEM turns it on with the charge and off after.",
     "config_charge_target_entity": "Charge target SOC entity",
     "config_help_charge_target_entity": "A number that holds the level to charge to, such as a backup reserve. SEM writes the plan's target there and puts the old value back.",
-    "config_charge_switch_one_battery": "The charge switch and charge target show with one battery only. Two packs would share them, and one pack's stop would put them back while the other still charges."
+    "config_charge_switch_one_battery": "The charge switch and charge target show with one battery only. Two packs would share them, and one pack's stop would put them back while the other still charges.",
+    "forecast_recommend_text": "{provider} has been closest for your roof over {days} days ({pct} % less error). SEM's own correction then learns again for a few days.",
+    "forecast_recommend_use": "Use it"
   },
   "es": {
     "% of limit": "% del límite",
@@ -15012,7 +15020,9 @@
     "config_help_charge_switch_entity": "Un interruptor que activa una carga de red. Junto al selector de carga de red es un permiso (por ejemplo permitir carga de red): SEM lo activa con la carga y lo desactiva después.",
     "config_charge_target_entity": "Entidad del nivel objetivo de carga",
     "config_help_charge_target_entity": "Un número que fija el nivel hasta el que se carga, como una reserva de respaldo. SEM escribe ahí el objetivo del plan y devuelve el valor anterior.",
-    "config_charge_switch_one_battery": "El interruptor y el nivel objetivo de carga solo se muestran con una batería. Dos baterías los compartirían, y la parada de una los devolvería mientras la otra aún carga."
+    "config_charge_switch_one_battery": "El interruptor y el nivel objetivo de carga solo se muestran con una batería. Dos baterías los compartirían, y la parada de una los devolvería mientras la otra aún carga.",
+    "forecast_recommend_text": "{provider} ha sido el más cercano para tu tejado durante {days} días ({pct} % menos error). La corrección propia de SEM vuelve a aprender durante unos días.",
+    "forecast_recommend_use": "Usarlo"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -18015,7 +18025,9 @@
     "config_help_charge_switch_entity": "Kytkin, joka käynnistää verkkolatauksen. Verkkolatauksen valinnan vieressä se on lupa (esimerkiksi salli verkkolataus): SEM kytkee sen päälle latauksen ajaksi ja pois sen jälkeen.",
     "config_charge_target_entity": "Latauksen tavoitetason entiteetti",
     "config_help_charge_target_entity": "Luku, joka pitää tason, johon ladataan, esimerkiksi varavoimavaranto. SEM kirjoittaa siihen suunnitelman tavoitteen ja palauttaa vanhan arvon.",
-    "config_charge_switch_one_battery": "Latauskytkin ja tavoitetaso näkyvät vain yhdellä akulla. Kaksi akkua jakaisi ne, ja toisen pysäytys palauttaisi ne, vaikka toinen vielä lataa."
+    "config_charge_switch_one_battery": "Latauskytkin ja tavoitetaso näkyvät vain yhdellä akulla. Kaksi akkua jakaisi ne, ja toisen pysäytys palauttaisi ne, vaikka toinen vielä lataa.",
+    "forecast_recommend_text": "{provider} on ollut lähimpänä kattoasi {days} päivän ajan ({pct} % pienempi virhe). SEM:n oma korjaus oppii sen jälkeen uudelleen muutaman päivän.",
+    "forecast_recommend_use": "Käytä"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -21018,7 +21030,9 @@
     "config_help_charge_switch_entity": "Un interrupteur qui lance une charge réseau. À côté du sélecteur de charge réseau, c'est une autorisation (par exemple autoriser la charge réseau) : SEM l'active avec la charge et le désactive après.",
     "config_charge_target_entity": "Entité du niveau cible de charge",
     "config_help_charge_target_entity": "Un nombre qui fixe le niveau de charge visé, comme une réserve de secours. SEM y écrit la cible du plan et remet l'ancienne valeur.",
-    "config_charge_switch_one_battery": "L'interrupteur et le niveau cible de charge ne s'affichent qu'avec une seule batterie. Deux batteries les partageraient, et l'arrêt de l'une les remettrait pendant que l'autre charge encore."
+    "config_charge_switch_one_battery": "L'interrupteur et le niveau cible de charge ne s'affichent qu'avec une seule batterie. Deux batteries les partageraient, et l'arrêt de l'une les remettrait pendant que l'autre charge encore.",
+    "forecast_recommend_text": "{provider} a été le plus proche pour votre toit sur {days} jours ({pct} % d'erreur en moins). La correction propre à SEM réapprend ensuite pendant quelques jours.",
+    "forecast_recommend_use": "L'utiliser"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -24021,7 +24035,9 @@
     "config_help_charge_switch_entity": "Kapcsoló, amely elindítja a hálózati töltést. A hálózati töltés választó mellett engedély (például hálózati töltés engedélyezése): az SEM bekapcsolja a töltéssel, utána kikapcsolja.",
     "config_charge_target_entity": "Töltési célszint entitás",
     "config_help_charge_target_entity": "Szám, amely a töltés célszintjét tartja, például tartalék szint. Az SEM ide írja a terv célját, és visszaállítja a régi értéket.",
-    "config_charge_switch_one_battery": "A töltés kapcsoló és a célszint csak egy akkumulátornál látszik. Két akkumulátor osztozna rajtuk, és az egyik leállítása visszaállítaná őket, míg a másik még tölt."
+    "config_charge_switch_one_battery": "A töltés kapcsoló és a célszint csak egy akkumulátornál látszik. Két akkumulátor osztozna rajtuk, és az egyik leállítása visszaállítaná őket, míg a másik még tölt.",
+    "forecast_recommend_text": "{provider} {days} napon át volt a legközelebb a tetődhöz ({pct} %-kal kisebb hiba). Az SEM saját korrekciója ezután néhány napig újra tanul.",
+    "forecast_recommend_use": "Használom"
   },
   "it": {
     "% of limit": "% del limite",
@@ -27024,7 +27040,9 @@
     "config_help_charge_switch_entity": "Un interruttore che avvia una carica da rete. Accanto al selettore di carica da rete è un permesso (per esempio consenti carica da rete): SEM lo attiva con la carica e lo disattiva dopo.",
     "config_charge_target_entity": "Entità del livello obiettivo di carica",
     "config_help_charge_target_entity": "Un numero che fissa il livello fino a cui caricare, come una riserva di backup. SEM vi scrive l'obiettivo del piano e rimette il valore precedente.",
-    "config_charge_switch_one_battery": "L'interruttore e il livello obiettivo di carica compaiono solo con una batteria. Due batterie li condividerebbero, e l'arresto di una li rimetterebbe mentre l'altra carica ancora."
+    "config_charge_switch_one_battery": "L'interruttore e il livello obiettivo di carica compaiono solo con una batteria. Due batterie li condividerebbero, e l'arresto di una li rimetterebbe mentre l'altra carica ancora.",
+    "forecast_recommend_text": "{provider} è stato il più vicino per il tuo tetto in {days} giorni ({pct} % di errore in meno). La correzione propria di SEM poi riapprende per qualche giorno.",
+    "forecast_recommend_use": "Usalo"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -30027,7 +30045,9 @@
     "config_help_charge_switch_entity": "Een schakelaar die een netlading start. Naast de netladen-keuzelijst is het een toestemming (bijvoorbeeld netladen toestaan): SEM zet hem aan met de lading en daarna uit.",
     "config_charge_target_entity": "Entiteit voor het laaddoelniveau",
     "config_help_charge_target_entity": "Een getal dat het niveau bepaalt tot waar wordt geladen, zoals een back-upreserve. SEM schrijft daar het doel van het plan en zet de oude waarde terug.",
-    "config_charge_switch_one_battery": "De laadschakelaar en het laaddoel worden alleen bij één batterij getoond. Twee accu's zouden ze delen, en de stop van één zou ze terugzetten terwijl de ander nog laadt."
+    "config_charge_switch_one_battery": "De laadschakelaar en het laaddoel worden alleen bij één batterij getoond. Twee accu's zouden ze delen, en de stop van één zou ze terugzetten terwijl de ander nog laadt.",
+    "forecast_recommend_text": "{provider} zat het dichtst bij uw dak over {days} dagen ({pct} % minder fout). De eigen correctie van SEM leert daarna een paar dagen opnieuw.",
+    "forecast_recommend_use": "Gebruiken"
   },
   "no": {
     "% of limit": "% av grense",
@@ -33030,7 +33050,9 @@
     "config_help_charge_switch_entity": "En bryter som starter nettlading. Ved siden av valget for nettlading er den en tillatelse (for eksempel tillat nettlading): SEM slår den på med ladingen og av etterpå.",
     "config_charge_target_entity": "Entitet for ladingens målnivå",
     "config_help_charge_target_entity": "Et tall som holder nivået det lades til, for eksempel en reserve. SEM skriver planens mål der og setter den gamle verdien tilbake.",
-    "config_charge_switch_one_battery": "Ladebryteren og målnivået vises bare ved ett batteri. To batterier ville delt dem, og stoppen til det ene ville satt dem tilbake mens det andre fortsatt lader."
+    "config_charge_switch_one_battery": "Ladebryteren og målnivået vises bare ved ett batteri. To batterier ville delt dem, og stoppen til det ene ville satt dem tilbake mens det andre fortsatt lader.",
+    "forecast_recommend_text": "{provider} har vært nærmest taket ditt over {days} dager ({pct} % mindre feil). SEMs egen korreksjon lærer deretter på nytt i noen dager.",
+    "forecast_recommend_use": "Bruk den"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -36033,7 +36055,9 @@
     "config_help_charge_switch_entity": "Przełącznik, który włącza ładowanie z sieci. Obok wyboru ładowania z sieci jest zezwoleniem (na przykład zezwól na ładowanie z sieci): SEM włącza go z ładowaniem i wyłącza po nim.",
     "config_charge_target_entity": "Encja docelowego poziomu ładowania",
     "config_help_charge_target_entity": "Liczba, która trzyma poziom, do którego się ładuje, na przykład rezerwa awaryjna. SEM zapisuje tam cel planu i przywraca starą wartość.",
-    "config_charge_switch_one_battery": "Przełącznik ładowania i poziom docelowy pokazują się tylko przy jednej baterii. Dwie baterie dzieliłyby je, a zatrzymanie jednej przywróciłoby je, gdy druga jeszcze ładuje."
+    "config_charge_switch_one_battery": "Przełącznik ładowania i poziom docelowy pokazują się tylko przy jednej baterii. Dwie baterie dzieliłyby je, a zatrzymanie jednej przywróciłoby je, gdy druga jeszcze ładuje.",
+    "forecast_recommend_text": "{provider} był najbliżej dla Twojego dachu przez {days} dni ({pct} % mniejszy błąd). Własna korekta SEM uczy się potem od nowa przez kilka dni.",
+    "forecast_recommend_use": "Użyj"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -39036,7 +39060,9 @@
     "config_help_charge_switch_entity": "Um interruptor que liga uma carga da rede. Ao lado do seletor de carga da rede é uma permissão (por exemplo permitir carga da rede): o SEM liga-o com a carga e desliga-o depois.",
     "config_charge_target_entity": "Entidade do nível alvo de carga",
     "config_help_charge_target_entity": "Um número que guarda o nível até ao qual se carrega, como uma reserva de backup. O SEM escreve aí o alvo do plano e repõe o valor antigo.",
-    "config_charge_switch_one_battery": "O interruptor e o nível alvo de carga só aparecem com uma bateria. Duas baterias partilhá-los-iam, e a paragem de uma repô-los-ia enquanto a outra ainda carrega."
+    "config_charge_switch_one_battery": "O interruptor e o nível alvo de carga só aparecem com uma bateria. Duas baterias partilhá-los-iam, e a paragem de uma repô-los-ia enquanto a outra ainda carrega.",
+    "forecast_recommend_text": "{provider} foi o mais próximo do seu telhado durante {days} dias ({pct} % menos erro). A correção própria do SEM volta a aprender durante alguns dias.",
+    "forecast_recommend_use": "Usar"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -42039,7 +42065,9 @@
     "config_help_charge_switch_entity": "Un comutator care pornește o încărcare din rețea. Lângă selectorul de încărcare din rețea este o permisiune (de exemplu permite încărcarea din rețea): SEM îl pornește odată cu încărcarea și îl oprește după.",
     "config_charge_target_entity": "Entitatea nivelului țintă de încărcare",
     "config_help_charge_target_entity": "Un număr care ține nivelul până la care se încarcă, de exemplu o rezervă de siguranță. SEM scrie acolo ținta planului și pune înapoi vechea valoare.",
-    "config_charge_switch_one_battery": "Comutatorul și nivelul țintă apar doar la o baterie. Două baterii le-ar împărți, iar oprirea uneia le-ar pune înapoi cât timp cealaltă încă se încarcă."
+    "config_charge_switch_one_battery": "Comutatorul și nivelul țintă apar doar la o baterie. Două baterii le-ar împărți, iar oprirea uneia le-ar pune înapoi cât timp cealaltă încă se încarcă.",
+    "forecast_recommend_text": "{provider} a fost cel mai apropiat de acoperișul tău pe {days} zile ({pct} % eroare mai mică). Corecția proprie a SEM învață apoi din nou câteva zile.",
+    "forecast_recommend_use": "Folosește"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -45042,7 +45070,9 @@
     "config_help_charge_switch_entity": "En brytare som startar en nätladdning. Vid sidan av valet för nätladdning är den ett tillstånd (till exempel tillåt nätladdning): SEM slår på den med laddningen och av efteråt.",
     "config_charge_target_entity": "Entitet för laddningens målnivå",
     "config_help_charge_target_entity": "Ett tal som håller nivån det laddas till, till exempel en reserv. SEM skriver planens mål där och sätter tillbaka det gamla värdet.",
-    "config_charge_switch_one_battery": "Laddningsbrytaren och målnivån visas bara vid ett batteri. Två batterier skulle dela dem, och det enas stopp skulle sätta tillbaka dem medan det andra fortfarande laddar."
+    "config_charge_switch_one_battery": "Laddningsbrytaren och målnivån visas bara vid ett batteri. Två batterier skulle dela dem, och det enas stopp skulle sätta tillbaka dem medan det andra fortfarande laddar.",
+    "forecast_recommend_text": "{provider} har legat närmast ditt tak under {days} dagar ({pct} % mindre fel). SEM:s egen korrigering lär sig sedan om under några dagar.",
+    "forecast_recommend_use": "Använd den"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -48045,6 +48075,8 @@
     "config_help_charge_switch_entity": "用于开启电网充电的开关。与电网充电选择项并用时，它是许可（例如允许电网充电）：SEM 在充电时打开它，结束后关闭。",
     "config_charge_target_entity": "充电目标 SOC 实体",
     "config_help_charge_target_entity": "保存充电目标电量的数值，例如备用电量。SEM 把计划的目标写入其中，并恢复原值。",
-    "config_charge_switch_one_battery": "充电开关和充电目标仅在只有一块电池时显示。两个电池组会共用它们，其中一个停止时会在另一个仍在充电时将其复原。"
+    "config_charge_switch_one_battery": "充电开关和充电目标仅在只有一块电池时显示。两个电池组会共用它们，其中一个停止时会在另一个仍在充电时将其复原。",
+    "forecast_recommend_text": "{provider} 在 {days} 天内最接近您屋顶的实际发电（误差少 {pct} %）。之后 SEM 自身的修正会重新学习几天。",
+    "forecast_recommend_use": "使用"
   }
 }
