@@ -104,7 +104,7 @@ def _reading(i: TankInputs) -> Tuple[Optional[float], Optional[str]]:
     A Legionella run reads the tank's own thermometer: that is the water."""
     if i.legionella_active and i.tank_c is not None:
         return i.tank_c, "tank"
-    if _band_usable(i):
+    if _band_usable(i) and not i.vacation:
         return i.band_c, "band"
     if i.tank_c is not None:
         return i.tank_c, "tank"

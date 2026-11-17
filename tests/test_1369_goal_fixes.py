@@ -1,8 +1,7 @@
-"""(#1369) The three fixes the tank goal showed: C1 one thermometer, C2 too
-cold wins while away, C3 Legionella counts its own target."""
+"""(#1369) Two fixes the tank goal showed: C1 one thermometer, C2 too cold
+wins while away. (C3 was dropped: natural Legionella stays at 60 C.)"""
 from __future__ import annotations
 
-from datetime import timedelta
 
 import pytest
 
@@ -48,6 +47,34 @@ def test_c1_start_and_stop_use_one_reading_across_the_top():
         assert starts == (band <= 55.0) and stops == (band >= 56.0), band
 
 
+# ── C1 stays out of the away dump: its start reads the TANK sensor ─────────
+
+def _away_two(tank, band, limit, minimum=45.0):
+    dev = _two(tank, band)
+    dev.comfort_limit = limit
+    dev.min_temperature = minimum
+    dev.vacation, dev.vacation_dhw_surplus = True, True
+    return dev
+
+
+@pytest.mark.parametrize("tank,band,limit,minimum,stops", [
+    (40.0, 65.0, 30.0, 45.0, False),    # heats to 45: the band's 65 is not the tank
+    (43.0, 65.0, 30.0, 45.0, False),
+    (45.0, 65.0, 30.0, 45.0, True),
+    (42.0, 60.0, 44.0, 40.0, True),     # band 60 is not too cold: the minimum rules
+])
+def test_c1_away_dump_reads_the_tank_sensor(tank, band, limit, minimum, stops):
+    dev = _away_two(tank, band, limit, minimum)
+    assert dev.stop_condition_met is stops
+    assert _agrees(dev)
+
+
+def test_c1_away_dump_start_and_stop_agree():
+    dev = _away_two(40.0, 65.0, 30.0)
+    assert dev.is_temperature_safe() is True       # starts
+    assert dev.stop_condition_met is False         # and is not stopped at once
+
+
 # ── C2: too cold wins while away ───────────────────────────────────────────
 
 def _away(temp, dump):
@@ -90,21 +117,6 @@ def test_c2_the_setpoint_written_stays_the_minimum():
     dev = _away(43.0, dump=True)
     assert dev._active_target_temp() == 40.0
     assert dev._stop_target_temp(peek=False) == 45.0
-
-
-# ── C3: Legionella counts its own target ───────────────────────────────────
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("target,temp,counted", [
-    (65.0, 61.0, False), (65.0, 65.0, True), (60.0, 61.0, True), (60.0, 59.0, False)])
-async def test_c3_natural_achievement_needs_the_own_target(target, temp, counted):
-    dev = _tank(_Hass(), temp)
-    dev.legionella_target_temp = target
-    dev._last_legionella_time = hwc.dt_util.now() - timedelta(hours=10)
-    before = dev._last_legionella_time
-    await dev.check_legionella_cycle(good_hour=False)
-    assert (dev._last_legionella_time != before) is counted
-    assert (dev._last_legionella_path == "natural_achievement") is counted
 
 
 # ── step 2: the registry reads the goal, the published block is the same ───

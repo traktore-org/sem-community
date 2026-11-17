@@ -762,7 +762,10 @@ class HotWaterController(SwitchDevice):
         sensor when a usable band is set, else the tank's. A switched tank's
         stop read the tank sensor while its start read the band's."""
         keep, _extra, limit = self._goal_band_fields()
-        if keep is not None and limit is not None and limit < keep:
+        # only while the band is engaged: away it is disengaged and the away
+        # dump's start compares the TANK sensor with the minimum temperature
+        if (keep is not None and limit is not None and limit < keep
+                and self._peek_comfort_state() != "disengaged"):
             band = self._comfort_reading()
             if band is not None:
                 return band
@@ -1235,11 +1238,10 @@ class HotWaterController(SwitchDevice):
 
         temp = self.get_current_temperature()
 
-        # 1. Natural achievement: solar heated to the tank's own Legionella
-        # target (at least 60 °C). (#1369, C3) 60 °C no longer counts when the
-        # user's target is higher.
-        natural_c = max(float(DEFAULT_LEGIONELLA_MIN_TEMP), float(self.legionella_target_temp))
-        if temp is not None and temp >= natural_c and not self._legionella_cycle_active:
+        # 1. Natural achievement: solar heated to ≥60°C. (#1369) Deliberately
+        # 60 °C, not the user's target: 60 is the recognised bar; a higher target
+        # is the forced run's margin, and counting it would buy grid heat daily.
+        if temp is not None and temp >= DEFAULT_LEGIONELLA_MIN_TEMP and not self._legionella_cycle_active:
             self._last_legionella_time = dt_util.now()
             self._last_legionella_path = "natural_achievement"
             return None

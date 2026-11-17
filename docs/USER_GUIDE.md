@@ -629,7 +629,7 @@ The dashboard exposes exactly two sliders for hot water control:
 
 The temperature SEM heats to during solar surplus periods. When surplus power is available, SEM heats the water up to this target. Once reached, SEM stops heating and releases surplus for other devices (EV, battery, etc.).
 
-If you set the Solar Boost Target to 60°C or above, the Legionella prevention requirement (60°C) is naturally met during sunny days — no separate forced heating cycle is needed on those days. A tank counts as disinfected on its own only at your Legionella target (60°C at least).
+If you set the Solar Boost Target to 60°C or above, the Legionella prevention requirement (60°C) is naturally met during sunny days — no separate forced heating cycle is needed on those days.
 
 With a comfort band, the tank starts and stops on the band's thermometer; without one, on the tank's own.
 
