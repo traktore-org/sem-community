@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📝 **Docs and README claims are now tested** (#1377). Each setting the guides name has a dashboard field; README claims match the code.
+
 # [2.3.0-beta.18] — 17.11.2026
 
 - 📝 **README shows 2.3: new dashboard, first-run checklist and the AI assistant** (#1086). All screenshots retaken.
