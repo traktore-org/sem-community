@@ -19,6 +19,12 @@ THRESHOLDS: Tuple[Tuple[str, float], ...] = (
 )
 #: a day at this ratio or above counts as a full-yield day
 FULL_YIELD_RATIO = 0.90
+#: (#1022) a full-yield day this recent (0 = the last settled day) proves
+#: the plant delivers: a low week is then the forecast's error (fog, grey
+#: winter days overshot), not a fault, and the colour stops at yellow. A
+#: real fault (a dead string, a tripped inverter) takes the full-yield days
+#: away, so it still turns orange or red — at most this many days later.
+RECENT_FULL_DAYS = 2
 #: fewer settled days than this → no verdict (state None)
 MIN_SETTLED_DAYS = 3
 #: the window the ratio is taken over
@@ -82,7 +88,8 @@ def pv_health(
     solar_w_now: float,
     low_since_s: Optional[float],
 ) -> PvHealth:
-    """The verdict.
+    """The verdict. A low ratio with a full-yield day in the last
+    ``RECENT_FULL_DAYS`` settled days is at most yellow.
 
     ``days``: (forecast_kwh, actual_kwh) per day, oldest first; a pair with
     a missing number is skipped. ``freezing``: None when there is no
@@ -105,6 +112,10 @@ def pv_health(
         if actual / forecast >= FULL_YIELD_RATIO:
             since_full = back
             break
+
+    # (#1022) a plant that just delivered a full day is not broken
+    if state in ("orange", "red") and since_full is not None and since_full <= RECENT_FULL_DAYS:
+        state = "yellow"
 
     snow = bool(
         freezing is True

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **PV health no longer turns orange when the forecast overshoots grey days** (#1022). A full day in the last two proves the panels work.
 - ✨ **A second dashboard, SEM-dashboard, with five screens by question** (#1321). The classic one stays; "Generate dashboard" adds the new one beside it.
 - 🔧 **The replay judges the hot water tank** (#1369). Tank rule changes are compared with develop on recorded days.
 - 🔧 **The tank's lines on the cards now come from its goal** (#1369). Same numbers as before.

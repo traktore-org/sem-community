@@ -2033,6 +2033,8 @@ One colour, from the last seven days of yield against forecast:
 | orange | 40 % to 65 % |
 | red | under 40 % |
 
+A full-yield day in the last two settled days proves the panels work: the colour then stops at yellow, because a low week comes from the forecast overshooting grey days, not from a fault.
+
 The state is `unknown` until three days are in. Attributes: `ratio_7d`,
 `settled_days`, `downtime_min_today` (minutes the solar input reported
 nothing today), `days_since_full_yield` (last day at 90 % or more), and
