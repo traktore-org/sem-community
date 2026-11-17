@@ -2591,7 +2591,8 @@ def _decision_attributes(coordinator, key: str) -> Dict[str, Any]:
     ``load_management_status`` the loads'.
     """
     from .coordinator.decision_log import (
-        KIND_BATTERY, KIND_CHARGER, KIND_LOAD, DecisionLog)
+        KIND_BATTERY, KIND_CHARGER, KIND_LOAD, DecisionLog, current,
+        current_by_kind)
     try:
         log = getattr(coordinator, "decision_log", None)
         if not isinstance(log, DecisionLog):
@@ -2603,15 +2604,15 @@ def _decision_attributes(coordinator, key: str) -> Dict[str, Any]:
                 for k, v in data.items()
                 if isinstance(k, str) and k.startswith("charger_")
                 and k.endswith("_strategy")}
-            return {"per_charger_last_decision": log.last_by_kind(KIND_CHARGER),
+            return {"per_charger_last_decision": current_by_kind(KIND_CHARGER, coordinator),
                     "per_charger_strategy": strategies}
         if key == "battery_status":
-            return {"per_battery_last_decision": log.last_by_kind(KIND_BATTERY)}
+            return {"per_battery_last_decision": current_by_kind(KIND_BATTERY, coordinator)}
         if key.startswith("battery_") and key.endswith("_status"):
             bid = key[len("battery_"):-len("_status")]
             # per-battery sensors only (b1, b2 …), not battery_priority_status
             if re.fullmatch(r"b\d+", bid):
-                return {"last_decision": log.last(KIND_BATTERY, bid)}
+                return {"last_decision": current(KIND_BATTERY, bid, coordinator)}
         if key == "load_management_status":
             return {"per_device_last_decision": log.last_by_kind(KIND_LOAD)}
     except Exception:  # noqa: BLE001 — attributes never break the entity
