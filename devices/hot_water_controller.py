@@ -555,6 +555,10 @@ class HotWaterController(SwitchDevice):
         "sensor_missing": "separate_sensor_missing",
     }
 
+    # (#1380) the tank's own reading leads, as it always did: a picked
+    # sensor only answers when the entity gives none
+    own_entity_first = True
+
     @property
     def own_temperature_entity_id(self) -> Optional[str]:
         """A water_heater / climate tank reports its own temperature."""

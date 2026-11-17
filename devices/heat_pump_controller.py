@@ -974,6 +974,8 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         _LOGGER.debug("SG-Ready state set to %s", state.name)
         return True
 
+    # (#1380) Known residual: a pump with only a climate entity reads ROOM
+    # temperature; a user max_setpoint <= ~22 could now hit already_warm_skip.
     # (#1380) the owner's path names -> the ones the #421 telemetry kept
     _TEMP_PATH_LABELS = {"no_source_configured": "no_sensor_configured"}
 

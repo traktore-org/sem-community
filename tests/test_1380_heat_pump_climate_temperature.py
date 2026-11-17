@@ -64,10 +64,14 @@ def test_the_coordinator_helper_never_raises_on_a_device_without_a_reader():
     assert asked_temperature(Bare()) is None
 
 
-def test_a_tank_with_both_reads_the_picked_sensor_first():
+def test_a_tank_keeps_its_own_reading_first():
     hass = _Hass()
-    hass.set("water_heater.tank", "eco", current_temperature=40.0)
-    hass.set(SENSOR, "52.0", unit_of_measurement="°C")
+    hass.set("water_heater.tank", "eco", current_temperature=52.0)
+    hass.set(SENSOR, "45.0", unit_of_measurement="°C")
     tank = HotWaterController(
-        hass=hass, entity_id="water_heater.tank", temperature_entity_id=SENSOR)
+        hass=hass, entity_id="water_heater.tank", temperature_entity_id=SENSOR,
+        solar_target_temp=50.0)
     assert tank.get_current_temperature() == 52.0
+    assert tank.is_temperature_safe() is False       # at target, stops
+    assert tank._peek_tank_reading() == (52.0, False)
+    assert tank._comfort_fallback_reading() == 52.0

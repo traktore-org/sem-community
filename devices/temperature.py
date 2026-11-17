@@ -58,21 +58,27 @@ def _read_own_entity(hass: Any, device: Any, entity_id: str) -> Tuple[Optional[f
 
 
 def temperature_reading(hass: Any, device: Any) -> TemperatureReading:
-    """The one read, with the path that answered. Writes nothing."""
+    """The one read, with the path that answered. Writes nothing.
+
+    Order: sensor first, own entity second. A device with
+    ``own_entity_first = True`` (the hot water tank, as before #1380) asks
+    its own entity first."""
     if hass is None:
         return TemperatureReading(None, PATH_NONE)
     sensor_id = getattr(device, "temperature_entity_id", None)
-    sensor_path = None
-    if sensor_id:
-        value, sensor_path = _read_sensor(hass, sensor_id)
-        if value is not None:
-            return TemperatureReading(value, sensor_path)
     own_id = getattr(device, "own_temperature_entity_id", None)
+    sensor_path = None
     attribute_bad = False
-    if own_id:
-        value, attribute_bad = _read_own_entity(hass, device, own_id)
-        if value is not None:
-            return TemperatureReading(value, PATH_ATTRIBUTE)
+    steps = ["own", "sensor"] if getattr(device, "own_entity_first", False) else ["sensor", "own"]
+    for step in steps:
+        if step == "sensor" and sensor_id:
+            value, sensor_path = _read_sensor(hass, sensor_id)
+            if value is not None:
+                return TemperatureReading(value, sensor_path)
+        elif step == "own" and own_id:
+            value, attribute_bad = _read_own_entity(hass, device, own_id)
+            if value is not None:
+                return TemperatureReading(value, PATH_ATTRIBUTE)
     if sensor_path:
         return TemperatureReading(None, sensor_path)
     return TemperatureReading(
