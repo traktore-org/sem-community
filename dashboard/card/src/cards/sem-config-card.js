@@ -331,6 +331,9 @@ const STRUCTURAL_KEYS = new Set([
     'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
     // (#1346) the select that starts a grid charge, and its charge option
     'battery_charge_select_entity', 'battery_charge_select_option',
+    // (#1362) the charge switch and the charge target: read at adapter
+    // construction, so they stage and reload like the select pair
+    'battery_force_charge_switch', 'battery_target_soc_entity',
     'battery_discharge_control_entity',  // #528 — discharge-limit (protection) entity
     // (#1166) the end-of-charge level of the battery: read from the config
     // snapshot, which only a reload rebuilds.
@@ -1823,7 +1826,8 @@ class SEMConfigCard extends SEMLitBase {
                             ${this._renderBatteryListPicker('battery_force_discharge_entities',
                                 'config_force_discharge_entity', ['number', 'input_number'], i, n, opts)}
                             ${this._renderBatteryListPicker('battery_strategy_entities',
-                                'config_strategy_entity', ['select', 'input_select'], i, n, opts)}`)}`;
+                                'config_strategy_entity', ['select', 'input_select'], i, n, opts)}`)}
+                            ${this._renderBatteryChargeFields(opts, n)}`;
                     }
                     return html`
                         ${this._renderPicker('battery_force_discharge_control_entity',
@@ -1832,13 +1836,7 @@ class SEMConfigCard extends SEMLitBase {
                         ${this._renderPicker('battery_strategy_control_entity',
                             'config_strategy_entity', 'select', null, opts,
                             'config_help_strategy_entity')}
-                        ${this._renderPicker('battery_charge_select_entity',
-                            'config_charge_select_entity', ['select', 'input_select'], null, opts,
-                            'config_help_charge_select_entity')}
-                        ${this._renderSelectOptionPicker('battery_charge_select_option',
-                            'config_charge_select_option', 'battery_charge_select_entity',
-                            opts, 'config_help_charge_select_option')}
-                        ${this._renderChargeSelectHint(opts)}
+                        ${this._renderBatteryChargeFields(opts, 1)}
                         ${opts['battery_strategy_control_entity'] ? html`
                             ${this._renderTextOption('battery_strategy_active_value',
                                 'config_strategy_val_active', opts,
@@ -2540,6 +2538,30 @@ class SEMConfigCard extends SEMLitBase {
                 ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
         `;
+    }
+
+    // (#1362) The grid-charge fields, shown for one battery AND for several:
+    // the select pair is one shared setting (its record has an owner per pack,
+    // #1346). The switch and the target are shared too, but a stop by one pack
+    // puts them back while another still charges, so they show for one
+    // battery only (#1377).
+    _renderBatteryChargeFields(opts, n) {
+        return html`
+            ${this._renderPicker('battery_charge_select_entity',
+                'config_charge_select_entity', ['select', 'input_select'], null, opts,
+                'config_help_charge_select_entity')}
+            ${this._renderSelectOptionPicker('battery_charge_select_option',
+                'config_charge_select_option', 'battery_charge_select_entity',
+                opts, 'config_help_charge_select_option')}
+            ${this._renderChargeSelectHint(opts)}
+            ${n > 1 ? (this._showHelp && this._showsControl('battery_force_charge_switch') ? html`
+                <div class="setting-help-text">${this._t('config_charge_switch_one_battery')}</div>` : nothing) : html`
+                ${this._renderPicker('battery_force_charge_switch',
+                    'config_charge_switch_entity', ['switch', 'input_boolean'], null, opts,
+                    'config_help_charge_switch_entity')}
+                ${this._renderPicker('battery_target_soc_entity',
+                    'config_charge_target_entity', ['number', 'input_number'], null, opts,
+                    'config_help_charge_target_entity')}`}`;
     }
 
     // (#1346) One line when only half of the select pair is set: the pair
