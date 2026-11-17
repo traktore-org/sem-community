@@ -3953,14 +3953,12 @@ class SensorReader:
             # average, once every pick that is there reads. One down is a
             # wait, not the other battery's level.
             # Each pick is checked as a fleet unit is (#1202, #1284).
-            # (#1373) Weighted by size like a fleet; a size is found on the
-            # pick's own device.
+            # (#1373) No battery slot to hold a size here: the plain average.
             picked = [e for e in unpowered if _picked_soc_present(self.hass, e)]
             levels = [self._accept_unit_soc(e, self._read_sensor(
                           e, "battery_soc", allow_none=True)) for e in picked]
             if levels and all(v is not None and v >= 0 for v in levels):
-                soc_val = self._soc_by_size(
-                    levels, [self._unit_capacity_kwh(e) for e in picked])
+                soc_val = self._soc_by_size(levels, [0.0] * len(levels))
         elif ed_soc:
             soc_val = self._read_sensor(ed_soc, "battery_soc", allow_none=True)
         elif ed.battery_power:
@@ -6178,10 +6176,15 @@ class SensorReader:
 
     def _unit_size_kwh(self, power_entity: str, slot: int) -> float:
         """(#1373) A battery's size for the total level: its own setting
-        (slot N of ``battery_capacity_kwhs`` is battery bN's), else the
-        size sensor on its device, else 0.0 (unknown). Weights the total
-        level ONLY: the scheduler and every other reader keep the global
-        ``battery_capacity_kwh``."""
+        (slot N of ``battery_capacity_kwhs`` is battery bN's), else 0.0
+        (unknown → the plain average). Weights the total level ONLY: the
+        scheduler and every other reader keep the global
+        ``battery_capacity_kwh``.
+
+        Never a size SENSOR found on the device: a review proved the device
+        scan takes "remaining capacity" (falls with the level) and gives two
+        batteries on one inverter the same size — a wrong weight would move
+        the total for users who set nothing."""
         lst = (getattr(self, "_raw_config", None) or {}).get(
             "battery_capacity_kwhs")
         if isinstance(lst, list) and slot < len(lst):
@@ -6190,7 +6193,7 @@ class SensorReader:
                     return float(lst[slot])
             except (TypeError, ValueError):
                 pass
-        return self._unit_capacity_kwh(power_entity)
+        return 0.0
 
     def _soc_by_size(self, levels: list, sizes: list) -> float:
         """(#1373) The home's level of several batteries: each level counts

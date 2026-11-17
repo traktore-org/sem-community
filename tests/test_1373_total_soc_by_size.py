@@ -33,13 +33,17 @@ def _reader(hass) -> SensorReader:
 
 
 def _fleet(hass, monkeypatch, socs, sizes):
-    """A reader whose two units read ``socs`` and hold ``sizes`` kWh."""
+    """A reader whose two units read ``socs``; ``sizes`` are the user's
+    per-battery settings (0 = not set). Every device also carries a
+    misleading "capacity" sensor of 99 kWh, which must never count."""
     r = _reader(hass)
-    by_unit = dict(zip(UNITS, zip(socs, sizes, strict=True), strict=True))
+    by_unit = dict(zip(UNITS, socs, strict=True))
     monkeypatch.setattr(r, "_auto_detect_battery_soc", lambda u: f"{u}_soc")
-    monkeypatch.setattr(r, "_read_sensor", lambda e, *a, **k: by_unit[e[:-4]][0])
+    monkeypatch.setattr(r, "_read_sensor", lambda e, *a, **k: by_unit[e[:-4]])
     monkeypatch.setattr(r, "_accept_unit_soc", lambda e, v: v)
-    monkeypatch.setattr(r, "_unit_capacity_kwh", lambda u: by_unit[u][1])
+    monkeypatch.setattr(r, "_unit_capacity_kwh", lambda u: 99.0)
+    r._raw_config = {**(r._raw_config or {}),
+                     "battery_capacity_kwhs": [c if c else None for c in sizes]}
     return r
 
 
@@ -125,9 +129,10 @@ def _read(r):
     return out
 
 
-async def test_the_no_power_path_weights_by_size(hass):
+async def test_the_no_power_path_is_the_plain_average(hass):
+    """No battery slot holds a size here, and a size sensor never counts."""
     r = _two_unpowered(hass, 5.28)
-    assert _read(r).battery_soc == pytest.approx(30.6, abs=0.05)
+    assert _read(r).battery_soc == pytest.approx(27.5)
 
 
 async def test_the_no_power_path_with_one_size_unknown_is_plain(hass):
@@ -151,18 +156,21 @@ def test_the_reporters_sizes_set_per_battery_give_30_6(hass, monkeypatch):
     assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
 
 
-def test_the_setting_beats_the_size_sensor(hass, monkeypatch):
-    r = _fleet(hass, monkeypatch, [38, 17], [5.0, 5.0])     # sensors: equal
+def test_the_setting_counts_a_size_sensor_never(hass, monkeypatch):
+    """(#1373 review) a device scan took "remaining capacity" and gave two
+    batteries on one inverter the same size: only the setting counts."""
+    r = _fleet(hass, monkeypatch, [38, 17], [0.0, 0.0])
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(27.5)
     _set_sizes(r, [9.8, 5.28])
     assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
 
 
-def test_an_unset_slot_falls_back_to_its_sensor(hass, monkeypatch):
+def test_an_unset_slot_is_unknown_and_the_total_plain(hass, monkeypatch):
     r = _fleet(hass, monkeypatch, [38, 17], [9.8, 5.28])
     _set_sizes(r, [None, ""])
-    assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(27.5)
     _set_sizes(r, [9.8])                                    # slot 2 absent
-    assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(27.5)
 
 
 def test_one_slot_set_and_the_other_unknown_is_the_plain_average(
