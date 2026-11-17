@@ -439,7 +439,8 @@ under **Configuration → Heat Pump → Step down when power is short**:
 
 It steps down in two cases: the house buys grid power in an **expensive**
 hour, or it is **near your peak limit**. It needs a comfort band on the heat
-pump (*Keep at* and *Run now past*) and a thermometer. Below *Run now past*
+pump (*Keep at* and *Run now past*) and a thermometer. If you picked no thermometer,
+SEM reads the room temperature of the pump's climate entity. Below *Run now past*
 the pump is never held back, and a pump that gets too cold is released at
 once. Away mode, Mode Off and removing SEM also release it.
 
