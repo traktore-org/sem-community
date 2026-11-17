@@ -31,6 +31,7 @@ def main(argv) -> int:
             "cost": None if run.cost is None else [round(v, 6) for v in run.cost],
             "commands": run.commands,
             "decision_error": run.decision_error,
+            "tank": run.tank, "tank_faults": run.tank_faults,
         }), flush=True)
         del day, run
         gc.collect()

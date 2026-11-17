@@ -42,6 +42,10 @@ ROLES: Dict[str, str] = {
     "forecast_today_kwh": "forecast_today_kwh",
     "forecast_remaining_kwh": "forecast_remaining_today_kwh",
     "import_price": "tariff_current_import_rate",
+    # (#1369) the tank's water temperature, as the load engine reads it. SEM
+    # publishes it as ``hot_water_current_temperature`` (coordinator data);
+    # no entity carries it yet, so a day has it only once one does.
+    "tank_temp": "hot_water_current_temperature",
 }
 
 #: roles that are power inputs of the balance; a dark one sets its flag

@@ -160,7 +160,53 @@ def no_writes(run: DayRun, base: Optional[DayRun] = None) -> Result:
     return Result("no_writes", "exact", not diff, detail, diff, evidence_n=n)
 
 
-DEFAULT = ("forecast_overshoot", "home_spike", "no_writes", "cost_identity")
+def _tank_rows(a: List[list], b: List[list]) -> List[dict]:
+    diff = [{"i": i, "branch": x, "base": y}
+            for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y]
+    diff += [{"i": i, "branch": a[i], "base": None} for i in range(len(b), len(a))]
+    diff += [{"i": i, "branch": None, "base": b[i]} for i in range(len(a), len(b))]
+    return diff
+
+
+def tank_commands(run: DayRun, base: Optional[DayRun] = None) -> Result:
+    """(#1369) The branch WOULD switch the hot water tank exactly as the
+    base does: same rows, same order. A day with no recorded tank, or a tree
+    that cannot replay one, has ``evidence_n`` 0 and says so — it is never a
+    pass by silence."""
+    if run.tank is None:
+        return Result("tank_commands", "exact", True, "no tank recorded — skipped")
+    if base is None or base.tank is None:
+        return Result("tank_commands", "exact", True,
+                      f"{len(run.tank)} would-send rows (no base to compare)",
+                      evidence_n=len(run.tank))
+    n = max(len(run.tank), len(base.tank))
+    diff = _tank_rows(run.tank, base.tank)
+    if diff:
+        f = diff[0]
+        detail = (f"{len(diff)} of {n} would-send rows differ; first at row {f['i']}: "
+                  f"branch {f['branch']} vs base {f['base']}")
+    else:
+        detail = f"{n} would-send rows, same as base"
+    return Result("tank_commands", "exact", not diff, detail, diff, evidence_n=n)
+
+
+def tank_sanity(run: DayRun, base: Optional[DayRun] = None) -> Result:
+    """(#1369) Against the RECORDED water temperature the replayed tank is
+    never ON at or above its top, nor OFF below its too-cold limit, for
+    longer than the allowed reaction time. ``relative``: a stretch the base
+    shows too is listed, never blamed on the branch (a recorded cold start
+    of the day can look like one)."""
+    if run.tank is None:
+        return Result("tank_sanity", "relative", True, "no tank recorded — skipped")
+    theirs = {(f["kind"], f["t"]) for f in (base.tank_faults if base and base.tank else [])}
+    new = [f for f in run.tank_faults if (f["kind"], f["t"]) not in theirs]
+    return Result("tank_sanity", "relative", not new,
+                  f"{len(new)} new stretches, {len(run.tank_faults) - len(new)} shared",
+                  new or run.tank_faults, evidence_n=len(run.tank))
+
+
+DEFAULT = ("forecast_overshoot", "home_spike", "no_writes", "cost_identity",
+           "tank_commands", "tank_sanity")
 
 
 def check(run: DayRun, base: Optional[DayRun] = None,
@@ -175,6 +221,10 @@ def check(run: DayRun, base: Optional[DayRun] = None,
             out[n] = no_writes(run, base)
         elif n == "cost_identity":
             out[n] = cost_identity(run)
+        elif n == "tank_commands":
+            out[n] = tank_commands(run, base)
+        elif n == "tank_sanity":
+            out[n] = tank_sanity(run, base)
         else:
             raise ValueError(f"unknown check {n!r}")
     return out

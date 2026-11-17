@@ -59,6 +59,11 @@ class DayRun:
     #: (#1299) the deciders exist in this tree but raised: the gate fails,
     #: it never reads a broken decider as "nothing to compare"
     decision_error: str = ""
+    #: (#1369) the hot water tank's would-send rows; None = no tank
+    #: temperature recorded (or a tree without the replay)
+    tank: Optional[List[list]] = None
+    #: (#1369) over-top / too-cold stretches of the replayed tank
+    tank_faults: List[dict] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
     #: (net cost priced every 10 s, the same day re-priced hourly by the
     #: simulation model); None = no price recorded or no model in the tree
@@ -172,7 +177,27 @@ def replay_day(day: RecordedDay, *, home_window: Optional[Tuple[float, float]] =
     replay_forecast(day, run)
     replay_cost(day, run)
     replay_decisions(day, run)
+    replay_tank_decisions(day, run)
     return run
+
+
+def replay_tank_decisions(day: RecordedDay, run: DayRun) -> None:
+    """(#1369) The tank's would-send rows from the real controller. A day
+    without a recorded tank, or a tree without the controller, is skipped."""
+    try:
+        from .tank import replay_tank
+        res = replay_tank(day, _daylight(day))
+    except ImportError as err:
+        run.notes.append(f"tank: no tank replay in this tree — {err}")
+        return
+    except Exception as err:  # noqa: BLE001 — a controller that raises is a finding
+        run.decision_error = run.decision_error or f"tank {type(err).__name__}: {err}"
+        run.notes.append(f"tank: raised — {type(err).__name__}: {err}")
+        return
+    if res is None:
+        run.notes.append("tank: no tank temperature recorded — skipped")
+        return
+    run.tank, run.tank_faults = res
 
 
 def replay_decisions(day: RecordedDay, run: DayRun) -> None:
