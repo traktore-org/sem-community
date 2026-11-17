@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Total charge level counts battery sizes** (#1373). Two batteries now give a level weighted by kWh, not a plain average.
 - ✨ **A second dashboard, SEM-dashboard, with five screens by question** (#1321). The classic one stays; "Generate dashboard" adds the new one beside it.
 - 🔧 **The replay judges the hot water tank** (#1369). Tank rule changes are compared with develop on recorded days.
 - 🔧 **The tank's lines on the cards now come from its goal** (#1369). Same numbers as before.
