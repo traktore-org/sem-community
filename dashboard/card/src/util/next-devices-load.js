@@ -340,9 +340,8 @@ export function loadBody(card, row) {
 /** (#1081, #1321) "Also in the cheapest-heat hours". Stored on stays checked but
  *  disabled without grid buying, so switching back does not re-arm it unseen. */
 export function preheatRow(card, pre, dis, send, limit = '') {
-    const box = html`<input type="checkbox" class="hq-preheat" aria-label="${card._t('hq_preheat')}"
-        .checked=${pre.on} ?disabled=${dis || !pre.enabled}
-        @change=${(e) => { for (const w of preheatWrites(e.target.checked)) send(w.property, w.value); }}>`;
+    const box = card._switch(pre.on, (on) => { for (const w of preheatWrites(on)) send(w.property, w.value); },
+        { cls: 'hq-preheat', label: card._t('hq_preheat'), disabled: dis || !pre.enabled });
     return card._row('mdi:cash-clock', card._t('hq_preheat'), box,
         pre.enabled ? card._t('hq_preheat_sub') : card._tf('hq_sub_no_buy', { limit }), { cls: 'hq-preheat-row' });
 }
@@ -410,15 +409,15 @@ export function bandBar(card, q, row) {
     const unit = card._hass?.config?.unit_system?.temperature || '°C';
     const c = row.comfort ? row.comfort.reading_c : null;
     const now = c == null ? null : (unit === '°F' ? Number(c) * 9 / 5 + 32 : Number(c));
-    const tick = (v) => html`<span style="position:absolute;top:-4px;left:${pct(v)}%;width:2px;height:16px;background:var(--primary-text-color,#ddd)"></span>
+    const tick = (v) => html`<span style="position:absolute;top:-4px;left:${pct(v)}%;width:2px;height:16px;background:var(--primary-text-color)"></span>
         <span class="muted" style="position:absolute;top:15px;left:${pct(v)}%;transform:translateX(-50%);font-size:11px;white-space:nowrap">${v} ${unit}</span>`;
-    return html`<div style="position:relative;height:8px;border-radius:5px;margin:14px 0 26px;background:var(--divider-color,#333)">
+    return html`<div style="position:relative;height:8px;border-radius:5px;margin:14px 0 26px;background:var(--divider-color)">
         ${q.cooling
-        ? html`<span style="position:absolute;right:0;top:0;height:8px;border-radius:0 5px 5px 0;width:${100 - pct(q.floor)}%;background:#b23c3c"></span>`
-        : html`<span style="position:absolute;left:0;top:0;height:8px;border-radius:5px 0 0 5px;width:${pct(q.floor)}%;background:#b23c3c"></span>`}
-        <span style="position:absolute;top:0;height:8px;left:${pct(Math.min(q.keep, q.sunMax))}%;width:${Math.abs(pct(q.sunMax) - pct(q.keep))}%;background:#ff9800"></span>
+        ? html`<span style="position:absolute;right:0;top:0;height:8px;border-radius:0 5px 5px 0;width:${100 - pct(q.floor)}%;background:var(--error-color, #db4437)"></span>`
+        : html`<span style="position:absolute;left:0;top:0;height:8px;border-radius:5px 0 0 5px;width:${pct(q.floor)}%;background:var(--error-color, #db4437)"></span>`}
+        <span style="position:absolute;top:0;height:8px;left:${pct(Math.min(q.keep, q.sunMax))}%;width:${Math.abs(pct(q.sunMax) - pct(q.keep))}%;background:var(--energy-solar-color, #ff9800)"></span>
         ${tick(q.floor)}${tick(q.keep)}${tick(q.sunMax)}
-        ${now === null ? nothing : html`<span style="position:absolute;top:-11px;left:calc(${pct(now)}% - 6px);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid var(--primary-text-color,#fff)"></span>`}
+        ${now === null ? nothing : html`<span style="position:absolute;top:-11px;left:calc(${pct(now)}% - 6px);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid var(--primary-text-color)"></span>`}
     </div>`;
 }
 

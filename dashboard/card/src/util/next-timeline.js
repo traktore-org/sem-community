@@ -9,8 +9,9 @@
  */
 
 export const LANE_COLORS = {
-    sun: '#ff9800', price: '#8353d1', grid: '#488fc2',
-    battery_in: '#f06292', battery_out: '#4db6ac', ev: '#8DC892', load: '#5BC8D8',
+    sun: 'var(--energy-solar-color, #ff9800)', price: 'var(--energy-grid-return-color, #8353d1)',
+    grid: 'var(--energy-grid-consumption-color, #488fc2)', battery_in: 'var(--energy-battery-in-color, #f06292)',
+    battery_out: 'var(--energy-battery-out-color, #4db6ac)', ev: 'var(--sem-ev-color, #8dc892)', load: 'var(--sem-home-color, #5bc8d8)',
 };
 
 const HOUR_MS = 3600e3;

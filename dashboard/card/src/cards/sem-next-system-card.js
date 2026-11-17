@@ -18,6 +18,7 @@
 
 import { OPEN_PANEL_KEY, takeStored } from '../util/setup-checklist.js';
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { haDefined, ensureHaElements } from '../util/ha-elements.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
@@ -71,11 +72,11 @@ const FRESH_LOOK = {
 const cardCss = css`
     .val.dirty { color: var(--n-accent); text-decoration-color: var(--n-accent); text-decoration-style: solid; }
     .sent .edit { display: inline-flex; align-items: center; gap: 4px; vertical-align: baseline; }
-    .sent input, .sent select, .help input, .help select { font-size: 13px; padding: 2px 6px; max-width: 130px; min-height: 28px; }
+    .sent input, .sent select, .help input, .help select { font-size: var(--ha-font-size-s, 13px); padding: 2px 6px; max-width: 130px; min-height: 28px; }
     .sent .ro { font-weight: 500; color: var(--n-fg); }
     .fresh .tile .xs.warn { color: var(--n-warn); }
     .fresh .tile .xs.bad { color: var(--n-bad); }
-    .fresh .tile .srcid { font-family: var(--code-font-family, monospace); overflow-wrap: anywhere; }
+    .fresh .tile .dim { overflow-wrap: anywhere; }
     .confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
     .ct .lnk.ic { padding: 2px 4px; }
     .ct .lnk.ic ha-icon { color: var(--n-fg3); }
@@ -201,11 +202,13 @@ class SEMNextSystemCard extends SEMNextBase {
             const txt = r.state === 'ok' || r.state === 'old' ? (ageLabel(r.age) || this._t('next_fresh_ok')) : this._t('next_fresh_' + r.state);
             // (#1321) the value and the real entity SEM reads, for checking a setup
             const st = this._hass.states[r.entity];
+            // (#1321) the source by its friendly name; the id shows only in more-info
+            const srcName = String(this._hass.states[r.src]?.attributes?.friendly_name || '');
             const val = !st ? '' : (typeof this._hass.formatEntityState === 'function' ? this._hass.formatEntityState(st)
                 : `${st.state}${st.attributes?.unit_of_measurement ? ' ' + st.attributes.unit_of_measurement : ''}`);
             return html`<div class="tile" style="--c:${r.color}" role="button" tabindex="0" @click=${() => this._moreInfo(r.src && this._hass.states[r.src] ? r.src : r.entity)}>
                 ${this._icon(r.icon)}<div style="min-width:0"><div class="sm" style="font-weight:500">${r.name}</div><div class="xs ${cls}">${val ? val + ' · ' : ''}${txt}</div>
-                ${r.src ? html`<div class="xs dim srcid">${r.src}</div>` : nothing}</div></div>`;
+                ${srcName ? html`<div class="xs dim">${srcName}</div>` : nothing}</div></div>`;
         })}</div>`;
     }
 
@@ -378,23 +381,16 @@ class SEMNextSystemCard extends SEMNextBase {
 
     /** HA loads ha-entity-picker on demand; an entities card's editor pulls it in. */
     async _ensureEntityPicker() {
-        if (customElements.get('ha-entity-picker')) { this._pickerReady = true; return; }
-        try {
-            const helpers = await window.loadCardHelpers?.();
-            if (helpers?.createCardElement) {
-                const el = await helpers.createCardElement({ type: 'entities', entities: [] });
-                await el.constructor?.getConfigElement?.();
-            }
-        } catch (e) { /* the text input stays */ }
-        this._pickerReady = !!customElements.get('ha-entity-picker');
+        await ensureHaElements(['ha-entity-picker'], 3000);
+        this._pickerReady = haDefined('ha-entity-picker');
     }
 
     _entityEditor(slot, value, close) {
         const done = (v) => { this._stage(slot, v || ''); close(); };
         const esc = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
         if (!customElements.get('ha-entity-picker')) {
-            return html`<span class="edit pick"><input type="text" .value=${String(value ?? '')} placeholder="sensor.…"
-                @change=${(e) => done(e.target.value.trim())} @keydown=${(e) => { esc(e); if (e.key === 'Enter') { e.preventDefault(); done(e.target.value.trim()); } }}></span>`;
+            return html`<span class="edit pick">${this._input({ value, placeholder: 'sensor.…',
+                onChange: (e) => done(e.target.value.trim()), onKeydown: (e) => { esc(e); if (e.key === 'Enter') { e.preventDefault(); done(e.target.value.trim()); } } })}</span>`;
         }
         const dc = slot.deviceClass;
         return html`<span class="edit pick" @keydown=${esc}><ha-entity-picker
@@ -414,17 +410,17 @@ class SEMNextSystemCard extends SEMNextBase {
         const t = (k) => this._t(k);
         if (slot.kind === 'entity') return this._entityEditor(slot, value, close);
         if (slot.kind === 'select') {
-            return html`<span class="edit"><select @change=${(e) => { this._stage(slot, e.target.value); close(); }} @blur=${close} @keydown=${keys}>
-                ${(slot.options || []).map((o) => html`<option value="${o.value}" ?selected=${String(o.value) === String(value)}>${o.labelKey ? t(o.labelKey) : (o.label ?? o.value)}</option>`)}
-            </select></span>`;
+            const options = (slot.options || []).map((o) => ({ value: o.value, label: o.labelKey ? t(o.labelKey) : String(o.label ?? o.value) }));
+            const field = this._select(options, value, (v) => { this._stage(slot, v); close(); }, { onBlur: close, onKeydown: keys });
+            // a selector's menu takes focus (no blur), so a Cancel closes it
+            return html`<span class="edit">${field}${haDefined('ha-selector') ? this._btn(t('next_cancel'), close, { small: true, ghost: true }) : nothing}</span>`;
         }
         if (slot.kind === 'number') {
-            return html`<span class="edit"><input type="number" .value=${String(value ?? '')}
-                min="${slot.min ?? nothing}" max="${slot.max ?? nothing}" step="${slot.step || 1}"
-                @input=${(e) => this._stage(slot, e.target.value)} @blur=${close} @keydown=${keys}>${slot.unit ? html` ${slot.unit}` : nothing}</span>`;
+            return html`<span class="edit">${this._input({ type: 'number', value, min: slot.min, max: slot.max, step: slot.step || 1,
+                onInput: (e) => this._stage(slot, e.target.value), onBlur: close, onKeydown: keys })}${slot.unit ? html` ${slot.unit}` : nothing}</span>`;
         }
-        return html`<span class="edit"><input type="text" .value=${String(value ?? '')} placeholder="${slot.placeholder || nothing}"
-            @input=${(e) => this._stage(slot, e.target.value)} @blur=${close} @keydown=${keys}></span>`;
+        return html`<span class="edit">${this._input({ value, placeholder: slot.placeholder,
+            onInput: (e) => this._stage(slot, e.target.value), onBlur: close, onKeydown: keys })}</span>`;
     }
 
     _stage(slot, raw) {

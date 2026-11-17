@@ -17,6 +17,7 @@
  */
 
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { haDefined, ensureHaElements } from '../util/ha-elements.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -85,7 +86,8 @@ const devicesCss = css`
     .cpchip:focus-visible { outline: 2px solid var(--n-accent, currentColor); outline-offset: 2px; }
     .addform { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 6px; }
     .addform label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--n-fg2); }
-    .addform input.txt { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--n-line); background: var(--n-card2); color: var(--n-fg); font: inherit; }
+    .addform input.txt { max-width: none; }
+    .addform ha-textfield { max-width: none; }
     .addform .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .addform .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     ha-entity-picker { display: block; }
@@ -99,7 +101,7 @@ const devicesCss = css`
     .dev .name.tap { cursor: pointer; }
     .period button.pill { border: 0; cursor: pointer; }
     .grid.reorder { grid-template-columns: 1fr; }
-    .dev.dragging { opacity: .95; z-index: 20; position: relative; box-shadow: 0 10px 26px rgba(0, 0, 0, .35); cursor: grabbing; }
+    .dev.dragging { opacity: .95; z-index: 20; position: relative; outline: 2px solid var(--n-accent); cursor: grabbing; }
     .dev.drop-above { box-shadow: 0 -3px 0 0 var(--n-accent); }
     .dev.drop-below { box-shadow: 0 3px 0 0 var(--n-accent); }
     .dev .live { font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -109,7 +111,7 @@ const devicesCss = css`
     .dayin { display: flex; flex-direction: column; font-size: 11px; color: var(--n-fg3); gap: 2px; }
     .dayin input { max-width: 96px; padding: 2px 6px; }
     .days .help { flex: 1 0 100%; margin: 0; }
-    .banner { display: flex; gap: 10px; align-items: flex-start; background: var(--n-card2); border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; }
+    .banner { display: flex; gap: 10px; align-items: flex-start; background: var(--n-card2); border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; }
     .banner ha-icon { color: var(--n-warn); }
     .banner.bad ha-icon { color: var(--n-bad); }
 `;
@@ -295,40 +297,38 @@ class SEMNextDevicesCard extends SEMNextBase {
             this._edit = null;
             if (Number.isFinite(v)) onCommit(v);
         };
-        return html`<input type="number" .value=${value == null ? '' : String(value)}
-            min=${min ?? nothing} max=${max ?? nothing} step=${step ?? nothing}
-            @keydown=${this._keys(commit)} @change=${commit} @blur=${() => { this._edit = null; }}>${unit ? html`<span class="sm muted">${unit}</span>` : nothing}`;
+        return html`${this._input({ type: 'number', value, min, max, step, onKeydown: this._keys(commit), onChange: commit, onBlur: () => { this._edit = null; } })}${unit ? html`<span class="sm muted">${unit}</span>` : nothing}`;
     }
 
     /** (#1081) One text box: Enter or a change commits, Escape closes. */
     _textEdit(key, { value, placeholder, onCommit }) {
         const commit = (e) => { const v = e.target.value; this._edit = null; onCommit(v); };
-        return html`<input type="text" .value=${value || ''} placeholder=${placeholder || nothing}
-            @keydown=${this._keys(commit)} @change=${commit} @blur=${() => { this._edit = null; }}>`;
+        return this._input({ value: value || '', placeholder, onKeydown: this._keys(commit), onChange: commit, onBlur: () => { this._edit = null; } });
     }
 
     _selEdit(key, { value, options, onCommit }) {
-        return html`<select @change=${(e) => { const v = e.target.value; this._edit = null; onCommit(v); }}
-            @keydown=${this._keys(() => { this._edit = null; })} @blur=${() => { this._edit = null; }}>
-            ${(options || []).map((o) => html`<option value=${o.key} ?selected=${o.key === value}>${o.label}</option>`)}</select>`;
+        const close = () => { this._edit = null; };
+        const field = this._select((options || []).map((o) => ({ value: o.key, label: o.label })), value,
+            (v) => { this._edit = null; onCommit(v); }, { onKeydown: this._keys(close), onBlur: close });
+        // a selector's menu takes focus, so it has no blur: a Cancel closes it instead
+        return haDefined('ha-selector') ? html`${field}${this._btn(this._t('next_cancel'), close, { small: true, ghost: true })}` : field;
     }
 
     _timeEdit(key, { value, onCommit }) {
         const commit = (e) => { const v = e.target.value; this._edit = null; if (v) onCommit(v); };
-        return html`<input type="time" .value=${value || ''} @keydown=${this._keys(commit)} @change=${commit} @blur=${() => { this._edit = null; }}>`;
+        return this._input({ type: 'time', value: value || '', onKeydown: this._keys(commit), onChange: commit, onBlur: () => { this._edit = null; } });
     }
 
     /** Two numbers (At least · Up to) with one OK: a blur between the two must not close it. */
     _pairEdit(key, { a, b, unit, onCommit }) {
         const commit = (e) => {
             const box = e.currentTarget.closest('[data-edit]');
-            const ins = box ? box.querySelectorAll('input') : [];
+            const ins = box ? box.querySelectorAll('input, ha-textfield') : [];
             const x = ins[0] ? parseFloat(ins[0].value) : NaN, y = ins[1] ? parseFloat(ins[1].value) : NaN;
             this._edit = null;
             onCommit(Number.isFinite(x) ? x : null, Number.isFinite(y) ? y : null);
         };
-        const inp = (v) => html`<input type="number" .value=${v.value == null ? '' : String(v.value)}
-            min=${v.min ?? nothing} max=${v.max ?? nothing} step=${v.step ?? nothing} @keydown=${this._keys(commit)}>`;
+        const inp = (v) => this._input({ type: 'number', value: v.value, min: v.min, max: v.max, step: v.step, onKeydown: this._keys(commit) });
         return html`${inp(a)} – ${inp(b)} <span class="sm muted">${unit}</span>
             ${this._btn(this._t('next_ok'), commit, { small: true })}
             ${this._btn(this._t('next_cancel'), () => { this._edit = null; }, { small: true, ghost: true })}`;
@@ -414,6 +414,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         }
         const listId = 'ents-' + domains.join('-') + (o.filter ? '-f' : '');
         const ids = entityOptions(this._hass?.states, domains, o.filter);
+        // a native input: a datalist only attaches to one
         return html`<input class="txt" list=${listId} .value=${value || ''} placeholder=${o.label || ''}
             @change=${(e) => onChange(e.target.value.trim())}>
             <datalist id=${listId}>${ids.map((id) => html`<option value=${id}></option>`)}</datalist>`;
@@ -458,14 +459,14 @@ class SEMNextDevicesCard extends SEMNextBase {
             })}</div>`
             : html`<p class="help">${t('next_add_none_loose')}</p>`;
         const form = html`<div class="addform">
-            <label>${t('next_add_name')}<input class="txt" .value=${f.name || ''} @input=${(e) => this._setAdd('name', e.target.value)}></label>
+            <label>${t('next_add_name')}${this._input({ cls: 'txt', value: f.name || '', onInput: (e) => this._setAdd('name', e.target.value) })}</label>
             <label>${t('next_add_switch')}${this._entityField(f.entity, SWITCH_DOMAINS, (v) => this._setAdd('entity', v))}</label>
             <label>${t('next_add_power_sensor')}${this._entityField(f.power, ['sensor'], (v) => this._setAdd('power', v),
                 { filter: (st) => ['W', 'kW'].includes(st?.attributes?.unit_of_measurement) })}</label>
             <div class="two">
-                <label>${t('next_add_rated')}<input class="txt" type="number" min="0" step="50" .value=${f.rated || ''} @input=${(e) => this._setAdd('rated', e.target.value)}></label>
-                <label>${t('next_priority')}<input class="txt" type="number" min="1" max="10" step="1" .value=${f.priority || ''}
-                    placeholder=${String(Math.min(10, rows.length + 1))} @input=${(e) => this._setAdd('priority', e.target.value)}></label>
+                <label>${t('next_add_rated')}${this._input({ cls: 'txt', type: 'number', min: 0, step: 50, value: f.rated || '', onInput: (e) => this._setAdd('rated', e.target.value) })}</label>
+                <label>${t('next_priority')}${this._input({ cls: 'txt', type: 'number', min: 1, max: 10, step: 1, value: f.priority || '',
+                    placeholder: String(Math.min(10, rows.length + 1)), onInput: (e) => this._setAdd('priority', e.target.value) })}</label>
             </div>
             <p class="help">${t('next_add_starts_off')}</p>
             <div class="acts">
@@ -630,14 +631,7 @@ class SEMNextDevicesCard extends SEMNextBase {
 
     // ── configure dialog (the classic Load Priority card's, unchanged in behaviour) ──
     async _ensureEntityPicker() {
-        if (customElements.get('ha-entity-picker')) return;
-        try {
-            const helpers = await window.loadCardHelpers?.();
-            if (helpers?.createCardElement) {
-                const el = await helpers.createCardElement({ type: 'entities', entities: [] });
-                await el.constructor?.getConfigElement?.();
-            }
-        } catch (e) { /* the text input stays */ }
+        await ensureHaElements(['ha-entity-picker', 'ha-dialog'], 3000);
     }
 
     async _showConfigureModal(deviceId, deviceName) {
@@ -648,14 +642,25 @@ class SEMNextDevicesCard extends SEMNextBase {
         const values = controlToFormValues(dev?.control);
         const hasManual = dev?.control?.discovered_via === 'manual_mapping';
         await this._ensureEntityPicker();
-        const overlay = document.createElement('div');
+        // (#1321) HA's own dialog when it exists; the fixed overlay in HA's colours otherwise
+        const useDialog = haDefined('ha-dialog');
+        const overlay = document.createElement(useDialog ? 'ha-dialog' : 'div');
         overlay.id = 'sem-config-modal';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:center;justify-content:center';
+        const title = `${this._t('configure_device')}: ${deviceName}`;
+        if (useDialog) {
+            overlay.open = true;
+            overlay.heading = title;
+            overlay.setAttribute('header-title', title);
+            overlay.addEventListener('closed', (e) => { if (e.target === overlay) overlay.remove(); });
+        } else {
+            overlay.style.cssText = 'position:fixed;inset:0;background:color-mix(in srgb, black 60%, transparent);z-index:999;display:flex;align-items:center;justify-content:center';
+        }
         const isLoad = dev && dev.type === 'load';
         overlay.innerHTML = buildLoadConfigModalHTML({
             deviceName, values, t: (k) => this._t(k), hasManual,
             behindRelay: isLoad ? !!dev.behindRelay : null,
             inUse: !hasManual && !values.entity ? (dev?.controlEntity || '') : '',
+            dialog: useDialog, textfield: haDefined('ha-textfield'),
         });
         this.renderRoot.appendChild(overlay);
         const typeSel = overlay.querySelector('#cfg-type');
@@ -692,7 +697,7 @@ class SEMNextDevicesCard extends SEMNextBase {
                 this._dev(dev.id, 'behind_operator_relay', String(on));
             });
         }
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        if (!useDialog) overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         overlay.querySelector('#cfg-cancel').addEventListener('click', () => overlay.remove());
         const removeBtn = overlay.querySelector('#cfg-remove');
         if (removeBtn) {

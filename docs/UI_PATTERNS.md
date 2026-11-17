@@ -1,98 +1,99 @@
-# SEM UI Patterns
+# SEM UI patterns
 
-The design language for SEM dashboard cards. **The EV charger card is the
-reference pattern** — when a new control surface is needed, it should look
-like the EV charger already solved it. This guide exists so consistency is
-the starting point, not the result of review rounds. (#565)
+The SEM dashboard looks and behaves like Home Assistant itself. A user who
+knows HA should not see a second design. When a screen needs something, use
+HA's element and HA's theme variables first; draw our own only when HA has
+none. (#565, #1321)
 
-## The reference vocabulary
+## Surfaces
 
-Taken from the EV card's *Charge Target* block, reused by the device goal
-panel — copy these, don't reinvent:
+- One real `ha-card` per section (`_sec()` in `base/sem-next-base.js`). The
+  card gives radius, border, background and shadow from the theme:
+  `--ha-card-border-radius`, `--ha-card-border-width`, `--ha-card-border-color`,
+  `--ha-card-box-shadow`, `--card-background-color`.
+- No own shadow, border colour, radius, blur or glass. Lines inside a card
+  are `--divider-color`. A tile inside a card uses `--secondary-background-color`.
+- 16 px padding in a card, 16 px between cards, 12 px between rows' content.
 
-### Settings panel (`charge-target-group` / `goal-editor`)
-- Inset panel: 1px `--divider-color` border, radius 10px, background
-  `rgba(255,255,255,0.025)`.
-- **Uppercase section title** (11px, letter-spacing 0.05em, secondary color)
-  with a small colored icon (e.g. `mdi:target` in `#8DC892`).
-- **Unit / scope picker top-right** in the title row (small select, e.g.
-  SOC ↔ kWh on the EV card, min ↔ kWh on the goal panel).
+## Colours
 
-### Rows
-- One setting per row: **label left, control right** (`display:flex`,
-  control in a right-aligned cell), 1px separators between rows
-  (`rgba(255,255,255,0.06)`), min-height ~32px.
-- Time values get a small clock icon in `#5BC8D8`.
+- Only theme variables. A hex or rgba literal is allowed only as the fallback
+  inside `var(--x, #fallback)`. `test/next-theme-lint.test.js` fails the
+  build on any other.
+- Text: `--primary-text-color`, `--secondary-text-color`. Accent:
+  `--primary-color`. States: `--success-color`, `--warning-color`,
+  `--error-color`. Icons: `--state-icon-color`.
+- Energy: `--energy-solar-color`, `--energy-grid-consumption-color`,
+  `--energy-grid-return-color`, `--energy-battery-in-color`,
+  `--energy-battery-out-color`. Home and car have no HA variable:
+  `--sem-home-color`, `--sem-ev-color`. Fallbacks are the SEM palette: solar
+  `#ff9800`, grid import `#488fc2`, export `#8353d1`, battery in `#f06292`,
+  battery out `#4db6ac`, home `#5bc8d8`, car `#8dc892`. Use `NEXT_COLORS` in
+  code, never the hex.
+- Text on a coloured bar: `--sem-on-energy` (dark) or `--sem-on-energy-dark`
+  (light).
+- Check every new colour in a light and a dark theme.
 
-### The dual-handle range slider
-- Green **At least** handle (`#8DC892`) = the guaranteed minimum/target.
-- Orange **Up to** handle (`#ff9800`) = the ceiling/cap.
-- Labels above the track: `At least <b green>X</b> … Up to <b orange>Y</b>`.
-- The max handle parked at the far right means **no limit** — display
-  `Full` (EV) or `∞` (goals), store the sentinel (100% / 0).
-- Track: 6px, radius 3, fill = green→orange gradient; 18px white handles
-  with 3px colored borders.
-- **Value order: the big/primary value comes FIRST (left), secondary chips
-  after** — on mobile the block wraps and the order must survive.
+## Type
 
-### Mode pickers
-- **One mode picker per device/feature** — a single ladder where each step
-  adds capability (EV: charge modes; devices: Off → Peak only → Surplus —
-  solar only → + cheap top-up → + finish by deadline). Never two selects
-  that both read as "mode".
-- If the UI merges several backend fields into one picker, decompose in the
-  card (`control_mode` + `top_up_policy`) — keep the backend API stable.
-- Select chrome: custom caret SVG, radius 8px, 12px bold text, secondary
-  background (copy `.ct-mode-select`).
+- Inherit HA's font. Never set a font family (code: `--code-font-family`).
+- Sizes `--ha-font-size-s/m/l/xl` (12, 14, 16, 20 px), weights
+  `--ha-font-weight-normal/medium/bold`, always with a fallback.
+- Card heading: sentence case, 16 px, weight 500. Secondary text 14 px or 12 px
+  in `--secondary-text-color`. No uppercase, no letter spacing.
+- No own title bar: HA's toolbar names the dashboard. The header row holds
+  only small pills (battery, price, live or observing) and the All settings
+  switch.
 
-### Help
-- Cards with options get a **`?` toggle** that reveals inline help texts per
-  option (not hover tooltips — they don't exist on touch).
-- Every option's help explains behavior, not the label.
+## Controls
 
-### Everyday and All settings
-- **One switch for every card**: *Everyday* (default) or *All settings*,
-  read with `getAllSettings()` from `src/util/view-mode.js` and changed with
-  `setAllSettings()`, which tells every card (`sem-view-mode-changed`). It is
-  kept per browser — a view is not a setting. Never call it "beginner".
-- Everyday keeps open what is used every day (EV: state, SOC, power, today,
-  solar share, charge mode, charge target, Charge by). The rest goes into
-  **folds**: *More* for controls changed now and then, *Details* for what
-  explains the result. A warning that needs action is never folded.
-- A fold is a `<button aria-expanded>` row (copy `.fold-btn`). All settings
-  opens every fold. A fold the user opens holds for that card on that page;
-  switching the view puts every fold back to the view's default.
-- Values set once (EV: battery size, min current, consumption) are one
-  *Set once* line in Everyday; each value opens the same more-info as its
-  tile. Folding must never make a setting unreachable.
-- Help (`?`) hints follow the toggle, not the view.
+Each helper draws HA's element when it is defined and a native one in HA's
+look when it is not. HA loads many elements late, so never assume one.
+`ensureHaElements()` (`util/ha-elements.js`) asks HA's card helpers to load
+them, waits with a timeout and the card renders again.
 
-### Heroes / KPIs
-- One hero per surface. Big value (orange for solar), small uppercase label
-  beneath, live secondary values as pill chips beside it.
-- **Never show the same number twice on one screen** — if a header and a
-  card would both show it, the header wins and the card goes.
+| Need | Helper | HA element | Fallback |
+|---|---|---|---|
+| On or off | `_switch()` | `ha-switch` | switch button |
+| Pick one of a few | `_seg()` | `ha-control-select`, `ha-button-toggle-group` | button group |
+| Button | `_btn()` | `ha-button` | `.btn` |
+| Text, number, time | `_input()` | `ha-textfield` | `input` |
+| Pick from a list | `_select()` | `ha-selector` | `select` |
+| Pick an entity | `ha-entity-picker` | itself | text box with a datalist |
+| Dialog | `ha-dialog` | itself | fixed overlay |
+| Message | `_toast()` | `hass-notification` (HA's snackbar) | message in the card |
 
-## Colors
+- Tapping a value that is an entity opens HA's more-info (`_moreInfo()`).
+  Never an own popup for an entity.
+- Show friendly names. An entity id appears only in more-info.
+- A selector's menu takes focus: give it no blur handler, close with Cancel.
 
-Use the canonical palette (see project notes): solar `#ff9800`, grid import
-`#488fc2`, export `#8353d1`, battery charge `#f06292` / discharge `#4db6ac`,
-home `#5BC8D8`, EV `#8DC892`. Green/orange on sliders = guaranteed/ceiling.
+## Rows, sentences, folds
 
-## Process: mockup first
+- A row: icon, label left, value right, a divider above (`_row()`).
+- A setting is a sentence; the value in it is tapped to edit.
+- **Everyday and All settings**: one switch in the header for every screen,
+  read with `getAllSettings()` and set with `setAllSettings()` (`util/view-mode.js`,
+  kept per browser). Everyday keeps open what is used daily; the rest sits in
+  folds. A warning that needs action is never folded. Folding must never make
+  a setting unreachable.
+- Help text explains what an option does, not its label. No hover-only hints.
+- One number once per screen. If the header shows it, the card does not.
+- One mode picker per device. If the UI merges backend fields, decompose in
+  the card and keep the backend API stable.
 
-Visual work is proposed as a **mockup or annotated screenshot next to the
-reference pattern before any implementation** — one approval, one build.
+## Process
 
-## Card checklist (every new/changed card)
+Visual work starts as a mockup next to the reference. One approval, one
+build.
 
-- [ ] All strings via `semLocalize` keys, translated ×15 in
-      `dashboard/translations.json`, `sem-localize.js` regenerated
-- [ ] No backtick characters inside lit `html`/`css` template bodies
-      (guarded by `tests/test_card_template_lint.py` — they blank the card)
-- [ ] `watchedEntities` covers every entity the card reads
-- [ ] `npm run build` — `dist/sem-cards.js` is what ships; `src/` alone does
-      nothing
-- [ ] Template uses the `*glass_card` anchor (defined at the first styled
-      card of the Home view — check ordering when inserting cards)
-- [ ] Translation parity + card lint tests green
+## Card checklist
+
+- [ ] Strings via `semLocalize` keys, all 16 languages in
+      `dashboard/translations.json`, `scripts/regenerate_localize.py` run
+- [ ] No backtick inside a lit `html` or `css` template, comments included
+      (`tests/test_card_template_lint.py`)
+- [ ] `_watchIds()` lists every entity the card reads
+- [ ] `npm run build`: `dist/sem-cards.js` is what ships
+- [ ] `npm test` green, including the theme lint
+- [ ] Looked at in a light and a dark theme

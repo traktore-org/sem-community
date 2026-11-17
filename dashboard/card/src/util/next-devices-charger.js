@@ -218,8 +218,8 @@ export function chargerBody(card, row) {
     const nextDep = dep.next ? card._hhmm(dep.next) : '';
     const depEditor = card._depOpen && card._depOpen[cid] ? html`<div class="days">
         ${DAYS.map((d, i) => html`<label class="dayin"><span>${card._dayName(i)}</span>
-            <input type="time" .value=${own[d] || ''} placeholder=${depDefault} ?disabled=${dis}
-                @change=${(e) => { const map = { ...own }; const v = e.target.value; if (!v || v === depDefault) delete map[d]; else map[d] = v; card._svc('set_charger_departure', { charger_id: cid, by_weekday: map }); }}></label>`)}
+            ${card._input({ type: 'time', value: own[d] || '', placeholder: depDefault, disabled: dis, label: card._dayName(i),
+                onChange: (e) => { const map = { ...own }; const v = e.target.value; if (!v || v === depDefault) delete map[d]; else map[d] = v; card._svc('set_charger_departure', { charger_id: cid, by_weekday: map }); } })}</label>`)}
         <div class="help">${tf('next_dep_help', { time: depDefault || '—' })}</div></div>` : nothing;
     const oneBlock = !!dep.one_block;
     const lateMin = Number(dep.late_min) || 0;

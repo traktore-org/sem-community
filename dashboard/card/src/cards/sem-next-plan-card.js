@@ -91,7 +91,7 @@ class SEMNextPlanCard extends SEMNextBase {
             .pc .lab span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
             .pc .lab ha-icon { color: var(--c); }
             .pc .tip { position: absolute; z-index: 2; pointer-events: none; background: var(--n-card); border: 1px solid var(--n-line);
-                border-radius: 10px; padding: 7px 10px; font-size: 12px; line-height: 1.4; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+                border-radius: 8px; padding: 8px 12px; font-size: var(--ha-font-size-s, 12px); line-height: 1.4; box-shadow: var(--ha-card-box-shadow, none);
                 min-width: 120px; max-width: 220px; }
             .pc .tip b { font-variant-numeric: tabular-nums; }
             .pc .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
@@ -474,7 +474,7 @@ class SEMNextPlanCard extends SEMNextBase {
                     <path d="${line}" fill="none" stroke="${C.solar}" stroke-width="2" stroke-linejoin="round" stroke-dasharray="${actual ? nothing : '4 3'}"></path>`);
             }
             const pk = d.sun.peak;
-            if (pk && d.sun.totalKwh > 0.05) parts.push(this._svgChip(X((pk.s + pk.e) / 2), sy0 - 24, `${this._fmt(d.sun.totalKwh, 1)} kWh`, C.solar, '#1b1204', 0, W));
+            if (pk && d.sun.totalKwh > 0.05) parts.push(this._svgChip(X((pk.s + pk.e) / 2), sy0 - 24, `${this._fmt(d.sun.totalKwh, 1)} kWh`, C.solar, 'var(--sem-on-energy, #10161c)', 0, W));
         } else {
             const kwh = this._sunFallbackKwh(d);
             const text = kwh !== null ? this._tf('next_chip_forecast_kwh', { kwh: this._fmt(kwh, 1) }) : this._t('next_sun_none');
@@ -539,7 +539,7 @@ class SEMNextPlanCard extends SEMNextBase {
                     <rect x="${x0 + 0.75}" y="${y + 4}" width="${w}" height="${rowH - 8}" rx="${Math.min(7, w / 4)}" fill="${color}"
                         fill-opacity="${b.provisional ? 0.45 : (b.past ? 0.35 : 1)}" stroke="${on ? 'var(--n-fg)' : (b.provisional ? color : 'none')}"
                         stroke-width="${on ? 2 : 1}" stroke-dasharray="${b.provisional ? '3 2' : nothing}"><title>${title}</title></rect>
-                    ${b.kwh > 0.05 && w > 48 ? svg`<text x="${x0 + 0.75 + w / 2}" y="${y + rowH / 2 + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#10161c" pointer-events="none">${this._fmt(b.kwh, 1)} kWh</text>` : nothing}
+                    ${b.kwh > 0.05 && w > 48 ? svg`<text x="${x0 + 0.75 + w / 2}" y="${y + rowH / 2 + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--sem-on-energy, #10161c)" pointer-events="none">${this._fmt(b.kwh, 1)} kWh</text>` : nothing}
                 </g>`);
             }
         });

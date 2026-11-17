@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **The SEM dashboard looks like Home Assistant** (#1321). Real cards, your theme's colours and fonts, and HA's own switch, buttons, fields, dialog and messages.
+- 🐛 **Replacing the old dashboard never restarts Home Assistant** (#1321). A new dashboard that cannot load at once shows up after your next restart.
+- 🐛 **Repair texts name the screens of the SEM dashboard** (#1321). They no longer send you to tabs that are gone.
+- ✨ **The Plan screen shows last night's review again** (#1321). What each device used, the battery's night and the sun kept.
+- 🐛 **Source health tiles show names, not entity ids** (#1321). The id is in the more-info dialog.
 - ✨ **One dashboard: the new one** (#1321). The classic dashboard, its cards and the diagram style option are gone.
 - ✨ **An unedited classic dashboard is replaced on the first start** (#1321). If you changed it, it stays and a Repair offers to delete it.
 - 🐛 **Removed cards show a short notice, not a red error** (#1321). It links to the SEM dashboard.
