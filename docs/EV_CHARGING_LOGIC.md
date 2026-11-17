@@ -135,6 +135,10 @@ passes as is, and a charger without a status sensor keeps the median alone.
    clamps every command to it, so the box's rating is the hard limit whatever
    you set above.
 
+If your charger takes its current through a select that offers only some
+steps (for example 8, 10, 12 A), SEM picks the largest step at or below the
+current it wants. It never picks a higher one.
+
 SEM decides against `min(hardware, Max Amps)` — a configured value can ask for
 *less* than the hardware allows, never for more, because deciding above the
 clamp is drift between what SEM plans and what it can command (#627).

@@ -449,7 +449,8 @@ under **Configuration → Heat Pump → Step down when power is short**:
 
 It steps down in two cases: the house buys grid power in an **expensive**
 hour, or it is **near your peak limit**. It needs a comfort band on the heat
-pump (*Keep at* and *Run now past*) and a thermometer. Below *Run now past*
+pump (*Keep at* and *Run now past*) and a thermometer. If you picked no thermometer,
+SEM reads the room temperature of the pump's climate entity. Below *Run now past*
 the pump is never held back, and a pump that gets too cold is released at
 once. Away mode, Mode Off and removing SEM also release it.
 
@@ -2268,7 +2269,9 @@ Ollama ...) that may control Home Assistant, SEM's tools are there
 automatically; no sentence file needed. Ask it the same questions in
 your own words. It also gets a read-only tool, `SemSetupStatus`, that
 tells it how SEM is set up: watch-only or not, chargers, battery,
-forecast source, tariff, open repairs and version. The four change
+forecast source, tariff, open repairs and version. When no grid charge is
+set up for the battery, it lists the selects on the battery and their options,
+so the AI can tell you which one to pick. The four change
 tools (target, skip tonight, charge now, back to normal) show up only
 while the **Voice commands** switch is on. With several SEM entries,
 the first loaded one answers.
