@@ -117,11 +117,16 @@ def _believe(dev, hass, on: bool, clock: _Clock) -> None:
     now = clock.naive()
     dev._status.state = DeviceState.ACTIVE if on else DeviceState.IDLE
     dev._status.current_consumption_w = RATED_W if on else 0.0
-    dev._sem_owned = dev._sem_commanded = dev._commanded_claim = on
+    # (#1369) the replay DID command it: claim and release through the
+    # device layer's own writers (#779 — no claim outside devices/base.py),
+    # then put the replay's clock on the timestamps they stamp
     if on:
+        dev.record_activated()
         dev._last_activated = dev._status.last_activated = now
     else:
+        dev.record_deactivated()
         dev._last_deactivated = now
+    dev._commanded_claim = on
     hass.set(SWITCH, "on" if on else "off")
 
 
