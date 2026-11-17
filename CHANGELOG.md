@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.18] — 17.11.2026
+
 - 📝 **README shows 2.3: new dashboard, first-run checklist and the AI assistant** (#1086). All screenshots retaken.
 - 🐛 **"Why is my car not charging?" answers for every charger** (#1379). Before, an AI got "which charger?" back.
 - ✨ **Home says when SEM only watches** (#1379). A banner with a confirmed take-control button; a checklist opens each fix.
