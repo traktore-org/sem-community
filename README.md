@@ -144,65 +144,20 @@ Before setting up SEM, make sure you have:
 
 ---
 
-## Setup
+## Getting Started
 
-### Step 1: Add the Integration
+Detail for each step is in the [Quick Start](docs/QUICK_START.md).
 
-1. Go to **Settings** > **Devices & Services** > **Add Integration**
-2. Search for **Solar Energy Management**
-3. Follow the setup wizard
-
-### Step 2: Energy Dashboard Verification
-
-SEM auto-detects your solar, grid, and battery sensors from the HA Energy Dashboard. If they are not configured yet, the wizard will ask you to set up the Energy Dashboard first.
-
-SEM also uses the Energy Dashboard's import/export energy counters to automatically detect your grid and battery power sensor sign conventions — no manual configuration needed. This works with all inverter brands regardless of whether they use positive-for-export or positive-for-import conventions.
-
-### Step 3: EV Charger Configuration
-
-Select the sensors for your EV charger:
-
-| Setting | Description |
-|---------|-------------|
-| Connected sensor | Binary sensor showing if the EV is plugged in |
-| Charging sensor | Binary sensor showing if charging is active |
-| Charging power sensor | Power sensor (W) for current charging power |
-| Charger service | Service to set charging current (e.g., `keba.set_current`) |
-| Total energy sensor | Cumulative energy sensor (kWh) — optional |
-
-SEM auto-detects chargers from the entity registry: **KEBA**, **Wallbox Pulsar**, **go-eCharger** (HTTP + MQTT), **Easee**, **Zaptec**, **ChargePoint**, **Heidelberg**, **OpenWB 2.x**, **OCPP-compatible**, **Ohme**, **Peblar**, **V2C Trydan**, **Alfen Eve**, **Blue Current**, **OpenEVSE**. Any other charger that exposes power/connected/charging sensors in HA can be configured manually.
-
-### Step 4: Notifications (Optional)
-
-- **Charger display messages** — show charging status on the charger's built-in display (KEBA, Easee, Wallbox, etc.)
-- **Notifications** — push notifications via HA Companion App (`notify.mobile_app_*`), REST webhooks (`rest_command.*`), or any `notify.*` service (Matrix, Slack, Telegram, etc.)
-
-### Step 5: Optimization Settings
-
-Key settings you can adjust (all have sensible defaults):
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Update interval | 10s | How often SEM reads sensors and adjusts |
-| Daily EV target | 10 kWh | How much energy to charge overnight |
-| Battery priority SOC | 30% | Below this, all solar goes to battery first |
-| Battery buffer SOC | 70% | Above this, battery can help charge the EV |
-| Battery auto-start SOC | 90% | From this, the battery may help the car fully (still only with spare sun) |
-| Min solar power | 500W | Minimum surplus before solar EV charging starts |
-| Observer mode | **On** | SEM watches and shows what it *would* do, commanding nothing. Turn it off when the decisions look right. |
-
-For detailed explanations of all settings, see the [Setup Guide](docs/SETUP_GUIDE.md).
-
-### Step 6: Load Management (Optional)
-
-Off on a fresh install. Enable peak load management on the Configuration tab
-if your utility bills based on peak demand. Tune
-the target peak limit from the Control tab's slider (1–80 kW, or drag to
-**Uncapped** if your connection has no limit worth defending) — warning (90%)
-and emergency (120%) are derived from it automatically and sit behind an
-**Advanced** disclosure on the Configuration tab. See
-[Load Management Settings](docs/USER_GUIDE.md#load-management-settings) for
-the full reference.
+1. **Install SEM** from HACS, or from **Settings → Marketplace** on Home Assistant 2026.11 or newer. No custom repository needed.
+2. **Restart Home Assistant.**
+3. Go to **Settings → Devices & Services → + Add Integration** and add **Solar Energy Management**.
+4. **Confirm the sensors SEM found** (solar, grid and battery power, in watts). Pick your own if one is wrong.
+5. Open **Solar Energy Management** in the sidebar. SEM made the dashboard for you.
+6. **Add your EV charger** under **Configure** on the integration, or on the dashboard's Configuration tab. The wizard does not ask for it.
+7. *Optional:* **Solar forecast** (Solcast, Forecast.Solar, Open-Meteo or Helios). SEM then plans grid charging around tomorrow's sun.
+8. *Optional:* **Dynamic tariff** (Tibber, Nordpool, ENTSO-e or aWATTar). SEM then charges in the cheapest hours.
+9. **Turn watch-only off** when the dashboard looks right: switch off `switch.sem_observer_mode`. SEM starts in watch-only mode, so **until you do this, SEM changes nothing**. It only shows what it would do.
+10. **Check Repairs** (**Settings → Repairs**) when SEM needs your attention.
 
 ![SEM Integration Page](https://raw.githubusercontent.com/traktore-org/sem-community/main/docs/images/sem_integration_detail.png)
 
