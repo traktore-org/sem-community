@@ -694,6 +694,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     #: this attempt's writes, whether the option was ever read back, why it
     #: ended (a message), and the stop's (failed cycles, options listed)
     _sel_writes: int = 0
+    _permit_writes: int = 0     # (#1377) turn_on writes of this attempt
     _sel_seen: bool = False
     _sel_spent: "str | None" = None
     _sel_stop_miss: tuple = (0, ())
@@ -707,6 +708,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     def _forget_attempt(self) -> None:
         """(#1346) A stop ends the attempt: the next start may try again."""
         self._sel_writes, self._sel_seen = 0, False
+        self._permit_writes = 0
         self._sel_spent = None
         self._sel_stop_miss = (0, ())
 
@@ -799,9 +801,29 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             if not await self.charge_record.started(entity, self._battery()):
                 return self._select_failed("SEM could not save its record")
             self._active, self._target_soc = True, command.target_soc
+            refused = await self._check_permit(entity)
+            if refused is not None:
+                return refused
         return ChargeStatus(status=ChargeCommandStatus.CHARGING,
                             target_soc=command.target_soc,
                             message="Select already shows the charge option")
+
+    async def _check_permit(self, entity: str) -> "ChargeStatus | None":
+        """(#1377) SEM turned the permit on and it reads OFF: a switch that
+        ignores the write. One more try, then the charge is given up, the
+        mode and the reserve go back and the plan says it was refused."""
+        permit = permit_switch(self.config)
+        if (not permit or self._permit_state(permit) != "off"
+                or await self.charge_record.prior_of(permit) is None):
+            return None
+        if self._permit_writes < self.SELECT_WRITES_PER_ATTEMPT:
+            await self._permit_on()
+            return None
+        why = (f"{permit} did not turn on — could not start the charge, no "
+               "more writes for it")
+        await self._stop_by_select()
+        self._sel_spent, self._sel_refused_at = why, time.monotonic()
+        return self._select_failed(why)
 
     async def _stop_by_select(self) -> ChargeStatus:
         """Put the select back to what it showed before SEM's start, but
@@ -810,24 +832,20 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         packs still charge through goes back with the last of them."""
         entity, option = select_setup(self.config)
         prior = await self.charge_record.prior_of(entity)
+        # (#1377) the reserve goes back FIRST and each restore is tried on
+        # its own: a mode or permit that cannot be read must never hold the
+        # reserve high (it blocks the battery's discharge to the house)
+        await self._put_target_back()
         if prior is None:
             self._active, self._target_soc = False, 0.0
             self._forget_attempt()
-            failed = await self._put_permit_back()     # (#1377)
+            failed = await self._put_permit_back()
             if failed is not None:
                 return failed
-            await self._put_target_back()
             return _say_nothing_to_stop(self, f"SEM changed no option of {entity}")
-        state, options = read_select(self.hass, entity)
-        if state is None:
-            return self._select_failed(f"{entity} is unavailable — the charge "
-                                       "option is put back when it answers")
         shared = await self.charge_record.others(entity, self._battery())
-        if (not shared and state == charge_option(self.hass, entity, option)):
-            failed = await self._put_select_back(entity, option, prior, options)
-            if failed is not None:
-                return failed
-        failed = await self._put_permit_back()         # (#1377)
+        failed = await self._put_mode_back(entity, option, prior, shared)
+        failed = await self._put_permit_back() or failed
         if failed is not None:
             return failed
         self._active, self._target_soc = False, 0.0
@@ -837,9 +855,18 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             await self.charge_record.left(entity, self._battery())
         else:
             await self._note_stopped(True)
-        await self._put_target_back()
         return ChargeStatus(status=ChargeCommandStatus.IDLE,
                             message="Select put back")
+
+    async def _put_mode_back(self, entity: str, option: str, prior: str,
+                             shared: bool) -> "ChargeStatus | None":
+        state, options = read_select(self.hass, entity)
+        if state is None:
+            return self._select_failed(f"{entity} is unavailable — the charge "
+                                       "option is put back when it answers")
+        if not shared and state == charge_option(self.hass, entity, option):
+            return await self._put_select_back(entity, option, prior, options)
+        return None
 
     # ── (#1377) the permit switch beside the select ──────────────────
     def _permit_state(self, entity: str) -> "str | None":
@@ -876,6 +903,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         entity = permit_switch(self.config)
         if (entity and self._permit_state(entity) == "off"
                 and await self.charge_record.prior_of(entity) is not None):
+            self._permit_writes += 1
             await self.hass.services.async_call(
                 "switch", "turn_on", {"entity_id": entity})
 
@@ -957,9 +985,27 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 if entity not in live and not await self._restore_one(
                         entity, prior, option, observer):
                     return                      # asked again next cycle
+            if not await self._restore_stale_permit(observer):
+                return
             self._orphans_settled = True
         except Exception:  # noqa: BLE001 — a record never costs a cycle
             _LOGGER.debug("orphan select not restored", exc_info=True)
+
+    async def _restore_stale_permit(self, observer: bool) -> bool:
+        """(#1377) A crash between the permit and the select write leaves
+        the permit on with the select at its old option: no charge runs, so
+        the permit goes back. True: settled; False: asked again next cycle
+        (unreadable, or observer mode, which sends nothing)."""
+        permit = permit_switch(self.config)
+        if not permit or await self.charge_record.prior_of(permit) is None:
+            return True
+        entity, option = select_setup(self.config)
+        state, _ = read_select(self.hass, entity)
+        if state is None or observer:
+            return False
+        if state == charge_option(self.hass, entity, option):
+            return True                         # a charge runs: its stop
+        return await self._put_permit_back() is None
 
     async def _restore_one(self, entity: str, prior: str, option: str,
                            observer: bool) -> bool:

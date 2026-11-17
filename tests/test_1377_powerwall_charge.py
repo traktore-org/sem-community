@@ -57,6 +57,7 @@ class _Hass:
         }
         self.calls: list[tuple] = []
         self.refuse_mode = False
+        self.refuse_permit = False
         self.states = SimpleNamespace(get=self._states.get)
         self.services = SimpleNamespace(async_call=self._call)
 
@@ -73,7 +74,8 @@ class _Hass:
         eid = data["entity_id"]
         if service == "select_option" and not self.refuse_mode:
             self.put(eid, data["option"])
-        elif service in ("turn_on", "turn_off"):
+        elif service in ("turn_on", "turn_off") and not (
+                self.refuse_permit and service == "turn_on"):
             self.put(eid, service[5:])
         elif service == "set_value":
             self.put(eid, str(data["value"]))
@@ -294,3 +296,50 @@ class TestObserver:
         n = len(hass.calls)
         await bare.async_adopt_running_charge(observer=True)
         assert len(hass.calls) == n and hass.read(PERMIT) == "on"
+
+
+class TestReview:
+    async def test_an_unreadable_permit_at_the_stop_never_holds_the_reserve(self):
+        hass = _Hass()
+        a = _adapter(hass, _Store(), _Store())
+        await actuate_battery(_charge(), a)
+        hass.put(PERMIT, "unavailable")
+        await actuate_battery(_stop(), a)
+        assert float(hass.read(RESERVE)) == 20           # not held at 100
+        assert hass.read(MODE) == "self_consumption"
+        assert "unavailable" in a.last_error
+        hass.put(PERMIT, "on")                           # it answers again
+        await actuate_battery(_stop(), a)                # the stop is retried
+        assert hass.read(PERMIT) == "off"
+
+    async def test_an_unreadable_mode_at_the_stop_still_restores_the_reserve(self):
+        hass = _Hass()
+        a = _adapter(hass, _Store(), _Store())
+        await actuate_battery(_charge(), a)
+        hass.put(MODE, "unavailable")
+        await actuate_battery(_stop(), a)
+        assert float(hass.read(RESERVE)) == 20
+        assert hass.read(PERMIT) == "off"
+
+    async def test_a_permit_that_ignores_turn_on_is_bounded_said_and_undone(self):
+        hass = _Hass()
+        hass.refuse_permit = True
+        a = _adapter(hass, _Store(), _Store())
+        for _ in range(10):
+            await actuate_battery(_charge(), a)
+        assert len(hass.writes("switch")) == 2           # the start + one try
+        assert hass.read(MODE) == "self_consumption"     # given up, put back
+        assert float(hass.read(RESERVE)) == 20
+        assert a.charge_refused is True
+        assert "did not turn on" in a.last_error
+        assert a.last_intent is not BatteryIntent.FORCE_CHARGE
+
+    async def test_a_crash_before_the_select_write_puts_the_permit_back(self):
+        hass, rec, hold = _Hass(), _Store(), _Store()
+        await actuate_battery(_charge(), _adapter(hass, rec, hold))
+        hass.put(MODE, "self_consumption")       # the select write never came
+        fresh = _adapter(hass, rec, hold)
+        await fresh.async_adopt_running_charge(observer=True)
+        assert hass.read(PERMIT) == "on"                 # observer: nothing sent
+        await fresh.async_adopt_running_charge()
+        assert hass.read(PERMIT) == "off"

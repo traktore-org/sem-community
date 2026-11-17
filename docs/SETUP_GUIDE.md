@@ -1248,7 +1248,10 @@ Each old value is saved to disk before SEM changes it, so the stop, Off, an
 unload and a restart all put it back. A value you change by hand during a
 charge is left alone, and a switch that was already on stays on. Nothing is
 written while one of the three cannot be read, and nothing in observer mode.
-A select that keeps its old option gets one more try, then SEM says so. Leave
+A select that keeps its old option gets one more try, then SEM says so. With both a charge
+switch and the select pair set, the switch is now a permit (before, the switch alone
+started the charge). A switch that ignores the turn-on gets one more try, then
+SEM gives the charge up, puts the rest back and says so. Leave
 the switch empty if your battery needs only the select; leave the target empty
 if it needs none.
 

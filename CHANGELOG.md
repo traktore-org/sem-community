@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- ✨ **A Tesla Powerwall can charge from the grid** (#1377). A charge switch beside the select pair is now a permit, put back after the charge.
+- ✨ **A Tesla Powerwall can charge from the grid** (#1377). With a select pair set, a charge switch is now a permit, not the start. It is put back after.
 - ✨ **A second dashboard, SEM-dashboard, with five screens by question** (#1321). The classic one stays; "Generate dashboard" adds the new one beside it.
 - 🔧 **The replay judges the hot water tank** (#1369). Tank rule changes are compared with develop on recorded days.
 - 🔧 **The tank's lines on the cards now come from its goal** (#1369). Same numbers as before.
