@@ -1213,11 +1213,47 @@ change the select by hand during a charge, SEM leaves your choice alone. SEM
 writes nothing while the select is unavailable or does not list the option,
 and nothing in observer mode. A select that keeps its old option gets one
 more try, then SEM says so and stops writing for that charge. Off until both
-are set. A charge switch, when set, wins. No target SOC entity is needed: SEM
+are set. A charge switch set beside them is a permit, turned on with the charge (#1377). No target SOC entity is needed: SEM
 ends the charge itself.
 
 Without the SEM dashboard, set both values with the service
 `solar_energy_management.set_option`.
+
+### A battery charged through its operating mode or backup reserve (#1377)
+
+**Your battery has no limit of its own in this mode. If Home Assistant stops
+during a charge, SEM puts the settings back when it runs again; until then the
+battery keeps charging from the grid.**
+
+Some batteries have no single "charge from grid" control. A charge needs up to
+three entities changed together, and put back afterwards. In the Configuration
+tab, All settings, Battery control, set:
+
+1. **Grid-charge select** and **Option that charges from the grid**: the
+   select that changes how the battery runs, and the option that charges.
+2. **Charge target SOC entity**: a number that holds the level to charge to,
+   such as a backup reserve. SEM writes the plan's target there and puts the
+   old value back.
+3. **Charge switch**: a switch that must be on for a grid charge ("allow grid
+   charging"). Set next to the select, it is a permit, not the start.
+
+Example, Tesla Powerwall (HA's own Powerwall integration): select =
+`select.<site>_operating_mode`, option = `autonomous`, target =
+`number.<site>_backup_reserve`, switch = `switch.<site>_allow_grid_charging`.
+This is the order the Powerwall's owner confirmed by hand: reserve, switch,
+mode. SEM writes in that order, and puts back the mode, the switch, then the
+reserve.
+
+Each old value is saved to disk before SEM changes it, so the stop, Off, an
+unload and a restart all put it back. A value you change by hand during a
+charge is left alone, and a switch that was already on stays on. Nothing is
+written while one of the three cannot be read, and nothing in observer mode.
+A select that keeps its old option gets one more try, then SEM says so. With both a charge
+switch and the select pair set, the switch is now a permit (before, the switch alone
+started the charge). A switch that ignores the turn-on gets one more try, then
+SEM gives the charge up, puts the rest back and says so. Leave
+the switch empty if your battery needs only the select; leave the target empty
+if it needs none.
 
 ### Break-even logic
 

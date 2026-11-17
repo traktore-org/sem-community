@@ -110,14 +110,15 @@ class TestAsleep:
             a = GenericBatteryAdapter(_Hass(), {"battery_id": "b1", **cfg})
             assert a.supports_forced_charge is False
 
-    async def test_a_switch_setup_is_untouched_by_the_select_keys(self):
+    async def test_a_switch_beside_the_pair_is_a_permit_not_the_start(self):
+        # (#1377) it used to win; now the select starts and the switch permits
         hass = _Hass()
         hass._states[SWITCH] = SimpleNamespace(state="off", attributes={})
         a = _adapter(hass, _Store(), battery_force_charge_switch=SWITCH,
                      battery_target_soc_entity="number.t")
         await actuate_battery(_charge(), a)
-        assert [c[:2] for c in hass.calls] == [("switch", "turn_on")]
-        assert hass.writes() == []
+        assert ("switch", "turn_on", {"entity_id": SWITCH}) in hass.calls
+        assert len(hass.writes()) == 1
 
     async def test_no_target_entity_is_needed_for_the_select_path(self):
         assert _adapter(_Hass(), _Store()).supports_forced_charge is True
