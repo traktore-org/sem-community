@@ -808,6 +808,16 @@ class SEMStorage:
     def set_cop_learn_state(self, state: Dict[str, Any]) -> None:
         self._energy_data["cop_learn_state"] = dict(state or {})
 
+    # (#1081) each unit's free-running drift rows, kept 14 days:
+    # ``{device_id: {"hours": [[hour, slope, mean, outdoor, n], ...]}}``.
+    # Record only — nothing in the plan reads it.
+    def get_drift_state(self) -> Dict[str, Any]:
+        value = self._energy_data.get("drift_state")
+        return dict(value) if isinstance(value, dict) else {}
+
+    def set_drift_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["drift_state"] = dict(state or {})
+
     def get_season_state(self) -> Dict[str, Any]:
         value = self._energy_data.get("season_state")
         return dict(value) if isinstance(value, dict) else {}

@@ -24,6 +24,7 @@ import { demandName } from '../util/demand-name.js';
 import { battIndexes, homeCover } from '../util/plan-cover.js';
 import { coldHeaters } from '../util/heater-questions.js';
 import { planNoteText } from '../util/plan-notes.js';
+import { heatCostRows } from '../util/heat-cost-table.js';
 
 const DEFAULT_ENTITY = 'sensor.sem_energy_plan';
 
@@ -168,6 +169,29 @@ class SEMEnergyPlanCard extends SEMLitBase {
             return html`<span class="live done">${this._t('energy_plan_live_done')}</span>`;
         }
         return html`<span class="live react">${this._t('energy_plan_live_reactive')}</span>`;
+    }
+
+    // (#1081) "Heat cost per hour": a closed table under the device's row.
+    // Read only; no key in the attributes, no table.
+    _heatCost(heatCost, demandId) {
+        const rows = heatCostRows(heatCost, demandId, (i) => this._hm(i), (k) => this._t(k));
+        if (!rows) return nothing;
+        const cur = semGetCurrency(this._hass);
+        const f = (v, d) => (v == null ? '—' : v.toFixed(d));
+        return html`<details class="hc">
+            <summary>${this._t('energy_plan_hc_title')}</summary>
+            <table>
+                <tr><th>${this._t('energy_plan_hc_time')}</th>
+                    <th>${this._t('energy_plan_hc_price')}</th>
+                    <th>${this._t('energy_plan_hc_cop')}</th>
+                    <th>${this._t('energy_plan_hc_heat')}</th><th></th></tr>
+                ${rows.map(r => html`<tr class="${r.chosen ? 'on' : ''}">
+                    <td>${r.time}${r.cheap ? ' *' : ''}</td>
+                    <td>${f(r.price, 3)} ${cur}</td><td>${f(r.cop, 1)}</td>
+                    <td>${f(r.heat, 3)} ${cur}</td><td>${r.why}</td></tr>`)}
+            </table>
+            <div class="note">* ${this._t('energy_plan_legend_cheap')}</div>
+        </details>`;
     }
 
     _hm(iso) {
@@ -572,6 +596,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
         const demands = Array.isArray(a.demands) ? a.demands : [];
         const slots = Array.isArray(a.slots) ? a.slots : [];
         const blocks = Array.isArray(a.blocks) ? a.blocks : [];
+        const heatCost = a.heat_cost && typeof a.heat_cost === 'object' ? a.heat_cost : null;
         if (verdict === 'idle' || !demands.length) {
             return this._renderIdle(act, 'energy_plan_idle', '', !!a.tomorrow,
                 a.why || '', a.why_codes || [], a.not_scheduled || [],
@@ -816,6 +841,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                     <div class="note">${reason}</div>
                                     ${hasStrip ? html`<div class="stat"></div>` : nothing}
                                 ` : nothing}
+                                ${this._heatCost(heatCost, d.id)}
                             `;
                         })}
                     </div>
@@ -1085,6 +1111,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
                 font-variant-numeric: tabular-nums;
                 white-space: nowrap;
             }
+            details.hc { grid-column: 1 / -1; font-size: 11px; }
+            details.hc summary { cursor: pointer; color: var(--secondary-text-color); }
+            details.hc table { border-collapse: collapse; margin-top: 4px; }
+            details.hc th, details.hc td { padding: 1px 8px 1px 0; text-align: left;
+                font-variant-numeric: tabular-nums; font-weight: normal; }
+            details.hc th { color: var(--secondary-text-color); }
+            details.hc tr.on td { font-weight: 600; }
             .note {
                 font-size: 10px; opacity: 0.6; line-height: 1.2;
                 color: var(--secondary-text-color);

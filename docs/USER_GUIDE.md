@@ -569,6 +569,19 @@ used** to **Learned**. Outside the temperatures it has seen, SEM uses your
 curve, if you set one. Service: `update_device_config`, property
 `cop_source`, value `flat`, `curve` or `learned`.
 
+**Heat cost per hour (Diagnose).** On the Energy plan card, a heat pump or a
+heater with Pre-heat ticked has a closed table under its row: **Heat cost per
+hour**. Each line is an hour with its price, the COP from the forecast outdoor
+temperature, the heat price (price ÷ COP), a star when the hour is cheap, and
+why the plan chose it: cheapest heat, Keep at, or pre-heat. It lists at most 24
+hours, the chosen ones first. It only shows; it changes nothing SEM switches.
+
+**How fast a room cools (Diagnose).** For each unit with a comfort band, SEM now
+keeps one line for every hour the unit did not run, for 14 days, and loads them
+again after a restart. The unit's comfort block shows how many hours it has and,
+from 12 hours on, the cooling rate in K/h at 5 °C outdoors. Until then it says
+"learning". SEM does not use this rate to plan yet.
+
 ### How much did SG-Ready actually shift? (#769)
 
 The SG-Ready unit has its own energy row, on the same footing as the EV:

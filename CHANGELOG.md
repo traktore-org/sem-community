@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🔧 **The tank's lines on the cards now come from its goal** (#1369). Same numbers as before.
 - 🐛 **Too cold wins while away** (#1369). With the dump on, a tank under its limit heats back above it, not only to the minimum.
 - 🐛 **A tank starts and stops on one thermometer** (#1369). With a comfort band, both use the band's sensor, not the tank's.
+- ✨ **The Energy plan shows heat cost per hour** (#1081). A closed table per heat pump: price, COP, heat price, why picked. Read only.
+- ✨ **SEM keeps how fast a room or tank cools for 14 days** (#1081), also across restarts. Diagnose shows it; nothing uses it yet.
 - 🐛 **The battery direction button flips one battery** (#1375). With several, you pick which. A two-sensor battery is never flipped.
 
 # [2.3.0-beta.17] — 16.11.2026
