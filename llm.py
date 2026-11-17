@@ -90,6 +90,8 @@ async def build_setup_status(hass: HomeAssistant, coordinator: Any) -> dict:
         "forecast_source": facts["forecast_source"],
         "tariff_configured": facts["tariff_configured"],
         "open_repairs": await issue_titles(hass, facts["issues"]),
+        # (#1362) set or not, where, and the selects to choose from
+        "battery_grid_charge": facts["battery_grid_charge"],
     }
 
 
@@ -99,6 +101,8 @@ class SetupStatusTool(Tool):
     name = TOOL_SETUP_STATUS
     description = (
         "Summarise how SEM is set up: watch-only mode, chargers, battery, "
+        "grid charge of the battery (set or not; if not, the selects on the "
+        "battery's device and their options, to tell the user which to pick), "
         "forecast source, tariff, open repairs and version. Read-only."
     )
 
