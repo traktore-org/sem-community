@@ -367,14 +367,44 @@ SERVICE_CONTROL_KEYS = ("ev_charger_service", "ev_service_param_name",
                         "ev_charger_service_entity_id")
 
 
-def site_limit_controls(charger, entry_of=lambda eid: None) -> Tuple[str, ...]:
+def says_site_current_field(field) -> bool:
+    """(#1144, #1376) Is this service field the current of a whole site?
+    Zaptec's ``limit_current`` takes ``available_current`` and its per-phase
+    twins (``available_current_phase1`` …) — the word list's own pattern."""
+    from .consts.role_lexicon import SITE_CURRENT_KEY
+    return isinstance(field, str) and bool(
+        re.search(SITE_CURRENT_KEY, field.strip().lower()))
+
+
+def service_sets_a_site_limit(service, fields) -> bool:
+    """(#1376) Does ``domain.name`` set a whole site's current, by its OWN
+    fields (R6: a service is read by what it takes, never by its name)?
+    An entity platform's service (``number.set_value``) is judged by its
+    target, not here."""
+    service = str(service or "")
+    if "." not in service or service.split(".", 1)[0] in _ENTITY_SERVICE_DOMAINS:
+        return False
+    fields = [str(f) for f in fields or ()]
+    site = [f for f in fields if says_site_current_field(f)]
+    # R6: the site's when its ONLY current field is the site's — one that
+    # also takes a charger's own current is not
+    return bool(site) and _current_field(
+        [f for f in fields if f not in site]) is None
+
+
+def site_limit_controls(charger, entry_of=lambda eid: None,
+                        fields_of=lambda service: None) -> Tuple[str, ...]:
     """(#1144) The keys of a charger config that would write a whole site's
     current limit — the number itself, or a service that sets it (Zaptec's
     ``limit_current`` takes ``available_current``). SEM never writes one
     (#804), whoever saved it: an old setup offer (#1141), the old Zaptec
     rule (before 25.08), or a pick by hand. ``entry_of`` finds an entity's
-    registry entry; without one, only the id is read."""
-    from .consts.role_lexicon import SERVICE_SITE_CURRENT_FIELDS
+    registry entry; without one, only the id is read.
+
+    (#1376) A service saved with no field name (SEM then writes "current")
+    is the site's too when its own fields say so: ``fields_of`` reads them
+    live (``service_fields``). Without an answer only the saved field is
+    read."""
     if not isinstance(charger, dict):
         return ()
     out: List[str] = []
@@ -387,7 +417,9 @@ def site_limit_controls(charger, entry_of=lambda eid: None) -> Tuple[str, ...]:
     # an entity platform's service writes its target; its field name is
     # not read (number.set_value takes "value")
     by_field = service.split(".", 1)[0] not in _ENTITY_SERVICE_DOMAINS
-    if service and ((by_field and param in SERVICE_SITE_CURRENT_FIELDS)
+    if service and ((by_field and (says_site_current_field(param)
+                                   or service_sets_a_site_limit(
+                                       service, fields_of(service))))
                     or (target and says_a_site_limit(target,
                                                      entry_of(str(target))))):
         # the start and stop services name the box by the same device id
@@ -1983,20 +2015,49 @@ def _services_of(hass):
         try:
             for name, svc in ((services.async_services() or {})
                               .get(str(domain), {}) or {}).items():
-                fields: list = []
-                inner = getattr(getattr(svc, "schema", None), "schema", None)
-                if isinstance(inner, dict):
-                    fields = sorted(str(getattr(k, "schema", k)) for k in inner)
-                if not fields:
-                    # (#1054) a service registered with NO schema (go-e's
-                    # set_max_current) tells its fields only through its
-                    # services.yaml — Home Assistant's description cache
-                    fields = _described_fields(hass, str(domain), str(name))
-                out[str(name)] = fields
+                out[str(name)] = _schema_fields(hass, str(domain), str(name), svc)
         except Exception:  # noqa: BLE001
             return _ServiceNames()
         return _ServiceNames(out)
     return _of
+
+
+def _schema_fields(hass, domain: str, name: str, svc) -> list:
+    """The fields one registered service takes: its schema's keys, else
+    (#1054) its services.yaml — a service registered with NO schema (go-e's
+    set_max_current) tells its fields only through Home Assistant's
+    description cache."""
+    fields: list = []
+    inner = getattr(getattr(svc, "schema", None), "schema", None)
+    if isinstance(inner, dict):
+        fields = sorted(str(getattr(k, "schema", k)) for k in inner)
+    if not fields:
+        fields = _described_fields(hass, domain, name)
+    return fields
+
+
+def service_fields(hass, service) -> Optional[list]:
+    """(#1376) The fields ``domain.name`` takes, read as the crawler reads
+    them (``_services_of``) — but a service that is registered can be read
+    before Home Assistant has finished starting, so this does not wait for
+    it. None when it cannot be told: no hass, the service is not registered
+    (yet), or it names no field (its services.yaml is loaded after start)."""
+    service = str(service or "")
+    if hass is None or "." not in service:
+        return None
+    domain, name = service.split(".", 1)
+    try:
+        reg = hass.services
+        # one domain, not a copy of every service: asked before each write
+        # while it cannot tell (``refuse_site_limit_service``)
+        own = (reg.async_services_for_domain(domain)
+               if hasattr(reg, "async_services_for_domain")
+               else (reg.async_services() or {}).get(domain))
+        svc = (own or {}).get(name)
+        fields = _schema_fields(hass, domain, name, svc) if svc is not None else []
+    except Exception:  # noqa: BLE001 — unknown, never "no"
+        return None
+    return fields or None
 
 
 def _described_fields(hass, domain: str, service: str) -> list:
@@ -2611,8 +2672,8 @@ def _service_field_roles(domain: str, services: Dict[str, list]) -> Dict[str, An
                             for p in lex.SERVICE_PHASE_NOT)):
             out.setdefault("phase_service", {"service": f"{domain}.{name}",
                                              "fields": fields})
-        cur = [f for f in fields if f in lex.SERVICE_SITE_CURRENT_FIELDS]
-        if cur:
+        cur = [f for f in fields if says_site_current_field(f)]
+        if service_sets_a_site_limit(f"{domain}.{name}", fields):
             out.setdefault("site_service", {"service": f"{domain}.{name}",
                                             "param": cur[0], "fields": fields})
     return out
@@ -6304,6 +6365,40 @@ def wire_current_entity(hass, device, charger_id: str, current_entity_id) -> Non
             "Charger '%s': OCPP current number %s with no charge-control "
             "switch found — SEM cannot stop this charger; set "
             "ev_start_stop_entity (#976)", charger_id, current_entity_id)
+
+
+def refuse_site_limit_service(hass, device, charger_id: str) -> Optional[bool]:
+    """(#1376) Take a service that sets a whole site's current off a built
+    charger device — asked by the device before each write through its
+    service (``_settle_charger_service``) until this can tell.
+
+    The builder and the refs step ask the same of the save
+    (``site_limit_controls``), but at boot the service's fields may not be
+    readable yet. A save with no field name (SEM then writes "current")
+    kept Zaptec's ``limit_current``: every write went to the site's
+    service, which refused it, and the charger's own number was never used.
+
+    True: the service was the site's and is gone (SEM writes the device's
+    current number, if it has one). False: it is not, or there is none.
+    None: its fields cannot be read yet — the caller asks again."""
+    service = str(getattr(device, "charger_service", "") or "")
+    if "." not in service or service.split(".", 1)[0] in _ENTITY_SERVICE_DOMAINS:
+        return False
+    fields = service_fields(hass, service)
+    if fields is None:
+        return None
+    if not service_sets_a_site_limit(service, fields):
+        return False
+    device.charger_service = None
+    device.charger_service_entity_id = None
+    device.service_param_name = "current"
+    device._site_service_refused = True
+    _LOGGER.warning(
+        "Charger '%s': %s sets a whole site's current limit, not this "
+        "charger's; SEM does not write it and uses %s (#804, #1376).",
+        charger_id, service,
+        getattr(device, "current_entity_id", None) or "no current control")
+    return True
 
 
 def phase_readback_entity(dev_entities) -> Optional[str]:

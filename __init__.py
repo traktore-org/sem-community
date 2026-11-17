@@ -3020,16 +3020,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             from homeassistant.helpers import entity_registry as _er
             from .hardware_detection import (
                 SERVICE_CONTROL_KEYS,
+                service_fields,
                 site_limit_controls,
             )
+            # (#1376) a service saved with no field name is asked by its own
+            # fields; one not readable yet is asked again before each write
+            # (the device's ``_settle_charger_service``)
             _site = site_limit_controls(
                 {k: _cfg(k) for k in ("ev_current_control_entity",
                                       *SERVICE_CONTROL_KEYS)},
-                _er.async_get(hass).async_get)
+                _er.async_get(hass).async_get,
+                lambda svc: service_fields(hass, svc))
             if _site:
                 _LOGGER.warning(
                     "Charger '%s': %s write a whole site's current limit, not "
-                    "this charger's; SEM does not write it (#804, #1144).",
+                    "this charger's; SEM does not write it (#804, #1144, #1376).",
                     charger_id, {k: _cfg(k) for k in _site})
                 if "ev_current_control_entity" in _site:
                     ev_current_entity = None
