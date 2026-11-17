@@ -135,14 +135,7 @@ it), and it will not overwrite what you chose.
 
 ### Supported hardware
 
-**Inverters (all auto-detected):** Huawei SUN2000, SMA, Victron, Sungrow,
-Fronius, Enphase, Powerwall, Kostal, SolarEdge, GoodWe, Sonnen, SolaX,
-Growatt, and any inverter that exposes watt-level sensors to HA.
-
-**EV chargers:** KEBA P30 (service-based), Easee (service-based), Zaptec Since 2.1 also NRGkick, ABL eMH1 (through matfroh's `ABL_emh1_modbus`) and Wallbox behind the MQTT bridge, found on their own.
-(service-based), Wallbox, go-eCharger, ChargePoint, Heidelberg, OpenWB 2.x,
-OCPP-compatible, Ohme, Peblar, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE,
-and any charger with a controllable number entity.
+Each brand's status (tested live, implemented or requested) and its evidence are in [SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md). Check that list before you install.
 
 **Solar forecasts (optional):** Solcast, Forecast.Solar, Open-Meteo Solar Forecast, Helios Forecast. Required for smart
 night charging and battery charge scheduling.

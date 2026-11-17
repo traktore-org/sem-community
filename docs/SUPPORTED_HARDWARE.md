@@ -36,8 +36,9 @@
 | Sofar | `ha-solarman` | ED | yes | 🧩 implemented | — |
 | Solis | `ha-solarman` | ED | yes | 🧩 implemented | — |
 | Sungrow | `sungrow` | A | yes | 🧩 implemented | — |
-| Tesla Powerwall | `powerwall` | B | yes | 🧩 implemented | — |
+| Tesla Powerwall | `powerwall` | B | yes | 🧩 implemented | SEM reads SOC and power. A grid charge needs the 2.3 setup (SETUP_GUIDE, operating-mode section); #1377 (fburgod, open): the charge did not start |
 | Victron | `victron / venus` | A | yes | 🧩 implemented | #621/#622 load-management fixes confirmed by a Victron GX owner, but no Victron entity ever traced; BESS ask in #809 |
+| DESS Monitor / Daxtromon | `none yet` | - | — | 📥 requested | #1346 asks for it. Grid charge through a select shipped in 2.3 (fields fixed in #1362); no DESS install confirmed. SEM cannot limit discharge through the select |
 | EG4 / Flexboss | `eg4 (tbd)` | - | — | 📥 requested | #810 native EG4 Web Monitor; #689/#727 (Azlinon) a FlexBOSS 21 + 2 Wallmount pair already runs via Solar Assistant MQTT — its battery-temp misread was fixed live |
 | Victron Multiplus II BESS | `victron (tbd)` | - | — | 📥 requested | #809 |
 
@@ -67,7 +68,7 @@
 | Peblar Rocksolid | `peblar` | number entity | 🧩 implemented | — |
 | V2C Trydan | `v2c` | number entity | 🧩 implemented | — |
 | Wallbox (MQTT bridge) | `mqtt` | number entity + switch (community MQTT bridge) | 🧩 implemented | #984/#985 (RienduPre) two Pulsar Plus behind the bridge; mapped from his entity lists, live confirm pending |
-| Zaptec | `zaptec` | number entity (charger_max_current) | 🧩 implemented | disc. 103 (coppe218) reports a Zaptec Go2 under test; no entities or values shown yet |
+| Zaptec | `zaptec` | number entity (charger_max_current) | 🧩 implemented | #869 (coppe218): the Anker + Zaptec system partly works. #1376 (open): a saved site-limit service blocked the charger's own current number on a Go 2 |
 
 ## Vehicles
 
@@ -97,9 +98,11 @@ Everything else SEM reads or switches: the SG-Ready and hot-water path, metered 
 | Shelly (EM / PM / Plug) | metered load, CT meter | `shelly` | ✅ tested live | #744 (Azlinon) small metered loads, #745 plug hardware state confirmed there; #685 an EM CT clamp meters a heat pump |
 | SwitchBot relay | hot water | `switchbot` | ✅ tested live | #560 (covuser) the hot-water entity picker was fixed on that relay and confirmed |
 | Tibber Pulse | grid meter + price feed | `tibber` | ✅ tested live | #120/#491 (RienduPre) the tibber_pulse price and consumption sensors on a running install |
+| Anker Solix (generic adapter) | battery (Solarbank) | `generic adapter (HA Modbus)` | 🧩 implemented | #869 (coppe218): forced discharge detected, forced charge not; partly works |
 | BYD (Battery-Box, behind another inverter) | battery pack | `generic patterns` | 🧩 implemented | #564 bmu_temp pattern in hardware_detection.py and the rated_capacity pattern in config_flow.py; no live report yet |
 | Echelon meter | grid meter | `custom` | 🧩 implemented | #807 (ab-elco-clal) import/export entities appear in a live diagnostics dump; nothing confirmed about them |
 | Viessmann Vitocal 250-A / 252-A | heat pump / hot water | `vicare` | 🧩 implemented | #600 / disc. 599 (tlinnet) ViCare sensors mapped into SEM's fields; no actuation confirmed yet |
+| Zendure SolarFlow | battery pack | `generic sensor patterns` | 🧩 implemented | #1373 (BerndWilli60): second battery, a SolarFlow 2400 Pro, reads 0 % SOC with two batteries. Open. Signs: tests/test_1375_battery_signs.py |
 | Buderus heat pump | heat pump (SG-Ready) | `ems-esp` | 📥 requested | #801 (HorizonKane) SG-Ready needs a command sent to EMS-ESP, not a relay flip |
 
 ## How SEM finds a charger it has no row for
