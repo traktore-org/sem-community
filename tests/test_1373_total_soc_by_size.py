@@ -42,7 +42,7 @@ def _fleet(hass, monkeypatch, socs, sizes, found=(0.0, 0.0)):
     monkeypatch.setattr(r, "_read_sensor", lambda e, *a, **k: by_unit[e[:-4]])
     monkeypatch.setattr(r, "_accept_unit_soc", lambda e, v: v)
     by_found = dict(zip(UNITS, found, strict=True))
-    monkeypatch.setattr(r, "_unit_capacity_kwh", lambda u: by_found.get(u, 0.0))
+    monkeypatch.setattr(r, "_unit_size_sensor_kwh", lambda u: by_found.get(u, 0.0))
     r._raw_config = {**(r._raw_config or {}),
                      "battery_capacity_kwhs": [c if c else None for c in sizes]}
     return r

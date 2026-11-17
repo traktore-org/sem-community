@@ -226,6 +226,10 @@ class ControllableDevice(SetpointMemoMixin, ABC):
     # device goal); ``_tariff_level`` / ``tariff_inputs`` are stamped each
     # cycle by ``DeviceTariffs.stamp``.
     tariff_rate: float = 0.0
+    # (#1380) the device's own climate / water_heater entity whose
+    # ``current_temperature`` is its thermometer of last resort; see
+    # ``devices/temperature.py``, the one reader. None = it has none.
+    own_temperature_entity_id: Optional[str] = None
     tariff_entity: str = ""
     tariff_meter: str = ""
     _tariff_level: Optional[str] = None
@@ -2553,18 +2557,15 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
                             else "target_temp_low")
         return self._attribute_temp_c(raw)
 
+    @property
+    def own_temperature_entity_id(self):
+        return self.entity_id or None
+
     def _comfort_fallback_reading(self):
-        """Zero-config thermometer: the climate entity's own
-        ``current_temperature``. The attribute carries no unit — it is in
-        the install's display unit, so conversion follows
-        ``hass.config.units``; anything unrecognised is assumed °C."""
-        if not self.entity_id:
-            return None
-        state = self.hass.states.get(self.entity_id)
-        if state is None:
-            return None
-        raw = (state.attributes or {}).get("current_temperature")
-        return self._attribute_temp_c(raw)
+        """Zero-config thermometer: the climate entity's own reading, via the
+        one device-temperature owner (#1380)."""
+        from .temperature import read_device_temperature
+        return read_device_temperature(self.hass, self)
 
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a climate unit that SEM is running at (re-)registration.

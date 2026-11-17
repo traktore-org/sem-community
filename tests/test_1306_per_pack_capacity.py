@@ -198,7 +198,7 @@ class TestTheReaderReadsEachPack:
 def _coord(total=15.0, adapters=None):
     c = NS(battery_capacity_kwh=total, _battery_adapters=adapters)
     c.fleet_battery_capacity_kwh = lambda power=None: SEMCoordinator.fleet_battery_capacity_kwh(c, power)
-    c._unit_capacity_kwh = lambda bid, power=None: SEMCoordinator._unit_capacity_kwh(c, bid, power)
+    c._pack_share_kwh = lambda bid, power=None: SEMCoordinator._pack_share_kwh(c, bid, power)
     return c
 
 
@@ -224,27 +224,27 @@ class TestFleetAndShares:
         c = _coord(total=15.0, adapters={"b1": NS(_max_discharge_w=5000.0),
                                          "b2": NS(_max_discharge_w=2500.0)})
         p = _two(0.0, 0.0)
-        assert c._unit_capacity_kwh("b1", p) == 10.0
-        assert c._unit_capacity_kwh("b2", p) == 5.0
+        assert c._pack_share_kwh("b1", p) == 10.0
+        assert c._pack_share_kwh("b2", p) == 5.0
         assert c.fleet_battery_capacity_kwh(p) == 15.0
 
     def test_one_declared_pack_leaves_the_rest_to_the_other(self):
         c = _coord(total=15.0, adapters={"b1": NS(_max_discharge_w=5000.0),
                                          "b2": NS(_max_discharge_w=5000.0)})
         p = _two(10.0, 0.0)
-        assert c._unit_capacity_kwh("b1", p) == 10.0
-        assert c._unit_capacity_kwh("b2", p) == 5.0
+        assert c._pack_share_kwh("b1", p) == 10.0
+        assert c._pack_share_kwh("b2", p) == 5.0
 
     def test_no_ceilings_means_equal_shares(self):
         c = _coord(total=16.0, adapters=None)
         p = _two(0.0, 0.0)
-        assert c._unit_capacity_kwh("b1", p) == 8.0
-        assert c._unit_capacity_kwh("b2", p) == 8.0
+        assert c._pack_share_kwh("b1", p) == 8.0
+        assert c._pack_share_kwh("b2", p) == 8.0
 
     def test_declared_above_the_setting_never_goes_negative(self):
         c = _coord(total=8.0, adapters=None)
         p = _two(10.0, 0.0)
-        assert c._unit_capacity_kwh("b2", p) == 0.0
+        assert c._pack_share_kwh("b2", p) == 0.0
         assert c.fleet_battery_capacity_kwh(p) == 10.0
 
 
@@ -301,8 +301,8 @@ def _plan_self():
     fake = _fake_self(devices=[_fake_load()])
     fake.fleet_battery_capacity_kwh = (
         lambda power=None: SEMCoordinator.fleet_battery_capacity_kwh(fake, power))
-    fake._unit_capacity_kwh = (
-        lambda bid, power=None: SEMCoordinator._unit_capacity_kwh(fake, bid, power))
+    fake._pack_share_kwh = (
+        lambda bid, power=None: SEMCoordinator._pack_share_kwh(fake, bid, power))
     fake._battery_adapters = None
     return fake
 

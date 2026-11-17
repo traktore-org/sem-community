@@ -101,6 +101,7 @@ from .health_check import (
     home_members, HealthCheck, sem_ev_chargers,
 )
 from .units import energy_state_to_kwh, power_state_to_watts, temperature_state_to_celsius
+from ..devices.temperature import asked_temperature  # (#1380)
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
 from .departure import (
@@ -2174,18 +2175,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     def fleet_battery_capacity_kwh(self, power=None) -> float:
         """(#1306) The fleet's nameplate: with two or more packs read this
         cycle, the sum of their own capacities (own sensor, else their
-        share of the setting — ``_unit_capacity_kwh``); one pack or none
+        share of the setting — ``_pack_share_kwh``); one pack or none
         read is ``battery_capacity_kwh`` exactly as before."""
         units = getattr(power, "batteries", None) or {}
         if len(units) < 2:
             return float(self.battery_capacity_kwh or 0.0)
         total = 0.0
         for bid in units:
-            total += self._unit_capacity_kwh(bid, power)
+            total += self._pack_share_kwh(bid, power)
         return total if total > 0 else float(self.battery_capacity_kwh or 0.0)
 
-    def _unit_capacity_kwh(self, battery_id: str, power=None) -> float:
-        """(#1306) One pack's kWh: its own capacity sensor when it has one;
+    def _pack_share_kwh(self, battery_id: str, power=None) -> float:
+        """(#1306) One pack's kWh for the scheduler: its own size
+        (``BatteryPower.capacity_kwh``, the reader's ``_unit_size_kwh``) when it has one;
         else the configured total, minus what the other packs declare,
         split among the undeclared packs by their discharge ceilings (a
         pack that can give 5 kW is taken for twice one that can give 2.5)."""
@@ -7349,7 +7351,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         caps = {}
         for bid, _ad in adapters:
             try:
-                caps[bid] = float(self._unit_capacity_kwh(bid, power) or 0.0)
+                caps[bid] = float(self._pack_share_kwh(bid, power) or 0.0)
             except (TypeError, ValueError, AttributeError):
                 caps[bid] = 0.0
         total = sum(caps.values())
@@ -8413,11 +8415,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         hp_current_temp: Optional[float] = None
         if hp_controller is not None:
-            try:
-                t = hp_controller.get_current_temperature() if hasattr(hp_controller, "get_current_temperature") else None
-                hp_current_temp = float(t) if t is not None else None
-            except (ValueError, TypeError, AttributeError):
-                hp_current_temp = None
+            hp_current_temp = asked_temperature(hp_controller)  # #1380
 
         # #570: wire the registered controller's LIVE SG-Ready state into
         # the sensor surface — the override the comment above promised but
@@ -8612,11 +8610,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             clear_heater_no_rise(self.hass, did)
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Heating check failed: %s", e)
-            try:
-                t = hw_controller.get_current_temperature() if hasattr(hw_controller, "get_current_temperature") else None
-                hw_current_temp = float(t) if t is not None else None
-            except (ValueError, TypeError, AttributeError):
-                hw_current_temp = None
+            hw_current_temp = asked_temperature(hw_controller)  # #1380
             try:
                 hw_hours_since_leg = float(hw_controller.hours_since_legionella) if hasattr(hw_controller, "hours_since_legionella") else None
             except (ValueError, TypeError, AttributeError):
@@ -11035,7 +11029,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     last_known_soc=float(bp.soc_pct or 0.0),
                     last_known_w=float(bp.power_w or 0.0),
                     # (#1306) its own nameplate, else its share of the fleet
-                    capacity_kwh=self._unit_capacity_kwh(battery_id, power),
+                    capacity_kwh=self._pack_share_kwh(battery_id, power),
                     # (#932) "populated → it reported this cycle" was false:
                     # a HELD reading is populated too. Per-unit flag when the
                     # reading carries one, else the fleet's — never a bare
