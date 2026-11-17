@@ -11445,7 +11445,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         correction = self._forecast_tracker.correction_factor
 
-        expected_consumption = self._predictor.predict_consumption_today_kwh(now)
+        # (#1377) The same span as the forecast above: the plan day. The
+        # evening plans tomorrow, so it needs tomorrow's whole use, not
+        # the few hours of today that remain.
+        if plans_today:
+            expected_consumption = self._predictor.predict_consumption_today_kwh(now)
+        else:
+            _day0 = datetime.combine(plan_day, datetime.min.time(),
+                                     tzinfo=now.tzinfo)
+            expected_consumption = self._predictor.predict_consumption_for_day_kwh(_day0)
         if expected_consumption <= 0:
             expected_consumption = 12.0
 
@@ -11487,6 +11495,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         _set_cap = getattr(scheduler, "set_fleet_capacity_kwh", None)
         if callable(_set_cap):
             _set_cap(_fleet_capacity_of(self, power))   # (#1306)
+        # (#1377) The dear hours before solar, and the floor the plan reports.
+        _floor_soc = _battery_floor_for(self)[0]
+        _bridge = self._plan_bridge_slots(now, plan_day, plans_today)
         scheduler.evaluate(
             current_soc=power.battery_soc,
             forecast_tomorrow_kwh=forecast_tomorrow,
@@ -11498,11 +11509,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             forecast_available=forecast.available,
             forecast_age_hours=forecast_age,
             current_price=current_price,
+            floor_soc=_floor_soc,
+            bridge_slots=_bridge,
         )
 
         # (#638 G3) SHADOW: the joint energy plan, computed + logged next
         # to the reactive planners it replaced.
         self._shadow_energy_plan(scheduler, energy, power)
+
+    def _plan_bridge_slots(self, now, plan_day, plans_today: bool) -> list:
+        """(#1377) The hours the battery must carry on the plan day: from
+        its start (from now, in the small hours) until the sun covers the
+        house, each with its price. [] when the profile is unknown."""
+        from .battery_charge_scheduler import bridge_slots
+        try:
+            start = (now.replace(minute=0, second=0, microsecond=0)
+                     if plans_today else datetime.combine(
+                         plan_day, datetime.min.time(), tzinfo=now.tzinfo))
+            cons = self._predictor.predict_consumption_24h(start)
+            sun = self._predictor.predict_solar_24h(start)
+            price_at = getattr(self._tariff_provider, "get_price_at", None)
+            return bridge_slots(start, cons, sun, price_at)
+        except Exception:  # noqa: BLE001 — no bridge is the safe answer
+            return []
 
     def _ev_blocks_for(self, cid: str, now=None) -> "Optional[list]":
         """(#742) THIS charger's blocks from the stamped plan — only when

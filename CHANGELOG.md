@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **A charging current set through a select picks an offered step** (#1376). Never more current than SEM asked for.
 - 📝 **Repair texts name menus that exist** (#1371). A test checks every path against the real menus and dashboard sections.
+- 🐛 **Night battery charge counts the whole next day and the battery's floor** (#1377). An empty battery now charges before dear hours.
 - 🐛 **"Why" answers from what a device does now** (#1086). A missing reading counts as unknown, never as 0.
 - 📝 **Docs and README claims are now tested** (#1377). Each setting the guides name has a dashboard field; README claims match the code.
 
