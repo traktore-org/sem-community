@@ -340,7 +340,7 @@ SEM creates 70+ sensors organized by category:
 
 **Battery discharge control auto-detected for:** Huawei Solar, SolaX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis, GoodWe, SolarEdge (solaredge-modbus-multi), Enphase (IQ Battery), Tesla Powerwall, Victron, Kostal Plenticore, Sungrow
 
-> **Note:** Tesla Powerwall: SEM reads its SOC and power. A grid charge needs a one-time setup (2.3 and later): Operating mode select = `autonomous`, charge target = the backup reserve number, charge switch = "allow grid charging". SEM sets all three for the charge and puts them back. 2.2.0 cannot do it. See [Setup Guide](docs/SETUP_GUIDE.md#a-battery-charged-through-its-operating-mode-or-backup-reserve).
+> **Note:** Tesla Powerwall: SEM reads its SOC and power. A grid charge needs a one-time setup (2.3 and later): Operating mode select = `autonomous`, charge target = the backup reserve number, charge switch = "allow grid charging". SEM sets all three for the charge and puts them back. 2.2.0 cannot do it. See [Setup Guide](docs/SETUP_GUIDE.md#a-battery-charged-through-its-operating-mode-or-backup-reserve-1377).
 
 **EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger (HTTP + MQTT), Fronius/go-e Wattpilot, Easee, Zaptec, ChargePoint, Heidelberg Energy Control, OpenWB 2.x, OCPP-compatible (ABB Terra, Vestel, Grizzl-E, etc.), Ohme, Peblar Rocksolid, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE, NRGkick, ABL eMH1 (through matfroh's ABL_emh1_modbus), Wallbox behind the MQTT bridge, GARO, JuiceBox 48
 
