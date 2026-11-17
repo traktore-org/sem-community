@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Legionella counts your own target** (#1369). A tank that warms itself to 60 °C no longer counts when your target is higher.
 - 🐛 **The battery direction button flips one battery** (#1375). With several, you pick which. A two-sensor battery is never flipped.
 
 # [2.3.0-beta.17] — 16.11.2026

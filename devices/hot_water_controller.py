@@ -1204,8 +1204,11 @@ class HotWaterController(SwitchDevice):
 
         temp = self.get_current_temperature()
 
-        # 1. Natural achievement: solar heated to ≥60°C
-        if temp is not None and temp >= DEFAULT_LEGIONELLA_MIN_TEMP and not self._legionella_cycle_active:
+        # 1. Natural achievement: solar heated to the tank's own Legionella
+        # target (at least 60 °C). (#1369, C3) 60 °C no longer counts when the
+        # user's target is higher.
+        natural_c = max(float(DEFAULT_LEGIONELLA_MIN_TEMP), float(self.legionella_target_temp))
+        if temp is not None and temp >= natural_c and not self._legionella_cycle_active:
             self._last_legionella_time = dt_util.now()
             self._last_legionella_path = "natural_achievement"
             return None
