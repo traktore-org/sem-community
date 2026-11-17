@@ -455,10 +455,13 @@ the opened row.
 | **Keep it at** (was *Keep at*) | The temperature to keep. Spare sun heats to it. If SEM may buy power, it also heats to it in a planned cheap hour; that run starts only 1 °C below it (less when *Never colder than* is close). On a day with one price all day (a weekend on a two-rate tariff, a flat tariff) it heats to it in a night hour without sun |
 | **Never colder than** (was *Run now past*) | Below this SEM heats at once, at any price, and goes on to *Keep it at* |
 | **With spare sun, heat up to** (was *Extra from surplus*) | How hot free sun may heat it. You type the temperature itself; SEM stores the degrees above *Keep it at*. On a hot-water tank with a thermometer this is the top; the Solar target of the Configuration tab only applies without one |
+| **Also in the cheapest-heat hours** | Off by default. With it ticked, the heat above *Keep it at* (up to the top: *Keep it at* plus the degrees above it, a tank at most to its Legionella target) is bought only inside the planned cheap block, and only in a cheap hour. The larger ask comes after the car and every load above the heater in your order; a load below it can lose a cheap hour to it. On a day with one price nothing above *Keep it at* is bought. It needs *Yes, in cheap hours*. When the block ends the run stops, even if the hour is still cheap, so the cheap hours stay with the car or the battery. A run also stops at the top, at your own stop, and while away. A start still needs the reading below *Keep it at*. A unit that follows its own thermostat or setpoint is not offered it yet |
 | **May SEM buy power for it?** (was *Finish overnight from*) | *No, sun only*: only the sun heats it. *Yes, in cheap hours*: SEM buys the rest in the cheapest hours. *Yes, from the house battery at night* (only with a house battery): at night it heats to *Keep it at* from the battery, while the battery is above its reserve. At the reserve it stops and waits for the sun; it never turns into a bought run |
 
 Above the questions one line says what the heater does now and what comes
-next, for example "45.8 °C now. Heats to 52 °C at 23:00." Everything else —
+next, for example "45.8 °C now. Heats to 52 °C at 23:00." When the boiler's
+own thermostat stops it below SEM's target, the line says so and at which temperature;
+raise that thermostat on the boiler. Everything else —
 the thermometer, minimum on and off time, its own tariff, *Stop when* — sits
 under **More**.
 
@@ -556,7 +559,9 @@ counts in steps too coarse for one hour (it needs 0.1 kWh or finer). SEM
 takes the middle value of each band, so a few defrost hours do not move
 it. SEM cannot tell a hot-water hour: a meter that also counts hot water
 gives a mixed COP. If the COP stays near 1, the card says the meter counts
-electricity, not heat, and nothing is learned.
+electricity, not heat, and nothing is learned. If the outdoor temperature
+has not changed for 12 hours, SEM learns nothing and the card asks you to
+check the outdoor thermometer.
 After 6 good hours in a 2 °C band, the band is learned. The load list shows "Learned from
 the heat meter: N hours, X to Y °C". Nothing changes until you set **COP
 used** to **Learned**. Outside the temperatures it has seen, SEM uses your
@@ -1228,8 +1233,10 @@ on the charger itself puts a `Solar only` charger into the night lane.
 
 Night charging starts when night mode activates: at sunset plus the offset you
 set in **Night start offset** (0–400 minutes, default 30), in every season. It
-ends at sunrise or at **Night Latest End** (default 07:00), whichever comes
-first. Without a sun reading the start falls back to 20:30.
+ends at sunrise or at **Night Latest End** (default 07:00, from 03:00 to 09:00), whichever comes
+first. You find it under Settings → Devices → SEM → Controls. If your cheap tariff ends at
+04:00, set it to 4. The mode *Solar + cheapest hours* follows your tariff by itself; the other
+modes charge through the whole night window. Without a sun reading the start falls back to 20:30.
 
 ### How it works
 

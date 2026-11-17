@@ -23,12 +23,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
+from ..devices.tank_goal import RECOMPUTE
 from . import reason_codes as RC  # (#1174)
 from .plan_verdict import NO_OPINION, PlanVerdict
 
 from ..utils.log_gate import log_on_change
-from .device_tariff import device_price_level  # (#812)
-from .price_signal import is_cheap_name, is_expensive_name
+from .price_view import answer_for_device, answer_for_level  # (#812, #1372)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -672,7 +672,7 @@ def price_damped_pool(distributable: float, price_level: str) -> float:
     damped = distributable
     # (#994) was ``== "expensive"`` — very_expensive silently did not damp
     # the pool, the one drift the six hand-typed copies had already produced.
-    if is_expensive_name(price_level):
+    if answer_for_level(price_level).peak:
         damped = max(0.0, distributable - 500)
     return min(damped, distributable)
 
@@ -820,6 +820,53 @@ def _heater_band(device: "ControllableDevice"):
     return state, below
 
 
+def _preheat_open(device: "ControllableDevice") -> bool:
+    """(#1081) Does a pre-heat run still have room? The pre-heat tick counts
+    for this load and the reading is short of the top (Keep at + Extra). A
+    load without the rule, or with the tick off, is never open: every
+    decision below is then what it was before."""
+    rule = getattr(device, "comfort_preheat_open", None)
+    if not callable(rule):
+        return False
+    try:
+        return rule() is True
+    except Exception:  # noqa: BLE001 — an unreadable rule stops at Keep at
+        return False
+
+
+def _preheat_on(device: "ControllableDevice") -> bool:
+    """(#1081) Does the pre-heat tick count for this load (ticked, supported,
+    may buy)? Only used to word the stop at the top."""
+    rule = getattr(device, "comfort_preheat_on", None)
+    try:
+        return callable(rule) and rule() is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _preheat_goes_on(device: "ControllableDevice", active: bool,
+                     price_is_cheap: bool, plan: "PlanVerdict") -> bool:
+    """(#1081) A running PLANNED run (not the sun's, not the floor's) goes on
+    past Keep at to the top, only while ITS planned block is open and the
+    hour is cheap for this device. Outside its block the cheap hours belong
+    to what the plan gave them to (the car, the battery); on a day with one
+    price nothing above Keep at is bought. A fresh start still needs the
+    reading below Keep at."""
+    return (active and getattr(device, "_comfort_goal_run", False) is True
+            and price_is_cheap is True and plan.comfort_in_block is True
+            and _preheat_open(device))
+
+
+def _at_target_text(device) -> str:
+    """(#1081) Why a goal run stopped at its target: the top, the end of its
+    pre-heat block above Keep at, or Keep at itself."""
+    if getattr(device, "_comfort_goal_run", False) is not True or not _preheat_on(device):
+        return "reached its keep-at temperature"
+    if _preheat_open(device):
+        return "pre-heat block over — held at its keep-at temperature"
+    return "reached its top temperature"
+
+
 def _away_pauses(device: "ControllableDevice") -> bool:
     """(#594/#1344) Is this device paused because the house is away? The
     device's own rule (a heater with its band set up, or a comfort
@@ -856,7 +903,7 @@ def _goal_hour_holds(device, price_is_cheap: bool) -> bool:
     both read "normal". No price known = no."""
     if price_is_cheap:
         return True
-    if getattr(device, "_cycle_price_tag", None) == "expensive":
+    if answer_for_level(getattr(device, "_cycle_price_tag", None)).peak:
         return False
     now = getattr(device, "_cycle_price", None)
     started = getattr(device, "_comfort_goal_price", None)
@@ -1080,7 +1127,8 @@ def compute_load_intent(
     _goal_band = _heater_band(device)
     _goal_goes_on = (active and getattr(device, "_comfort_goal_run", False) is True
                      and _goal_band is not None and _goal_band[0] == "willing"
-                     and _goal_band[1] and _goal_hour_holds(device, price_is_cheap)
+                     and _goal_band[1]
+                     and _goal_hour_holds(device, price_is_cheap)
                      and _goal_may_buy(device))
     if (active and plan_hold and not _goal_goes_on
             and (getattr(device, "_batt_overnight_forced", False)
@@ -1313,10 +1361,13 @@ def compute_load_intent(
 
     # (#1369) A run SEM started FOR Keep at (too cold, or the plan's block)
     # that has reached it ends there, and says so — not "no spare sun".
+    # (#1081) a pre-heat run goes on to the top; at the top it ends here.
     if (active and band is not None and band[1] is False
             and (getattr(device, "_comfort_floor_run", False) is True
-                 or getattr(device, "_comfort_goal_run", False) is True)):
-        return LoadIntent(False, 0.0, None, "reached its keep-at temperature",
+                 or getattr(device, "_comfort_goal_run", False) is True)
+            and not _preheat_goes_on(device, active, price_is_cheap, plan)):
+        return LoadIntent(False, 0.0, None,
+                          _at_target_text(device),
                           RC.LOAD_AT_TARGET)
 
     # (#1102) Too cold: at or past the limit it heats NOW on any tariff, and
@@ -1351,7 +1402,9 @@ def compute_load_intent(
     # Bought power needs the user's word for the grid on this load: solar
     # only is solar only, as for a car.
     if (plan.comfort_in_block and can_start and band is not None
-            and band[0] == "willing" and band[1]
+            and band[0] == "willing"
+            and (band[1] or _preheat_goes_on(
+                device, active, price_is_cheap, plan))
             and _goal_may_buy(device)
             and (active or (grid_start_fits and _goal_wants_start(device)))):
         # (#1344) a watt setpoint is sent its full power for this run
@@ -1366,7 +1419,8 @@ def compute_load_intent(
     # rate or one hour, times the configured rating): when it was too short
     # the run ended a few degrees under Keep at — the reporter's 50 °C for
     # Keep at 52 (#1102). Never into an hour that is not cheap.
-    if (active and band is not None and band[0] == "willing" and band[1]
+    if (active and band is not None and band[0] == "willing"
+            and band[1]
             and getattr(device, "_comfort_goal_run", False) is True
             and _goal_hour_holds(device, price_is_cheap) and _goal_may_buy(device)):
         return LoadIntent(True, _heater_claim(device, True, held), "cheap_grid",
@@ -1675,6 +1729,43 @@ async def _release_step_down(device) -> None:
     if await device.release_step_down():
         _note_load(device, on=False, reason_code=RC.LOAD_STEP_DOWN_END,
                    text="step-down released")
+
+
+#: (#1369) the verdicts that return BEFORE clause 3 reads the stop rule
+_BEFORE_THE_STOP_RULE = frozenset({
+    RC.LOAD_DISABLED, RC.LOAD_MODE_OFF, RC.LOAD_PEAK_SHED, RC.LOAD_PHASE_GUARD,
+    RC.LOAD_PLAN_CLOSED, RC.LOAD_LEGIONELLA_END, RC.LOAD_DAILY_MAX})
+
+
+def _engine_stop_verdict(device, intent):
+    """(#1369) Did the engine stop this tank by its stop rule THIS cycle?
+    True / False from the intent it just made; None when it returned before
+    clause 3 (shed, lock, plan hold, disabled, off…) and never asked;
+    ``RECOMPUTE`` for an idle tank at its target, where clause 3 and the
+    start refusal give the same code. Reads only, never the stop rule."""
+    if (getattr(device, "is_enabled", True) is False
+            or getattr(device, "control_mode", DeviceControlMode.SURPLUS)
+            != DeviceControlMode.SURPLUS
+            or getattr(device, "locked_by_operator", False) is True
+            or intent.code in _BEFORE_THE_STOP_RULE):
+        return None
+    if intent.code == RC.LOAD_STOP_CONDITION:
+        return True
+    if intent.code == RC.LOAD_AT_TARGET and not device.is_active:
+        return RECOMPUTE
+    return False
+
+
+def _shadow_tank_goal(device, intent) -> None:
+    """(#1369, step 1) A tank's goal object is built beside the decision just
+    made and compared with it; the counts are diagnostics, nothing reads them
+    to decide. Strict class read, like ``_is_heater``."""
+    compare = getattr(type(device), "compare_tank_goal", None)
+    if compare is not None and _is_heater(device):
+        try:
+            compare(device, _engine_stop_verdict(device, intent))
+        except Exception:  # noqa: BLE001 — a diagnostic never costs a cycle
+            _LOGGER.debug("tank goal comparison failed", exc_info=True)
 
 
 def _is_heater(device) -> bool:
@@ -2386,9 +2477,9 @@ class SurplusController:
             tier1 = self._tier1_headroom_w(device)
             # (#1369) this cycle's price level for the device, for the Keep
             # at run's "never into a dearer hour"
-            _lvl = device_price_level(device, price_level)
-            device._cycle_price_tag = ("cheap" if is_cheap_name(_lvl) else
-                                       "expensive" if is_expensive_name(_lvl) else "normal")
+            _ans = answer_for_device(device, price_level)  # (#1372)
+            device._cycle_price_tag = ("cheap" if _ans.is_cheap else
+                                       "expensive" if _ans.peak else "normal")
             # the house's price now; a device on its own tariff has no
             # number here, so its run holds in its cheap hours only
             device._cycle_price = (None if isinstance(getattr(device, "_tariff_level", None), str)
@@ -2396,8 +2487,7 @@ class SurplusController:
             intent = compute_load_intent(
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 # (#812) the device's own tariff when it has one
-                price_is_cheap=is_cheap_name(
-                    device_price_level(device, price_level)),
+                price_is_cheap=_ans.is_cheap,
                 peak_freeze=peak_freeze,
                 is_night=getattr(self, "_is_night_cycle", True),
                 # (#953) same cycle context as is_night — stamped by update()
@@ -2416,11 +2506,11 @@ class SurplusController:
                 override=self._override_action(device),
                 # (#1323) the step-down's two facts: this load's price level
                 # and what the house buys now (0 when the meter is unread)
-                price_is_expensive=is_expensive_name(
-                    device_price_level(device, price_level)),
+                price_is_expensive=_ans.peak,
                 buying_w=(max(0.0, float(getattr(self, "_grid_import_w", 0.0) or 0.0))
                           if getattr(self, "_grid_import_known", True) else 0.0))
             intents[did] = intent
+            _shadow_tank_goal(device, intent)
             spend[did] = debit = self._walk_debit(
                 device, intent, remaining=remaining, now=now)
             remaining -= debit

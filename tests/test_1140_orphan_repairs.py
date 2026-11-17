@@ -65,6 +65,9 @@ KEYED = {
         "#1140 sweep: the battery entities the config names",
     "raise_battery_force_discharge_unsupported":
         "#1140 sweep: the battery entities the config names",
+    "raise_charge_select_stuck":
+        "#1140 sweep: the battery entities the config names (the charge "
+        "select, #1346)",
     "raise_battery_operating_mode_unexpected":
         "#1140 sweep: the battery entities the config names (non-persistent, "
         "but an options reload keeps it)",
@@ -121,6 +124,8 @@ RAISE = {
             h, entity_id=x, wanted="1 W", seen="0 W", strikes=3))),
     "raise_battery_force_discharge_unsupported": ("battery", lambda h, x: (
         ri.raise_battery_force_discharge_unsupported(h, x, error="e"))),
+    "raise_charge_select_stuck": ("battery", lambda h, x: (
+        ri.raise_charge_select_stuck(h, entity=x, option="o"))),
     "raise_battery_operating_mode_unexpected": ("battery", lambda h, x: (
         ri.raise_battery_operating_mode_unexpected(
             h, x, mode="fully_fed_to_grid", expected="self"))),

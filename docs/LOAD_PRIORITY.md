@@ -284,6 +284,9 @@ They only apply where SEM is the one switching — the two **solar modes**. In
 *Peak only* the load is user-managed and the peak shedder does not read these
 windows; the row still shows them, but nothing consults them there.
 
+A hot water tank stops at your own stop or at its top even inside its
+minimum run. The minimum pause still holds before its next start.
+
 **Defaults** if you leave the boxes blank:
 
 | device | minimum run | minimum pause |

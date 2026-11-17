@@ -286,6 +286,8 @@ _DOCS_ANCHORS = {
     "charger_control_entity_broken": "a-charger-control-entity-is-broken",
     # (#915) a battery control SEM wrote never reflected the value
     "battery_control_write_not_taken": "a-battery-control-write-is-not-taken",
+    # (#1346) the grid-charge select cannot be put back: its old option is gone
+    "charge_select_stuck": "the-grid-charge-select-is-still-on",
     # KEBA has a dedicated deep-dive doc — richer than a troubleshooting
     # section, so the builder serves it whole (a full URL passes through).
     "keba_failsafe_active":
@@ -1834,6 +1836,39 @@ def clear_battery_control_write_not_taken(hass: HomeAssistant, entity_id: str) -
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
+def _charge_select_issue_id(entity_id: str) -> str:
+    return f"charge_select_stuck_{entity_id}"
+
+
+def raise_charge_select_stuck(hass: HomeAssistant, *, entity: str,
+                              option: str) -> None:
+    """(#1346) SEM started a grid charge through a select and cannot put it
+    back: the option the select showed before is no longer listed. Three
+    failed stops in a row on one list; the user sets it back by hand."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_charge_select_issue_id(entity),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="charge_select_stuck",
+            learn_more_url=next_step_url(
+                "docs", "charge_select_stuck", **_versions(hass)),
+            translation_placeholders={"entity": entity, "option": str(option)},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", entity, e)
+
+
+def clear_charge_select_stuck(hass: HomeAssistant, entity_id: str) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _charge_select_issue_id(entity_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
+
+
 def clear_charger_control_entity_broken(
     hass: HomeAssistant, device_id: str, entity_id: str,
 ) -> None:
@@ -1916,6 +1951,7 @@ _ORPHAN_SWEPT_ISSUE_IDS = {
     "read": (_sensor_issue_id, _stale_issue_id),
     "battery": (
         _battery_write_issue_id,
+        _charge_select_issue_id,
         _battery_force_discharge_issue_id,
         _operating_mode_issue_id,
         _work_mode_issue_id,

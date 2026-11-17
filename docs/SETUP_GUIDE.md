@@ -912,6 +912,9 @@ EV charger card — one place, per charger, no config-flow round-trips:
     using the vehicle's live SOC sensor. The unit selector
     (`select.sem_charger_<id>_ev_target_type`) only offers **%** when that charger has a
     **vehicle SOC entity** configured — otherwise it shows kWh only.
+  - In Home Assistant these entities carry the settings dialog's names:
+    *Guarantee at least (kWh)* and *Consider full at (%)*. Their entity IDs
+    did not change.
 - **Never charge past** (`number.sem_charger_<id>_daily_ev_target_max` / `_target_soc_max`): the
   Max handle of the range slider — charging stops once this ceiling is
   reached, in every mode (the night top-up to *Guarantee at least* still runs). Defaults to full (charge freely from sun); lower it to cap surplus. (Replaces
@@ -1191,6 +1194,31 @@ When the charge stops, SEM puts your own value back.
 > `switch.sem_energy_plan_actuation` **off** there is no planned pre-charge at
 > all — the switch is the kill-switch for the whole night.
 
+### Inverters with a select instead of a switch (#1346)
+
+**Your inverter has no limit of its own in this mode. If Home Assistant stops
+during a charge, the battery charges from the grid until it is full.**
+
+Some inverters have no switch for charging from the grid, only a select with
+an option such as *Solar and mains* (against *Solar only*). Set it in the
+Configuration tab, All settings, Battery control:
+
+1. **Grid-charge select**: pick the select.
+2. **Option that charges from the grid**: pick it from the list of options
+   that select offers, then Apply.
+
+To start a grid charge SEM sets that option. To stop it, SEM puts the select
+back to what it showed before, also after Off, an unload or a restart. If you
+change the select by hand during a charge, SEM leaves your choice alone. SEM
+writes nothing while the select is unavailable or does not list the option,
+and nothing in observer mode. A select that keeps its old option gets one
+more try, then SEM says so and stops writing for that charge. Off until both
+are set. A charge switch, when set, wins. No target SOC entity is needed: SEM
+ends the charge itself.
+
+Without the SEM dashboard, set both values with the service
+`solar_energy_management.set_option`.
+
 ### Break-even logic
 
 The scheduler charges overnight only when:
@@ -1407,6 +1435,9 @@ tab**, in the boiler's row, as four questions:
 - **Never colder than** — below it SEM heats at once, at any price.
 - **With spare sun, heat up to** — how hot free sun may heat it. With a
   thermometer this is the top: the Solar target above no longer caps it.
+- **Also in the cheapest-heat hours** — off by default; with it, the heat
+  above *Keep it at* is bought only inside the planned cheap block, in a cheap
+  hour.
 - **May SEM buy power for it?** — *No, sun only*, or *Yes, in cheap hours*.
 
 One line above them says what the boiler does now and next. The order SEM

@@ -340,7 +340,8 @@ NUMBER_TYPES = [
     NumberEntityDescription(
         key="night_latest_end",
         native_unit_of_measurement="h",
-        native_min_value=5.0,
+        # (#1320) from 03:00: an off-peak that ends at 04:00 could not be set
+        native_min_value=3.0,
         native_max_value=9.0,
         native_step=0.5,
         mode=NumberMode.SLIDER,

@@ -8,6 +8,7 @@
  *   never colder than     = comfort_limit
  *   with spare sun, up to = comfort_target + comfort_offset   (an ABSOLUTE temperature)
  *   may SEM buy power     = top_up_policy / battery_eligible_overnight
+ *   also in cheap-heat hours = preheat (#1081; off; needs the grid allowed)
  *
  * A COOLING band is the same model turned round: "never warmer than" is the
  * limit, the sun may cool DOWN to comfort_target − comfort_offset.
@@ -94,6 +95,8 @@ export function heaterSays(row, live = {}, running = false) {
         if (code === 'comfort_goal_battery' || (code !== 'comfort_goal' && intent.source === 'tier2_battery')) {
             return p('hq_st_heating_battery', { keep: T(keep) }, 'ok');
         }
+        // (#1081) a planned run that goes on to the top says so
+        if (code === 'comfort_goal' && preheatOn(c) && max !== null) return p('hq_st_preheating', { top: T(max) }, 'ok');
         if (code === 'comfort_goal') return p('hq_st_heating_to', { keep: T(keep) }, 'ok');
         if (intent.source === 'solar' || intent.source === 'tier1_battery') {
             return p('hq_st_heating_sun', { max: T(max === null ? keep : max) }, 'ok');
@@ -136,6 +139,10 @@ export function heaterSays(row, live = {}, running = false) {
         if (c.may_buy === false && c.may_use_battery !== true) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
         return withSoon(idle('hq_st_warm_again', { start: T(line) }));
     }
+    // (#1081) a planned hour that heats on to the top says so
+    if (live.plannedAt && preheatOn(c) && max !== null) {
+        return withSoon(idle('hq_st_preheats_at', { top: T(max), start: live.plannedAt }));
+    }
     if (live.plannedAt) return withSoon(idle('hq_st_heats_at', { keep: T(keep), time: live.plannedAt }));
     // (#1349) the house battery reaches Keep at tonight — or is at its reserve
     if (c.may_use_battery === true) {
@@ -148,6 +155,15 @@ export function heaterSays(row, live = {}, running = false) {
     if (c.may_buy === false) return withSoon({ ...idle('hq_st_waits_sun', { keep: T(keep) }), noBuy: true });
     const why = becauseKey(row.intent);
     return withSoon(idle('hq_st_below_none', { keep: T(keep) }, 'warn', why === 'hq_because_no_sun' ? '' : why));
+}
+
+/**
+ * (#1081) Is the pre-heat tick in force for this band? Ticked, a heating band
+ * the engine says can do it (a unit on its own setpoint cannot), and the
+ * engine's own published answer. Pure: reads the live comfort block only.
+ */
+export function preheatOn(c) {
+    return !!c && c.preheat === true && c.preheat_ok === true && c.anchored !== true && c.hvac !== 'cool';
 }
 
 /** The cooling words of each heating text. */
@@ -173,7 +189,7 @@ export function heaterSub(says, row, live = {}) {
     if (!says) return null;
     const T = typeof live.fmtTemp === 'function' ? live.fmtTemp : (v) => (Math.round(v * 10) / 10) + ' °C';
     const cool = says.cool === true;
-    if (says.key === 'hq_st_heats_at' || says.key === 'hq_st_cools_at') {
+    if (says.key === 'hq_st_heats_at' || says.key === 'hq_st_cools_at' || says.key === 'hq_st_preheats_at') {
         return { key: cool ? 'hq_sub_sun_free_cool' : 'hq_sub_sun_free', params: {} };
     }
     if (says.noBuy) {
@@ -213,6 +229,11 @@ export function buySource(goals) {
     if (g.battery_eligible_overnight === true || g.battery_eligible_overnight === 'true') return 'battery';
     if (g.top_up_policy === 'cheap_hours') return 'grid';
     return 'off';
+}
+
+/** The write of the pre-heat tick: the stored goal, as a bool string. */
+export function preheatWrites(on) {
+    return [{ property: 'preheat', value: String(on === true) }];
 }
 
 /** The two writes of the buy question — exactly what the old picker wrote. */
@@ -256,8 +277,16 @@ export function heaterQuestions({ goals, comfort }, { hasBattery = false, toUnit
     const buy = src === 'battery' && !hasBattery ? 'off' : src;
     const buyChoices = hasBattery ? ['off', 'grid', 'battery'] : ['off', 'grid'];
     if (engaged) {
+        // (#1081) "Also in the cheapest-heat hours": offered for a heating band
+        // the engine says can pre-heat (not a unit on its own setpoint); it
+        // counts only with the grid allowed, so it is disabled without
+        const preheat = {
+            offered: !cooling && !!comfort && comfort.preheat_ok === true && !anchored,
+            on: g.preheat === true || g.preheat === 'true' || g.preheat === 'True',
+            enabled: buy === 'grid',
+        };
         return {
-            view: 'band', cooling, keep, floor, offset,
+            view: 'band', cooling, keep, floor, offset, preheat,
             sunMax: anchored && num(comfort.max_c) !== null ? r1(comfort.max_c)
                 : Math.round((cooling ? keep - offset : keep + offset) * 10) / 10,
             anchored, keepReadOnly: anchored, storedKeep,
@@ -332,4 +361,23 @@ export function asSentence(text) {
     if (!s) return '';
     const up = s.charAt(0).toUpperCase() + s.slice(1);
     return /[.!?]$/.test(up) ? up : up + '.';
+}
+
+/**
+ * (#1353) The crawler's thermometer proposal for a heater, or null. Shown
+ * only while the heater has NO thermometer set (`goals.comfort_entity`
+ * empty) and the engine published one. The confirm writes the SAME setting
+ * the manual picker writes (`comfort_entity`); nothing is written before.
+ */
+export function thermometerProposal(device) {
+    const p = device && device.thermometerProposal;
+    const g = (device && device.goals) || {};
+    if (!p || typeof p !== 'object' || !p.entity_id || g.comfort_entity) return null;
+    // a name that ends with a full stop would print "Name.. Use it?"
+    return { entity: String(p.entity_id), name: String(p.name || p.entity_id).replace(/[.\s]+$/, ''), why: String(p.why || '') };
+}
+
+/** The one write the confirm sends: `{property, value}` — the picker's own. */
+export function useThermometerWrite(proposal) {
+    return { property: 'comfort_entity', value: proposal.entity };
 }

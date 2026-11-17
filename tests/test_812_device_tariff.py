@@ -247,7 +247,7 @@ class TestAPriceEntity:
     def test_the_house_classifier_is_reused_not_copied(self):
         from custom_components.solar_energy_management.tests.ast_contracts import calls
         assert calls(DeviceTariffs.provider_for, "DynamicTariffProvider")
-        assert calls(DeviceTariffs.level, "comparative_level")
+        assert calls(DeviceTariffs.level, "compared_level")  # (#1372) PriceView -> comparative_level
         assert calls(DeviceTariffs.level, "absence_word")
 
     def test_an_unreadable_entity_is_not_cheap_and_falls_back_to_the_rate(self):

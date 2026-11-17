@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "O ciclo anti-legionela não atinge o objetivo",
       "description": "{name}: a tua paragem em {stop} °C está abaixo do objetivo anti-legionela {target} °C. O SEM não pode desinfetar o depósito e salta o ciclo. Sobe a paragem ou baixa o objetivo. Desaparece sozinho."
+    },
+    "charge_select_stuck": {
+      "title": "A seleção de carga da rede continua ativa: {entity}",
+      "description": "A seleção **{entity}** continua em **{option}**, e o SEM não a consegue repor: a opção anterior já não está na lista. Reponha-a à mão. Até lá, a bateria pode continuar a carregar da rede. Desaparece quando a seleção mudar."
     }
   },
   "selector": {

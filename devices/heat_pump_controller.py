@@ -457,6 +457,12 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         except (TypeError, ValueError):
             return None
 
+    def comfort_preheat_supported(self) -> bool:
+        """(#1081) Contacts only. With a climate entity the boost writes its
+        setpoint and the end of a run writes the configured one back, not the
+        one the unit had: not offered until that is fixed."""
+        return not self.climate_entity_id and super().comfort_preheat_supported()
+
     @property
     def step_down_ready(self) -> bool:
         """May layer 1 ask for a step-down? Read-only; it writes nothing.

@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Legionellen-Lauf erreicht sein Ziel nicht",
       "description": "{name}: Dein Stopp bei {stop} °C liegt unter dem Legionellen-Ziel {target} °C. SEM kann den Speicher nicht desinfizieren und lässt den Lauf aus. Erhöhe den Stopp oder senke das Ziel. Die Meldung verschwindet von selbst."
+    },
+    "charge_select_stuck": {
+      "title": "Die Netzladung-Auswahl steht noch auf Laden: {entity}",
+      "description": "Die Auswahl **{entity}** steht noch auf **{option}**, und SEM kann sie nicht zurücksetzen: die frühere Option fehlt in der Liste. Stelle sie von Hand zurück. Bis dahin lädt die Batterie womöglich weiter aus dem Netz. Verschwindet, sobald die Auswahl geändert wird."
     }
   },
   "selector": {

@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "A legionella-ciklus nem éri el a célját",
       "description": "{name}: a leállításod {stop} °C, ez a legionella-cél ({target} °C) alatt van. A SEM nem tudja fertőtleníteni a tárolót, és kihagyja a ciklust. Emeld a leállítást vagy csökkentsd a célt. Magától eltűnik."
+    },
+    "charge_select_stuck": {
+      "title": "A hálózati töltés választója még be van kapcsolva: {entity}",
+      "description": "A(z) **{entity}** választó még mindig **{option}** értéken áll, és a SEM nem tudja visszaállítani: a korábbi opció már nincs a listában. Állítsd vissza kézzel. Addig az akku tovább tölthet a hálózatból. Eltűnik, ha a választó megváltozik."
     }
   },
   "selector": {

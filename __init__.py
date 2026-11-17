@@ -333,6 +333,10 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # at adapter construction.
     "battery_strategy_entities",
     "battery_strategy_control_entity",
+    # (#1346) the select that starts a grid charge and its charge option —
+    # read at adapter construction like the entities above.
+    "battery_charge_select_entity",
+    "battery_charge_select_option",
     # #523 AC-coupled bidirectional setpoint (charge = negative on the
     # force-discharge entity) — read at adapter construction.
     "battery_setpoint_bidirectional",
@@ -5432,6 +5436,8 @@ async def _async_register_services(
             "min_on_time_min", "min_off_time_min",
             # (#705) thermal comfort band
             "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+            # (#1081) heat on to the top in the planned cheap hours
+            "preheat",
             # (#1020) a Schedule helper that sets the mode while it is on
             "schedule_entity", "schedule_mode",
             # (#1048) the supply phase the load sits on
@@ -5534,7 +5540,7 @@ async def _async_register_services(
             # (#620) normalize the two battery flags to a canonical bool string
             # so the stored dict + live apply agree regardless of "true"/"1"/"on".
             if prop in ("battery_assist_enabled", "battery_eligible_overnight",
-                        "behind_operator_relay"):
+                        "behind_operator_relay", "preheat"):
                 value = str(str(value).strip().lower() in ("true", "1", "on", "yes"))
             # (#688) anti-cycle windows are non-negative minutes.
             if prop in ("min_on_time_min", "min_off_time_min"):
@@ -5634,6 +5640,8 @@ async def _async_register_services(
                     "min_on_time_min", "min_off_time_min",
                     # (#705) thermal comfort band
                     "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+                    # (#1081) heat on to the top in the planned cheap hours
+                    "preheat",
                     # (#1020) a Schedule helper that sets the mode while on
                     "schedule_entity", "schedule_mode",
                     # (#1048) the supply phase

@@ -1505,6 +1505,10 @@ class ComfortBandMixin:
     comfort_target: float = 0.0
     comfort_offset: float = 0.0
     comfort_limit: float = 0.0
+    # (#1081) "Also in the cheapest-heat hours": a planned cheap block heats on
+    # to the top (Keep at + Extra) instead of stopping at Keep at. Off unless
+    # the user ticks it; it only counts where ``comfort_preheat_on`` says so.
+    preheat: bool = False
     # (#688) extra watts a fresh START needs on top of the threshold.
     start_reserve_w: float = 0.0
 
@@ -1656,36 +1660,50 @@ class ComfortBandMixin:
         behaves byte-for-byte like a device without a band: a dead
         sensor never forces a run and never parks the device.
         """
+        state, misconfigured = self._comfort_band_peek()
+        if misconfigured and not getattr(self, "_comfort_misconfig_warned", False):
+            self._comfort_misconfig_warned = True
+            _LOGGER.warning(
+                "%s: comfort band misconfigured (direction=%s target=%.1f "
+                "limit=%.1f) — cool needs limit > target, heat needs "
+                "limit < target; band disengaged",
+                self.name,
+                "cool" if self._comfort_direction() == "cool" else "heat",
+                self.comfort_target, self.comfort_limit,
+            )
+        return state
+
+    def _comfort_band_peek(self):
+        """(#1369) ``(state, misconfigured)`` — the band state with NO write
+        and no log: the shadow goal comparison reads it, the one-time warning
+        stays in ``_comfort_band_state``."""
         if not (self.comfort_target and self.comfort_limit):
-            return "disengaged"
+            return "disengaged", False
         cooling = self._comfort_direction() == "cool"
         if ((cooling and self.comfort_limit <= self.comfort_target)
                 or (not cooling and self.comfort_limit >= self.comfort_target)):
-            if not getattr(self, "_comfort_misconfig_warned", False):
-                self._comfort_misconfig_warned = True
-                _LOGGER.warning(
-                    "%s: comfort band misconfigured (direction=%s target=%.1f "
-                    "limit=%.1f) — cool needs limit > target, heat needs "
-                    "limit < target; band disengaged",
-                    self.name, "cool" if cooling else "heat",
-                    self.comfort_target, self.comfort_limit,
-                )
-            return "disengaged"
+            return "disengaged", True
         temp = self._comfort_reading()
         if temp is None:
-            return "disengaged"
+            return "disengaged", False
         target_c, offset_c, limit_c = self._comfort_thresholds_c()
         if cooling:
             if temp >= limit_c:
-                return "forced"
+                return "forced", False
             if temp <= target_c - offset_c:
-                return "banked"
+                return "banked", False
         else:
             if temp <= limit_c:
-                return "forced"
+                return "forced", False
             if temp >= target_c + offset_c:
-                return "banked"
-        return "willing"
+                return "banked", False
+        return "willing", False
+
+    def _peek_comfort_state(self) -> str:
+        """(#1369) ``comfort_state`` without the warning flag's write."""
+        if getattr(self, "vacation", False) is True:
+            return "disengaged"
+        return self._comfort_band_peek()[0]
 
     # ── (#638 Phase 3) the band becomes PLANNABLE ──────────────────────
     # The drift learners eat one reading per cycle, split by whether the
@@ -1770,6 +1788,41 @@ class ComfortBandMixin:
         grid rule (``comfort_goal_may_buy``) stays its own question."""
         return getattr(self, "battery_eligible_overnight", False) is True
 
+    def comfort_preheat_supported(self) -> bool:
+        """(#1081) Can this load pre-heat? A heating band on a load switched by
+        a contact, a switch or a boost. A unit that rides its own setpoint is
+        out: at the end of a run SEM writes back the configured setpoint, not
+        the one the unit had. That must be fixed before it can be offered."""
+        try:
+            return (self._comfort_direction() == "heat"
+                    and self._comfort_anchor_c() is None)
+        except Exception:  # noqa: BLE001 — an unreadable band offers nothing
+            return False
+
+    def comfort_preheat_on(self) -> bool:
+        """(#1081) Does the tick count? Ticked, supported, and the load may
+        buy from the grid: the pre-heat hours are bought hours."""
+        return (self.preheat is True and self.comfort_preheat_supported()
+                and self.comfort_goal_may_buy())
+
+    def comfort_preheat_top_c(self):
+        """(#1081) The top a pre-heat run heats to, in °C: Keep at + Extra, or
+        the device's own top (a tank's, capped at its Legionella target)."""
+        own = getattr(self, "band_top_c", None)
+        if callable(own):
+            return own()
+        target_c, offset_c, _limit_c = self._comfort_thresholds_c()
+        return float(target_c) + max(0.0, float(offset_c or 0.0))
+
+    def comfort_preheat_open(self) -> bool:
+        """(#1081) Is a pre-heat run still short of its top? The one question
+        layer 1 asks to run on past Keep at."""
+        if not self.comfort_preheat_on():
+            return False
+        temp = self._comfort_reading()
+        top = self.comfort_preheat_top_c()
+        return temp is not None and top is not None and float(temp) < float(top)
+
     def comfort_goal_wants_start(self) -> bool:
         """(#1102) Is the reading far enough from Keep at to START a planned
         run? The one rule for the plan's ask and for layer 1's start."""
@@ -1836,12 +1889,20 @@ class ComfortBandMixin:
 
 
     def _comfort_goal_demand(self, banking_energy_kwh, learn_drift):
-        """(#1102) Energy to reach Keep at, or None when already there."""
+        """(#1102) Energy to reach Keep at, or None when already there.
+        (#1081) With the pre-heat tick in effect and a learned heating rate,
+        the ask reaches the top (Keep at + Extra) instead."""
         temp = self._comfort_reading()
         if temp is None:
             return None
         direction = self._comfort_direction()
         target_c, _offset_c, _limit_c = self._comfort_thresholds_c()
+        on = learn_drift(list(getattr(self, "_comfort_on_samples", None) or ()))
+        keep_c = target_c
+        if on is not None and self.comfort_preheat_on():
+            # without a rate the ask stays as it is: one hour to Keep at
+            # never below Keep at: a cap under it must not shrink the ask
+            target_c = max(target_c, self.comfort_preheat_top_c() or target_c)
         below = temp > target_c if direction == "cool" else temp < target_c
         if not below:
             return None
@@ -1855,7 +1916,6 @@ class ComfortBandMixin:
         rated = self.comfort_run_power_w()
         if rated <= 0:
             return None
-        on = learn_drift(list(getattr(self, "_comfort_on_samples", None) or ()))
         kwh = None
         if on is not None:
             kwh = banking_energy_kwh(
@@ -1866,7 +1926,23 @@ class ComfortBandMixin:
             kwh = rated / 1000.0 * self.COMFORT_GOAL_FALLBACK_H
         if not kwh:
             return None
-        return {"energy_kwh": kwh, "deadline": None}
+        ask = {"energy_kwh": kwh, "deadline": None}
+        if target_c != keep_c:
+            # (#1081) the part above Keep at is bought in cheap hours only
+            ask["cheap_only_kwh"] = self._preheat_extra_kwh(
+                banking_energy_kwh, on, temp, keep_c, direction, rated, kwh)
+        return ask
+
+    def _preheat_extra_kwh(self, banking_energy_kwh, on, temp, keep_c,
+                           direction, rated, total_kwh) -> float:
+        """(#1081) The kWh of a pre-heat ask above Keep at: the whole ask less
+        what Keep at alone would take (nothing, once at or past Keep at)."""
+        below = temp > keep_c if direction == "cool" else temp < keep_c
+        base = (banking_energy_kwh(
+            current_c=temp, target_c=keep_c, direction=direction,
+            offset_c=0.0, active_rate_c_per_h=on.rate_c_per_h,
+            rated_power_w=rated) or 0.0) if below else 0.0
+        return max(0.0, float(total_kwh) - float(base))
     # The band speaks through the three generic properties every surplus
     # pass already reads — no new controller clauses; peak shed,
     # anti-cycling, priority and LIFO apply to comfort runs unchanged.
@@ -2385,6 +2461,12 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
     @comfort_limit.setter
     def comfort_limit(self, value) -> None:
         self._comfort_limit_set = float(value or 0.0)
+
+    def comfort_preheat_supported(self) -> bool:
+        """(#1081) Not offered: a climate unit takes its setpoint from SEM
+        (``set_temperature`` on start), so a pre-heat run would need the
+        one the unit had back at its end. Fix that first."""
+        return False
 
     def _comfort_direction(self) -> str:
         if self._hvac_setting == HVAC_BY_FORECAST:

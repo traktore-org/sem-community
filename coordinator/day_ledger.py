@@ -30,7 +30,7 @@ import math
 from datetime import datetime, timedelta
 
 from .energy_planner import LedgerSlot
-from .price_signal import is_cheap_name
+from .price_view import PriceView
 
 # Below this computed surplus a "free window" is forecast noise, not a
 # plannable window — mirrors the delta-guard instinct on the EV side.
@@ -286,39 +286,28 @@ def export_rate_fn(rate):
 
 def tariff_cheap_at(prov, ts):
     """The ONE cheap-level accessor (#638) — the same gate execution's
-    cheap-hours loads fire on."""
-    if hasattr(prov, "get_price_level_at"):
-        try:
-            lvl = prov.get_price_level_at(ts)
-        except Exception:  # noqa: BLE001 — no level is not cheap
-            return False
-        # (#994) one vocabulary; an unknown level is never cheap.
-        return is_cheap_name(lvl)
-    return False
+    cheap-hours loads fire on. (#1372) A thin wrapper: ``PriceView`` with
+    the plan rule (the raw level; an unknown level is never cheap, #994)."""
+    return PriceView(prov).cheap_at(ts)
 
 
 def tariff_rate_cheap_at(prov, ts):
     """(#1310) Is this hour at the tariff's cheap rate? What the plan card's
     band, the tomorrow preview and Assist show. Execution's gates read
     ``tariff_cheap_at``, which also refuses a day that holds one rate
-    (#994). A provider without the rate word answers with the gate's."""
-    if hasattr(prov, "get_rate_level_at"):
-        try:
-            lvl = prov.get_rate_level_at(ts)
-        except Exception:  # noqa: BLE001 — no level is not cheap
-            return False
-        return is_cheap_name(lvl)
-    return tariff_cheap_at(prov, ts)
+    (#994). A provider without the rate word answers with the gate's.
+    (#1372) Asked through ``PriceView``; same answers."""
+    return PriceView(prov).rate_cheap_at(ts)
 
 
 def rate_cheap_fn(prov):
     """(#1310) A builder's ``rate_cheap_at`` for ``prov``, or ``None`` when
     the tariff's rate word is its price level (a dynamic tariff): the slot
     then reuses the gate's answer instead of asking the same level twice,
-    ~400 times on a 15-min curve."""
-    own = getattr(type(prov), "get_rate_level_at", None)
-    if own is None or getattr(own, "same_as_price_level", False):
+    ~400 times on a 15-min curve. (#1372) Asked through ``PriceView``."""
+    if PriceView(prov).rate_cheap_fn() is None:
         return None
+    # PRICE-ASK: this file's own thin wrapper over the price view
     return lambda ts: tariff_rate_cheap_at(prov, ts)
 
 

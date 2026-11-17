@@ -19,6 +19,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .base import ComfortBandMixin, SwitchDevice, DeviceState
+from .tank_goal import (  # noqa: F401 — the shared numbers, re-exported
+    LEGIONELLA_HOLD_BAND_K, LEGIONELLA_HOLD_DIP_K, RECOMPUTE, START_MARGIN_K,
+    START_MARGIN_STICKY_K, TankGoal, TankInputs, build_tank_goal, differences,
+)
+from ..utils.log_gate import log_on_change
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,15 +53,9 @@ LEGIONELLA_MIN_RUN_H = 1.0
 #: (#1369) the good hour must hold this long before an early start, and be
 #: gone this long before an early run pauses — no start/stop on a passing cloud
 LEGIONELLA_EARLY_START_HOLD_MIN = 10.0
-#: (#1369) a new start needs this much room below the top (or the user's
-#: stop): no one-minute run for a tenth of a degree
-START_MARGIN_K = 1.0
-#: (#1369) a switched tank holding its Legionella temperature switches off
-#: this far above the target; the tank holds the heat through the hold
-LEGIONELLA_HOLD_BAND_K = 0.5
-#: (#1369) a reading this far under the target is noise, not a dip: the hold
-#: goes on (a probe that wobbles 59.9/60.1 never finished a hold otherwise)
-LEGIONELLA_HOLD_DIP_K = 0.3
+# (#1369) START_MARGIN_K, START_MARGIN_STICKY_K, LEGIONELLA_HOLD_BAND_K and
+# LEGIONELLA_HOLD_DIP_K are defined once, in ``tank_goal`` (imported above) —
+# a probe that wobbles 59.9/60.1 never finished a hold without the dip.
 #: (#1369) an early run does not pause this close to its due time — the
 #: minimum run would hold it on anyway, and it is due right after
 LEGIONELLA_EARLY_PAUSE_MIN_LEAD_H = 1.0
@@ -219,6 +218,13 @@ class HotWaterController(SwitchDevice):
         # (#914) One restart adoption per lifetime, decided on the first
         # READABLE observation after registration — see adopt_if_running.
         self._boot_adoption_pending: bool = True
+
+        # (#1369, step 1) the shadow goal: where it differs from today's
+        # decision, per field; nothing reads these to decide
+        self.tank_goal_diffs: Dict[str, int] = {}
+        self.tank_goal_last: Dict[str, Any] = {}
+        self.tank_goal_errors: int = 0
+        self.tank_goal_skipped: int = 0   # cycles the engine never asked the stop
 
     # ─── Restart adoption (#914) ─────────────────────────────
 
@@ -504,25 +510,28 @@ class HotWaterController(SwitchDevice):
         stop = self.user_stop_c()
         return stop is not None and stop < float(self.legionella_target_temp)
 
-    def band_top_c(self) -> Optional[float]:
+    def band_top_c(self, *, peek: bool = False) -> Optional[float]:
         """(#1369) The top a USABLE comfort band sets, or None when the tank
         has no band, the band is misconfigured or its thermometer is silent
         (then it is disengaged and the old Solar Heating Target caps the
         tank as before)."""
         # ``comfort_state`` is the band as the engine sees it: disengaged
         # while away too, so away keeps the old target (#594)
-        if getattr(self, "comfort_state", "disengaged") == "disengaged":
+        # (#1369) ``peek``: the shadow asks without the misconfiguration flag
+        state = (self._peek_comfort_state() if peek
+                 else getattr(self, "comfort_state", "disengaged"))
+        if state == "disengaged":
             return None
         return self._band_fields_top_c()
 
-    def normal_target_temp(self) -> float:
+    def normal_target_temp(self, *, peek: bool = False) -> float:
         """(#1369) The cutoff outside Legionella and the vacation dump: the
         band's top when the tank has a band — the band decides alone, as on
         the my-PV and evcc controllers — else the Solar Heating Target."""
-        top = self.band_top_c()
+        top = self.band_top_c(peek=peek)
         return top if top is not None else self.solar_target_temp
 
-    def _active_target_temp(self) -> float:
+    def _active_target_temp(self, *, peek: bool = False) -> float:
         """The temperature target for the CURRENT operating context (#594).
 
         Legionella cycle → ``legionella_target_temp`` (disinfection is never
@@ -536,7 +545,7 @@ class HotWaterController(SwitchDevice):
             return self.legionella_target_temp
         if self.vacation and self.vacation_dhw_surplus:
             return self.min_temperature
-        return self.normal_target_temp()
+        return self.normal_target_temp(peek=peek)
 
     def get_current_temperature(self) -> Optional[float]:
         """Read water temperature from sensor or entity attributes.
@@ -689,9 +698,9 @@ class HotWaterController(SwitchDevice):
                     reading = self.get_current_temperature()
                 if reading is not None:
                     edge = min(lines) - START_MARGIN_K
-                    # once refused, it waits 0.2 K more: no flip on noise
+                    # once refused, it waits a little more: no flip on noise
                     if getattr(self, "_margin_refused", False):
-                        edge -= 0.2
+                        edge -= START_MARGIN_STICKY_K
                     refused = float(reading) > edge
                     self._margin_refused = refused
                     if refused:
@@ -738,32 +747,166 @@ class HotWaterController(SwitchDevice):
         ``check_legionella_cycle`` ends the run itself. A stop entity the user
         set still counts, as it did before (#1062).
         """
+        met, hold = self._stop_condition(
+            getattr(self, "_hold_stopped", False),
+            read=self.get_current_temperature,
+            band_state=lambda: self.comfort_state,
+            target=self._active_target_temp)
+        if hold is not None:
+            self._hold_stopped = hold
+        return met
+
+    def _stop_condition(self, hold_stopped, *, read, band_state, target):
+        """(#1369) The stop rule, PURE: ``(met, new_hold_stopped)`` — the new
+        hold flag is None when the rule leaves it alone. It writes nothing;
+        what it reads comes in as callables (called lazily, in the order the
+        rule always asked), so the property passes the getters that keep
+        their telemetry and the shadow comparison passes peeks that do not.
+        One rule for both: the shadow cannot change a decision by running."""
         if self._legionella_cycle_active:
             # The base stop only (the stop entity) — skip the band's banked.
             if super(ComfortBandMixin, self).stop_condition_met:
-                return True
+                return True, None
             # (#1369) a switched tank in its hold: off a little above the
             # target — the tank holds the heat; before, it heated on to +3 K
             if (self._entity_domain not in _SETPOINT_DOMAINS
                     and self._legionella_hold_start is not None):
-                temp = self.get_current_temperature()
-                target = float(self.legionella_target_temp)
+                temp = read()
+                tgt = float(self.legionella_target_temp)
                 if temp is None:
-                    return bool(getattr(self, "_hold_stopped", False))
+                    return bool(hold_stopped), None
                 # off above target + 0.5; once off, it stays off while the
                 # hold needs no heat — no flip on sensor noise
-                stopped = temp >= target + LEGIONELLA_HOLD_BAND_K or (
-                    getattr(self, "_hold_stopped", False)
-                    and temp >= target - LEGIONELLA_HOLD_DIP_K)
-                self._hold_stopped = stopped
-                return stopped
-            return False
-        if super().stop_condition_met:
-            return True
+                stopped = temp >= tgt + LEGIONELLA_HOLD_BAND_K or (
+                    bool(hold_stopped) and temp >= tgt - LEGIONELLA_HOLD_DIP_K)
+                return stopped, stopped
+            return False, None
+        # the band's banked state ORs with the stop entity (ComfortBandMixin)
+        if super(ComfortBandMixin, self).stop_condition_met or band_state() == "banked":
+            return True, None
         if self._entity_domain in _SETPOINT_DOMAINS:
-            return False
-        temp = self.get_current_temperature()
-        return temp is not None and temp >= self._active_target_temp()
+            return False, None
+        temp = read()
+        return temp is not None and temp >= target(), None
+
+    # ─── The tank's goal, in the shadow (#1369, step 1) ──────────────
+
+    def _peek_tank_reading(self):
+        """(#1369) ``get_current_temperature`` without its writes: the tank's
+        own reading in °C and whether a missing one is fine (no sensor is set
+        up, the device's own thermostat rules). It leaves
+        ``_last_temperature_reading*`` alone."""
+        attribute_invalid = False
+        if self._entity_domain in _SETPOINT_DOMAINS and self.entity_id:
+            state = self.hass.states.get(self.entity_id)
+            raw = state.attributes.get("current_temperature") if state else None
+            if raw is not None:
+                value = self._attribute_temp_c(raw)
+                if value is not None:
+                    return value, False
+                attribute_invalid = True
+        if self.temperature_entity_id:
+            from ..coordinator.units import temperature_state_to_celsius
+            state = self.hass.states.get(self.temperature_entity_id)
+            value = None
+            if state and state.state not in ("unknown", "unavailable"):
+                value = temperature_state_to_celsius(state, None)
+            return value, False
+        return None, not attribute_invalid
+
+    def _goal_band_fields(self):
+        """(keep, extra, limit) in °C for a set heating band, else Nones.
+        ``_comfort_thresholds_c`` only reads."""
+        t, lim = getattr(self, "comfort_target", None), getattr(self, "comfort_limit", None)
+        if not (t and lim) or self._comfort_direction() != "heat":
+            return None, None, None
+        try:
+            keep, extra, limit = self._comfort_thresholds_c()
+            return float(keep), float(extra or 0.0), float(limit)
+        except (TypeError, ValueError, AttributeError):
+            return None, None, None
+
+    def tank_goal_inputs(self) -> TankInputs:
+        """(#1369) What the goal reads, from the controller's own fields.
+        Read-only. Getters AVOIDED because they write state:
+        ``get_current_temperature`` / ``is_temperature_safe`` /
+        ``own_run_needs_heat`` (``_last_temperature_*``), ``start_refusal``
+        (``_margin_refused``), ``stop_condition_met`` (``_hold_stopped``) and
+        ``comfort_state`` / ``comfort_away_heats`` / ``_comfort_band_state``
+        (the one-time misconfiguration warning flag). Their stored fields
+        are read raw; the band state comes from ``_peek_comfort_state``."""
+        keep, extra, limit = self._goal_band_fields()
+        tank_c, blind_ok = self._peek_tank_reading()
+        user_stop = self.user_stop_c()
+        return TankInputs(
+            tank_c=tank_c, band_c=self._comfort_reading(),
+            keep_c=keep, extra_c=extra, too_cold_c=limit,
+            fallback_top_c=float(self.solar_target_temp),
+            min_temperature_c=float(self.min_temperature),
+            legionella_target_c=float(self.legionella_target_temp),
+            user_stop_c=user_stop,
+            # the base stop rule (the stop entity) is a plain read; a stop on
+            # the tank's or the band's sensor is the goal's own user stop
+            other_stop_met=(user_stop is None and bool(
+                super(ComfortBandMixin, self).stop_condition_met)),
+            legionella_active=self._legionella_cycle_active is True,
+            legionella_hold=self._legionella_hold_start is not None,
+            hold_stopped=bool(getattr(self, "_hold_stopped", False)),
+            margin_refused=bool(getattr(self, "_margin_refused", False)),
+            vacation=getattr(self, "vacation", False) is True,
+            vacation_dump=getattr(self, "vacation_dhw_surplus", False) is True,
+            may_buy=self.comfort_goal_may_buy(),
+            switched=self._entity_domain not in _SETPOINT_DOMAINS,
+            sensor_expected=not blind_ok, now=dt_util.now())
+
+    def tank_goal(self) -> TankGoal:
+        """(#1369) The tank's goal this cycle. Nothing decides by it yet."""
+        return build_tank_goal(self.tank_goal_inputs())
+
+    def _goal_seen(self, engine_stop=RECOMPUTE) -> Dict[str, Any]:
+        """What today's code decided, per compared field. The top is the
+        cutoff the engine uses (active target, the user's stop below it).
+        PURE (#1369): every read is a peek; ``engine_stop`` is the engine's
+        own answer for this cycle where it gave one (True/False), None where
+        the engine never asked this cycle (the field is left out and counted
+        as skipped), ``RECOMPUTE`` to ask the pure stop rule."""
+        keep, _extra, limit = self._goal_band_fields()
+        top = self._active_target_temp(peek=True)
+        stop = self.user_stop_c()
+        if stop is not None and not self._legionella_cycle_active:
+            top = min(top, stop)
+        seen = {"top": top, "keep_at": keep, "too_cold_below": limit,
+                "band_state": self._peek_comfort_state(),
+                "legionella_blocked": self.legionella_blocked_by_stop}
+        if engine_stop is RECOMPUTE:
+            seen["must_stop"] = self._stop_condition(
+                getattr(self, "_hold_stopped", False),
+                read=lambda: self._peek_tank_reading()[0],
+                band_state=self._peek_comfort_state,
+                target=lambda: self._active_target_temp(peek=True))[0]
+        elif engine_stop is not None:
+            seen["must_stop"] = bool(engine_stop)
+        return seen
+
+    def compare_tank_goal(self, engine_stop=RECOMPUTE) -> None:
+        """(#1369) Once per cycle, after the engine decided for this tank:
+        count where the goal differs from today's decision. Never raises.
+        It writes NOTHING but its own counters — it runs after every
+        decision, also the early returns where the engine never reads the
+        stop rule, so a write here would change the next cycle's decision."""
+        try:
+            seen = self._goal_seen(engine_stop)
+            if "must_stop" not in seen:
+                self.tank_goal_skipped += 1   # the engine did not ask this cycle
+            for name, pair in differences(self.tank_goal(), seen).items():
+                self.tank_goal_diffs[name] = self.tank_goal_diffs.get(name, 0) + 1
+                self.tank_goal_last[name] = pair
+                log_on_change(
+                    _LOGGER, f"tank_goal:{self.device_id}:{name}", logging.INFO,
+                    "%s: the tank goal differs from today's decision on %s "
+                    "(shadow only, nothing changed; #1369)", self.name, name)
+        except Exception:  # noqa: BLE001 — the shadow must never break a cycle
+            self.tank_goal_errors += 1
 
     # (#594/#1344) it heats for comfort by nature: away pauses it, band or
     # not. The band itself goes quiet while away in the shared mixin; the

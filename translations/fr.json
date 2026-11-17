@@ -2115,6 +2115,10 @@
     "legionella_below_stop": {
       "title": "Le cycle anti-légionelles n'atteint pas sa cible",
       "description": "{name} : votre arrêt à {stop} °C est sous la cible anti-légionelles {target} °C. SEM ne peut pas désinfecter le ballon et saute le cycle. Relevez l'arrêt ou baissez la cible. Ce message disparaît tout seul."
+    },
+    "charge_select_stuck": {
+      "title": "La sélection de charge réseau est toujours active : {entity}",
+      "description": "La sélection **{entity}** est toujours sur **{option}**, et SEM ne peut pas la remettre : l'ancienne option n'est plus dans la liste. Remettez-la à la main. D'ici là, la batterie peut continuer à charger depuis le réseau. Disparaît quand la sélection change."
     }
   },
   "selector": {

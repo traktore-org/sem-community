@@ -13,7 +13,7 @@ import math
 from abc import ABC, abstractmethod
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -486,6 +486,13 @@ class TariffProvider(ABC):
         unknown (no data / provider cannot say): the planner treats it as
         not-cheap, conservatively.
         """
+        return None
+
+    def known_until(self) -> Optional[datetime]:
+        """(#1372) The end of the prices this provider knows; ``None`` = no
+        limit. A clock rule answers for any hour, so it has none; a forecast
+        ends where its last point ends. ``PriceView`` calls an hour past it
+        UNKNOWN."""
         return None
 
     def get_rate_level_at(self, when: datetime) -> Optional[PriceLevel]:
@@ -2348,6 +2355,14 @@ class DynamicTariffProvider(TariffProvider):
             if p.timestamp <= when < p.timestamp + interval:
                 return self._import_value(p.price, self._grid_import_surcharge())
         return None
+
+    def known_until(self) -> Optional[datetime]:
+        """(#1372) The last price point's start plus one slot. No prices at
+        all = nothing is known (the earliest moment), not "no limit"."""
+        prices = self._read_prices_list()
+        if not prices:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        return max(p.timestamp for p in prices) + self._detect_interval(prices)
 
     def get_price_level_at(self, when: datetime) -> Optional[PriceLevel]:
         # The classified level of the series point covering ``when`` —

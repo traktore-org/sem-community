@@ -303,6 +303,8 @@ class TestStructuralKeysVisibility:
             "battery_discharge_end_soc_entity",
             "battery_strategy_entities",
             "battery_strategy_control_entity",
+            # (#1346) the select that starts a grid charge, and its option
+            "battery_charge_select_entity", "battery_charge_select_option",
             "battery_setpoint_bidirectional",
         # (#809/#869) the setpoint model and its direction select
         "battery_setpoint_model", "battery_power_direction_entity",

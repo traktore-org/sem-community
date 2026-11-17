@@ -1072,6 +1072,18 @@ entity, so you can see which battery did not keep the value.
 
 The Repair clears itself the moment a write is reflected.
 
+
+## The grid charge select is still on
+
+**Repair:** *"The grid charge select is still on"*.
+
+SEM started a grid charge by setting a select to your charge option. To end
+it, SEM sets the select back to what it showed before. That option is no
+longer in the select's list, so SEM cannot, and it will not guess another.
+
+**What to do:** set the select back by hand. The notice clears when the
+select changes. Until then the battery may keep charging from the grid.
+
 ## The battery charge limit does not follow SEM's pacing (2.2, #820)
 
 Press **Diagnose** in the Battery section of the Configuration tab. The
