@@ -141,6 +141,35 @@ class TestTheReaderReadsEachPack:
         assert r._capacity_entity_by_power["sensor.b2"] is None
         assert r._capacity_entity_by_power["sensor.b1"] == "sensor.b1_rated_capacity"
 
+    def test_a_remaining_capacity_is_not_a_size(self, monkeypatch):
+        """(#1373 review) kWh that fall with the level are not the pack's size."""
+        states = _states()
+        states["sensor.b2_battery_capacity_remaining"] = _state("3", "kWh")
+        devices = {"sensor.b1": DEVICES["sensor.b1"],
+                   "sensor.b2": ("dev2", [("sensor.b2", None), ("sensor.soc2", None),
+                                          ("sensor.b2_battery_capacity_remaining", None)])}
+        r = _fleet(monkeypatch, states, devices)
+        assert r.read_power().batteries["b2"].capacity_kwh == 0.0
+
+    def test_two_size_sensors_on_one_device_decide_nothing(self, monkeypatch):
+        """(#1373 review) two packs behind one inverter: whose is which?"""
+        states = _states()
+        shared = ("inv", [("sensor.b1", None), ("sensor.b2", None),
+                          ("sensor.b1_rated_capacity", "rated_ess_capacity"),
+                          ("sensor.b2_battery_capacity", None)])
+        r = _fleet(monkeypatch, states, {"sensor.b1": shared, "sensor.b2": shared})
+        p = r.read_power()
+        assert p.batteries["b1"].capacity_kwh == 0.0
+        assert p.batteries["b2"].capacity_kwh == 0.0
+
+    def test_the_per_battery_setting_is_the_packs_size(self, monkeypatch):
+        """(#1373) the user's size beats the sensor, for the scheduler too."""
+        r = _fleet(monkeypatch, _states(), DEVICES)
+        r._raw_config = {**(r._raw_config or {}), "battery_capacity_kwhs": [12.0, None]}
+        p = r.read_power()
+        assert p.batteries["b1"].capacity_kwh == 12.0
+        assert p.batteries["b2"].capacity_kwh == 5.0
+
     def test_the_fleet_detect_still_takes_the_first_sensor_in_the_house(self, monkeypatch):
         # unchanged on purpose: one pack, the setting empty, this is its size
         r = _fleet(monkeypatch, _states(), DEVICES)

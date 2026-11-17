@@ -32,16 +32,17 @@ def _reader(hass) -> SensorReader:
     return SensorReader(hass, {"update_interval": 10})
 
 
-def _fleet(hass, monkeypatch, socs, sizes):
+def _fleet(hass, monkeypatch, socs, sizes, found=(0.0, 0.0)):
     """A reader whose two units read ``socs``; ``sizes`` are the user's
-    per-battery settings (0 = not set). Every device also carries a
-    misleading "capacity" sensor of 99 kWh, which must never count."""
+    per-battery settings (0 = not set); ``found`` the size sensor the
+    device scan finds on each pack's device (0 = none)."""
     r = _reader(hass)
     by_unit = dict(zip(UNITS, socs, strict=True))
     monkeypatch.setattr(r, "_auto_detect_battery_soc", lambda u: f"{u}_soc")
     monkeypatch.setattr(r, "_read_sensor", lambda e, *a, **k: by_unit[e[:-4]])
     monkeypatch.setattr(r, "_accept_unit_soc", lambda e, v: v)
-    monkeypatch.setattr(r, "_unit_capacity_kwh", lambda u: 99.0)
+    by_found = dict(zip(UNITS, found, strict=True))
+    monkeypatch.setattr(r, "_unit_capacity_kwh", lambda u: by_found.get(u, 0.0))
     r._raw_config = {**(r._raw_config or {}),
                      "battery_capacity_kwhs": [c if c else None for c in sizes]}
     return r
@@ -156,10 +157,15 @@ def test_the_reporters_sizes_set_per_battery_give_30_6(hass, monkeypatch):
     assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
 
 
-def test_the_setting_counts_a_size_sensor_never(hass, monkeypatch):
-    """(#1373 review) a device scan took "remaining capacity" and gave two
-    batteries on one inverter the same size: only the setting counts."""
-    r = _fleet(hass, monkeypatch, [38, 17], [0.0, 0.0])
+def test_a_size_found_on_each_pack_weighs_when_none_is_set(hass, monkeypatch):
+    """(#1306, #1373) one answer for a pack's size: the setting, else the
+    pack's own size sensor (the scan itself skips "remaining" ones)."""
+    r = _fleet(hass, monkeypatch, [38, 17], [0.0, 0.0], found=(9.8, 5.28))
+    assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)
+
+
+def test_the_setting_beats_a_found_size(hass, monkeypatch):
+    r = _fleet(hass, monkeypatch, [38, 17], [5.0, 5.0], found=(99.0, 1.0))
     assert r._read_battery_soc_average(UNITS) == pytest.approx(27.5)
     _set_sizes(r, [9.8, 5.28])
     assert r._read_battery_soc_average(UNITS) == pytest.approx(30.6, abs=0.05)

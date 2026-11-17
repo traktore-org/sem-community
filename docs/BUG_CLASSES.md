@@ -6959,8 +6959,8 @@ Refs #1377 #1346.
 ### 184. A value found by a sensor's name — a different quantity with a similar name is taken — GUARDED
 
 **What happens.** The total charge level of several batteries was to be weighted by size (#1373). A first build looked for a size sensor on each battery's device by its name. A review showed it took "remaining capacity" (kWh that fall with the level) as the size, and gave two batteries on one inverter the first one's size. Users who set nothing would have seen the total move.
-**The rule.** A number that changes what SEM shows or decides for everyone comes from a setting the user made, or from a role the crawler proved, never from a name match alone.
-**Guard:** `tests/test_1373_total_soc_by_size.py` — a misleading 99 kWh "capacity" sensor on every device never counts; only the per-battery size setting weighs the total; one size missing gives the plain average.
+**The rule.** One answer for a pack's size, read by the total level and the scheduler: the user's per-battery setting, else a size sensor on the pack's own device. The scan skips "remaining"/"available" sensors and decides nothing when one device holds two size sensors.
+**Guard:** `tests/test_1373_total_soc_by_size.py` — a misleading 99 kWh "capacity" sensor on every device never counts; the setting beats a found size; a remaining-capacity sensor and two size sensors on one device give no size; one size missing gives the plain average.
 **Sweep question:** could another sensor on the same device match the same words?
 Refs #1373 #1306.
 
