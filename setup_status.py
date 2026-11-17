@@ -68,7 +68,50 @@ def setup_facts(hass: HomeAssistant, coordinator: Any) -> dict[str, Any]:
         "forecast_source": forecast_part(coordinator),
         "tariff_configured": tariff_configured(coordinator.config),
         "issues": open_issues(hass),
+        "battery_grid_charge": grid_charge_part(hass, coordinator),
     }
+
+
+# (#1362) how SEM may start a grid charge: the keys a user sets, and — when
+# none is set — the selects on the battery's own device(s), so an assistant
+# can name the one to pick. Read only; the user sets it.
+_GRID_CHARGE_KEYS = ("battery_charge_select_entity", "battery_charge_select_option",
+                     "battery_force_charge_switch", "battery_target_soc_entity")
+_MAX_SELECTS, _MAX_OPTIONS = 6, 12
+
+
+def grid_charge_part(hass: HomeAssistant, coordinator: Any) -> dict[str, Any]:
+    cfg = getattr(coordinator, "config", None) or {}
+    setting = {k: str(cfg.get(k) or "") or None for k in _GRID_CHARGE_KEYS}
+    configured = bool(setting["battery_charge_select_entity"] and setting["battery_charge_select_option"]) \
+        or bool(setting["battery_force_charge_switch"])
+    out: dict[str, Any] = {"configured": configured,
+                           "where": "Configuration tab, All settings, Battery control",
+                           **{k: v for k, v in setting.items() if v}}
+    if configured:
+        return out
+    ed = getattr(getattr(coordinator, "_sensor_reader", None), "_energy_dashboard_config", None)
+    try:
+        from .ha_energy_reader import battery_units
+        units = [u for u in battery_units(ed) if isinstance(u, str) and u]
+    except Exception:  # noqa: BLE001 — a half-started SEM has none yet
+        units = []
+    reg = er.async_get(hass)
+    devices = {getattr(reg.async_get(u), "device_id", None) for u in units} - {None}
+    found = []
+    for dev in devices:
+        for e in er.async_entries_for_device(reg, dev):
+            if e.domain not in ("select", "input_select") or len(found) >= _MAX_SELECTS:
+                continue
+            st = hass.states.get(e.entity_id)
+            opts = (st.attributes.get("options") if st else None) or []
+            if opts:
+                found.append({"entity": e.entity_id,
+                              "name": (st.attributes.get("friendly_name") if st else None) or e.entity_id,
+                              "current": st.state if st else None,
+                              "options": [str(o) for o in opts][:_MAX_OPTIONS]})
+    out["selects_on_battery_device"] = found
+    return out
 
 
 def _hardware_domains(hass: HomeAssistant, coordinator: Any) -> list[str]:

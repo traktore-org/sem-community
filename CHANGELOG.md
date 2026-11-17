@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **"Why" answers from what a device does now** (#1086). A missing reading counts as unknown, never as 0.
 - 📝 **Docs and README claims are now tested** (#1377). Each setting the guides name has a dashboard field; README claims match the code.
 
+- ✨ **An AI assistant can tell you how to set up a grid charge** (#1362). It names the battery's selects and options to pick.
 # [2.3.0-beta.18] — 17.11.2026
 
 - 📝 **README shows 2.3: new dashboard, first-run checklist and the AI assistant** (#1086). All screenshots retaken.
