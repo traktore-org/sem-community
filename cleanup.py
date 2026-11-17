@@ -41,6 +41,7 @@ _LOGGER = logging.getLogger(__name__)
 #:   coordinator/coordinator.py (#955) -> f"sem.export_guard.{entry_id}"
 #:   coordinator/coordinator.py (#1180) -> f"sem.charge_target.{entry_id}"
 #:   coordinator/coordinator.py (#1181) -> f"sem.forced_charge.{entry_id}"
+#:   coordinator/coordinator.py (#1362) -> f"sem.battery_hold.{entry_id}"
 _PER_ENTRY_STORE_FORMATS: tuple[str, ...] = (
     f"{DOMAIN}_{{entry_id}}_energy",
     f"{DOMAIN}_{{entry_id}}_daily",
@@ -59,6 +60,8 @@ _PER_ENTRY_STORE_FORMATS: tuple[str, ...] = (
     "sem.charge_target.{entry_id}",
     # (#1181) coordinator/coordinator.py — the forced charges SEM started
     "sem.forced_charge.{entry_id}",
+    # (#1362) coordinator/coordinator.py — the selects SEM turned to a hold
+    "sem.battery_hold.{entry_id}",
 )
 
 #: Per-entry stores whose key carries a SECOND scope (a battery id), so they

@@ -333,6 +333,8 @@ const STRUCTURAL_KEYS = new Set([
     'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
     // (#1346) the select that starts a grid charge, and its charge option
     'battery_charge_select_entity', 'battery_charge_select_option',
+    // (#1362) the select that holds the battery and its hold option
+    'battery_hold_select_entity', 'battery_hold_select_option',
     // (#1362) the charge switch and the charge target: read at adapter
     // construction, so they stage and reload like the select pair
     'battery_force_charge_switch', 'battery_target_soc_entity',
@@ -1841,7 +1843,8 @@ class SEMConfigCard extends SEMLitBase {
                                 'config_force_discharge_entity', ['number', 'input_number'], i, n, opts)}
                             ${this._renderBatteryListPicker('battery_strategy_entities',
                                 'config_strategy_entity', ['select', 'input_select'], i, n, opts)}`)}
-                            ${this._renderBatteryChargeFields(opts, n)}`;
+                            ${this._renderBatteryChargeFields(opts, n)}
+                            ${this._renderBatteryHoldFields(opts)}`;
                     }
                     return html`
                         ${this._renderPicker('battery_force_discharge_control_entity',
@@ -1851,6 +1854,7 @@ class SEMConfigCard extends SEMLitBase {
                             'config_strategy_entity', 'select', null, opts,
                             'config_help_strategy_entity')}
                         ${this._renderBatteryChargeFields(opts, 1)}
+                        ${this._renderBatteryHoldFields(opts)}
                         ${opts['battery_strategy_control_entity'] ? html`
                             ${this._renderTextOption('battery_strategy_active_value',
                                 'config_strategy_val_active', opts,
@@ -2527,6 +2531,9 @@ class SEMConfigCard extends SEMLitBase {
                 if (optionKey === 'battery_charge_select_entity' && !val) {
                     this._pending['battery_charge_select_option'] = '';
                 }
+                if (optionKey === 'battery_hold_select_entity' && !val) {
+                    this._pending['battery_hold_select_option'] = '';
+                }
                 this.requestUpdate();
             } else {
                 this._saveOption(optionKey, val, optionKey);
@@ -2578,15 +2585,35 @@ class SEMConfigCard extends SEMLitBase {
                     'config_help_charge_target_entity')}`}`;
     }
 
-    // (#1346) One line when only half of the select pair is set: the pair
+    // (#1362) The hold select, for one battery AND for several: one shared
+    // setting, like the charge select. For an inverter with no discharge limit
+    // number: SEM sets the option to keep the battery for a dearer hour.
+    _renderBatteryHoldFields(opts) {
+        return html`
+            ${this._renderPicker('battery_hold_select_entity',
+                'config_hold_select_entity', ['select', 'input_select'], null, opts,
+                'config_help_hold_select_entity')}
+            ${this._renderSelectOptionPicker('battery_hold_select_option',
+                'config_hold_select_option', 'battery_hold_select_entity',
+                opts, 'config_help_hold_select_option')}
+            ${this._renderChargeSelectHint(opts, 'battery_hold_select_entity',
+                'battery_hold_select_option', 'config_hold_select_need_option',
+                'config_hold_select_need_select')}`;
+    }
+
+    // (#1346) One line when only half of a select pair is set: the pair
     // does nothing until both are, and a silent half is a trap.
-    _renderChargeSelectHint(opts) {
+    _renderChargeSelectHint(opts,
+        selKey = 'battery_charge_select_entity',
+        optKey = 'battery_charge_select_option',
+        needOption = 'config_charge_select_need_option',
+        needSelect = 'config_charge_select_need_select') {
         const val = (k) => String(Object.prototype.hasOwnProperty.call(this._pending, k)
             ? this._pending[k] : (opts[k] || '')).trim();
-        const sel = val('battery_charge_select_entity');
-        const opt = val('battery_charge_select_option');
+        const sel = val(selKey);
+        const opt = val(optKey);
         if (!!sel === !!opt) return nothing;
-        const key = sel ? 'config_charge_select_need_option' : 'config_charge_select_need_select';
+        const key = sel ? needOption : needSelect;
         return html`<div class="setting-help-text">${this._t(key)}</div>`;
     }
 

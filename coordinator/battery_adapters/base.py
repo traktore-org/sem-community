@@ -56,6 +56,8 @@ def unload_release_reason(adapter, was_observer: bool) -> Optional[str]:
         return None
     if getattr(adapter, "_forcible_charging", False) or getattr(adapter, "_forcible_discharging", False):
         return "a forcible operation SEM started is still active"
+    if getattr(adapter, "hold_active", False) is True:     # (#1362)
+        return "a hold SEM set through a select is still in force"
     charge = getattr(adapter, "_charge_adapter", None)
     if charge is not None and bool(getattr(charge, "is_active", False)):
         return "a forced charge SEM started is still active"
@@ -104,6 +106,10 @@ async def async_release_batteries_on_unload(coordinator) -> dict:
             outcome[bid] = ("observer mode — nothing was ever commanded, nothing written"
                             if was_observer else "nothing commanded in this lifetime — left as found")
             continue
+        try:
+            adapter._hand_back = True       # (#1362) a hold goes back now
+        except Exception:  # noqa: BLE001 — a read-only stand-in in tests
+            pass
         try:
             await adapter.command_normal()
             # (#1181) a stop that failed records no NORMAL: say so, there is
@@ -393,6 +399,19 @@ class BatteryControlAdapter(ABC):
         "no discharge limit entity — SEM cannot cap this battery, so it "
         "covers any load on the meter, the car included")
 
+    #: (#1362) a select can hold a battery, not cap it
+    NO_PARTIAL_HOLD_ERROR = (
+        "this battery is held or released through a select, which cannot "
+        "cap it at a part of its power — SEM does not hold it for a limit "
+        "above 0 W, so it covers the whole house")
+    #: (#1362) Off or the unload hand-back is running: a hold goes back now
+    _hand_back: bool = False
+    #: (#1362) this battery's own power this cycle (SEM's sign), set by the
+    #: actuator from the decision; None = no reading
+    _pack_w: "Optional[float]" = None
+    #: (#1362) how ``last_error`` names a hold that did not go out or back
+    HOLD_ERROR = "hold by select"
+
     def _discharge_limit_unwritable(self) -> bool:
         """(#1066) True when a LIMIT_DISCHARGE has nowhere to go — and say so.
 
@@ -422,6 +441,7 @@ class BatteryControlAdapter(ABC):
     def _clear_no_limit_error(self) -> None:
         """(#1066) The gap is only an error while a limit is asked for."""
         if self._last_error in (self.NO_DISCHARGE_LIMIT_ERROR,
+                                self.NO_PARTIAL_HOLD_ERROR,
                                 self.NO_PERCENT_BASE_ERROR,
                                 self._limit_floor_said):
             self._last_error = None
@@ -883,6 +903,13 @@ class BatteryControlAdapter(ABC):
         still sends nothing. Brands that keep no such record (Huawei reads
         its own status sensor, Deye its snapshot) do nothing here. Never
         raises."""
+        # (#1362) a battery held through a select, the same record rule
+        hold = getattr(self, "async_adopt_hold", None)
+        if hold is not None:
+            try:
+                await hold(observer)
+            except Exception:  # noqa: BLE001 — a record never costs a cycle
+                _LOGGER.debug("hold not adopted", exc_info=True)
         charge = getattr(self, "_charge_adapter", None)
         adopt = getattr(charge, "adopt_running", None)
         if adopt is None:

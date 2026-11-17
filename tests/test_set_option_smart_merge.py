@@ -305,6 +305,7 @@ class TestStructuralKeysVisibility:
             "battery_strategy_control_entity",
             # (#1346) the select that starts a grid charge, and its option
             "battery_charge_select_entity", "battery_charge_select_option",
+            "battery_hold_select_entity", "battery_hold_select_option",
             # (#1362) the charge switch, set in the card
             "battery_force_charge_switch",
             "battery_setpoint_bidirectional",

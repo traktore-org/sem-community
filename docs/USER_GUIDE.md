@@ -214,6 +214,7 @@ the car always needs enough spare sun first (the Solar Gate).
 | `battery_discharge_protection_enabled` | true | Protect battery during night charging |
 | `battery_max_discharge_power` | 5000W | Maximum battery discharge rate (500-10000W) |
 | `battery_discharge_control_entity` | — | Number entity to control inverter discharge limit |
+| `battery_hold_select_entity` / `battery_hold_select_option` | — | **(2.3)** For an inverter with no discharge limit number: a select and its option that stops discharge. SEM holds the battery through it for a dearer hour and puts it back (see the Setup guide) |
 | `battery_force_discharge_control_entity` | — | **(v1.7.3)** Number entity to control battery force-discharge power (per-battery, all brands) |
 | `battery_setpoint_model` | `signed` | **(2.2)** How SEM's signed watts reach that entity: `signed`, `inverted` (Victron ESS), `direction_select` (Anker Solix) |
 | `battery_power_direction_entity` | — | **(2.2)** The charge/discharge select a `direction_select` setpoint needs; `battery_direction_discharge_value` / `battery_direction_charge_value` name its options (default *discharge* / *charge*) |

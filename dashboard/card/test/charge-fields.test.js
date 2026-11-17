@@ -91,3 +91,22 @@ test('the Battery control section hands both counts to the fields', () => {
         assert.deepEqual(got, want, `${n} batteries`);
     }
 });
+
+// (#1362) the hold select: the same shared setting for any battery count
+const HOLD = ['battery_hold_select_entity', 'battery_hold_select_option'];
+
+test('the hold select pair shows for one battery and for two', () => {
+    for (const n of [1, 2]) {
+        const el = card({}, n);
+        el._renderBatteryHoldFields({});
+        assert.deepEqual(el.pickers, HOLD, `${n} batteries`);
+    }
+});
+
+test('the Battery control section renders the hold fields for both counts', () => {
+    for (const n of [1, 2]) {
+        const el = card({}, n);
+        el._renderTariff(T_);
+        assert.deepEqual(el.pickers.filter((k) => HOLD.includes(k)), HOLD, `${n} batteries`);
+    }
+});

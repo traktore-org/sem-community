@@ -433,6 +433,10 @@ class BatteryDecision:
     pack_idle_soc: Optional[float] = field(default=None, compare=False)
     #: …and whether its own power moved more than 100 W either way.
     pack_moves: bool = field(default=False, compare=False)
+    #: (#1362) the pack's own power this cycle (SEM's sign: below 0 is
+    #: discharge) when it was read, else ``None`` — for the check that a
+    #: hold made through a select is kept.
+    pack_w: Optional[float] = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)

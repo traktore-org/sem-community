@@ -338,6 +338,10 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # read at adapter construction like the entities above.
     "battery_charge_select_entity",
     "battery_charge_select_option",
+    # (#1362) the select that holds the battery (no discharge-limit number)
+    # and its hold option — read at adapter construction too.
+    "battery_hold_select_entity",
+    "battery_hold_select_option",
     # (#1362) the charge switch and target, set in the card: read at adapter
     # construction too. (The target is also in MODULE_EVIDENCE_KEYS; the
     # card/backend parity test reads this literal only.)

@@ -81,6 +81,8 @@ BATTERY_WIRING_KEYS: tuple[str, ...] = (
     # (#1346) the select SEM sets to start a grid charge: only a battery
     # has one
     "battery_charge_select_entity",
+    # (#1362) the select SEM sets to hold a battery: only a battery has one
+    "battery_hold_select_entity",
     # (#1358) the inverter's own end-of-discharge level, read every plan
     "battery_discharge_end_soc_entity",
     # (#923, ruflo) seeded by the config flow when it finds a battery-mode

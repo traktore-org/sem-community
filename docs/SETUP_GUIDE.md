@@ -1212,6 +1212,52 @@ ends the charge itself.
 Without the SEM dashboard, set both values with the service
 `solar_energy_management.set_option`.
 
+### A battery held through a select (#1362)
+
+**Your inverter has no discharge limit of its own in this mode. If Home Assistant
+stops while a battery is held, it stays held until SEM runs again and puts the
+select back.**
+
+Some inverters have no number that limits discharge, only a mode select. One
+option of it stops the battery giving, and the house runs from the grid. Set it
+in the Configuration tab, All settings, Battery control:
+
+1. **Discharge-hold select**: pick the select.
+2. **Option that stops discharge**: pick it from that select's options, then
+   Apply.
+
+Example, two batteries behind one inverter in the DESS Monitor integration:
+select = `select.<inverter>_output_mode`, option = `Utility`. SEM sets `Utility`
+to hold the batteries and puts the select back to what it showed (`SBU`) after.
+
+Turn on **House as a battery sink** (`switch.sem_battery_house_sink_enabled`).
+It is off by default. With it on, SEM holds the battery in the cheap hours of a
+tariff that has dearer hours ahead the same day, and lets it go when the dear
+hours start. With a G12w calendar that is the night, and 13:00 to 15:00, on
+weekdays. A weekend day has one price, so nothing is held.
+
+How it works:
+
+- SEM holds only when it wants **no discharge at all**. A select cannot limit
+  to 500 W, so any other limit puts the select back and the battery covers the
+  house. The battery's `last_error` says so.
+- The option is saved to disk before SEM writes it, and put back on normal, on
+  Off, on unload and after a restart. A choice you make by hand is left alone.
+- A hold lasts at least 30 minutes (Off and unload never wait). SEM writes this
+  select at most 12 times a day; over that it stays as it is.
+- SEM checks the hold. If the select does not show the option within a minute
+  it sends once more, then gives up. If the battery still gives over 100 W five
+  minutes after the select shows the option, the inverter ignores the hold: SEM
+  puts the select back and tries no hold for 24 hours. The battery's
+  `last_error` says why.
+- It works only for a battery without a discharge-limit number, and the hold
+  select must not be the grid-charge select.
+- It is independent of the grid charge: two selects, two records, each put back
+  on its own. SEM does not change the hold during a grid charge. Some inverters
+  charge from the grid only in one mode: test by hand which combination of the
+  two selects charges, then set the hold option to match.
+- Observer mode sends nothing.
+
 ### A battery charged through its operating mode or backup reserve (#1377)
 
 **Your battery has no limit of its own in this mode. If Home Assistant stops

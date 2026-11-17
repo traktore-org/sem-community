@@ -20,6 +20,7 @@ from ..power_control import (
 )
 from .base import BatteryControlAdapter
 from .charge_select import select_setup
+from .hold_select import SETTLING, SelectHold, hold_setup
 from ...utils.select_option import listed_option
 
 _LOGGER = logging.getLogger(__name__)
@@ -126,6 +127,8 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             self._charge_adapter = GenericChargeAdapter(hass, config)
         except Exception:  # noqa: BLE001
             self._charge_adapter = None
+        # (#1362) a battery held through a select (no discharge-limit number)
+        self._hold = SelectHold(hass, config)
         # #531: adopt a stranded API strategy left by a prior instance.
         self._detect_stranded_strategy()
 
@@ -529,6 +532,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         # the charge switch off, so a forced charge SEM started stops first.
         # A failed stop records no NORMAL; the rest still goes out.
         stopped = await self._stop_own_charge()
+        stopped = await self._release_hold() and stopped    # (#1362)
         # (#1346) the block is over: a select that refused may be asked
         # again in the next block (at most two writes each)
         _ca = self._charge_adapter
@@ -548,6 +552,13 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             self._last_intent = BatteryIntent.NORMAL
 
     async def command_off(self) -> None:
+        self._hand_back = True          # (#1362) Off never waits to release
+        try:
+            await self._command_off()
+        finally:
+            self._hand_back = False
+
+    async def _command_off(self) -> None:
         """#523 (Rien): a Sessy in 'Off' should sit IDLE (no charge/discharge),
         not self-consume and not stay in ``eco``. Set the idle power strategy
         and zero the setpoint, then stay silent (one-shot like the base). A
@@ -561,6 +572,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         # (#1181) idle means no grid charge of SEM's either; a stop that
         # failed records no OFF, so the next cycle tries again
         stopped = await self._stop_own_charge()
+        stopped = await self._release_hold() and stopped    # (#1362)
         await self._zero_setpoint()  # (#1005)
         await self._set_strategy(self._strategy_off)
         # (#1175) Hands off means no limit of SEM's left behind either.
@@ -571,6 +583,9 @@ class GenericBatteryAdapter(BatteryControlAdapter):
     async def command_limit_discharge(self, watts: float) -> None:
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         await self._set_strategy(self._strategy_self_consume)
+        if self._hold_wired():                          # (#1362)
+            await self._limit_by_hold(watts)
+            return
         if self._discharge_limit_unwritable():          # (#1066)
             self._last_intent = BatteryIntent.LIMIT_DISCHARGE
             return
@@ -579,6 +594,68 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             self._last_intent = BatteryIntent.LIMIT_DISCHARGE
             return
         await self._apply_discharge_limit(watts)
+        self._last_intent = BatteryIntent.LIMIT_DISCHARGE
+
+    # ── (#1362) a hold through a select ──────────────────────────────
+    def _hold_wired(self) -> bool:
+        """The select holds the battery only where no discharge-limit number
+        exists: that number is the better control."""
+        return (not self._discharge_control_entity
+                and hold_setup(self._config) is not None)
+
+    @property
+    def hold_active(self) -> bool:
+        """SEM holds this battery through the select and has not put it
+        back: the unload hand-back must release it."""
+        return self._hold.active
+
+    async def async_adopt_hold(self, observer: bool = False) -> None:
+        """Before the decisions: take over a hold of the last lifetime, or
+        put back one whose setting was cleared (reads only in observer)."""
+        await self._hold.restore_orphan(observer)
+        await self._hold.adopt()
+
+    @property
+    def hold_refused(self) -> bool:
+        """The inverter did not keep SEM's hold lately: none is tried for
+        24 h, and nothing may count a battery as held."""
+        return self._hold.refused
+
+    async def _release_hold(self, urgent: "bool | None" = None) -> bool:
+        """Put the select back. False: it is still held (``last_error``).
+        Off and the unload hand-back never wait for the minimum hold."""
+        err = await self._hold.release(
+            self._hand_back if urgent is None else urgent)
+        if err is None:
+            self._clear_hold_error()
+            return True
+        if err != SETTLING:
+            self._last_error = f"{self.HOLD_ERROR}: {err}"
+        return False
+
+    def _clear_hold_error(self) -> None:
+        if str(self._last_error or "").startswith(self.HOLD_ERROR):
+            self._last_error = None
+
+    async def _limit_by_hold(self, watts: float) -> None:
+        """A select holds or releases; it cannot cap. Hold only for 0 W.
+        Any other limit releases the hold and says SEM cannot cap."""
+        if watts > 0:
+            if await self._release_hold(urgent=False):
+                self._last_discharge_limit_w = -1.0
+                self._last_error = self.NO_PARTIAL_HOLD_ERROR
+                self._last_intent = BatteryIntent.LIMIT_DISCHARGE
+            return
+        err = await self._hold.hold(self._pack_w)
+        if err == SETTLING:
+            return
+        if err is not None:
+            self._last_discharge_limit_w = -1.0
+            self._last_error = f"{self.HOLD_ERROR}: {err}"
+        else:
+            self._last_discharge_limit_w = 0.0
+            self._clear_no_limit_error()
+            self._clear_hold_error()
         self._last_intent = BatteryIntent.LIMIT_DISCHARGE
 
     async def command_force_charge(

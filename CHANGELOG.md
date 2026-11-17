@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Hold the battery through a mode select** (#1362). For inverters with no discharge limit: SEM keeps it for dear hours and checks the hold works.
+
 # [2.3.0-beta.18] — 17.11.2026
 
 - 📝 **README shows 2.3: new dashboard, first-run checklist and the AI assistant** (#1086). All screenshots retaken.

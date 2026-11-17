@@ -394,6 +394,8 @@ async def _dispatch_battery(
     # stop, a held stop after no room, observer, another intent — asks for
     # none, so a pack SEM did not ask to charge is never read as full.
     _set(adapter, "_sem_charge_asked_w", 0.0)
+    # (#1362) the pack's own power, for the check that a hold is kept
+    _set(adapter, "_pack_w", getattr(decision, "pack_w", None))
     # (#1165) …and the same for a sale, set by the FORCE_DISCHARGE branch.
     _set(adapter, "_sem_discharge_asked_w", 0.0)
     if (decision.intent is not BatteryIntent.LIMIT_DISCHARGE

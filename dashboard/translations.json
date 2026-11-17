@@ -3035,7 +3035,13 @@
     "setup_check_n": "Věcí ke kontrole: {n}",
     "setup_ai_hint": "Používáte AI asistenta? Zeptejte se: \"Co SEM chybí?\"",
     "setup_chip_control": "SEM řídí",
-    "setup_chip_setup": "Nastavení {done} z {total}"
+    "setup_chip_setup": "Nastavení {done} z {total}",
+    "config_hold_select_entity": "Volba pro zadržení vybíjení",
+    "config_hold_select_option": "Možnost, která zastaví vybíjení",
+    "config_hold_select_need_option": "Vyberte možnost, která zastaví vybíjení baterie.",
+    "config_hold_select_need_select": "Nejprve vyberte volbu.",
+    "config_help_hold_select_entity": "Pro střídač bez čísla pro limit vybíjení: volba s možností, která zastaví vybíjení baterie (například Utility, kdy dům běží ze sítě a baterie odpočívá). SEM tuto možnost nastaví, aby baterii ušetřil na dražší hodinu, a potom volbu vrátí do původního stavu. Vypnuto, dokud nejsou nastaveny toto pole i možnost níže.",
+    "config_help_hold_select_option": "Možnost této volby, která zastaví vybíjení baterie. SEM baterii drží jen tehdy, když nechce žádné vybíjení; nedokáže omezit na část výkonu. SEM volbu vrátí jen dokud stále ukazuje tuto možnost; změna provedená ručně zůstane beze změny."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -6073,7 +6079,13 @@
     "setup_check_n": "{n} ting at tjekke",
     "setup_ai_hint": "Bruger du en AI-assistent? Spørg den: \"Hvad mangler SEM?\"",
     "setup_chip_control": "SEM styrer",
-    "setup_chip_setup": "Opsætning {done} af {total}"
+    "setup_chip_setup": "Opsætning {done} af {total}",
+    "config_hold_select_entity": "Valg til at holde afladningen tilbage",
+    "config_hold_select_option": "Valg, der stopper afladning",
+    "config_hold_select_need_option": "Vælg det valg, der stopper batteriets afladning.",
+    "config_hold_select_need_select": "Vælg først valglisten.",
+    "config_help_hold_select_entity": "Til en inverter uden tal for afladningsgrænse: en valgliste med et valg, der stopper batteriets afladning (for eksempel Utility, hvor huset kører på nettet, og batteriet hviler). SEM sætter dette valg for at spare batteriet til en dyrere time og stiller derefter valglisten tilbage, som den var. Slået fra, indtil dette felt og valget nedenfor begge er sat.",
+    "config_help_hold_select_option": "Valget på den valgliste, der stopper batteriets afladning. SEM holder kun tilbage, når det slet ikke vil have afladning; det kan ikke begrænse til en del af effekten. SEM stiller kun valglisten tilbage, så længe den stadig viser dette valg; en ændring, du har lavet i hånden, bliver ikke rørt."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -9111,7 +9123,13 @@
     "setup_check_n": "{n} Punkte zu prüfen",
     "setup_ai_hint": "Sie nutzen einen KI-Assistenten? Fragen Sie: \"Was fehlt SEM noch?\"",
     "setup_chip_control": "SEM steuert",
-    "setup_chip_setup": "Einrichtung {done} von {total}"
+    "setup_chip_setup": "Einrichtung {done} von {total}",
+    "config_hold_select_entity": "Auswahl zum Halten der Entladung",
+    "config_hold_select_option": "Option, die die Entladung stoppt",
+    "config_hold_select_need_option": "Wähle die Option, die das Entladen der Batterie stoppt.",
+    "config_hold_select_need_select": "Wähle zuerst die Auswahl.",
+    "config_help_hold_select_entity": "Für einen Wechselrichter ohne Zahl für die Entladegrenze: eine Auswahl mit einer Option, die das Entladen der Batterie stoppt (zum Beispiel Utility: das Haus läuft aus dem Netz, die Batterie ruht). SEM setzt diese Option, um die Batterie für eine teurere Stunde aufzusparen, und stellt die Auswahl danach zurück. Aus, bis dieses Feld und die Option darunter gesetzt sind.",
+    "config_help_hold_select_option": "Die Option dieser Auswahl, die das Entladen der Batterie stoppt. SEM hält nur, wenn gar keine Entladung gewünscht ist; es kann nicht auf einen Teil der Leistung begrenzen. SEM stellt die Auswahl nur zurück, solange sie noch diese Option zeigt; eine Änderung von Hand bleibt unberührt."
   },
   "en": {
     "% of limit": "% of limit",
@@ -12149,7 +12167,13 @@
     "setup_check_n": "{n} things to check",
     "setup_ai_hint": "Using an AI assistant? Ask it: \"What is SEM missing?\"",
     "setup_chip_control": "SEM is in control",
-    "setup_chip_setup": "Setup {done} of {total}"
+    "setup_chip_setup": "Setup {done} of {total}",
+    "config_hold_select_entity": "Discharge-hold select",
+    "config_hold_select_option": "Option that stops discharge",
+    "config_hold_select_need_option": "Pick the option that stops the battery discharging.",
+    "config_hold_select_need_select": "Pick the select first.",
+    "config_help_hold_select_entity": "For an inverter with no discharge limit number: a select with an option that stops the battery discharging (for example Utility, where the house runs from the grid and the battery rests). SEM sets that option to keep the battery for a dearer hour and puts the select back to what it was after. Off until this and the option below are both set.",
+    "config_help_hold_select_option": "The option of that select that stops the battery discharging. SEM holds only when it wants no discharge at all; it cannot cap at a part of the power. SEM puts the select back only while it still shows this option; a change you make by hand is left alone."
   },
   "es": {
     "% of limit": "% del límite",
@@ -15187,7 +15211,13 @@
     "setup_check_n": "{n} cosas por revisar",
     "setup_ai_hint": "¿Usa un asistente de IA? Pregúntele: \"¿Qué le falta a SEM?\"",
     "setup_chip_control": "SEM tiene el control",
-    "setup_chip_setup": "Configuración {done} de {total}"
+    "setup_chip_setup": "Configuración {done} de {total}",
+    "config_hold_select_entity": "Selector para retener la descarga",
+    "config_hold_select_option": "Opción que detiene la descarga",
+    "config_hold_select_need_option": "Elige la opción que detiene la descarga de la batería.",
+    "config_hold_select_need_select": "Elige primero el selector.",
+    "config_help_hold_select_entity": "Para un inversor sin número de límite de descarga: un selector con una opción que detiene la descarga de la batería (por ejemplo Utility, donde la casa funciona con la red y la batería descansa). SEM pone esa opción para reservar la batería para una hora más cara y después devuelve el selector a como estaba. Desactivado hasta que este campo y la opción de abajo estén definidos.",
+    "config_help_hold_select_option": "La opción de ese selector que detiene la descarga de la batería. SEM solo retiene cuando no quiere ninguna descarga; no puede limitar a una parte de la potencia. SEM solo devuelve el selector mientras siga mostrando esta opción; un cambio hecho a mano se respeta."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -18225,7 +18255,13 @@
     "setup_check_n": "{n} asiaa tarkistettavana",
     "setup_ai_hint": "Käytätkö tekoälyavustajaa? Kysy siltä: \"Mitä SEM:ltä puuttuu?\"",
     "setup_chip_control": "SEM ohjaa",
-    "setup_chip_setup": "Asetukset {done}/{total}"
+    "setup_chip_setup": "Asetukset {done}/{total}",
+    "config_hold_select_entity": "Valinta purkamisen pidättämiseen",
+    "config_hold_select_option": "Vaihtoehto, joka pysäyttää purkamisen",
+    "config_hold_select_need_option": "Valitse vaihtoehto, joka pysäyttää akun purkamisen.",
+    "config_hold_select_need_select": "Valitse ensin valinta.",
+    "config_help_hold_select_entity": "Vaihtosuuntaajalle, jossa ei ole purkurajan lukua: valinta, jossa on vaihtoehto, joka pysäyttää akun purkamisen (esimerkiksi Utility, jossa talo toimii verkosta ja akku lepää). SEM asettaa tämän vaihtoehdon säästääkseen akun kalliimmalle tunnille ja palauttaa sen jälkeen valinnan entiselleen. Pois käytöstä, kunnes tämä kenttä ja alla oleva vaihtoehto on asetettu.",
+    "config_help_hold_select_option": "Sen valinnan vaihtoehto, joka pysäyttää akun purkamisen. SEM pidättää vain, kun se ei halua purkua lainkaan; se ei voi rajoittaa osaan tehosta. SEM palauttaa valinnan vain niin kauan kuin se näyttää vielä tätä vaihtoehtoa; käsin tehty muutos jätetään rauhaan."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -21263,7 +21299,13 @@
     "setup_check_n": "{n} points à vérifier",
     "setup_ai_hint": "Vous utilisez un assistant IA ? Demandez-lui : \"Que manque-t-il à SEM ?\"",
     "setup_chip_control": "SEM pilote",
-    "setup_chip_setup": "Configuration {done} sur {total}"
+    "setup_chip_setup": "Configuration {done} sur {total}",
+    "config_hold_select_entity": "Sélecteur de maintien de la décharge",
+    "config_hold_select_option": "Option qui arrête la décharge",
+    "config_hold_select_need_option": "Choisissez l'option qui arrête la décharge de la batterie.",
+    "config_hold_select_need_select": "Choisissez d'abord le sélecteur.",
+    "config_help_hold_select_entity": "Pour un onduleur sans valeur de limite de décharge : un sélecteur avec une option qui arrête la décharge de la batterie (par exemple Utility, où la maison fonctionne sur le réseau et la batterie se repose). SEM règle cette option pour garder la batterie pour une heure plus chère, puis remet le sélecteur comme il était. Inactif tant que ce champ et l'option ci-dessous ne sont pas renseignés.",
+    "config_help_hold_select_option": "L'option de ce sélecteur qui arrête la décharge de la batterie. SEM ne retient la batterie que s'il ne veut aucune décharge ; il ne peut pas limiter à une partie de la puissance. SEM ne remet le sélecteur que tant qu'il affiche encore cette option ; un changement fait à la main est laissé tel quel."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -24301,7 +24343,13 @@
     "setup_check_n": "{n} ellenőrizendő dolog",
     "setup_ai_hint": "MI-asszisztenst használ? Kérdezze meg: \"Mi hiányzik a SEM-nek?\"",
     "setup_chip_control": "A SEM irányít",
-    "setup_chip_setup": "Beállítás {done} / {total}"
+    "setup_chip_setup": "Beállítás {done} / {total}",
+    "config_hold_select_entity": "Kiválasztó a kisütés visszatartásához",
+    "config_hold_select_option": "Kisütést leállító opció",
+    "config_hold_select_need_option": "Válaszd ki az opciót, amely leállítja az akkumulátor kisütését.",
+    "config_hold_select_need_select": "Előbb válaszd ki a kiválasztót.",
+    "config_help_hold_select_entity": "Kisütési korlát számot nem tartalmazó inverterhez: egy kiválasztó egy olyan opcióval, amely leállítja az akkumulátor kisütését (például Utility, ahol a ház a hálózatról megy, az akkumulátor pihen). A SEM ezt az opciót állítja be, hogy az akkumulátort egy drágább órára tartogassa, majd visszaállítja a kiválasztót az eredetire. Kikapcsolva, amíg ez a mező és az alatta lévő opció is be nincs állítva.",
+    "config_help_hold_select_option": "A kiválasztó azon opciója, amely leállítja az akkumulátor kisütését. A SEM csak akkor tartja vissza, ha egyáltalán nem kér kisütést; nem tud a teljesítmény egy részére korlátozni. A SEM csak addig állítja vissza a kiválasztót, amíg az még ezt az opciót mutatja; a kézzel végzett módosítást érintetlenül hagyja."
   },
   "it": {
     "% of limit": "% del limite",
@@ -27339,7 +27387,13 @@
     "setup_check_n": "{n} cose da controllare",
     "setup_ai_hint": "Usi un assistente IA? Chiedigli: \"Cosa manca a SEM?\"",
     "setup_chip_control": "SEM ha il controllo",
-    "setup_chip_setup": "Configurazione {done} di {total}"
+    "setup_chip_setup": "Configurazione {done} di {total}",
+    "config_hold_select_entity": "Selettore per trattenere la scarica",
+    "config_hold_select_option": "Opzione che ferma la scarica",
+    "config_hold_select_need_option": "Scegli l'opzione che ferma la scarica della batteria.",
+    "config_hold_select_need_select": "Scegli prima il selettore.",
+    "config_help_hold_select_entity": "Per un inverter senza numero per il limite di scarica: un selettore con un'opzione che ferma la scarica della batteria (per esempio Utility, dove la casa funziona dalla rete e la batteria riposa). SEM imposta quell'opzione per tenere la batteria per un'ora più cara e poi rimette il selettore com'era. Disattivato finché questo campo e l'opzione sotto non sono impostati.",
+    "config_help_hold_select_option": "L'opzione di quel selettore che ferma la scarica della batteria. SEM trattiene solo quando non vuole alcuna scarica; non può limitare a una parte della potenza. SEM rimette il selettore solo finché mostra ancora questa opzione; una modifica fatta a mano resta com'è."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -30377,7 +30431,13 @@
     "setup_check_n": "{n} dingen om te controleren",
     "setup_ai_hint": "Gebruikt u een AI-assistent? Vraag: \"Wat mist SEM nog?\"",
     "setup_chip_control": "SEM heeft de leiding",
-    "setup_chip_setup": "Instellen {done} van {total}"
+    "setup_chip_setup": "Instellen {done} van {total}",
+    "config_hold_select_entity": "Keuzelijst om ontlading vast te houden",
+    "config_hold_select_option": "Optie die ontladen stopt",
+    "config_hold_select_need_option": "Kies de optie die het ontladen van de batterij stopt.",
+    "config_hold_select_need_select": "Kies eerst de keuzelijst.",
+    "config_help_hold_select_entity": "Voor een omvormer zonder getal voor een ontlaadlimiet: een keuzelijst met een optie die het ontladen van de batterij stopt (bijvoorbeeld Utility, waarbij het huis op het net draait en de batterij rust). SEM zet die optie om de batterij te bewaren voor een duurder uur en zet de keuzelijst daarna terug zoals hij was. Uit tot dit veld en de optie hieronder allebei zijn ingesteld.",
+    "config_help_hold_select_option": "De optie van die keuzelijst die het ontladen van de batterij stopt. SEM houdt de batterij alleen vast als het helemaal geen ontlading wil; het kan niet begrenzen op een deel van het vermogen. SEM zet de keuzelijst alleen terug zolang hij deze optie nog toont; een wijziging met de hand blijft ongemoeid."
   },
   "no": {
     "% of limit": "% av grense",
@@ -33415,7 +33475,13 @@
     "setup_check_n": "{n} ting å sjekke",
     "setup_ai_hint": "Bruker du en AI-assistent? Spør den: \"Hva mangler SEM?\"",
     "setup_chip_control": "SEM styrer",
-    "setup_chip_setup": "Oppsett {done} av {total}"
+    "setup_chip_setup": "Oppsett {done} av {total}",
+    "config_hold_select_entity": "Valg for å holde tilbake utlading",
+    "config_hold_select_option": "Valg som stopper utlading",
+    "config_hold_select_need_option": "Velg valget som stopper utlading av batteriet.",
+    "config_hold_select_need_select": "Velg valglisten først.",
+    "config_help_hold_select_entity": "For en vekselretter uten tall for utladingsgrense: en valgliste med et valg som stopper utlading av batteriet (for eksempel Utility, der huset går på nettet og batteriet hviler). SEM setter dette valget for å spare batteriet til en dyrere time, og setter deretter valglisten tilbake slik den var. Av til dette feltet og valget under begge er satt.",
+    "config_help_hold_select_option": "Valget i den valglisten som stopper utlading av batteriet. SEM holder bare tilbake når det ikke vil ha noen utlading; det kan ikke begrense til en del av effekten. SEM setter valglisten bare tilbake så lenge den fortsatt viser dette valget; en endring du har gjort for hånd blir ikke rørt."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -36453,7 +36519,13 @@
     "setup_check_n": "Rzeczy do sprawdzenia: {n}",
     "setup_ai_hint": "Korzystasz z asystenta AI? Zapytaj: \"Czego brakuje SEM?\"",
     "setup_chip_control": "SEM steruje",
-    "setup_chip_setup": "Konfiguracja {done} z {total}"
+    "setup_chip_setup": "Konfiguracja {done} z {total}",
+    "config_hold_select_entity": "Wybór wstrzymania rozładowania",
+    "config_hold_select_option": "Opcja zatrzymująca rozładowanie",
+    "config_hold_select_need_option": "Wybierz opcję, która zatrzymuje rozładowanie baterii.",
+    "config_hold_select_need_select": "Najpierw wybierz listę.",
+    "config_help_hold_select_entity": "Dla falownika bez liczby limitu rozładowania: lista wyboru z opcją, która zatrzymuje rozładowanie baterii (na przykład Utility, gdzie dom działa z sieci, a bateria odpoczywa). SEM ustawia tę opcję, aby zachować baterię na droższą godzinę, a potem przywraca poprzednią wartość listy. Wyłączone, dopóki to pole i opcja poniżej nie są ustawione.",
+    "config_help_hold_select_option": "Opcja tej listy, która zatrzymuje rozładowanie baterii. SEM wstrzymuje tylko wtedy, gdy nie chce żadnego rozładowania; nie potrafi ograniczyć do części mocy. SEM przywraca listę tylko dopóki nadal pokazuje tę opcję; zmiana wykonana ręcznie zostaje nienaruszona."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -39491,7 +39563,13 @@
     "setup_check_n": "{n} coisas a verificar",
     "setup_ai_hint": "Usa um assistente de IA? Pergunte-lhe: \"O que falta ao SEM?\"",
     "setup_chip_control": "O SEM tem o controlo",
-    "setup_chip_setup": "Configuração {done} de {total}"
+    "setup_chip_setup": "Configuração {done} de {total}",
+    "config_hold_select_entity": "Seletor para reter a descarga",
+    "config_hold_select_option": "Opção que para a descarga",
+    "config_hold_select_need_option": "Escolha a opção que para a descarga da bateria.",
+    "config_hold_select_need_select": "Escolha primeiro o seletor.",
+    "config_help_hold_select_entity": "Para um inversor sem número de limite de descarga: um seletor com uma opção que para a descarga da bateria (por exemplo Utility, em que a casa funciona pela rede e a bateria descansa). O SEM define essa opção para guardar a bateria para uma hora mais cara e depois devolve o seletor ao que era. Desligado até este campo e a opção abaixo estarem definidos.",
+    "config_help_hold_select_option": "A opção desse seletor que para a descarga da bateria. O SEM só retém quando não quer nenhuma descarga; não consegue limitar a uma parte da potência. O SEM só devolve o seletor enquanto ele ainda mostrar esta opção; uma alteração feita à mão é deixada como está."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -42529,7 +42607,13 @@
     "setup_check_n": "{n} lucruri de verificat",
     "setup_ai_hint": "Folosiți un asistent AI? Întrebați-l: \"Ce îi lipsește lui SEM?\"",
     "setup_chip_control": "SEM are controlul",
-    "setup_chip_setup": "Configurare {done} din {total}"
+    "setup_chip_setup": "Configurare {done} din {total}",
+    "config_hold_select_entity": "Selector pentru reținerea descărcării",
+    "config_hold_select_option": "Opțiunea care oprește descărcarea",
+    "config_hold_select_need_option": "Alege opțiunea care oprește descărcarea bateriei.",
+    "config_hold_select_need_select": "Alege mai întâi selectorul.",
+    "config_help_hold_select_entity": "Pentru un invertor fără număr pentru limita de descărcare: un selector cu o opțiune care oprește descărcarea bateriei (de exemplu Utility, unde casa funcționează din rețea și bateria se odihnește). SEM setează această opțiune pentru a păstra bateria pentru o oră mai scumpă și apoi pune selectorul înapoi cum era. Dezactivat până când acest câmp și opțiunea de mai jos sunt setate.",
+    "config_help_hold_select_option": "Opțiunea acelui selector care oprește descărcarea bateriei. SEM reține doar când nu vrea deloc descărcare; nu poate limita la o parte din putere. SEM pune selectorul înapoi doar cât timp mai arată această opțiune; o schimbare făcută manual este lăsată neatinsă."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -45567,7 +45651,13 @@
     "setup_check_n": "{n} saker att kontrollera",
     "setup_ai_hint": "Använder du en AI-assistent? Fråga: \"Vad saknar SEM?\"",
     "setup_chip_control": "SEM styr",
-    "setup_chip_setup": "Inställning {done} av {total}"
+    "setup_chip_setup": "Inställning {done} av {total}",
+    "config_hold_select_entity": "Val för att hålla tillbaka urladdning",
+    "config_hold_select_option": "Val som stoppar urladdning",
+    "config_hold_select_need_option": "Välj valet som stoppar urladdningen av batteriet.",
+    "config_hold_select_need_select": "Välj först listan.",
+    "config_help_hold_select_entity": "För en växelriktare utan tal för urladdningsgräns: en vallista med ett val som stoppar urladdningen av batteriet (till exempel Utility, där huset går på nätet och batteriet vilar). SEM sätter det valet för att spara batteriet till en dyrare timme och ställer sedan tillbaka listan som den var. Av tills både detta fält och valet nedan är satta.",
+    "config_help_hold_select_option": "Valet i den listan som stoppar urladdningen av batteriet. SEM håller bara tillbaka när det inte vill ha någon urladdning alls; det kan inte begränsa till en del av effekten. SEM ställer bara tillbaka listan så länge den fortfarande visar detta val; en ändring du gjort för hand lämnas orörd."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -48605,6 +48695,12 @@
     "setup_check_n": "{n} 项待检查",
     "setup_ai_hint": "在用 AI 助手？问它：“SEM 还缺什么？”",
     "setup_chip_control": "SEM 已接管",
-    "setup_chip_setup": "设置 {done} / {total}"
+    "setup_chip_setup": "设置 {done} / {total}",
+    "config_hold_select_entity": "保留放电的选择项",
+    "config_hold_select_option": "停止放电的选项",
+    "config_hold_select_need_option": "请选择能停止电池放电的选项。",
+    "config_hold_select_need_select": "请先选择该选择项。",
+    "config_help_hold_select_entity": "适用于没有放电限制数值的逆变器：一个带有可停止电池放电的选项的选择项（例如 Utility，此时住宅由电网供电，电池休息）。SEM 会设置该选项，把电池留给更贵的时段，之后再把选择项恢复原样。在此字段和下方选项都设置之前不会启用。",
+    "config_help_hold_select_option": "该选择项中能停止电池放电的选项。SEM 仅在完全不需要放电时才保留电池，无法限制到部分功率。仅当选择项仍显示此选项时，SEM 才会将其恢复；你手动做出的更改不会被改动。"
   }
 }
