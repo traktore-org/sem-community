@@ -273,6 +273,21 @@ test('the card renders every device with its body, the surplus section and the l
     assert.equal(el._rowsNow().map((r) => r.id).join(','), 'load_device_keba,heat_pump,hot_water,battery');
 });
 
+test('(#1373) each battery shows its size beside its reserve; an unset size is a dash', () => {
+    const st = states();
+    st['select.sem_battery_b2_mode'] = S('auto', { options: ['auto', 'off'] });
+    st['number.sem_battery_b2_reserve_soc'] = S(10);
+    st['number.sem_battery_b1_capacity_kwh'] = S(9.8);
+    st['number.sem_battery_b2_capacity_kwh'] = S('unknown');
+    const el = makeCard(st);
+    el._all = true;
+    el._watchIds && el._watchIds();
+    const out = text(el.render());
+    assert.match(out, /battery_size_label/);
+    assert.match(out, /9\.8/);
+    assert.doesNotMatch(out, /undefined|NaN/);
+});
+
 test('loads start folded, chargers and the battery open; a tap and All settings open them', () => {
     const el = makeCard(states());
     const rows = el._rowsNow();
