@@ -3,7 +3,8 @@
 Nothing decides by the goal yet. The controller builds it beside today's code
 each cycle and counts where the two differ. These tests pin that the goal
 agrees with today's decisions everywhere EXCEPT the two documented spots, and
-that the shadow changes and publishes nothing.
+that the shadow changes and publishes nothing. C1 is FIXED (#1369):
+the live code now does what the goal says.
 
 The documented differences (the goal picks ONE side):
   C1  start reads the band's sensor, a switched tank's stop reads the tank's
@@ -395,16 +396,31 @@ class TestC1TheTwoThermometers:
         dev.comfort_offset = 10.0
         return dev
 
-    def test_a_switched_tank_stops_by_the_tank_sensor_today_the_goal_by_the_band(self):
+    def test_a_switched_tank_stops_by_the_band_sensor_like_the_goal(self):
+        # (#1369, C1) start and stop read the band's sensor now
         dev = self._two(tank=45.0, band=61.0)    # band says hot, tank says cool
-        assert dev.stop_condition_met is False                       # today: tank 45
-        assert differences(dev.tank_goal(), dev._goal_seen()).get("must_stop") == (True, False)
+        assert dev.stop_condition_met is True
+        assert differences(dev.tank_goal(), dev._goal_seen()) == {}
         dev = self._two(tank=61.0, band=45.0)
-        assert dev.stop_condition_met is True                        # today: tank 57
-        assert differences(dev.tank_goal(), dev._goal_seen()).get("must_stop") == (False, True)
+        assert dev.stop_condition_met is False
+        assert differences(dev.tank_goal(), dev._goal_seen()) == {}
+
+    def test_start_and_stop_read_the_same_sensor(self):
+        # the band's top is 60 (Keep 52 + Extra 10, capped by Legionella 60)
+        for tank, band in ((45.0, 59.0), (59.0, 45.0), (45.0, 61.0)):
+            dev = self._two(tank=tank, band=band)
+            starts = dev.start_refusal is None
+            stops = dev.stop_condition_met
+            assert starts == (band <= 60.0 - 1.0), (tank, band)
+            assert stops == (band >= 60.0), (tank, band)
+
+    def test_no_band_sensor_reads_the_tank_sensor(self):
+        dev = _tank(_Hass(), 61.0, band=False)
+        assert dev.stop_condition_met is True
+        assert differences(dev.tank_goal(), dev._goal_seen()) == {}
 
     @pytest.mark.asyncio
-    async def test_the_engine_counts_it_once_per_cycle(self):
+    async def test_the_engine_counts_no_difference_any_more(self):
         from custom_components.solar_energy_management.coordinator.surplus_controller import (
             SurplusController,
         )
@@ -415,8 +431,13 @@ class TestC1TheTwoThermometers:
                   battery_reserve_soc=10.0, daylight_remaining_s=3600.0, solar_w=5000.0)
         for _ in range(3):
             await sc.update(4000.0, **kw)
-        assert dev.tank_goal_diffs.get("must_stop", 0) >= 3
-        assert dev.tank_goal_last["must_stop"] == (True, False)
+        assert dev.tank_goal_diffs == {} and dev.tank_goal_errors == 0
+
+
+def _shadow_diff(dev):
+    """A made-up difference: the plumbing tests need one, and no known
+    difference is left (C1 and C2 are fixed)."""
+    return patch.object(dev, "_goal_seen", return_value={"must_stop": True})
 
 
 # ── the shadow itself ───────────────────────────────────────────────────────
@@ -470,8 +491,8 @@ class TestTheShadowChangesNothing:
         from custom_components.solar_energy_management.utils.log_gate import reset_log_gate
         reset_log_gate()
         hass = _Hass()
-        dev = TestC1TheTwoThermometers()._two(tank=45.0, band=61.0)
-        with caplog.at_level("INFO"):
+        dev = _tank(hass, 45.0)
+        with caplog.at_level("INFO"), _shadow_diff(dev):
             for _ in range(5):
                 dev.compare_tank_goal()
         lines = [r for r in caplog.records if "tank goal differs" in r.getMessage()]
@@ -485,8 +506,9 @@ class TestTheShadowChangesNothing:
         assert "goal_shadow" not in UnifiedDeviceRegistry._comfort_payload(dev)
 
     def test_the_counts_are_published_when_there_are_some(self):
-        dev = TestC1TheTwoThermometers()._two(tank=45.0, band=61.0)
-        dev.compare_tank_goal()
+        dev = _tank(_Hass(), 45.0)
+        with _shadow_diff(dev):
+            dev.compare_tank_goal()
         out = UnifiedDeviceRegistry._comfort_payload(dev)
         assert out["goal_shadow"] == {"diffs": {"must_stop": 1}, "errors": 0}
         dev.tank_goal_diffs, dev.tank_goal_errors = {}, 2

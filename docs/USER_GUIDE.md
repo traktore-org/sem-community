@@ -630,6 +630,8 @@ The temperature SEM heats to during solar surplus periods. When surplus power is
 
 If you set the Solar Boost Target to 60°C or above, the Legionella prevention requirement (60°C) is naturally met during sunny days — no separate forced heating cycle is needed on those days. A tank counts as disinfected on its own only at your Legionella target (60°C at least).
 
+With a comfort band, the tank starts and stops on the band's thermometer; without one, on the tank's own.
+
 #### Legionella Target (60-80°C)
 
 The minimum temperature for the Legionella prevention cycle. Range: 60-80°C. The legal minimum is 60°C per DVGW W 551 (Germany), SIA 385/1 (Switzerland), and ÖNORM B 5019 (Austria). When a Legionella cycle triggers, SEM heats to this target regardless of solar availability — grid power is used if necessary.

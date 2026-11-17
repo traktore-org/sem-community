@@ -94,7 +94,10 @@ def _band_usable(i: TankInputs) -> bool:
 
 def _reading(i: TankInputs) -> Tuple[Optional[float], Optional[str]]:
     """ONE reading for start and stop: the band's sensor when the band is
-    in use, else the tank's (C1: today a start reads one, a stop the other)."""
+    in use, else the tank's (C1: a start and a stop used to read different ones).
+    A Legionella run reads the tank's own thermometer: that is the water."""
+    if i.legionella_active and i.tank_c is not None:
+        return i.tank_c, "tank"
     if _band_usable(i):
         return i.band_c, "band"
     if i.tank_c is not None:

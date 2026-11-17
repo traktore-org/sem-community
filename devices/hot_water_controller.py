@@ -750,13 +750,25 @@ class HotWaterController(SwitchDevice):
         met, hold = self._stop_condition(
             getattr(self, "_hold_stopped", False),
             read=self.get_current_temperature,
+            read_goal=lambda: self._goal_reading(peek=False),
             band_state=lambda: self.comfort_state,
             target=self._active_target_temp)
         if hold is not None:
             self._hold_stopped = hold
         return met
 
-    def _stop_condition(self, hold_stopped, *, read, band_state, target):
+    def _goal_reading(self, *, peek: bool):
+        """(#1369, C1) ONE thermometer for the start and the stop: the band's
+        sensor when a usable band is set, else the tank's. A switched tank's
+        stop read the tank sensor while its start read the band's."""
+        keep, _extra, limit = self._goal_band_fields()
+        if keep is not None and limit is not None and limit < keep:
+            band = self._comfort_reading()
+            if band is not None:
+                return band
+        return self._peek_tank_reading()[0] if peek else self.get_current_temperature()
+
+    def _stop_condition(self, hold_stopped, *, read, band_state, target, read_goal=None):
         """(#1369) The stop rule, PURE: ``(met, new_hold_stopped)`` — the new
         hold flag is None when the rule leaves it alone. It writes nothing;
         what it reads comes in as callables (called lazily, in the order the
@@ -786,7 +798,7 @@ class HotWaterController(SwitchDevice):
             return True, None
         if self._entity_domain in _SETPOINT_DOMAINS:
             return False, None
-        temp = read()
+        temp = (read_goal or read)()
         return temp is not None and temp >= target(), None
 
     # ─── The tank's goal, in the shadow (#1369, step 1) ──────────────
@@ -882,6 +894,7 @@ class HotWaterController(SwitchDevice):
             seen["must_stop"] = self._stop_condition(
                 getattr(self, "_hold_stopped", False),
                 read=lambda: self._peek_tank_reading()[0],
+                read_goal=lambda: self._goal_reading(peek=True),
                 band_state=self._peek_comfort_state,
                 target=lambda: self._active_target_temp(peek=True))[0]
         elif engine_stop is not None:
