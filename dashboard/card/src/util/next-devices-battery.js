@@ -178,9 +178,16 @@ export function batteryBody(card, row) {
             const id = 'number.sem_battery_' + bid + '_reserve_soc';
             return card._has(id) ? card._val(card._fmt(num(id), 0) + ' %', () => card._moreInfo(id)) : null;
         }).filter(Boolean);
+        // (#1373) each battery's size weighs the total level; unset shows a dash
+        const sizes = bats.map((bid) => {
+            const id = 'number.sem_battery_' + bid + '_capacity_kwh';
+            if (!card._has(id)) return null;
+            const v = num(id);
+            return card._val(v === null ? '—' : card._fmt(v, 1), () => card._moreInfo(id));
+        }).filter(Boolean);
         rows.push(card._row('mdi:swap-vertical', bats.map((_, i) => tf('next_battery_n', { n: i + 1 })).join(' · '),
             html`${vals.map((x, i) => html`${i ? ' · ' : ''}${x}`)}`,
-            reserves.length ? html`${t(Q.reserve.key)} ${reserves.map((x, i) => html`${i ? ' · ' : ''}${x}`)}` : ''));
+            html`${reserves.length ? html`${t(Q.reserve.key)} ${reserves.map((x, i) => html`${i ? ' · ' : ''}${x}`)}` : ''}${reserves.length && sizes.length ? ' · ' : ''}${sizes.length ? html`${t('battery_size_label')} ${sizes.map((x, i) => html`${i ? ' · ' : ''}${x}`)}` : ''}`));
         // (#1321) each battery's own level and power, when SEM publishes them
         const units = batteryUnits(card._hass?.states, bats);
         units.forEach((u) => {

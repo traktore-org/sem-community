@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **Grid-charge fields show with two batteries; charge switch and target now have fields** (#1362). The select pair no longer hides.
+- 🐛 **The new dashboard shows each battery's size** (#1373). It sits beside the reserve on the Devices screen; tap it to set it.
 - 🐛 **PV health no longer turns orange when the forecast overshoots grey days** (#1022). A full day in the last two proves the panels work.
 - ✨ **A Powerwall can charge from the grid** (#1377). With a select pair set, a charge switch is now a permit, not the start.
 - 🐛 **Total charge level counts battery sizes** (#1373). Set each battery's size in kWh; the total is then weighted, not a plain average.
