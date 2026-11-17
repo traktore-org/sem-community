@@ -1271,6 +1271,11 @@ The day rate is the price of the coming day from 07:00 to 20:00. On a
 peak/off-peak tariff, SEM charges at night before a day with peak hours. A day
 with only the off-peak price, such as a weekend, gets no night charge.
 
+SEM also counts the hours after the cheap window until the sun covers your
+house. When those hours cost more than stored power, the night charge puts in
+enough to carry them. A charge plan never ends below the battery's floor (its
+reserve or end of discharge).
+
 ### Scheduler state sensor
 
 `sensor.sem_battery_scheduler_state` shows:
