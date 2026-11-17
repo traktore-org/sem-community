@@ -26,6 +26,7 @@ import { chargerAddPlan, detectRowLabelKey, isCo2IntensityEntity, isOutdoorTempe
 import { roleSource, showsRoleLegend } from '../util/role-source.js';
 import { batteryListEdit } from '../util/battery-slot-edit.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
+import { OPEN_SECTION_KEY, takeStored } from '../util/setup-checklist.js';
 import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
 import { taxesApply } from '../util/settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
@@ -442,6 +443,7 @@ class SEMConfigCard extends SEMLitBase {
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener(VIEW_MODE_EVENT, this._onViewMode);
+        window.removeEventListener('location-changed', this._onRoute);
         // Cancel pending save-status clears — they hold `this` alive and
         // fire requestUpdate() on a detached element when the dashboard
         // is switched away mid-save (#476).
@@ -566,6 +568,10 @@ class SEMConfigCard extends SEMLitBase {
         super.connectedCallback();
         // Another card (or another SEM tab) flipped the view switch.
         window.addEventListener(VIEW_MODE_EVENT, this._onViewMode);
+        // (#1379) the Home checklist sends the user to one section
+        this._onRoute = () => setTimeout(() => this._openRoutedSection(), 0);
+        window.addEventListener('location-changed', this._onRoute);
+        this._openRoutedSection();
         this._advanced = getAllSettings();
         // Defer until hass arrives. If hass is already set, fire now.
         if (this._hass) {
@@ -948,6 +954,13 @@ class SEMConfigCard extends SEMLitBase {
         if (id === 'battery_scheduler') return !!opts.battery_charge_scheduler_enabled;
         if (id === 'notifications') return !!opts.enable_mobile_notifications;
         return false;
+    }
+
+    // (#1379) The setup checklist leaves the section it wants open in
+    // sessionStorage before it switches to this tab.
+    _openRoutedSection() {
+        const id = takeStored(OPEN_SECTION_KEY);
+        if (id) this._openSection(id);
     }
 
     _openSection(id) {

@@ -30,6 +30,7 @@ import { priceLevelColor } from '../util/price-level.js';
 import { sourceMix, priceStrip, deviceChips } from '../util/next-now-extras.js';
 import { resolveChargerSoc } from '../util/charger-soc.js';
 import { loadKind } from '../util/next-devices.js';
+import './sem-setup-checklist-card.js';
 
 const IDS = [
     'sensor.sem_solar_power', 'sensor.sem_grid_power', 'sensor.sem_battery_power', 'sensor.sem_battery_soc',
@@ -724,7 +725,8 @@ class SEMNextNowCard extends SEMNextBase {
     render() {
         if (!this._hass) return nothing;
         const lead = this._lead();
-        return this._frame(lead, html`<div class="grid">
+        // (#1379) first-run banner + checklist on top; only a chip once done
+        return this._frame(lead, html`<sem-setup-checklist-card .hass=${this._hass} .layout=${'next'}></sem-setup-checklist-card><div class="grid">
             ${this._hintBox()}
             ${this._sec(this._t('next_power_now'), this._powerNow(), { cls: 'span2', extra: this._updatedPill() })}
             ${this._todayTiles()}
