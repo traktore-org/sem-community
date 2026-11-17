@@ -15,7 +15,8 @@ import { plainReason } from './why-rows.js';
 import { loadRunsBySem } from './settings-applies.js';
 import { parseCopCurve, formatCopCurve, heatCostNow,
     copSourceOf, copSourceOptions, copLearnLine } from './heat-pump-cost.js';
-import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, BUY_LABEL } from './heater-questions.js';
+import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, preheatWrites,
+    thermometerProposal, useThermometerWrite, BUY_LABEL } from './heater-questions.js';
 
 const MODES = [
     { key: 'off', label: 'off', help: 'help_mode_off' },
@@ -186,6 +187,9 @@ export function loadBody(card, row) {
                     if (res.error) { card._showError(new Error(tf(res.error, res.params))); return; }
                     for (const w of res.writes) send(w.property, w.value);
                 }), t(q.keys.sunMaxSub)));
+            // (#1081, #1321) the tick under the sun row; checked-and-disabled while SEM may not buy
+            if (q.preheat && q.preheat.offered) rows.push(preheatRow(card, q.preheat, dis, send,
+                row.comfort && row.comfort.limit_c != null ? displayTemp(card, row.comfort.limit_c) || '' : ''));
             rows.push(buyRow());
         } else if (q.view === 'time') {
             rows.push(card._row('mdi:flag-outline', t('hq_run_each_day'),
@@ -241,6 +245,11 @@ export function loadBody(card, row) {
     if (runs) rows.push(card._row('mdi:flag-checkered', t('next_stop_when'), stopPick,
         stopEnt ? html`${t('next_stop_at')} ${stopAt}${stopNow ? ' · ' + tf('next_now_value', { v: stopNow }) : ''}` : t('next_stop_when_sub'),
         { more: band || !stopEnt }));
+    // (#1353, #1321) the confirm is the only write: the picker's own comfort_entity
+    const proposal = !measureOnly ? thermometerProposal(row) : null;
+    if (proposal) rows.push(card._row('mdi:thermometer-check', tf('hq_found_thermometer', { name: proposal.name }),
+        card._btn(t('hq_use_thermometer'), () => { const w = useThermometerWrite(proposal); send(w.property, w.value); },
+            { primary: true, small: true, disabled: dis })));
     // Own thermometer for the comfort band; without one SEM reads the device's own temperature.
     const thermo = g.comfort_entity || '';
     if (runs) rows.push(card._row('mdi:thermometer-lines', t('next_own_thermometer'),
@@ -310,6 +319,16 @@ export function loadBody(card, row) {
 /** (#1081) The heat pump's COP row under More: the COP now (and the
  *  outdoor °C with a curve), then the curve as text to edit. A curve that
  *  cannot be read is not sent; an empty box clears it. */
+/** (#1081, #1321) "Also in the cheapest-heat hours". Stored on stays checked but
+ *  disabled without grid buying, so switching back does not re-arm it unseen. */
+export function preheatRow(card, pre, dis, send, limit = '') {
+    const box = html`<input type="checkbox" class="hq-preheat" aria-label="${card._t('hq_preheat')}"
+        .checked=${pre.on} ?disabled=${dis || !pre.enabled}
+        @change=${(e) => { for (const w of preheatWrites(e.target.checked)) send(w.property, w.value); }}>`;
+    return card._row('mdi:cash-clock', card._t('hq_preheat'), box,
+        pre.enabled ? card._t('hq_preheat_sub') : card._tf('hq_sub_no_buy', { limit }), { cls: 'hq-preheat-row' });
+}
+
 export function copCurveRow(card, row, g, send) {
     const t = (k) => card._t(k);
     const tf = (k, p) => card._tf(k, p);

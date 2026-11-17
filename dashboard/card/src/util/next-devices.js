@@ -148,6 +148,8 @@ function rowFromMap(id, info) {
         goals: i.goals || null,
         progress: i.progress || null,
         comfort: i.comfort || null,
+        // (#1353, #1321) the crawler's thermometer proposal, same field the classic card reads
+        thermometerProposal: i.thermometer_proposal || null,
         // (#1321) what the load engine decided this cycle: {on, source, code}
         intent: i.intent && typeof i.intent === 'object' ? i.intent : null,
         blockedBy: i.blocked_by || null,
