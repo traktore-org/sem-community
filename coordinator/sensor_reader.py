@@ -171,6 +171,9 @@ def _own_stems(ed_config: Any, battery_power_entity: str) -> list:
         stems.append("_".join(parts[:k]))
     return stems
 
+#: (#1306) words that make a "capacity" sensor something other than a size
+_NOT_A_SIZE_WORDS = ("remaining", "available", "left", "today", "daily",
+                     "percent", "state_of", "verbleib", "restkapaz")
 _CAPACITY_KEYWORDS = (
     "akkukapazit", "rated_capacity", "battery_capacity",
     "rated_energy", "nennkapazit", "usable_capacity",
@@ -3801,7 +3804,7 @@ class SensorReader:
                 readings.batteries[bid] = BatteryPower(
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=entity,
                     power_read=raw_w is not None,
-                    capacity_kwh=self._unit_capacity_kwh(entity),   # (#1306)
+                    capacity_kwh=self._unit_size_kwh(entity, idx),  # (#1306, #1373)
                 )
             # #553 — two-sensor pair units, bids continue after the combined
             # ones. net = charge(to) − discharge(from); the user-declared
@@ -3833,7 +3836,8 @@ class SensorReader:
                     battery_id=bid, power_w=w, soc_pct=soc_val, name=p_to,
                     # (#1167) one dark side is half a number
                     power_read=raw_to is not None and raw_from is not None,
-                    capacity_kwh=self._unit_capacity_kwh(p_to),     # (#1306)
+                    capacity_kwh=self._unit_size_kwh(
+                        p_to, len(ed.battery_power_list) + k),           # (#1306, #1373)
                 )
 
         # Fleet scalar precedence: a real ≥2 per-battery breakdown owns the fleet
@@ -6175,16 +6179,16 @@ class SensorReader:
             return None
 
     def _unit_size_kwh(self, power_entity: str, slot: int) -> float:
-        """(#1373) A battery's size for the total level: its own setting
-        (slot N of ``battery_capacity_kwhs`` is battery bN's), else 0.0
-        (unknown → the plain average). Weights the total level ONLY: the
-        scheduler and every other reader keep the global
-        ``battery_capacity_kwh``.
+        """(#1373, #1306) ONE answer for a pack's size, read by the total
+        level and the scheduler (``BatteryPower.capacity_kwh``): the user's
+        own per-battery setting (slot N of ``battery_capacity_kwhs`` is
+        battery bN's), else a size sensor on the pack's own device, else 0.0
+        (unknown → the plain average, and the scheduler's share of the
+        global ``battery_capacity_kwh``).
 
-        Never a size SENSOR found on the device: a review proved the device
-        scan takes "remaining capacity" (falls with the level) and gives two
-        batteries on one inverter the same size — a wrong weight would move
-        the total for users who set nothing."""
+        The device scan skips "remaining"/"available" sensors and finds
+        nothing when one device holds two size sensors (a review found both
+        cases taken as sizes)."""
         lst = (getattr(self, "_raw_config", None) or {}).get(
             "battery_capacity_kwhs")
         if isinstance(lst, list) and slot < len(lst):
@@ -6193,7 +6197,7 @@ class SensorReader:
                     return float(lst[slot])
             except (TypeError, ValueError):
                 pass
-        return 0.0
+        return self._unit_capacity_kwh(power_entity)
 
     def _soc_by_size(self, levels: list, sizes: list) -> float:
         """(#1373) The home's level of several batteries: each level counts
@@ -8101,18 +8105,28 @@ class SensorReader:
             registry = er.async_get(self.hass)
             entry = registry.async_get(power_entity)
             if entry is not None and entry.device_id:
+                hits = []
                 for e in er.async_entries_for_device(registry, entry.device_id):
                     if e.domain != "sensor":
                         continue
                     key = e.translation_key or e.entity_id.split(".", 1)[1]
-                    looks = (role_for("sensor", key) == "battery_capacity_spec"
-                             or any(kw in e.entity_id.lower()
-                                    for kw in _CAPACITY_KEYWORDS))
-                    if not looks:
+                    # (#1306, #1373 review) a name match alone took
+                    # "remaining capacity" (kWh that fall with the level) as
+                    # the pack's size; the role's own exclusions apply to it.
+                    oid = e.entity_id.split(".", 1)[1].lower()
+                    named = (any(kw in oid for kw in _CAPACITY_KEYWORDS)
+                             and not any(w in key.lower() for w in _NOT_A_SIZE_WORDS))
+                    if role_for("sensor", key) != "battery_capacity_spec" and not named:
                         continue
-                    if _capacity_kwh_of_state(self.hass.states.get(e.entity_id)) is not None:
-                        found = e.entity_id
-                        break
+                    hits.append(e.entity_id)
+                # two size sensors on one device (two packs behind one
+                # inverter): which is this pack's cannot be told — none.
+                # Counted BEFORE reading them: one still unavailable at a
+                # cold start must not make the other pack's size this one's.
+                if len(hits) == 1:
+                    if _capacity_kwh_of_state(self.hass.states.get(hits[0])) is None:
+                        return None          # not reading yet: ask again, no cache
+                    found = hits[0]
         except Exception:  # noqa: BLE001 — no registry is "none found"
             found = None
         self._capacity_entity_by_power[power_entity] = found
