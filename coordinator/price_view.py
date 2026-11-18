@@ -230,6 +230,27 @@ class PriceView:
         words through ``answer_for_level`` themselves."""
         return getattr(self._p, "get_price_level_at", None)
 
+    def hold_level_at_fn(self) -> Optional[Callable[[datetime], Any]]:
+        """(#1387) ``level_at_fn`` for the hold-through-dear-hours rule.
+
+        A two-rate tariff marks its peak NORMAL, so a rule that holds only
+        through EXPENSIVE hours let the car start in the peak. For a tariff
+        that has cheap hours and is not dynamic (``has_cheap_rate()`` is
+        False for a dynamic one) every priced hour that is not cheap reads
+        EXPENSIVE. A dynamic tariff keeps its own words. No answer stays
+        no answer: silence is not a dear hour (#925).
+        """
+        raw = self.level_at_fn()
+        if raw is None or not self.has_cheap_rate():
+            return raw
+
+        def level_at(t: datetime) -> Any:
+            lvl = raw(t)
+            if not _name(lvl) or is_cheap_name(lvl):
+                return lvl
+            return PriceLevel.EXPENSIVE
+        return level_at
+
     def now(self) -> PriceAnswer:
         """The live question: the state now, for acting now."""
         return self.at(None)

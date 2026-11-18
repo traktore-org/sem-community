@@ -490,7 +490,7 @@ class EVControlMixin:
             # starting at the window open. The overlay still wins when the
             # joint plan covers the car.
             level_at=PriceView(
-                getattr(self, "_tariff_provider", None)).level_at_fn(),  # (#1372)
+                getattr(self, "_tariff_provider", None)).hold_level_at_fn(),  # (#1372, #1387)
             # (#1023) The next departure as a moment: a weekday's time may
             # be more than a day away.
             deadline_at=departure_for(

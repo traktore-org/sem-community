@@ -7034,7 +7034,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # window open exactly as the night will (D3), so the
                                 # strip never promises a start in the peak band.
                                 _lvl = PriceView(getattr(
-                                    self, "_tariff_provider", None)).level_at_fn()  # (#1372)
+                                    self, "_tariff_provider", None)).hold_level_at_fn()  # (#1372, #1387)
                                 if (self._tariff_optimized_for(_pcfg) and _lvl is not None
                                         and _night_start and _ev_deadline_dt
                                         and _ev_rate_kw > 0):
@@ -13542,6 +13542,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     contiguous=bool(cfg.get("ev_plan_one_block", False)),
                     # (#1023) the late charge right before departure
                     late_s=late_charge_s(cfg),
+                    # (#1383) cheap-hours mode: a thin sun hour may be topped
+                    # up from the grid at its import price
+                    grid_in_sun=bool(self._tariff_optimized_for(cfg)),
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)
