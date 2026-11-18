@@ -89,3 +89,15 @@ async def test_a_failing_plan_switch_does_not_undo_the_handover(hass, coordinato
     await sw.async_turn_off()
     assert sw._is_on is False
     assert coordinator._observer_mode is False
+
+
+async def test_restore_and_reload_never_arm_plan_execution(hass, coordinator, plan_calls):
+    """Only a turn-off someone asks for flips plan execution. Startup restore,
+    an options reload and migrations set state without going through it."""
+    from types import SimpleNamespace
+    hass.states.async_set(PLAN, "off")
+    sw = _switch(hass, coordinator)
+    sw._apply_restored_state(SimpleNamespace(state="off"))
+    assert sw._is_on is False
+    assert plan_calls == []
+    assert hass.states.get(PLAN).state == "off"

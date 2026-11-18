@@ -154,6 +154,7 @@ class LedgerSlot:
                                     # slot start — the discharge limit is an
                                     # instantaneous bottleneck, not an average)
     batt_in_kwh: float = 0.0        # pre-charge raising the trajectory (G4 hook)
+    cap_kwh: float = 0.0            # (#1377) pack capacity; 0 = unknown, no cap
     grid_committed_w: float = 0.0   # grid power already allocated here — a
                                     # re-walk must NOT resurrect spent headroom
     # explicit per-slot cap override (compat path); None = derive from peak
@@ -169,15 +170,26 @@ class LedgerSlot:
 # ---------------------------------------------------------------------------
 
 def build_night_ledger(slots, *, soc_kwh, floor_kwh, max_discharge_w,
-                       peak_limit_w) -> list:
+                       peak_limit_w, capacity_kwh=0.0) -> list:
     """Walk the night once: home draws the battery down to the sunrise floor
     (bounded by discharge power), the remainder lands on the meter, and the
     grid headroom per slot follows. ``_walk`` re-runs whenever packing
     changes the battery's path — a Tier-2 draw empties it EARLIER, the
     takeover hour moves, and later grid headroom shrinks."""
     ledger = sorted(slots, key=lambda s: s.start)
+    for s in ledger:
+        s.cap_kwh = float(capacity_kwh or 0.0)
     _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w)
     return ledger
+
+
+def level_after_charge(s, soc=None) -> float:
+    """(#1377) Pack level once this slot's planned charge has arrived,
+    held at the pack's capacity: the one place the trajectory is capped."""
+    lvl = (float(s.soc_kwh) if soc is None else float(soc)) + float(
+        getattr(s, "batt_in_kwh", 0.0) or 0.0)
+    cap = float(getattr(s, "cap_kwh", 0.0) or 0.0)
+    return min(lvl, cap) if cap > 0 else lvl
 
 
 def _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w) -> None:
@@ -186,7 +198,7 @@ def _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w) -> None:
         s.soc_kwh = soc
         h = s.hours
         # Pre-charge raises the trajectory (energy arrives this slot).
-        soc += s.batt_in_kwh
+        soc = level_after_charge(s, soc)
         # Home draws battery first — energy above the floor, power-bounded.
         home_kwh = s.home_w * h / 1000.0
         avail = max(0.0, soc - floor_kwh)
@@ -219,7 +231,9 @@ def battery_at_end(ledger, floor_kwh, capacity_kwh) -> Optional[dict]:
     if not ledger or not capacity_kwh or capacity_kwh <= 0:
         return None
     s = ledger[-1]
-    soc = float(s.soc_kwh) + float(getattr(s, "batt_in_kwh", 0.0) or 0.0)
+    soc = level_after_charge(s)
+    if capacity_kwh and not getattr(s, "cap_kwh", 0.0):
+        soc = min(soc, float(capacity_kwh))
     avail = max(0.0, soc - float(floor_kwh))
     batt_home = float(getattr(s, "home_batt_kwh", 0.0) or 0.0)
     batt_loads = min(float(getattr(s, "batt_out_kwh", 0.0) or 0.0),
@@ -539,6 +553,16 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 code = "before_deadline"
         return {"code": code, "params": params}
 
+    def _book_grid(s, d, power, e_kwh):
+        """(#1377) One bookkeeping for every grid placement: the power is
+        spent, and a battery charge also raises the pack's trajectory."""
+        s.grid_committed_w += power   # survives trajectory re-walks
+        s.headroom_w -= power
+        if d.kind == "battery":
+            s.batt_in_kwh += e_kwh
+            _walk(ledger, initial_soc, floor_kwh,
+                  max_discharge_w, peak_limit_w)
+
     def _cheapest_run(d, need):
         """(#1023) The cheapest run of back-to-back priced, eligible slots
         that covers ``need`` within headroom: ``[(i, power_w, run_h)]``, or
@@ -610,8 +634,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 if _p is None:
                     late_unpriced = True
                 price = 0.0 if _p is None else float(_p)
-                s.grid_committed_w += power
-                s.headroom_w -= power
+                _book_grid(s, d, power, power / 1000.0 * run_h)
                 allocations.append(Allocation(
                     demand_id=d.id, start=begin, end=hi, power_w=power,
                     price=price,
@@ -636,8 +659,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     begin = _begin(d, i)
                     end = begin + timedelta(hours=run_h)
                     price = float(_price(d, i))
-                    s.grid_committed_w += power
-                    s.headroom_w -= power
+                    _book_grid(s, d, power, power / 1000.0 * run_h)
                     allocations.append(Allocation(
                         demand_id=d.id, start=begin, end=end, power_w=power,
                         price=price,
@@ -668,7 +690,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 # From the WALKED state: what the trajectory leaves above the
                 # floor after home's ACTUAL battery share this slot (clamped
                 # by the walk, not the raw home ask) and draws already booked.
-                avail = max(0.0, s.soc_kwh + s.batt_in_kwh - floor_kwh
+                avail = max(0.0, level_after_charge(s) - floor_kwh
                             - s.home_batt_kwh - s.batt_out_kwh)
                 if avail <= 1e-9:
                     continue
@@ -723,14 +745,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                        f"from battery (trajectory leaves "
                        f"{max(0.0, s.soc_kwh - floor_kwh):.1f} kWh above floor)")
             else:
-                s.grid_committed_w += power   # survives trajectory re-walks
-                s.headroom_w -= power
-                if d.kind == "battery":
-                    # (#1377) a planned charge raises the trajectory: the
-                    # end level and later slots count the energy it adds
-                    s.batt_in_kwh += e_kwh
-                    _walk(ledger, initial_soc, floor_kwh,
-                          max_discharge_w, peak_limit_w)
+                _book_grid(s, d, power, e_kwh)
                 why = (f"{d.id}: {power:.0f} W {begin:%H:%M}–{end:%H:%M} "
                        + (f"@ {price:.3f} (slot #{own_rank[i]} cheapest, "
                           if price is not None else "unpriced (no price published, ")

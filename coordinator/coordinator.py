@@ -13152,7 +13152,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _peak_w = 0.0
                 ledger2 = build_night_ledger(
                     slots2, soc_kwh=soc_seed, floor_kwh=_floor2,
-                    max_discharge_w=_md_w, peak_limit_w=_peak_w)
+                    max_discharge_w=_md_w, peak_limit_w=_peak_w,
+                    capacity_kwh=cap_kwh2)
                 plan2 = pack_night(
                     demands2, ledger2, floor_kwh=_floor2,
                     max_discharge_w=_md_w, peak_limit_w=_peak_w)
@@ -14170,7 +14171,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             ledger = build_night_ledger(
                 slots, soc_kwh=soc_kwh, floor_kwh=floor_kwh,
-                max_discharge_w=max_discharge_w, peak_limit_w=peak_w)
+                max_discharge_w=max_discharge_w, peak_limit_w=peak_w,
+                capacity_kwh=cap_kwh)
             # ── Arbitrage advice (#638, the last string) ────────────────
             # The advisor reads the SAME walked ledger the pack consumes
             # — prices on both horizons, the home's hour-by-hour grid
