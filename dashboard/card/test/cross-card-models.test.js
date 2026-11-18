@@ -209,7 +209,7 @@ test('charger: both cards take the "why" line from the shared chargerSays', asyn
     assert.equal(chargerSays({}, t, plainReason), null);
     const src = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
     for (const f of ['../src/cards/sem-next-now-card.js']) {
-        assert.ok(src(f).includes('chargerSays('), f);
+        assert.ok(src(f).includes('chargerSaysEach('), f);
     }
     assert.ok(!src('../src/cards/sem-next-now-card.js').includes('strategyWords('), 'no second path in the new Now card');
 });

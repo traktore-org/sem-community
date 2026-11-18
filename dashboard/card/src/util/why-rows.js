@@ -121,6 +121,27 @@ export function plainReason(rec, t) {
     return missing ? null : out;
 }
 
+/**
+ * (#1321) A would-do / held-back record's reason in plain words. The record's
+ * own code first; else the code the decision log holds for that device
+ * (charger, battery or load); else nothing. The engine's log text
+ * ("ev plugged in + battery SoC 20% < floor …") is never shown.
+ */
+export function recordReason(rec, states, t) {
+    const own = plainReason(rec, t);
+    if (own) return own;
+    const id = String(rec?.device_id || '');
+    const kind = rec?.kind || rec?.device_kind;
+    const attr = (sid, a) => states?.[sid]?.attributes?.[a] || {};
+    let log = {};
+    let key = id;
+    if (kind === 'charger') { log = attr('sensor.sem_charging_state', 'per_charger_last_decision'); key = id.replace(/^ev:/, ''); }
+    else if (kind === 'battery') { log = attr('sensor.sem_battery_status', 'per_battery_last_decision'); key = id.replace(/^battery:/, ''); }
+    else if (kind === 'load') log = attr('sensor.sem_load_management_status', 'per_device_last_decision');
+    const held = log[key];
+    return held ? (plainReason({ reason_code: held.reason_code, params: held.params }, t) || '') : '';
+}
+
 const _num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 export function formatWatts(w) {

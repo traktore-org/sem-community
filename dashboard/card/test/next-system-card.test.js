@@ -89,7 +89,8 @@ test('renders the charger tools and the HA settings link, no classic link', () =
     assert.match(out, /config_open_ha_settings/);
     assert.doesNotMatch(out, /next_ch_add/);
     assert.doesNotMatch(out, /sem-dashboard/);
-    assert.match(out, /Inverter input/, 'the auto-found solar source is named');
+    assert.match(out, /Inverter/, 'the auto-found solar source is named');
+    assert.doesNotMatch(out, /Inverter input/i, 'without the sensor class word');
 });
 
 test('an entity value is a row; a tap opens the picker dialog, which stages the choice', () => {
@@ -97,7 +98,7 @@ test('an entity value is a row; a tap opens the picker dialog, which stages the 
     const g = groups(el.hass.states, (k) => TEXT[k] || k, el._ctx());
     const row = g.flatMap((x) => x.rows).find((r) => r.slot.option === 'solar_production_sensor');
     assert.ok(row, 'a row for the solar source');
-    assert.match(text(el._slotRow(row)), /Inverter input/, 'the auto-found source is its value');
+    assert.match(text(el._slotRow(row)), /Inverter/, 'the auto-found source is its value');
     const specs = [];
     el._editDialog = (spec) => { specs.push(spec); };
     el._openEdit(row.slot, row.label, row.slot.value);
@@ -133,13 +134,14 @@ test('the setup and hardware rows open their panel in place', () => {
     assert.ok(el._setupPanel('hardware').values.includes('hardware'));
 });
 
-test('observer mode: adding and removing chargers sends nothing', async () => {
+test('watch only: adding and removing a charger is SEM config and still goes through', async () => {
     const calls = [];
     const el = makeCard(calls);
     el.hass.states['switch.sem_observer_mode'] = S('on');
     await el._addCharger();
     await el._removeCharger('keba');
-    assert.equal(calls.length, 0);
+    assert.ok(calls.some((c) => c[1] === 'set_option'));
+    assert.ok(calls.some((c) => c[1] === 'remove_charger'));
 });
 
 test('held-back calls: one row per withheld call, named by device and service', () => {

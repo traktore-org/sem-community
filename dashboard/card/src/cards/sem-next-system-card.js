@@ -23,7 +23,7 @@ import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../b
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
-import { plainReason, deviceName, actionWords } from '../util/why-rows.js';
+import { recordReason, deviceName, actionWords } from '../util/why-rows.js';
 import { gridReading } from '../util/next-format.js';
 import { entityName } from '../util/next-names.js';
 import { MISSING } from '../util/missing-value.js';
@@ -155,7 +155,7 @@ class SEMNextSystemCard extends SEMNextBase {
     async _loadOptions() {
         if (!this._hass) return;
         try {
-            const resp = await this._hass.callService('solar_energy_management', 'get_config', {},
+            const resp = await this._call('solar_energy_management', 'get_config', {},
                 undefined, undefined, true);
             const cfg = resp?.response?.config;
             if (cfg && typeof cfg === 'object') this._options = cfg;
@@ -327,7 +327,7 @@ class SEMNextSystemCard extends SEMNextBase {
             ? html`<div class="rows">${rows.slice(0, 8).map((r) => this._row('mdi:hand-back-left-outline',
                 `${this._refusedName(r, t, rows)}${r.action ? ' · ' + actionWords(r.action, t) : ''}`,
                 Number.isFinite(Number(r.power_w)) ? this._kw(Number(r.power_w)) : '',
-                plainReason(r, t) || r.reason || ''))}</div>`
+                recordReason(r, this._hass.states, t)))}</div>`
             : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;
         return this._sec(obs ? this._t('next_would_do') : this._t('next_held_back'), body);
     }
@@ -374,7 +374,7 @@ class SEMNextSystemCard extends SEMNextBase {
     _slotRow(r) {
         const slot = r.slot;
         const t = (k) => this._t(k);
-        const dis = this._obs();
+        const dis = false;   // (#1321) SEM's own settings stay editable while it only watches
         if (slot.kind === 'action') {
             const go = slot.nav ? () => this._go(navTarget(window.location.pathname, slot.action)) : () => this._action(slot.action);
             return this._setRow({ label: r.label, value: rowText(t(slot.labelKey)), help: r.help, more: r.more, onTap: go, disabled: dis && !slot.nav });
@@ -389,7 +389,7 @@ class SEMNextSystemCard extends SEMNextBase {
         if (slot.kind === 'switch') {
             return this._setRow({ ...base, toggle: { on: !!value, onChange: (v) => this._stage(slot, v) } });
         }
-        return this._setRow({ ...base, value: slotText(slot, t, value, this._hass.states), onTap: () => this._openEdit(slot, r.label, value) });
+        return this._setRow({ ...base, value: slotText(slot, t, value, this._hass), onTap: () => this._openEdit(slot, r.label, value) });
     }
 
     /** The edit dialog for a slot: its kind picks the control, the commit stages the change. */
@@ -413,7 +413,6 @@ class SEMNextSystemCard extends SEMNextBase {
     }
 
     _openEdit(slot, label, value) {
-        if (this._obs()) return;
         this._editDialog(this._editSpec(slot, label, value));
     }
 
@@ -434,7 +433,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const extra = html`<button type="button" class="lnk ic" aria-label="${this._t('config_diagnose')}" title="${this._t('config_diagnose')}"
             ?disabled=${this._diagBusy} @click=${() => this._diagnose(g.diagnoseSection)}>${this._icon('mdi:stethoscope', 's')}</button>`;
         const t = (k) => this._t(k);
-        const summary = sentenceText(g.sentence, t, this._hass.states, (s) => {
+        const summary = sentenceText(g.sentence, t, this._hass, (s) => {
             const p = this._pending[pendingKey(s)];
             return p ? p.value : s.value;
         });
@@ -449,7 +448,7 @@ class SEMNextSystemCard extends SEMNextBase {
     // ── chargers: add and remove (classic _addCharger / _removeCharger) ──
 
     _chargerTools() {
-        const dis = this._obs() || this._chargerBusy || this._applying || !this._options;
+        const dis = this._chargerBusy || this._applying || !this._options;
         const list = this._chargerList();
         const t = (k) => this._t(k);
         const removeFor = (c) => (this._confirmRemove === c.cid
@@ -464,12 +463,12 @@ class SEMNextSystemCard extends SEMNextBase {
     }
 
     async _setOptions(options) {
-        await this._hass.callService('solar_energy_management', 'set_option',
+        await this._call('solar_energy_management', 'set_option',
             { options, ...(this._entryId ? { entry_id: this._entryId } : {}) }, undefined, false);
     }
 
     async _addCharger() {
-        if (this._chargerBusy || !this._options || this._obs()) return;
+        if (this._chargerBusy || !this._options) return;
         const charger = chargerSkeleton(this._options.ev_chargers, this._chargers, this._t('config_ev_new_charger'));
         this._chargerBusy = true;
         try {
@@ -486,11 +485,11 @@ class SEMNextSystemCard extends SEMNextBase {
     }
 
     async _removeCharger(cid) {
-        if (this._chargerBusy || !cid || this._obs()) return;
+        if (this._chargerBusy || !cid) return;
         this._chargerBusy = true;
         this._confirmRemove = '';
         try {
-            await this._hass.callService('solar_energy_management', 'remove_charger', { charger_id: cid }, undefined, false);
+            await this._call('solar_energy_management', 'remove_charger', { charger_id: cid }, undefined, false);
             const p = { ...this._pending };
             for (const k of Object.keys(p)) if (k.startsWith(`opt:ev_chargers:${cid}:`)) delete p[k];
             this._pending = p;
@@ -524,9 +523,9 @@ class SEMNextSystemCard extends SEMNextBase {
         this._applying = true;
         const plan = applyPlan(this._pending, this._hass.states);
         try {
-            for (const w of plan.entityWrites) await this._hass.callService(w.domain, w.service, w.data, undefined, false);
+            for (const w of plan.entityWrites) await this._call(w.domain, w.service, w.data, undefined, false);
             if (Object.keys(plan.options).length) {
-                await this._hass.callService('solar_energy_management', 'set_option',
+                await this._call('solar_energy_management', 'set_option',
                     { options: plan.options, ...(this._entryId ? { entry_id: this._entryId } : {}) }, undefined, false);
             }
             for (const edit of plan.listEdits || []) await this._setOptions(edit);
@@ -544,18 +543,18 @@ class SEMNextSystemCard extends SEMNextBase {
     // ── one-shot actions ──
 
     async _action(name) {
-        if (!this._hass || this._obs()) return;
+        if (!this._hass) return;
         try {
             if (name === 'flip_grid_sign' || name === 'flip_battery_sign') {
-                const res = await this._hass.callService('solar_energy_management', name, {}, undefined, false, true);
+                const res = await this._call('solar_energy_management', name, {}, undefined, false, true);
                 const payload = res && res.response ? res.response : res;
                 const ok = await this._writeClipboard(JSON.stringify(payload || {}, null, 2), true);
                 this._say(this._t(ok ? 'sign_flipped_copied' : 'sign_flipped'), 6000);
             } else if (name === 'reset_sign_detection') {
-                await this._hass.callService('solar_energy_management', 'reset_sign_detection', {}, undefined, false);
+                await this._call('solar_energy_management', 'reset_sign_detection', {}, undefined, false);
                 this._say(this._t('sign_relearn_started'), 4000);
             } else if (name === 'purge_status_history') {
-                await this._hass.callService('solar_energy_management', 'purge_status_history', {}, undefined, false);
+                await this._call('solar_energy_management', 'purge_status_history', {}, undefined, false);
                 this._say(this._t('next_done'));
             }
         } catch (err) {
@@ -568,7 +567,7 @@ class SEMNextSystemCard extends SEMNextBase {
         if (!this._hass || this._diagBusy) return;
         this._diagBusy = true;
         try {
-            const resp = await this._hass.callService('solar_energy_management', 'diagnose',
+            const resp = await this._call('solar_energy_management', 'diagnose',
                 { section: section || 'all' }, undefined, false, true);
             const payload = resp?.response || resp;
             await this._writeClipboard(JSON.stringify(payload, null, 2));
@@ -629,7 +628,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const rows = this._freshRows();
         const bad = rows.filter((r) => r.state !== 'ok').length + (this._inputsDegraded() ? 1 : 0);
         const main = bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok');
-        const sub = this._obs() ? `${this._t('next_sys_sub')} ${this._t('next_observing_hint')}` : this._t('next_sys_sub');
+        const sub = this._t('next_sys_sub');
         const t = (k) => this._t(k);
         const gs = groups(this._hass.states, t, this._ctx());
         return this._frame({ main, sub }, html`<div class="grid">

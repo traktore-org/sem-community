@@ -34,6 +34,11 @@ export { html, css, svg, nothing };
 // the HA elements these screens draw when they exist
 const HA_DRAWN = ['ha-switch', 'ha-control-select', 'ha-button-toggle-group', 'ha-button', 'ha-selector', 'ha-textfield', 'ha-dialog', 'ha-alert'];
 
+// (#1321) the SEM services and entities that move a device: refused while SEM only watches
+const WATCH_BLOCKED_SERVICES = new Set(['plan_override', 'plan_override_clear', 'start_battery_boost', 'stop_battery_boost',
+    'schedule_appliance', 'cancel_appliance_schedule']);
+const WATCH_BLOCKED_ENTITY = /^select\.sem_battery(_.+)?_mode$|_pause_charging$/;
+
 export const NEXT_COLORS = {
     solar: 'var(--energy-solar-color, #ff9800)', grid: 'var(--energy-grid-consumption-color, #488fc2)',
     export: 'var(--energy-grid-return-color, #8353d1)', battery_in: 'var(--energy-battery-in-color, #f06292)',
@@ -439,6 +444,31 @@ export class SEMNextBase extends SEMLitBase {
     _loadName(id, d) { return displayName(this._hass, { name: d?.name, entity: d?.power_entity, id: String(id) }); }
     _observer() { return this._str('switch.sem_observer_mode') === 'on'; }
     _obs() { return this._observer(); }
+
+    /**
+     * (#1321) Watch-only mode: SEM's own settings stay editable (the classic
+     * Configuration card never locked them); a write that moves a device is
+     * refused. Checked where the write leaves, so no screen can skip it.
+     * Device writes: SEM's one-off actions, the battery's mode, and any
+     * entity that is not SEM's own.
+     */
+    _writeBlocked(domain, service, data) {
+        if (!this._observer()) return false;
+        const d = String(domain || '');
+        if (d === 'solar_energy_management') return WATCH_BLOCKED_SERVICES.has(String(service));
+        const ids = [].concat((data && data.entity_id) || []);
+        if (!ids.length) return true;
+        return !ids.every((id) => String(id).startsWith(d + '.sem_') && !WATCH_BLOCKED_ENTITY.test(String(id)));
+    }
+    /** A control for a device write is disabled while watching; `entity` is what it writes. */
+    _devOff(entity, domain = 'select') {
+        return this._writeBlocked(domain, 'x', { entity_id: entity });
+    }
+    /** Every write of the SEM Next screens goes through here (hass.callService, guarded). */
+    _call(domain, service, data, ...rest) {
+        if (this._writeBlocked(domain, service, data)) return Promise.reject(new Error(this._t('next_disabled_watching')));
+        return this._hass.callService(domain, service, data, ...rest);
+    }
     /** All settings on? Read `this._all` (a reactive property); flip it with `_toggleAll()`. */
     _toggleAll() { setAllSettings(!this._all); }
     _clock() { return hhmmIn(new Date(), this._hass?.config?.time_zone); }
@@ -573,7 +603,7 @@ export class SEMNextBase extends SEMLitBase {
     async _callService(domain, service, data) {
         if (!this._hass) return false;
         try {
-            await this._hass.callService(domain, service, data, undefined, false);
+            await this._call(domain, service, data, undefined, false);
             return true;
         } catch (err) {
             console.error(`[SEM ${this.tagName}]`, domain + '.' + service, err);
@@ -731,7 +761,9 @@ export class SEMNextBase extends SEMLitBase {
      * opens the editor; a boolean is a switch on the row, no dialog.
      * o = { label, value, help, onTap, toggle: { on, onChange }, disabled, ro, dirty, more }.
      */
-    _setRow(o) {
+    _setRow(o0) {
+        // (#1321) blocked = a device write while SEM only watches: disabled, with the reason under the label
+        const o = o0.blocked ? { ...o0, disabled: true, help: this._t('next_disabled_watching') } : o0;
         const tog = o.toggle || null;
         const tap = !tog && !o.ro && !o.disabled && typeof o.onTap === 'function' ? o.onTap : null;
         const body = tog ? this._switch(tog.on, tog.onChange, { label: o.label, disabled: o.disabled }) : (o.value ?? '');

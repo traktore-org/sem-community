@@ -29,7 +29,7 @@ function capacityKwh(card) {
 export function batteryBody(card, row) {
     const t = (k) => card._t(k);
     const tf = (k, p) => card._tf(k, p);
-    const dis = card._obs();
+    const dis = false;   // (#1321) the battery's settings are SEM's own: editable while watching
     const num = card._num.bind(card);
 
     // ── mode ──
@@ -168,7 +168,7 @@ export function batteryBody(card, row) {
             const id = 'select.sem_battery_' + bid + '_mode';
             const m = card._str(id);
             const lbl = (k) => (bats.length > 1 ? n + ' · ' : '') + card._lbl(k);
-            rows.push(card._setRow({ label: lbl('mode'), value: t('battery_mode_' + m) || m || '—', disabled: dis || !card._has(id),
+            rows.push(card._setRow({ label: lbl('mode'), value: t('battery_mode_' + m) || m || '—', disabled: !card._has(id), blocked: card._devOff(id),
                 onTap: () => card._editDialog({ title: lbl('mode'), ...card._selEdit('bmode:' + bid, {
                     value: m, options: (card._attrs(id).options || []).map((o) => ({ key: o, label: t('battery_mode_' + o) || o })),
                     onCommit: (o) => card._selectOption(id, o) }) }) }));
@@ -221,7 +221,7 @@ export function batteryBody(card, row) {
     }
 
     return html`
-        ${segItems.length ? card._seg(segItems, segKey, pick, { disabled: dis }) : nothing}
+        ${segItems.length ? card._seg(segItems, segKey, pick, { disabled: card._devOff(modeId) }) : nothing}
         ${hint ? html`<div class="modehelp">${hint}</div>` : nothing}
         ${card._stats(stats)}
         ${zones}

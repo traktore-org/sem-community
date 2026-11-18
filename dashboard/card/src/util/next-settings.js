@@ -229,16 +229,18 @@ export function decimalsOf(step) {
     return 3;
 }
 
-function nameOf(states, id) {
-    return entityName({ states }, id);
+function nameOf(hass, id) {
+    // the full hass names the HA device (Inverter, Power meter); a bare states map names the entity
+    return entityName(hass && hass.states ? hass : { states: hass }, id);
 }
 
 /** The words a slot shows when it is not being edited; `states` names an entity slot. */
-export function slotText(slot, t, value = slot.value, states = null) {
+export function slotText(slot, t, value = slot.value, states = null, plain = false) {
     if (!slot) return '';
     if (slot.kind === 'entity') {
         if (value) return nameOf(states, value);
-        if (slot.fallback) return String(t('next_entity_auto')).replace('{name}', nameOf(states, slot.fallback));
+        // in a sentence the found name needs no "(found)"; a row's value keeps it
+        if (slot.fallback) return plain ? nameOf(states, slot.fallback) : String(t('next_entity_auto')).replace('{name}', nameOf(states, slot.fallback));
         return t(slot.emptyKey || 'config_notif_none');
     }
     if (slot.kind === 'text' && (value === '' || value == null)) return slot.placeholder || '—';
@@ -441,10 +443,10 @@ export function sentenceText(parts, t, states, valueOf = (s) => s.value) {
     const txt = (parts || []).map((p) => {
         if (typeof p === 'string') return p;
         if (!p || typeof p !== 'object' || p.kind === 'action') return '';
-        return slotText(p, t, valueOf(p), states);
+        return slotText(p, t, valueOf(p), states, true);
     }).join('');
     // a dropped action leaves its brackets and spaces behind
-    return txt.replace(/\s*\(\s*\)/g, '').replace(/\s+([.,])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+    return txt.replace(/,\s*\)/g, ')').replace(/\(\s*,\s*/g, '(').replace(/\s*\(\s*\)/g, '').replace(/\s+([.,])/g, '$1').replace(/\s{2,}/g, ' ').trim();
 }
 
 // ── option vocabularies (labels are translation keys) ──

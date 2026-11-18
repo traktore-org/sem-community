@@ -5,21 +5,28 @@
  * id, never a snake_case slug. Pure; `hass` is only read.
  */
 
-const CLASS_WORD = /\s+(power|energy|leistung|verbrauch|vermogen|vermogen)$/i;
+const CLASS_WORD = /\s+(power|energy|input|leistung|verbrauch|vermogen)$/i;
+// the English sensor-class tails SEM's own naming leaves; a person's "Wärmepumpe Verbrauch" is not one
+const RAW_TAIL = /\s+(power|energy)$/i;
 const ENTITY_ID = /^[a-z_]+\.[a-z0-9_]+$/;
 
-/** True for text that was cut from an entity: an id, a slug, a list with no spaces, or a sensor-class tail. */
+/**
+ * True for text that was cut from an entity: an id, a slug, or a list with no
+ * spaces ("a,b"). A name a person typed is never raw: "Heizstab 1,5 kW" (a
+ * decimal comma) and "Wärmepumpe Verbrauch" stay as they are.
+ */
 export function looksRaw(name) {
     const s = String(name || '').trim();
     if (!s) return true;
-    return ENTITY_ID.test(s) || /_/.test(s) || /,\S/.test(s) || CLASS_WORD.test(s);
+    return ENTITY_ID.test(s) || /_/.test(s) || /(?<!\d),\S|,(?!\d)\S/.test(s) || RAW_TAIL.test(s);
 }
 
 /** Words for a raw name: "garage_carport_licht Power" → "Garage carport licht". */
 export function cleanName(name) {
     let s = String(name || '').trim();
     if (ENTITY_ID.test(s)) s = s.split('.')[1];
-    s = s.replace(/_+/g, ' ').replace(/,\s*/g, ', ').replace(CLASS_WORD, '').replace(/\s+/g, ' ').trim();
+    // a raw entity name: no slug dashes, no "(HA Convention)" notes, no register or id number tail
+    s = s.replace(/_+/g, ' ').replace(/\s*\([^)]*\)/g, '').replace(/,\s*/g, ', ').replace(/\s+\d{4,}$/, '').replace(CLASS_WORD, '').replace(/\s+/g, ' ').trim();
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 }
 

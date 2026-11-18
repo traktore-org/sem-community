@@ -50,13 +50,13 @@ function modeControl(card, row, dis, helpKey) {
     let line;
     let boost = nothing;
     if (row.override) {
-        const back = card._val(t('next_back'), () => card._callService(DOMAIN, 'plan_override_clear', { device_id: id }), { disabled: dis });
+        const back = card._val(t('next_back'), () => card._callService(DOMAIN, 'plan_override_clear', { device_id: id }), { disabled: card._obs() });
         const key = row.override.action === 'skip' ? 'next_load_paused_until' : 'next_boost_until';
         line = html`<div class="modehelp">${tf(key, { time: row.override.until || '—' })} · ${back}</div>`;
     } else if (semRuns) {
         const minSeg = card._seg(BOOST_MINUTES.map((m) => ({ key: m, label: tf('next_n_min', { n: m }) })), null,
             (m) => card._callService(DOMAIN, 'plan_override', { device_id: id, action: 'force', minutes: m }),
-            { disabled: dis, small: true });
+            { disabled: card._obs(), small: true });
         // (#1321) the one-off boost sits under More, the mode's own help stays in view
         line = helpKey ? html`<div class="modehelp">${t(helpKey)}</div>` : nothing;
         boost = html`<div class="modehelp">${t('next_boost_for')} ${minSeg}</div>`;
@@ -87,7 +87,7 @@ function displayTemp(card, c) {
 export function loadBody(card, row) {
     const t = (k) => card._t(k);
     const tf = (k, p) => card._tf(k, p);
-    const dis = card._obs();
+    const dis = false;   // (#1321) a load's settings are SEM's own: editable while watching
     const id = row.id;
     const g = row.goals || {};
     const send = (property, value) => card._dev(id, property, value);

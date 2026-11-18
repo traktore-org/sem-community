@@ -55,7 +55,7 @@ await import('../src/cards/sem-next-plan-card.js');
 const { planLead, houseGridKwh } = await import('../src/util/next-lead.js');
 const { flowBars } = await import('../src/util/next-flows.js');
 const { fmtPrice, gridReading } = await import('../src/util/next-format.js');
-const { displayName, looksRaw } = await import('../src/util/next-names.js');
+const { displayName, looksRaw, cleanName } = await import('../src/util/next-names.js');
 const { slotText } = await import('../src/util/next-settings.js');
 const { todayRows } = await import('../src/util/next-today-rows.js');
 const { deviceChips } = await import('../src/util/next-now-extras.js');
@@ -217,6 +217,13 @@ test('6: the name helper: SEM name, HA device name, cleaned friendly name', () =
     assert.equal(displayName(hass, { name: 'Pro4PM S6 Tableau Output 1 Energy', entity: 'sensor.pro4pm_s6_tableau_output_1_power' }), 'Pro4PM S6 Tableau Output 1');
     assert.equal(displayName(hass, { name: 'garage_carport_licht Power' }), 'Garage carport licht');
     assert.equal(displayName(hass, { name: 'Eltern,Kind,Balkon' }), 'Eltern, Kind, Balkon');
+    // a name a person typed is never rewritten (decimal comma, German words)
+    assert.equal(displayName(hass, { name: 'Heizstab 1,5 kW' }), 'Heizstab 1,5 kW');
+    assert.equal(displayName(hass, { name: 'Wärmepumpe Verbrauch' }), 'Wärmepumpe Verbrauch');
+    assert.equal(cleanName('Grid Power (HA Convention)'), 'Grid');
+    assert.equal(cleanName('Sg ready heating 48282'), 'Sg ready heating');
+    assert.equal(cleanName('Inverter Input'), 'Inverter');
+    assert.equal(cleanName('Battery 1 Charge/Discharge Power'), 'Battery 1 Charge/Discharge');
     assert.equal(displayName(hass, { entity: 'sensor.garage_carport_licht_power' }), 'Garage carport licht');
     assert.ok(looksRaw('sensor.x_y') && looksRaw('a_b') && !looksRaw('Keller'));
 });

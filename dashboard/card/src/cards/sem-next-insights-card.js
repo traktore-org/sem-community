@@ -284,7 +284,10 @@ class SEMNextInsightsCard extends SEMNextBase {
         const w = this._chartW();
         const layers = HOME_FLOWS.filter(([src]) => this._series(flowId(src, 'home')));
         const model = stackModel(layers.map(([src]) => this._series(flowId(src, 'home'))), layers.map(([, c]) => c), b.labels, w, 150, b.highlightIndex, { unit: 'kWh' });
-        const total = model.sums.reduce((a, v) => a + v, 0);
+        // (#1321) the total is the house's own meter, the figure the lead and the Now screen
+        // show; the per-source flow sums only split it
+        const housePt = this._pt('house');
+        const total = housePt !== null ? housePt : model.sums.reduce((a, v) => a + v, 0);
         const i = this._hover;
         const sum = i >= 0 && i < b.n
             ? html`<div class="sumrow"><span><b>${this._hoverLabel(b)}</b></span>${this._legend(layers.map(([src, c, k]) => [c, this._t(k), this._kwh(this._series(flowId(src, 'home'))[i] || 0)]))}</div>`

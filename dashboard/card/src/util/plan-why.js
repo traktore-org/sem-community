@@ -52,8 +52,13 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
         .sort((a, b) => (Number.isFinite(a.s) ? a.s : Infinity) - (Number.isFinite(b.s) ? b.s : Infinity))
         .map(({ s: _s, ...rest }) => rest);
     const known = new Set(planned.map((x) => x.id));
+    // (#1321) one line per device: a heater planned under Keep at run (comfort:x)
+    // is not also "not scheduled" under its run time (load:x)
+    const device = (id) => String(id).replace(/^(load|comfort):/, '');
+    const plannedDevices = new Set(planned.filter((x) => /^(load|comfort):/.test(x.id)).map((x) => device(x.id)));
     const left = (Array.isArray(plan.not_scheduled) ? plan.not_scheduled : [])
-        .filter((n) => n && n.id && !known.has(String(n.id)))
+        .filter((n) => n && n.id && !known.has(String(n.id))
+            && !(/^(load|comfort):/.test(String(n.id)) && plannedDevices.has(device(n.id))))
         .map((n) => ({ id: String(n.id), start: '', end: '', reason: '', params: {}, why: String(n.why || n.reason || ''), code: '', kwh: 0, label: n.label || '' }));
     return [...planned, ...left].slice(0, max);
 }

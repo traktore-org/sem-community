@@ -18,7 +18,8 @@ import { planNoteText } from '../util/plan-notes.js';
 import { whyLines, batteryEnd } from '../util/plan-why.js';
 import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
 import { semDefineCard } from '../base/sem-shared.js';
-import { planLead, kwhOf, coldHeaters, houseGridKwh } from '../util/next-lead.js';
+import { planLead, kwhOf, coldHeaters, planGridKwh } from '../util/next-lead.js';
+import { planWhenKey } from '../util/next-time.js';
 
 /** null / '' is unknown, never 0 (Number(null) is 0). */
 export function knownNum(v) {
@@ -833,8 +834,8 @@ class SEMNextPlanCard extends SEMNextBase {
         const tiles = [];
         const cost = knownNum(plan.total_cost);
         if (Array.isArray(plan.blocks) && Number.isFinite(cost)) {
-            const gridKwh = kwhOf(plan.blocks, (id) => !String(id).startsWith('battery_out')) + houseGridKwh(plan);
-            tiles.push({ label: t('next_grid_cost'), value: this._fmt(cost, 2), unit: this._currency(), sub: `${this._kwh(gridKwh)} · ${t('next_tonight')}` });
+            const gridKwh = planGridKwh(plan);
+            tiles.push({ label: t('next_grid_cost'), value: this._fmt(cost, 2), unit: this._currency(), sub: `${this._kwh(gridKwh)} · ${this._planWhen(plan)}` });
         }
         // (#1321) what waiting for the planned hours saves; no field, no tile
         const saved = knownNum(plan.saved);
@@ -864,11 +865,11 @@ class SEMNextPlanCard extends SEMNextBase {
         if (this._has('switch.sem_energy_plan_actuation')) {
             const on = this._str('switch.sem_energy_plan_actuation') === 'on';
             rows.push(this._row('mdi:toggle-switch-outline', t('next_plan_acts'),
-                this._switch(on, () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { label: t('next_plan_acts'), disabled: obs }),
+                this._switch(on, () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { label: t('next_plan_acts') }),
                 t('next_actuation_sub')));
         }
         rows.push(this._row('mdi:sync', t('next_replan'),
-            this._btn(t('next_now_btn'), () => this._callService(DOMAIN, 'replan', {}), { small: true, disabled: obs }),
+            this._btn(t('next_now_btn'), () => this._callService(DOMAIN, 'replan', {}), { small: true }),
             m.computedAt ? this._tf('next_replan_last', { time: this._hhmm(m.computedAt) }) : ''));
         return this._sec(t('next_expected'), html`${tiles.length ? this._tiles(tiles, { three: tiles.length % 3 === 0 }) : nothing}
             <div class="rows" style="margin-top:8px">${rows}</div>`);
@@ -909,6 +910,14 @@ class SEMNextPlanCard extends SEMNextBase {
     }
 
     // ── lead ──
+    /** (#1321) "tonight", "this morning", "today" or "tomorrow": the plan's first hour against now. */
+    _planWhen(plan) {
+        const now = Date.now();
+        const starts = (Array.isArray(plan.blocks) ? plan.blocks : []).filter((b) => Date.parse(b.end) > now)
+            .map((b) => Math.max(Date.parse(b.start), now)).filter(Number.isFinite);
+        return this._t(planWhenKey(starts.length ? Math.min(...starts) : now, new Date(now), this._hass?.config?.time_zone));
+    }
+
     _lead(plan, m) {
         if (this._range === 'tomorrow') {
             const sun = this._num('sensor.sem_forecast_tomorrow_kwh');
@@ -923,6 +932,7 @@ class SEMNextPlanCard extends SEMNextBase {
             fitsKey: m.fits === undefined ? '' : this._t(m.fits ? 'next_fits_yes' : 'next_fits_no'),
             sunTomorrowKwh: this._num('sensor.sem_forecast_tomorrow_kwh'),
             cold: this._cold(plan)[0] || null,
+            when: this._planWhen(plan),
         });
         const flat = (this._str('sensor.sem_tariff_price_level') || 'flat') === 'flat';
         const main = this._tf(lead.main.key, lead.main.params);

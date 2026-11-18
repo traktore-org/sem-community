@@ -17,11 +17,12 @@ import { planIdName } from '../util/plan-ids.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { nowLead } from '../util/next-lead.js';
+import { deadlineLabel } from '../util/next-time.js';
 import { powerBar } from '../util/next-power-bar.js';
 import { todayRows } from '../util/next-today-rows.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
-import { chargerSays } from '../util/charger-questions.js';
+import { chargerSays, chargerSaysEach } from '../util/charger-questions.js';
 import { plainReason } from '../util/why-rows.js';
 import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
@@ -184,7 +185,8 @@ class SEMNextNowCard extends SEMNextBase {
             const present = powerW !== null && (powerW > 50 || (remaining !== null && remaining > 0.1));
             if (!present) continue;
             return { present: true, charging: powerW > 50, powerW, amps, remainingKwh: remaining,
-                     targetTime: (this._str(`time.sem_charger_${cid}_target_time`) || '').slice(0, 5), cid };
+                     targetTime: deadlineLabel((this._str(`time.sem_charger_${cid}_target_time`) || '').slice(0, 5),
+                         this._tick || Date.now(), this._hass?.config?.time_zone, this._t('tomorrow')), cid };
         }
         return null;
     }
@@ -431,7 +433,12 @@ class SEMNextNowCard extends SEMNextBase {
         });
         const devices = this._attrs('sensor.sem_controllable_devices_count').devices || {};
         const heaters = Object.entries(devices).filter(([id]) => loadKind(id) !== 'load')
-            .map(([id, d]) => ({ name: this._loadName(id, d), on: !!(d && (d.is_on || d.is_active)) }));
+            .map(([id, d]) => {
+                // (#1321) same rule as the Devices screen: switched on, or drawing power
+                const pe = d && d.power_entity && this._has(d.power_entity) ? d.power_entity : null;
+                const live = pe ? this._powerW(pe) : null;
+                return { name: this._loadName(id, d), on: !!(d && (d.is_on || d.is_active)) || (live !== null && live > 10) };
+            });
         const chips = deviceChips({ batterySoc: this._num('sensor.sem_battery_soc'), cars, heaters });
         if (!chips.length) return nothing;
         const stateKey = { charging: 'next_st_charging', plugged: 'next_st_plugged', unplugged: 'next_st_unplugged', on: 'next_st_on', off: 'next_st_off' };
@@ -591,11 +598,13 @@ class SEMNextNowCard extends SEMNextBase {
     _why() {
         const rows = [];
         // (#1354) the user's words only, from the shared charger model
-        const said = chargerSays(this._hass?.states, (k) => this._t(k), plainReason);
-        if (said) {
-            const { title, text } = said;
-            const evW = this._powerW('sensor.sem_ev_power');
-            rows.push(this._row('mdi:car-electric', title, evW === null ? '' : this._kw(evW), text, { color: C.ev }));
+        // (#1321) one reading per charger: the fleet line "No car is plugged in"
+        // must never sit beside a charger that has one
+        const said = chargerSaysEach(this._hass?.states, this._chargers, (k) => this._t(k), plainReason);
+        for (const one of said) {
+            const w = one.cid ? this._powerW(`sensor.sem_charger_${one.cid}_power`) : this._powerW('sensor.sem_ev_power');
+            const title = one.cid && this._chargers.length > 1 ? this._tf('next_car_of', { name: this._chargerName(one.cid) }) : one.title;
+            rows.push(this._row('mdi:car-electric', title, w === null ? '' : this._kw(w), one.text, { color: C.ev }));
         }
         const soc = this._num('sensor.sem_battery_soc');
         const floor = this._spending() ? this._num('sensor.sem_battery_dynamic_floor_pct') : null;

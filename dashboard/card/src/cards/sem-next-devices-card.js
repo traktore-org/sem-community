@@ -260,7 +260,7 @@ class SEMNextDevicesCard extends SEMNextBase {
     // ── services ──
     _svc(service, data) {
         if (!this._hass) return Promise.resolve();
-        return this._hass.callService(DOMAIN, service, data, undefined, false).catch((err) => this._showError(err));
+        return this._call(DOMAIN, service, data, undefined, false).catch((err) => this._showError(err));
     }
 
     _dev(deviceId, property, value) {
@@ -282,12 +282,11 @@ class SEMNextDevicesCard extends SEMNextBase {
     _inline(key, text, editor, o = {}) {
         // the dialog is named after the row the value sits in
         const open = (e) => {
-            if (this._obs()) return;
             const row = e && e.currentTarget && e.currentTarget.closest ? e.currentTarget.closest('.row') : null;
             const title = o.label || (row && row.querySelector('.t') ? row.querySelector('.t').textContent.trim() : '');
             this._editDialog({ title, ...editor() });
         };
-        return this._vbtn(text, open, { disabled: this._obs() || !!o.disabled });
+        return this._vbtn(text, open, { disabled: !!o.disabled });
     }
 
     _numEdit(key, { value, min, max, step, unit, onCommit }) {
@@ -410,7 +409,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         if (error) { this._toast(this._t(error), true); return; }
         this._addBusy = true;
         try {
-            await this._hass.callService(DOMAIN, 'register_surplus_device', data, undefined, false);
+            await this._call(DOMAIN, 'register_surplus_device', data, undefined, false);
             this._toast(this._tf('next_add_done', { name: data.name }));
             this._adding = false;
             this._addForm = {};
@@ -423,14 +422,14 @@ class SEMNextDevicesCard extends SEMNextBase {
 
     _addSheet(rows) {
         const t = (k) => this._t(k);
-        const dis = this._obs() || this._addBusy;
+        const dis = this._addBusy;
         const f = this._addForm || {};
         const loose = unmanagedLoads(rows);
         const known = loose.length
             ? html`<div class="rows">${loose.map((r) => {
                 const w = r.powerEntity ? this._powerW(r.powerEntity) : null;
                 return this._row('mdi:power-plug-outline', r.name,
-                    this._btn(t('next_add_control_it'), () => this._showConfigureModal(r.id, r.name), { small: true, disabled: this._obs() }),
+                    this._btn(t('next_add_control_it'), () => this._showConfigureModal(r.id, r.name), { small: true }),
                     w === null ? t('next_add_measured_only') : this._kw(w) + ' · ' + t('next_add_measured_only'));
             })}</div>`
             : html`<p class="help">${t('next_add_none_loose')}</p>`;
@@ -665,7 +664,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         const removeBtn = overlay.querySelector('#cfg-remove');
         if (removeBtn) {
             removeBtn.addEventListener('click', () => {
-                this._hass.callService(DOMAIN, 'remove_device_control_mapping', { energy_sensor: energySensor })
+                this._call(DOMAIN, 'remove_device_control_mapping', { energy_sensor: energySensor })
                     .then(() => close()).catch((err) => showError(err.message));
             });
         }
@@ -674,7 +673,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             if (picker) formVals.entity = (picker.value || '').trim();
             let data;
             try { data = formValuesToServiceData(energySensor, formVals); } catch (err) { showError(this._t(err.message)); return; }
-            this._hass.callService(DOMAIN, 'set_device_control_mapping', data)
+            this._call(DOMAIN, 'set_device_control_mapping', data)
                 .then(() => close()).catch((err) => showError(err.message));
         });
     }
@@ -714,7 +713,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         if (!tiles.length) return nothing;
         const pctSensor = this._num('sensor.sem_current_vs_peak_percentage');
         const pct = uncapped ? 0 : (pctSensor !== null ? pctSensor : (limitW && peakW !== null ? (peakW / limitW) * 100 : 0));
-        const dis = this._obs();
+        const dis = false;   // (#1321) the peak limit is SEM's own setting: editable while watching
         const peakRows = [];
         const sent = [];
         if (peakE) {

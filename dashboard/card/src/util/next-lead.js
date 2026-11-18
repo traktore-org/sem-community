@@ -118,13 +118,15 @@ export function planLead(a, extra) {
         ? { key: (cold.cool ? 'hq_plan_above_no_hour' : 'hq_plan_below_no_hour') + (cold.time ? '' : '_plain'),
             params: { name: cold.name, keep: cold.keep, time: cold.time || '' } }
         : { key: 'next_plan_quiet', params: {} };
-    // (#1321) the house's own grid draw is what the chart's From grid lane and
-    // the Grid cost tile show: the line reads the same number
+    // (#1321) one number for "from the grid": the Expected tile reads the same
+    // planGridKwh, so the line and the tile never differ
     const houseKwh = houseGridKwh(a);
+    const gridKwh = planGridKwh(a);
+    const when = extra?.when || '';
     const main = evKwh > 0.05
-        ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh) } }
-        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } }
-            : (houseKwh > 0.05 ? { key: 'next_plan_house', params: { kwh: fmt1(houseKwh) } } : quiet));
+        ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh), when } }
+        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(gridKwh), when } }
+            : (houseKwh > 0.05 ? { key: 'next_plan_house', params: { kwh: fmt1(houseKwh), when } } : quiet));
     // (#1321) hours with no price yet give no cost: say so, not "cost ,"
     const sub = { key: extra?.cost ? 'next_plan_sub' : 'next_plan_sub_nocost', params: {
         time: extra?.computedAt || '', cost: extra?.cost || '',
@@ -142,6 +144,12 @@ export function kwhOf(blocks, pick) {
         kwh += (Number(b.power_w) || 0) * (e - s) / 3.6e9;
     }
     return kwh;
+}
+
+/** Everything the plan buys from the grid: its blocks (not battery output) plus the house's own draw. */
+export function planGridKwh(plan) {
+    const blocks = plan && Array.isArray(plan.blocks) ? plan.blocks : [];
+    return kwhOf(blocks, (id) => !String(id).startsWith('battery_out')) + houseGridKwh(plan);
 }
 
 /**

@@ -242,18 +242,17 @@ test('a number typed in the dialog goes through the same range clamp', () => {
     assert.equal(plan.options.target_peak_limit, r.slot.max);
 });
 
-test('while SEM only watches, rows do not open and switches are off limits', () => {
+test('while SEM only watches, SEM settings rows still open (they are SEM config)', () => {
     const el = sys();
     el.hass = { ...el.hass, states: { ...el.hass.states, 'switch.sem_observer_mode': S('on') } };
     const specs = [];
     el._editDialog = (s) => { specs.push(s); return {}; };
     const r = rowsOfAll(el).find((x) => x.slot.option === 'tariff_mode');
     const out = text(el._slotRow(r));
-    assert.doesNotMatch(out, /role="button"/);
-    assert.match(out, /aria-disabled="true"/);
-    assert.equal(fns(el._slotRow(r)).length, 0);
+    assert.match(out, /role="button"/);
+    assert.doesNotMatch(out, /aria-disabled="true"/);
     el._openEdit(r.slot, r.label, r.slot.value);
-    assert.equal(specs.length, 0);
+    assert.equal(specs.length, 1);
 });
 
 test('the group keeps one read-only summary, then the rows; the rest sit under All settings', () => {

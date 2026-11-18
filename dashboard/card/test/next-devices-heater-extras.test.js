@@ -76,9 +76,9 @@ test('no proposal row without a proposal or with a thermometer set', () => {
         .some((x) => /hq_found_thermometer/.test(x.label)), false);
 });
 
-test('the proposal button is disabled in observer mode', () => {
+test('the proposal button stays usable in watch only (it is a SEM setting)', () => {
     const r = rowsOf(fakeCard(true), { thermometer_proposal: PROP }).find((x) => /hq_found_thermometer/.test(x.label));
-    assert.equal(r.val.o.disabled, true);
+    assert.equal(!!r.val.o.disabled, false);
 });
 
 const BAND = { goals: { comfort_target: 55, comfort_limit: 40, comfort_entity: 'sensor.t', overnight_source: 'grid' },

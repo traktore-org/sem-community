@@ -49,6 +49,28 @@ export function chargerSays(states, t, plainReason) {
 }
 
 /**
+ * (#1321) The fleet line, split by charger when it would contradict one.
+ * The engine's fleet reason says "No car is plugged in" while any charger
+ * may hold a car; then each connected charger speaks with its own last
+ * decision's reason. Returns [{cid|null, title, text}].
+ */
+export function chargerSaysEach(states, chargerIds, t, plainReason) {
+    const fleet = chargerSays(states, t, plainReason);
+    if (!fleet) return [];
+    const ids = Array.isArray(chargerIds) ? chargerIds : [];
+    const on = ids.filter((cid) => states?.[`binary_sensor.sem_charger_${cid}_connected`]?.state === 'on');
+    const code = states?.['sensor.sem_charging_strategy']?.attributes?.reason_code;
+    if (code !== 'charger_no_car' || !on.length) return [{ cid: null, ...fleet }];
+    const per = states?.['sensor.sem_charging_state']?.attributes?.per_charger_last_decision || {};
+    return on.map((cid) => {
+        const rec = per[cid] || per[`charger_${cid}`] || null;
+        const own = rec && rec.reason_code !== 'charger_no_car';
+        const text = own ? (plainReason({ reason_code: rec.reason_code, params: rec.params }, t) || '') : '';
+        return { cid, title: fleet.title, text };
+    });
+}
+
+/**
  * (#1321) The charge plan in one line: "Ready by 07:00 · 20–100 kWh · Mon–Sun".
  * `runs` = weekday runs [{from, to, time}] (0 = Monday); `dayName(i)` names a day.
  * Returns {time, range, days}; each part is '' when unknown.
