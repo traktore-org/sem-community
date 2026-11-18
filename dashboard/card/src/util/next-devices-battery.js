@@ -71,16 +71,11 @@ export function batteryBody(card, row) {
     const floorPct = batteryFloorPct(card._hass?.states, card._attrs('sensor.sem_energy_plan'));
     const z = zonesModel({ soc, priority: lv.priority, buffer: lv.buffer, autoStart: lv.autostart, floor: num(ids.tonight), reserve: floorPct });
     const above = kwhAboveFloor(soc, floorPct, cap);
-    // Two marks closer than 14 % would overprint: the second goes under the bar.
-    let lastPct = -99, lastLo = false, anyLo = false;
-    const marks = z.marks.map((m) => {
-        const lo = (m.pct - lastPct) < 14 && !lastLo;
-        lastPct = m.pct; lastLo = lo; anyLo = anyLo || lo;
-        return { ...m, lo };
-    });
-    const zones = z.marks.length || z.cur !== null ? html`<div class="zones ${anyLo ? 'two' : ''}" style="--z1:${z.z1}%;--z2:${z.z2}%">
-        ${marks.map((m) => html`<span class="z ${m.lo ? 'lo' : ''} ${m.pct >= 85 ? 'r' : m.pct <= 15 ? 'l' : ''}" style="left:${m.pct}%">${t('next_zone_' + m.key)} ${m.value}</span>`)}
-        ${z.cur === null ? nothing : html`<span class="cur" style="left:${z.cur}%"></span>`}</div>` : nothing;
+    // (#1321) the bar is the picture only: the five zone names are the rows below, so the
+    // bar carries one marker, "now" at the battery's level
+    const zones = z.marks.length || z.cur !== null ? html`<div class="zones" style="--z1:${z.z1}%;--z2:${z.z2}%">
+        ${z.cur === null ? nothing : html`<span class="z ${z.cur >= 85 ? 'r' : z.cur <= 15 ? 'l' : ''}" style="left:${z.cur}%">${t('next_now_marker')} ${Math.round(soc)} %</span>
+            <span class="cur" style="left:${z.cur}%"></span>`}</div>` : nothing;
     const parts = [];
     // what it does now and next, the same words as the classic Battery tab
     const says = batterySaysFromStates(card._hass?.states);

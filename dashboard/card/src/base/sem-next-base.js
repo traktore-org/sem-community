@@ -162,6 +162,7 @@ export const nextCss = css`
     .row { position: relative; }
     .row .btn, .row .seg, .row ha-control-select, .row ha-button-toggle-group, .row ha-button, .row ha-switch, .row .sw, .row .lnk, .row .val { position: relative; z-index: 1; }
     .row.set { min-height: 48px; }
+    .row.set .k .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .row.set .k { align-items: flex-start; }
     .tx { display: flex; flex-direction: column; min-width: 0; }
     .row .hlp { color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); font-size: var(--ha-font-size-s, 12px); text-wrap: pretty; }
@@ -197,14 +198,14 @@ export const nextCss = css`
     .btn.primary { background: var(--n-accent); color: var(--n-accent-fg); border-color: transparent; }
     .btn.ghost { border-color: transparent; }
     .btn.sm { min-height: 32px; padding: 0 12px; font-size: var(--ha-font-size-s, 13px); }
-    .btn[disabled] { opacity: .6; cursor: default; }
+    .btn[disabled] { color: var(--n-fg2); border-color: var(--n-line); background: color-mix(in srgb, var(--n-fg2) 8%, transparent); cursor: default; }
     .btn ha-icon { --mdc-icon-size: 18px; vertical-align: -4px; }
     ha-button ha-icon { --mdc-icon-size: 18px; }
     .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     .track { height: 8px; border-radius: 4px; background: var(--n-card2); position: relative; overflow: visible; }
     .fill { height: 100%; border-radius: 4px; position: absolute; left: 0; top: 0; }
     .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 16px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); background: var(--n-card2); color: var(--n-fg2); white-space: nowrap; }
-    .pill.ok { color: var(--n-ok); } .pill.warn { color: var(--n-warn); } .pill.bad { color: var(--n-bad); }
+    .pill.ok { color: var(--n-ok); } .pill.warn { background: color-mix(in srgb, var(--n-warn) 24%, var(--n-card)); color: var(--n-fg); } .pill.warn .dot { background: var(--n-warn); } .pill.bad { color: var(--n-bad); }
     .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
     .app:not(.all) [data-more] { display: none !important; }
     .app.all .app-not-all { display: none; }
@@ -553,7 +554,7 @@ export class SEMNextBase extends SEMLitBase {
         return html`
             <header class="hdr">
                 ${soc === null ? nothing : html`<button type="button" class="chip" @click=${() => this._moreInfo('sensor.sem_battery_soc')}>${this._icon('mdi:battery-medium')}${this._int(soc)} %</button>`}
-                ${rate === null || flat ? nothing : html`<button type="button" class="chip" @click=${() => this._moreInfo('sensor.sem_tariff_current_import_rate')}>${this._icon('mdi:cash')}${this._price(rate)} <span class="dim">· ${this._t(priceLevelKey(level))}</span></button>`}
+                ${rate === null || flat ? nothing : html`<button type="button" class="chip" @click=${() => this._moreInfo('sensor.sem_tariff_current_import_rate')}>${this._icon('mdi:cash')}${this._price(rate)} ${this._currency()}/kWh <span class="dim">· ${this._t(priceLevelKey(level))}</span></button>`}
                 <span class="chip ${obs ? 'obs' : ''}"><span class="dot"></span>${obs ? this._t('next_pill_observing') : this._t('next_pill_live')}</span>
                 <span class="sp"></span>
                 ${all}
@@ -697,7 +698,7 @@ export class SEMNextBase extends SEMLitBase {
         const cur = value === null || value === undefined ? '' : String(value);
         if (haDefined('ha-selector') && this._hass) {
             const selector = { select: { mode: 'dropdown', options: options.map((x) => ({ value: String(x.value), label: x.label })) } };
-            return html`<ha-selector .hass=${this._hass} .selector=${selector} .value=${cur} .label=${o.label || ''} ?disabled=${!!o.disabled}
+            return html`<ha-selector .hass=${this._hass} .selector=${selector} .value=${cur} .label=${o.label || ''} .required=${false} ?disabled=${!!o.disabled}
                 @value-changed=${(e) => { const v = e.detail?.value; if (v !== undefined && String(v) !== cur) onChange(String(v)); }}
                 @keydown=${o.onKeydown || nothing}></ha-selector>`;
         }
@@ -742,7 +743,7 @@ export class SEMNextBase extends SEMLitBase {
         return html`<div class="tiles ${o.three ? 't3' : ''}">${items.map((t) => html`<div class="tile ${t.cls || ''}">
             <span class="lbl">${t.color ? html`<i class="mark" style="background:${t.color}"></i>` : nothing}${t.label}</span>
             <div class="big" style="${t.valueColor ? `color:${t.valueColor}` : ''}">${t.value}${t.unit ? html`<small>${t.unit}</small>` : nothing}</div>
-            ${t.sub ? html`<div class="xs dim">${t.sub}</div>` : nothing}${t.extra || nothing}</div>`)}</div>`;
+            ${t.sub ? html`<div class="xs dim">${typeof t.sub === 'string' ? t.sub.replace(/(\d) (kW|kWh|W|A|%)/g, '$1\u00a0$2') : t.sub}</div>` : nothing}${t.extra || nothing}</div>`)}</div>`;
     }
 
     _track(pct, color) {
@@ -771,7 +772,7 @@ export class SEMNextBase extends SEMLitBase {
                 role="${tap ? 'button' : nothing}" tabindex="${tap ? 0 : nothing}" aria-label="${tap ? `${o.label}: ${typeof o.value === 'string' ? o.value : ''}` : nothing}"
                 aria-disabled="${o.disabled && !tog ? 'true' : nothing}"
                 @click=${tap || nothing} @keydown=${tap ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tap(e); } } : nothing}>
-            <div class="k"><div class="tx"><span class="t">${o.label}</span>${o.help ? html`<small class="hlp">${o.help}</small>` : nothing}</div></div>
+            <div class="k"><div class="tx"><span class="t" title="${o.label}">${o.label}</span>${o.help ? html`<small class="hlp">${o.help}</small>` : nothing}</div></div>
             <div class="v">${body}</div></div>`;
     }
 
@@ -832,7 +833,14 @@ export class SEMNextBase extends SEMLitBase {
             const [a, b] = vals.map((v) => (Number.isFinite(v) ? v : null));
             if (a !== null || b !== null) spec.onCommit(a, b);
         } else if (spec.kind === 'number') {
-            if (Number.isFinite(vals[0]) && vals[0] !== Number(spec.value)) spec.onCommit(vals[0]);
+            // (#1321) inside the setting's own range, as the staged settings are; blank = no change
+            const lo = Number(spec.min), hi = Number(spec.max);
+            let v = vals[0];
+            if (Number.isFinite(v)) {
+                if (spec.min !== undefined && spec.min !== null && spec.min !== '' && Number.isFinite(lo)) v = Math.max(lo, v);
+                if (spec.max !== undefined && spec.max !== null && spec.max !== '' && Number.isFinite(hi)) v = Math.min(hi, v);
+                if (v !== Number(spec.value)) spec.onCommit(v);
+            }
         } else if (spec.kind === 'text' || spec.kind === 'time') {
             if (spec.kind === 'text' || vals[0]) if (String(vals[0]) !== String(spec.value ?? '')) spec.onCommit(vals[0]);
         } else if (String(vals[0] ?? '') !== String(spec.value ?? '')) spec.onCommit(vals[0]);

@@ -172,6 +172,7 @@ class SEMNextNowCard extends SEMNextBase {
         super.updated(changed);
         this._fetchHist();
         this._fetchForecast(this._weatherId());
+        if (this._hint) this._syncHint();
     }
 
     // ── the lead ──
@@ -335,9 +336,22 @@ class SEMNextNowCard extends SEMNextBase {
 
     // ── sections ──
 
+    /** (#1321) The dismissal follows the person across browsers: kept in Home Assistant's user data too. */
+    async _syncHint() {
+        if (this._hintSynced || !this._hass || typeof this._hass.callWS !== 'function') return;
+        this._hintSynced = true;
+        try {
+            const r = await this._hass.callWS({ type: 'frontend/get_user_data', key: HINT_KEY });
+            if (r && r.value === true) { this._hint = false; writeLocal(HINT_KEY, '1'); }
+        } catch (e) { /* no user data: this browser's choice stands */ }
+    }
+    async _saveHintForUser() {
+        try { await this._hass.callWS({ type: 'frontend/set_user_data', key: HINT_KEY, value: true }); } catch (e) { /* this browser keeps it */ }
+    }
+
     _hintBox() {
         if (!this._hint) return nothing;
-        const dismiss = () => { this._hint = false; writeLocal(HINT_KEY, '1'); };
+        const dismiss = () => { this._hint = false; writeLocal(HINT_KEY, '1'); this._saveHintForUser(); };
         return html`<div class="span2">${this._alert('info', '', this._t('next_hint_first'), this._btn(this._t('next_hint_ok'), dismiss, { small: true, ghost: true }))}</div>`;
     }
 
@@ -367,7 +381,6 @@ class SEMNextNowCard extends SEMNextBase {
                 <div class="lane bot">${bar.sinks.map(mk(bar.sinks.length > 1))}</div>
             </div>
             ${this._mixLine(bar)}
-            <p class="help" style="margin-top:8px">${this._io ? this._t('next_bar_fold') : this._t('next_bar_unfold')}</p>
             ${this._io ? this._ioList(bar) : nothing}`;
     }
 
@@ -524,10 +537,11 @@ class SEMNextNowCard extends SEMNextBase {
             const rev = this._num('sensor.sem_daily_export_revenue');
             outs.push(row('grid_out', this._t('next_grid_export'), posOf('sensor.sem_grid_power'), sub(kwhToday('sensor.sem_daily_grid_export_energy'), rev === null ? '' : this._money(rev)), 'sensor.sem_grid_power'));
         }
-        const head = (label, w) => html`<div class="row hd"><div class="k">${label}</div><div class="v">${this._kw(w)}</div></div>`;
+        // (#1321) the power figure is on the bar; the columns only name their side
+        const head = (label) => html`<div class="row hd"><div class="k">${label}</div></div>`;
         return html`<div class="io">
-            <div class="rows">${head(this._t('next_in_title'), bar.inW)}${ins}</div>
-            <div class="rows">${head(this._t('next_out_title'), bar.outW)}${outs}</div>
+            <div class="rows">${head(this._t('next_in_title'))}${ins}</div>
+            <div class="rows">${head(this._t('next_out_title'))}${outs}</div>
         </div>`;
     }
 
@@ -725,8 +739,7 @@ class SEMNextNowCard extends SEMNextBase {
                 : this._tf('next_co2_sub', { life: lifeText, trees: Math.round(trees) }));
             rows.push(this._row('mdi:leaf', this._t('next_co2_avoided'), `${this._fmt(co2, 1)} ${unit}`, sub, { color: C.ev, onClick: () => this._moreInfo('sensor.sem_daily_co2_avoided') }));
         }
-        const score = this._num('sensor.sem_energy_optimization_score');
-        if (score !== null) rows.push(this._row('mdi:star-outline', this._t('next_score'), String(Math.round(score)), this._t('next_score_sub'), { onClick: () => this._moreInfo('sensor.sem_energy_optimization_score') }));
+        // (#1321) the optimisation score said nothing a person could act on: dropped
         const wid = this._weatherId();
         if (wid) rows.push(this._weatherRow(wid));
         if (!rows.length) return nothing;
@@ -744,7 +757,7 @@ class SEMNextNowCard extends SEMNextBase {
         const days = (this._fc || []).filter((f) => f && f.datetime && new Date(f.datetime).toDateString() !== today).slice(0, 4);
         const sub = days.length ? html`<span class="fc">${days.map((f) => {
             const c = WEATHER[f.condition] || null;
-            const t = f.temperature != null ? `${Math.round(f.temperature)} °` : '';
+            const t = f.temperature != null ? `${Math.round(f.temperature)} ${unit}` : '';
             return html`<span>${new Date(f.datetime).toLocaleDateString(lang, { weekday: 'short' })} ${t}${c ? this._icon(c.icon, 's') : nothing}</span>`;
         })}</span>` : '';
         return this._row(cond ? cond.icon : 'mdi:weather-partly-cloudy', this._t('next_weather'), value, sub, { onClick: () => this._moreInfo(id) });

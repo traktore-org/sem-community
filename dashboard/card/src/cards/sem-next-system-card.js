@@ -242,7 +242,6 @@ class SEMNextSystemCard extends SEMNextBase {
         const count = this._str('sensor.sem_diag_charger_count');
         const control = this._valLabel('diag_charger_control');
         const cap = this._num('sensor.sem_diag_battery_capacity');
-        const gridMode = this._valLabel('diag_grid_mode');
         const report = this._attrs('sensor.sem_diag_charger_control').detection_report || null;
         const unmapped = report ? (report.near_misses || []).length : null;
         const strings = pvStrings(this._hass.states).length;
@@ -250,8 +249,8 @@ class SEMNextSystemCard extends SEMNextBase {
         const sub = [
             strings ? this._tf('next_strings', { n: strings }) : '',
             cap !== null && cap > 0 ? this._tf('next_batt_cap', { kwh: this._fmt(cap, 1) }) : '',
-            gridMode ? `${this._t('next_grid_mode')} ${gridMode}` : '',
-            unmapped !== null ? this._tf('next_unmapped', { n: unmapped }) : '',
+            // only what needs a look: unmapped devices; the grid wiring is in the settings
+            unmapped ? this._tf('next_unmapped', { n: unmapped }) : '',
         ].filter(Boolean).join(' · ');
         return this._row('mdi:radar', this._t('next_hardware'), value, sub, { onClick: () => this._togglePanel('hardware') });
     }
@@ -281,6 +280,16 @@ class SEMNextSystemCard extends SEMNextBase {
     }
 
     /** (#1321) Observer mode changes what SEM does, so it is a switch row, not a tool button. */
+    updated(changed) {
+        super.updated(changed);
+        // (#1321) the confirm opens under the switch: the keyboard goes to its first button
+        if (this._confirmObs && !this._confirmFocused) {
+            this._confirmFocused = true;
+            const b = this.renderRoot?.querySelector?.('.confirm ha-button, .confirm button');
+            if (b && typeof b.focus === 'function') b.focus();
+        } else if (!this._confirmObs) this._confirmFocused = false;
+    }
+
     _observerRow() {
         const obs = this._obs();
         const confirm = this._confirmObs
@@ -377,19 +386,25 @@ class SEMNextSystemCard extends SEMNextBase {
         const dis = false;   // (#1321) SEM's own settings stay editable while it only watches
         if (slot.kind === 'action') {
             const go = slot.nav ? () => this._go(navTarget(window.location.pathname, slot.action)) : () => this._action(slot.action);
-            return this._setRow({ label: r.label, value: rowText(t(slot.labelKey)), help: r.help, more: r.more, onTap: go, disabled: dis && !slot.nav });
+            // a link names itself once: the row text, no second copy as its value
+            return this._setRow({ label: r.label, value: slot.nav ? '›' : rowText(t(slot.labelKey)), more: r.more, onTap: go, disabled: dis && !slot.nav });
         }
+        // (#1321) no help line under any row: it sits in the row's dialog
         if (slot.ro || slot.kind === 'text' && !pendingKey(slot)) {
-            return this._setRow({ label: r.label, value: slot.value, help: r.help, more: r.more, ro: true });
+            return this._setRow({ label: r.label, value: slot.value, more: r.more, ro: true });
         }
         const key = pendingKey(slot);
         const pend = this._pending[key];
         const value = pend ? pend.value : slot.value;
-        const base = { label: r.label, help: r.help, more: r.more, dirty: !!pend, disabled: dis };
+        const base = { label: r.label, more: r.more, dirty: !!pend, disabled: dis };
         if (slot.kind === 'switch') {
             return this._setRow({ ...base, toggle: { on: !!value, onChange: (v) => this._stage(slot, v) } });
         }
-        return this._setRow({ ...base, value: slotText(slot, t, value, this._hass), onTap: () => this._openEdit(slot, r.label, value) });
+        // the peak limit is a switch (limit or none); its level is the next row
+        if (slot.peak) {
+            return this._setRow({ ...base, toggle: { on: value === 'limit', onChange: (on) => this._stage(slot, on ? 'limit' : 'none') } });
+        }
+        return this._setRow({ ...base, value: slotText(slot, t, value, this._hass), onTap: () => this._openEdit(slot, r.label, value, r.help) });
     }
 
     /** The edit dialog for a slot: its kind picks the control, the commit stages the change. */
@@ -412,8 +427,8 @@ class SEMNextSystemCard extends SEMNextBase {
         return { ...base, kind: 'text', placeholder: slot.placeholder };
     }
 
-    _openEdit(slot, label, value) {
-        this._editDialog(this._editSpec(slot, label, value));
+    _openEdit(slot, label, value, help = '') {
+        this._editDialog({ ...this._editSpec(slot, label, value), ...(help ? { help } : {}) });
     }
 
     _stage(slot, raw) {

@@ -157,7 +157,7 @@ test('8: the power number is printed once on the bar', () => {
     const out = text(now._powerNow());
     assert.equal((out.match(/>0\.8 kW</g) || []).length, 1, out);
     assert.doesNotMatch(out, /next_tap_row_history|next_self_use_pct/);
-    assert.match(out, /next_bar_unfold/);
+    assert.doesNotMatch(out, /next_bar_unfold|next_bar_fold/, 'no hint line under the bar');
 });
 
 test('8: the two Today cards are named and "No recommendations" is not a tip', () => {

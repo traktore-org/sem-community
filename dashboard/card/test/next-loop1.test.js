@@ -190,3 +190,30 @@ test('D: a would-do record shows a plain sentence or nothing, never the log text
     const load = { device_id: 'heizband', kind: 'load', action: 'hold', reason: 'peak_only — user-managed', reason_code: null };
     assert.equal(recordReason(load, {}, t), '');
 });
+
+// ── L: code ──
+test('L: a number typed in an immediate-write dialog is clamped; blank commits nothing', () => {
+    const el = nowCard({ 'switch.sem_observer_mode': S('off') });
+    const got = [];
+    const spec = { kind: 'number', value: 5, min: 0, max: 10, onCommit: (v) => got.push(v) };
+    el._editOk(spec, [{ get: () => 99 }], () => {});
+    el._editOk(spec, [{ get: () => -4 }], () => {});
+    el._editOk(spec, [{ get: () => NaN }], () => {});
+    el._editOk({ ...spec, min: undefined, max: undefined }, [{ get: () => 99 }], () => {});
+    assert.deepEqual(got, [10, 0, 99]);
+});
+
+test('G: a finished setup folds to one line', async () => {
+    const { viewModel } = await import('../src/util/setup-checklist.js');
+    assert.equal(viewModel({ done: 5, total: 5, items: [] }, true, false, false).complete, true);
+    assert.equal(viewModel({ done: 4, total: 5, items: [] }, true, false, false).complete, false);
+});
+
+test('F: the hints sentence has no "to None"', async () => {
+    const { groups, sentenceText } = await import('../src/util/next-settings.js');
+    const tt = (k) => ({ next_misc_hints_to: 'hints {hints} to {service}', next_misc_hints: 'hints {hints}' }[k] || k);
+    const st = { 'select.sem_hints': S('off', { options: ['off'] }) };
+    const g = groups(st, tt, { notifyServices: [{ value: 'notify.x', label: 'X' }], chargers: [] }).find((x) => x.key === 'misc');
+    assert.ok(g, 'misc group');
+    assert.doesNotMatch(sentenceText(g.sentence, tt, st), /to None|hints .* to /);
+});

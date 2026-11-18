@@ -126,7 +126,7 @@ test('peak: with no limit the card says "No limit" and what that means', () => {
     const st = baseStates({ 'sensor.sem_target_peak_limit': S(6.5, { unit_of_measurement: 'kW', peak_limit_unlimited: true }) });
     for (const tag of ['sem-next-devices-card']) {
         const out = draw(tag, st);
-        assert.ok(out.includes(PEAK_TEXT.none), `${tag}: ${out.slice(0, 400)}`);
+        // the limit is a switch now: off says No limit through its help line
         assert.ok(out.includes(PEAK_TEXT.subNone), tag);
     }
 });
@@ -137,7 +137,8 @@ test('battery: the card shows the three levels the shared model reads, and the s
     const says = batterySaysFromStates(st);
     const next = draw('sem-next-devices-card', st);
     for (const id of ['priority', 'buffer', 'autostart']) {
-        assert.match(next, new RegExp(`next_zone_\\w+ ${lv[id]}\\b`), `next levels: ${id}`);
+        // (#1321) the levels are rows; the bar carries one marker, "now"
+        assert.match(next, new RegExp(`bq_${id}\\b[\\s\\S]*?${lv[id]} %`, 'i'), `next levels: ${id}`);
     }
     for (const [name, out] of [['next', next]]) {
         assert.ok(out.includes(says.now.key), `${name}: ${says.now.key}`);

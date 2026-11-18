@@ -419,8 +419,9 @@ export function rowsFor(sentence, items, t, prefix = '') {
     const out = [];
     const seen = new Set();
     const add = (label, slot, more) => {
+        if (!slot) return;
         const id = pendingKey(slot) || label;
-        if (!slot || seen.has(id)) return;
+        if (seen.has(id)) return;
         seen.add(id);
         const hk = slot.option && ROW_HELP[slot.option];
         out.push({ label: prefix ? `${prefix} · ${label}` : label, help: hk ? t(hk) : '', slot, more });
@@ -429,7 +430,8 @@ export function rowsFor(sentence, items, t, prefix = '') {
         if (!p || typeof p !== 'object' || p.ro) continue;
         if (!(p.id || p.option || p.action)) continue;
         const key = rowLabelKey(p);
-        add(key ? rowText(t(key)) : String(p.id || p.option || p.action), p, false);
+        // (#1321) a slot with no label key reads "Setting", never its raw id (a test holds every slot to a key)
+        add(key ? rowText(t(key)) : rowText(t('next_row_setting')), p, false);
     }
     for (const it of items || []) {
         const l = it.labelKey;
@@ -879,7 +881,7 @@ export function groups(states, t, ctx = {}) {
             const cid = c.cid;
             const name = text(c.name || cid);
             const phases = numSlot(states, `number.sem_charger_${cid}_ev_phases`);
-            const min = numSlot(states, `number.sem_charger_${cid}_minimum_current`, { unit: '' });
+            const min = numSlot(states, `number.sem_charger_${cid}_minimum_current`);
             const max = numSlot(states, `number.sem_charger_${cid}_maximum_current`);
             const entry = o ? (o.ev_chargers || []).find((x) => x && x.id === cid) : null;
             const types = entry && entry.vehicle_soc_entity ? TARGET_TYPES : TARGET_TYPES.slice(0, 1);
@@ -1032,7 +1034,8 @@ export function groups(states, t, ctx = {}) {
             ? optSelect(o, 'mobile_notification_service', [{ value: '', labelKey: 'config_notif_none' }, ...services], '')
             : (o && o.mobile_notification_service ? text(o.mobile_notification_service) : null);
         const sentence = join(
-            clause([frag(t, 'next_misc_hints_to', { hints, service }) || frag(t, 'next_misc_hints', { hints })]),
+            // no service picked: "hints Off", never "hints Off to None"
+            clause([(o && o.mobile_notification_service ? frag(t, 'next_misc_hints_to', { hints, service }) : null) || frag(t, 'next_misc_hints', { hints })]),
             clause([frag(t, 'next_misc_interval', { interval: numSlot(states, 'number.sem_update_interval') })]),
             clause([frag(t, 'next_misc_morning', { on: switchSlot(states, 'switch.sem_ev_morning_window_enabled'),
                                                    hours: numSlot(states, 'number.sem_ev_morning_window_hours') })]),

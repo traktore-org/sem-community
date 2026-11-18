@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Each fact reads one source** (#1321). Heat pump state, car plug status, grid kWh, house kWh and the battery floor now agree on every screen.
+- 🐛 **Plan words match the time** (#1321). A passed deadline says tomorrow; the plan says this morning, today or tonight; no false "one rate".
+- ✨ **Watch only has one name and settings stay editable** (#1321). Only writes that move a device are refused, at the moment of the write.
+- 🐛 **No engine text on screen** (#1321). "What SEM would do" shows plain sentences; names you typed are kept; source names are plain.
+- 🐛 **Plainer Now, Devices and System screens** (#1321). One mode control per car, schedule shown once, fewer repeats, units on values, readable light mode.
 - ✨ **Settings are Home Assistant rows** (#1321). Name left, value right; tap a row to change it. On/off settings are a switch.
 - 🐛 **Screens show true values and plain names** (#1321). Plan line matches chart, one bar scale, one price format, no entity ids.
 - 🐛 **Plainer words in all languages** (#1321). Solar, Export and Charge by each have one name; jargon is gone.

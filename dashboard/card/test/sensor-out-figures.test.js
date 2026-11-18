@@ -158,9 +158,9 @@ const ALLOWED_OUT = {
 // query results that are not here. A sensor that reads never prints the dash.
 const DASHES_WITH_READINGS = {
     'sem-simulation-card': 2,
-    // (#1321) charge-by time, target min and max, departures: settings
-    // (time and number entities), which this hass does not carry
-    'sem-next-devices-card': 3,   // (#1371) the weekday row shows only when days differ
+    // (#1321) the schedule shows once, as rows that need their entities: no
+    // entity, no row, no dash
+    'sem-next-devices-card': 0,
     // drawn before the first update writes its labels (tested below)
 };
 const DRAWN = CARDS.filter((t) => typeof customElements.get(t) === 'function');

@@ -33,6 +33,8 @@ export function viewModel(checklist, watchOnly, hidden, reopened) {
         list,
         chip: !list,
         done: checklist.done, total: checklist.total,
+        // (#1321) every required step done: the list folds to one line
+        complete: checklist.total > 0 && checklist.done >= checklist.total,
         pct: checklist.total ? Math.round((checklist.done / checklist.total) * 100) : 100,
         repairs: checklist.repairs || { count: 0, first: null },
     };

@@ -686,7 +686,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         return this._frame(lead, html`
             <div class="period">
                 ${this._seg(PERIOD_KEYS.map(([key, label]) => ({ key, label: this._t(label) })), this._period, (k) => this._pick(k), { small: true, disabled: this._tab === 'replay' })}
-                ${this._w && this._w < 600
+                ${(this._w || (typeof window !== 'undefined' ? window.innerWidth : 0)) && (this._w || window.innerWidth) < 600
                     ? this._select(tabs.map((x) => ({ value: x.key, label: x.label })), this._tab, (k) => this._pickTab(k), { label: this._t('next_topic') })
                     : this._seg(tabs, this._tab, (k) => this._pickTab(k), { small: true })}
             </div>

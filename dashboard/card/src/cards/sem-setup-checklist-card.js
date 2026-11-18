@@ -125,6 +125,15 @@ class SEMSetupChecklistCard extends SEMLitBase {
             { label: this._t('setup_btn_open'), fn: () => this._go('repairs') });
     }
 
+    /** (#1321) All steps done: one line, tap to open the list; the check-up row only when it needs action. */
+    _complete(vm) {
+        return html`<ha-card class="list done" aria-label=${this._t('setup_list_title')}>
+            <button type="button" class="one" aria-expanded="false" @click=${() => this._reopen()}>
+                <ha-icon class="ok" icon=${ICON_OK}></ha-icon><span class="t">${this._t('setup_complete')}</span><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+            ${this._repairsRow(vm.repairs)}
+        </ha-card>`;
+    }
+
     _list(c, vm) {
         return html`<ha-card class="list" aria-label=${this._t('setup_list_title')}>
             <div class="lhead">
@@ -153,7 +162,7 @@ class SEMSetupChecklistCard extends SEMLitBase {
         const watchOnly = isWatchOnly(this._hass.states, c);
         const vm = viewModel(c, watchOnly, this._hidden, this._reopened);
         return html`${vm.banner ? this._banner() : nothing}
-            ${vm.list ? this._list(c, vm) : this._chip(vm, watchOnly)}`;
+            ${vm.list ? (vm.complete && !this._reopened ? this._complete(vm) : this._list(c, vm)) : this._chip(vm, watchOnly)}`;
     }
 
     getCardSize() { return 3; }
@@ -179,6 +188,9 @@ class SEMSetupChecklistCard extends SEMLitBase {
             ha-card.list { display: block; padding: 16px; margin-bottom: 16px; color: var(--primary-text-color);
                 background: var(--ha-card-background, var(--card-background-color, #fff)); border-radius: var(--sem-card-radius, 12px);
                 border: var(--sem-card-border-width, 1px) solid var(--sem-card-border-color, var(--divider-color, #e0e0e0)); box-shadow: var(--ha-card-box-shadow, none); }
+            .one { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+            .one .t { flex: 1; font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); }
+            ha-card.list.done { padding-top: 4px; padding-bottom: 4px; }
             .lhead { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; }
             .cap { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); }
             .bar { height: 6px; border-radius: 3px; background: var(--divider-color); overflow: hidden; margin-bottom: 6px; }

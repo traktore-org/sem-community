@@ -13,7 +13,6 @@ import { monthTotals, rowsForMonth } from './sessions.js';
 import { rowText } from './next-settings.js';
 import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities } from './charger-questions.js';
 
-const SMART_DEFAULT = 'min_plus_solar';
 const LATE = [0, 15, 30, 45, 60, 90, 120];
 const FLOORS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -70,30 +69,13 @@ export function chargerBody(card, row) {
     const mode = modeId ? card._str(modeId) : '';
     const modeAttrs = modeId ? card._attrs(modeId) : {};
     const options = Array.isArray(modeAttrs.options) ? modeAttrs.options : [];
-    const smartOpts = options.filter((o) => o !== 'off' && o !== 'always_max');
-    const segKey = mode === 'off' ? 'off' : mode === 'always_max' ? 'always' : 'smart';
+    const segKey = mode;
     const tariffOk = modeAttrs.tariff_available !== false;
     const needTariff = Array.isArray(modeAttrs.modes_needing_tariff) ? modeAttrs.modes_needing_tariff : [];
-    const pickSmart = () => {
-        const last = (card._smartLast || {})[cid];
-        const first = smartOpts.includes(SMART_DEFAULT) ? SMART_DEFAULT : smartOpts[0];
-        card._selectOption(modeId, smartOpts.includes(last) ? last : first);
-    };
-    const pickMode = (key) => {
-        if (!modeId) return;
-        if (key === 'off') card._selectOption(modeId, 'off');
-        else if (key === 'always') card._selectOption(modeId, 'always_max');
-        else pickSmart();
-    };
-    const segItems = [];
-    // (#1354) the modes by the shared names and order, as the classic card lists them
-    if (options.includes('off')) segItems.push({ key: 'off', label: t(chargeModeKey('off')) });
-    if (smartOpts.length) segItems.push({ key: 'smart', label: t('next_smart') });
-    if (options.includes('always_max')) segItems.push({ key: 'always', label: t(chargeModeKey('always_max')) });
-    const smartSeg = segKey === 'smart' && smartOpts.length > 1 ? card._seg(
-        [...smartOpts].sort((x, y) => CHARGE_MODES.indexOf(x) - CHARGE_MODES.indexOf(y)).map((o) => ({ key: o, label: t(chargeModeKey(o)) || o, disabled: !tariffOk && needTariff.includes(o) })),
-        mode, (o) => { card._smartLast = { ...(card._smartLast || {}), [cid]: o }; card._selectOption(modeId, o); },
-        { small: true, disabled: dis }) : nothing;
+    const pickMode = (key) => { if (modeId && key !== mode) card._selectOption(modeId, key); };
+    // (#1321) ONE control for the mode, as the battery has: Off first, then the modes in the shared order
+    const segItems = ['off', ...CHARGE_MODES.filter((m) => m !== 'off')].filter((m) => options.includes(m))
+        .map((m) => ({ key: m, label: t(chargeModeKey(m)) || m, disabled: !tariffOk && needTariff.includes(m) }));
     const buffer = card._num('number.sem_battery_buffer_soc');
     const priority = card._num('number.sem_battery_priority_soc');
     const hintP = { buffer: buffer === null ? '—' : Math.round(buffer), priority: priority === null ? '—' : Math.round(priority) };
@@ -120,10 +102,11 @@ export function chargerBody(card, row) {
     const sessionExt = card._num(S('session_energy_external'));
     const session = sessionExt !== null && sessionExt > 0 ? sessionExt : card._num(S('session_energy'));
     const sessionSun = card._num(S('session_solar_share'));
+    const noCarNow = card._str('binary_sensor.sem_charger_' + cid + '_connected') === 'off';
     const stats1 = [
         [t('next_power'), card._kw(powerW), html`${amps === null ? '' : Math.round(amps) + ' A'}${phaseDots(phases)}${phases === null ? '' : ' ' + tf('next_n_ph', { n: phases })}`],
         [t('next_today'), card._kwh(daily), sunToday === null ? '' : tf('next_sun_pct', { pct: Math.round(sunToday) })],
-        [t('next_session_cap'), card._kwh(session), sessionSun === null ? '' : tf('next_sun_pct', { pct: Math.round(sessionSun) })],
+        [t(noCarNow ? 'next_last_session' : 'next_session_cap'), card._kwh(session), sessionSun === null ? '' : tf('next_sun_pct', { pct: Math.round(sessionSun) })],
     ];
 
     // ── target ──
@@ -151,7 +134,7 @@ export function chargerBody(card, row) {
     const timeId = ent('time', 'target_time');
     const chargeBy = timeId ? card._hhmm(card._str(timeId)) : '';
     const fmtT = (v) => (v === null ? '—' : (isSoc ? Math.round(v) : card._fmt(v, 1)));
-    const flag = tm.flagLeft === null ? nothing : html`<div class="flag" style="left:${tm.flagLeft}%">${chargeBy ? chargeBy + ' · ' : ''}${tf('next_at_least_x', { x: fmtT(min) + ' ' + unit })}</div>`;
+    const flag = tm.flagLeft === null ? nothing : html`<div class="flag" style="left:${tm.flagLeft}%">${tf('next_at_least_x', { x: fmtT(min) + ' ' + unit })}</div>`;
     const target = html`<div class="target">
         <div class="soc" style="width:${tm.fill}%"></div>
         ${tm.bandLeft === null ? nothing : html`<div class="band" style="left:${tm.bandLeft}%;width:${tm.bandWidth}%"></div>`}
@@ -177,10 +160,6 @@ export function chargerBody(card, row) {
     const stats2 = html`<div class="stats" style="margin-top:4px">
         <div><span class="lbl">${t('next_charge')}</span><div class="big num">${soc === null ? '—' : (isEstimate ? '~' : '') + Math.round(soc) + ' %'}</div>
             <div class="sub2">${soc === null ? t('next_no_soc') : html`${kmNow === null ? '' : tf('next_km', { km: kmNow }) + ' · '}${isEstimate ? t('next_estimate') : t('next_measured')}`}</div></div>
-        <div><span class="lbl">${t(CHARGER_TEXT.departure)}</span><div class="big num">${timeVal}</div>
-            <div class="sub2">${daysVal}${dep.next && card._hhmm(dep.next) !== chargeBy ? ' · ' + tf('next_next_departure', { time: card._hhmm(dep.next) }) : ''}${plannedKwh > 0 ? ' · ' + tf('next_kwh_planned', { kwh: card._fmt(plannedKwh, 1) }) : ''}</div></div>
-        <div><span class="lbl">${t(CHARGER_TEXT.target)}</span><div class="big num">${targetVal}</div>
-            <div class="sub2">${t('next_goal_unit')} ${typeVal}${kmAdd ? ' · ' + tf('next_plus_km', { km: kmAdd }) : ''}</div></div>
     </div>`;
 
     // ── buttons ──
@@ -228,7 +207,11 @@ export function chargerBody(card, row) {
     const srow = (label, value, spec, o = {}) => card._setRow({ label, value, disabled: dis || !!o.disabled, help: o.help || '', more: !!o.more,
         onTap: () => card._editDialog({ title: label, ...spec }) });
     if (timeId) {
-        setRows.push(srow(t(CHARGER_TEXT.departure), chargeBy || '—', card._timeEdit('time:' + cid, { value: chargeBy, onCommit: (v) => card._setTime(timeId, v) })));
+        // (#1321) the schedule is shown once, here: the time, its weekdays, the next departure and the planned kWh
+        const more = [dep.next && card._hhmm(dep.next) !== chargeBy ? tf('next_next_departure', { time: card._hhmm(dep.next) }) : '',
+            plannedKwh > 0 ? tf('next_kwh_planned', { kwh: card._fmt(plannedKwh, 1) }) : ''].filter(Boolean).join(' · ');
+        setRows.push(srow(t(CHARGER_TEXT.departure), chargeBy || '—', card._timeEdit('time:' + cid, { value: chargeBy, onCommit: (v) => card._setTime(timeId, v) }), { help: more }));
+        setRows.push(card._setRow({ label: card._lbl('next_days'), value: daysVal, disabled: dis }));
     }
     if (minId && maxId) {
         const at = (id) => ({ value: card._num(id), min: card._attrs(id).min, max: card._attrs(id).max, step: card._attrs(id).step });
@@ -311,8 +294,7 @@ export function chargerBody(card, row) {
     rows.unshift(...setRows);
     return html`
         ${segItems.length ? card._seg(segItems, segKey, pickMode, { disabled: dis }) : nothing}
-        ${smartSeg !== nothing ? html`<div style="margin-top:6px">${smartSeg}</div>` : nothing}
-        ${hint || pausedUntil ? html`<div class="modehelp">${pausedUntil ? tf('next_paused_until', { time: pausedUntil, mode: resumeMode }) + ' ' : ''}${segKey === 'smart' ? html`${t('next_smart_is')} <b>${t('charge_mode_' + mode) || mode}</b> · ` : ''}${hint}${nextCheap ? ' · ' + tf('next_next_cheap', { time: nextCheap }) : ''}</div>` : nothing}
+        ${hint || pausedUntil ? html`<div class="modehelp">${pausedUntil ? tf('next_paused_until', { time: pausedUntil, mode: resumeMode }) + ' ' : ''}${hint}${nextCheap ? ' · ' + tf('next_next_cheap', { time: nextCheap }) : ''}</div>` : nothing}
         ${card._stats(stats1)}
         ${target}
         ${stats2}

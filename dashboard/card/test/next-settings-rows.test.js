@@ -105,6 +105,7 @@ const { groups, applyPlan, pendingKey, slotsOf, slotText } = await import('../sr
 const EN = JSON.parse(readFileSync(new URL('../../translations.json', import.meta.url), 'utf8')).en;
 globalThis.semLocalize = (key) => EN[key] || key;
 const tEn = (k) => EN[k] || k;
+const rowTextOf = (x) => String(x).replace(/\s*\([^)]*\)\s*$/, '');
 
 const numE = (state, min, max, step, unit) => S(state, { min, max, step, unit_of_measurement: unit });
 function states() {
@@ -155,7 +156,7 @@ test('every setting slot has a row with a label and a value', () => {
         assert.doesNotMatch(r.label, /^[a-z_.]+$/, 'a plain label, not a key or id: ' + r.label);
         const out = text(el._slotRow(r));
         assert.ok(out.includes(r.label), r.label);
-        if (r.slot.kind !== 'switch' && r.slot.kind !== 'action') {
+        if (r.slot.kind !== 'switch' && r.slot.kind !== 'action' && !r.slot.peak) {
             assert.ok(out.includes(slotText(r.slot, tEn, r.slot.value, el.hass.states)), 'value of ' + r.label);
         }
     }
@@ -169,7 +170,7 @@ test('a row opens the dialog for its kind; a boolean toggles on the row', () => 
     for (const r of rowsOfAll(el)) {
         const tpl = el._slotRow(r);
         const kind = r.slot.kind;
-        if (kind === 'switch') {
+        if (kind === 'switch' || r.slot.peak) {
             assert.doesNotMatch(text(tpl), /role="button"/, 'a switch row is not a button');
             assert.match(text(tpl), /role="switch"/);
             toggled += 1;
@@ -185,6 +186,25 @@ test('a row opens the dialog for its kind; a boolean toggles on the row', () => 
     }
     assert.equal(specs.length, opened);
     assert.ok(opened > 40 && toggled > 5, `${opened} dialogs, ${toggled} switches`);
+});
+
+test('every row has a real label key, never the fallback word or a raw id', () => {
+    const el = sys();
+    for (const r of rowsOfAll(el)) {
+        assert.notEqual(r.label, rowTextOf(tEn('next_row_setting')), 'fallback label on ' + pendingKey(r.slot));
+        assert.doesNotMatch(r.label, /[a-z]+_[a-z]+/, 'no raw id: ' + r.label);
+    }
+});
+
+test('the peak limit is a switch row, and no row prints a help line', () => {
+    const el = sys();
+    const r = rowsOfAll(el).find((x) => x.slot.peak);
+    assert.ok(r, 'a peak row');
+    assert.match(text(el._slotRow(r)), /role="switch"/);
+    fns(el._slotRow(r)).map((f) => f.fn)[0]();
+    assert.equal(Object.values(el._pending).length, 1, 'the toggle stages one change');
+    assert.ok(['limit', 'none'].includes(Object.values(el._pending)[0].value));
+    for (const row of rowsOfAll(el)) assert.doesNotMatch(text(el._slotRow(row)), /class="hlp"/, row.label);
 });
 
 test('a switch row stages the boolean, like the old inline button did', () => {
@@ -207,7 +227,7 @@ test('Apply sends the same entity writes and options as the inline editors did',
     const old = {};
     for (const r of rowsOfAll(el)) {
         const kind = r.slot.kind;
-        if (!KIND[kind] || r.slot.ro || kind === 'switch') continue;
+        if (!KIND[kind] || r.slot.ro || kind === 'switch' || r.slot.peak) continue;
         fns(el._slotRow(r)).map((f) => f.fn)[0]();
         const spec = specs.at(-1);
         const other = kind === 'select' ? spec.options.find((o) => String(o.value) !== String(r.slot.value)) : null;
@@ -452,7 +472,8 @@ test('Devices: the charger target, charge by and goal are rows; the pair dialog 
     const calls = [];
     const st = { ...CAR, 'number.sem_charger_keba_minimum_current': numE(6, 6, 32, 1, 'A'),
         'number.sem_charger_keba_daily_ev_target': numE(10, 0, 50, 1, 'kWh'), 'number.sem_charger_keba_ev_target_min': numE(10, 0, 50, 1, 'kWh'),
-        'number.sem_charger_keba_ev_target_max': numE(30, 0, 50, 1, 'kWh') };
+        'number.sem_charger_keba_ev_target_max': numE(30, 0, 50, 1, 'kWh'),
+        'number.sem_charger_keba_daily_ev_target_max': numE(30, 0, 50, 1, 'kWh') };
     const el = mk('sem-next-devices-card', st, { callService: async (d, s, data) => { calls.push([d, s, data]); } });
     const tpl = chargerBody(el, { id: 'load_device_keba', cid: 'keba', type: 'charger' });
     const out = text(tpl);

@@ -28,9 +28,8 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, nextBlock, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, weekdaySummary, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
+import { deviceRows, statePill, nextBlock, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
-import { chargePlanSummary, targetEntities } from '../util/charger-questions.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
 
@@ -78,12 +77,13 @@ function writeOpen(map) {
     try { window.localStorage.setItem(OPEN_KEY, JSON.stringify(map)); } catch (e) { /* private window: nothing kept */ }
 }
 
+/** (#1321) "Normal" and "Normal operation" say one thing: show the longer once. */
+function sameWords(a, b) {
+    const x = String(a || '').trim().toLowerCase(), y = String(b || '').trim().toLowerCase();
+    return !!x && !!y && (y.startsWith(x) || x.startsWith(y));
+}
+
 const devicesCss = css`
-    .cpchip { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 6px 36px; padding: 4px 10px; border-radius: 16px; text-align: left;
-        border: 1px solid var(--n-line); background: var(--n-bg2, transparent); color: var(--n-fg); font: inherit; font-size: 12.5px; cursor: pointer; max-width: calc(100% - 36px); }
-    .cpchip span { min-width: 0; overflow-wrap: break-word; }
-    .cpchip ha-icon { --mdc-icon-size: 15px; color: var(--n-fg2); flex: 0 0 auto; }
-    .cpchip:focus-visible { outline: 2px solid var(--n-accent, currentColor); outline-offset: 2px; }
     .addform { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 6px; }
     .addform label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--n-fg2); }
     .addform input.txt { max-width: none; }
@@ -478,27 +478,6 @@ class SEMNextDevicesCard extends SEMNextBase {
         this._tick++;
     }
 
-    /** (#1321) The charge plan in one line, always visible: "Ready by 07:00 · 20–100 kWh · Mon–Sun" + a pencil. */
-    _chargePlanChip(row) {
-        const cid = row.cid;
-        const typeId = this._chargerEntity('select', cid, 'ev_target_type');
-        const type = typeId ? (this._str(typeId) || 'kwh') : 'kwh';
-        const te = targetEntities(cid, type);
-        const timeId = this._chargerEntity('time', cid, 'target_time');
-        const chargeBy = timeId ? this._hhmm(this._str(timeId)) : '';
-        const dep = ((this._attrs('sensor.sem_charging_state').per_charger_departure || {})[cid]) || {};
-        const runs = weekdaySummary(dep.by_weekday || {}, chargeBy || dep.default || '');
-        const s = chargePlanSummary({
-            chargeBy, unit: type === 'soc' ? '%' : 'kWh',
-            min: this._has(te.atLeast) ? this._num(te.atLeast) : null, max: this._has(te.upTo) ? this._num(te.upTo) : null,
-            runs, dayName: (i) => this._dayName(i),
-        });
-        const parts = [s.time ? this._tf('next_cp_ready_by', { time: s.time }) : '', s.range, s.days].filter(Boolean);
-        if (!parts.length) return nothing;
-        return html`<button type="button" class="cpchip" title=${this._t('next_cp_edit')} aria-label=${this._t('next_cp_edit')}
-            @click=${() => this._openChargePlan(cid)}>${this._icon('mdi:calendar-clock', 's')}<span>${parts.join(' · ')}</span>${this._icon('mdi:pencil', 's')}</button>`;
-    }
-
     /** A charge plan another screen asked for, read once. */
     _takeOpenRequest() {
         let cid = null;
@@ -724,11 +703,9 @@ class SEMNextDevicesCard extends SEMNextBase {
                 this._svc('update_target_peak', { target_peak_limit: w.target_peak_limit ?? q.kw, peak_limit_unlimited: w.peak_limit_unlimited });
             };
             // a limit that is not read shows no number (no fallback in its place)
-            peakRows.push(this._setRow({ label: this._lbl('next_peak_limit'), value: t(q.limited ? PEAK_TEXT.limit : PEAK_TEXT.none),
-                help: t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone), disabled: dis || limit === null,
-                onTap: () => this._editDialog({ title: this._lbl('next_peak_limit'), kind: 'select', value: q.limited ? 'limit' : 'none',
-                    options: [{ value: 'limit', label: t(PEAK_TEXT.limit) }, { value: 'none', label: t(PEAK_TEXT.none) }],
-                    onCommit: (v) => send(v === 'limit', q.kw) }) }));
+            // (#1321) a switch (limit on or off) and, when on, its level as the next row
+            peakRows.push(this._setRow({ label: this._lbl('next_peak_limit'), help: t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone),
+                disabled: dis || limit === null, toggle: { on: q.limited, onChange: (on) => send(!!on, q.kw) } }));
             if (q.limited) {
                 peakRows.push(this._setRow({ label: this._lbl('next_row_peak_level'), value: limit === null ? '—' : this._kw(q.kw * 1000), disabled: dis,
                     onTap: () => this._editDialog({ title: this._lbl('next_row_peak_level'), kind: 'number', value: q.kw,
@@ -756,7 +733,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             ${peakE && !uncapped ? html`<div style="margin:10px 0 6px">${this._track(pct, C.grid)}</div>` : nothing}
             ${peakRows.length ? html`<div class="rows">${peakRows}</div>` : nothing}
             ${sent.length ? html`<p class="sent">${sent.map((s, i) => html`${i ? ' ' : ''}${s}`)}</p>` : nothing}
-            ${status || rec ? html`<p class="help">${status}${status && rec ? ' · ' : ''}${rec}</p>` : nothing}`, { cls: 'span2' });
+            ${status || rec ? html`<p class="help">${sameWords(status, rec) ? rec : html`${status}${status && rec ? ' · ' : ''}${rec}`}</p>` : nothing}`, { cls: 'span2' });
     }
 
     // ── one device card ──
@@ -794,7 +771,6 @@ class SEMNextDevicesCard extends SEMNextBase {
                 <button type="button" class="fold" aria-expanded=${open ? 'true' : 'false'} aria-label=${t(open ? 'next_fold_device' : 'next_open_device')}
                     @click=${toggle}>${this._icon('mdi:chevron-down')}</button>
             </div>
-            ${row.type === 'charger' && !this._reorder ? this._chargePlanChip(row) : nothing}
             ${open ? html`<div class="body">${body}</div>` : nothing}</ha-card>`;
     }
 

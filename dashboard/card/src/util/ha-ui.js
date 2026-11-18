@@ -8,7 +8,8 @@ import { haDefined } from './ha-elements.js';
 
 /** o = { primary, ghost, small, disabled, icon (mdi), title, onIcon: (mdi) => template }. */
 export function renderButton(label, onClick, o = {}, icon = (mdi) => html`<ha-icon icon="${mdi}"></ha-icon>`) {
-    if (haDefined('ha-button')) {
+    // HA fades a disabled ha-button to nothing on a light theme: a disabled one is the native button in readable colours
+    if (haDefined('ha-button') && !o.disabled) {
         return html`<ha-button appearance="${o.primary ? 'filled' : o.ghost ? 'plain' : 'outlined'}" size="${o.small ? 'small' : 'medium'}"
             title="${o.title || nothing}" ?raised=${!!o.primary} ?outlined=${!o.primary && !o.ghost} ?disabled=${!!o.disabled}
             @click=${onClick}>${o.icon ? html`<ha-icon slot="start" icon="${o.icon}"></ha-icon>` : nothing}${label}</ha-button>`;
