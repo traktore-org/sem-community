@@ -34,10 +34,26 @@ export const chipKey = (rec) => `${rec?.device_kind || ''}:${rec?.device_id || '
 /** A device's shown name: its own, or the kind's word when the log only has an id. */
 export function deviceName(rec, t, many = false) {
     const own = rec?.name;
-    if (own && own !== rec.device_id) return own;
-    const word = t(`why_kind_${rec?.device_kind}`);
-    if (!word || word === `why_kind_${rec?.device_kind}`) return own || rec?.device_id || '';
+    // a name that is only an id (primary, keba_fa87f74cd3) is not a name
+    if (own && own !== rec.device_id && !/^[a-z0-9_:.-]+$/.test(String(own))) return own;
+    const kind = rec?.device_kind || rec?.kind;
+    const word = t(`why_kind_${kind}`);
+    if (!word || word === `why_kind_${kind}`) return own || rec?.device_id || '';
     return many ? `${word} ${rec.device_id}` : word;
+}
+
+/**
+ * (#1321) A command verb in words: `next_act_<verb>`; a verb with no text
+ * reads as plain words (limit_export becomes "limit export"), never snake_case.
+ */
+export function actionWords(action, t) {
+    const code = String(action || '').trim();
+    if (!code) return '';
+    if (code.includes('.')) return code;  // a service call (keba.set_current) stays as it is
+    const key = `next_act_${code}`;
+    const said = t(key);
+    if (said && said !== key) return said;
+    return code.replace(/[_\s]+/g, ' ').trim().toLowerCase();
 }
 
 /** The chips: one per device that has rows, in the order the rows meet them. */

@@ -91,7 +91,7 @@ const devicesCss = css`
     .addform .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .addform .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     ha-entity-picker { display: block; }
-    .grid { align-items: start; grid-template-columns: minmax(0, 1fr); max-width: 980px; }
+    .grid { align-items: start; grid-template-columns: minmax(0, 1fr); }
     .dev.folded .body { display: none; }
     .dev.folded .head { margin-bottom: 0; }
     .dev .fold { border: 0; background: none; color: var(--n-fg3); cursor: pointer; padding: 4px; border-radius: 8px; display: inline-flex; }
@@ -534,7 +534,7 @@ class SEMNextDevicesCard extends SEMNextBase {
     _afterRender() {
         if (this._chargers && this._chargers.length && !this._openTaken) { this._openTaken = true; this._takeOpenRequest(); }
         if (this._scrollTo) {
-            const el = this.renderRoot && this.renderRoot.querySelector(`section[data-id="${this._scrollTo}"]`);
+            const el = this.renderRoot && this.renderRoot.querySelector(`[data-id="${this._scrollTo}"]`);
             if (el) { this._scrollTo = null; el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
         }
     }
@@ -811,7 +811,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             : row.type === 'charger' ? chargerBody(this, row) : row.type === 'battery' ? batteryBody(this, row) : loadBody(this, row);
         const locked = (row.dependsOn || []).length > 0;
         const toggle = () => { if (!this._reorder) this._toggleOpen(row); };
-        return html`<section class="card dev ${open ? '' : 'folded'}" data-id=${row.id} style="--c:${color}">
+        return html`<ha-card class="card dev ${open ? '' : 'folded'}" data-id=${row.id} style="--c:${color}">
             <div class="head">
                 <span class="handle" title=${locked ? t('locked_under_parent') : t('drag_to_reorder')}
                     @pointerdown=${locked ? nothing : (e) => this._dragStart(e, row.id)}>${this._icon(locked ? 'mdi:subdirectory-arrow-right' : 'mdi:drag-vertical')}</span>
@@ -820,15 +820,15 @@ class SEMNextDevicesCard extends SEMNextBase {
                 <span class="live muted sm">${liveText}</span>
                 ${row.type === 'load' && !row.lockedByOperator ? this._pill(t(verdictKey(row)), '', { icon: 'mdi:hand-back-left-outline' }) : nothing}
                 <div class="arrows">
-                    <button type="button" data-mv="-1" aria-label=${t('move_up')} ?disabled=${locked || dis} @click=${() => this._move(row.id, -1)}>${this._icon('mdi:arrow-up')}</button>
-                    <button type="button" data-mv="1" aria-label=${t('move_down')} ?disabled=${locked || dis} @click=${() => this._move(row.id, 1)}>${this._icon('mdi:arrow-down')}</button>
+                    <button type="button" data-mv="-1" aria-label=${t('move_up')} ?disabled=${locked} @click=${() => this._move(row.id, -1)}>${this._icon('mdi:arrow-up')}</button>
+                    <button type="button" data-mv="1" aria-label=${t('move_down')} ?disabled=${locked} @click=${() => this._move(row.id, 1)}>${this._icon('mdi:arrow-down')}</button>
                 </div>
                 ${row.type === 'load' ? html`<button type="button" class="gear" aria-label=${t('configure')} @click=${() => this._showConfigureModal(row.id, row.name)}>${this._icon('mdi:cog-outline')}</button>` : nothing}
                 <button type="button" class="fold" aria-expanded=${open ? 'true' : 'false'} aria-label=${t(open ? 'next_fold_device' : 'next_open_device')}
                     @click=${toggle}>${this._icon('mdi:chevron-down')}</button>
             </div>
             ${row.type === 'charger' && !this._reorder ? this._chargePlanChip(row) : nothing}
-            ${open ? html`<div class="body">${body}</div>` : nothing}</section>`;
+            ${open ? html`<div class="body">${body}</div>` : nothing}</ha-card>`;
     }
 
     render() {
@@ -843,7 +843,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         const dis = this._obs();
         const toolbar = html`<div class="period">
             ${this._btn(this._reorder ? t('next_done_btn') : t('next_reorder'), () => this._toggleReorder(),
-                { primary: this._reorder, icon: this._reorder ? 'mdi:check' : 'mdi:swap-vertical', disabled: dis || n < 2 })}
+                { primary: this._reorder, icon: this._reorder ? 'mdi:check' : 'mdi:swap-vertical', disabled: n < 2 })}
             <button type="button" class="pill" aria-expanded=${this._adding ? 'true' : 'false'} @click=${() => this._toggleAdd()}>${this._icon(this._adding ? 'mdi:close' : 'mdi:plus', 's')}${t(this._adding ? 'next_cancel' : 'next_add_device')}</button>
             ${!this._reorder && !this._all && n > 1 ? (() => {
                 const allOpen = rows.every((r) => this._isOpen(r));

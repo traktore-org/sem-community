@@ -336,8 +336,7 @@ class SEMNextNowCard extends SEMNextBase {
     _hintBox() {
         if (!this._hint) return nothing;
         const dismiss = () => { this._hint = false; writeLocal(HINT_KEY, '1'); };
-        return html`<div class="card flat span2 hintrow"><span class="sm muted">${this._t('next_hint_first')}</span>
-            ${this._btn(this._t('next_hint_ok'), dismiss, { small: true })}</div>`;
+        return html`<div class="span2">${this._alert('info', '', this._t('next_hint_first'), this._btn(this._t('next_hint_ok'), dismiss, { small: true, ghost: true }))}</div>`;
     }
 
     _updatedPill() {

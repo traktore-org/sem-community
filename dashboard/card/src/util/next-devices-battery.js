@@ -94,7 +94,7 @@ export function batteryBody(card, row) {
         return { ...m, lo };
     });
     const zones = z.marks.length || z.cur !== null ? html`<div class="zones ${anyLo ? 'two' : ''}" style="--z1:${z.z1}%;--z2:${z.z2}%">
-        ${marks.map((m) => html`<span class="z ${m.lo ? 'lo' : ''}" style="left:${m.pct}%">${t('next_zone_' + m.key)} ${m.value}</span>`)}
+        ${marks.map((m) => html`<span class="z ${m.lo ? 'lo' : ''} ${m.pct >= 85 ? 'r' : m.pct <= 15 ? 'l' : ''}" style="left:${m.pct}%">${t('next_zone_' + m.key)} ${m.value}</span>`)}
         ${z.cur === null ? nothing : html`<span class="cur" style="left:${z.cur}%"></span>`}</div>` : nothing;
     const v = (id, text) => card._val(text, () => card._moreInfo(id));
     const parts = [];

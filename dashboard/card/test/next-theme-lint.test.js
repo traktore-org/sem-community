@@ -16,6 +16,10 @@ const FILES = [
     join(SRC, 'base/sem-next-base.js'),
     ...pick('cards', /^sem-next-.*\.js$/),
     join(SRC, 'cards/load-config-modal.js'),
+    join(SRC, 'cards/sem-setup-checklist-card.js'),
+    join(SRC, 'cards/sem-simulation-card.js'),
+    join(SRC, 'cards/sem-retired-card.js'),
+    join(SRC, 'util/ha-ui.js'),
     ...pick('util', /^next-.*\.js$/),
 ];
 

@@ -34,7 +34,7 @@ import {
 const WS = 'solar_energy_management/simulation';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const POLL_MS = 2000;
-const C = '#8353d1';
+const C = 'var(--primary-color, #03a9f4)';
 const TAG_WORD = {
     sunny: 'sim_tag_sunny', mixed: 'sim_tag_mixed', grey: 'sim_tag_grey', car: 'sim_tag_car',
     cheap: 'sim_tag_cheap', negative: 'sim_tag_cheap', gap: 'sim_tag_gap',
@@ -285,7 +285,7 @@ class SEMSimulationCard extends SEMLitBase {
         return html`
             <ha-card><div class="header-wrap">
                 <div class="icon-ring">
-                    <svg viewBox="-34 -34 68 68"><circle r="28" fill="none" stroke="${C}" stroke-width="1.2" opacity=".25"></circle><circle r="24" fill="${C}0F" stroke="${C}" stroke-width="1.5"></circle></svg>
+                    <svg viewBox="-34 -34 68 68"><circle r="28" fill="none" stroke="${C}" stroke-width="1.2" opacity=".25"></circle><circle r="24" fill="${C}" fill-opacity=".06" stroke="${C}" stroke-width="1.5"></circle></svg>
                     <ha-icon icon="mdi:flask-outline"></ha-icon>
                 </div>
                 <div class="title-area">
@@ -659,24 +659,24 @@ class SEMSimulationCard extends SEMLitBase {
             ha-card { display: block; margin: 8px 0; overflow: hidden; }
             .wrap {
                 padding: 14px 20px; position: relative;
-                background: radial-gradient(ellipse 70% 60% at 50% 25%, #8353d10f 0%, transparent 100%),
-                    radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
+                background: radial-gradient(ellipse 70% 60% at 50% 25%, color-mix(in srgb, var(--primary-color, #03a9f4) 6%, transparent) 0%, transparent 100%),
+                    radial-gradient(circle at 2px 2px, color-mix(in srgb, var(--secondary-text-color, #727272) 8%, transparent) 0.7px, transparent 0.7px);
                 background-size: 100% 100%, 50px 50px;
             }
             .header-wrap {
                 display: flex; align-items: center; gap: 16px; padding: 16px 20px;
-                background: radial-gradient(ellipse 80% 70% at 20% 50%, #8353d10d 0%, transparent 70%),
-                    radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
+                background: radial-gradient(ellipse 80% 70% at 20% 50%, color-mix(in srgb, var(--primary-color, #03a9f4) 5%, transparent) 0%, transparent 70%),
+                    radial-gradient(circle at 2px 2px, color-mix(in srgb, var(--secondary-text-color, #727272) 8%, transparent) 0.7px, transparent 0.7px);
                 background-size: 100% 100%, 50px 50px;
             }
             .icon-ring { position: relative; flex-shrink: 0; width: 64px; height: 64px; }
             .icon-ring svg { width: 100%; height: 100%; }
             .icon-ring ha-icon {
                 position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-                color: #8353d1; --mdc-icon-size: 26px; opacity: .85;
+                color: var(--primary-color, #03a9f4); --mdc-icon-size: 26px; opacity: .85;
             }
             .title-area { flex: 1 1 auto; min-width: 140px; }
-            .tab-title { font-size: 20px; font-weight: 700; color: #8353d1; letter-spacing: .5px; text-shadow: 0 0 12px #8353d140; }
+            .tab-title { font-size: 20px; font-weight: 700; color: var(--primary-color, #03a9f4); letter-spacing: .5px;  }
             .tab-subtitle { font-size: 12px; color: var(--secondary-text-color); margin-top: 2px; font-weight: 500; }
             .stats { display: flex; gap: 16px; flex-shrink: 0; }
             .stat { text-align: center; min-width: 50px; }
@@ -686,32 +686,32 @@ class SEMSimulationCard extends SEMLitBase {
                 font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--secondary-text-color);
                 display: flex; align-items: center; gap: 5px; margin-bottom: 6px;
             }
-            .ct-title ha-icon { --mdc-icon-size: 14px; color: #8353d1; }
+            .ct-title ha-icon { --mdc-icon-size: 14px; color: var(--primary-color, #03a9f4); }
             .ct-title .right {
                 margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600;
-                color: #5BC8D8; display: flex; gap: 4px; align-items: center; cursor: pointer;
+                color: var(--energy-grid-consumption-color, #488fc2); display: flex; gap: 4px; align-items: center; cursor: pointer;
             }
-            .ct-title .right ha-icon { color: #5BC8D8; }
+            .ct-title .right ha-icon { color: var(--energy-grid-consumption-color, #488fc2); }
             .chip {
                 display: inline-flex; align-items: center; gap: 4px; background: var(--secondary-background-color);
                 border: 1px solid var(--divider-color); border-radius: 12px; padding: 3px 10px; font-size: 11px;
                 font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer; user-select: none;
             }
-            .chip.on { background: #8353d122; border-color: #8353d1; color: #8353d1; font-weight: 700; }
+            .chip.on { background: color-mix(in srgb, var(--primary-color, #03a9f4) 13%, transparent); border-color: var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); font-weight: 700; }
             .picks { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 10px; }
             .recent { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; margin: 0 0 10px; font-size: 12px; }
             .recent label { font-weight: 600; }
             .recent small { color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
-            .recent input { grid-column: 1 / -1; width: 100%; min-height: 36px; accent-color: #8353d1; }
+            .recent input { grid-column: 1 / -1; width: 100%; min-height: 36px; accent-color: var(--primary-color, #03a9f4); }
             .span { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
             .lbl-small { font-size: 11px; color: var(--secondary-text-color); align-self: center; }
             .legend { font-size: 11px; color: var(--secondary-text-color); margin-top: 8px; }
             .note { font-size: 12px; color: var(--secondary-text-color); margin: 2px 0 6px; }
             .err { font-size: 12px; color: var(--error-color, #db4437); margin-top: 8px; }
-            .warn { font-size: 12px; color: var(--warning-color, #ff9800); margin-top: 8px; }
+            .warn { font-size: 12px; color: var(--warning-color, var(--warning-color, #ffa600)); margin-top: 8px; }
             .group {
                 margin-top: 8px; padding: 6px 12px; border: 1px solid var(--divider-color);
-                border-radius: 10px; background: rgba(255,255,255,0.025);
+                border-radius: 10px; background: var(--secondary-background-color, #f5f5f5);
             }
             .ct-row { display: flex; align-items: center; min-height: 34px; gap: 8px; border-bottom: 1px solid var(--divider-color); }
             .ct-row:last-child { border-bottom: 0; }
@@ -729,7 +729,7 @@ class SEMSimulationCard extends SEMLitBase {
             }
             .inp input::-webkit-outer-spin-button, .inp input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
             .inp input:focus { outline: none; }
-            .inp.changed, .sel-ctl.changed { border-color: #8353d1; color: #8353d1; }
+            .inp.changed, .sel-ctl.changed { border-color: var(--primary-color, #03a9f4); color: var(--primary-color, #03a9f4); }
             .inp small { font-weight: 500; color: var(--secondary-text-color); }
             .sel-ctl {
                 appearance: none; -webkit-appearance: none; background-color: var(--secondary-background-color);
@@ -741,7 +741,7 @@ class SEMSimulationCard extends SEMLitBase {
             .runrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
             .btn {
                 display: inline-flex; align-items: center; gap: 6px; border-radius: 10px; padding: 8px 16px;
-                font-size: 13px; font-weight: 700; border: 1px solid #8353d1; background: #8353d1; color: #fff;
+                font-size: 13px; font-weight: 700; border: 1px solid var(--primary-color, #03a9f4); background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff);
                 cursor: pointer; font-family: inherit;
             }
             .btn[disabled] { opacity: .45; cursor: not-allowed; }
@@ -749,7 +749,7 @@ class SEMSimulationCard extends SEMLitBase {
             .btn ha-icon { --mdc-icon-size: 16px; }
             .prog { flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px; }
             .bar { height: 6px; border-radius: 3px; background: var(--secondary-background-color); overflow: hidden; }
-            .bar i { display: block; height: 100%; background: linear-gradient(90deg, #8353d1, #5BC8D8); transition: width .4s; }
+            .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--primary-color, #03a9f4), var(--energy-grid-consumption-color, #488fc2)); transition: width .4s; }
             .prog small { font-size: 11px; color: var(--secondary-text-color); }
             .trow, .thead {
                 display: grid; grid-template-columns: 1.5fr 1fr .9fr 1.1fr 1.1fr; gap: 6px; align-items: center;
@@ -760,25 +760,25 @@ class SEMSimulationCard extends SEMLitBase {
             .num { text-align: right; }
             .warn { font-size: 11px; cursor: help; }
             .delta { font-weight: 700; }
-            .cheaper { color: #8DC892; }
-            .dearer { color: #ff9800; }
+            .cheaper { color: var(--success-color, #43a047); }
+            .dearer { color: var(--warning-color, #ffa600); }
             .same, .none { color: var(--secondary-text-color); }
             .est {
-                font-style: normal; font-size: 9px; font-weight: 600; color: #8353d1; border: 1px solid #8353d166;
+                font-style: normal; font-size: 9px; font-weight: 600; color: var(--primary-color, #03a9f4); border: 1px solid color-mix(in srgb, var(--primary-color, #03a9f4) 40%, transparent);
                 border-radius: 6px; padding: 0 4px; vertical-align: middle;
             }
             .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
-            .tile { border: 1px solid var(--divider-color); border-radius: 10px; padding: 8px 10px; background: rgba(255,255,255,0.025); }
+            .tile { border: 1px solid var(--divider-color); border-radius: 10px; padding: 8px 10px; background: var(--secondary-background-color, #f5f5f5); }
             .tile .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
             .tile .l { font-size: 11px; color: var(--secondary-text-color); font-weight: 500; }
             .total { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; }
             .total b { font-size: 14px; }
             .more { font-size: 11px; color: var(--secondary-text-color); padding: 6px 0 0; cursor: pointer; }
             .tap { cursor: pointer; }
-            .tile.on { border-color: #8353d1; background: #8353d11c; }
+            .tile.on { border-color: var(--primary-color, #03a9f4); background: color-mix(in srgb, var(--primary-color, #03a9f4) 11%, transparent); }
             .tile.empty { opacity: .55; cursor: default; }
-            .trow.open { background: #8353d10f; }
-            .detail { padding: 6px 8px 8px; border-bottom: 1px solid var(--divider-color); background: #8353d108; }
+            .trow.open { background: color-mix(in srgb, var(--primary-color, #03a9f4) 6%, transparent); }
+            .detail { padding: 6px 8px 8px; border-bottom: 1px solid var(--divider-color); background: color-mix(in srgb, var(--primary-color, #03a9f4) 3%, transparent); }
             .dl { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; min-height: 22px; align-items: center; font-variant-numeric: tabular-nums; }
             .why { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; }
             .headline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; font-size: 13px; }
@@ -789,8 +789,8 @@ class SEMSimulationCard extends SEMLitBase {
             .mrow { display: grid; grid-template-columns: 80px 1fr auto; gap: 8px; align-items: center; font-size: 12px; min-height: 22px; font-variant-numeric: tabular-nums; }
             .mbar { height: 6px; border-radius: 3px; background: var(--secondary-background-color); overflow: hidden; }
             .mbar i { display: block; height: 100%; }
-            .mbar i.cheaper { background: #8DC892; }
-            .mbar i.dearer { background: #ff9800; }
+            .mbar i.cheaper { background: var(--success-color, #43a047); }
+            .mbar i.dearer { background: var(--warning-color, #ffa600); }
             .mbar i.same { background: var(--divider-color); }
             @media (max-width: 600px) {
                 .header-wrap { flex-wrap: wrap; }

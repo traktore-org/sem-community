@@ -47,7 +47,7 @@ globalThis.semLocalize = (key) => key;
 await import('../src/cards/sem-next-now-card.js');
 const { ensureHaElements, haDefined } = await import('../src/util/ha-elements.js');
 
-const TAGS = ['ha-switch', 'ha-control-select', 'ha-button', 'ha-selector', 'ha-textfield'];
+const TAGS = ['ha-switch', 'ha-control-select', 'ha-button', 'ha-selector', 'ha-textfield', 'ha-alert'];
 const STUB = class {};
 const defineAll = (on) => TAGS.forEach((t) => { if (on) registry.set(t, STUB); else registry.delete(t); });
 
@@ -174,3 +174,33 @@ test('ensureHaElements works where the page has no element registry', async () =
     try { assert.deepEqual(await ensureHaElements(['ha-switch'], 10), { 'ha-switch': false }); }
     finally { globalThis.customElements = saved; }
 });
+
+test('a disabled segmented control is the readable native one even when HA has its own', () => {
+    defineAll(true);
+    const el = card();
+    el._hass.states['switch.sem_observer_mode'] = { state: 'on', attributes: {} };
+    const out = el._seg(ITEMS, 'a', () => {}, { disabled: true });
+    assert.match(text(out), /<div class="seg[^"]* off/);
+    assert.doesNotMatch(text(out), /<ha-control-select/);
+    assert.match(text(out), /next_disabled_watching/, 'says why on hover while SEM only watches');
+    defineAll(false);
+});
+
+test('a disabled button says why while SEM only watches, an enabled one does not', () => {
+    defineAll(false);
+    const el = card();
+    el._hass.states['switch.sem_observer_mode'] = { state: 'on', attributes: {} };
+    assert.match(text(el._btn('Go', () => {}, { disabled: true })), /title="next_disabled_watching"/);
+    assert.doesNotMatch(text(el._btn('Go', () => {})), /next_disabled_watching/);
+});
+
+for (const defined of [false, true]) {
+    test(`alert, ${defined ? 'HA element defined' : 'HA element undefined'}`, () => {
+        defineAll(defined);
+        const out = card()._alert('info', 'Title', 'Body', 'ACTION');
+        assert.match(text(out), defined ? /<ha-alert alert-type="info"/ : /<div class="alert info"/);
+        assert.match(text(out), /Body/);
+        assert.match(text(out), /ACTION/);
+        defineAll(false);
+    });
+}

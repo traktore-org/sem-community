@@ -23,11 +23,12 @@ import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { chargerNameOf } from '../util/charger-name.js';
 import { sibling } from '../util/setup-checklist.js';
 import { ensureHaElements, haDefined } from '../util/ha-elements.js';
+import { renderButton, renderAlert } from '../util/ha-ui.js';
 
 export { html, css, svg, nothing };
 
 // the HA elements these screens draw when they exist
-const HA_DRAWN = ['ha-switch', 'ha-control-select', 'ha-button-toggle-group', 'ha-button', 'ha-selector', 'ha-textfield', 'ha-dialog'];
+const HA_DRAWN = ['ha-switch', 'ha-control-select', 'ha-button-toggle-group', 'ha-button', 'ha-selector', 'ha-textfield', 'ha-dialog', 'ha-alert'];
 
 export const NEXT_COLORS = {
     solar: 'var(--energy-solar-color, #ff9800)', grid: 'var(--energy-grid-consumption-color, #488fc2)',
@@ -59,7 +60,10 @@ export const nextCss = css`
         --n-bout: var(--energy-battery-out-color, #4db6ac);
         --n-home: var(--sem-home-color, #5bc8d8);
         --n-ev: var(--sem-ev-color, #8dc892);
-        --n-r: var(--ha-card-border-radius, 12px);
+        /* a panel view zeroes HA's card radius and border: the cards here take the theme's own (read in _themeCards) */
+        --n-r: var(--sem-card-radius, 12px);
+        --n-bw: var(--sem-card-border-width, 1px);
+        --n-bc: var(--sem-card-border-color, var(--divider-color, #e0e0e0));
         --n-ink: var(--sem-on-energy, #10161c);
         --n-ink-dark: var(--sem-on-energy-dark, #ffffff);
         font-size: var(--ha-font-size-m, 14px); line-height: 1.45; color: var(--n-fg);
@@ -67,7 +71,7 @@ export const nextCss = css`
     * { box-sizing: border-box; }
     ha-card {
         display: block; color: var(--n-fg); background: var(--n-card); border-radius: var(--n-r);
-        border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--n-line));
+        border: var(--n-bw) solid var(--n-bc);
         box-shadow: var(--ha-card-box-shadow, none);
     }
     .app { container-type: inline-size; max-width: 1180px; margin: 0 auto; padding: 8px 16px 40px; }
@@ -120,6 +124,9 @@ export const nextCss = css`
     .seg button { border: 0; background: transparent; color: var(--n-fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); padding: 6px 14px; border-radius: 16px; cursor: pointer; min-height: 32px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
     .seg button.on { background: var(--n-accent); color: var(--n-accent-fg); }
     .seg button[disabled] { opacity: .5; cursor: default; }
+    .seg.off { background: var(--n-card2); }
+    .seg.off button { color: var(--n-fg2); cursor: default; }
+    .seg.off button.on { background: var(--n-fg2); color: var(--n-card); }
     .seg.sm button { font-size: var(--ha-font-size-s, 13px); padding: 4px 10px; min-height: 28px; }
     ha-control-select, ha-button-toggle-group { --control-select-thickness: 36px; --control-select-border-radius: 18px; width: auto; max-width: 100%; }
     ha-control-select.sm { --control-select-thickness: 28px; --control-select-border-radius: 14px; }
@@ -136,7 +143,10 @@ export const nextCss = css`
     .row:has(.btns) .btns { margin-left: auto; }
     .val { background: none; border: 0; padding: 0; font: inherit; color: var(--n-fg); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; text-decoration-color: var(--n-fg2); text-decoration-thickness: 1.5px; cursor: pointer; font-weight: var(--ha-font-weight-medium, 500); }
     .val[disabled] { cursor: default; opacity: .6; }
-    .val:not([disabled])::after { content: '✎'; display: inline-block; margin-left: 3px; font-size: .8em; color: var(--n-fg2); opacity: 0; transition: opacity .15s; text-decoration: none; }
+    .val { position: relative; }
+    .val:not([disabled])::after { content: '✎'; position: absolute; left: 100%; bottom: 0; margin-left: 2px; font-size: .8em; color: var(--n-fg2); opacity: 0; transition: opacity .15s; text-decoration: none; }
+    .big .val, .stats .val { font-size: inherit; font-weight: inherit; color: inherit; }
+    .big .val[disabled], .stats .val[disabled] { opacity: 1; text-decoration: none; cursor: default; }
     .val:not([disabled]):hover::after, .val:not([disabled]):focus-visible::after { opacity: 1; }
     @media (hover: none) { .val:not([disabled])::after { opacity: .7; } }
     .sent { line-height: 1.6; margin: 0; color: var(--n-fg2); }
@@ -208,10 +218,12 @@ export const nextCss = css`
     .target .band { position: absolute; top: -3px; height: 20px; border: 2px solid var(--n-fg3); border-radius: 6px; opacity: .6; }
     .target .flag { position: absolute; top: -22px; transform: translateX(-50%); font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); white-space: nowrap; }
     .target .flag::after { content: ""; position: absolute; left: 50%; top: 14px; height: 30px; border-left: 1.5px dashed var(--n-fg3); }
-    .zones { position: relative; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--n-bad) 0 var(--z1, 20%), var(--n-warn) var(--z1, 20%) var(--z2, 50%), var(--n-card2) var(--z2, 50%) 100%); opacity: .9; margin: 14px 0 4px; }
+    .zones { position: relative; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--n-bad) 0 var(--z1, 20%), var(--n-warn) var(--z1, 20%) var(--z2, 50%), var(--n-card2) var(--z2, 50%) 100%); opacity: .9; margin: 26px 0 8px; }
     .zones .z { position: absolute; top: -16px; transform: translateX(-50%); font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); white-space: nowrap; }
-    .zones .z.lo { top: 12px; }
-    .zones.two { margin-bottom: 18px; }
+    .zones .z.lo { top: 14px; }
+    .zones .z.r { transform: translateX(-100%); }
+    .zones .z.l { transform: none; }
+    .zones.two { margin-bottom: 26px; }
     .zones .cur { position: absolute; top: -4px; width: 4px; height: 18px; border-radius: 2px; background: var(--n-fg); transform: translateX(-50%); }
     .reorder .dev .body { display: none; }
     .reorder .dev { padding: 8px 12px; }
@@ -238,6 +250,15 @@ export const nextCss = css`
     .flows .fb { display: flex; height: 8px; gap: 2px; }
     .flows .fb i { height: 100%; border-radius: 4px; }
     .period { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+
+    /* alert fallback (ha-alert is used when HA has it) */
+    .alert { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--n-accent); background: color-mix(in srgb, var(--n-accent) 12%, var(--n-card)); }
+    .alert.warning { border-color: var(--n-warn); background: color-mix(in srgb, var(--n-warn) 12%, var(--n-card)); }
+    .alert.error { border-color: var(--n-bad); background: color-mix(in srgb, var(--n-bad) 12%, var(--n-card)); }
+    .alert.success { border-color: var(--n-ok); background: color-mix(in srgb, var(--n-ok) 12%, var(--n-card)); }
+    .alert .atxt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .alert .atxt span { color: var(--n-fg2); font-size: var(--ha-font-size-s, 13px); }
+    ha-alert { display: block; }
 
     /* system */
     .group .row { align-items: flex-start; }
@@ -274,6 +295,19 @@ export class SEMNextBase extends SEMLitBase {
         super.connectedCallback();
         window.addEventListener(VIEW_MODE_EVENT, this._onViewMode);
         this._wantHaElements();
+        this._themeCards();
+    }
+
+    /** A panel view sets HA's card radius and border to 0; the cards here take the theme's own values. */
+    _themeCards() {
+        try {
+            const root = getComputedStyle(document.documentElement);
+            for (const [from, to] of [['--ha-card-border-radius', '--sem-card-radius'], ['--ha-card-border-width', '--sem-card-border-width'],
+                                      ['--ha-card-border-color', '--sem-card-border-color']]) {
+                const v = String(root.getPropertyValue(from) || '').trim();
+                if (v && this.style && this.style.setProperty) this.style.setProperty(to, v);
+            }
+        } catch (e) { /* the fallbacks in the CSS stay */ }
     }
 
     /** (#1321) HA's lazy form elements: draw them once they exist (native ones until then). */
@@ -516,18 +550,18 @@ export class SEMNextBase extends SEMLitBase {
             const it = items.find((x) => String(x.key) === String(v));
             if (it && !it.disabled && String(v) !== cur) onPick(it.key);
         };
-        if (haDefined('ha-control-select')) {
-            const options = items.map((it) => ({ value: String(it.key), label: it.label, disabled: !!it.disabled,
-                ...(it.icon ? { icon: this._icon(it.icon, 's') } : {}) }));
+        // HA's disabled look fades the labels to nothing, so a disabled control is the native one in readable colours
+        if (haDefined('ha-control-select') && !o.disabled) {
+            const options = items.map((it) => ({ value: String(it.key), label: it.label, disabled: !!it.disabled }));
             return html`<ha-control-select class="${o.small ? 'sm' : ''}" .options=${options} .value=${cur} ?disabled=${!!o.disabled}
                 @value-changed=${(e) => pick(e.detail?.value)}></ha-control-select>`;
         }
-        if (haDefined('ha-button-toggle-group')) {
+        if (haDefined('ha-button-toggle-group') && !o.disabled) {
             const buttons = items.map((it) => ({ label: it.label, value: String(it.key) }));
             return html`<ha-button-toggle-group size="${o.small ? 'small' : 'medium'}" .buttons=${buttons} .active=${cur} ?disabled=${!!o.disabled}
                 @value-changed=${(e) => pick(e.detail?.value)}></ha-button-toggle-group>`;
         }
-        return html`<div class="seg ${o.small ? 'sm' : ''}" role="group">
+        return html`<div class="seg ${o.small ? 'sm' : ''} ${o.disabled ? 'off' : ''}" role="group" title="${this._whyOff(o.disabled) || nothing}">
             ${items.map((it) => html`<button type="button" class="${String(it.key) === cur ? 'on' : ''}" ?disabled=${!!it.disabled || !!o.disabled}
                 aria-pressed="${String(it.key) === cur}" @click=${() => onPick(it.key)}>${it.icon ? this._icon(it.icon, 's') : nothing}${it.label}</button>`)}
         </div>`;
@@ -630,13 +664,14 @@ export class SEMNextBase extends SEMLitBase {
 
     /** A button: ha-button when defined, else a native one in HA's look. */
     _btn(label, onClick, o = {}) {
-        if (haDefined('ha-button')) {
-            return html`<ha-button appearance="${o.primary ? 'filled' : o.ghost ? 'plain' : 'outlined'}" size="${o.small ? 'small' : 'medium'}"
-                ?raised=${!!o.primary} ?outlined=${!o.primary && !o.ghost} ?disabled=${!!o.disabled} @click=${onClick}>${o.icon ? html`<ha-icon slot="start" icon="${o.icon}"></ha-icon>` : nothing}${label}</ha-button>`;
-        }
-        return html`<button type="button" class="btn ${o.primary ? 'primary' : ''} ${o.small ? 'sm' : ''} ${o.ghost ? 'ghost' : ''}"
-            ?disabled=${!!o.disabled} @click=${onClick}>${o.icon ? this._icon(o.icon) : nothing}${label}</button>`;
+        return renderButton(label, onClick, { ...o, title: o.title ?? this._whyOff(o.disabled) }, (mdi) => this._icon(mdi));
     }
+
+    /** A disabled control says why on hover while SEM only watches. */
+    _whyOff(disabled) { return disabled && this._obs() ? this._t('next_disabled_watching') : undefined; }
+
+    /** An alert in HA's style (ha-alert when defined). */
+    _alert(type, title, body, actions) { return renderAlert(type, title, body, actions); }
 
     getCardSize() { return 8; }
     static getStubConfig() { return {}; }

@@ -22,7 +22,7 @@ import { haDefined, ensureHaElements } from '../util/ha-elements.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
-import { plainReason, deviceName } from '../util/why-rows.js';
+import { plainReason, deviceName, actionWords } from '../util/why-rows.js';
 import { MISSING } from '../util/missing-value.js';
 import { groups, applyPlan, pendingKey, navTarget, slotText, setupItems, loadSources, unavailableCount,
          reserveIds, pvStrings, chargerSkeleton, FILTER_CLASSES } from '../util/next-settings.js';
@@ -198,8 +198,10 @@ class SEMNextSystemCard extends SEMNextBase {
 
     _freshTiles(rows) {
         return html`<div class="fresh">${rows.map((r) => {
-            const cls = r.state === 'ok' ? 'dim' : (r.state === 'old' ? 'warn' : 'bad');
-            const txt = r.state === 'ok' || r.state === 'old' ? (ageLabel(r.age) || this._t('next_fresh_ok')) : this._t('next_fresh_' + r.state);
+            // no entity at all is "no reading" in the quiet colour; only an entity that went dark is an error
+            const cls = r.state === 'ok' || r.state === 'missing' ? 'dim' : (r.state === 'old' ? 'warn' : 'bad');
+            const txt = r.state === 'ok' || r.state === 'old' ? (ageLabel(r.age) || this._t('next_fresh_ok'))
+                : r.state === 'missing' ? this._t('next_no_reading') : this._t('next_fresh_' + r.state);
             // (#1321) the value and the real entity SEM reads, for checking a setup
             const st = this._hass.states[r.entity];
             // (#1321) the source by its friendly name; the id shows only in more-info
@@ -290,6 +292,14 @@ class SEMNextSystemCard extends SEMNextBase {
 `, { cls: 'span2' });
     }
 
+    /** A charger by the name the user knows; the rest by their own name, else their kind (a second one numbered). */
+    _refusedName(r, t, rows) {
+        const cid = r.kind === 'charger' ? String(r.device_id || '').replace(/^ev:/, '') : '';
+        if (cid && this._chargers.includes(cid)) return this._chargerName(cid);
+        const kind = r.device_kind || r.kind;
+        return deviceName(r, t, rows.filter((x) => (x.device_kind || x.kind) === kind).length > 1);
+    }
+
     _refused() {
         const attrs = this._attrs('switch.sem_observer_mode');
         const obs = this._obs();
@@ -304,7 +314,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const t = (k) => this._t(k);
         const body = rows.length
             ? html`<div class="rows">${rows.slice(0, 8).map((r) => this._row('mdi:hand-back-left-outline',
-                `${deviceName(r, t)}${r.action ? ' · ' + r.action : ''}`,
+                `${this._refusedName(r, t, rows)}${r.action ? ' · ' + actionWords(r.action, t) : ''}`,
                 Number.isFinite(Number(r.power_w)) ? this._kw(Number(r.power_w)) : '',
                 plainReason(r, t) || r.reason || ''))}</div>`
             : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;
