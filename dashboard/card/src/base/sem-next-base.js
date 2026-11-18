@@ -35,6 +35,11 @@ import { renderButton, renderAlert } from '../util/ha-ui.js';
 export { html, css, svg, nothing };
 
 // the HA elements these screens draw when they exist
+/** (#1321) a phone-width screen: a long row of mode buttons does not fit. */
+export function segNarrow() {
+    try { return !!globalThis.matchMedia && globalThis.matchMedia('(max-width: 600px)').matches; } catch (_) { return false; }
+}
+
 const HA_DRAWN = ['ha-switch', 'ha-control-select', 'ha-button-toggle-group', 'ha-button', 'ha-selector', 'ha-textfield', 'ha-dialog', 'ha-alert'];
 
 // (#1321) the SEM services and entities that move a device: refused while SEM only watches
@@ -274,6 +279,10 @@ export const nextCss = css`
     .target .band { position: absolute; top: -3px; height: 20px; border: 2px solid var(--n-fg3); border-radius: 6px; opacity: .6; }
     .target .flag { position: absolute; top: -22px; transform: translateX(-50%); font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); white-space: nowrap; }
     .target .flag::after { content: ""; position: absolute; left: 50%; top: 14px; height: 30px; border-left: 1.5px dashed var(--n-fg3); }
+    .target .flag.start { transform: none; }
+    .target .flag.start::after { left: 0; }
+    .target .flag.end { transform: translateX(-100%); }
+    .target .flag.end::after { left: 100%; }
     .zones { position: relative; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--n-bad) 0 var(--z1, 20%), var(--n-warn) var(--z1, 20%) var(--z2, 50%), var(--n-card2) var(--z2, 50%) 100%); opacity: .9; margin: 26px 0 8px; }
     .zones .z { position: absolute; top: -16px; transform: translateX(-50%); font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); white-space: nowrap; }
     .zones .z.lo { top: 14px; }
@@ -687,6 +696,12 @@ export class SEMNextBase extends SEMLitBase {
             const it = items.find((x) => String(x.key) === String(v));
             if (it && !it.disabled && String(v) !== cur) onPick(it.key);
         };
+        // (#1321) many modes on a phone: a row of buttons cuts each label to
+        // "Solar +…", so a dropdown names every mode in full instead
+        if (items.length > 4 && !o.disabled && segNarrow()) {
+            return this._select(items.filter((it) => !it.disabled).map((it) => ({ value: String(it.key), label: it.label })),
+                cur, (v) => pick(v), { ariaLabel: o.label || '' });
+        }
         // HA's disabled look fades the labels to nothing, so a disabled control is the native one in readable colours
         if (haDefined('ha-control-select') && !o.disabled) {
             const options = items.map((it) => ({ value: String(it.key), label: it.label, disabled: !!it.disabled }));

@@ -137,7 +137,9 @@ export function chargerBody(card, row) {
     const timeId = ent('time', 'target_time');
     const chargeBy = timeId ? card._hhmm(card._str(timeId)) : '';
     const fmtT = (v) => (v === null ? '—' : (isSoc ? Math.round(v) : card._fmt(v, 1)));
-    const flag = tm.flagLeft === null ? nothing : html`<div class="flag" style="left:${tm.flagLeft}%">${tf('next_at_least_x', { x: fmtT(min) + ' ' + unit })}</div>`;
+    // (#1321) near an edge the label grows inward, so it never leaves the card
+    const edge = tm.flagLeft === null ? '' : (tm.flagLeft < 15 ? 'start' : (tm.flagLeft > 85 ? 'end' : ''));
+    const flag = tm.flagLeft === null ? nothing : html`<div class="flag ${edge}" style="left:${tm.flagLeft}%">${tf('next_at_least_x', { x: fmtT(min) + ' ' + unit })}</div>`;
     const target = html`<div class="target">
         <div class="soc" style="width:${tm.fill}%"></div>
         ${tm.bandLeft === null ? nothing : html`<div class="band" style="left:${tm.bandLeft}%;width:${tm.bandWidth}%"></div>`}
