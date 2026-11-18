@@ -163,8 +163,8 @@ class SEMSetupChecklistCard extends SEMLitBase {
         return css`
             :host { display: block; color: var(--primary-text-color); font-size: var(--ha-font-size-m, 14px); }
             .gap { margin-bottom: 16px; }
-            ha-alert [slot="action"], .aact { display: flex; gap: 8px; flex: none; white-space: nowrap; }
-            ha-alert ha-button { white-space: nowrap; flex: none; }
+            .aact { display: flex; gap: 8px; flex: none; white-space: nowrap; }
+            ha-alert ha-button { white-space: nowrap; }
             .alert { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--primary-color);
                 background: color-mix(in srgb, var(--primary-color) 12%, var(--card-background-color, #fff)); }
             .alert.warning { border-color: var(--warning-color, #ffa600); background: color-mix(in srgb, var(--warning-color, #ffa600) 12%, var(--card-background-color, #fff)); }
