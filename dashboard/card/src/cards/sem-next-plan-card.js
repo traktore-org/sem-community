@@ -338,7 +338,7 @@ class SEMNextPlanCard extends SEMNextBase {
                 battery: () => t('next_src_battery'), label: () => l.label,
             });
             const kind = l.id.startsWith('ev:') ? 'ev' : l.id.includes('battery') ? 'battery_in' : 'load';
-            const win = l.runs && l.runs.length ? runsText(l.runs, (a, b) => this._winText(a, b)) : this._winText(Date.parse(l.start), Date.parse(l.end));
+            const win = !l.start ? '' : (l.runs && l.runs.length ? runsText(l.runs, (a, b) => this._winText(a, b)) : this._winText(Date.parse(l.start), Date.parse(l.end)));
             const when = l.start ? `${win}${l.kwh > 0.05 ? ' · ' + this._kwh(l.kwh) : ''}` : t('next_not_scheduled');
             const why = l.code ? this._planWhyText(l.code, l.params, l.runs)
                 : l.why ? this._whyText({ why: l.why }) : this._reasonText(l.reason, l.params);

@@ -428,3 +428,9 @@ test('3.3: the Why list of a plan with a gap draws, and names both runs (loop 3)
     assert.match(out, /09:00 – 10:00/);
     assert.match(out, /14:00 – 15:00/);
 });
+
+test('3.4: a device the plan does not schedule still draws in the Why list (loop 3)', () => {
+    const plan = { computed_at: '2026-11-18T08:00:00+01:00', blocks: [], demands: [], not_scheduled: [{ id: 'ev:b', why: 'no_car' }] };
+    const el = mount('sem-next-plan-card', { 'sensor.sem_energy_plan': S('idle', plan) });
+    assert.doesNotThrow(() => text(el._whySec(el._plan())));
+});
