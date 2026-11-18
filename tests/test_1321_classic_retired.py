@@ -170,6 +170,9 @@ async def test_unedited_and_the_new_dashboard_exists_removes_the_classic():
     remove.assert_awaited_once_with(hass, "sem-dashboard")
     hass.config_entries.async_update_entry.assert_called_once()
     assert hass.config_entries.async_update_entry.call_args.kwargs["options"][dm.RETIRED_FLAG] is True
+    # a copy of the old dashboard is kept, so the removal can be undone
+    assert stores.saved[dm.COPY_KEY]["config"] == _classic()
+    assert stores.saved[dm.COPY_KEY]["url_path"] == "sem-dashboard"
 
 
 @pytest.mark.asyncio

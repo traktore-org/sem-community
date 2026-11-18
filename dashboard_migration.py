@@ -11,10 +11,13 @@ handled once per install, flagged in the entry options:
   dashboard is created beside it, live when Lovelace runs it, else on the
   next normal restart (a notification says so). Never an automatic restart.
 
-"Never edited" means every view path is a classic path and every card is a
-SEM card (or a layout card or one of the cards the generator swapped in).
-Home Assistant keeps no edit mark, so a rearranged classic dashboard that
-still holds only these cards is read as unedited.
+"Never edited" means every view keeps its generated path, title, icon and
+keys, and every card is one the generator made (a SEM card, a stack of them,
+the PV health tile, a swapped-in sankey, K-Flow or weather card). Any card
+or view setting of the user's own makes it edited. Home Assistant keeps no
+edit mark, so SEM cards that were only moved, removed or added still read as
+unedited; those cards would show the retired note anyway. Before a removal
+or rewrite the old config is saved to ``.storage/solar_energy_management.classic_dashboard_copy``.
 """
 from __future__ import annotations
 
@@ -34,6 +37,7 @@ _LOGGER = logging.getLogger(__name__)
 
 RETIRED_FLAG = "_classic_retired"
 ISSUE_ID = "classic_dashboard_kept"
+COPY_KEY = f"{DOMAIN}.classic_dashboard_copy"
 CLASSIC_PATH = "sem-dashboard"
 CLASSIC_TITLE = "SEM-classic"
 
@@ -194,6 +198,10 @@ async def async_retire_classic(hass: HomeAssistant, entry) -> str:
     verdict = classify((stored or {}).get("config"), titles) if stored else "none"
     result = "none" if verdict == "none" else verdict
     if verdict == "classic":
+        # Keep a copy first, so a removal or rewrite can be undone by hand:
+        # a layout-only edit (SEM cards moved or removed) reads as unedited.
+        await Store(hass, 1, COPY_KEY).async_save(
+            {"url_path": CLASSIC_PATH, "item": row, "config": stored.get("config")})
         if NEXT_DASHBOARD_PATH in await _registered_paths(hass):
             from .cleanup import async_remove_dashboard
             await async_remove_dashboard(hass, CLASSIC_PATH)
