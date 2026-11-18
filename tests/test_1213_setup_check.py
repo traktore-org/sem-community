@@ -290,6 +290,7 @@ def test_every_setup_link_and_picture_in_the_docs_exists():
     docs = ROOT / "docs"
     guide = docs / "SETUP_GUIDE.md"
     targets = []
+    own = []
     manifest = json.loads((ROOT / "manifest.json").read_text())["documentation"]
     targets.append(manifest.split("/blob/develop/docs/")[1])
     for doc in (docs / "QUICK_START.md", guide, docs / "TROUBLESHOOTING.md"):
@@ -298,12 +299,19 @@ def test_every_setup_link_and_picture_in_the_docs_exists():
             link = m.group(2)
             if doc == guide and not link.startswith("#"):
                 continue
+            if doc != guide and m.group(1) is None and link.startswith("#"):
+                # (#1321) a bare #anchor in another doc points into THAT doc
+                # (Troubleshooting has its own index), never into the guide
+                own.append((doc, link[1:]))
+                continue
             targets.append("SETUP_GUIDE.md" + link.replace("SETUP_GUIDE.md", ""))
     assert len(targets) >= 6
     slugs = _slugs(guide)
     for t in targets:
         anchor = t.split("#", 1)[1]
         assert anchor in slugs, f"no heading for #{anchor}"
+    for doc, anchor in own:
+        assert anchor in _slugs(doc), f"{doc.name}: no heading for #{anchor}"
     pics = re.findall(r"\]\((screenshots/setup-flow/[^)]+)\)",
                       guide.read_text(encoding="utf-8"))
     assert {"01a-step1-one-question.png", "01b-step1-pick-grid.png",

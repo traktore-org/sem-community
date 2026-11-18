@@ -124,7 +124,7 @@ CLAIMS = (
     ("languages", r"in (\d+) languages", _check_languages),
     ("dashboard screens", r"dashboard has (\d+) screens", _check_views),
     ("HA floor", r"\*\*Home Assistant (2026\.\d+\.\d+)\*\* or newer", _check_ha_floor),
-    ("session history", r"last (\d+) sessions per charger", _check_sessions),
+    ("session history", r"last (\d+) sessions for all chargers", _check_sessions),
     ("tested-live trio", r"Sessy \(NL\), Huawei LUNA2000 and Sonnen work automatically and are tested live", _check_live_trio),
     ("discharge list", r"\*\*Battery discharge control auto-detected for:\*\* ([^\n]+)", _check_discharge),
     ("powerwall", r"Tesla Powerwall reads automatically; its grid charge needs a setup step", _check_powerwall),

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📝 **Shorter docs for the new dashboard** (#1321). Every guide is rewritten for the five screens and checked against the code. New screenshots.
 - 🐛 **A run under way reads as running** (#1321). The screens say "charging until 14:45", not "waits for 15:00".
 - 🐛 **Plainer battery and settings** (#1321). The battery line says what a full battery gives; an unset car size reads "not set".
 - 🐛 **One figure per device** (#1321). Plan, Now and Devices count only runs still ahead. Coming up names the car and drops cars not plugged in.

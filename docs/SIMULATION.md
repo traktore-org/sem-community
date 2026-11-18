@@ -1,272 +1,120 @@
-# Simulating SEM — the standard workflow
+# Test SEM without real hardware
 
-SEM can be tested end to end **without touching any real hardware**, and
-without waiting for real nights. This is how the project itself verifies
-releases, and it works on any install. Written down 13.08.2026 so it never
-has to be re-invented (the N2 campaign night).
+You can test SEM's plans, decisions and timing with simulated inputs.
+Use **Watch only** so that no device receives a command.
 
-## The one principle
+## Watch only
 
-**Observer mode is the simulation boundary.** With
-`switch.sem_observer_mode` **on**, every layer of SEM runs for real —
-sensors are read, plans are stamped, decisions are made, coverage is
-judged — and only the final hardware command is cut. Instead of acting,
-SEM *publishes what it would do*. Nothing else is mocked, so what you
-observe is exactly what a live system would execute.
+Watch only is the one name for observer mode. Its switch is
+`switch.sem_observer_mode`.
 
-You never need observer mode off to test decisions, plans, or timing.
-You only need it off to watch a physical contactor close — and that is
-what a production soak is for, not a simulation.
+- Turn it on or off on **System › Health › Watch only**.
+- With Watch only on, SEM runs in full. It reads the sensors, makes
+  plans and makes decisions. Only the last step, the command to the
+  device, is not sent.
+- SEM's own settings stay editable. Device actions are blocked.
+- The setting is saved, so it holds from the first cycle after a restart.
 
-That principle now holds for **every** family. Until 16.08.2026 it was
-true of loads only: for EV chargers and batteries the cut sat *above* the
-decision, so observing meant no adapter was built, `decide()` and
-`decide_battery()` never ran, and there was nothing to publish — a
-two-battery rig reported `adapters = {}` in diagnostics and read as a
-misconfiguration. The cut is now at the write for all three (#764), so
-the executor is simulable the same way the planner always was.
+Keep Watch only on when a real charger or battery is shared with a live
+system. Two controllers on one device cause conflicts.
 
-## The WOULD surface (#764)
+## What SEM publishes in Watch only
 
-When observer mode is on, SEM publishes its would-be actions on two
-standard surfaces (one source of truth — the execution seam itself):
+| Where | What you read |
+|---|---|
+| `switch.sem_observer_mode`, attribute `would_decisions` | One row per device SEM decided on this cycle: `action`, `power_w`, `source`, `reason`. Keys look like `ev:<charger_id>` and `battery:<battery_id>`. Empty when Watch only is off. |
+| `switch.sem_observer_mode`, attribute `withheld_commands` | The exact service call and data a device would have received. |
+| Event `solar_energy_management_observer_decision` | Fires when a decision changes. Unchanged decisions do not fire. |
 
-1. **State — read it fresh anytime:**
-   `switch.sem_observer_mode` carries a `would_decisions` attribute:
+Judge a charger on `withheld_commands`. The reason text alone does not
+show what would reach the device.
 
-   ```yaml
-   would_decisions:
-     sim_heizband:
-       name: Sim Heizband
-       action: activate        # activate | deactivate | adjust | hold
-       power_w: 1000.0
-       source: tier2_battery   # solar | tier1_battery | tier2_battery | cheap_grid
-       reason: "overnight battery — runtime deficit"
-   ```
+## Simulate the inputs
 
-   `hold` means no command would be sent — the device is where SEM wants
-   it. The attribute is empty while observer mode is off (a live system's
-   map would be stale by definition).
-
-   The map is a **roster, not a ledger**: it carries exactly the devices
-   that decided this cycle. One that stops deciding — a charger
-   deregistered, a load taken out of surplus management, a startup-only
-   code path that fired once — leaves the map at the end of that cycle
-   rather than lingering as a ghost row. So a row's presence is itself a
-   signal, and a count you read off the attribute is the live count.
-
-   Deciding to leave a device alone is still deciding: a battery set to
-   `off` keeps its row and reports `action: off` ("SEM hands-off — inverter
-   self-manages"), and a charger set to `off` reports `action: disable`.
-   The absence of a row means SEM has nothing to say about that device;
-   `off` means SEM would deliberately do nothing.
-
-   Chargers and batteries share the map, keyed `ev:<charger_id>` and
-   `battery:<battery_id>`, with `kind` naming the family — one attribute
-   carries the whole shadow cycle:
-
-   ```yaml
-   would_decisions:
-     ev:keba_fa87f74cd3:
-       kind: charger
-       action: charge_at_amps  # idle | disable | charge_at_amps | charge_max
-       amps: 10
-       power_w: 6900.0         # what the box would actually pull
-       source: min_plus_solar  # the resolved charge mode
-       reason: "night floor — deadline 06:00"
-     battery:b1:
-       kind: battery
-       action: force_charge    # normal | limit_discharge | force_charge |
-                               # stop_force_charge | force_discharge | off
-       power_w: 3000.0
-       reason: "planned window 03:00–05:00 — deficit 3.0 kWh"
-   ```
-
-2. **Events — subscribe for the edges:** every decision *transition*
-   fires a `solar_energy_management_observer_decision` bus event with the
-   same payload. Unchanged decisions do not repeat (a wobbling watt
-   number is not a transition), so the stream is edges, not a heartbeat.
-
-## Closing the loop: a sim actuator in five lines
-
-A simulation is closed-loop when the "hardware" responds: the device
-turns on, runtime accrues, deficits shrink, stop conditions fire, and the
-outcome recorder measures a real draw. With the WOULD surface that is one
-HA automation per simulated device:
-
-```yaml
-automation:
-  - alias: "Sim actuator: heizband follows SEM's would-decisions"
-    trigger:
-      - platform: event
-        event_type: solar_energy_management_observer_decision
-        event_data: {device_id: sim_heizband}
-    action:
-      - service: >
-          {{ 'input_boolean.turn_on'
-             if trigger.event.data.action in ('activate', 'adjust')
-             else 'input_boolean.turn_off' }}
-        target: {entity_id: input_boolean.sim_heizband}
-```
-
-Give the sim device a power template sensor that follows its boolean
-(rated watts when on, 0 when off) and the loop is fully closed — SEM's
-own decisions drive the "hardware", and every downstream mechanism
-(runtime targets, anti-cycling, the night ledger's outcome record) runs
-exactly as it would live.
-
-## Simulating the inputs
-
-Every input SEM plans against can be a plain HA entity you control:
+Every input that SEM plans with can be a Home Assistant entity that you
+control.
 
 | Input | How to simulate |
 |---|---|
-| Dynamic prices | A template sensor with `raw_today`/`raw_tomorrow` (Nordpool shape) or `prices` (ENTSO-E shape). See `packages/sem_sim_dynamic_price.yaml` on the test rig — **generate `raw_tomorrow` too**, or night plans see only the dying hours of today. |
-| Solar / grid / battery power | `input_number` or posted sensor states; SEM's sensor reader treats them like any hardware. |
-| Battery SOC | An `input_number` wired as the SOC sensor. |
-| Room temperature (comfort bands) | An `input_number` as `comfort_entity`; drift it with a small script to exercise willing/banked/forced. |
-| EV connection | `input_boolean` as the plug sensor. |
-| Loads | `input_boolean` as the control entity + a power template sensor. |
+| Prices | A template sensor with `raw_today` and `raw_tomorrow` (Nord Pool style) or `prices` (ENTSO-E style). Set tomorrow's prices too. Without them the night plan sees only the rest of today. |
+| Solar, grid and battery power | `input_number`, or a sensor you post states to. |
+| Battery charge level | `input_number` set as the charge level sensor. |
+| Room temperature | `input_number` set as the comfort sensor. |
+| Car connected | `input_boolean` set as the plug sensor. |
+| Devices | `input_boolean` as the control entity, plus a power template sensor. |
 
-## Running cases back to back
+Simulate the input, never an entity that a real integration updates. The
+integration writes its own value again within one poll.
 
-The planner re-stamps within one cycle of any demand-shaping change
-(prices, targets, connection, comfort, stop conditions), so a "scenario"
-is: **set the inputs → wait two cycles (~20 s) → read the verdict** from
-`sensor.sem_energy_plan` (demands, blocks, coverage, why-codes). A whole
-night's worth of edge cases runs in an evening:
+## Run a test case
 
-1. Post a price curve → assert cheap-hours blocks land in the valley.
-2. Drop the sim SOC → assert the battery pre-charge packs.
-3. Warm the sim room past target+offset → assert the load leaves the plan
-   (`stop_condition_met` is a collector gate); cool it → it returns.
-4. Flip the plug boolean → assert the EV demand appears/vanishes.
-5. `solar_energy_management.replan` is the manual lever when you change
-   something the demand signature does not watch (the honest test/ops
-   restamp; the cause is recorded as `manual`).
+1. Change the inputs, for example post a price curve.
+2. Wait 20 seconds for two cycles.
+3. Read `sensor.sem_energy_plan`. Its state is `fits`, `yields`, `idle`
+   or `pending`. Its attributes `demands`, `blocks`, `takeover` and
+   `computed_at` hold the detail.
 
-Provocations: delete the stamp from storage while HA is stopped (the
-next boot must say "no plan — the reactive layer decides alone" and
-re-stamp); reboot mid-block (the stamp must survive with the same
-`computed_at`); flip the actuation kill-switch (coverage must flip to
-"actuation off" and back without a restamp).
+To make SEM plan again at once, call `solar_energy_management.replan`.
+The plan survives a restart, so `computed_at` does not change after one.
 
-## Simulate the input, never the entity a real device owns
+Useful checks:
 
-Point SEM at *simulated* entities (`input_boolean`, `input_number`,
-template sensors) — those the harness owns outright. An entity a live
-integration publishes cannot be held: the integration republishes its own
-truth within a poll and wins. On the shared clone that is the KEBA plug
-sensor — with a real cable connected, "the car went away" is not a state
-the rig can enter, no matter how many `POST /api/states` calls the harness
-makes.
+- Cheap price hours give battery or EV blocks in the cheapest hours.
+- A lower battery charge level gives a battery pre-charge block.
+- Connecting a car adds an EV demand. Disconnecting it removes the demand.
+- A restart in the middle of a block keeps the same block.
 
-So a harness check has **three** verdicts, not two: pass, fail, and
-*untestable*. Probe first (hold the value, read it back, see whether it
-sticks), and when the precondition is unreachable say so. A rig limit
-reported as a failure trains you to skim past failures; reported as a pass
-it hides untested surface. Both are worse than an honest "not testable
-today, and here is what proves the same property instead".
+For a full list of diagnostics, call `solar_energy_management.diagnose`.
 
-## Observer mode survives a restart — and where it is recorded
+## Compress time: test an evening in minutes
 
-Observer mode is a promise about hardware, so it has to hold across a
-restart *from the first cycle*, not from whenever the switch entity happens
-to attach. The flag is recorded in the config entry (options, or data from
-the install flow) and setup reads it before the coordinator is built.
+SEM starts the night at sunset plus an offset. The offset is
+`number.sem_night_start_offset_min`, from 0 to 400 minutes in steps of
+5, with a default of 30. Sunset comes from `sun.sun`.
 
-Installs older than the persisted toggles (before 18.07.2026) recorded it
-only in Home Assistant's restore store — the switch entity's own last
-state, which setup could not see. Those came up **armed** until the switch
-attached, and lost the setting entirely if the machine stayed off past the
-restore store's seven-day expiry. Since 16.08.2026 setup reads that store
-too and writes what it finds into the config entry, so the recovery happens
-once and the flag is explicit from then on. You will see it in the log:
+To test the evening now:
 
-```
-Recovered observer_mode=on from the switch restore store — this install
-predates the persisted toggles ...
-```
+1. Set `sun.sun` so that `next_setting` is a few minutes in the past.
+   Post the state again often, so that the real sun integration does
+   not overwrite it.
+2. Set the offset so that sunset plus offset is the evening you want.
+3. Watch `would_decisions` and `withheld_commands`.
+4. When you finish, stop the hold and restore the offset.
 
-To confirm an install is protected from the first cycle, look for
-`Observer mode: hardware control disabled` on the coordinator's own
-startup line, before any platform sets up. If observer is on and that line
-is missing, the flag is not reaching setup — report it.
+## Test a hardware write
 
-## Compressing time — an evening in minutes
+Use this when you must see a write on the device, not only the decision.
 
-Waiting for the real evening is not a simulation. SEM's day/night clock is
-*derived*, so it can be held:
+1. Replace the grid sensors with simulated split sensors, one for import
+   and one for export, and hold them at fixed values.
+2. Run with Watch only on. Check that `withheld_commands` shows the call
+   you expect.
+3. Before you turn Watch only off, check that no other device has a
+   withheld command for a charge that is due now.
+4. Turn Watch only off for a short, fixed time. Watch the car's charging
+   sensor. Turn Watch only on again as soon as the car starts to draw.
+5. Read the device register from a second Home Assistant host, or force an
+   update of the sensor with `homeassistant.update_entity`. A sensor
+   can show a stale value for a while after a write.
 
-- **Night start** is `sunset + night_start_offset_min` (#1318); sunset is
-  read from `sun.sun` (`next_setting` / `next_rising` and the state).
-- **Hold `sun.sun`** by posting its state and attributes every 0.5 s (the sun
-  integration republishes within seconds; slower holds flap) with
-  `next_setting` a few minutes in the past, and set the offset number
-  (`number.sem_night_start_offset_min`) so that sunset + offset is the
-  evening you want. SEM now believes the evening is minutes away: the
-  forecast-spend block `[night_start − 15 min, night_start)` opens, night
-  top-up sizing runs, pacing lands the pack "at day's end" — all as WOULD
-  decisions.
-- **The offset's maximum is 400 minutes**, so the fake evening can sit up to
-  ~6.5 h after the held sunset; the day side (pacing, spendable budget, the
-  peak slot guard) simulates at any hour.
-- **Release before the fake night begins**, and restore the floor. A held
-  night start that is allowed to arrive opens a real battery-night record in
-  the recorder (#800) — data the learner will later trust.
-- Read **both** observer surfaces every sample: `would_decisions` for the
-  decision, and `withheld_commands` (#855) for the exact service and payload
-  a charger would have received. A charger case is judged on the wire, not
-  on the reason string.
-- The meter has the same row (#955): `withheld_commands.export_guard` names the
-  exact call the export guard would make — `huawei_solar.set_zero_power_grid_connection`
-  with the INVERTER device on a cut, the captured prior's restore on a release
-  (`set_maximum_feed_grid_power_percent 100` under a `Limited to 100 %` mode) — or
-  the refusal in the verb's own words (`cannot read the inverter's active-power
-  mode …`, `under external scheduling …`). A held cut keeps its row every cycle.
-  Judge the export guard on this row, never on `would_decisions` alone.
+## Replay recorded days on the Insights screen
 
-`~/bin/sem-sim-compress.sh <host> <floor-hours> [step] [charger-mode]` does
-all of this with auto-restore, and refuses to run unless observer mode is on.
+Insights has a **Replay** topic. It replays past days with another setting.
+The topic is shown only when **System › Notifications and more › simulation
+tab** is on.
 
-## Proving a hardware write end to end — the export guard, 17.09.2026
+1. Open **Insights › Replay**.
+2. Pick a period, or a day type such as sunny or car charged.
+3. Set a **What if** value: battery size, battery reserve, peak limit,
+   import price or export value. Or pick a scenario.
+4. Run the simulation and read the difference.
 
-Observer mode proves the decision and the exact call; it cannot prove that the
-call lands. When a write must be seen on the hardware, this is the shape that
-worked, on the shared rig, without touching a car or a battery:
+SEM tags each day after midnight. Results after a changed decision are
+estimates, not measurements.
 
-1. **Make the inputs synthetic, keep the output real.** Point the grid at two
-   synthetic split-grid sensors (`grid_import_power_entity` /
-   `grid_export_power_entity`) and the price at a synthetic feed-in sensor, and
-   hold them with a bounded re-post. A fake 2 kW of export is enough to engage
-   the guard; nothing physical has to flow, the register is the proof.
-2. **Run it in observer mode first** and read the LOG, not only the surface:
-   the seam logs `OBSERVER · WOULD LIMIT_EXPORT …` when its command branch
-   runs. A `withheld_commands.export_guard` row with `standing: true` is the
-   roster re-publishing a held cut — it looks like a command and is not. The
-   guard that never wrote (bug class 94) was found by the absence of that log
-   line, not by anything on the surface.
-3. **Before observer goes off, judge every other device on what would hit the
-   wire.** Withheld commands for the KEBA must be empty, the next planned
-   charge window must be hours away, the battery decision must be one this
-   host cannot write (no discharge-control entity), loads on hold. The shared
-   KEBA and LUNA are the whole risk; observer off makes this host a second
-   controller on them.
-4. **Then the live pass, bounded.** Observer off with the guard *idle*; close
-   the price; the guard engages after its delay and writes; open the price;
-   it releases after its delay and restores the mode it found. Watch the car's
-   charging sensor every sample and flip observer back on the moment it turns
-   on. The whole window is six minutes.
-5. **Read the register from a second host.** The writing host's mode sensor
-   refreshes on the write and then times out for ~60 s; another HA host on the
-   same inverter lags by up to ~15 minutes. `homeassistant.update_entity` on
-   that sensor forces a read — that is the register truth. Twice on 17.09:
-   cut → *Zero Power*, release → *Limited to 100 %*.
-6. **Put it back.** Observer on, the store restored to the real meter, one
-   restart; and write the timeline into the branch's challenge record.
+## What a simulation cannot test
 
-## What this cannot test
-
-The last centimeter: brand adapters talking to real firmware (Modbus
-quirks, UDP blips, contactor behavior, a car's BMS). That is what the
-production soak covers — everything above that seam is fully simulable.
+The last part of the device path is not simulated: the brand adapter
+against real firmware, Modbus behaviour, contactor timing and the car's
+battery system. A live soak test covers this. Use Watch only on a live
+system until that test is done.

@@ -1,432 +1,189 @@
-# Loads charge before the battery (#576)
+# Loads, the battery and the priority list
 
-*Added in 1.7.5. Design:
-`docs/superpowers/specs/2026-07-10-load-priority-above-battery-design.md`.*
+SEM runs your surplus loads (pool pump, heater, hot water, heat pump) on solar.
+Their order in the priority list decides who gets the sun and the battery
+first. The list is on the **Devices** screen: drag a card, or use **Reorder**.
 
-Your surplus-managed loads (pool pump, heaters, …) now outrank home-battery
-charging above the reserve zone — the Victron-style priority order. This isn't a
-mode you turn on; it's simply how device priority relates to the battery: the
-battery is the **sink** at the bottom of the priority walk.
+## The battery is in the list
 
-## What it does
+The home battery is a row in the same list as the EV charger and your loads.
+Its position is the only control it has.
 
-Above the reserve zone (`Battery priority SOC`, default 30 %), power that would
-otherwise **charge** the battery is added to the surplus pool, and SEM shares it
-across your surplus devices in their normal priority order. Whatever the loads
-don't take flows to the battery — on a self-consumption inverter the battery
-simply charges from the leftover solar (nothing is force-commanded on it).
+- A load **above** the battery takes the battery's charge power first.
+- A load **below** the battery yields. The battery charges first.
+- Default order: **EV → battery → loads**. Loads wait for the battery until you
+  drag one above it.
 
-Below the reserve zone the battery still fills first, so your evening reserve is
-protected.
+**Below this the battery fills first** (default 30 %, on the battery card on
+**Devices**) is an absolute floor. Below it the battery charges first,
+wherever it sits in the list. This keeps the evening reserve.
 
-## Set the order by dragging the battery
+## How the walk works
 
-The **home battery appears as a device in the Control-tab priority list** (the
-"Drag to reorder" card), right alongside the EV charger and your loads. Its
-position is the control:
+SEM walks the list from the top. Each device gets its share if enough surplus
+is left.
 
-- Loads **above** the battery **reclaim** its charge power (they charge first).
-- Loads **below** the battery **yield** — the battery charges first.
-
-Drag the battery up to protect it (fewer loads outrank it); drag it down to let
-more loads charge before it. By default it sits at the **bottom**, so every
-surplus load outranks it until you move it. The battery row shows its SOC and
-current charge power; it has no on/off or mode selector — its only control is
-where you put it.
-
-The **`Battery priority SOC`** slider (Settings → SEM → Configure → battery step)
-is still an **absolute floor**: below it the battery jumps to the top and charges
-first no matter where you dragged it, protecting your evening reserve.
-
-## How the priority walk works
-
-The allocatable pool becomes the **pre-battery** surplus. SEM walks your surplus
-devices by priority and gives each its share if enough is available:
-
-| Device | "Minimum" | Consumes |
+| Device | Minimum | Uses |
 |---|---|---|
-| Heater / switch (discrete) | its rated power — all-or-nothing | its rating to start; once on, what its power sensor reads |
-| Battery (the sink) | 0 | whatever is left |
+| Switch or heater (on/off) | Its rated power, all or nothing | Its rating to start. Once running, what its power sensor reads |
+| Battery (the sink) | 0 | Whatever is left |
 
-A discrete load only switches on when the available surplus meets its full rated
-power; otherwise it yields and that power flows to the battery.
+- A running load counts what it draws, not its rating. If a heater lowers its
+  own power, the spare goes to the next load.
+- **Rating.** If you enter a rated power, SEM uses it. Otherwise SEM uses 1 kW
+  until the load runs once, then uses the measured draw. The rating can go
+  down or up. After that it only rises, to the largest draw seen.
+- A load with no power sensor keeps the 1 kW placeholder. SEM does not start
+  such a load on a small surplus.
 
-Once a load runs, SEM counts what it draws, not its rating. When a heater
-lowers its own power, the spare surplus goes to the next load.
+**Requires.** A load can require another, for example a towel rail that runs
+only when the pool pump runs. A required device sits directly below its parent
+and moves with it. SEM refuses a link that makes a loop.
 
-**Where the rating comes from matters** (#744). If you registered the load with a
-`rated_power`, that is the number. Otherwise SEM holds a 1 kW placeholder until it
-sees the load run once, then adopts the measured draw — in either direction, so a
-lamp on a metering plug settles at its real 8 W rather than being held at the
-placeholder and never offered surplus. After that first measurement the rating only
-climbs, to the largest draw ever measured. A load with **no** power sensor keeps the
-1 kW placeholder for good; that is deliberate, since the alternative is switching an
-unmeasurable load on at any trickle of surplus and importing the rest.
+**EV row.** The EV row shows its minimum power as its rating. While charging, it
+shows the live draw.
 
-## Worked examples
+## Who spends the battery and the sun
 
-Reserve zone = 30 %, two 1 kW heaters at priorities 2 and 3.
+The battery can discharge into the house and the cars. SEM uses one allowance,
+spent in list order.
 
-| Situation | Result |
+- A device above a charger gets its share before the charger. The next device
+  down uses solar and grid.
+- Only devices that allow battery help take part. A load takes part when its
+  Mode includes battery help. A charger takes part unless you turn off
+  *Battery may charge the car* for it.
+- A load set to *Finish overnight from: Battery* reserves nothing against a
+  car. It runs below the Buffer SOC, where the car may not go.
+- Solar works the same way. A load above a charger gets its share of the sun
+  first, so the charger may get less sun than before.
+- A running load keeps its battery reservation, but not its sun reservation.
+  Without that, a battery-backed load would switch off and on again.
+
+### Mode and battery mode
+
+| Battery mode | Effect on the list |
 |---|---|
-| 3.5 kW spare solar, SOC 85 % | both heaters ON (2 kW), battery absorbs the remaining ~1.5 kW |
-| 0.8 kW spare, one 1 kW heater, SOC 85 % | heater stays OFF (0.8 < 1.0 kW), 0.8 kW → battery |
-| Any solar, SOC 25 % (below the zone) | battery fills first — loads see export-leftover only |
-| Force-charge / scheduled / arbitrage battery charge active | honored — **no reclaim** |
+| Auto or self-consumption, above the reserve | Passive. Your position counts |
+| Auto or self-consumption, below the reserve | Moves to the top |
+| Force charge | Moves to the top. Loads and the EV yield |
+| Force discharge or arbitrage | Leaves the list. It feeds the grid, not the house |
 
-## Guards & interactions
+## Load modes
 
-- **Reserve floor.** Below `Battery priority SOC`, behavior is identical to
-  before. This protects the evening.
-- **Explicit battery commands win.** A force-charge, a scheduled night charge, or
-  battery→grid arbitrage is never reclaimed — the load yields to it.
-- **No oscillation.** The pool is `solar − home` (invariant to how it's shared
-  out), and a device's own draw is added back to the signal, so consuming from
-  the pool shrinks it by exactly what was consumed and converges. Existing
-  median/EMA smoothing and anti-flicker guard the residual jitter.
-
-## The EV and every device honour the same list (1.7.5-beta.3, #576 Phase 2)
-
-The priority list is now the **single control for everything** — not just the loads
-and the battery:
-
-- **The EV charger is a first-class row**, keyed by its own control id. Above the
-  battery → it reclaims the battery-charge power (charges first, above the reserve
-  zone); below → it yields. This replaced the old fixed 90 % SOC gate. Your list
-  position also drives the **multi-charger distribution order** (the old
-  `ev_surplus_priority` is now just the seeded default).
-- **Every device type participates by position** — surplus switches, modulating
-  loads, climate/AC, the heat pump (SG-Ready) and hot water are all walked by their
-  list slot and share the reclaimed battery-charge power the same way.
-- **Heat pump & hot water are draggable rows too (v1.7.5-beta.11, #602)** — they
-  appear with their own glyphs (heat-pump / water-boiler) and their surplus
-  priority is their list position, seeded once from the old
-  `heat_pump_priority` / `hot_water_priority` values on upgrade. The separate
-  priority sliders were retired; the legacy EV flags
-  (`ev_load_priority`, `ev_shed_priority`, `ev_priority_over_battery`) are
-  cleaned from stored configs by the v16 schema migration (#604).
-- **Default order is EV → battery → loads.** Loads yield to battery charging until
-  you drag one above the battery; the `Battery priority SOC` reserve floor stays an
-  absolute override (below it, the battery charges first regardless of position).
-
-### Spending the battery — and the sun — follows the same list too (2.1, #885)
-
-Everything above is about who yields while the battery **charges**. The mirror
-questions — who gets to **spend** the pack when it discharges, and who gets the
-**sun** — used to ignore the list entirely.
-
-Two subsystems each held a private copy of `Battery assist max power` and each
-treated it as its own full budget: the EV path and the load path. Nothing
-reconciled them, so a 5 kW pack could be offered 5 kW to the cars *and* 5 kW to
-the loads in the same cycle. And because every charger is decided before the
-load pass runs, a **prio-9 charger took battery power ahead of a prio-1 hot
-water tank** — dragging that tank to the top changed nothing.
-
-Now there is **one allowance, spent in list order**:
-
-- Devices that outrank a charger have their share set aside *before* the
-  charger is offered the pack. What is left goes to the charger; the next
-  device down runs on solar and grid.
-- Only devices that **opted in** take part. A load reserves nothing unless its
-  Mode includes battery ("Solar + battery"), and — new in 2.1 — a charger can
-  be excluded on its own with **Battery may assist this charger**, so a
-  two-charger install can say "the garage may, the guest charger may not". The
-  install-wide battery permission still applies on top: a per-charger toggle
-  can only restrict, never override a battery you have declared off-limits.
-- **"Finish overnight from → Battery" loads reserve nothing against a car.**
-  They run *below* the buffer, down to the hard reserve — a band the car's
-  assist floor forbids it from entering. The two are not competing for the same
-  energy, so an overnight tank never starves the car and the car never eats the
-  tank's overnight window.
-
-> The reservation is an estimate — a device's learned rating, or the threshold
-> it needs to switch on. A device that then draws less simply leaves the
-> remainder in the pool on the next cycle.
-
-**The same now applies to solar.** Chargers are decided earlier in the cycle
-than loads, so before 2.1 a charger at the *bottom* of your list could spend
-the sun before a load at the top was ever asked — and that load then ran on
-grid. Loads ranked above a charger now have their share of the surplus set
-aside first.
-
-If you have loads dragged above a charger, **that charger will now be offered
-less solar than it used to be**. That is the intended change: it is what the
-order was always supposed to mean.
-
-One asymmetry worth knowing, because it looks like an inconsistency: a load
-that is *already running* reserves nothing further from the sun (its draw is
-already inside the house-consumption figure every charger subtracts), but it
-does keep reserving from the battery (the battery ceiling is a state-of-charge
-number and has no such term). Without that, a battery-backed load would switch
-itself off and on repeatedly.
-
-### How position interacts with battery mode
-
-| Battery mode | Effect |
-|---|---|
-| `auto` / `self_consumption`, SOC ≥ reserve | passive sink — your dragged position governs |
-| `auto` / `self_consumption`, SOC < reserve | jumps to the top (reserve floor) |
-| `force_charge` | jumps to the top — commanded charge, loads/EV yield |
-| `force_discharge` / arbitrage | leaves the walk — it's feeding, not drawing |
-
-### "Requires" links (dependency chains)
-
-A device can **require** another (the "Requires" link on its Configure dialog): a
-towel rail that should only run when the pool pump does, for example. A required
-child always sits **immediately below its parent** in the list and moves with it —
-drag the parent and the child follows, so the chain never separates. The link is
-persisted, so it survives a drag, the periodic re-discovery, and a restart.
-
-SEM **rejects a link that would form a loop** — a device can't require itself, and
-it can't require something that (directly or transitively) already requires it.
-A rejected link is logged and the previous link is kept, so two devices can never
-deadlock each other waiting to start.
-
-### The EV row's rating
-
-The EV charger row shows its **minimum** power (min amps × phases × voltage) as its
-rating — the surplus *threshold* to start charging — not the theoretical 32 A × 3-phase
-maximum (which read as "the EV draws 22 kW"). While charging it shows the live draw;
-idle, it shows that start threshold.
-
-### Seeing the plan
-
-The layered trace (`diagnose`, `section: trace`) reports each device's list role
-— e.g. *"sink at list position 2"*, *"charging first — below reserve"* — so you can
-see who charges before whom each cycle. **Today's Plan** shows the pool pump / heat
-pump / hot water in the same forward timeline as the battery and EV.
-
----
-
-# Daily runtime goals for a load (#620)
-
-*Added in 1.7.5. Design:
-`docs/superpowers/specs/2026-07-20-620-device-goal-model-design.md`.*
-
-The priority list decides **who gets surplus first**; the per-device **goal
-editor** (the 🎯 target button on a load's row) decides **how much that load
-should run and from what source**. It's the load-side analogue of the EV
-charge-target: continuous priority allocation bounded by two hard ceilings — the
-**grid peak limit** and the battery **reserve SoC** — and deliberately **no
-device deadlines** (see "Why no deadlines" below).
-
-## Mode — how SEM drives the load
-
-Each load's row has a **Mode** selector:
-
-The mode says who runs the load, not where its power comes from; whether
-SEM buys power for it is the load's own buy question.
+Each load has a **Mode** on the **Devices** screen.
 
 | Mode | What SEM does |
 |---|---|
-| **Off** | Monitor only. SEM never turns it on or off, and the peak guard does not shed it. |
-| **Peak only** | Your automations run it. SEM never starts it; it only turns it off while the grid peak is at risk, and back on when the peak falls. |
-| **SEM runs it** (was *Solar only*) | Starts on spare sun. Stops when the house buys power from the grid for it, or when the sun makes less than the load draws. It never starts on the battery. See the note below for the evening. |
-| **SEM runs it, battery may help** (was *Solar + battery*) | As *SEM runs it*, and by day the home battery may help it, down to the Buffer SoC (or tonight's floor when that sits higher). The help starts only while at least the Solar Gate (`battery_assist_min_surplus`, 1200 W) goes to the grid. See the note below. |
+| **Off** | Monitors only. SEM never switches it, and the peak guard never sheds it |
+| **Peak only** | Your automations run it. SEM never starts it. It switches it off while the grid peak is at risk, and on again when the peak falls |
+| **SEM runs it** | Starts on spare sun. Stops when the house buys power from the grid for it, or when the sun makes less than the load draws. It never starts on the battery |
+| **SEM runs it, battery may help** | As *SEM runs it*. By day the battery may help, down to the Buffer SOC (or tonight's floor if that is higher). The help starts only when at least the Solar Gate (1200 W default) goes to the grid |
 
-> **SEM runs it, in the evening.** A running load in this mode keeps going while
-> the sun still makes at least what the load itself draws. If the house then
-> needs more, a home battery covers the gap and the grid reads 0 W, so SEM
-> does not stop the load. Example: sun 3.2 kW, house 1.5 kW, boiler 3 kW —
-> the boiler runs on and 1.3 kW comes from the battery. Without a battery the
-> house would import instead, and the load stops. Open for discussion: #1112.
->
-> **Battery may help, while the battery charges.** SEM measures spare sun at the
-> grid meter. While the battery is still charging from spare sun, little goes
-> to the grid, so the battery's help usually waits until the battery is full.
-> Example: sun 2 kW, house 0.5 kW, battery at 95 % taking 1.5 kW — a 3 kW
-> boiler stays off. Open for discussion: #1114.
+- A load that SEM started on sun stops when the sun stops, even if its power
+  sensor reads 0 W. A load you switched on yourself stays on.
+- **Evening.** A running *SEM runs it* load keeps going while the sun makes at
+  least what the load draws. If the house needs more, the battery covers the
+  gap and the grid reads 0 W. SEM does not stop the load in that case.
+- **Battery help while the battery charges.** Spare sun is measured at the grid
+  meter. While the battery still charges from spare sun, little reaches the
+  grid. So the battery help waits until the battery is full.
+- Battery help does not start a load at night. That is the *Finish overnight*
+  setting.
 
-Each mode promise is tested: `tests/test_docs_contracts_loads.py`.
+## Minimum and maximum run time
 
-The Mode is **axis 1 — the daytime source**. What happens *overnight* (no sun) is a
-separate choice, the **"Finish overnight from"** picker below.
+Each load has a daily run-time slider with two handles.
 
-A load SEM started on sun stops when your solar production ends, even when
-the load's power sensor reads 0 W. A load you switched on yourself is left on.
+- **Minimum** is a floor, not a stop. Below it SEM may buy power for the load:
+  from the battery or the cheap grid. Once it is met, free surplus can keep the
+  load on up to the **Maximum**. Set 0 for no target.
+- **Maximum** is the hard stop for the day. *Uncapped* means "run as long as the
+  sun lasts". If the load runs when it hits the cap, SEM switches it off.
+- The day counter resets after sunrise, not at midnight. A battery load is not
+  reset in the night and drained again.
 
-## Min / Max runtime (the dual slider)
+If both handles land on the same spot, use the split button to move them apart.
 
-Under the 🎯 target button, a **dual-handle slider** sets the daily runtime
-window (shown only in the two solar modes):
+## Anti-cycling: minimum run and minimum pause
 
-- **Minimum** (green handle) — a **floor**, not a stop. This is the runtime SEM
-  will *pay* to reach: below it the load may draw on the home battery or the
-  cheap-tariff grid (see "Finish overnight from" below). Once the floor is met
-  those paid sources stand down — but **free solar surplus keeps the load
-  running** on up to the Maximum. Set to 0 for "no target — just take surplus".
-- **Maximum** (orange handle) — a **ceiling**, and the only hard stop. The load
-  never runs past this in a day. Full-scale = *Uncapped* ("run as long as the
-  sun lasts"). Persisted across restarts; if a load is running when it hits the
-  cap, SEM switches it off.
+**Min run / pause** (minutes) stops a load from flapping on a passing cloud.
+Once on, it stays on for the minimum run. Once off, it stays off for the
+minimum pause. The window range is 0 to 120 min.
 
-So the pair reads exactly as the card labels it: **"at least X … up to Y."**
-This mirrors the EV charge-target range (#245), where the target is the
-grid-guaranteed floor and surplus may carry the charge past it up to the max.
-Before #688 the Minimum was wired as a hard stop, which made any Maximum above
-it unreachable.
+These apply only to the two *SEM runs it* modes. A hot water tank stops at its
+top or at your stop, even inside its minimum run.
 
-If both handles land on the same spot, tap the **split button** (⬍) that appears
-to nudge them apart so each is grabbable again.
-
-The counter resets **after sunrise**, not at midnight — so a battery-eligible
-load isn't reset mid-night and re-drained before the new day's surplus arrives.
-
-## Minimum run / minimum pause — anti-cycling
-
-Two small inputs sit under the Min/Max slider: **Minimum run** and **Minimum
-pause**, in minutes (#688). They stop a load flapping on a passing cloud: once
-SEM switches a load on it stays on for at least the minimum run, and once it
-switches it off it stays off for at least the minimum pause. Together they cap
-cycling at roughly one period per run-plus-pause.
-
-They only apply where SEM is the one switching — the two **solar modes**. In
-*Peak only* the load is user-managed and the peak shedder does not read these
-windows; the row still shows them, but nothing consults them there.
-
-A hot water tank stops at your own stop or at its top even inside its
-minimum run. The minimum pause still holds before its next start.
-
-**Defaults** if you leave the boxes blank:
-
-| device | minimum run | minimum pause |
+| Device | Minimum run | Minimum pause |
 |---|---|---|
-| a switch load (pump, heater, plug) | 5 min | 5 min |
-| the hot-water controller | 10 min | 5 min |
-| the heat-pump controller | 10 min | 5 min |
+| Switch load (pump, heater, plug) | 5 min | 5 min |
+| Hot water controller | 10 min | 5 min |
+| Heat pump controller | 10 min | 5 min |
 
-The hot-water and heat-pump numbers are the ones SEM uses for its own
-compressor logic (#508): a heat pump restarted after a one-minute pause is
-pure wear while the circuit water is still coming up, which is what the old
-60-second hot-water default did (#914).
+A value you type is kept and applied again after every restart.
 
-A value you type is saved, shown back to you, and **re-applied to the device
-after every restart** (2.1, #914 — before that it silently reverted to the
-default). The greyed placeholder in an empty box is the window the device is
-actually holding right now, or a dash if the device has not come up yet;
-never a made-up number. The range (0–120 min) comes from SEM's one bounds
-table, and the service keeps accepting any non-negative value, so an older
-install holding a larger number is untouched.
+## Finish overnight from
 
-## Finish overnight from — the overnight source (axis 2)
+When the sun is gone and the day target is not met, **Finish overnight from**
+decides what finishes the runtime. It applies to both *SEM runs it* modes.
 
-These are **finish** sources: they engage once the free window can no longer
-deliver the target, and a load still running when it can again is stopped —
-daytime supply is always the Mode above. **Battery** is night-only (#633): it
-engages after night mode starts and stops at daybreak. **Grid** (2.1, #953)
-engages whenever today's remaining daylight is shorter than the runtime still
-owed — the whole night, and the tail of a short winter day — but never in a
-morning the sun still has time to cover. Before #953 the Grid half had no
-window at all: the first cheap slot after the meter day rolls at sunrise
-bought the whole day's target from the meter with the sun still to come.
+| Choice | What happens |
+|---|---|
+| **Off** | Nothing. The load waits for the sun. It may miss its target on a dark day |
+| **Battery** | At night, while runtime is still owed, it runs on the home battery. It stops at the reserve (*Below this the battery fills first*, default 30 %) and does not start again below it. It stops at daybreak |
+| **Grid** | While runtime is owed and the rest of the day is too short for it, it runs on the grid in cheap-price hours only. It needs a tariff with price levels. It never runs in a morning the sun can still cover |
 
-When the sun is gone and the daily target isn't met, a single **"Finish overnight
-from"** picker (shown for *both* solar modes) decides what — if anything — finishes
-the runtime:
+- The mode sets the daytime source. This setting sets the no-sun source.
+- Switching the picker also stops a load that runs on the source you moved
+  away from. You do not have to wait for the reserve or the cheap window to end.
 
-| Choice | Overnight behavior | Backend |
-|---|---|---|
-| **Off** | Nothing finishes it. The load waits for the sun and may miss its target on a dark day. | `solar_only`, no battery |
-| **Battery** | At night, while runtime is still owed, it runs off the **home battery** and stops at `Battery priority SOC` (default 30 %). It does not start again below it, and it stops at daybreak. | `battery_eligible_overnight` |
-| **Grid** | While runtime is still owed and the day left is too short to cover it, it runs off the **grid** in cheap-price hours only (needs a tariff with price levels). | `top_up_policy = cheap_hours` |
+## Stop condition
 
-Each choice is tested: `tests/test_docs_contracts_loads.py`.
+A load can stop early when a sensor reaches a value. Set **Stop when** with
+the sensor picker. Examples: tank level full, water at 28 °C, car at 80 %.
+Clear it with the picker's clear button.
 
-The two axes are independent: the **Mode** picks the daytime source (solar, or
-solar + battery assist above the buffer), and **Finish overnight from** picks the
-no-sun source (nothing / battery to reserve / cheap grid). Switching the picker
-also **stops a load that's already running** on the source you moved away from —
-you don't have to wait for the reserve floor or the cheap window to end.
+## Why there are no deadlines
 
-The daytime battery help (mode "SEM runs it, battery may help") uses the same Solar Gate
-setting as the EV assist (`battery_assist_min_surplus`), but loads measure it
-at the grid meter (spare sun going out), while chargers measure solar − home.
-The overnight battery drain stops at `Battery priority SOC` (default 30 %).
+SEM does not force a grid top-up by a deadline. A high-priority car can sit
+at the peak limit for hours. A deadline would then push a heat pump to import
+from the grid all at once. Other HEMS tools throttle by priority in the same
+way. Use **Finish overnight from** instead. It finishes the runtime from the
+battery or the cheap grid, and never forces an import.
 
-## Optional stop condition
+## A phase over its limit
 
-Any load can also **end its run early** when a sensor crosses a value — pick the
-sensor with the **entity search** (the *Stop when ≥* picker: e.g. tank-level ≥
-full, water-temp ≥ 28 °C, car SOC ≥ 80 %). Clear it with the picker's ✕.
+On a three-phase house, each phase can have its own limit. With enforcement on,
+SEM keeps its chargers inside what each phase has left. If stopping the car is
+not enough, SEM also sheds loads. The phase guard reads the phases each
+coordinator cycle, every 10 seconds by default.
 
-## Why no deadlines (and no forced grid top-up)
+**Set the phase of each load.** The row has a **Phase** select: **L1**, **L2**,
+**L3**, **3-phase** or **unknown** (the default). A charger's phase is measured
+from its own current.
 
-The originally-requested "guarantee the minimum by a deadline using grid" was
-**deliberately not built**. In winter, a high-priority load (the EV) can sit on
-the peak ceiling for hours, so a *deadline* would force lower-priority devices
-(the heat pump) to grid-import all at once against that ceiling — the exact
-contention we avoid. Field research (evcc, Solarmanager) confirmed neither ships
-generic-device deadlines; both throttle continuously by priority. #620 instead
-gives you the **"Finish overnight from"** picker — battery (stored solar) or grid
-(cheap-tariff window) — to complete the runtime when the sun runs short, never a
-hard forced-import deadline.
+**Shed order** on a cycle where a phase is over its limit:
 
----
+1. **Chargers first.** The guard stops them as soon as a phase is over. If a
+   car was charging, loads are asked only if the phase is still over on the
+   next cycle.
+2. **Loads on that phase**, or three-phase loads, highest priority number first.
+   A load on that line frees all of its current. A three-phase load frees a
+   third on each line.
+3. **Loads of unknown phase** after those, one per cycle. SEM lets the meter
+   answer before it takes the next.
 
-# A phase over its limit (#1048)
+**Never shed:** critical loads, loads you keep hands-off, loads in *Off* mode,
+and the chargers (the guard handles them). Load shedding needs load management
+on. Without it, the guard acts on chargers only.
 
-*Added in 2.2.* A three-phase house has a limit per phase — a fuse, or a
-grid connection rated per conductor. The phase guard measures each phase
-(see *Direct per-phase grid-current sensors* in the
-[Setup Guide](SETUP_GUIDE.md)) and, with enforcement on, keeps SEM's own
-chargers inside the headroom: it clamps an increase to what the phase has
-left and stops a charger outright when a phase is over. Since 2.2 it also
-sheds **loads** when stopping the car is not enough — or when no car is
-charging at all.
+**When loads come back.** Not when the phase is merely under its limit. When the
+guard's recovery latch clears: every phase back at the recovery margin (2 A) for
+3 cycles. Then the loads return one at a time, so they do not flap.
 
-## Tell SEM which phase a load sits on
+**After a restart,** SEM waits for the meter's phase readings to settle before
+it sends a notice. If a reading is still missing, you get one. In watch-only
+mode, SEM says the reading is unavailable. It does not say a phase is over.
 
-Each load in the priority list has a **Phase** select beside *Mode* and
-*Requires*: **L1**, **L2**, **L3**, **3-phase**, or **unknown** (the default
-— SEM cannot see your wiring). A charger's phase is measured from its own
-current and shown, not set. The same setting is the `phase` property of
-`solar_energy_management.update_device_config` and a field of
-`register_surplus_device`.
-
-## The shed order
-
-On a cycle where a phase is over its limit:
-
-1. **The chargers first.** The guard stops them the moment a phase is over.
-   If a car was charging, the loads are asked only when the phase is still
-   over on the next cycle — one cycle for the stop to land.
-2. **Loads known to draw on that phase** — on that line, or three-phase —
-   highest priority number first (the bottom of the list goes first), until
-   the amps they free cover the excess. A load on that line frees all of its
-   current; a three-phase load a third of it on each line.
-3. **Loads of unknown phase** only after those, and **one per cycle**: SEM
-   cannot know which line an unknown load is on, so it lets the meter answer
-   before taking the next.
-
-**Never taken:** critical loads, loads you keep hands off, loads in mode
-*Off*, and the chargers (the guard handles them itself). A load on another
-line never answers for this one. On a one-phase supply every load sits on
-L1.
-
-**Who switches what.** A load that load management drives is switched off
-by it. A load the surplus controller runs is *held* for that controller
-instead — it backs the load off and starts nothing held — so a load always
-has one writer (#649). Load shedding for a phase needs load management to
-be switched on: without it the guard can only act on the chargers, and its
-status says so (`load_management_off`).
-
-**When they come back.** Not when the phase is merely under its limit
-again: when the guard's own recovery latch clears — every phase back to the
-recovery margin (2 A by default) for the recovery cycles (3 by default), the
-rule the chargers wait for too. Until then nothing that was taken returns,
-and a load *known* to sit on that phase does not start. After it, the loads
-return one at a time with the usual restore delay, so a shed load does not
-flap.
-
-**Reaction time.** The guard reads the phases once per coordinator cycle —
-the update interval, 10 seconds by default (at 60 seconds it is once a
-minute); a breaker that trips faster than that is not something SEM can
-outrun. Evaluating the guard on every sensor change is not part of this
-release.
-
-**After a restart.** While your meter starts up, its phase readings are missing. SEM still holds the chargers, but sends no notice until Home Assistant has run for 5 minutes. If a reading is still missing then, you get a notice. When SEM only watches, it says the reading is unavailable, not that a phase is over.
-
-**SG-Ready state 1 stays the operator's relay.** SEM never commands the grid
-operator's block state of a heat pump (SG-Ready state 1, *EVU-Sperre*). The
-phase guard switches loads the way load management always has — never
-through that relay.
+SEM never switches the grid operator's relay (SG-Ready state 1, *EVU-Sperre*) of
+a heat pump. The phase guard switches loads only.
