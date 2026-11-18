@@ -5365,6 +5365,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # Brand quirks (KEBA's 6A min, self-resume — #315/#346/#353)
                         # live entirely in ChargerAdapter, not in the actuator.
                         from .actuate import actuate
+                        from .active_phase_guard import yield_override_reason
                         from .build_view import build_charger_view
                         from .charger_adapters import adapter_for
                         from .decide import decide as decide_v2
@@ -5688,6 +5689,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 observer=self._observer_mode,
                                 controller=self._surplus_controller,
                                 yielded=self.external_yielding(f"charger:{cid}"),
+                                phase_override=yield_override_reason(self, decision),
                             )
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
@@ -5768,6 +5770,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # Single-charger legacy path — also flipped to the new pipeline.
                 # Build a synthetic per-charger view from the global config.
                 from .actuate import actuate
+                from .active_phase_guard import yield_override_reason
                 from .build_view import build_charger_view
                 from .charger_adapters import adapter_for
                 from .decide import decide as decide_v2
@@ -5858,6 +5861,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         observer=self._observer_mode,
                         controller=self._surplus_controller,
                         yielded=self.external_yielding(f"charger:{cid}"),
+                        phase_override=yield_override_reason(self, decision),
                     )
                     self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:

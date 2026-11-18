@@ -14,7 +14,7 @@ from typing import Any, Dict
 from ..const import DEFAULT_PHASE_GUARD_TOPOLOGY
 from . import reason_codes as RC
 from .charger_types import ChargerDecision, ChargerIntent, rewrite
-from ..features.phase_shed import CHARGERS_FIRST_CYCLES, over_phases
+from ..features.phase_shed import CHARGERS_FIRST_CYCLES, over_phases, worst_over
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,6 +80,23 @@ class ActivePhaseGuard:
             if not ev_drawing
             or self._over_cycles.get(phase, 0) >= CHARGERS_FIRST_CYCLES
         }
+
+    def yield_override_reason(self, decision: ChargerDecision) -> str:
+        """(#1381) Why a yielded charger's stop must go out anyway, or "".
+
+        Only the guard's own stop of a phase measured over its limit counts:
+        enforcing (watch-only never acts), the decision rewritten by this
+        guard, and a fresh reading above the limit now. A stop for stale
+        data or a recovery hold is not a fuse case."""
+        if not self._enforcing:
+            return ""
+        if decision.reason_code != RC.CHARGER_PHASE_STOP:
+            return ""
+        worst = worst_over(self._guard_snapshot)
+        if worst is None:
+            return ""
+        phase, current, limit = worst
+        return f"phase {phase} at {current:.1f} A > {limit:.1f} A"
 
     @property
     def latched_phases(self) -> frozenset:
@@ -449,6 +466,14 @@ def update_active_phase_guard(coord: Any) -> Dict[str, Any]:
     runtime = enforcer.update(raw, config)
     coord._phase_guard_snapshot = runtime
     return runtime
+
+
+def yield_override_reason(coord: Any, decision: ChargerDecision) -> str:
+    """(#1381) The guard's reason to stop a yielded charger anyway, or ""."""
+    enforcer = getattr(coord, "_active_phase_guard", None)
+    if not isinstance(enforcer, ActivePhaseGuard):
+        return ""
+    return enforcer.yield_override_reason(decision)
 
 
 def filter_charger_decision(
