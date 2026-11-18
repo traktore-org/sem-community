@@ -351,7 +351,7 @@ class SEMNextSystemCard extends SEMNextBase {
                 return this._row('mdi:hand-back-left-outline',
                     `${this._refusedName(r, t, rows)}${r.action ? ' · ' + actionWords(r.action, t) : ''}`,
                     Number.isFinite(w) ? this._kw(w) : '',
-                    own ? t('next_runs_not_started') : recordReason(r, this._hass.states, t));
+                    own ? t('next_runs_not_started') : recordReason(r, this._hass.states, t), { cls: 'stack' });
             })}</div>`
             : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;
         return this._sec(obs ? this._t('next_would_do') : this._t('next_held_back'), body);

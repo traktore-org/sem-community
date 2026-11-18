@@ -452,9 +452,11 @@ class SEMNextPlanCard extends SEMNextBase {
         return this._num(tomorrow ? 'sensor.sem_forecast_tomorrow_kwh' : 'sensor.sem_forecast_today_kwh');
     }
 
-    _svgChip(x, y, text, fill, fg, minX, maxX) {
+    _svgChip(x, y, text, fill, fg, minX, maxX, avoidX = null) {
         const w = text.length * 6.2 + 14;
-        const cx = Math.max(minX, Math.min(maxX - w, x - w / 2));
+        let cx = Math.max(minX, Math.min(maxX - w, x - w / 2));
+        // (#1321) never across the now line: the label moves to its right
+        if (avoidX !== null && cx - 2 <= avoidX && avoidX <= cx + w + 2) cx = Math.min(maxX - w, avoidX + 6);
         return svg`<rect x="${cx}" y="${y}" width="${w}" height="18" rx="9" fill="${fill}"></rect>
             <text x="${cx + w / 2}" y="${y + 12.5}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${fg}">${text}</text>`;
     }
@@ -511,7 +513,7 @@ class SEMNextPlanCard extends SEMNextBase {
             }
             const pk = d.sun.peak;
             const chip = pk && this._sunChip(d, pk);
-            if (chip) parts.push(this._svgChip(X((pk.s + pk.e) / 2), sy0 - 24, chip, C.solar, 'var(--sem-on-energy, #10161c)', 0, W));
+            if (chip) parts.push(this._svgChip(X((pk.s + pk.e) / 2), sy0 - 24, chip, C.solar, 'var(--sem-on-energy, #10161c)', 0, W, Number.isFinite(d.now) ? X(d.now) : null));
         } else {
             const kwh = this._sunFallbackKwh(d);
             const text = kwh !== null ? this._tf('next_chip_forecast_kwh', { kwh: this._fmt(kwh, 1) }) : this._t('next_sun_none');

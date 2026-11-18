@@ -183,6 +183,11 @@ export const nextCss = css`
     .ed-body .ed-pair { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .ed-body input, .ed-body select { max-width: none; width: 100%; box-sizing: border-box; }
     .ed-body ha-textfield, .ed-body ha-selector, .ed-body ha-entity-picker { max-width: none; width: 100%; display: block; }
+    /* (#1321) a narrow screen: the value sits under its label, in full width */
+    @media (max-width: 600px) {
+        .row.stack { flex-wrap: wrap; }
+        .row.stack .v { flex: 1 1 100%; max-width: 100%; text-align: left; padding-left: 36px; }
+    }
     .row .v small { display: block; color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); font-size: var(--ha-font-size-s, 12px); text-wrap: pretty; }
     .row:has(.btns) { flex-wrap: wrap; }
     .row:has(.btns) .btns { margin-left: auto; }
