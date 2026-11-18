@@ -218,15 +218,31 @@ def test_no_meters_leave_the_split_as_integrated():
 
 
 @pytest.mark.unit
-def test_the_ev_column_keeps_the_splits_own_sum():
-    """The midnight mirror can hold a counter's catch-up for charging SEM
-    never saw. No flow carries it, and its factor would reach every
-    charger's own flows: it changes nothing in the split."""
+def test_the_ev_column_is_the_mirror_from_its_second_day():
     calc, _ = _rig()
-    assert calc.calendar_day_totals(DAY)["ev"] is None
-    first = _publish(calc.calendar_day_totals(DAY))
-    calc._daily_accumulators[f"{MIDNIGHT_EV_CATEGORY}_{DAY}"] = EV_ROW + 10.0
-    assert _publish(calc.calendar_day_totals(DAY)) == first
+    assert calc.calendar_day_totals(DAY)["ev"] == EV_ROW
+    for since in (DAY, None):   # born today, or not yet: the split's own EV sum
+        calc._midnight_ev_since = since
+        assert calc.calendar_day_totals(DAY)["ev"] is None
+
+
+@pytest.mark.unit
+def test_a_charger_power_read_above_its_counter_stays_out_of_the_house():
+    """(#1049 shape) The power read says 19.56 kWh, the wallbox counter
+    10.99 and owns the EV row. The split's EV follows the counter, and the
+    house adds up to the home row instead of losing the gap."""
+    calc = EnergyCalculator.__new__(EnergyCalculator)
+    calc._meter_counter_enabled = True
+    calc._midnight_ev_since = DAY - timedelta(days=1)
+    calc._daily_accumulators = {
+        f"solar_{DAY}": 10.0, f"grid_import_{DAY}": 20.0,
+        f"{MIDNIGHT_EV_CATEGORY}_{DAY}": 10.99,
+    }
+    flows = EnergyFlows(solar_to_home=6.0, solar_to_ev=4.0,
+                        grid_to_home=4.44, grid_to_ev=15.56)
+    out = fit_flows_to_totals(flows, calc.calendar_day_totals(DAY))
+    assert out.solar_to_ev + out.grid_to_ev == pytest.approx(10.99, abs=0.01)
+    assert out.solar_to_home + out.grid_to_home == pytest.approx(30.0 - 10.99, abs=0.01)
 
 
 @pytest.mark.unit

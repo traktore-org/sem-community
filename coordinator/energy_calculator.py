@@ -4776,14 +4776,13 @@ class EnergyCalculator:
         missing read switched it, and every flow moved by the day's whole
         gap between the bases.
 
-        With grid or battery counters set up, the sources and the battery
-        and grid sinks take the day's published rows, read or not. A None
-        keeps the split's own sum: the EV, because the midnight mirror can
-        hold a counter's catch-up for charging SEM never saw, which no flow
-        carries, and its factor would reach every charger's own flows; the
-        house, which becomes the balance of the rest (as the home row is
-        whenever the meters read). With no meters the split stays as
-        integrated.
+        With grid or battery counters set up, the targets are the day's
+        published rows, read or not; the EV is the midnight mirror (the
+        flows run on calendar days, and a wallbox counter owns that row,
+        #1049). The house is None: the balance of the rest, as the home row
+        is whenever the meters read. On the mirror's first day the EV is
+        None too (the split's own sum), as the home balance stands down
+        that day. With no meters the split stays as integrated.
 
         ``day`` is the split's own day (``FlowCalculator.flow_day``).
         """
@@ -4796,7 +4795,9 @@ class EnergyCalculator:
                       "battery_charge", "battery_discharge")
         }
         out["home"] = None
-        out["ev"] = None
+        since = self._midnight_ev_since
+        out["ev"] = (acc.get(f"{MIDNIGHT_EV_CATEGORY}_{day}", 0.0)
+                     if since is not None and day > since else None)
         return out
 
     def _get_daily(self, category: str, today: date) -> float:
