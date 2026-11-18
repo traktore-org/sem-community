@@ -143,3 +143,130 @@ def test_loads_are_not_shed_before_the_charger_stop_has_had_its_turn():
         g.update(_snapshot(31.2), {"phase_guard_enabled": True,
                                    "phase_guard_enforcement_enabled": True})
     assert g.phase_shed_request(ev_drawing=True) != {}  # only if the stop failed
+
+
+# ── through the REAL reconciler, adapter and send seam ────────────────
+
+from custom_components.solar_energy_management.coordinator.charger_adapters import (  # noqa: E402
+    adapter_for,
+)
+from custom_components.solar_energy_management.coordinator.charger_reconciler import (  # noqa: E402
+    STOP_REASSERT_DWELL_S,
+    ChargerReconciler,
+)
+from custom_components.solar_energy_management.devices.base import (  # noqa: E402
+    CurrentControlDevice,
+)
+
+DRAWING = SimpleNamespace(power_w=7000.0, connected=True, charging=True)
+
+
+def _real(kind):
+    """A yielded charger of ``kind`` on a real device + adapter."""
+    hass = MagicMock()
+    hass.services.async_call = AsyncMock()
+    hass.services.has_service = MagicMock(return_value=True)
+    def _state(eid):
+        on = eid.startswith(("switch.", "input_boolean."))
+        return SimpleNamespace(
+            state="on" if on else "16",
+            attributes={"min": 0, "max": 32, "step": 1,
+                        "options": ["stop", "start"]})
+    hass.states.get = MagicMock(side_effect=_state)
+    kw = dict(charger_service=None, current_entity_id="number.ev_current")
+    if kind == "keba":
+        kw["charger_service"] = "keba.set_current"
+    dev = CurrentControlDevice(
+        hass=hass, device_id="c1", name="Wallbox", priority=3, min_current=6.0,
+        max_current=32.0, phases=3, voltage=230.0, power_entity_id="sensor.p",
+        **kw)
+    if kind == "switch":
+        dev.start_stop_entity = "switch.wallbox_pause"
+    elif kind == "select":
+        dev.charge_mode_entity, dev.charge_mode_stop = "select.mode", "stop"
+    elif kind == "service":
+        dev.stop_service = "wallbox.stop"
+    elif kind == "ocpp":
+        dev.zero_amps_parks_a_limit = True
+    dev.external_yield = True
+    return dev, hass, adapter_for(dev)
+
+
+def _written(hass):
+    return [(c.args[0], c.args[1], dict(c.args[2]) if len(c.args) > 2 else {})
+            for c in hass.services.async_call.await_args_list]
+
+
+async def _real_cycle(guard, dev, adapter, rec, now_ref, current=31.2):
+    decision = guard.filter_decision(_decision())
+    reason = guard.yield_override_reason(decision)
+    real_mono = __import__("time").monotonic
+    import time as _t
+    _t.monotonic = lambda: now_ref[0]
+    try:
+        await actuate(decision, adapter, DRAWING, rec, yielded=True,
+                      phase_override=reason)
+    finally:
+        _t.monotonic = real_mono
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["keba", "switch", "select", "service", "number", "ocpp"])
+async def test_each_charger_kind_gets_only_its_own_stop(kind):
+    dev, hass, adapter = _real(kind)
+    rec = ChargerReconciler(charger_id="c1", heartbeat_s=5.0, idle_disable_threshold=4)
+    await _real_cycle(_guard(31.2), dev, adapter, rec, [1000.0])
+    calls = _written(hass)
+    # an OCPP number with no switch cannot be stopped safely (#976): the
+    # reconciler writes nothing, and the override must not change that
+    assert calls or kind == "ocpp", f"{kind}: the stop never went out"
+    assert not any(s == "set_failsafe" for _d, s, _x in calls)  # no dead-man
+    assert not any(s in ("authorize", "enable", "turn_off") and kind == "keba"
+                   for _d, s, _x in calls)
+    if kind == "keba":
+        assert calls == [("keba", "disable", {})]
+    if kind == "ocpp":  # #976: a persisted 0 A profile is never written
+        assert not any(d == "number" and x.get("value") == 0 for d, _s, x in calls)
+
+
+@pytest.mark.asyncio
+async def test_the_real_reconciler_writes_one_stop_then_holds_the_dwell():
+    dev, hass, adapter = _real("keba")
+    rec = ChargerReconciler(charger_id="c1", heartbeat_s=5.0, idle_disable_threshold=4)
+    g, now = _guard(31.2), [1000.0]
+    for _ in range(5):  # five cycles, 10 s apart, all over the limit
+        await _real_cycle(g, dev, adapter, rec, now)
+        now[0] += 10.0
+    assert _written(hass) == [("keba", "disable", {})]
+    now[0] += STOP_REASSERT_DWELL_S
+    await _real_cycle(g, dev, adapter, rec, now)
+    assert len(_written(hass)) == 2  # one re-assert after the dwell, no more
+
+
+@pytest.mark.asyncio
+async def test_a_stop_goes_out_inside_the_contactor_minimum_on_time():
+    dev, hass, adapter = _real("keba")
+    rec = ChargerReconciler(charger_id="c1", heartbeat_s=5.0, idle_disable_threshold=4)
+    now = [1000.0]
+    rec._charge_started_at = now[0] - 30.0  # charging for 30 s only
+    await _real_cycle(_guard(31.2), dev, adapter, rec, now)
+    assert _written(hass) == [("keba", "disable", {})]
+
+
+@pytest.mark.asyncio
+async def test_a_third_party_that_keeps_re_enabling_hits_the_ceasefire():
+    global DRAWING
+    dev, hass, adapter = _real("keba")
+    rec = ChargerReconciler(charger_id="c1", heartbeat_s=5.0, idle_disable_threshold=4)
+    g, now = _guard(31.2), [1000.0]
+    try:
+        for _ in range(12):  # stop lands, the third party starts it again
+            for watts in (0.0, 7000.0):
+                DRAWING = SimpleNamespace(power_w=watts, connected=True,
+                                          charging=watts > 0)
+                await _real_cycle(g, dev, adapter, rec, now)
+                now[0] += STOP_REASSERT_DWELL_S + 1.0
+    finally:
+        DRAWING = SimpleNamespace(power_w=7000.0, connected=True, charging=True)
+    assert rec._stop_war_backoff_until > 0  # the ceasefire armed
+    assert len(_written(hass)) < 12
