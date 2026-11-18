@@ -27,7 +27,7 @@ import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
 import { chartWindow, chartTicks, priceModel } from '../util/next-plan-chart.js';
 import { priceLevelColor } from '../util/price-level.js';
-import { sourceMix, priceStrip, deviceChips } from '../util/next-now-extras.js';
+import { sourceMix, priceStrip, deviceChips, isRealTip } from '../util/next-now-extras.js';
 import { resolveChargerSoc } from '../util/charger-soc.js';
 import { loadKind } from '../util/next-devices.js';
 import './sem-setup-checklist-card.js';
@@ -353,20 +353,31 @@ class SEMNextNowCard extends SEMNextBase {
         });
         if (!bar.sources.length && !bar.sinks.length && !bar.idle) return html`<p class="help">${this._t('next_lead_unknown')}</p>`;
         if (bar.idle) return html`<p class="help">${this._t('next_bar_idle')}</p>${this._io ? this._ioList(bar) : nothing}`;
-        const mk = (s) => html`<div class="mk" style="--c:${META[s.key].color};flex:${s.w} 1 0">${this._icon(META[s.key].icon)}${s.label ? html`<span>${this._kw(s.w)}</span>` : nothing}</div>`;
-        const sg = (s) => html`<div class="sg ${META[s.key].dark ? 'dark' : ''}" style="flex:${s.w} 1 0;background:${META[s.key].color}">${s.label ? this._kw(s.w) : ''}</div>`;
+        // (#1321) a number is printed once: on the bar for the sources, on the lower marks only when several sinks share the lane
+        const mk = (num) => (s) => html`<div class="mk" style="--c:${META[s.key].color};flex:${s.w} 1 0">${this._icon(META[s.key].icon)}${num && s.label ? html`<span>${this._kw(s.w)}</span>` : nothing}</div>`;
+        const sg = (s) => html`<div class="sg ${META[s.key].dark ? 'dark' : ''}" style="flex:${s.w} 1 0;background:${META[s.key].color}" title="${this._barName(s)}">${s.label ? this._kw(s.w) : ''}</div>`;
         const toggle = () => { this._io = !this._io; writeLocal(IO_KEY, this._io ? '1' : '0'); };
-        const self = this._num('sensor.sem_self_consumption_rate');
         return html`
-            <div class="ebar" role="button" tabindex="0" aria-expanded="${this._io}" aria-label="${this._t('next_bar_aria')}"
+            <div class="ebar" role="button" tabindex="0" aria-expanded="${this._io}" aria-label="${this._barAria(bar)}"
                  @click=${toggle} @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}>
-                <div class="lane top">${bar.sources.map(mk)}</div>
+                <div class="lane top">${bar.sources.map(mk(false))}</div>
                 <div class="bar">${bar.sources.map(sg)}</div>
-                <div class="lane bot">${bar.sinks.map(mk)}</div>
+                <div class="lane bot">${bar.sinks.map(mk(bar.sinks.length > 1))}</div>
             </div>
             ${this._mixLine(bar)}
-            <p class="help" style="margin-top:8px">${this._io ? this._t('next_bar_fold') : this._t('next_bar_unfold')}${self === null ? '' : ' · ' + this._tf('next_self_use_pct', { pct: Math.round(self) })} · ${this._t('next_tap_row_history')}</p>
+            <p class="help" style="margin-top:8px">${this._io ? this._t('next_bar_fold') : this._t('next_bar_unfold')}</p>
             ${this._io ? this._ioList(bar) : nothing}`;
+    }
+
+    /** A segment's name and size in words, so the colour is never the only meaning. */
+    _barName(s) {
+        const names = { solar: 'next_src_solar', battery_out: 'next_src_battery', grid_in: 'next_src_grid', home: 'next_src_house',
+            ev: 'next_src_car', battery_in: 'next_src_battery', grid_out: 'next_export' };
+        return `${this._t(names[s.key] || s.key)} ${this._kw(s.w)}`;
+    }
+
+    _barAria(bar) {
+        return [this._t('next_bar_aria'), ...bar.sources.map((s) => this._barName(s)), '→', ...bar.sinks.map((s) => this._barName(s))].join(', ');
     }
 
     /** (#1321) Where the power comes from now, in percent — always shown, not folded. */
@@ -395,9 +406,13 @@ class SEMNextNowCard extends SEMNextBase {
         const W = 240, H = 12, span = win.end - win.start;
         const x = (t) => (t - win.start) / span * W;
         const ticks = chartTicks(win, tz, 6);
+        // colour is not the only meaning: the levels as words, with their hours
+        const words = strip.runs.filter((r) => r.level !== 'unknown')
+            .map((r) => this._t(priceLevelKey(r.level)) + ' ' + this._hhmm(new Date(r.s)) + '–' + this._hhmm(new Date(r.e)));
+        const aria = [this._t('next_price_strip'), ...words].join(', ');
         return html`<div class="pstrip">
             <div class="lbl">${this._t('next_price_strip')}</div>
-            <svg viewBox="0 0 ${W} ${H + 12}" role="img" aria-label="${this._t('next_price_strip')}">
+            <svg viewBox="0 0 ${W} ${H + 12}" role="img" aria-label="${aria}">
                 ${strip.runs.map((r) => svgRun(x(r.s), x(r.e), H, r.level === 'unknown' ? 'var(--n-line)' : priceLevelColor(r.level)))}
                 ${svgNow(x(now), H)}
                 ${ticks.map((t) => svgTick(x(t.t), H, t.label))}
@@ -424,8 +439,7 @@ class SEMNextNowCard extends SEMNextBase {
         const go = () => this._go(this._screen('devices'));
         const text = (c) => [c.kind === 'battery' ? this._t('next_src_battery') : c.label,
             c.state ? this._t(stateKey[c.state]) : '', c.soc === null ? '' : `${c.soc} %`].filter(Boolean).join(' · ');
-        return this._sec(this._t('next_devices_summary'), html`<div class="devrow">${chips.map((c) => html`<span class="chip" role="button" tabindex="0"
-                @click=${go} @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }}>${this._icon(icon[c.kind])}${text(c)}</span>`)}</div>`,
+        return this._sec(this._t('next_devices_summary'), html`<div class="devrow">${chips.map((c) => html`<button type="button" class="chip" @click=${go}>${this._icon(icon[c.kind])}${text(c)}</button>`)}</div>`,
             { extra: this._link(this._t('next_devices_link'), go) });
     }
 
@@ -551,7 +565,7 @@ class SEMNextNowCard extends SEMNextBase {
             ${self === null ? nothing : ring('sensor.sem_self_consumption_rate', self, C.solar, this._t('next_self_use'), 'next_self_use_sub')}
             ${aut === null ? nothing : ring('sensor.sem_autarky_rate', aut, C.home, this._t('next_own_supply'), 'next_own_supply_sub')}
         </div>`;
-        return this._sec(this._t('next_today'), html`${items.length ? this._tiles(items) : nothing}${rings}`);
+        return this._sec(this._t('next_so_far_today'), html`${items.length ? this._tiles(items) : nothing}${rings}`);
     }
 
     _todayList() {
@@ -571,7 +585,7 @@ class SEMNextNowCard extends SEMNextBase {
                 r.late ? html`<span class="late">${when(r)}</span>` : (r.until ? `${when(r)} – ${this._hhmm(new Date(r.until))}` : when(r)),
                 r.detail ? this._tf(r.detail, r.values) : '', { color: C[r.color] || C.home }))}</div>`
             : html`<p class="help">${this._t('next_nothing_planned')}</p>`;
-        return this._sec(this._t('next_today'), body, { extra: this._link(this._t('next_plan_link'), () => this._go(this._screen('plan'))) });
+        return this._sec(this._t('next_coming_up'), body, { extra: this._link(this._t('next_plan_link'), () => this._go(this._screen('plan'))) });
     }
 
     _why() {
@@ -648,7 +662,7 @@ class SEMNextNowCard extends SEMNextBase {
         const tiles = [];
         if (cost !== null) tiles.push({ label: this._t('next_today'), value: this._fmt(cost, 2), unit: cur, sub: this._t('next_bought') });
         if (saved !== null) tiles.push({ label: this._t('next_saved'), value: this._fmt(saved, 2), unit: cur, valueColor: C.good, sub: this._t('next_sun_and_battery') });
-        if (mcost !== null) tiles.push({ label: this._t('next_period_month'), value: mcost >= 100 ? String(Math.round(mcost)) : this._fmt(mcost, 2), unit: cur,
+        if (mcost !== null) tiles.push({ label: this._t('next_period_month'), value: mcost >= 100 ? this._int(mcost) : this._fmt(mcost, 2), unit: cur,
             sub: msaved === null ? '' : this._tf('next_saved_month', { money: this._money(msaved) }) });
         const sum = [];
         if (imp !== null && !flat) {
@@ -673,7 +687,7 @@ class SEMNextNowCard extends SEMNextBase {
     _signals() {
         const rows = [];
         const tip = this._str('sensor.sem_energy_tip');
-        if (tip) rows.push(this._row('mdi:lightbulb-outline', this._t('next_tip'), '', tip, { onClick: () => this._moreInfo('sensor.sem_energy_tip') }));
+        if (isRealTip(tip)) rows.push(this._row('mdi:lightbulb-outline', this._t('next_tip'), '', tip, { onClick: () => this._moreInfo('sensor.sem_energy_tip') }));
         const win = this._str('sensor.sem_best_surplus_window');
         const rem = this._num('sensor.sem_forecast_remaining_today_kwh');
         // The window is today's: once no sun is left today it has passed.
@@ -697,7 +711,7 @@ class SEMNextNowCard extends SEMNextBase {
         if (co2 !== null) {
             const life = this._num('sensor.sem_lifetime_co2_avoided'), trees = this._num('sensor.sem_lifetime_trees_equivalent');
             const unit = this._kgUnit('daily_co2_avoided');
-            const lifeText = life === null ? '' : `${life >= 100 ? Math.round(life) : this._fmt(life, 1)} ${this._kgUnit('lifetime_co2_avoided')}`;
+            const lifeText = life === null ? '' : `${life >= 100 ? this._int(life) : this._fmt(life, 1)} ${this._kgUnit('lifetime_co2_avoided')}`;
             const sub = life === null ? '' : (trees === null ? this._tf('next_co2_sub_notrees', { life: lifeText })
                 : this._tf('next_co2_sub', { life: lifeText, trees: Math.round(trees) }));
             rows.push(this._row('mdi:leaf', this._t('next_co2_avoided'), `${this._fmt(co2, 1)} ${unit}`, sub, { color: C.ev, onClick: () => this._moreInfo('sensor.sem_daily_co2_avoided') }));

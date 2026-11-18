@@ -21,6 +21,7 @@ import { hhmmIn } from '../util/next-time.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { fmtPrice } from '../util/next-format.js';
+import { fmtNum, setNumberLocale } from '../util/next-number.js';
 import { displayName } from '../util/next-names.js';
 import { chargerNameOf } from '../util/charger-name.js';
 import { sibling } from '../util/setup-checklist.js';
@@ -48,8 +49,8 @@ export const nextCss = css`
         --n-card2: var(--secondary-background-color, #f5f5f5);
         --n-line: var(--divider-color, #e0e0e0);
         --n-fg: var(--primary-text-color, #212121);
-        --n-fg2: var(--secondary-text-color, #727272);
-        --n-fg3: var(--secondary-text-color, #727272);
+        --n-fg2: var(--secondary-text-color, #6b6b6b);
+        --n-fg3: var(--secondary-text-color, #6b6b6b);
         --n-accent: var(--primary-color, #03a9f4);
         --n-accent-fg: var(--text-primary-color, #ffffff);
         --n-ok: var(--success-color, #43a047);
@@ -79,6 +80,16 @@ export const nextCss = css`
     .app { container-type: inline-size; max-width: 1180px; margin: 0 auto; padding: 8px 16px 40px; }
     button { font: inherit; color: inherit; }
     :focus-visible { outline: 2px solid var(--n-accent); outline-offset: 2px; }
+    /* (#1321) touch: every control is at least 40 px */
+    @media (pointer: coarse) {
+        .chip, .seg button, .seg.sm button, .btn, .btn.sm, .lnk, button.pill, .dev .gear, .dev .fold { min-height: 40px; }
+        .chip { height: 40px; }
+        .sw { min-height: 40px; min-width: 40px; }
+        select, input[type="time"], input[type="number"], input[type="text"], input.txt { min-height: 40px; }
+        ha-control-select, ha-control-select.sm, ha-button-toggle-group { --control-select-thickness: 40px; }
+        .dev .rank { width: 40px; height: 40px; }
+        .dev .gear, .dev .fold { min-width: 40px; }
+    }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
     ha-icon { --mdc-icon-size: 20px; vertical-align: -5px; }
     ha-icon.s { --mdc-icon-size: 16px; vertical-align: -3px; }
@@ -87,18 +98,18 @@ export const nextCss = css`
     /* header: compact pills and the All settings switch, no second title bar */
     .hdr { display: flex; align-items: center; gap: 8px; padding: 4px 0 12px; flex-wrap: wrap; }
     .hdr .sp { margin-right: auto; }
+    button.chip { cursor: pointer; }
     .chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; height: 32px; border-radius: 16px; background: var(--n-card); border: 1px solid var(--n-line); font-size: var(--ha-font-size-s, 13px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; }
     .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--n-ok); }
     .chip.obs .dot { background: var(--n-warn); }
     .chip ha-icon { --mdc-icon-size: 16px; vertical-align: -3px; }
     .allsw { display: inline-flex; align-items: center; gap: 8px; font-size: var(--ha-font-size-m, 14px); color: var(--n-fg); cursor: pointer; user-select: none; }
-    .switch { display: inline-flex; align-items: center; gap: 8px; font-size: var(--ha-font-size-m, 14px); color: var(--n-fg); cursor: pointer; user-select: none; background: none; border: 0; padding: 4px; }
-    .switch i, .sw i { width: 36px; height: 14px; border-radius: 7px; background: color-mix(in srgb, var(--n-fg2) 45%, transparent); position: relative; display: inline-block; transition: background .15s; flex: none; }
-    .switch i::after, .sw i::after { content: ""; position: absolute; top: -3px; left: 0; width: 20px; height: 20px; border-radius: 50%; background: var(--n-fg2); transition: left .15s, background .15s; }
-    .app.all .switch i, .sw[aria-checked="true"] i { background: color-mix(in srgb, var(--n-accent) 50%, transparent); }
-    .app.all .switch i::after, .sw[aria-checked="true"] i::after { left: 16px; background: var(--n-accent); }
-    .sw { background: none; border: 0; padding: 4px; cursor: pointer; display: inline-flex; align-items: center; }
-    .sw[disabled] { opacity: .5; cursor: default; }
+    .sw i { width: 36px; height: 14px; border-radius: 7px; background: color-mix(in srgb, var(--n-fg2) 45%, transparent); position: relative; display: inline-block; transition: background .15s; flex: none; }
+    .sw i::after { content: ""; position: absolute; top: -3px; left: 0; width: 20px; height: 20px; border-radius: 50%; background: var(--n-fg2); transition: left .15s, background .15s; }
+    .sw[aria-checked="true"] i { background: color-mix(in srgb, var(--n-accent) 50%, transparent); }
+    .sw[aria-checked="true"] i::after { left: 16px; background: var(--n-accent); }
+    .sw { background: none; border: 0; padding: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: var(--ha-font-size-m, 14px); color: var(--n-fg); user-select: none; }
+    .sw[disabled] { opacity: .6; cursor: default; }
 
     /* screen */
     .lead { font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-medium, 500); line-height: 1.3; text-wrap: balance; margin: 2px 0; }
@@ -108,29 +119,29 @@ export const nextCss = css`
     ha-card.card { padding: 16px; min-width: 0; }
     .card.flat { background: var(--n-card2); }
     .ct { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
-    .ct h3 { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); color: var(--n-fg); margin: 0; flex: 1; line-height: 1.4; }
+    .ct h3 { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); color: var(--n-fg); margin: 0; flex: 1 1 auto; min-width: min(100%, max-content); line-height: 1.4; }
     .lnk { font-size: var(--ha-font-size-m, 14px); color: var(--n-accent); font-weight: var(--ha-font-weight-medium, 500); background: none; border: 0; cursor: pointer; padding: 4px 2px; }
     .lbl { font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); }
     .big { font-size: 22px; font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; line-height: 1.1; }
-    .big small { font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); margin-left: 3px; }
+    .big small { white-space: nowrap; font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); margin-left: 3px; }
     .num { font-variant-numeric: tabular-nums; }
     .muted { color: var(--n-fg2); } .dim { color: var(--n-fg3); } .sm { font-size: var(--ha-font-size-s, 12px); } .xs { font-size: var(--ha-font-size-s, 12px); }
     .ok { color: var(--n-ok); } .warn { color: var(--n-warn); } .bad { color: var(--n-bad); }
     .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .tiles.t3 { grid-template-columns: 1fr 1fr 1fr; }
-    .tile { background: var(--n-card2); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+    .tile { background: transparent; border: 1px solid var(--n-line); border-radius: 8px; padding: 8px 12px; min-width: 0; }
     .tile .lbl { display: block; margin-bottom: 4px; }
     .tile svg { display: block; margin-top: 6px; max-width: 100%; }
     .mark { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }
-    .seg { display: inline-flex; background: color-mix(in srgb, var(--disabled-color, var(--n-fg2)) 20%, transparent); border-radius: 18px; padding: 2px; gap: 2px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .seg { display: inline-flex; background: color-mix(in srgb, var(--disabled-color, var(--n-fg2)) 20%, transparent); border-radius: 16px; padding: 2px; gap: 2px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
     .seg button { border: 0; background: transparent; color: var(--n-fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); padding: 6px 14px; border-radius: 16px; cursor: pointer; min-height: 32px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
     .seg button.on { background: var(--n-accent); color: var(--n-accent-fg); }
-    .seg button[disabled] { opacity: .5; cursor: default; }
+    .seg button[disabled] { opacity: .6; cursor: default; }
     .seg.off { background: var(--n-card2); }
     .seg.off button { color: var(--n-fg2); cursor: default; }
     .seg.off button.on { background: var(--n-fg2); color: var(--n-card); }
     .seg.sm button { font-size: var(--ha-font-size-s, 13px); padding: 4px 10px; min-height: 28px; }
-    ha-control-select, ha-button-toggle-group { --control-select-thickness: 36px; --control-select-border-radius: 18px; width: auto; max-width: 100%; }
+    ha-control-select, ha-button-toggle-group { --control-select-thickness: 36px; --control-select-border-radius: 16px; width: auto; max-width: 100%; }
     ha-control-select.sm { --control-select-thickness: 32px; --control-select-border-radius: 16px; }
     .rows { display: flex; flex-direction: column; }
     .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--n-line); min-width: 0; }
@@ -138,7 +149,8 @@ export const nextCss = css`
     .row[role="button"] { cursor: pointer; }
     .row ha-icon { color: var(--state-icon-color, var(--n-fg2)); }
     .row .k { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 40%; }
-    .row .k .t { min-width: 0; overflow-wrap: anywhere; }
+    .row .k .t { min-width: 0; overflow-wrap: break-word; }
+    .row.ell .k .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .row .v { text-align: right; font-weight: var(--ha-font-weight-medium, 500); flex: 0 1 auto; max-width: 62%; min-width: 0; }
     .row .v small { display: block; color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); font-size: var(--ha-font-size-s, 12px); text-wrap: pretty; }
     .row:has(.btns) { flex-wrap: wrap; }
@@ -157,13 +169,13 @@ export const nextCss = css`
     .btn.primary { background: var(--n-accent); color: var(--n-accent-fg); border-color: transparent; }
     .btn.ghost { border-color: transparent; }
     .btn.sm { min-height: 32px; padding: 0 12px; font-size: var(--ha-font-size-s, 13px); }
-    .btn[disabled] { opacity: .5; cursor: default; }
+    .btn[disabled] { opacity: .6; cursor: default; }
     .btn ha-icon { --mdc-icon-size: 18px; vertical-align: -4px; }
     ha-button ha-icon { --mdc-icon-size: 18px; }
     .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     .track { height: 8px; border-radius: 4px; background: var(--n-card2); position: relative; overflow: visible; }
     .fill { height: 100%; border-radius: 4px; position: absolute; left: 0; top: 0; }
-    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); background: var(--n-card2); color: var(--n-fg2); white-space: nowrap; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 16px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); background: var(--n-card2); color: var(--n-fg2); white-space: nowrap; }
     .pill.ok { color: var(--n-ok); } .pill.warn { color: var(--n-warn); } .pill.bad { color: var(--n-bad); }
     .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
     .app:not(.all) [data-more] { display: none !important; }
@@ -207,7 +219,7 @@ export const nextCss = css`
     .dev .rank { width: 26px; height: 26px; border-radius: 8px; background: var(--n-card2); display: flex; align-items: center; justify-content: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); color: var(--n-fg2); flex: 0 0 auto; }
     .dev .name { font-weight: var(--ha-font-weight-medium, 500); font-size: var(--ha-font-size-l, 16px); flex: 1 1 11em; min-width: 8em; display: flex; align-items: center; gap: 6px; }
     .dev .name { flex-wrap: wrap; }
-    .dev .name > span:not(.pill) { flex: 1 1 auto; min-width: 7em; overflow-wrap: anywhere; }
+    .dev .name > span:not(.pill) { flex: 1 1 auto; min-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dev .name ha-icon, .dev .name .pill { flex: none; }
     .dev .head > .live, .dev .head > .pill { flex: none; }
     .dev .name ha-icon { color: var(--c); }
@@ -276,6 +288,17 @@ export const nextCss = css`
     .fresh .tile { display: flex; align-items: center; gap: 8px; }
     .fresh .tile ha-icon { color: var(--c); }
     :host(.observe) .card { opacity: .92; }
+    .more { margin-top: 8px; border-top: 1px solid var(--n-line); }
+    .more summary { cursor: pointer; color: var(--n-accent); font-weight: var(--ha-font-weight-medium, 500); padding: 10px 0; list-style: none; display: flex; align-items: center; gap: 4px; min-height: 40px; }
+    .more summary::-webkit-details-marker { display: none; }
+    .more summary::before { content: '\\25B8'; display: inline-block; transition: transform .15s; }
+    .more[open] summary::before { transform: rotate(90deg); }
+    /* dialog fallback when ha-dialog is not there */
+    .dlg-overlay { position: fixed; inset: 0; background: color-mix(in srgb, black 60%, transparent); z-index: 999; display: flex; align-items: center; justify-content: center; }
+    .dlg-box { background: var(--card-background-color, #fff); border-radius: var(--ha-card-border-radius, 12px); border: 1px solid var(--divider-color); padding: 24px; min-width: 320px; max-width: 90vw; max-height: 90vh; overflow: auto; color: var(--primary-text-color); }
+    .dlg-title { font-weight: var(--ha-font-weight-medium, 500); font-size: var(--ha-font-size-l, 16px); margin-bottom: 16px; }
+    .dlg-actions { display: flex; gap: 8px; align-items: center; }
+    .dlg-actions .grow { flex: 1; }
     .toast { position: fixed; left: 16px; right: 16px; margin: 0 auto; width: fit-content; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10;
         max-width: 560px; box-sizing: border-box; display: flex; align-items: flex-start; gap: 8px; padding: 12px 16px; border-radius: 4px;
         background: var(--n-card); color: var(--n-fg); border: 1px solid var(--n-line); border-left: 4px solid var(--n-ok);
@@ -344,6 +367,7 @@ export class SEMNextBase extends SEMLitBase {
     set hass(hass) {
         this._hass = hass;
         if (!hass) return;
+        setNumberLocale(hass);
         const lang = hass.language;
         const hasLocalize = typeof semLocalize === 'function';
         let localeChanged = false;
@@ -422,7 +446,7 @@ export class SEMNextBase extends SEMLitBase {
     _temp(c) {
         const unit = this._hass?.config?.unit_system?.temperature || '°C';
         const v = unit === '°F' ? Number(c) * 9 / 5 + 32 : Number(c);
-        return (Math.round(v * 10) / 10) + ' ' + unit;
+        return fmtNum(Math.round(v * 10) / 10, 1) + ' ' + unit;
     }
     _moreInfo(entityId) { this._fireMoreInfo(entityId); }
     /** The path of another screen of this dashboard, from the page we are on (#1321). */
@@ -434,13 +458,15 @@ export class SEMNextBase extends SEMLitBase {
     }
 
     // ── formatting ──
-    _fmtKw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : (w / 1000).toFixed(d); }
-    _fmt(v, d = 1) { return v === null || v === undefined || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(d); }
-    _kw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : `${(w / 1000).toFixed(d)} kW`; }
-    _kwh(v, d = 1) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Number(v) >= 100 ? Math.round(v) : Number(v).toFixed(d)} kWh`; }
+    // (#1321) every number goes through fmtNum: the user's locale, units kept
+    _fmtKw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : fmtNum(w / 1000, d); }
+    _fmt(v, d = 1) { return fmtNum(v, d); }
+    _int(v) { return fmtNum(Math.round(Number(v)), 0); }
+    _kw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : `${fmtNum(w / 1000, d)} kW`; }
+    _kwh(v, d = 1) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Number(v) >= 100 ? fmtNum(Math.round(v), 0) : fmtNum(v, d)} kWh`; }
     _price(v) { return fmtPrice(v); }
-    _money(v, d = 2) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Number(v).toFixed(d)} ${this._currency()}`; }
-    _pct(v) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Math.round(v)} %`; }
+    _money(v, d = 2) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${fmtNum(v, d)} ${this._currency()}`; }
+    _pct(v) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${fmtNum(Math.round(v), 0)} %`; }
     /** 'HH:MM' from a Date, an ISO stamp, or an 'HH:MM[:SS]' string. */
     _hhmm(x) {
         if (x === null || x === undefined || x === '') return '';
@@ -470,11 +496,11 @@ export class SEMNextBase extends SEMLitBase {
         const flat = !level || isAbsence(level);
         const all = haDefined('ha-switch')
             ? html`<label class="allsw"><ha-switch .checked=${this._all} @change=${(e) => { if (!!e.target.checked !== this._all) this._toggleAll(); }}></ha-switch>${this._t('next_all_settings')}</label>`
-            : html`<button type="button" class="switch" role="switch" aria-checked="${this._all}" @click=${() => this._toggleAll()}><i></i>${this._t('next_all_settings')}</button>`;
+            : html`<button type="button" class="sw" role="switch" aria-checked="${this._all}" @click=${() => this._toggleAll()}><i></i>${this._t('next_all_settings')}</button>`;
         return html`
             <header class="hdr">
-                ${soc === null ? nothing : html`<span class="chip" role="button" tabindex="0" @click=${() => this._moreInfo('sensor.sem_battery_soc')}>${this._icon('mdi:battery-medium')}${Math.round(soc)} %</span>`}
-                ${rate === null || flat ? nothing : html`<span class="chip" role="button" tabindex="0" @click=${() => this._moreInfo('sensor.sem_tariff_current_import_rate')}>${this._icon('mdi:cash')}${this._price(rate)} <span class="dim">· ${this._t(priceLevelKey(level))}</span></span>`}
+                ${soc === null ? nothing : html`<button type="button" class="chip" @click=${() => this._moreInfo('sensor.sem_battery_soc')}>${this._icon('mdi:battery-medium')}${this._int(soc)} %</button>`}
+                ${rate === null || flat ? nothing : html`<button type="button" class="chip" @click=${() => this._moreInfo('sensor.sem_tariff_current_import_rate')}>${this._icon('mdi:cash')}${this._price(rate)} <span class="dim">· ${this._t(priceLevelKey(level))}</span></button>`}
                 <span class="chip ${obs ? 'obs' : ''}"><span class="dot"></span>${obs ? this._t('next_pill_observing') : this._t('next_pill_live')}</span>
                 <span class="sp"></span>
                 ${all}
@@ -676,11 +702,57 @@ export class SEMNextBase extends SEMLitBase {
 
     /** A button: ha-button when defined, else a native one in HA's look. */
     _btn(label, onClick, o = {}) {
-        return renderButton(label, onClick, { ...o, title: o.title ?? this._whyOff(o.disabled) }, (mdi) => this._icon(mdi));
+        // (#1321) one filled main action per card; every other button is a text button
+        return renderButton(label, onClick, { ...o, ghost: o.ghost ?? !o.primary, title: o.title ?? this._whyOff(o.disabled) }, (mdi) => this._icon(mdi));
     }
 
     /** A disabled control says why on hover while SEM only watches. */
     _whyOff(disabled) { return disabled && this._obs() ? this._t('next_disabled_watching') : undefined; }
+
+    /**
+     * (#1321) The one dialog every screen uses. o = { id, title, build(native) -> html string,
+     * onClose }. HA's ha-dialog when defined, a plain overlay otherwise; both get
+     * role=dialog, aria-modal, Escape to close, focus on the first field and back to the
+     * control that opened it. Returns { el, close }; the caller wires its buttons on el.
+     */
+    _dialog(o) {
+        const root = this.renderRoot;
+        const old = root?.getElementById?.(o.id);
+        if (old) old.remove();
+        const opener = (root && root.activeElement) || (typeof document !== 'undefined' ? document.activeElement : null);
+        const native = haDefined('ha-dialog');
+        const el = document.createElement(native ? 'ha-dialog' : 'div');
+        el.id = o.id;
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-modal', 'true');
+        el.setAttribute('aria-label', o.title || '');
+        let done = false;
+        const close = () => {
+            if (done) return;
+            done = true;
+            el.remove();
+            if (typeof o.onClose === 'function') o.onClose();
+            if (opener && typeof opener.focus === 'function') opener.focus();
+        };
+        if (native) {
+            el.open = true; el.heading = o.title || ''; el.setAttribute('header-title', o.title || '');
+            el.addEventListener('closed', (e) => { if (e.target === el) close(); });
+        } else {
+            el.className = 'dlg-overlay';
+            el.addEventListener('click', (e) => { if (e.target === el) close(); });
+        }
+        el.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+        el.innerHTML = o.build(native);
+        root.appendChild(el);
+        const first = el.querySelector('input, select, ha-textfield, button');
+        if (first && typeof first.focus === 'function') first.focus();
+        return { el, close };
+    }
+
+    /** (#1321) Settings that rarely change sit under one fold named More, closed until asked. */
+    _more(body, label) {
+        return html`<details class="more"><summary>${label || this._t('next_more')}</summary>${body}</details>`;
+    }
 
     /** An alert in HA's style (ha-alert when defined). */
     _alert(type, title, body, actions) { return renderAlert(type, title, body, actions); }

@@ -43,7 +43,7 @@ export function whyNoButton(p) {
         case 'observe_only': return { key: 'config_proposed_observe_only' };
         case 'not_loaded': return { key: 'config_proposed_not_loaded' };
         case 'no_unit': return { key: 'config_proposed_no_unit', vars: { wanted: p.unit_wanted || '' } };
-        case 'unit_mismatch': return { key: 'config_proposed_unit_mismatch', vars: { seen: p.unit_seen || '?', wanted: p.unit_wanted || '' } };
+        case 'unit_mismatch': return { key: 'config_proposed_unit_mismatch', vars: { seen: p.unit_seen || '—', wanted: p.unit_wanted || '' } };
         case 'options_unmapped': return { key: 'config_proposed_options_unmapped',
             vars: { missing: (p.values_missing || []).join(', '), options: (p.options || []).join(', ') } };
         case 'pair_incomplete': return { key: 'config_proposed_pair_incomplete', vars: { missing: (p.missing_role || []).join(', ') } };

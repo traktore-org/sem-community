@@ -100,6 +100,7 @@ class SEMNextSystemCard extends SEMNextBase {
             _confirmObs: { state: true },
             _diagBusy: { state: true },
             _panel: { state: true },
+            _showSources: { state: true },
             _chargerBusy: { state: true },
             _confirmRemove: { state: true },
             _pickerReady: { state: true },
@@ -198,25 +199,42 @@ class SEMNextSystemCard extends SEMNextBase {
         return rows;
     }
 
-    _freshTiles(rows) {
-        return html`<div class="fresh">${rows.map((r) => {
-            // no entity at all is "no reading" in the quiet colour; only an entity that went dark is an error
-            const cls = r.state === 'ok' || r.state === 'missing' ? 'dim' : (r.state === 'old' ? 'warn' : 'bad');
-            const txt = r.state === 'ok' || r.state === 'old' ? (ageLabel(r.age) || this._t('next_fresh_ok'))
-                : r.state === 'missing' ? this._t('next_no_reading') : this._t('next_fresh_' + r.state);
-            // (#1321) the value and the real entity SEM reads, for checking a setup
-            const st = this._hass.states[r.entity];
-            // (#1321) the source by its friendly name; the id shows only in more-info
-            const srcName = r.src ? entityName(this._hass, r.src) : '';
-            const g = r.key === 'next_src_grid' ? gridReading(st?.state) : null;
-            // (#1321) the grid reads as Now says it: a size and import or export, not a signed number
-            const val = g ? `${this._fmt(g.watts, 0)} W${g.dir ? ' ' + this._t(g.dir === 'import' ? 'next_import' : 'next_export').toLowerCase() : ''}`
-                : !st ? '' : (typeof this._hass.formatEntityState === 'function' ? this._hass.formatEntityState(st)
-                : `${st.state}${st.attributes?.unit_of_measurement ? ' ' + st.attributes.unit_of_measurement : ''}`);
-            return html`<div class="tile" style="--c:${r.color}" role="button" tabindex="0" @click=${() => this._moreInfo(r.src && this._hass.states[r.src] ? r.src : r.entity)}>
-                ${this._icon(r.icon)}<div style="min-width:0"><div class="sm" style="font-weight:500">${r.name}</div><div class="xs ${cls}">${val ? val + ' · ' : ''}${txt}</div>
-                ${srcName && srcName.toLowerCase() !== String(r.name).toLowerCase() ? html`<div class="xs dim">${srcName}</div>` : nothing}</div></div>`;
-        })}</div>`;
+    /** The value and status words of one source, as the old tile said them. */
+    _freshLine(r) {
+        const txt = r.state === 'ok' || r.state === 'old' ? (ageLabel(r.age) || this._t('next_fresh_ok'))
+            : r.state === 'missing' ? this._t('next_no_reading') : this._t('next_fresh_' + r.state);
+        const st = this._hass.states[r.entity];
+        const g = r.key === 'next_src_grid' ? gridReading(st?.state) : null;
+        // the grid reads as Now says it: a size and import or export, not a signed number
+        const val = g ? `${this._fmt(g.watts, 0)} W${g.dir ? ' ' + this._t(g.dir === 'import' ? 'next_import' : 'next_export').toLowerCase() : ''}`
+            : !st ? '' : (typeof this._hass.formatEntityState === 'function' ? this._hass.formatEntityState(st)
+            : `${st.state}${st.attributes?.unit_of_measurement ? ' ' + st.attributes.unit_of_measurement : ''}`);
+        return { value: val ? `${val} · ${txt}` : txt, cls: r.state === 'old' || r.state === 'missing' ? 'warn' : 'bad' };
+    }
+
+    _sourceRow(r) {
+        const { value, cls } = this._freshLine(r);
+        const srcName = r.src ? entityName(this._hass, r.src) : '';
+        const sub = srcName && srcName.toLowerCase() !== String(r.name).toLowerCase() ? srcName : '';
+        const open = () => this._moreInfo(r.src && this._hass.states[r.src] ? r.src : r.entity);
+        return this._row(r.icon, r.name, html`<span class="${r.state === 'ok' ? '' : cls}">${value}</span>`, sub, { color: r.color, onClick: open, cls: 'ell' });
+    }
+
+    /**
+     * (#1321) One row says how the sources are doing (tap for the list); only a
+     * source with a problem gets a row of its own. HA's own pattern for a healthy list.
+     */
+    _freshSummary(rows) {
+        const bad = rows.filter((r) => r.state !== 'ok');
+        const okN = rows.length - bad.length;
+        const label = bad.length ? this._tf('next_n_sources_ok', { n: okN }) : this._tf('next_all_sources_ok', { n: rows.length });
+        const open = !!this._showSources;
+        return html`<div class="rows">
+            ${bad.map((r) => this._sourceRow(r))}
+            ${okN || !bad.length ? this._row(bad.length ? 'mdi:check-circle-outline' : 'mdi:check-circle', label,
+                html`<ha-icon icon="${open ? 'mdi:chevron-up' : 'mdi:chevron-down'}"></ha-icon>`, '',
+                { color: C.good, onClick: () => { this._showSources = !open; } }) : nothing}
+            ${open ? rows.filter((r) => r.state === 'ok').map((r) => this._sourceRow(r)) : nothing}</div>`;
     }
 
     _setupRow() {
@@ -242,7 +260,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const value = [count !== '' ? this._tf('next_chargers_n', { n: count }) : '', control].filter(Boolean).join(' · ') || MISSING;
         const sub = [
             strings ? this._tf('next_strings', { n: strings }) : '',
-            cap !== null && cap > 0 ? this._tf('next_batt_cap', { kwh: cap.toFixed(1) }) : '',
+            cap !== null && cap > 0 ? this._tf('next_batt_cap', { kwh: this._fmt(cap, 1) }) : '',
             gridMode ? `${this._t('next_grid_mode')} ${gridMode}` : '',
             unmapped !== null ? this._tf('next_unmapped', { n: unmapped }) : '',
         ].filter(Boolean).join(' · ');
@@ -273,26 +291,25 @@ class SEMNextSystemCard extends SEMNextBase {
         return this._row('mdi:new-box', this._t('version'), ver || MISSING, sub, { onClick: () => this._moreInfo('sensor.sem_diag_version') });
     }
 
-    _observerButton() {
+    /** (#1321) Observer mode changes what SEM does, so it is a switch row, not a tool button. */
+    _observerRow() {
         const obs = this._obs();
-        if (this._confirmObs) {
-            return html`<span class="confirm">${this._t(obs ? 'next_obs_confirm_off' : 'next_obs_confirm_on')}
+        const confirm = this._confirmObs
+            ? html`<div class="confirm">${this._alert('warning', '', this._t(obs ? 'next_obs_confirm_off' : 'next_obs_confirm_on'), html`
                 ${this._btn(this._t('next_yes'), () => { this._confirmObs = false; this._toggleSwitch('switch.sem_observer_mode'); }, { small: true, primary: true })}
-                ${this._btn(this._t('next_cancel'), () => { this._confirmObs = false; }, { small: true, ghost: true })}</span>`;
-        }
-        return this._btn(html`${this._t('next_observer')}: ${obs ? this._t('on') : this._t('off')} · <span class="val">${this._t(obs ? 'next_turn_off' : 'next_turn_on')}</span>`,
-                         () => { this._confirmObs = true; }, { small: true, icon: 'mdi:eye-outline' });
+                ${this._btn(this._t('next_cancel'), () => { this._confirmObs = false; }, { small: true, ghost: true })}`)}</div>` : nothing;
+        return html`${this._row('mdi:eye-outline', this._t('next_observer'),
+            this._switch(obs, () => { this._confirmObs = true; }, { label: this._t('next_observer') }), this._t('next_observer_sub'))}${confirm}`;
     }
 
     _health(rows) {
         return this._sec(this._t('next_health'), html`
-            ${this._freshTiles(rows)}
-            <div class="rows" style="margin-top:8px">${this._setupRow()}${this._panel === 'setup' ? this._setupPanel('setup') : nothing}${this._hardwareRow()}${this._panel === 'hardware' ? this._setupPanel('hardware') : nothing}${this._unavailableRow()}${this._versionRow()}</div>
+            ${this._freshSummary(rows)}
+            <div class="rows" style="margin-top:8px">${this._setupRow()}${this._panel === 'setup' ? this._setupPanel('setup') : nothing}${this._hardwareRow()}${this._panel === 'hardware' ? this._setupPanel('hardware') : nothing}${this._unavailableRow()}${this._versionRow()}${this._observerRow()}</div>
             <div class="btns" style="margin-top:10px">
-                ${this._btn(this._t('copy_diagnostics'), () => this._copyDiagnostics(), { small: true, icon: 'mdi:content-copy' })}
-                ${this._btn(this._t('config_diagnose'), () => this._diagnose('all'), { small: true, icon: 'mdi:stethoscope', disabled: this._diagBusy })}
-                ${this._btn(this._t('config_open_ha_settings'), () => this._go(HA_SETTINGS), { small: true, icon: 'mdi:cog-outline' })}
-                ${this._observerButton()}
+                ${this._btn(this._t('copy_diagnostics'), () => this._copyDiagnostics(), { small: true, ghost: true, icon: 'mdi:content-copy' })}
+                ${this._btn(this._t('config_diagnose'), () => this._diagnose('all'), { small: true, ghost: true, icon: 'mdi:stethoscope', disabled: this._diagBusy })}
+                ${this._btn(this._t('config_open_ha_settings'), () => this._go(HA_SETTINGS), { small: true, ghost: true, icon: 'mdi:cog-outline' })}
             </div>
 `, { cls: 'span2' });
     }

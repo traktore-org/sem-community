@@ -27,6 +27,7 @@ import { displayName, entityName } from './next-names.js';
 import { priceAddOns } from './settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from './peak-questions.js';
 import { BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
+import { fmtNum } from './next-number.js';
 
 // (#528) option keys that reload the entry when written — a subset of
 // `__init__.py:_SET_OPTION_STRUCTURAL_KEYS` (tests/test_528).
@@ -250,7 +251,7 @@ export function slotText(slot, t, value = slot.value, states = null) {
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         }
         // (#1321) a price per kWh reads the same here as on Now and Plan
-        const s = /\/kWh$/.test(slot.unit || '') ? fmtPrice(v) : v.toFixed(decimalsOf(slot.step));
+        const s = /\/kWh$/.test(slot.unit || '') ? fmtPrice(v) : fmtNum(v, decimalsOf(slot.step));
         return slot.unit ? `${s} ${slot.unit}` : s;
     }
     if (slot.kind === 'switch') return value ? t('next_on') : t('next_off');

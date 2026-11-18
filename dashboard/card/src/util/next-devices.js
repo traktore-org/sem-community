@@ -203,7 +203,7 @@ export function deviceRows(devices, chargers = [], { hasBattery = false, charger
 export function statePill(row, live = {}) {
     const p = (key, params = {}, cls = '') => ({ key, params, cls });
     if (row.lockedByOperator) return p('locked_by_grid_operator', {}, 'warn');
-    if (row.isShed) return p(shedReasonKey(row.shedReason), { phase: row.shedPhase || '?' }, 'bad');
+    if (row.isShed) return p(shedReasonKey(row.shedReason), { phase: row.shedPhase || '—' }, 'bad');
     const w = Number.isFinite(live.powerW) ? live.powerW : null;
     if (row.type === 'charger') {
         if (live.paused) return p('next_st_paused', { time: live.pausedUntil || '' }, 'warn');

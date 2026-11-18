@@ -10,11 +10,13 @@
  * without one.
  */
 
+import { fmtNum } from './next-number.js';
+
 const IMPORT_W = 100;   // below this the grid is "quiet"
 const SUN_W = 100;      // the roof gives something above this
 
 function fmt1(v) {
-    return Number.isFinite(v) ? (Math.round(v * 10) / 10).toFixed(1) : '';
+    return Number.isFinite(v) ? fmtNum(Math.round(v * 10) / 10, 1) : '';
 }
 function fmt0(v) {
     return Number.isFinite(v) ? String(Math.round(v)) : '';

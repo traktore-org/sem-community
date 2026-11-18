@@ -8,8 +8,10 @@
  * a bare key. The viewer's clock formats the "full again by" time.
  */
 
+import { fmtNum } from './next-number.js';
+
 const PREFIX = 'energy_plan_review_';
-const fix = (v, d = 1) => (v == null || !Number.isFinite(Number(v)) ? '' : Number(v).toFixed(d));
+const fix = (v, d = 1) => (v == null || !Number.isFinite(Number(v)) ? '' : fmtNum(v, d));
 
 /** → [{ kind: 'ev'|'load'|'battery'|'sun', id?, label?, text }] */
 export function reviewRows(rv, say, clock = (ts) => String(ts)) {

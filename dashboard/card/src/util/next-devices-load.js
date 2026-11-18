@@ -14,6 +14,7 @@ import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, s
 import { plainReason } from './why-rows.js';
 import { loadRunsBySem } from './settings-applies.js';
 import { cleanName } from './next-names.js';
+import { fmtNum } from './next-number.js';
 import { parseCopCurve, formatCopCurve, heatCostNow,
     copSourceOf, copSourceOptions, copLearnLine } from './heat-pump-cost.js';
 import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, preheatWrites,
@@ -47,6 +48,7 @@ function modeControl(card, row, dis, helpKey) {
         for (const w of modeWrites(row, key)) card._dev(id, w.property, w.value);
     }, { disabled: dis });
     let line;
+    let boost = nothing;
     if (row.override) {
         const back = card._val(t('next_back'), () => card._callService(DOMAIN, 'plan_override_clear', { device_id: id }), { disabled: dis });
         const key = row.override.action === 'skip' ? 'next_load_paused_until' : 'next_boost_until';
@@ -55,16 +57,18 @@ function modeControl(card, row, dis, helpKey) {
         const minSeg = card._seg(BOOST_MINUTES.map((m) => ({ key: m, label: tf('next_n_min', { n: m }) })), null,
             (m) => card._callService(DOMAIN, 'plan_override', { device_id: id, action: 'force', minutes: m }),
             { disabled: dis, small: true });
-        line = html`<div class="modehelp">${helpKey ? html`${t(helpKey)} ` : nothing}${t('next_boost_for')} ${minSeg}</div>`;
+        // (#1321) the one-off boost sits under More, the mode's own help stays in view
+        line = helpKey ? html`<div class="modehelp">${t(helpKey)}</div>` : nothing;
+        boost = html`<div class="modehelp">${t('next_boost_for')} ${minSeg}</div>`;
     } else {
         line = helpKey ? html`<div class="modehelp">${t(helpKey)}</div>` : nothing;
     }
-    return html`${seg}${line}`;
+    return { main: html`${seg}${line}`, boost };
 }
 
 function hours(min) {
     const h = (Number(min) || 0) / 60;
-    return h % 1 === 0 ? String(h) : h.toFixed(1);
+    return h % 1 === 0 ? fmtNum(h, 0) : fmtNum(h, 1);
 }
 
 function phaseLabel(card, p) {
@@ -95,7 +99,9 @@ export function loadBody(card, row) {
 
     // ── mode ── (#1354) one control: the four modes, then Boost or what the mode means
     const helpKey = modeHelpKey(merged, g) || (MODES.find((m) => m.key === merged) || {}).help;
-    const simple = measureOnly ? nothing : modeControl(card, row, dis, helpKey);
+    const mc = measureOnly ? { main: nothing, boost: nothing } : modeControl(card, row, dis, helpKey);
+    const simple = mc.main;
+    const moreRows = [];
 
     // ── stats ──
     const live = row.powerEntity ? card._powerW(row.powerEntity) : null;
@@ -232,7 +238,7 @@ export function loadBody(card, row) {
         { more: asked && !parent && !blocked }));
     const phaseVal = card._inline('ph:' + id, phaseLabel(card, row.phase), () => card._selEdit('ph:' + id, {
         value: row.phase, options: PHASES.map((p) => ({ key: p, label: phaseLabel(card, p) })), onCommit: (p) => send('phase', p) }));
-    rows.push(card._row('mdi:sine-wave', t('next_phase'), phaseVal, t('next_phase_sub'), { more: asked }));
+    moreRows.push(card._row('mdi:sine-wave', t('next_phase'), phaseVal, t('next_phase_sub'), { more: asked }));
     // Stop condition: a sensor that ends the day's run once it reaches a value (water temperature, a car's %).
     const stopEnt = g.stop_entity || '';
     const stopPick = card._inline('stopent:' + id, stopEnt ? card._name(stopEnt) : t('action_none'), () => card._entEdit('stopent:' + id, {
@@ -332,7 +338,8 @@ export function loadBody(card, row) {
         ${simple}
         ${stats}
         ${pct === null ? nothing : html`<div style="margin:6px 0 10px">${card._track(pct, 'var(--c)')}</div>`}
-        <div class="rows">${rows}</div>`;
+        <div class="rows">${rows}</div>
+        ${mc.boost === nothing && !moreRows.length ? nothing : card._more(html`${mc.boost}<div class="rows">${moreRows}</div>`)}`;
 }
 
 /** (#1081) The heat pump's COP row under More: the COP now (and the

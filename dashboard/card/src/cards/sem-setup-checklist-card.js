@@ -142,8 +142,8 @@ class SEMSetupChecklistCard extends SEMLitBase {
     _chip(vm, watchOnly) {
         return html`<div class="chip-row">
             ${watchOnly ? nothing : html`<span class="chip ok"><ha-icon icon=${ICON_OK}></ha-icon>${this._t('setup_chip_control')}</span>`}
-            <button type="button" class="chip link" @click=${() => this._reopen()}>
-                ${this._fill('setup_chip_setup', { done: vm.done, total: vm.total })}</button>
+            ${vm.done >= vm.total ? nothing : html`<button type="button" class="chip link" @click=${() => this._reopen()}>
+                ${this._fill('setup_chip_setup', { done: vm.done, total: vm.total })}</button>`}
         </div>`;
     }
 

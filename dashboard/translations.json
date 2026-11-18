@@ -2368,7 +2368,18 @@
     "next_disabled_watching": "Ne, dokud SEM jen sleduje",
     "next_no_reading": "bez údaje",
     "next_plan_house": "Dnes v noci dům odebere ze sítě {kwh} kWh.",
-    "next_goal_unit": "Cíl v"
+    "next_goal_unit": "Cíl v",
+    "next_all_sources_ok": "Všech {n} zdrojů je v pořádku",
+    "next_n_sources_ok": "{n} dalších zdrojů je v pořádku",
+    "next_observer_sub": "Když je zapnuto, SEM jen sleduje a nic neřídí.",
+    "next_so_far_today": "Dnes zatím",
+    "next_coming_up": "Co přijde",
+    "next_skip_tonight": "Dnes v noci vynechat",
+    "next_ignore_price": "Ignorovat cenu",
+    "next_full_power": "Teď plný výkon",
+    "next_full_power_yes": "Ano, teď plný výkon",
+    "next_more": "Více",
+    "next_topic": "Téma"
   },
   "da": {
     "/year": "/år",
@@ -4739,7 +4750,18 @@
     "next_disabled_watching": "Ikke mens SEM kun observerer",
     "next_no_reading": "ingen måling",
     "next_plan_house": "I nat tager huset {kwh} kWh fra nettet.",
-    "next_goal_unit": "Mål i"
+    "next_goal_unit": "Mål i",
+    "next_all_sources_ok": "Alle {n} kilder er OK",
+    "next_n_sources_ok": "{n} andre kilder er OK",
+    "next_observer_sub": "Når den er slået til, ser SEM kun på og sender ingen kommandoer.",
+    "next_so_far_today": "Hidtil i dag",
+    "next_coming_up": "Det næste",
+    "next_skip_tonight": "Spring over i nat",
+    "next_ignore_price": "Ignorer prisen",
+    "next_full_power": "Fuld effekt nu",
+    "next_full_power_yes": "Ja, fuld effekt nu",
+    "next_more": "Mere",
+    "next_topic": "Emne"
   },
   "de": {
     "/year": "/Jahr",
@@ -7110,7 +7132,18 @@
     "next_disabled_watching": "Nicht, solange SEM nur zuschaut",
     "next_no_reading": "kein Wert",
     "next_plan_house": "Heute Nacht bezieht das Haus {kwh} kWh aus dem Netz.",
-    "next_goal_unit": "Ziel in"
+    "next_goal_unit": "Ziel in",
+    "next_all_sources_ok": "Alle {n} Quellen in Ordnung",
+    "next_n_sources_ok": "{n} weitere Quellen in Ordnung",
+    "next_observer_sub": "Wenn an, beobachtet SEM nur und sendet keine Befehle.",
+    "next_so_far_today": "Bisher heute",
+    "next_coming_up": "Als Nächstes",
+    "next_skip_tonight": "Heute Nacht aussetzen",
+    "next_ignore_price": "Preis ignorieren",
+    "next_full_power": "Jetzt volle Leistung",
+    "next_full_power_yes": "Ja, jetzt volle Leistung",
+    "next_more": "Mehr",
+    "next_topic": "Thema"
   },
   "en": {
     "/year": "/year",
@@ -9481,7 +9514,18 @@
     "next_disabled_watching": "Not while SEM only watches",
     "next_no_reading": "no reading",
     "next_plan_house": "Tonight the house takes {kwh} kWh from the grid.",
-    "next_goal_unit": "Target in"
+    "next_goal_unit": "Target in",
+    "next_all_sources_ok": "All {n} sources OK",
+    "next_n_sources_ok": "{n} other sources OK",
+    "next_observer_sub": "When on, SEM only watches and sends no commands.",
+    "next_so_far_today": "So far today",
+    "next_coming_up": "Coming up",
+    "next_skip_tonight": "Skip tonight",
+    "next_ignore_price": "Ignore price",
+    "next_full_power": "Full power now",
+    "next_full_power_yes": "Yes, full power now",
+    "next_more": "More",
+    "next_topic": "Topic"
   },
   "es": {
     "/year": "/año",
@@ -11852,7 +11896,18 @@
     "next_disabled_watching": "No mientras SEM solo observa",
     "next_no_reading": "sin lectura",
     "next_plan_house": "Esta noche la casa toma {kwh} kWh de la red.",
-    "next_goal_unit": "Objetivo en"
+    "next_goal_unit": "Objetivo en",
+    "next_all_sources_ok": "Las {n} fuentes están bien",
+    "next_n_sources_ok": "{n} fuentes más están bien",
+    "next_observer_sub": "Si está activado, SEM solo observa y no envía órdenes.",
+    "next_so_far_today": "Hasta ahora hoy",
+    "next_coming_up": "Próximamente",
+    "next_skip_tonight": "Omitir esta noche",
+    "next_ignore_price": "Ignorar el precio",
+    "next_full_power": "Máxima potencia ahora",
+    "next_full_power_yes": "Sí, máxima potencia ahora",
+    "next_more": "Más",
+    "next_topic": "Tema"
   },
   "fi": {
     "/year": "/vuosi",
@@ -14223,7 +14278,18 @@
     "next_disabled_watching": "Ei, kun SEM vain tarkkailee",
     "next_no_reading": "ei lukemaa",
     "next_plan_house": "Tänä yönä talo ottaa verkosta {kwh} kWh.",
-    "next_goal_unit": "Tavoite yksikössä"
+    "next_goal_unit": "Tavoite yksikössä",
+    "next_all_sources_ok": "Kaikki {n} lähdettä kunnossa",
+    "next_n_sources_ok": "{n} muuta lähdettä kunnossa",
+    "next_observer_sub": "Kun päällä, SEM vain seuraa eikä lähetä komentoja.",
+    "next_so_far_today": "Tähän mennessä tänään",
+    "next_coming_up": "Tulossa",
+    "next_skip_tonight": "Ohita tämä yö",
+    "next_ignore_price": "Ohita hinta",
+    "next_full_power": "Täysi teho nyt",
+    "next_full_power_yes": "Kyllä, täysi teho nyt",
+    "next_more": "Lisää",
+    "next_topic": "Aihe"
   },
   "fr": {
     "/year": "/an",
@@ -16594,7 +16660,18 @@
     "next_disabled_watching": "Pas tant que SEM observe seulement",
     "next_no_reading": "pas de valeur",
     "next_plan_house": "Cette nuit, la maison prend {kwh} kWh sur le réseau.",
-    "next_goal_unit": "Objectif en"
+    "next_goal_unit": "Objectif en",
+    "next_all_sources_ok": "Les {n} sources sont OK",
+    "next_n_sources_ok": "{n} autres sources sont OK",
+    "next_observer_sub": "Activé, SEM observe seulement et n’envoie aucune commande.",
+    "next_so_far_today": "Jusqu’ici aujourd’hui",
+    "next_coming_up": "À venir",
+    "next_skip_tonight": "Passer cette nuit",
+    "next_ignore_price": "Ignorer le prix",
+    "next_full_power": "Pleine puissance maintenant",
+    "next_full_power_yes": "Oui, pleine puissance",
+    "next_more": "Plus",
+    "next_topic": "Sujet"
   },
   "hu": {
     "/year": "/év",
@@ -18965,7 +19042,18 @@
     "next_disabled_watching": "Nem, amíg a SEM csak figyel",
     "next_no_reading": "nincs érték",
     "next_plan_house": "Ma éjjel a ház {kwh} kWh-t vesz a hálózatból.",
-    "next_goal_unit": "Cél:"
+    "next_goal_unit": "Cél:",
+    "next_all_sources_ok": "Mind a(z) {n} forrás rendben",
+    "next_n_sources_ok": "{n} további forrás rendben",
+    "next_observer_sub": "Bekapcsolva a SEM csak figyel, parancsot nem küld.",
+    "next_so_far_today": "Eddig ma",
+    "next_coming_up": "Következik",
+    "next_skip_tonight": "Ma éjjel kihagy",
+    "next_ignore_price": "Ár figyelmen kívül hagyása",
+    "next_full_power": "Teljes teljesítmény most",
+    "next_full_power_yes": "Igen, teljes teljesítmény most",
+    "next_more": "Továbbiak",
+    "next_topic": "Téma"
   },
   "it": {
     "/year": "/anno",
@@ -21336,7 +21424,18 @@
     "next_disabled_watching": "Non mentre SEM osserva soltanto",
     "next_no_reading": "nessuna lettura",
     "next_plan_house": "Stanotte la casa prende {kwh} kWh dalla rete.",
-    "next_goal_unit": "Obiettivo in"
+    "next_goal_unit": "Obiettivo in",
+    "next_all_sources_ok": "Tutte le {n} fonti sono OK",
+    "next_n_sources_ok": "Altre {n} fonti sono OK",
+    "next_observer_sub": "Se attivo, SEM osserva soltanto e non invia comandi.",
+    "next_so_far_today": "Finora oggi",
+    "next_coming_up": "In arrivo",
+    "next_skip_tonight": "Salta stanotte",
+    "next_ignore_price": "Ignora il prezzo",
+    "next_full_power": "Piena potenza ora",
+    "next_full_power_yes": "Sì, piena potenza ora",
+    "next_more": "Altro",
+    "next_topic": "Argomento"
   },
   "nl": {
     "/year": "/jaar",
@@ -23707,7 +23806,18 @@
     "next_disabled_watching": "Niet terwijl SEM alleen kijkt",
     "next_no_reading": "geen waarde",
     "next_plan_house": "Vannacht neemt het huis {kwh} kWh van het net.",
-    "next_goal_unit": "Doel in"
+    "next_goal_unit": "Doel in",
+    "next_all_sources_ok": "Alle {n} bronnen zijn in orde",
+    "next_n_sources_ok": "{n} andere bronnen zijn in orde",
+    "next_observer_sub": "Als dit aan staat, kijkt SEM alleen mee en stuurt geen commando’s.",
+    "next_so_far_today": "Tot nu toe vandaag",
+    "next_coming_up": "Straks",
+    "next_skip_tonight": "Vannacht overslaan",
+    "next_ignore_price": "Prijs negeren",
+    "next_full_power": "Nu volle kracht",
+    "next_full_power_yes": "Ja, nu volle kracht",
+    "next_more": "Meer",
+    "next_topic": "Onderwerp"
   },
   "no": {
     "/year": "/år",
@@ -26078,7 +26188,18 @@
     "next_disabled_watching": "Ikke mens SEM bare observerer",
     "next_no_reading": "ingen måling",
     "next_plan_house": "I natt tar huset {kwh} kWh fra nettet.",
-    "next_goal_unit": "Mål i"
+    "next_goal_unit": "Mål i",
+    "next_all_sources_ok": "Alle {n} kilder er OK",
+    "next_n_sources_ok": "{n} andre kilder er OK",
+    "next_observer_sub": "Når den er på, observerer SEM bare og sender ingen kommandoer.",
+    "next_so_far_today": "Så langt i dag",
+    "next_coming_up": "Kommer",
+    "next_skip_tonight": "Hopp over i natt",
+    "next_ignore_price": "Ignorer prisen",
+    "next_full_power": "Full effekt nå",
+    "next_full_power_yes": "Ja, full effekt nå",
+    "next_more": "Mer",
+    "next_topic": "Emne"
   },
   "pl": {
     "/year": "/rok",
@@ -28449,7 +28570,18 @@
     "next_disabled_watching": "Nie, gdy SEM tylko obserwuje",
     "next_no_reading": "brak odczytu",
     "next_plan_house": "Tej nocy dom pobierze z sieci {kwh} kWh.",
-    "next_goal_unit": "Cel w"
+    "next_goal_unit": "Cel w",
+    "next_all_sources_ok": "Wszystkie źródła ({n}) są w porządku",
+    "next_n_sources_ok": "Pozostałe źródła ({n}) są w porządku",
+    "next_observer_sub": "Gdy włączone, SEM tylko obserwuje i nie wysyła poleceń.",
+    "next_so_far_today": "Dotąd dzisiaj",
+    "next_coming_up": "Wkrótce",
+    "next_skip_tonight": "Pomiń tej nocy",
+    "next_ignore_price": "Ignoruj cenę",
+    "next_full_power": "Pełna moc teraz",
+    "next_full_power_yes": "Tak, pełna moc teraz",
+    "next_more": "Więcej",
+    "next_topic": "Temat"
   },
   "pt": {
     "/year": "/ano",
@@ -30820,7 +30952,18 @@
     "next_disabled_watching": "Não enquanto o SEM só observa",
     "next_no_reading": "sem leitura",
     "next_plan_house": "Esta noite a casa recebe {kwh} kWh da rede.",
-    "next_goal_unit": "Alvo em"
+    "next_goal_unit": "Alvo em",
+    "next_all_sources_ok": "Todas as {n} fontes estão OK",
+    "next_n_sources_ok": "Mais {n} fontes estão OK",
+    "next_observer_sub": "Ligado, o SEM só observa e não envia comandos.",
+    "next_so_far_today": "Até agora hoje",
+    "next_coming_up": "A seguir",
+    "next_skip_tonight": "Saltar esta noite",
+    "next_ignore_price": "Ignorar o preço",
+    "next_full_power": "Potência máxima agora",
+    "next_full_power_yes": "Sim, potência máxima agora",
+    "next_more": "Mais",
+    "next_topic": "Tópico"
   },
   "ro": {
     "/year": "/an",
@@ -33191,7 +33334,18 @@
     "next_disabled_watching": "Nu cât timp SEM doar observă",
     "next_no_reading": "fără citire",
     "next_plan_house": "În noaptea asta casa ia {kwh} kWh din rețea.",
-    "next_goal_unit": "Țintă în"
+    "next_goal_unit": "Țintă în",
+    "next_all_sources_ok": "Toate cele {n} surse sunt OK",
+    "next_n_sources_ok": "Alte {n} surse sunt OK",
+    "next_observer_sub": "Când este pornit, SEM doar observă și nu trimite comenzi.",
+    "next_so_far_today": "Până acum azi",
+    "next_coming_up": "Urmează",
+    "next_skip_tonight": "Sari peste în seara asta",
+    "next_ignore_price": "Ignoră prețul",
+    "next_full_power": "Putere maximă acum",
+    "next_full_power_yes": "Da, putere maximă acum",
+    "next_more": "Mai multe",
+    "next_topic": "Subiect"
   },
   "sv": {
     "/year": "/år",
@@ -35562,7 +35716,18 @@
     "next_disabled_watching": "Inte medan SEM bara observerar",
     "next_no_reading": "ingen avläsning",
     "next_plan_house": "I natt tar huset {kwh} kWh från nätet.",
-    "next_goal_unit": "Mål i"
+    "next_goal_unit": "Mål i",
+    "next_all_sources_ok": "Alla {n} källor är OK",
+    "next_n_sources_ok": "{n} andra källor är OK",
+    "next_observer_sub": "När det är på tittar SEM bara och skickar inga kommandon.",
+    "next_so_far_today": "Hittills i dag",
+    "next_coming_up": "Härnäst",
+    "next_skip_tonight": "Hoppa över i natt",
+    "next_ignore_price": "Ignorera priset",
+    "next_full_power": "Full effekt nu",
+    "next_full_power_yes": "Ja, full effekt nu",
+    "next_more": "Mer",
+    "next_topic": "Ämne"
   },
   "zh": {
     "/year": "/年",
@@ -37933,6 +38098,17 @@
     "next_disabled_watching": "SEM 仅观察时不可用",
     "next_no_reading": "无读数",
     "next_plan_house": "今晚房屋将从电网用电 {kwh} kWh。",
-    "next_goal_unit": "目标单位"
+    "next_goal_unit": "目标单位",
+    "next_all_sources_ok": "全部 {n} 个数据源正常",
+    "next_n_sources_ok": "其余 {n} 个数据源正常",
+    "next_observer_sub": "开启后，SEM 只观察，不发送任何命令。",
+    "next_so_far_today": "今天至今",
+    "next_coming_up": "即将进行",
+    "next_skip_tonight": "今晚跳过",
+    "next_ignore_price": "忽略电价",
+    "next_full_power": "立即全功率",
+    "next_full_power_yes": "是，立即全功率",
+    "next_more": "更多",
+    "next_topic": "主题"
   }
 }

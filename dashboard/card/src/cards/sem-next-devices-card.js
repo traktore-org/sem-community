@@ -79,9 +79,9 @@ function writeOpen(map) {
 }
 
 const devicesCss = css`
-    .cpchip { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 6px 36px; padding: 4px 10px; border-radius: 999px;
+    .cpchip { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 6px 36px; padding: 4px 10px; border-radius: 16px; text-align: left;
         border: 1px solid var(--n-line); background: var(--n-bg2, transparent); color: var(--n-fg); font: inherit; font-size: 12.5px; cursor: pointer; max-width: calc(100% - 36px); }
-    .cpchip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cpchip span { min-width: 0; overflow-wrap: break-word; }
     .cpchip ha-icon { --mdc-icon-size: 15px; color: var(--n-fg2); flex: 0 0 auto; }
     .cpchip:focus-visible { outline: 2px solid var(--n-accent, currentColor); outline-offset: 2px; }
     .addform { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 6px; }
@@ -636,34 +636,22 @@ class SEMNextDevicesCard extends SEMNextBase {
     }
 
     async _showConfigureModal(deviceId, deviceName) {
-        const existing = this.renderRoot.getElementById('sem-config-modal');
-        if (existing) existing.remove();
         const dev = findDeviceForConfig(this._rowsNow(), deviceId);
         const energySensor = dev?.energySensor || '';
         const values = controlToFormValues(dev?.control);
         const hasManual = dev?.control?.discovered_via === 'manual_mapping';
         await this._ensureEntityPicker();
-        // (#1321) HA's own dialog when it exists; the fixed overlay in HA's colours otherwise
-        const useDialog = haDefined('ha-dialog');
-        const overlay = document.createElement(useDialog ? 'ha-dialog' : 'div');
-        overlay.id = 'sem-config-modal';
-        const title = `${this._t('configure_device')}: ${deviceName}`;
-        if (useDialog) {
-            overlay.open = true;
-            overlay.heading = title;
-            overlay.setAttribute('header-title', title);
-            overlay.addEventListener('closed', (e) => { if (e.target === overlay) overlay.remove(); });
-        } else {
-            overlay.style.cssText = 'position:fixed;inset:0;background:color-mix(in srgb, black 60%, transparent);z-index:999;display:flex;align-items:center;justify-content:center';
-        }
         const isLoad = dev && dev.type === 'load';
-        overlay.innerHTML = buildLoadConfigModalHTML({
-            deviceName, values, t: (k) => this._t(k), hasManual,
-            behindRelay: isLoad ? !!dev.behindRelay : null,
-            inUse: !hasManual && !values.entity ? (dev?.controlEntity || '') : '',
-            dialog: useDialog, textfield: haDefined('ha-textfield'),
+        // (#1321) one dialog helper in the base: ha-dialog or the plain overlay, Escape, focus back
+        const { el: overlay, close } = this._dialog({
+            id: 'sem-config-modal', title: `${this._t('configure_device')}: ${deviceName}`,
+            build: (useDialog) => buildLoadConfigModalHTML({
+                deviceName, values, t: (k) => this._t(k), hasManual,
+                behindRelay: isLoad ? !!dev.behindRelay : null,
+                inUse: !hasManual && !values.entity ? (dev?.controlEntity || '') : '',
+                dialog: useDialog, textfield: haDefined('ha-textfield'),
+            }),
         });
-        this.renderRoot.appendChild(overlay);
         const typeSel = overlay.querySelector('#cfg-type');
         const entityGroup = overlay.querySelector('#cfg-entity-group');
         const serviceGroup = overlay.querySelector('#cfg-service-group');
@@ -698,13 +686,12 @@ class SEMNextDevicesCard extends SEMNextBase {
                 this._dev(dev.id, 'behind_operator_relay', String(on));
             });
         }
-        if (!useDialog) overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-        overlay.querySelector('#cfg-cancel').addEventListener('click', () => overlay.remove());
+        overlay.querySelector('#cfg-cancel').addEventListener('click', () => close());
         const removeBtn = overlay.querySelector('#cfg-remove');
         if (removeBtn) {
             removeBtn.addEventListener('click', () => {
                 this._hass.callService(DOMAIN, 'remove_device_control_mapping', { energy_sensor: energySensor })
-                    .then(() => overlay.remove()).catch((err) => showError(err.message));
+                    .then(() => close()).catch((err) => showError(err.message));
             });
         }
         overlay.querySelector('#cfg-save').addEventListener('click', () => {
@@ -713,7 +700,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             let data;
             try { data = formValuesToServiceData(energySensor, formVals); } catch (err) { showError(this._t(err.message)); return; }
             this._hass.callService(DOMAIN, 'set_device_control_mapping', data)
-                .then(() => overlay.remove()).catch((err) => showError(err.message));
+                .then(() => close()).catch((err) => showError(err.message));
         });
     }
 
@@ -771,7 +758,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             sent.push(this._sentence(q.limited ? t(PEAK_TEXT.label) + ' {limit} · {answer}.' : '{answer}.', parts));
             sent.push(t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone));
             const slot = uncapped ? null : slotStatus({ targetKw: limit, usedKwh: peakE.attributes?.peak_slot_used_kwh, allowedW: peakE.attributes?.peak_slot_allowed_w });
-            if (slot) sent.push(this._tf('next_sent_slot', { used: slot.usedKwh.toFixed(2), budget: slot.budgetKwh.toFixed(2) }));
+            if (slot) sent.push(this._tf('next_sent_slot', { used: this._fmt(slot.usedKwh, 2), budget: this._fmt(slot.budgetKwh, 2) }));
         }
         const month = this._kwSensorW('sensor.sem_monthly_consecutive_peak');
         if (month !== null) sent.push(this._tf('next_sent_month_peak', { kw: this._kw(month) }));
@@ -784,8 +771,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         const rec = recRaw ? (this._t(recRaw) || recRaw) : '';
         const lm = this._attrs('sensor.sem_load_management_status');
         const op = lm.shed_signal_active === true ? this._tf('operator_limit_banner', {
-            kw: typeof lm.shed_signal_cap_kw === 'number' ? lm.shed_signal_cap_kw.toFixed(1) : '?',
-            time: lm.shed_signal_since ? this._hhmm(lm.shed_signal_since) : '?' }) : '';
+            kw: typeof lm.shed_signal_cap_kw === 'number' ? this._fmt(lm.shed_signal_cap_kw, 1) : '—',
+            time: lm.shed_signal_since ? this._hhmm(lm.shed_signal_since) : '—' }) : '';
         return this._sec(t('next_surplus_peak'), html`
             ${op ? html`<div class="banner">${this._icon('mdi:transmission-tower-export')}<div class="sm">${op}</div></div>` : nothing}
             ${this._tiles(tiles, { three: true })}
@@ -817,7 +804,8 @@ class SEMNextDevicesCard extends SEMNextBase {
                 <span class="handle" title=${locked ? t('locked_under_parent') : t('drag_to_reorder')}
                     @pointerdown=${locked ? nothing : (e) => this._dragStart(e, row.id)}>${this._icon(locked ? 'mdi:subdirectory-arrow-right' : 'mdi:drag-vertical')}</span>
                 <span class="rank" title=${t('next_priority')}>${i + 1}</span>
-                <div class="name tap" @click=${toggle}>${this._icon(row.icon)}<span>${row.name}</span>${this._pill(this._pillText(pill), pill.cls)}</div>
+                <div class="name tap" role="button" tabindex="0" aria-expanded=${open ? 'true' : 'false'} @click=${toggle}
+                    @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}>${this._icon(row.icon)}<span title=${row.name}>${row.name}</span>${this._pill(this._pillText(pill), pill.cls)}</div>
                 <span class="live muted sm">${liveText}</span>
                 ${row.type === 'load' && !row.lockedByOperator ? this._pill(t(verdictKey(row)), '', { icon: 'mdi:hand-back-left-outline' }) : nothing}
                 <div class="arrows">

@@ -168,7 +168,9 @@ export function chargerBody(card, row) {
     const depDefault = chargeBy || dep.default || '';
     const timeVal = timeId ? card._inline('time:' + cid, chargeBy || '—', () => card._timeEdit('time:' + cid, {
         value: chargeBy, onCommit: (v) => card._setTime(timeId, v) })) : html`${chargeBy || '—'}`;
-    const daysVal = card._val(hasOwnDays ? t('ev_dep_most_days') : t('next_every_day'), () => card._toggleDep(cid), { disabled: dis });
+    const runs = weekdaySummary(own, depDefault);
+    const runText = runs.map((r) => (r.from === r.to ? card._dayName(r.from) : card._dayName(r.from) + ' – ' + card._dayName(r.to)) + ' ' + r.time).join(' · ');
+    const daysVal = card._val(hasOwnDays ? (runText || t('ev_dep_most_days')) : t('next_every_day'), () => card._toggleDep(cid), { disabled: dis });
     const targetText = `${t(CHARGER_TEXT.atLeast)} ${fmtT(min)} · ${t(CHARGER_TEXT.upTo)} ${fmtT(max)} ${unit}`;
     const targetVal = minId && maxId ? card._inline('target:' + cid, targetText, () => card._pairEdit('target:' + cid, {
         a: { value: min, min: card._attrs(minId).min, max: card._attrs(minId).max, step: card._attrs(minId).step },
@@ -181,19 +183,20 @@ export function chargerBody(card, row) {
         <div><span class="lbl">${t('next_charge')}</span><div class="big num">${soc === null ? '—' : (isEstimate ? '~' : '') + Math.round(soc) + ' %'}</div>
             <div class="sub2">${soc === null ? t('next_no_soc') : html`${kmNow === null ? '' : tf('next_km', { km: kmNow }) + ' · '}${isEstimate ? t('next_estimate') : t('next_measured')}`}</div></div>
         <div><span class="lbl">${t(CHARGER_TEXT.departure)}</span><div class="big num">${timeVal}</div>
-            <div class="sub2">${daysVal}${!hasOwnDays && dep.next && card._hhmm(dep.next) !== chargeBy ? ' · ' + tf('next_next_departure', { time: card._hhmm(dep.next) }) : ''}${plannedKwh > 0 ? ' · ' + tf('next_kwh_planned', { kwh: card._fmt(plannedKwh, 1) }) : ''}</div></div>
+            <div class="sub2">${daysVal}${dep.next && card._hhmm(dep.next) !== chargeBy ? ' · ' + tf('next_next_departure', { time: card._hhmm(dep.next) }) : ''}${plannedKwh > 0 ? ' · ' + tf('next_kwh_planned', { kwh: card._fmt(plannedKwh, 1) }) : ''}</div></div>
         <div><span class="lbl">${t(CHARGER_TEXT.target)}</span><div class="big num">${targetVal}</div>
             <div class="sub2">${t('next_goal_unit')} ${typeVal}${kmAdd ? ' · ' + tf('next_plus_km', { km: kmAdd }) : ''}</div></div>
     </div>`;
 
     // ── buttons ──
     const btns = [];
+    const boostBtns = [];
     const pauseBtn = 'button.sem_charger_' + cid + '_pause_charging';
     if (card._has(pauseBtn)) {
         const durId = 'select.sem_pause_duration';
         const dur = card._has(durId) ? card._str(durId) : '';
         const durOpts = card._has(durId) ? (card._attrs(durId).options || []) : [];
-        btns.push(card._btn(t('pause_charging'), () => card._pressButton(pauseBtn), { small: true, icon: 'mdi:pause', disabled: dis }));
+        btns.push(card._btn(t('pause_charging'), () => card._pressButton(pauseBtn), { small: true, primary: true, icon: 'mdi:pause', disabled: dis }));
         if (dur) btns.push(html`<span class="sm muted">${t('next_for')} ${card._inline('pausedur', t('pause_duration_' + dur) || dur, () => card._selEdit('pausedur', {
             value: dur, options: durOpts.map((o) => ({ key: o, label: t('pause_duration_' + o) || o })), onCommit: (v) => card._selectOption(durId, v) }))}</span>`);
     }
@@ -201,25 +204,22 @@ export function chargerBody(card, row) {
         const boost = cs.battery_boost || null;
         const running = !!(boost && boost.active && boost.charger_id === cid);
         if (running) {
-            btns.push(card._btn(t('next_stop_boost'), () => card._svc('stop_battery_boost', {}), { small: true, icon: 'mdi:stop', disabled: dis }));
-            btns.push(html`<span class="sm muted">${tf('next_boost_left', { kwh: card._fmt(boost.remaining_kwh, 1), floor: Math.round(Number(boost.floor_soc) || 0) })}</span>`);
+            boostBtns.push(card._btn(t('next_stop_boost'), () => card._svc('stop_battery_boost', {}), { small: true, ghost: true, icon: 'mdi:stop', disabled: dis }));
+            boostBtns.push(html`<span class="sm muted">${tf('next_boost_left', { kwh: card._fmt(boost.remaining_kwh, 1), floor: Math.round(Number(boost.floor_soc) || 0) })}</span>`);
         } else if (dep.boost_allowed === false) {
-            btns.push(card._pill(t('ev_boost_not_permitted'), 'warn', { icon: 'mdi:battery-lock' }));
+            boostBtns.push(card._pill(t('ev_boost_not_permitted'), 'warn', { icon: 'mdi:battery-lock' }));
         } else {
             const preview = cs.battery_boost_preview || {};
             const floor = (card._boostFloor || {})[cid] ?? Math.round(Number(preview.default_floor ?? 50));
-            btns.push(card._btn(t('next_boost_to'), () => card._svc('start_battery_boost', { charger_id: cid, floor_soc: floor }), { small: true, icon: 'mdi:home-battery-outline', disabled: dis }));
-            btns.push(html`<span class="sm muted">${card._inline('boost:' + cid, floor + ' %', () => card._selEdit('boost:' + cid, {
+            boostBtns.push(card._btn(t('next_boost_to'), () => card._svc('start_battery_boost', { charger_id: cid, floor_soc: floor }), { small: true, ghost: true, icon: 'mdi:home-battery-outline', disabled: dis }));
+            boostBtns.push(html`<span class="sm muted">${card._inline('boost:' + cid, floor + ' %', () => card._selEdit('boost:' + cid, {
                 value: String(floor), options: (FLOORS.includes(floor) ? FLOORS : [...FLOORS, floor].sort((a, b) => a - b)).map((f) => ({ key: String(f), label: f + ' %' })),
                 onCommit: (v) => { card._boostFloor = { ...(card._boostFloor || {}), [cid]: Number(v) }; } }))}</span>`);
         }
     }
-    btns.push(card._btn(t('next_sessions'), () => card._go(card._screen('insights') + '#car'), { small: true, icon: 'mdi:history' }));
+    btns.push(card._btn(t('next_sessions'), () => card._go(card._screen('insights') + '#car'), { small: true, ghost: true, icon: 'mdi:history' }));
 
     // ── sheet rows ──
-    const runs = weekdaySummary(own, depDefault);
-    const runText = runs.map((r) => (r.from === r.to ? card._dayName(r.from) : card._dayName(r.from) + ' – ' + card._dayName(r.to)) + ' ' + r.time).join(' · ');
-    const nextDep = dep.next ? card._hhmm(dep.next) : '';
     const depEditor = card._depOpen && card._depOpen[cid] ? html`<div class="days">
         ${DAYS.map((d, i) => html`<label class="dayin"><span>${card._dayName(i)}</span>
             ${card._input({ type: 'time', value: own[d] || '', placeholder: depDefault, disabled: dis, label: card._dayName(i),
@@ -229,12 +229,10 @@ export function chargerBody(card, row) {
     const lateMin = Number(dep.late_min) || 0;
     const lateOpts = LATE.includes(lateMin) ? LATE : [...LATE, lateMin].sort((a, b) => a - b);
     const rows = [];
-    // (#1371) with one time for every day the tile above already says it
-    // (its "every day" opens the day editor): this row is for days that differ
-    if (hasOwnDays) rows.push(card._row('mdi:calendar-repeat', t(CHARGER_TEXT.departure), runText || depDefault || '—',
-        nextDep ? tf('next_next_departure', { time: nextDep }) : t('ev_dep_most_days'), { onClick: () => card._toggleDep(cid) }));
+    const moreRows = [];
+    // (#1321) the weekly schedule is on the tile above once; its day editor opens from there
     if (depEditor !== nothing) rows.push(depEditor);
-    rows.push(card._row('mdi:view-agenda', t('ev_dep_one_block'),
+    moreRows.push(card._row('mdi:view-agenda', t('ev_dep_one_block'),
         card._val(oneBlock ? t('next_on') : t('next_off'), () => card._svc('set_charger_departure', { charger_id: cid, one_block: !oneBlock }), { disabled: dis }),
         html`${t('ev_dep_late_charge')}: ${card._inline('late:' + cid, lateMin ? tf('ev_dep_minutes', { n: lateMin }) : t('ev_dep_late_off'), () => card._selEdit('late:' + cid, {
             value: String(lateMin), options: lateOpts.map((m) => ({ key: String(m), label: m ? tf('ev_dep_minutes', { n: m }) : t('ev_dep_late_off') })),
@@ -243,7 +241,7 @@ export function chargerBody(card, row) {
     if (phaseId || phases !== null) {
         const pm = phaseId ? card._str(phaseId) : '';
         const pOpts = phaseId ? (card._attrs(phaseId).options || ['auto', '1', '3']) : [];
-        rows.push(card._row('mdi:sine-wave', t('next_phases'),
+        moreRows.push(card._row('mdi:sine-wave', t('next_phases'),
             phaseId ? card._seg(pOpts.map((o) => ({ key: o, label: t('phase_mode_' + o) || o })), pm, (o) => card._selectOption(phaseId, o), { small: true, disabled: dis })
                 : phaseStatus(card, cid),
             phaseId ? phaseStatus(card, cid) : ''));
@@ -300,5 +298,6 @@ export function chargerBody(card, row) {
         ${target}
         ${stats2}
         <div class="btns" style="margin-top:6px">${btns}</div>
-        <div class="sheet"><div class="rows">${rows}</div></div>`;
+        <div class="sheet"><div class="rows">${rows}</div>
+            ${card._more(html`${boostBtns.length ? html`<div class="btns" style="margin:8px 0">${boostBtns}</div>` : nothing}<div class="rows">${moreRows}</div>`)}</div>`;
 }

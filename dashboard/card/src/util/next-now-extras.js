@@ -75,3 +75,9 @@ export function deviceChips({ batterySoc = null, cars = [], heaters = [] } = {})
     for (const h of heaters) chips.push({ kind: 'heater', label: h.name, state: h.on ? 'on' : 'off', soc: null });
     return chips;
 }
+
+/** (#1321) The assistant's "No recommendations" filler is not a tip: show a row only for a real one. */
+export function isRealTip(text) {
+    const s = String(text || '').trim();
+    return s !== '' && !/^no recommendations/i.test(s);
+}

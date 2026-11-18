@@ -352,8 +352,8 @@ class SEMNextInsightsCard extends SEMNextBase {
             tiles.push({ label: this._t('next_today'), value: this._fmt(today, 1), unit: 'kWh', sub, color: C.solar });
         }
         if (month !== null || year !== null) {
-            tiles.push({ label: this._t('next_month_year'), value: month === null ? '—' : (month >= 100 ? Math.round(month) : this._fmt(month, 1)),
-                unit: year === null ? 'kWh' : `· ${Math.round(year)} kWh`,
+            tiles.push({ label: this._t('next_month_year'), value: month === null ? '—' : (month >= 100 ? this._int(month) : this._fmt(month, 1)),
+                unit: year === null ? 'kWh' : `· ${this._int(year)} kWh`,
                 sub: deg !== null && deg !== 0 ? html`${this._icon(deg > 0 ? 'mdi:trending-down' : 'mdi:trending-up', 's')} ${this._tf('next_per_year', { pct: this._fmt(Math.abs(deg), 1) })}` : '' });
         }
         const rows = [];
@@ -366,7 +366,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         if (health) {
             const a = this._attrs(S + 'pv_health');
             const cls = health === 'green' ? 'ok' : health === 'red' ? 'bad' : 'warn';
-            const sub = [Number.isFinite(Number(a.ratio_7d)) && a.ratio_7d !== null ? this._tf('next_ratio_7d', { ratio: Number(a.ratio_7d).toFixed(2) }) : '',
+            const sub = [Number.isFinite(Number(a.ratio_7d)) && a.ratio_7d !== null ? this._tf('next_ratio_7d', { ratio: this._fmt(a.ratio_7d, 2) }) : '',
                          Number.isFinite(Number(a.downtime_min_today)) && a.downtime_min_today !== null ? this._tf('next_dark_minutes', { min: Math.round(a.downtime_min_today) }) : '',
                          a.snow ? this._t('next_snow') : ''].filter(Boolean).join(' · ');
             rows.push(this._row('mdi:solar-panel', this._t('next_pv_health'), this._pill(this._t('next_health_' + health) || health, cls), sub, { onClick: () => this._moreInfo(S + 'pv_health') }));
@@ -386,7 +386,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const tiles = [self !== null ? ring(self, C.solar, 'next_self_use', 'next_self_use_sub') : null, aut !== null ? ring(aut, C.home, 'next_own_supply', 'next_own_supply_sub') : null].filter(Boolean);
         const rows = [];
         if (co2d !== null || co2y !== null || co2l !== null) {
-            const sub = [co2y !== null ? `${Math.round(co2y)} ${unit} ${this._t('next_this_year')}` : '', co2l !== null ? `${this._fmtT(co2l, unit)} ${this._t('next_lifetime')}` : '',
+            const sub = [co2y !== null ? `${this._int(co2y)} ${unit} ${this._t('next_this_year')}` : '', co2l !== null ? `${this._fmtT(co2l, unit)} ${this._t('next_lifetime')}` : '',
                          trees !== null ? this._tf('next_trees', { n: Math.round(trees) }) : ''].filter(Boolean).join(' · ');
             rows.push(this._row('mdi:leaf', this._t('next_co2_avoided'), co2d === null ? '—' : `${this._fmt(co2d, 1)} ${unit} ${this._t('next_today').toLowerCase()}`, sub, { onClick: () => this._moreInfo(S + 'daily_co2_avoided') }));
         }
@@ -394,7 +394,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const title = this._period === 'day' ? this._t('next_shares') : `${this._t('next_shares')} · ${this._t('next_today')}`;
         return this._sec(title, html`${tiles.length ? html`<div class="tiles">${tiles}</div>` : nothing}${rows.length ? html`<div class="rows" style="margin-top:6px">${rows}</div>` : nothing}`);
     }
-    _fmtT(kg, unit) { return unit === 'kg' && kg >= 1000 ? `${(kg / 1000).toFixed(1)} t` : `${Math.round(kg)} ${unit}`; }
+    _fmtT(kg, unit) { return unit === 'kg' && kg >= 1000 ? `${this._fmt(kg / 1000, 1)} t` : `${this._fmt(Math.round(kg), 0)} ${unit}`; }
 
     // ── Power ──
     _powerTab() {
@@ -516,7 +516,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const life = ['lifetime_ev_energy', 'lifetime_ev_cost', 'lifetime_ev_solar_share', 'lifetime_ev_sessions'].map((k) => this._num(S + k));
         if (today === null && life.every((v) => v === null)) return nothing;
         const lifeText = [life[0] !== null ? this._kwh(life[0]) : '', life[1] !== null ? this._money(life[1]) : '', life[2] !== null ? `${this._pct(life[2])} ${this._t('next_src_sun')}` : '',
-                          life[3] !== null ? `${Math.round(life[3])} ${this._t('next_sessions')}` : ''].filter(Boolean).join(' · ');
+                          life[3] !== null ? `${this._int(life[3])} ${this._t('next_sessions')}` : ''].filter(Boolean).join(' · ');
         return this._sec(this._t('next_progress'), html`
             ${today !== null && target ? this._track(today / target * 100, C.ev) : nothing}
             <div class="sumrow">${today !== null ? html`<span>${this._t('next_today').toLowerCase()} <b>${this._fmt(today, 1)}</b>${target ? ` ${this._tf('next_of_target', { kwh: this._fmt(target, 1) })}` : ' kWh'}</span>` : nothing}
@@ -545,11 +545,11 @@ class SEMNextInsightsCard extends SEMNextBase {
         const ys = this._num(S + 'yearly_savings'), yb = this._num(S + 'yearly_battery_savings');
         const pay = this._num(S + 'roi_payback_years'), roi = this._num(S + 'roi_percentage'), inv = this._num('number.sem_system_investment_cost');
         const tiles = [];
-        if (ys !== null) tiles.push({ label: this._t('next_saved_year'), value: Math.round(ys + (yb || 0)), unit: cur, valueColor: C.good,
-            sub: `${this._t('next_src_sun')} ${Math.round(ys)}${yb !== null ? ` · ${this._t('next_src_battery').toLowerCase()} ${Math.round(yb)}` : ''}` });
+        if (ys !== null) tiles.push({ label: this._t('next_saved_year'), value: this._int(ys + (yb || 0)), unit: cur, valueColor: C.good,
+            sub: `${this._t('next_src_sun')} ${this._int(ys)}${yb !== null ? ` · ${this._t('next_src_battery').toLowerCase()} ${this._int(yb)}` : ''}` });
         if (pay !== null || inv !== null) tiles.push({ label: this._t('next_payback'), value: pay !== null && pay > 0 ? this._fmt(pay, 1) : '—', unit: this._t('next_years'),
             sub: html`${roi !== null ? `${this._t('next_roi')} ${this._fmt(roi, 1)} % · ` : ''}${this._t('next_invested')} ${this._has('number.sem_system_investment_cost')
-                ? this._val(inv === null ? '—' : Math.round(inv), () => this._moreInfo('number.sem_system_investment_cost')) : '—'}` });
+                ? this._val(inv === null ? '—' : this._int(inv), () => this._moreInfo('number.sem_system_investment_cost')) : '—'}` });
         const rows = [];
         const evE = this._num(S + 'lifetime_ev_energy'), evC = this._num(S + 'lifetime_ev_cost');
         if (evE !== null && evE > 0 && evC !== null) {
@@ -585,7 +585,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const life = this._num(S + 'lifetime_total_savings');
         if (life !== null) {
             const co2 = this._num(S + 'lifetime_co2_avoided'), trees = this._num(S + 'lifetime_trees_equivalent');
-            rows.push(this._row('mdi:forest', this._t('next_lifetime'), `${Math.round(life)} ${cur} ${this._t('next_saved').toLowerCase()}`,
+            rows.push(this._row('mdi:forest', this._t('next_lifetime'), `${this._int(life)} ${cur} ${this._t('next_saved').toLowerCase()}`,
                 [co2 !== null ? `${this._fmtT(co2, this._kgUnit('lifetime_co2_avoided'))} CO₂` : '', trees !== null ? this._tf('next_trees', { n: Math.round(trees) }) : ''].filter(Boolean).join(' · '), { more: true }));
         }
         if (!tiles.length && !rows.length) return nothing;
@@ -683,7 +683,9 @@ class SEMNextInsightsCard extends SEMNextBase {
         return this._frame(lead, html`
             <div class="period">
                 ${this._seg(PERIOD_KEYS.map(([key, label]) => ({ key, label: this._t(label) })), this._period, (k) => this._pick(k), { small: true, disabled: this._tab === 'replay' })}
-                ${this._seg(tabs, this._tab, (k) => this._pickTab(k), { small: true })}
+                ${this._w && this._w < 600
+                    ? this._select(tabs.map((x) => ({ value: x.key, label: x.label })), this._tab, (k) => this._pickTab(k), { label: this._t('next_topic') })
+                    : this._seg(tabs, this._tab, (k) => this._pickTab(k), { small: true })}
             </div>
             <div class="grid">${body()}</div>`);
     }

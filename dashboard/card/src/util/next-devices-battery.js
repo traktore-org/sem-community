@@ -16,13 +16,6 @@ const LEVEL = Object.fromEntries(BATTERY_LEVELS.map((l) => [l.id, l.entity]));
 const AUTO_MODES = ['auto', 'self_consumption', 'allow_arbitrage'];
 const SPEND = 'sensor.sem_battery_spendable_kwh';
 
-function segKeyOf(mode) {
-    if (mode === 'off') return 'off';
-    if (mode === 'force_charge') return 'charge';
-    if (mode === 'force_discharge') return 'discharge';
-    return 'auto';
-}
-
 /** The pack's capacity in kWh from the first source that answers. */
 function capacityKwh(card) {
     for (const id of ['sensor.sem_battery_measured_capacity_kwh', 'sensor.sem_diag_battery_capacity', 'number.sem_battery_capacity']) {
@@ -43,22 +36,14 @@ export function batteryBody(card, row) {
     const modeId = card._has('select.sem_battery_mode') ? 'select.sem_battery_mode' : null;
     const mode = modeId ? card._str(modeId) : '';
     const options = modeId ? (card._attrs(modeId).options || []) : [];
-    const autoOpts = options.filter((o) => AUTO_MODES.includes(o));
-    const segKey = segKeyOf(mode);
-    const segItems = [];
-    if (options.includes('off')) segItems.push({ key: 'off', label: t('charge_mode_off') });
-    if (autoOpts.length) segItems.push({ key: 'auto', label: t('battery_mode_auto') });
-    if (options.includes('force_charge')) segItems.push({ key: 'charge', label: t('next_charge') });
-    if (options.includes('force_discharge')) segItems.push({ key: 'discharge', label: t('next_discharge') });
-    const pick = (key) => {
-        if (!modeId) return;
-        const map = { off: 'off', charge: 'force_charge', discharge: 'force_discharge' };
-        if (map[key]) card._selectOption(modeId, map[key]);
-        else card._selectOption(modeId, autoOpts.includes(card._autoLast) ? card._autoLast : autoOpts[0]);
-    };
-    const autoSeg = segKey === 'auto' && autoOpts.length > 1 ? card._seg(
-        autoOpts.map((o) => ({ key: o, label: t('battery_mode_' + o) || o })), mode,
-        (o) => { card._autoLast = o; card._selectOption(modeId, o); }, { small: true, disabled: dis }) : nothing;
+    // (#1321) SEM's battery mode is ONE setting (this select); Auto and Self-consumption are two of its
+    // values, so it is one control. The inverter's own mode is not on this card.
+    const order = ['off', ...AUTO_MODES, 'force_charge', 'force_discharge'];
+    const labelOf = { off: t('charge_mode_off'), force_charge: t('next_charge'), force_discharge: t('next_discharge') };
+    const segItems = order.filter((o) => options.includes(o))
+        .map((o) => ({ key: o, label: labelOf[o] || t('battery_mode_' + o) || o }));
+    const segKey = mode;
+    const pick = (key) => { if (modeId) card._selectOption(modeId, key); };
     const hint = mode ? t('battery_mode_hint_' + mode) : '';
 
     // ── stats ──
@@ -125,6 +110,7 @@ export function batteryBody(card, row) {
 
     // ── rows ──
     const rows = [];
+    const moreRows = [];
     const sa = card._attrs(SPEND);
     if (card._has(SPEND) && sa.phase) {
         const need = Number(sa.overnight_need_kwh), refill = Number(sa.expected_refill_kwh);
@@ -152,7 +138,7 @@ export function batteryBody(card, row) {
         if (blocked) value = t(blocked);
         else if (code !== 'none' && code !== 'night') value = (a.enabled ? '' : t('pacing_would') + ' ') + (t('pacing_' + code) || code) + (at ? ' · ' + t('pacing_full_by') + ' ' + at : '');
         const sw = paceSw ? card._val(card._str(paceSw) === 'on' ? t('next_on') : t('next_off'), () => card._toggleSwitch(paceSw), { disabled: dis }) : '';
-        rows.push(card._row('mdi:speedometer', t('charge_pacing'), value, html`${capText}${capText && sw ? ' · ' : ''}${sw}`));
+        moreRows.push(card._row('mdi:speedometer', t('charge_pacing'), value, html`${capText}${capText && sw ? ' · ' : ''}${sw}`));
     }
     const sellSw = card._has(Q.may_export.entity) ? Q.may_export.entity : null;
     const st = sa.battery_sell_state && sa.battery_sell_state !== 'none' ? sa.battery_sell_state : '';
@@ -162,7 +148,7 @@ export function batteryBody(card, row) {
             : st === 'scheduled' ? t('spend_sell_planned') + (until ? ' · ' + until : '') : t('next_none');
         const rate = num('sensor.sem_tariff_current_export_rate');
         const sw = sellSw ? html`${t('next_may_export')}: ${card._val(card._str(sellSw) === 'on' ? t('next_on') : t('next_off'), () => card._toggleSwitch(sellSw), { disabled: dis })}` : '';
-        rows.push(card._row('mdi:transmission-tower-export', t('next_sell_window'), value,
+        moreRows.push(card._row('mdi:transmission-tower-export', t('next_sell_window'), value,
             html`${rate === null ? '' : tf('next_export_rate', { rate: card._price(rate) })}${rate !== null && sellSw ? ' · ' : ''}${sw}`));
     }
     const bats = card._batteries || [];
@@ -222,10 +208,10 @@ export function batteryBody(card, row) {
 
     return html`
         ${segItems.length ? card._seg(segItems, segKey, pick, { disabled: dis }) : nothing}
-        ${autoSeg !== nothing ? html`<div style="margin-top:6px">${autoSeg}</div>` : nothing}
         ${hint ? html`<div class="modehelp">${hint}</div>` : nothing}
         ${card._stats(stats)}
         ${zones}
         ${sentence}
-        ${rows.length ? html`<div class="rows" style="margin-top:6px">${rows}</div>` : nothing}`;
+        ${rows.length ? html`<div class="rows" style="margin-top:6px">${rows}</div>` : nothing}
+        ${moreRows.length ? card._more(html`<div class="rows">${moreRows}</div>`) : nothing}`;
 }

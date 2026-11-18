@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **The System screen has the grid-charge, discharge-end, peak-hold and heat pump step-down settings** (#1321). They only had a place on the old Configuration tab.
 - 🐛 **Links between screens work at any dashboard address** (#1321). Also the welcome message and phone notifications.
 - 📝 **Dashboard Guide rewritten for the five screens** (#1321). README shows only the new dashboard.
+- 🐛 **Fewer duplicates on the SEM screens** (#1321). One sources row on System, one number on the power bar, one battery mode control, rare settings under More.
+- ✨ **Easier to use** (#1321). Plain button labels, Observer mode as a switch, outlined tiles, 40 px touch targets, Insights topics as a dropdown on phones.
+- ✨ **Numbers follow your language and keyboard works everywhere** (#1321). 3,5 kW in German; Enter and Space work on every control; dialogs close with Escape.
 
 - 🐛 **Loads SEM switched off come back after a restart** (#896). Also on unload, stop or crash; hand changes are left alone.
 - 🐛 **A switch named router, NAS or server is never switched off** (#896). A warning shows; “surplus” becomes “peak only”.

@@ -146,11 +146,11 @@ test('without the switch, the attribute decides watch-only', () => {
     assert.equal(util.isWatchOnly({ 'switch.sem_observer_mode': { state: 'off' } }, { watch_only: true }), false);
 });
 
-test('in control and nothing must be done: only the chip, no banner, no list', () => {
+test('in control and nothing must be done: only the control chip, no setup chip, no banner, no list', () => {
     const c = card(states({ watch: false, must: false, over: { charger: { done: true }, forecast: { done: true }, price: { done: true } }, repairs: { count: 0 } }));
     const t = shown(c);
     assert.match(t, /setup_chip_control/);
-    assert.match(t, /setup_chip_setup/);
+    assert.doesNotMatch(t, /setup_chip_setup/, 'a finished setup has no "5 of 5" chip');
     assert.doesNotMatch(t, /setup_watch_title|setup_list_title|setup_take_control/);
 });
 

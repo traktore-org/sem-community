@@ -8,6 +8,8 @@
  * does not fit the axis at all is dropped, never squeezed.
  */
 
+import { fmtNum } from './next-number.js';
+
 export const LANE_COLORS = {
     sun: 'var(--energy-solar-color, #ff9800)', price: 'var(--energy-grid-return-color, #8353d1)',
     grid: 'var(--energy-grid-consumption-color, #488fc2)', battery_in: 'var(--energy-battery-in-color, #f06292)',
@@ -95,7 +97,7 @@ export function laneModel(o) {
         if (!String(b.id).startsWith('battery')) continue;
         const f = clip(Date.parse(b.start), Date.parse(b.end));
         if (f) bat.blocks.push({ x0: f[0], x1: f[1], kind: 'battery_in', color: LANE_COLORS.battery_in, dashed: true,
-            powerW: Number(b.power_w) || 0, reasonKey: 'next_reason_battery_charge', params: { kw: ((Number(b.power_w) || 0) / 1000).toFixed(1) } });
+            powerW: Number(b.power_w) || 0, reasonKey: 'next_reason_battery_charge', params: { kw: fmtNum((Number(b.power_w) || 0) / 1000, 1) } });
     }
     for (const r of (Array.isArray(a.batt_runs) ? a.batt_runs : [])) {
         const f = clip(Date.parse(r.start), Date.parse(r.end));
@@ -124,7 +126,7 @@ export function laneModel(o) {
                 lane.blocks.push({ x0: f[0], x1: f[1], kind: prefix, color, dashed: Date.parse(b.start) > start,
                     powerW: Number(b.power_w) || 0,
                     reasonKey: prefix === 'ev' ? 'next_reason_ev_block' : 'next_reason_load_block',
-                    params: { kw: ((Number(b.power_w) || 0) / 1000).toFixed(1), status: d.status || '',
+                    params: { kw: fmtNum((Number(b.power_w) || 0) / 1000, 1), status: d.status || '',
                         // (#1354) the planner's note in the user's words when the card passes a reader
                         note: (typeof o.noteText === 'function' ? o.noteText(d) : d.note) || '' } });
             }

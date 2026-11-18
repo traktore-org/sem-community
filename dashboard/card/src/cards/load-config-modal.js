@@ -182,11 +182,11 @@ export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = fa
         ${btn('cfg-save', t('save'), 'primaryAction', 'filled')}`;
     if (dialog) return `${form}${actions}`;
     return `
-        <div style="background:var(--card-background-color);border-radius:var(--ha-card-border-radius,12px);border:1px solid var(--divider-color);padding:24px;min-width:320px;max-width:90vw;color:var(--primary-text-color)">
-            <div style="font-weight:var(--ha-font-weight-medium,500);font-size:var(--ha-font-size-l,16px);margin-bottom:16px">${t('configure_device')}: ${escapeHtml(deviceName)}</div>
+        <div class="dlg-box">
+            <div class="dlg-title">${t('configure_device')}: ${escapeHtml(deviceName)}</div>
             ${form}
-            <div style="display:flex;gap:8px;align-items:center">${hasManual ? btn('cfg-remove', t('clear_mapping'), '', 'plain') : ''}
-                <div style="flex:1"></div>
+            <div class="dlg-actions">${hasManual ? btn('cfg-remove', t('clear_mapping'), '', 'plain') : ''}
+                <div class="grow"></div>
                 ${btn('cfg-cancel', t('cancel'), '', 'plain')}
                 ${btn('cfg-save', t('save'), '', 'filled')}
             </div>

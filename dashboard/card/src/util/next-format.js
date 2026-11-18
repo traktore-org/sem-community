@@ -2,6 +2,8 @@
  * (#1321) Shared number words so one value reads the same on every screen.
  */
 
+import { fmtNum } from './next-number.js';
+
 /**
  * A tariff price: two decimals, three when the third is not zero, so an
  * export rate of 0.075 is never rounded to 0.07 on one screen and shown
@@ -11,7 +13,7 @@ export function fmtPrice(v) {
     const n = Number(v);
     if (v === null || v === undefined || v === '' || !Number.isFinite(n)) return '—';
     const three = n.toFixed(3);
-    return three.endsWith('0') ? n.toFixed(2) : three;
+    return fmtNum(n, three.endsWith('0') ? 2 : 3);
 }
 
 /**

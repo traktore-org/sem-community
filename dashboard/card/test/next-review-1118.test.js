@@ -183,7 +183,9 @@ test('3: System shows the grid as import, a size and a way, never -762', () => {
     assert.deepEqual(gridReading('-762'), { watts: 762, dir: 'import' });
     assert.deepEqual(gridReading('300'), { watts: 300, dir: 'export' });
     assert.equal(gridReading('unavailable'), null);
-    const out = text(systemCard()._freshTiles(systemCard()._freshRows()));
+    const sys = systemCard();
+    sys._showSources = true;
+    const out = text(sys._freshSummary(sys._freshRows()));
     assert.match(out, /762 W import/);
     assert.doesNotMatch(out, /-762|−762/);
 });
@@ -220,7 +222,9 @@ test('6: the name helper: SEM name, HA device name, cleaned friendly name', () =
 });
 
 test('6: no screen prints an entity id or a snake_case slug for these loads', () => {
-    const sys = text(systemCard().render());
+    const card = systemCard();
+    card._showSources = true;
+    const sys = text(card.render());
     assert.doesNotMatch(sys, /garage_carport_licht|pro4pm_s6|eltern_kind|Eltern,Kind/);
     assert.doesNotMatch(sys, /Inverter Input power|Power meter Active power/);
     assert.match(sys, /Pro4PM S6 Tableau Output 1\b(?! Energy)/);

@@ -687,14 +687,14 @@ class SEMNextPlanCard extends SEMNextBase {
         if (full && !ov) {
             // a full car has nothing to skip or start
         } else if (this._confirm === cid) {
-            btns.push(this._btn(t('next_confirm'), () => this._chargeNow(cid, plan), { small: true, primary: true, disabled: obs }));
+            btns.push(this._btn(t('next_full_power_yes'), () => this._chargeNow(cid, plan), { small: true, primary: true, disabled: obs }));
             btns.push(this._btn(t('next_cancel'), () => { this._confirm = null; }, { small: true }));
         } else if (ov) {
             btns.push(this._btn(t('next_back_to_plan'), () => this._overrideClear(cid), { small: true, disabled: obs }));
         } else {
-            btns.push(this._btn(t('next_skip'), () => this._override(cid, 'skip', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
-            btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, primary: true, disabled: obs }));
-            if (mode) btns.push(this._btn(t('next_charge_now'), () => { this._confirm = cid; }, { small: true, ghost: true, disabled: obs || mode === 'always_max' }));
+            btns.push(this._btn(t('next_skip_tonight'), () => this._override(cid, 'skip', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
+            btns.push(this._btn(t('next_ignore_price'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, primary: true, disabled: obs }));
+            if (mode) btns.push(this._btn(t('next_full_power'), () => { this._confirm = cid; }, { small: true, ghost: true, disabled: obs || mode === 'always_max' }));
         }
         // (#1321) the charge plan lives on the charger's Devices card: one tap there
         btns.push(this._btn(t('next_charge_plan'), () => this._openChargePlan(cid), { small: true, ghost: true, icon: 'mdi:pencil' }));
@@ -864,7 +864,7 @@ class SEMNextPlanCard extends SEMNextBase {
         if (this._has('switch.sem_energy_plan_actuation')) {
             const on = this._str('switch.sem_energy_plan_actuation') === 'on';
             rows.push(this._row('mdi:toggle-switch-outline', t('next_plan_acts'),
-                this._btn(on ? t('next_on') : t('next_off'), () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { small: true, primary: on, disabled: obs }),
+                this._switch(on, () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { label: t('next_plan_acts'), disabled: obs }),
                 t('next_actuation_sub')));
         }
         rows.push(this._row('mdi:sync', t('next_replan'),
