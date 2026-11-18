@@ -2517,7 +2517,8 @@
     "next_copy_by_hand_title": "Zkopírujte ručně",
     "next_copy_by_hand": "Tento prohlížeč zde kopírování nepovoluje. Text je označený: zkopírujte ho a vložte do hlášení.",
     "next_close": "Zavřít",
-    "next_period": "Období"
+    "next_period": "Období",
+    "next_runs_span": "v {n} úsecích, {window}"
   },
   "da": {
     "/year": "/år",
@@ -5037,7 +5038,8 @@
     "next_copy_by_hand_title": "Kopiér selv",
     "next_copy_by_hand": "Denne browser tillader ikke kopiering her. Teksten er markeret: kopiér den og indsæt den i din rapport.",
     "next_close": "Luk",
-    "next_period": "Periode"
+    "next_period": "Periode",
+    "next_runs_span": "i {n} omgange, {window}"
   },
   "de": {
     "/year": "/Jahr",
@@ -7557,7 +7559,8 @@
     "next_copy_by_hand_title": "Von Hand kopieren",
     "next_copy_by_hand": "Dieser Browser erlaubt hier kein Kopieren. Der Text ist markiert: kopieren Sie ihn und fügen Sie ihn in Ihre Meldung ein.",
     "next_close": "Schliessen",
-    "next_period": "Zeitraum"
+    "next_period": "Zeitraum",
+    "next_runs_span": "in {n} Abschnitten, {window}"
   },
   "en": {
     "/year": "/year",
@@ -10077,7 +10080,8 @@
     "next_copy_by_hand_title": "Copy by hand",
     "next_copy_by_hand": "This browser does not allow copying here. The text is selected: copy it, then paste it in your report.",
     "next_close": "Close",
-    "next_period": "Period"
+    "next_period": "Period",
+    "next_runs_span": "in {n} runs, {window}"
   },
   "es": {
     "/year": "/año",
@@ -12597,7 +12601,8 @@
     "next_copy_by_hand_title": "Copiar a mano",
     "next_copy_by_hand": "Este navegador no permite copiar aquí. El texto está seleccionado: cópielo y péguelo en su informe.",
     "next_close": "Cerrar",
-    "next_period": "Periodo"
+    "next_period": "Periodo",
+    "next_runs_span": "en {n} veces, {window}"
   },
   "fi": {
     "/year": "/vuosi",
@@ -15117,7 +15122,8 @@
     "next_copy_by_hand_title": "Kopioi itse",
     "next_copy_by_hand": "Tämä selain ei salli kopiointia tässä. Teksti on valittu: kopioi se ja liitä se ilmoitukseesi.",
     "next_close": "Sulje",
-    "next_period": "Jakso"
+    "next_period": "Jakso",
+    "next_runs_span": "{n} jaksossa, {window}"
   },
   "fr": {
     "/year": "/an",
@@ -17637,7 +17643,8 @@
     "next_copy_by_hand_title": "Copier à la main",
     "next_copy_by_hand": "Ce navigateur ne permet pas de copier ici. Le texte est sélectionné : copiez-le, puis collez-le dans votre rapport.",
     "next_close": "Fermer",
-    "next_period": "Période"
+    "next_period": "Période",
+    "next_runs_span": "en {n} fois, {window}"
   },
   "hu": {
     "/year": "/év",
@@ -20157,7 +20164,8 @@
     "next_copy_by_hand_title": "Másolja kézzel",
     "next_copy_by_hand": "Ez a böngésző itt nem engedi a másolást. A szöveg ki van jelölve: másolja ki, és illessze be a bejelentésbe.",
     "next_close": "Bezárás",
-    "next_period": "Időszak"
+    "next_period": "Időszak",
+    "next_runs_span": "{n} szakaszban, {window}"
   },
   "it": {
     "/year": "/anno",
@@ -22677,7 +22685,8 @@
     "next_copy_by_hand_title": "Copia a mano",
     "next_copy_by_hand": "Questo browser non consente di copiare qui. Il testo è selezionato: copialo e incollalo nella segnalazione.",
     "next_close": "Chiudi",
-    "next_period": "Periodo"
+    "next_period": "Periodo",
+    "next_runs_span": "in {n} volte, {window}"
   },
   "nl": {
     "/year": "/jaar",
@@ -25197,7 +25206,8 @@
     "next_copy_by_hand_title": "Handmatig kopiëren",
     "next_copy_by_hand": "Deze browser staat kopiëren hier niet toe. De tekst is geselecteerd: kopieer hem en plak hem in je melding.",
     "next_close": "Sluiten",
-    "next_period": "Periode"
+    "next_period": "Periode",
+    "next_runs_span": "in {n} keer, {window}"
   },
   "no": {
     "/year": "/år",
@@ -27717,7 +27727,8 @@
     "next_copy_by_hand_title": "Kopier selv",
     "next_copy_by_hand": "Denne nettleseren tillater ikke kopiering her. Teksten er merket: kopier den og lim den inn i rapporten.",
     "next_close": "Lukk",
-    "next_period": "Periode"
+    "next_period": "Periode",
+    "next_runs_span": "i {n} omganger, {window}"
   },
   "pl": {
     "/year": "/rok",
@@ -30237,7 +30248,8 @@
     "next_copy_by_hand_title": "Skopiuj ręcznie",
     "next_copy_by_hand": "Ta przeglądarka nie pozwala tu kopiować. Tekst jest zaznaczony: skopiuj go i wklej do zgłoszenia.",
     "next_close": "Zamknij",
-    "next_period": "Okres"
+    "next_period": "Okres",
+    "next_runs_span": "w {n} etapach, {window}"
   },
   "pt": {
     "/year": "/ano",
@@ -32757,7 +32769,8 @@
     "next_copy_by_hand_title": "Copiar à mão",
     "next_copy_by_hand": "Este navegador não permite copiar aqui. O texto está selecionado: copie-o e cole-o no seu relato.",
     "next_close": "Fechar",
-    "next_period": "Período"
+    "next_period": "Período",
+    "next_runs_span": "em {n} vezes, {window}"
   },
   "ro": {
     "/year": "/an",
@@ -35277,7 +35290,8 @@
     "next_copy_by_hand_title": "Copiați manual",
     "next_copy_by_hand": "Acest browser nu permite copierea aici. Textul este selectat: copiați-l și lipiți-l în raport.",
     "next_close": "Închide",
-    "next_period": "Perioadă"
+    "next_period": "Perioadă",
+    "next_runs_span": "în {n} etape, {window}"
   },
   "sv": {
     "/year": "/år",
@@ -37797,7 +37811,8 @@
     "next_copy_by_hand_title": "Kopiera själv",
     "next_copy_by_hand": "Den här webbläsaren tillåter inte kopiering här. Texten är markerad: kopiera den och klistra in den i din rapport.",
     "next_close": "Stäng",
-    "next_period": "Period"
+    "next_period": "Period",
+    "next_runs_span": "i {n} omgångar, {window}"
   },
   "zh": {
     "/year": "/年",
@@ -40317,6 +40332,7 @@
     "next_copy_by_hand_title": "手动复制",
     "next_copy_by_hand": "此浏览器不允许在此复制。文本已选中：请复制后粘贴到您的报告中。",
     "next_close": "关闭",
-    "next_period": "时间段"
+    "next_period": "时间段",
+    "next_runs_span": "分 {n} 次，{window}"
   }
 }

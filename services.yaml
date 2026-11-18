@@ -633,7 +633,7 @@ get_config:
     response. Home Assistant's own `config_entries/get` strips both for
     security, so this is the only way to read back option-only fields.
 
-    Used by the dashboard's Configuration tab. Read-only.
+    Used by the dashboard's System screen. Read-only.
   fields:
     entry_id:
       name: Config Entry ID
@@ -674,7 +674,7 @@ set_option:
     Write one or more configuration options, merging them into the SEM
     config entry exactly as the Options flow does.
 
-    Used by the dashboard's Configuration tab. Prefer the UI — this service
+    Used by the dashboard's System screen. Prefer the UI — this service
     does not validate the way the config flow does, and an unknown key is
     stored rather than rejected.
   fields:

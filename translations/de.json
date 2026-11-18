@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Letzter Schritt! SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere — einschließlich Ihres Netz-Spitzenwert-Limits — verwendet sichere Standardwerte, die Sie direkt nach der Einrichtung anpassen können: das Spitzenwert-Limit über den Schieberegler im **Steuerung**-Tab, alles andere im **Konfiguration**-Tab des SEM-Dashboards — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
+        "description": "Letzter Schritt! SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere — einschließlich Ihres Netz-Spitzenwert-Limits — verwendet sichere Standardwerte, die Sie direkt nach der Einrichtung anpassen können: das Spitzenwert-Limit auf dem Bildschirm **Geräte**, alles andere auf dem Bildschirm **System** des SEM-Dashboards — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
         "data": {
           "battery_capacity_kwh": "Hausbatterie-Kapazität (kWh)",
           "generate_dashboard_on_install": "SEM-Dashboard jetzt erstellen (startet HA neu)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Wähle deinen Netzzähler",
-        "description": "SEM hat keinen Sensor für die Netzleistung gefunden. Ohne ihn weiß SEM nicht, was du kaufst oder einspeist.\n\nWähle ihn unten oder drücke **Senden**, um zu überspringen. Du kannst ihn später im Tab Konfiguration setzen.\n\nSolar: {solar}. Batterie: {battery}.",
+        "description": "SEM hat keinen Sensor für die Netzleistung gefunden. Ohne ihn weiß SEM nicht, was du kaufst oder einspeist.\n\nWähle ihn unten oder drücke **Senden**, um zu überspringen. Du kannst ihn später auf dem Bildschirm System setzen.\n\nSolar: {solar}. Batterie: {battery}.",
         "data": {
           "grid_power_sensor": "Netzleistung"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "EV-Ladegerät",
-        "description": "Tipp: Die meisten Einstellungen sind jetzt im SEM-Dashboard → Tab Konfiguration (farbig, live). Dieser Dialog bleibt für Setups ohne Dashboard.\n\nÜberprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
+        "description": "Tipp: Die meisten Einstellungen sind im SEM-Dashboard: auf den Bildschirmen Geräte und System. Dieser Dialog bleibt für Setups ohne Dashboard.\n\nÜberprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
         "data": {
           "ev_connected_sensor": "EV-Verbindungsstatus",
           "ev_charging_sensor": "EV-Ladestatus",
@@ -1880,7 +1880,7 @@
       "message": "Kein Geräteplan für {device_id} gefunden. Prüfen Sie die Geräte-ID, die Sie mit dem Dienst schedule_appliance verwendet haben."
     },
     "load_management_disabled": {
-      "message": "Das Lastmanagement ist ausgeschaltet, daher gibt es keine Abwurfliste zu aktualisieren. Schalte es auf dem SEM-Dashboard unter Konfiguration → Lastmanagement ein und versuche es erneut."
+      "message": "Das Lastmanagement ist ausgeschaltet, daher gibt es keine Abwurfliste zu aktualisieren. Schalte es auf dem SEM-Dashboard unter System → Lastmanagement ein und versuche es erneut."
     },
     "load_management_failed_to_start": {
       "message": "Das Lastmanagement ist eingeschaltet, konnte aber nicht starten, daher kann SEM seine Geräteliste nicht verwenden. Prüfe das Home-Assistant-Protokoll auf \"Failed to initialize load management\" und lade die Integration neu."

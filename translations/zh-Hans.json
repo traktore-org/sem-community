@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "硬件",
-        "description": "最后一步！SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置——包括电网峰值功率限制——都将使用安全默认值，您可以在安装完成后立即调整：峰值功率限制通过 **控制** 标签页的滑块调整，其余设置通过 SEM 看板的 **配置** 标签页调整——包括电动汽车充电桩、热泵、电价以及电池分区。",
+        "description": "最后一步！SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置——包括电网峰值功率限制——都将使用安全默认值，您可以在安装完成后立即调整：峰值功率限制在 **设备** 屏幕调整，其余设置在 SEM 看板的 **系统** 屏幕调整——包括电动汽车充电桩、热泵、电价以及电池分区。",
         "data": {
           "battery_capacity_kwh": "家用蓄电池容量 (kWh)",
           "generate_dashboard_on_install": "立即生成 SEM 看板（会重启 HA）"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "选择你的电网电表",
-        "description": "SEM 没有找到电网功率传感器。没有它，SEM 不知道你买入或送出了多少电。\n\n请在下面选择，或按 **提交** 跳过。你也可以稍后在“配置”标签页中设置。\n\n光伏：{solar}。电池：{battery}。",
+        "description": "SEM 没有找到电网功率传感器。没有它，SEM 不知道你买入或送出了多少电。\n\n请在下面选择，或按 **提交** 跳过。你也可以稍后在“系统”屏幕中设置。\n\n光伏：{solar}。电池：{battery}。",
         "data": {
           "grid_power_sensor": "电网功率"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "电动汽车充电桩",
-        "description": "提示：大多数设置现在都移到了 SEM 看板 → 配置标签页（色彩丰富且实时）。此流程仅保留用于无头（Headless）设置和实体绑定。\n\n请检查并更新您的电动汽车充电桩实体映射。只有当您提供车辆蓄电池电量 (SOC) 传感器时，车辆 SOC 字段才会生效。",
+        "description": "提示：大多数设置都在 SEM 看板上：设备和系统屏幕。此流程仅保留用于无头（Headless）设置和实体绑定。\n\n请检查并更新您的电动汽车充电桩实体映射。只有当您提供车辆蓄电池电量 (SOC) 传感器时，车辆 SOC 字段才会生效。",
         "data": {
           "ev_connected_sensor": "充电桩连接状态",
           "ev_charging_sensor": "充电桩充电状态",
@@ -1880,7 +1880,7 @@
       "message": "未找到 {device_id} 的设备计划。请检查您在 schedule_appliance 服务中使用的设备 ID。"
     },
     "load_management_disabled": {
-      "message": "负载管理已关闭，因此没有可更新的卸载设备列表。请在 SEM 仪表盘的 配置 → 负载管理 中开启后重试。"
+      "message": "负载管理已关闭，因此没有可更新的卸载设备列表。请在 SEM 仪表盘的 系统 → 负载管理 中开启后重试。"
     },
     "load_management_failed_to_start": {
       "message": "负载管理已开启但启动失败，因此 SEM 无法使用其设备列表。请在 Home Assistant 日志中查找 \"Failed to initialize load management\" 并重新加载该集成。"

@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Sidste trin! SEM har automatisk fundet din inverters entitet til afladningsstyring: {discharge_entity}\n\nLad dashboard-indstillingen være TIL, så bygger SEM sit Lovelace-dashboard for dig. **Bemærk: dette genstarter Home Assistant ca. 5 sekunder efter, at installationen er færdig.**\n\nAlt andet — også din spidsgrænse mod nettet — bruger sikre standardværdier, som du kan justere lige efter opsætningen: spidsgrænsen med skyderen på fanen **Styring**, alt andet på fanen **Konfiguration** på SEM-dashboardet — herunder elbilladere, varmepumpe, tarif og batterizoner.",
+        "description": "Sidste trin! SEM har automatisk fundet din inverters entitet til afladningsstyring: {discharge_entity}\n\nLad dashboard-indstillingen være TIL, så bygger SEM sit Lovelace-dashboard for dig. **Bemærk: dette genstarter Home Assistant ca. 5 sekunder efter, at installationen er færdig.**\n\nAlt andet — også din spidsgrænse mod nettet — bruger sikre standardværdier, som du kan justere lige efter opsætningen: spidsgrænsen på skærmen **Enheder**, alt andet på skærmen **System** på SEM-dashboardet — herunder elbilladere, varmepumpe, tarif og batterizoner.",
         "data": {
           "battery_capacity_kwh": "Husbatteriets kapacitet (kWh)",
           "generate_dashboard_on_install": "Generér SEM-dashboardet nu (genstarter HA)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Vælg din netmåler",
-        "description": "SEM fandt ingen sensor for neteffekt. Uden den ved SEM ikke, hvad du køber eller sender ud.\n\nVælg den nedenfor, eller tryk **Indsend** for at springe over. Du kan sætte den senere under fanen Konfiguration.\n\nSol: {solar}. Batteri: {battery}.",
+        "description": "SEM fandt ingen sensor for neteffekt. Uden den ved SEM ikke, hvad du køber eller sender ud.\n\nVælg den nedenfor, eller tryk **Indsend** for at springe over. Du kan sætte den senere på skærmen System.\n\nSol: {solar}. Batteri: {battery}.",
         "data": {
           "grid_power_sensor": "Neteffekt"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "EV Lader",
-        "description": "Tip: de fleste indstillinger findes nu på SEM-dashboardet → fanen Konfiguration (farverigt, live). Dette flow forbliver til opsætninger uden dashboard.\n\nGennemgå og opdater entitetstilknytningerne for din elbillader. Felterne for køretøjets SOC bruges kun, hvis du angiver en sensor for køretøjets batteri-SOC.",
+        "description": "Tip: de fleste indstillinger findes på SEM-dashboardet: skærmene Enheder og System. Dette flow forbliver til opsætninger uden dashboard.\n\nGennemgå og opdater entitetstilknytningerne for din elbillader. Felterne for køretøjets SOC bruges kun, hvis du angiver en sensor for køretøjets batteri-SOC.",
         "data": {
           "ev_connected_sensor": "EV Forbindelsesstatus",
           "ev_charging_sensor": "EV Ladestatus",
@@ -1880,7 +1880,7 @@
       "message": "Der blev ikke fundet nogen apparatplan for {device_id}. Kontrollér det enheds-ID, du brugte med tjenesten schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "Laststyring er slået fra, så der er ingen frakoblingsliste at opdatere. Slå den til under Konfiguration → Laststyring på SEM-dashboardet, og prøv igen."
+      "message": "Laststyring er slået fra, så der er ingen frakoblingsliste at opdatere. Slå den til under System → Laststyring på SEM-dashboardet, og prøv igen."
     },
     "load_management_failed_to_start": {
       "message": "Laststyring er slået til, men kunne ikke starte, så SEM kan ikke bruge sin enhedsliste. Tjek Home Assistant-loggen for \"Failed to initialize load management\", og genindlæs integrationen."

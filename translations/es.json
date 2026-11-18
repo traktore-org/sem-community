@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "¡Último paso! SEM ha detectado automáticamente la entidad de control de descarga de su inversor: {discharge_entity}\n\nDeje la opción del panel ACTIVADA para que SEM cree su panel de Lovelace por usted. **Nota: esto reinicia Home Assistant unos 5 segundos después de terminar la instalación.**\n\nTodo lo demás — incluido su límite de pico de red — usa valores seguros por defecto que puede ajustar justo después de la configuración: el límite de pico con el control deslizante de la pestaña **Control**, todo lo demás en la pestaña **Configuración** del panel de SEM — incluidos cargadores de VE, bomba de calor, tarifa y zonas de batería.",
+        "description": "¡Último paso! SEM ha detectado automáticamente la entidad de control de descarga de su inversor: {discharge_entity}\n\nDeje la opción del panel ACTIVADA para que SEM cree su panel de Lovelace por usted. **Nota: esto reinicia Home Assistant unos 5 segundos después de terminar la instalación.**\n\nTodo lo demás — incluido su límite de pico de red — usa valores seguros por defecto que puede ajustar justo después de la configuración: el límite de pico en la pantalla **Dispositivos**, todo lo demás en la pantalla **Sistema** del panel de SEM — incluidos cargadores de VE, bomba de calor, tarifa y zonas de batería.",
         "data": {
           "battery_capacity_kwh": "Capacidad de la batería doméstica (kWh)",
           "generate_dashboard_on_install": "Generar ahora el panel SEM (reinicia HA)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Elige tu contador de red",
-        "description": "SEM no encontró un sensor de potencia de red. Sin él, SEM no sabe lo que compras o viertes.\n\nElígelo abajo o pulsa **Enviar** para saltar. Puedes ajustarlo más tarde en la pestaña Configuración.\n\nSolar: {solar}. Batería: {battery}.",
+        "description": "SEM no encontró un sensor de potencia de red. Sin él, SEM no sabe lo que compras o viertes.\n\nElígelo abajo o pulsa **Enviar** para saltar. Puedes ajustarlo más tarde en la pantalla Sistema.\n\nSolar: {solar}. Batería: {battery}.",
         "data": {
           "grid_power_sensor": "Potencia de red"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Cargador VE",
-        "description": "Consejo: la mayoría de los ajustes están ahora en el panel SEM → pestaña Configuración (a color, en vivo). Este flujo permanece para instalaciones sin panel.\n\nRevise y actualice las asignaciones de entidades de su cargador de VE. Los campos de SOC del vehículo solo se utilizan si proporciona un sensor de SOC de batería del vehículo.",
+        "description": "Consejo: la mayoría de los ajustes están en el panel SEM: las pantallas Dispositivos y Sistema. Este flujo permanece para instalaciones sin panel.\n\nRevise y actualice las asignaciones de entidades de su cargador de VE. Los campos de SOC del vehículo solo se utilizan si proporciona un sensor de SOC de batería del vehículo.",
         "data": {
           "ev_connected_sensor": "Estado de conexión VE",
           "ev_charging_sensor": "Estado de carga VE",
@@ -1880,7 +1880,7 @@
       "message": "No se ha encontrado ninguna programación de electrodoméstico para {device_id}. Comprueba el ID de dispositivo que usaste con el servicio schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "La gestión de cargas está desactivada, así que no hay lista de desconexión que actualizar. Actívala en Configuración → Gestión de cargas en el panel de SEM e inténtalo de nuevo."
+      "message": "La gestión de cargas está desactivada, así que no hay lista de desconexión que actualizar. Actívala en Sistema → Gestión de cargas en el panel de SEM e inténtalo de nuevo."
     },
     "load_management_failed_to_start": {
       "message": "La gestión de cargas está activada pero no pudo iniciarse, así que SEM no puede usar su lista de dispositivos. Revisa el registro de Home Assistant en busca de \"Failed to initialize load management\" y recarga la integración."

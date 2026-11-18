@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Last step! SEM auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else — including your grid peak limit — uses safe defaults that you can tune right after setup: the peak limit from the **Control** tab slider, everything else from the **Configuration** tab on the SEM dashboard — including EV chargers, heat pump, tariff, and battery zones.",
+        "description": "Last step! SEM auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else — including your grid peak limit — uses safe defaults that you can tune right after setup: the peak limit on the **Devices** screen, everything else on the **System** screen of the SEM dashboard — including EV chargers, heat pump, tariff, and battery zones.",
         "data": {
           "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
           "battery_capacity_kwh": "Home Battery Capacity (kWh)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Pick your grid meter",
-        "description": "SEM could not find a grid power sensor. Without it, SEM cannot tell what you buy or send.\n\nPick it below, or press **Submit** to skip. You can set it later in the Configuration tab.\n\nSolar: {solar}. Battery: {battery}.",
+        "description": "SEM could not find a grid power sensor. Without it, SEM cannot tell what you buy or send.\n\nPick it below, or press **Submit** to skip. You can set it later on the System screen.\n\nSolar: {solar}. Battery: {battery}.",
         "data": {
           "grid_power_sensor": "Grid power"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "EV Charger",
-        "description": "Tip: most settings now live on the SEM dashboard → Configuration tab (colorful, live). This flow remains for headless setups and entity wiring.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "description": "Tip: most settings are on the SEM dashboard: the Devices and System screens. This flow remains for headless setups and entity wiring.\n\nReview and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",
@@ -1880,7 +1880,7 @@
       "message": "No SEM ConfigEntry found — install SEM via Settings → Devices & Services first."
     },
     "load_management_disabled": {
-      "message": "Load management is switched off, so there is no shed device list to update. Turn it on under Configuration → Load management on the SEM dashboard, then try again."
+      "message": "Load management is switched off, so there is no shed device list to update. Turn it on under System → Load management on the SEM dashboard, then try again."
     },
     "load_management_failed_to_start": {
       "message": "Load management is switched on but failed to start, so SEM cannot use its device list. Check the Home Assistant log for \"Failed to initialize load management\" and reload the integration."

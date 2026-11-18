@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Ultimul pas! SEM a detectat automat entitatea de control al descărcării invertorului dvs.: {discharge_entity}\n\nLăsați opțiunea tabloului de bord PORNITĂ pentru ca SEM să vă creeze tabloul Lovelace. **Notă: aceasta repornește Home Assistant la aproximativ 5 secunde după terminarea instalării.**\n\nTot restul — inclusiv limita de vârf a rețelei — folosește valori implicite sigure pe care le puteți ajusta imediat după configurare: limita de vârf din glisorul filei **Control**, tot restul din fila **Configurare** a tabloului SEM — inclusiv încărcătoarele VE, pompa de căldură, tariful și zonele bateriei.",
+        "description": "Ultimul pas! SEM a detectat automat entitatea de control al descărcării invertorului dvs.: {discharge_entity}\n\nLăsați opțiunea tabloului de bord PORNITĂ pentru ca SEM să vă creeze tabloul Lovelace. **Notă: aceasta repornește Home Assistant la aproximativ 5 secunde după terminarea instalării.**\n\nTot restul — inclusiv limita de vârf a rețelei — folosește valori implicite sigure pe care le puteți ajusta imediat după configurare: limita de vârf pe ecranul **Dispozitive**, tot restul pe ecranul **Sistem** al tabloului SEM — inclusiv încărcătoarele VE, pompa de căldură, tariful și zonele bateriei.",
         "data": {
           "battery_capacity_kwh": "Capacitatea bateriei casnice (kWh)",
           "generate_dashboard_on_install": "Generează acum tabloul de bord SEM (repornește HA)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Alege contorul de rețea",
-        "description": "SEM nu a găsit un senzor de putere a rețelei. Fără el, SEM nu știe ce cumperi sau trimiți în rețea.\n\nAlege-l mai jos sau apasă **Trimite** ca să sari. Îl poți seta mai târziu în fila Configurare.\n\nSolar: {solar}. Baterie: {battery}.",
+        "description": "SEM nu a găsit un senzor de putere a rețelei. Fără el, SEM nu știe ce cumperi sau trimiți în rețea.\n\nAlege-l mai jos sau apasă **Trimite** ca să sari. Îl poți seta mai târziu pe ecranul Sistem.\n\nSolar: {solar}. Baterie: {battery}.",
         "data": {
           "grid_power_sensor": "Putere rețea"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Încărcător EV",
-        "description": "Sfat: majoritatea setărilor sunt acum pe tabloul SEM → fila Configurare (colorat, live). Acest flux rămâne pentru instalări fără tablou de bord.\n\nVerificați și actualizați asocierile de entități ale încărcătorului VE. Câmpurile SOC ale vehiculului sunt folosite doar dacă furnizați un senzor SOC al bateriei vehiculului.",
+        "description": "Sfat: majoritatea setărilor sunt pe tabloul SEM: ecranele Dispozitive și Sistem. Acest flux rămâne pentru instalări fără tablou de bord.\n\nVerificați și actualizați asocierile de entități ale încărcătorului VE. Câmpurile SOC ale vehiculului sunt folosite doar dacă furnizați un senzor SOC al bateriei vehiculului.",
         "data": {
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",
@@ -1880,7 +1880,7 @@
       "message": "Nu a fost găsită nicio programare de aparat pentru {device_id}. Verificați ID-ul dispozitivului folosit cu serviciul schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "Gestionarea sarcinilor este oprită, deci nu există o listă de deconectare de actualizat. Porniți-o din Configurare → Gestionarea sarcinilor pe panoul SEM și încercați din nou."
+      "message": "Gestionarea sarcinilor este oprită, deci nu există o listă de deconectare de actualizat. Porniți-o din Sistem → Gestionarea sarcinilor pe panoul SEM și încercați din nou."
     },
     "load_management_failed_to_start": {
       "message": "Gestionarea sarcinilor este pornită, dar nu a reușit să pornească, deci SEM nu își poate folosi lista de dispozitive. Verificați jurnalul Home Assistant pentru \"Failed to initialize load management\" și reîncărcați integrarea."

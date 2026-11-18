@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Sprzęt",
-        "description": "Ostatni krok! SEM automatycznie wykrył encję sterowania rozładowaniem Twojego falownika: {discharge_entity}\n\nZostaw opcję pulpitu WŁĄCZONĄ, a SEM zbuduje dla Ciebie swój pulpit Lovelace. **Uwaga: około 5 sekund po zakończeniu instalacji Home Assistant uruchomi się ponownie.**\n\nWszystko inne — w tym Twój limit szczytowy sieci — używa bezpiecznych wartości domyślnych, które możesz zmienić zaraz po konfiguracji: limit szczytowy suwakiem na karcie **Sterowanie**, wszystko inne na karcie **Konfiguracja** pulpitu SEM — w tym ładowarki EV, pompę ciepła, taryfę i strefy baterii.",
+        "description": "Ostatni krok! SEM automatycznie wykrył encję sterowania rozładowaniem Twojego falownika: {discharge_entity}\n\nZostaw opcję pulpitu WŁĄCZONĄ, a SEM zbuduje dla Ciebie swój pulpit Lovelace. **Uwaga: około 5 sekund po zakończeniu instalacji Home Assistant uruchomi się ponownie.**\n\nWszystko inne — w tym Twój limit szczytowy sieci — używa bezpiecznych wartości domyślnych, które możesz zmienić zaraz po konfiguracji: limit szczytowy na ekranie **Urządzenia**, wszystko inne na ekranie **System** pulpitu SEM — w tym ładowarki EV, pompę ciepła, taryfę i strefy baterii.",
         "data": {
           "battery_capacity_kwh": "Pojemność baterii domowej (kWh)",
           "generate_dashboard_on_install": "Wygeneruj teraz pulpit SEM (restartuje HA)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Wybierz licznik sieci",
-        "description": "SEM nie znalazł czujnika mocy sieci. Bez niego SEM nie wie, co kupujesz lub oddajesz.\n\nWybierz go poniżej albo naciśnij **Zatwierdź**, aby pominąć. Możesz ustawić go później w zakładce Konfiguracja.\n\nSłońce: {solar}. Bateria: {battery}.",
+        "description": "SEM nie znalazł czujnika mocy sieci. Bez niego SEM nie wie, co kupujesz lub oddajesz.\n\nWybierz go poniżej albo naciśnij **Zatwierdź**, aby pominąć. Możesz ustawić go później na ekranie System.\n\nSłońce: {solar}. Bateria: {battery}.",
         "data": {
           "grid_power_sensor": "Moc sieci"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Ładowarka EV",
-        "description": "Wskazówka: większość ustawień znajduje się teraz na pulpicie SEM → karta Konfiguracja (kolorowo, na żywo). Ten przepływ pozostaje dla instalacji bez pulpitu.\n\nSprawdź i zaktualizuj przypisania encji ładowarki EV. Pola SOC pojazdu są używane tylko wtedy, gdy podasz czujnik SOC akumulatora pojazdu.",
+        "description": "Wskazówka: większość ustawień znajduje się na pulpicie SEM: na ekranach Urządzenia i System. Ten przepływ pozostaje dla instalacji bez pulpitu.\n\nSprawdź i zaktualizuj przypisania encji ładowarki EV. Pola SOC pojazdu są używane tylko wtedy, gdy podasz czujnik SOC akumulatora pojazdu.",
         "data": {
           "ev_connected_sensor": "Status podłączenia EV",
           "ev_charging_sensor": "Status ładowania EV",
@@ -1880,7 +1880,7 @@
       "message": "Nie znaleziono harmonogramu urządzenia dla {device_id}. Sprawdź identyfikator urządzenia użyty w usłudze schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "Zarządzanie obciążeniem jest wyłączone, więc nie ma listy zrzutu do aktualizacji. Włącz je w Konfiguracja → Zarządzanie obciążeniem na pulpicie SEM i spróbuj ponownie."
+      "message": "Zarządzanie obciążeniem jest wyłączone, więc nie ma listy zrzutu do aktualizacji. Włącz je w System → Zarządzanie obciążeniem na pulpicie SEM i spróbuj ponownie."
     },
     "load_management_failed_to_start": {
       "message": "Zarządzanie obciążeniem jest włączone, ale nie udało się go uruchomić, więc SEM nie może użyć swojej listy urządzeń. Sprawdź dziennik Home Assistant pod kątem \"Failed to initialize load management\" i przeładuj integrację."

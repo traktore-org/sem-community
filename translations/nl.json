@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Laatste stap! SEM heeft de ontlaad-besturingsentiteit van je omvormer automatisch gedetecteerd: {discharge_entity}\n\nLaat de dashboardoptie AAN staan zodat SEM automatisch je Lovelace-dashboard voor je aanmaakt. **Let op: dit veroorzaakt ongeveer 5 seconden na het voltooien van de installatie een herstart van Home Assistant.**\n\nVoor al het overige — inclusief je piekvermogenlimiet — gebruikt SEM veilige standaardwaardes die je direct na de installatie kunt aanpassen: de piekvermogenlimiet via de schuifregelaar op het tabblad **Besturing**, de rest via het tabblad **Configuratie** van het SEM-dashboard — waaronder EV-laders, warmtepomp, tarief en batterijzones.",
+        "description": "Laatste stap! SEM heeft de ontlaad-besturingsentiteit van je omvormer automatisch gedetecteerd: {discharge_entity}\n\nLaat de dashboardoptie AAN staan zodat SEM automatisch je Lovelace-dashboard voor je aanmaakt. **Let op: dit veroorzaakt ongeveer 5 seconden na het voltooien van de installatie een herstart van Home Assistant.**\n\nVoor al het overige — inclusief je piekvermogenlimiet — gebruikt SEM veilige standaardwaardes die je direct na de installatie kunt aanpassen: de piekvermogenlimiet op het scherm **Apparaten**, de rest op het scherm **Systeem** van het SEM-dashboard — waaronder EV-laders, warmtepomp, tarief en batterijzones.",
         "data": {
           "battery_capacity_kwh": "Thuis Batterij Capaciteit (kWh)",
           "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Kies je netmeter",
-        "description": "SEM vond geen sensor voor het netvermogen. Zonder die sensor weet SEM niet wat je koopt of teruglevert.\n\nKies hem hieronder, of druk op **Verzenden** om over te slaan. Je kunt hem later instellen in het tabblad Configuratie.\n\nZon: {solar}. Batterij: {battery}.",
+        "description": "SEM vond geen sensor voor het netvermogen. Zonder die sensor weet SEM niet wat je koopt of teruglevert.\n\nKies hem hieronder, of druk op **Verzenden** om over te slaan. Je kunt hem later instellen op het scherm Systeem.\n\nZon: {solar}. Batterij: {battery}.",
         "data": {
           "grid_power_sensor": "Netvermogen"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "EV-lader",
-        "description": "Tip: de meeste instellingen staan nu op het SEM-dashboard → tabblad Configuratie (kleurrijk, live). Deze flow blijft voor installaties zonder dashboard.\n\nControleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
+        "description": "Tip: de meeste instellingen staan op het SEM-dashboard: de schermen Apparaten en Systeem. Deze flow blijft voor installaties zonder dashboard.\n\nControleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
         "data": {
           "ev_connected_sensor": "EV-verbindingsstatus",
           "ev_charging_sensor": "EV-laadstatus",
@@ -1880,7 +1880,7 @@
       "message": "Geen apparaatschema gevonden voor {device_id}. Controleer de apparaat-ID die je bij de service schedule_appliance hebt gebruikt."
     },
     "load_management_disabled": {
-      "message": "Lastbeheer staat uit, dus er is geen afschakellijst om bij te werken. Zet het aan via Configuratie → Lastbeheer op het SEM-dashboard en probeer het opnieuw."
+      "message": "Lastbeheer staat uit, dus er is geen afschakellijst om bij te werken. Zet het aan via Systeem → Lastbeheer op het SEM-dashboard en probeer het opnieuw."
     },
     "load_management_failed_to_start": {
       "message": "Lastbeheer staat aan maar kon niet starten, dus SEM kan zijn apparatenlijst niet gebruiken. Controleer het Home Assistant-logboek op \"Failed to initialize load management\" en herlaad de integratie."

@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Ultimo passo! SEM ha rilevato automaticamente l'entità di controllo della scarica del tuo inverter: {discharge_entity}\n\nLascia ATTIVA l'opzione dashboard perché SEM crei la sua dashboard Lovelace per te. **Nota: questo riavvia Home Assistant circa 5 secondi dopo la fine dell'installazione.**\n\nTutto il resto — compreso il limite di picco di rete — usa valori predefiniti sicuri che puoi regolare subito dopo la configurazione: il limite di picco con il cursore della scheda **Controllo**, tutto il resto nella scheda **Configurazione** della dashboard SEM — compresi caricatori EV, pompa di calore, tariffa e zone della batteria.",
+        "description": "Ultimo passo! SEM ha rilevato automaticamente l'entità di controllo della scarica del tuo inverter: {discharge_entity}\n\nLascia ATTIVA l'opzione dashboard perché SEM crei la sua dashboard Lovelace per te. **Nota: questo riavvia Home Assistant circa 5 secondi dopo la fine dell'installazione.**\n\nTutto il resto — compreso il limite di picco di rete — usa valori predefiniti sicuri che puoi regolare subito dopo la configurazione: il limite di picco nella schermata **Dispositivi**, tutto il resto nella schermata **Sistema** della dashboard SEM — compresi caricatori EV, pompa di calore, tariffa e zone della batteria.",
         "data": {
           "battery_capacity_kwh": "Capacità batteria domestica (kWh)",
           "generate_dashboard_on_install": "Genera ora la dashboard SEM (riavvia HA)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Scegli il contatore di rete",
-        "description": "SEM non ha trovato un sensore di potenza di rete. Senza, SEM non sa cosa compri o immetti.\n\nSceglilo qui sotto, oppure premi **Invia** per saltare. Puoi impostarlo più tardi nella scheda Configurazione.\n\nSolare: {solar}. Batteria: {battery}.",
+        "description": "SEM non ha trovato un sensore di potenza di rete. Senza, SEM non sa cosa compri o immetti.\n\nSceglilo qui sotto, oppure premi **Invia** per saltare. Puoi impostarlo più tardi nella schermata Sistema.\n\nSolare: {solar}. Batteria: {battery}.",
         "data": {
           "grid_power_sensor": "Potenza di rete"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Caricatore VE",
-        "description": "Suggerimento: la maggior parte delle impostazioni è ora nella dashboard SEM → scheda Configurazione (a colori, in tempo reale). Questo flusso resta per installazioni senza dashboard.\n\nVerifica e aggiorna le mappature delle entità del caricatore VE. I campi SOC del veicolo vengono utilizzati solo se fornisci un sensore SOC batteria del veicolo.",
+        "description": "Suggerimento: la maggior parte delle impostazioni è nella dashboard SEM: le schermate Dispositivi e Sistema. Questo flusso resta per installazioni senza dashboard.\n\nVerifica e aggiorna le mappature delle entità del caricatore VE. I campi SOC del veicolo vengono utilizzati solo se fornisci un sensore SOC batteria del veicolo.",
         "data": {
           "ev_connected_sensor": "Stato connessione VE",
           "ev_charging_sensor": "Stato di carica VE",
@@ -1880,7 +1880,7 @@
       "message": "Nessuna pianificazione dell’elettrodomestico trovata per {device_id}. Controlla l’ID dispositivo che hai usato con il servizio schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "La gestione dei carichi è disattivata, quindi non c'è alcun elenco di distacco da aggiornare. Attivala in Configurazione → Gestione carichi nella dashboard SEM e riprova."
+      "message": "La gestione dei carichi è disattivata, quindi non c'è alcun elenco di distacco da aggiornare. Attivala in Sistema → Gestione carichi nella dashboard SEM e riprova."
     },
     "load_management_failed_to_start": {
       "message": "La gestione dei carichi è attiva ma non è riuscita ad avviarsi, quindi SEM non può usare il suo elenco dispositivi. Controlla il log di Home Assistant per \"Failed to initialize load management\" e ricarica l'integrazione."

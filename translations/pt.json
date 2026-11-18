@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Último passo! O SEM detetou automaticamente a entidade de controlo de descarga do seu inversor: {discharge_entity}\n\nDeixe a opção do painel LIGADA para o SEM criar o painel Lovelace por si. **Nota: isto reinicia o Home Assistant cerca de 5 segundos após a instalação terminar.**\n\nTudo o resto — incluindo o seu limite de pico da rede — usa valores predefinidos seguros que pode ajustar logo após a configuração: o limite de pico no controlo deslizante do separador **Controlo**, tudo o resto no separador **Configuração** do painel do SEM — incluindo carregadores VE, bomba de calor, tarifa e zonas da bateria.",
+        "description": "Último passo! O SEM detetou automaticamente a entidade de controlo de descarga do seu inversor: {discharge_entity}\n\nDeixe a opção do painel LIGADA para o SEM criar o painel Lovelace por si. **Nota: isto reinicia o Home Assistant cerca de 5 segundos após a instalação terminar.**\n\nTudo o resto — incluindo o seu limite de pico da rede — usa valores predefinidos seguros que pode ajustar logo após a configuração: o limite de pico no ecrã **Dispositivos**, tudo o resto no ecrã **Sistema** do painel do SEM — incluindo carregadores VE, bomba de calor, tarifa e zonas da bateria.",
         "data": {
           "battery_capacity_kwh": "Capacidade da bateria doméstica (kWh)",
           "generate_dashboard_on_install": "Gerar agora o painel SEM (reinicia o HA)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Escolha o contador de rede",
-        "description": "O SEM não encontrou um sensor de potência da rede. Sem ele, o SEM não sabe o que compra ou injeta.\n\nEscolha-o abaixo, ou prima **Submeter** para saltar. Pode defini-lo mais tarde no separador Configuração.\n\nSolar: {solar}. Bateria: {battery}.",
+        "description": "O SEM não encontrou um sensor de potência da rede. Sem ele, o SEM não sabe o que compra ou injeta.\n\nEscolha-o abaixo, ou prima **Submeter** para saltar. Pode defini-lo mais tarde no ecrã Sistema.\n\nSolar: {solar}. Bateria: {battery}.",
         "data": {
           "grid_power_sensor": "Potência da rede"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Carregador EV",
-        "description": "Dica: a maioria das definições está agora no painel SEM → separador Configuração (a cores, ao vivo). Este fluxo permanece para instalações sem painel.\n\nReveja e atualize os mapeamentos de entidades do seu carregador VE. Os campos de SOC do veículo só são usados se indicar um sensor de SOC da bateria do veículo.",
+        "description": "Dica: a maioria das definições está no painel SEM: os ecrãs Dispositivos e Sistema. Este fluxo permanece para instalações sem painel.\n\nReveja e atualize os mapeamentos de entidades do seu carregador VE. Os campos de SOC do veículo só são usados se indicar um sensor de SOC da bateria do veículo.",
         "data": {
           "ev_connected_sensor": "Estado de conexão VE",
           "ev_charging_sensor": "Estado de carregamento VE",
@@ -1880,7 +1880,7 @@
       "message": "Não foi encontrado nenhum agendamento de eletrodoméstico para {device_id}. Verifique o ID do dispositivo que usou com o serviço schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "A gestão de cargas está desligada, por isso não há lista de corte para atualizar. Ligue-a em Configuração → Gestão de cargas no painel SEM e tente novamente."
+      "message": "A gestão de cargas está desligada, por isso não há lista de corte para atualizar. Ligue-a em Sistema → Gestão de cargas no painel SEM e tente novamente."
     },
     "load_management_failed_to_start": {
       "message": "A gestão de cargas está ligada mas não conseguiu arrancar, por isso o SEM não pode usar a sua lista de dispositivos. Verifique o registo do Home Assistant por \"Failed to initialize load management\" e recarregue a integração."

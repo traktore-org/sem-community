@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Poslední krok! SEM automaticky zjistil entitu pro řízení vybíjení vašeho střídače: {discharge_entity}\n\nPonechte volbu panelu ZAPNUTOU a SEM pro vás vytvoří svůj panel Lovelace. **Poznámka: přibližně 5 sekund po dokončení instalace se Home Assistant restartuje.**\n\nVše ostatní — včetně limitu špičky ze sítě — používá bezpečné výchozí hodnoty, které můžete upravit hned po nastavení: limit špičky posuvníkem na kartě **Ovládání**, vše ostatní na kartě **Konfigurace** v panelu SEM — včetně nabíječek EV, tepelného čerpadla, tarifu a zón baterie.",
+        "description": "Poslední krok! SEM automaticky zjistil entitu pro řízení vybíjení vašeho střídače: {discharge_entity}\n\nPonechte volbu panelu ZAPNUTOU a SEM pro vás vytvoří svůj panel Lovelace. **Poznámka: přibližně 5 sekund po dokončení instalace se Home Assistant restartuje.**\n\nVše ostatní — včetně limitu špičky ze sítě — používá bezpečné výchozí hodnoty, které můžete upravit hned po nastavení: limit špičky na obrazovce **Zařízení**, vše ostatní na obrazovce **Systém** panelu SEM — včetně nabíječek EV, tepelného čerpadla, tarifu a zón baterie.",
         "data": {
           "battery_capacity_kwh": "Kapacita domácí baterie (kWh)",
           "generate_dashboard_on_install": "Vygenerovat nyní panel SEM (restartuje HA)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Vyberte síťový elektroměr",
-        "description": "SEM nenašel senzor výkonu sítě. Bez něj SEM neví, co nakupujete nebo dodáváte.\n\nVyberte ho níže, nebo stiskněte **Odeslat** a přeskočte. Můžete ho nastavit později na kartě Konfigurace.\n\nSlunce: {solar}. Baterie: {battery}.",
+        "description": "SEM nenašel senzor výkonu sítě. Bez něj SEM neví, co nakupujete nebo dodáváte.\n\nVyberte ho níže, nebo stiskněte **Odeslat** a přeskočte. Můžete ho nastavit později na obrazovce Systém.\n\nSlunce: {solar}. Baterie: {battery}.",
         "data": {
           "grid_power_sensor": "Výkon sítě"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Nabíječka EV",
-        "description": "Tip: většina nastavení je nyní na panelu SEM → karta Konfigurace (barevně, živě). Tento průvodce zůstává pro instalace bez panelu.\n\nZkontrolujte a upravte přiřazení entit vaší nabíječky EV. Pole SOC vozidla se použijí, jen pokud zadáte senzor SOC baterie vozidla.",
+        "description": "Tip: většina nastavení je na panelu SEM: na obrazovkách Zařízení a Systém. Tento průvodce zůstává pro instalace bez panelu.\n\nZkontrolujte a upravte přiřazení entit vaší nabíječky EV. Pole SOC vozidla se použijí, jen pokud zadáte senzor SOC baterie vozidla.",
         "data": {
           "ev_connected_sensor": "Stav připojení EV",
           "ev_charging_sensor": "Stav nabíjení EV",
@@ -1880,7 +1880,7 @@
       "message": "Pro {device_id} nebyl nalezen žádný plán spotřebiče. Zkontrolujte ID zařízení, které jste použili u služby schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "Řízení zátěže je vypnuté, takže není co aktualizovat v seznamu odpojení. Zapněte ho v Konfigurace → Řízení zátěže na panelu SEM a zkuste to znovu."
+      "message": "Řízení zátěže je vypnuté, takže není co aktualizovat v seznamu odpojení. Zapněte ho v Systém → Řízení zátěže na panelu SEM a zkuste to znovu."
     },
     "load_management_failed_to_start": {
       "message": "Řízení zátěže je zapnuté, ale nepodařilo se ho spustit, takže SEM nemůže použít svůj seznam zařízení. Zkontrolujte protokol Home Assistant na \"Failed to initialize load management\" a znovu načtěte integraci."

@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Hardver",
-        "description": "Utolsó lépés! A SEM automatikusan felismerte az inverter kisütés-vezérlő entitását: {discharge_entity}\n\nHagyja BEKAPCSOLVA az irányítópult opciót, hogy a SEM elkészítse Önnek a Lovelace irányítópultját. **Megjegyzés: ez a telepítés befejezése után kb. 5 másodperccel újraindítja a Home Assistantot.**\n\nMinden más — a hálózati csúcsteljesítmény-korlátot is beleértve — biztonságos alapértékeket használ, amelyeket közvetlenül a beállítás után módosíthat: a csúcskorlátot a **Vezérlés** fül csúszkájával, minden mást a SEM irányítópult **Konfiguráció** fülén — beleértve az EV töltőket, a hőszivattyút, a tarifát és az akkumulátorzónákat.",
+        "description": "Utolsó lépés! A SEM automatikusan felismerte az inverter kisütés-vezérlő entitását: {discharge_entity}\n\nHagyja BEKAPCSOLVA az irányítópult opciót, hogy a SEM elkészítse Önnek a Lovelace irányítópultját. **Megjegyzés: ez a telepítés befejezése után kb. 5 másodperccel újraindítja a Home Assistantot.**\n\nMinden más — a hálózati csúcsteljesítmény-korlátot is beleértve — biztonságos alapértékeket használ, amelyeket közvetlenül a beállítás után módosíthat: a csúcskorlátot az **Eszközök** képernyőn, minden mást a SEM irányítópult **Rendszer** képernyőjén — beleértve az EV töltőket, a hőszivattyút, a tarifát és az akkumulátorzónákat.",
         "data": {
           "battery_capacity_kwh": "Házi akkumulátor kapacitása (kWh)",
           "generate_dashboard_on_install": "SEM irányítópult létrehozása most (újraindítja a HA-t)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Válaszd ki a hálózati mérőt",
-        "description": "A SEM nem talált hálózati teljesítmény érzékelőt. Nélküle a SEM nem tudja, mit veszel vagy adsz vissza.\n\nVálaszd ki lent, vagy nyomd meg a **Küldés** gombot a kihagyáshoz. Később a Konfiguráció fülön is beállíthatod.\n\nNapelem: {solar}. Akkumulátor: {battery}.",
+        "description": "A SEM nem talált hálózati teljesítmény érzékelőt. Nélküle a SEM nem tudja, mit veszel vagy adsz vissza.\n\nVálaszd ki lent, vagy nyomd meg a **Küldés** gombot a kihagyáshoz. Később a Rendszer képernyőn is beállíthatod.\n\nNapelem: {solar}. Akkumulátor: {battery}.",
         "data": {
           "grid_power_sensor": "Hálózati teljesítmény"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "EV Töltő",
-        "description": "Tipp: a legtöbb beállítás már a SEM irányítópulton található → Konfiguráció fül (színes, élő). Ez a folyamat megmarad irányítópult nélküli telepítésekhez.\n\nEllenőrizze és frissítse az EV töltő entitás-hozzárendeléseit. A jármű SOC mezőit csak akkor használja a SEM, ha megad egy jármű akkumulátor SOC érzékelőt.",
+        "description": "Tipp: a legtöbb beállítás a SEM irányítópulton található: az Eszközök és a Rendszer képernyőn. Ez a folyamat megmarad irányítópult nélküli telepítésekhez.\n\nEllenőrizze és frissítse az EV töltő entitás-hozzárendeléseit. A jármű SOC mezőit csak akkor használja a SEM, ha megad egy jármű akkumulátor SOC érzékelőt.",
         "data": {
           "ev_connected_sensor": "EV Csatlakoztatva",
           "ev_charging_sensor": "EV Töltési állapot",
@@ -1880,7 +1880,7 @@
       "message": "Nem található készülék-ütemezés ehhez: {device_id}. Ellenőrizze az eszközazonosítót, amelyet a schedule_appliance szolgáltatással használt."
     },
     "load_management_disabled": {
-      "message": "A terheléskezelés ki van kapcsolva, így nincs frissítendő lekapcsolási lista. Kapcsolja be a SEM irányítópulton a Beállítások → Terheléskezelés alatt, majd próbálja újra."
+      "message": "A terheléskezelés ki van kapcsolva, így nincs frissítendő lekapcsolási lista. Kapcsolja be a SEM irányítópulton a Rendszer → Terheléskezelés alatt, majd próbálja újra."
     },
     "load_management_failed_to_start": {
       "message": "A terheléskezelés be van kapcsolva, de nem indult el, így a SEM nem tudja használni az eszközlistáját. Ellenőrizze a Home Assistant naplóját a \"Failed to initialize load management\" bejegyzésre, és töltse újra az integrációt."

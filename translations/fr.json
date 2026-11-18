@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Matériel",
-        "description": "Dernière étape ! SEM a détecté automatiquement l'entité de contrôle de décharge de votre onduleur : {discharge_entity}\n\nLaissez l'option tableau de bord ACTIVÉE pour que SEM crée son tableau de bord Lovelace pour vous. **Remarque : cela redémarre Home Assistant environ 5 secondes après la fin de l'installation.**\n\nTout le reste — y compris votre limite de pointe réseau — utilise des valeurs par défaut sûres que vous pouvez ajuster juste après l'installation : la limite de pointe avec le curseur de l'onglet **Contrôle**, tout le reste dans l'onglet **Configuration** du tableau de bord SEM — y compris les chargeurs VE, la pompe à chaleur, le tarif et les zones de batterie.",
+        "description": "Dernière étape ! SEM a détecté automatiquement l'entité de contrôle de décharge de votre onduleur : {discharge_entity}\n\nLaissez l'option tableau de bord ACTIVÉE pour que SEM crée son tableau de bord Lovelace pour vous. **Remarque : cela redémarre Home Assistant environ 5 secondes après la fin de l'installation.**\n\nTout le reste — y compris votre limite de pointe réseau — utilise des valeurs par défaut sûres que vous pouvez ajuster juste après l'installation : la limite de pointe sur l'écran **Appareils**, tout le reste sur l'écran **Système** du tableau de bord SEM — y compris les chargeurs VE, la pompe à chaleur, le tarif et les zones de batterie.",
         "data": {
           "battery_capacity_kwh": "Capacité de la batterie domestique (kWh)",
           "generate_dashboard_on_install": "Générer le tableau de bord SEM maintenant (redémarre HA)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Choisissez votre compteur réseau",
-        "description": "SEM n'a pas trouvé de capteur de puissance réseau. Sans lui, SEM ne sait pas ce que vous achetez ou injectez.\n\nChoisissez-le ci-dessous, ou appuyez sur **Valider** pour passer. Vous pourrez le régler plus tard dans l'onglet Configuration.\n\nSolaire : {solar}. Batterie : {battery}.",
+        "description": "SEM n'a pas trouvé de capteur de puissance réseau. Sans lui, SEM ne sait pas ce que vous achetez ou injectez.\n\nChoisissez-le ci-dessous, ou appuyez sur **Valider** pour passer. Vous pourrez le régler plus tard sur l'écran Système.\n\nSolaire : {solar}. Batterie : {battery}.",
         "data": {
           "grid_power_sensor": "Puissance réseau"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Chargeur VE",
-        "description": "Astuce : la plupart des réglages sont désormais sur le tableau de bord SEM → onglet Configuration (en couleur, en direct). Ce flux reste pour les installations sans tableau de bord.\n\nVérifiez et mettez à jour les mappages d'entités de votre chargeur VE. Les champs SOC du véhicule ne sont utilisés que si vous fournissez un capteur SOC de batterie du véhicule.",
+        "description": "Astuce : la plupart des réglages sont sur le tableau de bord SEM : les écrans Appareils et Système. Ce flux reste pour les installations sans tableau de bord.\n\nVérifiez et mettez à jour les mappages d'entités de votre chargeur VE. Les champs SOC du véhicule ne sont utilisés que si vous fournissez un capteur SOC de batterie du véhicule.",
         "data": {
           "ev_connected_sensor": "État de connexion VE",
           "ev_charging_sensor": "État de charge VE",
@@ -1880,7 +1880,7 @@
       "message": "Aucune programmation d’appareil trouvée pour {device_id}. Vérifiez l’ID d’appareil que vous avez utilisé avec le service schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "La gestion de charge est désactivée, il n'y a donc aucune liste de délestage à mettre à jour. Activez-la sous Configuration → Gestion de charge sur le tableau de bord SEM, puis réessayez."
+      "message": "La gestion de charge est désactivée, il n'y a donc aucune liste de délestage à mettre à jour. Activez-la sous Système → Gestion de charge sur le tableau de bord SEM, puis réessayez."
     },
     "load_management_failed_to_start": {
       "message": "La gestion de charge est activée mais n'a pas pu démarrer, SEM ne peut donc pas utiliser sa liste d'appareils. Vérifiez le journal Home Assistant pour \"Failed to initialize load management\" et rechargez l'intégration."

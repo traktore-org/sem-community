@@ -43,7 +43,7 @@
       },
       "hardware": {
         "title": "Laitteisto",
-        "description": "Viimeinen vaihe! SEM tunnisti automaattisesti invertterisi purkuohjauksen entiteetin: {discharge_entity}\n\nJätä koontinäyttövalinta PÄÄLLE, niin SEM rakentaa Lovelace-koontinäyttönsä puolestasi. **Huomaa: tämä käynnistää Home Assistantin uudelleen noin 5 sekuntia asennuksen valmistumisen jälkeen.**\n\nKaikki muu — myös verkon huipputehon raja — käyttää turvallisia oletusarvoja, joita voit säätää heti asennuksen jälkeen: huipputehon rajan välilehden **Ohjaus** liukusäätimellä, kaiken muun SEM-koontinäytön välilehdellä **Asetukset** — mukaan lukien sähköauton laturit, lämpöpumppu, tariffi ja akkualueet.",
+        "description": "Viimeinen vaihe! SEM tunnisti automaattisesti invertterisi purkuohjauksen entiteetin: {discharge_entity}\n\nJätä koontinäyttövalinta PÄÄLLE, niin SEM rakentaa Lovelace-koontinäyttönsä puolestasi. **Huomaa: tämä käynnistää Home Assistantin uudelleen noin 5 sekuntia asennuksen valmistumisen jälkeen.**\n\nKaikki muu — myös verkon huipputehon raja — käyttää turvallisia oletusarvoja, joita voit säätää heti asennuksen jälkeen: huipputehon rajan **Laitteet**-näytöllä, kaiken muun SEM-koontinäytön **Järjestelmä**-näytöllä — mukaan lukien sähköauton laturit, lämpöpumppu, tariffi ja akkualueet.",
         "data": {
           "battery_capacity_kwh": "Kotiakun kapasiteetti (kWh)",
           "generate_dashboard_on_install": "Luo SEM-koontinäyttö nyt (käynnistää HA:n uudelleen)"
@@ -131,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Valitse verkkomittarisi",
-        "description": "SEM ei löytänyt verkkotehon anturia. Ilman sitä SEM ei tiedä, mitä ostat tai myyt.\n\nValitse se alta tai ohita painamalla **Lähetä**. Voit asettaa sen myöhemmin Asetukset-välilehdellä.\n\nAurinko: {solar}. Akku: {battery}.",
+        "description": "SEM ei löytänyt verkkotehon anturia. Ilman sitä SEM ei tiedä, mitä ostat tai myyt.\n\nValitse se alta tai ohita painamalla **Lähetä**. Voit asettaa sen myöhemmin Järjestelmä-näytöllä.\n\nAurinko: {solar}. Akku: {battery}.",
         "data": {
           "grid_power_sensor": "Verkkoteho"
         },
@@ -166,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Sähköauton laturi",
-        "description": "Vinkki: useimmat asetukset ovat nyt SEM-koontinäytöllä → Määritykset-välilehti (värikäs, reaaliaikainen). Tämä kulku jää käyttöön ilman koontinäyttöä.\n\nTarkista ja päivitä sähköauton laturin entiteettien määritykset. Ajoneuvon SOC-kenttiä käytetään vain, jos annat ajoneuvon akun SOC-anturin.",
+        "description": "Vinkki: useimmat asetukset ovat SEM-koontinäytöllä: Laitteet- ja Järjestelmä-näytöillä. Tämä kulku jää käyttöön ilman koontinäyttöä.\n\nTarkista ja päivitä sähköauton laturin entiteettien määritykset. Ajoneuvon SOC-kenttiä käytetään vain, jos annat ajoneuvon akun SOC-anturin.",
         "data": {
           "ev_connected_sensor": "Sähköauto yhdistetty",
           "ev_charging_sensor": "Sähköauton lataustila",
@@ -1880,7 +1880,7 @@
       "message": "Laitteelle {device_id} ei löytynyt laiteaikataulua. Tarkista laitetunnus, jota käytit palvelun schedule_appliance kanssa."
     },
     "load_management_disabled": {
-      "message": "Kuormanhallinta on pois päältä, joten päivitettävää irtikytkentälistaa ei ole. Kytke se päälle SEM-kojelaudan kohdasta Asetukset → Kuormanhallinta ja yritä uudelleen."
+      "message": "Kuormanhallinta on pois päältä, joten päivitettävää irtikytkentälistaa ei ole. Kytke se päälle SEM-kojelaudan kohdasta Järjestelmä → Kuormanhallinta ja yritä uudelleen."
     },
     "load_management_failed_to_start": {
       "message": "Kuormanhallinta on päällä, mutta se ei käynnistynyt, joten SEM ei voi käyttää laitelistaansa. Tarkista Home Assistantin lokista \"Failed to initialize load management\" ja lataa integraatio uudelleen."

@@ -198,7 +198,11 @@ class SEMNextNowCard extends SEMNextBase {
             // (#1321) the plan's own runs: a gap between two runs stays a gap
             const plan = { blocks: this._planBlocks(), demands: this._attrs('sensor.sem_energy_plan').demands };
             const runs = planRuns(plan, (id) => id === 'ev:' + cid, Date.now());
-            const planWindow = runsText(runs, (a, b) => this._winText(a, b));
+            // (#1321) the headline stays one line: many runs read "in 4 runs, 23:02 – tomorrow 06:15";
+            // the Plan screen lists each run
+            const planWindow = runs.length > 2
+                ? this._tf('next_runs_span', { n: runs.length, window: this._winText(runs[0].s, runs[runs.length - 1].e) })
+                : runsText(runs, (a, b) => this._winText(a, b));
             // (#1321) the plan's own need beats the entity guess: the Plan screen reads the same figure
             const fig = demandFigures(plan, 'ev:' + cid, Date.now());
             return { present: true, charging: powerW > 50, powerW, amps, remainingKwh: fig.needed !== null ? fig.needed : remaining,
