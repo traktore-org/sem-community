@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **Plainer Now, Devices and System screens, round two** (#1321). One power figure, one Phases row, the peak switch first, and clear names and numbers in 16 languages.
+- 🐛 **Fewer repeats, clearer words** (#1321). One power figure, one Phases row, the peak switch first; names and numbers agree.
 - 🐛 **One plan on every screen** (#1321). Headline, chart, list and Now name the same car hours; past hours are gone; tomorrow's say tomorrow.
 - 🐛 **A day plan keeps its hours** (#1321). A busy quarter-hour day no longer drops who takes energy and when.
 - 🐛 **Actions ask first** (#1321). Sign flips, replan, pause, boost and clean up ask first; a tap alone changes nothing.
