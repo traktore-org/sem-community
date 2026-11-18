@@ -187,7 +187,13 @@ class SEMNextNowCard extends SEMNextBase {
             const powerW = this._powerW(`sensor.sem_charger_${cid}_power`);
             const amps = this._num(`sensor.sem_charger_${cid}_commanded_current`);
             const remaining = this._remainingKwh(cid);
-            const present = powerW !== null && (powerW > 50 || (remaining !== null && remaining > 0.1));
+            // (#1321) the plug sensor decides: an open target with no car plugged
+            // in said "the car waits" above "No car is plugged in". Unknown plug
+            // state keeps the old rule; drawing power always counts.
+            const plug = this._hass?.states?.[`binary_sensor.sem_charger_${cid}_connected`]?.state;
+            const unplugged = plug === 'off';
+            const present = powerW !== null
+                && (powerW > 50 || (!unplugged && remaining !== null && remaining > 0.1));
             if (!present) continue;
             // (#1321) the plan's own runs: a gap between two runs stays a gap
             const plan = { blocks: this._planBlocks(), demands: this._attrs('sensor.sem_energy_plan').demands };
