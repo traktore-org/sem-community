@@ -74,12 +74,12 @@ class SEMSetupChecklistCard extends SEMLitBase {
 
     _banner() {
         if (this._confirming) {
-            return renderAlert('warning', this._t('setup_confirm_text'), '', html`
+            return html`<div class="gap">${renderAlert('warning', this._t('setup_confirm_text'), '', html`
                 ${this._btn(this._t('setup_confirm_yes'), () => this._takeControl(), { primary: true, small: true })}
-                ${this._btn(this._t('setup_confirm_no'), () => { this._confirming = false; }, { ghost: true, small: true })}`);
+                ${this._btn(this._t('setup_confirm_no'), () => { this._confirming = false; }, { ghost: true, small: true })}`)}</div>`;
         }
-        return renderAlert('info', this._t('setup_watch_title'), this._t('setup_watch_body'),
-            this._btn(this._t('setup_take_control'), () => { this._confirming = true; }, { primary: true, small: true }));
+        return html`<div class="gap">${renderAlert('info', this._t('setup_watch_title'), this._t('setup_watch_body'),
+            this._btn(this._t('setup_take_control'), () => { this._confirming = true; }, { primary: true, small: true }))}</div>`;
     }
 
     _row(done, title, sub, action) {
@@ -162,7 +162,9 @@ class SEMSetupChecklistCard extends SEMLitBase {
     static get styles() {
         return css`
             :host { display: block; color: var(--primary-text-color); font-size: var(--ha-font-size-m, 14px); }
-            ha-alert, .alert { margin-bottom: 16px; }
+            .gap { margin-bottom: 16px; }
+            ha-alert [slot="action"], .aact { display: flex; gap: 8px; flex: none; white-space: nowrap; }
+            ha-alert ha-button { white-space: nowrap; flex: none; }
             .alert { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--primary-color);
                 background: color-mix(in srgb, var(--primary-color) 12%, var(--card-background-color, #fff)); }
             .alert.warning { border-color: var(--warning-color, #ffa600); background: color-mix(in srgb, var(--warning-color, #ffa600) 12%, var(--card-background-color, #fff)); }

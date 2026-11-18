@@ -203,7 +203,10 @@ export const nextCss = css`
     .dev { position: relative; }
     .dev .head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .dev .rank { width: 26px; height: 26px; border-radius: 8px; background: var(--n-card2); display: flex; align-items: center; justify-content: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); color: var(--n-fg2); flex: 0 0 auto; }
-    .dev .name { font-weight: var(--ha-font-weight-medium, 500); font-size: var(--ha-font-size-l, 16px); flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .dev .name { font-weight: var(--ha-font-weight-medium, 500); font-size: var(--ha-font-size-l, 16px); flex: 1 1 9em; min-width: 0; display: flex; align-items: center; gap: 6px; }
+    .dev .name > span:not(.pill) { min-width: 0; overflow-wrap: anywhere; }
+    .dev .name ha-icon, .dev .name .pill { flex: none; }
+    .dev .head > .live, .dev .head > .pill { flex: none; }
     .dev .name ha-icon { color: var(--c); }
     .dev .gear { border: 0; background: none; color: var(--n-fg2); cursor: pointer; padding: 4px; border-radius: 8px; }
     .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 12px 0 10px; }
@@ -259,6 +262,8 @@ export const nextCss = css`
     .alert .atxt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .alert .atxt span { color: var(--n-fg2); font-size: var(--ha-font-size-s, 13px); }
     ha-alert { display: block; }
+    ha-alert [slot="action"], .aact { display: flex; gap: 8px; flex: none; white-space: nowrap; }
+    ha-alert ha-button { white-space: nowrap; flex: none; }
 
     /* system */
     .group .row { align-items: flex-start; }
