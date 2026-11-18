@@ -574,7 +574,14 @@ class SEMNextPlanCard extends SEMNextBase {
                 const gx0 = X(g.s), gw = X(g.e) - gx0;
                 if (gw < 2) continue;
                 parts.push(svg`<rect x="${gx0}" y="${py0}" width="${gw}" height="${py1 - py0}" rx="6" fill="url(#${gid}h)"></rect>`);
-                if (gw > 96 && g.e > d.now) parts.push(svg`<text x="${gx0 + gw / 2}" y="${py1 - 10}" text-anchor="middle" font-size="10.5" fill="${C.fg3}">${this._t('next_prices_later')}</text>`);
+                if (gw > 96 && g.e > d.now) {
+                    // (#1321) the label stays inside the chart: centred in the gap, but
+                    // never past the right edge (a phone cut it by a few pixels)
+                    const label = this._t('next_prices_later');
+                    const half = label.length * 10.5 * 0.29;
+                    const cx = Math.min(gx0 + gw / 2, W - half - 4);
+                    parts.push(svg`<text x="${cx}" y="${py1 - 10}" text-anchor="middle" font-size="10.5" fill="${C.fg3}">${label}</text>`);
+                }
             }
         } else {
             parts.push(svg`<text x="${W / 2}" y="${(py0 + py1) / 2 + 4}" text-anchor="middle" font-size="11" fill="${C.fg3}">${this._t('next_prices_none')}</text>`);

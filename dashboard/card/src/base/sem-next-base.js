@@ -171,7 +171,9 @@ export const nextCss = css`
     .row { position: relative; }
     .row .btn, .row .seg, .row ha-control-select, .row ha-button-toggle-group, .row ha-button, .row ha-switch, .row .sw, .row .lnk, .row .val { position: relative; z-index: 1; }
     .row.set { min-height: 48px; }
-    .row.set .k .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* (#1321) a setting's name wraps like HA's own settings rows; "…" hid
+       which entity a row sets on a phone */
+    .row.set .k .t { overflow-wrap: anywhere; white-space: normal; }
     .row.set .k { align-items: flex-start; }
     .tx { display: flex; flex-direction: column; min-width: 0; }
     .row .hlp { color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); font-size: var(--ha-font-size-s, 12px); text-wrap: pretty; }
@@ -192,6 +194,9 @@ export const nextCss = css`
     .ed-body ha-textfield, .ed-body ha-selector, .ed-body ha-entity-picker { max-width: none; width: 100%; display: block; }
     /* (#1321) a narrow screen: the value sits under its label, in full width */
     @media (max-width: 600px) {
+        /* (#1321) a greyed-out mode row (watch only) wraps instead of hiding
+           its last modes behind a scroll */
+        .seg { flex-wrap: wrap; overflow-x: visible; }
         .row.stack { flex-wrap: wrap; }
         .row.stack .v { flex: 1 1 100%; max-width: 100%; text-align: left; padding-left: 36px; }
     }
@@ -218,7 +223,9 @@ export const nextCss = css`
     .btns { display: flex; flex-wrap: wrap; gap: 8px; }
     .track { height: 8px; border-radius: 4px; background: var(--n-card2); position: relative; overflow: visible; }
     .fill { height: 100%; border-radius: 4px; position: absolute; left: 0; top: 0; }
-    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 16px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); background: var(--n-card2); color: var(--n-fg2); white-space: nowrap; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 16px; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); background: var(--n-card2); color: var(--n-fg2); white-space: nowrap; max-width: 100%; }
+    /* (#1321) a long pill (who gets how much) wraps inside the card instead of running past it */
+    .pill { white-space: normal; overflow-wrap: anywhere; }
     .pill.ok { color: var(--n-ok); } .pill.warn { background: color-mix(in srgb, var(--n-warn) 24%, var(--n-card)); color: var(--n-fg); } .pill.warn .dot { background: var(--n-warn); } .pill.bad { color: var(--n-bad); }
     .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
     .app:not(.all) [data-more] { display: none !important; }
