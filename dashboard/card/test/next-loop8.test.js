@@ -147,3 +147,11 @@ test('L: the setup row shows an info icon while things are open, a check mark wh
     assert.match(text(open._setupRow()), /mdi:information-outline/);
     assert.doesNotMatch(text(open._setupRow()), /mdi:check-decagram/);
 });
+
+test('L: the Now checklist header shows an info icon, not a check mark, while checks are open', () => {
+    const el = mount('sem-setup-checklist-card', {});
+    const open = text(el._complete({ repairs: { count: 2, first: 'x' } }));
+    assert.match(open, /mdi:information-outline/);
+    assert.doesNotMatch(open, /<ha-icon class=ok icon=mdi:check-circle>/);
+    assert.match(text(el._complete({ repairs: { count: 0 } })), /<ha-icon class=ok icon=mdi:check-circle>/);
+});

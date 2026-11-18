@@ -129,10 +129,11 @@ class SEMSetupChecklistCard extends SEMLitBase {
     _complete(vm) {
         // (#1321) never "complete" beside "2 things to check": one line says both
         const n = vm.repairs.count;
+        // (#1321) a check mark only when nothing is open
         const title = n ? `${this._t('next_set_up')} · ${n === 1 ? this._t('setup_check_one') : this._fill('setup_check_n', { n })}` : this._t('setup_complete');
         return html`<ha-card class="list done" aria-label=${this._t('setup_list_title')}>
             <button type="button" class="one" aria-expanded="false" @click=${() => this._reopen()}>
-                <ha-icon class="ok" icon=${ICON_OK}></ha-icon><span class="t">${title}</span><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                <ha-icon class=${n ? '' : 'ok'} icon=${n ? 'mdi:information-outline' : ICON_OK}></ha-icon><span class="t">${title}</span><ha-icon icon="mdi:chevron-down"></ha-icon></button>
             ${this._repairsRow(vm.repairs)}
         </ha-card>`;
     }
