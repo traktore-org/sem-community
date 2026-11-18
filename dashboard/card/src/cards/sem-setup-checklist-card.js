@@ -121,7 +121,7 @@ class SEMSetupChecklistCard extends SEMLitBase {
         if (!repairs.count) return nothing;
         const title = repairs.count === 1 ? this._t('setup_check_one')
             : this._fill('setup_check_n', { n: repairs.count });
-        return this._row(false, title, repairs.first || '',
+        return this._row(false, title, (Array.isArray(repairs.titles) && repairs.titles.length ? repairs.titles.join(' · ') : repairs.first) || '',
             { label: this._t('setup_btn_open'), fn: () => this._go('repairs') });
     }
 

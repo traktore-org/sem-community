@@ -136,3 +136,10 @@ test('L: the All settings switch is a view choice: it writes no server state and
     setAllSettings(true);
     assert.deepEqual(seen, [{ all: true }], 'the page still hears the choice');
 });
+
+test('1: the Now checklist names every check, not only the first', async () => {
+    const st = { 'sensor.sem_diag_charger_control': S('number', { setup_checklist: { watch_only: true, items: [], done: 5, total: 5, must_open: false,
+        repairs: { count: 2, first: 'A', titles: ['A', 'B'] } } }) };
+    const el = mount('sem-setup-checklist-card', st);
+    assert.match(text(el._repairsRow({ count: 2, first: 'A', titles: ['A', 'B'] })), /A · B/);
+});

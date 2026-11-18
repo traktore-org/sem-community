@@ -9961,7 +9961,7 @@
     "plan_why_cheapest_left": "In the cheapest hours left, {from}–{to}, at {price} on average.",
     "next_batt_cap_usable": "{kwh} kWh battery ({usable} usable)",
     "next_stored_of_usable": "{stored} of {cap} kWh ({usable} usable)",
-    "next_would_x": "Would {what}"
+    "next_would_x": "Would: {what}"
   },
   "es": {
     "/year": "/año",
