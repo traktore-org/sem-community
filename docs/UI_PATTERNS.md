@@ -71,7 +71,17 @@ them, waits with a timeout and the card renders again.
 ## Rows, sentences, folds
 
 - A row: icon, label left, value right, a divider above (`_row()`).
-- A setting is a sentence; the value in it is tapped to edit.
+- **Settings rows**: a setting is a Home Assistant settings row (`_setRow()`):
+  the label left in plain words, the value right (numbers through the locale
+  helper, with the unit), one line of help under the label. Tap the row, or
+  press Enter or Space, and `_editDialog()` opens with the control for the
+  kind: `ha-selector` for a choice, `ha-textfield` for a number, text or time,
+  `ha-entity-picker` for an entity; the styled native field when HA has not
+  loaded the element. A boolean is a switch on the row, no dialog. A group
+  keeps one short read-only sentence above its rows. System rows are built
+  from `groups()` in `util/next-settings.js` (the one source), so a new
+  setting needs a slot there and a label key, never its own markup. Changes
+  wait in the Apply bar; Devices rows write at once, as before.
 - **Everyday and All settings**: one switch in the header for every screen,
   read with `getAllSettings()` and set with `setAllSettings()` (`util/view-mode.js`,
   kept per browser). Everyday keeps open what is used daily; the rest sits in

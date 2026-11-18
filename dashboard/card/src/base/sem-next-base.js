@@ -23,6 +23,7 @@ import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { fmtPrice } from '../util/next-format.js';
 import { fmtNum, setNumberLocale } from '../util/next-number.js';
 import { displayName } from '../util/next-names.js';
+import { rowText } from '../util/next-settings.js';
 import { chargerNameOf } from '../util/charger-name.js';
 import { sibling } from '../util/setup-checklist.js';
 import { ensureHaElements, haDefined } from '../util/ha-elements.js';
@@ -150,8 +151,30 @@ export const nextCss = css`
     .row ha-icon { color: var(--state-icon-color, var(--n-fg2)); }
     .row .k { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 40%; }
     .row .k .t { min-width: 0; overflow-wrap: break-word; }
+    .row .k .tx { min-width: 0; flex: 1; }
     .row.ell .k .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .row .v { text-align: right; font-weight: var(--ha-font-weight-medium, 500); flex: 0 1 auto; max-width: 62%; min-width: 0; }
+    .row { position: relative; }
+    .row .btn, .row .seg, .row ha-control-select, .row ha-button-toggle-group, .row ha-button, .row ha-switch, .row .sw, .row .lnk, .row .val { position: relative; z-index: 1; }
+    .row.set { min-height: 48px; }
+    .row.set .k { align-items: flex-start; }
+    .tx { display: flex; flex-direction: column; min-width: 0; }
+    .row .hlp { color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); font-size: var(--ha-font-size-s, 12px); text-wrap: pretty; }
+    .row.set .v { color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); }
+    .row.set.dirty .v { color: var(--n-accent); font-weight: var(--ha-font-weight-medium, 500); }
+    .row.set[aria-disabled="true"] { cursor: default; }
+    .row[role="button"]:focus-visible { outline: 2px solid var(--n-accent); outline-offset: -2px; border-radius: 4px; }
+    .vbtn { background: none; border: 0; padding: 0; font: inherit; color: inherit; font-weight: inherit; text-align: right; cursor: pointer; }
+    .vbtn::before { content: ""; position: absolute; inset: 0; }
+    .vbtn:focus-visible { outline: none; }
+    .vbtn:focus-visible::before { outline: 2px solid var(--n-accent); outline-offset: -2px; border-radius: 4px; }
+    .vbtn[disabled] { cursor: default; }
+    .vbtn[disabled]::before { display: none; }
+    .ed-body { display: flex; flex-direction: column; gap: 12px; min-width: min(320px, 80vw); padding-top: 4px; }
+    .ed-body .ed-help { color: var(--n-fg2); font-size: var(--ha-font-size-s, 12px); }
+    .ed-body .ed-pair { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .ed-body input, .ed-body select { max-width: none; width: 100%; box-sizing: border-box; }
+    .ed-body ha-textfield, .ed-body ha-selector, .ed-body ha-entity-picker { max-width: none; width: 100%; display: block; }
     .row .v small { display: block; color: var(--n-fg2); font-weight: var(--ha-font-weight-normal, 400); font-size: var(--ha-font-size-s, 12px); text-wrap: pretty; }
     .row:has(.btns) { flex-wrap: wrap; }
     .row:has(.btns) .btns { margin-left: auto; }
@@ -567,14 +590,15 @@ export class SEMNextBase extends SEMLitBase {
 
     _link(label, onClick) { return html`<button type="button" class="lnk" @click=${onClick}>${label}</button>`; }
 
-    /** One row. o = { color, onClick, more, cls } — more hides it unless All settings is on. */
+    /** One row. o = { color, onClick, more, cls, help } — more hides it unless All settings is on; help puts the sub line under the label. */
     _row(icon, text, value, sub, o = {}) {
         const click = o.onClick || null;
+        const help = o.help && sub ? html`<small class="hlp">${sub}</small>` : nothing;
         return html`<div class="row ${o.cls || ''}" style="${o.color ? `--c:${o.color}` : ''}" ?data-more=${!!o.more}
                 role="${click ? 'button' : nothing}" tabindex="${click ? 0 : nothing}"
                 @click=${click || nothing} @keydown=${click ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); click(e); } } : nothing}>
-            <div class="k">${icon ? this._icon(icon) : nothing}<span class="t">${text}</span></div>
-            <div class="v">${value ?? ''}${sub ? html`<small>${sub}</small>` : nothing}</div></div>`;
+            <div class="k">${icon ? this._icon(icon) : nothing}<div class="tx"><span class="t">${text}</span>${help}</div></div>
+            <div class="v">${value ?? ''}${sub && !o.help ? html`<small>${sub}</small>` : nothing}</div></div>`;
     }
 
     /**
@@ -698,6 +722,145 @@ export class SEMNextBase extends SEMLitBase {
 
     _val(text, onTap, o = {}) {
         return html`<button type="button" class="val" ?disabled=${!!o.disabled} @click=${onTap}>${text}</button>`;
+    }
+
+
+    /**
+     * (#1321) A settings row, as Home Assistant draws them: the label left, the
+     * value right, one line of help under the label. A tap (or Enter, Space)
+     * opens the editor; a boolean is a switch on the row, no dialog.
+     * o = { label, value, help, onTap, toggle: { on, onChange }, disabled, ro, dirty, more }.
+     */
+    _setRow(o) {
+        const tog = o.toggle || null;
+        const tap = !tog && !o.ro && !o.disabled && typeof o.onTap === 'function' ? o.onTap : null;
+        const body = tog ? this._switch(tog.on, tog.onChange, { label: o.label, disabled: o.disabled }) : (o.value ?? '');
+        return html`<div class="row set ${o.dirty ? 'dirty' : ''}" ?data-more=${!!o.more}
+                role="${tap ? 'button' : nothing}" tabindex="${tap ? 0 : nothing}" aria-label="${tap ? `${o.label}: ${typeof o.value === 'string' ? o.value : ''}` : nothing}"
+                aria-disabled="${o.disabled && !tog ? 'true' : nothing}"
+                @click=${tap || nothing} @keydown=${tap ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tap(e); } } : nothing}>
+            <div class="k"><div class="tx"><span class="t">${o.label}</span>${o.help ? html`<small class="hlp">${o.help}</small>` : nothing}</div></div>
+            <div class="v">${body}</div></div>`;
+    }
+
+    /** (#1321) A row label from a translation key: sentence case, no unit in brackets. */
+    _lbl(key) { return rowText(this._t(key)); }
+
+    /** (#1321) A value that opens its editor; its hit area is the whole row (see .vbtn). */
+    _vbtn(text, onTap, o = {}) {
+        return html`<button type="button" class="vbtn" ?disabled=${!!o.disabled} @click=${onTap}>${text}</button>`;
+    }
+
+    /**
+     * (#1321) The one editing dialog of every settings row. spec = { title, help, kind
+     * (number | text | time | select | entity | pair), value, min, max, step, unit, placeholder,
+     * options [{ value, label }], domains, deviceClasses, filter, allowClear, a, b (pair), onCommit }.
+     * Draws HA's ha-textfield / ha-selector / ha-entity-picker when defined, the styled
+     * native field otherwise. OK commits (a blank number commits nothing); Escape and Cancel
+     * close. Returns { el, close }.
+     */
+    async _editDialog(spec) {
+        const t = (k) => this._t(k);
+        if (spec.kind === 'entity') await ensureHaElements(['ha-entity-picker'], 3000);
+        const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const btn = (id, label, slot, kind, dlg) => (dlg
+            ? `<ha-button id="${id}" slot="${slot}" appearance="${kind}">${esc(label)}</ha-button>`
+            : `<button type="button" id="${id}" class="btn ${kind === 'filled' ? 'primary' : 'ghost'}">${esc(label)}</button>`);
+        const none = spec.allowClear && spec.value ? (d) => btn('ed-none', t('action_none'), 'secondaryAction', 'plain', d) : () => '';
+        const { el, close } = this._dialog({
+            id: 'sem-edit-dlg', title: spec.title || '',
+            build: (d) => (d
+                ? `<div class="ed-body"></div>${none(true)}${btn('ed-cancel', t('next_cancel'), 'secondaryAction', 'plain', true)}${btn('ed-ok', t('next_ok'), 'primaryAction', 'filled', true)}`
+                : `<div class="dlg-box"><div class="dlg-title">${esc(spec.title)}</div><div class="ed-body"></div>
+                    <div class="dlg-actions">${none(false)}<div class="grow"></div>${btn('ed-cancel', t('next_cancel'), '', 'plain', false)}${btn('ed-ok', t('next_ok'), '', 'filled', false)}</div></div>`),
+        });
+        const body = el.querySelector('.ed-body');
+        const fields = (spec.kind === 'pair' ? [{ ...spec.a, kind: 'number', unit: '' }, { ...spec.b, kind: 'number', unit: spec.unit }] : [spec])
+            .map((f) => this._editField(f, () => this._editOk(spec, fields, close)));
+        if (spec.help && body) {
+            const h = document.createElement('div');
+            h.className = 'ed-help'; h.textContent = spec.help;
+            body.appendChild(h);
+        }
+        for (const f of fields) if (body && f.el) body.appendChild(f.el);
+        el.querySelector('#ed-ok')?.addEventListener('click', () => this._editOk(spec, fields, close));
+        el.querySelector('#ed-cancel')?.addEventListener('click', () => close());
+        el.querySelector('#ed-none')?.addEventListener('click', () => { close(); spec.onCommit(''); });
+        const first = fields[0];
+        if (first && typeof first.focus === 'function') first.focus();
+        else if (first && first.el && typeof first.el.focus === 'function') first.el.focus();
+        return { el, close };
+    }
+
+    /** Commit what the dialog holds, once; a blank number or an unchanged value commits nothing. */
+    _editOk(spec, fields, close) {
+        const vals = fields.map((f) => f.get());
+        close();
+        if (spec.kind === 'pair') {
+            const [a, b] = vals.map((v) => (Number.isFinite(v) ? v : null));
+            if (a !== null || b !== null) spec.onCommit(a, b);
+        } else if (spec.kind === 'number') {
+            if (Number.isFinite(vals[0]) && vals[0] !== Number(spec.value)) spec.onCommit(vals[0]);
+        } else if (spec.kind === 'text' || spec.kind === 'time') {
+            if (spec.kind === 'text' || vals[0]) if (String(vals[0]) !== String(spec.value ?? '')) spec.onCommit(vals[0]);
+        } else if (String(vals[0] ?? '') !== String(spec.value ?? '')) spec.onCommit(vals[0]);
+    }
+
+    /** One field of the edit dialog: { el, get() }. */
+    _editField(f, submit) {
+        const cur = f.value === null || f.value === undefined ? '' : f.value;
+        const keys = (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
+        if (f.kind === 'select') {
+            let v = String(cur);
+            if (haDefined('ha-selector') && this._hass) {
+                const el = document.createElement('ha-selector');
+                el.hass = this._hass;
+                el.selector = { select: { mode: 'dropdown', options: (f.options || []).map((o) => ({ value: String(o.value), label: o.label })) } };
+                el.value = v;
+                el.addEventListener('value-changed', (e) => { e.stopPropagation(); if (e.detail?.value !== undefined) v = String(e.detail.value); });
+                return { el, get: () => v };
+            }
+            const el = document.createElement('select');
+            for (const o of f.options || []) {
+                const op = document.createElement('option');
+                op.value = String(o.value); op.textContent = o.label;
+                if (String(o.value) === v) op.selected = true;
+                el.appendChild(op);
+            }
+            el.addEventListener('keydown', keys);
+            return { el, get: () => el.value };
+        }
+        if (f.kind === 'entity') return this._entityField2(f, String(cur), keys);
+        const type = f.kind === 'number' ? 'number' : f.kind === 'time' ? 'time' : 'text';
+        const tf = haDefined('ha-textfield');
+        const el = document.createElement(tf ? 'ha-textfield' : 'input');
+        el.setAttribute('type', type);
+        for (const k of ['min', 'max', 'step', 'placeholder']) if (f[k] !== undefined && f[k] !== null && f[k] !== '') el.setAttribute(k, String(f[k]));
+        if (f.label) el.setAttribute('aria-label', f.label);
+        if (tf && f.unit) el.setAttribute('suffix', f.unit);
+        el.value = String(cur);
+        el.addEventListener('keydown', keys);
+        const wrap = tf || !f.unit ? null : document.createElement('div');
+        if (wrap) { wrap.className = 'ed-pair'; wrap.appendChild(el); const u = document.createElement('span'); u.textContent = f.unit; wrap.appendChild(u); }
+        return { el: wrap || el, get: () => (type === 'number' ? (el.value === '' ? NaN : parseFloat(el.value)) : String(el.value).trim()), focus: () => el.focus() };
+    }
+
+    /** An entity field: HA's picker when defined, a text box with the matching ids otherwise. */
+    _entityField2(f, cur, keys) {
+        let v = cur;
+        if (haDefined('ha-entity-picker')) {
+            const el = document.createElement('ha-entity-picker');
+            el.hass = this._hass; el.value = v; el.allowCustomEntity = false;
+            if (f.domains) el.includeDomains = f.domains;
+            if (f.deviceClasses) el.includeDeviceClasses = f.deviceClasses;
+            if (f.filter) el.entityFilter = f.filter;
+            el.addEventListener('value-changed', (e) => { e.stopPropagation(); v = String(e.detail?.value || ''); });
+            return { el, get: () => v };
+        }
+        const el = document.createElement('input');
+        el.setAttribute('type', 'text'); el.setAttribute('placeholder', f.placeholder || 'sensor.…');
+        el.value = v; el.addEventListener('keydown', keys);
+        return { el, get: () => String(el.value).trim() };
     }
 
     /** A button: ha-button when defined, else a native one in HA's look. */

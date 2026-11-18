@@ -145,7 +145,7 @@ test('10: Plan buttons use plain labels and one filled action per charger', () =
     const plan = mk('sem-next-plan-card', { ...BASE, 'sensor.sem_charging_state': S('idle'),
         'select.sem_charger_keba_charge_mode': S('solar_only', { options: ['solar_only', 'off'] }) });
     const out = text(plan._chargerRow('keba', {}, [], [], []));
-    for (const k of ['next_skip_tonight', 'next_ignore_price', 'next_full_power']) assert.match(out, new RegExp(k));
+    for (const k of ['next_skip_tonight', 'next_start_now', 'next_full_power']) assert.match(out, new RegExp(k));
     assert.equal((out.match(/btn primary/g) || []).length, 1);
 });
 
@@ -201,8 +201,8 @@ test('9: the weekly schedule shows once; boost, one block and phases sit under M
     assert.ok(i > 0);
     const head = out.slice(0, i), more = out.slice(i);
     for (const k of ['ev_dep_one_block', 'next_phases', 'next_boost_to']) {
-        assert.match(more, new RegExp(k), k);
-        assert.doesNotMatch(head, new RegExp(k), k);
+        assert.match(more, new RegExp(k, 'i'), k);
+        assert.doesNotMatch(head, new RegExp(k, 'i'), k);
     }
     assert.match(head, /pause_charging/);
     assert.equal((out.match(/btn primary/g) || []).length, 1);

@@ -4,8 +4,10 @@
  * Health first: how fresh every source is, the setup check, the hardware,
  * what is unavailable, the version, with Copy diagnostics, Diagnose and
  * the observer switch (behind a confirm step: the test rigs share real
- * hardware). Then what SEM held back. Then the settings as seven sentences;
- * tap a value, it becomes a control; changes wait in a pending map and go
+ * hardware). Then what SEM held back. Then the settings as seven groups: a
+ * short summary sentence, then Home Assistant settings rows (label, value;
+ * tap a row, a dialog opens with the right control; a boolean is a switch on
+ * the row). Changes wait in a pending map and go
  * out together from the sticky Apply bar: entities directly, options in
  * one set_option call. Entity fields use HA's own entity picker, filtered
  * like the classic setup card's picker for the same option. Chargers are
@@ -18,7 +20,6 @@
 
 import { OPEN_PANEL_KEY, takeStored } from '../util/setup-checklist.js';
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
-import { haDefined, ensureHaElements } from '../util/ha-elements.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
@@ -26,7 +27,7 @@ import { plainReason, deviceName, actionWords } from '../util/why-rows.js';
 import { gridReading } from '../util/next-format.js';
 import { entityName } from '../util/next-names.js';
 import { MISSING } from '../util/missing-value.js';
-import { groups, applyPlan, pendingKey, navTarget, slotText, setupItems, loadSources, unavailableCount,
+import { groups, applyPlan, pendingKey, navTarget, slotText, sentenceText, rowText, setupItems, loadSources, unavailableCount,
          reserveIds, pvStrings, chargerSkeleton, FILTER_CLASSES } from '../util/next-settings.js';
 import { isPowerEntity, isCo2IntensityEntity, isOutdoorTemperatureCandidate } from '../util/detect-rows.js';
 
@@ -94,7 +95,6 @@ class SEMNextSystemCard extends SEMNextBase {
         return {
             ...super.properties,
             _pending: { state: true },
-            _editing: { state: true },
             _options: { state: true },
             _applying: { state: true },
             _confirmObs: { state: true },
@@ -103,14 +103,12 @@ class SEMNextSystemCard extends SEMNextBase {
             _showSources: { state: true },
             _chargerBusy: { state: true },
             _confirmRemove: { state: true },
-            _pickerReady: { state: true },
         };
     }
 
     constructor() {
         super();
         this._pending = {};
-        this._editing = '';
         this._options = null;
         this._entryId = '';
         this._applying = false;
@@ -121,7 +119,6 @@ class SEMNextSystemCard extends SEMNextBase {
         this._panel = takeStored(OPEN_PANEL_KEY);
         this._chargerBusy = false;
         this._confirmRemove = '';
-        this._pickerReady = false;
     }
 
     // (#1379) a Home checklist tap while this screen is already built
@@ -151,14 +148,6 @@ class SEMNextSystemCard extends SEMNextBase {
         for (const cid of this._chargers) for (const s of CHARGER_SUFFIXES) per.push(`number.sem_charger_${cid}_${s}`);
         return [...super._watchIds(), ...DIAG_IDS, ...SETTING_IDS, ...per, ...reserveIds(states),
                 ...SOURCE_ROWS.map((r) => r.entity), ...loadSources(states).map((l) => l.entity)];
-    }
-
-    updated(changed) {
-        super.updated(changed);
-        if (changed.has('_editing') && this._editing) {
-            const el = this.renderRoot?.querySelector('.edit input, .edit select');
-            if (el) { el.focus(); if (el.select) el.select(); }
-        }
     }
 
     // ── options (the integration's own dict, for the slots no entity carries) ──
@@ -381,78 +370,51 @@ class SEMNextSystemCard extends SEMNextBase {
         return out;
     }
 
-    _part(p) {
-        if (typeof p === 'string') return p;
-        if (!p || typeof p !== 'object') return '';
-        if (p.ro) return html`<span class="ro">${p.value}</span>`;
-        // (#1354) a link to where a setting is asked works while SEM only watches
-        if (p.kind === 'action' && p.nav) return this._val(this._t(p.labelKey), () => this._go(navTarget(window.location.pathname, p.action)));
-        if (p.kind === 'action') return this._val(this._t(p.labelKey), () => this._action(p.action), { disabled: this._obs() });
-        return this._slot(p);
-    }
-
-    _slot(slot) {
+    /** (#1321) A setting row: label left, value right; a tap opens the right control, a boolean is a switch. */
+    _slotRow(r) {
+        const slot = r.slot;
+        const t = (k) => this._t(k);
+        const dis = this._obs();
+        if (slot.kind === 'action') {
+            const go = slot.nav ? () => this._go(navTarget(window.location.pathname, slot.action)) : () => this._action(slot.action);
+            return this._setRow({ label: r.label, value: rowText(t(slot.labelKey)), help: r.help, more: r.more, onTap: go, disabled: dis && !slot.nav });
+        }
+        if (slot.ro || slot.kind === 'text' && !pendingKey(slot)) {
+            return this._setRow({ label: r.label, value: slot.value, help: r.help, more: r.more, ro: true });
+        }
         const key = pendingKey(slot);
         const pend = this._pending[key];
         const value = pend ? pend.value : slot.value;
-        const dis = this._obs();
-        const t = (k) => this._t(k);
+        const base = { label: r.label, help: r.help, more: r.more, dirty: !!pend, disabled: dis };
         if (slot.kind === 'switch') {
-            return html`<button type="button" class="val ${pend ? 'dirty' : ''}" ?disabled=${dis} role="switch" aria-checked="${!!value}"
-                @click=${() => this._stage(slot, !value)}>${slotText(slot, t, value, this._hass.states)}</button>`;
+            return this._setRow({ ...base, toggle: { on: !!value, onChange: (v) => this._stage(slot, v) } });
         }
-        if (this._editing === key && !dis) return this._editor(slot, value);
-        return html`<button type="button" class="val ${pend ? 'dirty' : ''}" ?disabled=${dis}
-            @click=${() => this._edit(slot, key)}>${slotText(slot, t, value, this._hass.states)}</button>`;
+        return this._setRow({ ...base, value: slotText(slot, t, value, this._hass.states), onTap: () => this._openEdit(slot, r.label, value) });
     }
 
-    _edit(slot, key) {
-        this._editing = key;
-        if (slot.kind === 'entity') this._ensureEntityPicker();
-    }
-
-    /** HA loads ha-entity-picker on demand; an entities card's editor pulls it in. */
-    async _ensureEntityPicker() {
-        await ensureHaElements(['ha-entity-picker'], 3000);
-        this._pickerReady = haDefined('ha-entity-picker');
-    }
-
-    _entityEditor(slot, value, close) {
-        const done = (v) => { this._stage(slot, v || ''); close(); };
-        const esc = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
-        if (!customElements.get('ha-entity-picker')) {
-            return html`<span class="edit pick">${this._input({ value, placeholder: 'sensor.…',
-                onChange: (e) => done(e.target.value.trim()), onKeydown: (e) => { esc(e); if (e.key === 'Enter') { e.preventDefault(); done(e.target.value.trim()); } } })}</span>`;
-        }
-        const dc = slot.deviceClass;
-        return html`<span class="edit pick" @keydown=${esc}><ha-entity-picker
-            .hass=${this._hass}
-            .value=${value || ''}
-            .includeDomains=${slot.domains || undefined}
-            .includeDeviceClasses=${dc && !FILTER_CLASSES.has(dc) ? [dc] : undefined}
-            .entityFilter=${dc ? ENTITY_FILTERS[dc] : undefined}
-            .allowCustomEntity=${false}
-            @value-changed=${(e) => done(e.detail?.value || '')}></ha-entity-picker>
-            ${this._btn(this._t('next_cancel'), close, { small: true, ghost: true })}</span>`;
-    }
-
-    _editor(slot, value) {
-        const close = () => { if (this._editing === pendingKey(slot)) this._editing = ''; };
-        const keys = (e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.target.blur(); } };
+    /** The edit dialog for a slot: its kind picks the control, the commit stages the change. */
+    _editSpec(slot, label, value) {
         const t = (k) => this._t(k);
-        if (slot.kind === 'entity') return this._entityEditor(slot, value, close);
+        const stage = (v) => this._stage(slot, v);
+        const base = { title: label, value, onCommit: stage };
+        if (slot.kind === 'entity') {
+            const dc = slot.deviceClass;
+            return { ...base, kind: 'entity', allowClear: true, domains: slot.domains || undefined,
+                deviceClasses: dc && !FILTER_CLASSES.has(dc) ? [dc] : undefined, filter: dc ? ENTITY_FILTERS[dc] : undefined };
+        }
         if (slot.kind === 'select') {
             const options = (slot.options || []).map((o) => ({ value: o.value, label: o.labelKey ? t(o.labelKey) : String(o.label ?? o.value) }));
-            const field = this._select(options, value, (v) => { this._stage(slot, v); close(); }, { onBlur: close, onKeydown: keys });
-            // a selector's menu takes focus (no blur), so a Cancel closes it
-            return html`<span class="edit">${field}${haDefined('ha-selector') ? this._btn(t('next_cancel'), close, { small: true, ghost: true }) : nothing}</span>`;
+            return { ...base, kind: 'select', options };
         }
         if (slot.kind === 'number') {
-            return html`<span class="edit">${this._input({ type: 'number', value, min: slot.min, max: slot.max, step: slot.step || 1,
-                onInput: (e) => this._stage(slot, e.target.value), onBlur: close, onKeydown: keys })}${slot.unit ? html` ${slot.unit}` : nothing}</span>`;
+            return { ...base, kind: 'number', min: slot.min, max: slot.max, step: slot.step || 1, unit: slot.unit };
         }
-        return html`<span class="edit">${this._input({ value, placeholder: slot.placeholder,
-            onInput: (e) => this._stage(slot, e.target.value), onBlur: close, onKeydown: keys })}</span>`;
+        return { ...base, kind: 'text', placeholder: slot.placeholder };
+    }
+
+    _openEdit(slot, label, value) {
+        if (this._obs()) return;
+        this._editDialog(this._editSpec(slot, label, value));
     }
 
     _stage(slot, raw) {
@@ -471,10 +433,16 @@ class SEMNextSystemCard extends SEMNextBase {
         const n = g.count || 0;
         const extra = html`<button type="button" class="lnk ic" aria-label="${this._t('config_diagnose')}" title="${this._t('config_diagnose')}"
             ?disabled=${this._diagBusy} @click=${() => this._diagnose(g.diagnoseSection)}>${this._icon('mdi:stethoscope', 's')}</button>`;
+        const t = (k) => this._t(k);
+        const summary = sentenceText(g.sentence, t, this._hass.states, (s) => {
+            const p = this._pending[pendingKey(s)];
+            return p ? p.value : s.value;
+        });
         return this._sec(this._t(g.titleKey), html`
-            <p class="sent">${g.sentence.map((p) => this._part(p))}</p>
+            ${summary ? html`<p class="sent">${summary}</p>` : nothing}
             ${g.key === 'chargers' ? this._chargerTools() : nothing}
-            ${n ? html`<p class="help"><span data-more>${g.more.map((p) => this._part(p))}</span><span class="app-not-all">${this._tf('config_more_in_all', { n })}</span></p>` : nothing}`,
+            <div class="rows">${(g.rows || []).map((r) => this._slotRow(r))}</div>
+            ${n ? html`<p class="help app-not-all">${this._tf('config_more_in_all', { n })}</p>` : nothing}`,
             { cls: 'group', extra });
     }
 
@@ -549,12 +517,11 @@ class SEMNextSystemCard extends SEMNextBase {
             ${this._btn(this._t('config_apply'), () => this._apply(), { primary: true, disabled: this._applying })}</div>`;
     }
 
-    _discard() { this._pending = {}; this._editing = ''; }
+    _discard() { this._pending = {}; }
 
     async _apply() {
         if (this._applying || !Object.keys(this._pending).length || !this._hass) return;
         this._applying = true;
-        this._editing = '';
         const plan = applyPlan(this._pending, this._hass.states);
         try {
             for (const w of plan.entityWrites) await this._hass.callService(w.domain, w.service, w.data, undefined, false);

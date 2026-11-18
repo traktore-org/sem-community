@@ -693,7 +693,7 @@ class SEMNextPlanCard extends SEMNextBase {
             btns.push(this._btn(t('next_back_to_plan'), () => this._overrideClear(cid), { small: true, disabled: obs }));
         } else {
             btns.push(this._btn(t('next_skip_tonight'), () => this._override(cid, 'skip', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
-            btns.push(this._btn(t('next_ignore_price'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, primary: true, disabled: obs }));
+            btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, primary: true, disabled: obs }));
             if (mode) btns.push(this._btn(t('next_full_power'), () => { this._confirm = cid; }, { small: true, ghost: true, disabled: obs || mode === 'always_max' }));
         }
         // (#1321) the charge plan lives on the charger's Devices card: one tap there

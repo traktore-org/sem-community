@@ -265,7 +265,7 @@ The SEM dashboard has five screens, one per question. The dashboard has 5 screen
 | **Plan** | The day as a timeline with sun, price and every planned block, with the reason for each |
 | **Devices** | Battery, cars, heat pumps, tanks and other loads, each with its own settings and drag-and-drop priority |
 | **Insights** | History, charging sessions with a CSV button, costs, forecast accuracy, and the Simulation replay |
-| **System** | Setup check, what SEM reads, how fresh it is, and every setting written as a sentence (*Everyday* or *All settings*) |
+| **System** | Setup check, what SEM reads, how fresh it is, and every setting as a row (*Everyday* or *All settings*) |
 
 ### Dashboard Features
 - **No card install** — every card ships inside the integration

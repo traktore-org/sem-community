@@ -264,9 +264,9 @@ test('the card renders every device with its body, the surplus section and the l
     assert.match(out, /next_surplus_peak/);
     assert.match(out, /operator_limit_banner/);
     for (const k of ['next_st_charging_a', 'next_st_on', 'next_st_waiting_for', 'next_st_to_house',
-        'charge_mode_hint_solar_plus_cheap_surplus', 'ev_charge_by', 'next_set_once', 'next_lifetime',
-        'load_mode_help_sem', 'next_legionella', 'next_sg_ready', 'battery_mode_hint_auto', 'next_bat_sent_fill',
-        'planning_phase_holding', 'charge_pacing', 'next_sell_window', 'next_battery_n', 'next_evidence', 'health']) {
+        'charge_mode_hint_solar_plus_cheap_surplus', 'ev_charge_by', 'Next_more_capacity', 'next_lifetime',
+        'load_mode_help_sem', 'Next_row_legionella_temp', 'next_sg_ready', 'battery_mode_hint_auto', 'Bq_priority',
+        'planning_phase_holding', 'charge_pacing', 'next_sell_window', 'next_evidence', 'health']) {
         assert.match(out, new RegExp(k), k);
     }
     assert.doesNotMatch(out, /undefined|NaN/);
@@ -283,7 +283,7 @@ test('(#1373) each battery shows its size beside its reserve; an unset size is a
     el._all = true;
     el._watchIds && el._watchIds();
     const out = text(el.render());
-    assert.match(out, /battery_size_label/);
+    assert.match(out, /Battery_size_label/);
     assert.match(out, /9\.8/);
     assert.doesNotMatch(out, /undefined|NaN/);
 });
@@ -690,7 +690,7 @@ test('the battery row is open on first view and asks its levels from the shared 
     const row = out.slice(at);
     assert.ok(!out.includes('class="card dev folded" data-id=battery'), 'open on first view');
     assert.match(row, /bq_says_(giving|charging|resting)/);
-    assert.match(row, /next_bat_sent_fill/);
+    assert.match(row, /Bq_priority/);
     // one tap on the name folds it, a second opens it again
     el._toggleOpen({ id: 'battery', type: 'battery' });
     assert.ok(text(el.render()).includes('class="card dev folded" data-id=battery'), 'one tap folds it');

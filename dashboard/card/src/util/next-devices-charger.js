@@ -10,6 +10,7 @@ import { resolveChargerSoc } from './charger-soc.js';
 import { kwhOf } from './next-lead.js';
 import { targetModel, weekdaySummary } from './next-devices.js';
 import { monthTotals, rowsForMonth } from './sessions.js';
+import { rowText } from './next-settings.js';
 import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities } from './charger-questions.js';
 
 const SMART_DEFAULT = 'min_plus_solar';
@@ -166,19 +167,13 @@ export function chargerBody(card, row) {
     const own = dep.by_weekday || {};
     const hasOwnDays = Object.keys(own).length > 0;
     const depDefault = chargeBy || dep.default || '';
-    const timeVal = timeId ? card._inline('time:' + cid, chargeBy || '—', () => card._timeEdit('time:' + cid, {
-        value: chargeBy, onCommit: (v) => card._setTime(timeId, v) })) : html`${chargeBy || '—'}`;
+    const timeVal = html`${chargeBy || '—'}`;
     const runs = weekdaySummary(own, depDefault);
     const runText = runs.map((r) => (r.from === r.to ? card._dayName(r.from) : card._dayName(r.from) + ' – ' + card._dayName(r.to)) + ' ' + r.time).join(' · ');
     const daysVal = card._val(hasOwnDays ? (runText || t('ev_dep_most_days')) : t('next_every_day'), () => card._toggleDep(cid), { disabled: dis });
     const targetText = `${t(CHARGER_TEXT.atLeast)} ${fmtT(min)} · ${t(CHARGER_TEXT.upTo)} ${fmtT(max)} ${unit}`;
-    const targetVal = minId && maxId ? card._inline('target:' + cid, targetText, () => card._pairEdit('target:' + cid, {
-        a: { value: min, min: card._attrs(minId).min, max: card._attrs(minId).max, step: card._attrs(minId).step },
-        b: { value: max, min: card._attrs(maxId).min, max: card._attrs(maxId).max, step: card._attrs(maxId).step },
-        unit, onCommit: (a, b) => { if (a !== null) card._setNumber(minId, a); if (b !== null) card._setNumber(maxId, b); } })) : html`${targetText}`;
-    const typeVal = typeOpts.length > 1
-        ? card._val(isSoc ? t('next_soc') : 'kWh', () => card._selectOption(typeId, isSoc ? 'kwh' : 'soc'), { disabled: dis })
-        : html`${isSoc ? t('next_soc') : 'kWh'}`;
+    const targetVal = html`${targetText}`;
+    const typeVal = html`${isSoc ? t('next_soc') : 'kWh'}`;
     const stats2 = html`<div class="stats" style="margin-top:4px">
         <div><span class="lbl">${t('next_charge')}</span><div class="big num">${soc === null ? '—' : (isEstimate ? '~' : '') + Math.round(soc) + ' %'}</div>
             <div class="sub2">${soc === null ? t('next_no_soc') : html`${kmNow === null ? '' : tf('next_km', { km: kmNow }) + ' · '}${isEstimate ? t('next_estimate') : t('next_measured')}`}</div></div>
@@ -191,14 +186,10 @@ export function chargerBody(card, row) {
     // ── buttons ──
     const btns = [];
     const boostBtns = [];
+    let boostFloor = null;
     const pauseBtn = 'button.sem_charger_' + cid + '_pause_charging';
     if (card._has(pauseBtn)) {
-        const durId = 'select.sem_pause_duration';
-        const dur = card._has(durId) ? card._str(durId) : '';
-        const durOpts = card._has(durId) ? (card._attrs(durId).options || []) : [];
         btns.push(card._btn(t('pause_charging'), () => card._pressButton(pauseBtn), { small: true, primary: true, icon: 'mdi:pause', disabled: dis }));
-        if (dur) btns.push(html`<span class="sm muted">${t('next_for')} ${card._inline('pausedur', t('pause_duration_' + dur) || dur, () => card._selEdit('pausedur', {
-            value: dur, options: durOpts.map((o) => ({ key: o, label: t('pause_duration_' + o) || o })), onCommit: (v) => card._selectOption(durId, v) }))}</span>`);
     }
     if (card._has('sensor.sem_battery_soc')) {
         const boost = cs.battery_boost || null;
@@ -212,9 +203,7 @@ export function chargerBody(card, row) {
             const preview = cs.battery_boost_preview || {};
             const floor = (card._boostFloor || {})[cid] ?? Math.round(Number(preview.default_floor ?? 50));
             boostBtns.push(card._btn(t('next_boost_to'), () => card._svc('start_battery_boost', { charger_id: cid, floor_soc: floor }), { small: true, ghost: true, icon: 'mdi:home-battery-outline', disabled: dis }));
-            boostBtns.push(html`<span class="sm muted">${card._inline('boost:' + cid, floor + ' %', () => card._selEdit('boost:' + cid, {
-                value: String(floor), options: (FLOORS.includes(floor) ? FLOORS : [...FLOORS, floor].sort((a, b) => a - b)).map((f) => ({ key: String(f), label: f + ' %' })),
-                onCommit: (v) => { card._boostFloor = { ...(card._boostFloor || {}), [cid]: Number(v) }; } }))}</span>`);
+            boostFloor = floor;
         }
     }
     btns.push(card._btn(t('next_sessions'), () => card._go(card._screen('insights') + '#car'), { small: true, ghost: true, icon: 'mdi:history' }));
@@ -232,11 +221,40 @@ export function chargerBody(card, row) {
     const moreRows = [];
     // (#1321) the weekly schedule is on the tile above once; its day editor opens from there
     if (depEditor !== nothing) rows.push(depEditor);
-    moreRows.push(card._row('mdi:view-agenda', t('ev_dep_one_block'),
-        card._val(oneBlock ? t('next_on') : t('next_off'), () => card._svc('set_charger_departure', { charger_id: cid, one_block: !oneBlock }), { disabled: dis }),
-        html`${t('ev_dep_late_charge')}: ${card._inline('late:' + cid, lateMin ? tf('ev_dep_minutes', { n: lateMin }) : t('ev_dep_late_off'), () => card._selEdit('late:' + cid, {
-            value: String(lateMin), options: lateOpts.map((m) => ({ key: String(m), label: m ? tf('ev_dep_minutes', { n: m }) : t('ev_dep_late_off') })),
-            onCommit: (v) => card._svc('set_charger_departure', { charger_id: cid, late_charge_min: Number(v) }) }))}`));
+    const send = (data) => card._svc('set_charger_departure', { charger_id: cid, ...data });
+    const lateLabel = (m) => (m ? tf('ev_dep_minutes', { n: m }) : t('ev_dep_late_off'));
+    // (#1321) every setting of this charger is a row: tap it, a dialog opens; a boolean is a switch
+    const setRows = [];
+    const srow = (label, value, spec, o = {}) => card._setRow({ label, value, disabled: dis || !!o.disabled, help: o.help || '', more: !!o.more,
+        onTap: () => card._editDialog({ title: label, ...spec }) });
+    if (timeId) {
+        setRows.push(srow(t(CHARGER_TEXT.departure), chargeBy || '—', card._timeEdit('time:' + cid, { value: chargeBy, onCommit: (v) => card._setTime(timeId, v) })));
+    }
+    if (minId && maxId) {
+        const at = (id) => ({ value: card._num(id), min: card._attrs(id).min, max: card._attrs(id).max, step: card._attrs(id).step });
+        setRows.push(srow(t(CHARGER_TEXT.target), targetText, card._pairEdit('target:' + cid, { a: at(minId), b: at(maxId), unit,
+            onCommit: (a, b) => { if (a !== null) card._setNumber(minId, a); if (b !== null) card._setNumber(maxId, b); } })));
+    }
+    if (typeOpts.length > 1) {
+        setRows.push(srow(card._lbl('next_goal_unit'), isSoc ? t('next_soc') : 'kWh', card._selEdit('type:' + cid, {
+            value: type, options: typeOpts.map((o) => ({ key: o, label: o === 'soc' ? t('next_soc') : 'kWh' })), onCommit: (v) => card._selectOption(typeId, v) })));
+    }
+    if (boostFloor !== null) {
+        const fl = FLOORS.includes(boostFloor) ? FLOORS : [...FLOORS, boostFloor].sort((a, b) => a - b);
+        moreRows.push(srow(card._lbl('next_boost_to'), boostFloor + ' %', card._selEdit('boost:' + cid, {
+            value: String(boostFloor), options: fl.map((f) => ({ key: String(f), label: f + ' %' })),
+            onCommit: (v) => { card._boostFloor = { ...(card._boostFloor || {}), [cid]: Number(v) }; card._tick++; } })));
+    }
+    const durId = 'select.sem_pause_duration';
+    if (card._has(pauseBtn) && card._has(durId) && card._str(durId)) {
+        const dur = card._str(durId);
+        setRows.push(srow(rowText(t('pause_charging') + ' ' + t('next_for')), t('pause_duration_' + dur) || dur, card._selEdit('pausedur', {
+            value: dur, options: (card._attrs(durId).options || []).map((o) => ({ key: o, label: t('pause_duration_' + o) || o })), onCommit: (v) => card._selectOption(durId, v) })));
+    }
+    moreRows.push(card._setRow({ label: card._lbl('ev_dep_one_block'), disabled: dis, toggle: { on: oneBlock, onChange: (v) => send({ one_block: v }) } }));
+    moreRows.push(srow(card._lbl('ev_dep_late_charge'), lateLabel(lateMin), card._selEdit('late:' + cid, {
+        value: String(lateMin), options: lateOpts.map((m) => ({ key: String(m), label: lateLabel(m) })),
+        onCommit: (v) => send({ late_charge_min: Number(v) }) })));
     const phaseId = ent('select', 'phase_mode');
     if (phaseId || phases !== null) {
         const pm = phaseId ? card._str(phaseId) : '';
@@ -246,23 +264,23 @@ export function chargerBody(card, row) {
                 : phaseStatus(card, cid),
             phaseId ? phaseStatus(card, cid) : ''));
     }
-    const once = [];
     const capId = 'number.sem_charger_' + cid + '_ev_battery_capacity_kwh';
     const minAId = 'number.sem_charger_' + cid + '_minimum_current';
     const maxAId = 'number.sem_charger_' + cid + '_maximum_current';
     const perId = 'number.sem_charger_' + cid + '_ev_kwh_per_100km';
     const phId = 'number.sem_charger_' + cid + '_ev_phases';
-    if (card._has(capId)) once.push(card._val(card._kwh(card._num(capId), 0), () => card._moreInfo(capId)));
-    if (card._has(minAId) || card._has(maxAId)) {
-        const a = card._has(minAId) ? card._fmt(card._num(minAId), 0) : '—';
-        const b = card._has(maxAId) ? card._fmt(card._num(maxAId), 0) : '—';
-        once.push(card._val(a + ' – ' + b + ' A', () => card._moreInfo(card._has(minAId) ? minAId : maxAId)));
-    }
-    if (card._has(perId)) once.push(card._val(card._fmt(card._num(perId), 1) + ' kWh/100 km', () => card._moreInfo(perId)));
-    if (once.length) {
-        rows.push(card._row('mdi:tune', t('next_set_once'), html`${once.map((v, i) => html`${i ? ' · ' : ''}${v}`)}`,
-            html`${t('next_set_once_sub')}${card._has(phId) ? html` · ${card._val(tf('next_n_phases', { n: card._fmt(card._num(phId), 0) }), () => card._moreInfo(phId))}` : ''}`, { more: true }));
-    }
+    // (#1321) set once: the car's battery and the charger's current range, each its own row
+    const numSet = (id, label, text, unit) => {
+        if (!card._has(id)) return;
+        const a = card._attrs(id);
+        moreRows.push(srow(label, text, { kind: 'number', value: card._num(id), min: a.min, max: a.max, step: a.step, unit,
+            onCommit: (x) => card._setNumber(id, x) }));
+    };
+    numSet(capId, card._lbl('next_more_capacity'), card._kwh(card._num(capId), 0), 'kWh');
+    numSet(minAId, card._lbl('next_row_min_current'), card._fmt(card._num(minAId), 0) + ' A', 'A');
+    numSet(maxAId, card._lbl('next_row_max_current'), card._fmt(card._num(maxAId), 0) + ' A', 'A');
+    numSet(perId, card._lbl('next_more_use'), card._fmt(card._num(perId), 1) + ' kWh/100 km', 'kWh/100 km');
+    numSet(phId, card._lbl('config_ev_phases'), tf('next_n_phases', { n: card._fmt(card._num(phId), 0) }), '');
     if (card._has(S('estimated_soc'))) {
         const est = card._num(S('estimated_soc'));
         const ea = card._attrs(S('estimated_soc'));
@@ -290,6 +308,7 @@ export function chargerBody(card, row) {
         rows.push(card._row('mdi:all-inclusive', t('next_lifetime'), card._kwh(e, 0) + (c === null ? '' : ' · ' + card._money(c)), parts.join(' · '), { more: true }));
     }
 
+    rows.unshift(...setRows);
     return html`
         ${segItems.length ? card._seg(segItems, segKey, pickMode, { disabled: dis }) : nothing}
         ${smartSeg !== nothing ? html`<div style="margin-top:6px">${smartSeg}</div>` : nothing}

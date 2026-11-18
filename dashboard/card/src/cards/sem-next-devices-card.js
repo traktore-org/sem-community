@@ -119,12 +119,11 @@ const devicesCss = css`
 class SEMNextDevicesCard extends SEMNextBase {
     static get styles() { return [nextCss, devicesCss]; }
     static get properties() {
-        return { ...super.properties, _edit: { state: true }, _reorder: { state: true }, _open: { state: true }, _adding: { state: true }, _addForm: { state: true }, _addBusy: { state: true }, _tick: { state: true } };
+        return { ...super.properties, _reorder: { state: true }, _open: { state: true }, _adding: { state: true }, _addForm: { state: true }, _addBusy: { state: true }, _tick: { state: true } };
     }
 
     constructor() {
         super();
-        this._edit = null;
         this._reorder = false;
         this._open = readOpen();
         this._adding = false;
@@ -181,10 +180,6 @@ class SEMNextDevicesCard extends SEMNextBase {
 
     updated(changed) {
         super.updated(changed);
-        if (changed.has('_edit') && this._edit) {
-            const el = this.renderRoot.querySelector('[data-edit] input, [data-edit] select');
-            if (el && el.focus) el.focus();
-        }
         this._watchSessions();
         this._afterRender();
     }
@@ -279,60 +274,42 @@ class SEMNextDevicesCard extends SEMNextBase {
         this._callService('time', 'set_value', { entity_id: id, time: value.length === 5 ? value + ':00' : value });
     }
 
-    // ── inline editors (one open at a time; Enter or a change commits, Escape or blur closes) ──
-    _inline(key, text, editor, o = {}) {
-        if (this._edit === key) return html`<span class="edit" data-edit>${editor()}</span>`;
-        return this._val(text, () => { this._edit = key; }, { disabled: this._obs() || !!o.disabled });
-    }
+    /** Every row on this screen puts its sub line under the label, as HA's settings rows do. */
+    _row(icon, text, value, sub, o = {}) { return super._row(icon, text, value, sub, { help: true, ...o }); }
 
-    _keys(commit) {
-        return (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); commit(e); }
-            if (e.key === 'Escape') { e.preventDefault(); this._edit = null; }
+    // ── editable values (#1321): the value shows as plain text in its row; a tap opens the one edit dialog ──
+    /** A value that opens its editor; `editor()` gives the dialog's spec, `o.label` its title. */
+    _inline(key, text, editor, o = {}) {
+        // the dialog is named after the row the value sits in
+        const open = (e) => {
+            if (this._obs()) return;
+            const row = e && e.currentTarget && e.currentTarget.closest ? e.currentTarget.closest('.row') : null;
+            const title = o.label || (row && row.querySelector('.t') ? row.querySelector('.t').textContent.trim() : '');
+            this._editDialog({ title, ...editor() });
         };
+        return this._vbtn(text, open, { disabled: this._obs() || !!o.disabled });
     }
 
     _numEdit(key, { value, min, max, step, unit, onCommit }) {
-        const commit = (e) => {
-            const v = parseFloat(e.target.value);
-            this._edit = null;
-            if (Number.isFinite(v)) onCommit(v);
-        };
-        return html`${this._input({ type: 'number', value, min, max, step, onKeydown: this._keys(commit), onChange: commit, onBlur: () => { this._edit = null; } })}${unit ? html`<span class="sm muted">${unit}</span>` : nothing}`;
+        return { kind: 'number', value, min, max, step, unit, onCommit };
     }
 
-    /** (#1081) One text box: Enter or a change commits, Escape closes. */
+    /** (#1081) One text box. */
     _textEdit(key, { value, placeholder, onCommit }) {
-        const commit = (e) => { const v = e.target.value; this._edit = null; onCommit(v); };
-        return this._input({ value: value || '', placeholder, onKeydown: this._keys(commit), onChange: commit, onBlur: () => { this._edit = null; } });
+        return { kind: 'text', value: value || '', placeholder, onCommit };
     }
 
     _selEdit(key, { value, options, onCommit }) {
-        const close = () => { this._edit = null; };
-        const field = this._select((options || []).map((o) => ({ value: o.key, label: o.label })), value,
-            (v) => { this._edit = null; onCommit(v); }, { onKeydown: this._keys(close), onBlur: close });
-        // a selector's menu takes focus, so it has no blur: a Cancel closes it instead
-        return haDefined('ha-selector') ? html`${field}${this._btn(this._t('next_cancel'), close, { small: true, ghost: true })}` : field;
+        return { kind: 'select', value, options: (options || []).map((o) => ({ value: o.key, label: o.label })), onCommit };
     }
 
     _timeEdit(key, { value, onCommit }) {
-        const commit = (e) => { const v = e.target.value; this._edit = null; if (v) onCommit(v); };
-        return this._input({ type: 'time', value: value || '', onKeydown: this._keys(commit), onChange: commit, onBlur: () => { this._edit = null; } });
+        return { kind: 'time', value: value || '', onCommit };
     }
 
-    /** Two numbers (At least · Up to) with one OK: a blur between the two must not close it. */
+    /** Two numbers (At least · Up to) in one dialog. */
     _pairEdit(key, { a, b, unit, onCommit }) {
-        const commit = (e) => {
-            const box = e.currentTarget.closest('[data-edit]');
-            const ins = box ? box.querySelectorAll('input, ha-textfield') : [];
-            const x = ins[0] ? parseFloat(ins[0].value) : NaN, y = ins[1] ? parseFloat(ins[1].value) : NaN;
-            this._edit = null;
-            onCommit(Number.isFinite(x) ? x : null, Number.isFinite(y) ? y : null);
-        };
-        const inp = (v) => this._input({ type: 'number', value: v.value, min: v.min, max: v.max, step: v.step, onKeydown: this._keys(commit) });
-        return html`${inp(a)} – ${inp(b)} <span class="sm muted">${unit}</span>
-            ${this._btn(this._t('next_ok'), commit, { small: true })}
-            ${this._btn(this._t('next_cancel'), () => { this._edit = null; }, { small: true, ghost: true })}`;
+        return { kind: 'pair', a, b, unit, onCommit };
     }
 
     /** "{a} and {b}" with templates in the slots. */
@@ -421,11 +398,9 @@ class SEMNextDevicesCard extends SEMNextBase {
             <datalist id=${listId}>${ids.map((id) => html`<option value=${id}></option>`)}</datalist>`;
     }
 
-    /** An inline entity editor: commits on choice, an empty choice clears, Cancel closes. */
+    /** An entity editor: the dialog's picker; an empty choice clears. */
     _entEdit(key, { value, domains, filter, onCommit }) {
-        return html`${this._entityField(value, domains, (v) => { this._edit = null; onCommit(v); }, { filter })}
-            ${value ? this._btn(this._t('action_none'), () => { this._edit = null; onCommit(''); }, { small: true, ghost: true }) : nothing}
-            ${this._btn(this._t('next_cancel'), () => { this._edit = null; }, { small: true, ghost: true })}`;
+        return { kind: 'entity', value, domains, filter, allowClear: true, onCommit };
     }
 
     _setAdd(field, value) { this._addForm = { ...this._addForm, [field]: value }; }
@@ -740,7 +715,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         const pctSensor = this._num('sensor.sem_current_vs_peak_percentage');
         const pct = uncapped ? 0 : (pctSensor !== null ? pctSensor : (limitW && peakW !== null ? (peakW / limitW) * 100 : 0));
         const dis = this._obs();
-        const parts = {};
+        const peakRows = [];
         const sent = [];
         if (peakE) {
             // (#1354) the peak limit is ONE question, the same model as the classic card
@@ -750,13 +725,16 @@ class SEMNextDevicesCard extends SEMNextBase {
                 this._svc('update_target_peak', { target_peak_limit: w.target_peak_limit ?? q.kw, peak_limit_unlimited: w.peak_limit_unlimited });
             };
             // a limit that is not read shows no number (no fallback in its place)
-            parts.limit = this._inline('peak', limit === null ? '—' : this._kw(q.kw * 1000), () => this._numEdit('peak', {
-                value: q.kw, min: PEAK_KW.min, max: PEAK_KW.max, step: PEAK_KW.slider, unit: 'kW',
-                onCommit: (v) => send(true, v) }));
-            parts.answer = this._val(t(q.limited ? PEAK_TEXT.limit : PEAK_TEXT.none),
-                () => send(!q.limited, q.kw), { disabled: dis || limit === null });
-            sent.push(this._sentence(q.limited ? t(PEAK_TEXT.label) + ' {limit} · {answer}.' : '{answer}.', parts));
-            sent.push(t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone));
+            peakRows.push(this._setRow({ label: this._lbl('next_peak_limit'), value: t(q.limited ? PEAK_TEXT.limit : PEAK_TEXT.none),
+                help: t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone), disabled: dis || limit === null,
+                onTap: () => this._editDialog({ title: this._lbl('next_peak_limit'), kind: 'select', value: q.limited ? 'limit' : 'none',
+                    options: [{ value: 'limit', label: t(PEAK_TEXT.limit) }, { value: 'none', label: t(PEAK_TEXT.none) }],
+                    onCommit: (v) => send(v === 'limit', q.kw) }) }));
+            if (q.limited) {
+                peakRows.push(this._setRow({ label: this._lbl('next_row_peak_level'), value: limit === null ? '—' : this._kw(q.kw * 1000), disabled: dis,
+                    onTap: () => this._editDialog({ title: this._lbl('next_row_peak_level'), kind: 'number', value: q.kw,
+                        min: PEAK_KW.min, max: PEAK_KW.max, step: PEAK_KW.slider, unit: 'kW', onCommit: (v) => send(true, v) }) }));
+            }
             const slot = uncapped ? null : slotStatus({ targetKw: limit, usedKwh: peakE.attributes?.peak_slot_used_kwh, allowedW: peakE.attributes?.peak_slot_allowed_w });
             if (slot) sent.push(this._tf('next_sent_slot', { used: this._fmt(slot.usedKwh, 2), budget: this._fmt(slot.budgetKwh, 2) }));
         }
@@ -777,6 +755,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             ${op ? html`<div class="banner">${this._icon('mdi:transmission-tower-export')}<div class="sm">${op}</div></div>` : nothing}
             ${this._tiles(tiles, { three: true })}
             ${peakE && !uncapped ? html`<div style="margin:10px 0 6px">${this._track(pct, C.grid)}</div>` : nothing}
+            ${peakRows.length ? html`<div class="rows">${peakRows}</div>` : nothing}
             ${sent.length ? html`<p class="sent">${sent.map((s, i) => html`${i ? ' ' : ''}${s}`)}</p>` : nothing}
             ${status || rec ? html`<p class="help">${status}${status && rec ? ' · ' : ''}${rec}</p>` : nothing}`, { cls: 'span2' });
     }

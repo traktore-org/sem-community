@@ -115,7 +115,8 @@ test('peak: the card asks "Limit grid draw to" with the value the shared model r
     const q = peakQuestion({ unlimited: false, limitKw: 6.5 });
     const next = draw('sem-next-devices-card', st);
     for (const [name, out] of [['next', next]]) {
-        assert.match(out, new RegExp(`${PEAK_TEXT.label} ${q.kw.toFixed(1)} kW`), `${name}: ${out.slice(0, 400)}`);
+        // (#1321) the peak limit is two settings rows: the answer, then its level
+        assert.match(out, new RegExp(`Next_row_peak_level ${q.kw.toFixed(1)} kW`), `${name}: ${out.slice(0, 400)}`);
         assert.ok(out.includes(PEAK_TEXT.sub), `${name}: the limit says what it does`);
         assert.ok(!out.includes('unlimited'), `${name}: no second name for "no limit"`);
     }

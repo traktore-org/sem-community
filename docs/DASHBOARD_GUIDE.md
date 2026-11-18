@@ -47,10 +47,11 @@ between screens work whatever URL the dashboard has.
 | **Plan** | What will SEM do next? The day as a timeline with sun, price and every planned block, and the reason behind each. |
 | **Devices** | How is each device set up and run? Battery, cars, heat pumps, tanks and other loads, each with its own settings. |
 | **Insights** | How did it go? History, sessions per charger, costs, forecast accuracy, and the Simulation replay. |
-| **System** | Is everything connected, and how do I change a setting? Setup check, sources, freshness, and the settings written as sentences. |
+| **System** | Is everything connected, and how do I change a setting? Setup check, sources, freshness, and every setting as a row. |
 
-Every setting is on the System or the Devices screen. **Everyday** shows the
-sentences that matter. **All settings** lists the rest. The choice is kept per
+Every setting is on the System or the Devices screen, as a row: the name on
+the left, the value on the right. Tap a row to change it; an on/off setting is
+a switch on the row. **Everyday** shows the rows that matter. **All settings** lists the rest. The choice is kept per
 browser.
 
 ---
@@ -179,8 +180,8 @@ Legionella show under **All settings**. See
 
 Each charger card shows its charge plan in one line under the name, also
 when folded: *Ready by 07:00 · 20–100 kWh · Mon–Sun*. The pencil opens the
-charge plan. Every value you can change is underlined with dots; a pencil
-shows on hover and always on a touch screen. The battery's level bar marks
+charge plan. Every setting you can change is a row; tap it and a small
+dialog asks for the new value. The battery's level bar marks
 its reserve and says how much is above it (*About 1.2 kWh above the 20 %
 reserve*); with two batteries each gets its own level and power. A heat pump
 shows what a kWh of heat costs and its next planned run. On a phone every
@@ -213,10 +214,10 @@ really reads (for example the inverter's power sensor), which helps when a
 setup reads the wrong sensor, the setup check with the grid and battery
 signs, the hardware, what is unavailable, the version; buttons Copy
 diagnostics, Diagnose (copies the report) and Observer on/off behind a
-confirm step. Then what SEM held back. Then seven settings groups written
-as sentences (How I pay · What SEM may do · Battery rules · Chargers · Heat
-pump and hot water · What SEM reads · Notifications and more): tap a value,
-change it, and apply every change at once from the bar at the bottom. The
+confirm step. Then what SEM held back. Then seven settings groups, each a short
+summary and then rows (How I pay · What SEM may do · Battery rules · Chargers · Heat
+pump and hot water · What SEM reads · Notifications and more): tap a row,
+change it in the dialog, and apply every change at once from the bar at the bottom. The
 "N more" line opens with All settings. *What SEM may do* asks the peak limit
 as the same question as the Devices screen. *Battery rules* reads the
 battery's levels back and links to the battery on the Devices screen, where

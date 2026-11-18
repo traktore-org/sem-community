@@ -132,10 +132,8 @@ export function loadBody(card, row) {
     } else if (kind === 'hot_water') {
         const stop = g.stop_entity && card._has(g.stop_entity) ? g.stop_entity : null;
         const temp = stop ? card._num(stop) : null;
-        const stopVal = card._inline('stop:' + id, String(g.stop_at ?? '—'), () => card._numEdit('stop:' + id, {
-            value: g.stop_at, step: 1, onCommit: (v) => send('stop_at', String(v)) }));
         third = [t('next_water'), temp === null ? '—' : card._fmt(temp, 0) + ' ' + (card._unitOf(stop) || '°C'),
-            html`${t('next_stop_at')} ${stopVal}`];
+            `${t('next_stop_at')} ${g.stop_at ?? '—'}`];
     } else if (kind === 'heat_pump') {
         const sg = card._str('sensor.sem_heat_pump_sg_ready_state');
         const boost = card._str('binary_sensor.sem_heat_pump_solar_boost') === 'on';
@@ -155,11 +153,17 @@ export function loadBody(card, row) {
     // ── rows ──
     const rows = [];
     const numVal = (key, text, o) => card._inline(key + ':' + id, text, () => card._numEdit(key + ':' + id, o));
+    // (#1321) a setting as a row: the label, the value, a tap opens its dialog
+    const srow = (label, value, spec, o = {}) => card._setRow({ label, value, help: o.help || '', more: !!o.more, disabled: dis,
+        onTap: () => card._editDialog({ title: label, ...spec }) });
+    const nspec = (key, o) => card._numEdit(key + ':' + id, o);
     if (solar) {
-        const minVal = numVal('min_h', minMin > 0 ? hours(minMin) + ' h' : t('no_target'), {
-            value: minMin / 60, min: 0, max: 24, step: 0.5, unit: 'h', onCommit: (h) => send('daily_min_runtime_min', String(Math.round(h * 60))) });
-        const maxVal = numVal('max_h', maxMin > 0 ? hours(maxMin) + ' h' : t('uncapped'), {
-            value: maxMin > 0 ? maxMin / 60 : null, min: 0, max: 24, step: 0.5, unit: 'h', onCommit: (h) => send('daily_max_runtime_min', String(h > 0 ? Math.round(h * 60) : 0)) });
+        const goalRows = (label, sub) => [
+            srow(`${label} · ${t('at_least')}`, minMin > 0 ? hours(minMin) + ' h' : t('no_target'), nspec('min_h', {
+                value: minMin / 60, min: 0, max: 24, step: 0.5, unit: 'h', onCommit: (h) => send('daily_min_runtime_min', String(Math.round(h * 60))) }), { help: sub }),
+            srow(`${label} · ${t('up_to')}`, maxMin > 0 ? hours(maxMin) + ' h' : t('uncapped'), nspec('max_h', {
+                value: maxMin > 0 ? maxMin / 60 : null, min: 0, max: 24, step: 0.5, unit: 'h', onCommit: (h) => send('daily_max_runtime_min', String(h > 0 ? Math.round(h * 60) : 0)) })),
+        ];
         const tUnit = card._hass?.config?.unit_system?.temperature || '°C';
         const buyRow = () => card._row('mdi:cash-check', t('hq_buy'),
             card._seg(q.buyChoices.map((k) => ({ key: k, label: t(BUY_LABEL[k]) })), q.buy,
@@ -199,24 +203,22 @@ export function loadBody(card, row) {
                 row.comfort && row.comfort.limit_c != null ? displayTemp(card, row.comfort.limit_c) || '' : ''));
             rows.push(buyRow());
         } else if (q.view === 'time') {
-            rows.push(card._row('mdi:flag-outline', t('hq_run_each_day'),
-                card._sentence(t('next_goal_value'), { min: minVal, max: maxVal }), t('hq_run_each_day_sub')));
+            rows.push(...goalRows(card._lbl('hq_run_each_day'), t('hq_run_each_day_sub')));
             rows.push(buyRow());
         } else {
             const src = overnightSource(g);
-            const srcVal = card._inline('ov:' + id, t('overnight_' + src), () => card._selEdit('ov:' + id, {
+            rows.push(...goalRows(card._lbl('next_goal')));
+            rows.push(srow(card._lbl('next_row_overnight'), t('overnight_' + src), card._selEdit('ov:' + id, {
                 value: src, options: ['off', 'battery', 'grid'].map((s) => ({ key: s, label: t('overnight_' + s) })),
-                onCommit: (s) => { for (const w of overnightWrites(s)) send(w.property, w.value); } }));
-            rows.push(card._row('mdi:flag-outline', t('next_goal'), card._sentence(t('next_goal_value'), { min: minVal, max: maxVal }),
-                card._sentence(t('next_finish_overnight'), { src: srcVal })));
+                onCommit: (s) => { for (const w of overnightWrites(s)) send(w.property, w.value); } })));
         }
         const bounds = antiCycleBounds(card._attrs('sensor.sem_controllable_devices_count'));
-        const anti = (key, eff) => numVal(key, g[key] != null && g[key] !== '' ? String(g[key]) : antiCyclePlaceholder(g, eff), {
-            value: g[key], min: bounds ? Math.max(1, bounds.min) : 1, max: bounds ? bounds.max : undefined, step: 1,
-            onCommit: (v) => { const x = antiCycleValue(String(v), bounds); if (x != null) send(key, String(x)); } });
-        rows.push(card._row('mdi:timer-outline', t('next_min_run_pause'),
-            html`${anti('min_on_time_min', 'min_on_effective_min')} / ${anti('min_off_time_min', 'min_off_effective_min')} ${t('minutes_short')}`,
-            t('next_anti_cycle_sub'), { more: asked }));
+        const anti = (key, eff, label) => srow(label, (g[key] != null && g[key] !== '' ? String(g[key]) : antiCyclePlaceholder(g, eff)) + ' ' + t('minutes_short'),
+            nspec(key, { value: g[key], min: bounds ? Math.max(1, bounds.min) : 1, max: bounds ? bounds.max : undefined, step: 1, unit: t('minutes_short'),
+                onCommit: (v) => { const x = antiCycleValue(String(v), bounds); if (x != null) send(key, String(x)); } }),
+            { more: asked, help: key === 'min_on_time_min' ? t('next_anti_cycle_sub') : '' });
+        rows.push(anti('min_on_time_min', 'min_on_effective_min', card._lbl('next_row_min_on')),
+            anti('min_off_time_min', 'min_off_effective_min', card._lbl('next_row_min_off')));
     }
     if (measureOnly) {
         const phaseOnly = card._inline('ph:' + id, phaseLabel(card, row.phase), () => card._selEdit('ph:' + id, {
@@ -243,15 +245,18 @@ export function loadBody(card, row) {
     const stopEnt = g.stop_entity || '';
     const stopPick = card._inline('stopent:' + id, stopEnt ? card._name(stopEnt) : t('action_none'), () => card._entEdit('stopent:' + id, {
         value: stopEnt, domains: ['sensor', 'input_number', 'number'], onCommit: (v) => send('stop_entity', v) }));
-    const stopAt = stopEnt ? numVal('stopat', g.stop_at > 0 ? String(g.stop_at) + (card._unitOf(stopEnt) ? ' ' + card._unitOf(stopEnt) : '') : '—', {
-        value: g.stop_at || null, step: 1, onCommit: (v) => send('stop_at', String(v)) }) : '';
+    const stopUnit = stopEnt && card._unitOf(stopEnt) ? ' ' + card._unitOf(stopEnt) : '';
     const stopNow = stopEnt && card._has(stopEnt) ? card._str(stopEnt) + (card._unitOf(stopEnt) ? ' ' + card._unitOf(stopEnt) : '') : '';
     // (#1354) in Off and Peak only SEM does not run the load: its stop, thermometer,
     // Legionella and comfort rows would change nothing, so they are not shown
     const runs = loadRunsBySem(merged);
     if (runs) rows.push(card._row('mdi:flag-checkered', t('next_stop_when'), stopPick,
-        stopEnt ? html`${t('next_stop_at')} ${stopAt}${stopNow ? ' · ' + tf('next_now_value', { v: stopNow }) : ''}` : t('next_stop_when_sub'),
+        stopEnt ? (stopNow ? tf('next_now_value', { v: stopNow }) : '') : t('next_stop_when_sub'),
         { more: band || !stopEnt }));
+    if (runs && stopEnt) {
+        rows.push(srow(card._lbl('next_stop_at'), g.stop_at > 0 ? String(g.stop_at) + stopUnit : '—',
+            nspec('stopat', { value: g.stop_at || null, step: 1, unit: stopUnit.trim(), onCommit: (v) => send('stop_at', String(v)) }), { more: band }));
+    }
     // (#1353, #1321) the confirm is the only write: the picker's own comfort_entity
     const proposal = !measureOnly ? thermometerProposal(row) : null;
     if (proposal) rows.push(card._row('mdi:thermometer-check', tf('hq_found_thermometer', { name: proposal.name }),
@@ -265,19 +270,27 @@ export function loadBody(card, row) {
         t('next_own_thermometer_sub'), { more: band || !thermo }));
     if (runs && kind === 'hot_water' && card._has('number.sem_legionella_target_temp')) {
         const lid = 'number.sem_legionella_target_temp', iid = 'number.sem_legionella_interval_hours';
-        rows.push(card._row('mdi:bacteria-outline', t('next_legionella'),
-            card._val(card._fmt(card._num(lid), 0) + ' ' + (card._unitOf(lid) || '°C'), () => card._moreInfo(lid)),
-            card._has(iid) ? card._val(tf('next_every_h', { h: card._fmt(card._num(iid), 0) }), () => card._moreInfo(iid)) : '',
-            { more: band }));
+        const num = (id, label, text, unit) => {
+            const a = card._attrs(id);
+            return srow(label, text, { kind: 'number', value: card._num(id), min: a.min, max: a.max, step: a.step, unit,
+                onCommit: (x) => card._setNumber(id, x) }, { more: band });
+        };
+        rows.push(num(lid, card._lbl('next_row_legionella_temp'), card._fmt(card._num(lid), 0) + ' ' + (card._unitOf(lid) || '°C'), card._unitOf(lid) || '°C'));
+        if (card._has(iid)) rows.push(num(iid, card._lbl('next_row_legionella_interval'), tf('next_every_h', { h: card._fmt(card._num(iid), 0) }), 'h'));
     }
     const target = parseFloat(g.comfort_target) || 0, offset = parseFloat(g.comfort_offset) || 0, limit = parseFloat(g.comfort_limit) || 0;
     const engaged = target > 0 && limit > 0;
     const tUnit = card._hass?.config?.unit_system?.temperature || '°C';
-    const cNum = (key, val) => numVal(key, val ? val + ' ' + tUnit : '—', { value: val || null, step: 0.5, unit: tUnit, onCommit: (v) => send(key, String(v)) });
-    // the four questions replace this row where they are shown
-    if (runs && !(band && solar)) rows.push(card._row('mdi:thermometer', t('next_comfort'), displayTemp(card, row.comfort && row.comfort.reading_c) || '—',
-        html`${card._sentence(t('next_keep_sentence'), { target: cNum('comfort_target', target), limit: cNum('comfort_limit', limit), offset: cNum('comfort_offset', offset) })}<div class="modehelp">${t(row.comfort && row.comfort.may_buy === false ? 'next_keep_sub_no_buy' : 'next_keep_sub')}</div>`,
-        { more: q.view === 'time' || (!engaged && !(row.comfort && row.comfort.reading_c != null)) }));
+    const comfortMore = q.view === 'time' || (!engaged && !(row.comfort && row.comfort.reading_c != null));
+    const cRow = (key, label, val, help = '') => srow(label, val ? val + ' ' + tUnit : '—', nspec(key, { value: val || null, step: 0.5, unit: tUnit,
+        onCommit: (v) => send(key, String(v)) }), { more: comfortMore, help });
+    // the four questions replace these rows where they are shown
+    if (runs && !(band && solar)) {
+        rows.push(card._row('mdi:thermometer', t('next_comfort'), displayTemp(card, row.comfort && row.comfort.reading_c) || '—',
+            t(row.comfort && row.comfort.may_buy === false ? 'next_keep_sub_no_buy' : 'next_keep_sub'), { more: comfortMore }));
+        rows.push(cRow('comfort_target', card._lbl('hq_keep'), target), cRow('comfort_offset', card._lbl('next_row_sun_adds'), offset),
+            cRow('comfort_limit', card._lbl('next_row_heat_below'), limit));
+    }
     if (kind === 'heat_pump') {
         // (#1321) one visible line: what a kWh of heat costs now, and the next planned run
         const coh = card._has('sensor.sem_heat_pump_cost_of_heat') ? card._num('sensor.sem_heat_pump_cost_of_heat') : null;
@@ -296,8 +309,10 @@ export function loadBody(card, row) {
         }
         const offId = 'number.sem_heat_pump_boost_offset';
         if (card._has(offId)) {
-            rows.push(card._row('mdi:tune-vertical', t('next_relay_values'),
-                card._val(tf('next_boost_offset', { v: '+' + card._fmt(card._num(offId), 1) + ' ' + (card._unitOf(offId) || '°C') }), () => card._moreInfo(offId)), '', { more: true }));
+            const oa = card._attrs(offId);
+            rows.push(srow(card._lbl('next_row_boost'), '+' + card._fmt(card._num(offId), 1) + ' ' + (card._unitOf(offId) || '°C'),
+                { kind: 'number', value: card._num(offId), min: oa.min, max: oa.max, step: oa.step, unit: card._unitOf(offId) || '°C',
+                    onCommit: (x) => card._setNumber(offId, x) }, { more: true }));
         }
     } else {
         const rate = parseFloat(g.tariff_rate) || 0;
@@ -318,11 +333,12 @@ export function loadBody(card, row) {
     // (#1371) with the mode Off SEM acts on nothing: "SEM may switch it: on"
     // under "Off — SEM won't act" read as a contradiction. The row stays
     // (Critical and Configure live here); only its answer says the mode.
-    rows.push(card._row('mdi:toggle-switch-outline', t('next_may_switch'),
-        row.mergedMode === 'off' ? html`<span class="muted">${t('control_verdict_off')}</span>`
-            : card._val(row.isControllable ? t('next_on') : t('next_off'), () => send('controllable', String(!row.isControllable)), { disabled: dis }),
-        html`${t('never_switch_off')}: ${card._val(row.isCritical ? t('next_yes') : t('next_no'), () => send('critical', String(!row.isCritical)), { disabled: dis })}${row.controlEntity ? ' · ' + row.controlEntity : ''} · ${card._val(t('configure'), () => card._showConfigureModal(id, row.name))}`,
-        { more: true }));
+    if (row.mergedMode === 'off') rows.push(card._row('mdi:toggle-switch-outline', t('next_may_switch'), html`<span class="muted">${t('control_verdict_off')}</span>`, '', { more: true }));
+    else rows.push(card._setRow({ label: card._lbl('next_may_switch'), more: true, disabled: dis,
+        toggle: { on: !!row.isControllable, onChange: (v) => send('controllable', String(v)) } }));
+    rows.push(card._setRow({ label: card._lbl('never_switch_off'), more: true, disabled: dis,
+        toggle: { on: !!row.isCritical, onChange: (v) => send('critical', String(v)) } }));
+    rows.push(card._row('mdi:cog-outline', t('configure'), row.controlEntity || '', '', { more: true, onClick: () => card._showConfigureModal(id, row.name) }));
     // (#896) the name says it powers the network or HA: never switched off
     // until the user allows it
     if (row.hostGuard && row.isCritical) {

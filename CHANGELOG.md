@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Settings are Home Assistant rows** (#1321). Name left, value right; tap a row to change it. On/off settings are a switch.
 - 🐛 **Screens show true values and plain names** (#1321). Plan line matches chart, one bar scale, one price format, no entity ids.
 - 🐛 **Plainer words in all languages** (#1321). Solar, Export and Charge by each have one name; jargon is gone.
 - ✨ **The SEM dashboard looks like Home Assistant** (#1321). Real cards, your theme's colours and fonts, and HA's own switch, buttons, fields, dialog and messages.
@@ -26,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **The System screen has the grid-charge, discharge-end, peak-hold and heat pump step-down settings** (#1321). They only had a place on the old Configuration tab.
 - 🐛 **Links between screens work at any dashboard address** (#1321). Also the welcome message and phone notifications.
 - 📝 **Dashboard Guide rewritten for the five screens** (#1321). README shows only the new dashboard.
-- 🐛 **Fewer duplicates on the SEM screens** (#1321). One sources row on System, one number on the power bar, one battery mode control, rare settings under More.
+- 🐛 **Fewer duplicates on the SEM screens** (#1321). One sources row, one power number, one battery mode control, rare settings under More.
 - ✨ **Easier to use** (#1321). Plain button labels, Observer mode as a switch, outlined tiles, 40 px touch targets, Insights topics as a dropdown on phones.
 - ✨ **Numbers follow your language and keyboard works everywhere** (#1321). 3,5 kW in German; Enter and Space work on every control; dialogs close with Escape.
 

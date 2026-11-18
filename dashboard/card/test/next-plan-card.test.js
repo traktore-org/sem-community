@@ -114,9 +114,9 @@ test('a full car shows its status only, no Skip or Start now', () => {
     const el = makeCard();
     const out = text(el._chargerRow('keba', {}, [], [], [{ id: 'ev:keba', why: 'car_full' }]));
     assert.match(out, /energy_plan_why_car_full/);
-    for (const k of ['next_skip_tonight', 'next_ignore_price', 'next_full_power']) assert.doesNotMatch(out, new RegExp(k), k);
+    for (const k of ['next_skip_tonight', 'next_start_now', 'next_full_power']) assert.doesNotMatch(out, new RegExp(k), k);
     const other = text(el._chargerRow('keba', {}, [], [], []));
-    assert.match(other, /next_ignore_price/);
+    assert.match(other, /next_start_now/);
 });
 
 test('Charge now is the backend force override: no mode flip, Back to plan clears it', async () => {

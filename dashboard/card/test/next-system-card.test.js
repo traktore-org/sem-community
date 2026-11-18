@@ -92,16 +92,19 @@ test('renders the charger tools and the HA settings link, no classic link', () =
     assert.match(out, /Inverter input/, 'the auto-found solar source is named');
 });
 
-test('an entity value opens HA\'s picker (or a text box when HA has not loaded it)', () => {
+test('an entity value is a row; a tap opens the picker dialog, which stages the choice', () => {
     const el = makeCard([]);
     const g = groups(el.hass.states, (k) => TEXT[k] || k, el._ctx());
-    const solar = slotsOf(g).find((s) => s.option === 'solar_production_sensor');
-    el._editing = pendingKey(solar);
-    let out = text(el.render());
-    assert.match(out, /placeholder="sensor/, 'text fallback without ha-entity-picker');
-    customElements.define('ha-entity-picker', class {});
-    out = text(el.render());
-    assert.match(out, /<ha-entity-picker/);
+    const row = g.flatMap((x) => x.rows).find((r) => r.slot.option === 'solar_production_sensor');
+    assert.ok(row, 'a row for the solar source');
+    assert.match(text(el._slotRow(row)), /Inverter input/, 'the auto-found source is its value');
+    const specs = [];
+    el._editDialog = (spec) => { specs.push(spec); };
+    el._openEdit(row.slot, row.label, row.slot.value);
+    assert.equal(specs[0].kind, 'entity');
+    assert.deepEqual(specs[0].domains, ['sensor']);
+    specs[0].onCommit('sensor.pv');
+    assert.equal(el._pending[pendingKey(row.slot)].value, 'sensor.pv');
 });
 
 test('add charger sends one skeleton through set_option; remove needs a confirm', async () => {

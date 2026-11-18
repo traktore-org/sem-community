@@ -81,32 +81,39 @@ export function batteryBody(card, row) {
     const zones = z.marks.length || z.cur !== null ? html`<div class="zones ${anyLo ? 'two' : ''}" style="--z1:${z.z1}%;--z2:${z.z2}%">
         ${marks.map((m) => html`<span class="z ${m.lo ? 'lo' : ''} ${m.pct >= 85 ? 'r' : m.pct <= 15 ? 'l' : ''}" style="left:${m.pct}%">${t('next_zone_' + m.key)} ${m.value}</span>`)}
         ${z.cur === null ? nothing : html`<span class="cur" style="left:${z.cur}%"></span>`}</div>` : nothing;
-    const v = (id, text) => card._val(text, () => card._moreInfo(id));
     const parts = [];
     // what it does now and next, the same words as the classic Battery tab
     const says = batterySaysFromStates(card._hass?.states);
     parts.push(html`${tf(says.now.key, says.now.params)}${says.next ? html` ${tf(says.next.key, says.next.params)}` : nothing}`);
-    if (card._has(ids.priority)) parts.push(card._sentence(t('next_bat_sent_fill'), { priority: v(ids.priority, Math.round(num(ids.priority)) + ' %') }));
+    if (above !== null) parts.push(tf('next_above_reserve', { kwh: card._fmt(above, 1), reserve: Math.round(floorPct) }));
+    const sentence = parts.length ? html`<p class="sent">${parts.map((p, i) => html`${i ? ' ' : ''}${p}`)}</p>` : nothing;
+
+    // ── the zone settings as rows (#1321): the bar above stays the picture ──
     const Q = BATTERY_QUESTIONS;
     const assistId = card._has(Q.may_assist.entity) ? Q.may_assist.entity : null;
     const maxId = card._has(Q.assist_max.entity) ? Q.assist_max.entity : null;
     const gateId = card._has(Q.solar_gate.entity) ? Q.solar_gate.entity : null;
-    if (assistId || maxId || gateId) {
-        const assistOn = assistId ? card._str(assistId) === 'on' : true;
-        const assistVal = assistId ? card._val(assistOn ? t('next_on') : t('next_off'), () => card._toggleSwitch(assistId), { disabled: dis }) : html`${t('next_on')}`;
-        parts.push(assistOn
-            ? card._sentence(t('next_bat_sent_assist'), {
-                // (#1354) the help starts at the buffer and is full from auto-start
-                // (coordinator/decide.py `soc_zone`, flow_calculator.py `battery_assist_potential_w`)
-                buffer: card._has(ids.buffer) ? v(ids.buffer, Math.round(num(ids.buffer)) + ' %') : html`—`,
-                autostart: card._has(ids.auto) ? v(ids.auto, Math.round(num(ids.auto)) + ' %') : html`—`,
-                max: maxId ? v(maxId, card._kw(num(maxId))) : html`—`,
-                gate: gateId ? v(gateId, card._fmt(num(gateId), 0) + ' W') : html`—`,
-                assist: assistVal })
-            : card._sentence(t('next_bat_sent_no_assist'), { assist: assistVal }));
+    const assistOn = assistId ? card._str(assistId) === 'on' : true;
+    const numRow = (q, id, text) => {
+        const a = card._attrs(id), label = card._lbl(q.key);
+        return card._setRow({ label, help: t(q.sub), value: text, disabled: dis,
+            onTap: () => card._editDialog({ title: label, kind: 'number', value: num(id), min: a.min, max: a.max, step: a.step,
+                unit: a.unit_of_measurement || '', onCommit: (x) => card._setNumber(id, x) }) });
+    };
+    const levelRows = [];
+    if (card._has(ids.priority)) levelRows.push(numRow({ key: 'bq_priority', sub: 'bq_priority_sub' }, ids.priority, Math.round(num(ids.priority)) + ' %'));
+    if (assistId) {
+        levelRows.push(card._setRow({ label: card._lbl(Q.may_assist.key), help: t(Q.may_assist.sub), disabled: dis,
+            toggle: { on: assistOn, onChange: () => card._toggleSwitch(assistId) } }));
     }
-    if (above !== null) parts.push(tf('next_above_reserve', { kwh: card._fmt(above, 1), reserve: Math.round(floorPct) }));
-    const sentence = parts.length ? html`<p class="sent">${parts.map((p, i) => html`${i ? ' ' : ''}${p}`)}</p>` : nothing;
+    // (#1354) the help starts at the buffer and is full from auto-start
+    // (coordinator/decide.py `soc_zone`, flow_calculator.py `battery_assist_potential_w`)
+    if (assistOn) {
+        if (card._has(ids.buffer)) levelRows.push(numRow({ key: 'bq_buffer', sub: 'bq_buffer_sub' }, ids.buffer, Math.round(num(ids.buffer)) + ' %'));
+        if (card._has(ids.auto)) levelRows.push(numRow({ key: 'bq_autostart', sub: 'bq_autostart_sub' }, ids.auto, Math.round(num(ids.auto)) + ' %'));
+        if (maxId) levelRows.push(numRow(Q.assist_max, maxId, card._kw(num(maxId))));
+        if (gateId) levelRows.push(numRow(Q.solar_gate, gateId, card._fmt(num(gateId), 0) + ' W'));
+    }
 
     // ── rows ──
     const rows = [];
@@ -137,8 +144,9 @@ export function batteryBody(card, row) {
         let value = t('next_none');
         if (blocked) value = t(blocked);
         else if (code !== 'none' && code !== 'night') value = (a.enabled ? '' : t('pacing_would') + ' ') + (t('pacing_' + code) || code) + (at ? ' · ' + t('pacing_full_by') + ' ' + at : '');
-        const sw = paceSw ? card._val(card._str(paceSw) === 'on' ? t('next_on') : t('next_off'), () => card._toggleSwitch(paceSw), { disabled: dis }) : '';
-        moreRows.push(card._row('mdi:speedometer', t('charge_pacing'), value, html`${capText}${capText && sw ? ' · ' : ''}${sw}`));
+        moreRows.push(card._row('mdi:speedometer', t('charge_pacing'), value, capText));
+        if (paceSw) moreRows.push(card._setRow({ label: card._lbl(Q.pacing.key), help: t(Q.pacing.sub), disabled: dis,
+            toggle: { on: card._str(paceSw) === 'on', onChange: () => card._toggleSwitch(paceSw) } }));
     }
     const sellSw = card._has(Q.may_export.entity) ? Q.may_export.entity : null;
     const st = sa.battery_sell_state && sa.battery_sell_state !== 'none' ? sa.battery_sell_state : '';
@@ -147,33 +155,39 @@ export function batteryBody(card, row) {
         const value = st === 'selling' ? t('spend_selling') + (until ? ' · ' + t('spend_until') + ' ' + until : '')
             : st === 'scheduled' ? t('spend_sell_planned') + (until ? ' · ' + until : '') : t('next_none');
         const rate = num('sensor.sem_tariff_current_export_rate');
-        const sw = sellSw ? html`${t('next_may_export')}: ${card._val(card._str(sellSw) === 'on' ? t('next_on') : t('next_off'), () => card._toggleSwitch(sellSw), { disabled: dis })}` : '';
         moreRows.push(card._row('mdi:transmission-tower-export', t('next_sell_window'), value,
-            html`${rate === null ? '' : tf('next_export_rate', { rate: card._price(rate) })}${rate !== null && sellSw ? ' · ' : ''}${sw}`));
+            rate === null ? '' : tf('next_export_rate', { rate: card._price(rate) })));
+        if (sellSw) moreRows.push(card._setRow({ label: card._lbl(Q.may_export.key), help: t(Q.may_export.sub), disabled: dis,
+            toggle: { on: card._str(sellSw) === 'on', onChange: () => card._toggleSwitch(sellSw) } }));
     }
     const bats = card._batteries || [];
     if (bats.length) {
-        const vals = bats.map((bid, i) => {
+        // (#1321) one row per setting and battery: mode, the level SEM sells down to, the size
+        bats.forEach((bid, i) => {
+            const n = tf('next_battery_n', { n: i + 1 });
             const id = 'select.sem_battery_' + bid + '_mode';
             const m = card._str(id);
-            return card._inline('bmode:' + bid, t('battery_mode_' + m) || m || '—', () => card._selEdit('bmode:' + bid, {
-                value: m, options: (card._attrs(id).options || []).map((o) => ({ key: o, label: t('battery_mode_' + o) || o })),
-                onCommit: (o) => card._selectOption(id, o) }));
+            const lbl = (k) => (bats.length > 1 ? n + ' · ' : '') + card._lbl(k);
+            rows.push(card._setRow({ label: lbl('mode'), value: t('battery_mode_' + m) || m || '—', disabled: dis || !card._has(id),
+                onTap: () => card._editDialog({ title: lbl('mode'), ...card._selEdit('bmode:' + bid, {
+                    value: m, options: (card._attrs(id).options || []).map((o) => ({ key: o, label: t('battery_mode_' + o) || o })),
+                    onCommit: (o) => card._selectOption(id, o) }) }) }));
+            const rid = 'number.sem_battery_' + bid + '_reserve_soc';
+            if (card._has(rid)) {
+                const a = card._attrs(rid);
+                rows.push(card._setRow({ label: lbl(Q.reserve.key), help: t(Q.reserve.sub), value: card._fmt(num(rid), 0) + ' %', disabled: dis,
+                    onTap: () => card._editDialog({ title: lbl(Q.reserve.key), kind: 'number', value: num(rid), min: a.min, max: a.max, step: a.step,
+                        unit: '%', onCommit: (x) => card._setNumber(rid, x) }) }));
+            }
+            // (#1373) each battery's size weighs the total level; unset shows a dash
+            const cid = 'number.sem_battery_' + bid + '_capacity_kwh';
+            if (card._has(cid)) {
+                const a = card._attrs(cid), v = num(cid);
+                rows.push(card._setRow({ label: lbl('battery_size_label'), value: v === null ? '—' : card._fmt(v, 1) + ' kWh', disabled: dis,
+                    onTap: () => card._editDialog({ title: lbl('battery_size_label'), kind: 'number', value: v, min: a.min, max: a.max, step: a.step,
+                        unit: 'kWh', onCommit: (x) => card._setNumber(cid, x) }) }));
+            }
         });
-        const reserves = bats.map((bid) => {
-            const id = 'number.sem_battery_' + bid + '_reserve_soc';
-            return card._has(id) ? card._val(card._fmt(num(id), 0) + ' %', () => card._moreInfo(id)) : null;
-        }).filter(Boolean);
-        // (#1373) each battery's size weighs the total level; unset shows a dash
-        const sizes = bats.map((bid) => {
-            const id = 'number.sem_battery_' + bid + '_capacity_kwh';
-            if (!card._has(id)) return null;
-            const v = num(id);
-            return card._val(v === null ? '—' : card._fmt(v, 1), () => card._moreInfo(id));
-        }).filter(Boolean);
-        rows.push(card._row('mdi:swap-vertical', bats.map((_, i) => tf('next_battery_n', { n: i + 1 })).join(' · '),
-            html`${vals.map((x, i) => html`${i ? ' · ' : ''}${x}`)}`,
-            html`${reserves.length ? html`${t(Q.reserve.key)} ${reserves.map((x, i) => html`${i ? ' · ' : ''}${x}`)}` : ''}${reserves.length && sizes.length ? ' · ' : ''}${sizes.length ? html`${t('battery_size_label')} ${sizes.map((x, i) => html`${i ? ' · ' : ''}${x}`)}` : ''}`));
         // (#1321) each battery's own level and power, when SEM publishes them
         const units = batteryUnits(card._hass?.states, bats);
         units.forEach((u) => {
@@ -212,6 +226,7 @@ export function batteryBody(card, row) {
         ${card._stats(stats)}
         ${zones}
         ${sentence}
+        ${levelRows.length ? html`<div class="rows" style="margin-top:6px">${levelRows}</div>` : nothing}
         ${rows.length ? html`<div class="rows" style="margin-top:6px">${rows}</div>` : nothing}
         ${moreRows.length ? card._more(html`<div class="rows">${moreRows}</div>`) : nothing}`;
 }
