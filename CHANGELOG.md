@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Screens show true values and plain names** (#1321). Plan line matches chart, one bar scale, one price format, no entity ids.
+- 🐛 **Plainer words in all languages** (#1321). Solar, Export and Charge by each have one name; jargon is gone.
 - ✨ **The SEM dashboard looks like Home Assistant** (#1321). Real cards, your theme's colours and fonts, and HA's own switch, buttons, fields, dialog and messages.
 - 🐛 **Replacing the old dashboard never restarts Home Assistant** (#1321). A new dashboard that cannot load at once shows up after your next restart.
 - 🐛 **Repair texts name the screens of the SEM dashboard** (#1321). They no longer send you to tabs that are gone.

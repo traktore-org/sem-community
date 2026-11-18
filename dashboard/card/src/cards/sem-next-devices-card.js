@@ -199,6 +199,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         const rows = deviceRows(devices, this._chargers, {
             hasBattery: this._has('sensor.sem_battery_soc'),
             chargerName: (cid) => this._chargerName(cid),
+            loadName: (id, info) => this._loadName(id, info),
         });
         for (const r of rows) {
             if (r.type === 'charger') { r.name = this._chargerName(r.cid); r.icon = 'mdi:ev-station'; continue; }

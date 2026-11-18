@@ -23,6 +23,8 @@ import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
 import { plainReason, deviceName, actionWords } from '../util/why-rows.js';
+import { gridReading } from '../util/next-format.js';
+import { entityName } from '../util/next-names.js';
 import { MISSING } from '../util/missing-value.js';
 import { groups, applyPlan, pendingKey, navTarget, slotText, setupItems, loadSources, unavailableCount,
          reserveIds, pvStrings, chargerSkeleton, FILTER_CLASSES } from '../util/next-settings.js';
@@ -188,7 +190,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const now = Date.now();
         const ed = states['sensor.sem_diag_ed_config']?.attributes?.energy_dashboard;
         const rows = sourceRows(states, now).map((r) => ({ ...r, name: this._t(r.key), src: sourceEntityOf(r.key, ed), ...FRESH_LOOK[r.key] }));
-        for (const l of loadSources(states)) {
+        for (const l of loadSources(states, this._hass)) {
             const e = states[l.entity];
             rows.push({ key: l.id, name: l.name, entity: l.entity, src: l.entity, state: freshness(e, now), age: null,
                         icon: 'mdi:power-plug', color: C.home });
@@ -205,12 +207,15 @@ class SEMNextSystemCard extends SEMNextBase {
             // (#1321) the value and the real entity SEM reads, for checking a setup
             const st = this._hass.states[r.entity];
             // (#1321) the source by its friendly name; the id shows only in more-info
-            const srcName = String(this._hass.states[r.src]?.attributes?.friendly_name || '');
-            const val = !st ? '' : (typeof this._hass.formatEntityState === 'function' ? this._hass.formatEntityState(st)
+            const srcName = r.src ? entityName(this._hass, r.src) : '';
+            const g = r.key === 'next_src_grid' ? gridReading(st?.state) : null;
+            // (#1321) the grid reads as Now says it: a size and import or export, not a signed number
+            const val = g ? `${this._fmt(g.watts, 0)} W${g.dir ? ' ' + this._t(g.dir === 'import' ? 'next_import' : 'next_export').toLowerCase() : ''}`
+                : !st ? '' : (typeof this._hass.formatEntityState === 'function' ? this._hass.formatEntityState(st)
                 : `${st.state}${st.attributes?.unit_of_measurement ? ' ' + st.attributes.unit_of_measurement : ''}`);
             return html`<div class="tile" style="--c:${r.color}" role="button" tabindex="0" @click=${() => this._moreInfo(r.src && this._hass.states[r.src] ? r.src : r.entity)}>
                 ${this._icon(r.icon)}<div style="min-width:0"><div class="sm" style="font-weight:500">${r.name}</div><div class="xs ${cls}">${val ? val + ' · ' : ''}${txt}</div>
-                ${srcName ? html`<div class="xs dim">${srcName}</div>` : nothing}</div></div>`;
+                ${srcName && srcName.toLowerCase() !== String(r.name).toLowerCase() ? html`<div class="xs dim">${srcName}</div>` : nothing}</div></div>`;
         })}</div>`;
     }
 
@@ -234,7 +239,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const report = this._attrs('sensor.sem_diag_charger_control').detection_report || null;
         const unmapped = report ? (report.near_misses || []).length : null;
         const strings = pvStrings(this._hass.states).length;
-        const value = [count !== '' ? this._tf('next_chargers_n', { n: count }) : '', control ? `(${control})` : ''].filter(Boolean).join(' ') || MISSING;
+        const value = [count !== '' ? this._tf('next_chargers_n', { n: count }) : '', control].filter(Boolean).join(' · ') || MISSING;
         const sub = [
             strings ? this._tf('next_strings', { n: strings }) : '',
             cap !== null && cap > 0 ? this._tf('next_batt_cap', { kwh: cap.toFixed(1) }) : '',

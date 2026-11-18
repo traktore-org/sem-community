@@ -21,6 +21,7 @@ import { monthTotals, rowsForMonth, sessionRowView, shiftMonth, sessionMonth } f
 import { downloadBase64 } from '../util/download.js';
 import { providerName, trustConsequence } from '../util/forecast-evidence.js';
 import { avgPriceFor } from '../util/plan-why.js';
+import { flowBars } from '../util/next-flows.js';
 import './sem-simulation-card.js';
 
 const PERIODS = {
@@ -50,6 +51,7 @@ const S = 'sensor.sem_';
 const HOME_FLOWS = [['solar', C.solar, 'next_from_sun'], ['battery', C.battery_out, 'next_from_battery'], ['grid', C.grid, 'next_from_grid']];
 const SINKS = [['home', 'mdi:home', 'next_src_house', ['solar', 'battery', 'grid']], ['ev', 'mdi:car-electric', 'next_src_car', ['solar', 'battery', 'grid']],
                ['battery', 'mdi:battery-charging', 'next_battery_in', ['solar', 'grid']], ['grid', 'mdi:transmission-tower-export', 'next_export', ['solar', 'battery']]];
+const SRC_KEY = { solar: 'next_from_sun', battery: 'next_from_battery', grid: 'next_from_grid' };
 const SRC_COLOR = { solar: C.solar, battery: C.battery_out, grid: C.grid };
 const CHARGER_COLORS = [C.ev, C.battery_out, C.grid, C.export, C.battery_in, C.home];
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -304,10 +306,10 @@ class SEMNextInsightsCard extends SEMNextBase {
             const total = parts.reduce((a, [, v]) => a + Math.max(0, v), 0);
             return parts.length ? { sink, icon, key, parts, total } : null;
         }).filter(Boolean);
-        const body = rows.length ? html`<div class="rows flows">${rows.map((r) => html`<div class="row">
+        const body = rows.length ? html`<div class="rows flows">${flowBars(rows).map((r) => html`<div class="row">
                 <div class="fh"><span>${this._icon(r.icon)} ${this._t(r.key)}</span><b class="num">${this._kwh(r.total)}</b></div>
-                <div class="fb">${r.total > 0 ? r.parts.map(([s, v]) => html`<i style="flex:${Math.max(0, v) / r.total};background:${SRC_COLOR[s]}"></i>`) : nothing}</div></div>`)}</div>
-            <div class="sumrow">${this._legend(HOME_FLOWS.map(([, c, k]) => [c, this._t(k)]))}<span class="dim">${this._t('next_sankey_note')}</span></div>
+                <div class="fb" style="width:${r.widthPct}%">${r.segs.map((g) => html`<i style="flex:${g.flex};background:${SRC_COLOR[g.src]}" title="${this._t(SRC_KEY[g.src])} ${this._kwh(g.kwh)}"></i>`)}</div></div>`)}</div>
+            <div class="sumrow">${this._legend(HOME_FLOWS.map(([, c, k]) => [c, this._t(k)]))}</div>
             ${this._sankey()}` : this._hint('next_no_flows');
         return this._sec(`${this._t('next_where_went')} · ${this._periodLabel()}`, body);
     }
@@ -569,7 +571,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         if (imp !== null || prov) {
             const kind = !level || level === 'flat' ? this._t('next_level_flat') : this._t('next_dynamic');
             rows.push(this._row('mdi:tag-multiple', this._t('next_tariff'), [kind, prov].filter(Boolean).join(' · '),
-                [imp !== null ? `${this._t('next_import')} ${this._fmt(imp, 2)}` : '', exp !== null ? `${this._t('next_export').toLowerCase()} ${this._fmt(exp, 2)}` : ''].filter(Boolean).join(' · '),
+                [imp !== null ? `${this._t('next_import')} ${this._price(imp)}` : '', exp !== null ? `${this._t('next_export').toLowerCase()} ${this._price(exp)}` : ''].filter(Boolean).join(' · '),
                 { onClick: () => this._moreInfo(S + 'tariff_current_import_rate') }));
         }
         // (#1321) what SEM paid per bought kWh against the hours' own average

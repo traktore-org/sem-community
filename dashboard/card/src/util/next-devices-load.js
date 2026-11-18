@@ -13,6 +13,7 @@ import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-se
 import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey } from './next-devices.js';
 import { plainReason } from './why-rows.js';
 import { loadRunsBySem } from './settings-applies.js';
+import { cleanName } from './next-names.js';
 import { parseCopCurve, formatCopCurve, heatCostNow,
     copSourceOf, copSourceOptions, copLearnLine } from './heat-pump-cost.js';
 import { heaterQuestions, heaterSub, sunMaxWrites, limitWrites, buyWrites, preheatWrites,
@@ -226,7 +227,7 @@ export function loadBody(card, row) {
     const reqVal = card._inline('dep:' + id, parentRow ? parentRow.name : (parent || t('action_none')), () => card._selEdit('dep:' + id, {
         value: parent, options: [{ key: '', label: t('action_none') }, ...others.map((r) => ({ key: r.id, label: r.name }))],
         onCommit: (v) => send('depends_on', v) }));
-    const blocked = row.blockedBy ? (others.find((r) => r.id === row.blockedBy) || {}).name || row.blockedBy : '';
+    const blocked = row.blockedBy ? (others.find((r) => r.id === row.blockedBy) || {}).name || cleanName(row.blockedBy) : '';
     rows.push(card._row('mdi:link-variant', t('requires'), reqVal, blocked ? tf('next_st_waiting_for', { parent: blocked }) : t('next_requires_sub'),
         { more: asked && !parent && !blocked }));
     const phaseVal = card._inline('ph:' + id, phaseLabel(card, row.phase), () => card._selEdit('ph:' + id, {

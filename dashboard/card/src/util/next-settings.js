@@ -22,6 +22,8 @@
  * setup card's picker for the same key (ENTITY_FIELDS).
  */
 
+import { fmtPrice } from './next-format.js';
+import { displayName, entityName } from './next-names.js';
 import { priceAddOns } from './settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from './peak-questions.js';
 import { BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
@@ -227,8 +229,7 @@ export function decimalsOf(step) {
 }
 
 function nameOf(states, id) {
-    const n = states?.[id]?.attributes?.friendly_name;
-    return n ? String(n) : String(id);
+    return entityName({ states }, id);
 }
 
 /** The words a slot shows when it is not being edited; `states` names an entity slot. */
@@ -248,7 +249,8 @@ export function slotText(slot, t, value = slot.value, states = null) {
             const h = Math.floor(v), m = Math.round((v - h) * 60);
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         }
-        const s = v.toFixed(decimalsOf(slot.step));
+        // (#1321) a price per kWh reads the same here as on Now and Plan
+        const s = /\/kWh$/.test(slot.unit || '') ? fmtPrice(v) : v.toFixed(decimalsOf(slot.step));
         return slot.unit ? `${s} ${slot.unit}` : s;
     }
     if (slot.kind === 'switch') return value ? t('next_on') : t('next_off');
@@ -477,7 +479,7 @@ export function setupItems(states, options) {
 }
 
 /** Loads with a power entity, for the freshness tiles (chargers and the battery have their own). */
-export function loadSources(states) {
+export function loadSources(states, hass = { states }) {
     const devs = st(states, 'sensor.sem_controllable_devices_count')?.attributes?.devices;
     const out = [];
     const list = devs && typeof devs === 'object' ? Object.entries(devs) : [];
@@ -485,7 +487,7 @@ export function loadSources(states) {
         if (!d || typeof d !== 'object') continue;
         if (d.device_type === 'ev_charger' || d.device_type === 'battery') continue;
         if (!d.power_entity) continue;
-        out.push({ id, name: d.name || id, entity: d.power_entity });
+        out.push({ id, name: displayName(hass, { name: d.name, entity: d.power_entity, id }), entity: d.power_entity });
     }
     return out;
 }

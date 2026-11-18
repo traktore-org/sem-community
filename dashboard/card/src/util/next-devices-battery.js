@@ -163,7 +163,7 @@ export function batteryBody(card, row) {
         const rate = num('sensor.sem_tariff_current_export_rate');
         const sw = sellSw ? html`${t('next_may_export')}: ${card._val(card._str(sellSw) === 'on' ? t('next_on') : t('next_off'), () => card._toggleSwitch(sellSw), { disabled: dis })}` : '';
         rows.push(card._row('mdi:transmission-tower-export', t('next_sell_window'), value,
-            html`${rate === null ? '' : tf('next_export_rate', { rate: card._fmt(rate, 2) })}${rate !== null && sellSw ? ' · ' : ''}${sw}`));
+            html`${rate === null ? '' : tf('next_export_rate', { rate: card._price(rate) })}${rate !== null && sellSw ? ' · ' : ''}${sw}`));
     }
     const bats = card._batteries || [];
     if (bats.length) {

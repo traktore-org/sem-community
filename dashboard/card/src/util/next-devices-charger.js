@@ -137,8 +137,12 @@ export function chargerBody(card, row) {
     const maxId = card._has(te.upTo) ? te.upTo : null;
     const min = minId ? card._num(minId) : null;
     const max = maxId ? card._num(maxId) : null;
-    const { soc, isEstimate } = resolveChargerSoc(card._num(S('vehicle_soc')), card._num('sensor.sem_vehicle_soc'),
+    const resolved = resolveChargerSoc(card._num(S('vehicle_soc')), card._num('sensor.sem_vehicle_soc'),
         card._num(S('estimated_soc')), card._chargers.length);
+    // (#1321) no car plugged in: the last level is an old reading, so show none
+    const noCar = card._str('binary_sensor.sem_charger_' + cid + '_connected') === 'off';
+    const soc = noCar ? null : resolved.soc;
+    const isEstimate = noCar ? false : resolved.isEstimate;
     const capacity = card._num('number.sem_charger_' + cid + '_ev_battery_capacity_kwh');
     const per100 = card._num('number.sem_charger_' + cid + '_ev_kwh_per_100km');
     const have = isSoc ? soc : daily;
@@ -179,7 +183,7 @@ export function chargerBody(card, row) {
         <div><span class="lbl">${t(CHARGER_TEXT.departure)}</span><div class="big num">${timeVal}</div>
             <div class="sub2">${daysVal}${!hasOwnDays && dep.next && card._hhmm(dep.next) !== chargeBy ? ' · ' + tf('next_next_departure', { time: card._hhmm(dep.next) }) : ''}${plannedKwh > 0 ? ' · ' + tf('next_kwh_planned', { kwh: card._fmt(plannedKwh, 1) }) : ''}</div></div>
         <div><span class="lbl">${t(CHARGER_TEXT.target)}</span><div class="big num">${targetVal}</div>
-            <div class="sub2">${typeVal} ↔ ${isSoc ? 'kWh' : t('next_soc')}${kmAdd ? ' · ' + tf('next_plus_km', { km: kmAdd }) : ''}</div></div>
+            <div class="sub2">${t('next_goal_unit')} ${typeVal}${kmAdd ? ' · ' + tf('next_plus_km', { km: kmAdd }) : ''}</div></div>
     </div>`;
 
     // ── buttons ──

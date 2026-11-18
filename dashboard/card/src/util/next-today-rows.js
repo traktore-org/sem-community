@@ -9,7 +9,7 @@
  *   label / detail are translation keys the card fills with `values`;
  *   color is a NEXT_COLORS name; day is 0 today, 1 tomorrow, 2 later;
  *   late marks the Min-reached row when it lands after the charge-by
- *   deadline (the card paints it red).
+ *   deadline (the card paints it red) and a car is plugged in.
  * The "now" anchor row is dropped: the lead line already says now.
  */
 export const KINDS = {
@@ -43,7 +43,7 @@ export function dayIndex(whenMs, nowMs) {
     return d <= 0 ? 0 : (d === 1 ? 1 : 2);
 }
 
-export function todayRows(attrs, { now = Date.now() } = {}) {
+export function todayRows(attrs, { now = Date.now(), carPresent = true } = {}) {
     const plan = attrs && Array.isArray(attrs.today_plan) ? attrs.today_plan : [];
     const rows = [];
     for (const r of plan) {
@@ -60,7 +60,8 @@ export function todayRows(attrs, { now = Date.now() } = {}) {
     }
     rows.sort((a, b) => a.when - b.when);
     const deadline = rows.find((r) => r.kind === 'ev_deadline');
-    if (deadline) {
+    // (#1321) red is for a real miss: with no car plugged in nothing can be late
+    if (deadline && carPresent) {
         for (const r of rows) if (r.kind === 'ev_min_reached' && r.when > deadline.when) r.late = true;
     }
     return rows;

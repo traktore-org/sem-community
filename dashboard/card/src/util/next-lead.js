@@ -116,9 +116,13 @@ export function planLead(a, extra) {
         ? { key: (cold.cool ? 'hq_plan_above_no_hour' : 'hq_plan_below_no_hour') + (cold.time ? '' : '_plain'),
             params: { name: cold.name, keep: cold.keep, time: cold.time || '' } }
         : { key: 'next_plan_quiet', params: {} };
+    // (#1321) the house's own grid draw is what the chart's From grid lane and
+    // the Grid cost tile show: the line reads the same number
+    const houseKwh = houseGridKwh(a);
     const main = evKwh > 0.05
         ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh) } }
-        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } } : quiet);
+        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } }
+            : (houseKwh > 0.05 ? { key: 'next_plan_house', params: { kwh: fmt1(houseKwh) } } : quiet));
     // (#1321) hours with no price yet give no cost: say so, not "cost ,"
     const sub = { key: extra?.cost ? 'next_plan_sub' : 'next_plan_sub_nocost', params: {
         time: extra?.computedAt || '', cost: extra?.cost || '',
@@ -134,6 +138,22 @@ export function kwhOf(blocks, pick) {
         const s = Date.parse(b.start), e = Date.parse(b.end);
         if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) continue;
         kwh += (Number(b.power_w) || 0) * (e - s) / 3.6e9;
+    }
+    return kwh;
+}
+
+/**
+ * kWh the house itself draws from the grid over the plan (plan.house_grid,
+ * the planner's sum of the slots' home_grid_w; the slots when it is missing).
+ * The one source for the Plan line, the Grid cost tile and the chart's lane.
+ */
+export function houseGridKwh(plan) {
+    const v = plan && plan.house_grid ? Number(plan.house_grid.kwh) : NaN;
+    if (Number.isFinite(v)) return Math.max(0, v);
+    let kwh = 0;
+    for (const s of (plan && Array.isArray(plan.slots) ? plan.slots : [])) {
+        const w = Number(s?.home_grid_w), a = Date.parse(s?.start), b = Date.parse(s?.end);
+        if (w > 0 && Number.isFinite(a) && Number.isFinite(b) && b > a) kwh += w * (b - a) / 3.6e9;
     }
     return kwh;
 }

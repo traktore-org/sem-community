@@ -110,7 +110,7 @@ export function overnightWrites(source) {
     ];
 }
 
-function rowFromMap(id, info) {
+function rowFromMap(id, info, nameFor) {
     const i = info || {};
     const type = i.device_type === 'battery' ? 'battery'
         : (i.device_type === 'ev_charger' || i.device_type === 'ev_charging') ? 'charger' : 'load';
@@ -119,7 +119,7 @@ function rowFromMap(id, info) {
     return {
         id, type, kind, inMap: true,
         cid: type === 'charger' ? (chargerIdOf(id) || id) : null,
-        name: i.name || id.replace(/^(load_device_|energy_dashboard_)/, '').replace(/_/g, ' '),
+        name: nameFor ? nameFor(id, i) : (i.name || id.replace(/^(load_device_|energy_dashboard_)/, '').replace(/_/g, ' ')),
         priority: Number.isFinite(pr) ? pr : 999,
         icon: iconFor(i, kind),
         powerEntity: i.power_entity || '',
@@ -165,8 +165,8 @@ function rowFromMap(id, info) {
  * and the battery the map does not know. `chargers` = charger ids from
  * the base; `hasBattery` = a battery SOC sensor exists.
  */
-export function deviceRows(devices, chargers = [], { hasBattery = false, chargerName } = {}) {
-    const rows = Object.entries(devices || {}).map(([id, info]) => rowFromMap(id, info));
+export function deviceRows(devices, chargers = [], { hasBattery = false, chargerName, loadName } = {}) {
+    const rows = Object.entries(devices || {}).map(([id, info]) => rowFromMap(id, info, loadName));
     rows.sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
     const seenCid = new Set(rows.filter((r) => r.type === 'charger').map((r) => r.cid));
     for (const cid of chargers || []) {

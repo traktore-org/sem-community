@@ -20,6 +20,8 @@ import { fill } from '../util/next-lead.js';
 import { hhmmIn } from '../util/next-time.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
+import { fmtPrice } from '../util/next-format.js';
+import { displayName } from '../util/next-names.js';
 import { chargerNameOf } from '../util/charger-name.js';
 import { sibling } from '../util/setup-checklist.js';
 import { ensureHaElements, haDefined } from '../util/ha-elements.js';
@@ -384,8 +386,10 @@ export class SEMNextBase extends SEMLitBase {
     _attrs(id) { return this._hass?.states[id]?.attributes || {}; }
     _name(id) {
         const n = this._hass?.states[id]?.attributes?.friendly_name;
-        return n ? String(n).replace(/^SEM\s+/i, '') : id;
+        return displayName(this._hass, { name: n ? String(n).replace(/^SEM\s+/i, '') : '', entity: id });
     }
+    /** (#1321) a load's name for every screen: SEM name, HA device name, cleaned friendly name. */
+    _loadName(id, d) { return displayName(this._hass, { name: d?.name, entity: d?.power_entity, id: String(id) }); }
     _observer() { return this._str('switch.sem_observer_mode') === 'on'; }
     _obs() { return this._observer(); }
     /** All settings on? Read `this._all` (a reactive property); flip it with `_toggleAll()`. */
@@ -434,6 +438,7 @@ export class SEMNextBase extends SEMLitBase {
     _fmt(v, d = 1) { return v === null || v === undefined || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(d); }
     _kw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : `${(w / 1000).toFixed(d)} kW`; }
     _kwh(v, d = 1) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Number(v) >= 100 ? Math.round(v) : Number(v).toFixed(d)} kWh`; }
+    _price(v) { return fmtPrice(v); }
     _money(v, d = 2) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Number(v).toFixed(d)} ${this._currency()}`; }
     _pct(v) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Math.round(v)} %`; }
     /** 'HH:MM' from a Date, an ISO stamp, or an 'HH:MM[:SS]' string. */
@@ -469,7 +474,7 @@ export class SEMNextBase extends SEMLitBase {
         return html`
             <header class="hdr">
                 ${soc === null ? nothing : html`<span class="chip" role="button" tabindex="0" @click=${() => this._moreInfo('sensor.sem_battery_soc')}>${this._icon('mdi:battery-medium')}${Math.round(soc)} %</span>`}
-                ${rate === null || flat ? nothing : html`<span class="chip" role="button" tabindex="0" @click=${() => this._moreInfo('sensor.sem_tariff_current_import_rate')}>${this._icon('mdi:cash')}${this._fmt(rate, 2)} <span class="dim">· ${this._t(priceLevelKey(level))}</span></span>`}
+                ${rate === null || flat ? nothing : html`<span class="chip" role="button" tabindex="0" @click=${() => this._moreInfo('sensor.sem_tariff_current_import_rate')}>${this._icon('mdi:cash')}${this._price(rate)} <span class="dim">· ${this._t(priceLevelKey(level))}</span></span>`}
                 <span class="chip ${obs ? 'obs' : ''}"><span class="dot"></span>${obs ? this._t('next_pill_observing') : this._t('next_pill_live')}</span>
                 <span class="sp"></span>
                 ${all}

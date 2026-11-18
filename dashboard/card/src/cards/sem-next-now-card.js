@@ -416,7 +416,7 @@ class SEMNextNowCard extends SEMNextBase {
         });
         const devices = this._attrs('sensor.sem_controllable_devices_count').devices || {};
         const heaters = Object.entries(devices).filter(([id]) => loadKind(id) !== 'load')
-            .map(([id, d]) => ({ name: d?.name || id, on: !!(d && (d.is_on || d.is_active)) }));
+            .map(([id, d]) => ({ name: this._loadName(id, d), on: !!(d && (d.is_on || d.is_active)) }));
         const chips = deviceChips({ batterySoc: this._num('sensor.sem_battery_soc'), cars, heaters });
         if (!chips.length) return nothing;
         const stateKey = { charging: 'next_st_charging', plugged: 'next_st_plugged', unplugged: 'next_st_unplugged', on: 'next_st_on', off: 'next_st_off' };
@@ -429,6 +429,12 @@ class SEMNextNowCard extends SEMNextBase {
             { extra: this._link(this._t('next_devices_link'), go) });
     }
 
+    /** Is any car plugged in? Unknown counts as yes, so a real miss is never hidden. */
+    _anyCarConnected() {
+        if (!this._chargers.length) return false;
+        return this._chargers.some((cid) => this._str(`binary_sensor.sem_charger_${cid}_connected`) !== 'off');
+    }
+
     /** The three loads drawing most right now (chargers and the battery have their own rows). */
     _topConsumers() {
         const devices = this._attrs('sensor.sem_controllable_devices_count').devices || {};
@@ -438,7 +444,7 @@ class SEMNextNowCard extends SEMNextBase {
             // Same read as the classic Home tab: the load's own power entity, else the figure SEM holds.
             const pe = d.power_entity && this._has(d.power_entity) ? d.power_entity : null;
             const w = pe ? this._powerW(pe) : (Number(d.current_power) || 0);
-            list.push({ id, name: d.name || id, w, entity: pe });
+            list.push({ id, name: this._loadName(id, d), w, entity: pe });
         }
         list.sort((a, b) => (b.w ?? -1) - (a.w ?? -1));
         const top = list.slice(0, 3);
@@ -484,7 +490,7 @@ class SEMNextNowCard extends SEMNextBase {
             for (const cid of this._chargers) {
                 const pid = `sensor.sem_charger_${cid}_power`;
                 const share = this._num(`sensor.sem_charger_${cid}_session_solar_share`);
-                outs.push(row('ev', this._tf('next_car_of', { name: this._chargerName(cid) }), posOf(pid),
+                outs.push(row('ev', (this._chargers.length > 1 ? this._tf('next_car_of', { name: this._chargerName(cid) }) : this._t('next_src_car')), posOf(pid),
                     sub(kwhToday(`sensor.sem_charger_${cid}_daily_energy`), share === null ? '' : this._tf('next_pct_sun', { pct: Math.round(share) })), pid));
             }
         } else if (this._has('sensor.sem_ev_power')) {
@@ -550,7 +556,7 @@ class SEMNextNowCard extends SEMNextBase {
 
     _todayList() {
         if (!this._has('sensor.sem_charging_state')) return nothing;
-        const rows = todayRows(this._attrs('sensor.sem_charging_state'), { now: this._tick });
+        const rows = todayRows(this._attrs('sensor.sem_charging_state'), { now: this._tick, carPresent: this._anyCarConnected() });
         const lang = this._hass?.language || 'en';
         const when = (r) => {
             const t = this._hhmm(new Date(r.when));
@@ -604,7 +610,7 @@ class SEMNextNowCard extends SEMNextBase {
             rows.push(this._row('mdi:transmission-tower', title, this._kw(Math.abs(grid)), text, { color: grid > 50 ? C.export : C.grid }));
         }
         for (const d of this._loads()) {
-            const name = d.name || d.id;
+            const name = this._loadName(d.id, d);
             if (d.is_shed) {
                 rows.push(this._row('mdi:power-plug-off', this._tf('next_why_load_held', { name }), '', this._t(shedReasonKey(d.shed_reason)), { color: C.home }));
             } else if (d.blocked_by) {
@@ -646,18 +652,18 @@ class SEMNextNowCard extends SEMNextBase {
             sub: msaved === null ? '' : this._tf('next_saved_month', { money: this._money(msaved) }) });
         const sum = [];
         if (imp !== null && !flat) {
-            sum.push(html`<span>${this._t('next_price_now')} <b>${this._fmt(imp, 2)}</b> · ${this._t(priceLevelKey(level))}</span>`);
+            sum.push(html`<span>${this._t('next_price_now')} <b>${this._price(imp)}</b> · ${this._t(priceLevelKey(level))}</span>`);
             const start = a.next_cheap_start ? this._hhmm(a.next_cheap_start) : '';
             if (start) {
                 const t0 = Date.parse(a.next_cheap_start);
                 const pt = (Array.isArray(a.upcoming) ? a.upcoming : []).find((p) => p && Date.parse(p.t) === t0);
-                const price = pt && Number.isFinite(Number(pt.price)) ? ` · ${this._fmt(Number(pt.price), 2)}` : '';
+                const price = pt && Number.isFinite(Number(pt.price)) ? ` · ${this._price(pt.price)}` : '';
                 sum.push(html`<span>${this._t('next_next_cheap')} <b>${start}</b>${price}</span>`);
             }
         } else if (imp !== null) {
-            sum.push(html`<span>${this._t('next_price_now')} <b>${this._fmt(imp, 2)}</b> · ${this._t('next_one_rate')}</span>`);
+            sum.push(html`<span>${this._t('next_price_now')} <b>${this._price(imp)}</b> · ${this._t('next_one_rate')}</span>`);
         }
-        if (exp !== null) sum.push(html`<span>${this._t('next_export')} <b>${this._fmt(exp, 2)}</b></span>`);
+        if (exp !== null) sum.push(html`<span>${this._t('next_export')} <b>${this._price(exp)}</b></span>`);
         return this._sec(this._t('next_money'), html`${tiles.length ? this._tiles(tiles, { three: tiles.length === 3 }) : nothing}
             ${sum.length ? html`<div class="sumrow">${sum}</div>` : nothing}
             ${this._priceStrip()}`,
