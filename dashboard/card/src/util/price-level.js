@@ -73,7 +73,9 @@ export function tariffKind(states) {
     const own = lv && !['unknown', 'unavailable', ''].includes(String(lv.state)) ? String(lv.state).toLowerCase() : '';
     const level = own || String(a.price_level || '').toLowerCase();
     if (level === LEVEL_NO_PRICES) return 'none';
-    if (level === LEVEL_FLAT || a.is_dynamic === false) return 'flat';
+    // (#1385) not `is_dynamic`: a schedule or two-rate tariff is not dynamic but
+    // has cheaper hours; only the level 'flat' means one price
+    if (level === LEVEL_FLAT) return 'flat';
     if (!level) return rate && !['unknown', 'unavailable', ''].includes(String(rate.state)) ? 'flat' : 'none';
     return 'dynamic';
 }
