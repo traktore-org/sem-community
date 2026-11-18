@@ -1046,6 +1046,11 @@ class EnergyCalculator:
         ev_day = self._ev_reset_day(now)
         month_key = f"{today.year}_{today.month}"
         year_key = f"{today.year}"
+        # (#812) the day this cycle's books and totals are under — set before
+        # a skipped cycle returns (#1382): unset after a restart, or still
+        # yesterday across midnight, the device cost books showed nothing,
+        # or yesterday's cost under today's reset.
+        self.booking_day = today
         # (#1177) a dark input books its last live read, not 0 W — read
         # first, so a skipped cycle's live read still counts as one
         held_w = self._integral_watts(power, dt_util.utcnow())
@@ -1090,7 +1095,6 @@ class EnergyCalculator:
 
         # Check for day/month/year rollover and reset accumulators
         self._check_rollover(today, month_key, year_key)
-        self.booking_day = today   # (#812)
 
         # (#628) This cycle's counter-backing starts empty — each reconciler
         # below records its own category only when it actually read a COMPLETE
@@ -4766,38 +4770,33 @@ class EnergyCalculator:
         """(#1324) The totals of ``day`` the flow split must add up to, or None.
 
         (#1382) One base for the whole day, set by the setup and never by
-        this cycle's reads. The split is published as a daily counter, so a
-        base that changes mid-day makes it step back. Until #1382 the base
-        followed ``_counter_backed``, which is rebuilt every cycle: the
-        home row's balance switched on and off with one missing read, and
-        the fitted split jumped by the day's whole gap between the bases.
+        this cycle's reads. The split is published as daily counters, so a
+        base that changes mid-day makes them step back. Until #1382 the base
+        followed ``_counter_backed``, which is rebuilt every cycle: one
+        missing read switched it, and every flow moved by the day's whole
+        gap between the bases.
 
-        With grid or battery counters set up, the targets are the day's
-        published rows (each continuous through the day, read or not), the
-        EV column is the midnight mirror (the flows run on calendar days),
-        and the house is left as None: the balance of the rest, which is
-        what the home row is whenever the meters read. On the mirror's
-        first day the EV keeps the split's own sum, as the home balance
-        stands down that day. With no meters the split stays as integrated.
+        With grid or battery counters set up, the sources and the battery
+        and grid sinks take the day's published rows, read or not. A None
+        keeps the split's own sum: the EV, because the midnight mirror can
+        hold a counter's catch-up for charging SEM never saw, which no flow
+        carries, and its factor would reach every charger's own flows; the
+        house, which becomes the balance of the rest (as the home row is
+        whenever the meters read). With no meters the split stays as
+        integrated.
 
-        ``day`` is the split's own day (the flow integrator's), not
-        ``booking_day``: a cycle ``calculate_energy`` skips (the first after
-        a restart of over two minutes, a gap across midnight) books
-        nothing, so ``booking_day`` is unset or still yesterday then.
+        ``day`` is the split's own day (``FlowCalculator.flow_day``).
         """
-        today = day
-        if not isinstance(today, date) or not self._meter_counter_enabled:
+        if not isinstance(day, date) or not self._meter_counter_enabled:
             return None
         acc = self._daily_accumulators
         out: Dict[str, Optional[float]] = {
-            c: acc.get(f"{c}_{today}", 0.0)
+            c: acc.get(f"{c}_{day}", 0.0)
             for c in ("solar", "grid_import", "grid_export",
                       "battery_charge", "battery_discharge")
         }
         out["home"] = None
-        since = self._midnight_ev_since
-        out["ev"] = (acc.get(f"{MIDNIGHT_EV_CATEGORY}_{today}", 0.0)
-                     if since is not None and today > since else None)
+        out["ev"] = None
         return out
 
     def _get_daily(self, category: str, today: date) -> float:

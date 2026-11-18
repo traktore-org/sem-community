@@ -218,20 +218,24 @@ def test_no_meters_leave_the_split_as_integrated():
 
 
 @pytest.mark.unit
-def test_the_ev_column_waits_for_a_whole_mirror_day():
+def test_the_ev_column_keeps_the_splits_own_sum():
+    """The midnight mirror can hold a counter's catch-up for charging SEM
+    never saw. No flow carries it, and its factor would reach every
+    charger's own flows: it changes nothing in the split."""
     calc, _ = _rig()
-    calc.booking_day = DAY
-    assert calc.calendar_day_totals(DAY)["ev"] == EV_ROW
-    for since in (DAY, None):   # born today, or not yet: the split's own EV sum
-        calc._midnight_ev_since = since
-        assert calc.calendar_day_totals(DAY)["ev"] is None
+    assert calc.calendar_day_totals(DAY)["ev"] is None
+    first = _publish(calc.calendar_day_totals(DAY))
+    calc._daily_accumulators[f"{MIDNIGHT_EV_CATEGORY}_{DAY}"] = EV_ROW + 10.0
+    assert _publish(calc.calendar_day_totals(DAY)) == first
 
 
 @pytest.mark.unit
-def test_a_day_of_cycles_never_steps_back():
-    """Oracle: the rows and the raw split grow all day at different rates,
-    and the backing changes every few cycles. Under one base no published
-    cell steps back; under the old rule they do."""
+def test_a_day_of_changing_reads_keeps_one_base():
+    """The rows and the raw split grow all day, each row at its own fixed
+    ratio to the split, and the backing changes every few cycles. Under one
+    base the published split moves with the day alone; the old rule steps
+    back each time the reads change. (A ratio that drifts during the day (#1384)
+    can still move a cell down: that is the fit itself, not its base.)"""
     calc = EnergyCalculator.__new__(EnergyCalculator)
     calc.booking_day = DAY
     calc._meter_counter_enabled = True
@@ -280,10 +284,9 @@ def test_a_day_of_cycles_never_steps_back():
 
 @pytest.mark.unit
 @freeze_time("2026-11-17 12:00:00")
-def test_a_skipped_cycle_after_a_restart_keeps_the_base():
+def test_a_skipped_cycle_after_a_restart_keeps_the_base(caplog):
     """A restart of over two minutes: ``calculate_energy`` skips its first
-    cycle and books nothing, so ``booking_day`` is still unset."""
-    from datetime import datetime
+    cycle. The split keeps its base, and the books' day is set."""
     from homeassistant.util import dt as dt_util
 
     calc, _ = _rig()
@@ -291,30 +294,59 @@ def test_a_skipped_cycle_after_a_restart_keeps_the_base():
     before = _publish(_new_rule(calc))
     calc.booking_day = None                      # a new process
     calc._last_update = dt_util.now() - timedelta(minutes=10)
-    assert isinstance(calc._last_update, datetime)
+    caplog.clear()
     calc.calculate_energy(PowerReadings())
-    assert calc.booking_day is None              # the cycle was skipped
+    assert "skipping cycle" in caplog.text       # the cycle was skipped
+    assert calc.booking_day == DAY
     after = _publish(_new_rule(calc))
     for cell in CELLS:
         assert after[cell] == pytest.approx(before[cell], abs=0.001), cell
-    # The old rule read ``booking_day``: the raw split for that cycle.
+    # The old rule read ``booking_day``, which develop left unset here: the
+    # raw split for that cycle.
+    calc.booking_day = None
     assert _publish(_old_rule(calc)) == _publish(None)
     assert max(before[c] - _publish(None)[c] for c in CELLS) > 0.1
 
 
 @pytest.mark.unit
 def test_a_new_day_never_takes_yesterdays_rows():
-    """A gap across midnight: the flows are the new day's, ``booking_day``
-    is still yesterday. The new day's rows are empty, so nothing is scaled
-    up to yesterday's totals."""
+    """A gap across midnight: the flows are the new day's. The new day's
+    rows are empty, so nothing is scaled up to yesterday's totals."""
     calc, _ = _rig()
-    calc.booking_day = DAY
     tomorrow = DAY + timedelta(days=1)
     totals = calc.calendar_day_totals(tomorrow)
     assert totals["grid_import"] == 0.0 and totals["solar"] == 0.0
     tiny = EnergyFlows(grid_to_home=0.003, solar_to_home=0.001)
     out = fit_flows_to_totals(tiny, totals)
     assert out.grid_to_home <= 0.003 and out.solar_to_home <= 0.001
+
+
+@pytest.mark.unit
+@freeze_time("2026-11-18 00:00:30")
+def test_a_skipped_cycle_across_midnight_books_under_the_new_day(caplog):
+    """The device cost books read ``booking_day``. A skipped cycle left it
+    at yesterday, so yesterday's cost showed under today's midnight reset
+    for one cycle (a tool that reads a drop as a reset counts it twice)."""
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.solar_energy_management.coordinator.energy_calculator import (
+        DEVICE_TARIFF_COST,
+        DEVICE_TARIFF_KWH,
+    )
+
+    calc, _ = _rig()
+    calc.booking_day = DAY
+    calc._daily_accumulators[f"{DEVICE_TARIFF_KWH}pump_{DAY}"] = 4.2
+    calc._daily_cost_accumulators[f"{DEVICE_TARIFF_COST}pump_{DAY}"] = 1.30
+    calc._last_update = dt_util.now() - timedelta(minutes=5)
+    caplog.clear()
+    calc.calculate_energy(PowerReadings())
+    assert "skipping cycle" in caplog.text
+    assert calc.booking_day == DAY + timedelta(days=1)
+    assert calc.get_device_tariff("pump", calc.booking_day) == {
+        "daily_grid_kwh": 0.0, "daily_cost": 0.0}
+    # yesterday's books stay where they are
+    assert calc.get_device_tariff("pump", DAY)["daily_cost"] == 1.30
 
 
 # ── Guard: the base reads nothing ``calculate_energy`` rebuilds each cycle ──
@@ -361,7 +393,7 @@ def _self_reads(source: str, name: str) -> set:
 
 @pytest.mark.unit
 def test_the_base_reads_no_state_of_this_cycle():
-    # ``booking_day`` too: a cycle ``calculate_energy`` skips never sets it.
+    # ``booking_day`` too: the books' day, not the split's.
     per_cycle = _rebuilt_each_cycle() | {"booking_day"}
     assert {"_counter_backed", "_meter_staged"} <= per_cycle   # the scan finds them
     src = (ROOT / "coordinator" / "energy_calculator.py").read_text()

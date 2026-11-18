@@ -118,8 +118,8 @@ def test_totals_are_the_day_rows_whatever_this_cycle_read():
     rows = {k: v for k, v in PROD_TOTALS.items() if k != "home"}
     for backed in (set(), {"grid_import", "grid_export"}, {"home", "grid_import"}):
         totals = _calc(backed).calendar_day_totals(date(2026, 11, 8))
-        # the EV column is the midnight mirror, not the EV day; the house is the balance
-        assert totals == {**rows, "home": None}, backed
+        # the EV keeps the split's own sum (#1382); the house is the balance
+        assert totals == {**rows, "home": None, "ev": None}, backed
 
 
 @pytest.mark.unit
@@ -137,8 +137,9 @@ def test_coordinator_publishes_the_fitted_copy_right_after_integrating():
 # ── (#1324) No solar counter: the meters that DO count still win ─────────
 # PROD 08.11 evening: grid and battery are counter-backed, solar is not
 # (no solar counter), so the home row is never "the meters' balance".
-# The split must still follow the four metered totals; solar keeps the
-# split's own sum and the house becomes the balance.
+# The split must still follow the four metered totals; the house becomes
+# the balance. (A None total keeps the split's own sum; since #1382 only the
+# EV and the house are None, and solar takes its row.)
 
 def test_partial_meters_fit_grid_and_battery_and_balance_the_house():
     from custom_components.solar_energy_management.coordinator.flow_calculator import (
