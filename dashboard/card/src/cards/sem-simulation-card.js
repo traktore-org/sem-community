@@ -735,8 +735,11 @@ class SEMSimulationCard extends SEMLitBase {
                 appearance: none; -webkit-appearance: none; background-color: var(--secondary-background-color);
                 background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bbbbbb' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
                 background-repeat: no-repeat; background-position: right 6px center; background-size: 14px;
-                color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 8px;
-                padding: 4px 24px 4px 10px; font-size: 12px; font-weight: 700; font-family: inherit;
+                color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: 20px;
+                /* (#1321) the rounded chip of the other screens' choice lists */
+                height: 36px; padding: 0 32px 0 14px; background-position: right 10px center; background-size: 18px;
+                font-size: var(--ha-font-size-m, 14px); font-weight: 500; font-family: inherit;
+                background-color: var(--card-background-color, var(--secondary-background-color));
             }
             .runrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
             .btn {

@@ -126,9 +126,12 @@ for (const defined of [false, true]) {
         defineAll(defined);
         const seen = [];
         const out = card()._select([{ value: 'x', label: 'X' }, { value: 'y', label: 'Y' }], 'x', (v) => seen.push(v));
-        assert.match(text(out), defined ? /<ha-selector/ : /<select/);
+        // (#1321) the rounded chip either way: HA's grey form field looked out of place
+        assert.match(text(out), /pickchip/);
+        assert.match(text(out), /<select/);
+        assert.doesNotMatch(text(out), /<ha-selector/);
         const fire = handlers(out)[0];
-        fire(defined ? { detail: { value: 'y' } } : { target: { value: 'y' } });
+        fire({ target: { value: 'y' } });
         assert.deepEqual(seen, ['y']);
     });
 }

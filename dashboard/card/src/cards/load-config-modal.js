@@ -89,6 +89,9 @@ export function formValuesToServiceData(energySensor, v) {
 // (#1321) HA's theme variables only: the box follows the light and dark theme.
 const FIELD_STYLE =
     'width:100%;padding:8px;margin:6px 0 12px;border-radius:4px 4px 0 0;border:0;border-bottom:1px solid var(--secondary-text-color);background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit;box-sizing:border-box';
+// (#1321) a choice list in the rounded chip look of the dashboard's other choices
+const CHOICE_STYLE =
+    'appearance:none;-webkit-appearance:none;width:100%;height:40px;margin:6px 0 12px;padding:0 36px 0 16px;border-radius:20px;border:1px solid var(--divider-color);background:var(--card-background-color,var(--secondary-background-color)) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23888%27 d=%27M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z%27/%3E%3C/svg%3E") no-repeat right 10px center/20px;color:var(--primary-text-color);font:inherit;box-sizing:border-box';
 const LABEL_STYLE = 'font-size:var(--ha-font-size-s,12px);color:var(--secondary-text-color)';
 const NOTE_STYLE = 'font-size:var(--ha-font-size-s,12px);color:var(--secondary-text-color);margin:-6px 0 12px;max-width:340px';
 
@@ -137,7 +140,7 @@ export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = fa
             ${field('cfg-name', 'text', ownName, `maxlength="${LOAD_NAME_MAX}" placeholder="${escapeHtml(autoName)}"`)}
             <div style="${NOTE_STYLE}">${t('cfg_own_name_hint')}</div>`}
             ${label(t('control_type'))}
-            <select id="cfg-type" style="${FIELD_STYLE}">
+            <select id="cfg-type" style="${CHOICE_STYLE}">
                 ${opt('switch', t('mode_switch'))}
                 ${opt('current', t('mode_current'))}
                 ${opt('input_boolean', t('mode_input_boolean'))}

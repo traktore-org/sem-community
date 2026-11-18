@@ -2516,7 +2516,8 @@
     "next_reason_one_rate": "Jedna sazba",
     "next_copy_by_hand_title": "Zkopírujte ručně",
     "next_copy_by_hand": "Tento prohlížeč zde kopírování nepovoluje. Text je označený: zkopírujte ho a vložte do hlášení.",
-    "next_close": "Zavřít"
+    "next_close": "Zavřít",
+    "next_period": "Období"
   },
   "da": {
     "/year": "/år",
@@ -5035,7 +5036,8 @@
     "next_reason_one_rate": "Én pris",
     "next_copy_by_hand_title": "Kopiér selv",
     "next_copy_by_hand": "Denne browser tillader ikke kopiering her. Teksten er markeret: kopiér den og indsæt den i din rapport.",
-    "next_close": "Luk"
+    "next_close": "Luk",
+    "next_period": "Periode"
   },
   "de": {
     "/year": "/Jahr",
@@ -7554,7 +7556,8 @@
     "next_reason_one_rate": "Ein Tarif",
     "next_copy_by_hand_title": "Von Hand kopieren",
     "next_copy_by_hand": "Dieser Browser erlaubt hier kein Kopieren. Der Text ist markiert: kopieren Sie ihn und fügen Sie ihn in Ihre Meldung ein.",
-    "next_close": "Schliessen"
+    "next_close": "Schliessen",
+    "next_period": "Zeitraum"
   },
   "en": {
     "/year": "/year",
@@ -10073,7 +10076,8 @@
     "next_reason_one_rate": "One rate",
     "next_copy_by_hand_title": "Copy by hand",
     "next_copy_by_hand": "This browser does not allow copying here. The text is selected: copy it, then paste it in your report.",
-    "next_close": "Close"
+    "next_close": "Close",
+    "next_period": "Period"
   },
   "es": {
     "/year": "/año",
@@ -12592,7 +12596,8 @@
     "next_reason_one_rate": "Una tarifa",
     "next_copy_by_hand_title": "Copiar a mano",
     "next_copy_by_hand": "Este navegador no permite copiar aquí. El texto está seleccionado: cópielo y péguelo en su informe.",
-    "next_close": "Cerrar"
+    "next_close": "Cerrar",
+    "next_period": "Periodo"
   },
   "fi": {
     "/year": "/vuosi",
@@ -15111,7 +15116,8 @@
     "next_reason_one_rate": "Yksi hinta",
     "next_copy_by_hand_title": "Kopioi itse",
     "next_copy_by_hand": "Tämä selain ei salli kopiointia tässä. Teksti on valittu: kopioi se ja liitä se ilmoitukseesi.",
-    "next_close": "Sulje"
+    "next_close": "Sulje",
+    "next_period": "Jakso"
   },
   "fr": {
     "/year": "/an",
@@ -17630,7 +17636,8 @@
     "next_reason_one_rate": "Un tarif",
     "next_copy_by_hand_title": "Copier à la main",
     "next_copy_by_hand": "Ce navigateur ne permet pas de copier ici. Le texte est sélectionné : copiez-le, puis collez-le dans votre rapport.",
-    "next_close": "Fermer"
+    "next_close": "Fermer",
+    "next_period": "Période"
   },
   "hu": {
     "/year": "/év",
@@ -20149,7 +20156,8 @@
     "next_reason_one_rate": "Egy tarifa",
     "next_copy_by_hand_title": "Másolja kézzel",
     "next_copy_by_hand": "Ez a böngésző itt nem engedi a másolást. A szöveg ki van jelölve: másolja ki, és illessze be a bejelentésbe.",
-    "next_close": "Bezárás"
+    "next_close": "Bezárás",
+    "next_period": "Időszak"
   },
   "it": {
     "/year": "/anno",
@@ -22668,7 +22676,8 @@
     "next_reason_one_rate": "Tariffa unica",
     "next_copy_by_hand_title": "Copia a mano",
     "next_copy_by_hand": "Questo browser non consente di copiare qui. Il testo è selezionato: copialo e incollalo nella segnalazione.",
-    "next_close": "Chiudi"
+    "next_close": "Chiudi",
+    "next_period": "Periodo"
   },
   "nl": {
     "/year": "/jaar",
@@ -25187,7 +25196,8 @@
     "next_reason_one_rate": "Eén tarief",
     "next_copy_by_hand_title": "Handmatig kopiëren",
     "next_copy_by_hand": "Deze browser staat kopiëren hier niet toe. De tekst is geselecteerd: kopieer hem en plak hem in je melding.",
-    "next_close": "Sluiten"
+    "next_close": "Sluiten",
+    "next_period": "Periode"
   },
   "no": {
     "/year": "/år",
@@ -27706,7 +27716,8 @@
     "next_reason_one_rate": "Én pris",
     "next_copy_by_hand_title": "Kopier selv",
     "next_copy_by_hand": "Denne nettleseren tillater ikke kopiering her. Teksten er merket: kopier den og lim den inn i rapporten.",
-    "next_close": "Lukk"
+    "next_close": "Lukk",
+    "next_period": "Periode"
   },
   "pl": {
     "/year": "/rok",
@@ -30225,7 +30236,8 @@
     "next_reason_one_rate": "Jedna taryfa",
     "next_copy_by_hand_title": "Skopiuj ręcznie",
     "next_copy_by_hand": "Ta przeglądarka nie pozwala tu kopiować. Tekst jest zaznaczony: skopiuj go i wklej do zgłoszenia.",
-    "next_close": "Zamknij"
+    "next_close": "Zamknij",
+    "next_period": "Okres"
   },
   "pt": {
     "/year": "/ano",
@@ -32744,7 +32756,8 @@
     "next_reason_one_rate": "Tarifa única",
     "next_copy_by_hand_title": "Copiar à mão",
     "next_copy_by_hand": "Este navegador não permite copiar aqui. O texto está selecionado: copie-o e cole-o no seu relato.",
-    "next_close": "Fechar"
+    "next_close": "Fechar",
+    "next_period": "Período"
   },
   "ro": {
     "/year": "/an",
@@ -35263,7 +35276,8 @@
     "next_reason_one_rate": "Tarif unic",
     "next_copy_by_hand_title": "Copiați manual",
     "next_copy_by_hand": "Acest browser nu permite copierea aici. Textul este selectat: copiați-l și lipiți-l în raport.",
-    "next_close": "Închide"
+    "next_close": "Închide",
+    "next_period": "Perioadă"
   },
   "sv": {
     "/year": "/år",
@@ -37782,7 +37796,8 @@
     "next_reason_one_rate": "Ett pris",
     "next_copy_by_hand_title": "Kopiera själv",
     "next_copy_by_hand": "Den här webbläsaren tillåter inte kopiering här. Texten är markerad: kopiera den och klistra in den i din rapport.",
-    "next_close": "Stäng"
+    "next_close": "Stäng",
+    "next_period": "Period"
   },
   "zh": {
     "/year": "/年",
@@ -40301,6 +40316,7 @@
     "next_reason_one_rate": "单一电价",
     "next_copy_by_hand_title": "手动复制",
     "next_copy_by_hand": "此浏览器不允许在此复制。文本已选中：请复制后粘贴到您的报告中。",
-    "next_close": "关闭"
+    "next_close": "关闭",
+    "next_period": "时间段"
   }
 }

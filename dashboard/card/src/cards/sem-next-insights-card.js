@@ -694,10 +694,12 @@ class SEMNextInsightsCard extends SEMNextBase {
         const lead = this._tab === 'replay' ? { main: this._t('next_replay'), sub: this._t('next_replay_hint') } : { main: this._lead(), sub: this._t(['week', 'month', 'year'].includes(this._period) ? 'next_ins_sub' : 'next_ins_sub_short') };
         return this._frame(lead, html`
             <div class="period">
-                ${this._seg(PERIOD_KEYS.map(([key, label]) => ({ key, label: this._t(label) })), this._period, (k) => this._pick(k), { small: true, disabled: this._tab === 'replay' })}
                 ${(this._w || (typeof window !== 'undefined' ? window.innerWidth : 0)) && (this._w || window.innerWidth) < 600
-                    ? this._select(tabs.map((x) => ({ value: x.key, label: x.label })), this._tab, (k) => this._pickTab(k), { ariaLabel: this._t('next_topic'), required: true })
-                    : this._seg(tabs, this._tab, (k) => this._pickTab(k), { small: true })}
+                    // (#1321) a phone: two chips "Today ▾" "Energy ▾" in the header chips' look
+                    ? html`${this._tab === 'replay' ? nothing : this._pickChip(PERIOD_KEYS.map(([key, label]) => ({ value: key, label: this._t(label) })), this._period, (k) => this._pick(k), { ariaLabel: this._t('next_period') })}
+                        ${this._pickChip(tabs.map((x) => ({ value: x.key, label: x.label })), this._tab, (k) => this._pickTab(k), { ariaLabel: this._t('next_topic') })}`
+                    : html`${this._seg(PERIOD_KEYS.map(([key, label]) => ({ key, label: this._t(label) })), this._period, (k) => this._pick(k), { small: true, disabled: this._tab === 'replay' })}
+                        ${this._seg(tabs, this._tab, (k) => this._pickTab(k), { small: true })}`}
             </div>
             <div class="grid">${body()}</div>`);
     }

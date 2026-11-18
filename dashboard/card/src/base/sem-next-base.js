@@ -113,6 +113,19 @@ export const nextCss = css`
     .hdr { display: flex; align-items: center; gap: 8px; padding: 4px 0 12px; flex-wrap: wrap; }
     .hdr .sp { margin-right: auto; }
     button.chip { cursor: pointer; }
+    /* (#1321) a switcher chip on a phone: looks like the header chips, the phone's own picker opens */
+    .pickchip { position: relative; display: inline-flex; align-items: center; height: 40px; border-radius: 20px; background: var(--n-card); border: 1px solid var(--n-line); color: var(--n-fg); max-width: 100%; }
+    .pickchip select { appearance: none; -webkit-appearance: none; background: transparent; border: 0; color: inherit; font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); padding: 0 34px 0 16px; height: 100%; border-radius: 20px; cursor: pointer; max-width: 100%; text-overflow: ellipsis; }
+    .pickchip select:focus-visible { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 2px; }
+    .pickchip ha-icon, .pickchip .i { position: absolute; right: 10px; pointer-events: none; color: var(--n-fg2); }
+    /* (#1321) choices in a dialog: one row each, the chosen one ticked */
+    .choices { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+    .choice { display: flex; align-items: center; min-height: 44px; padding: 0 16px 0 44px; border-radius: 12px; border: 1px solid var(--n-line); background: var(--n-card); color: var(--n-fg); font: inherit; font-size: var(--ha-font-size-m, 14px); text-align: left; cursor: pointer; position: relative; }
+    .choice::before { content: ""; position: absolute; left: 14px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--n-fg2); box-sizing: border-box; }
+    .choice.on { border-color: var(--primary-color, #03a9f4); background: color-mix(in srgb, var(--primary-color, #03a9f4) 10%, var(--n-card)); }
+    .choice.on::before { border-color: var(--primary-color, #03a9f4); background: radial-gradient(circle, var(--primary-color, #03a9f4) 0 4px, transparent 5px); }
+    .choice:focus-visible { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 2px; }
+    select.chip-select { appearance: none; -webkit-appearance: none; height: 40px; border-radius: 20px; border: 1px solid var(--n-line); background: var(--n-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23888' d='M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z'/%3E%3C/svg%3E") no-repeat right 10px center / 20px; color: var(--n-fg); font: inherit; font-size: var(--ha-font-size-m, 14px); padding: 0 36px 0 16px; max-width: 100%; }
     .chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; height: 32px; border-radius: 16px; background: var(--n-card); border: 1px solid var(--n-line); font-size: var(--ha-font-size-s, 13px); font-weight: var(--ha-font-weight-medium, 500); white-space: nowrap; }
     .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--n-ok); }
     .chip.obs .dot { background: var(--n-warn); }
@@ -706,7 +719,7 @@ export class SEMNextBase extends SEMLitBase {
         // (#1321) many modes on a phone: a row of buttons cuts each label to
         // "Solar +…", so a dropdown names every mode in full instead
         if (items.length > 4 && !o.disabled && segNarrow()) {
-            return this._select(items.filter((it) => !it.disabled).map((it) => ({ value: String(it.key), label: it.label })),
+            return this._pickChip(items.filter((it) => !it.disabled).map((it) => ({ value: String(it.key), label: it.label })),
                 cur, (v) => pick(v), { ariaLabel: o.label || '' });
         }
         // HA's disabled look fades the labels to nothing, so a disabled control is the native one in readable colours
@@ -763,6 +776,9 @@ export class SEMNextBase extends SEMLitBase {
      */
     _select(options, value, onChange, o = {}) {
         const cur = value === null || value === undefined ? '' : String(value);
+        // (#1321) every choice list on a screen is the rounded chip; HA's grey
+        // form field with its clear "×" looked out of place among the cards
+        if (!o.disabled && !o.onKeydown && !o.onBlur) return this._pickChip(options, value, onChange, o);
         if (haDefined('ha-selector') && this._hass) {
             const selector = { select: { mode: 'dropdown', options: options.map((x) => ({ value: String(x.value), label: x.label })) } };
             // (#1321) a required field draws an asterisk after its label; the topic switch names itself for readers instead
@@ -773,6 +789,19 @@ export class SEMNextBase extends SEMLitBase {
         return html`<select aria-label="${o.label || o.ariaLabel || nothing}" ?disabled=${!!o.disabled} @change=${(e) => onChange(e.target.value)}
             @keydown=${o.onKeydown || nothing} @blur=${o.onBlur || nothing}>
             ${options.map((x) => html`<option value=${x.value} ?selected=${String(x.value) === cur}>${x.label}</option>`)}</select>`;
+    }
+
+    /**
+     * (#1321) A switcher on a phone: a rounded chip "Today ▾" in the look of
+     * the header chips. Tapping it opens the phone's own picker. HA's form
+     * field (grey box, clear ×) stays for settings dialogs only.
+     */
+    _pickChip(options, value, onChange, o = {}) {
+        const cur = value === null || value === undefined ? '' : String(value);
+        return html`<label class="pickchip">
+            <select aria-label="${o.ariaLabel || o.label || nothing}" @change=${(e) => { if (e.target.value !== cur) onChange(e.target.value); }}>
+                ${options.map((x) => html`<option value=${x.value} ?selected=${String(x.value) === cur}>${x.label}</option>`)}
+            </select>${this._icon('mdi:chevron-down', 's')}</label>`;
     }
 
     _pill(text, cls = '', o = {}) {
@@ -947,15 +976,35 @@ export class SEMNextBase extends SEMLitBase {
         const keys = (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
         if (f.kind === 'select') {
             let v = String(cur);
-            if (haDefined('ha-selector') && this._hass) {
-                const el = document.createElement('ha-selector');
-                el.hass = this._hass;
-                el.selector = { select: { mode: 'dropdown', options: (f.options || []).map((o) => ({ value: String(o.value), label: o.label })) } };
-                el.value = v;
-                el.addEventListener('value-changed', (e) => { e.stopPropagation(); if (e.detail?.value !== undefined) v = String(e.detail.value); });
-                return { el, get: () => v };
+            const opts = f.options || [];
+            if (opts.length <= 8) {
+                // (#1321) a few choices: one row each, the chosen one ticked, as HA's
+                // own choice dialogs do; a tap picks it (OK still commits)
+                const list = document.createElement('div');
+                list.className = 'choices';
+                list.setAttribute('role', 'radiogroup');
+                const rows = opts.map((o) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'choice';
+                    b.setAttribute('role', 'radio');
+                    b.dataset.value = String(o.value);
+                    b.textContent = o.label;
+                    b.addEventListener('click', () => { v = String(o.value); mark(); });
+                    b.addEventListener('dblclick', () => { v = String(o.value); mark(); submit(); });
+                    list.appendChild(b);
+                    return b;
+                });
+                const mark = () => rows.forEach((b) => {
+                    const on = b.dataset.value === v;
+                    b.classList.toggle('on', on);
+                    b.setAttribute('aria-checked', String(on));
+                });
+                mark();
+                return { el: list, get: () => v };
             }
             const el = document.createElement('select');
+            el.className = 'chip-select';
             for (const o of f.options || []) {
                 const op = document.createElement('option');
                 op.value = String(o.value); op.textContent = o.label;

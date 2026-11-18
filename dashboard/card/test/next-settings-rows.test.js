@@ -306,7 +306,7 @@ test('rows are buttons for the keyboard: Enter and Space open, other keys do not
 
 // ── the dialog: HA elements when defined, native ones otherwise ──
 class FakeEl {
-    constructor(tag) { this.tag = tag; this.attrs = {}; this.children = []; this.listeners = {}; this.btns = {}; this.value = ''; this.id = ''; this.removed = false; }
+    constructor(tag) { this.tag = tag; this.attrs = {}; this.children = []; this.listeners = {}; this.btns = {}; this.value = ''; this.id = ''; this.removed = false; this.dataset = {}; this.on = false; const me = this; this.classList = { toggle(c, v) { if (c === 'on') me.on = !!v; }, add() {} }; }
     setAttribute(k, v) { this.attrs[k] = v; }
     appendChild(c) { this.children.push(c); return c; }
     addEventListener(t, f) { this.listeners[t] = f; }
@@ -369,27 +369,35 @@ test('the dialog commits nothing for a blank number, an unchanged value or Escap
     assert.deepEqual(got, []);
 });
 
-test('a select is a native select without ha-selector, ha-selector with it', async () => {
+test('a select in the dialog is a list of choices, with or without HA elements (#1321)', async () => {
     const options = [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }];
+    for (const defined of [[], ['ha-selector', 'ha-textfield', 'ha-dialog']]) {
+        let got = null;
+        const c = dialogCard(defined);
+        const d = await c.run(async () => c.el._editDialog({ title: 'T', kind: 'select', value: 'a', options, onCommit: (v) => { got = v; } }));
+        const list = d.el.body.children.at(-1);
+        assert.equal(list.className, 'choices', 'no grey form field, a list of choices');
+        assert.deepEqual(list.children.map((b) => b.dataset.value), ['a', 'b']);
+        assert.deepEqual(list.children.map((b) => b.on), [true, false], 'the current value is ticked');
+        list.children[1].listeners.click();
+        assert.deepEqual(list.children.map((b) => b.on), [false, true]);
+        assert.equal(got, null, 'a tap picks; OK commits');
+        d.el.btns['ed-ok'].listeners.click();
+        assert.equal(got, 'b');
+    }
+});
+
+test('a long choice list in the dialog is the chip select (#1321)', async () => {
+    const options = Array.from({ length: 12 }, (_, i) => ({ value: 'v' + i, label: 'V' + i }));
     let got = null;
-    let c = dialogCard();
-    let d = await c.run(async () => c.el._editDialog({ title: 'T', kind: 'select', value: 'a', options, onCommit: (v) => { got = v; } }));
+    const c = dialogCard(['ha-selector', 'ha-dialog']);
+    const d = await c.run(async () => c.el._editDialog({ title: 'T', kind: 'select', value: 'v0', options, onCommit: (v) => { got = v; } }));
     const sel = d.el.body.children.at(-1);
     assert.equal(sel.tag, 'select');
-    assert.deepEqual(sel.children.map((o) => o.value), ['a', 'b']);
-    sel.value = 'b';
+    assert.equal(sel.className, 'chip-select');
+    sel.value = 'v7';
     d.el.btns['ed-ok'].listeners.click();
-    assert.equal(got, 'b');
-    c = dialogCard(['ha-selector', 'ha-textfield', 'ha-dialog']);
-    got = null;
-    d = await c.run(async () => c.el._editDialog({ title: 'T', kind: 'select', value: 'a', options, onCommit: (v) => { got = v; } }));
-    const hs = d.el.body.children.at(-1);
-    assert.equal(hs.tag, 'ha-selector');
-    assert.deepEqual(hs.selector.select.options.map((o) => o.value), ['a', 'b']);
-    assert.ok(hs.hass);
-    hs.listeners['value-changed']({ stopPropagation() {}, detail: { value: 'b' } });
-    d.el.btns['ed-ok'].listeners.click();
-    assert.equal(got, 'b');
+    assert.equal(got, 'v7');
 });
 
 test('text and entity fields: ha-textfield and the picker when defined, plain inputs otherwise', async () => {

@@ -52,7 +52,7 @@ test('six modes on a phone: a dropdown, not a row of cut labels', () => {
     try {
         const el = mount('sem-next-devices-card', {});
         let picked = null;
-        el._select = (opts, cur, onChange) => { picked = { opts, cur, onChange }; return 'select'; };
+        el._pickChip = (opts, cur, onChange) => { picked = { opts, cur, onChange }; return 'select'; };
         const items = ['off', 'solar_only', 'solar_plus_battery', 'solar_plus_cheap', 'min_plus_solar', 'always_max']
             .map((k) => ({ key: k, label: k }));
         let chosen = null;
@@ -73,7 +73,7 @@ test('a wide screen keeps the buttons', () => {
     try {
         const el = mount('sem-next-devices-card', {});
         let picked = null;
-        el._select = () => { picked = true; return 'select'; };
+        el._pickChip = () => { picked = true; return 'select'; };
         el._seg([1, 2, 3, 4, 5, 6].map((k) => ({ key: k, label: String(k) })), 1, () => {});
         assert.equal(picked, null);
     } finally { globalThis.matchMedia = real; }
