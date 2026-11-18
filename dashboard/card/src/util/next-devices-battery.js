@@ -121,7 +121,7 @@ export function batteryBody(card, row) {
         if (Number.isFinite(refill)) subs.push(tf('next_refill', { kwh: card._fmt(refill, 1) }));
         if (spend !== null) subs.push(tf('next_spendable_kwh', { kwh: card._fmt(spend, 1) }));
         if (Number.isFinite(nights)) subs.push(tf('next_nights_learned', { n: nights }));
-        const rebuild = card._val(t('rebuild_nights'), () => card._svc('backfill_battery_nights', { days: 365 }), { disabled: dis });
+        const rebuild = card._val(t('rebuild_nights'), () => card._askFirst(t('rebuild_nights'), () => card._svc('backfill_battery_nights', { days: 365 })), { disabled: dis });
         rows.push(card._row('mdi:weather-night', t('tonight'),
             (t('planning_phase_' + sa.phase) || sa.phase) + (Number.isFinite(need) ? ' · ' + tf('next_needs_kwh', { kwh: card._fmt(need, 1) }) : ''),
             html`${subs.join(' · ')}${sa.phase === 'learning' ? html`${subs.length ? ' · ' : ''}${rebuild}` : ''}`));
@@ -200,7 +200,7 @@ export function batteryBody(card, row) {
         const pct = (x) => (x === null ? t('learning') : Math.round(x) + ' %');
         rows.push(card._row('mdi:check-decagram-outline', t('next_evidence'),
             (providerName(src) || t('next_src_forecast')) + ' · ' + pct(d1) + ' / ' + pct(d2),
-            html`${t('next_trusted_sub')}${card._has(SPEND) ? html` · ${card._val(t('rebuild_nights'), () => card._svc('backfill_battery_nights', { days: 365 }), { disabled: dis })}` : ''}`, { more: true }));
+            html`${t('next_trusted_sub')}${card._has(SPEND) ? html` · ${card._val(t('rebuild_nights'), () => card._askFirst(t('rebuild_nights'), () => card._svc('backfill_battery_nights', { days: 365 })), { disabled: dis })}` : ''}`, { more: true }));
     }
     const health = num('sensor.sem_battery_health_score'), cycles = num('sensor.sem_battery_cycles_estimated');
     const temp = num('sensor.sem_battery_temperature');

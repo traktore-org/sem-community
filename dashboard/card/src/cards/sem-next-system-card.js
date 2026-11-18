@@ -385,9 +385,9 @@ class SEMNextSystemCard extends SEMNextBase {
         const t = (k) => this._t(k);
         const dis = false;   // (#1321) SEM's own settings stay editable while it only watches
         if (slot.kind === 'action') {
-            const go = slot.nav ? () => this._go(navTarget(window.location.pathname, slot.action)) : () => this._action(slot.action);
-            // a link names itself once: the row text, no second copy as its value
-            return this._setRow({ label: r.label, value: slot.nav ? '›' : rowText(t(slot.labelKey)), more: r.more, onTap: go, disabled: dis && !slot.nav });
+            const go = slot.nav ? () => this._go(navTarget(window.location.pathname, slot.action)) : () => this._askAction(slot, r.label);
+            // (#1321) a sign row shows its direction now; a tap only opens the question
+            return this._setRow({ label: r.label, value: slot.nav ? '›' : this._actionValue(slot, t), more: r.more, onTap: go, disabled: dis && !slot.nav });
         }
         // (#1321) no help line under any row: it sits in the row's dialog
         if (slot.ro || slot.kind === 'text' && !pendingKey(slot)) {
@@ -556,6 +556,23 @@ class SEMNextSystemCard extends SEMNextBase {
     }
 
     // ── one-shot actions ──
+
+    /** What the row reads: the direction a sign is read in now, else the verb. */
+    _actionValue(slot, t) {
+        const sensor = { flip_grid_sign: 'diag_grid_sign', flip_battery_sign: 'diag_battery_sign' }[slot.action];
+        if (!sensor) return rowText(t(slot.labelKey));
+        const raw = this._str('sensor.sem_' + sensor);
+        if (!raw) return MISSING;
+        return t(/negated|inverted/i.test(raw) ? 'sign_negated' : 'normal');
+    }
+
+    /** (#1321) No action runs on a tap: the question comes first, only its confirm button calls the service. */
+    _askAction(slot, label) {
+        const flip = slot.action === 'flip_grid_sign' ? 'next_flip_grid_body' : slot.action === 'flip_battery_sign' ? 'next_flip_battery_body' : '';
+        const run = () => this._action(slot.action);
+        if (flip) this._confirmDo({ title: label, body: this._t(flip), okLabel: this._t('next_flip_ok'), run });
+        else this._askFirst(label, run);
+    }
 
     async _action(name) {
         if (!this._hass) return;

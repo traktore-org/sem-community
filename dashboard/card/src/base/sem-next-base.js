@@ -825,6 +825,33 @@ export class SEMNextBase extends SEMLitBase {
         return { el, close };
     }
 
+    /**
+     * (#1321) Every action that changes what SEM does asks first. A tap opens
+     * this dialog; only the confirm button runs `run`. Cancel, Escape and a
+     * click outside call nothing. spec = { title, body, okLabel, run }.
+     */
+    _confirmDo(spec) {
+        const t = (k) => this._t(k);
+        const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const ok = spec.okLabel || t('next_yes');
+        const { el, close } = this._dialog({
+            id: 'sem-confirm-dlg', title: spec.title || '',
+            build: (d) => (d
+                ? `<div class="ed-help">${esc(spec.body)}</div><ha-button id="cf-cancel" slot="secondaryAction" appearance="plain">${esc(t('next_cancel'))}</ha-button><ha-button id="cf-ok" slot="primaryAction" appearance="filled">${esc(ok)}</ha-button>`
+                : `<div class="dlg-box"><div class="dlg-title">${esc(spec.title)}</div><div class="ed-help">${esc(spec.body)}</div>
+                    <div class="dlg-actions"><div class="grow"></div><button type="button" id="cf-cancel" class="btn ghost">${esc(t('next_cancel'))}</button><button type="button" id="cf-ok" class="btn primary">${esc(ok)}</button></div></div>`),
+        });
+        el.querySelector('#cf-cancel')?.addEventListener('click', () => close());
+        el.querySelector('#cf-ok')?.addEventListener('click', () => { close(); spec.run(); });
+        return { el, close };
+    }
+
+    /** The words of a confirm for an action named `label`: "Replan?" and what a yes does. */
+    _askFirst(label, run, o = {}) {
+        this._confirmDo({ title: o.title || this._tf('next_confirm_title', { action: label }), body: o.body || this._t('next_confirm_body'),
+            okLabel: o.okLabel || label, run });
+    }
+
     /** Commit what the dialog holds, once; a blank number or an unchanged value commits nothing. */
     _editOk(spec, fields, close) {
         const vals = fields.map((f) => f.get());

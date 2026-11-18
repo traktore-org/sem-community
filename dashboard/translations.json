@@ -2411,7 +2411,12 @@
     "next_days": "Dny",
     "next_last_session": "Poslední nabíjení",
     "setup_complete": "Nastavení dokončeno",
-    "next_row_setting": "Nastavení"
+    "next_row_setting": "Nastavení",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Tohle hned změní, co SEM dělá. Pokračovat?",
+    "next_flip_grid_body": "Otočí znaménko, kterým SEM čte síť. Použijte jen když odběr ze sítě vypadá jako dodávka. Špatné znaménko vede baterii a auto špatným směrem.",
+    "next_flip_battery_body": "Otočí znaménko, kterým SEM čte baterii. Použijte jen když nabíjení vypadá jako vybíjení. Špatné znaménko vede baterii a auto špatným směrem.",
+    "next_flip_ok": "Otočit"
   },
   "da": {
     "/year": "/år",
@@ -4825,7 +4830,12 @@
     "next_days": "Dage",
     "next_last_session": "Seneste session",
     "setup_complete": "Opsætning færdig",
-    "next_row_setting": "Indstilling"
+    "next_row_setting": "Indstilling",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Det ændrer straks, hvad SEM gør. Fortsæt?",
+    "next_flip_grid_body": "Vender fortegnet, som SEM læser nettet med. Brug det kun, når køb vises som salg. Et forkert fortegn får SEM til at styre batteri og bil forkert.",
+    "next_flip_battery_body": "Vender fortegnet, som SEM læser batteriet med. Brug det kun, når opladning vises som afladning. Et forkert fortegn får SEM til at styre batteri og bil forkert.",
+    "next_flip_ok": "Vend"
   },
   "de": {
     "/year": "/Jahr",
@@ -7239,7 +7249,12 @@
     "next_days": "Tage",
     "next_last_session": "Letzte Sitzung",
     "setup_complete": "Einrichtung abgeschlossen",
-    "next_row_setting": "Einstellung"
+    "next_row_setting": "Einstellung",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Das ändert sofort, was SEM tut. Fortfahren?",
+    "next_flip_grid_body": "Dreht das Vorzeichen, mit dem SEM das Netz liest. Nur nutzen, wenn Bezug als Einspeisung erscheint. Ein falsches Vorzeichen steuert Batterie und Auto verkehrt.",
+    "next_flip_battery_body": "Dreht das Vorzeichen, mit dem SEM die Batterie liest. Nur nutzen, wenn Laden als Entladen erscheint. Ein falsches Vorzeichen steuert Batterie und Auto verkehrt.",
+    "next_flip_ok": "Drehen"
   },
   "en": {
     "/year": "/year",
@@ -8331,7 +8346,7 @@
     "config_help_hints": "Short messages when something is off. Off: none. Weekly note: the Sunday summary only. All hints: a sensor that stops sending, a heavy night, rising grid use, cheap power with the car idle, and the weekly note.",
     "grid_manual": "Split sensors (set by you)",
     "grid_split_unverified": "Split sensors (not checked)",
-    "sign_negated": "Inverted",
+    "sign_negated": "Flipped",
     "charger_control_number": "via a number setting",
     "charger_control_service": "via action",
     "actual": "Actual",
@@ -9653,7 +9668,12 @@
     "next_days": "Days",
     "next_last_session": "Last session",
     "setup_complete": "Setup complete",
-    "next_row_setting": "Setting"
+    "next_row_setting": "Setting",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "This changes what SEM does right away. Continue?",
+    "next_flip_grid_body": "Flips the sign SEM reads the grid with. Use it only when import shows as export. A wrong sign makes SEM steer the battery and car the wrong way.",
+    "next_flip_battery_body": "Flips the sign SEM reads the battery with. Use it only when charging shows as discharging. A wrong sign makes SEM steer the battery and car the wrong way.",
+    "next_flip_ok": "Flip"
   },
   "es": {
     "/year": "/año",
@@ -12067,7 +12087,12 @@
     "next_days": "Días",
     "next_last_session": "Última sesión",
     "setup_complete": "Configuración completa",
-    "next_row_setting": "Ajuste"
+    "next_row_setting": "Ajuste",
+    "next_confirm_title": "¿{action}?",
+    "next_confirm_body": "Esto cambia al instante lo que hace SEM. ¿Continuar?",
+    "next_flip_grid_body": "Invierte el signo con el que SEM lee la red. Úselo solo si la importación aparece como exportación. Un signo erróneo hace que SEM gestione mal la batería y el coche.",
+    "next_flip_battery_body": "Invierte el signo con el que SEM lee la batería. Úselo solo si la carga aparece como descarga. Un signo erróneo hace que SEM gestione mal la batería y el coche.",
+    "next_flip_ok": "Invertir"
   },
   "fi": {
     "/year": "/vuosi",
@@ -14481,7 +14506,12 @@
     "next_days": "Päivät",
     "next_last_session": "Viimeisin lataus",
     "setup_complete": "Asennus valmis",
-    "next_row_setting": "Asetus"
+    "next_row_setting": "Asetus",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Tämä muuttaa heti sitä, mitä SEM tekee. Jatketaanko?",
+    "next_flip_grid_body": "Kääntää etumerkin, jolla SEM lukee verkon. Käytä vain, kun osto näkyy myyntinä. Väärä etumerkki ohjaa akkua ja autoa väärin.",
+    "next_flip_battery_body": "Kääntää etumerkin, jolla SEM lukee akun. Käytä vain, kun lataus näkyy purkuna. Väärä etumerkki ohjaa akkua ja autoa väärin.",
+    "next_flip_ok": "Käännä"
   },
   "fr": {
     "/year": "/an",
@@ -16895,7 +16925,12 @@
     "next_days": "Jours",
     "next_last_session": "Dernière session",
     "setup_complete": "Configuration terminée",
-    "next_row_setting": "Réglage"
+    "next_row_setting": "Réglage",
+    "next_confirm_title": "{action} ?",
+    "next_confirm_body": "Cela change tout de suite ce que fait SEM. Continuer ?",
+    "next_flip_grid_body": "Inverse le signe avec lequel SEM lit le réseau. À utiliser seulement si l'import apparaît comme export. Un mauvais signe fait piloter la batterie et la voiture à l'envers.",
+    "next_flip_battery_body": "Inverse le signe avec lequel SEM lit la batterie. À utiliser seulement si la charge apparaît comme une décharge. Un mauvais signe fait piloter la batterie et la voiture à l'envers.",
+    "next_flip_ok": "Inverser"
   },
   "hu": {
     "/year": "/év",
@@ -19309,7 +19344,12 @@
     "next_days": "Napok",
     "next_last_session": "Utolsó munkamenet",
     "setup_complete": "A beállítás kész",
-    "next_row_setting": "Beállítás"
+    "next_row_setting": "Beállítás",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Ez azonnal megváltoztatja, mit csinál a SEM. Folytatja?",
+    "next_flip_grid_body": "Megfordítja az előjelet, amellyel a SEM a hálózatot olvassa. Csak akkor használja, ha a vétel betáplálásnak látszik. Rossz előjellel a SEM rosszul vezérli az akkut és az autót.",
+    "next_flip_battery_body": "Megfordítja az előjelet, amellyel a SEM az akkut olvassa. Csak akkor használja, ha a töltés merülésnek látszik. Rossz előjellel a SEM rosszul vezérli az akkut és az autót.",
+    "next_flip_ok": "Megfordítás"
   },
   "it": {
     "/year": "/anno",
@@ -21723,7 +21763,12 @@
     "next_days": "Giorni",
     "next_last_session": "Ultima sessione",
     "setup_complete": "Configurazione completata",
-    "next_row_setting": "Impostazione"
+    "next_row_setting": "Impostazione",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Questo cambia subito ciò che fa SEM. Continuare?",
+    "next_flip_grid_body": "Inverte il segno con cui SEM legge la rete. Usalo solo se il prelievo appare come immissione. Un segno sbagliato fa gestire male batteria e auto.",
+    "next_flip_battery_body": "Inverte il segno con cui SEM legge la batteria. Usalo solo se la carica appare come scarica. Un segno sbagliato fa gestire male batteria e auto.",
+    "next_flip_ok": "Inverti"
   },
   "nl": {
     "/year": "/jaar",
@@ -24137,7 +24182,12 @@
     "next_days": "Dagen",
     "next_last_session": "Laatste sessie",
     "setup_complete": "Installatie voltooid",
-    "next_row_setting": "Instelling"
+    "next_row_setting": "Instelling",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Dit verandert meteen wat SEM doet. Doorgaan?",
+    "next_flip_grid_body": "Draait het teken om waarmee SEM het net leest. Gebruik dit alleen als afname als teruglevering wordt getoond. Een fout teken stuurt accu en auto verkeerd aan.",
+    "next_flip_battery_body": "Draait het teken om waarmee SEM de accu leest. Gebruik dit alleen als laden als ontladen wordt getoond. Een fout teken stuurt accu en auto verkeerd aan.",
+    "next_flip_ok": "Omdraaien"
   },
   "no": {
     "/year": "/år",
@@ -26551,7 +26601,12 @@
     "next_days": "Dager",
     "next_last_session": "Siste økt",
     "setup_complete": "Oppsett ferdig",
-    "next_row_setting": "Innstilling"
+    "next_row_setting": "Innstilling",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Dette endrer med en gang hva SEM gjør. Fortsette?",
+    "next_flip_grid_body": "Snur fortegnet SEM leser nettet med. Bruk det bare når kjøp vises som salg. Feil fortegn får SEM til å styre batteri og bil feil.",
+    "next_flip_battery_body": "Snur fortegnet SEM leser batteriet med. Bruk det bare når lading vises som utlading. Feil fortegn får SEM til å styre batteri og bil feil.",
+    "next_flip_ok": "Snu"
   },
   "pl": {
     "/year": "/rok",
@@ -28965,7 +29020,12 @@
     "next_days": "Dni",
     "next_last_session": "Ostatnia sesja",
     "setup_complete": "Konfiguracja zakończona",
-    "next_row_setting": "Ustawienie"
+    "next_row_setting": "Ustawienie",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "To od razu zmienia działanie SEM. Kontynuować?",
+    "next_flip_grid_body": "Odwraca znak, którym SEM czyta sieć. Użyj tylko wtedy, gdy pobór wygląda jak oddawanie. Zły znak sprawia, że SEM źle steruje baterią i autem.",
+    "next_flip_battery_body": "Odwraca znak, którym SEM czyta baterię. Użyj tylko wtedy, gdy ładowanie wygląda jak rozładowanie. Zły znak sprawia, że SEM źle steruje baterią i autem.",
+    "next_flip_ok": "Odwróć"
   },
   "pt": {
     "/year": "/ano",
@@ -31379,7 +31439,12 @@
     "next_days": "Dias",
     "next_last_session": "Última sessão",
     "setup_complete": "Configuração concluída",
-    "next_row_setting": "Definição"
+    "next_row_setting": "Definição",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Isto muda de imediato o que o SEM faz. Continuar?",
+    "next_flip_grid_body": "Inverte o sinal com que o SEM lê a rede. Use só quando a importação aparece como exportação. Um sinal errado faz o SEM comandar mal a bateria e o carro.",
+    "next_flip_battery_body": "Inverte o sinal com que o SEM lê a bateria. Use só quando a carga aparece como descarga. Um sinal errado faz o SEM comandar mal a bateria e o carro.",
+    "next_flip_ok": "Inverter"
   },
   "ro": {
     "/year": "/an",
@@ -33793,7 +33858,12 @@
     "next_days": "Zile",
     "next_last_session": "Ultima sesiune",
     "setup_complete": "Configurare terminată",
-    "next_row_setting": "Setare"
+    "next_row_setting": "Setare",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Asta schimbă imediat ce face SEM. Continuați?",
+    "next_flip_grid_body": "Inversează semnul cu care SEM citește rețeaua. Folosiți-l doar când importul apare ca export. Un semn greșit face SEM să comande greșit bateria și mașina.",
+    "next_flip_battery_body": "Inversează semnul cu care SEM citește bateria. Folosiți-l doar când încărcarea apare ca descărcare. Un semn greșit face SEM să comande greșit bateria și mașina.",
+    "next_flip_ok": "Inversează"
   },
   "sv": {
     "/year": "/år",
@@ -36207,7 +36277,12 @@
     "next_days": "Dagar",
     "next_last_session": "Senaste session",
     "setup_complete": "Konfigurationen klar",
-    "next_row_setting": "Inställning"
+    "next_row_setting": "Inställning",
+    "next_confirm_title": "{action}?",
+    "next_confirm_body": "Det ändrar direkt vad SEM gör. Fortsätta?",
+    "next_flip_grid_body": "Vänder tecknet som SEM läser nätet med. Använd det bara när köp visas som sälj. Fel tecken får SEM att styra batteri och bil fel.",
+    "next_flip_battery_body": "Vänder tecknet som SEM läser batteriet med. Använd det bara när laddning visas som urladdning. Fel tecken får SEM att styra batteri och bil fel.",
+    "next_flip_ok": "Vänd"
   },
   "zh": {
     "/year": "/年",
@@ -38621,6 +38696,11 @@
     "next_days": "日期",
     "next_last_session": "上次充电",
     "setup_complete": "设置已完成",
-    "next_row_setting": "设置"
+    "next_row_setting": "设置",
+    "next_confirm_title": "{action}？",
+    "next_confirm_body": "这会立即改变 SEM 的行为。要继续吗？",
+    "next_flip_grid_body": "反转 SEM 读取电网功率时使用的符号。仅在购电显示为售电时使用。符号错误会让 SEM 错误地控制电池和汽车。",
+    "next_flip_battery_body": "反转 SEM 读取电池功率时使用的符号。仅在充电显示为放电时使用。符号错误会让 SEM 错误地控制电池和汽车。",
+    "next_flip_ok": "反转"
   }
 }

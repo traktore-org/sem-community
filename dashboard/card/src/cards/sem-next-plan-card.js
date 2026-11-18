@@ -732,7 +732,7 @@ class SEMNextPlanCard extends SEMNextBase {
         if (mode === 'force_charge' || mode === 'force_discharge') {
             if (options.includes('auto')) btns.push(this._btn(t('next_back_to_plan'), () => this._selectOption('select.sem_battery_mode', 'auto'), { small: true, disabled: obs }));
         } else if (mode && options.includes('force_discharge')) {
-            btns.push(this._btn(t('next_sell'), () => this._selectOption('select.sem_battery_mode', 'force_discharge'), { small: true, disabled: obs }));
+            btns.push(this._btn(t('next_sell'), () => this._askFirst(t('next_sell'), () => this._selectOption('select.sem_battery_mode', 'force_discharge')), { small: true, disabled: obs }));
         }
         const modeText = mode && mode !== 'auto' ? this._tf('next_mode_now', { mode: t('battery_mode_' + mode) || mode }) : '';
         return this._devRow('mdi:home-battery', C.battery_out, t('next_src_battery'), parts.join(' · '), [sub, modeText].filter(Boolean).join(' · '), btns, plan.why ? String(plan.why) : '');
@@ -865,11 +865,11 @@ class SEMNextPlanCard extends SEMNextBase {
         if (this._has('switch.sem_energy_plan_actuation')) {
             const on = this._str('switch.sem_energy_plan_actuation') === 'on';
             rows.push(this._row('mdi:toggle-switch-outline', t('next_plan_acts'),
-                this._switch(on, () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { label: t('next_plan_acts') }),
+                this._switch(on, () => this._askFirst(t('next_plan_acts'), () => this._toggleSwitch('switch.sem_energy_plan_actuation')), { label: t('next_plan_acts') }),
                 t('next_actuation_sub')));
         }
         rows.push(this._row('mdi:sync', t('next_replan'),
-            this._btn(t('next_now_btn'), () => this._callService(DOMAIN, 'replan', {}), { small: true }),
+            this._btn(t('next_now_btn'), () => this._askFirst(t('next_replan'), () => this._callService(DOMAIN, 'replan', {})), { small: true }),
             m.computedAt ? this._tf('next_replan_last', { time: this._hhmm(m.computedAt) }) : ''));
         return this._sec(t('next_expected'), html`${tiles.length ? this._tiles(tiles, { three: tiles.length % 3 === 0 }) : nothing}
             <div class="rows" style="margin-top:8px">${rows}</div>`);

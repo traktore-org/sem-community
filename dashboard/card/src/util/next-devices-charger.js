@@ -168,7 +168,7 @@ export function chargerBody(card, row) {
     let boostFloor = null;
     const pauseBtn = 'button.sem_charger_' + cid + '_pause_charging';
     if (card._has(pauseBtn)) {
-        btns.push(card._btn(t('pause_charging'), () => card._pressButton(pauseBtn), { small: true, primary: true, icon: 'mdi:pause', disabled: card._devOff(pauseBtn, 'button') }));
+        btns.push(card._btn(t('pause_charging'), () => card._askFirst(t('pause_charging'), () => card._pressButton(pauseBtn)), { small: true, primary: true, icon: 'mdi:pause', disabled: card._devOff(pauseBtn, 'button') }));
     }
     if (card._has('sensor.sem_battery_soc')) {
         const boost = cs.battery_boost || null;
@@ -181,7 +181,7 @@ export function chargerBody(card, row) {
         } else {
             const preview = cs.battery_boost_preview || {};
             const floor = (card._boostFloor || {})[cid] ?? Math.round(Number(preview.default_floor ?? 50));
-            boostBtns.push(card._btn(t('next_boost_to'), () => card._svc('start_battery_boost', { charger_id: cid, floor_soc: floor }), { small: true, ghost: true, icon: 'mdi:home-battery-outline', disabled: card._obs() }));
+            boostBtns.push(card._btn(t('next_boost_to'), () => card._askFirst(t('next_boost_to'), () => card._svc('start_battery_boost', { charger_id: cid, floor_soc: floor })), { small: true, ghost: true, icon: 'mdi:home-battery-outline', disabled: card._obs() }));
             boostFloor = floor;
         }
     }

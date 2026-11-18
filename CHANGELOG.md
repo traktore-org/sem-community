@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Actions ask first** (#1321). Flipping the grid or battery sign, replan, pause, boost and clean up now show a question; a tap alone changes nothing.
 - 🐛 **Each fact reads one source** (#1321). Heat pump state, car plug status, grid kWh, house kWh and the battery floor now agree on every screen.
 - 🐛 **Plan words match the time** (#1321). A passed deadline says tomorrow; the plan says this morning, today or tonight; no false "one rate".
 - ✨ **Watch only has one name and settings stay editable** (#1321). Only writes that move a device are refused, at the moment of the write.

@@ -263,6 +263,13 @@ class SEMNextSetupPanel extends SEMNextBase {
         }
     }
 
+    /** (#1321) A tap only asks; the flip runs on the confirm button. */
+    _askFlip(which) {
+        this._confirmDo({ title: this._t(which === 'battery' ? 'next_row_flip_battery' : 'next_row_flip_grid'),
+            body: this._t(which === 'battery' ? 'next_flip_battery_body' : 'next_flip_grid_body'),
+            okLabel: this._t('next_flip_ok'), run: () => this._flip(which) });
+    }
+
     async _flip(which) {
         if (this._busy || !this._hass) return;
         this._busy = true;
@@ -338,8 +345,8 @@ class SEMNextSetupPanel extends SEMNextBase {
             ${this._sec(t('config_check_intro'), html`<div class="rows">${reads}</div>
                 <p class="help">${t('config_check_question')}</p>
                 <div class="acts">
-                    ${this._btn(t('config_check_grid_wrong'), () => this._flip('grid'), { small: true, icon: 'mdi:swap-vertical-bold', disabled: this._busy })}
-                    ${m.hasBattery ? this._btn(t('config_check_battery_wrong'), () => this._flip('battery'), { small: true, icon: 'mdi:swap-vertical-bold', disabled: this._busy }) : nothing}
+                    ${this._btn(t('config_check_grid_wrong'), () => this._askFlip('grid'), { small: true, icon: 'mdi:swap-vertical-bold', disabled: this._busy })}
+                    ${m.hasBattery ? this._btn(t('config_check_battery_wrong'), () => this._askFlip('battery'), { small: true, icon: 'mdi:swap-vertical-bold', disabled: this._busy }) : nothing}
                 </div>
                 <p class="help">${t('config_check_wrong_sensor')}</p>`)}`;
     }

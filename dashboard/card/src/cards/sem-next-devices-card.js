@@ -643,8 +643,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         const removeBtn = overlay.querySelector('#cfg-remove');
         if (removeBtn) {
             removeBtn.addEventListener('click', () => {
-                this._call(DOMAIN, 'remove_device_control_mapping', { energy_sensor: energySensor })
-                    .then(() => close()).catch((err) => showError(err.message));
+                this._askFirst(removeBtn.textContent.trim(), () => this._call(DOMAIN, 'remove_device_control_mapping', { energy_sensor: energySensor })
+                    .then(() => close()).catch((err) => showError(err.message)));
             });
         }
         overlay.querySelector('#cfg-save').addEventListener('click', () => {
