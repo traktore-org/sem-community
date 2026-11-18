@@ -18,6 +18,7 @@ import { effectivePlan, planRuns, planRunsRounded, demandFigures, nextRun, runsT
 import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { nowLead } from '../util/next-lead.js';
+import { batteryFacts, batteryNeedText } from '../util/next-battery-line.js';
 import { deadlineLabel } from '../util/next-time.js';
 import { powerBar } from '../util/next-power-bar.js';
 import { todayRows } from '../util/next-today-rows.js';
@@ -240,11 +241,18 @@ class SEMNextNowCard extends SEMNextBase {
         const parts = [];
         const b = this._nextBlock();
         if (b) parts.push(this._tf('next_sub_next_block', { who: b.who, time: b.time, kwh: b.kwh }));
-        const floor = this._spending() ? this._num('sensor.sem_battery_dynamic_floor_pct') : null;
-        if (floor !== null) parts.push(this._tf('next_why_batt_floor_short', { floor: Math.round(floor) }));
-        else if (soc !== null && this._holding()) parts.push(this._t('next_batt_holds_house'));
+        const bt = this._batteryLine();
+        if (bt) parts.push(bt);
         const sub = parts.length ? parts.join(' ') : (r.sub ? this._tf(r.sub.key, r.sub.params) : '');
         return { main, sub };
+    }
+
+    /** (#1321) One sentence for the battery and the car (util/next-battery-line.js). */
+    _batteryLine() {
+        const f = batteryFacts(this);
+        if (f.soc === null) return '';
+        if (!this._spending()) f.floor = null;
+        return batteryNeedText((k, p) => this._tf(k, p), (k) => this._t(k), f);
     }
 
     /** Tonight's floor is a limit only while SEM spends the battery; while it holds,
@@ -286,7 +294,7 @@ class SEMNextNowCard extends SEMNextBase {
         const demands = this._attrs('sensor.sem_energy_plan').demands || [];
         return planIdName(id, {
             charger: (cid) => this._chargerName(cid),
-            load: (key) => this._devices().find((d) => d.id === key)?.name,
+            load: (key) => { const d = this._devices().find((x) => x.id === key); return d ? this._loadName(d.id, d) : undefined; },
             battery: () => this._t('next_src_battery'),
             label: (pid) => demands.find((x) => x && x.id === pid)?.label,
         });
@@ -669,7 +677,7 @@ class SEMNextNowCard extends SEMNextBase {
             const title = batt !== null && batt < -50 ? this._t('next_why_batt_house')
                 : (batt !== null && batt > 50 ? this._t('next_why_batt_charging') : this._t('next_why_batt_rest'));
             const parts = [];
-            if (holding) parts.push(this._t('next_batt_holds_house'));
+            if (holding) { const bl = this._batteryLine(); if (bl) parts.push(bl); }
             else if (floor !== null && soc < floor) parts.push(this._tf('next_why_batt_floor', { soc: Math.round(soc), floor: Math.round(floor) }));
             else if (prio !== null) parts.push(this._tf(soc >= prio ? 'next_why_batt_above_prio' : 'next_why_batt_below_prio', { soc: Math.round(soc), prio: Math.round(prio) }));
             else parts.push(this._tf('next_sub_battery_at', { soc: Math.round(soc) }));

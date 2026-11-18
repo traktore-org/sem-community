@@ -99,7 +99,8 @@ test('a holding battery names no floor and says it keeps its charge for the hous
 
 test('a spending battery names tonight\'s floor', () => {
     const el = makeCard(states('spending'));
-    assert.match(el._lead().sub, /next_why_batt_floor_short/);
+    // the sentence names the need when the sensor has it, the floor alone when it has not
+    assert.match(el._lead().sub, /next_batt_need_above|next_why_batt_floor_short/);
     assert.match(text(el._why()), /next_why_batt_floor/);
 });
 

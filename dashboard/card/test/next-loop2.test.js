@@ -410,14 +410,15 @@ test('9: the peak switch is the first row and "Use a limit" is not in the prose'
     assert.doesNotMatch(sentenceText(may.sentence, tt, st), /Use a limit/);
 });
 
-test('low: no trailing dot, no break inside a temperature, next departure by its own day', () => {
+test('low: no trailing dot, no break inside a temperature, next departure by its own day', (tc) => {
+    // pinned: the label reads new Date() as well as Date.now()
+    tc.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-20T18:00:00+01:00') });
     const el = mount('sem-next-plan-card', { });
     el._hass.config.unit_system = { temperature: '°C' };
     assert.equal(el._temp(2), '2.0 °C');
     const now = mount('sem-next-now-card', { 'sensor.sem_charging_state': S('idle', { per_charger_departure: { keba: { next: '2026-11-23T07:00:00+01:00' } } }) });
-    const real = Date.now; Date.now = () => Date.parse('2026-11-20T18:00:00+01:00');
-    try { assert.match(now._departureLabel('keba'), /07:00$/); assert.doesNotMatch(now._departureLabel('keba'), /^next_when_tomorrow/); }
-    finally { Date.now = real; }
+    assert.match(now._departureLabel('keba'), /07:00$/);
+    assert.doesNotMatch(now._departureLabel('keba'), /^next_when_tomorrow/);
 });
 
 test('3.3: the Why list of a plan with a gap draws, and names both runs (loop 3)', () => {

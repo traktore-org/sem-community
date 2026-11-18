@@ -8,10 +8,11 @@
 import { html, nothing } from '../base/sem-next-base.js';
 import { resolveChargerSoc } from './charger-soc.js';
 import { kwhOf } from './next-lead.js';
+import { effectivePlan } from './plan-facts.js';
 import { targetModel, weekdaySummary } from './next-devices.js';
 import { monthTotals, rowsForMonth } from './sessions.js';
 import { rowText } from './next-settings.js';
-import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities } from './charger-questions.js';
+import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities, upToShown } from './charger-questions.js';
 
 const LATE = [0, 15, 30, 45, 60, 90, 120];
 const FLOORS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
@@ -146,7 +147,7 @@ export function chargerBody(card, row) {
     const kmNow = soc !== null && capacity && per100 ? Math.round((soc / 100) * capacity / per100 * 100) : null;
     const gapKwh = have === null || min === null ? null : (isSoc ? Math.max(0, (min - soc) / 100 * (capacity || 0)) : Math.max(0, min - daily));
     const kmAdd = gapKwh !== null && per100 ? Math.round(gapKwh / per100 * 100) : null;
-    const plan = card._attrs('sensor.sem_energy_plan');
+    const plan = effectivePlan(card._attrs('sensor.sem_energy_plan'));
     const plannedKwh = Array.isArray(plan.blocks) ? kwhOf(plan.blocks, (id) => id === 'ev:' + cid) : 0;
     const dep = ((cs.per_charger_departure || {})[cid]) || {};
     const own = dep.by_weekday || {};
@@ -156,7 +157,10 @@ export function chargerBody(card, row) {
     const runs = weekdaySummary(own, depDefault);
     const runText = runs.map((r) => (r.from === r.to ? card._dayName(r.from) : card._dayName(r.from) + ' – ' + card._dayName(r.to)) + ' ' + r.time).join(' · ');
     const daysVal = card._val(hasOwnDays ? (runText || t('ev_dep_most_days')) : t('next_every_day'), () => card._toggleDep(cid), { disabled: dis });
-    const targetText = `${t(CHARGER_TEXT.atLeast)} ${fmtT(min)} · ${t(CHARGER_TEXT.upTo)} ${fmtT(max)} ${unit}`;
+    // (#1321) never "up to 100 kWh" on a 40 kWh car; unknown car and the setting's ceiling: "full"
+    const upTo = upToShown({ max, capacity, bound: maxId ? Number(card._attrs(maxId).max) : null, isSoc });
+    const targetText = upTo.full ? `${t(CHARGER_TEXT.atLeast)} ${fmtT(min)} ${unit} · ${t('next_up_to_full')}`
+        : `${t(CHARGER_TEXT.atLeast)} ${fmtT(min)} · ${t(CHARGER_TEXT.upTo)} ${fmtT(upTo.max)} ${unit}`;
     const targetVal = html`${targetText}`;
     const typeVal = html`${isSoc ? t('next_soc') : 'kWh'}`;
     const stats2 = html`<div class="stats" style="margin-top:4px">
@@ -216,7 +220,9 @@ export function chargerBody(card, row) {
         setRows.push(card._setRow({ label: card._lbl('next_days'), value: daysVal, disabled: dis }));
     }
     if (minId && maxId) {
-        const at = (id) => ({ value: card._num(id), min: card._attrs(id).min, max: card._attrs(id).max, step: card._attrs(id).step });
+        // the dialog's ceiling is the car's battery too, when it is known
+        const cap = (id) => { const m = Number(card._attrs(id).max); return !isSoc && capacity > 0 && Number.isFinite(m) ? Math.min(m, capacity) : card._attrs(id).max; };
+        const at = (id) => ({ value: card._num(id), min: card._attrs(id).min, max: cap(id), step: card._attrs(id).step });
         setRows.push(srow(t(CHARGER_TEXT.target), targetText, card._pairEdit('target:' + cid, { a: at(minId), b: at(maxId), unit,
             onCommit: (a, b) => { if (a !== null) card._setNumber(minId, a); if (b !== null) card._setNumber(maxId, b); } })));
     }

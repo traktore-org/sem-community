@@ -394,6 +394,27 @@ class FlowCalculator:
         # per-charger schema). Empty in single-string setups.
         self._per_string_accumulators: Dict[str, Dict[str, float]] = {}
         self._current_date: date = dt_util.now().date()
+        # (#1321) Highest value published today per flow, see hold_published.
+        self._published_floor: Dict[str, float] = {}
+
+    def hold_published(self, flows: EnergyFlows, today: date) -> EnergyFlows:
+        """A daily counter never steps down: a lower value keeps the day's high.
+
+        The fit to the meters switches on and off with the home row's
+        counter backing, and the two bases differ by up to a kWh. A step down
+        reads as a counter reset in the recorder (#1321).
+        """
+        if getattr(self, "_floor_day", None) != today:
+            self._published_floor = {}
+            self._floor_day = today
+        for attr in _FLOW_CELLS.values():
+            value = float(getattr(flows, attr, 0.0) or 0.0)
+            floor = self._published_floor.get(attr, 0.0)
+            if value < floor:
+                setattr(flows, attr, floor)
+            else:
+                self._published_floor[attr] = value
+        return flows
 
     @staticmethod
     def calculate_power_flows(power: PowerReadings) -> PowerFlows:

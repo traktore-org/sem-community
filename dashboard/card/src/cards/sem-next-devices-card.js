@@ -29,7 +29,7 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
+import { deviceRows, statePill, surplusInUse, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
@@ -675,18 +675,9 @@ class SEMNextDevicesCard extends SEMNextBase {
         return (this._unitOf(id) || '').toLowerCase() === 'w' ? v : v * 1000;
     }
 
-    /** Watts the running devices draw by measurement, and the rated watts of running ones with no reading. */
+    /** Measured watts of the running devices, capped at the house; see surplusInUse. */
     _inUse(rows) {
-        let measuredW = 0, estW = 0;
-        for (const r of rows || []) {
-            if (r.type === 'battery') continue;
-            const live = this._live(r).powerW;
-            const on = r.type === 'charger' ? live !== null && live > 50 : r.isOn || (live !== null && live > 10);
-            if (!on) continue;
-            if (live !== null) measuredW += Math.max(0, live);
-            else if (r.rating > 0) estW += r.rating;
-        }
-        return { measuredW, estW };
+        return surplusInUse(rows, (r) => this._live(r).powerW, this._powerW('sensor.sem_home_consumption_power'));
     }
 
     _surplus(rows) {
@@ -703,9 +694,13 @@ class SEMNextDevicesCard extends SEMNextBase {
         const tiles = [];
         if (total !== null) {
             // (#1321) "in use" counts measured power only: a switch's configured size is an estimate, shown apart
+            // …never more than the house draws; a sensor that reads more than the house is named
             const use = this._inUse(rows);
-            const sub = given === null && free === null ? '' : this._tf(use.estW > 0 ? 'next_given_free_est' : 'next_given_free',
+            const base = given === null && free === null ? '' : this._tf(use.estW > 0 ? 'next_given_free_est' : 'next_given_free',
                 { given: this._fmtKw(use.measuredW), est: this._fmtKw(use.estW), free: this._fmtKw(free ?? 0) });
+            const who = use.names.length && use.names.length <= 2 ? this._tf('next_in_use_by', { names: use.names.join(', ') }) : '';
+            const bad = use.over.length ? this._tf('next_sensor_over_house', { names: use.over.join(', ') }) : '';
+            const sub = [base, who, bad].filter(Boolean).join(' · ');
             tiles.push({ label: t('next_surplus'), value: this._fmtKw(total), unit: 'kW', sub });
         }
         if (active !== null || totalN !== null) {

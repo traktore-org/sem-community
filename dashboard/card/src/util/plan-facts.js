@@ -29,6 +29,30 @@ export function demandRuns(d) {
 }
 
 /**
+ * (#1321) A demand is never shown more than it needs. The planner books whole
+ * slots, so a car that needs 10.0 kWh can hold 10.3; the car stops at its
+ * target. The blocks of such a demand are scaled down together, so the parts
+ * still add up to the need. Returns the same array when nothing is over.
+ */
+function capAtNeed(blocks, demands) {
+    const need = new Map();
+    for (const d of (Array.isArray(demands) ? demands : [])) {
+        const n = Number(d && d.needed_kwh);
+        if (d && d.id && Number.isFinite(n) && n > 0) need.set(String(d.id), n);
+    }
+    const sums = new Map();
+    for (const b of blocks) {
+        if (!b || !need.has(String(b.id))) continue;
+        const kwh = (Number(b.power_w) || 0) * Math.max(0, Date.parse(b.end) - Date.parse(b.start)) / 3.6e9;
+        sums.set(String(b.id), (sums.get(String(b.id)) || 0) + (Number.isFinite(kwh) ? kwh : 0));
+    }
+    const factor = new Map();
+    for (const [id, sum] of sums) if (sum > need.get(id) * 1.001) factor.set(id, need.get(id) / sum);
+    if (!factor.size) return blocks;
+    return blocks.map((b) => (b && factor.has(String(b.id)) ? { ...b, power_w: (Number(b.power_w) || 0) * factor.get(String(b.id)) } : b));
+}
+
+/**
  * The plan with a block for every demand that names hours but has none. A demand's own
  * runs come first, so a gap between two runs stays a gap; the first-to-last span of
  * `why.params` is only the fallback for a plan that has no runs (older sensor).
@@ -52,7 +76,8 @@ export function effectivePlan(plan) {
         added.push({ id: String(d.id), start: iso(w.s), end: iso(w.e),
             power_w: kwh * 1000 / ((w.e - w.s) / HOUR), price: null, derived: true });
     }
-    const out = added.length ? { ...plan, blocks: [...blocks, ...added] } : plan;
+    const all = capAtNeed(added.length ? [...blocks, ...added] : blocks, plan.demands);
+    const out = all !== blocks ? { ...plan, blocks: all } : plan;
     cache.set(plan, out);
     return out;
 }

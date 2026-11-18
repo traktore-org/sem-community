@@ -17,6 +17,7 @@
 import { tariffKind } from '../util/price-level.js';
 import { SEMNextBase, html, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard, semDiscoverPVStrings } from '../base/sem-shared.js';
+import { fitParts } from '../util/next-split.js';
 import { bucketsFor, fetchSeries, fetchPeriodFor, bucketValues, stackModel, lineModel, sunCurve } from '../util/next-history.js';
 import { monthTotals, rowsForMonth, sessionRowView, shiftMonth, sessionMonth } from '../util/sessions.js';
 import { downloadBase64 } from '../util/download.js';
@@ -289,11 +290,13 @@ class SEMNextInsightsCard extends SEMNextBase {
         // show; the per-source flow sums only split it
         const housePt = this._pt('house');
         const total = housePt !== null ? housePt : model.sums.reduce((a, v) => a + v, 0);
+        // the parts come from the same daily counters as the total and are fitted to it
+        const parts = fitParts(layers.map(([src]) => this._flowValue(src, 'home') ?? this._sum(flowId(src, 'home'))), total, 1);
         const i = this._hover;
         const sum = i >= 0 && i < b.n
             ? html`<div class="sumrow"><span><b>${this._hoverLabel(b)}</b></span>${this._legend(layers.map(([src, c, k]) => [c, this._t(k), this._kwh(this._series(flowId(src, 'home'))[i] || 0)]))}</div>`
             : html`<div class="sumrow"><span><b>${this._kwh(total)}</b> ${this._t('next_used')}</span>
-                ${this._legend(layers.map(([src, c, k]) => [c, this._t(k), this._kwh(this._sum(flowId(src, 'home')))]))}</div>`;
+                ${this._legend(layers.map(([, c, k], j) => [c, this._t(k), this._kwh(parts[j])]))}</div>`;
         const main = this._sec(`${this._t('next_house_by_source')} · ${this._periodLabel()}`,
             html`${layers.length ? this._stack(model, this._t('next_house_by_source')) : this._hint()}${model.empty ? nothing : sum}`, { cls: 'span2' });
         return html`${main}${this._flowsCard()}${this._solarCard()}${this._sharesCard()}`;

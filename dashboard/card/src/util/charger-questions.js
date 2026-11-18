@@ -87,3 +87,16 @@ export function chargePlanSummary({ chargeBy = '', min = null, max = null, unit 
     const days = list.length ? list.map((r) => (one ? span(r) : `${span(r)} ${r.time}`)).join(', ') : '';
     return { time, range, days };
 }
+
+/**
+ * (#1321) The "Up to" figure of a kWh target, never above the car's battery.
+ * → { max, full }: `max` the number to show (null when the car is unknown and
+ * the figure is only the setting's own ceiling), `full` true when the text
+ * should say "full" instead of a number.
+ */
+export function upToShown({ max, capacity, bound, isSoc }) {
+    if (max === null || max === undefined) return { max: null, full: false };
+    if (isSoc) return { max, full: false };
+    if (Number.isFinite(capacity) && capacity > 0) return { max: Math.min(max, capacity), full: false };
+    return { max, full: Number.isFinite(bound) && max >= bound };
+}

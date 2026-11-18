@@ -424,3 +424,39 @@ export function registerPayload(form, rows = []) {
     if (power) data.power_entity_id = power;
     return { data };
 }
+
+/**
+ * (#1321) The surplus tile's "in use": the watts running devices draw by
+ * measurement, never more than the house itself uses. A device whose own reading
+ * is more than the whole house is a wrong sensor; it is left out and named in
+ * `over`. `rows` are the Devices rows, `liveOf(row)` their live watts.
+ * → { measuredW, estW, names: [who is counted], over: [who reads too much] }
+ */
+export function surplusInUse(rows, liveOf, houseW = null) {
+    let measuredW = 0, estW = 0;
+    const names = [], over = [];
+    for (const r of rows || []) {
+        if (r.type === 'battery') continue;
+        const live = liveOf(r);
+        const on = r.type === 'charger' ? live !== null && live > 50 : r.isOn || (live !== null && live > 10);
+        if (!on) continue;
+        if (live === null) { if (r.rating > 0) estW += r.rating; continue; }
+        if (Number.isFinite(houseW) && live > houseW + 50) { over.push(r.name); continue; }
+        measuredW += Math.max(0, live);
+        names.push(r.name);
+    }
+    if (Number.isFinite(houseW)) measuredW = Math.min(measuredW, Math.max(0, houseW));
+    return { measuredW, estW, names, over };
+}
+
+/**
+ * (#1321) A load SEM leaves as it is that runs anyway (the user's own switch, a
+ * thermostat): System shows its live power and says SEM did not start it, the
+ * same facts Devices shows. `row` is a would-decision, `info` the device entry.
+ */
+export function runsNotStartedBySem(row, info, powerW, switchState) {
+    if (!row || (row.kind || row.device_kind) !== 'load' || !info) return false;
+    const action = String(row.action || '');
+    if (action && action !== 'hold' && action !== 'idle') return false;
+    return runningNow(info, powerW, switchState);
+}

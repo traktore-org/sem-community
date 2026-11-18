@@ -893,7 +893,8 @@ export function groups(states, t, ctx = {}) {
             const types = entry && entry.vehicle_soc_entity ? TARGET_TYPES : TARGET_TYPES.slice(0, 1);
             const type = chargerSlot(o, cid, 'ev_target_type', 'select', { options: types, def: 'kwh' });
             sentences.push(clause([
-                frag(t, 'next_ch_name_control', { name, control }) || frag(t, 'next_ch_name', { name }),
+                // (#1321) current control reads as what it does: SEM sets the current
+                (labels.controlRaw === 'number' ? frag(t, 'next_ch_name_sets', { name }) : frag(t, 'next_ch_name_control', { name, control })) || frag(t, 'next_ch_name', { name }),
                 frag(t, 'next_ch_phases', { phases }),
                 frag(t, 'next_ch_amps', { min, max }),
             ]));

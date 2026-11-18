@@ -113,16 +113,21 @@ export function nearestIndex(ts, starts) {
     return dist <= step * 0.75 ? best : -1;
 }
 
-/** Increments of a counter that resets: a drop means the counter started over. */
+/**
+ * Increments of a daily counter. A drop to under half is a restart (the new
+ * value is what it counted since); a smaller drop is a correction or a flicker
+ * of the source, never use: it adds nothing and the high mark stays, so the
+ * climb back is not counted twice (#1321).
+ */
 export function diffCumulative(values) {
     const out = [];
     let prev = null;
     for (const raw of values || []) {
         const v = Number(raw);
         if (!Number.isFinite(v)) { out.push(0); continue; }
-        if (prev === null || v < prev) out.push(Math.max(0, v));
-        else out.push(v - prev);
-        prev = v;
+        if (prev === null || v <= prev * 0.5) { out.push(Math.max(0, v)); prev = v; }
+        else if (v < prev) out.push(0);
+        else { out.push(v - prev); prev = v; }
     }
     return out;
 }

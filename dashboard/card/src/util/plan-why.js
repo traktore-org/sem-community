@@ -9,6 +9,25 @@ import { planRuns } from './plan-facts.js';
 
 export const WHY_LINES_MAX = 4;
 
+const isBatteryIn = (id) => /battery/.test(String(id)) && !String(id).startsWith('battery_out');
+const hasBlocksFor = (plan, id) => (Array.isArray(plan.blocks) ? plan.blocks : []).some((b) => b && b.reason && String(b.id) === String(id));
+
+/**
+ * The reasons of one id's blocks, the one with the most energy first:
+ * [{reason, params}], each reason once.
+ */
+export function blockReasons(blocks, id) {
+    const by = new Map();
+    for (const b of blocks || []) {
+        if (!b || !b.reason || String(b.id) !== String(id)) continue;
+        const kwh = (Number(b.power_w) || 0) * Math.max(0, Date.parse(b.end) - Date.parse(b.start)) / 3.6e9;
+        const cur = by.get(b.reason) || { reason: b.reason, params: b.reason_params || {}, kwh: 0 };
+        cur.kwh += kwh;
+        by.set(b.reason, cur);
+    }
+    return [...by.values()].sort((a, b) => b.kwh - a.kwh).map(({ reason, params }) => ({ reason, params }));
+}
+
 /**
  * [{id, start, end, reason, params, why, kwh, label}]: `reason`/`params` is
  * the block's reason code, `why` the not-scheduled code. Times are ISO.
@@ -21,6 +40,8 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
     for (const d of (Array.isArray(plan.demands) ? plan.demands : [])) {
         const w = d && d.why;
         if (!d || !d.id || !w || !w.code) continue;
+        // (#1321) the battery's reasons come from its blocks only: the chart names those
+        if (isBatteryIn(d.id) && hasBlocksFor(plan, d.id)) continue;
         const p = w.params || {};
         // a window that has ended is history, not a plan
         const endMs = Date.parse(p.to);
@@ -49,6 +70,7 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
     const fromBlocks = [...byId.values()].filter((x) => !own.has(x.id)).map((x) => ({
         id: x.id, start: new Date(x.s).toISOString(), end: new Date(x.e).toISOString(),
         reason: String(x.reason), params: x.params, why: '', code: '', label: '',
+        reasons: isBatteryIn(x.id) ? blockReasons(blocks, x.id) : null,
         kwh: kwhOf(blocks, (i) => String(i) === x.id), s: x.s,
         runs: planRuns(plan, (i) => String(i) === x.id, nowMs),
     })).map((x) => ({ ...x, kwh: x.runs.length ? x.runs.reduce((a, r) => a + r.kwh, 0) : x.kwh }));

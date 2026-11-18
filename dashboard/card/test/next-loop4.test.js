@@ -111,7 +111,8 @@ test('1: a plan that serves part of the need says "planned of needed", not just 
     assert.equal(nowLead({ car: { ...car, plannedKwh: 10 }, solarW: 0, gridW: 0 }).main.key, 'next_lead_car_planned');
 });
 
-test('2: "not everything fits" names who is short and by how much', () => {
+test('2: "not everything fits" names who is short and by how much', (tc) => {
+    tc.mock.method(Date, 'now', () => NOW);   // the plan's runs are read against now: pin it
     const low = shortfalls(effectivePlan(PLAN), NOW);
     assert.equal(low.length, 1);
     assert.deepEqual([low[0].id, low[0].planned, low[0].needed], ['ev:c2', 8.1, 10]);
@@ -148,7 +149,9 @@ test('5: "in use" counts measured power; a switch with a rated size is an estima
         { id: 'hp', type: 'load', isOn: true, powerEntity: 'sensor.hp_w', rating: 2000 },
         { id: 'off', type: 'load', isOn: false, powerEntity: '', rating: 1000 },
     ];
-    assert.deepEqual(el._inUse(rows), { measuredW: 800, estW: 3000 });
+    const use = el._inUse(rows);
+    assert.equal(use.measuredW, 800);
+    assert.equal(use.estW, 3000);
 });
 
 test('6: Why now has no empty car row: the plan line, or no row', () => {

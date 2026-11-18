@@ -27,6 +27,7 @@ import { recordReason, deviceName, actionWords } from '../util/why-rows.js';
 import { gridReading } from '../util/next-format.js';
 import { entityName } from '../util/next-names.js';
 import { MISSING } from '../util/missing-value.js';
+import { runsNotStartedBySem, switchStateOf } from '../util/next-devices.js';
 import { groups, applyPlan, pendingKey, navTarget, slotText, sentenceText, rowText, setupItems, loadSources, unavailableCount,
          reserveIds, pvStrings, chargerSkeleton, FILTER_CLASSES } from '../util/next-settings.js';
 import { isPowerEntity, isCo2IntensityEntity, isOutdoorTemperatureCandidate } from '../util/detect-rows.js';
@@ -341,10 +342,17 @@ class SEMNextSystemCard extends SEMNextBase {
         const rows = obs ? would : withheld;
         const t = (k) => this._t(k);
         const body = rows.length
-            ? html`<div class="rows">${rows.slice(0, 8).map((r) => this._row('mdi:hand-back-left-outline',
-                `${this._refusedName(r, t, rows)}${r.action ? ' · ' + actionWords(r.action, t) : ''}`,
-                Number.isFinite(Number(r.power_w)) ? this._kw(Number(r.power_w)) : '',
-                recordReason(r, this._hass.states, t)))}</div>`
+            ? html`<div class="rows">${rows.slice(0, 8).map((r) => {
+                // (#1321) a load that runs on its own: its live power, said as it is
+                const info = r.kind === 'load' ? (this._attrs('sensor.sem_controllable_devices_count').devices || {})[String(r.device_id || '')] : null;
+                const live = info && info.power_entity ? this._powerW(info.power_entity) : null;
+                const own = runsNotStartedBySem(r, info, live, switchStateOf(info, this._hass.states));
+                const w = own ? (live !== null ? live : Number(info.current_power)) : Number(r.power_w);
+                return this._row('mdi:hand-back-left-outline',
+                    `${this._refusedName(r, t, rows)}${r.action ? ' · ' + actionWords(r.action, t) : ''}`,
+                    Number.isFinite(w) ? this._kw(w) : '',
+                    own ? t('next_runs_not_started') : recordReason(r, this._hass.states, t));
+            })}</div>`
             : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;
         return this._sec(obs ? this._t('next_would_do') : this._t('next_held_back'), body);
     }
@@ -362,6 +370,7 @@ class SEMNextSystemCard extends SEMNextBase {
             chargers: this._chargerList(),
             labels: {
                 control: this._valLabel('diag_charger_control'),
+                controlRaw: this._str('sensor.sem_diag_charger_control'),
                 // (#1321) "from Custom" says nothing: a custom source names no provider
                 provider: /^custom$/i.test(this._str('sensor.sem_tariff_provider')) ? '' : (this._valLabel('tariff_provider') || this._str('sensor.sem_tariff_provider')),
                 gridSign: this._valLabel('diag_grid_sign'),
@@ -668,7 +677,12 @@ class SEMNextSystemCard extends SEMNextBase {
         if (!this._hass) return nothing;
         const rows = this._freshRows();
         const bad = rows.filter((r) => r.state !== 'ok').length + (this._inputsDegraded() ? 1 : 0);
-        const main = bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok');
+        // (#1321) the headline names what to check: the sources and the repairs the Setup row counts
+        const names = rows.filter((r) => r.state !== 'ok').map((r) => r.name);
+        const rep = readChecklist(this._hass.states)?.repairs || {};
+        if (rep.count) names.push(rep.count > 1 ? `${rep.first || this._tf('setup_check_n', { n: rep.count })} +${rep.count - 1}` : (rep.first || this._t('setup_check_one')));
+        const main = names.length ? this._tf('next_sys_lead_names', { names: names.join(', ') })
+            : bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok');
         const sub = this._t('next_sys_sub');
         const t = (k) => this._t(k);
         const gs = groups(this._hass.states, t, this._ctx());

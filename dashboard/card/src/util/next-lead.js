@@ -144,8 +144,10 @@ export function planLead(a, extra) {
         : loadKwh === top ? { key: 'next_plan_loads', params: { kwh: fmt1(gridKwh), when } }
         : { key: 'next_plan_house', params: { kwh: fmt1(houseKwh), when } };
     // (#1321) hours with no price yet give no cost: say so, not "cost ,"
-    const sub = { key: extra?.cost ? 'next_plan_sub' : 'next_plan_sub_nocost', params: {
-        time: extra?.computedAt || '', cost: extra?.cost || '',
+    // (#1321) …and name whose cost is missing, when it is known
+    const subKey = extra?.cost ? 'next_plan_sub' : (extra?.costUnknownFor ? 'next_plan_sub_nocost_who' : 'next_plan_sub_nocost');
+    const sub = { key: subKey, params: {
+        time: extra?.computedAt || '', cost: extra?.cost || '', who: extra?.costUnknownFor || '',
         fits: extra?.fitsKey || '', sun: fmt1(extra?.sunTomorrowKwh) } };
     return { main, sub };
 }

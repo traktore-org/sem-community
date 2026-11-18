@@ -89,8 +89,8 @@ test('battery row: no raw planner text, honest floor, no Back to plan for a stan
     const plan = { why: 'ev_targets={x}, battery_deficit=0.00 kWh', why_codes: ['battery_no_deficit'], slots: [], batt_runs: [] };
     const out = text(el._batteryRow(plan, [], []));
     assert.match(out, /energy_plan_whyc_battery_no_deficit/);
-    assert.match(out, /next_batt_below_floor/);
-    assert.doesNotMatch(out, /next_batt_holds/);
+    assert.match(out, /next_batt_now_pct/);
+    assert.match(out, /next_why_batt_floor_short/);
     assert.doesNotMatch(out, /next_back_to_plan/);
     assert.match(out, /title=ev_targets/);   // raw text only as the tooltip
     assert.doesNotMatch(out.replace(/title=[^>]*/, ''), /battery_deficit=/);
