@@ -197,7 +197,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const st = this._hass.states[r.entity];
         const g = r.key === 'next_src_grid' ? gridReading(st?.state) : null;
         // the grid reads as Now says it: a size and import or export, not a signed number
-        const val = g ? `${this._fmt(g.watts, 0)} W${g.dir ? ' ' + this._t(g.dir === 'import' ? 'next_import' : 'next_export').toLowerCase() : ''}`
+        const val = g ? `${this._power(g.watts)}${g.dir ? ' ' + this._t(g.dir === 'import' ? 'next_import' : 'next_export').toLowerCase() : ''}`
             : !st ? '' : (typeof this._hass.formatEntityState === 'function' ? this._hass.formatEntityState(st)
             : `${st.state}${st.attributes?.unit_of_measurement ? ' ' + st.attributes.unit_of_measurement : ''}`);
         return { value: val ? `${val} · ${txt}` : txt, cls: r.state === 'old' || r.state === 'missing' ? 'warn' : 'bad' };

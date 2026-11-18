@@ -537,6 +537,8 @@ export class SEMNextBase extends SEMLitBase {
     }
     _int(v) { return fmtNum(Math.round(Number(v)), 0); }
     _kw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : `${fmtNum(w / 1000, d)} kW`; }
+    /** A power as the screens say it: kW from 1 kW up, else W (#1321). */
+    _power(w) { return w === null || !Number.isFinite(w) ? '—' : (Math.abs(w) >= 1000 ? this._kw(w) : `${fmtNum(Math.round(w), 0)} W`); }
     _kwh(v, d = 1) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Number(v) >= 100 ? fmtNum(Math.round(v), 0) : fmtNum(v, d)} kWh`; }
     _price(v) { return fmtPrice(v); }
     _money(v, d = 2) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${fmtNum(v, d)} ${this._currency()}`; }

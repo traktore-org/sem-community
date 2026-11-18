@@ -135,7 +135,7 @@ export function batteryBody(card, row) {
         if (card._has(ids.buffer)) levelRows.push(numRow({ key: 'bq_buffer', sub: 'bq_buffer_sub' }, ids.buffer, Math.round(num(ids.buffer)) + ' %'));
         if (card._has(ids.auto)) levelRows.push(numRow({ key: 'bq_autostart', sub: 'bq_autostart_sub' }, ids.auto, Math.round(num(ids.auto)) + ' %'));
         if (maxId) levelRows.push(numRow(Q.assist_max, maxId, card._kw(num(maxId))));
-        if (gateId) levelRows.push(numRow(Q.solar_gate, gateId, card._fmt(num(gateId), 0) + ' W'));
+        if (gateId) levelRows.push(numRow(Q.solar_gate, gateId, card._power(num(gateId))));
     }
 
     // ── rows ──
