@@ -196,6 +196,17 @@ class TestTheLiveGateFollowsTheBlock:
         d = decide(self._view("cheap"))
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
         assert d.commanded_amps >= 6
+        # the sun alone (900 W, below the 4140 W minimum) never wins here
+        assert "solar offer wins" not in d.reason
+
+    def test_min_zero_the_gate_stays_on_sun(self):
+        from .test_decide import _view
+        from custom_components.solar_energy_management.coordinator.decide import (
+            ChargerIntent, decide)
+        d = decide(_view(mode="solar_plus_cheap", is_night=False,
+                         tariff_level="cheap", target_kwh=0.0, solar_w=1400.0,
+                         home_w=500.0, battery_soc=95))
+        assert d.intent is not ChargerIntent.CHARGE_AT_AMPS or d.commanded_amps < 6
 
     def test_normal_hour_does_not(self):
         from custom_components.solar_energy_management.coordinator.decide import (
@@ -203,3 +214,56 @@ class TestTheLiveGateFollowsTheBlock:
         d = decide(self._view("normal"))
         assert not (d.intent is ChargerIntent.CHARGE_AT_AMPS
                     and d.commanded_amps >= 6)
+
+
+@pytest.mark.unit
+def test_the_label_is_per_block_not_per_slot():
+    slots = _slots()[:1]
+    slots[0].cap_override_w = 5000.0
+    ledger = build_night_ledger(slots, soc_kwh=0.0, floor_kwh=0.0,
+                                max_discharge_w=0.0, peak_limit_w=0.0)
+    first = Demand(id="ev:1", kind="ev", energy_kwh=1.0, max_power_w=CAR_W,
+                   min_power_w=CAR_W, priority=1, deadline=_t(12, 15),
+                   grid_in_sun=True)
+    second = Demand(id="ev:2", kind="ev", energy_kwh=1.0, max_power_w=CAR_W,
+                    min_power_w=CAR_W, priority=2, deadline=_t(12, 15),
+                    grid_in_sun=True)
+    plan = pack_night([first, second], ledger)
+    code = {a.demand_id: a.code for a in plan.allocations}
+    # the first sits on the sun (4140 of 5000 W); the second buys the rest
+    assert code == {"ev:1": "solar", "ev:2": "sun_plus_grid"}
+
+
+@pytest.mark.unit
+class TestThePlanBooksGridInSunOnlyForTheMinFloor:
+    def _demands(self, monkeypatch, kwh):
+        from custom_components.solar_energy_management.coordinator import (
+            energy_planner, ev_night_targets,
+        )
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        from .test_638_shadow_mode import _fake_self, _power, _scheduler
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {"ev_charger": kwh})
+        seen = []
+        real = energy_planner.pack_night
+
+        def spy(demands, *a, **kw):
+            seen.extend(demands)
+            return real(demands, *a, **kw)
+        monkeypatch.setattr(energy_planner, "pack_night", spy)
+        fake = _fake_self()
+        fake._tariff_optimized_for = lambda cfg: True
+        from unittest.mock import MagicMock
+        SEMCoordinator._shadow_energy_plan(
+            fake, _scheduler(), energy=MagicMock(), power=_power())
+        return [d for d in seen if d.kind == "ev"]
+
+    def test_min_owed_books_the_assist(self, monkeypatch):
+        evs = self._demands(monkeypatch, 10.0)
+        assert evs and all(d.grid_in_sun for d in evs)
+
+    def test_min_zero_books_none(self, monkeypatch):
+        evs = self._demands(monkeypatch, 0.0)
+        assert not any(d.grid_in_sun for d in evs)

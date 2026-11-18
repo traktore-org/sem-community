@@ -13543,8 +13543,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (#1023) the late charge right before departure
                     late_s=late_charge_s(cfg),
                     # (#1383) cheap-hours mode: a thin sun hour may be topped
-                    # up from the grid at its import price
-                    grid_in_sun=bool(self._tariff_optimized_for(cfg)),
+                    # up from the grid at its import price — but only for the
+                    # Min floor, the one need the live gate buys grid for
+                    # (``kwh`` is that floor: bound="min", > 0.1 as in decide)
+                    grid_in_sun=bool(self._tariff_optimized_for(cfg)
+                                     and float(kwh) > 0.1),
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)

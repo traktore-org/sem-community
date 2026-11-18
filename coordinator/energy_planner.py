@@ -588,14 +588,17 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         power = min(grant, max(float(d.min_power_w), want / h * 1000.0))
         return power, min(h, want / (power / 1000.0))
 
-    def _why(d, i, code, price):
+    def _why(d, i, code, price, power=0.0):
         """(#1321) The reason code for a grid block of ``d`` in slot ``i``:
         a sun slot says solar; a price pick says before_deadline when a
         cheaper priced hour lies past the deadline, else ``code``."""
         if ledger[i].cap_override_w is not None:
             # (#1383) a thin sun slot topped up from the grid says so
-            over = (ledger[i].grid_committed_w
-                    > float(ledger[i].cap_override_w) + _W_EPS)
+            # this block's own grid share: its power beyond the sun left
+            # BEFORE it was booked (a block fully on sun stays "solar")
+            sun_left = max(0.0, float(ledger[i].cap_override_w)
+                           - (ledger[i].grid_committed_w - power))
+            over = power > sun_left + _W_EPS
             return {"code": "sun_plus_grid" if over else "solar",
                     "params": {}}
         params = {"price": round(float(price), 4)}
@@ -712,7 +715,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                         reason=(f"{d.id}: {power:.0f} W {begin:%H:%M}–"
                                 f"{end:%H:%M} @ {price:.3f} (one block, "
                                 f"headroom left {s.headroom_w:.0f} W)"),
-                        **_why(d, i, "one_block", price)))
+                        **_why(d, i, "one_block", price, power)))
                     last_block_end[d.id] = max(
                         last_block_end.get(d.id, end), end)
                     planned += power / 1000.0 * run_h
@@ -802,9 +805,9 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             elif price is None:
                 code = {"code": "no_price_yet", "params": {}}
             elif d.needs_cheap_level and _cheap(d, i):
-                code = _why(d, i, "cheap_hours", price)
+                code = _why(d, i, "cheap_hours", price, power)
             else:
-                code = _why(d, i, "cheapest_hours", price)
+                code = _why(d, i, "cheapest_hours", price, power)
             allocations.append(Allocation(
                 demand_id=d.id, start=begin, end=end, power_w=power,
                 price=price, reason=why, **code))
