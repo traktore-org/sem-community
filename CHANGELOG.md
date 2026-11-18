@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **A run under way reads as running** (#1321). Now, Plan and Devices say "charging until 14:45", not "waits for 15:00". A real shortfall no longer reads "fits".
-- 🐛 **Plainer battery and settings** (#1321). The battery line says what a full battery gives. An unset car size reads "not set" in All settings. Kilowatts from 1 kW up.
+- 🐛 **A run under way reads as running** (#1321). The screens say "charging until 14:45", not "waits for 15:00".
+- 🐛 **Plainer battery and settings** (#1321). The battery line says what a full battery gives; an unset car size reads "not set".
 - 🐛 **One figure per device** (#1321). Plan, Now and Devices count only runs still ahead. Coming up names the car and drops cars not plugged in.
 - 🐛 **Plainer lines** (#1321). Unset car size reads "not set". Heat pump off and about to start says so in one line.
 - 🐛 **No braces in checks** (#1321). Repair titles show their values. A car size you set to the default stays yours.
