@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Rename a charger on the Devices screen** (#1386). Tap the Name row on its card; entity ids stay the same.
 - 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
 
 # [2.3.0-beta.20] — 18.11.2026
