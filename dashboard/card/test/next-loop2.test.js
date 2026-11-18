@@ -131,3 +131,115 @@ test('1: Plan screen — Sell only asks on a tap', () => {
     el.__dlg.on['#cf-ok']();
     assert.deepEqual(writes(el).map((c) => [c[0], c[1]]), [['select', 'select_option']]);
 });
+
+// ── 2–4: one reading of the plan, from the test system's real shape ──
+const { effectivePlan } = await import('../src/util/plan-facts.js');
+const { planRows, chartWindow } = await import('../src/util/next-plan-chart.js');
+const { todayRows } = await import('../src/util/next-today-rows.js');
+const { nowLead } = await import('../src/util/next-lead.js');
+const { heaterSays } = await import('../src/util/heater-questions.js');
+const { tariffKind } = await import('../src/util/price-level.js');
+const { recordReason, plainReason } = await import('../src/util/why-rows.js');
+
+const NOW = Date.parse('2026-11-18T08:10:00+01:00');
+// slots and blocks dropped (a quarter-hour day); each demand names its hours
+const RAW_PLAN = {
+    computed_at: '2026-11-18T08:04:23+01:00', house_grid: { kwh: 15.23 }, slots: [], blocks: [], not_scheduled: [],
+    demands: [
+        { id: 'comfort:hot_water', label: 'Sim Boiler', planned_kwh: 3.0, why: { code: 'unpriced_hours', params: { from: '2026-11-19T06:30:00+01:00', to: '2026-11-19T07:30:00+01:00' } } },
+        { id: 'comfort:old_heater', label: 'Old heater', planned_kwh: 1.0, why: { code: 'unpriced_hours', params: { from: '2026-11-18T06:30:00+01:00', to: '2026-11-18T07:30:00+01:00' } } },
+        { id: 'ev:ev_charger_1', label: 'Sim Charger 2', planned_kwh: 10.05, why: { code: 'cheapest_hours', params: { from: '2026-11-18T08:04:23+01:00', to: '2026-11-18T15:15:00+01:00', price: 0.136 } } },
+    ],
+};
+
+test('2: the headline, the chart and the list read the same car window', () => {
+    const plan = effectivePlan(RAW_PLAN);
+    const win = chartWindow(NOW, 'next', TZ);
+    const lead = planLead(plan, { when: 'today', nowMs: NOW, win });
+    assert.equal(lead.main.key, 'next_plan_car', 'the car is the biggest taker still to come');
+    assert.equal(lead.main.params.kwh, '9.9');           // from now on, not the 10.05 that includes 06 min gone
+    const rows = planRows({ win, nowMs: NOW, plan, names: { charger: () => 'Sim Charger 2' } });
+    const car = rows.find((r) => r.kind === 'ev');
+    assert.ok(car, 'the chart has the car row');
+    assert.equal(new Date(car.blocks[0].e).toISOString(), '2026-11-18T14:15:00.000Z');
+    const why = whyLines(plan, NOW);
+    assert.ok(why.find((l) => l.id === 'ev:ev_charger_1'));
+});
+
+test('2: a block that has run is history: not in the headline, not in the why list', () => {
+    const plan = effectivePlan({ ...RAW_PLAN, house_grid: { kwh: 0 }, demands: RAW_PLAN.demands.filter((d) => d.id === 'comfort:old_heater') });
+    const lead = planLead(plan, { when: 'today', nowMs: NOW, win: chartWindow(NOW, 'next', TZ) });
+    assert.equal(lead.main.key, 'next_plan_quiet', 'a past heater block plans nothing');
+    assert.deepEqual(whyLines(plan, NOW).map((l) => l.id), []);
+});
+
+test('2: a car block in the future and a heater block in the past: the car is named', () => {
+    const plan = effectivePlan({ ...RAW_PLAN, blocks: [
+        { id: 'ev:ev_charger_1', start: '2026-11-18T09:00:00+01:00', end: '2026-11-18T11:00:00+01:00', power_w: 4000 },
+        { id: 'comfort:hot_water', start: '2026-11-18T06:30:00+01:00', end: '2026-11-18T07:30:00+01:00', power_w: 3000 }] });
+    const lead = planLead(plan, { when: 'today', nowMs: NOW, win: chartWindow(NOW, 'next', TZ) });
+    assert.equal(lead.main.key, 'next_plan_car');
+    assert.equal(lead.main.params.kwh, '8.0');
+});
+
+test('2: tomorrow hours say tomorrow; the battery end never reads as a past hour', () => {
+    const el = mount('sem-next-plan-card', {});
+    const real = Date.now;
+    Date.now = () => NOW;
+    try {
+        assert.equal(el._winText(Date.parse('2026-11-19T06:30:00+01:00'), Date.parse('2026-11-19T07:30:00+01:00')), 'next_when_tomorrow 06:30 – 07:30');
+        assert.equal(el._clockDay('2026-11-19T07:30:00+01:00'), 'next_when_tomorrow 07:30');
+        assert.equal(el._clockDay('2026-11-18T15:15:00+01:00'), '15:15');
+    } finally { Date.now = real; }
+});
+
+test('2: Now — the car row names the plan window, the strip guess for an absent car is dropped', () => {
+    const attrs = { today_plan: [
+        { when: '2026-11-18T08:10:00+01:00', kind: 'device_run', label: 'plan_device_run', values: { name: 'Sim Boiler' } },
+        { when: '2026-11-18T17:16:00+01:00', kind: 'ev_charge_start', label: 'plan_ev_charge_start', detail: 'plan_ev_charge_estimate', values: {} }] };
+    const plan = effectivePlan(RAW_PLAN);
+    const rows = todayRows(attrs, { now: NOW, carPresent: true, plan, cars: [{ cid: 'ev_charger_1', name: 'Sim Charger 2' }] });
+    assert.ok(!rows.some((r) => /estimate/.test(String(r.detail))), 'no estimate beside the plan');
+    const car = rows.find((r) => r.label === 'next_car_charges');
+    assert.equal(car.values.name, 'Sim Charger 2');
+    assert.equal(new Date(car.until).getTime(), Date.parse('2026-11-18T15:15:00+01:00'));
+    // the boiler row takes the plan's hour (tomorrow 06:30), not the strip's "08:10"
+    const boiler = rows.find((r) => r.kind === 'device_run');
+    assert.equal(boiler.when, Date.parse('2026-11-19T06:30:00+01:00'));
+    assert.equal(boiler.day, 1);
+    // no car plugged in: no guess at all
+    const none = todayRows(attrs, { now: NOW, carPresent: false, plan: null });
+    assert.ok(!none.some((r) => r.kind === 'ev_charge_start'));
+});
+
+test('2: the Now lead names the plan window when the plan has hours for the car', () => {
+    const car = { present: true, charging: false, powerW: 0, remainingKwh: 10, targetTime: 'tomorrow 07:00', planWindow: '08:04 – 15:15' };
+    assert.equal(nowLead({ night: false, observer: true, solarW: 0, gridW: -900, batteryW: 0, car }).main.key, 'next_lead_car_planned');
+    assert.equal(nowLead({ night: false, observer: true, solarW: 0, gridW: -900, batteryW: 0, car: { ...car, planWindow: '' } }).main.key, 'next_lead_car_waits');
+});
+
+test('3: a boiler that runs with no sun says its minimum run time, not "heating on sun"', () => {
+    const row = { comfort: { keep_c: 50, max_c: 53, start_c: 45, reading_c: 48, hvac: 'heat' }, intent: { on: true, source: 'solar', code: 'surplus' }, mergedMode: 'solar_only' };
+    assert.equal(heaterSays(row, { sunW: 0 }, true).key, 'hq_st_min_run');
+    assert.equal(heaterSays(row, { sunW: 4200 }, true).key, 'hq_st_heating_sun');
+    assert.equal(heaterSays(row, {}, true).key, 'hq_st_heating_sun', 'no reading of the sun: the old text');
+});
+
+test('3: "one rate" only when the tariff really is one rate; no prices says so', () => {
+    const st = (level, extra = {}, rate = '0.15') => ({ 'sensor.sem_tariff_current_import_rate': S(rate, extra), 'sensor.sem_tariff_price_level': S(level) });
+    assert.equal(tariffKind(st('flat')), 'flat');
+    assert.equal(tariffKind(st('no_prices')), 'none');
+    assert.equal(tariffKind(st('unknown', {}, 'unknown')), 'none');
+    assert.equal(tariffKind(st('cheap')), 'dynamic');
+    assert.equal(tariffKind(st('unknown', { is_dynamic: false })), 'flat');
+    assert.equal(tariffKind({}), 'none');
+});
+
+test('4: a live reason reads the battery level the chip reads', () => {
+    const words = { why_reason_battery_car_level_unknown: 'unknown', why_reason_battery_car_level_known: 'A car is plugged in. The battery is at {soc} %.' };
+    const t = (k) => words[k] || k;
+    const rec = { reason_code: 'battery_car_level_unknown', params: {} };
+    assert.equal(recordReason(rec, { 'sensor.sem_battery_soc': S(20) }, t), 'A car is plugged in. The battery is at 20 %.');
+    assert.equal(recordReason(rec, { 'sensor.sem_battery_soc': S('unavailable') }, t), 'unknown');
+    assert.equal(plainReason(rec, t), 'unknown', 'a dated record keeps what it said then');
+});

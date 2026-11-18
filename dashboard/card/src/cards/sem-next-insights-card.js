@@ -14,6 +14,7 @@
  *   type: custom:sem-next-insights-card
  */
 
+import { tariffKind } from '../util/price-level.js';
 import { SEMNextBase, html, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard, semDiscoverPVStrings } from '../base/sem-shared.js';
 import { bucketsFor, fetchSeries, fetchPeriodFor, bucketValues, stackModel, lineModel, sunCurve } from '../util/next-history.js';
@@ -572,7 +573,8 @@ class SEMNextInsightsCard extends SEMNextBase {
         const prov = this._str(S + 'tariff_provider'), level = this._str(S + 'tariff_price_level');
         const imp = this._num(S + 'tariff_current_import_rate'), exp = this._num(S + 'tariff_current_export_rate');
         if (imp !== null || prov) {
-            const kind = !level || level === 'flat' ? this._t('next_level_flat') : this._t('next_dynamic');
+            const tk = tariffKind(this._hass?.states);
+            const kind = tk === 'none' ? this._t('next_no_prices_yet') : (tk === 'flat' ? this._t('next_level_flat') : this._t('next_dynamic'));
             rows.push(this._row('mdi:tag-multiple', this._t('next_tariff'), [kind, prov].filter(Boolean).join(' · '),
                 [imp !== null ? `${this._t('next_import')} ${this._price(imp)}` : '', exp !== null ? `${this._t('next_export').toLowerCase()} ${this._price(exp)}` : ''].filter(Boolean).join(' · '),
                 { onClick: () => this._moreInfo(S + 'tariff_current_import_rate') }));

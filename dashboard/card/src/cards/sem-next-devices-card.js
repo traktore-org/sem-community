@@ -16,6 +16,7 @@
  *   type: custom:sem-next-devices-card
  */
 
+import { effectivePlan } from '../util/plan-facts.js';
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { haDefined, ensureHaElements } from '../util/ha-elements.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
@@ -212,9 +213,10 @@ class SEMNextDevicesCard extends SEMNextBase {
      * Several ids: the earliest of them (a heater's run-time block and its Keep at block).
      */
     _plannedAt(...planIds) {
-        const plan = this._attrs('sensor.sem_energy_plan');
+        // (#1321) the same plan every screen reads; tomorrow's hour says tomorrow
+        const plan = effectivePlan(this._attrs('sensor.sem_energy_plan'));
         const next = nextBlock(plan.blocks, planIds, Date.now());
-        return next ? this._hhmm(next.start) : '';
+        return next ? this._clockDay(next.start) : '';
     }
 
     /** The pill's words: the state, then why when the engine names a cause. */
@@ -252,6 +254,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         return {
             powerW: row.powerEntity ? this._powerW(row.powerEntity) : null,
             plannedAt: this._plannedAt('load:' + row.id, 'comfort:' + row.id),
+            sunW: this._powerW('sensor.sem_solar_power'),
             fmtTemp: (c) => this._temp(c),
             parentName: parent ? parent.name : '',
         };

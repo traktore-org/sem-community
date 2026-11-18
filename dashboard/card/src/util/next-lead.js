@@ -11,6 +11,7 @@
  */
 
 import { fmtNum } from './next-number.js';
+import { kwhIn, houseKwhIn } from './plan-facts.js';
 
 const IMPORT_W = 100;   // below this the grid is "quiet"
 const SUN_W = 100;      // the roof gives something above this
@@ -58,7 +59,10 @@ export function nowLead(f) {
             main = { key: 'next_lead_car_sun', params: { kw: fmt1(car.powerW / 1000) } };
         }
     } else if (car && car.present && Number.isFinite(car.remainingKwh) && car.remainingKwh > 0.1) {
-        main = { key: 'next_lead_car_waits', params: { kwh: fmt1(car.remainingKwh), time: car.targetTime || '' } };
+        // (#1321) the plan's own hours when it has them: the same window the Plan screen shows
+        main = car.planWindow
+            ? { key: 'next_lead_car_planned', params: { kwh: fmt1(car.remainingKwh), window: car.planWindow } }
+            : { key: 'next_lead_car_waits', params: { kwh: fmt1(car.remainingKwh), time: car.targetTime || '' } };
     } else if (sun && exporting) {
         main = { key: 'next_lead_sun_export', params: { kw: fmt1(f.gridW / 1000) } };
     } else if (sun && bat && Number.isFinite(f.batteryW) && f.batteryW > IMPORT_W) {
@@ -108,9 +112,13 @@ export { coldHeaters } from './heater-questions.js';
 export function planLead(a, extra) {
     const ok = a && typeof a === 'object' && Array.isArray(a.blocks);
     if (!ok || !a.computed_at) return { main: { key: 'next_plan_none', params: {} }, sub: null };
-    const evKwh = kwhOf(a.blocks, (id) => String(id).startsWith('ev:'));
+    // (#1321) the window the chart shows, from now on: the headline counts what
+    // is still to come inside it, never a block that has run or one outside it
+    const from = Number.isFinite(extra?.nowMs) ? extra.nowMs : -Infinity;
+    const to = extra?.win && Number.isFinite(extra.win.end) ? extra.win.end : Infinity;
+    const evKwh = kwhIn(a.blocks, (id) => id.startsWith('ev:'), from, to);
     // (#1321) a heater's Keep at run is a load run too (plan id comfort:<id>)
-    const loadKwh = kwhOf(a.blocks, (id) => String(id).startsWith('load:') || String(id).startsWith('comfort:'));
+    const loadKwh = kwhIn(a.blocks, (id) => id.startsWith('load:') || id.startsWith('comfort:'), from, to);
     // A heater below its start line with no hour planned: "nothing planned"
     // would read as "nothing is needed". Say what is missing instead.
     const cold = extra?.cold || null;
@@ -120,13 +128,19 @@ export function planLead(a, extra) {
         : { key: 'next_plan_quiet', params: {} };
     // (#1321) one number for "from the grid": the Expected tile reads the same
     // planGridKwh, so the line and the tile never differ
-    const houseKwh = houseGridKwh(a);
-    const gridKwh = planGridKwh(a);
+    const windowed = Number.isFinite(from) || Number.isFinite(to);
+    const houseKwh = windowed ? houseKwhIn(a, from, to) : houseGridKwh(a);
+    const gridKwh = windowed ? loadKwh + houseKwh : planGridKwh(a);
     const when = extra?.when || '';
-    const main = evKwh > 0.05
-        ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh), when } }
-        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(gridKwh), when } }
-            : (houseKwh > 0.05 ? { key: 'next_plan_house', params: { kwh: fmt1(houseKwh), when } } : quiet));
+    // (#1321) the biggest taker in the window is named. Without slots the house
+    // figure covers the whole plan, not the window: it names nothing then.
+    const slotsKnown = !windowed || (Array.isArray(a.slots) && a.slots.length > 0);
+    const houseRank = slotsKnown || (evKwh <= 0.05 && loadKwh <= 0.05) ? houseKwh : 0;
+    const top = Math.max(evKwh, loadKwh, houseRank);
+    const main = top <= 0.05 ? quiet
+        : evKwh === top ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh), when } }
+        : loadKwh === top ? { key: 'next_plan_loads', params: { kwh: fmt1(gridKwh), when } }
+        : { key: 'next_plan_house', params: { kwh: fmt1(houseKwh), when } };
     // (#1321) hours with no price yet give no cost: say so, not "cost ,"
     const sub = { key: extra?.cost ? 'next_plan_sub' : 'next_plan_sub_nocost', params: {
         time: extra?.computedAt || '', cost: extra?.cost || '',

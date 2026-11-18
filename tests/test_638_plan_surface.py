@@ -332,9 +332,30 @@ def test_an_oversized_night_drops_the_chart_not_the_answer():
     plan["demands"] = plan["demands"] * 4
     attrs = _energy_plan_attrs(plan)
     assert attrs["timeline_omitted"] is True
-    assert attrs["slots"] == [] and attrs["blocks"] == []
+    assert attrs["slots"] == []
     # The demands ARE the answer — they survive, and so does the verdict.
     assert attrs["demands"] and attrs["takeover"]
+    assert _size(attrs) <= _PLAN_ATTR_BUDGET_BYTES
+
+
+def test_1321_blocks_go_last_when_they_alone_overflow():
+    plan = _synthetic_plan(slots=96, demands=12, blocks_per_demand=60)
+    for i, b in enumerate(plan["blocks"]):
+        b["power_w"] = 100.0 + i      # no two touch, so merging cannot save it
+    attrs = _energy_plan_attrs(plan)
+    assert attrs["slots"] == [] and attrs["blocks"] == []
+    assert attrs["demands"] and _size(attrs) <= _PLAN_ATTR_BUDGET_BYTES
+
+
+def test_1321_slots_overflow_alone_keeps_who_takes_energy_and_when():
+    """(#1321) A day on a quarter-hour market is too big only because of its
+    slots. The few merged blocks must survive: the chart and the headline
+    read who takes energy, and when, from them."""
+    plan = _synthetic_plan(slots=200, demands=3, blocks_per_demand=1)
+    attrs = _energy_plan_attrs(plan)
+    assert attrs["timeline_omitted"] is True
+    assert attrs["slots"] == [] and attrs["batt_runs"] == []
+    assert {b["id"] for b in attrs["blocks"]} == {f"load:device_{d}" for d in range(3)}
     assert _size(attrs) <= _PLAN_ATTR_BUDGET_BYTES
 
 

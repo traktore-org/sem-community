@@ -302,10 +302,14 @@ def _energy_plan_attrs(
         attrs.pop("heat_cost")
         attrs["heat_cost_omitted"] = True
     if _too_big():
+        # (#1321) the slots are the bulk; the merged blocks are a few rows and
+        # carry who takes energy and when. Keep them: without them the card
+        # drew a chart with nothing planned beside a list that had windows.
         attrs["slots"] = []
-        attrs["blocks"] = []
         attrs["batt_runs"] = []
         attrs["timeline_omitted"] = True
+        if _too_big():
+            attrs["blocks"] = []
     # (#758) The timeline is the biggest term, but it is not the only one,
     # and going over means the recorder keeps NOTHING. If dropping it was
     # not enough, drop what rode along and say so — the plan itself is what

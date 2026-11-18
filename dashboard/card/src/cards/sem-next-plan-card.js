@@ -16,6 +16,8 @@ import { planIdName } from '../util/plan-ids.js';
 import { reviewRows } from '../util/next-review.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { whyLines, batteryEnd } from '../util/plan-why.js';
+import { effectivePlan } from '../util/plan-facts.js';
+import { tariffKind } from '../util/price-level.js';
 import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, kwhOf, coldHeaters, planGridKwh } from '../util/next-lead.js';
@@ -224,7 +226,8 @@ class SEMNextPlanCard extends SEMNextBase {
     }
 
     // ── models ──
-    _plan() { return this._attrs('sensor.sem_energy_plan'); }
+    /** (#1321) the plan with a block for every demand that names hours: one list for every part of the screen */
+    _plan() { return effectivePlan(this._attrs('sensor.sem_energy_plan')); }
 
     _devices() { return this._attrs('sensor.sem_controllable_devices_count').devices || {}; }
 
@@ -334,7 +337,7 @@ class SEMNextPlanCard extends SEMNextBase {
                 battery: () => t('next_src_battery'), label: () => l.label,
             });
             const kind = l.id.startsWith('ev:') ? 'ev' : l.id.includes('battery') ? 'battery_in' : 'load';
-            const when = l.start ? `${this._hhmm(l.start)} – ${this._hhmm(l.end)}${l.kwh > 0.05 ? ' · ' + this._kwh(l.kwh) : ''}` : t('next_not_scheduled');
+            const when = l.start ? `${this._winText(Date.parse(l.start), Date.parse(l.end))}${l.kwh > 0.05 ? ' · ' + this._kwh(l.kwh) : ''}` : t('next_not_scheduled');
             const why = l.code ? this._planWhyText(l.code, l.params)
                 : l.why ? this._whyText({ why: l.why }) : this._reasonText(l.reason, l.params);
             return html`<div class="row" style="--c:${KIND_COLOR[kind] || C.home}"><div class="k">${this._icon(KIND_ICON[kind] || 'mdi:power-plug')}
@@ -372,8 +375,10 @@ class SEMNextPlanCard extends SEMNextBase {
             cop: Number.isFinite(Number(p.cop)) && p.cop !== null && p.cop !== ''
                 ? this._fmt(Number(p.cop), 1) : '',
         };
-        const text = this._tf(key, vars);
-        return text && text !== key ? text : '';
+        // (#1321) one rate: no price was ever a reason to wait, so the short-window text must not claim time ran out
+        const flatKey = code === 'short_window' && tariffKind(this._hass?.states) === 'flat' ? 'plan_why_one_rate' : key;
+        const text = this._tf(flatKey, vars);
+        return text && text !== flatKey ? text : '';
     }
 
     _focusReason(fb, plan) {
@@ -644,10 +649,12 @@ class SEMNextPlanCard extends SEMNextBase {
 
     // ── per device ──
     _windowOf(blocks, id) {
-        const mine = blocks.filter((b) => b.id === id && Number.isFinite(Date.parse(b.start)) && Number.isFinite(Date.parse(b.end)))
+        // (#1321) a window that has ended is history, not a plan
+        const now = Date.now();
+        const mine = blocks.filter((b) => b.id === id && Number.isFinite(Date.parse(b.start)) && Date.parse(b.end) > now)
             .sort((p, q) => Date.parse(p.start) - Date.parse(q.start));
         if (!mine.length) return '';
-        return `${this._hhmm(mine[0].start)} – ${this._hhmm(mine[mine.length - 1].end)}`;
+        return this._winText(Date.parse(mine[0].start), Date.parse(mine[mine.length - 1].end), now);
     }
 
     _devRow(icon, color, name, rest, sub, btns, tip = '') {
@@ -714,12 +721,12 @@ class SEMNextPlanCard extends SEMNextBase {
         if (floor !== null && soc !== null) {
             parts.push(this._tf(soc < floor ? 'next_batt_below_floor' : 'next_batt_above_floor', { floor: Math.round(floor), soc: Math.round(soc) }));
         }
-        const inWin = this._windowOf(blocks.filter((b) => String(b.id).startsWith('battery')).map((b) => ({ ...b, id: 'battery' })), 'battery');
+        const inWin = this._windowOf(blocks.filter((b) => /battery/.test(String(b.id)) && !String(b.id).startsWith('battery_out')).map((b) => ({ ...b, id: 'battery' })), 'battery');
         if (inWin) parts.push(`${t('next_battery_charging')} ${inWin}`);
         const first = runs.length && Array.isArray(runs[0]) ? slots[runs[0][0]] : null;
         const last = runs.length && Array.isArray(runs[runs.length - 1]) ? slots[runs[runs.length - 1][1]] : null;
         if (first && last) parts.push(`${t('next_to_house')} ${this._hhmm(first.start)} – ${this._hhmm(last.end)}`);
-        const d = demands.find((x) => String(x.id).startsWith('battery'));
+        const d = demands.find((x) => /battery/.test(String(x.id)));
         const arb = plan.arbitrage;
         // (#1367) a battery SEM cannot charge says so, instead of nothing
         const left = notSched.filter((n) => n && String(n.id).startsWith('battery'));
@@ -847,7 +854,7 @@ class SEMNextPlanCard extends SEMNextBase {
         if (bEnd) {
             const end = bEnd.at;
             tiles.push({ label: t('next_batt_end'), value: Math.round(bEnd.pct), unit: '%',
-                sub: end && Number.isFinite(Date.parse(end)) ? this._tf('next_batt_end_sub', { time: this._hhmm(end) }) : '' });
+                sub: end && Number.isFinite(Date.parse(end)) ? this._tf('next_batt_end_sub', { time: this._clockDay(end) }) : '' });
         }
         const sun = this._num('sensor.sem_forecast_tomorrow_kwh');
         if (sun !== null) {
@@ -936,10 +943,11 @@ class SEMNextPlanCard extends SEMNextBase {
             sunTomorrowKwh: this._num('sensor.sem_forecast_tomorrow_kwh'),
             cold: this._cold(plan)[0] || null,
             when: this._planWhen(plan),
+            nowMs: Date.now(), win: chartWindow(Date.now(), this._range, this._hass?.config?.time_zone),
         });
-        const flat = (this._str('sensor.sem_tariff_price_level') || 'flat') === 'flat';
+        const kind = tariffKind(this._hass?.states);
         const main = this._tf(lead.main.key, lead.main.params);
-        const sub = lead.sub ? this._tf(lead.sub.key, lead.sub.params) + (flat ? ' ' + this._t('next_one_rate_sub') : '') : '';
+        const sub = lead.sub ? this._tf(lead.sub.key, lead.sub.params) + (kind === 'flat' ? ' ' + this._t('next_one_rate_sub') : kind === 'none' ? ' ' + this._t('next_no_prices_yet') + '.' : '') : '';
         return { main, sub };
     }
 

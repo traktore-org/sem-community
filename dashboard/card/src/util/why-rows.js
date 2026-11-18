@@ -105,9 +105,13 @@ export function changeLabel(rec, t) {
  * `rec.params`. Null when the code has no sentence or a number it names
  * is missing; the card then shows the internal text instead.
  */
-export function plainReason(rec, t) {
-    const code = rec?.reason_code;
+export function plainReason(rec, t, opts = {}) {
+    let code = rec?.reason_code;
     if (!code) return null;
+    // (#1321) a live line never says the level is unknown while the chip reads it
+    if (code === 'battery_car_level_unknown' && Number.isFinite(opts.soc)) {
+        return t('why_reason_battery_car_level_known').replace('{soc}', String(Math.round(opts.soc)));
+    }
     const key = `why_reason_${code}`;
     const sentence = t(key);
     if (!sentence || sentence === key) return null;
@@ -128,7 +132,9 @@ export function plainReason(rec, t) {
  * ("ev plugged in + battery SoC 20% < floor …") is never shown.
  */
 export function recordReason(rec, states, t) {
-    const own = plainReason(rec, t);
+    const soc = Number(states?.['sensor.sem_battery_soc']?.state);
+    const live = { soc: Number.isFinite(soc) && states?.['sensor.sem_battery_soc']?.state !== '' ? soc : NaN };
+    const own = plainReason(rec, t, live);
     if (own) return own;
     const id = String(rec?.device_id || '');
     const kind = rec?.kind || rec?.device_kind;
@@ -139,7 +145,7 @@ export function recordReason(rec, states, t) {
     else if (kind === 'battery') { log = attr('sensor.sem_battery_status', 'per_battery_last_decision'); key = id.replace(/^battery:/, ''); }
     else if (kind === 'load') log = attr('sensor.sem_load_management_status', 'per_device_last_decision');
     const held = log[key];
-    return held ? (plainReason({ reason_code: held.reason_code, params: held.params }, t) || '') : '';
+    return held ? (plainReason({ reason_code: held.reason_code, params: held.params }, t, live) || '') : '';
 }
 
 const _num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);

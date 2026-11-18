@@ -14,13 +14,14 @@
 
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { planIdName } from '../util/plan-ids.js';
+import { effectivePlan } from '../util/plan-facts.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { nowLead } from '../util/next-lead.js';
 import { deadlineLabel } from '../util/next-time.js';
 import { powerBar } from '../util/next-power-bar.js';
 import { todayRows } from '../util/next-today-rows.js';
-import { priceLevelKey, isAbsence } from '../util/price-level.js';
+import { priceLevelKey, isAbsence, tariffKind } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
 import { chargerSays, chargerSaysEach } from '../util/charger-questions.js';
 import { plainReason } from '../util/why-rows.js';
@@ -185,7 +186,10 @@ class SEMNextNowCard extends SEMNextBase {
             const remaining = this._remainingKwh(cid);
             const present = powerW !== null && (powerW > 50 || (remaining !== null && remaining > 0.1));
             if (!present) continue;
-            return { present: true, charging: powerW > 50, powerW, amps, remainingKwh: remaining,
+            const own = this._planBlocks().filter((b) => b.id === 'ev:' + cid && Date.parse(b.end) > Date.now());
+            const planWindow = own.length ? this._winText(Math.min(...own.map((b) => Math.max(Date.parse(b.start), Date.now()))),
+                Math.max(...own.map((b) => Date.parse(b.end)))) : '';
+            return { present: true, charging: powerW > 50, powerW, amps, remainingKwh: remaining, planWindow,
                      targetTime: deadlineLabel((this._str(`time.sem_charger_${cid}_target_time`) || '').slice(0, 5),
                          this._tick || Date.now(), this._hass?.config?.time_zone, this._t('tomorrow')), cid };
         }
@@ -239,7 +243,7 @@ class SEMNextNowCard extends SEMNextBase {
     // ── plan and device readers ──
 
     _planBlocks() {
-        const plan = this._attrs('sensor.sem_energy_plan');
+        const plan = effectivePlan(this._attrs('sensor.sem_energy_plan'));
         return Array.isArray(plan.blocks) ? plan.blocks : [];
     }
 
@@ -591,7 +595,10 @@ class SEMNextNowCard extends SEMNextBase {
 
     _todayList() {
         if (!this._has('sensor.sem_charging_state')) return nothing;
-        const rows = todayRows(this._attrs('sensor.sem_charging_state'), { now: this._tick, carPresent: this._anyCarConnected() });
+        const cars = this._chargers.filter((cid) => this._str(`binary_sensor.sem_charger_${cid}_connected`) !== 'off')
+            .map((cid) => ({ cid, name: this._chargerName(cid) }));
+        const rows = todayRows(this._attrs('sensor.sem_charging_state'), { now: this._tick || Date.now(), carPresent: this._anyCarConnected(),
+            plan: effectivePlan(this._attrs('sensor.sem_energy_plan')), cars });
         const lang = this._hass?.language || 'en';
         const when = (r) => {
             const t = this._hhmm(new Date(r.when));
@@ -698,7 +705,7 @@ class SEMNextNowCard extends SEMNextBase {
                 sum.push(html`<span>${this._t('next_next_cheap')} <b>${start}</b>${price}</span>`);
             }
         } else if (imp !== null) {
-            sum.push(html`<span>${this._t('next_price_now')} <b>${this._price(imp)}</b> · ${this._t('next_one_rate')}</span>`);
+            sum.push(html`<span>${this._t('next_price_now')} <b>${this._price(imp)}</b> · ${this._t(tariffKind(this._hass?.states) === 'none' ? 'next_no_prices_yet' : 'next_one_rate')}</span>`);
         }
         if (exp !== null) sum.push(html`<span>${this._t('next_export')} <b>${this._price(exp)}</b></span>`);
         return this._sec(this._t('next_money'), html`${tiles.length ? this._tiles(tiles, { three: tiles.length === 3 }) : nothing}

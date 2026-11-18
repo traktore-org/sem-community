@@ -98,6 +98,8 @@ export function heaterSays(row, live = {}, running = false) {
         // (#1081) a planned run that goes on to the top says so
         if (code === 'comfort_goal' && preheatOn(c) && max !== null) return p('hq_st_preheating', { top: T(max) }, 'ok');
         if (code === 'comfort_goal') return p('hq_st_heating_to', { keep: T(keep) }, 'ok');
+        // (#1321) "on sun" only while the roof gives something: the minimum run time keeps it on otherwise
+        if (intent.source === 'solar' && Number.isFinite(live.sunW) && live.sunW < 100) return p('hq_st_min_run', {}, 'ok');
         if (intent.source === 'solar' || intent.source === 'tier1_battery') {
             return p('hq_st_heating_sun', { max: T(max === null ? keep : max) }, 'ok');
         }
@@ -172,6 +174,7 @@ const COOL_KEY = {
     hq_st_heating_to: 'hq_st_cooling_to',
     hq_st_heating_battery: 'hq_st_cooling_battery',
     hq_st_heating_sun: 'hq_st_cooling_sun',
+    hq_st_min_run: 'hq_st_min_run',
     hq_st_heats_at: 'hq_st_cools_at',
     hq_st_heats_tonight_battery: 'hq_st_cools_tonight_battery',
     hq_st_waits_battery: 'hq_st_waits_battery_cool',

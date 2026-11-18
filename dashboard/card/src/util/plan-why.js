@@ -21,6 +21,9 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
         const w = d && d.why;
         if (!d || !d.id || !w || !w.code) continue;
         const p = w.params || {};
+        // a window that has ended is history, not a plan
+        const endMs = Date.parse(p.to);
+        if (Number.isFinite(endMs) && endMs <= nowMs) continue;
         own.set(String(d.id), {
             id: String(d.id), start: p.from || '', end: p.to || '',
             reason: '', params: p, why: '', code: String(w.code),

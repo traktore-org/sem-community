@@ -74,10 +74,10 @@ function text(part) {
 const S = (state, attributes = {}) => ({ state: String(state), attributes, last_updated: '2026-11-18T01:40:00+00:00' });
 
 // the PROD night of 18.11: nothing for the car or loads, the house draws 2.9 kWh from the grid
-const T0 = Date.parse('2026-11-18T02:01:00+01:00');
+const T0 = Date.now() + 5 * 60e3;   // slots still to come: a past hour is history, not a plan
 const slot = (i, w) => ({ start: new Date(T0 + i * 3600e3).toISOString(), end: new Date(T0 + (i + 1) * 3600e3).toISOString(), home_grid_w: w, price: 0.36 });
 const PLAN = {
-    computed_at: '2026-11-18T02:01:00+01:00', blocks: [], batt_runs: [[0, 0]], total_cost: 1.05,
+    computed_at: new Date(T0).toISOString(), blocks: [], batt_runs: [[0, 0]], total_cost: 1.05,
     house_grid: { kwh: 2.9, cost: 1.05, reason: null },
     slots: [slot(0, 0), slot(1, 1450), slot(2, 1450), slot(3, 0)],
 };

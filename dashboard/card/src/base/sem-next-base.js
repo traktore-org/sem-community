@@ -18,6 +18,7 @@ import { SEMLitBase, html, css, svg, nothing } from './sem-lit-base.js';
 import { readNumber } from '../util/missing-value.js';
 import { fill } from '../util/next-lead.js';
 import { hhmmIn } from '../util/next-time.js';
+import { clockWithDay, windowText } from '../util/plan-facts.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { fmtPrice } from '../util/next-format.js';
@@ -528,6 +529,19 @@ export class SEMNextBase extends SEMLitBase {
         const d = x instanceof Date ? x : new Date(Date.parse(x));
         if (!Number.isFinite(d.getTime())) return String(x);
         return hhmmIn(d, this._hass?.config?.time_zone);
+    }
+    /** (#1321) A clock time with its day when it is not today: never a future hour that reads as a past one. */
+    _clockDay(x, nowMs = Date.now()) {
+        const ms = typeof x === 'number' ? x : Date.parse(x instanceof Date ? x.toISOString() : x);
+        if (!Number.isFinite(ms)) return this._hhmm(x);
+        return clockWithDay(ms, nowMs, this._hass?.config?.time_zone, { tomorrow: this._t('next_when_tomorrow') }, this._weekdayOf());
+    }
+    _winText(s, e, nowMs = Date.now()) {
+        return windowText(s, e, nowMs, this._hass?.config?.time_zone, { tomorrow: this._t('next_when_tomorrow') }, this._weekdayOf());
+    }
+    _weekdayOf() {
+        const lang = this._hass?.language || 'en', tz = this._hass?.config?.time_zone;
+        return (ms) => { try { return new Date(ms).toLocaleDateString(lang, { weekday: 'short', timeZone: tz || undefined }); } catch (e) { return ''; } };
     }
     /** 12 s · 4 min · 2 h */
     _ago(iso, nowMs = Date.now()) {

@@ -383,7 +383,7 @@ log line for every install.
   ledger's internal columns stay out, and back-to-back allocations are merged
   into runs, so the payload stays under the recorder's 16 KiB attribute limit
   (above it HA stores **no** attributes at all). On an exceptionally large
-  night the timeline alone is dropped — `timeline_omitted: true`, the card
+  night the timeline alone is dropped — `timeline_omitted: true` (the slots and battery runs; the merged blocks stay unless they overflow too), the card
   falls back to the demand list and says so. `diagnose` always has the full
   detail.
 - **Logs** — `ENERGY-PLAN (shadow)` lines (`(active)` while actuation is

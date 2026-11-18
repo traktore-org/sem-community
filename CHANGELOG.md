@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **One plan on every screen** (#1321). Headline, chart, list and Now name the same car hours; past hours are gone; tomorrow's say tomorrow.
+- 🐛 **A day plan keeps its hours** (#1321). A busy quarter-hour day no longer drops who takes energy and when.
 - 🐛 **Actions ask first** (#1321). Flipping the grid or battery sign, replan, pause, boost and clean up now show a question; a tap alone changes nothing.
 - 🐛 **Each fact reads one source** (#1321). Heat pump state, car plug status, grid kWh, house kWh and the battery floor now agree on every screen.
 - 🐛 **Plan words match the time** (#1321). A passed deadline says tomorrow; the plan says this morning, today or tonight; no false "one rate".
