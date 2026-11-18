@@ -52,7 +52,9 @@ function phaseStatus(card, cid) {
     if (ph.switch_state === 'settling') return card._t('phase_status_settling');
     if (ph.active_phases) return card._tf('phase_status_measured', { n: ph.active_phases });
     if (ph.believed_phases) return card._tf('phase_status_believed', { n: ph.believed_phases });
-    return card._t('phase_status_unknown');
+    // (#1321) nothing measured yet: the phases the charger is set up with, in the one Phases row
+    const set = card._num('number.sem_charger_' + cid + '_ev_phases');
+    return Number.isFinite(set) && set > 0 ? card._tf('next_n_phases', { n: card._fmt(set, 0) }) : card._t('phase_status_unknown');
 }
 
 export function chargerBody(card, row) {
@@ -159,7 +161,7 @@ export function chargerBody(card, row) {
     const typeVal = html`${isSoc ? t('next_soc') : 'kWh'}`;
     const stats2 = html`<div class="stats" style="margin-top:4px">
         <div><span class="lbl">${t('next_charge')}</span><div class="big num">${soc === null ? '—' : (isEstimate ? '~' : '') + Math.round(soc) + ' %'}</div>
-            <div class="sub2">${soc === null ? t('next_no_soc') : html`${kmNow === null ? '' : tf('next_km', { km: kmNow }) + ' · '}${isEstimate ? t('next_estimate') : t('next_measured')}`}</div></div>
+            <div class="sub2">${soc === null ? t('next_no_soc') : [kmNow === null ? '' : tf('next_km', { km: kmNow }), isEstimate ? t('next_estimate') : t('next_measured')].filter(Boolean).join(' · ')}</div></div>
     </div>`;
 
     // ── buttons ──
@@ -181,7 +183,7 @@ export function chargerBody(card, row) {
         } else {
             const preview = cs.battery_boost_preview || {};
             const floor = (card._boostFloor || {})[cid] ?? Math.round(Number(preview.default_floor ?? 50));
-            boostBtns.push(card._btn(t('next_boost_to'), () => card._askFirst(t('next_boost_to'), () => card._svc('start_battery_boost', { charger_id: cid, floor_soc: floor })), { small: true, ghost: true, icon: 'mdi:home-battery-outline', disabled: card._obs() }));
+            boostBtns.push(card._btn(t('next_boost_go'), () => card._askFirst(t('next_boost_go'), () => card._svc('start_battery_boost', { charger_id: cid, floor_soc: floor })), { small: true, ghost: true, icon: 'mdi:home-battery-outline', disabled: card._obs() }));
             boostFloor = floor;
         }
     }
@@ -251,7 +253,6 @@ export function chargerBody(card, row) {
     const minAId = 'number.sem_charger_' + cid + '_minimum_current';
     const maxAId = 'number.sem_charger_' + cid + '_maximum_current';
     const perId = 'number.sem_charger_' + cid + '_ev_kwh_per_100km';
-    const phId = 'number.sem_charger_' + cid + '_ev_phases';
     // (#1321) set once: the car's battery and the charger's current range, each its own row
     const numSet = (id, label, text, unit) => {
         if (!card._has(id)) return;
@@ -263,7 +264,7 @@ export function chargerBody(card, row) {
     numSet(minAId, card._lbl('next_row_min_current'), card._fmt(card._num(minAId), 0) + ' A', 'A');
     numSet(maxAId, card._lbl('next_row_max_current'), card._fmt(card._num(maxAId), 0) + ' A', 'A');
     numSet(perId, card._lbl('next_more_use'), card._fmt(card._num(perId), 1) + ' kWh/100 km', 'kWh/100 km');
-    numSet(phId, card._lbl('config_ev_phases'), tf('next_n_phases', { n: card._fmt(card._num(phId), 0) }), '');
+    // (#1321) the phases are one row above; the setting itself is on System
     if (card._has(S('estimated_soc'))) {
         const est = card._num(S('estimated_soc'));
         const ea = card._attrs(S('estimated_soc'));

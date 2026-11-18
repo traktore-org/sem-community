@@ -444,7 +444,7 @@ export function rowsFor(sentence, items, t, prefix = '') {
 export function sentenceText(parts, t, states, valueOf = (s) => s.value) {
     const txt = (parts || []).map((p) => {
         if (typeof p === 'string') return p;
-        if (!p || typeof p !== 'object' || p.kind === 'action') return '';
+        if (!p || typeof p !== 'object' || p.kind === 'action' || p.silent) return '';
         return slotText(p, t, valueOf(p), states, true);
     }).join('');
     // a dropped action leaves its brackets and spaces behind
@@ -819,9 +819,10 @@ export function groups(states, t, ctx = {}) {
         const acSet = ac && ac.value > 0 ? ac : null;
         const relay = o && o.shed_signal_entity ? o.shed_signal_entity : null;
         const sentence = join(
+            // (#1321) the switch is the first row and says nothing in the prose: "Use a limit." is gone
             !pq ? [] : pq.limited
-                ? [t(PEAK_TEXT.label) + ' ', limit, ' · ', answer, '. ', t(PEAK_TEXT.sub)]
-                : [answer, '. ', t(PEAK_TEXT.subNone)],
+                ? [{ ...answer, silent: true }, t(PEAK_TEXT.label) + ' ', limit, '. ', t(PEAK_TEXT.sub)]
+                : [{ ...answer, silent: true }, t(PEAK_TEXT.none), '. ', t(PEAK_TEXT.subNone)],
             clause([frag(t, 'next_may_ac', { ac: acSet })]),
         );
         const m = more(t, [

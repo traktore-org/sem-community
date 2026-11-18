@@ -2427,7 +2427,9 @@
     "why_reason_no_source_held": "Není přebytek ze slunce ani levná energie, takže zůstává vypnuté.",
     "why_reason_surplus_short_held": "Není dost přebytku ze slunce, takže zůstává vypnuté.",
     "why_reason_peak_shed_held": "Dům překračuje svůj výkonový limit, takže zůstává vypnuté.",
-    "why_reason_phase_guard_held": "Jedna fáze překračuje svůj limit, takže zůstává vypnuté."
+    "why_reason_phase_guard_held": "Jedna fáze překračuje svůj limit, takže zůstává vypnuté.",
+    "next_history": "Historie",
+    "next_boost_go": "Spustit posílení z baterie"
   },
   "da": {
     "/year": "/år",
@@ -4857,7 +4859,9 @@
     "why_reason_no_source_held": "Der er hverken soloverskud eller billig strøm, så den forbliver slukket.",
     "why_reason_surplus_short_held": "Der er ikke nok soloverskud, så den forbliver slukket.",
     "why_reason_peak_shed_held": "Huset er over sin effektgrænse, så den forbliver slukket.",
-    "why_reason_phase_guard_held": "Én fase er over sin grænse, så den forbliver slukket."
+    "why_reason_phase_guard_held": "Én fase er over sin grænse, så den forbliver slukket.",
+    "next_history": "Historik",
+    "next_boost_go": "Start batteriboost"
   },
   "de": {
     "/year": "/Jahr",
@@ -7287,7 +7291,9 @@
     "why_reason_no_source_held": "Es gibt keinen Sonnenüberschuss und keinen günstigen Strom, darum bleibt es aus.",
     "why_reason_surplus_short_held": "Es gibt nicht genug Sonnenüberschuss, darum bleibt es aus.",
     "why_reason_peak_shed_held": "Das Haus liegt über seiner Leistungsgrenze, darum bleibt es aus.",
-    "why_reason_phase_guard_held": "Eine Phase liegt über ihrer Grenze, darum bleibt es aus."
+    "why_reason_phase_guard_held": "Eine Phase liegt über ihrer Grenze, darum bleibt es aus.",
+    "next_history": "Verlauf",
+    "next_boost_go": "Batterie-Boost starten"
   },
   "en": {
     "/year": "/year",
@@ -9717,7 +9723,9 @@
     "why_reason_no_source_held": "There is no spare sun or cheap power, so it stays off.",
     "why_reason_surplus_short_held": "There is not enough spare sun, so it stays off.",
     "why_reason_peak_shed_held": "The house is over its power limit, so it stays off.",
-    "why_reason_phase_guard_held": "One phase is over its limit, so it stays off."
+    "why_reason_phase_guard_held": "One phase is over its limit, so it stays off.",
+    "next_history": "History",
+    "next_boost_go": "Start battery boost"
   },
   "es": {
     "/year": "/año",
@@ -12147,7 +12155,9 @@
     "why_reason_no_source_held": "No hay excedente solar ni energía barata, así que sigue apagado.",
     "why_reason_surplus_short_held": "No hay suficiente excedente solar, así que sigue apagado.",
     "why_reason_peak_shed_held": "La casa supera su límite de potencia, así que sigue apagado.",
-    "why_reason_phase_guard_held": "Una fase supera su límite, así que sigue apagado."
+    "why_reason_phase_guard_held": "Una fase supera su límite, así que sigue apagado.",
+    "next_history": "Historial",
+    "next_boost_go": "Iniciar refuerzo de batería"
   },
   "fi": {
     "/year": "/vuosi",
@@ -14577,7 +14587,9 @@
     "why_reason_no_source_held": "Aurinkoylijäämää tai halpaa sähköä ei ole, joten se pysyy pois päältä.",
     "why_reason_surplus_short_held": "Aurinkoylijäämää ei ole tarpeeksi, joten se pysyy pois päältä.",
     "why_reason_peak_shed_held": "Talo ylittää tehorajansa, joten se pysyy pois päältä.",
-    "why_reason_phase_guard_held": "Yksi vaihe ylittää rajansa, joten se pysyy pois päältä."
+    "why_reason_phase_guard_held": "Yksi vaihe ylittää rajansa, joten se pysyy pois päältä.",
+    "next_history": "Historia",
+    "next_boost_go": "Käynnistä akkuboost"
   },
   "fr": {
     "/year": "/an",
@@ -17007,7 +17019,9 @@
     "why_reason_no_source_held": "Il n'y a ni surplus solaire ni courant bon marché, il reste éteint.",
     "why_reason_surplus_short_held": "Il n'y a pas assez de surplus solaire, il reste éteint.",
     "why_reason_peak_shed_held": "La maison dépasse sa limite de puissance, il reste éteint.",
-    "why_reason_phase_guard_held": "Une phase dépasse sa limite, il reste éteint."
+    "why_reason_phase_guard_held": "Une phase dépasse sa limite, il reste éteint.",
+    "next_history": "Historique",
+    "next_boost_go": "Lancer le boost batterie"
   },
   "hu": {
     "/year": "/év",
@@ -19437,7 +19451,9 @@
     "why_reason_no_source_held": "Nincs napenergia-többlet és olcsó áram sem, ezért kikapcsolva marad.",
     "why_reason_surplus_short_held": "Nincs elég napenergia-többlet, ezért kikapcsolva marad.",
     "why_reason_peak_shed_held": "A ház túllépte a teljesítményhatárt, ezért kikapcsolva marad.",
-    "why_reason_phase_guard_held": "Az egyik fázis túllépte a határt, ezért kikapcsolva marad."
+    "why_reason_phase_guard_held": "Az egyik fázis túllépte a határt, ezért kikapcsolva marad.",
+    "next_history": "Előzmények",
+    "next_boost_go": "Akkuboost indítása"
   },
   "it": {
     "/year": "/anno",
@@ -21867,7 +21883,9 @@
     "why_reason_no_source_held": "Non c'è surplus solare né energia a basso costo, quindi resta spento.",
     "why_reason_surplus_short_held": "Non c'è abbastanza surplus solare, quindi resta spento.",
     "why_reason_peak_shed_held": "La casa supera il limite di potenza, quindi resta spento.",
-    "why_reason_phase_guard_held": "Una fase supera il limite, quindi resta spento."
+    "why_reason_phase_guard_held": "Una fase supera il limite, quindi resta spento.",
+    "next_history": "Cronologia",
+    "next_boost_go": "Avvia boost batteria"
   },
   "nl": {
     "/year": "/jaar",
@@ -24297,7 +24315,9 @@
     "why_reason_no_source_held": "Er is geen zonne-overschot of goedkope stroom, dus het blijft uit.",
     "why_reason_surplus_short_held": "Er is niet genoeg zonne-overschot, dus het blijft uit.",
     "why_reason_peak_shed_held": "Het huis zit boven zijn vermogenslimiet, dus het blijft uit.",
-    "why_reason_phase_guard_held": "Eén fase zit boven zijn limiet, dus het blijft uit."
+    "why_reason_phase_guard_held": "Eén fase zit boven zijn limiet, dus het blijft uit.",
+    "next_history": "Geschiedenis",
+    "next_boost_go": "Accuboost starten"
   },
   "no": {
     "/year": "/år",
@@ -26727,7 +26747,9 @@
     "why_reason_no_source_held": "Det er verken soloverskudd eller billig strøm, så den forblir av.",
     "why_reason_surplus_short_held": "Det er ikke nok soloverskudd, så den forblir av.",
     "why_reason_peak_shed_held": "Huset er over effektgrensen, så den forblir av.",
-    "why_reason_phase_guard_held": "Én fase er over grensen, så den forblir av."
+    "why_reason_phase_guard_held": "Én fase er over grensen, så den forblir av.",
+    "next_history": "Historikk",
+    "next_boost_go": "Start batteriboost"
   },
   "pl": {
     "/year": "/rok",
@@ -29157,7 +29179,9 @@
     "why_reason_no_source_held": "Nie ma nadwyżki ze słońca ani taniego prądu, więc pozostaje wyłączone.",
     "why_reason_surplus_short_held": "Nie ma dość nadwyżki ze słońca, więc pozostaje wyłączone.",
     "why_reason_peak_shed_held": "Dom przekracza limit mocy, więc pozostaje wyłączone.",
-    "why_reason_phase_guard_held": "Jedna faza przekracza limit, więc pozostaje wyłączone."
+    "why_reason_phase_guard_held": "Jedna faza przekracza limit, więc pozostaje wyłączone.",
+    "next_history": "Historia",
+    "next_boost_go": "Uruchom wsparcie z baterii"
   },
   "pt": {
     "/year": "/ano",
@@ -31587,7 +31611,9 @@
     "why_reason_no_source_held": "Não há excedente solar nem energia barata, por isso fica desligado.",
     "why_reason_surplus_short_held": "Não há excedente solar suficiente, por isso fica desligado.",
     "why_reason_peak_shed_held": "A casa está acima do limite de potência, por isso fica desligado.",
-    "why_reason_phase_guard_held": "Uma fase está acima do limite, por isso fica desligado."
+    "why_reason_phase_guard_held": "Uma fase está acima do limite, por isso fica desligado.",
+    "next_history": "Histórico",
+    "next_boost_go": "Iniciar reforço da bateria"
   },
   "ro": {
     "/year": "/an",
@@ -34017,7 +34043,9 @@
     "why_reason_no_source_held": "Nu este nici surplus solar, nici energie ieftină, deci rămâne oprit.",
     "why_reason_surplus_short_held": "Nu este destul surplus solar, deci rămâne oprit.",
     "why_reason_peak_shed_held": "Casa depășește limita de putere, deci rămâne oprit.",
-    "why_reason_phase_guard_held": "O fază depășește limita, deci rămâne oprit."
+    "why_reason_phase_guard_held": "O fază depășește limita, deci rămâne oprit.",
+    "next_history": "Istoric",
+    "next_boost_go": "Pornește boost baterie"
   },
   "sv": {
     "/year": "/år",
@@ -36447,7 +36475,9 @@
     "why_reason_no_source_held": "Det finns inget solöverskott eller billig el, så den förblir avstängd.",
     "why_reason_surplus_short_held": "Det finns inte tillräckligt med solöverskott, så den förblir avstängd.",
     "why_reason_peak_shed_held": "Huset ligger över sin effektgräns, så den förblir avstängd.",
-    "why_reason_phase_guard_held": "En fas ligger över sin gräns, så den förblir avstängd."
+    "why_reason_phase_guard_held": "En fas ligger över sin gräns, så den förblir avstängd.",
+    "next_history": "Historik",
+    "next_boost_go": "Starta batteriboost"
   },
   "zh": {
     "/year": "/年",
@@ -38877,6 +38907,8 @@
     "why_reason_no_source_held": "既没有多余的太阳能，也没有便宜的电，所以保持关闭。",
     "why_reason_surplus_short_held": "多余的太阳能不够，所以保持关闭。",
     "why_reason_peak_shed_held": "房子超出了功率限制，所以保持关闭。",
-    "why_reason_phase_guard_held": "有一相超出限制，所以保持关闭。"
+    "why_reason_phase_guard_held": "有一相超出限制，所以保持关闭。",
+    "next_history": "历史",
+    "next_boost_go": "启动电池助力"
   }
 }

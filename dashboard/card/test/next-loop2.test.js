@@ -339,3 +339,82 @@ test('6: Plan screen — the actuation row says paused while watch-only', () => 
     const off = mount('sem-next-plan-card', { 'switch.sem_energy_plan_actuation': S('on'), 'switch.sem_observer_mode': S('off'), 'sensor.sem_energy_plan': S('fits', { computed_at: '2026-11-18T08:04:23+01:00', blocks: [], demands: [] }) });
     assert.match(text(off._expectedSec(off._plan(), off._model())), /next_actuation_sub/);
 });
+
+// ── 11: two chargers, one mode control each ──
+const { chargerBody } = await import('../src/util/next-devices-charger.js');
+
+test('11: each of the six car modes writes that charger\'s own select, on a home with two chargers', () => {
+    const MODES = ['off', 'solar_only', 'min_plus_solar', 'solar_plus_battery', 'solar_plus_cheap', 'always_max'];
+    const st = { 'switch.sem_observer_mode': S('off'), 'sensor.sem_charging_state': S('idle') };
+    for (const cid of ['keba', 'ev_charger_1']) {
+        st[`select.sem_charger_${cid}_charge_mode`] = S('min_plus_solar', { options: MODES });
+        st[`sensor.sem_charger_${cid}_power`] = S(0, { charger_name: cid });
+    }
+    const el = mount('sem-next-devices-card', st);
+    el._chargers = ['keba', 'ev_charger_1'];
+    el._freezeEntity = () => {};
+    let modeSeg = null;
+    el._seg = (items, key, onChange) => { if (items.some((i) => i.key === 'off') && items.some((i) => i.key === 'always_max')) modeSeg = { items, onChange }; return null; };
+    for (const cid of ['keba', 'ev_charger_1']) {
+        modeSeg = null;
+        chargerBody(el, { cid, type: 'charger' });
+        assert.ok(modeSeg, `${cid}: one mode control`);
+        assert.deepEqual(modeSeg.items.map((i) => i.key).sort(), [...MODES].sort());
+        el.__calls = [];
+        for (const m of modeSeg.items.map((i) => i.key).filter((k) => k !== 'min_plus_solar')) modeSeg.onChange(m);
+        const writes = writes_(el);
+        assert.equal(writes.length, 5);
+        for (const w of writes) {
+            assert.deepEqual([w[0], w[1]], ['select', 'select_option']);
+            assert.equal(w[2].entity_id, `select.sem_charger_${cid}_charge_mode`, 'its own charger, never the other');
+        }
+        assert.deepEqual(writes.map((w) => w[2].option).sort(), MODES.filter((k) => k !== 'min_plus_solar').sort());
+    }
+});
+const writes_ = (el) => el.__calls.filter((c) => c[1] !== 'get_config');
+
+// ── 7–9 and the small ones ──
+test('7: the Now power figure is on the bar once; the lists and "Why now" print no second copy', () => {
+    const st = { 'sensor.sem_grid_power': S(-900, { unit_of_measurement: 'W' }), 'sensor.sem_solar_power': S(0, { unit_of_measurement: 'W' }),
+        'sensor.sem_battery_power': S(0, { unit_of_measurement: 'W' }), 'sensor.sem_home_consumption_power': S(900, { unit_of_measurement: 'W' }),
+        'sensor.sem_ev_power': S(0, { unit_of_measurement: 'W' }), 'sensor.sem_battery_soc': S(20), 'switch.sem_observer_mode': S('off') };
+    const el = mount('sem-next-now-card', st);
+    el._io = true;
+    // what a person sees: the attributes (aria, title) are not text on the screen
+    const out = (text(el._powerNow()) + text(el._why())).replace(/[\w-]+="[^"]*"/g, '');
+    assert.equal((out.match(/0\.9 kW/g) || []).length, 1, out.replace(/\s+/g, ' '));
+});
+
+test('7: the System setup row counts the same checks as the Now checklist', () => {
+    const el = sys({ 'sensor.sem_diag_charger_control': S('number', { setup_checklist: { items: [], done: 3, total: 3, repairs: { count: 2, first: 'x' } } }) });
+    assert.match(text(el._setupRow()), /setup_check_n/);
+});
+
+test('8: the Devices charger shows one Phases row, falling back to the set count', () => {
+    const st = { 'switch.sem_observer_mode': S('off'), 'sensor.sem_charging_state': S('idle'), 'number.sem_charger_keba_ev_phases': S(3, { min: 1, max: 3, step: 1 }),
+        'sensor.sem_charger_keba_power': S(0, { charger_name: 'Keba' }), 'select.sem_charger_keba_charge_mode': S('off', { options: ['off'] }) };
+    const el = mount('sem-next-devices-card', st);
+    el._chargers = ['keba'];
+    const out = text(chargerBody(el, { cid: 'keba', type: 'charger' }));
+    assert.equal((out.match(/next_phases|config_ev_phases/g) || []).length <= 1, true);
+    assert.doesNotMatch(out, /phase_status_unknown/);
+});
+
+test('9: the peak switch is the first row and "Use a limit" is not in the prose', () => {
+    const st = { 'sensor.sem_battery_soc': S(50), 'switch.sem_observer_mode': S('off') };
+    const tt = (k) => ({ peak_q_choice_limit: 'Use a limit', peak_q_label: 'Limit grid draw to', peak_q_sub: 'SUB' }[k] || k);
+    const may = groups(st, tt, { options: { peak_limit_unlimited: false, target_peak_limit: 5 }, currency: 'CHF', chargers: [], labels: {} }).find((g) => g.key === 'may');
+    const order = may.rows.map((r) => (r.slot.peak ? 'switch' : r.slot.option));
+    assert.ok(order.indexOf('switch') < order.indexOf('target_peak_limit'), order.join());
+    assert.doesNotMatch(sentenceText(may.sentence, tt, st), /Use a limit/);
+});
+
+test('low: no trailing dot, no break inside a temperature, next departure by its own day', () => {
+    const el = mount('sem-next-plan-card', { });
+    el._hass.config.unit_system = { temperature: '°C' };
+    assert.equal(el._temp(2), '2.0 °C');
+    const now = mount('sem-next-now-card', { 'sensor.sem_charging_state': S('idle', { per_charger_departure: { keba: { next: '2026-11-23T07:00:00+01:00' } } }) });
+    const real = Date.now; Date.now = () => Date.parse('2026-11-20T18:00:00+01:00');
+    try { assert.match(now._departureLabel('keba'), /07:00$/); assert.doesNotMatch(now._departureLabel('keba'), /^next_when_tomorrow/); }
+    finally { Date.now = real; }
+});

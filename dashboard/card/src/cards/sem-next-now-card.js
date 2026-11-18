@@ -190,10 +190,17 @@ class SEMNextNowCard extends SEMNextBase {
             const planWindow = own.length ? this._winText(Math.min(...own.map((b) => Math.max(Date.parse(b.start), Date.now()))),
                 Math.max(...own.map((b) => Date.parse(b.end)))) : '';
             return { present: true, charging: powerW > 50, powerW, amps, remainingKwh: remaining, planWindow,
-                     targetTime: deadlineLabel((this._str(`time.sem_charger_${cid}_target_time`) || '').slice(0, 5),
-                         this._tick || Date.now(), this._hass?.config?.time_zone, this._t('tomorrow')), cid };
+                     targetTime: this._departureLabel(cid), cid };
         }
         return null;
+    }
+
+    /** (#1321) The next departure by its own day: a weekday-only schedule says Monday, not tomorrow. */
+    _departureLabel(cid) {
+        const now = this._tick || Date.now(), tz = this._hass?.config?.time_zone;
+        const next = Date.parse(this._attrs('sensor.sem_charging_state').per_charger_departure?.[cid]?.next);
+        if (Number.isFinite(next) && next > now) return this._clockDay(next, now);
+        return deadlineLabel((this._str(`time.sem_charger_${cid}_target_time`) || '').slice(0, 5), now, tz, this._t('tomorrow'));
     }
 
     _remainingKwh(cid) {
@@ -497,7 +504,8 @@ class SEMNextNowCard extends SEMNextBase {
     _ioList(bar) {
         const kwhToday = (id) => { const v = this._num(id); return v === null ? '' : this._tf('next_kwh_today', { kwh: this._fmt(v, 1) }); };
         const sub = (...parts) => parts.filter(Boolean).join(' · ');
-        const row = (key, text, w, subText, entity) => this._row(META[key].icon, text, w === null ? '—' : this._kw(w), subText,
+        // (#1321) the power is on the bar once; the list rows say what the day added
+        const row = (key, text, w, subText, entity) => this._row(META[key].icon, text, '', subText,
             { color: META[key].color, onClick: entity ? () => this._moreInfo(entity) : null });
         const posOf = (id) => { const v = this._powerW(id); return v === null ? null : Math.max(0, v); };
         const negOf = (id) => { const v = this._powerW(id); return v === null ? null : Math.max(0, -v); };
@@ -515,9 +523,8 @@ class SEMNextNowCard extends SEMNextBase {
             ins.push(row('grid_in', this._t('next_grid_import'), negOf('sensor.sem_grid_power'), sub(kwhToday('sensor.sem_daily_grid_import_energy'), cost === null ? '' : this._money(cost)), 'sensor.sem_grid_power'));
         }
         if (this._has('sensor.sem_home_consumption_power')) {
-            const hw = posOf('sensor.sem_home_consumption_power');
             // The number opens the history chart as before; the rest of the row opens the top 3.
-            const hv = html`<button type="button" class="val" @click=${(e) => { e.stopPropagation(); this._moreInfo('sensor.sem_home_consumption_power'); }}>${hw === null ? '—' : this._kw(hw)}</button>`;
+            const hv = html`<button type="button" class="val" aria-label="${this._t('next_history')}" @click=${(e) => { e.stopPropagation(); this._moreInfo('sensor.sem_home_consumption_power'); }}>${this._icon('mdi:chart-line')}</button>`;
             const hr = this._row(META.home.icon, this._t('next_src_house'), hv,
                 sub(kwhToday('sensor.sem_daily_home_energy'), this._t(this._house ? 'next_top_fold' : 'next_top_unfold')),
                 { color: META.home.color, onClick: () => { this._house = !this._house; } });
@@ -625,7 +632,7 @@ class SEMNextNowCard extends SEMNextBase {
         for (const one of said) {
             const w = one.cid ? this._powerW(`sensor.sem_charger_${one.cid}_power`) : this._powerW('sensor.sem_ev_power');
             const title = one.cid && this._chargers.length > 1 ? this._tf('next_car_of', { name: this._chargerName(one.cid) }) : one.title;
-            rows.push(this._row('mdi:car-electric', title, w === null ? '' : this._kw(w), one.text, { color: C.ev }));
+            rows.push(this._row('mdi:car-electric', title, '', one.text, { color: C.ev }));
         }
         const soc = this._num('sensor.sem_battery_soc');
         const floor = this._spending() ? this._num('sensor.sem_battery_dynamic_floor_pct') : null;
@@ -641,7 +648,7 @@ class SEMNextNowCard extends SEMNextBase {
             else if (prio !== null) parts.push(this._tf(soc >= prio ? 'next_why_batt_above_prio' : 'next_why_batt_below_prio', { soc: Math.round(soc), prio: Math.round(prio) }));
             else parts.push(this._tf('next_sub_battery_at', { soc: Math.round(soc) }));
             if (!holding && this._str('switch.sem_battery_may_assist_ev') === 'on' && !(floor !== null && soc < floor)) parts.push(this._t('next_why_batt_assist'));
-            rows.push(this._row('mdi:battery-charging', title, batt === null ? `${Math.round(soc)} %` : this._kw(Math.abs(batt)), parts.join(' '), { color: batt !== null && batt > 50 ? C.battery_in : C.battery_out }));
+            rows.push(this._row('mdi:battery-charging', title, `${Math.round(soc)} %`, parts.join(' '), { color: batt !== null && batt > 50 ? C.battery_in : C.battery_out }));
         }
         const peak = this._num('sensor.sem_consecutive_peak_15min');
         const limit = this._hass?.states['sensor.sem_target_peak_limit'];
@@ -651,7 +658,7 @@ class SEMNextNowCard extends SEMNextBase {
             const text = peak === null ? '' : (limit && !isUncapped(limit) && Number.isFinite(parseFloat(limit.state))
                 ? this._tf('next_why_peak', { kw: this._fmt(peak, 1), limit: this._fmt(parseFloat(limit.state), 1) })
                 : this._tf('next_why_peak_nolimit', { kw: this._fmt(peak, 1) }));
-            rows.push(this._row('mdi:transmission-tower', title, this._kw(Math.abs(grid)), text, { color: grid > 50 ? C.export : C.grid }));
+            rows.push(this._row('mdi:transmission-tower', title, '', text, { color: grid > 50 ? C.export : C.grid }));
         }
         for (const d of this._loads()) {
             const name = this._loadName(d.id, d);
@@ -693,7 +700,7 @@ class SEMNextNowCard extends SEMNextBase {
         if (cost !== null) tiles.push({ label: this._t('next_today'), value: this._fmt(cost, 2), unit: cur, sub: this._t('next_bought') });
         if (saved !== null) tiles.push({ label: this._t('next_saved'), value: this._fmt(saved, 2), unit: cur, valueColor: C.good, sub: this._t('next_sun_and_battery') });
         if (mcost !== null) tiles.push({ label: this._t('next_period_month'), value: mcost >= 100 ? this._int(mcost) : this._fmt(mcost, 2), unit: cur,
-            sub: msaved === null ? '' : this._tf('next_saved_month', { money: this._money(msaved) }) });
+            sub: msaved === null ? this._t('next_bought') : `${this._t('next_bought')} · ${this._tf('next_saved_month', { money: this._money(msaved) })}` });
         const sum = [];
         if (imp !== null && !flat) {
             sum.push(html`<span>${this._t('next_price_now')} <b>${this._price(imp)}</b> · ${this._t(priceLevelKey(level))}</span>`);

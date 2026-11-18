@@ -257,7 +257,7 @@ export const nextCss = css`
     .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 12px 0 10px; }
     .stats .lbl { display: block; }
     .stats .big { font-size: 20px; margin-top: 2px; }
-    .stats .sub2 { font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); margin-top: 2px; }
+    .stats .sub2 { font-size: var(--ha-font-size-s, 12px); color: var(--n-fg2); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ph { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
     .ph i { width: 10px; height: 3px; border-radius: 2px; background: var(--n-fg3); }
     .ph i.on { background: var(--n-ev); }
@@ -502,7 +502,7 @@ export class SEMNextBase extends SEMLitBase {
     _temp(c) {
         const unit = this._hass?.config?.unit_system?.temperature || '°C';
         const v = unit === '°F' ? Number(c) * 9 / 5 + 32 : Number(c);
-        return fmtNum(Math.round(v * 10) / 10, 1) + ' ' + unit;
+        return fmtNum(Math.round(v * 10) / 10, 1) + '\u00a0' + unit;
     }
     _moreInfo(entityId) { this._fireMoreInfo(entityId); }
     /** The path of another screen of this dashboard, from the page we are on (#1321). */
@@ -713,7 +713,7 @@ export class SEMNextBase extends SEMLitBase {
         const cur = value === null || value === undefined ? '' : String(value);
         if (haDefined('ha-selector') && this._hass) {
             const selector = { select: { mode: 'dropdown', options: options.map((x) => ({ value: String(x.value), label: x.label })) } };
-            return html`<ha-selector .hass=${this._hass} .selector=${selector} .value=${cur} .label=${o.label || ''} .required=${false} ?disabled=${!!o.disabled}
+            return html`<ha-selector .hass=${this._hass} .selector=${selector} .value=${cur} .label=${o.label || ''} .required=${!!o.required} ?disabled=${!!o.disabled}
                 @value-changed=${(e) => { const v = e.detail?.value; if (v !== undefined && String(v) !== cur) onChange(String(v)); }}
                 @keydown=${o.onKeydown || nothing}></ha-selector>`;
         }

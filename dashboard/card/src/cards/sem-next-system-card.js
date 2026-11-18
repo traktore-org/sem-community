@@ -18,7 +18,7 @@
  *   type: custom:sem-next-system-card
  */
 
-import { OPEN_PANEL_KEY, takeStored } from '../util/setup-checklist.js';
+import { OPEN_PANEL_KEY, takeStored, readChecklist } from '../util/setup-checklist.js';
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
@@ -234,7 +234,10 @@ class SEMNextSystemCard extends SEMNextBase {
             : this._tf('config_setup_progress', { done, total: counted.length });
         const grid = this._valLabel('diag_grid_sign');
         const batt = this._valLabel('diag_battery_sign');
-        const sub = [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : ''].filter(Boolean).join(' · ');
+        // (#1321) the Now screen's checklist counts the same things to check: the required steps are the value, the checks ride beside it
+        const checks = readChecklist(this._hass.states)?.repairs?.count || 0;
+        const checkText = checks === 1 ? this._t('setup_check_one') : (checks ? this._tf('setup_check_n', { n: checks }) : '');
+        const sub = [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : '', checkText].filter(Boolean).join(' · ');
         return this._row('mdi:check-decagram', this._t('next_setup_check'), value, sub, { onClick: () => this._togglePanel('setup') });
     }
 
@@ -339,7 +342,7 @@ class SEMNextSystemCard extends SEMNextBase {
             ? html`<div class="rows">${rows.slice(0, 8).map((r) => this._row('mdi:hand-back-left-outline',
                 `${this._refusedName(r, t, rows)}${r.action ? ' · ' + actionWords(r.action, t) : ''}`,
                 Number.isFinite(Number(r.power_w)) ? this._kw(Number(r.power_w)) : '',
-                recordReason(r, this._hass.states, t)))}</div>`
+                recordReason(r, this._hass.states, t), { cls: 'ell' }))}</div>`
             : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;
         return this._sec(obs ? this._t('next_would_do') : this._t('next_held_back'), body);
     }
@@ -391,7 +394,7 @@ class SEMNextSystemCard extends SEMNextBase {
         if (slot.kind === 'action') {
             const go = slot.nav ? () => this._go(navTarget(window.location.pathname, slot.action)) : () => this._askAction(slot, r.label);
             // (#1321) a sign row shows its direction now; a tap only opens the question
-            return this._setRow({ label: r.label, value: slot.nav ? '›' : this._actionValue(slot, t), more: r.more, onTap: go, disabled: dis && !slot.nav });
+            return this._setRow({ label: r.label, value: slot.nav ? '' : this._actionValue(slot, t), more: r.more, onTap: go, disabled: dis && !slot.nav });
         }
         // (#1321) no help line under any row: it sits in the row's dialog
         if (slot.ro || slot.kind === 'text' && !pendingKey(slot)) {
