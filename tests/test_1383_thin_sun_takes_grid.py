@@ -40,13 +40,14 @@ def _slots(sun_w=900.0):
             start=t, end=t + timedelta(minutes=15),
             price=EXPORT if sun else price, level_cheap=sun,
             cap_override_w=sun_w if sun else None,
-            import_price=0.11 if sun else None))
+            import_price=0.11 if sun else None, import_cheap=sun))
         t += timedelta(minutes=15)
     return out
 
 
-def _plan(*, sun_w=900.0, grid_in_sun=True, peak=0.0, min_w=CAR_W):
-    ledger = build_night_ledger(_slots(sun_w), soc_kwh=0.0, floor_kwh=0.0,
+def _plan(*, sun_w=900.0, grid_in_sun=True, peak=0.0, min_w=CAR_W,
+          slots=None):
+    ledger = build_night_ledger(slots or _slots(sun_w), soc_kwh=0.0, floor_kwh=0.0,
                                 max_discharge_w=0.0, peak_limit_w=peak)
     car = Demand(id="ev:1", kind="ev", energy_kwh=NEED, max_power_w=CAR_W,
                  min_power_w=min_w, deadline=_t(16, 30), grid_in_sun=grid_in_sun)
@@ -116,3 +117,89 @@ def test_the_day_slot_carries_the_import_price():
     assert all(s.price == pytest.approx(EXPORT) for s in sun)
     deficit = [s for s in slots if s.cap_override_w is None]
     assert all(s.import_price is None for s in deficit)
+
+
+@pytest.mark.unit
+def test_the_reason_says_sun_plus_grid_not_spare_solar():
+    codes = {a.code for a in _plan().allocations if a.start < _t(14, 15)}
+    assert codes == {"sun_plus_grid"}
+    fits = {a.code for a in _plan(sun_w=6000.0).allocations
+            if a.start < _t(14, 15)}
+    assert fits == {"solar"}
+
+
+@pytest.mark.unit
+def test_a_sun_hour_that_is_not_a_cheap_tariff_hour_is_not_assisted():
+    """The live gate tops up from the grid by day only in a cheap tariff
+    hour, so the plan must not book a grid share anywhere else."""
+    slots = _slots()
+    for s in slots:
+        s.import_cheap = False
+    plan = _plan(slots=slots)
+    assert min(a.start for a in plan.allocations) == _t(14, 15)
+
+
+@pytest.mark.unit
+def test_a_day_without_thin_sun_plans_identically():
+    def day(grid_in_sun):
+        slots = [LedgerSlot(start=_t(12) + timedelta(hours=n),
+                            end=_t(13) + timedelta(hours=n),
+                            price=p, level_cheap=False)
+                 for n, p in enumerate((0.20, 0.15, 0.15, 0.30))]
+        ledger = build_night_ledger(slots, soc_kwh=0.0, floor_kwh=0.0,
+                                    max_discharge_w=0.0, peak_limit_w=0.0)
+        car = Demand(id="ev:1", kind="ev", energy_kwh=6.0, max_power_w=CAR_W,
+                     min_power_w=CAR_W, deadline=_t(16), grid_in_sun=grid_in_sun)
+        return pack_night([car], ledger).allocations
+    assert day(True) == day(False)
+
+
+@pytest.mark.unit
+def test_two_chargers_share_a_thin_sun_hour_within_the_grid_limit():
+    slots = _slots()[:4]                     # 12:00-13:00, sun 900 W
+    ledger = build_night_ledger(slots, soc_kwh=0.0, floor_kwh=0.0,
+                                max_discharge_w=0.0, peak_limit_w=8000.0)
+    cars = [Demand(id=f"ev:{n}", kind="ev", energy_kwh=CAR_W / 1000.0 / 4,
+                   max_power_w=CAR_W, min_power_w=CAR_W, priority=n,
+                   deadline=_t(13), grid_in_sun=True) for n in (1, 2)]
+    plan = pack_night(cars, ledger, peak_limit_w=8000.0)
+    by_slot = {}
+    for a in plan.allocations:
+        by_slot[a.start] = by_slot.get(a.start, 0.0) + a.power_w
+    assert plan.allocations
+    for total in by_slot.values():
+        assert total - 900.0 <= 8000.0 + 1e-6   # the house is inside the sun
+    # a tighter limit leaves the second charger out of a slot the first took
+    tight = build_night_ledger(_slots()[:4], soc_kwh=0.0, floor_kwh=0.0,
+                               max_discharge_w=0.0, peak_limit_w=6000.0)
+    plan = pack_night(cars, tight, peak_limit_w=6000.0)
+    for t in {a.start for a in plan.allocations}:
+        total = sum(a.power_w for a in plan.allocations if a.start == t)
+        assert total - 900.0 <= 6000.0 + 1e-6
+
+
+@pytest.mark.unit
+class TestTheLiveGateFollowsTheBlock:
+    """The actuator, through ``decide``: in a cheap tariff hour with thin
+    sun and a floor owed, the car charges at the top-up amps (grid share
+    included); in a normal hour it does not."""
+
+    def _view(self, level):
+        from .test_decide import _view
+        return _view(mode="solar_plus_cheap", is_night=False,
+                     tariff_level=level, target_kwh=9.0, solar_w=1400.0,
+                     home_w=500.0, battery_soc=95)
+
+    def test_cheap_hour_charges_from_the_grid(self):
+        from custom_components.solar_energy_management.coordinator.decide import (
+            ChargerIntent, decide)
+        d = decide(self._view("cheap"))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps >= 6
+
+    def test_normal_hour_does_not(self):
+        from custom_components.solar_energy_management.coordinator.decide import (
+            ChargerIntent, decide)
+        d = decide(self._view("normal"))
+        assert not (d.intent is ChargerIntent.CHARGE_AT_AMPS
+                    and d.commanded_amps >= 6)

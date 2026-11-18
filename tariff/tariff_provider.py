@@ -523,6 +523,13 @@ class TariffProvider(ABC):
         """
         return False
 
+    def has_fixed_cheap_rate(self) -> bool:
+        """(#1387) A fixed schedule of cheap hours (a two-rate tariff, a
+        calendar), not a moving price. Default: no. A dynamic tariff says no
+        here though ``has_cheap_rate`` says yes: its cheap hours are the
+        classifier's, hour by hour."""
+        return False
+
     #: (#1362) The two break-even rates below ask ``get_price_at`` once per
     #: quarter hour: a calendar's windows start on the quarter hour.
     RATE_STEP = timedelta(minutes=15)
@@ -701,6 +708,9 @@ class StaticTariffProvider(TariffProvider):
         # peak window that is not empty. Weeknights and weekends are then
         # at the off-peak rate.
         return self._rates_differ() and self.peak_start < self.peak_end
+
+    def has_fixed_cheap_rate(self) -> bool:
+        return self.has_cheap_rate()
 
     def get_tariff_data(self) -> TariffData:
         now = dt_util.now()

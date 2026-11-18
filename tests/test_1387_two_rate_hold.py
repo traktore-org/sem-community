@@ -17,18 +17,19 @@ from custom_components.solar_energy_management.coordinator.ev_tariff_planner imp
 )
 from custom_components.solar_energy_management.coordinator.price_view import PriceView
 from custom_components.solar_energy_management.tariff.tariff_provider import (
-    PriceLevel, StaticTariffProvider,
+    DynamicTariffProvider, PriceLevel, StaticTariffProvider,
 )
 
 TZ = ZoneInfo("Europe/Zurich")
 NOW = datetime(2026, 11, 17, 22, 0, tzinfo=TZ)      # a Tuesday
 
 
-class _Dynamic:
-    """Hourly market prices: 22:00 is NORMAL, the small hours CHEAP."""
-
-    def get_price_level_at(self, t):
-        return PriceLevel.NORMAL if t.hour in (22, 23) else PriceLevel.CHEAP
+def _dynamic():
+    """The real dynamic provider; 22:00 and 23:00 are NORMAL, then CHEAP."""
+    p = DynamicTariffProvider.__new__(DynamicTariffProvider)
+    p.get_price_level_at = lambda t: (
+        PriceLevel.NORMAL if t.hour in (22, 23) else PriceLevel.CHEAP)
+    return p
 
 
 def _plan(level_at):
@@ -58,9 +59,12 @@ def test_the_raw_levels_start_in_the_peak():
 
 @pytest.mark.unit
 def test_a_dynamic_tariff_is_unchanged():
-    view = PriceView(_Dynamic())
-    assert view.hold_level_at_fn() == view.level_at_fn()
-    assert _plan(view.hold_level_at_fn()).should_wait_for_cheap is False
+    p = _dynamic()
+    assert p.has_cheap_rate() is True        # the mode is offered ...
+    view = PriceView(p)
+    assert view.hold_level_at_fn() == view.level_at_fn()   # ... no new hold
+    plan = _plan(view.hold_level_at_fn())
+    assert plan.should_wait_for_cheap is False   # starts at 22:00, as before
 
 
 @pytest.mark.unit

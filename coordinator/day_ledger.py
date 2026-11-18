@@ -162,6 +162,7 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 price=rate_at(t),
                 level_cheap=True, tariff_cheap=tariff_cheap, home_w=0.0,
                 cap_override_w=surplus_w, import_price=import_price,
+                import_cheap=level_cheap,
                 solar_w=solar_w, home_gross_w=home_w,
                 co2=co2,
             ))

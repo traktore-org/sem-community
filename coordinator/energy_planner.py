@@ -42,9 +42,10 @@ _W_EPS = 1.0              # grants below 1 W are noise
 #:                     a cheaper hour lies after it
 #:   no_price_yet    — an hour with no price published (Keep-at goals)
 #:   from_battery    — drawn from the home battery, not the grid
+#:   sun_plus_grid   — a thin sun hour, the rest from the grid (#1383)
 REASON_CODES = ("top_up_late", "one_block", "solar", "cheap_hours",
                 "cheapest_hours", "before_deadline", "no_price_yet",
-                "from_battery")
+                "from_battery", "sun_plus_grid")
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +167,10 @@ class LedgerSlot:
     # (#1383) What a kWh from the grid costs in a sun slot (``price`` holds the
     # export rate there). None = unknown: the slot offers the surplus only.
     import_price: Optional[float] = None
+    # (#1383) Is the TARIFF at a cheap level this hour (execution's word)?
+    # The live gate tops the car up from the grid by day only then, so the
+    # plan assists a thin sun slot only then.
+    import_cheap: bool = False
 
     @property
     def hours(self) -> float:
@@ -423,7 +428,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         surplus never lands here: it keeps the surplus at the export price."""
         s = ledger[i]
         if (not d.grid_in_sun or d.source == "battery" or d.tariff is not None
-                or s.cap_override_w is None or s.import_price is None):
+                or s.cap_override_w is None or s.import_price is None
+                or not s.import_cheap):
             return None
         sun_w = max(0.0, float(s.cap_override_w) - s.grid_committed_w)
         min_w = max(_W_EPS, float(d.min_power_w))
@@ -491,7 +497,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
     def _order(d):
         """Grid demands walk the cheapest slots first — by their own price
         (by the price of heat for a heat pump with a COP curve)."""
-        if d.tariff is None and d.cop_at is None and not d.grid_in_sun:
+        if (d.tariff is None and d.cop_at is None
+                and not (d.grid_in_sun and any(_sun_grid(d, j) for j in idx))):
             priced = list(by_price)
         else:
             priced = sorted((i for i in idx if _price(d, i) is not None),
@@ -586,7 +593,11 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         a sun slot says solar; a price pick says before_deadline when a
         cheaper priced hour lies past the deadline, else ``code``."""
         if ledger[i].cap_override_w is not None:
-            return {"code": "solar", "params": {}}
+            # (#1383) a thin sun slot topped up from the grid says so
+            over = (ledger[i].grid_committed_w
+                    > float(ledger[i].cap_override_w) + _W_EPS)
+            return {"code": "sun_plus_grid" if over else "solar",
+                    "params": {}}
         params = {"price": round(float(price), 4)}
         if d.deadline is not None:
             params["deadline"] = d.deadline.isoformat()
