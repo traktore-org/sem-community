@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **Loads SEM switched off come back after a restart** (#896). Also on unload, stop or crash; hand changes are left alone.
 - 🐛 **A switch named router, NAS or server is never switched off** (#896). A warning shows; “surplus” becomes “peak only”.
+- 🐛 **Daily energy flows no longer step back for a few minutes** (#1382). A missing meter read or a restart no longer changes how they are split.
 
 # [2.3.0-beta.19] — 17.11.2026
 

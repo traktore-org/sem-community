@@ -95,11 +95,13 @@ def test_per_charger_follows_the_fleet_and_strings_stay_as_measured():
     assert flows.grid_to_home == 1.67
 
 
-def _calc(backed):
+def _calc(backed, *, meters=True):
     calc = EnergyCalculator.__new__(EnergyCalculator)
     today = date(2026, 11, 8)
     calc.booking_day = today
     calc._counter_backed = set(backed)
+    calc._meter_counter_enabled = meters
+    calc._midnight_ev_since = date(2026, 11, 1)
     calc._daily_accumulators = {
         f"solar_{today}": 13.9, f"grid_import_{today}": 16.68,
         f"battery_discharge_{today}": 11.02, f"home_{today}": 18.79,
@@ -110,14 +112,14 @@ def _calc(backed):
 
 
 @pytest.mark.unit
-def test_totals_follow_what_the_meters_back():
-    assert _calc(set()).calendar_day_totals() is None          # nothing metered: leave the split
-    partial = _calc({"grid_import", "grid_export"}).calendar_day_totals()
-    assert partial == {"solar": None, "home": None, "ev": None,
-                       "grid_import": 16.68, "grid_export": 0.06,
-                       "battery_charge": None, "battery_discharge": None}
-    totals = _calc({"home", "grid_import"}).calendar_day_totals()
-    assert totals == PROD_TOTALS  # the EV column is the midnight mirror, not the EV day
+def test_totals_are_the_day_rows_whatever_this_cycle_read():
+    # (#1382) The base is set by the setup, not by this cycle's reads.
+    assert _calc(set(), meters=False).calendar_day_totals(date(2026, 11, 8)) is None   # no meters: leave the split
+    rows = {k: v for k, v in PROD_TOTALS.items() if k != "home"}
+    for backed in (set(), {"grid_import", "grid_export"}, {"home", "grid_import"}):
+        totals = _calc(backed).calendar_day_totals(date(2026, 11, 8))
+        # the EV column is the midnight mirror, not the EV day; the house is the balance
+        assert totals == {**rows, "home": None}, backed
 
 
 @pytest.mark.unit

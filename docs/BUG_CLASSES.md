@@ -6971,3 +6971,12 @@ Refs #1373 #1306.
 **Guard:** `tests/test_1081_setpoint_restore.py`.
 **Left open:** a memo that expired while the unit showed SEM's value: that value is later taken as the user's (rare, same outcome as the expiry).
 Refs #1081 #1323.
+
+### 186. A daily counter whose base is picked by this cycle's reads — one missing read makes it step back — GUARDED
+
+**What happens.** The flow split (grid to house, sun to battery …) is published as daily counters. #1324 fitted it to the day's totals, but the totals were picked each cycle: the day's rows while the home row was the meters' balance, the split's own sums for the rest otherwise, the raw split when no counter read or when `booking_day` was unset (the skipped first cycle after a restart). One missing read moved every counter by the whole gap between the bases, up to about 1 kWh, and back. The recorder took the drop as a reset; a chart on a test system showed 15.1 kWh grid against 8.1 kWh imported (#1382).
+**The rule.** A value published as a running total takes its base from the setup and the day, never from what this cycle read. The flow fit now always takes the day's rows (set up with grid or battery counters), the house as their balance, on the split's own day (`FlowCalculator.flow_day`). A cycle that reads less changes nothing.
+**Guard:** `tests/test_1382_one_flow_base.py` — real cycles where the home balance runs, stands down and no counter reads publish the same split (the old rule moved it); a skipped cycle after a restart and a new day's empty rows; a day-long check where the backing changes every few cycles and no cell steps back (old rule: 0.42 kWh). An AST check: `calendar_day_totals` reads nothing `calculate_energy` sets empty each cycle, nor `booking_day`.
+**Sweep question:** does another published total read `_counter_backed`, `booking_day` or another per-cycle set to choose where it comes from?
+**Swept:** the home row stands down from its stored value (continuous, not rebuilt); `_settle_meter_gaps` reads the backing for one event, not a total; `_device_tariff_books` reads `booking_day` and shows nothing for the skipped cycle (unavailable, not a step back).
+Refs #1382 #1324.

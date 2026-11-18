@@ -4762,40 +4762,43 @@ class EnergyCalculator:
         upgrade would make the recorder count the day's kWh again."""
         return getattr(self, "_ev_rolled_at", None)
 
-    def calendar_day_totals(self) -> Optional[Dict[str, Optional[float]]]:
-        """(#1324) Today's totals the flow split must add up to, or None.
+    def calendar_day_totals(self, day: date) -> Optional[Dict[str, Optional[float]]]:
+        """(#1324) The totals of ``day`` the flow split must add up to, or None.
 
-        Only while the home row is the meters' balance this cycle: then every
-        flowing term is counter-backed and sources equal sinks. The EV column
-        is the midnight mirror — the flows run on calendar days, not EV days.
+        (#1382) One base for the whole day, set by the setup and never by
+        this cycle's reads. The split is published as a daily counter, so a
+        base that changes mid-day makes it step back. Until #1382 the base
+        followed ``_counter_backed``, which is rebuilt every cycle: the
+        home row's balance switched on and off with one missing read, and
+        the fitted split jumped by the day's whole gap between the bases.
+
+        With grid or battery counters set up, the targets are the day's
+        published rows (each continuous through the day, read or not), the
+        EV column is the midnight mirror (the flows run on calendar days),
+        and the house is left as None: the balance of the rest, which is
+        what the home row is whenever the meters read. On the mirror's
+        first day the EV keeps the split's own sum, as the home balance
+        stands down that day. With no meters the split stays as integrated.
+
+        ``day`` is the split's own day (the flow integrator's), not
+        ``booking_day``: a cycle ``calculate_energy`` skips (the first after
+        a restart of over two minutes, a gap across midnight) books
+        nothing, so ``booking_day`` is unset or still yesterday then.
         """
-        today = self.booking_day
-        if today is None:
+        today = day
+        if not isinstance(today, date) or not self._meter_counter_enabled:
             return None
         acc = self._daily_accumulators
-        if "home" not in self._counter_backed:
-            # No solar counter (or another unmetered term): fit what the
-            # meters do back; None keeps the split's own sum, and the house
-            # becomes the balance of the rest (fit_flows_to_totals).
-            metered = ("grid_import", "grid_export", "battery_charge", "battery_discharge")
-            backed = [c for c in metered if c in self._counter_backed]
-            if not backed:
-                return None
-            out: Dict[str, Optional[float]] = {
-                "solar": None, "home": None, "ev": None,
-            }
-            for c in metered:
-                out[c] = acc.get(f"{c}_{today}", 0.0) if c in backed else None
-            return out
-        return {
-            "solar": acc.get(f"solar_{today}", 0.0),
-            "grid_import": acc.get(f"grid_import_{today}", 0.0),
-            "battery_discharge": acc.get(f"battery_discharge_{today}", 0.0),
-            "home": acc.get(f"home_{today}", 0.0),
-            "ev": acc.get(f"{MIDNIGHT_EV_CATEGORY}_{today}", 0.0),
-            "battery_charge": acc.get(f"battery_charge_{today}", 0.0),
-            "grid_export": acc.get(f"grid_export_{today}", 0.0),
+        out: Dict[str, Optional[float]] = {
+            c: acc.get(f"{c}_{today}", 0.0)
+            for c in ("solar", "grid_import", "grid_export",
+                      "battery_charge", "battery_discharge")
         }
+        out["home"] = None
+        since = self._midnight_ev_since
+        out["ev"] = (acc.get(f"{MIDNIGHT_EV_CATEGORY}_{today}", 0.0)
+                     if since is not None and today > since else None)
+        return out
 
     def _get_daily(self, category: str, today: date) -> float:
         """Get daily accumulated energy."""
