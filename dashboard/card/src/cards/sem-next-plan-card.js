@@ -380,7 +380,7 @@ class SEMNextPlanCard extends SEMNextBase {
         // (#1321) one rate: no price was ever a reason to wait, so the short-window text must not claim time ran out
         const flatKey = code === 'short_window' && tariffKind(this._hass?.states) === 'flat' ? 'plan_why_one_rate' : key;
         // (#1321) two runs: name both, never the span between them
-        const spanned = runs && runs.length > 1 ? this._t(flatKey).replace(/\{from\}\s*[–-]\s*\{to\}/, runsText(runs, (a, b) => `${this._hhmm(a)}–${this._hhmm(b)}`)) : null;
+        const spanned = runs && runs.length > 1 ? this._t(flatKey).replace(/\{from\}\s*[–-]\s*\{to\}/, runsText(runs, (a, b) => `${this._hhmm(new Date(a))}–${this._hhmm(new Date(b))}`)) : null;
         const text = spanned && spanned !== this._t(flatKey) ? fill(spanned, vars, (k) => this._t(k)) : this._tf(flatKey, vars);
         return text && text !== flatKey ? text : '';
     }
