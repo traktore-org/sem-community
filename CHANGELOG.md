@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A planned battery charge now raises the plan's battery level** (#1377). The end level and the hours after the charge no longer stay at 0 %.
+- 🐛 **Letting SEM take control also turns on plan execution** (#1377). The Plan card says "not applied" instead of "observation" while it is off.
 - 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
 
 # [2.3.0-beta.20] — 18.11.2026

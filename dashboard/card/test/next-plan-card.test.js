@@ -42,6 +42,7 @@ globalThis.localStorage = { getItem: () => null, setItem() {} };
 globalThis.navigator ??= {};
 globalThis.semLocalize = (key) => '«' + key + '»';
 const { knownNum } = await import('../src/cards/sem-next-plan-card.js');
+await import('../src/cards/sem-energy-plan-card.js');
 
 function text(part) {
     if (part == null || typeof part === 'symbol' || part === false) return '';
@@ -211,4 +212,54 @@ test('(#1081) a heat pump planned on the price of heat names its COP', () => {
         { from: '2026-11-14T13:00:00+01:00', to: '2026-11-14T15:00:00+01:00', cop: 4.18 });
     assert.match(out, /COP 4\.2$/);
     assert.doesNotMatch(out, /\{cop\}/);
+});
+
+// (#1377) watch-only off + plan execution off = "not applied", never "observation"
+function planStates(observer, actuation) {
+    return { 'switch.sem_observer_mode': S(observer), 'switch.sem_energy_plan_actuation': S(actuation) };
+}
+
+test('Plan screen: control on, plan execution off says not applied and offers the switch', async () => {
+    const el = makeCard(planStates('off', 'off'));
+    const calls = [];
+    el.hass.callService = async (d, s, data) => { calls.push([d, s, data]); };
+    const out = text(el._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: false }));
+    assert.match(out, /energy_plan_off/);
+    assert.match(out, /energy_plan_turn_on/);
+    assert.doesNotMatch(out, /next_pill_shadow/);
+    el._toggleSwitch('switch.sem_energy_plan_actuation');
+    assert.deepEqual(calls[0], ['switch', 'turn_on', { entity_id: 'switch.sem_energy_plan_actuation' }]);
+});
+
+test('Plan screen: watch-only still reads as shadow, live still reads live', () => {
+    const watch = text(makeCard(planStates('on', 'off'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: false }));
+    assert.match(watch, /next_pill_shadow/);
+    assert.doesNotMatch(watch, /energy_plan_off/);
+    const live = text(makeCard(planStates('off', 'on'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: true }));
+    assert.match(live, /next_pill_live/);
+});
+
+function energyCard(observer, actuation) {
+    const el = new (customElements.get('sem-energy-plan-card'))();
+    el.hass = { states: planStates(observer, actuation), language: 'en', config: {} };
+    return el;
+}
+
+test('Energy plan card: control on, plan execution off says not applied, not observation', () => {
+    const el = energyCard('off', 'off');
+    const chip = text(el._modeChip(false));
+    assert.match(chip, /energy_plan_off_note/);
+    assert.match(chip, /energy_plan_off/);
+    assert.doesNotMatch(chip, /energy_plan_shadow/);
+    const foot = text(el._footNote(false));
+    assert.match(foot, /energy_plan_off_note/);
+    assert.match(foot, /energy_plan_turn_on/);
+});
+
+test('Energy plan card: watch-only keeps the observation words', () => {
+    const el = energyCard('on', 'off');
+    assert.match(text(el._modeChip(false)), /energy_plan_shadow/);
+    assert.match(text(el._footNote(false)), /energy_plan_shadow_note/);
+    assert.doesNotMatch(text(el._footNote(false)), /energy_plan_turn_on/);
+    assert.match(text(energyCard('off', 'on')._modeChip(true)), /energy_plan_active/);
 });

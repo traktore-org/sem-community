@@ -598,7 +598,14 @@ class SEMNextPlanCard extends SEMNextBase {
             const prices = tmw ? ' · ' + t(tmw.prices === 'final' ? 'next_prices_final' : 'next_prices_pending') : '';
             out.push(this._pill(t('next_pill_provisional') + prices));
         } else if (plan.computed_at) {
-            out.push(this._pill(plan.actuation ? t('next_pill_live') : t('next_pill_shadow'), plan.actuation ? 'ok' : ''));
+            // (#1377) not applied is not "shadow": watch-only is off, so say it and offer the switch
+            const off = !plan.actuation && !this._obs() && this._str('switch.sem_energy_plan_actuation') === 'off';
+            if (off) {
+                out.push(this._pill(t('energy_plan_off'), 'warn'));
+                out.push(this._btn(t('energy_plan_turn_on'), () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { small: true, primary: true }));
+            } else {
+                out.push(this._pill(plan.actuation ? t('next_pill_live') : t('next_pill_shadow'), plan.actuation ? 'ok' : ''));
+            }
         }
         return out;
     }

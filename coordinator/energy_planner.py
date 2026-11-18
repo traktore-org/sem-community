@@ -725,6 +725,12 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             else:
                 s.grid_committed_w += power   # survives trajectory re-walks
                 s.headroom_w -= power
+                if d.kind == "battery":
+                    # (#1377) a planned charge raises the trajectory: the
+                    # end level and later slots count the energy it adds
+                    s.batt_in_kwh += e_kwh
+                    _walk(ledger, initial_soc, floor_kwh,
+                          max_discharge_w, peak_limit_w)
                 why = (f"{d.id}: {power:.0f} W {begin:%H:%M}–{end:%H:%M} "
                        + (f"@ {price:.3f} (slot #{own_rank[i]} cheapest, "
                           if price is not None else "unpriced (no price published, ")

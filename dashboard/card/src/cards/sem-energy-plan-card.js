@@ -242,9 +242,24 @@ class SEMEnergyPlanCard extends SEMLitBase {
     // into the night signals. Same for the footer note; the tooltip repeats
     // the note so the idle render (which has no footer) still explains itself.
     _modeChip(act) {
+        const off = this._planOff(act);
+        const key = act ? 'active' : off ? 'off' : 'shadow';
         return html`<span class="chip ${act ? 'chip-active' : ''}"
-            title="${this._t(act ? 'energy_plan_active_note' : 'energy_plan_shadow_note')}">${
-            this._t(act ? 'energy_plan_active' : 'energy_plan_shadow')}</span>`;
+            title="${this._t(act ? 'energy_plan_active_note' : off ? 'energy_plan_off_note' : 'energy_plan_shadow_note')}">${
+            this._t('energy_plan_' + key)}</span>`;
+    }
+
+    // (#1377) Watch-only is off but plan execution is off too: the plan is
+    // not applied, which is not "observation". Say so and offer the switch.
+    _planOff(act) {
+        return !act && this._hass?.states?.['switch.sem_observer_mode']?.state === 'off'
+            && this._hass?.states?.['switch.sem_energy_plan_actuation']?.state === 'off';
+    }
+
+    _footNote(act) {
+        if (!this._planOff(act)) return html`${this._t(act ? 'energy_plan_active_note' : 'energy_plan_shadow_note')}`;
+        return html`${this._t('energy_plan_off_note')}
+            <button type="button" class="chip chip-reactive" @click=${() => this._toggleSwitch('switch.sem_energy_plan_actuation')}>${this._t('energy_plan_turn_on')}</button>`;
     }
 
     _docsLink(key = 'actuation') {
@@ -886,8 +901,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
 
                     ${this._renderReview()}
 
-                    <div class="foot">${this._t(act
-                        ? 'energy_plan_active_note' : 'energy_plan_shadow_note')}</div>
+                    <div class="foot">${this._footNote(act)}</div>
                 </div>
             </ha-card>
         `;
