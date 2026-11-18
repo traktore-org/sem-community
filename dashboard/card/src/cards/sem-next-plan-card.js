@@ -782,7 +782,7 @@ class SEMNextPlanCard extends SEMNextBase {
         // entry that only says "not scheduled" is dropped beside it
         const hasBlock = (id) => blocks.some((b) => String(b.id) === id);
         for (const id of [...loadIds]) {
-            if (id.startsWith('load:') && !hasBlock(id) && hasBlock('comfort:' + id.slice(5))) loadIds.delete(id);
+            if (id.startsWith('load:') && !hasBlock(id) && loadIds.has('comfort:' + id.slice(5))) loadIds.delete(id);
         }
         for (const id of loadIds) rows.push(this._loadRow(id, plan, blocks, demands, notSched));
         // …and a heater that is below its line with no hour says so, not nothing
@@ -915,6 +915,9 @@ class SEMNextPlanCard extends SEMNextBase {
         const now = Date.now();
         const starts = (Array.isArray(plan.blocks) ? plan.blocks : []).filter((b) => Date.parse(b.end) > now)
             .map((b) => Math.max(Date.parse(b.start), now)).filter(Number.isFinite);
+        const ends = (Array.isArray(plan.blocks) ? plan.blocks : []).map((b) => Date.parse(b.end)).filter(Number.isFinite);
+        // a plan that spans the day is not "this morning": say today
+        if (starts.length && ends.length && Math.max(...ends) - Math.min(...starts) > 14 * 36e5) return this._t('next_when_today');
         return this._t(planWhenKey(starts.length ? Math.min(...starts) : now, new Date(now), this._hass?.config?.time_zone));
     }
 

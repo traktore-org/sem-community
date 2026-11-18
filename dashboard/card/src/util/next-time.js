@@ -33,7 +33,7 @@ export function deadlineLabel(hhmm, now, tz, tomorrowWord) {
     const t = String(hhmm || '');
     if (!t) return '';
     const clock = hhmmIn(now instanceof Date ? now : new Date(now), tz);
-    return clock && clock >= t ? `${tomorrowWord} ${t}` : t;
+    return clock && clock >= t ? `${String(tomorrowWord).toLowerCase()} ${t}` : t;
 }
 
 /** Local hour (0-23) and day 'YYYY-MM-DD' of a date in the home's zone. */
