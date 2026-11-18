@@ -129,7 +129,7 @@ export const nextCss = css`
     .seg.off button.on { background: var(--n-fg2); color: var(--n-card); }
     .seg.sm button { font-size: var(--ha-font-size-s, 13px); padding: 4px 10px; min-height: 28px; }
     ha-control-select, ha-button-toggle-group { --control-select-thickness: 36px; --control-select-border-radius: 18px; width: auto; max-width: 100%; }
-    ha-control-select.sm { --control-select-thickness: 28px; --control-select-border-radius: 14px; }
+    ha-control-select.sm { --control-select-thickness: 32px; --control-select-border-radius: 16px; }
     .rows { display: flex; flex-direction: column; }
     .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--n-line); min-width: 0; }
     .row:first-child { border-top: 0; }
@@ -559,7 +559,8 @@ export class SEMNextBase extends SEMLitBase {
         // HA's disabled look fades the labels to nothing, so a disabled control is the native one in readable colours
         if (haDefined('ha-control-select') && !o.disabled) {
             const options = items.map((it) => ({ value: String(it.key), label: it.label, disabled: !!it.disabled }));
-            return html`<ha-control-select class="${o.small ? 'sm' : ''}" .options=${options} .value=${cur} ?disabled=${!!o.disabled}
+            // each option gets room for one line of label (the control's own width is only its parent's)
+            return html`<ha-control-select class="${o.small ? 'sm' : ''}" style="min-width:min(100%, ${items.length * (o.small ? 6.5 : 5.5)}em)" .options=${options} .value=${cur} ?disabled=${!!o.disabled}
                 @value-changed=${(e) => pick(e.detail?.value)}></ha-control-select>`;
         }
         if (haDefined('ha-button-toggle-group') && !o.disabled) {

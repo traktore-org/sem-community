@@ -110,7 +110,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
     .seg.off button.on { background: var(--n-fg2); color: var(--n-card); }
     .seg.sm button { font-size: var(--ha-font-size-s, 13px); padding: 4px 10px; min-height: 28px; }
     ha-control-select, ha-button-toggle-group { --control-select-thickness: 36px; --control-select-border-radius: 18px; width: auto; max-width: 100%; }
-    ha-control-select.sm { --control-select-thickness: 28px; --control-select-border-radius: 14px; }
+    ha-control-select.sm { --control-select-thickness: 32px; --control-select-border-radius: 16px; }
     .rows { display: flex; flex-direction: column; }
     .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--n-line); min-width: 0; }
     .row:first-child { border-top: 0; }
@@ -281,7 +281,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 role="${i?"button":H}" tabindex="${i?0:H}"
                 @click=${i||H} @keydown=${i?t=>{"Enter"!==t.key&&" "!==t.key||(t.preventDefault(),i(t))}:H}>
             <div class="k">${t?this._icon(t):H}<span class="t">${e}</span></div>
-            <div class="v">${s??""}${n?R`<small>${n}</small>`:H}</div></div>`}_seg(t,e,s,n={}){const r=null==e?"":String(e),i=e=>{const n=t.find(t=>String(t.key)===String(e));n&&!n.disabled&&String(e)!==r&&s(n.key)};if(Jt("ha-control-select")&&!n.disabled){const e=t.map(t=>({value:String(t.key),label:t.label,disabled:!!t.disabled}));return R`<ha-control-select class="${n.small?"sm":""}" .options=${e} .value=${r} ?disabled=${!!n.disabled}
+            <div class="v">${s??""}${n?R`<small>${n}</small>`:H}</div></div>`}_seg(t,e,s,n={}){const r=null==e?"":String(e),i=e=>{const n=t.find(t=>String(t.key)===String(e));n&&!n.disabled&&String(e)!==r&&s(n.key)};if(Jt("ha-control-select")&&!n.disabled){const e=t.map(t=>({value:String(t.key),label:t.label,disabled:!!t.disabled}));return R`<ha-control-select class="${n.small?"sm":""}" style="min-width:min(100%, ${t.length*(n.small?6.5:5.5)}em)" .options=${e} .value=${r} ?disabled=${!!n.disabled}
                 @value-changed=${t=>i(t.detail?.value)}></ha-control-select>`}if(Jt("ha-button-toggle-group")&&!n.disabled){const e=t.map(t=>({label:t.label,value:String(t.key)}));return R`<ha-button-toggle-group size="${n.small?"small":"medium"}" .buttons=${e} .active=${r} ?disabled=${!!n.disabled}
                 @value-changed=${t=>i(t.detail?.value)}></ha-button-toggle-group>`}return R`<div class="seg ${n.small?"sm":""} ${n.disabled?"off":""}" role="group" title="${this._whyOff(n.disabled)||H}">
             ${t.map(t=>R`<button type="button" class="${String(t.key)===r?"on":""}" ?disabled=${!!t.disabled||!!n.disabled}
