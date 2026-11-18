@@ -812,13 +812,13 @@ export class SEMNextBase extends SEMLitBase {
         if (spec.kind === 'entity') await ensureHaElements(['ha-entity-picker'], 3000);
         const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const btn = (id, label, slot, kind, dlg) => (dlg
-            ? `<ha-button id="${id}" slot="${slot}" appearance="${kind}">${esc(label)}</ha-button>`
+            ? `<ha-button id="${id}" appearance="${kind}">${esc(label)}</ha-button>`
             : `<button type="button" id="${id}" class="btn ${kind === 'filled' ? 'primary' : 'ghost'}">${esc(label)}</button>`);
         const none = spec.allowClear && spec.value ? (d) => btn('ed-none', t('action_none'), 'secondaryAction', 'plain', d) : () => '';
         const { el, close } = this._dialog({
             id: 'sem-edit-dlg', title: spec.title || '',
             build: (d) => (d
-                ? `<div class="ed-body"></div>${none(true)}${btn('ed-cancel', t('next_cancel'), 'secondaryAction', 'plain', true)}${btn('ed-ok', t('next_ok'), 'primaryAction', 'filled', true)}`
+                ? `<div class="ed-body"></div><div class="dlg-actions" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:16px">${none(true)}<div class="grow" style="flex:1"></div>${btn('ed-cancel', t('next_cancel'), '', 'plain', true)}${btn('ed-ok', t('next_ok'), '', 'filled', true)}</div>`
                 : `<div class="dlg-box"><div class="dlg-title">${esc(spec.title)}</div><div class="ed-body"></div>
                     <div class="dlg-actions">${none(false)}<div class="grow"></div>${btn('ed-cancel', t('next_cancel'), '', 'plain', false)}${btn('ed-ok', t('next_ok'), '', 'filled', false)}</div></div>`),
         });
@@ -852,7 +852,7 @@ export class SEMNextBase extends SEMLitBase {
         const { el, close } = this._dialog({
             id: 'sem-confirm-dlg', title: spec.title || '',
             build: (d) => (d
-                ? `<div class="ed-help">${esc(spec.body)}</div><ha-button id="cf-cancel" slot="secondaryAction" appearance="plain">${esc(t('next_cancel'))}</ha-button><ha-button id="cf-ok" slot="primaryAction" appearance="filled">${esc(ok)}</ha-button>`
+                ? `<div class="ed-help">${esc(spec.body)}</div><div class="dlg-actions" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:16px"><ha-button id="cf-cancel" appearance="plain">${esc(t('next_cancel'))}</ha-button><ha-button id="cf-ok" appearance="filled">${esc(ok)}</ha-button></div>`
                 : `<div class="dlg-box"><div class="dlg-title">${esc(spec.title)}</div><div class="ed-help">${esc(spec.body)}</div>
                     <div class="dlg-actions"><div class="grow"></div><button type="button" id="cf-cancel" class="btn ghost">${esc(t('next_cancel'))}</button><button type="button" id="cf-ok" class="btn primary">${esc(ok)}</button></div></div>`),
         });

@@ -493,3 +493,13 @@ test('Devices: the charger target, charge by and goal are rows; the pair dialog 
     specs.at(-1).onCommit('08:30');
     assert.deepEqual(calls.at(-1), ['time', 'set_value', { entity_id: 'time.sem_charger_keba_target_time', time: '08:30:00' }]);
 });
+
+test('(#1321) dialog buttons are in the content, never in a slot HA 2026.11 dropped', async () => {
+    const c = dialogCard(['ha-textfield', 'ha-dialog']);
+    const edit = await c.run(async () => c.el._editDialog({ title: 'T', kind: 'number', value: 5, allowClear: true, onCommit() {} }));
+    const ask = c.run(() => c.el._confirmDo({ title: 'T', body: 'B', run() {} }).el);
+    for (const el of [edit.el, await ask]) {
+        assert.doesNotMatch(String(el.innerHTML), /slot="(primary|secondary)Action"/);
+        assert.match(String(el.innerHTML), /class="dlg-actions"/);
+    }
+});

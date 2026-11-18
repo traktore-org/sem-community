@@ -126,7 +126,7 @@ export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = fa
         : `<input id="${id}" type="${type}" ${extra} value="${escapeHtml(value)}" style="${FIELD_STYLE}">`);
     const label = (text) => `<label style="${LABEL_STYLE}">${text}</label>`;
     const btn = (id, text, slot, kind) => (dialog
-        ? `<ha-button id="${id}" slot="${slot}" appearance="${kind}">${text}</ha-button>`
+        ? `<ha-button id="${id}" appearance="${kind}">${text}</ha-button>`
         : `<button id="${id}" style="padding:0 16px;min-height:36px;border-radius:20px;border:0;cursor:pointer;font:inherit;${kind === 'filled'
             ? 'background:var(--primary-color);color:var(--text-primary-color)'
             : 'background:transparent;color:var(--primary-color)'}">${text}</button>`);
@@ -177,9 +177,11 @@ export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = fa
                 #cfg-relay.on::after { left:16px;background:var(--primary-color) }
             </style>`}
             <div class="cfg-error" style="color:var(--error-color);font-size:var(--ha-font-size-m,14px);margin:4px 0 8px;display:none"></div>`;
-    const actions = `${hasManual ? btn('cfg-remove', t('clear_mapping'), 'secondaryAction', 'plain') : ''}
-        ${btn('cfg-cancel', t('cancel'), 'secondaryAction', 'plain')}
-        ${btn('cfg-save', t('save'), 'primaryAction', 'filled')}`;
+    // (#1321) a footer row in the content: HA 2026.11's dialog has no primaryAction slot
+    const actions = `<div class="dlg-actions" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:16px">${hasManual ? btn('cfg-remove', t('clear_mapping'), '', 'plain') : ''}
+        <div style="flex:1"></div>
+        ${btn('cfg-cancel', t('cancel'), '', 'plain')}
+        ${btn('cfg-save', t('save'), '', 'filled')}</div>`;
     if (dialog) return `${form}${actions}`;
     return `
         <div class="dlg-box">

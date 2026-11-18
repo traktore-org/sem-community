@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Dialog buttons show on HA 2026.11** (#1321). Cancel, OK and Save were drawn at zero size, so nothing could be confirmed or saved.
 - 🐛 **Fewer repeats, clearer words** (#1321). One power figure, one Phases row, the peak switch first; names and numbers agree.
 - 🐛 **One plan on every screen** (#1321). Headline, chart, list and Now name the same car hours; past hours are gone; tomorrow's say tomorrow.
 - 🐛 **A day plan keeps its hours** (#1321). A busy quarter-hour day no longer drops who takes energy and when.
