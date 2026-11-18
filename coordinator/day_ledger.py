@@ -146,6 +146,13 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
             except Exception:  # noqa: BLE001 — no level is not cheap
                 tariff_cheap = False
         if surplus_w >= surplus_margin_w:
+            # (#1383) what a grid kWh costs here, for a load too big for
+            # the surplus; the slot's ``price`` stays the export rate
+            try:
+                p_in = price_at(t)
+                import_price = float(p_in) if p_in is not None else None
+            except Exception:  # noqa: BLE001 — unknown, the surplus only
+                import_price = None
             slots.append(LedgerSlot(
                 start=t, end=slot_end,
                 # (#871) NOT max(0.0, …). The clamp made a negative export rate
@@ -154,7 +161,8 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 # still handles an absent rate, the only case the clamp covered.
                 price=rate_at(t),
                 level_cheap=True, tariff_cheap=tariff_cheap, home_w=0.0,
-                cap_override_w=surplus_w,
+                cap_override_w=surplus_w, import_price=import_price,
+                import_cheap=level_cheap,
                 solar_w=solar_w, home_gross_w=home_w,
                 co2=co2,
             ))

@@ -532,6 +532,9 @@ class CalendarTariffProvider(TariffProvider):
         # read gives no peak block, so no.
         return self._rates_differ() and self._ht_occurs_in_week(dt_util.now())
 
+    def has_fixed_cheap_rate(self) -> bool:
+        return self.has_cheap_rate()
+
     def get_rate_level_at(self, when: datetime) -> "PriceLevel | None":
         # (#1310) Asked of the week, not of the day. A weekend with no peak
         # block is all at the off-peak rate, the same rate as Monday 03:00.

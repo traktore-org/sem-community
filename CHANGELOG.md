@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A one-phase car is spotted** (#1376). A slow ramp no longer hides it. Always (max) names the charger's own current limit.
 - 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
 - 🐛 **Phase guard stops a "SEM yields" charger when a phase is over its limit** (#1381). Only that stop is sent; small loads stay on.
+- 🐛 **Cheapest-hours car waits out the peak on a two-rate tariff** (#1387). Before, it could start in a peak hour.
+- 🐛 **Cheapest-hours car can use a cheap hour with thin sun** (#1383). The grid covers what the sun lacks, at the grid price.
 
 # [2.3.0-beta.20] — 18.11.2026
 
