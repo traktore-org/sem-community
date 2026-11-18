@@ -430,7 +430,8 @@ tariff.
 
 - Its cheap and expensive hours, and its plan, follow its own price. A fixed
   rate is never cheap or expensive.
-- A sensor *<heat pump> tariff cost today* shows what its grid power cost.
+- A sensor *<heat pump> tariff cost today* shows what its grid power cost
+  today. It starts again at 0 at midnight.
 - If the price entity cannot be read, SEM uses the fixed rate, or else the
   house tariff, until it reads again.
 
