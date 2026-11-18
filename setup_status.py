@@ -175,5 +175,6 @@ async def build_setup_checklist(hass: HomeAssistant, coordinator: Any) -> dict[s
         "done": sum(1 for i in items if i["done"]),
         "total": len(items),
         "must_open": bool(detected) and configured == 0,
-        "repairs": {"count": len(titles), "first": titles[0] if titles else None},
+        "repairs": {"count": len(titles), "first": titles[0] if titles else None,
+                    "titles": titles},
     }

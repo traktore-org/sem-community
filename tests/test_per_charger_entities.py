@@ -158,6 +158,39 @@ class TestPerChargerNumbers:
 
 
 @pytest.mark.unit
+class TestPerChargerSetByUser:
+    """(#1321) the card must tell the factory default from the owner's value."""
+
+    def _num(self, stored, factory=40):
+        chargers = [{"id": "c1", **({"ev_battery_capacity_kwh": stored} if stored is not None else {})}]
+        coord = _mock_coordinator(chargers)
+        coord.config = {"ev_chargers": chargers}
+        desc = NumberEntityDescription(key="charger_c1_ev_battery_capacity_kwh")
+        return SEMPerChargerNumber(coord, desc, _mock_entry(chargers), "c1",
+                                   "ev_battery_capacity_kwh", stored or factory,
+                                   default=factory)
+
+    def test_unset_default_is_not_the_owners_value(self):
+        assert self._num(None).extra_state_attributes == {"set_by_user": False}
+
+    def test_stored_factory_value_is_not_the_owners_value(self):
+        assert self._num(40).extra_state_attributes == {"set_by_user": False}
+
+    def test_a_stored_other_value_is_the_owners(self):
+        assert self._num(52).extra_state_attributes == {"set_by_user": True}
+
+    @pytest.mark.asyncio
+    async def test_writing_the_default_value_counts_as_set(self, monkeypatch):
+        num = self._num(None)
+        num.hass = MagicMock()
+        num.async_write_ha_state = MagicMock()
+        monkeypatch.setattr("custom_components.solar_energy_management.persist_per_charger_option",
+                            lambda *a, **k: None)
+        await num.async_set_native_value(40)
+        assert num.extra_state_attributes == {"set_by_user": True}
+
+
+@pytest.mark.unit
 class TestPerChargerSwitches:
     """Test per-charger night charging switch entities."""
 

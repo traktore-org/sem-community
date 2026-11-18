@@ -523,6 +523,7 @@ async def async_setup_entry(
                 entities.append(SEMPerChargerNumber(
                     coordinator, base_desc, entry, cid, config_key,
                     charger_cfg.get(config_key, default_val), cname,
+                    default=default_val,
                 ))
 
     if per_charger_descriptions:
@@ -879,9 +880,12 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         config_key: str,
         initial_value: float,
         charger_name: str = "EV Charger",
+        default: float | None = None,
     ) -> None:
         """Initialize per-charger number entity."""
         super().__init__(coordinator)
+        self._factory_default = default
+        self._set_here = False
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_translation_key = config_key
@@ -903,9 +907,24 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         """Return device information."""
         return self.coordinator.device_info
 
+    @property
+    def extra_state_attributes(self) -> dict[str, bool]:
+        """(#1321) Whether the value is the owner's own: a stored value that is
+        not the factory default, or one written here. The card shows an
+        unset default as unknown ("Up to full"), not as a measured size."""
+        return {"set_by_user": self._set_here or self._stored_differs()}
+
+    def _stored_differs(self) -> bool:
+        chargers = (getattr(self.coordinator, "config", None) or {}).get("ev_chargers") or []
+        mine = next((c for c in chargers
+                     if isinstance(c, dict) and c.get("id") == self._charger_id), {})
+        stored = mine.get(self._config_key)
+        return stored is not None and stored != self._factory_default
+
     async def async_set_native_value(self, value: float) -> None:
         """Update the per-charger setting value."""
         self._attr_native_value = value
+        self._set_here = True
 
         # Shared per-charger write path (#485 K2) — owns the data-side
         # fallback, missing-charger recovery (#462/#464), coordinator

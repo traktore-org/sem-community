@@ -40,7 +40,7 @@ async def test_fresh_watch_only_install_with_nothing(sem_real_hass):
     assert out["watch_only"] is True
     assert (out["done"], out["total"]) == (1, 5)  # only the dashboard
     assert out["must_open"] is False
-    assert out["repairs"] == {"count": 0, "first": None}
+    assert out["repairs"] == {"count": 0, "first": None, "titles": []}
     assert _by_key(out)["price"]["done"] is False
 
 
@@ -96,6 +96,8 @@ async def test_open_repairs_are_counted_with_the_first_title(sem_real_hass):
     out = await build_setup_checklist(sem_real_hass, _coord(sem_real_hass))
     assert out["repairs"]["count"] == 2
     assert out["repairs"]["first"] in ("first_issue", "second_issue")
+    # (#1321) every title is published, so the dashboard can name each one
+    assert sorted(out["repairs"]["titles"]) == ["first_issue", "second_issue"]
 
 
 async def test_ai_tool_and_checklist_read_the_same_facts(sem_real_hass):
