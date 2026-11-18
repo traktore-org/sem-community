@@ -584,7 +584,9 @@ def plan_night(day: HourlyDay, hours: List[SimHour], soc_kwh: float,
              for h in hours[:max(1, end)]]
     ledger = build_night_ledger(
         slots, soc_kwh=soc_kwh, floor_kwh=floor_kwh,
-        max_discharge_w=float(params.max_discharge_w), peak_limit_w=peak_w)
+        max_discharge_w=float(params.max_discharge_w), peak_limit_w=peak_w,
+        # (#1377) the projection is capped at the pack, as in the coordinator
+        capacity_kwh=float(params.capacity_kwh or 0.0))
     demands = []
     deficit = float(getattr(decision, "deficit_kwh", 0.0) or 0.0)
     # The coordinator's own battery demand (coordinator.py, #638).

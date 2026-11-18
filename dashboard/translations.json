@@ -3038,7 +3038,10 @@
     "setup_chip_setup": "Nastavení {done} z {total}",
     "never_switch_off": "Nikdy nevypínat",
     "host_guard_warning": "Vypadá to, že napájí vaši síť nebo Home Assistant. SEM to nikdy nevypne, pokud to nepovolíte.",
-    "host_guard_allow": "Povolit SEM vypnutí"
+    "host_guard_allow": "Povolit SEM vypnutí",
+    "energy_plan_off": "neuplatněno",
+    "energy_plan_off_note": "Provádění plánu je vypnuté, SEM tento plán neuplatňuje.",
+    "energy_plan_turn_on": "Zapnout provádění plánu"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -6079,7 +6082,10 @@
     "setup_chip_setup": "Opsætning {done} af {total}",
     "never_switch_off": "Aldrig sluk",
     "host_guard_warning": "Det ser ud til at forsyne dit netværk eller Home Assistant. SEM slukker det aldrig, medmindre du tillader det.",
-    "host_guard_allow": "Tillad SEM at slukke"
+    "host_guard_allow": "Tillad SEM at slukke",
+    "energy_plan_off": "ikke anvendt",
+    "energy_plan_off_note": "Planudførelse er slået fra, så SEM anvender ikke denne plan.",
+    "energy_plan_turn_on": "Slå planudførelse til"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -9120,7 +9126,10 @@
     "setup_chip_setup": "Einrichtung {done} von {total}",
     "never_switch_off": "Nie ausschalten",
     "host_guard_warning": "Das sieht nach der Stromversorgung von Netzwerk oder Home Assistant aus. SEM schaltet es nie aus, ausser du erlaubst es.",
-    "host_guard_allow": "SEM darf ausschalten"
+    "host_guard_allow": "SEM darf ausschalten",
+    "energy_plan_off": "nicht angewendet",
+    "energy_plan_off_note": "Die Planausführung ist aus, SEM wendet diesen Plan nicht an.",
+    "energy_plan_turn_on": "Planausführung einschalten"
   },
   "en": {
     "% of limit": "% of limit",
@@ -12161,7 +12170,10 @@
     "setup_chip_setup": "Setup {done} of {total}",
     "never_switch_off": "Never switch off",
     "host_guard_warning": "This looks like it powers your network or Home Assistant. SEM will never switch it off unless you allow it.",
-    "host_guard_allow": "Allow SEM to switch it off"
+    "host_guard_allow": "Allow SEM to switch it off",
+    "energy_plan_off": "not applied",
+    "energy_plan_off_note": "Plan execution is off, so SEM does not apply this plan.",
+    "energy_plan_turn_on": "Turn on plan execution"
   },
   "es": {
     "% of limit": "% del límite",
@@ -15202,7 +15214,10 @@
     "setup_chip_setup": "Configuración {done} de {total}",
     "never_switch_off": "Nunca apagar",
     "host_guard_warning": "Parece que alimenta tu red o Home Assistant. SEM nunca lo apagará a menos que lo permitas.",
-    "host_guard_allow": "Permitir que SEM lo apague"
+    "host_guard_allow": "Permitir que SEM lo apague",
+    "energy_plan_off": "no aplicado",
+    "energy_plan_off_note": "La ejecución del plan está desactivada, así que SEM no aplica este plan.",
+    "energy_plan_turn_on": "Activar la ejecución del plan"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -18243,7 +18258,10 @@
     "setup_chip_setup": "Asetukset {done}/{total}",
     "never_switch_off": "Älä koskaan sammuta",
     "host_guard_warning": "Tämä näyttää syöttävän verkkoasi tai Home Assistantia. SEM ei koskaan sammuta sitä, ellet salli sitä.",
-    "host_guard_allow": "Salli SEM:n sammuttaa"
+    "host_guard_allow": "Salli SEM:n sammuttaa",
+    "energy_plan_off": "ei käytössä",
+    "energy_plan_off_note": "Suunnitelman suoritus on pois päältä, joten SEM ei toteuta tätä suunnitelmaa.",
+    "energy_plan_turn_on": "Ota suunnitelman suoritus käyttöön"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -21284,7 +21302,10 @@
     "setup_chip_setup": "Configuration {done} sur {total}",
     "never_switch_off": "Ne jamais éteindre",
     "host_guard_warning": "Cela semble alimenter votre réseau ou Home Assistant. SEM ne l'éteindra jamais sans votre accord.",
-    "host_guard_allow": "Autoriser SEM à l'éteindre"
+    "host_guard_allow": "Autoriser SEM à l'éteindre",
+    "energy_plan_off": "non appliqué",
+    "energy_plan_off_note": "L'exécution du plan est désactivée : SEM n'applique pas ce plan.",
+    "energy_plan_turn_on": "Activer l'exécution du plan"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -24325,7 +24346,10 @@
     "setup_chip_setup": "Beállítás {done} / {total}",
     "never_switch_off": "Soha ne kapcsolja ki",
     "host_guard_warning": "Úgy tűnik, ez táplálja a hálózatot vagy a Home Assistantot. A SEM soha nem kapcsolja ki, hacsak nem engedélyezi.",
-    "host_guard_allow": "A SEM kikapcsolhatja"
+    "host_guard_allow": "A SEM kikapcsolhatja",
+    "energy_plan_off": "nincs alkalmazva",
+    "energy_plan_off_note": "A terv végrehajtása ki van kapcsolva, ezért a SEM nem alkalmazza ezt a tervet.",
+    "energy_plan_turn_on": "Terv végrehajtásának bekapcsolása"
   },
   "it": {
     "% of limit": "% del limite",
@@ -27366,7 +27390,10 @@
     "setup_chip_setup": "Configurazione {done} di {total}",
     "never_switch_off": "Non spegnere mai",
     "host_guard_warning": "Sembra alimentare la tua rete o Home Assistant. SEM non lo spegnerà mai se non lo consenti.",
-    "host_guard_allow": "Consenti a SEM di spegnere"
+    "host_guard_allow": "Consenti a SEM di spegnere",
+    "energy_plan_off": "non applicato",
+    "energy_plan_off_note": "L'esecuzione del piano è disattivata, quindi SEM non applica questo piano.",
+    "energy_plan_turn_on": "Attiva l'esecuzione del piano"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -30407,7 +30434,10 @@
     "setup_chip_setup": "Instellen {done} van {total}",
     "never_switch_off": "Nooit uitschakelen",
     "host_guard_warning": "Dit lijkt je netwerk of Home Assistant van stroom te voorzien. SEM schakelt het nooit uit tenzij je het toestaat.",
-    "host_guard_allow": "SEM mag uitschakelen"
+    "host_guard_allow": "SEM mag uitschakelen",
+    "energy_plan_off": "niet toegepast",
+    "energy_plan_off_note": "Planuitvoering staat uit, dus SEM past dit plan niet toe.",
+    "energy_plan_turn_on": "Planuitvoering aanzetten"
   },
   "no": {
     "% of limit": "% av grense",
@@ -33448,7 +33478,10 @@
     "setup_chip_setup": "Oppsett {done} av {total}",
     "never_switch_off": "Aldri slå av",
     "host_guard_warning": "Dette ser ut til å drive nettverket eller Home Assistant. SEM slår det aldri av med mindre du tillater det.",
-    "host_guard_allow": "La SEM slå av"
+    "host_guard_allow": "La SEM slå av",
+    "energy_plan_off": "ikke brukt",
+    "energy_plan_off_note": "Planutførelse er av, så SEM bruker ikke denne planen.",
+    "energy_plan_turn_on": "Slå på planutførelse"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -36489,7 +36522,10 @@
     "setup_chip_setup": "Konfiguracja {done} z {total}",
     "never_switch_off": "Nigdy nie wyłączaj",
     "host_guard_warning": "To wygląda na zasilanie sieci lub Home Assistant. SEM nigdy tego nie wyłączy, chyba że na to pozwolisz.",
-    "host_guard_allow": "Zezwól SEM na wyłączanie"
+    "host_guard_allow": "Zezwól SEM na wyłączanie",
+    "energy_plan_off": "niezastosowany",
+    "energy_plan_off_note": "Wykonywanie planu jest wyłączone, więc SEM nie stosuje tego planu.",
+    "energy_plan_turn_on": "Włącz wykonywanie planu"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -39530,7 +39566,10 @@
     "setup_chip_setup": "Configuração {done} de {total}",
     "never_switch_off": "Nunca desligar",
     "host_guard_warning": "Isto parece alimentar a sua rede ou o Home Assistant. O SEM nunca o desliga, a menos que o permita.",
-    "host_guard_allow": "Permitir que o SEM desligue"
+    "host_guard_allow": "Permitir que o SEM desligue",
+    "energy_plan_off": "não aplicado",
+    "energy_plan_off_note": "A execução do plano está desligada, por isso o SEM não aplica este plano.",
+    "energy_plan_turn_on": "Ligar a execução do plano"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -42571,7 +42610,10 @@
     "setup_chip_setup": "Configurare {done} din {total}",
     "never_switch_off": "Nu opri niciodată",
     "host_guard_warning": "Pare să alimenteze rețeaua sau Home Assistant. SEM nu îl va opri niciodată dacă nu permiți.",
-    "host_guard_allow": "Permite SEM să oprească"
+    "host_guard_allow": "Permite SEM să oprească",
+    "energy_plan_off": "neaplicat",
+    "energy_plan_off_note": "Execuția planului este oprită, deci SEM nu aplică acest plan.",
+    "energy_plan_turn_on": "Pornește execuția planului"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -45612,7 +45654,10 @@
     "setup_chip_setup": "Inställning {done} av {total}",
     "never_switch_off": "Stäng aldrig av",
     "host_guard_warning": "Det här verkar driva ditt nätverk eller Home Assistant. SEM stänger aldrig av det om du inte tillåter det.",
-    "host_guard_allow": "Tillåt SEM att stänga av"
+    "host_guard_allow": "Tillåt SEM att stänga av",
+    "energy_plan_off": "inte tillämpad",
+    "energy_plan_off_note": "Planutförandet är av, så SEM tillämpar inte den här planen.",
+    "energy_plan_turn_on": "Slå på planutförande"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -48653,6 +48698,9 @@
     "setup_chip_setup": "设置 {done} / {total}",
     "never_switch_off": "永不关闭",
     "host_guard_warning": "这看起来像是为你的网络或 Home Assistant 供电。除非你允许，SEM 绝不会关闭它。",
-    "host_guard_allow": "允许 SEM 关闭"
+    "host_guard_allow": "允许 SEM 关闭",
+    "energy_plan_off": "未应用",
+    "energy_plan_off_note": "计划执行已关闭，SEM 不会应用此计划。",
+    "energy_plan_turn_on": "开启计划执行"
   }
 }

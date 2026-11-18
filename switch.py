@@ -662,6 +662,26 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         except Exception as e:
             _LOGGER.warning("Failed to refresh coordinator when turning on %s: %s", self.entity_description.key, e)
 
+    async def _arm_plan_execution(self) -> None:
+        """(#1377) Letting SEM take control also turns plan execution on.
+
+        Every way to leave watch-only (the card button, this switch, a
+        service call) ends here. With plan execution left off, SEM controls
+        the hardware but ignores the plan, and the user sees no reason.
+        Turning watch-only ON never comes here.
+        """
+        entity_id = "switch.sem_energy_plan_actuation"
+        state = self.hass.states.get(entity_id) if self.hass else None
+        if state is None or state.state != "off":
+            return
+        _LOGGER.info("SEM takes control: turning on plan execution (%s) "
+                     "so the plan is applied", entity_id)
+        try:
+            await self.hass.services.async_call(
+                "switch", "turn_on", {"entity_id": entity_id}, blocking=True)
+        except Exception as e:  # noqa: BLE001 — control is already handed over
+            _LOGGER.warning("Could not turn on plan execution: %s", e)
+
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
         _LOGGER.info("Turning off %s", self.entity_description.key)
@@ -674,6 +694,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._energy_plan_actuation = False  # #638 G4 — immediate
         self._persist_flag(False)  # reload-durable (see _persist_flag)
         self.async_write_ha_state()  # reflect immediately (#259)
+        if self.entity_description.key == "observer_mode":
+            await self._arm_plan_execution()
         if self.entity_description.key == SIMULATION_TAB:
             self._simulation_tab_changed(False)
 

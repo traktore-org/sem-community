@@ -2394,6 +2394,7 @@ SEM skips:
 When you turn it off, SEM can start a load right away. A stop it held back does not start the load's minimum off time.
 
 Turn it on or off on the dashboard **Configuration** tab (`switch.sem_observer_mode`). The **Configure** button no longer asks for it.
+Turning it off also turns on plan execution (`switch.sem_energy_plan_actuation`) if it was off, so SEM applies the plan. Turning it on leaves plan execution as it is.
 
 ---
 
