@@ -432,21 +432,34 @@ export function registerPayload(form, rows = []) {
  * `over`. `rows` are the Devices rows, `liveOf(row)` their live watts.
  * → { measuredW, estW, names: [who is counted], over: [who reads too much] }
  */
-export function surplusInUse(rows, liveOf, houseW = null) {
-    let measuredW = 0, estW = 0;
+export function surplusInUse(rows, liveOf, houseW = null, surplusW = null) {
+    let measuredW = 0, estW = 0, unmetered = false;
     const names = [], over = [];
     for (const r of rows || []) {
         if (r.type === 'battery') continue;
         const live = liveOf(r);
         const on = r.type === 'charger' ? live !== null && live > 50 : r.isOn || (live !== null && live > 10);
         if (!on) continue;
-        if (live === null) { if (r.rating > 0) estW += r.rating; continue; }
+        if (live === null) { unmetered = true; if (r.rating > 0) estW += r.rating; continue; }
         if (Number.isFinite(houseW) && live > houseW + 50) { over.push(r.name); continue; }
         measuredW += Math.max(0, live);
         names.push(r.name);
     }
     if (Number.isFinite(houseW)) measuredW = Math.min(measuredW, Math.max(0, houseW));
-    return { measuredW, estW, names, over };
+    // (#1321) an estimate never exceeds what the house still draws beyond the measured part
+    if (Number.isFinite(houseW)) estW = Math.min(estW, Math.max(0, houseW - measuredW));
+    // "left" = surplus minus measured use; unknown while a running device has no reading (its size is a guess)
+    const leftW = Number.isFinite(surplusW) && estW === 0 && !unmetered ? Math.max(0, surplusW - measuredW) : null;
+    return { measuredW, estW, leftW, names, over };
+}
+
+/**
+ * (#1321) The power a device shows when it draws nothing now: its rated size,
+ * said as rated (never "~2 kW", which reads as live power). Without a meter, or
+ * with a size SEM only assumed, it also says "not measured". → translation key
+ */
+export function ratedKey(row, liveW) {
+    return liveW === null || row.ratingMeasured === false ? 'next_rated_x_unmeasured' : 'next_rated_x';
 }
 
 /**

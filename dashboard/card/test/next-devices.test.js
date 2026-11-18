@@ -404,7 +404,7 @@ test('a load whose rating is the 1 kW placeholder says not measured, not ~1.0 kW
     const row = el._rowsNow().find((r) => r.id === 'hot_water');
     assert.equal(row.ratingMeasured, false);
     const out = text(el.render());
-    assert.match(out, /rating_not_measured/);
+    assert.match(out, /next_rated_x_unmeasured/);
     devs.hot_water.rating_measured = true;
     assert.equal(makeCard(st)._rowsNow().find((r) => r.id === 'hot_water').ratingMeasured, true);
     delete devs.hot_water.rating_measured;
@@ -715,4 +715,16 @@ test('the next block is named after the device, not by its plan id', async () =>
     assert.doesNotMatch(out, /comfort:hot_water|load:hot_water/);
     assert.equal(el._nextBlock().who, 'Sim Boiler');
     assert.equal(el._whoName('comfort:unknown_heater'), 'Unknown heater');
+});
+
+test('an off load with a measured rating says "rated X", never a bare ~kW that reads as live power (#1321)', () => {
+    const st = states();
+    const devs = st['sensor.sem_controllable_devices_count'].attributes.devices;
+    devs.hot_water.rating_measured = true;
+    devs.hot_water.power_rating = 2000;
+    const el = makeCard(st);
+    el._all = true;
+    const out = text(el.render());
+    assert.match(out, /next_rated_x/);
+    assert.doesNotMatch(out, /~2\.0/);
 });

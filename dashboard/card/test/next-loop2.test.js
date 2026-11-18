@@ -388,7 +388,7 @@ test('7: the Now power figure is on the bar once; the lists and "Why now" print 
 
 test('7: the System setup row counts the same checks as the Now checklist', () => {
     const el = sys({ 'sensor.sem_diag_charger_control': S('number', { setup_checklist: { items: [], done: 3, total: 3, repairs: { count: 2, first: 'x' } } }) });
-    assert.match(text(el._setupRow()), /setup_check_n/);
+    assert.match(text(el._setupRow()), /x · next_n_more_checks/, 'the same two checks, named');
 });
 
 test('8: the Devices charger shows one Phases row, falling back to the set count', () => {

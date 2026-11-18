@@ -29,7 +29,7 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, surplusInUse, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
+import { deviceRows, statePill, surplusInUse, ratedKey, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
@@ -676,8 +676,8 @@ class SEMNextDevicesCard extends SEMNextBase {
     }
 
     /** Measured watts of the running devices, capped at the house; see surplusInUse. */
-    _inUse(rows) {
-        return surplusInUse(rows, (r) => this._live(r).powerW, this._powerW('sensor.sem_home_consumption_power'));
+    _inUse(rows, surplusW = null) {
+        return surplusInUse(rows, (r) => this._live(r).powerW, this._powerW('sensor.sem_home_consumption_power'), surplusW);
     }
 
     _surplus(rows) {
@@ -695,9 +695,10 @@ class SEMNextDevicesCard extends SEMNextBase {
         if (total !== null) {
             // (#1321) "in use" counts measured power only: a switch's configured size is an estimate, shown apart
             // …never more than the house draws; a sensor that reads more than the house is named
-            const use = this._inUse(rows);
-            const base = given === null && free === null ? '' : this._tf(use.estW > 0 ? 'next_given_free_est' : 'next_given_free',
-                { given: this._fmtKw(use.measuredW), est: this._fmtKw(use.estW), free: this._fmtKw(free ?? 0) });
+            const use = this._inUse(rows, total);
+            const nums = { given: this._fmtKw(use.measuredW), est: this._fmtKw(use.estW), free: this._fmtKw(use.leftW ?? 0) };
+            const base = given === null && free === null ? ''
+                : this._tf(use.leftW === null ? (use.estW > 0 ? 'next_given_est' : 'next_given_only') : use.estW > 0 ? 'next_given_free_est' : 'next_given_free', nums);
             const who = use.names.length && use.names.length <= 2 ? this._tf('next_in_use_by', { names: use.names.join(', ') }) : '';
             const bad = use.over.length ? this._tf('next_sensor_over_house', { names: use.over.join(', ') }) : '';
             const sub = [base, who, bad].filter(Boolean).join(' · ');
@@ -771,8 +772,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         const liveText = row.type === 'battery' && w !== null
             ? (w < 0 ? '−' : '') + this._kw(Math.abs(w))
             : (w !== null && (row.type !== 'load' || w > 10 || row.isOn) ? this._kw(w)
-                : (row.rating > 0 && row.ratingMeasured ? html`<span class="dim">~${this._kw(row.rating)}</span>`
-                    : (row.rating > 0 ? html`<span class="dim">${t('rating_not_measured')}</span>` : (w === null ? '' : this._kw(w)))));
+                : (row.rating > 0 ? html`<span class="dim">${this._tf(ratedKey(row, w), { kw: this._kw(row.rating) })}</span>` : (w === null ? '' : this._kw(w))));
         const dis = this._obs();
         const open = !this._reorder && this._isOpen(row);
         const body = !open ? nothing

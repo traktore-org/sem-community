@@ -9,6 +9,7 @@
 import { hhmmIn } from './next-time.js';
 
 const HOUR = 3600e3;
+const MINUTE = 60e3;
 const cache = new WeakMap();
 
 /** The demand's own hours { s, e } from its why code, or null. */
@@ -35,21 +36,29 @@ export function demandRuns(d) {
  * still add up to the need. Returns the same array when nothing is over.
  */
 function capAtNeed(blocks, demands) {
-    const need = new Map();
+    const need = new Map(), win = new Map();
     for (const d of (Array.isArray(demands) ? demands : [])) {
         const n = Number(d && d.needed_kwh);
-        if (d && d.id && Number.isFinite(n) && n > 0) need.set(String(d.id), n);
+        if (!d || !d.id || !Number.isFinite(n) || n <= 0) continue;
+        need.set(String(d.id), n);
+        // the need belongs to the demand's own window; blocks of a later window under the same id are not cut (#1321)
+        const runs = demandRuns(d);
+        win.set(String(d.id), demandWindow(d) || (runs.length ? { s: Math.min(...runs.map((r) => r.s)), e: Math.max(...runs.map((r) => r.e)) } : null));
     }
+    const inside = (b) => {
+        const w = win.get(String(b.id));
+        return !w || (Date.parse(b.start) >= w.s - MINUTE && Date.parse(b.end) <= w.e + MINUTE);
+    };
     const sums = new Map();
     for (const b of blocks) {
-        if (!b || !need.has(String(b.id))) continue;
+        if (!b || !need.has(String(b.id)) || !inside(b)) continue;
         const kwh = (Number(b.power_w) || 0) * Math.max(0, Date.parse(b.end) - Date.parse(b.start)) / 3.6e9;
         sums.set(String(b.id), (sums.get(String(b.id)) || 0) + (Number.isFinite(kwh) ? kwh : 0));
     }
     const factor = new Map();
     for (const [id, sum] of sums) if (sum > need.get(id) * 1.001) factor.set(id, need.get(id) / sum);
     if (!factor.size) return blocks;
-    return blocks.map((b) => (b && factor.has(String(b.id)) ? { ...b, power_w: (Number(b.power_w) || 0) * factor.get(String(b.id)) } : b));
+    return blocks.map((b) => (b && factor.has(String(b.id)) && inside(b) ? { ...b, power_w: (Number(b.power_w) || 0) * factor.get(String(b.id)) } : b));
 }
 
 /**

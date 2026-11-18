@@ -17,6 +17,25 @@ export function readChecklist(states) {
     return c && Array.isArray(c.items) ? c : null;
 }
 
+const REPAIR_DOMAIN = 'solar_energy_management';
+
+/**
+ * (#1321) Every open thing to check, in plain words. `listed` is HA's own repairs
+ * list (repairs/list_issues), `localize` turns a key into HA's text. When the
+ * titles cannot all be read, SEM's single published title stands and the rest
+ * are counted: `more(n)` words that count. → [string]
+ */
+export function repairNames(rep, listed, localize, more) {
+    const n = Number(rep?.count) || 0;
+    if (!n) return [];
+    const titles = (Array.isArray(listed) ? listed : [])
+        .filter((i) => i && i.domain === REPAIR_DOMAIN && !i.ignored)
+        .map((i) => localize(`component.${REPAIR_DOMAIN}.issues.${i.translation_key}.title`)).filter(Boolean);
+    if (titles.length === n) return titles;
+    const first = rep.first ? [rep.first] : [];
+    return n > first.length && first.length ? [...first, more(n - first.length)] : first;
+}
+
 /** Whether SEM only watches: the switch is live, the attribute is the fallback. */
 export function isWatchOnly(states, checklist) {
     const sw = states && states[OBSERVER_SWITCH];

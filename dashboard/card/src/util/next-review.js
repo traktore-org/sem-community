@@ -14,6 +14,8 @@ const PREFIX = 'energy_plan_review_';
 // (#1321) Next words for the codes whose classic text is vague: who is learning, what is kept
 const NEXT_CODE = { learning: 'next_review_learning', sc_beat: 'next_review_sc_beat', sc_met: 'next_review_sc_met', sc_missed: 'next_review_sc_missed' };
 const wording = (code) => NEXT_CODE[code] || PREFIX + code;
+// (#1321) "needs about 0.0 kWh" reads as "needs nothing": with no learned figure, say it is learning
+const noData = (d) => d.code === 'took_less' && !(Number(d.suggested_kwh) > 0);
 const fix = (v, d = 1) => (v == null || !Number.isFinite(Number(v)) ? '' : fmtNum(v, d));
 
 /** → [{ kind: 'ev'|'load'|'battery'|'sun', id?, label?, text }] */
@@ -21,7 +23,7 @@ export function reviewRows(rv, say, clock = (ts) => String(ts), nights = {}) {
     if (!rv || typeof rv !== 'object') return [];
     const rows = [];
     for (const d of Array.isArray(rv.demands) ? rv.demands : []) {
-        const text = say(wording(d.code), {
+        const text = say(noData(d) ? 'next_review_no_sessions' : wording(d.code), {
             // (#1321) the learner's own count, out of what it needs: one source, no other night count
             nights: d.nights, needed: d.needed || 5, asked: fix(d.asked_kwh || 0), suggested: fix(d.suggested_kwh), actual: fix(d.last_kwh || 0),
         });

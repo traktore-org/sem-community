@@ -10,7 +10,7 @@
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
-import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey, runningNow } from './next-devices.js';
+import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey, runningNow, ratedKey } from './next-devices.js';
 import { loadRunsBySem } from './settings-applies.js';
 import { cleanName } from './next-names.js';
 import { fmtNum } from './next-number.js';
@@ -106,7 +106,7 @@ export function loadBody(card, row) {
     const live = row.powerEntity ? card._powerW(row.powerEntity) : null;
     const on = runningNow({ is_on: row.isOn }, live) || (measureOnly && live !== null);
     const powerText = on && live !== null ? card._kw(live)
-        : (row.rating > 0 ? (row.ratingMeasured ? html`<span class="dim">~${card._kw(row.rating)}</span>` : html`<span class="dim">${card._t('rating_not_measured')}</span>`)
+        : (row.rating > 0 ? html`<span class="dim">${card._tf(ratedKey(row, live), { kw: card._kw(row.rating) })}</span>`
             : (live === null ? '—' : card._kw(live)));
     const minMin = parseFloat(g.daily_min_runtime_min) || 0, maxMin = parseFloat(g.daily_max_runtime_min) || 0;
     // (#1349) with a thermometer the run-time goal asks nothing: Today shows the time run, no goal

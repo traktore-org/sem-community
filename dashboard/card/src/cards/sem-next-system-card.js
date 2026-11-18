@@ -18,7 +18,7 @@
  *   type: custom:sem-next-system-card
  */
 
-import { OPEN_PANEL_KEY, takeStored, readChecklist } from '../util/setup-checklist.js';
+import { OPEN_PANEL_KEY, takeStored, readChecklist, repairNames } from '../util/setup-checklist.js';
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
@@ -227,6 +227,20 @@ class SEMNextSystemCard extends SEMNextBase {
             ${open ? rows.filter((r) => r.state === 'ok').map((r) => this._sourceRow(r)) : nothing}</div>`;
     }
 
+    /** (#1321) HA's own repairs list, asked once per count; names every thing to check. */
+    _checkNames() {
+        const rep = readChecklist(this._hass.states)?.repairs || {};
+        const n = Number(rep.count) || 0;
+        if (n > 1 && this._repairsFor !== n && this._hass.callWS) {
+            this._repairsFor = n;
+            this._hass.callWS({ type: 'repairs/list_issues' })
+                .then((r) => { this._repairList = r?.issues || []; this.requestUpdate(); })
+                .catch(() => { this._repairList = []; });
+        }
+        const loc = (k) => (this._hass.localize ? this._hass.localize(k) : '');
+        return repairNames(rep, this._repairList, loc, (m) => this._tf('next_n_more_checks', { n: m }));
+    }
+
     _setupRow() {
         const items = setupItems(this._hass.states, this._options);
         const counted = items.filter((i) => !i.optional);
@@ -240,7 +254,8 @@ class SEMNextSystemCard extends SEMNextBase {
         const grid = this._valLabel('diag_grid_sign');
         const batt = this._valLabel('diag_battery_sign');
         // (#1321) the Now screen's checklist counts the same things to check: the required steps are the value, the checks ride beside it
-        const sub = [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : '', allDone ? '' : checkText].filter(Boolean).join(' · ');
+        // (#1321) what to check is named here; the sign directions are in What SEM reads
+        const sub = (checks ? this._checkNames().join(' · ') : [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : ''].filter(Boolean).join(' · '));
         return this._row('mdi:check-decagram', this._t('next_setup_check'), value, sub, { onClick: () => this._togglePanel('setup') });
     }
 
@@ -680,7 +695,7 @@ class SEMNextSystemCard extends SEMNextBase {
         // (#1321) the headline names what to check: the sources and the repairs the Setup row counts
         const names = rows.filter((r) => r.state !== 'ok').map((r) => r.name);
         const rep = readChecklist(this._hass.states)?.repairs || {};
-        if (rep.count) names.push(rep.count > 1 ? `${rep.first || this._tf('setup_check_n', { n: rep.count })} +${rep.count - 1}` : (rep.first || this._t('setup_check_one')));
+        if (rep.count) names.push(...(this._checkNames().length ? this._checkNames() : [this._t('setup_check_one')]));
         const main = names.length ? this._tf('next_sys_lead_names', { names: names.join(', ') })
             : bad ? this._tf('next_sys_lead_bad', { n: bad }) : this._t('next_sys_lead_ok');
         const sub = this._t('next_sys_sub');

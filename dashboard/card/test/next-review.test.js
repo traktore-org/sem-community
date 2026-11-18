@@ -29,3 +29,9 @@ test('no review gives no rows', () => {
     assert.deepEqual(reviewRows(undefined, say), []);
     assert.deepEqual(reviewRows({}, say), []);
 });
+
+test('a learned need of zero says it is still learning, never "needs 0.0"', () => {
+    const say2 = (key) => ({ next_review_no_sessions: 'learning, no sessions yet', energy_plan_review_took_less: 'needs' }[key] || '');
+    const rows = reviewRows({ demands: [{ code: 'took_less', kind: 'ev', asked_kwh: 10, suggested_kwh: 0 }] }, say2);
+    assert.equal(rows[0].text, 'learning, no sessions yet');
+});
