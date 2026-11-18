@@ -732,8 +732,10 @@ class SEMNextPlanCard extends SEMNextBase {
         if (ov) bits.push(this._overrideText(ov));
         const btns = [];
         const full = (ns?.why || ns?.reason) === 'car_full';
-        if (full && !ov) {
-            // a full car has nothing to skip or start
+        // (#1321) no car plugged in: nothing to skip, start or push (a standing override can still be cleared)
+        const noCar = this._str('binary_sensor.sem_charger_' + cid + '_connected') === 'off';
+        if ((full || noCar) && !ov) {
+            // a full car or an empty plug has nothing to skip or start
         } else if (this._confirm === cid) {
             btns.push(this._btn(t('next_full_power_yes'), () => this._chargeNow(cid, plan), { small: true, primary: true, disabled: obs }));
             btns.push(this._btn(t('next_cancel'), () => { this._confirm = null; }, { small: true }));

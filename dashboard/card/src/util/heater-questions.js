@@ -27,7 +27,7 @@ const BECAUSE = {
     phase_shed: 'hq_because_phase',
     vacation: 'hq_because_away',
     plan_wait: 'hq_because_plan_wait',
-    no_source: 'hq_because_no_sun',
+    no_source: 'hq_because_no_source',   // (#1321) the same words System gives for it
     surplus_short: 'hq_because_no_sun',
     target_met: 'hq_because_ran_enough',
     daily_max: 'hq_because_daily_max',
@@ -158,7 +158,7 @@ export function heaterSays(row, live = {}, running = false) {
     // (#1102) Solar only buys nothing: no hour will ever be planned.
     if (c.may_buy === false) return withSoon({ ...idle('hq_st_waits_sun', { keep: T(keep) }), noBuy: true });
     const why = becauseKey(row.intent);
-    return withSoon(idle('hq_st_below_none', { keep: T(keep) }, 'warn', why === 'hq_because_no_sun' ? '' : why));
+    return withSoon(idle('hq_st_below_none', { keep: T(keep) }, 'warn', (why === 'hq_because_no_sun' || why === 'hq_because_no_source') ? '' : why));
 }
 
 /**

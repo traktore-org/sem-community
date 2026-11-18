@@ -154,7 +154,8 @@ test('5: "in use" counts measured power; a switch with a rated size is an estima
     assert.equal(use.estW, 3000);
 });
 
-test('6: Why now has no empty car row: the plan line, or no row', () => {
+test('6: Why now has no empty car row: the plan line, or no row', (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-18T10:47:00+01:00') });   // (#1321) a fixed clock
     const at = (h) => new Date(Date.now() + h * 36e5).toISOString();
     const plan = { blocks: [{ id: 'ev:c2', start: at(3), end: at(4), power_w: 4000 }], demands: [] };
     const make = (p) => {

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Plainer System and Plan** (#1321). One battery sentence everywhere; no buttons without a car; Coming up follows the plan; clearer units and tips.
 - 🐛 **Honest numbers and names** (#1321). Off devices show rated size, not live power. The headline names each check. Sources that disagree say so.
 - 🐛 **House by source adds up** (#1321). A small counter drop is no longer read as use. Parts match the total. Flow counters never step back.
 - 🐛 **One battery sentence** (#1321). Plan, Now and Decisions say what tonight needs and when the battery may help the car.

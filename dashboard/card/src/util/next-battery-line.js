@@ -7,17 +7,32 @@
 
 const SPEND = 'sensor.sem_battery_spendable_kwh';
 
-/** What the card knows: { phase, floor, need, soc } with null for what is unknown. */
-export function batteryFacts(card) {
-    const a = card._attrs(SPEND) || {};
+const numOf = (states, id) => {
+    const v = states?.[id]?.state;
+    return v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);
+};
+
+/** What the states hold: { phase, floor, need, soc } with null for what is unknown. */
+export function batteryFactsFrom(states) {
+    const a = states?.[SPEND]?.attributes || {};
     const need = Number(a.overnight_need_kwh);
-    const floor = card._num('sensor.sem_battery_dynamic_floor_pct');
     return {
         phase: String(a.phase || ''),
         need: Number.isFinite(need) && need > 0 ? need : null,
-        floor,
-        soc: card._num('sensor.sem_battery_soc'),
+        floor: numOf(states, 'sensor.sem_battery_dynamic_floor_pct'),
+        soc: numOf(states, 'sensor.sem_battery_soc'),
     };
+}
+
+/** What the card knows: same facts as batteryFactsFrom, read the card's way. */
+export function batteryFacts(card) {
+    return batteryFactsFrom(card._hass?.states);
+}
+
+/** The shared sentence from the states and a plain `t`: one source for every screen. */
+export function batterySentence(states, t) {
+    const tf = (k, p) => String(t(k)).replace(/\{(\w+)\}/g, (m, n) => (p && p[n] !== undefined ? String(p[n]) : m));
+    return batteryNeedText(tf, t, batteryFactsFrom(states));
 }
 
 /**

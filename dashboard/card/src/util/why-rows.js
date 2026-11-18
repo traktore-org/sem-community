@@ -7,6 +7,8 @@
  *   text, inputs, observer }.
  */
 
+
+import { batterySentence } from './next-battery-line.js';
 /** How many rows Everyday keeps open; the rest sit in the fold. */
 export const WHY_EVERYDAY_ROWS = 4;
 
@@ -54,6 +56,15 @@ export function actionWords(action, t) {
     const said = t(key);
     if (said && said !== key) return said;
     return code.replace(/[_\s]+/g, ' ').trim().toLowerCase();
+}
+
+// a load asked to "adjust power" whose reason says it stays on: say so (#1321)
+const STAYS_ON = new Set(['min_run_hold']);
+
+/** The verb a would-do row shows: the action in words; "keep on" when the reason says it only stays on. */
+export function wouldVerb(rec, t) {
+    if (String(rec?.action || '') === 'adjust' && STAYS_ON.has(rec?.reason_code)) return t('next_act_keep_on');
+    return actionWords(rec?.action, t);
 }
 
 /** The chips: one per device that has rows, in the order the rows meet them. */
@@ -164,6 +175,8 @@ export function plainReason(rec, t, opts = {}) {
     if (code === 'battery_car_level_unknown' && Number.isFinite(opts.soc)) {
         return t('why_reason_battery_car_level_known').replace('{soc}', String(Math.round(opts.soc)));
     }
+    // (#1321) a standing "battery is below the floor" says it the way every screen does: what tonight needs
+    if (code === 'battery_car_below_floor' && opts.battery) return opts.battery;
     // a past row: the level was not read THEN; say so without claiming it is unknown now
     if (code === 'battery_car_level_unknown' && opts.past) return t('next_reason_level_unread');
     // (#1321) a device that is held ("keep as is") is not turning off: its reason says it stays off
@@ -192,6 +205,7 @@ export function recordReason(rec, states, t) {
     const soc = Number(states?.['sensor.sem_battery_soc']?.state);
     const live = { soc: Number.isFinite(soc) && states?.['sensor.sem_battery_soc']?.state !== '' ? soc : NaN };
     live.held = rec?.action === 'hold';
+    live.battery = batterySentence(states, t);
     const own = plainReason(rec, t, live);
     if (own) return own;
     const id = String(rec?.device_id || '');

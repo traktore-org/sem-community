@@ -142,6 +142,7 @@ test('Charge now is the backend force override: no mode flip, Back to plan clear
 // ── the chart: sun, price and plan on one clock ──
 const HOUR = 3600e3;
 const isoAt = (ms) => new Date(ms).toISOString();
+const PINNED = Date.parse('2026-11-18T10:47:00+01:00');   // (#1321) a fixed clock: the time of day must not decide a result
 function planAround(now) {
     const h0 = Math.floor(now / HOUR) * HOUR;
     const slots = [];
@@ -149,7 +150,8 @@ function planAround(now) {
     return { slots, batt_runs: [[0, 3]], blocks: [{ id: 'ev:keba', start: isoAt(h0 + 2 * HOUR), end: isoAt(h0 + 4 * HOUR), power_w: 4000 }], computed_at: isoAt(now) };
 }
 
-test('flat tariff: one price said once, no made-up sun, every row labelled', () => {
+test('flat tariff: one price said once, no made-up sun, every row labelled', (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: PINNED });
     const now = Date.now();
     const el = makeCard({
         'sensor.sem_energy_plan': S('idle', planAround(now)),
@@ -169,7 +171,8 @@ test('flat tariff: one price said once, no made-up sun, every row labelled', () 
     assert.doesNotMatch(out, /NaN|undefined/);
 });
 
-test('dynamic tariff: steps with min, max and average; unknown prices hatched; forecast drawn with its total', () => {
+test('dynamic tariff: steps with min, max and average; unknown prices hatched; forecast drawn with its total', (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: PINNED });
     const now = Date.now();
     const h0 = Math.floor(now / HOUR) * HOUR;
     const upcoming = [];
@@ -191,7 +194,8 @@ test('dynamic tariff: steps with min, max and average; unknown prices hatched; f
     assert.match(tip, /next_tip_price/);
 });
 
-test('the range switch is remembered and clears a picked block', () => {
+test('the range switch is remembered and clears a picked block', (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: PINNED });
     const el = makeCard({ 'sensor.sem_energy_plan': S('idle', planAround(Date.now())) });
     const saved = [];
     globalThis.localStorage = { getItem: () => null, setItem: (k, v) => saved.push([k, v]) };

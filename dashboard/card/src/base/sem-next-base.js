@@ -18,6 +18,7 @@ import { SEMLitBase, html, css, svg, nothing } from './sem-lit-base.js';
 import { readNumber } from '../util/missing-value.js';
 import { fill } from '../util/next-lead.js';
 import { plainReason } from '../util/why-rows.js';
+import { batterySentence } from '../util/next-battery-line.js';
 import { hhmmIn } from '../util/next-time.js';
 import { clockWithDay, dayOffset, windowText } from '../util/plan-facts.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
@@ -531,7 +532,7 @@ export class SEMNextBase extends SEMLitBase {
      */
     _plainNow(rec, t = (k) => this._t(k)) {
         const soc = this._num('sensor.sem_battery_soc');
-        return plainReason(rec, t, { soc: soc === null ? NaN : soc });
+        return plainReason(rec, t, { soc: soc === null ? NaN : soc, battery: batterySentence(this._hass?.states, t) });
     }
     _int(v) { return fmtNum(Math.round(Number(v)), 0); }
     _kw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : `${fmtNum(w / 1000, d)} kW`; }

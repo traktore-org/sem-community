@@ -234,6 +234,12 @@ function nameOf(hass, id) {
     return entityName(hass && hass.states ? hass : { states: hass }, id);
 }
 
+/** (#1321) A per-month demand price in words: "4.3 CHF/kW/Mt" is not read as a unit by anyone. */
+function unitWords(unit, t) {
+    const m = /^(.+?)\/kW\/(?:Mt|mo|month|mois|mes|Monat)$/i.exec(unit);
+    return m ? t('next_per_kw_month').replace('{cur}', m[1]) : unit;
+}
+
 /** The words a slot shows when it is not being edited; `states` names an entity slot. */
 export function slotText(slot, t, value = slot.value, states = null, plain = false) {
     if (!slot) return '';
@@ -255,7 +261,7 @@ export function slotText(slot, t, value = slot.value, states = null, plain = fal
         // (#1321) a price per kWh reads the same here as on Now and Plan
         const s = /\/kWh$/.test(slot.unit || '') ? fmtPrice(v) : fmtNum(v, decimalsOf(slot.step));
         // (#1321) a no-break space keeps "2.0 °C" on one line
-        return slot.unit ? `${s}\u00a0${slot.unit}` : s;
+        return slot.unit ? `${s}\u00a0${unitWords(slot.unit, t)}` : s;
     }
     if (slot.kind === 'switch') return value ? t('next_on') : t('next_off');
     if (slot.kind === 'select') {
@@ -816,7 +822,7 @@ export function groups(states, t, ctx = {}) {
         const limit = pq ? { ...optNum(o, 'target_peak_limit', { ...kwRange, default: PEAK_KW.fallback }), value: pq.kw } : null;
         const warn = optNum(o, 'warning_peak_level', { ...kwRange, default: 4.5 });
         const shed = optNum(o, 'emergency_peak_level', { ...kwRange, default: 6 });
-        const ac = optNum(o, 'inverter_ac_limit_w', { min: 0, max: 100000, step: 100, unit: 'W', default: 0 });
+        const ac = optNum(o, 'inverter_ac_limit_w', { min: 0, max: 100000, step: 100, unit: 'W', default: 0, zeroKey: 'next_none' });
         const acSet = ac && ac.value > 0 ? ac : null;
         const relay = o && o.shed_signal_entity ? o.shed_signal_entity : null;
         const sentence = join(

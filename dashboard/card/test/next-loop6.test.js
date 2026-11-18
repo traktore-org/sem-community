@@ -127,3 +127,66 @@ test('5: a need cuts only the blocks of its own window; a later window under the
     assert.equal(Math.round(runs[0].kwh * 10) / 10, 10.0, 'its own window is cut to the need');
     assert.equal(Math.round(runs[1].kwh * 10) / 10, 10.3, 'the later window is not cut');
 });
+
+import { recordReason } from '../src/util/why-rows.js';
+
+test('L: a standing "battery below the floor" reason says what tonight needs, in the shared sentence', () => {
+    const states = {
+        'sensor.sem_battery_soc': S(25), 'sensor.sem_battery_dynamic_floor_pct': S(100),
+        'sensor.sem_battery_spendable_kwh': S('1.2', { overnight_need_kwh: 11.68, phase: 'holding' }),
+    };
+    const t = (k) => ({ next_batt_need_all: 'Tonight needs {need} kWh, more than it holds, so all of it stays for the house.',
+        why_reason_battery_car_below_floor: 'The battery is below the {floor}% tonight needs.' }[k] || k);
+    const out = recordReason({ reason_code: 'battery_car_below_floor', params: { floor: 100 }, device_kind: 'battery' }, states, t);
+    assert.equal(out, 'Tonight needs 11.7 kWh, more than it holds, so all of it stays for the house.');
+});
+
+import { becauseKey } from '../src/util/heater-questions.js';
+import { todayRows } from '../src/util/next-today-rows.js';
+import { wouldVerb } from '../src/util/why-rows.js';
+import { slotText } from '../src/util/next-settings.js';
+
+test('L: Devices and System say the same reason for a load with no sun and no cheap power', () => {
+    // System: why_reason_no_source_held "There is no spare sun or cheap power, so it stays off."
+    assert.equal(becauseKey({ on: false, code: 'no_source' }), 'hq_because_no_source');
+    assert.equal(becauseKey({ on: false, code: 'surplus_short' }), 'hq_because_no_sun');
+});
+
+test('L: Coming up lists a load only when the plan holds hours for it', () => {
+    const attrs = { today_plan: [
+        { when: '2026-11-18T13:00:00+01:00', kind: 'device_run', label: 'plan_device_run', values: { name: 'Heat pump' } },
+        { when: '2026-11-18T14:00:00+01:00', kind: 'device_run', label: 'plan_device_run', values: { name: 'Sim Boiler' } },
+    ] };
+    const NOW2 = Date.parse('2026-11-18T10:47:00+01:00');
+    const plan = effectivePlan({
+        blocks: [{ id: 'load:boiler', start: '2026-11-19T06:30:00+01:00', end: '2026-11-19T07:30:00+01:00', power_w: 3000 }],
+        demands: [{ id: 'load:boiler', kind: 'load', label: 'Sim Boiler', planned_kwh: 3, needed_kwh: 3 }],
+    });
+    const rows = todayRows(attrs, { now: NOW2, carPresent: false, plan, cars: [] });
+    assert.deepEqual(rows.filter((r) => r.kind === 'device_run').map((r) => r.values.name), ['Sim Boiler']);
+});
+
+test('L: a load told to adjust power that the reason keeps on says "keep on"', () => {
+    const t = (k) => k;
+    assert.equal(wouldVerb({ action: 'adjust', reason_code: 'min_run_hold' }, t), 'next_act_keep_on');
+    assert.equal(wouldVerb({ action: 'adjust', reason_code: 'solar' }, t), 'adjust');
+});
+
+test('L: units and zero words: a monthly price in words, no inverter limit reads "none"', () => {
+    const t = (k) => ({ next_per_kw_month: '{cur} per kW per month', next_none: 'none' }[k] || k);
+    assert.equal(slotText({ kind: 'number', value: 4.3, unit: 'CHF/kW/Mt', step: 0.01 }, t), '4.30\u00a0CHF per kW per month');
+    assert.equal(slotText({ kind: 'number', value: 0, unit: 'W', step: 100, zeroKey: 'next_none' }, t), 'none');
+});
+
+import { flowBars } from '../src/util/next-flows.js';
+
+test('L: a flow that reads 0.0 kWh draws no mark; a real small one keeps its sliver', () => {
+    const rows = flowBars([
+        { sink: 'home', total: 9.0, parts: [['solar', 1.3], ['grid', 7.7]] },
+        { sink: 'grid', total: 0.004, parts: [['solar', 0.004]] },
+        { sink: 'battery', total: 0.2, parts: [['solar', 0.2]] },
+    ]);
+    assert.equal(rows[1].widthPct, 0);
+    assert.deepEqual(rows[1].segs, []);
+    assert.ok(rows[2].widthPct >= 2);
+});

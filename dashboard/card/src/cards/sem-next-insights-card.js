@@ -365,7 +365,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         }
         if (month !== null || year !== null) {
             tiles.push({ label: this._t('next_month_year'), value: month === null ? '—' : (month >= 100 ? this._int(month) : this._fmt(month, 1)),
-                unit: year === null ? 'kWh' : `· ${this._int(year)} kWh`,
+                unit: year === null ? 'kWh' : `kWh · ${this._int(year)} kWh`,
                 sub: deg !== null && deg !== 0 ? html`${this._icon(deg > 0 ? 'mdi:trending-down' : 'mdi:trending-up', 's')} ${this._tf('next_per_year', { pct: this._fmt(Math.abs(deg), 1) })}` : '' });
         }
         const rows = [];
@@ -691,7 +691,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const tabs = TABS.filter(([k]) => k !== 'replay' || simOn).map(([key, label]) => ({ key, label: this._t(label) }));
         const body = { energy: () => this._energyTab(), power: () => this._powerTab(), battery: () => this._batteryTab(), car: () => this._carTab(),
                        money: () => this._moneyTab(), forecast: () => this._forecastTab(), replay: () => this._replayTab() }[this._tab] || (() => this._energyTab());
-        const lead = this._tab === 'replay' ? { main: this._t('next_replay'), sub: this._t('next_replay_hint') } : { main: this._lead(), sub: this._t('next_ins_sub') };
+        const lead = this._tab === 'replay' ? { main: this._t('next_replay'), sub: this._t('next_replay_hint') } : { main: this._lead(), sub: this._t(['week', 'month', 'year'].includes(this._period) ? 'next_ins_sub' : 'next_ins_sub_short') };
         return this._frame(lead, html`
             <div class="period">
                 ${this._seg(PERIOD_KEYS.map(([key, label]) => ({ key, label: this._t(label) })), this._period, (k) => this._pick(k), { small: true, disabled: this._tab === 'replay' })}

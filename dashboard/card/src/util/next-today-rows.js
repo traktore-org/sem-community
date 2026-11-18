@@ -59,14 +59,15 @@ function carPlanRows(plan, cars, now) {
     return out;
 }
 
-/** A device row the plan has its own hours for takes them, one row per run; a window that has ended is dropped. */
+/** A device row the plan has its own hours for takes them, one row per run; a window that has ended is dropped. A load the plan has no hours for is not listed. */
 function alignDevices(rows, plan, now) {
     const demands = plan && Array.isArray(plan.demands) ? plan.demands : [];
     const out = [];
     for (const r of rows) {
         const d = r.kind === 'device_run' ? demands.find((x) => x && /^(load|comfort):/.test(String(x.id)) && x.label && x.label === r.values.name) : null;
         const has = d ? (plan.blocks || []).some((b) => b && b.id === d.id) : false;
-        if (!has) { out.push(r); continue; }
+        // (#1321) the plan is the one source for "expected to run": a load it holds no hours for is not listed
+        if (!has) { if (!(r.kind === 'device_run' && demands.length)) out.push(r); continue; }
         for (const run of planRunsRounded(plan, (id) => id === d.id, now)) {
             out.push({ ...r, when: run.s, iso: new Date(run.s).toISOString(), until: new Date(run.e).toISOString(), day: dayIndex(run.s, now) });
         }

@@ -23,7 +23,7 @@ import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../b
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
-import { recordReason, deviceName, actionWords } from '../util/why-rows.js';
+import { recordReason, deviceName, wouldVerb } from '../util/why-rows.js';
 import { gridReading } from '../util/next-format.js';
 import { entityName } from '../util/next-names.js';
 import { MISSING } from '../util/missing-value.js';
@@ -266,7 +266,10 @@ class SEMNextSystemCard extends SEMNextBase {
         const report = this._attrs('sensor.sem_diag_charger_control').detection_report || null;
         const unmapped = report ? (report.near_misses || []).length : null;
         const strings = pvStrings(this._hass.states).length;
-        const value = [count !== '' ? this._tf('next_chargers_n', { n: count }) : '', control].filter(Boolean).join(' · ') || MISSING;
+        // (#1321) "2 chargers, SEM sets the current", not "Chargers: 2 · current control"
+        const setsCurrent = count !== '' && this._str('sensor.sem_diag_charger_control') === 'number';
+        const value = setsCurrent ? this._tf(Number(count) === 1 ? 'next_chargers_current_one' : 'next_chargers_current', { n: count })
+            : [count !== '' ? this._tf('next_chargers_n', { n: count }) : '', control].filter(Boolean).join(' · ') || MISSING;
         const sub = [
             strings ? this._tf('next_strings', { n: strings }) : '',
             cap !== null && cap > 0 ? this._tf('next_batt_cap', { kwh: this._fmt(cap, 1) }) : '',
@@ -364,8 +367,9 @@ class SEMNextSystemCard extends SEMNextBase {
                 const own = runsNotStartedBySem(r, info, live, switchStateOf(info, this._hass.states));
                 const w = own ? (live !== null ? live : Number(info.current_power)) : Number(r.power_w);
                 return this._row('mdi:hand-back-left-outline',
-                    `${this._refusedName(r, t, rows)}${r.action ? ' · ' + actionWords(r.action, t) : ''}`,
-                    Number.isFinite(w) ? this._kw(w) : '',
+                    `${this._refusedName(r, t, rows)}${r.action ? ' · ' + wouldVerb(r, t) : ''}`,
+                    // (#1321) a battery's number is the limit it would set: say so
+                    Number.isFinite(w) ? ((r.kind || r.device_kind) === 'battery' ? this._tf('next_would_limit', { kw: this._kw(w) }) : this._kw(w)) : '',
                     own ? t('next_runs_not_started') : recordReason(r, this._hass.states, t), { cls: 'stack' });
             })}</div>`
             : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;
