@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **House by source adds up** (#1321). A small counter drop is no longer read as use. Parts match the total. Flow counters never step back.
 - 🐛 **One battery sentence** (#1321). Plan, Now and Decisions say what tonight needs and when the battery may help the car.
-- 🐛 **Car and heat pump figures agree** (#1321). A car shows at most its need. A running heat pump shows as running. Surplus stays under the house.
+- 🐛 **Figures agree** (#1321). A car shows at most its need. A running heat pump shows running. Surplus stays under house use.
 - 🐛 **Plainer words, round two** (#1321). Contacts by role, the headline names what to check, and no Sell button while selling is off.
 - 🐛 **One number, one rounding** (#1321). The car's planned kWh, its need and the sun figure agree on every screen; the plan names who is short.
 - 🐛 **Plainer Devices and Plan** (#1321). Surplus counts measured power only; a switch that is unavailable is not on; two learners have their own names.
