@@ -701,10 +701,9 @@ class SEMNextDevicesCard extends SEMNextBase {
             const nums = { given: this._fmtKw(use.measuredW), est: this._fmtKw(use.estW), free: this._fmtKw(use.leftW ?? 0) };
             const base = given === null && free === null ? ''
                 : this._tf(use.leftW === null ? (use.estW > 0 ? 'next_given_est' : 'next_given_only') : use.estW > 0 ? 'next_given_free_est' : 'next_given_free', nums);
-            const who = use.names.length && use.names.length <= 2 ? this._tf('next_in_use_by', { names: use.names.join(', ') }) : '';
             const bad = use.over.length ? this._tf('next_sensor_over_house', { names: use.over.join(', ') }) : '';
-            const sub = [base, who, bad].filter(Boolean).join(' · ');
-            tiles.push({ label: t('next_surplus'), value: this._fmtKw(total), unit: 'kW', sub });
+            const sub = [base, bad].filter(Boolean).join(' · ');
+            tiles.push({ label: t('next_surplus_now'), value: this._fmtKw(total), unit: 'kW', sub });
         }
         if (active !== null || totalN !== null) {
             tiles.push({ label: t('next_active'), value: active === null ? '—' : Math.round(active), unit: totalN === null ? '' : this._tf('next_of_n', { n: Math.round(totalN) }),

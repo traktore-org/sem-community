@@ -71,7 +71,7 @@ const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v))
  * the actual; what comes after the last actual hour is the forecast.
  * → { points: [{ s, e, kw, kwh, actual }], totalKwh, peak, hasForecast }
  */
-export function sunModel({ win, nowMs, actual = [], forecast = {} }) {
+export function sunModel({ win, nowMs, actual = [], forecast = {}, liveW = null }) {
     const pts = [];
     let lastActualEnd = win.start;
     for (const a of actual) {
@@ -99,6 +99,11 @@ export function sunModel({ win, nowMs, actual = [], forecast = {} }) {
         pts.push({ s, e, kw: Math.max(0, wh) / 1000 / h, kwh: Math.max(0, wh) / 1000, actual: false });
         hasForecast = true;
     });
+    // the reading of this minute closes the measured line at now, not at the last whole hour (#1321)
+    const live = num(liveW);
+    if (liveW !== null && Number.isFinite(live) && nowMs > win.start && nowMs < win.end && nowMs > lastActualEnd) {
+        pts.push({ s: nowMs - 1, e: nowMs, kw: Math.max(0, live) / 1000, kwh: 0, actual: true, live: true });
+    }
     pts.sort((p, q) => p.s - q.s);
     const totalKwh = pts.reduce((a, p) => {
         const ov = Math.max(0, Math.min(p.e, win.end) - Math.max(p.s, win.start)) / (p.e - p.s);
@@ -268,7 +273,7 @@ export function sunRuns(points, X, SY) {
         const runs = [];
         for (const p of pts) {
             const last = runs[runs.length - 1];
-            if (last && p.s - last[last.length - 1].e < 40 * 60e3) last.push(p); else runs.push([p]);
+            if (last && (p.live || p.s - last[last.length - 1].e < 40 * 60e3)) last.push(p); else runs.push([p]);
         }
         runs.forEach((run, i) => {
             const first = run[0], end = run[run.length - 1];

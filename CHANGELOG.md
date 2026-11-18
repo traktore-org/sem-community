@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **No braces in checks** (#1321). Repair titles show their values. A car size you set to the default stays yours.
+- 🐛 **Plan and Devices agree** (#1321). "Cheapest hours" uses tariff prices. Battery refill is the plan's. A charge not running says planned.
+- 🐛 **Clearer wording** (#1321). Tonight's need is compared with what the battery gives above its reserve. Plainer surplus and morning lines.
 - 🐛 **True plan reasons** (#1321). "Cheapest hours" only when the car got them; each battery block names its reason; one battery size.
 - 🐛 **Named checks, no guessed car size** (#1321). The headline names every check; an unset car battery is unknown; watch-only Devices say what SEM would do.
 - 🐛 **Plainer System and Plan** (#1321). One battery sentence everywhere; no buttons without a car; Coming up follows the plan; clearer units and tips.

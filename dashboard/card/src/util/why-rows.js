@@ -67,6 +67,15 @@ export function wouldVerb(rec, t) {
     return actionWords(rec?.action, t);
 }
 
+/** (#1321) A battery row (the record names its kind either way). */
+export const isBattery = (rec) => (rec?.kind || rec?.device_kind) === 'battery';
+
+/** (#1321) Does the battery would-row set a limit? "Run normally" sets none, so it shows no limit. */
+export const setsLimit = (rec) => /limit/.test(String(rec?.action || ''));
+
+/** (#1321) "Run normally": no limit, no power to name. */
+export const isNormal = (rec) => String(rec?.action || '') === 'normal';
+
 /** (#1321) The decisions SEM would make in watch-only mode, from the observer switch's attributes. */
 export function wouldList(attrs) {
     return Object.values((attrs && attrs.would_decisions) || {}).filter((d) => d && d.action && d.action !== 'idle');

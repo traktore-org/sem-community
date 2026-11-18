@@ -133,12 +133,13 @@ import { recordReason } from '../src/util/why-rows.js';
 test('L: a standing "battery below the floor" reason says what tonight needs, in the shared sentence', () => {
     const states = {
         'sensor.sem_battery_soc': S(25), 'sensor.sem_battery_dynamic_floor_pct': S(100),
-        'sensor.sem_battery_spendable_kwh': S('1.2', { overnight_need_kwh: 11.68, phase: 'holding' }),
+        'sensor.sem_battery_spendable_kwh': S('1.2', { overnight_need_kwh: 11.68, phase: 'holding', measured_capacity_kwh: 12.73 }),
+        'sensor.sem_diag_battery_capacity': S(15), 'number.sem_battery_reserve_soc': S(20),
     };
-    const t = (k) => ({ next_batt_need_all: 'Tonight needs {need} kWh, more than it holds, so all of it stays for the house.',
+    const t = (k) => ({ next_batt_need_all: 'Tonight needs {need} kWh, more than the {avail} kWh above the reserve, so all of it stays for the house.',
         why_reason_battery_car_below_floor: 'The battery is below the {floor}% tonight needs.' }[k] || k);
     const out = recordReason({ reason_code: 'battery_car_below_floor', params: { floor: 100 }, device_kind: 'battery' }, states, t);
-    assert.equal(out, 'Tonight needs 11.7 kWh, more than it holds, so all of it stays for the house.');
+    assert.equal(out, 'Tonight needs 11.7 kWh, more than the 10.2 kWh above the reserve, so all of it stays for the house.');
 });
 
 import { becauseKey } from '../src/util/heater-questions.js';

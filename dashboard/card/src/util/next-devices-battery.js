@@ -10,12 +10,24 @@ import { providerName, trustPct } from './forecast-evidence.js';
 import { zonesModel } from './next-devices.js';
 import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels, batterySaysFromStates, batteryFloorPct, kwhAboveFloor, batteryUnits } from './battery-questions.js';
 import { batterySize } from './battery-size.js';
+import { effectivePlan, planRuns } from './plan-facts.js';
+import { isBatteryIn } from './plan-why.js';
 
 /** (#1354) The entity of a shared battery level by its id. */
 const LEVEL = Object.fromEntries(BATTERY_LEVELS.map((l) => [l.id, l.entity]));
 
 const AUTO_MODES = ['auto', 'self_consumption', 'allow_arbitrage'];
 const SPEND = 'sensor.sem_battery_spendable_kwh';
+
+/**
+ * (#1321) What the battery gets back: the plan's own charging still ahead (the figure the
+ * Plan screen names), the forecast refill only when the plan has no battery charging.
+ */
+export function refillKwh(planAttrs, forecast, nowMs = Date.now()) {
+    const runs = planRuns(effectivePlan(planAttrs), isBatteryIn, nowMs);
+    if (runs.length) return runs.reduce((a, r) => a + r.kwh, 0);
+    return Number.isFinite(forecast) ? forecast : null;
+}
 
 /** The pack's capacity in kWh from the first source that answers. */
 function capacityKwh(card) {
@@ -128,7 +140,8 @@ export function batteryBody(card, row) {
         const need = Number(sa.overnight_need_kwh), refill = Number(sa.expected_refill_kwh);
         const nights = Number(sa.nights_sealed), spend = num(SPEND);
         const subs = [];
-        if (Number.isFinite(refill)) subs.push(tf('next_refill', { kwh: card._fmt(refill, 1) }));
+        const back = refillKwh(card._attrs('sensor.sem_energy_plan'), refill);
+        if (back !== null) subs.push(tf('next_refill', { kwh: card._fmt(back, 1) }));
         if (spend !== null) subs.push(tf('next_spendable_kwh', { kwh: card._fmt(spend, 1) }));
         if (Number.isFinite(nights)) subs.push(tf('next_nights_learned', { n: nights }));
         const rebuild = card._val(t('rebuild_nights'), () => card._askFirst(t('rebuild_nights'), () => card._svc('backfill_battery_nights', { days: 365 }), { body: t('next_confirm_rebuild') }), { disabled: dis });

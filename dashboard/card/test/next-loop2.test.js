@@ -298,7 +298,7 @@ const { groups, sentenceText } = await import('../src/util/next-settings.js');
 const { reviewRows } = await import('../src/util/next-review.js');
 const { trustPct } = await import('../src/util/forecast-evidence.js');
 
-test('6: by price range the sentence names no fixed thresholds; they stay reachable in More', () => {
+test('6: by price range the fixed thresholds are named nowhere: the range does not use them', () => {
     const states = { 'number.sem_cheap_price_threshold': S(0.15, { min: 0, max: 5, step: 0.01 }), 'number.sem_expensive_price_threshold': S(0.35, { min: 0, max: 5, step: 0.01 }),
         'sensor.sem_battery_soc': S(50), 'switch.sem_observer_mode': S('off') };
     const tt = (k) => ({ next_pay_by_range: 'range {basis}', next_pay_thresholds: 'cheap {cheap} expensive {expensive} ({basis})', next_pay_dynamic: 'dyn' }[k] || k);
@@ -307,7 +307,8 @@ test('6: by price range the sentence names no fixed thresholds; they stay reacha
     const range = pay('percentile'), fixed = pay('static');
     assert.doesNotMatch(sentenceText(range.sentence, tt, states), /0\.35|0\.15/);
     assert.match(sentenceText(fixed.sentence, tt, states), /0\.35/);
-    assert.ok(range.rows.some((r) => r.slot.id === 'number.sem_expensive_price_threshold' && r.more), 'still a row in All settings');
+    assert.ok(!range.rows.some((r) => /price_threshold/.test(r.slot.id)), 'no unused row in All settings');
+    assert.ok(fixed.sentence && /0\.35/.test(sentenceText(fixed.sentence, tt, states)), 'a fixed basis still names them');
 });
 
 test('6: the forecast trust is one reading of one fraction', () => {

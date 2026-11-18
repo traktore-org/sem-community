@@ -46,8 +46,11 @@ const tf = (k, p) => `${k}|${Object.values(p || {}).join('|')}`;
 const t = (k) => k;
 
 test('2: the battery sentence names the need; when it is more than the battery holds, all of it stays', () => {
-    const all = batteryNeedText(tf, t, { phase: 'holding', floor: 100, need: 11.68, soc: 21 });
-    assert.equal(all, 'next_batt_need_all|11.7');
+    const all = batteryNeedText(tf, t, { phase: 'holding', floor: 100, need: 11.68, soc: 21, avail: 10.18 });
+    assert.equal(all, 'next_batt_need_all|11.7|10.2');
+    // (#1321) a need under what is above the reserve is never "more than the battery holds"
+    assert.equal(batteryNeedText(tf, t, { phase: 'holding', floor: 100, need: 8, soc: 21, avail: 10.18 }), 'next_batt_need_hold|8.0');
+    assert.equal(batteryNeedText(tf, t, { phase: 'holding', floor: 100, need: 11.68, soc: 21, avail: null }), 'next_batt_need_hold|11.7');
     const spare = batteryNeedText(tf, t, { phase: 'spending', floor: 60, need: 6.2, soc: 80 });
     assert.equal(spare, 'next_batt_need_above|6.2|60');
     assert.equal(batteryNeedText(tf, t, { phase: '', floor: 100, need: null, soc: 21 }), 'next_batt_holds_house');

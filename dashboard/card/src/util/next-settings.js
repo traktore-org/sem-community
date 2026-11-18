@@ -292,6 +292,9 @@ function frag(t, key, slots) {
 }
 
 /** Capitalise the sentence when it opens with text; a name or value may open it as is. */
+/** Sentence case for a row label that is stored in lower case for sentences. */
+const upFirst = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+
 function capFirst(parts) {
     const s = parts[0];
     if (typeof s !== 'string') return parts;
@@ -791,7 +794,6 @@ export function groups(states, t, ctx = {}) {
         const m = more(t, [
             ['next_more_demand_charge', numSlot(states, 'number.sem_demand_charge_rate')
                 || optNum(o, 'demand_charge_rate', { min: 0, max: 100000, step: 0.01, unit: `${cur}/kW`, default: 4.32 })],
-            ...(byRange ? [['next_row_cheap_below', cheap], ['next_row_expensive_above', expensive]] : []),
             ['next_more_off_peak', modeV === 'calendar' ? null : offPeak],
             ['next_more_fee_model', feeModel],
             ['next_more_fee_amount', feeV === 'per_kwh' || feeV === 'fixed_monthly'
@@ -907,7 +909,7 @@ export function groups(states, t, ctx = {}) {
             sentences.push(clause([frag(t, 'next_ch_targets', { type })]));
             // (#1321) the rows say which charger when there are several
             evRows.push(...rowsFor(sentences.slice(-2).flat(), [], t, chargers.length > 1 ? (c.name || cid) : ''));
-            const lab = (key) => (chargers.length > 1 ? { raw: `${c.name || cid} · ${t(key)}` } : key);
+            const lab = (key) => (chargers.length > 1 ? { raw: `${c.name || cid} · ${key.startsWith('next_more_') ? upFirst(t(key)) : t(key)}` } : key);
             const ce = (key) => [lab(CHARGER_ENTITY_FIELDS[key].labelKey), chargerSlot(o, cid, key, 'entity')];
             const ext = chargerSlot(o, cid, 'external_control_mode', 'select', { options: EXT_MODES, def: 'none' });
             moreItems.push(

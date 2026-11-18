@@ -9,7 +9,7 @@ import { planRuns } from './plan-facts.js';
 
 export const WHY_LINES_MAX = 4;
 
-const isBatteryIn = (id) => /battery/.test(String(id)) && !String(id).startsWith('battery_out');
+export const isBatteryIn = (id) => /battery/.test(String(id)) && !String(id).startsWith('battery_out');
 const hasBlocksFor = (plan, id) => (Array.isArray(plan.blocks) ? plan.blocks : []).some((b) => b && b.reason && String(b.id) === String(id));
 
 /**
@@ -42,13 +42,12 @@ export function reasonRuns(blocks, id, nowMs) {
  * headroom was full). The slots tell: the cheapest hours the same length are compared with
  * the average price the demand got. Null when the slots cannot answer.
  */
-export function gotCheapest(plan, runs, price, nowMs) {
+export function gotCheapest(plan, runs, price, nowMs, upcoming = []) {
     const p = Number(price);
     const hours = (runs || []).reduce((a, r) => a + (r.e - r.s) / 3.6e6, 0);
     if (!Number.isFinite(p) || price === null || price === '' || !(hours > 0)) return null;
-    const slots = (Array.isArray(plan?.slots) ? plan.slots : [])
-        .map((x) => ({ h: (Date.parse(x.end) - Date.parse(x.start)) / 3.6e6, price: x.price === null || x.price === '' ? NaN : Number(x.price), e: Date.parse(x.end) }))
-        .filter((x) => x.h > 0 && Number.isFinite(x.price) && x.e > nowMs)
+    const slots = priceCells(plan, upcoming)
+        .filter((x) => x.e > nowMs)
         .sort((a, b) => a.price - b.price);
     if (!slots.length) return null;
     let need = hours, cost = 0;
@@ -60,13 +59,32 @@ export function gotCheapest(plan, runs, price, nowMs) {
     if (need > 1e-9) return null;
     return p <= cost / hours + PRICE_EPS;
 }
+
+const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
+const QUARTER = 0.25;
+
+/**
+ * The tariff's own prices as {h, price, e}: its upcoming list (the one the Now price
+ * strip reads) first, the plan's slots when that is empty. The live plan sensor drops
+ * its slots (timeline_omitted), so the tariff is the source that is always there.
+ */
+function priceCells(plan, upcoming) {
+    const ups = (Array.isArray(upcoming) ? upcoming : []).map((u) => ({ s: Date.parse(u?.t), h: QUARTER, price: num(u?.price) }))
+        .map((x) => ({ ...x, e: x.s + x.h * 3.6e6 }));
+    const slots = (Array.isArray(plan?.slots) ? plan.slots : [])
+        .map((x) => ({ s: Date.parse(x.start), e: Date.parse(x.end), price: num(x.price) }))
+        .map((x) => ({ ...x, h: (x.e - x.s) / 3.6e6 }));
+    const usable = (x) => x.h > 0 && Number.isFinite(x.price) && Number.isFinite(x.s);
+    const own = ups.filter(usable);
+    return own.length ? own : slots.filter(usable);
+}
 const PRICE_EPS = 0.002;
 
 /**
  * [{id, start, end, reason, params, why, kwh, label}]: `reason`/`params` is
  * the block's reason code, `why` the not-scheduled code. Times are ISO.
  */
-export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
+export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX, upcoming = []) {
     if (!plan) return [];
     // The engine's own word first: each plan demand carries
     // `why: {code, params: {from, to, price?}}` (one line per device).
@@ -112,7 +130,7 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
     const withRuns = (x) => {
         const runs = planRuns(plan, (i) => i === x.id, nowMs);
         // (#1321) the cheapest hours were not all free to this demand: say "left", never "the cheapest"
-        const code = x.code === 'cheapest_hours' && gotCheapest(plan, runs, x.params.price, nowMs) === false ? 'cheapest_left' : x.code;
+        const code = x.code === 'cheapest_hours' && gotCheapest(plan, runs, x.params?.price, nowMs, upcoming) === false ? 'cheapest_left' : x.code;
         return runs.length ? { ...x, code, runs, kwh: runs.reduce((a, r) => a + r.kwh, 0) } : x;
     };
     const planned = [...own.values()].map(withRuns).map((x) => ({ ...x, s: Date.parse(x.start) }))

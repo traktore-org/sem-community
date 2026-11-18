@@ -23,7 +23,7 @@ import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../b
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
-import { recordReason, deviceName, wouldVerb, wouldList } from '../util/why-rows.js';
+import { recordReason, deviceName, wouldVerb, wouldList, isBattery, setsLimit, isNormal } from '../util/why-rows.js';
 import { gridReading } from '../util/next-format.js';
 import { entityName } from '../util/next-names.js';
 import { MISSING } from '../util/missing-value.js';
@@ -257,7 +257,9 @@ class SEMNextSystemCard extends SEMNextBase {
         // (#1321) the Now screen's checklist counts the same things to check: the required steps are the value, the checks ride beside it
         // (#1321) what to check is named here; the sign directions are in What SEM reads
         const sub = (checks ? this._checkNames().join(' · ') : [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : ''].filter(Boolean).join(' · '));
-        return this._row('mdi:check-decagram', this._t('next_setup_check'), value, sub, { onClick: () => this._togglePanel('setup') });
+        // (#1321) a check mark only when nothing is open
+        const icon = allDone && !checks ? 'mdi:check-decagram' : 'mdi:information-outline';
+        return this._row(icon, this._t('next_setup_check'), value, sub, { onClick: () => this._togglePanel('setup') });
     }
 
     /** (#1321) "15.0 kWh battery", with the measured usable size when it differs (one helper for every screen). */
@@ -376,8 +378,8 @@ class SEMNextSystemCard extends SEMNextBase {
                 const w = own ? (live !== null ? live : Number(info.current_power)) : Number(r.power_w);
                 return this._row('mdi:hand-back-left-outline',
                     `${this._refusedName(r, t, rows)}${r.action ? ' · ' + wouldVerb(r, t) : ''}`,
-                    // (#1321) a battery's number is the limit it would set: say so
-                    Number.isFinite(w) ? ((r.kind || r.device_kind) === 'battery' ? this._tf('next_would_limit', { kw: this._kw(w) }) : this._kw(w)) : '',
+                    // (#1321) a battery's number is the limit it would set: only a limit action has one
+                    Number.isFinite(w) ? (isBattery(r) ? (setsLimit(r) ? this._tf('next_would_limit', { kw: this._kw(w) }) : (w > 0 && !isNormal(r) ? this._kw(w) : '')) : this._kw(w)) : '',
                     own ? t('next_runs_not_started') : recordReason(r, this._hass.states, t), { cls: 'stack' });
             })}</div>`
             : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;

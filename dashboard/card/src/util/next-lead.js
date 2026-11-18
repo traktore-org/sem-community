@@ -97,6 +97,9 @@ export function nowLead(f) {
     return { prefix, main, sub };
 }
 
+/** (#1321) A heading about the car's planned charge already says who, when and how much: no "Next:" line repeats it. */
+export const repeatsNextBlock = (mainKey) => /^next_lead_car_/.test(String(mainKey));
+
 /** Fill {name} placeholders. Nested {key, params} values are rendered with t first. */
 export function fill(text, params, t) {
     let out = String(text || '');

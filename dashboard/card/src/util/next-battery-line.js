@@ -5,7 +5,10 @@
  * otherwise the car may use what is above the floor.
  */
 
+import { batterySize } from './battery-size.js';
+
 const SPEND = 'sensor.sem_battery_spendable_kwh';
+const RESERVE = 'number.sem_battery_reserve_soc';
 
 const numOf = (states, id) => {
     const v = states?.[id]?.state;
@@ -21,7 +24,20 @@ export function batteryFactsFrom(states) {
         need: Number.isFinite(need) && need > 0 ? need : null,
         floor: numOf(states, 'sensor.sem_battery_dynamic_floor_pct'),
         soc: numOf(states, 'sensor.sem_battery_soc'),
+        avail: aboveReserve(states),
     };
+}
+
+/**
+ * kWh the battery can give above its reserve: the usable size (measured, else the
+ * nameplate) times what is above the reserve. Same basis as the need, so the two compare.
+ */
+export function aboveReserve(states) {
+    const { nominal, usable } = batterySize(states);
+    const size = usable ?? nominal;
+    const reserve = numOf(states, RESERVE);
+    if (size === null || reserve === null || reserve < 0 || reserve > 100) return null;
+    return size * (1 - reserve / 100);
 }
 
 /** What the card knows: same facts as batteryFactsFrom, read the card's way. */
@@ -35,6 +51,14 @@ export function batterySentence(states, t) {
     return batteryNeedText(tf, t, batteryFactsFrom(states));
 }
 
+/** All stays for the house. "More than it holds" only when the need really exceeds what is above the reserve. */
+function allText(tf, t, f, need) {
+    if (need === null) return t('next_batt_holds_house');
+    const avail = Number.isFinite(f.avail) ? f.avail : null;
+    if (avail !== null && f.need > avail) return tf('next_batt_need_all', { need, avail: (Math.round(avail * 10) / 10).toFixed(1) });
+    return tf('next_batt_need_hold', { need });
+}
+
 /**
  * batteryNeedText(tf, t, facts) → text or ''.
  * Holding, or a floor at 100 %: all of it stays for the house. Else the car
@@ -44,7 +68,7 @@ export function batteryNeedText(tf, t, f) {
     const need = f.need === null ? null : (Math.round(f.need * 10) / 10).toFixed(1);
     const under = f.floor !== null && f.soc !== null && f.soc < f.floor;   // the floor is the need: under it, nothing is spare
     const all = f.phase === 'holding' || (f.floor !== null && f.floor >= 99.5) || (under && need !== null);
-    if (all) return need === null ? t('next_batt_holds_house') : tf('next_batt_need_all', { need });
+    if (all) return allText(tf, t, f, need);
     if (f.floor === null) return '';
     const floor = Math.round(f.floor);
     return need === null ? tf('next_why_batt_floor_short', { floor }) : tf('next_batt_need_above', { need, floor });

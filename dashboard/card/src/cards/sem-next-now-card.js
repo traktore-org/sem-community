@@ -17,7 +17,7 @@ import { planIdName } from '../util/plan-ids.js';
 import { effectivePlan, planRuns, planRunsRounded, demandFigures, nextRun, runsText } from '../util/plan-facts.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
-import { nowLead } from '../util/next-lead.js';
+import { nowLead, repeatsNextBlock } from '../util/next-lead.js';
 import { batteryFacts, batteryNeedText } from '../util/next-battery-line.js';
 import { deadlineLabel } from '../util/next-time.js';
 import { powerBar } from '../util/next-power-bar.js';
@@ -241,7 +241,8 @@ class SEMNextNowCard extends SEMNextBase {
         const main = (r.prefix ? this._t(r.prefix) + ' ' : '') + this._tf(r.main.key, r.main.params);
         const parts = [];
         const b = this._nextBlock();
-        if (b) parts.push(this._tf('next_sub_next_block', { who: b.who, time: b.time, kwh: b.kwh }));
+        // (#1321) a heading about the car's planned charge already says who, when and how much
+        if (b && !repeatsNextBlock(r.main.key)) parts.push(this._tf('next_sub_next_block', { who: b.who, time: b.time, kwh: b.kwh }));
         const bt = this._batteryLine();
         if (bt) parts.push(bt);
         const sub = parts.length ? parts.join(' ') : (r.sub ? this._tf(r.sub.key, r.sub.params) : '');
