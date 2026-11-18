@@ -25,6 +25,7 @@ export function batteryFactsFrom(states) {
         floor: numOf(states, 'sensor.sem_battery_dynamic_floor_pct'),
         soc: numOf(states, 'sensor.sem_battery_soc'),
         avail: aboveReserve(states),
+        now: aboveReserve(states, numOf(states, 'sensor.sem_battery_soc')),
     };
 }
 
@@ -32,12 +33,12 @@ export function batteryFactsFrom(states) {
  * kWh the battery can give above its reserve: the usable size (measured, else the
  * nameplate) times what is above the reserve. Same basis as the need, so the two compare.
  */
-export function aboveReserve(states) {
+export function aboveReserve(states, soc = 100) {
     const { nominal, usable } = batterySize(states);
     const size = usable ?? nominal;
     const reserve = numOf(states, RESERVE);
     if (size === null || reserve === null || reserve < 0 || reserve > 100) return null;
-    return size * (1 - reserve / 100);
+    return soc === null ? null : size * Math.max(0, soc - reserve) / 100;
 }
 
 /** What the card knows: same facts as batteryFactsFrom, read the card's way. */
@@ -51,11 +52,15 @@ export function batterySentence(states, t) {
     return batteryNeedText(tf, t, batteryFactsFrom(states));
 }
 
-/** All stays for the house. "More than it holds" only when the need really exceeds what is above the reserve. */
+/** All stays for the house. Names the full battery's share when even that is short, else what is above the reserve now. */
 function allText(tf, t, f, need) {
     if (need === null) return t('next_batt_holds_house');
     const avail = Number.isFinite(f.avail) ? f.avail : null;
-    if (avail !== null && f.need > avail) return tf('next_batt_need_all', { need, avail: (Math.round(avail * 10) / 10).toFixed(1) });
+    const one = (v) => (Math.round(v * 10) / 10).toFixed(1);
+    // even a full battery is short: say what a full one gives, not what is in it now (#1321)
+    if (avail !== null && f.need > avail) return tf('next_batt_need_all', { need, avail: one(avail) });
+    const now = Number.isFinite(f.now) ? f.now : null;
+    if (now !== null && avail !== null && now < avail - 0.05) return tf('next_batt_need_now', { need, now: one(now) });
     return tf('next_batt_need_hold', { need });
 }
 

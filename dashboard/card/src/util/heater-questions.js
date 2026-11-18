@@ -57,7 +57,8 @@ export function nextBlock(blocks, ids, nowMs) {
  * `{key, params, cls, why, next?, noBuy?}`, or null for a load without a
  * heating band (it keeps the plain texts).
  * `row` = {comfort, intent, mergedMode}; `live.fmtTemp` turns °C into the
- * user's unit; `live.plannedAt` is the next planned start (HH:MM).
+ * user's unit; `live.plannedAt` is the next planned start (HH:MM), `live.plannedUntil`
+ * the end of a planned run that is under way now (HH:MM).
  */
 export function heaterSays(row, live = {}, running = false) {
     const c = row && row.comfort;
@@ -143,6 +144,8 @@ export function heaterSays(row, live = {}, running = false) {
         if (c.may_buy === false && c.may_use_battery !== true) return withSoon(idle('hq_st_warm', { reading: T(reading) }));
         return withSoon(idle('hq_st_warm_again', { start: T(line) }));
     }
+    // (#1321) a planned run under way is not "at" a later time
+    if (live.plannedUntil) return withSoon(idle(live.observer ? 'hq_st_would_heat_until' : 'hq_st_heats_until', { keep: T(keep), time: live.plannedUntil }));
     // (#1081) a planned hour that heats on to the top says so
     if (live.plannedAt && preheatOn(c) && max !== null) {
         return withSoon(idle('hq_st_preheats_at', { top: T(max), start: live.plannedAt }));

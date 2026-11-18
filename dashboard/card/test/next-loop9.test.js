@@ -49,6 +49,7 @@ test('7: a battery block named cheapest hours that did not get them says cheap h
 });
 
 const carPlan = () => ({
+    computed_at: iso(-3),   // made before the 0.2 kWh run: that run was delivered since, so it comes off the need
     blocks: [
         { id: 'ev:c2', start: iso(-2), end: iso(-1.95), power_w: 4000, reason: 'cheapest_hours' },
         { id: 'ev:c2', start: iso(3), end: iso(5.25), power_w: 4356, reason: 'cheapest_hours' },

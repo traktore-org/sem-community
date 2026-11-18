@@ -76,7 +76,8 @@ test('(#1321) runs join only when they touch, whatever the watts; kWh is the who
     assert.equal(runs.length, 2, 'the gap stays a gap');
     assert.equal(runs[0].s, Date.parse(t(8, 33)), 'a run under way keeps its own start');
     assert.equal(Math.round((runs[0].kwh + runs[1].kwh) * 10) / 10, 4 * 0.2 + 4.8 + 4.4);
-    assert.equal(nextRun(runs, now).s, Date.parse(t(14, 45)), 'the next run, not the next change of watts');
+    assert.equal(nextRun(runs, now).s, Date.parse(t(8, 33)), 'a run under way is the next run (its end is named), not a change of watts inside it');
+    assert.equal(nextRun(runs, Date.parse(t(10))).s, Date.parse(t(14, 45)), 'after it, the next one');
     assert.equal(runsText(runs, (s, e) => `${new Date(s).getUTCHours()}-${new Date(e).getUTCHours()}`), '7-8, 13-14');
     assert.deepEqual(planRuns(plan, (id) => id === 'ev:a', Date.parse(t(16))), [], 'ended runs are history');
 });

@@ -35,6 +35,18 @@ class TestMarkOwnerValues:
         _mark_owner_values({"id": "c1"}, {"name": "x"}, charger)
         assert FLAG not in charger
 
+    def test_a_cleared_capacity_drops_the_flag(self):
+        # the merge writes a cleared field as None; no value, no owner flag
+        before = {"id": "c1", "ev_battery_capacity_kwh": 60, FLAG: True}
+        charger = {"id": "c1", "ev_battery_capacity_kwh": None, FLAG: True}
+        _mark_owner_values(before, {"name": "x"}, charger)
+        assert FLAG not in charger
+
+    def test_a_form_that_did_not_offer_the_field_keeps_the_flag(self):
+        charger = {"id": "c1", "ev_battery_capacity_kwh": 60, FLAG: True}
+        _mark_owner_values(dict(charger), {"name": "x"}, charger)
+        assert charger[FLAG] is True
+
 
 def _flow(chargers):
     entry = MagicMock()

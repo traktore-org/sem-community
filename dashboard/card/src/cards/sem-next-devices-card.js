@@ -216,13 +216,23 @@ class SEMNextDevicesCard extends SEMNextBase {
      * Several ids: the earliest of them (a heater's run-time block and its Keep at block).
      */
     _plannedAt(...planIds) {
+        const r = this._nextPlanned(planIds);
+        return r && !r.running ? this._clockDay(r.s) : '';
+    }
+
+    /** The end (HH:MM) of a run of these plan ids that is under way now, or '' (#1321). */
+    _plannedUntil(...planIds) {
+        const r = this._nextPlanned(planIds);
+        return r && r.running ? this._clockDay(r.e) : '';
+    }
+
+    _nextPlanned(planIds) {
         // (#1321) the same plan every screen reads; tomorrow's hour says tomorrow
         const plan = effectivePlan(this._attrs('sensor.sem_energy_plan'));
-        // the next run, not the next change of watts inside one that is under way
+        // a run under way is the next run; not the next change of watts inside it
         const now = Date.now();
         const want = new Set(planIds.map(String));
-        const next = nextRun(planRuns(plan, (id) => want.has(id), now), now);
-        return next ? this._clockDay(next.s) : '';
+        return nextRun(planRuns(plan, (id) => want.has(id), now), now);
     }
 
     /** The pill's words: the state, then why when the engine names a cause. */
@@ -243,7 +253,7 @@ class SEMNextDevicesCard extends SEMNextBase {
                 powerW: this._powerW('sensor.sem_charger_' + cid + '_power'),
                 amps: this._num('sensor.sem_charger_' + cid + '_commanded_current'),
                 paused, pausedUntil: paused ? this._hhmm(modeAttrs.paused_until) : '',
-                plannedAt: this._plannedAt('ev:' + cid),
+                plannedAt: this._plannedAt('ev:' + cid), plannedUntil: this._plannedUntil('ev:' + cid), observer: this._observer(),
                 connected: connId ? this._str(connId) === 'on' : null,
             };
         }
@@ -260,6 +270,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         return {
             powerW: row.powerEntity ? this._powerW(row.powerEntity) : null,
             plannedAt: this._plannedAt('load:' + row.id, 'comfort:' + row.id),
+            plannedUntil: this._plannedUntil('load:' + row.id, 'comfort:' + row.id), observer: this._observer(),
             sunW: this._powerW('sensor.sem_solar_power'),
             fmtTemp: (c) => this._temp(c),
             parentName: parent ? parent.name : '',

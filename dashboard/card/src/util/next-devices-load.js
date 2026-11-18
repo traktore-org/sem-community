@@ -304,9 +304,11 @@ export function loadBody(card, row) {
         // (#1321) one visible line: what a kWh of heat costs now, and the next planned run
         const coh = card._has('sensor.sem_heat_pump_cost_of_heat') ? card._num('sensor.sem_heat_pump_cost_of_heat') : null;
         const nextAt = card._plannedAt('load:' + row.id, 'comfort:' + row.id);
+        const until = card._plannedUntil('load:' + row.id, 'comfort:' + row.id);
         rows.push(card._row('mdi:heat-pump-outline', t('next_cost_of_heat'),
             coh === null ? '—' : tf('next_per_kwh_heat', { v: card._money(coh) }),
-            nextAt ? tf('next_hp_next_run', { time: nextAt }) : t('next_nothing_planned')));
+            until ? tf(card._observer() ? 'next_st_would_run_until' : 'next_st_runs_until', { time: until })
+                : (nextAt ? tf('next_hp_next_run', { time: nextAt }) : t('next_nothing_planned'))));
         // (#1081) the COP by outdoor temperature: what it is now, then the
         // 2–3 points as text "−7:2.5, 12:4.2"; empty = one fixed COP
         if (Object.prototype.hasOwnProperty.call(g, 'cop_curve')) {

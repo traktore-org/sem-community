@@ -309,6 +309,9 @@ def _mark_owner_values(before: dict, user_input: dict, charger: dict) -> None:
     for key, factory in _OWNER_VALUE_FACTORY.items():
         flag = f"{key}_by_owner"
         if key not in user_input:
+            # a cleared field is merged in as None: nothing typed any more, so no owner flag
+            if key in charger and charger[key] is None:
+                charger.pop(flag, None)
             continue
         if before.get(flag) or user_input[key] != before.get(key, factory):
             charger[flag] = True

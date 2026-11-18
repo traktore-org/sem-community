@@ -110,7 +110,16 @@ export function planRuns(plan, pick, nowMs = -Infinity) {
         const last = out[out.length - 1];
         if (last && r.s <= last.e) { last.e = Math.max(last.e, r.e); last.kwh += r.kwh; } else out.push({ ...r });
     }
-    return out;
+    return out.map((r) => withProgress(r, nowMs));
+}
+
+/**
+ * A run relative to now (#1321): a run with s <= now < e is "running" and only the
+ * part from now on is ahead: (e - now) / (e - s) of its kWh. One reading for every screen.
+ */
+export function withProgress(run, nowMs) {
+    const running = Number.isFinite(nowMs) && run.s <= nowMs && nowMs < run.e;
+    return { ...run, running, ahead: running ? run.kwh * (run.e - nowMs) / (run.e - run.s) : run.kwh };
 }
 
 /**
@@ -132,12 +141,12 @@ export function roundedParts(values, d = 1) {
 export function planRunsRounded(plan, pick, nowMs = -Infinity) {
     const runs = planRuns(plan, pick, nowMs);
     const parts = roundedParts(runs.map((r) => r.kwh));
-    return runs.map((r, i) => ({ ...r, kwh: parts[i] }));
+    return runs.map((r, i) => withProgress({ ...r, kwh: parts[i] }, nowMs));
 }
 
-/** kWh of the runs `pick` accepts that have not ended: the one figure every screen shows for a device (#1321). */
+/** kWh of the runs `pick` accepts still ahead of now (the rest of a run under way): the one figure every screen shows for a device (#1321). */
 export function kwhAhead(plan, pick, nowMs = -Infinity) {
-    return planRuns(plan, pick, nowMs).reduce((a, r) => a + r.kwh, 0);
+    return planRuns(plan, pick, nowMs).reduce((a, r) => a + r.ahead, 0);
 }
 
 /**
@@ -149,17 +158,25 @@ export function demandFigures(plan, id, nowMs = -Infinity) {
     const d = (plan && Array.isArray(plan.demands) ? plan.demands : []).find((x) => x && x.id === id);
     const need = d && Number.isFinite(Number(d.needed_kwh)) ? Number(d.needed_kwh) : null;
     const planned = kwhAhead(plan, (x) => x === id, nowMs);
-    const needed = need === null ? null : Math.max(0, need - endedKwh(plan, id, nowMs));
+    const needed = need === null ? null : Math.max(0, need - deliveredSincePlan(plan, id, nowMs));
     return { planned: Math.round(planned * 10) / 10, needed: needed === null ? null : Math.round(needed * 10) / 10 };
 }
 
-/** kWh of a demand's blocks that ended before `nowMs`. */
-function endedKwh(plan, id, nowMs) {
+/**
+ * kWh the plan's own blocks of a demand delivered between the plan being made and now.
+ * The planner's needed_kwh is the REMAINING need at computed_at (target minus delivered),
+ * so only what ran since then comes off it: never a block that ended before the plan was
+ * made, and nothing at all without computed_at (#1321).
+ */
+function deliveredSincePlan(plan, id, nowMs) {
+    const from = Date.parse(plan && plan.computed_at);
+    if (!Number.isFinite(from) || !Number.isFinite(nowMs)) return 0;
     let kwh = 0;
     for (const b of (plan && Array.isArray(plan.blocks) ? plan.blocks : [])) {
         const s = Date.parse(b && b.start), e = Date.parse(b && b.end);
-        if (!b || String(b.id) !== id || !Number.isFinite(s) || !Number.isFinite(e) || e <= s || e > nowMs) continue;
-        kwh += (Number(b.power_w) || 0) * (e - s) / 3.6e9;
+        if (!b || String(b.id) !== id || !Number.isFinite(s) || !Number.isFinite(e) || e <= s) continue;
+        const a = Math.max(s, from), z = Math.min(e, nowMs);
+        if (z > a) kwh += (Number(b.power_w) || 0) * (z - a) / 3.6e9;
     }
     return kwh;
 }
@@ -193,9 +210,13 @@ export function batteryFullAt(plan, nowMs = -Infinity) {
     return runs.length ? runs[runs.length - 1].e : null;
 }
 
-/** The first run that has not started, or null. */
+/**
+ * The run to name next: one under way (`running`, ends at `e`) or else the first that has not
+ * started; null when none. Every "waits for" and "next" line reads this (#1321).
+ */
 export function nextRun(runs, nowMs) {
-    return (runs || []).find((r) => r.s > nowMs) || null;
+    const list = runs || [];
+    return list.find((r) => r.s <= nowMs && nowMs < r.e) || list.find((r) => r.s > nowMs) || null;
 }
 
 /** "08:33 – 09:45, 14:45 – 15:45": every run by its own hours (`win(s, e)` words one). */

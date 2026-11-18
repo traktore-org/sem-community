@@ -146,7 +146,7 @@ export function batteryBody(card, row) {
         const need = Number(sa.overnight_need_kwh), refill = Number(sa.expected_refill_kwh);
         const nights = Number(sa.nights_sealed), spend = num(SPEND);
         const subs = [];
-        const back = refillKwh(card._attrs('sensor.sem_energy_plan'), refill, Date.now(), nightStart(card._attrs('sensor.sem_charging_state'), Date.now()));
+        const back = refillKwh(card._attrs('sensor.sem_energy_plan'), refill, Date.now(), nightStart(card._attrs('sensor.sem_charging_state'), Date.now(), card._str('sensor.sem_night_start_time')));
         if (back !== null) subs.push(tf('next_refill', { kwh: card._fmt(back, 1) }));
         if (spend !== null) subs.push(tf('next_spendable_kwh', { kwh: card._fmt(spend, 1) }));
         if (Number.isFinite(nights)) subs.push(tf('next_nights_learned', { n: nights }));

@@ -231,6 +231,7 @@ export function statePill(row, live = {}) {
                 ? p('next_st_charging_a', { amps: Math.round(live.amps) }, 'ok')
                 : p('next_st_charging', {}, 'ok');
         }
+        if (live.plannedUntil) return p(live.observer ? 'next_st_would_charge_until' : 'next_st_charges_until', { time: live.plannedUntil });
         if (live.plannedAt) return p('next_st_waits_for', { time: live.plannedAt });
         if (live.connected === false) return p('next_st_unplugged');
         if (row.mergedMode === 'off') return p('next_st_off');
@@ -255,6 +256,7 @@ export function statePill(row, live = {}) {
     if (row.mergedMode === 'off') return p('next_st_off_mode');
     // (#1321) peak-only: SEM never starts it, it only pauses it at a peak
     if (row.mergedMode === 'peak_only' || row.mergedMode === 'peak') return p('next_st_off_peak_only');
+    if (live.plannedUntil) return p(live.observer ? 'next_st_would_run_until' : 'next_st_runs_until', { time: live.plannedUntil });
     if (live.plannedAt) return p('next_st_waits_for', { time: live.plannedAt });
     return { ...p('next_st_off'), why: becauseKey(row.intent) };
 }

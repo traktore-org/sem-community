@@ -242,7 +242,10 @@ class SEMNextNowCard extends SEMNextBase {
         const parts = [];
         const b = this._nextBlock();
         // (#1321) a heading about the car's planned charge already says who, when and how much
-        if (b && !repeatsNextBlock(r.main.key)) parts.push(this._tf('next_sub_next_block', { who: b.who, time: b.time, kwh: b.kwh }));
+        if (b && !repeatsNextBlock(r.main.key)) {
+            parts.push(b.running ? this._tf(this._observer() ? 'next_sub_block_would' : 'next_sub_block_running', { who: b.who, time: b.until, kwh: b.kwh })
+                : this._tf('next_sub_next_block', { who: b.who, time: b.time, kwh: b.kwh }));
+        }
         const bt = this._batteryLine();
         if (bt) parts.push(bt);
         const sub = parts.length ? parts.join(' ') : (r.sub ? this._tf(r.sub.key, r.sub.params) : '');
@@ -281,7 +284,9 @@ class SEMNextNowCard extends SEMNextBase {
             if (r && (!best || r.s < best.r.s)) best = { id, r };
         }
         // (#1321) the next RUN, not the next change of watts inside a run that is under way
-        return best ? { id: best.id, who: this._whoName(best.id), time: this._hhmm(new Date(best.r.s)), kwh: this._fmt(best.r.kwh, 1), start: best.r.s } : null;
+        // a run under way is named by its end, and only what is left of it counts
+        return best ? { id: best.id, who: this._whoName(best.id), time: this._hhmm(new Date(best.r.s)), until: this._hhmm(new Date(best.r.e)),
+                        running: best.r.running, kwh: this._fmt(best.r.running ? best.r.ahead : best.r.kwh, 1), start: best.r.s } : null;
     }
 
     /** The measured watts of a load, or null without a power sensor. */
@@ -666,7 +671,8 @@ class SEMNextNowCard extends SEMNextBase {
             const title = one.cid && this._chargers.length > 1 ? this._tf('next_car_of', { name: this._chargerName(one.cid) }) : one.title;
             // (#1321) a car with no decision of its own gets the plan's line; with none, no empty row
             const nb = !one.text && one.cid ? this._nextBlock((id) => id === 'ev:' + one.cid) : null;
-            const text = one.text || (nb ? this._tf('next_st_waits_for', { time: nb.time }) : '');
+            const text = one.text || (nb ? (nb.running ? this._tf(this._observer() ? 'next_st_would_charge_until' : 'next_st_charges_until', { time: nb.until })
+                : this._tf('next_st_waits_for', { time: nb.time })) : '');
             if (!text && one.cid) continue;
             rows.push(this._row('mdi:car-electric', title, '', text, { color: C.ev }));
         }
@@ -708,8 +714,10 @@ class SEMNextNowCard extends SEMNextBase {
                 const b = this._nextBlock((id) => id === `load:${d.id}` || id === `comfort:${d.id}`);
                 if (b) {
                     const demand = (this._attrs('sensor.sem_energy_plan').demands || []).find((x) => x && x.id === b.id);
-                    rows.push(this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), b.time,
-                        demand ? (planNoteText(demand, (k) => this._t(k)) || '') : '', { color: C.home }));
+                    const note = demand ? (planNoteText(demand, (k) => this._t(k)) || '') : '';
+                    rows.push(b.running
+                        ? this._row('mdi:power-plug', name, '', this._tf(this._observer() ? 'next_st_would_run_until' : 'next_st_runs_until', { time: b.until }), { color: C.home })
+                        : this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), b.time, note, { color: C.home }));
                 }
             }
         }

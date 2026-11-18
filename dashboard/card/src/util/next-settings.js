@@ -28,6 +28,7 @@ import { priceAddOns } from './settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from './peak-questions.js';
 import { BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
 import { fmtNum } from './next-number.js';
+import { capacityUnset } from './charger-questions.js';
 
 // (#528) option keys that reload the entry when written — a subset of
 // `__init__.py:_SET_OPTION_STRUCTURAL_KEYS` (tests/test_528).
@@ -73,7 +74,8 @@ function numSlot(states, id, o = {}) {
     const v = num(e.state);
     if (v === null) return null;
     const a = e.attributes || {};
-    return { id, kind: 'number', value: v, unit: o.unit ?? (a.unit_of_measurement || ''),
+    // (#1321) the server says the value is only the factory default: the row says "not set", as Devices does
+    return { id, kind: 'number', value: v, unit: o.unit ?? (a.unit_of_measurement || ''), unset: !!o.unsetFlag && capacityUnset(a),
              min: num(a.min), max: num(a.max), step: num(a.step) ?? 1, zeroKey: o.zeroKey || null, clock: !!o.clock };
 }
 
@@ -241,6 +243,8 @@ function nameOf(hass, id) {
 
 /** (#1321) A per-month demand price in words: "4.3 CHF/kW/Mt" is not read as a unit by anyone. */
 function unitWords(unit, t) {
+    // the entity's own unit "kWh/100km" reads "kWh/100 km", as every other screen says it
+    if (/\/100km$/.test(unit)) return unit.replace(/100km$/, '100 km');
     const m = /^(.+?)\/kW\/(?:Mt|mo|month|mois|mes|Monat)$/i.exec(unit);
     return m ? t('next_per_kw_month').replace('{cur}', m[1]) : unit;
 }
@@ -256,6 +260,7 @@ export function slotText(slot, t, value = slot.value, states = null, plain = fal
     }
     if (slot.kind === 'text' && (value === '' || value == null)) return slot.placeholder || '—';
     if (slot.kind === 'number') {
+        if (slot.unset && value === slot.value) return t('next_not_set');
         if (slot.zeroKey && Number(value) === 0) return t(slot.zeroKey);
         const v = Number(value);
         if (!Number.isFinite(v)) return '—';
@@ -263,6 +268,8 @@ export function slotText(slot, t, value = slot.value, states = null, plain = fal
             const h = Math.floor(v), m = Math.round((v - h) * 60);
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         }
+        // (#1321) a power of 1 kW or more reads in kW, as every other screen shows it
+        if (slot.unit === 'W' && Math.abs(v) >= 1000) return `${fmtNum(v / 1000, v % 100 ? 2 : 1)}\u00a0kW`;
         // (#1321) a price per kWh reads the same here as on Now and Plan
         const s = /\/kWh$/.test(slot.unit || '') ? fmtPrice(v) : fmtNum(v, decimalsOf(slot.step));
         // (#1321) a no-break space keeps "2.0 °C" on one line
@@ -927,7 +934,7 @@ export function groups(states, t, ctx = {}) {
                 [lab('next_more_ext_control'), ext],
                 ...(ext && ext.value !== 'none' ? [ce('external_control_indicator')] : []),
                 [lab('next_more_finish_by_departure'), chargerSlot(o, cid, 'finish_by_departure', 'switch')],
-                [lab('next_more_capacity'), numSlot(states, `number.sem_charger_${cid}_ev_battery_capacity_kwh`)],
+                [lab('next_more_capacity'), numSlot(states, `number.sem_charger_${cid}_ev_battery_capacity_kwh`, { unsetFlag: true })],
                 [lab('next_more_use'), numSlot(states, `number.sem_charger_${cid}_ev_kwh_per_100km`)],
                 [lab('next_more_phase_switching'), chargerSlot(o, cid, 'ev_phase_switching_enabled', 'switch')],
                 ce('ev_phase_switch_entity'),

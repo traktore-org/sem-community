@@ -20,7 +20,7 @@ import { whyLines, batteryEnd } from '../util/plan-why.js';
 import { effectivePlan, planRuns, runsText, shortfalls, dayOffset, kwhAhead } from '../util/plan-facts.js';
 import { trustPct } from '../util/forecast-evidence.js';
 import { tariffKind } from '../util/price-level.js';
-import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
+import { OPEN_CHARGE_PLAN_KEY, runningNow, switchStateOf } from '../util/next-devices.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, coldHeaters, planGridKwh, fill } from '../util/next-lead.js';
 import { planWhenKey } from '../util/next-time.js';
@@ -35,7 +35,7 @@ import { laneModel } from '../util/next-timeline.js';
 import { minutesToPlanEnd } from '../util/next-strip.js';
 import { chartWindow, chartTicks, sunModel, sunRuns, priceModel, priceAt, planRows, focusBlock, runningAt, RANGES } from '../util/next-plan-chart.js';
 import {
-    WHY_KINDS, actionWords, changeLabel, deviceName, mergePerDay, earlierKey, filterRecords, isToday, plainReason, rowTime, whyChips,
+    WHY_KINDS, actionWords, changeLabel, deviceName, mergePerDay, earlierKey, filterRecords, isToday, plainReason, offStartReason, rowTime, whyChips,
 } from '../util/why-rows.js';
 
 export const WS_DECISION_LOG = 'solar_energy_management/decision_log';
@@ -953,12 +953,20 @@ class SEMNextPlanCard extends SEMNextBase {
         return info ? this._loadName(String(rec.device_id), info) : deviceName(rec, (k) => this._t(k), many);
     }
 
+    /** (#1321) A load that is off now says it would start, not "so it runs": one line from the shared helper. */
+    _offStart(rec) {
+        const info = rec.device_kind === 'load' ? this._devices()[String(rec.device_id || '')] : null;
+        if (!info) return '';
+        const w = info.power_entity ? this._powerW(info.power_entity) : null;
+        return offStartReason(rec, runningNow(info, w, switchStateOf(info, this._hass?.states)), this._obs(), (k) => this._t(k));
+    }
+
     _logRow(rec, many, standing = false) {
         const t = (k) => this._t(k);
         const tz = this._hass?.config?.time_zone;
         const lang = this._hass?.language || 'en';
         const kind = WHY_KINDS[rec.device_kind] || WHY_KINDS.load;
-        const plain = standing ? this._plainNow(rec, t) : plainReason(rec, t, { past: true });
+        const plain = standing ? (this._offStart(rec) || this._plainNow(rec, t)) : plainReason(rec, t, { past: true });
         const why = plain || rec.text || '';
         const plainRepeat = rec.count > 1 && rec.verb === 'limit_discharge';
         const change = plainRepeat ? this._tf('next_log_repeats_plain', { what: actionWords(rec.verb, t), n: rec.count })
@@ -1022,6 +1030,12 @@ class SEMNextPlanCard extends SEMNextBase {
         return ids.length && ids.length <= 2 ? ids.join(' and ') : '';
     }
 
+    /** (#1321) True when a planned run has no price yet: only then does the lead say the cost is unknown. */
+    _costMissing(plan) {
+        return (Array.isArray(plan.demands) ? plan.demands : [])
+            .some((d) => d && d.id && (d.est_cost === null || d.est_cost === undefined) && (plan.blocks || []).some((b) => b && b.id === d.id));
+    }
+
     _lead(plan, m) {
         if (this._range === 'tomorrow') {
             const sun = this._num('sensor.sem_forecast_tomorrow_kwh');
@@ -1036,7 +1050,7 @@ class SEMNextPlanCard extends SEMNextBase {
             fitsKey: m.fits === undefined ? '' : (m.fits ? this._t('next_fits_yes') : this._fitsNo(plan)),
             sunTomorrowKwh: this._num('sensor.sem_forecast_tomorrow_kwh'),
             cold: this._cold(plan)[0] || null,
-            costUnknownFor: this._costUnknownFor(plan),
+            costUnknownFor: this._costUnknownFor(plan), costMissing: this._costMissing(plan),
             when: this._planWhen(plan),
             nowMs: Date.now(), win: chartWindow(Date.now(), this._range, this._hass?.config?.time_zone),
         });

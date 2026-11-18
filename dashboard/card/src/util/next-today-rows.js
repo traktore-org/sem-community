@@ -14,6 +14,7 @@
  */
 import { planRunsRounded, isBatteryIn, batteryFullAt } from './plan-facts.js';
 import { fmtNum } from './next-number.js';
+import { nextClock } from './next-timeline.js';
 
 export const KINDS = {
     solar_peak:       { icon: 'mdi:weather-sunny',           color: 'solar' },
@@ -154,9 +155,18 @@ function planFull(list, plan, now) {
 
 /**
  * When tonight's charging window opens, from the Today list: ms; -Infinity when the night
- * is under way (its end comes first); null when the list names neither. One reading of "tonight" (#1321).
+ * is under way (its end comes first); null when the list names neither. One reading of "tonight" (#1321):
+ * `clock` ('HH:MM', the night start sensor) names the hour when given, the list says whether it is open.
  */
-export function nightStart(attrs, nowMs = Date.now()) {
+export function nightStart(attrs, nowMs = Date.now(), clock = '') {
+    const found = stripNightStart(attrs, nowMs);
+    if (found === null || found === -Infinity) return found;
+    // (#1321) the hour the lead shows (sunset plus the offset) wins for tonight
+    const at = nextClock(clock, new Date(nowMs));
+    return at && at.getDate() === new Date(nowMs).getDate() ? at.getTime() : found;
+}
+
+function stripNightStart(attrs, nowMs) {
     const strip = attrs && Array.isArray(attrs.today_plan) ? attrs.today_plan : [];
     const at = (kind) => strip.filter((r) => r && r.kind === kind).map((r) => Date.parse(r.when)).filter((t) => Number.isFinite(t) && t >= nowMs - 60e3).sort((a, b) => a - b)[0];
     const open = at('night_open'), end = at('night_end');

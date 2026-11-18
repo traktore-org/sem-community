@@ -74,7 +74,9 @@ function priceCells(plan, upcoming) {
         .filter((x) => Number.isFinite(x.s) && Number.isFinite(x.price)).sort((a, b) => a.s - b.s);
     const gaps = pts.slice(1).map((x, i) => x.s - pts[i].s).filter((g) => g > 0).sort((a, b) => a - b);
     const median = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 0;
-    const ups = pts.map((x, i) => ({ ...x, e: x.s + (i + 1 < pts.length ? pts[i + 1].s - x.s : median) }))
+    // a gap in the list (a missing hour) must not stretch one cell across it: cap at twice the median gap
+    const cap = median ? median * 2 : Infinity;
+    const ups = pts.map((x, i) => ({ ...x, e: x.s + (i + 1 < pts.length ? Math.min(pts[i + 1].s - x.s, cap) : median) }))
         .map((x) => ({ ...x, h: (x.e - x.s) / 3.6e6 }));
     const slots = (Array.isArray(plan?.slots) ? plan.slots : [])
         .map((x) => ({ s: Date.parse(x.start), e: Date.parse(x.end), price: num(x.price) }))

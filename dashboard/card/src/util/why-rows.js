@@ -114,6 +114,16 @@ export function startLine(code, watchOnly, t) {
     return why && why !== key ? `${t(watchOnly ? 'next_would_switch_on' : 'next_switches_soon')}: ${why}` : '';
 }
 
+/**
+ * (#1321) A load's standing reason when the device is off: the start line, never "so it runs".
+ * '' when the record is no load's start reason or the device runs; the caller keeps its own text then.
+ */
+export function offStartReason(rec, running, watchOnly, t) {
+    const kind = rec && (rec.kind || rec.device_kind);
+    if (kind !== 'load' || running) return '';
+    return startLine(String(rec.reason_code || ''), watchOnly, t);
+}
+
 /** The chips: one per device that has rows, in the order the rows meet them. */
 export function whyChips(records, t) {
     const seen = new Map();
