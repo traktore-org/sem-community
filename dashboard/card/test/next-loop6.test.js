@@ -152,18 +152,21 @@ test('L: Devices and System say the same reason for a load with no sun and no ch
     assert.equal(becauseKey({ on: false, code: 'surplus_short' }), 'hq_because_no_sun');
 });
 
-test('L: Coming up lists a load only when the plan holds hours for it', () => {
+test('L: Coming up drops a load whose plan demand has no hours; a load with no demand keeps its row (loop 7)', () => {
     const attrs = { today_plan: [
         { when: '2026-11-18T13:00:00+01:00', kind: 'device_run', label: 'plan_device_run', values: { name: 'Heat pump' } },
         { when: '2026-11-18T14:00:00+01:00', kind: 'device_run', label: 'plan_device_run', values: { name: 'Sim Boiler' } },
+        { when: '2026-11-18T15:00:00+01:00', kind: 'device_run', label: 'plan_device_run', values: { name: 'Pool pump' } },
     ] };
     const NOW2 = Date.parse('2026-11-18T10:47:00+01:00');
     const plan = effectivePlan({
         blocks: [{ id: 'load:boiler', start: '2026-11-19T06:30:00+01:00', end: '2026-11-19T07:30:00+01:00', power_w: 3000 }],
-        demands: [{ id: 'load:boiler', kind: 'load', label: 'Sim Boiler', planned_kwh: 3, needed_kwh: 3 }],
+        demands: [{ id: 'load:boiler', kind: 'load', label: 'Sim Boiler', planned_kwh: 3, needed_kwh: 3 },
+                  { id: 'load:pool', kind: 'load', label: 'Pool pump', planned_kwh: 0, needed_kwh: 2 }],
     });
     const rows = todayRows(attrs, { now: NOW2, carPresent: false, plan, cars: [] });
-    assert.deepEqual(rows.filter((r) => r.kind === 'device_run').map((r) => r.values.name), ['Sim Boiler']);
+    // Heat pump: no demand at all, runs on its own schedule, stays. Pool pump: a demand with no hours, dropped.
+    assert.deepEqual(rows.filter((r) => r.kind === 'device_run').map((r) => r.values.name).sort(), ['Heat pump', 'Sim Boiler']);
 });
 
 test('L: a load told to adjust power that the reason keeps on says "keep on"', () => {

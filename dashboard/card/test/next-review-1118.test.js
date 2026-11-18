@@ -6,7 +6,7 @@
  *
  * Run: `node --test test/next-review-1118.test.js` (from dashboard/card).
  */
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { register } from 'node:module';
@@ -74,7 +74,10 @@ function text(part) {
 const S = (state, attributes = {}) => ({ state: String(state), attributes, last_updated: '2026-11-18T01:40:00+00:00' });
 
 // the PROD night of 18.11: nothing for the car or loads, the house draws 2.9 kWh from the grid
-const T0 = Date.now() + 5 * 60e3;   // slots still to come: a past hour is history, not a plan
+// (#1321) a fixed clock: the slots are still to come, a past hour is history, not a plan
+const NOW0 = Date.parse('2026-11-18T01:40:00Z');
+mock.timers.enable({ apis: ['Date'], now: NOW0 });
+const T0 = NOW0 + 5 * 60e3;
 const slot = (i, w) => ({ start: new Date(T0 + i * 3600e3).toISOString(), end: new Date(T0 + (i + 1) * 3600e3).toISOString(), home_grid_w: w, price: 0.36 });
 const PLAN = {
     computed_at: new Date(T0).toISOString(), blocks: [], batt_runs: [[0, 0]], total_cost: 1.05,

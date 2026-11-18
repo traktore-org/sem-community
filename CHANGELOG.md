@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **True plan reasons** (#1321). "Cheapest hours" only when the car got them; each battery block names its reason; one battery size.
+- 🐛 **Named checks, no guessed car size** (#1321). The headline names every check; an unset car battery is unknown; watch-only Devices say what SEM would do.
 - 🐛 **Plainer System and Plan** (#1321). One battery sentence everywhere; no buttons without a car; Coming up follows the plan; clearer units and tips.
 - 🐛 **Honest numbers and names** (#1321). Off devices show rated size, not live power. The headline names each check. Sources that disagree say so.
 - 🐛 **House by source adds up** (#1321). A small counter drop is no longer read as use. Parts match the total. Flow counters never step back.

@@ -33,6 +33,7 @@ import { deviceRows, statePill, surplusInUse, ratedKey, swap, priorityPayload, v
 import { chargerBody } from '../util/next-devices-charger.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
+import { wouldFor, wouldList, wouldLine } from '../util/why-rows.js';
 
 const DOMAIN = 'solar_energy_management';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -94,6 +95,7 @@ const devicesCss = css`
     ha-entity-picker { display: block; }
     .grid { align-items: start; grid-template-columns: minmax(0, 1fr); }
     .dev.folded .body { display: none; }
+    .dev .would { margin: 2px 0 6px 40px; }
     .dev.folded .head { margin-bottom: 0; }
     .dev .fold { border: 0; background: none; color: var(--n-fg3); cursor: pointer; padding: 4px; border-radius: 8px; display: inline-flex; }
     .dev .fold ha-icon { transition: transform .15s; }
@@ -755,7 +757,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             time: lm.shed_signal_since ? this._hhmm(lm.shed_signal_since) : '—' }) : '';
         return this._sec(t('next_surplus_peak'), html`
             ${op ? html`<div class="banner">${this._icon('mdi:transmission-tower-export')}<div class="sm">${op}</div></div>` : nothing}
-            ${this._tiles(tiles, { three: true })}
+            ${this._tiles(tiles, { three: true, stack: this._narrow() })}
             ${peakE && !uncapped ? html`<div style="margin:10px 0 6px">${this._track(pct, C.grid)}</div>` : nothing}
             ${peakRows.length ? html`<div class="rows">${peakRows}</div>` : nothing}
             ${sent.length ? html`<p class="sent">${sent.map((s, i) => html`${i ? ' ' : ''}${s}`)}</p>` : nothing}
@@ -778,6 +780,9 @@ class SEMNextDevicesCard extends SEMNextBase {
         const body = !open ? nothing
             : row.type === 'charger' ? chargerBody(this, row) : row.type === 'battery' ? batteryBody(this, row) : loadBody(this, row);
         const locked = (row.dependsOn || []).length > 0;
+        // (#1321) watch-only: the same "would ..." line System shows, one helper
+        const dec = this._obs() ? wouldFor(row, wouldList(this._attrs('switch.sem_observer_mode'))) : null;
+        const would = dec ? wouldLine(dec, (k) => this._t(k)) : '';
         const toggle = () => { if (!this._reorder) this._toggleOpen(row); };
         return html`<ha-card class="card dev ${open ? '' : 'folded'}" data-id=${row.id} style="--c:${color}">
             <div class="head">
@@ -796,6 +801,7 @@ class SEMNextDevicesCard extends SEMNextBase {
                 <button type="button" class="fold" aria-expanded=${open ? 'true' : 'false'} aria-label=${t(open ? 'next_fold_device' : 'next_open_device')}
                     @click=${toggle}>${this._icon('mdi:chevron-down')}</button>
             </div>
+            ${would ? html`<div class="would xs dim">${would}</div>` : nothing}
             ${open ? html`<div class="body">${body}</div>` : nothing}</ha-card>`;
     }
 

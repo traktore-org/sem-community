@@ -28,6 +28,40 @@ export function blockReasons(blocks, id) {
     return [...by.values()].sort((a, b) => b.kwh - a.kwh).map(({ reason, params }) => ({ reason, params }));
 }
 
+/** blockReasons, each with the runs (planRuns shape) of the blocks that carry it: one reason per block. */
+export function reasonRuns(blocks, id, nowMs) {
+    return blockReasons(blocks, id).map((r) => ({
+        ...r,
+        runs: planRuns({ blocks: (blocks || []).filter((b) => b && String(b.id) === String(id) && b.reason === r.reason) }, () => true, nowMs),
+    }));
+}
+
+/**
+ * (#1321) Did a demand's runs sit in the cheapest hours of the plan's window? The planner
+ * names its pick "cheapest hours" even when another demand held the cheapest slots (its
+ * headroom was full). The slots tell: the cheapest hours the same length are compared with
+ * the average price the demand got. Null when the slots cannot answer.
+ */
+export function gotCheapest(plan, runs, price, nowMs) {
+    const p = Number(price);
+    const hours = (runs || []).reduce((a, r) => a + (r.e - r.s) / 3.6e6, 0);
+    if (!Number.isFinite(p) || price === null || price === '' || !(hours > 0)) return null;
+    const slots = (Array.isArray(plan?.slots) ? plan.slots : [])
+        .map((x) => ({ h: (Date.parse(x.end) - Date.parse(x.start)) / 3.6e6, price: x.price === null || x.price === '' ? NaN : Number(x.price), e: Date.parse(x.end) }))
+        .filter((x) => x.h > 0 && Number.isFinite(x.price) && x.e > nowMs)
+        .sort((a, b) => a.price - b.price);
+    if (!slots.length) return null;
+    let need = hours, cost = 0;
+    for (const x of slots) {
+        const take = Math.min(need, x.h);
+        cost += take * x.price; need -= take;
+        if (need <= 1e-9) break;
+    }
+    if (need > 1e-9) return null;
+    return p <= cost / hours + PRICE_EPS;
+}
+const PRICE_EPS = 0.002;
+
 /**
  * [{id, start, end, reason, params, why, kwh, label}]: `reason`/`params` is
  * the block's reason code, `why` the not-scheduled code. Times are ISO.
@@ -70,14 +104,16 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
     const fromBlocks = [...byId.values()].filter((x) => !own.has(x.id)).map((x) => ({
         id: x.id, start: new Date(x.s).toISOString(), end: new Date(x.e).toISOString(),
         reason: String(x.reason), params: x.params, why: '', code: '', label: '',
-        reasons: isBatteryIn(x.id) ? blockReasons(blocks, x.id) : null,
+        reasons: isBatteryIn(x.id) ? reasonRuns(blocks, x.id, nowMs) : null,
         kwh: kwhOf(blocks, (i) => String(i) === x.id), s: x.s,
         runs: planRuns(plan, (i) => String(i) === x.id, nowMs),
     })).map((x) => ({ ...x, kwh: x.runs.length ? x.runs.reduce((a, r) => a + r.kwh, 0) : x.kwh }));
     // (#1321) every line names its own runs: a gap between two stays a gap, and the kWh is theirs
     const withRuns = (x) => {
         const runs = planRuns(plan, (i) => i === x.id, nowMs);
-        return runs.length ? { ...x, runs, kwh: runs.reduce((a, r) => a + r.kwh, 0) } : x;
+        // (#1321) the cheapest hours were not all free to this demand: say "left", never "the cheapest"
+        const code = x.code === 'cheapest_hours' && gotCheapest(plan, runs, x.params.price, nowMs) === false ? 'cheapest_left' : x.code;
+        return runs.length ? { ...x, code, runs, kwh: runs.reduce((a, r) => a + r.kwh, 0) } : x;
     };
     const planned = [...own.values()].map(withRuns).map((x) => ({ ...x, s: Date.parse(x.start) }))
         .concat(fromBlocks)

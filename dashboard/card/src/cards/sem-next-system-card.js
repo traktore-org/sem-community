@@ -23,7 +23,7 @@ import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../b
 import { semDefineCard } from '../base/sem-shared.js';
 import './sem-next-setup-panel.js';
 import { sourceRows, ageLabel, freshness, SOURCE_ROWS, sourceEntityOf } from '../util/next-freshness.js';
-import { recordReason, deviceName, wouldVerb } from '../util/why-rows.js';
+import { recordReason, deviceName, wouldVerb, wouldList } from '../util/why-rows.js';
 import { gridReading } from '../util/next-format.js';
 import { entityName } from '../util/next-names.js';
 import { MISSING } from '../util/missing-value.js';
@@ -31,6 +31,7 @@ import { runsNotStartedBySem, switchStateOf } from '../util/next-devices.js';
 import { groups, applyPlan, pendingKey, navTarget, slotText, sentenceText, rowText, setupItems, loadSources, unavailableCount,
          reserveIds, pvStrings, chargerSkeleton, FILTER_CLASSES } from '../util/next-settings.js';
 import { isPowerEntity, isCo2IntensityEntity, isOutdoorTemperatureCandidate } from '../util/detect-rows.js';
+import { batterySize } from '../util/battery-size.js';
 
 const HA_SETTINGS = '/config/integrations/integration/solar_energy_management';
 const ENTITY_FILTERS = { power: isPowerEntity, co2_intensity: isCo2IntensityEntity, outdoor_temperature: isOutdoorTemperatureCandidate };
@@ -259,6 +260,13 @@ class SEMNextSystemCard extends SEMNextBase {
         return this._row('mdi:check-decagram', this._t('next_setup_check'), value, sub, { onClick: () => this._togglePanel('setup') });
     }
 
+    /** (#1321) "15.0 kWh battery", with the measured usable size when it differs (one helper for every screen). */
+    _batteryText(cap) {
+        const { usable } = batterySize(this._hass.states);
+        return usable !== null ? this._tf('next_batt_cap_usable', { kwh: this._fmt(cap, 1), usable: this._fmt(usable, 1) })
+            : this._tf('next_batt_cap', { kwh: this._fmt(cap, 1) });
+    }
+
     _hardwareRow() {
         const count = this._str('sensor.sem_diag_charger_count');
         const control = this._valLabel('diag_charger_control');
@@ -272,7 +280,7 @@ class SEMNextSystemCard extends SEMNextBase {
             : [count !== '' ? this._tf('next_chargers_n', { n: count }) : '', control].filter(Boolean).join(' · ') || MISSING;
         const sub = [
             strings ? this._tf('next_strings', { n: strings }) : '',
-            cap !== null && cap > 0 ? this._tf('next_batt_cap', { kwh: this._fmt(cap, 1) }) : '',
+            cap !== null && cap > 0 ? this._batteryText(cap) : '',
             // only what needs a look: unmapped devices; the grid wiring is in the settings
             unmapped ? this._tf('next_unmapped', { n: unmapped }) : '',
         ].filter(Boolean).join(' · ');
@@ -356,7 +364,7 @@ class SEMNextSystemCard extends SEMNextBase {
                 ...c, name: c.name || dev, device_id: c.device_id || dev,
                 action: c.action || c.service || '',
             })));
-        const would = Object.values(attrs.would_decisions || {}).filter((d) => d && d.action && d.action !== 'idle');
+        const would = wouldList(attrs);
         const rows = obs ? would : withheld;
         const t = (k) => this._t(k);
         const body = rows.length

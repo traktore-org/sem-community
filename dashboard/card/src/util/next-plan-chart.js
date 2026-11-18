@@ -252,3 +252,32 @@ export function focusBlock(rows, nowMs, pickedKey) {
 export function runningAt(rows, ms) {
     return rows.filter((r) => r.blocks.some((b) => b.s <= ms && ms < b.e));
 }
+
+/**
+ * (#1321) The sun lane's curves: runs of touching periods, each a smooth curve through the
+ * period midpoints. A curve falls to the base only where the sun really sets or rises: the
+ * newest measured run stops at its last reading, and the forecast that follows it starts
+ * from there, so no fake 0 appears at "now". `X` maps time to x, `SY` kW to y.
+ * → [{ actual, xy: [[x, y]], open: { start, end } }]; the card draws them.
+ */
+export function sunRuns(points, X, SY) {
+    const out = [];
+    const lastActual = (points || []).filter((p) => p.actual).reduce((a, p) => Math.max(a, p.e), -Infinity);
+    for (const actual of [true, false]) {
+        const pts = (points || []).filter((p) => p.actual === actual);
+        const runs = [];
+        for (const p of pts) {
+            const last = runs[runs.length - 1];
+            if (last && p.s - last[last.length - 1].e < 40 * 60e3) last.push(p); else runs.push([p]);
+        }
+        runs.forEach((run, i) => {
+            const first = run[0], end = run[run.length - 1];
+            const openEnd = actual && i === runs.length - 1;
+            const openStart = !actual && i === 0 && Number.isFinite(lastActual) && first.s - lastActual < 40 * 60e3;
+            const mid = run.map((p) => [X((p.s + p.e) / 2), SY(p.kw)]);
+            const xy = [...(openStart ? [] : [[X(first.s), SY(0)]]), ...mid, ...(openEnd ? [] : [[X(end.e), SY(0)]])];
+            out.push({ actual, xy, open: { start: openStart, end: openEnd } });
+        });
+    }
+    return out;
+}

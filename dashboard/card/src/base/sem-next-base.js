@@ -138,6 +138,7 @@ export const nextCss = css`
     .ok { color: var(--n-ok); } .warn { color: var(--n-warn); } .bad { color: var(--n-bad); }
     .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .tiles.t3 { grid-template-columns: 1fr 1fr 1fr; }
+    .tiles.stack { grid-template-columns: 1fr; }
     .tile { background: transparent; border: 1px solid var(--n-line); border-radius: 8px; padding: 8px 12px; min-width: 0; }
     .tile .lbl { display: block; margin-bottom: 4px; }
     .tile svg { display: block; margin-top: 6px; max-width: 100%; }
@@ -783,7 +784,7 @@ export class SEMNextBase extends SEMLitBase {
 
     /** items = [{label, value, unit, sub, color, valueColor, extra}] */
     _tiles(items, o = {}) {
-        return html`<div class="tiles ${o.three ? 't3' : ''}">${items.map((t) => html`<div class="tile ${t.cls || ''}">
+        return html`<div class="tiles ${o.stack ? 'stack' : o.three ? 't3' : ''}">${items.map((t) => html`<div class="tile ${t.cls || ''}">
             <span class="lbl">${t.color ? html`<i class="mark" style="background:${t.color}"></i>` : nothing}${t.label}</span>
             <div class="big" style="${t.valueColor ? `color:${t.valueColor}` : ''}">${t.value}${t.unit ? html`<small>${t.unit}</small>` : nothing}</div>
             ${t.sub ? html`<div class="xs dim">${typeof t.sub === 'string' ? t.sub.replace(/(\d) (kW|kWh|W|A|%)/g, '$1\u00a0$2') : t.sub}</div>` : nothing}${t.extra || nothing}</div>`)}</div>`;

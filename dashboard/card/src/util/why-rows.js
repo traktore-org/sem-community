@@ -67,6 +67,28 @@ export function wouldVerb(rec, t) {
     return actionWords(rec?.action, t);
 }
 
+/** (#1321) The decisions SEM would make in watch-only mode, from the observer switch's attributes. */
+export function wouldList(attrs) {
+    return Object.values((attrs && attrs.would_decisions) || {}).filter((d) => d && d.action && d.action !== 'idle');
+}
+
+/** (#1321) The would-decision of one Devices row (charger, battery or load), or null. */
+export function wouldFor(row, decisions) {
+    const bare = (id) => String(id || '').replace(/^(ev|battery|load):/, '');
+    return (decisions || []).find((d) => {
+        const kind = d.kind || d.device_kind;
+        if (kind !== row.type) return false;
+        if (row.type === 'battery') return true;
+        return bare(d.device_id) === bare(row.type === 'charger' ? row.cid : row.id);
+    }) || null;
+}
+
+/** (#1321) "Would switch on": the same words System › What SEM would do uses. */
+export function wouldLine(rec, t) {
+    const verb = wouldVerb(rec, t);
+    return verb ? t('next_would_x').replace('{what}', verb) : '';
+}
+
 /** The chips: one per device that has rows, in the order the rows meet them. */
 export function whyChips(records, t) {
     const seen = new Map();

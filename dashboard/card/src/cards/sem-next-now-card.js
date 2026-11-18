@@ -24,7 +24,7 @@ import { powerBar } from '../util/next-power-bar.js';
 import { todayRows } from '../util/next-today-rows.js';
 import { priceLevelKey, isAbsence, tariffKind } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
-import { chargerSays, chargerSaysEach } from '../util/charger-questions.js';
+import { chargerSays, chargerSaysEach, knownCapacity } from '../util/charger-questions.js';
 import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
 import { chartWindow, chartTicks, priceModel } from '../util/next-plan-chart.js';
@@ -215,7 +215,8 @@ class SEMNextNowCard extends SEMNextBase {
         if (type === 'soc') {
             const soc = this._num(`sensor.sem_charger_${cid}_vehicle_soc`);
             const target = this._num(`number.sem_charger_${cid}_target_soc`);
-            const cap = this._num(`number.sem_charger_${cid}_ev_battery_capacity_kwh`);
+            const capId = `number.sem_charger_${cid}_ev_battery_capacity_kwh`;
+            const cap = knownCapacity(this._num(capId), this._attrs(capId));
             if (soc === null || target === null || cap === null) return null;
             return Math.max(0, (target - soc) / 100 * cap);
         }

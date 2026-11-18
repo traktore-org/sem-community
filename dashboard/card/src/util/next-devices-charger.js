@@ -12,7 +12,7 @@ import { effectivePlan } from './plan-facts.js';
 import { targetModel, weekdaySummary } from './next-devices.js';
 import { monthTotals, rowsForMonth } from './sessions.js';
 import { rowText } from './next-settings.js';
-import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities, upToShown } from './charger-questions.js';
+import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities, upToShown, knownCapacity } from './charger-questions.js';
 
 const LATE = [0, 15, 30, 45, 60, 90, 120];
 const FLOORS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
@@ -130,7 +130,8 @@ export function chargerBody(card, row) {
     const noCar = card._str('binary_sensor.sem_charger_' + cid + '_connected') === 'off';
     const soc = noCar ? null : resolved.soc;
     const isEstimate = noCar ? false : resolved.isEstimate;
-    const capacity = card._num('number.sem_charger_' + cid + '_ev_battery_capacity_kwh');
+    const capKey = 'number.sem_charger_' + cid + '_ev_battery_capacity_kwh';
+    const capacity = knownCapacity(card._num(capKey), card._attrs(capKey));
     const per100 = card._num('number.sem_charger_' + cid + '_ev_kwh_per_100km');
     const have = isSoc ? soc : daily;
     const tm = targetModel({ have, min, max, isSoc });

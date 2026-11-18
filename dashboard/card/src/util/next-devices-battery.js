@@ -9,6 +9,7 @@ import { html, nothing } from '../base/sem-next-base.js';
 import { providerName, trustPct } from './forecast-evidence.js';
 import { zonesModel } from './next-devices.js';
 import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels, batterySaysFromStates, batteryFloorPct, kwhAboveFloor, batteryUnits } from './battery-questions.js';
+import { batterySize } from './battery-size.js';
 
 /** (#1354) The entity of a shared battery level by its id. */
 const LEVEL = Object.fromEntries(BATTERY_LEVELS.map((l) => [l.id, l.entity]));
@@ -24,6 +25,15 @@ function capacityKwh(card) {
     }
     const a = Number(card._attrs(SPEND).measured_capacity_kwh);
     return Number.isFinite(a) && a > 0 ? a : null;
+}
+
+/** (#1321) "3.3 of 15.0 kWh (12.7 usable)": the same size text as System › Hardware. */
+function storedOf(card, stored, cap) {
+    const { nominal, usable } = batterySize(card._hass?.states);
+    if (usable !== null && nominal !== null) {
+        return card._tf('next_stored_of_usable', { stored: card._fmt(stored, 1), cap: card._fmt(nominal, 1), usable: card._fmt(usable, 1) });
+    }
+    return card._tf('next_stored_of', { stored: card._fmt(stored, 1), cap: card._fmt(cap, 1) });
 }
 
 export function batteryBody(card, row) {
@@ -58,7 +68,7 @@ export function batteryBody(card, row) {
         : (powerW !== null && powerW < -50) || status === 'discharging' ? t('discharging')
         : (powerW !== null || status) ? t('idle') : '';
     const stats = [
-        [t('next_charge'), soc === null ? '—' : Math.round(soc) + ' %', stored === null ? (cap ? card._kwh(cap) : '') : tf('next_stored_of', { stored: card._fmt(stored, 1), cap: card._fmt(cap, 1) })],
+        [t('next_charge'), soc === null ? '—' : Math.round(soc) + ' %', stored === null ? (cap ? card._kwh(cap) : '') : storedOf(card, stored, cap)],
         [t('next_power'), powerW === null ? '—' : (powerW < 0 ? '−' : '') + card._kw(Math.abs(powerW)), statusWord],
         [t('next_today'), cin === null && cout === null ? '—' : card._fmt(cin, 1) + ' / ' + card._fmt(cout, 1) + ' kWh', t('next_in_out')],
     ];

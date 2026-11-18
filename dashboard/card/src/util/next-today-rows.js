@@ -59,15 +59,16 @@ function carPlanRows(plan, cars, now) {
     return out;
 }
 
-/** A device row the plan has its own hours for takes them, one row per run; a window that has ended is dropped. A load the plan has no hours for is not listed. */
+/** A device row the plan has its own hours for takes them, one row per run; a window that has ended is dropped. A load whose demand has no hours is not listed; a load with no demand keeps its row. */
 function alignDevices(rows, plan, now) {
     const demands = plan && Array.isArray(plan.demands) ? plan.demands : [];
     const out = [];
     for (const r of rows) {
         const d = r.kind === 'device_run' ? demands.find((x) => x && /^(load|comfort):/.test(String(x.id)) && x.label && x.label === r.values.name) : null;
         const has = d ? (plan.blocks || []).some((b) => b && b.id === d.id) : false;
-        // (#1321) the plan is the one source for "expected to run": a load it holds no hours for is not listed
-        if (!has) { if (!(r.kind === 'device_run' && demands.length)) out.push(r); continue; }
+        // (#1321) the plan is the one source for "expected to run" for a load it has a demand for:
+        // no hours for that demand, no row. A load the plan has no demand for runs on its own schedule: its row stays.
+        if (!has) { if (!(r.kind === 'device_run' && d)) out.push(r); continue; }
         for (const run of planRunsRounded(plan, (id) => id === d.id, now)) {
             out.push({ ...r, when: run.s, iso: new Date(run.s).toISOString(), until: new Date(run.e).toISOString(), day: dayIndex(run.s, now) });
         }

@@ -28,6 +28,9 @@ const REPAIR_DOMAIN = 'solar_energy_management';
 export function repairNames(rep, listed, localize, more) {
     const n = Number(rep?.count) || 0;
     if (!n) return [];
+    // (#1321) SEM publishes every title itself: HA's localize has none for these
+    const own = (Array.isArray(rep.titles) ? rep.titles : []).filter((t) => typeof t === 'string' && t);
+    if (own.length === n) return own;
     const titles = (Array.isArray(listed) ? listed : [])
         .filter((i) => i && i.domain === REPAIR_DOMAIN && !i.ignored)
         .map((i) => localize(`component.${REPAIR_DOMAIN}.issues.${i.translation_key}.title`)).filter(Boolean);

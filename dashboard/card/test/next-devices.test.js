@@ -700,7 +700,8 @@ test('the battery row is open on first view and asks its levels from the shared 
 
 // (#1354) A plan id is never printed as is: the Now card names a heater's
 // Keep at run after the device.
-test('the next block is named after the device, not by its plan id', async () => {
+test('the next block is named after the device, not by its plan id', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-18T10:47:00Z') });   // (#1321) a fixed clock
     await import('../src/cards/sem-next-now-card.js');
     const st = states();
     const soon = new Date(Date.now() + 3 * 3600e3).toISOString(), later = new Date(Date.now() + 4 * 3600e3).toISOString();

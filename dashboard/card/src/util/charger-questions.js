@@ -89,6 +89,16 @@ export function chargePlanSummary({ chargeBy = '', min = null, max = null, unit 
 }
 
 /**
+ * (#1321) The car's battery size when the owner set it. The number entity
+ * always holds a value; `set_by_user: false` says it is only the factory
+ * default, which must read as unknown. A server that sends no flag is trusted.
+ */
+export function knownCapacity(value, attrs) {
+    if (attrs && attrs.set_by_user === false) return null;
+    return Number.isFinite(value) ? value : null;
+}
+
+/**
  * (#1321) The "Up to" figure of a kWh target, never above the car's battery.
  * → { max, full }: `max` the number to show (null when the car is unknown and
  * the figure is only the setting's own ceiling), `full` true when the text

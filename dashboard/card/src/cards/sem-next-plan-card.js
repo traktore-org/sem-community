@@ -33,7 +33,7 @@ export function knownNum(v) {
 }
 import { laneModel } from '../util/next-timeline.js';
 import { minutesToPlanEnd } from '../util/next-strip.js';
-import { chartWindow, chartTicks, sunModel, priceModel, priceAt, planRows, focusBlock, runningAt, RANGES } from '../util/next-plan-chart.js';
+import { chartWindow, chartTicks, sunModel, sunRuns, priceModel, priceAt, planRows, focusBlock, runningAt, RANGES } from '../util/next-plan-chart.js';
 import {
     WHY_KINDS, actionWords, changeLabel, deviceName, mergePerDay, earlierKey, filterRecords, isToday, plainReason, rowTime, whyChips,
 } from '../util/why-rows.js';
@@ -322,6 +322,16 @@ class SEMNextPlanCard extends SEMNextBase {
         return this._reasonText(b.reason, b.reason_params);
     }
 
+    /** (#1321) One reason per block: with several, each says which hours it covers. */
+    _blockReasons(reasons) {
+        const many = reasons.length > 1;
+        return reasons.map((r) => {
+            const text = this._reasonText(r.reason, r.params);
+            const when = many && r.runs && r.runs.length ? runsText(r.runs, (a, b) => this._winText(a, b)) : '';
+            return text ? (when ? `${when}: ${text}` : text) : '';
+        }).filter(Boolean).join(' · ');
+    }
+
     /** A block's reason code in words, '' when the code has no text. */
     _reasonText(reason, params) {
         const key = 'next_reason_' + reason;
@@ -351,7 +361,7 @@ class SEMNextPlanCard extends SEMNextBase {
             const kind = l.id.startsWith('ev:') ? 'ev' : l.id.includes('battery') ? 'battery_in' : 'load';
             const win = !l.start ? '' : (l.runs && l.runs.length ? runsText(l.runs, (a, b) => this._winText(a, b)) : this._winText(Date.parse(l.start), Date.parse(l.end)));
             const when = l.start ? `${win}${l.kwh > 0.05 ? ' · ' + this._kwh(l.kwh) : ''}` : t('next_not_scheduled');
-            const why = l.reasons && l.reasons.length ? l.reasons.map((r) => this._reasonText(r.reason, r.params)).filter(Boolean).join(' · ')
+            const why = l.reasons && l.reasons.length ? this._blockReasons(l.reasons)
                 : l.code ? this._planWhyText(l.code, l.params, l.runs)
                 : l.why ? this._whyText({ why: l.why }) : this._reasonText(l.reason, l.params);
             return html`<div class="row" style="--c:${KIND_COLOR[kind] || C.home}"><div class="k">${this._icon(KIND_ICON[kind] || 'mdi:power-plug')}
@@ -493,21 +503,13 @@ class SEMNextPlanCard extends SEMNextBase {
             const max = Math.max(...d.sun.points.map((p) => p.kw), 0.1) * 1.15;
             const SY = (kw) => sy1 - (sy1 - sy0) * kw / max;
             for (const actual of [true, false]) {
-                const pts = d.sun.points.filter((p) => p.actual === actual);
-                if (!pts.length) continue;
-                // runs of touching periods; each run a smooth curve through the midpoints
-                const runs = [];
-                for (const p of pts) {
-                    const last = runs[runs.length - 1];
-                    if (last && p.s - last[last.length - 1].e < 40 * 60e3) last.push(p); else runs.push([p]);
-                }
                 let line = '', area = '';
-                for (const run of runs) {
-                    const xy = [[X(run[0].s), SY(0)], ...run.map((p) => [X((p.s + p.e) / 2), SY(p.kw)]), [X(run[run.length - 1].e), SY(0)]];
-                    const curve = smoothPath(xy);
+                for (const run of sunRuns(d.sun.points, X, SY).filter((r) => r.actual === actual)) {
+                    const curve = smoothPath(run.xy);
                     line += (line ? ' ' : '') + curve;
-                    area += (area ? ' ' : '') + curve + ` L${xy[xy.length - 1][0]} ${sy1} L${xy[0][0]} ${sy1} Z`;
+                    area += (area ? ' ' : '') + curve + ` L${run.xy[run.xy.length - 1][0]} ${sy1} L${run.xy[0][0]} ${sy1} Z`;
                 }
+                if (!line) continue;
                 parts.push(svg`<path d="${area}" fill="url(#${gid}${actual ? 's' : 'f'})"></path>
                     <path d="${line}" fill="none" stroke="${C.solar}" stroke-width="2" stroke-linejoin="round" stroke-dasharray="${actual ? nothing : '4 3'}"></path>`);
             }
