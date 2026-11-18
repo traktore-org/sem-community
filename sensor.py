@@ -245,7 +245,7 @@ def _energy_plan_attrs(
            if plan.get("saved") is not None
            and plan.get("cost_if_now") is not None else {}),
         "takeover": plan.get("takeover"),
-        "demands": _demand_rows(plan.get("demands"), merged_blocks),
+        "demands": plan.get("demands") or [],
         "slots": [{
             "start": s.get("start"), "end": s.get("end"),
             # PRICE-ASK: a field name of the published slot, not a level
@@ -325,12 +325,22 @@ def _energy_plan_attrs(
         attrs["batt_runs"] = []
         attrs["timeline_omitted"] = True
         if _too_big():
-            # (#1321) each demand's own runs say the same, in fewer bytes
+            # (#1321) the blocks go; each demand's own runs say the same in
+            # fewer bytes, so a gap between two runs stays a gap. Never both:
+            # runs beside the blocks pushed a normal quarter-hour day over.
             attrs["blocks"] = []
-        if _too_big():
-            attrs["demands"] = [{k: v for k, v in d.items() if k != "runs"}
-                                if isinstance(d, dict) else d
-                                for d in attrs["demands"]]
+            attrs["demands"] = _demand_rows(attrs["demands"], merged_blocks)
+        # Still too big: drop the runs of the demand with the most runs
+        # first, so a car's two hours survive a load that cycles all day.
+        while _too_big():
+            with_runs = [d for d in attrs["demands"]
+                         if isinstance(d, dict) and d.get("runs")]
+            if not with_runs:
+                break
+            longest = max(with_runs, key=lambda d: len(d["runs"]))
+            attrs["demands"] = [
+                {k: v for k, v in d.items() if k != "runs"} if d is longest else d
+                for d in attrs["demands"]]
     # (#758) The timeline is the biggest term, but it is not the only one,
     # and going over means the recorder keeps NOTHING. If dropping it was
     # not enough, drop what rode along and say so — the plan itself is what
