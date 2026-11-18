@@ -6946,7 +6946,18 @@ and the two provider files, no code may call a level accessor, use `PriceLevel.<
 with a level word. An exception carries `# PRICE-ASK: <reason>`.
 **Left open:** a device with its own tariff is still planned with the live question about later
 hours (`PlanTariff.cheap_at` → `cheap_seen_from_now`). No real data to prove a change on.
-Refs #1372 #994 #1310 #1362 #1368 #1369.
+**Round 2 (#1385) — "has cheap hours" read from the mode name.** "Solar + cheapest hours" was
+greyed out for a schedule tariff with 0.32 and 0.21: the select said `tariff_available` only when
+`tariff_mode == "dynamic"`, while the plan already used the 0.21 hours. A two-rate static tariff
+had the same block. **Fixed:** `PriceView.has_cheap_rate()` asks the provider
+(`has_cheap_rate`: static = two rates and a peak window; calendar = two rates and a peak block in
+the week; dynamic = yes). Swept, same shape in SEM Next: the money row said "one rate" and the plan
+chart drew one price for any tariff that is not dynamic (**fixed**: what the hours hold decides).
+**Guard:** `tests/test_1385_schedule_tariff_cheap_mode.py` — the reporter's schedule through the
+real provider and the real coordinator; an AST count of every compare with `"dynamic"`, each with
+its reason. **Left open (choice):** the "cheap now" hint and the #1321 price-paid compare stay
+dynamic-only.
+Refs #1372 #994 #1310 #1362 #1368 #1369 #1385.
 
 ### 183. Several things put back in one chain — the first that fails stops the rest — GUARDED
 

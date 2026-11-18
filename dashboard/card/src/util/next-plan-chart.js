@@ -147,7 +147,12 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], schedule
     const min = known.length ? Math.min(...known) : null;
     const max = known.length ? Math.max(...known) : null;
     const dynamic = isDynamic === true || (isDynamic !== false && level !== 'flat');
-    const flat = !dynamic || level === 'flat' || (known.length > 0 && max - min < 1e-6);
+    // (#1385) A schedule or a two-rate tariff is not dynamic, but its hours
+    // still hold two prices: they decide, not the mode name. Today's 'flat'
+    // (a weekend at one rate) does not flatten Monday's peak in the window.
+    // A dynamic tariff keeps its own word for a flat day.
+    const flat = known.length === 0 ? (!dynamic || level === 'flat')
+        : (max - min < 1e-6 || (dynamic && level === 'flat'));
     const avgNum = num(todayAvg);
     if (flat) {
         const price = known.length ? known[0] : (Number.isFinite(avgNum) ? avgNum : null);

@@ -277,6 +277,19 @@ class PriceView:
             return None
         return self.rate_cheap_at
 
+    def has_cheap_rate(self) -> bool:
+        """(#1385) Can the tariff call any hour cheap at all? A setting that
+        waits for cheap hours is offered only then. Not ``tariff_mode ==
+        "dynamic"``: a schedule or a two-rate tariff has cheap hours too.
+        Only a provider that says ``True`` has them."""
+        reader = getattr(self._p, "has_cheap_rate", None)
+        if not callable(reader):
+            return False
+        try:
+            return reader() is True
+        except Exception:  # noqa: BLE001 — a provider that cannot say has none
+            return False
+
     # ── comparing hours ───────────────────────────────────────────────
 
     def day_has_cheaper(self, hours: Iterable[datetime]) -> bool:

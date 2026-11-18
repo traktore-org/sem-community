@@ -50,9 +50,9 @@ EV_TARGET_TYPES = {
 # ``docs/plans/2026-05-30_ev_charge_mode_consolidation.md`` for the
 # full mapping, migration rules, and resolved design questions.
 #
-# ``solar_plus_cheap`` is conditionally hidden when no dynamic tariff
-# is configured — the option appears automatically when the user adds
-# a tariff. Maintainer decision Q1, 2026-05-30. Constant lives in
+# ``solar_plus_cheap`` is greyed out in the card when the tariff has no
+# cheap hours (#885; #1385: any tariff with a cheap rate, not only a
+# dynamic one). Decision Q1, 2026-05-30. Constant lives in
 # ``consts/ev_charge_modes.py`` so the coordinator's read-side helper
 # imports the same source of truth (no duplicated tuple in
 # ``coordinator/coordinator.py``).
@@ -465,11 +465,10 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
 
         For ``ev_target_type``: SOC % only when this charger has a
         vehicle_soc_entity configured (#235). For ``ev_charging_mode``:
-        the full mode set always. For ``charge_mode`` (#277): hide
-        ``solar_plus_cheap`` when no dynamic tariff is configured —
-        users without a tariff should not see a ghost option that
-        silently degrades. For unknown keys: pass through what the
-        description declared.
+        the full mode set always. For ``charge_mode``: every mode (#885);
+        the card greys ``solar_plus_cheap`` when the tariff has no cheap
+        hours (``extra_state_attributes``). For unknown keys: pass through
+        what the description declared.
         """
         if self._config_key == "ev_target_type":
             has_soc = bool(self._charger_cfg().get("vehicle_soc_entity"))
@@ -493,8 +492,8 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         """(#885) Prerequisite state for the mode list, read by the card.
 
         One rule, two severities: a mode that CANNOT function without its
-        prerequisite is disabled in the UI (``solar_plus_cheap`` without a
-        dynamic tariff has no cheap windows to use); a mode that functions
+        prerequisite is disabled in the UI (``solar_plus_cheap`` on a tariff
+        with no cheap rate has no cheap hours to use, #1385); a mode that functions
         PARTIALLY shows an info instead (``solar_plus_battery`` assists on
         live surplus from day one — the forecast-led bypass and the #878
         dynamic floor stay dormant until the #800 learner graduates, and
@@ -518,10 +517,14 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             if deadline is not None:
                 paused_until = deadline.isoformat()
                 resume_mode = cfg.get(_cp.PAUSE_RESUME_MODE_KEY) or None
+        # (#1385) Asked of the tariff, not of its mode name: a schedule
+        # with a peak and an off-peak rate has cheap hours as well, and the
+        # mode reads them through the same levels.
+        from .coordinator.price_view import PriceView
         return {
-            "tariff_available": (
-                self.coordinator.config.get("tariff_mode") == "dynamic"
-            ),
+            "tariff_available": PriceView(
+                getattr(self.coordinator, "_tariff_provider", None),
+            ).has_cheap_rate(),
             "modes_needing_tariff": ["solar_plus_cheap"],
             "paused_until": paused_until,
             "pause_resume_mode": resume_mode,

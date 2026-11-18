@@ -387,6 +387,10 @@ class SEMNextNowCard extends SEMNextBase {
         const tz = this._hass?.config?.time_zone;
         const win = chartWindow(now, 'next', tz);
         const tar = this._attrs('sensor.sem_tariff_current_import_rate');
+        // (#1385) The strip colours prices by the thresholds, made for a price
+        // that moves. A schedule's peak is its 'normal' rate, which the money
+        // row names; coloured 'expensive' here, the two would disagree.
+        if (tar.is_dynamic === false) return nothing;
         const plan = this._attrs('sensor.sem_energy_plan');
         const pm = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, schedule: tar.schedule_today,
             isDynamic: tar.is_dynamic, level: tar.price_level || this._str('sensor.sem_tariff_price_level'), todayAvg: tar.today_avg });
@@ -637,7 +641,8 @@ class SEMNextNowCard extends SEMNextBase {
         const imp = this._num('sensor.sem_tariff_current_import_rate'), exp = this._num('sensor.sem_tariff_current_export_rate');
         const level = this._str('sensor.sem_tariff_price_level') || String(rateEntity?.attributes?.price_level || '');
         const a = rateEntity?.attributes || {};
-        const flat = !level || isAbsence(level) || a.is_dynamic === false;
+        // (#1385) not `is_dynamic`: a schedule with two rates has a level too
+        const flat = !level || isAbsence(level);
         if (cost === null && saved === null && mcost === null && imp === null) return nothing;
         const cur = this._currency();
         const tiles = [];
