@@ -215,7 +215,8 @@ export function runningNow(info, powerW = null, switchState = null) {
 /** The state of a device's switch entity in `states`, or null when it has none. */
 export function switchStateOf(info, states) {
     const id = info && info.switch_entity;
-    return id && states && states[id] ? String(states[id].state) : null;
+    const st = id ? states?.[id]?.state : undefined;
+    return st == null ? null : String(st);
 }
 
 export function statePill(row, live = {}) {
