@@ -342,7 +342,7 @@ class SEMNextSystemCard extends SEMNextBase {
             ? html`<div class="rows">${rows.slice(0, 8).map((r) => this._row('mdi:hand-back-left-outline',
                 `${this._refusedName(r, t, rows)}${r.action ? ' · ' + actionWords(r.action, t) : ''}`,
                 Number.isFinite(Number(r.power_w)) ? this._kw(Number(r.power_w)) : '',
-                recordReason(r, this._hass.states, t), { cls: 'ell' }))}</div>`
+                recordReason(r, this._hass.states, t)))}</div>`
             : html`<div class="hint">${obs ? this._t('next_would_none') : this._t('next_refused_none')}</div>`;
         return this._sec(obs ? this._t('next_would_do') : this._t('next_held_back'), body);
     }
@@ -578,7 +578,7 @@ class SEMNextSystemCard extends SEMNextBase {
         const flip = slot.action === 'flip_grid_sign' ? 'next_flip_grid_body' : slot.action === 'flip_battery_sign' ? 'next_flip_battery_body' : '';
         const run = () => this._action(slot.action);
         if (flip) this._confirmDo({ title: label, body: this._t(flip), okLabel: this._t('next_flip_ok'), run });
-        else this._askFirst(label, run);
+        else this._askFirst(label, run, { body: this._t({ reset_sign_detection: 'next_confirm_reset_sign', purge_status_history: 'next_confirm_cleanup' }[slot.action] || 'next_confirm_body') });
     }
 
     async _action(name) {

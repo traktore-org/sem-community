@@ -16,7 +16,7 @@
  *   type: custom:sem-next-devices-card
  */
 
-import { effectivePlan } from '../util/plan-facts.js';
+import { effectivePlan, planRuns, nextRun } from '../util/plan-facts.js';
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { haDefined, ensureHaElements } from '../util/ha-elements.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
@@ -29,7 +29,7 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, nextBlock, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
+import { deviceRows, statePill, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
@@ -215,8 +215,11 @@ class SEMNextDevicesCard extends SEMNextBase {
     _plannedAt(...planIds) {
         // (#1321) the same plan every screen reads; tomorrow's hour says tomorrow
         const plan = effectivePlan(this._attrs('sensor.sem_energy_plan'));
-        const next = nextBlock(plan.blocks, planIds, Date.now());
-        return next ? this._clockDay(next.start) : '';
+        // the next run, not the next change of watts inside one that is under way
+        const now = Date.now();
+        const want = new Set(planIds.map(String));
+        const next = nextRun(planRuns(plan, (id) => want.has(id), now), now);
+        return next ? this._clockDay(next.s) : '';
     }
 
     /** The pill's words: the state, then why when the engine names a cause. */
@@ -635,11 +638,14 @@ class SEMNextDevicesCard extends SEMNextBase {
         typeSel.addEventListener('change', applyType);
         const relay = overlay.querySelector('#cfg-relay');
         if (relay && dev) {
+            // (#1321) one tap only asks: the switch and the device change on the confirm
             relay.addEventListener('click', () => {
                 const on = !relay.classList.contains('on');
-                relay.classList.toggle('on', on);
-                relay.setAttribute('aria-checked', String(on));
-                this._dev(dev.id, 'behind_operator_relay', String(on));
+                this._askFirst(this._t('cfg_behind_operator_relay'), () => {
+                    relay.classList.toggle('on', on);
+                    relay.setAttribute('aria-checked', String(on));
+                    this._dev(dev.id, 'behind_operator_relay', String(on));
+                }, { body: this._t('next_confirm_relay'), okLabel: this._t('next_yes') });
             });
         }
         overlay.querySelector('#cfg-cancel').addEventListener('click', () => close());
@@ -647,7 +653,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         if (removeBtn) {
             removeBtn.addEventListener('click', () => {
                 this._askFirst(removeBtn.textContent.trim(), () => this._call(DOMAIN, 'remove_device_control_mapping', { energy_sensor: energySensor })
-                    .then(() => close()).catch((err) => showError(err.message)));
+                    .then(() => close()).catch((err) => showError(err.message)), { body: this._t('next_confirm_clear_mapping') });
             });
         }
         overlay.querySelector('#cfg-save').addEventListener('click', () => {
@@ -690,7 +696,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         }
         if (peakE) {
             tiles.push({ label: t('next_peak'), value: this._fmtKw(peakW), unit: uncapped ? t('uncapped') : this._tf('next_of_kw', { kw: this._fmtKw(limitW) }),
-                sub: uncapped || marginW === null ? t('next_15min') : this._tf('next_15min_margin', { kw: this._fmtKw(marginW) }) });
+                // (#1321) a phone tile is a third of the width: the margin alone, not three lines
+                sub: uncapped || marginW === null ? t('next_15min') : this._tf(this._narrow() ? 'next_margin_short' : 'next_15min_margin', { kw: this._fmtKw(marginW) }) });
         }
         if (!tiles.length) return nothing;
         const pctSensor = this._num('sensor.sem_current_vs_peak_percentage');
@@ -723,9 +730,11 @@ class SEMNextDevicesCard extends SEMNextBase {
         // (#1371) only what SEM could really shed: nothing is said when that
         // is nothing (load management off), and a device in mode Off is not counted
         if (shed !== null && shed > 0) sent.push(this._tf('next_sent_can_shed', { kw: this._kw(shed), n: rows.filter((r) => r.type === 'load' && r.hasControlHandle && r.isControllable && r.mergedMode !== 'off').length }));
-        const status = this._valLabel('load_management_status');
-        const recRaw = this._str('sensor.sem_load_management_recommendation');
-        const rec = recRaw ? (this._t(recRaw) || recRaw) : '';
+        // (#1321) "warning" is the engine's low warning level: say it only when the peak is near the limit
+        const calm = this._str('sensor.sem_load_management_status') === 'warning' && !uncapped && pct !== null && pct < 80;
+        const status = calm ? '' : this._valLabel('load_management_status');
+        const recRaw = calm ? '' : this._str('sensor.sem_load_management_recommendation');
+        const rec = recRaw ? (this._t(recRaw === 'Monitor - approaching peak limit' ? 'next_peak_close' : recRaw) || recRaw) : '';
         const lm = this._attrs('sensor.sem_load_management_status');
         const op = lm.shed_signal_active === true ? this._tf('operator_limit_banner', {
             kw: typeof lm.shed_signal_cap_kw === 'number' ? this._fmt(lm.shed_signal_cap_kw, 1) : '—',

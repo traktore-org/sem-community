@@ -38,7 +38,7 @@ test('why lines: never more than four; the engine\'s `why` on a plan demand wins
     assert.equal(whyLines(many, NOW).length, WHY_LINES_MAX);
     // the engine's shape: plan.demands[].why = {code, params: {from, to, price?}}
     const plan = {
-        blocks: [blk('ev:keba', '2026-11-14T00:00:00+01:00', '2026-11-14T01:00:00+01:00', 4000, 'before_deadline'),
+        blocks: [blk('ev:keba', '2026-11-14T00:00:00+01:00', '2026-11-14T01:00:00+01:00', 7500, 'before_deadline'),
                  blk('comfort:hot_water', '2026-11-14T04:00:00+01:00', '2026-11-14T05:00:00+01:00', 3000, 'keep_at')],
         demands: [{ id: 'ev:keba', label: 'KEBA', planned_kwh: 7.5,
                     why: { code: 'cheapest_hours', params: { from: '2026-11-14T00:00:00+01:00', to: '2026-11-14T03:00:00+01:00', price: 0.11 } } },

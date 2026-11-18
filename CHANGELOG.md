@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Plans show real hours** (#1321). A car with two runs shows two windows, one kWh figure and one next start on every screen.
+- 🐛 **A device is either on or waiting** (#1321). Now, Devices and Why now use one rule; Health says no power reading.
+- ✨ **Every confirm says what it does** (#1321). Each action explains itself; the relay switch asks first; repeated battery limits fold into one row.
+- 🐛 **Plainer words** (#1321). Learning shows nights out of nights needed; no solar tip for zero export; one CO₂ format; peak warning only near the limit.
 - 🐛 **Dialog buttons show on HA 2026.11** (#1321). Cancel, OK and Save were drawn at zero size, so nothing could be confirmed or saved.
 - 🐛 **Fewer repeats, clearer words** (#1321). One power figure, one Phases row, the peak switch first; names and numbers agree.
 - 🐛 **One plan on every screen** (#1321). Headline, chart, list and Now name the same car hours; past hours are gone; tomorrow's say tomorrow.

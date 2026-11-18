@@ -12,6 +12,8 @@
  *   deadline (the card paints it red) and a car is plugged in.
  * The "now" anchor row is dropped: the lead line already says now.
  */
+import { planRuns } from './plan-facts.js';
+
 export const KINDS = {
     solar_peak:       { icon: 'mdi:weather-sunny',           color: 'solar' },
     solar_end:        { icon: 'mdi:weather-sunset',          color: 'solar' },
@@ -43,34 +45,30 @@ export function dayIndex(whenMs, nowMs) {
     return d <= 0 ? 0 : (d === 1 ? 1 : 2);
 }
 
-/** One row per plugged-in car that the plan has hours for: the plan's own window, not the strip's guess. */
+/** One row per run of a plugged-in car that the plan has hours for: the plan's own hours, a gap stays a gap. */
 function carPlanRows(plan, cars, now) {
     const out = [];
     for (const c of cars || []) {
-        const bs = (plan && Array.isArray(plan.blocks) ? plan.blocks : [])
-            .filter((b) => b && b.id === 'ev:' + c.cid && Date.parse(b.end) > now);
-        if (!bs.length) continue;
-        const s = Math.min(...bs.map((b) => Math.max(Date.parse(b.start), now))), e = Math.max(...bs.map((b) => Date.parse(b.end)));
-        const kwh = bs.reduce((a, b) => a + (Number(b.power_w) || 0) * (Math.min(Date.parse(b.end), e) - Math.max(Date.parse(b.start), now)) / 3.6e9, 0);
-        out.push({ kind: 'ev_charge_start', when: s, iso: new Date(s).toISOString(), icon: KINDS.ev_charge_start.icon, color: 'ev',
-            label: 'next_car_charges', detail: null, values: { name: c.name, kwh: String(Math.round(kwh * 10) / 10) },
-            until: new Date(e).toISOString(), day: dayIndex(s, now), late: false, planned: true });
+        for (const r of planRuns(plan, (id) => id === 'ev:' + c.cid, now)) {
+            out.push({ kind: 'ev_charge_start', when: r.s, iso: new Date(r.s).toISOString(), icon: KINDS.ev_charge_start.icon, color: 'ev',
+                label: 'next_car_charges', detail: null, values: { name: c.name, kwh: String(Math.round(r.kwh * 10) / 10) },
+                until: new Date(r.e).toISOString(), day: dayIndex(r.s, now), late: false, planned: true });
+        }
     }
     return out;
 }
 
-/** A device row the plan has its own hours for takes them; a window that has ended is dropped. */
+/** A device row the plan has its own hours for takes them, one row per run; a window that has ended is dropped. */
 function alignDevices(rows, plan, now) {
     const demands = plan && Array.isArray(plan.demands) ? plan.demands : [];
     const out = [];
     for (const r of rows) {
         const d = r.kind === 'device_run' ? demands.find((x) => x && /^(load|comfort):/.test(String(x.id)) && x.label && x.label === r.values.name) : null;
-        const bs = d ? (plan.blocks || []).filter((b) => b && b.id === d.id) : [];
-        if (!bs.length) { out.push(r); continue; }
-        const live = bs.filter((b) => Date.parse(b.end) > now);
-        if (!live.length) continue;
-        const s = Math.min(...live.map((b) => Math.max(Date.parse(b.start), now)));
-        out.push({ ...r, when: s, iso: new Date(s).toISOString(), until: new Date(Math.max(...live.map((b) => Date.parse(b.end)))).toISOString(), day: dayIndex(s, now) });
+        const has = d ? (plan.blocks || []).some((b) => b && b.id === d.id) : false;
+        if (!has) { out.push(r); continue; }
+        for (const run of planRuns(plan, (id) => id === d.id, now)) {
+            out.push({ ...r, when: run.s, iso: new Date(run.s).toISOString(), until: new Date(run.e).toISOString(), day: dayIndex(run.s, now) });
+        }
     }
     return out;
 }

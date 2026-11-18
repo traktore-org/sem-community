@@ -90,6 +90,7 @@ const writes = (el) => el.__calls.filter((c) => c[1] !== 'get_config');
 const sys = (extra = {}) => mount('sem-next-system-card', {
     'sensor.sem_diag_grid_sign': S('negated'), 'sensor.sem_diag_battery_sign': S('normal'), 'switch.sem_observer_mode': S('on'), ...extra });
 
+const writes_ = (el) => el.__calls.filter((c) => c[1] !== 'get_config');
 test('1: a sign row shows its direction, not "Flip sign"', () => {
     const el = sys();
     const val = (action) => el._actionValue({ kind: 'action', action, labelKey: 'next_flip_sign' }, (k) => k);
@@ -169,7 +170,7 @@ test('2: the headline, the chart and the list read the same car window', () => {
     const win = chartWindow(NOW, 'next', TZ);
     const lead = planLead(plan, { when: 'today', nowMs: NOW, win });
     assert.equal(lead.main.key, 'next_plan_car', 'the car is the biggest taker still to come');
-    assert.equal(lead.main.params.kwh, '9.9');           // from now on, not the 10.05 that includes 06 min gone
+    assert.equal(lead.main.params.kwh, '10.1');          // the whole run, as every list names it (#1321 loop 3)
     const rows = planRows({ win, nowMs: NOW, plan, names: { charger: () => 'Sim Charger 2' } });
     const car = rows.find((r) => r.kind === 'ev');
     assert.ok(car, 'the chart has the car row');
@@ -315,11 +316,11 @@ test('6: the forecast trust is one reading of one fraction', () => {
     assert.equal(trustPct(''), null);
 });
 
-test('6: the battery counts its nights once', () => {
-    const rv = { demands: [{ demand_id: 'arbitrage:battery', kind: 'battery', code: 'learning', nights: 0 }, { demand_id: 'ev:a', kind: 'ev', code: 'learning', nights: 3 }] };
-    const say = (key, p) => `${key}:${p.nights}`;
+test('6: a learning row says the learner\'s own count out of what it needs (loop 3)', () => {
+    const rv = { demands: [{ demand_id: 'arbitrage:battery', kind: 'battery', code: 'learning', nights: 0, needed: 5 }, { demand_id: 'ev:a', kind: 'ev', code: 'learning', nights: 3 }] };
+    const say = (key, p) => `${key}:${p.nights}/${p.needed}`;
     const rows = reviewRows(rv, say, undefined, { battery: 44 });
-    assert.deepEqual(rows.map((r) => r.text), ['energy_plan_review_learning:44', 'energy_plan_review_learning:3']);
+    assert.deepEqual(rows.map((r) => r.text), ['energy_plan_review_learning:0/5', 'energy_plan_review_learning:3/5'], 'no other night count joins in');
 });
 
 test('6: a held device does not say it "turns off"; a live line keeps its own reason otherwise', () => {
@@ -371,7 +372,6 @@ test('11: each of the six car modes writes that charger\'s own select, on a home
         assert.deepEqual(writes.map((w) => w[2].option).sort(), MODES.filter((k) => k !== 'min_plus_solar').sort());
     }
 });
-const writes_ = (el) => el.__calls.filter((c) => c[1] !== 'get_config');
 
 // ── 7–9 and the small ones ──
 test('7: the Now power figure is on the bar once; the lists and "Why now" print no second copy', () => {

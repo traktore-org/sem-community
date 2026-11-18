@@ -17,8 +17,9 @@
 import { SEMLitBase, html, css, svg, nothing } from './sem-lit-base.js';
 import { readNumber } from '../util/missing-value.js';
 import { fill } from '../util/next-lead.js';
+import { plainReason } from '../util/why-rows.js';
 import { hhmmIn } from '../util/next-time.js';
-import { clockWithDay, windowText } from '../util/plan-facts.js';
+import { clockWithDay, dayOffset, windowText } from '../util/plan-facts.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { priceLevelKey, isAbsence } from '../util/price-level.js';
 import { fmtPrice } from '../util/next-format.js';
@@ -517,6 +518,14 @@ export class SEMNextBase extends SEMLitBase {
     // (#1321) every number goes through fmtNum: the user's locale, units kept
     _fmtKw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : fmtNum(w / 1000, d); }
     _fmt(v, d = 1) { return fmtNum(v, d); }
+    /**
+     * (#1321) A reason in words for a decision that stands NOW: it never says the battery
+     * level is unknown while the chip reads it. A past record keeps what it said then.
+     */
+    _plainNow(rec, t = (k) => this._t(k)) {
+        const soc = this._num('sensor.sem_battery_soc');
+        return plainReason(rec, t, { soc: soc === null ? NaN : soc });
+    }
     _int(v) { return fmtNum(Math.round(Number(v)), 0); }
     _kw(w, d = 1) { return w === null || !Number.isFinite(w) ? '—' : `${fmtNum(w / 1000, d)} kW`; }
     _kwh(v, d = 1) { return v === null || !Number.isFinite(Number(v)) ? '—' : `${Number(v) >= 100 ? fmtNum(Math.round(v), 0) : fmtNum(v, d)} kWh`; }
@@ -536,6 +545,16 @@ export class SEMNextBase extends SEMLitBase {
         const ms = typeof x === 'number' ? x : Date.parse(x instanceof Date ? x.toISOString() : x);
         if (!Number.isFinite(ms)) return this._hhmm(x);
         return clockWithDay(ms, nowMs, this._hass?.config?.time_zone, { tomorrow: this._t('next_when_tomorrow') }, this._weekdayOf());
+    }
+    /** (#1321) A CO2 total in ONE format on every screen: whole kg, tonnes from 1000 kg. */
+    _co2Text(kg, unit) { return unit === 'kg' && kg >= 1000 ? `${this._fmt(kg / 1000, 1)} t` : `${this._fmt(Math.round(kg), 0)} ${unit}`; }
+    /** (#1321) "at 07:30" today, "tomorrow at 07:30" or "Fri at 07:30" another day: never "at tomorrow 07:30". */
+    _atWhen(ms, nowMs = Date.now()) {
+        const tz = this._hass?.config?.time_zone;
+        const off = dayOffset(ms, nowMs, tz);
+        const time = hhmmIn(new Date(ms), tz);
+        if (off === 0 || off < 0) return this._tf('next_batt_end_sub', { time });
+        return this._tf('next_at_day_time', { day: off === 1 ? this._t('next_when_tomorrow') : this._weekdayOf()(ms), time });
     }
     _winText(s, e, nowMs = Date.now()) {
         return windowText(s, e, nowMs, this._hass?.config?.time_zone, { tomorrow: this._t('next_when_tomorrow') }, this._weekdayOf());
@@ -713,11 +732,12 @@ export class SEMNextBase extends SEMLitBase {
         const cur = value === null || value === undefined ? '' : String(value);
         if (haDefined('ha-selector') && this._hass) {
             const selector = { select: { mode: 'dropdown', options: options.map((x) => ({ value: String(x.value), label: x.label })) } };
-            return html`<ha-selector .hass=${this._hass} .selector=${selector} .value=${cur} .label=${o.label || ''} .required=${!!o.required} ?disabled=${!!o.disabled}
+            // (#1321) a required field draws an asterisk after its label; the topic switch names itself for readers instead
+            return html`<ha-selector .hass=${this._hass} .selector=${selector} .value=${cur} .label=${o.label || ''} .required=${!!o.required} aria-label=${o.ariaLabel || nothing} ?disabled=${!!o.disabled}
                 @value-changed=${(e) => { const v = e.detail?.value; if (v !== undefined && String(v) !== cur) onChange(String(v)); }}
                 @keydown=${o.onKeydown || nothing}></ha-selector>`;
         }
-        return html`<select aria-label="${o.label || nothing}" ?disabled=${!!o.disabled} @change=${(e) => onChange(e.target.value)}
+        return html`<select aria-label="${o.label || o.ariaLabel || nothing}" ?disabled=${!!o.disabled} @change=${(e) => onChange(e.target.value)}
             @keydown=${o.onKeydown || nothing} @blur=${o.onBlur || nothing}>
             ${options.map((x) => html`<option value=${x.value} ?selected=${String(x.value) === cur}>${x.label}</option>`)}</select>`;
     }

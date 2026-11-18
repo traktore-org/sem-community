@@ -254,7 +254,8 @@ export function slotText(slot, t, value = slot.value, states = null, plain = fal
         }
         // (#1321) a price per kWh reads the same here as on Now and Plan
         const s = /\/kWh$/.test(slot.unit || '') ? fmtPrice(v) : fmtNum(v, decimalsOf(slot.step));
-        return slot.unit ? `${s} ${slot.unit}` : s;
+        // (#1321) a no-break space keeps "2.0 °C" on one line
+        return slot.unit ? `${s}\u00a0${slot.unit}` : s;
     }
     if (slot.kind === 'switch') return value ? t('next_on') : t('next_off');
     if (slot.kind === 'select') {

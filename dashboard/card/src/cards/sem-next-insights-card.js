@@ -390,7 +390,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const tiles = [self !== null ? ring(self, C.solar, 'next_self_use', 'next_self_use_sub') : null, aut !== null ? ring(aut, C.home, 'next_own_supply', 'next_own_supply_sub') : null].filter(Boolean);
         const rows = [];
         if (co2d !== null || co2y !== null || co2l !== null) {
-            const sub = [co2y !== null ? `${this._int(co2y)} ${unit} ${this._t('next_this_year')}` : '', co2l !== null ? `${this._fmtT(co2l, unit)} ${this._t('next_lifetime')}` : '',
+            const sub = [co2y !== null ? `${this._int(co2y)} ${unit} ${this._t('next_this_year')}` : '', co2l !== null ? `${this._co2Text(co2l, unit)} ${this._t('next_lifetime')}` : '',
                          trees !== null ? this._tf('next_trees', { n: Math.round(trees) }) : ''].filter(Boolean).join(' · ');
             rows.push(this._row('mdi:leaf', this._t('next_co2_avoided'), co2d === null ? '—' : `${this._fmt(co2d, 1)} ${unit} ${this._t('next_today').toLowerCase()}`, sub, { onClick: () => this._moreInfo(S + 'daily_co2_avoided') }));
         }
@@ -398,7 +398,6 @@ class SEMNextInsightsCard extends SEMNextBase {
         const title = this._period === 'day' ? this._t('next_shares') : `${this._t('next_shares')} · ${this._t('next_today')}`;
         return this._sec(title, html`${tiles.length ? html`<div class="tiles">${tiles}</div>` : nothing}${rows.length ? html`<div class="rows" style="margin-top:6px">${rows}</div>` : nothing}`);
     }
-    _fmtT(kg, unit) { return unit === 'kg' && kg >= 1000 ? `${this._fmt(kg / 1000, 1)} t` : `${this._fmt(Math.round(kg), 0)} ${unit}`; }
 
     // ── Power ──
     _powerTab() {
@@ -591,7 +590,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         if (life !== null) {
             const co2 = this._num(S + 'lifetime_co2_avoided'), trees = this._num(S + 'lifetime_trees_equivalent');
             rows.push(this._row('mdi:forest', this._t('next_lifetime'), `${this._int(life)} ${cur} ${this._t('next_saved').toLowerCase()}`,
-                [co2 !== null ? `${this._fmtT(co2, this._kgUnit('lifetime_co2_avoided'))} CO₂` : '', trees !== null ? this._tf('next_trees', { n: Math.round(trees) }) : ''].filter(Boolean).join(' · '), { more: true }));
+                [co2 !== null ? `${this._co2Text(co2, this._kgUnit('lifetime_co2_avoided'))} CO₂` : '', trees !== null ? this._tf('next_trees', { n: Math.round(trees) }) : ''].filter(Boolean).join(' · '), { more: true }));
         }
         if (!tiles.length && !rows.length) return nothing;
         return this._sec(this._t('next_money'), html`${tiles.length ? this._tiles(tiles) : nothing}${rows.length ? html`<div class="rows" style="margin-top:6px">${rows}</div>` : nothing}`);
@@ -689,7 +688,7 @@ class SEMNextInsightsCard extends SEMNextBase {
             <div class="period">
                 ${this._seg(PERIOD_KEYS.map(([key, label]) => ({ key, label: this._t(label) })), this._period, (k) => this._pick(k), { small: true, disabled: this._tab === 'replay' })}
                 ${(this._w || (typeof window !== 'undefined' ? window.innerWidth : 0)) && (this._w || window.innerWidth) < 600
-                    ? this._select(tabs.map((x) => ({ value: x.key, label: x.label })), this._tab, (k) => this._pickTab(k), { label: this._t('next_topic'), required: true })
+                    ? this._select(tabs.map((x) => ({ value: x.key, label: x.label })), this._tab, (k) => this._pickTab(k), { ariaLabel: this._t('next_topic'), required: true })
                     : this._seg(tabs, this._tab, (k) => this._pickTab(k), { small: true })}
             </div>
             <div class="grid">${body()}</div>`);

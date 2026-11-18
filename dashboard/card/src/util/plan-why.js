@@ -5,6 +5,7 @@
  */
 
 import { kwhOf } from './next-lead.js';
+import { planRuns } from './plan-facts.js';
 
 export const WHY_LINES_MAX = 4;
 
@@ -49,8 +50,14 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX) {
         id: x.id, start: new Date(x.s).toISOString(), end: new Date(x.e).toISOString(),
         reason: String(x.reason), params: x.params, why: '', code: '', label: '',
         kwh: kwhOf(blocks, (i) => String(i) === x.id), s: x.s,
-    }));
-    const planned = [...own.values()].map((x) => ({ ...x, s: Date.parse(x.start) }))
+        runs: planRuns(plan, (i) => String(i) === x.id, nowMs),
+    })).map((x) => ({ ...x, kwh: x.runs.length ? x.runs.reduce((a, r) => a + r.kwh, 0) : x.kwh }));
+    // (#1321) every line names its own runs: a gap between two stays a gap, and the kWh is theirs
+    const withRuns = (x) => {
+        const runs = planRuns(plan, (i) => i === x.id, nowMs);
+        return runs.length ? { ...x, runs, kwh: runs.reduce((a, r) => a + r.kwh, 0) } : x;
+    };
+    const planned = [...own.values()].map(withRuns).map((x) => ({ ...x, s: Date.parse(x.start) }))
         .concat(fromBlocks)
         .sort((a, b) => (Number.isFinite(a.s) ? a.s : Infinity) - (Number.isFinite(b.s) ? b.s : Infinity))
         .map(({ s: _s, ...rest }) => rest);

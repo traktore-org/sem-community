@@ -93,6 +93,38 @@ export function commandLabel(cmd, t) {
     return value ? `${said} ${value}` : said;
 }
 
+const _VALUE = /^(-?\d+(?:\.\d+)?)\s*(.*)$/;
+
+/**
+ * (#1321) A device that is nudged again and again (a battery limit swinging 1500, 1750,
+ * 2000 W) is one row: the same device, the same command word and the same reason join at
+ * the place of the newest. A group has `count`, `lo`, `hi`, `unit`, `verb`. Records whose
+ * command has no number stay as they are; so does a lone record.
+ */
+export function mergeRepeats(records) {
+    const parse = (r) => {
+        const [verb, ...rest] = String(r?.new || '').split(' ');
+        const m = _VALUE.exec(rest.join(' '));
+        return verb && m ? { verb, value: Number(m[1]), unit: m[2] } : null;
+    };
+    const groups = new Map();
+    for (const r of records || []) {
+        const p = parse(r);
+        if (!p) continue;
+        const key = [chipKey(r), p.verb, p.unit, r.reason_code || ''].join('|');
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push({ r, p });
+    }
+    const first = new Map();
+    for (const g of groups.values()) {
+        if (g.length < 2) continue;
+        const vals = g.map((x) => x.p.value);
+        first.set(g[0].r, { ...g[0].r, count: g.length, lo: Math.min(...vals), hi: Math.max(...vals), unit: g[0].p.unit, verb: g[0].p.verb });
+        for (const x of g.slice(1)) first.set(x.r, null);
+    }
+    return (records || []).filter((r) => first.get(r) !== null).map((r) => first.get(r) || r);
+}
+
 /** `8 A → off`, or only the new command when there was none before. */
 export function changeLabel(rec, t) {
     const now = commandLabel(rec?.new, t);

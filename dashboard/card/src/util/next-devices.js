@@ -126,7 +126,7 @@ function rowFromMap(id, info, nameFor) {
         rating: Number(i.power_rating) || 0,
         // (#1326) false only when SEM says the rating is its 1 kW placeholder.
         ratingMeasured: i.rating_measured !== false,
-        isOn: !!i.is_on,
+        isOn: runningNow(i),
         isShed: !!i.is_shed,
         shedReason: i.shed_reason || null,
         shedPhase: i.shed_phase || null,
@@ -200,6 +200,15 @@ export function deviceRows(devices, chargers = [], { hasBattery = false, charger
  * `live` carries what only the entities know: power, amps, pause, the
  * planned start, the battery status and boost.
  */
+/**
+ * (#1321) ONE rule for "this load is on": switched on or active, or drawing power.
+ * Now, Devices and Why now all ask this, so a device never reads on in one place
+ * and waiting in another. `info` is a sensor.sem_controllable_devices_count entry.
+ */
+export function runningNow(info, powerW = null) {
+    return !!(info && (info.is_on || info.is_active)) || (Number.isFinite(powerW) && powerW > 10);
+}
+
 export function statePill(row, live = {}) {
     const p = (key, params = {}, cls = '') => ({ key, params, cls });
     if (row.lockedByOperator) return p('locked_by_grid_operator', {}, 'warn');
@@ -227,7 +236,7 @@ export function statePill(row, live = {}) {
         return p('next_st_rests');
     }
     if (row.blockedBy) return p('next_st_waiting_for', { parent: live.parentName || row.blockedBy });
-    const running = row.isOn || (w !== null && w > 10);
+    const running = runningNow({ is_on: row.isOn }, w);
     // (#1369) the last sentence per device keeps sensor noise from flipping it
     const heater = heaterSays(row, { ...live, prevKey: _heaterPrev.get(row.id) }, running);
     _heaterPrev.set(row.id, heater ? heater.key : '');

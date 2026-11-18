@@ -174,7 +174,7 @@ test('3: an export price reads 0.075 everywhere, 0.36 stays 0.36', () => {
     assert.equal(fmtPrice(0.36), '0.36');
     assert.equal(fmtPrice(0.3387), '0.339');
     const slot = { kind: 'number', value: 0.075, unit: 'CHF/kWh', step: 0.001 };
-    assert.equal(slotText(slot, (k) => k), '0.075 CHF/kWh');
+    assert.equal(slotText(slot, (k) => k), '0.075\u00a0CHF/kWh', 'a no-break space keeps value and unit together');
     const el = systemCard();
     assert.equal(el._price(0.075), '0.075');
 });

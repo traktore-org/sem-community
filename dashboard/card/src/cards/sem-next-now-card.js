@@ -14,7 +14,7 @@
 
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { planIdName } from '../util/plan-ids.js';
-import { effectivePlan } from '../util/plan-facts.js';
+import { effectivePlan, planRuns, nextRun, runsText } from '../util/plan-facts.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { nowLead } from '../util/next-lead.js';
@@ -24,14 +24,13 @@ import { todayRows } from '../util/next-today-rows.js';
 import { priceLevelKey, isAbsence, tariffKind } from '../util/price-level.js';
 import { shedReasonKey } from '../util/shed-reason.js';
 import { chargerSays, chargerSaysEach } from '../util/charger-questions.js';
-import { plainReason } from '../util/why-rows.js';
 import { newestUpdate } from '../util/next-freshness.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
 import { chartWindow, chartTicks, priceModel } from '../util/next-plan-chart.js';
 import { priceLevelColor } from '../util/price-level.js';
 import { sourceMix, priceStrip, deviceChips, isRealTip } from '../util/next-now-extras.js';
 import { resolveChargerSoc } from '../util/charger-soc.js';
-import { loadKind } from '../util/next-devices.js';
+import { loadKind, runningNow } from '../util/next-devices.js';
 import './sem-setup-checklist-card.js';
 
 const IDS = [
@@ -186,9 +185,9 @@ class SEMNextNowCard extends SEMNextBase {
             const remaining = this._remainingKwh(cid);
             const present = powerW !== null && (powerW > 50 || (remaining !== null && remaining > 0.1));
             if (!present) continue;
-            const own = this._planBlocks().filter((b) => b.id === 'ev:' + cid && Date.parse(b.end) > Date.now());
-            const planWindow = own.length ? this._winText(Math.min(...own.map((b) => Math.max(Date.parse(b.start), Date.now()))),
-                Math.max(...own.map((b) => Date.parse(b.end)))) : '';
+            // (#1321) the plan's own runs: a gap between two runs stays a gap
+            const runs = planRuns({ blocks: this._planBlocks() }, (id) => id === 'ev:' + cid, Date.now());
+            const planWindow = runsText(runs, (a, b) => this._winText(a, b));
             return { present: true, charging: powerW > 50, powerW, amps, remainingKwh: remaining, planWindow,
                      targetTime: this._departureLabel(cid), cid };
         }
@@ -257,14 +256,21 @@ class SEMNextNowCard extends SEMNextBase {
     /** The first planned block that has not started, or null. */
     _nextBlock(pick = null) {
         const now = Date.now();
-        const blocks = this._planBlocks()
-            .filter((b) => Date.parse(b.start) > now && (!pick || pick(String(b.id))))
-            .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
-        if (!blocks.length) return null;
-        const b = blocks[0];
-        const s = Date.parse(b.start), e = Date.parse(b.end);
-        const kwh = Number.isFinite(e) && e > s ? (Number(b.power_w) || 0) * (e - s) / 3.6e9 : 0;
-        return { id: String(b.id), who: this._whoName(String(b.id)), time: this._hhmm(b.start), kwh: this._fmt(kwh, 1), start: s };
+        const plan = { blocks: this._planBlocks() };
+        const ids = new Set(plan.blocks.map((b) => String(b.id)).filter((id) => !pick || pick(id)));
+        let best = null;
+        for (const id of ids) {
+            const r = nextRun(planRuns(plan, (x) => x === id, now), now);
+            if (r && (!best || r.s < best.r.s)) best = { id, r };
+        }
+        // (#1321) the next RUN, not the next change of watts inside a run that is under way
+        return best ? { id: best.id, who: this._whoName(best.id), time: this._hhmm(best.r.s), kwh: this._fmt(best.r.kwh, 1), start: best.r.s } : null;
+    }
+
+    /** The measured watts of a load, or null without a power sensor. */
+    _livePower(d) {
+        const pe = d && d.power_entity && this._has(d.power_entity) ? d.power_entity : null;
+        return pe ? this._powerW(pe) : null;
     }
 
     /** A plan id as a name: the charger's, the battery's, or the load's. */
@@ -459,9 +465,8 @@ class SEMNextNowCard extends SEMNextBase {
         const heaters = Object.entries(devices).filter(([id]) => loadKind(id) !== 'load')
             .map(([id, d]) => {
                 // (#1321) same rule as the Devices screen: switched on, or drawing power
-                const pe = d && d.power_entity && this._has(d.power_entity) ? d.power_entity : null;
-                const live = pe ? this._powerW(pe) : null;
-                return { name: this._loadName(id, d), on: !!(d && (d.is_on || d.is_active)) || (live !== null && live > 10) };
+                const live = this._livePower(d);
+                return { name: this._loadName(id, d), on: runningNow(d, live) };
             });
         const chips = deviceChips({ batterySoc: this._num('sensor.sem_battery_soc'), cars, heaters });
         if (!chips.length) return nothing;
@@ -600,6 +605,16 @@ class SEMNextNowCard extends SEMNextBase {
         return this._sec(this._t('next_so_far_today'), html`${items.length ? this._tiles(items) : nothing}${rings}`);
     }
 
+    /** (#1321) A row's device is called what the Devices screen calls it, not the raw entity name. */
+    _namedValues(r) {
+        const name = r.values && r.values.name;
+        if (!name) return r.values;
+        const low = (x) => String(x || '').trim().toLowerCase();
+        const dev = this._devices().find((d) => low(d.name) === low(name))
+            || this._devices().find((d) => low(name).startsWith(low(this._loadName(d.id, d)) + ' '));
+        return dev ? { ...r.values, name: this._loadName(dev.id, dev) } : r.values;
+    }
+
     _todayList() {
         if (!this._has('sensor.sem_charging_state')) return nothing;
         const cars = this._chargers.filter((cid) => this._str(`binary_sensor.sem_charger_${cid}_connected`) !== 'off')
@@ -614,7 +629,7 @@ class SEMNextNowCard extends SEMNextBase {
             return t;
         };
         const body = rows.length
-            ? html`<div class="rows">${rows.map((r) => this._row(r.icon, this._tf(r.label === 'plan_battery_empty' ? 'next_battery_reserve_reached' : r.label, r.values),
+            ? html`<div class="rows">${rows.map((r) => this._row(r.icon, this._tf(r.label === 'plan_battery_empty' ? 'next_battery_reserve_reached' : r.label, this._namedValues(r)),
                 // A window with an end reads "17:26 – 19:05": a gap in the night gives a second
                 // start row, which looked like a repeat without its end.
                 r.late ? html`<span class="late">${when(r)}</span>` : (r.until ? `${when(r)} – ${this._hhmm(new Date(r.until))}` : when(r)),
@@ -628,7 +643,7 @@ class SEMNextNowCard extends SEMNextBase {
         // (#1354) the user's words only, from the shared charger model
         // (#1321) one reading per charger: the fleet line "No car is plugged in"
         // must never sit beside a charger that has one
-        const said = chargerSaysEach(this._hass?.states, this._chargers, (k) => this._t(k), plainReason);
+        const said = chargerSaysEach(this._hass?.states, this._chargers, (k) => this._t(k), (rec, t) => this._plainNow(rec, t));
         for (const one of said) {
             const w = one.cid ? this._powerW(`sensor.sem_charger_${one.cid}_power`) : this._powerW('sensor.sem_ev_power');
             const title = one.cid && this._chargers.length > 1 ? this._tf('next_car_of', { name: this._chargerName(one.cid) }) : one.title;
@@ -667,8 +682,8 @@ class SEMNextNowCard extends SEMNextBase {
             } else if (d.blocked_by) {
                 const parent = this._devices().find((x) => x.id === String(d.blocked_by));
                 rows.push(this._row('mdi:power-plug', this._tf('next_why_load_waits', { name }), '', this._tf('next_waits_for', { name: parent?.name || String(d.blocked_by) }), { color: C.home }));
-            } else {
-                // a load's run time and a heater's Keep at run both count
+            } else if (!runningNow(d, this._livePower(d))) {
+                // a load's run time and a heater's Keep at run both count; one that is on now is not "waiting"
                 const b = this._nextBlock((id) => id === `load:${d.id}` || id === `comfort:${d.id}`);
                 if (b) {
                     const demand = (this._attrs('sensor.sem_energy_plan').demands || []).find((x) => x && x.id === b.id);
@@ -748,7 +763,7 @@ class SEMNextNowCard extends SEMNextBase {
         if (co2 !== null) {
             const life = this._num('sensor.sem_lifetime_co2_avoided'), trees = this._num('sensor.sem_lifetime_trees_equivalent');
             const unit = this._kgUnit('daily_co2_avoided');
-            const lifeText = life === null ? '' : `${life >= 100 ? this._int(life) : this._fmt(life, 1)} ${this._kgUnit('lifetime_co2_avoided')}`;
+            const lifeText = life === null ? '' : this._co2Text(life, this._kgUnit('lifetime_co2_avoided'));
             const sub = life === null ? '' : (trees === null ? this._tf('next_co2_sub_notrees', { life: lifeText })
                 : this._tf('next_co2_sub', { life: lifeText, trees: Math.round(trees) }));
             rows.push(this._row('mdi:leaf', this._t('next_co2_avoided'), `${this._fmt(co2, 1)} ${unit}`, sub, { color: C.ev, onClick: () => this._moreInfo('sensor.sem_daily_co2_avoided') }));

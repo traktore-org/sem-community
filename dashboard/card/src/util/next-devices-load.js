@@ -11,7 +11,6 @@
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
 import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey } from './next-devices.js';
-import { plainReason } from './why-rows.js';
 import { loadRunsBySem } from './settings-applies.js';
 import { cleanName } from './next-names.js';
 import { fmtNum } from './next-number.js';
@@ -408,7 +407,7 @@ export function saysLine(card, row) {
     const code = row.intent && row.intent.code;
     // The engine's sentence describes the last switch ("…so it turns off").
     // A line that already says what comes NEXT does not get it on top.
-    const sentence = code && !pill.next ? plainReason({ reason_code: code }, (k) => card._t(k)) : null;
+    const sentence = code && !pill.next ? card._plainNow({ reason_code: code }, (k) => card._t(k)) : null;
     // (#1349) the heater's own line under it: sun before a planned hour is
     // free; a load SEM buys nothing for says so
     const sub = heaterSub(pill, row, { fmtTemp: (c) => displayTemp(card, c) });

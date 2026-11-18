@@ -170,6 +170,21 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _demand_rows(demands: Any, blocks: List[Dict[str, Any]]) -> List[Any]:
+    """(#1321) Each demand names its own runs, ``[[start, end, watts], ...]``.
+
+    One source for who runs when: a card that has to drop the blocks (a day
+    on a quarter-hour market) still draws the real hours, and a gap between
+    two runs stays a gap. The first-to-last span in ``why.params`` never did.
+    """
+    runs: Dict[Any, List[List[Any]]] = {}
+    for b in blocks:
+        runs.setdefault(b["id"], []).append([b["start"], b["end"], b["power_w"]])
+    return [{**d, "runs": runs[d["id"]]}
+            if isinstance(d, dict) and d.get("id") in runs else d
+            for d in demands or []]
+
+
 def _batt_runs(slots: Any) -> List[List[int]]:
     """(#1063) ``[[first, last], ...]`` — the slot indexes the plan marked
     ``batt`` (the battery covered the house), merged into runs."""
@@ -215,6 +230,7 @@ def _energy_plan_attrs(
         # Daytime: no plan to project, but the review still has to reach the
         # card — it is the record of LAST night, not of tonight's.
         return {k: v for k, v in (extra or {}).items() if v}
+    merged_blocks = _merge_plan_blocks(plan.get("blocks"))
     attrs: Dict[str, Any] = {
         "computed_at": plan.get("computed_at"),
         "fits": plan.get("fits"),
@@ -229,7 +245,7 @@ def _energy_plan_attrs(
            if plan.get("saved") is not None
            and plan.get("cost_if_now") is not None else {}),
         "takeover": plan.get("takeover"),
-        "demands": plan.get("demands") or [],
+        "demands": _demand_rows(plan.get("demands"), merged_blocks),
         "slots": [{
             "start": s.get("start"), "end": s.get("end"),
             # PRICE-ASK: a field name of the published slot, not a level
@@ -246,7 +262,7 @@ def _energy_plan_attrs(
         # never marked a slot, and the card then keeps its old drawing.
         "batt_runs": (_batt_runs(plan.get("slots"))
                       if "has_battery" in plan else None),
-        "blocks": _merge_plan_blocks(plan.get("blocks")),
+        "blocks": merged_blocks,
         # A string here means the battery figures behind this plan came from
         # a SUBSET of the fleet (#638 finding #3) — the card says so rather
         # than presenting a degraded plan as a healthy one.
@@ -309,7 +325,12 @@ def _energy_plan_attrs(
         attrs["batt_runs"] = []
         attrs["timeline_omitted"] = True
         if _too_big():
+            # (#1321) each demand's own runs say the same, in fewer bytes
             attrs["blocks"] = []
+        if _too_big():
+            attrs["demands"] = [{k: v for k, v in d.items() if k != "runs"}
+                                if isinstance(d, dict) else d
+                                for d in attrs["demands"]]
     # (#758) The timeline is the biggest term, but it is not the only one,
     # and going over means the recorder keeps NOTHING. If dropping it was
     # not enough, drop what rode along and say so — the plan itself is what

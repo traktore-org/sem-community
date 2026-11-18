@@ -65,6 +65,8 @@ class DemandVerdict:
     last_kwh: float
     suggested_kwh: Optional[float] = None
     nights: int = 0
+    # (#1321) clean nights the learner needs: "2 of 5" says what it waits for
+    needed: int = 0
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -76,6 +78,7 @@ class DemandVerdict:
             "suggested_kwh": (None if self.suggested_kwh is None
                               else round(self.suggested_kwh, 2)),
             "nights": self.nights,
+            "needed": self.needed,
         }
 
 
@@ -113,7 +116,7 @@ def review_demand(demand_id: str, records: List, *,
         kind=str(kind if kind is not None else getattr(latest, "kind", "")),
         code=CODE_LEARNING, asked_kwh=asked,
         last_kwh=float(getattr(latest, "actual_kwh", 0.0) or 0.0),
-        nights=s.nights_used)
+        nights=s.nights_used, needed=int(min_nights))
 
     if s.basis == "at_ceiling":
         verdict.code = CODE_AT_CEILING

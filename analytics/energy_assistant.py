@@ -23,6 +23,9 @@ _LOGGER = logging.getLogger(__name__)
 # advancing them every 10 s coordinator cycle only churned the recorder.
 TIP_ROTATION_INTERVAL_S = 300.0
 
+# (#1321) Below this much export a surplus tip has nothing to offer.
+_MIN_EXPORT_KWH = 1.0
+
 
 @dataclass
 class EnergyTip:
@@ -240,6 +243,10 @@ class EnergyAssistant:
     ) -> None:
         """Analyze surplus/export patterns."""
         if daily_solar_kwh <= 0:
+            return
+        if solar_export_kwh < _MIN_EXPORT_KWH:
+            # (#1321) "100% exported" of next to nothing: a diverter would
+            # capture ~0.0 kWh, so there is no tip to give
             return
 
         export_pct = (solar_export_kwh / daily_solar_kwh * 100)

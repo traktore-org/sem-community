@@ -196,9 +196,9 @@ test('the observer switch is never a settings slot', () => {
 });
 
 test('slotText: units, decimals from the step, on/off words, a zero label', () => {
-    assert.equal(slotText({ kind: 'number', value: 0.28, step: 0.01, unit: 'CHF/kWh' }, t), '0.28 CHF/kWh');
-    assert.equal(slotText({ kind: 'number', value: 5, step: 0.1, unit: 'kW' }, t), '5.0 kW');
-    assert.equal(slotText({ kind: 'number', value: 30, step: 5, unit: 's' }, t), '30 s');
+    assert.equal(slotText({ kind: 'number', value: 0.28, step: 0.01, unit: 'CHF/kWh' }, t), '0.28\u00a0CHF/kWh');
+    assert.equal(slotText({ kind: 'number', value: 5, step: 0.1, unit: 'kW' }, t), '5.0\u00a0kW');
+    assert.equal(slotText({ kind: 'number', value: 30, step: 5, unit: 's' }, t), '30\u00a0s');
     assert.equal(slotText({ kind: 'number', value: 0, step: 1, unit: 'days', zeroKey: 'config_retention_off' }, t), 'config_retention_off');
     assert.equal(slotText({ kind: 'switch', value: true }, t), 'on');
     assert.equal(slotText({ kind: 'number', value: 7.5, step: 0.5, unit: 'h', clock: true }, t), '07:30');
