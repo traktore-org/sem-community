@@ -4778,7 +4778,7 @@ class EnergyCalculator:
 
         With grid or battery counters set up, the targets are the day's
         published rows, read or not; the EV is the midnight mirror (the
-        flows run on calendar days, and a wallbox counter owns that row,
+        flows run on calendar days, and a charger counter owns that row,
         #1049). The house is None: the balance of the rest, as the home row
         is whenever the meters read. On the mirror's first day the EV is
         None too (the split's own sum), as the home balance stands down
