@@ -4768,9 +4768,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if isinstance(_day_totals, dict):
                 from .flow_calculator import fit_flows_to_totals
                 energy_flows = fit_flows_to_totals(energy_flows, _day_totals)
-            # (#1321) …and a published daily counter never steps back
-            energy_flows = self._flow_calculator.hold_published(
-                energy_flows, dt_util.now().date())
 
             # Step 3: Calculate costs and performance. ``performance``
             # gets ``energy_flows`` so autarky uses the
