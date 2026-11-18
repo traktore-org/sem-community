@@ -94,9 +94,12 @@ export function chargePlanSummary({ chargeBy = '', min = null, max = null, unit 
  * default, which must read as unknown. A server that sends no flag is trusted.
  */
 export function knownCapacity(value, attrs) {
-    if (attrs && attrs.set_by_user === false) return null;
+    if (capacityUnset(attrs)) return null;
     return Number.isFinite(value) ? value : null;
 }
+
+/** (#1321) The server says the capacity is only the factory default: every screen reads that one flag. */
+export const capacityUnset = (attrs) => !!attrs && attrs.set_by_user === false;
 
 /**
  * (#1321) The "Up to" figure of a kWh target, never above the car's battery.
@@ -104,9 +107,11 @@ export function knownCapacity(value, attrs) {
  * the figure is only the setting's own ceiling), `full` true when the text
  * should say "full" instead of a number.
  */
-export function upToShown({ max, capacity, bound, isSoc }) {
+export function upToShown({ max, capacity, bound, isSoc, unset = false }) {
     if (max === null || max === undefined) return { max: null, full: false };
     if (isSoc) return { max, full: false };
+    // an unknown car: the figure is only the setting's own number, so it reads "full" (#1321)
+    if (unset) return { max: null, full: true };
     if (Number.isFinite(capacity) && capacity > 0) return { max: Math.min(max, capacity), full: false };
     return { max, full: Number.isFinite(bound) && max >= bound };
 }

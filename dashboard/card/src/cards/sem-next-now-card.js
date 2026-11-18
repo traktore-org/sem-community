@@ -404,7 +404,7 @@ class SEMNextNowCard extends SEMNextBase {
         if (!bar.sources.length && !bar.sinks.length && !bar.idle) return html`<p class="help">${this._t('next_lead_unknown')}</p>`;
         if (bar.idle) return html`<p class="help">${this._t('next_bar_idle')}</p>${this._io ? this._ioList(bar) : nothing}`;
         // (#1321) a number is printed once: on the bar for the sources, on the lower marks only when several sinks share the lane
-        const mk = (num) => (s) => html`<div class="mk" style="--c:${META[s.key].color};flex:${s.w} 1 0">${this._icon(META[s.key].icon)}${num && s.label ? html`<span>${this._kw(s.w)}</span>` : nothing}</div>`;
+        const mk = (num) => (s) => html`<div class="mk" style="--c:${META[s.key].color};flex:${s.w} 1 0">${this._icon(META[s.key].icon)}${num && (s.label || s.share >= 0.08) ? html`<span>${this._kw(s.w)}</span>` : nothing}</div>`;
         const sg = (s) => html`<div class="sg ${META[s.key].dark ? 'dark' : ''}" style="flex:${s.w} 1 0;background:${META[s.key].color}" title="${this._barName(s)}">${s.label ? this._kw(s.w) : ''}</div>`;
         const toggle = () => { this._io = !this._io; writeLocal(IO_KEY, this._io ? '1' : '0'); };
         return html`
@@ -637,7 +637,7 @@ class SEMNextNowCard extends SEMNextBase {
         const cars = this._chargers.filter((cid) => this._str(`binary_sensor.sem_charger_${cid}_connected`) !== 'off')
             .map((cid) => ({ cid, name: this._chargerName(cid) }));
         const rows = todayRows(this._attrs('sensor.sem_charging_state'), { now: this._tick || Date.now(), carPresent: this._anyCarConnected(),
-            plan: effectivePlan(this._attrs('sensor.sem_energy_plan')), cars });
+            plan: effectivePlan(this._attrs('sensor.sem_energy_plan')), cars, multi: this._chargers.length > 1 });
         const lang = this._hass?.language || 'en';
         const when = (r) => {
             const t = this._hhmm(new Date(r.when));
@@ -646,7 +646,7 @@ class SEMNextNowCard extends SEMNextBase {
             return t;
         };
         const body = rows.length
-            ? html`<div class="rows">${rows.map((r) => this._row(r.icon, this._tf(NEXT_LABEL[r.label] || r.label, this._namedValues(r)),
+            ? html`<div class="rows">${rows.map((r) => this._row(r.icon, (r.who ? r.who + ' · ' : '') + this._tf(NEXT_LABEL[r.label] || r.label, this._namedValues(r)),
                 // A window with an end reads "17:26 – 19:05": a gap in the night gives a second
                 // start row, which looked like a repeat without its end.
                 r.late ? html`<span class="late">${when(r)}</span>` : (r.until ? `${when(r)} – ${this._hhmm(new Date(r.until))}` : when(r)),

@@ -7,12 +7,11 @@
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { resolveChargerSoc } from './charger-soc.js';
-import { kwhOf } from './next-lead.js';
-import { effectivePlan } from './plan-facts.js';
+import { effectivePlan, kwhAhead } from './plan-facts.js';
 import { targetModel, weekdaySummary } from './next-devices.js';
 import { monthTotals, rowsForMonth } from './sessions.js';
 import { rowText } from './next-settings.js';
-import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities, upToShown, knownCapacity } from './charger-questions.js';
+import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities, upToShown, knownCapacity, capacityUnset } from './charger-questions.js';
 
 const LATE = [0, 15, 30, 45, 60, 90, 120];
 const FLOORS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
@@ -149,7 +148,7 @@ export function chargerBody(card, row) {
     const gapKwh = have === null || min === null ? null : (isSoc ? Math.max(0, (min - soc) / 100 * (capacity || 0)) : Math.max(0, min - daily));
     const kmAdd = gapKwh !== null && per100 ? Math.round(gapKwh / per100 * 100) : null;
     const plan = effectivePlan(card._attrs('sensor.sem_energy_plan'));
-    const plannedKwh = Array.isArray(plan.blocks) ? kwhOf(plan.blocks, (id) => id === 'ev:' + cid) : 0;
+    const plannedKwh = Array.isArray(plan.blocks) ? kwhAhead(plan, (id) => id === 'ev:' + cid, Date.now()) : 0;
     const dep = ((cs.per_charger_departure || {})[cid]) || {};
     const own = dep.by_weekday || {};
     const hasOwnDays = Object.keys(own).length > 0;
@@ -159,7 +158,7 @@ export function chargerBody(card, row) {
     const runText = runs.map((r) => (r.from === r.to ? card._dayName(r.from) : card._dayName(r.from) + ' – ' + card._dayName(r.to)) + ' ' + r.time).join(' · ');
     const daysVal = card._val(hasOwnDays ? (runText || t('ev_dep_most_days')) : t('next_every_day'), () => card._toggleDep(cid), { disabled: dis });
     // (#1321) never "up to 100 kWh" on a 40 kWh car; unknown car and the setting's ceiling: "full"
-    const upTo = upToShown({ max, capacity, bound: maxId ? Number(card._attrs(maxId).max) : null, isSoc });
+    const upTo = upToShown({ max, capacity, bound: maxId ? Number(card._attrs(maxId).max) : null, isSoc, unset: capacityUnset(card._attrs(capKey)) });
     const targetText = upTo.full ? `${t(CHARGER_TEXT.atLeast)} ${fmtT(min)} ${unit} · ${t('next_up_to_full')}`
         : `${t(CHARGER_TEXT.atLeast)} ${fmtT(min)} · ${t(CHARGER_TEXT.upTo)} ${fmtT(upTo.max)} ${unit}`;
     const targetVal = html`${targetText}`;
@@ -267,7 +266,7 @@ export function chargerBody(card, row) {
         moreRows.push(srow(label, text, { kind: 'number', value: card._num(id), min: a.min, max: a.max, step: a.step, unit,
             onCommit: (x) => card._setNumber(id, x) }));
     };
-    numSet(capId, card._lbl('next_more_capacity'), card._kwh(card._num(capId), 0), 'kWh');
+    numSet(capId, card._lbl('next_more_capacity'), capacityUnset(card._attrs(capId)) ? t('next_not_set') : card._kwh(card._num(capId), 0), 'kWh');
     numSet(minAId, card._lbl('next_row_min_current'), card._fmt(card._num(minAId), 0) + ' A', 'A');
     numSet(maxAId, card._lbl('next_row_max_current'), card._fmt(card._num(maxAId), 0) + ' A', 'A');
     numSet(perId, card._lbl('next_more_use'), card._fmt(card._num(perId), 1) + ' kWh/100 km', 'kWh/100 km');

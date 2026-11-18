@@ -33,7 +33,7 @@ test('5: Devices says the battery refill the Plan names, not the forecast alone'
         { id: 'arbitrage:battery', start: iso(1), end: iso(2), power_w: 1000, reason: 'solar' },
         { id: 'arbitrage:battery', start: iso(13), end: iso(14), power_w: 1800, reason: 'cheapest_hours' },
         { id: 'battery_out', start: iso(3), end: iso(5), power_w: 900 }] };
-    assert.equal(refillKwh(plan, 0, NOW), 2.8, 'the 0.0 forecast does not hide the planned charging');
+    assert.equal(refillKwh(plan, 0, NOW), 1.8, 'the 0.0 forecast does not hide the planned night charging; the day\'s sun run is not tonight\'s');
     assert.equal(refillKwh({ blocks: [] }, 0.4, NOW), 0.4, 'no battery charging planned: the forecast');
     assert.equal(refillKwh({}, NaN, NOW), null);
 });

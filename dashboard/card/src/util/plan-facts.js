@@ -135,13 +135,33 @@ export function planRunsRounded(plan, pick, nowMs = -Infinity) {
     return runs.map((r, i) => ({ ...r, kwh: parts[i] }));
 }
 
-/** kWh the plan still has for a demand id and the kWh the demand needs: { planned, needed } (needed null when unknown). */
+/** kWh of the runs `pick` accepts that have not ended: the one figure every screen shows for a device (#1321). */
+export function kwhAhead(plan, pick, nowMs = -Infinity) {
+    return planRuns(plan, pick, nowMs).reduce((a, r) => a + r.kwh, 0);
+}
+
+/**
+ * kWh the plan still has for a demand id and the kWh the demand still needs: { planned, needed }
+ * (needed null when unknown). A block that has ended counts as done: it is not planned any more
+ * and not needed any more, so a 0.2 kWh run in the past never reads as a gap (#1321).
+ */
 export function demandFigures(plan, id, nowMs = -Infinity) {
-    const runs = planRuns(plan, (x) => x === id, nowMs);
     const d = (plan && Array.isArray(plan.demands) ? plan.demands : []).find((x) => x && x.id === id);
-    const needed = d && Number.isFinite(Number(d.needed_kwh)) ? Number(d.needed_kwh) : null;
-    const planned = runs.reduce((a, r) => a + r.kwh, 0);
+    const need = d && Number.isFinite(Number(d.needed_kwh)) ? Number(d.needed_kwh) : null;
+    const planned = kwhAhead(plan, (x) => x === id, nowMs);
+    const needed = need === null ? null : Math.max(0, need - endedKwh(plan, id, nowMs));
     return { planned: Math.round(planned * 10) / 10, needed: needed === null ? null : Math.round(needed * 10) / 10 };
+}
+
+/** kWh of a demand's blocks that ended before `nowMs`. */
+function endedKwh(plan, id, nowMs) {
+    let kwh = 0;
+    for (const b of (plan && Array.isArray(plan.blocks) ? plan.blocks : [])) {
+        const s = Date.parse(b && b.start), e = Date.parse(b && b.end);
+        if (!b || String(b.id) !== id || !Number.isFinite(s) || !Number.isFinite(e) || e <= s || e > nowMs) continue;
+        kwh += (Number(b.power_w) || 0) * (e - s) / 3.6e9;
+    }
+    return kwh;
 }
 
 /**
@@ -157,6 +177,20 @@ export function shortfalls(plan, nowMs = -Infinity) {
         if (f.needed !== null && planned < f.needed - 0.05 && d.status !== 'fits') out.push({ id: String(d.id), planned, needed: f.needed });
     }
     return out;
+}
+
+/** A plan id that charges the house battery (not its output). */
+export const isBatteryIn = (id) => /battery/.test(String(id)) && !String(id).startsWith('battery_out');
+
+/**
+ * When the plan has the battery full: the end of its last charging run, when the plan's
+ * own end state is full. Null when the plan has no such time, so no screen guesses one (#1321).
+ */
+export function batteryFullAt(plan, nowMs = -Infinity) {
+    const pct = Number(plan && plan.battery_end && plan.battery_end.pct);
+    if (!(pct >= 99)) return null;
+    const runs = planRuns(plan, isBatteryIn, nowMs);
+    return runs.length ? runs[runs.length - 1].e : null;
 }
 
 /** The first run that has not started, or null. */

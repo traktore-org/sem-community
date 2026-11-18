@@ -12,6 +12,7 @@ import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels, batterySaysFromStates
 import { batterySize } from './battery-size.js';
 import { effectivePlan, planRuns } from './plan-facts.js';
 import { isBatteryIn } from './plan-why.js';
+import { nightStart } from './next-today-rows.js';
 
 /** (#1354) The entity of a shared battery level by its id. */
 const LEVEL = Object.fromEntries(BATTERY_LEVELS.map((l) => [l.id, l.entity]));
@@ -23,8 +24,13 @@ const SPEND = 'sensor.sem_battery_spendable_kwh';
  * (#1321) What the battery gets back: the plan's own charging still ahead (the figure the
  * Plan screen names), the forecast refill only when the plan has no battery charging.
  */
-export function refillKwh(planAttrs, forecast, nowMs = Date.now()) {
-    const runs = planRuns(effectivePlan(planAttrs), isBatteryIn, nowMs);
+export function refillKwh(planAttrs, forecast, nowMs = Date.now(), nightFrom = null) {
+    // (#1321) "tonight" is the night's runs: charging by day (sun or a cheap hour) is not tonight's refill.
+    // The night starts where the Coming up list says; without it, a run on spare sun is the day's.
+    const plan = effectivePlan(planAttrs);
+    const night = (b) => (nightFrom === null ? !b || b.reason !== 'solar' : Date.parse(b.start) >= nightFrom - 60e3);
+    const only = { ...plan, blocks: (Array.isArray(plan?.blocks) ? plan.blocks : []).filter(night) };
+    const runs = planRuns(only, isBatteryIn, nowMs);
     if (runs.length) return runs.reduce((a, r) => a + r.kwh, 0);
     return Number.isFinite(forecast) ? forecast : null;
 }
@@ -140,7 +146,7 @@ export function batteryBody(card, row) {
         const need = Number(sa.overnight_need_kwh), refill = Number(sa.expected_refill_kwh);
         const nights = Number(sa.nights_sealed), spend = num(SPEND);
         const subs = [];
-        const back = refillKwh(card._attrs('sensor.sem_energy_plan'), refill);
+        const back = refillKwh(card._attrs('sensor.sem_energy_plan'), refill, Date.now(), nightStart(card._attrs('sensor.sem_charging_state'), Date.now()));
         if (back !== null) subs.push(tf('next_refill', { kwh: card._fmt(back, 1) }));
         if (spend !== null) subs.push(tf('next_spendable_kwh', { kwh: card._fmt(spend, 1) }));
         if (Number.isFinite(nights)) subs.push(tf('next_nights_learned', { n: nights }));

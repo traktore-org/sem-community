@@ -33,7 +33,7 @@ import { deviceRows, statePill, surplusInUse, ratedKey, swap, priorityPayload, v
 import { chargerBody } from '../util/next-devices-charger.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
-import { wouldFor, wouldList, wouldLine } from '../util/why-rows.js';
+import { wouldFor, wouldList, wouldLine, startCode } from '../util/why-rows.js';
 
 const DOMAIN = 'solar_energy_management';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -781,7 +781,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         const locked = (row.dependsOn || []).length > 0;
         // (#1321) watch-only: the same "would ..." line System shows, one helper
         const dec = this._obs() ? wouldFor(row, wouldList(this._attrs('switch.sem_observer_mode'))) : null;
-        const would = dec ? wouldLine(dec, (k) => this._t(k)) : '';
+        // (#1321) a load off and about to start says it in its own line: no second "Would" above it
+        const would = dec && !startCode(row, pill) ? wouldLine(dec, (k) => this._t(k)) : '';
         const toggle = () => { if (!this._reorder) this._toggleOpen(row); };
         return html`<ha-card class="card dev ${open ? '' : 'folded'}" data-id=${row.id} style="--c:${color}">
             <div class="head">

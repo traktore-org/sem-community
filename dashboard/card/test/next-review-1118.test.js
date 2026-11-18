@@ -201,13 +201,13 @@ test('4: no car, no charge level on the chip', () => {
     assert.equal(deviceChips({ cars: [{ name: 'EV Charger', connected: true, charging: false, soc: 86 }] })[0].soc, 86);
 });
 
-test('4: Min reached after the deadline is red only with a car plugged in', () => {
+test('4: Min reached after the deadline is red with a car plugged in, and not listed without one (loop 9)', () => {
     const now = Date.parse('2026-11-18T02:01:00+01:00');
     const attrs = { today_plan: [
         { kind: 'ev_deadline', when: '2026-11-18T06:14:00+01:00', label: 'plan_ev_deadline' },
         { kind: 'ev_min_reached', when: '2026-11-18T21:28:00+01:00', label: 'plan_ev_min_reached', values: { kwh: '30.0' } },
     ] };
-    assert.equal(todayRows(attrs, { now, carPresent: false }).find((r) => r.kind === 'ev_min_reached').late, false);
+    assert.equal(todayRows(attrs, { now, carPresent: false }).find((r) => r.kind === 'ev_min_reached'), undefined);
     assert.equal(todayRows(attrs, { now, carPresent: true }).find((r) => r.kind === 'ev_min_reached').late, true);
 });
 

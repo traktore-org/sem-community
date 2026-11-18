@@ -98,6 +98,22 @@ export function wouldLine(rec, t) {
     return verb ? t('next_would_x').replace('{what}', verb) : '';
 }
 
+// (#1321) reason codes whose sentence says a load runs: for a load that is still off they mean "about to"
+const START_CODES = ['solar', 'surplus', 'tier1_battery', 'cheap_grid', 'deadline', 'load_override_run'];
+
+/** The start reason of a load that is off, or '' (a load that runs, or whose reason is no start). */
+export function startCode(row, pill) {
+    const code = String(row?.intent?.code || '');
+    return row?.type === 'load' && pill?.key === 'next_st_off' && START_CODES.includes(code) ? code : '';
+}
+
+/** "would switch on: enough spare sun" (watch only) or "switches on soon: enough spare sun". One helper for every screen. */
+export function startLine(code, watchOnly, t) {
+    const key = 'why_short_' + code;
+    const why = START_CODES.includes(code) ? t(key) : '';
+    return why && why !== key ? `${t(watchOnly ? 'next_would_switch_on' : 'next_switches_soon')}: ${why}` : '';
+}
+
 /** The chips: one per device that has rows, in the order the rows meet them. */
 export function whyChips(records, t) {
     const seen = new Map();

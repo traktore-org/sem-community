@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **One figure per device** (#1321). Plan, Now and Devices count only runs still ahead. Coming up names the car and drops cars not plugged in.
+- 🐛 **Plainer lines** (#1321). Unset car size reads "not set". Heat pump off and about to start says so in one line.
 - 🐛 **No braces in checks** (#1321). Repair titles show their values. A car size you set to the default stays yours.
 - 🐛 **Plan and Devices agree** (#1321). "Cheapest hours" uses tariff prices. Battery refill is the plan's. A charge not running says planned.
 - 🐛 **Clearer wording** (#1321). Tonight's need is compared with what the battery gives above its reserve. Plainer surplus and morning lines.

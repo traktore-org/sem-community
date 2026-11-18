@@ -10,6 +10,7 @@
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
+import { startCode, startLine } from './why-rows.js';
 import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey, runningNow, ratedKey } from './next-devices.js';
 import { loadRunsBySem } from './settings-applies.js';
 import { cleanName } from './next-names.js';
@@ -73,6 +74,15 @@ function hours(min) {
 function phaseLabel(card, p) {
     if (!p || p === 'unknown') return card._t('load_phase_unknown');
     return p === '3ph' ? card._t('load_phase_3ph') : p;
+}
+
+/**
+ * (#1321) The Power tile's small line: "live" when measured, the phase when known. The big figure
+ * already says "rated", so the line never repeats it, and an unknown phase says nothing.
+ */
+export function powerSub(card, row, live) {
+    const known = row.phase && row.phase !== 'unknown';
+    return [live ? card._t('next_live') : '', known ? phaseLabel(card, row.phase) : ''].filter(Boolean).join(' · ');
 }
 
 /** A thermometer reading in the user's unit (the payload is °C). */
@@ -142,7 +152,7 @@ export function loadBody(card, row) {
         third = [t('next_comfort'), displayTemp(card, row.comfort.reading_c) || '—', ''];
     }
     const stats = card._stats([
-        [t('next_power'), powerText, (on && live !== null ? t('next_live') : t('next_rated_lc')) + ' · ' + phaseLabel(card, row.phase)],
+        [t('next_power'), powerText, powerSub(card, row, on && live !== null)],
         [t('next_today'), todayText, goalSub],
         third,
     ]);
@@ -407,7 +417,9 @@ export function saysLine(card, row) {
     const code = row.intent && row.intent.code;
     // The engine's sentence describes the last switch ("…so it turns off").
     // A line that already says what comes NEXT does not get it on top.
-    const sentence = code && !pill.next ? card._plainNow({ reason_code: code }, (k) => card._t(k)) : null;
+    // (#1321) a load that is off and about to start says so in one line, never "Off. … so it runs."
+    const start = !pill.next && startCode(row, pill) ? startLine(startCode(row, pill), card._obs(), (k) => card._t(k)) : '';
+    const sentence = code && !pill.next && !start ? card._plainNow({ reason_code: code }, (k) => card._t(k)) : null;
     // (#1349) the heater's own line under it: sun before a planned hour is
     // free; a load SEM buys nothing for says so
     const sub = heaterSub(pill, row, { fmtTemp: (c) => displayTemp(card, c) });
@@ -415,7 +427,8 @@ export function saysLine(card, row) {
     const reading = row.comfort && row.comfort.keep_c != null && pill.key !== 'hq_st_warm' && pill.key !== 'hq_st_cool'
         ? displayTemp(card, row.comfort.reading_c) : null;
     const now = reading ? card._tf('hq_now', { reading }) + ' ' : '';
-    const lead = now + text.charAt(0).toUpperCase() + text.slice(1) + '.';
+    const word = text.charAt(0).toUpperCase() + text.slice(1);
+    const lead = now + (start ? `${word} · ${start}` : word + '.');
     const tail = [sentence, hint].filter(Boolean).map((x) => ' ' + x).join('');
     return html`<p class="sent says"><span class="val">${lead}</span>${tail}</p>`;
 }
@@ -459,6 +472,6 @@ export function copSourceRow(card, row, g, send) {
             onCommit: (v) => send('cop_source', v),
         }))
         : label;
-    const sub = copLearnLine(g.cop_learn, t);
+    const sub = copLearnLine(g.cop_learn, t, cur);
     return card._row('mdi:school-outline', t('hp_cop_source'), val, sub, { more: true });
 }

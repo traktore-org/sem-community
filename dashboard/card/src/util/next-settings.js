@@ -83,6 +83,11 @@ function switchSlot(states, id) {
     return { id, kind: 'switch', value: e.state === 'on' };
 }
 
+/** The forecast-spending switch as a sentence part: its words say what on and off mean. */
+function spendSentence(slot) {
+    return slot ? [{ ...slot, words: { on: 'next_batt_spend_on', off: 'next_batt_spend_off' } }] : [];
+}
+
 /** `labelOf(value)` gives the option's label key. */
 function selectSlot(states, id, labelOf) {
     const e = st(states, id);
@@ -263,7 +268,7 @@ export function slotText(slot, t, value = slot.value, states = null, plain = fal
         // (#1321) a no-break space keeps "2.0 °C" on one line
         return slot.unit ? `${s}\u00a0${unitWords(slot.unit, t)}` : s;
     }
-    if (slot.kind === 'switch') return value ? t('next_on') : t('next_off');
+    if (slot.kind === 'switch') return slot.words ? t(value ? slot.words.on : slot.words.off) : (value ? t('next_on') : t('next_off'));
     if (slot.kind === 'select') {
         const o = (slot.options || []).find((x) => String(x.value) === String(value));
         if (!o) return String(value ?? '');
@@ -794,7 +799,7 @@ export function groups(states, t, ctx = {}) {
         const m = more(t, [
             ['next_more_demand_charge', numSlot(states, 'number.sem_demand_charge_rate')
                 || optNum(o, 'demand_charge_rate', { min: 0, max: 100000, step: 0.01, unit: `${cur}/kW`, default: 4.32 })],
-            ['next_more_off_peak', modeV === 'calendar' ? null : offPeak],
+            ['next_more_off_peak', modeV === 'calendar' || modeV === 'dynamic' ? null : offPeak],
             ['next_more_fee_model', feeModel],
             ['next_more_fee_amount', feeV === 'per_kwh' || feeV === 'fixed_monthly'
                 ? optNum(o, 'feed_in_fee', { min: 0, max: 100000, step: 0.0001, unit: feeV === 'fixed_monthly' ? `${cur}/${t('next_month_short')}` : perKwh, default: 0 }) : null],
@@ -868,7 +873,8 @@ export function groups(states, t, ctx = {}) {
             clause([frag(t, 'next_batt_zones', lvSlots)
                 || frag(t, 'next_batt_zones_two', { priority: lvSlots.priority, buffer: lvSlots.buffer })], ', ', '. '),
             [{ kind: 'action', action: 'open_battery', labelKey: 'next_bq_levels_open', nav: true }],
-            clause([frag(t, 'next_batt_spend', { v: switchSlot(states, 'switch.sem_forecast_spending_enabled') })]),
+            // (#1321) the switch reads as a full sentence, never "...will refill: on."
+            spendSentence(switchSlot(states, 'switch.sem_forecast_spending_enabled')),
         );
         const m = more(t, [
             ['next_more_max_discharge', numSlot(states, BATTERY_QUESTIONS.discharge_max.entity)],
@@ -1016,7 +1022,8 @@ export function groups(states, t, ctx = {}) {
         const solar = src('solar_production_sensor', ed.solar?.power);
         const grid = src('grid_power_sensor', ed.grid?.power);
         const battery = hasBattery(states) ? src('battery_power_sensor', ed.battery?.power) : null;
-        const gridSign = text(labels.gridSign);
+        // (#1321) it follows a comma in the sentence: "Grid Power (HA Convention), flipped"
+        const gridSign = text(labels.gridSign ? String(labels.gridSign).replace(/^./, (c) => c.toLowerCase()) : '');
         const flipGrid = action('flip_grid_sign', 'next_flip_sign');
         const flipBatt = action('flip_battery_sign', 'next_flip_sign');
         const house = src('house_power_sensor', '', { emptyKey: 'next_computed' });

@@ -5,11 +5,12 @@
  */
 
 import { kwhOf } from './next-lead.js';
-import { planRuns } from './plan-facts.js';
+import { planRuns, isBatteryIn } from './plan-facts.js';
+
+export { isBatteryIn };
 
 export const WHY_LINES_MAX = 4;
 
-export const isBatteryIn = (id) => /battery/.test(String(id)) && !String(id).startsWith('battery_out');
 const hasBlocksFor = (plan, id) => (Array.isArray(plan.blocks) ? plan.blocks : []).some((b) => b && b.reason && String(b.id) === String(id));
 
 /**
@@ -61,16 +62,20 @@ export function gotCheapest(plan, runs, price, nowMs, upcoming = []) {
 }
 
 const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
-const QUARTER = 0.25;
-
 /**
  * The tariff's own prices as {h, price, e}: its upcoming list (the one the Now price
  * strip reads) first, the plan's slots when that is empty. The live plan sensor drops
  * its slots (timeline_omitted), so the tariff is the source that is always there.
+ * (#1321) A cell lasts until the next timestamp (the provider's own interval, hourly or
+ * quarter-hourly); the last one lasts the median gap.
  */
 function priceCells(plan, upcoming) {
-    const ups = (Array.isArray(upcoming) ? upcoming : []).map((u) => ({ s: Date.parse(u?.t), h: QUARTER, price: num(u?.price) }))
-        .map((x) => ({ ...x, e: x.s + x.h * 3.6e6 }));
+    const pts = (Array.isArray(upcoming) ? upcoming : []).map((u) => ({ s: Date.parse(u?.t), price: num(u?.price) }))
+        .filter((x) => Number.isFinite(x.s) && Number.isFinite(x.price)).sort((a, b) => a.s - b.s);
+    const gaps = pts.slice(1).map((x, i) => x.s - pts[i].s).filter((g) => g > 0).sort((a, b) => a - b);
+    const median = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 0;
+    const ups = pts.map((x, i) => ({ ...x, e: x.s + (i + 1 < pts.length ? pts[i + 1].s - x.s : median) }))
+        .map((x) => ({ ...x, h: (x.e - x.s) / 3.6e6 }));
     const slots = (Array.isArray(plan?.slots) ? plan.slots : [])
         .map((x) => ({ s: Date.parse(x.start), e: Date.parse(x.end), price: num(x.price) }))
         .map((x) => ({ ...x, h: (x.e - x.s) / 3.6e6 }));
@@ -79,6 +84,10 @@ function priceCells(plan, upcoming) {
     return own.length ? own : slots.filter(usable);
 }
 const PRICE_EPS = 0.002;
+
+/** (#1321) A battery block named "cheapest hours" that did not get them says "cheap hours". */
+const leftCheap = (plan, r, nowMs, upcoming) => (r.reason === 'cheapest_hours'
+    && gotCheapest(plan, r.runs, r.params?.price, nowMs, upcoming) === false ? { ...r, reason: 'cheap_hours' } : r);
 
 /**
  * [{id, start, end, reason, params, why, kwh, label}]: `reason`/`params` is
@@ -122,7 +131,7 @@ export function whyLines(plan, nowMs = Date.now(), max = WHY_LINES_MAX, upcoming
     const fromBlocks = [...byId.values()].filter((x) => !own.has(x.id)).map((x) => ({
         id: x.id, start: new Date(x.s).toISOString(), end: new Date(x.e).toISOString(),
         reason: String(x.reason), params: x.params, why: '', code: '', label: '',
-        reasons: isBatteryIn(x.id) ? reasonRuns(blocks, x.id, nowMs) : null,
+        reasons: isBatteryIn(x.id) ? reasonRuns(blocks, x.id, nowMs).map((r) => leftCheap(plan, r, nowMs, upcoming)) : null,
         kwh: kwhOf(blocks, (i) => String(i) === x.id), s: x.s,
         runs: planRuns(plan, (i) => String(i) === x.id, nowMs),
     })).map((x) => ({ ...x, kwh: x.runs.length ? x.runs.reduce((a, r) => a + r.kwh, 0) : x.kwh }));

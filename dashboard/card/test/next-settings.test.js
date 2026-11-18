@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { groups, applyPlan, pendingKey, slotText, slotsOf, setupItems, loadSources,
-         unavailableCount, reserveIds, STRUCTURAL_KEYS } from '../src/util/next-settings.js';
+         unavailableCount, reserveIds, STRUCTURAL_KEYS, sentenceText } from '../src/util/next-settings.js';
 
 // Keys as variables; the stub returns the key with its placeholders so a
 // fragment's shape is visible without English in the asserts.
@@ -27,7 +27,7 @@ const TEXT = {
     next_pay_thresholds_plain: 'cheap means below {cheap}, expensive above {expensive}',
     [K_BATT_ZONES]: 'fill the battery first below {priority}, buffer at {buffer}, help the house above {autostart}',
     next_batt_zones_two: 'fill the battery first below {priority}, buffer at {buffer}',
-    next_batt_spend: 'spend forecast sun {v}',
+    next_batt_spend_on: 'SEM may use battery energy that forecast sun will refill.', next_batt_spend_off: 'SEM does not use it.',
     next_batt_sell: 'sell {v}',
     next_ch_name_control: '{name} controls {control}',
     next_ch_amps: '{min} to {max}',
@@ -150,7 +150,9 @@ test('a missing entity drops its fragment; the sentence still reads', () => {
     assert.ok(batt.sentence.some((p) => p && p.kind === 'action' && p.nav && p.action === 'open_battery'));
     // the flags asked on the battery row are not asked here a second time
     const txt = strings(batt.sentence);
-    assert.ok(txt.includes('Spend forecast sun '));
+    // (#1321) the switch is a full sentence, never "...refill: on."
+    assert.ok(batt.sentence.some((p) => p && p.kind === 'switch' && p.words && p.words.on === 'next_batt_spend_on'));
+    assert.ok(sentenceText(batt.sentence, t, states).includes('SEM may use battery energy that forecast sun will refill.'));
     assert.ok(!txt.includes('sell '));
 });
 

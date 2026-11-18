@@ -17,12 +17,12 @@ import { batteryFacts, batteryNeedText } from '../util/next-battery-line.js';
 import { reviewRows } from '../util/next-review.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { whyLines, batteryEnd } from '../util/plan-why.js';
-import { effectivePlan, planRuns, runsText, shortfalls, dayOffset } from '../util/plan-facts.js';
+import { effectivePlan, planRuns, runsText, shortfalls, dayOffset, kwhAhead } from '../util/plan-facts.js';
 import { trustPct } from '../util/forecast-evidence.js';
 import { tariffKind } from '../util/price-level.js';
 import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
 import { semDefineCard } from '../base/sem-shared.js';
-import { planLead, kwhOf, coldHeaters, planGridKwh, fill } from '../util/next-lead.js';
+import { planLead, coldHeaters, planGridKwh, fill } from '../util/next-lead.js';
 import { planWhenKey } from '../util/next-time.js';
 
 /** null / '' is unknown, never 0 (Number(null) is 0). */
@@ -407,9 +407,11 @@ class SEMNextPlanCard extends SEMNextBase {
     _planWhyText(code, params = {}, runs = null) {
         const key = `plan_why_${code}`;
         const p = params || {};
+        // (#1321) the window starts at the first run still ahead: a past run is not part of it
+        const first = runs && runs.length ? runs[0].s : null, last = runs && runs.length ? runs[runs.length - 1].e : null;
         const vars = {
-            from: p.from ? this._hhmm(p.from) : '',
-            to: p.to ? this._hhmm(p.to) : '',
+            from: first !== null ? this._hhmm(new Date(first)) : p.from ? this._hhmm(p.from) : '',
+            to: last !== null ? this._hhmm(new Date(last)) : p.to ? this._hhmm(p.to) : '',
             price: Number.isFinite(Number(p.price)) && p.price !== null && p.price !== ''
                 ? `${this._price(p.price)} ${this._currency()}/kWh` : '',
             // (#1081) a heat pump planned on the price of heat: its mean COP
@@ -738,7 +740,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const sel = `select.sem_charger_${cid}_charge_mode`;
         const mode = this._str(sel);
         const win = this._windowOf(blocks, id);
-        const kwh = kwhOf(blocks, (x) => x === id);
+        const kwh = kwhAhead({ blocks }, (x) => x === id, Date.now());
         const d = demands.find((x) => x.id === id);
         const ns = notSched.find((x) => x.id === id);
         const bits = [];
@@ -814,7 +816,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const ns = notSched.find((x) => x.id === id);
         const name = planIdName(id, { load: (k) => this._devices()[k] ? this._loadName(k, this._devices()[k]) : undefined, label: () => d?.label || ns?.label }) + (keepRun ? this._toKeep(key) : '');
         const win = this._windowOf(blocks, id);
-        const kwh = win ? kwhOf(blocks, (x) => x === id) : Number(d?.planned_kwh) || 0;
+        const kwh = win ? kwhAhead({ blocks }, (x) => x === id, Date.now()) : Number(d?.planned_kwh) || 0;
         const bits = [];
         if (d?.note || d?.notes) bits.push(this._noteText(d) || '');
         else if (d?.status) bits.push(t('next_status_' + d.status));
