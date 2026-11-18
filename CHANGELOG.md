@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
+
 # [2.3.0-beta.20] — 18.11.2026
 
 - 🐛 **Loads SEM switched off come back after a restart** (#896). Also on unload, stop or crash; hand changes are left alone.
