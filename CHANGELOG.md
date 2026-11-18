@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **The Plan screen shows last night's review again** (#1321). What each device used, the battery's night and the sun kept.
 - 🐛 **Source health tiles show names, not entity ids** (#1321). The id is in the more-info dialog.
 - ✨ **One dashboard: the new one** (#1321). The classic dashboard, its cards and the diagram style option are gone.
-- ✨ **An unedited classic dashboard is replaced on the first start** (#1321). If you changed it, it stays; its SEM cards link to the new one and a Repair offers to delete it.
+- ✨ **An unchanged classic dashboard is replaced on first start** (#1321). A changed one stays, its SEM cards link to the new one.
 - 🐛 **Removed cards show a short notice, not a red error** (#1321). On any dashboard, with a link to the SEM dashboard.
 - ✨ **The System screen has the grid-charge, discharge-end, peak-hold and heat pump step-down settings** (#1321). They only had a place on the old Configuration tab.
 - 🐛 **Links between screens work at any dashboard address** (#1321). Also the welcome message and phone notifications.
