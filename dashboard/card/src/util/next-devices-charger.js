@@ -89,7 +89,7 @@ export function chargerBody(card, row) {
     const floorGrid = mode === 'solar_plus_battery' && floorVal !== null && floorVal > 0
         ? tf('next_floor_uses_grid', { value: floorType === 'soc' ? Math.round(floorVal) + ' %' : card._kwh(floorVal) }) : '';
     const hint = mode ? [tf('charge_mode_hint_' + mode + '_surplus', hintP),
-        floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? t('next_at_night') + ': ' + hintNight : '')].filter(Boolean).join(' ') : '';
+        floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? hintNight : '')].filter(Boolean).join(' ') : '';
     const nextCheap = mode === 'solar_plus_cheap' && cs.ev_next_cheap_window ? card._hhmm(cs.ev_next_cheap_window) : '';
     const pausedUntil = mode === 'off' && modeAttrs.paused_until ? card._hhmm(modeAttrs.paused_until) : '';
     const resumeMode = modeAttrs.pause_resume_mode ? (t('charge_mode_' + modeAttrs.pause_resume_mode) || modeAttrs.pause_resume_mode) : '';

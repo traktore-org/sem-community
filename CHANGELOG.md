@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **One number, one rounding** (#1321). The car's planned kWh, its need and the sun figure agree on every screen; the plan names who is short.
+- 🐛 **Plainer Devices and Plan** (#1321). Surplus counts measured power only; a switch that is unavailable is not on; two learners have their own names.
+- 🐛 **Clearer setup, dialogs and tips** (#1321). Set up with checks is one line; dialog buttons stay in view; no praise tip on a dark day.
 - 🐛 **Plans show real hours** (#1321). A car with two runs shows two windows, one kWh figure and one next start on every screen.
 - 🐛 **A device is either on or waiting** (#1321). Now, Devices and Why now use one rule; Health says no power reading.
 - ✨ **Every confirm says what it does** (#1321). Each action explains itself; the relay switch asks first; repeated battery limits fold into one row.

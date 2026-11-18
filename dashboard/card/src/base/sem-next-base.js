@@ -325,10 +325,12 @@ export const nextCss = css`
     .more summary::before { content: '\\25B8'; display: inline-block; transition: transform .15s; }
     .more[open] summary::before { transform: rotate(90deg); }
     /* dialog fallback when ha-dialog is not there */
-    .dlg-overlay { position: fixed; inset: 0; background: color-mix(in srgb, black 60%, transparent); z-index: 999; display: flex; align-items: center; justify-content: center; }
+    .dlg-overlay { position: fixed; inset: 0; background: var(--mdc-dialog-scrim-color, color-mix(in srgb, black 60%, transparent)); z-index: 999; display: flex; align-items: center; justify-content: center; }
     .dlg-box { background: var(--card-background-color, #fff); border-radius: var(--ha-card-border-radius, 12px); border: 1px solid var(--divider-color); padding: 24px; min-width: 320px; max-width: 90vw; max-height: 90vh; overflow: auto; color: var(--primary-text-color); }
     .dlg-title { font-weight: var(--ha-font-weight-medium, 500); font-size: var(--ha-font-size-l, 16px); margin-bottom: 16px; }
-    .dlg-actions { display: flex; gap: 8px; align-items: center; }
+    /* (#1321) the footer stays in view in a tall dialog: the body scrolls, the buttons do not */
+    .dlg-actions { display: flex; gap: 8px; align-items: center; position: sticky; bottom: 0; z-index: 1; padding: 12px 0 0;
+        background: var(--ha-dialog-surface-background, var(--mdc-theme-surface, var(--card-background-color, #fff))); }
     .dlg-actions .grow { flex: 1; }
     .toast { position: fixed; left: 16px; right: 16px; margin: 0 auto; width: fit-content; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10;
         max-width: 560px; box-sizing: border-box; display: flex; align-items: flex-start; gap: 8px; padding: 12px 16px; border-radius: 4px;

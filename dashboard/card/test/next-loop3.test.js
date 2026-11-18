@@ -24,7 +24,9 @@ test('different devices, commands or reasons never merge; a lone record stays', 
 
 test('one rule for on: switched on, active, or drawing power', () => {
     assert.equal(runningNow({ is_on: true }), true);
-    assert.equal(runningNow({ is_active: true }), true);
+    assert.equal(runningNow({ is_active: true }), false, 'only is_on counts: surplus rows publish it');
+    assert.equal(runningNow({ is_on: true }, null, 'unavailable'), false, 'an unavailable switch is unknown, not on');
+    assert.equal(runningNow({ is_on: true }, 500, 'unavailable'), true, 'real power still counts');
     assert.equal(runningNow({}, 500), true);
     assert.equal(runningNow({}, 3), false);
     assert.equal(runningNow(null, null), false);

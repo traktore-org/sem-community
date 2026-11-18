@@ -6,7 +6,7 @@ import { reviewRows } from '../src/util/next-review.js';
 const say = (key, p) => ({
     energy_plan_review_took_less: `needs ${p.suggested} of ${p.asked}`,
     energy_plan_review_batt_refilled: `drained ${p.drained}, full by ${p.full_at}`,
-    energy_plan_review_sc_met: `kept ${p.actual}% of ${p.predicted}%`,
+    next_review_sc_met: `kept ${p.actual}% of ${p.predicted}%`,
 }[key] || '');
 
 test('a demand, the battery and the sun each give one row', () => {

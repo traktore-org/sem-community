@@ -370,7 +370,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         if (health) {
             const a = this._attrs(S + 'pv_health');
             const cls = health === 'green' ? 'ok' : health === 'red' ? 'bad' : 'warn';
-            const sub = [Number.isFinite(Number(a.ratio_7d)) && a.ratio_7d !== null ? this._tf('next_ratio_7d', { ratio: this._fmt(a.ratio_7d, 2) }) : '',
+            const sub = [Number.isFinite(Number(a.ratio_7d)) && a.ratio_7d !== null ? this._tf('next_pct_7d', { pct: Math.round(Number(a.ratio_7d) * 100) }) : '',
                          Number.isFinite(Number(a.downtime_min_today)) && a.downtime_min_today !== null ? this._tf('next_dark_minutes', { min: Math.round(a.downtime_min_today) }) : '',
                          a.snow ? this._t('next_snow') : ''].filter(Boolean).join(' · ');
             rows.push(this._row('mdi:solar-panel', this._t('next_pv_health'), this._pill(this._t('next_health_' + health) || health, cls), sub, { onClick: () => this._moreInfo(S + 'pv_health') }));
@@ -390,7 +390,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const tiles = [self !== null ? ring(self, C.solar, 'next_self_use', 'next_self_use_sub') : null, aut !== null ? ring(aut, C.home, 'next_own_supply', 'next_own_supply_sub') : null].filter(Boolean);
         const rows = [];
         if (co2d !== null || co2y !== null || co2l !== null) {
-            const sub = [co2y !== null ? `${this._int(co2y)} ${unit} ${this._t('next_this_year')}` : '', co2l !== null ? `${this._co2Text(co2l, unit)} ${this._t('next_lifetime')}` : '',
+            const sub = [co2y !== null ? `${this._int(co2y)} ${unit} ${this._t('next_this_year')}` : '', co2l !== null ? `${this._co2Text(co2l, unit)} ${this._t('next_in_total')}` : '',
                          trees !== null ? this._tf('next_trees', { n: Math.round(trees) }) : ''].filter(Boolean).join(' · ');
             rows.push(this._row('mdi:leaf', this._t('next_co2_avoided'), co2d === null ? '—' : `${this._fmt(co2d, 1)} ${unit} ${this._t('next_today').toLowerCase()}`, sub, { onClick: () => this._moreInfo(S + 'daily_co2_avoided') }));
         }

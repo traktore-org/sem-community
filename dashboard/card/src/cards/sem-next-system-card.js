@@ -230,14 +230,16 @@ class SEMNextSystemCard extends SEMNextBase {
         const items = setupItems(this._hass.states, this._options);
         const counted = items.filter((i) => !i.optional);
         const done = counted.filter((i) => i.done).length;
-        const value = done === counted.length ? this._t('config_setup_done')
+        // (#1321) the checks ride beside the steps, so everything done with checks to make reads "Set up · 2 things to check"
+        const checks = readChecklist(this._hass.states)?.repairs?.count || 0;
+        const checkText = checks === 1 ? this._t('setup_check_one') : (checks ? this._tf('setup_check_n', { n: checks }) : '');
+        const allDone = done === counted.length;
+        const value = allDone ? (checks ? `${this._t('next_set_up')} · ${checkText}` : this._t('config_setup_done'))
             : this._tf('config_setup_progress', { done, total: counted.length });
         const grid = this._valLabel('diag_grid_sign');
         const batt = this._valLabel('diag_battery_sign');
         // (#1321) the Now screen's checklist counts the same things to check: the required steps are the value, the checks ride beside it
-        const checks = readChecklist(this._hass.states)?.repairs?.count || 0;
-        const checkText = checks === 1 ? this._t('setup_check_one') : (checks ? this._tf('setup_check_n', { n: checks }) : '');
-        const sub = [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : '', checkText].filter(Boolean).join(' · ');
+        const sub = [grid ? `${this._t('next_grid_sign')} ${grid}` : '', batt ? `${this._t('next_battery_sign')} ${batt}` : '', allDone ? '' : checkText].filter(Boolean).join(' · ');
         return this._row('mdi:check-decagram', this._t('next_setup_check'), value, sub, { onClick: () => this._togglePanel('setup') });
     }
 

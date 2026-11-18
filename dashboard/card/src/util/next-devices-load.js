@@ -10,7 +10,7 @@
 
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
-import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey } from './next-devices.js';
+import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey, runningNow } from './next-devices.js';
 import { loadRunsBySem } from './settings-applies.js';
 import { cleanName } from './next-names.js';
 import { fmtNum } from './next-number.js';
@@ -104,7 +104,7 @@ export function loadBody(card, row) {
 
     // ── stats ──
     const live = row.powerEntity ? card._powerW(row.powerEntity) : null;
-    const on = row.isOn || (live !== null && live > 10) || (measureOnly && live !== null);
+    const on = runningNow({ is_on: row.isOn }, live) || (measureOnly && live !== null);
     const powerText = on && live !== null ? card._kw(live)
         : (row.rating > 0 ? (row.ratingMeasured ? html`<span class="dim">~${card._kw(row.rating)}</span>` : html`<span class="dim">${card._t('rating_not_measured')}</span>`)
             : (live === null ? '—' : card._kw(live)));

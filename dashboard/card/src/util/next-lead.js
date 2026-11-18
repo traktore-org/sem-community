@@ -60,8 +60,10 @@ export function nowLead(f) {
         }
     } else if (car && car.present && Number.isFinite(car.remainingKwh) && car.remainingKwh > 0.1) {
         // (#1321) the plan's own hours when it has them: the same window the Plan screen shows
+        const short = Number.isFinite(car.plannedKwh) && car.plannedKwh < car.remainingKwh - 0.05;
         main = car.planWindow
-            ? { key: 'next_lead_car_planned', params: { kwh: fmt1(car.remainingKwh), window: car.planWindow } }
+            ? { key: short ? 'next_lead_car_planned_part' : 'next_lead_car_planned',
+                params: { kwh: fmt1(car.remainingKwh), planned: fmt1(car.plannedKwh), window: car.planWindow } }
             : { key: 'next_lead_car_waits', params: { kwh: fmt1(car.remainingKwh), time: car.targetTime || '' } };
     } else if (sun && exporting) {
         main = { key: 'next_lead_sun_export', params: { kw: fmt1(f.gridW / 1000) } };

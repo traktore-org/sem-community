@@ -110,7 +110,7 @@ export function overnightWrites(source) {
     ];
 }
 
-function rowFromMap(id, info, nameFor) {
+function rowFromMap(id, info, nameFor, states = null) {
     const i = info || {};
     const type = i.device_type === 'battery' ? 'battery'
         : (i.device_type === 'ev_charger' || i.device_type === 'ev_charging') ? 'charger' : 'load';
@@ -126,7 +126,7 @@ function rowFromMap(id, info, nameFor) {
         rating: Number(i.power_rating) || 0,
         // (#1326) false only when SEM says the rating is its 1 kW placeholder.
         ratingMeasured: i.rating_measured !== false,
-        isOn: runningNow(i),
+        isOn: runningNow(i, null, switchStateOf(i, states)),
         isShed: !!i.is_shed,
         shedReason: i.shed_reason || null,
         shedPhase: i.shed_phase || null,
@@ -165,8 +165,8 @@ function rowFromMap(id, info, nameFor) {
  * and the battery the map does not know. `chargers` = charger ids from
  * the base; `hasBattery` = a battery SOC sensor exists.
  */
-export function deviceRows(devices, chargers = [], { hasBattery = false, chargerName, loadName } = {}) {
-    const rows = Object.entries(devices || {}).map(([id, info]) => rowFromMap(id, info, loadName));
+export function deviceRows(devices, chargers = [], { hasBattery = false, chargerName, loadName, states = null } = {}) {
+    const rows = Object.entries(devices || {}).map(([id, info]) => rowFromMap(id, info, loadName, states));
     rows.sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
     const seenCid = new Set(rows.filter((r) => r.type === 'charger').map((r) => r.cid));
     for (const cid of chargers || []) {
@@ -205,8 +205,17 @@ export function deviceRows(devices, chargers = [], { hasBattery = false, charger
  * Now, Devices and Why now all ask this, so a device never reads on in one place
  * and waiting in another. `info` is a sensor.sem_controllable_devices_count entry.
  */
-export function runningNow(info, powerW = null) {
-    return !!(info && (info.is_on || info.is_active)) || (Number.isFinite(powerW) && powerW > 10);
+export function runningNow(info, powerW = null, switchState = null) {
+    if (Number.isFinite(powerW) && powerW > 10) return true;
+    // a switch that reports nothing is unknown, never on from a stale is_on
+    if (switchState === 'unavailable' || switchState === 'unknown') return false;
+    return !!(info && info.is_on);
+}
+
+/** The state of a device's switch entity in `states`, or null when it has none. */
+export function switchStateOf(info, states) {
+    const id = info && info.switch_entity;
+    return id && states && states[id] ? String(states[id].state) : null;
 }
 
 export function statePill(row, live = {}) {
@@ -236,7 +245,7 @@ export function statePill(row, live = {}) {
         return p('next_st_rests');
     }
     if (row.blockedBy) return p('next_st_waiting_for', { parent: live.parentName || row.blockedBy });
-    const running = runningNow({ is_on: row.isOn }, w);
+    const running = runningNow({ is_on: row.isOn }, w);  // row.isOn already reads the switch state
     // (#1369) the last sentence per device keeps sensor noise from flipping it
     const heater = heaterSays(row, { ...live, prevKey: _heaterPrev.get(row.id) }, running);
     _heaterPrev.set(row.id, heater ? heater.key : '');

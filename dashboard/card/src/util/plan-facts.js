@@ -79,6 +79,52 @@ export function planRuns(plan, pick, nowMs = -Infinity) {
     return out;
 }
 
+/**
+ * `values` rounded to `d` decimals so the rounded parts add up to the rounded
+ * total (largest remainder). One rounding for a figure and its parts (#1321).
+ */
+export function roundedParts(values, d = 1) {
+    const f = 10 ** d;
+    const v = (values || []).map((x) => (Number.isFinite(Number(x)) ? Number(x) : 0));
+    const total = Math.round(v.reduce((a, b) => a + b, 0) * f);
+    const base = v.map((x) => Math.floor(x * f + 1e-9));
+    let rest = total - base.reduce((a, b) => a + b, 0);
+    const order = v.map((x, i) => [x * f - base[i], i]).sort((a, b) => b[0] - a[0]);
+    for (let k = 0; rest > 0 && k < order.length; k++, rest--) base[order[k][1]] += 1;
+    return base.map((x) => x / f);
+}
+
+/** planRuns whose kWh are rounded to one decimal and sum to the rounded total. */
+export function planRunsRounded(plan, pick, nowMs = -Infinity) {
+    const runs = planRuns(plan, pick, nowMs);
+    const parts = roundedParts(runs.map((r) => r.kwh));
+    return runs.map((r, i) => ({ ...r, kwh: parts[i] }));
+}
+
+/** kWh the plan still has for a demand id and the kWh the demand needs: { planned, needed } (needed null when unknown). */
+export function demandFigures(plan, id, nowMs = -Infinity) {
+    const runs = planRuns(plan, (x) => x === id, nowMs);
+    const d = (plan && Array.isArray(plan.demands) ? plan.demands : []).find((x) => x && x.id === id);
+    const needed = d && Number.isFinite(Number(d.needed_kwh)) ? Number(d.needed_kwh) : null;
+    const planned = runs.reduce((a, r) => a + r.kwh, 0);
+    return { planned: Math.round(planned * 10) / 10, needed: needed === null ? null : Math.round(needed * 10) / 10 };
+}
+
+/**
+ * Demands the plan cannot fully serve: [{ id, planned, needed }] (one decimal each).
+ * Names WHO is short, for the plan's "not everything fits" (#1321).
+ */
+export function shortfalls(plan, nowMs = -Infinity) {
+    const out = [];
+    for (const d of (plan && Array.isArray(plan.demands) ? plan.demands : [])) {
+        if (!d || !d.id) continue;
+        const f = demandFigures(plan, String(d.id), nowMs);
+        const planned = f.planned > 0 || (plan.blocks || []).some((b) => b && b.id === d.id) ? f.planned : Math.round((Number(d.planned_kwh) || 0) * 10) / 10;
+        if (f.needed !== null && planned < f.needed - 0.05 && d.status !== 'fits') out.push({ id: String(d.id), planned, needed: f.needed });
+    }
+    return out;
+}
+
 /** The first run that has not started, or null. */
 export function nextRun(runs, nowMs) {
     return (runs || []).find((r) => r.s > nowMs) || null;

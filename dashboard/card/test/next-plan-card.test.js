@@ -184,7 +184,7 @@ test('dynamic tariff: steps with min, max and average; unknown prices hatched; f
     const out = text(el._stripSec(el._plan()));
     assert.match(out, /next_price_avg/);
     assert.match(out, /next_prices_later/);
-    assert.match(out, /4\.0 kWh/);                        // the sun total chip
+    assert.match(out, /next_chip_sun_day/);               // the sun bubble names its day
     assert.doesNotMatch(out, /next_price_flat|next_chip_forecast_kwh/);
     el._hover = h0 + 30 * 60e3;
     const tip = text(el._stripSec(el._plan()));

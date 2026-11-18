@@ -255,6 +255,7 @@ test('4: a live reason reads the battery level the chip reads', () => {
     assert.equal(recordReason(rec, { 'sensor.sem_battery_soc': S(20) }, t), 'A car is plugged in. The battery is at 20 %.');
     assert.equal(recordReason(rec, { 'sensor.sem_battery_soc': S('unavailable') }, t), 'unknown');
     assert.equal(plainReason(rec, t), 'unknown', 'a dated record keeps what it said then');
+    assert.equal(plainReason(rec, (k) => ({ next_reason_level_unread: 'not read yet' }[k] || k), { past: true }), 'not read yet');
 });
 
 // ── 5: one name ──
@@ -320,7 +321,7 @@ test('6: a learning row says the learner\'s own count out of what it needs (loop
     const rv = { demands: [{ demand_id: 'arbitrage:battery', kind: 'battery', code: 'learning', nights: 0, needed: 5 }, { demand_id: 'ev:a', kind: 'ev', code: 'learning', nights: 3 }] };
     const say = (key, p) => `${key}:${p.nights}/${p.needed}`;
     const rows = reviewRows(rv, say, undefined, { battery: 44 });
-    assert.deepEqual(rows.map((r) => r.text), ['energy_plan_review_learning:0/5', 'energy_plan_review_learning:3/5'], 'no other night count joins in');
+    assert.deepEqual(rows.map((r) => r.text), ['next_review_learning:0/5', 'next_review_learning:3/5'], 'no other night count joins in');
 });
 
 test('6: a held device does not say it "turns off"; a live line keeps its own reason otherwise', () => {

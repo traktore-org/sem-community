@@ -98,6 +98,8 @@ export function heaterSays(row, live = {}, running = false) {
         // (#1081) a planned run that goes on to the top says so
         if (code === 'comfort_goal' && preheatOn(c) && max !== null) return p('hq_st_preheating', { top: T(max) }, 'ok');
         if (code === 'comfort_goal') return p('hq_st_heating_to', { keep: T(keep) }, 'ok');
+        // (#1321) the engine's own word wins: the decision log says the same
+        if (code === 'min_run_hold') return p('hq_st_min_run', {}, 'ok');
         // (#1321) "on sun" only while the roof gives something: the minimum run time keeps it on otherwise
         if (intent.source === 'solar' && Number.isFinite(live.sunW) && live.sunW < 100) return p('hq_st_min_run', {}, 'ok');
         if (intent.source === 'solar' || intent.source === 'tier1_battery') {

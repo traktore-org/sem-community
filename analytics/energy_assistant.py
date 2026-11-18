@@ -295,7 +295,8 @@ class EnergyAssistant:
         from ..utils.translate import get_text
         _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
 
-        if self_consumption_rate > 80:
+        # (#1321) praise needs a day with sun: 96 % of 0.6 kWh is not "well optimized"
+        if self_consumption_rate > 80 and daily_solar_kwh >= 2:
             self._tips.append(EnergyTip(
                 category="general",
                 title=_t("tip_excellent_self_title", "Excellent self-consumption"),

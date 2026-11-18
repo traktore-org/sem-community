@@ -87,6 +87,8 @@ export function commandLabel(cmd, t) {
     const [verb, ...rest] = String(cmd).split(' ');
     const value = rest.join(' ');
     if (verb === 'charge' && value) return value;
+    // (#1321) a battery limit is a plain fact: it stops powering the car; the watts are noise
+    if (verb === 'limit_discharge') return t('why_verb_limit_discharge') || 'limit discharge';
     const key = `why_verb_${verb}`;
     const word = t(key);
     const said = word && word !== key ? word : verb.replace(/_/g, ' ');
@@ -125,6 +127,24 @@ export function mergeRepeats(records) {
     return (records || []).filter((r) => first.get(r) !== null).map((r) => first.get(r) || r);
 }
 
+/**
+ * (#1321) mergeRepeats per calendar day: a swing at 23:50 and one at 00:10 are two days'
+ * rows, so today's list never counts yesterday's nudges. Order is kept.
+ */
+export function mergePerDay(records, tz) {
+    const out = [];
+    let group = [], day = null;
+    const flush = () => { out.push(...mergeRepeats(group)); group = []; };
+    for (const r of records || []) {
+        const d = _dayKey(new Date(r?.time), tz);
+        if (day !== null && d !== day) flush();
+        day = d;
+        group.push(r);
+    }
+    flush();
+    return out;
+}
+
 /** `8 A → off`, or only the new command when there was none before. */
 export function changeLabel(rec, t) {
     const now = commandLabel(rec?.new, t);
@@ -144,6 +164,8 @@ export function plainReason(rec, t, opts = {}) {
     if (code === 'battery_car_level_unknown' && Number.isFinite(opts.soc)) {
         return t('why_reason_battery_car_level_known').replace('{soc}', String(Math.round(opts.soc)));
     }
+    // a past row: the level was not read THEN; say so without claiming it is unknown now
+    if (code === 'battery_car_level_unknown' && opts.past) return t('next_reason_level_unread');
     // (#1321) a device that is held ("keep as is") is not turning off: its reason says it stays off
     const heldKey = opts.held ? `why_reason_${{ phase_shed: 'phase_guard' }[code] || code}_held` : '';
     const heldText = heldKey ? t(heldKey) : '';

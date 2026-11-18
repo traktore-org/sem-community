@@ -12,7 +12,8 @@
  *   deadline (the card paints it red) and a car is plugged in.
  * The "now" anchor row is dropped: the lead line already says now.
  */
-import { planRuns } from './plan-facts.js';
+import { planRunsRounded } from './plan-facts.js';
+import { fmtNum } from './next-number.js';
 
 export const KINDS = {
     solar_peak:       { icon: 'mdi:weather-sunny',           color: 'solar' },
@@ -49,9 +50,9 @@ export function dayIndex(whenMs, nowMs) {
 function carPlanRows(plan, cars, now) {
     const out = [];
     for (const c of cars || []) {
-        for (const r of planRuns(plan, (id) => id === 'ev:' + c.cid, now)) {
+        for (const r of planRunsRounded(plan, (id) => id === 'ev:' + c.cid, now)) {
             out.push({ kind: 'ev_charge_start', when: r.s, iso: new Date(r.s).toISOString(), icon: KINDS.ev_charge_start.icon, color: 'ev',
-                label: 'next_car_charges', detail: null, values: { name: c.name, kwh: String(Math.round(r.kwh * 10) / 10) },
+                label: 'next_car_charges', detail: null, values: { name: c.name, kwh: fmtNum(r.kwh, 1) },
                 until: new Date(r.e).toISOString(), day: dayIndex(r.s, now), late: false, planned: true });
         }
     }
@@ -66,7 +67,7 @@ function alignDevices(rows, plan, now) {
         const d = r.kind === 'device_run' ? demands.find((x) => x && /^(load|comfort):/.test(String(x.id)) && x.label && x.label === r.values.name) : null;
         const has = d ? (plan.blocks || []).some((b) => b && b.id === d.id) : false;
         if (!has) { out.push(r); continue; }
-        for (const run of planRuns(plan, (id) => id === d.id, now)) {
+        for (const run of planRunsRounded(plan, (id) => id === d.id, now)) {
             out.push({ ...r, when: run.s, iso: new Date(run.s).toISOString(), until: new Date(run.e).toISOString(), day: dayIndex(run.s, now) });
         }
     }

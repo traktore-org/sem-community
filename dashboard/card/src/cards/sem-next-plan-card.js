@@ -16,7 +16,7 @@ import { planIdName } from '../util/plan-ids.js';
 import { reviewRows } from '../util/next-review.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { whyLines, batteryEnd } from '../util/plan-why.js';
-import { effectivePlan, planRuns, runsText } from '../util/plan-facts.js';
+import { effectivePlan, planRuns, runsText, shortfalls, dayOffset } from '../util/plan-facts.js';
 import { trustPct } from '../util/forecast-evidence.js';
 import { tariffKind } from '../util/price-level.js';
 import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
@@ -34,7 +34,7 @@ import { laneModel } from '../util/next-timeline.js';
 import { minutesToPlanEnd } from '../util/next-strip.js';
 import { chartWindow, chartTicks, sunModel, priceModel, priceAt, planRows, focusBlock, runningAt, RANGES } from '../util/next-plan-chart.js';
 import {
-    WHY_KINDS, actionWords, changeLabel, deviceName, mergeRepeats, earlierKey, filterRecords, isToday, plainReason, rowTime, whyChips,
+    WHY_KINDS, actionWords, changeLabel, deviceName, mergePerDay, earlierKey, filterRecords, isToday, plainReason, rowTime, whyChips,
 } from '../util/why-rows.js';
 
 export const WS_DECISION_LOG = 'solar_energy_management/decision_log';
@@ -232,6 +232,15 @@ class SEMNextPlanCard extends SEMNextBase {
 
     _devices() { return this._attrs('sensor.sem_controllable_devices_count').devices || {}; }
 
+    /** A plan note in words; "no price" notes say from when (the last hour the tariff prices). */
+    _noteText(d) {
+        const up = this._attrs('sensor.sem_tariff_current_import_rate').upcoming;
+        const ts = (Array.isArray(up) ? up : []).map((u) => Date.parse(u?.t)).filter(Number.isFinite).sort((a, b) => a - b);
+        const step = ts.length > 1 ? Math.min(...ts.slice(1).map((x, i) => x - ts[i]).filter((g) => g > 0), 36e5) : 36e5;
+        const until = ts.length ? this._clockDay(ts[ts.length - 1] + step) : '';
+        return planNoteText(d, (k) => this._t(k), { until });
+    }
+
     _loads() {
         return Object.entries(this._devices()).map(([id, info]) => ({ id, name: this._loadName(id, info) }));
     }
@@ -244,7 +253,7 @@ class SEMNextPlanCard extends SEMNextBase {
             nightStart: this._str('sensor.sem_night_start_time'), nightEnd: this._str('sensor.sem_night_end_time'),
             forecastTomorrowKwh: this._num('sensor.sem_forecast_tomorrow_kwh'),
             forecastTodayKwh: this._num('sensor.sem_forecast_today_kwh'),
-            noteText: (d) => planNoteText(d, (k) => this._t(k)),
+            noteText: (d) => this._noteText(d),
         });
     }
 
@@ -254,15 +263,16 @@ class SEMNextPlanCard extends SEMNextBase {
         return times[0] || '';
     }
 
-    _rowLabel(r) {
+    _rowLabel(r, lane = false) {
         if (r.kind === 'ev' && !r.label) {
             // two unnamed cars must not read the same: number them in row order
             const evs = (this._lastRows || []).filter((x) => x.kind === 'ev');
             const i = evs.indexOf(r);
             return evs.length > 1 && i >= 0 ? `${this._t('next_src_car')} ${i + 1}` : this._t('next_src_car');
         }
-        if (r.kind === 'ev' || r.kind === 'load') return (r.label || this._t('next_lane_load')) + this._toKeep(r.keepOf);
-        return this._t({ battery_in: 'next_row_charge', battery_out: 'next_row_to_house', grid: 'next_row_from_grid' }[r.kind]);
+        // a lane label is narrow: the Keep at target stays in the tooltip and the rows
+        if (r.kind === 'ev' || r.kind === 'load') return (r.label || this._t('next_lane_load')) + (lane ? '' : this._toKeep(r.keepOf));
+        return this._t({ battery_in: 'next_src_battery', battery_out: 'next_row_to_house', grid: 'next_row_from_grid' }[r.kind]);
     }
 
     /** (#1321) " · to 52 °C" for a heater's Keep at run, '' otherwise. */
@@ -298,7 +308,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const key = 'energy_plan_why_' + code;
         const said = this._t(key);
         // (#1354) never a bare engine code on screen
-        return said && said !== key ? said : (planNoteText(n, (k) => this._t(k)) || '');
+        return said && said !== key ? said : (this._noteText(n) || '');
     }
 
     /** (#1321) The planner's own why for the tapped block, in words; '' when none. */
@@ -357,8 +367,9 @@ class SEMNextPlanCard extends SEMNextBase {
         if (!rows.length) return nothing;
         const devices = this._devices();
         const look = { ev: [KIND_ICON.ev, KIND_COLOR.ev], load: [KIND_ICON.load, KIND_COLOR.load],
-                       battery: ['mdi:battery-arrow-down', C.battery_out], sun: ['mdi:solar-power-variant', C.solar] };
-        const name = (r) => (r.kind === 'sun' ? '' : r.kind === 'battery' ? t('next_src_battery') : planIdName(r.id || '', {
+                       battery: ['mdi:battery-arrow-down', C.battery_out], sun: ['mdi:solar-power-variant', C.solar],
+                       batteryplan: ['mdi:battery-charging', C.battery_in], heater: ['mdi:water-boiler', C.home] };
+        const name = (r) => (r.kind === 'sun' ? '' : (r.kind === 'battery' || r.kind === 'batteryplan') ? t('next_src_battery') : planIdName(r.id || '', {
             charger: (cid) => this._chargerName(cid), load: (k) => (devices[k] ? this._loadName(k, devices[k]) : undefined), label: () => r.label }));
         return this._sec(t('energy_plan_review_title'), html`<div class="rows">${rows.map((r) => html`<div class="row" style="--c:${look[r.kind][1]}"><div class="k">${this._icon(look[r.kind][0])}
             <span class="t">${name(r) ? html`<b>${name(r)}</b> · ` : nothing}${r.text}</span></div></div>`)}</div>`);
@@ -397,7 +408,7 @@ class SEMNextPlanCard extends SEMNextBase {
         if (kind === 'grid') return this._t('next_reason_house_grid');
         const demands = Array.isArray(plan.demands) ? plan.demands : [];
         const d = demands.find((x) => x.id === fb.row.key);
-        if (d?.note || d?.notes) return planNoteText(d, (k) => this._t(k)) || '';
+        if (d?.note || d?.notes) return this._noteText(d) || '';
         if (d?.status) return this._t('next_status_' + d.status);
         return this._tf(kind === 'ev' ? 'next_reason_ev_block' : 'next_reason_load_block', { kw, status: '', note: '' }).replace(/\s+/g, ' ').trim();
     }
@@ -418,6 +429,19 @@ class SEMNextPlanCard extends SEMNextBase {
         } });
         this._lastRows = rows;
         return { tz, now, win, sun, price, rows };
+    }
+
+    /**
+     * (#1321) The peak's bubble says whose day it is and reads the day's forecast sensor, the
+     * figure the Now screen shows, so one number carries one label on every screen.
+     */
+    _sunChip(d, pk) {
+        const off = dayOffset((pk.s + pk.e) / 2, +new Date(d.now), this._hass?.config?.time_zone);
+        const sensor = off === 0 ? this._num('sensor.sem_forecast_today_kwh') : (off === 1 ? this._num('sensor.sem_forecast_tomorrow_kwh') : null);
+        const kwh = sensor !== null && sensor > 0.05 ? sensor : d.sun.totalKwh;
+        if (!(kwh > 0.05)) return '';
+        const day = off === 0 ? 'next_when_today' : (off === 1 ? 'next_when_tomorrow' : '');
+        return day ? this._tf('next_chip_sun_day', { kwh: this._fmt(kwh, 1), day: this._t(day) }) : `${this._fmt(kwh, 1)} kWh`;
     }
 
     /** The visible day's forecast total, when no hourly forecast exists. */
@@ -484,7 +508,8 @@ class SEMNextPlanCard extends SEMNextBase {
                     <path d="${line}" fill="none" stroke="${C.solar}" stroke-width="2" stroke-linejoin="round" stroke-dasharray="${actual ? nothing : '4 3'}"></path>`);
             }
             const pk = d.sun.peak;
-            if (pk && d.sun.totalKwh > 0.05) parts.push(this._svgChip(X((pk.s + pk.e) / 2), sy0 - 24, `${this._fmt(d.sun.totalKwh, 1)} kWh`, C.solar, 'var(--sem-on-energy, #10161c)', 0, W));
+            const chip = pk && this._sunChip(d, pk);
+            if (chip) parts.push(this._svgChip(X((pk.s + pk.e) / 2), sy0 - 24, chip, C.solar, 'var(--sem-on-energy, #10161c)', 0, W));
         } else {
             const kwh = this._sunFallbackKwh(d);
             const text = kwh !== null ? this._tf('next_chip_forecast_kwh', { kwh: this._fmt(kwh, 1) }) : this._t('next_sun_none');
@@ -609,14 +634,25 @@ class SEMNextPlanCard extends SEMNextBase {
         return html`
             ${lab((lay.sun[0] + lay.sun[1]) / 2, 'mdi:white-balance-sunny', C.solar, this._t('next_lane_sun'))}
             ${lab((lay.price[0] + lay.price[1]) / 2, 'mdi:cash', C.fg3, this._t('next_lane_price'), `${this._currency()}/kWh`)}
-            ${d.rows.map((r, i) => lab(lay.planY + i * lay.rowH + lay.rowH / 2, KIND_ICON[r.kind] || 'mdi:power-plug', KIND_COLOR[r.kind], this._rowLabel(r)))}`;
+            ${d.rows.map((r, i) => lab(lay.planY + i * lay.rowH + lay.rowH / 2, KIND_ICON[r.kind] || 'mdi:power-plug', KIND_COLOR[r.kind], this._rowLabel(r, true)))}`;
+    }
+
+    /** (#1321) "not everything fits" names who is short: "Sim Charger 2 gets 8.0 of 10.0 kWh". */
+    _fitsNo(plan) {
+        const low = shortfalls(plan, Date.now());
+        if (!low.length) return this._t('next_fits_no');
+        return low.map((x) => {
+            const d = (plan.demands || []).find((y) => y.id === x.id);
+            const name = x.id.startsWith('ev:') ? this._chargerName(x.id.slice(3)) : (d?.label || this._t('next_fits_no'));
+            return this._tf('next_fits_short', { name, planned: this._fmt(x.planned, 1), needed: this._fmt(x.needed, 1) });
+        }).join(', ');
     }
 
     _stripPills(plan) {
         const t = (k) => this._t(k);
         const out = [];
         if (plan.fits === true) out.push(this._pill(t('next_fits_yes'), 'ok', { icon: 'mdi:check' }));
-        else if (plan.fits === false) out.push(this._pill(t('next_fits_no'), 'warn'));
+        else if (plan.fits === false) out.push(this._pill(this._fitsNo(plan), 'warn'));
         if (plan.computed_at) out.push(this._pill(this._tf('next_made_at', { time: this._hhmm(plan.computed_at) })));
         const noSun = plan?.tomorrow?.provisional?.not_enough_sun;
         if (Array.isArray(noSun) && noSun.length) out.push(this._pill(t('next_tmrw_no_sun_car'), 'warn', { icon: 'mdi:weather-cloudy' }));
@@ -684,7 +720,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const d = demands.find((x) => x.id === id);
         const ns = notSched.find((x) => x.id === id);
         const bits = [];
-        if (d?.note || d?.notes) bits.push(planNoteText(d, (k) => this._t(k)) || '');
+        if (d?.note || d?.notes) bits.push(this._noteText(d) || '');
         else if (d?.status) bits.push(t('next_status_' + d.status));
         else if (ns) bits.push(this._whyText(ns));
         else if (!win) bits.push(t('next_nothing_planned'));
@@ -732,7 +768,7 @@ class SEMNextPlanCard extends SEMNextBase {
         // (#1367) a battery SEM cannot charge says so, instead of nothing
         const left = notSched.filter((n) => n && String(n.id).startsWith('battery'));
         const sub = left.length ? this._whyText(left[0])
-            : d?.note || d?.notes ? (planNoteText(d, (k) => this._t(k)) || '') : (this._whyCodes(plan) || (arb && arb.enabled && arb.reason ? String(arb.reason) : ''));
+            : d?.note || d?.notes ? (this._noteText(d) || '') : (this._whyCodes(plan) || (arb && arb.enabled && arb.reason ? String(arb.reason) : ''));
         const mode = this._str('select.sem_battery_mode');
         const options = this._attrs('select.sem_battery_mode').options || [];
         const btns = [];
@@ -757,7 +793,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const win = this._windowOf(blocks, id);
         const kwh = win ? kwhOf(blocks, (x) => x === id) : Number(d?.planned_kwh) || 0;
         const bits = [];
-        if (d?.note || d?.notes) bits.push(planNoteText(d, (k) => this._t(k)) || '');
+        if (d?.note || d?.notes) bits.push(this._noteText(d) || '');
         else if (d?.status) bits.push(t('next_status_' + d.status));
         else if (ns) bits.push(this._whyText(ns));
         const ov = this._overrideOf(key);
@@ -891,9 +927,11 @@ class SEMNextPlanCard extends SEMNextBase {
         const tz = this._hass?.config?.time_zone;
         const lang = this._hass?.language || 'en';
         const kind = WHY_KINDS[rec.device_kind] || WHY_KINDS.load;
-        const plain = standing ? this._plainNow(rec, t) : plainReason(rec, t);
+        const plain = standing ? this._plainNow(rec, t) : plainReason(rec, t, { past: true });
         const why = plain || rec.text || '';
-        const change = rec.count > 1 ? this._tf('next_log_repeats', { what: actionWords(rec.verb, t), n: rec.count,
+        const plainRepeat = rec.count > 1 && rec.verb === 'limit_discharge';
+        const change = plainRepeat ? this._tf('next_log_repeats_plain', { what: actionWords(rec.verb, t), n: rec.count })
+            : rec.count > 1 ? this._tf('next_log_repeats', { what: actionWords(rec.verb, t), n: rec.count,
             range: `${this._fmt(rec.lo, 0)}–${this._fmt(rec.hi, 0)}${rec.unit ? ' ' + rec.unit : ''}` }) : changeLabel(rec, t);
         return html`<div class="row" style="--c:${kind.color}"><div class="k"><span class="dim num sm tm">${rowTime(rec.time, lang, new Date(), tz)}</span>
             <span class="t"><b>${deviceName(rec, t, many[rec.device_kind] > 1)}</b> · ${change}${rec.observer ? html` ${this._pill(t('why_observer'), 'warn')}` : nothing}
@@ -907,11 +945,15 @@ class SEMNextPlanCard extends SEMNextBase {
         const chip = chips.some((c) => c.key === this._chip) ? this._chip : '';
         const many = {};
         for (const c of chips) many[c.kind] = (many[c.kind] || 0) + 1;
-        const rows = mergeRepeats(filterRecords(all, chip));
+        const tz = this._hass?.config?.time_zone;
+        const rows = mergePerDay(filterRecords(all, chip), tz);
+        // the standing row is a device's newest, and only when it is from today
         const standing = new Set();
         const seen = new Set();
-        for (const r of rows) { const k = r.device_kind + '|' + r.device_id; if (!seen.has(k)) { seen.add(k); standing.add(r); } }
-        const tz = this._hass?.config?.time_zone;
+        for (const r of rows) {
+            const k = r.device_kind + '|' + r.device_id;
+            if (!seen.has(k)) { seen.add(k); if (isToday(r.time, new Date(), tz)) standing.add(r); }
+        }
         const todays = rows.filter((r) => isToday(r.time, new Date(), tz));
         const shown = (todays.length ? todays : rows).slice(0, SHOWN_ROWS);
         const earlier = rows.slice(shown.length);
@@ -947,7 +989,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const lead = planLead(plan, {
             computedAt: m.computedAt ? this._hhmm(m.computedAt) : '',
             cost: Number.isFinite(knownNum(m.cost)) ? this._money(knownNum(m.cost)) : '',
-            fitsKey: m.fits === undefined ? '' : this._t(m.fits ? 'next_fits_yes' : 'next_fits_no'),
+            fitsKey: m.fits === undefined ? '' : (m.fits ? this._t('next_fits_yes') : this._fitsNo(plan)),
             sunTomorrowKwh: this._num('sensor.sem_forecast_tomorrow_kwh'),
             cold: this._cold(plan)[0] || null,
             when: this._planWhen(plan),

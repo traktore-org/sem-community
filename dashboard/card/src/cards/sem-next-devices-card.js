@@ -196,6 +196,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             hasBattery: this._has('sensor.sem_battery_soc'),
             chargerName: (cid) => this._chargerName(cid),
             loadName: (id, info) => this._loadName(id, info),
+            states: st,
         });
         for (const r of rows) {
             if (r.type === 'charger') { r.name = this._chargerName(r.cid); r.icon = 'mdi:ev-station'; continue; }
@@ -674,6 +675,20 @@ class SEMNextDevicesCard extends SEMNextBase {
         return (this._unitOf(id) || '').toLowerCase() === 'w' ? v : v * 1000;
     }
 
+    /** Watts the running devices draw by measurement, and the rated watts of running ones with no reading. */
+    _inUse(rows) {
+        let measuredW = 0, estW = 0;
+        for (const r of rows || []) {
+            if (r.type === 'battery') continue;
+            const live = this._live(r).powerW;
+            const on = r.type === 'charger' ? live !== null && live > 50 : r.isOn || (live !== null && live > 10);
+            if (!on) continue;
+            if (live !== null) measuredW += Math.max(0, live);
+            else if (r.rating > 0) estW += r.rating;
+        }
+        return { measuredW, estW };
+    }
+
     _surplus(rows) {
         const t = (k) => this._t(k);
         const peakE = this._hass.states['sensor.sem_target_peak_limit'];
@@ -687,8 +702,11 @@ class SEMNextDevicesCard extends SEMNextBase {
         const marginW = this._kwSensorW('sensor.sem_peak_margin');
         const tiles = [];
         if (total !== null) {
-            tiles.push({ label: t('next_surplus'), value: this._fmtKw(total), unit: 'kW',
-                sub: given === null && free === null ? '' : this._tf('next_given_free', { given: this._fmtKw(given ?? 0), free: this._fmtKw(free ?? 0) }) });
+            // (#1321) "in use" counts measured power only: a switch's configured size is an estimate, shown apart
+            const use = this._inUse(rows);
+            const sub = given === null && free === null ? '' : this._tf(use.estW > 0 ? 'next_given_free_est' : 'next_given_free',
+                { given: this._fmtKw(use.measuredW), est: this._fmtKw(use.estW), free: this._fmtKw(free ?? 0) });
+            tiles.push({ label: t('next_surplus'), value: this._fmtKw(total), unit: 'kW', sub });
         }
         if (active !== null || totalN !== null) {
             tiles.push({ label: t('next_active'), value: active === null ? '—' : Math.round(active), unit: totalN === null ? '' : this._tf('next_of_n', { n: Math.round(totalN) }),
