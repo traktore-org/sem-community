@@ -297,6 +297,25 @@ def _unsaved_off_peak_shown(config: dict) -> Any:
     return DEFAULT_ELECTRICITY_IMPORT_RATE if v is None else v
 
 
+# (#1321) Per-charger values the card must tell from the factory default: the flag
+# `<key>_by_owner` marks one the owner typed (number.py reads it). The form always
+# submits the field, so only a value that differs from what was stored (or the
+# factory 40 kWh when nothing was) counts as typed.
+_OWNER_VALUE_FACTORY = {"ev_battery_capacity_kwh": 40}
+
+
+def _mark_owner_values(before: dict, user_input: dict, charger: dict) -> None:
+    """Set `<key>_by_owner` on `charger` for a capacity the owner changed."""
+    for key, factory in _OWNER_VALUE_FACTORY.items():
+        flag = f"{key}_by_owner"
+        if key not in user_input:
+            continue
+        if before.get(flag) or user_input[key] != before.get(key, factory):
+            charger[flag] = True
+        elif flag in before:
+            charger[flag] = before[flag]
+
+
 def _merge_form_input(flow: Any, target: dict, user_input: dict) -> None:
     """Merge a submitted form into ``target``, honouring CLEARED fields.
 
@@ -2043,7 +2062,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             _merge_form_input(self, self._data, user_input)
             ev_chargers = _draft_list(self, "ev_chargers")
             if ev_chargers:
+                _was = dict(ev_chargers[0])
                 _merge_form_input(self, ev_chargers[0], user_input)
+                _mark_owner_values(_was, user_input, ev_chargers[0])
                 _drop_stale_service_wiring(_before, user_input, ev_chargers[0])
             else:
                 ev_chargers = [{"id": "ev_charger", "name": "EV Charger", **user_input}]
@@ -2556,6 +2577,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             charger_name = user_input.pop("charger_name", charger.get("name", "EV Charger"))
             _before = dict(charger)
             _merge_form_input(self, charger, user_input)
+            _mark_owner_values(_before, user_input, charger)
             _drop_stale_service_wiring(_before, user_input, charger)
             charger["name"] = charger_name
             self._data["ev_chargers"] = ev_chargers
