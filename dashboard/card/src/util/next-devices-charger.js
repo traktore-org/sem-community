@@ -6,6 +6,7 @@
  */
 
 import { html, nothing } from '../base/sem-next-base.js';
+import { chargerRenameWrite } from './charger-name.js';
 import { resolveChargerSoc } from './charger-soc.js';
 import { kwhOf } from './next-lead.js';
 import { targetModel, weekdaySummary } from './next-devices.js';
@@ -225,6 +226,15 @@ export function chargerBody(card, row) {
     const lateMin = Number(dep.late_min) || 0;
     const lateOpts = LATE.includes(lateMin) ? LATE : [...LATE, lateMin].sort((a, b) => a - b);
     const rows = [];
+    // (#1386) the name: a SEM setting, so it stays open in watch-only mode
+    const nameKey = 'name:' + cid;
+    rows.push(card._row('mdi:rename-box-outline', t('next_add_name'),
+        card._edit === nameKey
+            ? html`<span class="edit" data-edit>${card._textEdit(nameKey, { value: row.name, onCommit: (v) => {
+                const w = chargerRenameWrite(cid, v);
+                if (w && w.ev_chargers[0].name !== row.name) card._svc('set_option', { options: w });
+            } })}</span>`
+            : card._val(row.name, () => { card._edit = nameKey; })));
     // (#1371) with one time for every day the tile above already says it
     // (its "every day" opens the day editor): this row is for days that differ
     if (hasOwnDays) rows.push(card._row('mdi:calendar-repeat', t(CHARGER_TEXT.departure), runText || depDefault || '—',

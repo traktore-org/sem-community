@@ -34,3 +34,13 @@ test('a custom prefix is honoured', () => {
     const s = { 'sensor.my_charger_a_power': { attributes: { charger_name: 'A' } } };
     assert.equal(chargerNameOf(s, 'a', 'sensor.my_'), 'A');
 });
+
+import { chargerRenameWrite } from '../src/util/charger-name.js';
+
+test('a rename writes the name of that one charger, by id (#1386)', () => {
+    assert.deepEqual(chargerRenameWrite('ev_charger_1', '  Garage   left '),
+        { ev_chargers: [{ id: 'ev_charger_1', name: 'Garage left' }] });
+    assert.equal(chargerRenameWrite('ev_charger', '   '), null);
+    assert.equal(chargerRenameWrite('ev_charger', null), null);
+    assert.equal(chargerRenameWrite('x', 'a'.repeat(80)).ev_chargers[0].name.length, 60);
+});

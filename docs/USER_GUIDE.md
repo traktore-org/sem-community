@@ -77,6 +77,8 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 
 ### EV Charger Settings
 
+To rename a charger, open its card on the **Devices** screen and tap the **Name** row. The new name shows everywhere; entity ids do not change.
+
 | Setting | Description |
 |---------|-------------|
 | `ev_connected_sensor` | Binary sensor — is the EV plugged in? |

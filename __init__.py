@@ -6466,6 +6466,13 @@ async def _async_register_phase_services(
         # ``test_set_option_ev_chargers_partial_submit_preserves_sibling``
         # in the test_services_real.py framework tests.
         if isinstance(options.get("ev_chargers"), list):
+            # (#1386) a charger's name is typed on the dashboard: one line,
+            # at most 60 characters, like a load's (#1341)
+            from .features.device_registry import clean_load_name
+            options = {**options, "ev_chargers": [
+                {**c, "name": clean_load_name(c["name"])}
+                if isinstance(c, dict) and "name" in c else c
+                for c in options["ev_chargers"]]}
             existing_list = (
                 (target_entry.options or {}).get("ev_chargers")
                 or (target_entry.data or {}).get("ev_chargers")
