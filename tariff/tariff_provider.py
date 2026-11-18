@@ -512,6 +512,17 @@ class TariffProvider(ABC):
     # gate's answer per slot. An override does not carry it.
     get_rate_level_at.same_as_price_level = True
 
+    def has_cheap_rate(self) -> bool:
+        """(#1385) Can this tariff call any hour cheap at all?
+
+        Asked by the charge-mode select: "Solar + cheapest hours" needs
+        cheap hours to wait for. The answer is about the tariff, not about
+        today: a weekend at one rate does not take it away. (A calendar's
+        holiday sensor still makes every hour off-peak while it is on.)
+        Default: no.
+        """
+        return False
+
     #: (#1362) The two break-even rates below ask ``get_price_at`` once per
     #: quarter hour: a calendar's windows start on the quarter hour.
     RATE_STEP = timedelta(minutes=15)
@@ -684,6 +695,12 @@ class StaticTariffProvider(TariffProvider):
             return None
         return (PriceLevel.NORMAL if self._is_high_tariff(when)
                 else PriceLevel.CHEAP)
+
+    def has_cheap_rate(self) -> bool:
+        # (#1385) The same rule as ``get_rate_level_at``: two rates, and a
+        # peak window that is not empty. Weeknights and weekends are then
+        # at the off-peak rate.
+        return self._rates_differ() and self.peak_start < self.peak_end
 
     def get_tariff_data(self) -> TariffData:
         now = dt_util.now()
@@ -2303,6 +2320,12 @@ class DynamicTariffProvider(TariffProvider):
         needed.
         """
         return getattr(self, "_last_curve_absence", LEVEL_NO_PRICES)
+
+    def has_cheap_rate(self) -> bool:
+        # (#1385) A price that moves hour by hour has cheaper hours; which
+        # ones is the classifier's job, hour by hour. Same answer as before
+        # the question existed (``tariff_mode == "dynamic"``).
+        return True
 
     def get_price_level(self) -> Optional[PriceLevel]:
         """(#994) ``None`` when the classifier had nothing to compare.

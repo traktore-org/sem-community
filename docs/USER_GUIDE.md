@@ -50,7 +50,7 @@ SEM shows a row or a card only for hardware you have.
 | A home battery | Battery card and battery settings on **Devices** |
 | A car charger | Charger card on **Devices** |
 | A heat pump or hot water | Heat pump and hot water rows on **Devices** |
-| A dynamic tariff | Price settings and the cheapest-hours charge mode |
+| A tariff with cheaper hours (dynamic, or a schedule or two rates) | Price settings and the cheapest-hours charge mode |
 | A forecast integration | Forecast rows and forecast spending |
 | A grid power limit | Peak limit rows |
 
@@ -135,7 +135,7 @@ Set the mode per charger, on **Devices**.
 | **Min + Solar** (default) | Grid, plus spare sun on top. Always starts. | You need the car ready by a time. |
 | **Solar only** | Spare sun only. A grid top-up runs only if you set **At least**. | You want solar only. |
 | **Solar + battery** | Spare sun and the home battery above its buffer. | The battery may help the car. |
-| **Solar + cheapest hours** | Spare sun. On cheap hours, it tops up from the grid. | You have a dynamic tariff. Shown only with one. |
+| **Solar + cheapest hours** | Spare sun. On cheap hours, it tops up from the grid. | Your tariff has cheaper hours: dynamic, or a schedule or two rates. Greyed out with one price. |
 | **Always (max)** | Full power, day and night. | You need the car now. |
 | **Off** | Nothing. SEM sends one stop, then leaves the charger alone. | You want to control the car by hand. |
 
@@ -481,7 +481,7 @@ The **preset** **Netherlands from 2027** fills tax and VAT.
 | An input stopped sending | A sensor SEM reads was silent for 15 minutes |
 | A load ran all night | The night's draw was 1.5 times the usual |
 | Grid use rose | Grid use was 1.5 times the usual, with the same sun |
-| Power is cheap, car idle | Cheap price, car plugged in and not charging (dynamic tariff) |
+| Power is cheap, car idle | Cheap price, car plugged in and not charging (a tariff with cheaper hours) |
 | Weekly summary | The first night on a Sunday |
 
 Each hint is one message. Automations can use the event

@@ -63,6 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Fewer duplicates on the SEM screens** (#1321). One sources row, one power number, one battery mode control, rare settings under More.
 - ✨ **Easier to use** (#1321). Plain button labels, Observer mode as a switch, outlined tiles, 40 px touch targets, Insights topics as a dropdown on phones.
 - ✨ **Numbers follow your language and keyboard works everywhere** (#1321). 3,5 kW in German; Enter and Space work on every control; dialogs close with Escape.
+- 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
+
+# [2.3.0-beta.20] — 18.11.2026
 
 - 🐛 **Loads SEM switched off come back after a restart** (#896). Also on unload, stop or crash; hand changes are left alone.
 - 🐛 **A switch named router, NAS or server is never switched off** (#896). A warning shows; “surplus” becomes “peak only”.

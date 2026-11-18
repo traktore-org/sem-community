@@ -123,3 +123,25 @@ test('an odd first forecast key does not shrink the step: the curve stays one ru
     for (let i = 1; i < sm.points.length; i++) assert.equal(sm.points[i].s, sm.points[i - 1].e, 'periods touch');
     assert.equal(sm.points[sm.points.length - 1].e - sm.points[sm.points.length - 1].s, 30 * 60e3);
 });
+
+test('(#1385) a schedule with two rates is drawn with both, not as one price', () => {
+    const win = chartWindow(NOW, 'next', TZ);
+    const slots = [
+        { start: iso('2026-11-08T20:00:00+01:00'), end: iso('2026-11-08T21:00:00+01:00'), price: 0.32 },
+        { start: iso('2026-11-08T21:00:00+01:00'), end: iso('2026-11-09T07:00:00+01:00'), price: 0.21 },
+        { start: iso('2026-11-09T07:00:00+01:00'), end: iso('2026-11-09T20:00:00+01:00'), price: 0.32 },
+    ];
+    const pm = priceModel({ win, tz: TZ, nowMs: NOW, slots, isDynamic: false, level: 'normal', todayAvg: 0.265 });
+    assert.equal(pm.flat, false);
+    assert.deepEqual(pm.steps.map((s) => s.p), [0.32, 0.21, 0.32]);
+    assert.equal(priceAt(pm, Date.parse('2026-11-09T03:00:00+01:00')), 0.21);
+    // a weekend at one rate (level 'flat') still draws the peak that follows
+    assert.equal(priceModel({ win, tz: TZ, nowMs: NOW, slots, isDynamic: false, level: 'flat', todayAvg: 0.21 }).flat, false);
+    // hours at one price, and no hours known yet, are one price
+    const one = slots.map((x) => ({ ...x, price: 0.21 }));
+    assert.equal(priceModel({ win, tz: TZ, nowMs: NOW, slots: one, isDynamic: false, level: 'normal' }).flat, true);
+    const none = priceModel({ win, tz: TZ, nowMs: NOW, isDynamic: false, level: 'normal', todayAvg: 0.32 });
+    assert.deepEqual([none.flat, none.price], [true, 0.32]);
+    // a dynamic tariff keeps its own word for a flat day
+    assert.equal(priceModel({ win, tz: TZ, nowMs: NOW, slots, isDynamic: true, level: 'flat' }).flat, true);
+});

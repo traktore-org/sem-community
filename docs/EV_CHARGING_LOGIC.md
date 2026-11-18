@@ -14,7 +14,7 @@ Default: **Min + Solar**.
 |---|---|---|---|
 | **Solar only** | Never by day. At night only with an *At least* floor you set on this charger | Never for the car. Exception: forecast-led spending | Spare sun only. Idles at night unless you set a floor. |
 | **Solar + battery** | Never by day. At night only with an *At least* floor | Helps down to the higher of the Buffer SOC and tonight's floor | Spare sun plus the pack. Above the Solar Gate it always helps. Below it, only when tonight's forecast budget is positive. |
-| **Solar + cheapest hours** | Only in cheap hours, up to the floor | Never | Spare sun by day. Grid only at cheap, very cheap or negative prices. Needs a dynamic tariff. |
+| **Solar + cheapest hours** | Only in cheap hours, up to the floor | Never | Spare sun by day. Grid only at cheap, very cheap or negative prices. Needs a tariff with cheaper hours: dynamic, or a schedule or two-rate tariff. |
 | **Min + Solar** | Up to the floor (*At least*) | Helps above the Buffer SOC | Tops up to *At least* by the *Charge by* time. Spare sun adds up to *Up to*. Nothing owed means no grid. |
 | **Always (max)** | Whatever it takes | Held to the house, unless the pack is above the Buffer SOC and spare sun passes the Solar Gate | Full speed whenever a car is plugged in, day or night, at any price. Stops at *Up to*. A floor of 0 does not stop it. |
 | **Off** | None | None | Hands-off. Switching to Off stops a running charge once, whoever started it. Then SEM sends nothing: no start, no stop, no current. SEM still reads the power and counts the energy. |
