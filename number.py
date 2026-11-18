@@ -912,12 +912,17 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         """(#1321) Whether the value is the owner's own: a stored value that is
         not the factory default, or one written here. The card shows an
         unset default as unknown ("Up to full"), not as a measured size."""
-        return {"set_by_user": self._set_here or self._stored_differs()}
+        return {"set_by_user": self._set_here or self._stored_as_owner()}
 
-    def _stored_differs(self) -> bool:
+    def _stored_as_owner(self) -> bool:
+        """(#1321) The owner wrote it (a stored flag, set with the value), or
+        a stored value differs from the default. A stored default alone is
+        what the setup form writes for everyone, so it stays unknown."""
         chargers = (getattr(self.coordinator, "config", None) or {}).get("ev_chargers") or []
         mine = next((c for c in chargers
                      if isinstance(c, dict) and c.get("id") == self._charger_id), {})
+        if mine.get(f"{self._config_key}_by_owner"):
+            return True
         stored = mine.get(self._config_key)
         return stored is not None and stored != self._factory_default
 
@@ -933,7 +938,7 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         from . import persist_per_charger_option
         persist_per_charger_option(
             self.hass, self._entry, self.coordinator,
-            self._charger_id, self._config_key, value,
+            self._charger_id, self._config_key, value, by_owner=True,
         )
 
         self.async_write_ha_state()

@@ -189,6 +189,33 @@ class TestPerChargerSetByUser:
         await num.async_set_native_value(40)
         assert num.extra_state_attributes == {"set_by_user": True}
 
+    @pytest.mark.asyncio
+    async def test_owner_flag_survives_a_restart_with_the_default_value(self):
+        """(#1321) the real writer stores the flag next to the value; a new
+        entity built from the stored options reads it, default size or not."""
+        chargers = [{"id": "c1"}]
+        entry = _mock_entry(chargers)
+        coord = _mock_coordinator(chargers)
+        coord.config = {"ev_chargers": chargers}
+        entry.entry_id = "e"
+        hass = MagicMock()
+        desc = NumberEntityDescription(key="charger_c1_ev_battery_capacity_kwh")
+        num = SEMPerChargerNumber(coord, desc, entry, "c1",
+                                  "ev_battery_capacity_kwh", 40, default=40)
+        num.hass = hass
+        num.async_write_ha_state = MagicMock()
+        await num.async_set_native_value(40)
+        stored = hass.config_entries.async_update_entry.call_args.kwargs["options"]
+        # restart: a fresh entity over the stored charger list
+        coord2 = _mock_coordinator(stored["ev_chargers"])
+        coord2.config = {"ev_chargers": stored["ev_chargers"]}
+        again = SEMPerChargerNumber(coord2, desc, _mock_entry(stored["ev_chargers"]),
+                                    "c1", "ev_battery_capacity_kwh", 40, default=40)
+        assert again.extra_state_attributes == {"set_by_user": True}
+
+    def test_an_install_without_the_flag_keeps_a_stored_other_value(self):
+        assert self._num(52).extra_state_attributes == {"set_by_user": True}
+
 
 @pytest.mark.unit
 class TestPerChargerSwitches:

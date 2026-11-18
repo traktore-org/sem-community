@@ -714,8 +714,12 @@ def _merge_ev_chargers_by_id(existing: list, incoming: list) -> list:
 
 def persist_per_charger_option(
     hass, entry, coordinator, charger_id: str, key: str, value,
+    by_owner: bool = False,
 ) -> None:
     """Persist ONE per-charger option without an integration reload.
+
+    * (#1321) ``by_owner`` also stores ``<key>_by_owner`` so a value that
+      equals the factory default still reads as the owner's after a restart.
 
     Single write path for every per-charger entity platform (#485 K2 —
     select/number/time each carried a ~30-line copy of this hardening,
@@ -743,6 +747,8 @@ def persist_per_charger_option(
     for charger in ev_chargers:
         if charger.get("id") == charger_id:
             charger[key] = value
+            if by_owner:
+                charger[f"{key}_by_owner"] = True
             forget_on_mode_write(charger, key, value)    # (#980)
             break
     else:
@@ -752,6 +758,8 @@ def persist_per_charger_option(
             {"id": charger_id},
         )
         recovered[key] = value
+        if by_owner:
+            recovered[f"{key}_by_owner"] = True
         forget_on_mode_write(recovered, key, value)      # (#980)
         ev_chargers.append(recovered)
         _LOGGER.warning(
