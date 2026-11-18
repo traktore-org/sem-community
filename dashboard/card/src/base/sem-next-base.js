@@ -204,7 +204,8 @@ export const nextCss = css`
     .dev .head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .dev .rank { width: 26px; height: 26px; border-radius: 8px; background: var(--n-card2); display: flex; align-items: center; justify-content: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); color: var(--n-fg2); flex: 0 0 auto; }
     .dev .name { font-weight: var(--ha-font-weight-medium, 500); font-size: var(--ha-font-size-l, 16px); flex: 1 1 11em; min-width: 8em; display: flex; align-items: center; gap: 6px; }
-    .dev .name > span:not(.pill) { min-width: 0; overflow-wrap: anywhere; }
+    .dev .name { flex-wrap: wrap; }
+    .dev .name > span:not(.pill) { flex: 1 1 auto; min-width: 7em; overflow-wrap: anywhere; }
     .dev .name ha-icon, .dev .name .pill { flex: none; }
     .dev .head > .live, .dev .head > .pill { flex: none; }
     .dev .name ha-icon { color: var(--c); }
@@ -263,7 +264,7 @@ export const nextCss = css`
     .alert .atxt span { color: var(--n-fg2); font-size: var(--ha-font-size-s, 13px); }
     ha-alert { display: block; }
     .aact { display: flex; gap: 8px; flex: none; white-space: nowrap; }
-    ha-alert ha-button { white-space: nowrap; }
+    ha-alert ha-button { white-space: nowrap; min-width: max-content; }
 
     /* system */
     .group .row { align-items: flex-start; }

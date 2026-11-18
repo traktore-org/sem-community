@@ -185,7 +185,8 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
     .dev .head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .dev .rank { width: 26px; height: 26px; border-radius: 8px; background: var(--n-card2); display: flex; align-items: center; justify-content: center; font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-bold, 700); color: var(--n-fg2); flex: 0 0 auto; }
     .dev .name { font-weight: var(--ha-font-weight-medium, 500); font-size: var(--ha-font-size-l, 16px); flex: 1 1 11em; min-width: 8em; display: flex; align-items: center; gap: 6px; }
-    .dev .name > span:not(.pill) { min-width: 0; overflow-wrap: anywhere; }
+    .dev .name { flex-wrap: wrap; }
+    .dev .name > span:not(.pill) { flex: 1 1 auto; min-width: 7em; overflow-wrap: anywhere; }
     .dev .name ha-icon, .dev .name .pill { flex: none; }
     .dev .head > .live, .dev .head > .pill { flex: none; }
     .dev .name ha-icon { color: var(--c); }
@@ -244,7 +245,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
     .alert .atxt span { color: var(--n-fg2); font-size: var(--ha-font-size-s, 13px); }
     ha-alert { display: block; }
     .aact { display: flex; gap: 8px; flex: none; white-space: nowrap; }
-    ha-alert ha-button { white-space: nowrap; }
+    ha-alert ha-button { white-space: nowrap; min-width: max-content; }
 
     /* system */
     .group .row { align-items: flex-start; }
@@ -330,7 +331,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             :host { display: block; color: var(--primary-text-color); font-size: var(--ha-font-size-m, 14px); }
             .gap { margin-bottom: 16px; }
             .aact { display: flex; gap: 8px; flex: none; white-space: nowrap; }
-            ha-alert ha-button { white-space: nowrap; }
+            ha-alert ha-button { white-space: nowrap; min-width: max-content; }
             .alert { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--primary-color);
                 background: color-mix(in srgb, var(--primary-color) 12%, var(--card-background-color, #fff)); }
             .alert.warning { border-color: var(--warning-color, #ffa600); background: color-mix(in srgb, var(--warning-color, #ffa600) 12%, var(--card-background-color, #fff)); }
