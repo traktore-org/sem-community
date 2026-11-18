@@ -433,6 +433,11 @@ force charge/discharge is refused.
 walk through that page pinned a brand install to the generic adapter. The
 setting is `battery_charge_platform` in the integration options.
 
+**No battery at all (#1376):** a home without a battery that kept *generic*
+looked like a home with one. SEM then waited for a battery level that never
+came and made no night plan, so "Solar + cheapest hours" charged at once.
+*generic* alone no longer counts as a battery.
+
 **Fix:** open *Settings → Devices & Services → SEM → Configure*, go to the
 battery page and set the platform to **auto** (SEM detects the brand from the
 loaded integration) or to the brand itself. The wizard now offers every
