@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Vanha SEM-näkymä on yhä olemassa",
-            "description": "Vanha SEM-näkymä osoitteessa `/{path}` on poistettu käytöstä, eivätkä sen kortit enää toimi. Muokkasit sitä, joten SEM jätti sen ennalleen. Uusi SEM-näkymä korvaa sen. Vahvista, niin vanha poistetaan."
+            "description": "Vanha SEM-näkymä osoitteessa `/{path}` on poistettu käytöstä. Muokkasit sitä, joten SEM jätti sen asettelun ennalleen. Sen SEM-kortit näyttävät nyt linkin uuteen SEM-näkymään. Vahvista, niin vanha poistetaan."
           }
         }
       }

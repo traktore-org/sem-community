@@ -120,14 +120,30 @@ def test_service_accepts_the_template_field():
 @pytest.mark.unit
 def test_links_follow_the_dashboard_url():
     from types import SimpleNamespace
-    from custom_components.solar_energy_management.features.dashboard_generator import sem_dashboard_path
-    for paths, want in (({"sem-next": 1}, "sem-next"), ({"sem-dashboard": 1}, "sem-dashboard"),
-                        ({"sem-next": 1, "sem-dashboard": 1}, "sem-next"), ({}, "sem-next")):
+    from custom_components.solar_energy_management.features.dashboard_generator import (
+        sem_dashboard_path, sem_dashboard_url,
+    )
+    next_views = {"_data": {"config": {"views": [{"path": "now"}, {"path": "system"}]}}}
+    classic = {"_data": {"config": {"views": [{"path": "home"}, {"path": "system"}]}}}
+
+    def hass_with(paths, marked=()):
         hass = MagicMock()
-        hass.data = {"lovelace": SimpleNamespace(dashboards=paths)}
+        hass.data = {"lovelace": SimpleNamespace(dashboards={k: SimpleNamespace(**v) for k, v in paths.items()})}
+        hass.config_entries.async_entries.return_value = [SimpleNamespace(options={"_next_dashboard_path": m}) for m in marked]
+        return hass
+
+    for paths, marked, want in (({"sem-next": {}}, (), "sem-next"),
+                                ({"sem-dashboard": next_views}, (), "sem-dashboard"),   # rewritten in place
+                                ({"sem-dashboard": {}}, ("sem-dashboard",), "sem-dashboard"),  # marked by the migration
+                                ({"sem-next": {}, "sem-dashboard": classic}, (), "sem-next"),
+                                ({"sem-dashboard": classic}, (), None),  # a kept, edited classic is not the SEM dashboard
+                                ({}, (), None)):
+        hass = hass_with(paths, marked)
         assert sem_dashboard_path(hass) == want
+        assert sem_dashboard_url(hass) == (f"/{want}/now" if want else "/")
     from custom_components.solar_energy_management import build_welcome_message
     assert "(/my-energy/now)" in build_welcome_message({}, None, "my-energy")
+    assert "(/)" in build_welcome_message({}, None, None)
 
 
 @pytest.mark.unit

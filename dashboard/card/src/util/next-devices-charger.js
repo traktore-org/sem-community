@@ -87,7 +87,7 @@ export function chargerBody(card, row) {
     const segItems = [];
     // (#1354) the modes by the shared names and order, as the classic card lists them
     if (options.includes('off')) segItems.push({ key: 'off', label: t(chargeModeKey('off')) });
-    if (smartOpts.length) segItems.push({ key: 'smart', label: t('next_smart'), icon: 'mdi:chevron-down' });
+    if (smartOpts.length) segItems.push({ key: 'smart', label: t('next_smart') });
     if (options.includes('always_max')) segItems.push({ key: 'always', label: t(chargeModeKey('always_max')) });
     const smartSeg = segKey === 'smart' && smartOpts.length > 1 ? card._seg(
         [...smartOpts].sort((x, y) => CHARGE_MODES.indexOf(x) - CHARGE_MODES.indexOf(y)).map((o) => ({ key: o, label: t(chargeModeKey(o)) || o, disabled: !tariffOk && needTariff.includes(o) })),

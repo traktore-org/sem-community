@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "El panel antiguo de SEM sigue ahí",
-            "description": "El panel antiguo de SEM en `/{path}` se ha retirado y sus tarjetas ya no funcionan. Lo cambiaste, así que SEM lo dejó como estaba. El nuevo panel de SEM lo reemplaza. Confirma para borrar el antiguo."
+            "description": "El panel antiguo de SEM en `/{path}` se ha retirado. Lo cambiaste, así que SEM dejó su diseño como estaba. Sus tarjetas de SEM ahora muestran un enlace al nuevo panel de SEM. Confirma para borrar el antiguo."
           }
         }
       }

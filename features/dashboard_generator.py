@@ -18,11 +18,25 @@ NEXT_DASHBOARD_PATH = "sem-next"
 NEXT_DASHBOARD_TITLE = "SEM-dashboard"
 
 
-def sem_dashboard_path(hass: HomeAssistant) -> str:
-    """URL path of the live SEM dashboard (#1321).
+def _holds_next(dashboard) -> bool:
+    """Does this live dashboard serve the SEM dashboard (its loaded views are ours)?"""
+    data = getattr(dashboard, "_data", None)
+    config = data.get("config") if isinstance(data, dict) else None
+    paths = {str(v.get("path")) for v in (config or {}).get("views", []) if isinstance(v, dict)}
+    return bool(paths) and paths <= _NEXT_VIEW_PATHS and bool(paths & {"now", "plan", "devices", "insights"})
+
+
+_NEXT_VIEW_PATHS = frozenset({"now", "plan", "devices", "insights", "system"})
+
+
+def sem_dashboard_path(hass: HomeAssistant) -> str | None:
+    """URL path of the live SEM dashboard (#1321), or None while it is not live.
 
     Links never hard-code it: a migrated install may keep the old
-    ``sem-dashboard`` path, a fresh one uses ``sem-next``.
+    ``sem-dashboard`` path (the migration rewrote it with the SEM dashboard),
+    a fresh one uses ``sem-next``. A kept, edited classic dashboard at
+    ``sem-dashboard`` is not it: until the SEM dashboard is registered there is
+    no path to link to.
     """
     try:
         ll_data = hass.data.get("lovelace")
@@ -30,12 +44,21 @@ def sem_dashboard_path(hass: HomeAssistant) -> str:
         if dashboards is None and isinstance(ll_data, dict):
             dashboards = ll_data.get("dashboards")
         if isinstance(dashboards, dict):
-            for path in (NEXT_DASHBOARD_PATH, "sem-dashboard"):
-                if path in dashboards:
+            if NEXT_DASHBOARD_PATH in dashboards:
+                return NEXT_DASHBOARD_PATH
+            marked = {e.options.get("_next_dashboard_path") for e in hass.config_entries.async_entries("solar_energy_management")}
+            for path, dash in dashboards.items():
+                if path and (path in marked or _holds_next(dash)):
                     return path
     except Exception:  # noqa: BLE001
         pass
-    return NEXT_DASHBOARD_PATH
+    return None
+
+
+def sem_dashboard_url(hass: HomeAssistant, view: str = "now") -> str:
+    """A link into the SEM dashboard, else the dashboard root."""
+    path = sem_dashboard_path(hass)
+    return f"/{path}/{view}" if path else "/"
 
 
 class DashboardGenerator:

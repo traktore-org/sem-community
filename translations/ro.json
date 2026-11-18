@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Vechiul panou SEM mai există",
-            "description": "Vechiul panou SEM de la `/{path}` a fost retras, iar cardurile lui nu mai funcționează. L-ai modificat, așa că SEM l-a lăsat neschimbat. Noul panou SEM îl înlocuiește. Confirmă pentru a-l șterge pe cel vechi."
+            "description": "Vechiul panou SEM de la `/{path}` a fost retras. L-ai modificat, așa că SEM i-a lăsat aspectul neschimbat. Cardurile lui SEM arată acum un link către noul panou SEM. Confirmă pentru a-l șterge pe cel vechi."
           }
         }
       }

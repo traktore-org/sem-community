@@ -468,7 +468,7 @@ def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check,
 
 
 def build_welcome_message(
-    config: dict, presence: dict | None = None, dashboard_path: str = "sem-next",
+    config: dict, presence: dict | None = None, dashboard_path: str | None = "sem-next",
 ) -> str:
     """The first-run checklist, describing THIS install (#805 fix 2).
 
@@ -513,7 +513,7 @@ def build_welcome_message(
 
     return (
         "👋 Welcome! Your SEM dashboard is ready at "
-        f"[Open the SEM Dashboard](/{dashboard_path}/now).\n\n"
+        f"[Open the SEM Dashboard]({f'/{dashboard_path}/now' if dashboard_path else '/'}).\n\n"
         "**First-day checklist:**\n"
         + "\n".join(lines)
         + "\n\n**What SEM does right now:** it watches, and it controls "

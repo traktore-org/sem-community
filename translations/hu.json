@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "A régi SEM irányítópult még megvan",
-            "description": "A régi SEM irányítópult a `/{path}` címen megszűnt, a kártyái már nem működnek. Módosítottad, ezért a SEM békén hagyta. Az új SEM irányítópult leváltja. Erősítsd meg a régi törléséhez."
+            "description": "A régi SEM irányítópult a `/{path}` címen megszűnt. Módosítottad, ezért a SEM az elrendezését békén hagyta. A SEM-kártyái most az új SEM irányítópultra mutató hivatkozást mutatnak. Erősítsd meg a régi törléséhez."
           }
         }
       }

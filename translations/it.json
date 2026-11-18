@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "La vecchia dashboard SEM è ancora presente",
-            "description": "La vecchia dashboard SEM in `/{path}` è stata ritirata e le sue schede non funzionano più. L'hai modificata, quindi SEM l'ha lasciata com'era. La nuova dashboard SEM la sostituisce. Conferma per eliminare la vecchia."
+            "description": "La vecchia dashboard SEM in `/{path}` è stata ritirata. L'hai modificata, quindi SEM ha lasciato com'era la sua disposizione. Le sue schede SEM ora mostrano un link alla nuova dashboard SEM. Conferma per eliminare la vecchia."
           }
         }
       }

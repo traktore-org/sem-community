@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Het oude SEM-dashboard staat er nog",
-            "description": "Het oude SEM-dashboard op `/{path}` is vervallen en de kaarten werken niet meer. Je hebt het aangepast, dus SEM liet het staan. Het nieuwe SEM-dashboard vervangt het. Bevestig om het oude te verwijderen."
+            "description": "Het oude SEM-dashboard op `/{path}` is vervallen. Je hebt het aangepast, dus SEM liet de indeling staan. De SEM-kaarten erin tonen nu een link naar het nieuwe SEM-dashboard. Bevestig om het oude te verwijderen."
           }
         }
       }

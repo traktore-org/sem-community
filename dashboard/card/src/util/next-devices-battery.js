@@ -47,7 +47,7 @@ export function batteryBody(card, row) {
     const segKey = segKeyOf(mode);
     const segItems = [];
     if (options.includes('off')) segItems.push({ key: 'off', label: t('charge_mode_off') });
-    if (autoOpts.length) segItems.push({ key: 'auto', label: t('battery_mode_auto'), icon: autoOpts.length > 1 ? 'mdi:chevron-down' : undefined });
+    if (autoOpts.length) segItems.push({ key: 'auto', label: t('battery_mode_auto') });
     if (options.includes('force_charge')) segItems.push({ key: 'charge', label: t('next_charge') });
     if (options.includes('force_discharge')) segItems.push({ key: 'discharge', label: t('next_discharge') });
     const pick = (key) => {

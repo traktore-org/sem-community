@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Old SEM dashboard is still there",
-            "description": "The old SEM dashboard at `/{path}` is retired and its cards no longer work. You changed it, so SEM left it as it was. The new SEM dashboard replaces it. Confirm to delete the old one."
+            "description": "The old SEM dashboard at `/{path}` is retired. You changed it, so SEM left its layout as it was. Its SEM cards now show a link to the new SEM dashboard. Confirm to delete the old one."
           }
         }
       }

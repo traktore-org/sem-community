@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "L'ancien tableau de bord SEM est toujours là",
-            "description": "L'ancien tableau de bord SEM à `/{path}` est retiré et ses cartes ne fonctionnent plus. Vous l'aviez modifié, SEM l'a donc laissé tel quel. Le nouveau tableau de bord SEM le remplace. Confirmez pour supprimer l'ancien."
+            "description": "L'ancien tableau de bord SEM à `/{path}` est retiré. Vous l'aviez modifié, SEM a donc laissé sa disposition telle quelle. Ses cartes SEM affichent maintenant un lien vers le nouveau tableau de bord SEM. Confirmez pour supprimer l'ancien."
           }
         }
       }

@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "O painel antigo do SEM ainda existe",
-            "description": "O painel antigo do SEM em `/{path}` foi retirado e os seus cartões já não funcionam. Você o alterou, por isso o SEM deixou-o como estava. O novo painel do SEM substitui-o. Confirme para apagar o antigo."
+            "description": "O painel antigo do SEM em `/{path}` foi retirado. Você o alterou, por isso o SEM deixou o seu esquema como estava. Os seus cartões do SEM mostram agora uma ligação ao novo painel do SEM. Confirme para apagar o antigo."
           }
         }
       }

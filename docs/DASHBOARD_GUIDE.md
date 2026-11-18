@@ -270,12 +270,17 @@ after the update SEM looks at it once:
 - **You never edited it** and the SEM dashboard exists: it is removed.
 - **You never edited it** and there is no SEM dashboard yet: it is rewritten in
   place with the SEM dashboard, so the address and the sidebar entry stay.
-- **You edited it:** it stays as it is. A Repair, *Old SEM dashboard is still
-  there*, offers to delete it. The SEM dashboard is created beside it.
+- **You edited it:** it keeps its layout, but its SEM cards now show a link
+  to the SEM dashboard. A Repair, *Old SEM dashboard is still there*, offers
+  to delete it. The SEM dashboard is created beside it. A dashboard of your
+  own at another address that holds SEM cards from the classic dashboard gets
+  the same link on those cards.
 
-SEM cannot see whether you edited a dashboard. It reads the stored one: if
-every view is a classic one and every card is a SEM card, it counts as
-unedited. The service `solar_energy_management.generate_dashboard` still takes
+SEM cannot see whether you edited a dashboard. It reads the stored one: it
+counts as unedited only if every view is a classic one with its own title and
+icon and nothing added (no badges, theme or hidden views), and every card is a
+SEM card, a stack of them, or the PV health tile. A note, another tile or any
+other card makes it yours, and in doubt SEM keeps it. The service `solar_energy_management.generate_dashboard` still takes
 `template: classic`, as an alias for the SEM dashboard that logs a warning.
 The option *System diagram style* is gone with the diagram card.
 

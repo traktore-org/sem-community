@@ -37,50 +37,88 @@ ISSUE_ID = "classic_dashboard_kept"
 CLASSIC_PATH = "sem-dashboard"
 CLASSIC_TITLE = "SEM-classic"
 
-CLASSIC_VIEWS = frozenset({
-    "home", "energy", "battery", "ev", "control", "config", "costs", "system",
-    "simulation", "overview", "peak-load-management",
+# The nine views of the last classic template and their icons, pinned against
+# tests/fixtures/classic_dashboard_last.yaml. A view the user renamed, re-iconed
+# or added to (badges, theme, visibility...) is edited work (#1321).
+CLASSIC_VIEW_ICONS = {
+    "home": "mdi:home-lightning-bolt", "energy": "mdi:lightning-bolt", "battery": "mdi:battery-charging-80",
+    "ev": "mdi:car-electric", "control": "mdi:tune-vertical", "config": "mdi:cog-outline", "costs": "mdi:cash-multiple",
+    "system": "mdi:heart-pulse", "simulation": "mdi:flask-outline",
+}
+CLASSIC_VIEWS = frozenset(CLASSIC_VIEW_ICONS)
+CLASSIC_VIEW_TITLES = frozenset({
+    "Home", "Energy", "Battery", "EV", "Control", "Configuration", "Costs", "System", "Simulation",
 })
+_VIEW_KEYS = frozenset({"path", "type", "cards", "icon", "title"})
 NEXT_VIEWS = frozenset({"now", "plan", "devices", "insights", "system"})
-# Every non-SEM card the last classic template held (tile: PV health) plus
-# the cards its generator swapped in (sankey, K-Flow, weather). Pinned
-# against the real template in tests/fixtures/classic_dashboard_last.yaml —
-# a missing type made every untouched classic look edited (#1321).
-_GENERATED_TYPES = frozenset({
-    "vertical-stack", "horizontal-stack", "grid", "conditional", "markdown",
-    "tile", "energy-sankey", "custom:sankey-chart", "custom:k-flow-card",
-    "custom:clock-weather-card",
-})
+# Layout cards hold other cards; they count as generated only when every child does.
+_STACKS = frozenset({"vertical-stack", "horizontal-stack", "grid"})
+# What the classic generator swapped in for a missing sankey, K-Flow and weather card.
+_SWAPPED_TYPES = frozenset({"energy-sankey", "custom:sankey-chart", "custom:k-flow-card", "custom:clock-weather-card"})
+_PV_HEALTH = "sensor.sem_pv_health"
 
 
-def _card_types(card: Any):
-    """Every card ``type`` in a view or card, through stacks and conditionals."""
+def _card_generated(card: Any) -> bool:
+    """Is this card, and everything inside it, something the classic generator wrote?
+
+    A ``tile`` only for the PV health sensor, ``markdown`` never (the template
+    held none, so a markdown card is the user's note), a stack or a
+    conditional only when all its children are generated. Anything unknown is
+    edited work: when in doubt the dashboard is kept (#1321).
+    """
     if not isinstance(card, dict):
-        return
-    if "type" in card and "path" not in card:
-        yield str(card["type"])
-    for key in ("cards", "sections"):
-        for child in card.get(key) or []:
-            yield from _card_types(child)
-    yield from _card_types(card.get("card"))
+        return False
+    kind = str(card.get("type", ""))
+    if kind.startswith("custom:sem-") or kind in _SWAPPED_TYPES:
+        return True
+    if kind in _STACKS:
+        children = card.get("cards")
+        return isinstance(children, list) and all(_card_generated(c) for c in children)
+    if kind == "conditional":
+        return _card_generated(card.get("card"))
+    if kind == "tile":
+        return card.get("entity") == _PV_HEALTH
+    return False
 
 
-def classify(config: dict | None) -> str:
+def _view_generated(view: Any, titles: frozenset[str]) -> bool:
+    if not isinstance(view, dict) or not set(view) <= _VIEW_KEYS:
+        return False
+    path = str(view.get("path"))
+    if path not in CLASSIC_VIEW_ICONS or view.get("icon") != CLASSIC_VIEW_ICONS[path]:
+        return False
+    if view.get("title") not in titles:
+        return False
+    cards = view.get("cards")
+    return isinstance(cards, list) and all(_card_generated(c) for c in cards)
+
+
+def classify(config: dict | None, titles: frozenset[str] | None = None) -> str:
     """``classic`` (generated, unedited), ``next`` (already the SEM dashboard)
-    or ``edited``."""
+    or ``edited``. ``titles`` = the view titles the generator can write
+    (English plus its translations); default English only."""
     views = (config or {}).get("views") or []
     if not views:
         return "edited"
     paths = {str(v.get("path")) for v in views if isinstance(v, dict)}
     if paths <= NEXT_VIEWS and paths & {"now", "plan", "devices", "insights"}:
         return "next"
-    if not paths <= CLASSIC_VIEWS:
-        return "edited"
-    for view in views:
-        for card_type in _card_types({k: v for k, v in view.items() if k != "type"}):
-            if not (card_type.startswith("custom:sem-") or card_type in _GENERATED_TYPES):
-                return "edited"
-    return "classic"
+    known = CLASSIC_VIEW_TITLES | (titles or frozenset())
+    return "classic" if all(_view_generated(v, known) for v in views) else "edited"
+
+
+def _translated_titles() -> frozenset[str]:
+    """Every language's word for each classic view title (from the dashboard translations)."""
+    import json
+    import os
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "dashboard", "translations.json"), encoding="utf-8") as fh:
+            table = json.load(fh)
+    except (OSError, ValueError):
+        return frozenset()
+    en = table.get("en", {})
+    keys = [k for k, v in en.items() if v in CLASSIC_VIEW_TITLES]
+    return frozenset(t for lang in table.values() for k in keys if (t := lang.get(k)))
 
 
 def _live_dashboards(hass: HomeAssistant) -> dict:
@@ -97,21 +135,40 @@ async def _registered_paths(hass: HomeAssistant) -> set[str]:
 
 
 async def _save_next_in_place(hass: HomeAssistant, path: str) -> None:
-    """Rewrite the dashboard stored at ``path`` with the SEM dashboard."""
+    """Rewrite the dashboard served at ``path`` with the SEM dashboard.
+
+    The row is found by its URL (a dashboard made in the UI has a slug id) and
+    changed through HA's running collection when Lovelace is loaded, so HA
+    never writes an old list back; the stored files are the fallback.
+    """
+    from .cleanup import async_dashboard_item, running_dashboards_collection
+
     config = await DashboardGenerator(hass).generate_dashboard(NEXT_DASHBOARD_TITLE, path)
     payload = {"views": config["views"]}
+    item = await async_dashboard_item(hass, path)
+    item_id = (item or {}).get("id", path)
     live = _live_dashboards(hass).get(path)
     if live is not None and hasattr(live, "async_save"):
         await live.async_save(payload)
     else:
-        await Store(hass, 1, f"lovelace.{path}").async_save({"config": payload})
+        await Store(hass, 1, f"lovelace.{item_id}").async_save({"config": payload})
+    if item is None:
+        return
+    changes = {"icon": NEXT_DASHBOARD_ICON}
+    if item.get("title") == CLASSIC_TITLE:
+        changes["title"] = NEXT_DASHBOARD_TITLE
+    collection = running_dashboards_collection(hass)
+    if collection is not None and hasattr(collection, "async_update_item"):
+        try:
+            await collection.async_update_item(item_id, changes)
+            return
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("SEM migration: the running collection refused, using the file", exc_info=True)
     store = Store(hass, 1, "lovelace_dashboards")
     data = await store.async_load() or {"items": []}
-    for item in data.get("items", []):
-        if item.get("id") == path:
-            item["icon"] = NEXT_DASHBOARD_ICON
-            if item.get("title") == CLASSIC_TITLE:
-                item["title"] = NEXT_DASHBOARD_TITLE
+    for row in data.get("items", []):
+        if row.get("url_path") == path:
+            row.update(changes)
     await store.async_save(data)
 
 
@@ -129,8 +186,12 @@ async def async_retire_classic(hass: HomeAssistant, entry) -> str:
     before), ``none``, ``next``, ``removed``, ``rewritten`` or ``kept``."""
     if entry.options.get(RETIRED_FLAG):
         return "done"
-    stored = await Store(hass, 1, f"lovelace.{CLASSIC_PATH}").async_load()
-    verdict = classify((stored or {}).get("config")) if stored else "none"
+    from .cleanup import async_dashboard_item
+
+    row = await async_dashboard_item(hass, CLASSIC_PATH)  # found by URL; its config is stored under its id
+    stored = await Store(hass, 1, f"lovelace.{row['id']}").async_load() if row else None
+    titles = await hass.async_add_executor_job(_translated_titles) if stored else None
+    verdict = classify((stored or {}).get("config"), titles) if stored else "none"
     result = "none" if verdict == "none" else verdict
     if verdict == "classic":
         if NEXT_DASHBOARD_PATH in await _registered_paths(hass):
@@ -148,6 +209,8 @@ async def async_retire_classic(hass: HomeAssistant, entry) -> str:
                 DOMAIN, "generate_dashboard", {"restart": False}, blocking=True)
         result = "kept"
     new_options = {**entry.options, RETIRED_FLAG: True}
+    if result == "rewritten":
+        new_options["_next_dashboard_path"] = CLASSIC_PATH  # the SEM dashboard now lives at the old URL
     coordinator = getattr(entry, "runtime_data", None)
     if coordinator is not None:  # the flag is no reason to reload the integration
         coordinator._skip_options_reload = dict(new_options)

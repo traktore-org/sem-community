@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Stary panel SEM nadal istnieje",
-            "description": "Stary panel SEM pod `/{path}` został wycofany, a jego karty już nie działają. Zmieniono go, więc SEM go nie ruszył. Nowy panel SEM go zastępuje. Potwierdź, aby usunąć stary."
+            "description": "Stary panel SEM pod `/{path}` został wycofany. Zmieniono go, więc SEM zostawił jego układ bez zmian. Jego karty SEM pokazują teraz link do nowego panelu SEM. Potwierdź, aby usunąć stary."
           }
         }
       }

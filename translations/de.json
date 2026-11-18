@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Das alte SEM-Dashboard ist noch da",
-            "description": "Das alte SEM-Dashboard unter `/{path}` ist abgelöst, seine Karten funktionieren nicht mehr. Du hast es geändert, daher hat SEM es nicht angefasst. Das neue SEM-Dashboard ersetzt es. Bestätige, um das alte zu löschen."
+            "description": "Das alte SEM-Dashboard unter `/{path}` ist abgelöst. Du hast es geändert, daher hat SEM sein Layout nicht angefasst. Seine SEM-Karten zeigen jetzt einen Link zum neuen SEM-Dashboard. Bestätige, um das alte zu löschen."
           }
         }
       }

@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Det gamle SEM-dashboard findes stadig",
-            "description": "Det gamle SEM-dashboard på `/{path}` er udgået, og kortene virker ikke mere. Du har ændret det, så SEM lod det være. Det nye SEM-dashboard erstatter det. Bekræft for at slette det gamle."
+            "description": "Det gamle SEM-dashboard på `/{path}` er udgået. Du har ændret det, så SEM lod dets opsætning stå. Dets SEM-kort viser nu et link til det nye SEM-dashboard. Bekræft for at slette det gamle."
           }
         }
       }

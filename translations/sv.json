@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Den gamla SEM-panelen finns kvar",
-            "description": "Den gamla SEM-panelen på `/{path}` är borttagen och dess kort fungerar inte längre. Du ändrade den, så SEM lät den vara. Den nya SEM-panelen ersätter den. Bekräfta för att ta bort den gamla."
+            "description": "Den gamla SEM-panelen på `/{path}` är borttagen. Du ändrade den, så SEM lät layouten vara. Dess SEM-kort visar nu en länk till den nya SEM-panelen. Bekräfta för att ta bort den gamla."
           }
         }
       }

@@ -2125,7 +2125,7 @@
         "step": {
           "confirm": {
             "title": "Starý panel SEM stále existuje",
-            "description": "Starý panel SEM na `/{path}` byl vyřazen a jeho karty už nefungují. Upravili jste ho, proto ho SEM nechal beze změny. Nový panel SEM ho nahrazuje. Potvrzením starý panel smažete."
+            "description": "Starý panel SEM na `/{path}` byl vyřazen. Upravili jste ho, proto SEM nechal jeho rozvržení beze změny. Jeho karty SEM nyní ukazují odkaz na nový panel SEM. Potvrzením starý panel smažete."
           }
         }
       }
