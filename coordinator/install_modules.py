@@ -147,7 +147,8 @@ HOT_WATER_WIRING_KEYS: tuple[str, ...] = (
 # (#1376) Nor does "generic": before #900 the options form DEFAULTED to it,
 # so a home with no battery that walked through the form kept "generic" and
 # read as a battery for good — no SOC ever came, so no night plan was ever
-# made. A real generic battery has its SOC or power sensor wired.
+# made. A real generic battery has its SOC or power sensor wired, or SEM
+# reads its level at runtime (``runtime["battery"]``, see ``module_verdict``).
 _DEFAULT_VALUES: Mapping[str, tuple[str, ...]] = {
     "battery_charge_platform": ("auto", "generic"),
 }
@@ -235,6 +236,15 @@ def _runtime_answer(runtime: Mapping[str, Any] | None, fact: str) -> bool | None
     return value if isinstance(value, bool) else None
 
 
+def _generic_with_runtime_battery(config: Mapping[str, Any],
+                                  runtime: Mapping[str, Any] | None) -> bool:
+    """(#1376) A saved "generic" platform proves a battery only when SEM
+    also READS one: the SOC it measured or the pack it detected
+    (``runtime["battery"]``, the same signals ``battery_unseen`` asks)."""
+    platform = str(config.get("battery_charge_platform") or "").strip().lower()
+    return platform == "generic" and _runtime_answer(runtime, "battery") is True
+
+
 def module_verdict(
     config: Mapping[str, Any],
     ed_config: Any | None,
@@ -290,7 +300,10 @@ def module_verdict(
     tariff_mode = str(config.get("tariff_mode") or "static").strip().lower()
 
     return {
-        Module.BATTERY: _config_or_dashboard(_wired(config, BATTERY_WIRING_KEYS), battery_declared),
+        Module.BATTERY: _config_or_dashboard(
+            _wired(config, BATTERY_WIRING_KEYS) or _generic_with_runtime_battery(
+                config, runtime),
+            battery_declared),
         Module.EV: _config_or_dashboard(_wired(config, EV_WIRING_KEYS), ev_declared),
         Module.HEAT_PUMP: _config_only(_wired(config, HEAT_PUMP_WIRING_KEYS)),
         Module.HOT_WATER: _config_only(_wired(config, HOT_WATER_WIRING_KEYS)),

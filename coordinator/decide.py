@@ -686,7 +686,7 @@ class AlwaysMaxMode(ModeStrategy):
         # (#1376) A charger that caps its own current says so, instead of
         # looking like SEM holds it back.
         limit = (f" — the charger's own limit is {cfg.get('ev_max_current')} A"
-                 f" (SEM allows {asked} A); raise it on the charger"
+                 f" (SEM allows {asked} A); check the charger's own setting"
                  if asked else "")
         return ChargerDecision(
             charger_id=view.power.charger_id,
@@ -996,8 +996,9 @@ class MinPlusSolarMode(ModeStrategy):
             return self._decide_night(view)
         return self._decide_day(view)
 
-    def _decide_night(self, view: ChargerView) -> ChargerDecision:
-        return night_top_up_decision(view, "min_plus_solar")
+    def _decide_night(self, view: ChargerView,
+                      mode_name: str = "min_plus_solar") -> ChargerDecision:
+        return night_top_up_decision(view, mode_name)
 
     def _decide_day(self, view: ChargerView,
                     mode_name: str = "min_plus_solar",
@@ -1298,7 +1299,7 @@ class SolarPlusCheapMode(ModeStrategy):
         # ``config["_tariff_wait"]``; it was the only one that did, and
         # the two siblings that didn't charged straight through the plan.
         # One seam, no per-mode copies to keep in sync.
-        return _MIN_PLUS_SOLAR._decide_night(view)
+        return _MIN_PLUS_SOLAR._decide_night(view, "solar_plus_cheap")  # (#1376) own label
 
 
 # ─────────────────────────────────────────────────────────────────

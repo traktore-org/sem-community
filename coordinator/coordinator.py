@@ -2964,7 +2964,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # running is Solcast. A MISS counts only from a read taken while HA
         # was running; the readers answer None for an earlier one, and the
         # caller then falls back to the stored running-time verdict.
-        facts: Dict[str, Optional[bool]] = {"solar_forecast": None, "export_limit": None}
+        facts: Dict[str, Optional[bool]] = {
+            "solar_forecast": None, "export_limit": None, "battery": None}
         reader = getattr(self, "_forecast_reader", None)
         if reader is not None:
             try:
@@ -2974,6 +2975,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001 — no answer is UNKNOWN, never a crash
                 pass
         sensors = getattr(self, "_sensor_reader", None)
+        # (#1376) A battery SEM READS (a measured SOC, or a detected pack):
+        # a hit only. No reading is "not asked", never "no battery".
+        # Only asked for a saved "generic" platform, the one case it decides.
+        if str((self.config or {}).get("battery_charge_platform") or ""
+               ).strip().lower() == "generic":
+            def _num(v):
+                return isinstance(v, (int, float)) and not isinstance(v, bool)
+            if (_num(getattr(sensors, "_last_valid_soc", None))
+                    or _num(getattr(sensors, "_soc_step_candidate", None))
+                    or (_num(getattr(self, "_detected_battery_capacity_kwh", None))
+                        and self._detected_battery_capacity_kwh > 0)):
+                facts["battery"] = True
         if sensors is not None:
             config = self.config or {}
             try:

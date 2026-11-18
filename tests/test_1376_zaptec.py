@@ -30,6 +30,7 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
     FleetCycleState,
 )
 from custom_components.solar_energy_management.coordinator.coordinator import (
+    SEMCoordinator,
     battery_soc_ready_for_plan,
 )
 from custom_components.solar_energy_management.coordinator.decide import decide
@@ -82,6 +83,27 @@ class TestTheNightPlanIsMade:
             config=REPORTER, _boot_monotonic=0.0)
         power = SimpleNamespace(battery_soc_unavailable=True)
         assert battery_soc_ready_for_plan(coord, power) is True
+
+    def test_generic_with_a_battery_SEM_reads_is_a_battery(self):
+        """A saved "generic" and a pack SEM measures: still a battery."""
+        verdict = module_verdict(
+            REPORTER, ED_NO_BATTERY, True, runtime={"battery": True})
+        assert verdict[Module.BATTERY] is Presence.PRESENT
+
+    def test_no_reading_is_not_a_battery_for_generic(self):
+        verdict = module_verdict(
+            REPORTER, ED_NO_BATTERY, True, runtime={"battery": None})
+        assert verdict[Module.BATTERY] is Presence.ABSENT
+
+    def test_the_coordinator_reports_a_read_battery(self):
+        host = SimpleNamespace(
+            config={"battery_charge_platform": "generic"}, _forecast_reader=None, _detected_battery_capacity_kwh=None,
+            _sensor_reader=SimpleNamespace(
+                _last_valid_soc=63.0, _soc_step_candidate=None,
+                export_limit_answer=lambda _s: None))
+        assert SEMCoordinator._live_runtime_facts(host)["battery"] is True
+        host._sensor_reader._last_valid_soc = None
+        assert SEMCoordinator._live_runtime_facts(host)["battery"] is None
 
     def test_a_brand_platform_still_waits_for_its_soc(self):
         cfg = {**REPORTER, "battery_charge_platform": "huawei"}
@@ -143,6 +165,12 @@ class TestAPlanHoldsTheCharge:
         assert d.intent is ChargerIntent.IDLE
         assert "waiting for the planned window" in d.reason
 
+    def test_the_cheap_mode_names_itself_at_night(self):
+        now = datetime(2026, 11, 17, 23, 9).astimezone()
+        d = self._decision(now, PlanVerdict())
+        assert d.mode == "solar_plus_cheap"
+        assert d.reason.startswith("solar_plus_cheap night:")
+
     def test_no_plan_charges_at_the_deadline_floor(self):
         """The reporter's symptom: the fallback has no cheap-hour opinion."""
         now = datetime(2026, 11, 17, 23, 9).astimezone()
@@ -179,6 +207,21 @@ class TestThePhaseVerdictSeesOneRealPhase:
             _feed(learner, amps, min(0.95, 4100.0 / (amps * 690.0)), 4)
         assert learner.phase_verdict(CID, 3) is None
 
+    def test_a_capped_three_phase_ladder_gives_no_verdict(self):
+        """A 3-phase car held near 4.4 kW at 32/27/22 A: the implied
+        count falls as the offer rises, and the low setpoints (22 A) read
+        ABOVE the plateau — a cap, not a ramp."""
+        learner = WattsPerAmpLearner()
+        for amps, implied in {32: 0.62, 27: 0.72, 22: 0.88, 16: 1.2}.items():
+            _feed(learner, amps, implied, 4)
+        assert learner.phase_verdict(CID, 3) is None
+
+    def test_two_agreeing_setpoints_are_too_few(self):
+        learner = WattsPerAmpLearner()
+        for amps, implied in {20: 0.88, 14: 0.83, 8: 0.49}.items():
+            _feed(learner, amps, implied, 7)
+        assert learner.phase_verdict(CID, 3) is None
+
 
 class TestTheBoxLimitIsSaid:
     def _reason(self, hardware_max_a):
@@ -201,6 +244,7 @@ class TestTheBoxLimitIsSaid:
         d = self._reason(20)
         assert d.intent is ChargerIntent.CHARGE_MAX
         assert "charger's own limit is 20 A" in d.reason
+        assert "check the charger's own setting" in d.reason
         assert "48 A" in d.reason
 
     def test_no_note_when_nothing_caps_it(self):
