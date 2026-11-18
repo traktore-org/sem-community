@@ -80,6 +80,7 @@ async def actuate(
     observer: bool = False,
     controller=None,
     yielded: bool = False,
+    phase_override: str = "",
 ) -> None:
     """Apply a per-charger decision through the reconciler.
 
@@ -127,11 +128,34 @@ async def actuate(
     # mode, when on, still takes its own path below. Nothing is stopped or
     # started here, and the box's failsafe is left as it is.
     _ydev = getattr(adapter, "_device", None)
+    _override = bool(phase_override) and yielded and not observer
     if _ydev is not None:
         try:
             _ydev.external_yield = bool(yielded) and not observer
+            _ydev.phase_guard_override = _override
         except AttributeError:  # a frozen test double
             pass
+    if _override:
+        # (#1381) The fuse comes first: the guard's stop goes out even though
+        # SEM yields. The send seam lets only this cycle's stop through; the
+        # failsafe stays unarmed, so the other party's session is not ended.
+        log_on_change(
+            _LOGGER, f"yield-override:ev:{decision.charger_id}:{phase_override}",
+            logging.WARNING,
+            "phase guard overrides yield: %s — stopping %s. SEM will not "
+            "restart it; the other party owns it",
+            phase_override, decision.charger_id,
+        )
+        try:
+            await reconciler.reconcile_and_apply(
+                decision, adapter, power, time.monotonic())
+        finally:
+            if _ydev is not None:
+                try:
+                    _ydev.phase_guard_override = False
+                except AttributeError:
+                    pass
+        return
     if yielded and not observer:
         log_on_change(
             _LOGGER, f"yield:ev:{decision.charger_id}", logging.INFO,

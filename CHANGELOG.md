@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
+- 🐛 **Phase guard stops a charger set to "SEM yields" when a phase is over its limit** (#1381). Only that stop is sent; small loads are no longer shed for the car.
 
 # [2.3.0-beta.20] — 18.11.2026
 
