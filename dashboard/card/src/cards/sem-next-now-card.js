@@ -264,7 +264,7 @@ class SEMNextNowCard extends SEMNextBase {
             if (r && (!best || r.s < best.r.s)) best = { id, r };
         }
         // (#1321) the next RUN, not the next change of watts inside a run that is under way
-        return best ? { id: best.id, who: this._whoName(best.id), time: this._hhmm(best.r.s), kwh: this._fmt(best.r.kwh, 1), start: best.r.s } : null;
+        return best ? { id: best.id, who: this._whoName(best.id), time: this._hhmm(new Date(best.r.s)), kwh: this._fmt(best.r.kwh, 1), start: best.r.s } : null;
     }
 
     /** The measured watts of a load, or null without a power sensor. */

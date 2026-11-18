@@ -434,3 +434,12 @@ test('3.4: a device the plan does not schedule still draws in the Why list (loop
     const el = mount('sem-next-plan-card', { 'sensor.sem_energy_plan': S('idle', plan) });
     assert.doesNotThrow(() => text(el._whySec(el._plan())));
 });
+
+test('3.5: Next block on Now names a clock time, the next RUN, not a number (loop 3)', () => {
+    const future = (m) => new Date(Date.now() + m * 60e3).toISOString();
+    const plan = { computed_at: future(-5), blocks: [{ id: 'load:boiler', start: future(120), end: future(180), power_w: 1500 }] };
+    const el = mount('sem-next-now-card', { 'sensor.sem_energy_plan': S('fits', plan) });
+    const b = el._nextBlock();
+    assert.match(b.time, /^\d\d:\d\d$/);
+    assert.equal(b.kwh, '1.5');
+});
