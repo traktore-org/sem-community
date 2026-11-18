@@ -87,6 +87,27 @@ _IMPLIED_TIGHTNESS: float = 0.35
 Key = Tuple[str, int, int]
 
 
+def _top_plateau(implied: Dict[int, float]) -> Optional[list]:
+    """(#1376) The implied phase counts of the HIGH setpoints that agree,
+    or None when they do not span a ladder.
+
+    A car that is slow to follow a new current reads LOW at the setpoints
+    SEM has only just stepped onto (a Go 2 with an e-Niro: 0.49 at 8 A,
+    0.80-0.88 from 12 A up). Lag only ever lowers a draw, so the top
+    setpoints are the true ones: walk down from the highest and keep every
+    setpoint within ``_IMPLIED_AGREEMENT`` of it. Needs a spread of
+    ``_SPREAD_MIN`` inside that plateau, as before — a fixed power cap
+    still gives ``W/A ∝ 1/amps`` and breaks the plateau at once."""
+    top = max(implied)
+    anchor = implied[top]
+    kept = {a: v for a, v in implied.items()
+            if abs(v - anchor) <= _IMPLIED_AGREEMENT}
+    lo = min(kept)
+    if lo <= 0 or top / lo < _SPREAD_MIN:
+        return None
+    return list(kept.values())
+
+
 # ── the pure conversions ─────────────────────────────────────────────────
 # Shared by the learner and by the PURE decide layer (which receives the
 # table on the ChargerView and must not import the learner).
@@ -290,10 +311,8 @@ class WattsPerAmpLearner:
             measured = next((p for p in _PHASE_COUNTS if p >= bound), None)
         # ── under-determined: only the ladder can answer ──
         elif len(implied) >= 2:
-            lo, hi = min(implied), max(implied)
-            vals = list(implied.values())
-            if (lo > 0 and hi / lo >= _SPREAD_MIN
-                    and max(vals) - min(vals) <= _IMPLIED_AGREEMENT):
+            vals = _top_plateau(implied)
+            if vals is not None:
                 mean = sum(vals) / len(vals)
                 near = min(_PHASE_COUNTS, key=lambda p: abs(mean - p))
                 if near < ph and abs(mean - near) < _IMPLIED_TIGHTNESS:

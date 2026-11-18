@@ -97,8 +97,8 @@ BATTERY_WIRING_KEYS: tuple[str, ...] = (
     # (#869) the charge/discharge direction select a direction_select
     # setpoint needs — wired, it is evidence of a battery like the rest.
     "battery_power_direction_entity",
-    # An explicit platform is a choice; its default "auto" is not (see
-    # _DEFAULT_VALUES below).
+    # An explicit brand platform is a choice; "auto" and "generic" are the
+    # defaults the options form saved (see _DEFAULT_VALUES below).
     "battery_charge_platform",
 )
 EV_WIRING_KEYS: tuple[str, ...] = (
@@ -144,8 +144,12 @@ HOT_WATER_WIRING_KEYS: tuple[str, ...] = (
 
 # A wiring key holding its INSTALL DEFAULT says nothing: "auto" asks SEM to
 # detect a battery platform, it does not declare that a battery exists.
+# (#1376) Nor does "generic": before #900 the options form DEFAULTED to it,
+# so a home with no battery that walked through the form kept "generic" and
+# read as a battery for good — no SOC ever came, so no night plan was ever
+# made. A real generic battery has its SOC or power sensor wired.
 _DEFAULT_VALUES: Mapping[str, tuple[str, ...]] = {
-    "battery_charge_platform": ("auto",),
+    "battery_charge_platform": ("auto", "generic"),
 }
 
 # (#996) The option keys a capability verdict reads. They are NOT reload

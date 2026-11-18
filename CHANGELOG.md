@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Night plan made on homes without a battery** (#1376). A saved "generic" platform no longer counts as a battery. "Solar + cheapest hours" now waits for the cheap block.
+- 🐛 **A one-phase car is spotted** (#1376). A slow ramp no longer hides it. Always (max) names the charger's own current limit.
 - 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
 
 # [2.3.0-beta.20] — 18.11.2026

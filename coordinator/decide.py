@@ -681,13 +681,20 @@ class AlwaysMaxMode(ModeStrategy):
                 reason="always_max mode but EV disconnected",
                 reason_code=RC.CHARGER_NO_CAR,
             )
+        cfg = view.config if isinstance(view.config, dict) else {}
+        asked = cfg.get("hardware_limited_from_a")
+        # (#1376) A charger that caps its own current says so, instead of
+        # looking like SEM holds it back.
+        limit = (f" — the charger's own limit is {cfg.get('ev_max_current')} A"
+                 f" (SEM allows {asked} A); raise it on the charger"
+                 if asked else "")
         return ChargerDecision(
             charger_id=view.power.charger_id,
             mode="always_max",
             intent=ChargerIntent.CHARGE_MAX,
             commanded_amps=0,  # adapter resolves from device.max_current
             budget_w=0.0,  # not budget-limited
-            reason="always_max mode — charge at hardware maximum",
+            reason="always_max mode — charge at hardware maximum" + limit,
             reason_code=RC.CHARGER_MAX,
         )
 
