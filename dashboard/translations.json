@@ -2443,7 +2443,8 @@
     "next_confirm_relay": "Říká SEM, zda toto zařízení spíná relé provozovatele sítě. SEM podle toho plánuje.",
     "next_confirm_clear_mapping": "SEM zapomene ovládání nastavené pro toto zařízení. Poté ho jen měří.",
     "next_confirm_reset_sign": "SEM zapomene nalezená znaménka sítě a baterie a zjistí je znovu.",
-    "next_confirm_cleanup": "Odstraní z historie staré záznamy stavu, které SEM už nepotřebuje."
+    "next_confirm_cleanup": "Odstraní z historie staré záznamy stavu, které SEM už nepotřebuje.",
+    "next_no_power_reading": "žádné měření výkonu"
   },
   "da": {
     "/year": "/år",
@@ -4889,7 +4890,8 @@
     "next_confirm_relay": "Fortæller SEM, om netoperatørens relæ styrer denne enhed. SEM planlægger så efter det.",
     "next_confirm_clear_mapping": "SEM glemmer den styring, du har sat for denne enhed. Bagefter måles den kun.",
     "next_confirm_reset_sign": "SEM glemmer de fundne fortegn for net og batteri og finder dem igen.",
-    "next_confirm_cleanup": "Fjerner gamle statuspunkter, som SEM ikke længere har brug for, fra historikken."
+    "next_confirm_cleanup": "Fjerner gamle statuspunkter, som SEM ikke længere har brug for, fra historikken.",
+    "next_no_power_reading": "ingen effektmåling"
   },
   "de": {
     "/year": "/Jahr",
@@ -7335,7 +7337,8 @@
     "next_confirm_relay": "Teilt SEM mit, ob das Relais des Netzbetreibers dieses Gerät schaltet. SEM plant dann darum herum.",
     "next_confirm_clear_mapping": "SEM vergisst die für dieses Gerät eingestellte Steuerung. Danach wird es nur noch gemessen.",
     "next_confirm_reset_sign": "SEM vergisst die erkannten Vorzeichen von Netz und Batterie und erkennt sie neu.",
-    "next_confirm_cleanup": "Entfernt alte Statuseinträge, die SEM nicht mehr braucht, aus dem Verlauf."
+    "next_confirm_cleanup": "Entfernt alte Statuseinträge, die SEM nicht mehr braucht, aus dem Verlauf.",
+    "next_no_power_reading": "keine Leistungsmessung"
   },
   "en": {
     "/year": "/year",
@@ -9781,7 +9784,8 @@
     "next_confirm_relay": "Tells SEM whether the grid operator's relay switches this device. SEM then plans around it.",
     "next_confirm_clear_mapping": "SEM forgets the control you set for this device. It only measures it afterwards.",
     "next_confirm_reset_sign": "SEM forgets the grid and battery signs it found and detects them again.",
-    "next_confirm_cleanup": "Removes old status entries SEM no longer needs from the history."
+    "next_confirm_cleanup": "Removes old status entries SEM no longer needs from the history.",
+    "next_no_power_reading": "no power reading"
   },
   "es": {
     "/year": "/año",
@@ -12227,7 +12231,8 @@
     "next_confirm_relay": "Indica a SEM si el relé del operador de red conmuta este dispositivo. SEM planifica en consecuencia.",
     "next_confirm_clear_mapping": "SEM olvida el control configurado para este dispositivo. Después solo lo mide.",
     "next_confirm_reset_sign": "SEM olvida los signos de red y batería encontrados y los detecta de nuevo.",
-    "next_confirm_cleanup": "Quita del historial las entradas de estado antiguas que SEM ya no necesita."
+    "next_confirm_cleanup": "Quita del historial las entradas de estado antiguas que SEM ya no necesita.",
+    "next_no_power_reading": "sin lectura de potencia"
   },
   "fi": {
     "/year": "/vuosi",
@@ -14673,7 +14678,8 @@
     "next_confirm_relay": "Kertoo SEM:lle, ohjaako verkkoyhtiön rele tätä laitetta. SEM suunnittelee sen mukaan.",
     "next_confirm_clear_mapping": "SEM unohtaa tälle laitteelle asetetun ohjauksen. Sen jälkeen sitä vain mitataan.",
     "next_confirm_reset_sign": "SEM unohtaa löytämänsä verkon ja akun etumerkit ja tunnistaa ne uudelleen.",
-    "next_confirm_cleanup": "Poistaa historiasta vanhat tilamerkinnät, joita SEM ei enää tarvitse."
+    "next_confirm_cleanup": "Poistaa historiasta vanhat tilamerkinnät, joita SEM ei enää tarvitse.",
+    "next_no_power_reading": "ei tehomittausta"
   },
   "fr": {
     "/year": "/an",
@@ -17119,7 +17125,8 @@
     "next_confirm_relay": "Indique à SEM si le relais du gestionnaire de réseau commande cet appareil. SEM planifie alors en conséquence.",
     "next_confirm_clear_mapping": "SEM oublie la commande réglée pour cet appareil. Ensuite il est seulement mesuré.",
     "next_confirm_reset_sign": "SEM oublie les signes réseau et batterie trouvés et les détecte de nouveau.",
-    "next_confirm_cleanup": "Supprime de l'historique les anciennes entrées d'état dont SEM n'a plus besoin."
+    "next_confirm_cleanup": "Supprime de l'historique les anciennes entrées d'état dont SEM n'a plus besoin.",
+    "next_no_power_reading": "pas de mesure de puissance"
   },
   "hu": {
     "/year": "/év",
@@ -19565,7 +19572,8 @@
     "next_confirm_relay": "Megmondja a SEM-nek, hogy a hálózatüzemeltető relé kapcsolja-e ezt az eszközt. A SEM ehhez igazítja a tervet.",
     "next_confirm_clear_mapping": "A SEM elfelejti az eszközhöz beállított vezérlést. Utána csak méri.",
     "next_confirm_reset_sign": "A SEM elfelejti a talált hálózati és akkumulátor-előjeleket, és újra felismeri őket.",
-    "next_confirm_cleanup": "Eltávolítja az előzményekből a régi állapotbejegyzéseket, amelyekre a SEM már nem tart igényt."
+    "next_confirm_cleanup": "Eltávolítja az előzményekből a régi állapotbejegyzéseket, amelyekre a SEM már nem tart igényt.",
+    "next_no_power_reading": "nincs teljesítménymérés"
   },
   "it": {
     "/year": "/anno",
@@ -22011,7 +22019,8 @@
     "next_confirm_relay": "Dice a SEM se il relè del gestore di rete comanda questo dispositivo. SEM pianifica di conseguenza.",
     "next_confirm_clear_mapping": "SEM dimentica il controllo impostato per questo dispositivo. Poi lo misura soltanto.",
     "next_confirm_reset_sign": "SEM dimentica i segni di rete e batteria trovati e li rileva di nuovo.",
-    "next_confirm_cleanup": "Rimuove dallo storico le vecchie voci di stato che SEM non usa più."
+    "next_confirm_cleanup": "Rimuove dallo storico le vecchie voci di stato che SEM non usa più.",
+    "next_no_power_reading": "nessuna lettura di potenza"
   },
   "nl": {
     "/year": "/jaar",
@@ -24457,7 +24466,8 @@
     "next_confirm_relay": "Vertelt SEM of het relais van de netbeheerder dit apparaat schakelt. SEM plant daar dan omheen.",
     "next_confirm_clear_mapping": "SEM vergeet de ingestelde bediening van dit apparaat. Daarna wordt het alleen gemeten.",
     "next_confirm_reset_sign": "SEM vergeet de gevonden tekens van net en batterij en detecteert ze opnieuw.",
-    "next_confirm_cleanup": "Verwijdert oude statusitems die SEM niet meer nodig heeft uit de geschiedenis."
+    "next_confirm_cleanup": "Verwijdert oude statusitems die SEM niet meer nodig heeft uit de geschiedenis.",
+    "next_no_power_reading": "geen vermogensmeting"
   },
   "no": {
     "/year": "/år",
@@ -26903,7 +26913,8 @@
     "next_confirm_relay": "Forteller SEM om nettoperatørens rele styrer denne enheten. SEM planlegger så etter det.",
     "next_confirm_clear_mapping": "SEM glemmer styringen du har satt for denne enheten. Etterpå måles den bare.",
     "next_confirm_reset_sign": "SEM glemmer de funne fortegnene for nett og batteri og finner dem på nytt.",
-    "next_confirm_cleanup": "Fjerner gamle statuspunkter SEM ikke trenger lenger fra historikken."
+    "next_confirm_cleanup": "Fjerner gamle statuspunkter SEM ikke trenger lenger fra historikken.",
+    "next_no_power_reading": "ingen effektmåling"
   },
   "pl": {
     "/year": "/rok",
@@ -29349,7 +29360,8 @@
     "next_confirm_relay": "Informuje SEM, czy przekaźnik operatora sieci przełącza to urządzenie. SEM planuje wtedy z tym.",
     "next_confirm_clear_mapping": "SEM zapomina sterowanie ustawione dla tego urządzenia. Potem tylko je mierzy.",
     "next_confirm_reset_sign": "SEM zapomina znaki sieci i baterii i wykrywa je ponownie.",
-    "next_confirm_cleanup": "Usuwa z historii stare wpisy stanu, których SEM już nie potrzebuje."
+    "next_confirm_cleanup": "Usuwa z historii stare wpisy stanu, których SEM już nie potrzebuje.",
+    "next_no_power_reading": "brak odczytu mocy"
   },
   "pt": {
     "/year": "/ano",
@@ -31795,7 +31807,8 @@
     "next_confirm_relay": "Diz ao SEM se o relé do operador da rede comanda este dispositivo. O SEM planeia em conformidade.",
     "next_confirm_clear_mapping": "O SEM esquece o controlo definido para este dispositivo. Depois só o mede.",
     "next_confirm_reset_sign": "O SEM esquece os sinais de rede e bateria encontrados e deteta-os de novo.",
-    "next_confirm_cleanup": "Remove do histórico entradas de estado antigas de que o SEM já não precisa."
+    "next_confirm_cleanup": "Remove do histórico entradas de estado antigas de que o SEM já não precisa.",
+    "next_no_power_reading": "sem leitura de potência"
   },
   "ro": {
     "/year": "/an",
@@ -34241,7 +34254,8 @@
     "next_confirm_relay": "Spune SEM dacă releul operatorului de rețea comută acest dispozitiv. SEM planifică în consecință.",
     "next_confirm_clear_mapping": "SEM uită controlul setat pentru acest dispozitiv. Apoi îl doar măsoară.",
     "next_confirm_reset_sign": "SEM uită semnele găsite pentru rețea și baterie și le detectează din nou.",
-    "next_confirm_cleanup": "Elimină din istoric intrările vechi de stare de care SEM nu mai are nevoie."
+    "next_confirm_cleanup": "Elimină din istoric intrările vechi de stare de care SEM nu mai are nevoie.",
+    "next_no_power_reading": "fără citire de putere"
   },
   "sv": {
     "/year": "/år",
@@ -36687,7 +36701,8 @@
     "next_confirm_relay": "Talar om för SEM om nätoperatörens relä styr den här enheten. SEM planerar då efter det.",
     "next_confirm_clear_mapping": "SEM glömmer styrningen du ställt in för den här enheten. Därefter mäts den bara.",
     "next_confirm_reset_sign": "SEM glömmer de funna tecknen för nät och batteri och hittar dem igen.",
-    "next_confirm_cleanup": "Tar bort gamla statusposter som SEM inte längre behöver från historiken."
+    "next_confirm_cleanup": "Tar bort gamla statusposter som SEM inte längre behöver från historiken.",
+    "next_no_power_reading": "ingen effektmätning"
   },
   "zh": {
     "/year": "/年",
@@ -39133,6 +39148,7 @@
     "next_confirm_relay": "告诉 SEM 电网运营商的继电器是否控制此设备，SEM 会据此规划。",
     "next_confirm_clear_mapping": "SEM 会忘记为此设备设置的控制，之后只做测量。",
     "next_confirm_reset_sign": "SEM 会忘记已识别的电网和电池符号，并重新检测。",
-    "next_confirm_cleanup": "从历史中删除 SEM 不再需要的旧状态记录。"
+    "next_confirm_cleanup": "从历史中删除 SEM 不再需要的旧状态记录。",
+    "next_no_power_reading": "无功率读数"
   }
 }
