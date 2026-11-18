@@ -333,14 +333,14 @@ def _energy_plan_attrs(
         # Still too big: drop the runs of the demand with the most runs
         # first, so a car's two hours survive a load that cycles all day.
         while _too_big():
-            with_runs = [d for d in attrs["demands"]
-                         if isinstance(d, dict) and d.get("runs")]
+            with_runs = [dem for dem in attrs["demands"]
+                         if isinstance(dem, dict) and dem.get("runs")]
             if not with_runs:
                 break
-            longest = max(with_runs, key=lambda d: len(d["runs"]))
+            longest = max(with_runs, key=lambda dem: len(dem["runs"]))
             attrs["demands"] = [
-                {k: v for k, v in d.items() if k != "runs"} if d is longest else d
-                for d in attrs["demands"]]
+                {k: v for k, v in dem.items() if k != "runs"} if dem is longest else dem
+                for dem in attrs["demands"]]
     # (#758) The timeline is the biggest term, but it is not the only one,
     # and going over means the recorder keeps NOTHING. If dropping it was
     # not enough, drop what rode along and say so — the plan itself is what
