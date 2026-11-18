@@ -112,7 +112,10 @@ export function plainReason(rec, t, opts = {}) {
     if (code === 'battery_car_level_unknown' && Number.isFinite(opts.soc)) {
         return t('why_reason_battery_car_level_known').replace('{soc}', String(Math.round(opts.soc)));
     }
-    const key = `why_reason_${code}`;
+    // (#1321) a device that is held ("keep as is") is not turning off: its reason says it stays off
+    const heldKey = opts.held ? `why_reason_${{ phase_shed: 'phase_guard' }[code] || code}_held` : '';
+    const heldText = heldKey ? t(heldKey) : '';
+    const key = heldText && heldText !== heldKey ? heldKey : `why_reason_${code}`;
     const sentence = t(key);
     if (!sentence || sentence === key) return null;
     const params = rec.params || {};
@@ -134,6 +137,7 @@ export function plainReason(rec, t, opts = {}) {
 export function recordReason(rec, states, t) {
     const soc = Number(states?.['sensor.sem_battery_soc']?.state);
     const live = { soc: Number.isFinite(soc) && states?.['sensor.sem_battery_soc']?.state !== '' ? soc : NaN };
+    live.held = rec?.action === 'hold';
     const own = plainReason(rec, t, live);
     if (own) return own;
     const id = String(rec?.device_id || '');

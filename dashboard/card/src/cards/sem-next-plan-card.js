@@ -17,6 +17,7 @@ import { reviewRows } from '../util/next-review.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { whyLines, batteryEnd } from '../util/plan-why.js';
 import { effectivePlan } from '../util/plan-facts.js';
+import { trustPct } from '../util/forecast-evidence.js';
 import { tariffKind } from '../util/price-level.js';
 import { OPEN_CHARGE_PLAN_KEY } from '../util/next-devices.js';
 import { semDefineCard } from '../base/sem-shared.js';
@@ -43,7 +44,7 @@ const DOMAIN = 'solar_energy_management';
 const IDS = ['sensor.sem_energy_plan', 'sensor.sem_forecast_tomorrow_kwh', 'sensor.sem_forecast_today_kwh',
              'sensor.sem_tariff_price_level', 'sensor.sem_controllable_devices_count', 'switch.sem_energy_plan_actuation',
              'sensor.sem_charging_state', 'number.sem_expensive_price_threshold', 'select.sem_battery_mode',
-             'sensor.sem_battery_dynamic_floor_pct', 'sensor.sem_forecast_trust_d2'];
+             'sensor.sem_battery_dynamic_floor_pct', 'sensor.sem_forecast_trust_d1'];
 const SHOWN_ROWS = 6;
 const CHARGE_NOW_MINUTES = 120;   // how long "Charge now" holds before the plan takes over
 const KIND_COLOR = { ev: C.ev, battery_in: C.battery_in, battery_out: C.battery_out, grid: C.grid, load: C.home };
@@ -351,7 +352,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const t = (k) => this._t(k);
         const say = (key, params) => { const v = this._tf(key, params); return v && v !== key ? v : ''; };
         const clock = (ms) => this._hhmm(new Date(ms));
-        const rows = reviewRows(this._plan().review, say, clock);
+        const rows = reviewRows(this._plan().review, say, clock, { battery: Number(this._attrs('sensor.sem_battery_spendable_kwh').nights_sealed) });
         if (!rows.length) return nothing;
         const devices = this._devices();
         const look = { ev: [KIND_ICON.ev, KIND_COLOR.ev], load: [KIND_ICON.load, KIND_COLOR.load],
@@ -858,9 +859,10 @@ class SEMNextPlanCard extends SEMNextBase {
         }
         const sun = this._num('sensor.sem_forecast_tomorrow_kwh');
         if (sun !== null) {
-            const trust = this._num('sensor.sem_forecast_trust_d2');
-            const sub = trust !== null && trust > 0 && trust <= 1.5
-                ? `${t('next_forecast')} · ${this._tf('next_trusted', { pct: Math.round(trust * 100) })}` : t('next_forecast');
+            // (#1321) tomorrow's sun is the one-day trust, as on Insights
+            const trust = trustPct(this._num('sensor.sem_forecast_trust_d1'));
+            const sub = trust !== null && trust > 0
+                ? `${t('next_forecast')} · ${this._tf('next_trusted', { pct: Math.round(trust) })}` : t('next_forecast');
             tiles.push({ label: t('next_sun_tomorrow'), value: this._fmt(sun, 1), unit: 'kWh', sub });
         }
         const rows = [];
@@ -873,7 +875,8 @@ class SEMNextPlanCard extends SEMNextBase {
             const on = this._str('switch.sem_energy_plan_actuation') === 'on';
             rows.push(this._row('mdi:toggle-switch-outline', t('next_plan_acts'),
                 this._switch(on, () => this._askFirst(t('next_plan_acts'), () => this._toggleSwitch('switch.sem_energy_plan_actuation')), { label: t('next_plan_acts') }),
-                t('next_actuation_sub')));
+                // (#1321) watch-only holds every device write: say the plan is paused, not that it controls
+                t(this._obs() ? 'next_actuation_watch' : 'next_actuation_sub')));
         }
         rows.push(this._row('mdi:sync', t('next_replan'),
             this._btn(t('next_now_btn'), () => this._askFirst(t('next_replan'), () => this._callService(DOMAIN, 'replan', {})), { small: true }),

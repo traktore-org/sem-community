@@ -14,12 +14,13 @@ const PREFIX = 'energy_plan_review_';
 const fix = (v, d = 1) => (v == null || !Number.isFinite(Number(v)) ? '' : fmtNum(v, d));
 
 /** → [{ kind: 'ev'|'load'|'battery'|'sun', id?, label?, text }] */
-export function reviewRows(rv, say, clock = (ts) => String(ts)) {
+export function reviewRows(rv, say, clock = (ts) => String(ts), nights = {}) {
     if (!rv || typeof rv !== 'object') return [];
     const rows = [];
     for (const d of Array.isArray(rv.demands) ? rv.demands : []) {
         const text = say(PREFIX + d.code, {
-            nights: d.nights, asked: fix(d.asked_kwh || 0), suggested: fix(d.suggested_kwh), actual: fix(d.last_kwh || 0),
+            // (#1321) the battery's nights are counted once: the Devices screen's count wins
+            nights: d.kind === 'battery' && Number.isFinite(nights.battery) ? nights.battery : d.nights, asked: fix(d.asked_kwh || 0), suggested: fix(d.suggested_kwh), actual: fix(d.last_kwh || 0),
         });
         if (text) rows.push({ kind: d.kind === 'ev' ? 'ev' : 'load', id: d.demand_id, label: d.label, text });
     }

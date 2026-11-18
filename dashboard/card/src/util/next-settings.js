@@ -239,8 +239,8 @@ export function slotText(slot, t, value = slot.value, states = null, plain = fal
     if (!slot) return '';
     if (slot.kind === 'entity') {
         if (value) return nameOf(states, value);
-        // in a sentence the found name needs no "(found)"; a row's value keeps it
-        if (slot.fallback) return plain ? nameOf(states, slot.fallback) : String(t('next_entity_auto')).replace('{name}', nameOf(states, slot.fallback));
+        // (#1321) what SEM found reads as its name, with no "(found)" after it
+        if (slot.fallback) return nameOf(states, slot.fallback);
         return t(slot.emptyKey || 'config_notif_none');
     }
     if (slot.kind === 'text' && (value === '' || value == null)) return slot.placeholder || '—';
@@ -762,6 +762,7 @@ export function groups(states, t, ctx = {}) {
         const markup = optNum(o, 'import_markup', { min: 0, max: 10000, step: 0.0001, unit: perKwh, default: 0 });
         const tax = optNum(o, 'import_energy_tax', { min: 0, max: 10000, step: 0.0001, unit: perKwh, default: 0 });
         const isSet = (slot) => !!slot && Number(slot.value) > 0;
+        const byRange = modeV === 'dynamic' && !!basis && basis.value !== 'static';
         const first = modeV === 'dynamic'
             ? (frag(t, 'next_pay_dynamic', { mode, provider }) || frag(t, 'next_pay_mode', { mode }))
             : modeV === 'calendar'
@@ -776,11 +777,14 @@ export function groups(states, t, ctx = {}) {
                 adds.fee && isSet(fee) ? frag(t, 'next_pay_plus_fee', { fee }) : null,
             ]),
             clause([frag(t, 'next_pay_export', { export: exportRate })]),
-            clause([frag(t, 'next_pay_thresholds', { cheap, expensive, basis }) || frag(t, 'next_pay_thresholds_plain', { cheap, expensive })]),
+            // (#1321) by price range the fixed thresholds are not used: naming them contradicts the hours SEM calls cheap
+            clause([byRange ? frag(t, 'next_pay_by_range', { basis })
+                : (frag(t, 'next_pay_thresholds', { cheap, expensive, basis }) || frag(t, 'next_pay_thresholds_plain', { cheap, expensive }))]),
         );
         const m = more(t, [
             ['next_more_demand_charge', numSlot(states, 'number.sem_demand_charge_rate')
                 || optNum(o, 'demand_charge_rate', { min: 0, max: 100000, step: 0.01, unit: `${cur}/kW`, default: 4.32 })],
+            ...(byRange ? [['next_row_cheap_below', cheap], ['next_row_expensive_above', expensive]] : []),
             ['next_more_off_peak', modeV === 'calendar' ? null : offPeak],
             ['next_more_fee_model', feeModel],
             ['next_more_fee_amount', feeV === 'per_kwh' || feeV === 'fixed_monthly'

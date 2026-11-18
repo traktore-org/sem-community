@@ -90,7 +90,6 @@ test('renders the charger tools and the HA settings link, no classic link', () =
     assert.doesNotMatch(out, /next_ch_add/);
     assert.doesNotMatch(out, /sem-dashboard/);
     assert.match(out, /Inverter/, 'the auto-found solar source is named');
-    assert.doesNotMatch(out, /Inverter input/i, 'without the sensor class word');
 });
 
 test('an entity value is a row; a tap opens the picker dialog, which stages the choice', () => {

@@ -51,6 +51,18 @@ const { whyLines } = await import('../src/util/plan-why.js');
 const S = (state, attributes = {}) => ({ state: String(state), attributes, last_updated: '2026-11-18T06:16:00+00:00' });
 const TZ = 'Europe/Zurich';
 
+function text(part) {
+    if (part == null || typeof part === 'symbol' || part === false) return '';
+    if (Array.isArray(part)) return part.map(text).join('');
+    if (part && part.strings && part.values) {
+        let out = '';
+        part.strings.forEach((x, i) => { out += x; if (i < part.values.length) out += text(part.values[i]); });
+        return out;
+    }
+    if (typeof part === 'function') return '';
+    return String(part);
+}
+
 /** every function a template carries (the click handlers), in order */
 function fns(part, out = []) {
     if (typeof part === 'function') out.push(part);
@@ -242,4 +254,88 @@ test('4: a live reason reads the battery level the chip reads', () => {
     assert.equal(recordReason(rec, { 'sensor.sem_battery_soc': S(20) }, t), 'A car is plugged in. The battery is at 20 %.');
     assert.equal(recordReason(rec, { 'sensor.sem_battery_soc': S('unavailable') }, t), 'unknown');
     assert.equal(plainReason(rec, t), 'unknown', 'a dated record keeps what it said then');
+});
+
+// ── 5: one name ──
+const { displayName, cleanName } = await import('../src/util/next-names.js');
+const { chargerNameOf } = await import('../src/util/charger-name.js');
+
+test('5: a friendly name a person chose is returned as it is; raw ones are cleaned', () => {
+    const hass = (friendly) => ({ states: { 'sensor.x': { state: '1', attributes: { friendly_name: friendly } } } });
+    assert.equal(displayName(hass('Heizstab 1,5 kW'), { entity: 'sensor.x' }), 'Heizstab 1,5 kW');
+    assert.equal(displayName(hass('Wärmepumpe Verbrauch'), { entity: 'sensor.x' }), 'Wärmepumpe Verbrauch');
+    assert.equal(displayName(hass('garage_carport_licht Power'), { entity: 'sensor.x' }), 'Garage carport licht');
+    assert.equal(displayName(hass('Pro4PM S6 Tableau Output 1 Energy'), { entity: 'sensor.x' }), 'Pro4PM S6 Tableau Output 1');
+    assert.equal(displayName(hass('Eltern,Kind,Balkon'), { entity: 'sensor.x' }), 'Eltern, Kind, Balkon');
+    assert.equal(displayName(hass(''), { name: 'sensor.keller_power' }), 'Keller');
+    assert.equal(displayName(hass(''), { name: '' }), '');
+    assert.equal(cleanName(''), '');
+});
+
+test('5: the same load has one name on System and on Devices', () => {
+    const devices = { energy_dashboard_shellyplus1pm_441793d5470c: { name: 'Heizkörper Frauen Energy', device_type: 'load', power_entity: 'sensor.p' } };
+    const sysEl = sys({ 'sensor.sem_controllable_devices_count': S(1, { devices }), 'sensor.p': S(0, { friendly_name: 'Heizkörper Frauen Energy' }) });
+    const rec = { kind: 'load', device_id: 'energy_dashboard_shellyplus1pm_441793d5470c', name: 'Heizkörper Frauen Energy' };
+    const onDevices = mount('sem-next-devices-card', sysEl.hass.states)._loadName('energy_dashboard_shellyplus1pm_441793d5470c', devices.energy_dashboard_shellyplus1pm_441793d5470c);
+    assert.equal(sysEl._refusedName(rec, (k) => k, [rec]), onDevices);
+    assert.equal(onDevices, 'Heizkörper Frauen');
+});
+
+test('5: while names load a charger is "Charger N", never a slug or a hash', () => {
+    assert.equal(chargerNameOf({}, 'keba_fa87f74cd3', 'sensor.sem_', 'Charger 1'), 'Charger 1');
+    // SEM's own device list names it when the power sensor has not loaded
+    const states = { 'sensor.sem_controllable_devices_count': S(1, { devices: { ev_charger_1: { name: 'Sim Charger 2' } } }) };
+    assert.equal(chargerNameOf(states, 'ev_charger_1', 'sensor.sem_', 'Charger 2'), 'Sim Charger 2');
+    const el = mount('sem-next-plan-card', {});
+    el._chargers = ['keba_fa87f74cd3', 'ev_charger_1'];
+    assert.equal(el._chargerName('ev_charger_1'), 'config_detect_charger 2');
+});
+
+// ── 6: words and numbers that agree ──
+const { groups, sentenceText } = await import('../src/util/next-settings.js');
+const { reviewRows } = await import('../src/util/next-review.js');
+const { trustPct } = await import('../src/util/forecast-evidence.js');
+
+test('6: by price range the sentence names no fixed thresholds; they stay reachable in More', () => {
+    const states = { 'number.sem_cheap_price_threshold': S(0.15, { min: 0, max: 5, step: 0.01 }), 'number.sem_expensive_price_threshold': S(0.35, { min: 0, max: 5, step: 0.01 }),
+        'sensor.sem_battery_soc': S(50), 'switch.sem_observer_mode': S('off') };
+    const tt = (k) => ({ next_pay_by_range: 'range {basis}', next_pay_thresholds: 'cheap {cheap} expensive {expensive} ({basis})', next_pay_dynamic: 'dyn' }[k] || k);
+    const ctx = (mode) => ({ options: { tariff_mode: 'dynamic', tariff_classification_mode: mode }, currency: 'CHF', chargers: [], labels: {} });
+    const pay = (mode) => groups(states, tt, ctx(mode)).find((g) => g.key === 'pay');
+    const range = pay('percentile'), fixed = pay('static');
+    assert.doesNotMatch(sentenceText(range.sentence, tt, states), /0\.35|0\.15/);
+    assert.match(sentenceText(fixed.sentence, tt, states), /0\.35/);
+    assert.ok(range.rows.some((r) => r.slot.id === 'number.sem_expensive_price_threshold' && r.more), 'still a row in All settings');
+});
+
+test('6: the forecast trust is one reading of one fraction', () => {
+    assert.equal(Math.round(trustPct(0.584)), 58);
+    assert.equal(Math.round(trustPct(65)), 65);
+    assert.equal(trustPct('unavailable'), null);
+    assert.equal(trustPct(''), null);
+});
+
+test('6: the battery counts its nights once', () => {
+    const rv = { demands: [{ demand_id: 'arbitrage:battery', kind: 'battery', code: 'learning', nights: 0 }, { demand_id: 'ev:a', kind: 'ev', code: 'learning', nights: 3 }] };
+    const say = (key, p) => `${key}:${p.nights}`;
+    const rows = reviewRows(rv, say, undefined, { battery: 44 });
+    assert.deepEqual(rows.map((r) => r.text), ['energy_plan_review_learning:44', 'energy_plan_review_learning:3']);
+});
+
+test('6: a held device does not say it "turns off"; a live line keeps its own reason otherwise', () => {
+    const words = { why_reason_no_source: 'so it turns off', why_reason_no_source_held: 'so it stays off' };
+    const t2 = (k) => words[k] || k;
+    assert.equal(plainReason({ reason_code: 'no_source', params: {} }, t2, { held: true }), 'so it stays off');
+    assert.equal(plainReason({ reason_code: 'no_source', params: {} }, t2), 'so it turns off');
+    assert.equal(recordReason({ reason_code: 'no_source', action: 'hold' }, {}, t2), 'so it stays off');
+    assert.equal(recordReason({ reason_code: 'no_source', action: 'off' }, {}, t2), 'so it turns off');
+    assert.equal(plainReason({ reason_code: 'surplus_short', params: {} }, t2, { held: true }), null, 'no held text: no sentence');
+});
+
+test('6: Plan screen — the actuation row says paused while watch-only', () => {
+    const el = mount('sem-next-plan-card', { 'switch.sem_energy_plan_actuation': S('on'), 'switch.sem_observer_mode': S('on'), 'sensor.sem_energy_plan': S('fits', { computed_at: '2026-11-18T08:04:23+01:00', blocks: [], demands: [] }) });
+    const m = el._model();
+    assert.match(text(el._expectedSec(el._plan(), m)), /next_actuation_watch/);
+    const off = mount('sem-next-plan-card', { 'switch.sem_energy_plan_actuation': S('on'), 'switch.sem_observer_mode': S('off'), 'sensor.sem_energy_plan': S('fits', { computed_at: '2026-11-18T08:04:23+01:00', blocks: [], demands: [] }) });
+    assert.match(text(off._expectedSec(off._plan(), off._model())), /next_actuation_sub/);
 });

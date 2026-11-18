@@ -47,6 +47,8 @@ export function displayName(hass, { name = '', entity = '', id = '' } = {}) {
     const dev = entity ? haDeviceName(hass, entity) : '';
     if (dev && !looksRaw(dev)) return dev;
     const friendly = entity ? String(hass?.states?.[entity]?.attributes?.friendly_name || '') : '';
+    // (#1321) a friendly name a person chose is kept as it is ("Wärmepumpe Verbrauch", "Heizstab 1,5 kW")
+    if (friendly && !looksRaw(friendly)) return friendly.trim();
     return cleanName(name || friendly || entity || id);
 }
 

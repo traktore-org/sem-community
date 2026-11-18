@@ -317,6 +317,9 @@ class SEMNextSystemCard extends SEMNextBase {
         const cid = r.kind === 'charger' ? String(r.device_id || '').replace(/^ev:/, '') : '';
         if (cid && this._chargers.includes(cid)) return this._chargerName(cid);
         const kind = r.device_kind || r.kind;
+        // (#1321) a load is named as the Devices screen names it
+        const info = kind === 'load' ? (this._attrs('sensor.sem_controllable_devices_count').devices || {})[String(r.device_id || '')] : null;
+        if (info) return this._loadName(String(r.device_id), info);
         return deviceName(r, t, rows.filter((x) => (x.device_kind || x.kind) === kind).length > 1);
     }
 
@@ -354,7 +357,8 @@ class SEMNextSystemCard extends SEMNextBase {
             chargers: this._chargerList(),
             labels: {
                 control: this._valLabel('diag_charger_control'),
-                provider: this._valLabel('tariff_provider') || this._str('sensor.sem_tariff_provider'),
+                // (#1321) "from Custom" says nothing: a custom source names no provider
+                provider: /^custom$/i.test(this._str('sensor.sem_tariff_provider')) ? '' : (this._valLabel('tariff_provider') || this._str('sensor.sem_tariff_provider')),
                 gridSign: this._valLabel('diag_grid_sign'),
                 battSign: this._valLabel('diag_battery_sign'),
             },

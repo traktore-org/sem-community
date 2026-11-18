@@ -52,7 +52,7 @@ test('the four sources are pickers that show what SEM found until overridden', (
     assert.equal(solar.fallback, 'sensor.pv');
     assert.deepEqual(solar.domains, ['sensor']);
     assert.equal(solar.deviceClass, 'power');
-    assert.equal(slotText(solar, t, solar.value, states()), 'Inverter input (auto)');
+    assert.equal(slotText(solar, t, solar.value, states()), 'Inverter input');
     assert.equal(slotText(solar, t, 'sensor.my_grid', states()), 'My grid meter');
     const house = find(reads.sentence, (p) => p && p.option === 'house_power_sensor');
     assert.equal(slotText(house, t, '', states()), 'next_computed');

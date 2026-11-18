@@ -92,7 +92,8 @@ const words = (s) => s
     .replace(/\s+/g, ' ')
     .trim();
 // Every number a person reads: "0", "0.00", "+56", "−3" — not the 1 in "PV1".
-const numbers = (s) => [...s.matchAll(/(?<![\w.])[+\-−]?\d+(?:[.,]\d+)?(?![\w])/g)].map((m) => m[0]);
+// (#1321) a charger named while names load is "Charger 1": its place in the list, not a reading
+const numbers = (s) => [...s.replace(/config_detect_charger \d+/g, 'config_detect_charger').matchAll(/(?<![\w.])[+\-−]?\d+(?:[.,]\d+)?(?![\w])/g)].map((m) => m[0]);
 
 const CARDS = readdirSync(new URL('../src/cards/', import.meta.url))
     .filter((f) => f.startsWith('sem-') && f.endsWith('.js'))

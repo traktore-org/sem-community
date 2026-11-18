@@ -481,7 +481,8 @@ export class SEMNextBase extends SEMLitBase {
         return s > e ? (now >= s || now < e) : (now >= s && now < e);
     }
     _chargerName(cid) {
-        return chargerNameOf(this._hass?.states, cid);
+        const n = this._chargers.indexOf(cid);
+        return chargerNameOf(this._hass?.states, cid, 'sensor.sem_', n >= 0 ? `${this._t('config_detect_charger')} ${n + 1}` : '');
     }
     _chargerEntity(domain, cid, suffix) {
         const id = `${domain}.sem_charger_${cid}_${suffix}`;

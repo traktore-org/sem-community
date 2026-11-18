@@ -6,7 +6,7 @@
  */
 
 import { html, nothing } from '../base/sem-next-base.js';
-import { providerName } from './forecast-evidence.js';
+import { providerName, trustPct } from './forecast-evidence.js';
 import { zonesModel } from './next-devices.js';
 import { BATTERY_LEVELS, BATTERY_QUESTIONS, batteryLevels, batterySaysFromStates, batteryFloorPct, kwhAboveFloor, batteryUnits } from './battery-questions.js';
 
@@ -194,8 +194,9 @@ export function batteryBody(card, row) {
         });
     }
     const src = card._str('sensor.sem_forecast_source');
-    const d1 = card._has('sensor.sem_forecast_trust_d1') ? num('sensor.sem_forecast_trust_d1') : (Number.isFinite(Number(sa.forecast_trust_d1)) ? Number(sa.forecast_trust_d1) * 100 : null);
-    const d2 = card._has('sensor.sem_forecast_trust_d2') ? num('sensor.sem_forecast_trust_d2') : (Number.isFinite(Number(sa.forecast_trust_d2)) ? Number(sa.forecast_trust_d2) * 100 : null);
+    // (#1321) the same fraction-to-percent reading as the Plan and Insights screens
+    const d1 = trustPct(card._has('sensor.sem_forecast_trust_d1') ? num('sensor.sem_forecast_trust_d1') : sa.forecast_trust_d1);
+    const d2 = trustPct(card._has('sensor.sem_forecast_trust_d2') ? num('sensor.sem_forecast_trust_d2') : sa.forecast_trust_d2);
     if (src || d1 !== null || d2 !== null) {
         const pct = (x) => (x === null ? t('learning') : Math.round(x) + ' %');
         rows.push(card._row('mdi:check-decagram-outline', t('next_evidence'),
