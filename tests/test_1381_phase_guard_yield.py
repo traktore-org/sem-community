@@ -197,25 +197,21 @@ def _written(hass):
             for c in hass.services.async_call.await_args_list]
 
 
-async def _real_cycle(guard, dev, adapter, rec, now_ref, current=31.2):
+async def _real_cycle(guard, dev, adapter, rec, now_ref, monkeypatch, drawing=None):
     decision = guard.filter_decision(_decision())
     reason = guard.yield_override_reason(decision)
-    real_mono = __import__("time").monotonic
-    import time as _t
-    _t.monotonic = lambda: now_ref[0]
-    try:
-        await actuate(decision, adapter, DRAWING, rec, yielded=True,
-                      phase_override=reason)
-    finally:
-        _t.monotonic = real_mono
+    # the reconciler's clock follows the test; monkeypatch restores it (no global mutation)
+    monkeypatch.setattr("time.monotonic", lambda: now_ref[0])
+    await actuate(decision, adapter, drawing or DRAWING, rec, yielded=True,
+                  phase_override=reason)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["keba", "switch", "select", "service", "number", "ocpp"])
-async def test_each_charger_kind_gets_only_its_own_stop(kind):
+async def test_each_charger_kind_gets_only_its_own_stop(kind, monkeypatch):
     dev, hass, adapter = _real(kind)
     rec = ChargerReconciler(charger_id="c1", heartbeat_s=5.0, idle_disable_threshold=4)
-    await _real_cycle(_guard(31.2), dev, adapter, rec, [1000.0])
+    await _real_cycle(_guard(31.2), dev, adapter, rec, [1000.0], monkeypatch)
     calls = _written(hass)
     # an OCPP number with no switch cannot be stopped safely (#976): the
     # reconciler writes nothing, and the override must not change that
@@ -230,43 +226,39 @@ async def test_each_charger_kind_gets_only_its_own_stop(kind):
 
 
 @pytest.mark.asyncio
-async def test_the_real_reconciler_writes_one_stop_then_holds_the_dwell():
+async def test_the_real_reconciler_writes_one_stop_then_holds_the_dwell(monkeypatch):
     dev, hass, adapter = _real("keba")
     rec = ChargerReconciler(charger_id="c1", heartbeat_s=5.0, idle_disable_threshold=4)
     g, now = _guard(31.2), [1000.0]
     for _ in range(5):  # five cycles, 10 s apart, all over the limit
-        await _real_cycle(g, dev, adapter, rec, now)
+        await _real_cycle(g, dev, adapter, rec, now, monkeypatch)
         now[0] += 10.0
     assert _written(hass) == [("keba", "disable", {})]
     now[0] += STOP_REASSERT_DWELL_S
-    await _real_cycle(g, dev, adapter, rec, now)
+    await _real_cycle(g, dev, adapter, rec, now, monkeypatch)
     assert len(_written(hass)) == 2  # one re-assert after the dwell, no more
 
 
 @pytest.mark.asyncio
-async def test_a_stop_goes_out_inside_the_contactor_minimum_on_time():
+async def test_a_stop_goes_out_inside_the_contactor_minimum_on_time(monkeypatch):
     dev, hass, adapter = _real("keba")
     rec = ChargerReconciler(charger_id="c1", heartbeat_s=5.0, idle_disable_threshold=4)
     now = [1000.0]
     rec._charge_started_at = now[0] - 30.0  # charging for 30 s only
-    await _real_cycle(_guard(31.2), dev, adapter, rec, now)
+    await _real_cycle(_guard(31.2), dev, adapter, rec, now, monkeypatch)
     assert _written(hass) == [("keba", "disable", {})]
 
 
 @pytest.mark.asyncio
-async def test_a_third_party_that_keeps_re_enabling_hits_the_ceasefire():
-    global DRAWING
+async def test_a_third_party_that_keeps_re_enabling_hits_the_ceasefire(monkeypatch):
     dev, hass, adapter = _real("keba")
     rec = ChargerReconciler(charger_id="c1", heartbeat_s=5.0, idle_disable_threshold=4)
     g, now = _guard(31.2), [1000.0]
-    try:
-        for _ in range(12):  # stop lands, the third party starts it again
-            for watts in (0.0, 7000.0):
-                DRAWING = SimpleNamespace(power_w=watts, connected=True,
-                                          charging=watts > 0)
-                await _real_cycle(g, dev, adapter, rec, now)
-                now[0] += STOP_REASSERT_DWELL_S + 1.0
-    finally:
-        DRAWING = SimpleNamespace(power_w=7000.0, connected=True, charging=True)
+    for _ in range(12):  # stop lands, the third party starts it again
+        for watts in (0.0, 7000.0):
+            drawing = SimpleNamespace(power_w=watts, connected=True,
+                                      charging=watts > 0)
+            await _real_cycle(g, dev, adapter, rec, now, monkeypatch, drawing)
+            now[0] += STOP_REASSERT_DWELL_S + 1.0
     assert rec._stop_war_backoff_until > 0  # the ceasefire armed
     assert len(_written(hass)) < 12
