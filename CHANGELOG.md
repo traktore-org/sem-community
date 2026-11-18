@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **Honest numbers and names** (#1321). Off devices show their rated size, not a live-looking figure; the headline names every thing to check; sources that disagree say so.
+- 🐛 **Honest numbers and names** (#1321). Off devices show rated size, not live power. The headline names each check. Sources that disagree say so.
 - 🐛 **House by source adds up** (#1321). A small counter drop is no longer read as use. Parts match the total. Flow counters never step back.
 - 🐛 **One battery sentence** (#1321). Plan, Now and Decisions say what tonight needs and when the battery may help the car.
 - 🐛 **Figures agree** (#1321). A car shows at most its need. A running heat pump shows running. Surplus stays under house use.
