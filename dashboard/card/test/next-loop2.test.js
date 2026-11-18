@@ -424,10 +424,15 @@ test('3.3: the Why list of a plan with a gap draws, and names both runs (loop 3)
     const t = (h) => `2026-11-18T${String(h).padStart(2, '0')}:00:00+01:00`;
     const plan = { computed_at: t(8), blocks: [{ id: 'ev:a', start: t(9), end: t(10), power_w: 3000 }, { id: 'ev:a', start: t(14), end: t(15), power_w: 2000 }],
         demands: [{ id: 'ev:a', planned_kwh: 5, why: { code: 'cheapest_hours', params: { from: t(9), to: t(15), price: 0.1 } } }] };
-    const el = mount('sem-next-plan-card', { 'sensor.sem_energy_plan': S('fits', plan) });
-    const out = text(el._whySec(el._plan()));
-    assert.match(out, /09:00 – 10:00/);
-    assert.match(out, /14:00 – 15:00/);
+    // Pinned clock: runs that ended are dropped, so a real clock past 09:00
+    // on the fixture's day failed this test.
+    const real = Date.now; Date.now = () => Date.parse(t(8));
+    try {
+        const el = mount('sem-next-plan-card', { 'sensor.sem_energy_plan': S('fits', plan) });
+        const out = text(el._whySec(el._plan()));
+        assert.match(out, /09:00 – 10:00/);
+        assert.match(out, /14:00 – 15:00/);
+    } finally { Date.now = real; }
 });
 
 test('3.4: a device the plan does not schedule still draws in the Why list (loop 3)', () => {
