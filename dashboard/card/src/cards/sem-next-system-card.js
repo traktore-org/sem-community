@@ -684,21 +684,46 @@ class SEMNextSystemCard extends SEMNextBase {
         if (navigator?.clipboard?.writeText && window.isSecureContext !== false) {
             try { await navigator.clipboard.writeText(text); return done(true); } catch (err) { /* fall through */ }
         }
+        let ok = false;
         try {
+            // (#1321) iOS copies only from an editable field with an explicit
+            // selection range; a readonly one copied nothing on an iPhone
             const ta = document.createElement('textarea');
             ta.value = text;
-            ta.setAttribute('readonly', '');
+            ta.contentEditable = 'true';
             ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0';
             ta.style.width = '1px'; ta.style.height = '1px'; ta.style.opacity = '0';
+            ta.style.fontSize = '16px';   // no zoom on iOS
             document.body.appendChild(ta);
             ta.focus(); ta.select();
-            const ok = document.execCommand('copy');
+            if (typeof ta.setSelectionRange === 'function') ta.setSelectionRange(0, text.length);
+            ok = !!document.execCommand('copy');
             document.body.removeChild(ta);
-            return done(!!ok);
         } catch (err) {
             console.error('[sem-next-system-card] clipboard fallback threw', err);
-            return done(false);
         }
+        if (ok || quiet) return done(ok);
+        // (#1321) the browser refused both ways (an iPhone on plain http):
+        // show the text selected, so it can be copied by hand
+        this._showCopyText(text);
+        return false;
+    }
+
+    /** The text in a window, selected, for a copy by hand when the browser will not copy. */
+    _showCopyText(text) {
+        const t = (k) => this._t(k);
+        const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const box = '<textarea id="cp-text" readonly style="width:100%;min-height:180px;font:12px/1.4 monospace;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid var(--divider-color,#444);background:var(--card-background-color,#1c1c1c);color:var(--primary-text-color,#e1e1e1)"></textarea>';
+        const { el, close } = this._dialog({
+            id: 'sem-copy-dlg', title: t('next_copy_by_hand_title'),
+            build: (d) => (d
+                ? `<div class="ed-help">${esc(t('next_copy_by_hand'))}</div>${box}<div class="dlg-actions" style="display:flex;justify-content:flex-end;margin-top:12px"><ha-button id="cp-close" appearance="filled">${esc(t('next_close'))}</ha-button></div>`
+                : `<div class="dlg-box"><div class="dlg-title">${esc(t('next_copy_by_hand_title'))}</div><div class="ed-help">${esc(t('next_copy_by_hand'))}</div>${box}
+                    <div class="dlg-actions"><div class="grow"></div><button type="button" id="cp-close" class="btn primary">${esc(t('next_close'))}</button></div></div>`),
+        });
+        const ta = el.querySelector('#cp-text');
+        if (ta) { ta.value = text; ta.focus(); ta.select(); if (typeof ta.setSelectionRange === 'function') ta.setSelectionRange(0, text.length); }
+        el.querySelector('#cp-close')?.addEventListener('click', () => close());
     }
 
     // ── render ──

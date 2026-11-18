@@ -2512,7 +2512,11 @@
     "next_sub_block_running": "Teď: {who} do {time}, {kwh} kWh.",
     "next_sub_block_would": "Teď by běželo: {who} do {time}, {kwh} kWh.",
     "next_batt_need_now": "Teď je {now} kWh nad rezervou; dnes v noci je třeba {need} kWh, proto vše zůstane domu.",
-    "next_plan_sub_plain": "Plán vytvořen {time}, {fits}. Solár zítra {sun} kWh."
+    "next_plan_sub_plain": "Plán vytvořen {time}, {fits}. Solár zítra {sun} kWh.",
+    "next_reason_one_rate": "Jedna sazba",
+    "next_copy_by_hand_title": "Zkopírujte ručně",
+    "next_copy_by_hand": "Tento prohlížeč zde kopírování nepovoluje. Text je označený: zkopírujte ho a vložte do hlášení.",
+    "next_close": "Zavřít"
   },
   "da": {
     "/year": "/år",
@@ -5027,7 +5031,11 @@
     "next_sub_block_running": "Nu: {who} til {time}, {kwh} kWh.",
     "next_sub_block_would": "Ville køre nu: {who} til {time}, {kwh} kWh.",
     "next_batt_need_now": "Nu {now} kWh over reserven; i nat skal der bruges {need} kWh, så alt bliver til huset.",
-    "next_plan_sub_plain": "Plan lavet {time}, {fits}. Sol i morgen {sun} kWh."
+    "next_plan_sub_plain": "Plan lavet {time}, {fits}. Sol i morgen {sun} kWh.",
+    "next_reason_one_rate": "Én pris",
+    "next_copy_by_hand_title": "Kopiér selv",
+    "next_copy_by_hand": "Denne browser tillader ikke kopiering her. Teksten er markeret: kopiér den og indsæt den i din rapport.",
+    "next_close": "Luk"
   },
   "de": {
     "/year": "/Jahr",
@@ -7542,7 +7550,11 @@
     "next_sub_block_running": "Jetzt: {who} bis {time}, {kwh} kWh.",
     "next_sub_block_would": "Würde jetzt laufen: {who} bis {time}, {kwh} kWh.",
     "next_batt_need_now": "Jetzt {now} kWh über der Reserve; heute Nacht werden {need} kWh gebraucht, also bleibt alles für das Haus.",
-    "next_plan_sub_plain": "Plan von {time}, {fits}. Solar morgen {sun} kWh."
+    "next_plan_sub_plain": "Plan von {time}, {fits}. Solar morgen {sun} kWh.",
+    "next_reason_one_rate": "Ein Tarif",
+    "next_copy_by_hand_title": "Von Hand kopieren",
+    "next_copy_by_hand": "Dieser Browser erlaubt hier kein Kopieren. Der Text ist markiert: kopieren Sie ihn und fügen Sie ihn in Ihre Meldung ein.",
+    "next_close": "Schliessen"
   },
   "en": {
     "/year": "/year",
@@ -10057,7 +10069,11 @@
     "next_sub_block_running": "Now: {who} until {time}, {kwh} kWh.",
     "next_sub_block_would": "Would run now: {who} until {time}, {kwh} kWh.",
     "next_batt_need_now": "Now {now} kWh above the reserve; tonight needs {need} kWh, so all of it stays for the house.",
-    "next_plan_sub_plain": "Plan made {time}, {fits}. Solar tomorrow {sun} kWh."
+    "next_plan_sub_plain": "Plan made {time}, {fits}. Solar tomorrow {sun} kWh.",
+    "next_reason_one_rate": "One rate",
+    "next_copy_by_hand_title": "Copy by hand",
+    "next_copy_by_hand": "This browser does not allow copying here. The text is selected: copy it, then paste it in your report.",
+    "next_close": "Close"
   },
   "es": {
     "/year": "/año",
@@ -12572,7 +12588,11 @@
     "next_sub_block_running": "Ahora: {who} hasta las {time}, {kwh} kWh.",
     "next_sub_block_would": "Funcionaría ahora: {who} hasta las {time}, {kwh} kWh.",
     "next_batt_need_now": "Ahora {now} kWh sobre la reserva; esta noche hacen falta {need} kWh, así que todo queda para la casa.",
-    "next_plan_sub_plain": "Plan hecho a las {time}, {fits}. Solar mañana {sun} kWh."
+    "next_plan_sub_plain": "Plan hecho a las {time}, {fits}. Solar mañana {sun} kWh.",
+    "next_reason_one_rate": "Una tarifa",
+    "next_copy_by_hand_title": "Copiar a mano",
+    "next_copy_by_hand": "Este navegador no permite copiar aquí. El texto está seleccionado: cópielo y péguelo en su informe.",
+    "next_close": "Cerrar"
   },
   "fi": {
     "/year": "/vuosi",
@@ -15087,7 +15107,11 @@
     "next_sub_block_running": "Nyt: {who} klo {time} asti, {kwh} kWh.",
     "next_sub_block_would": "Käynnistyisi nyt: {who} klo {time} asti, {kwh} kWh.",
     "next_batt_need_now": "Nyt {now} kWh varan yläpuolella; tänä yönä tarvitaan {need} kWh, joten kaikki jää talolle.",
-    "next_plan_sub_plain": "Suunnitelma tehty {time}, {fits}. Aurinko huomenna {sun} kWh."
+    "next_plan_sub_plain": "Suunnitelma tehty {time}, {fits}. Aurinko huomenna {sun} kWh.",
+    "next_reason_one_rate": "Yksi hinta",
+    "next_copy_by_hand_title": "Kopioi itse",
+    "next_copy_by_hand": "Tämä selain ei salli kopiointia tässä. Teksti on valittu: kopioi se ja liitä se ilmoitukseesi.",
+    "next_close": "Sulje"
   },
   "fr": {
     "/year": "/an",
@@ -17602,7 +17626,11 @@
     "next_sub_block_running": "Maintenant : {who} jusqu'à {time}, {kwh} kWh.",
     "next_sub_block_would": "Fonctionnerait maintenant : {who} jusqu'à {time}, {kwh} kWh.",
     "next_batt_need_now": "Maintenant {now} kWh au-dessus de la réserve ; cette nuit il faut {need} kWh, donc tout reste pour la maison.",
-    "next_plan_sub_plain": "Plan fait à {time}, {fits}. Solaire demain {sun} kWh."
+    "next_plan_sub_plain": "Plan fait à {time}, {fits}. Solaire demain {sun} kWh.",
+    "next_reason_one_rate": "Un tarif",
+    "next_copy_by_hand_title": "Copier à la main",
+    "next_copy_by_hand": "Ce navigateur ne permet pas de copier ici. Le texte est sélectionné : copiez-le, puis collez-le dans votre rapport.",
+    "next_close": "Fermer"
   },
   "hu": {
     "/year": "/év",
@@ -20117,7 +20145,11 @@
     "next_sub_block_running": "Most: {who} eddig: {time}, {kwh} kWh.",
     "next_sub_block_would": "Most működne: {who} eddig: {time}, {kwh} kWh.",
     "next_batt_need_now": "Most {now} kWh van a tartalék felett; ma éjjel {need} kWh kell, ezért minden a háznál marad.",
-    "next_plan_sub_plain": "Terv: {time}, {fits}. Napelem holnap {sun} kWh."
+    "next_plan_sub_plain": "Terv: {time}, {fits}. Napelem holnap {sun} kWh.",
+    "next_reason_one_rate": "Egy tarifa",
+    "next_copy_by_hand_title": "Másolja kézzel",
+    "next_copy_by_hand": "Ez a böngésző itt nem engedi a másolást. A szöveg ki van jelölve: másolja ki, és illessze be a bejelentésbe.",
+    "next_close": "Bezárás"
   },
   "it": {
     "/year": "/anno",
@@ -22632,7 +22664,11 @@
     "next_sub_block_running": "Ora: {who} fino alle {time}, {kwh} kWh.",
     "next_sub_block_would": "Sarebbe attivo ora: {who} fino alle {time}, {kwh} kWh.",
     "next_batt_need_now": "Ora {now} kWh sopra la riserva; stanotte servono {need} kWh, quindi tutto resta per la casa.",
-    "next_plan_sub_plain": "Piano fatto alle {time}, {fits}. Solare domani {sun} kWh."
+    "next_plan_sub_plain": "Piano fatto alle {time}, {fits}. Solare domani {sun} kWh.",
+    "next_reason_one_rate": "Tariffa unica",
+    "next_copy_by_hand_title": "Copia a mano",
+    "next_copy_by_hand": "Questo browser non consente di copiare qui. Il testo è selezionato: copialo e incollalo nella segnalazione.",
+    "next_close": "Chiudi"
   },
   "nl": {
     "/year": "/jaar",
@@ -25147,7 +25183,11 @@
     "next_sub_block_running": "Nu: {who} tot {time}, {kwh} kWh.",
     "next_sub_block_would": "Zou nu draaien: {who} tot {time}, {kwh} kWh.",
     "next_batt_need_now": "Nu {now} kWh boven de reserve; vannacht is {need} kWh nodig, dus alles blijft voor het huis.",
-    "next_plan_sub_plain": "Plan gemaakt {time}, {fits}. Zon morgen {sun} kWh."
+    "next_plan_sub_plain": "Plan gemaakt {time}, {fits}. Zon morgen {sun} kWh.",
+    "next_reason_one_rate": "Eén tarief",
+    "next_copy_by_hand_title": "Handmatig kopiëren",
+    "next_copy_by_hand": "Deze browser staat kopiëren hier niet toe. De tekst is geselecteerd: kopieer hem en plak hem in je melding.",
+    "next_close": "Sluiten"
   },
   "no": {
     "/year": "/år",
@@ -27662,7 +27702,11 @@
     "next_sub_block_running": "Nå: {who} til {time}, {kwh} kWh.",
     "next_sub_block_would": "Ville gått nå: {who} til {time}, {kwh} kWh.",
     "next_batt_need_now": "Nå {now} kWh over reserven; i natt trengs {need} kWh, så alt blir igjen til huset.",
-    "next_plan_sub_plain": "Plan laget {time}, {fits}. Sol i morgen {sun} kWh."
+    "next_plan_sub_plain": "Plan laget {time}, {fits}. Sol i morgen {sun} kWh.",
+    "next_reason_one_rate": "Én pris",
+    "next_copy_by_hand_title": "Kopier selv",
+    "next_copy_by_hand": "Denne nettleseren tillater ikke kopiering her. Teksten er merket: kopier den og lim den inn i rapporten.",
+    "next_close": "Lukk"
   },
   "pl": {
     "/year": "/rok",
@@ -30177,7 +30221,11 @@
     "next_sub_block_running": "Teraz: {who} do {time}, {kwh} kWh.",
     "next_sub_block_would": "Działałoby teraz: {who} do {time}, {kwh} kWh.",
     "next_batt_need_now": "Teraz {now} kWh ponad rezerwą; dziś w nocy potrzeba {need} kWh, więc całość zostaje dla domu.",
-    "next_plan_sub_plain": "Plan z {time}, {fits}. Słońce jutro {sun} kWh."
+    "next_plan_sub_plain": "Plan z {time}, {fits}. Słońce jutro {sun} kWh.",
+    "next_reason_one_rate": "Jedna taryfa",
+    "next_copy_by_hand_title": "Skopiuj ręcznie",
+    "next_copy_by_hand": "Ta przeglądarka nie pozwala tu kopiować. Tekst jest zaznaczony: skopiuj go i wklej do zgłoszenia.",
+    "next_close": "Zamknij"
   },
   "pt": {
     "/year": "/ano",
@@ -32692,7 +32740,11 @@
     "next_sub_block_running": "Agora: {who} até às {time}, {kwh} kWh.",
     "next_sub_block_would": "Funcionaria agora: {who} até às {time}, {kwh} kWh.",
     "next_batt_need_now": "Agora {now} kWh acima da reserva; esta noite precisa de {need} kWh, por isso tudo fica para a casa.",
-    "next_plan_sub_plain": "Plano feito {time}, {fits}. Solar amanhã {sun} kWh."
+    "next_plan_sub_plain": "Plano feito {time}, {fits}. Solar amanhã {sun} kWh.",
+    "next_reason_one_rate": "Tarifa única",
+    "next_copy_by_hand_title": "Copiar à mão",
+    "next_copy_by_hand": "Este navegador não permite copiar aqui. O texto está selecionado: copie-o e cole-o no seu relato.",
+    "next_close": "Fechar"
   },
   "ro": {
     "/year": "/an",
@@ -35207,7 +35259,11 @@
     "next_sub_block_running": "Acum: {who} până la {time}, {kwh} kWh.",
     "next_sub_block_would": "Ar funcționa acum: {who} până la {time}, {kwh} kWh.",
     "next_batt_need_now": "Acum {now} kWh peste rezervă; în seara asta e nevoie de {need} kWh, deci totul rămâne pentru casă.",
-    "next_plan_sub_plain": "Plan făcut {time}, {fits}. Solar mâine {sun} kWh."
+    "next_plan_sub_plain": "Plan făcut {time}, {fits}. Solar mâine {sun} kWh.",
+    "next_reason_one_rate": "Tarif unic",
+    "next_copy_by_hand_title": "Copiați manual",
+    "next_copy_by_hand": "Acest browser nu permite copierea aici. Textul este selectat: copiați-l și lipiți-l în raport.",
+    "next_close": "Închide"
   },
   "sv": {
     "/year": "/år",
@@ -37722,7 +37778,11 @@
     "next_sub_block_running": "Nu: {who} till {time}, {kwh} kWh.",
     "next_sub_block_would": "Skulle gå nu: {who} till {time}, {kwh} kWh.",
     "next_batt_need_now": "Nu {now} kWh över reserven; i natt behövs {need} kWh, så allt stannar för huset.",
-    "next_plan_sub_plain": "Plan gjord {time}, {fits}. Sol i morgon {sun} kWh."
+    "next_plan_sub_plain": "Plan gjord {time}, {fits}. Sol i morgon {sun} kWh.",
+    "next_reason_one_rate": "Ett pris",
+    "next_copy_by_hand_title": "Kopiera själv",
+    "next_copy_by_hand": "Den här webbläsaren tillåter inte kopiering här. Texten är markerad: kopiera den och klistra in den i din rapport.",
+    "next_close": "Stäng"
   },
   "zh": {
     "/year": "/年",
@@ -40237,6 +40297,10 @@
     "next_sub_block_running": "现在：{who} 至 {time}，{kwh} kWh。",
     "next_sub_block_would": "现在会运行：{who} 至 {time}，{kwh} kWh。",
     "next_batt_need_now": "现在高于保留电量 {now} kWh；今晚需要 {need} kWh，因此全部留给家用。",
-    "next_plan_sub_plain": "计划于 {time} 制定，{fits}。明日光伏 {sun} kWh。"
+    "next_plan_sub_plain": "计划于 {time} 制定，{fits}。明日光伏 {sun} kWh。",
+    "next_reason_one_rate": "单一电价",
+    "next_copy_by_hand_title": "手动复制",
+    "next_copy_by_hand": "此浏览器不允许在此复制。文本已选中：请复制后粘贴到您的报告中。",
+    "next_close": "关闭"
   }
 }

@@ -25,6 +25,23 @@ import { semDefineCard } from '../base/sem-shared.js';
 import { planLead, coldHeaters, planGridKwh, fill } from '../util/next-lead.js';
 import { planWhenKey } from '../util/next-time.js';
 
+let _measureCtx = null;
+/** (#1321) the drawn width of a chart label; a generous guess when no canvas exists (tests). */
+export function textWidth(text, font) {
+    try {
+        if (!_measureCtx && typeof document !== 'undefined' && document.createElement) {
+            const c = document.createElement('canvas');
+            _measureCtx = c && c.getContext ? c.getContext('2d') : null;
+        }
+        if (_measureCtx) { _measureCtx.font = font; const w = _measureCtx.measureText(text).width; if (w > 0) return w; }
+    } catch (_) { /* fall through to the guess */ }
+    return text.length * 7.2;
+}
+/** The font the chart text inherits from the card (HA's theme font). */
+function chartFont(el) {
+    try { return (globalThis.getComputedStyle && el ? getComputedStyle(el).fontFamily : '') || 'Roboto, sans-serif'; } catch (_) { return 'Roboto, sans-serif'; }
+}
+
 /** null / '' is unknown, never 0 (Number(null) is 0). */
 export function knownNum(v) {
     if (v === null || v === undefined || v === '') return NaN;
@@ -348,8 +365,13 @@ class SEMNextPlanCard extends SEMNextBase {
         }).filter(Boolean).join(' · ');
     }
 
+    _oneRate() { return tariffKind(this._hass?.states) === 'flat'; }
+
     /** A block's reason code in words, '' when the code has no text. */
     _reasonText(reason, params) {
+        // (#1321) one rate all day: no hour is cheaper, so "Cheapest hours" would
+        // contradict the header's "One rate, so no waiting for cheap hours"
+        if (reason === 'cheapest_hours' && this._oneRate()) reason = 'one_rate';
         const key = 'next_reason_' + reason;
         const text = this._t(key);
         if (!reason || !text || text === key) return '';
@@ -481,10 +503,13 @@ class SEMNextPlanCard extends SEMNextBase {
     }
 
     _svgChip(x, y, text, fill, fg, minX, maxX, avoidX = null) {
-        const w = text.length * 6.2 + 14;
-        let cx = Math.max(minX, Math.min(maxX - w, x - w / 2));
+        // (#1321) the chip's width from the real text width: a per-letter guess
+        // was too narrow for bold digits and ran a chip into the card's edge
+        const w = textWidth(String(text), '700 10.5px ' + chartFont(this)) + 16;
+        const right = maxX - w - 2;
+        let cx = Math.max(minX, Math.min(right, x - w / 2));
         // (#1321) never across the now line: the label moves to its right
-        if (avoidX !== null && cx - 2 <= avoidX && avoidX <= cx + w + 2) cx = Math.min(maxX - w, avoidX + 6);
+        if (avoidX !== null && cx - 2 <= avoidX && avoidX <= cx + w + 2) cx = Math.min(right, avoidX + 6);
         return svg`<rect x="${cx}" y="${y}" width="${w}" height="18" rx="9" fill="${fill}"></rect>
             <text x="${cx + w / 2}" y="${y + 12.5}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${fg}">${text}</text>`;
     }
