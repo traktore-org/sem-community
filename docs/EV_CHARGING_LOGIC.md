@@ -33,7 +33,7 @@ migrating old automations):
 |---|---|---|---|
 | **Solar only** | Never by day. At night only if *you* set a floor on this charger | Never discharges for the car, with one exception: forecast spending (see below) | Charges on spare sun only. Idles at night unless you set a floor. |
 | **Solar + battery** *(2.1, #885/#878)* | Never by day. At night only if *you* set a floor | Assists down to **max(Buffer SoC, tonight's computed floor)** — above the Solar Gate always, and below it when tonight's forecast budget is positive | Spare sun plus the pack — the charger twin of a load's "Solar + battery" mode. Idles at night unless you set a floor. Works from day one; the forecast-led bypass and the dynamic floor wake once the battery learner completes (the card says so while it's still gathering). |
-| **Solar + cheapest hours** | Only in cheap-price hours, up to the floor | Never | Spare sun by day; grid only when the live price level is cheap, very cheap or negative. Always listed — shown disabled with the reason when no dynamic tariff is configured. |
+| **Solar + cheapest hours** | Only in cheap-price hours, up to the floor | Never | Spare sun by day; grid only when the live price level is cheap, very cheap or negative. Always listed — shown disabled with the reason when the tariff has no cheaper hours (one price). A dynamic tariff, a schedule or a static tariff with two rates all have them (#1385). |
 | **Min + Solar** *(default)* | Up to the floor (*At least X*) | Assists above the Buffer SoC | Tops up to *At least X kWh* by the *Charge by* deadline (at night when needed); spare sun adds up to Max on top. Nothing owed → no grid. |
 | **Always (max)** | Whatever it takes | Held to the house unless the pack is above the Buffer SoC and the spare sun passes the Solar Gate | Charges at the charger's maximum whenever a car is plugged in, day or night, at any price. The floor does not matter here: a floor of 0 does **not** stop it. It stops at the *Up to* ceiling, and the grid peak limit can slow or stop it. |
 | **Off** | — | — | Hands-off. Switching to Off stops a running charge **once**, whoever started it. After that SEM sends nothing: no start, no stop, no current. SEM still reads the charger's power and counts its energy. |
@@ -205,7 +205,7 @@ The cheapest-hours behaviour (built into the **Solar + cheapest hours** mode, an
 |---|---|---|
 | Night | tariff-aware modes | Waits for the [energy plan's](ENERGY_PLANNER.md) charge block — the cheapest hours that also fit under your peak limit and priority order (subject to Min reachability) |
 | Daytime | Min + Solar | **Drops the Min grid guarantee on EXPENSIVE / VERY_EXPENSIVE hours.** Falls back to surplus-only; resumes on price drop or sufficient solar |
-| Daytime | Solar + cheapest hours | **Tops the Min floor up from grid on CHEAP / VERY_CHEAP / NEGATIVE hours** (#856) — the same shared top-up seam as the night window (plan gate, deadline floor, peak-managed rate). Solar surplus wins when it offers more. A static tariff (no live price level) never triggers it. |
+| Daytime | Solar + cheapest hours | **Tops the Min floor up from grid on CHEAP / VERY_CHEAP / NEGATIVE hours** (#856) — the same shared top-up seam as the night window (plan gate, deadline floor, peak-managed rate). Solar surplus wins when it offers more. A tariff with one price (no cheap level) never triggers it. |
 | Daytime | Solar only | No effect (never uses grid anyway) |
 | Anytime | Always (max) / Off | No effect (explicit override) |
 

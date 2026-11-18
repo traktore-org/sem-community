@@ -230,7 +230,7 @@ the permission — there is no second switch. Grid: never, unless you set an
 
 Surplus first, and grid whenever the price is genuinely cheap — **day or night** (#856, 2.1). By day a cheap, very cheap or negative price hour tops the **Min floor** up from grid through the same seam the night window uses (plan gate, deadline floor, peak-managed rate); solar surplus always wins when it offers more, and expensive hours pause grid import entirely. By night it defers to the cheapest contiguous window, with Min still guaranteed by the deadline.
 
-The Min floor is what a cheap hour fills — with *At least* at 0 kWh there is nothing to top up and a cheap hour charges nothing, which the strategy line says out loud. A static tariff never triggers the daytime half. Hidden if no dynamic tariff is configured; this is the only mode that consults the tariff.
+The Min floor is what a cheap hour fills — with *At least* at 0 kWh there is nothing to top up and a cheap hour charges nothing, which the strategy line says out loud. A tariff with one price never triggers it. Greyed out when the tariff has no cheaper hours; a dynamic tariff, a schedule or a two-rate tariff all have them (#1385). This is the only mode that consults the tariff.
 
 ### Min + Solar (default)
 

@@ -163,7 +163,7 @@ The per-charger `Charge mode` selector replaces the v1.6.x toggle-soup (`Overnig
 | Mode | Behaviour | Typical user |
 |---|---|---|
 | **Solar only** | Surplus only — never imports from grid | Solar maximalist |
-| **Solar + cheapest hours** | Surplus first, plus grid whenever the price is genuinely cheap — **day or night** (#856). A cheap/negative daytime hour tops the Min floor up from grid; the night defers to the cheapest contiguous window (hidden if no dynamic tariff is configured) | Dynamic-tariff users |
+| **Solar + cheapest hours** | Surplus first, plus grid whenever the price is genuinely cheap — **day or night** (#856). A cheap/negative daytime hour tops the Min floor up from grid; the night defers to the cheapest contiguous window (greyed out when the tariff has no cheaper hours, #1385) | Dynamic, schedule or two-rate tariff users |
 | **Min + Solar** (default) | Guarantee Min by deadline (from night top-up), solar adds up to Max. Zone-adaptive during the day. | Daily commuter |
 | **Always (max)** | Charge at max regardless of source | "Just charge the car" / strict legacy `minpv` |
 | **Off** | No charging — SEM monitors but issues no commands | Disabled |

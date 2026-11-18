@@ -1175,9 +1175,8 @@ class SEMEVStatusCard extends SEMLitBase {
         // four-toggle stack (ev_charging_mode select + night_charging +
         // smart_night_charging + tariff_optimized switches) with one
         // named per-charger select. Options + label come from the HA
-        // select entity itself — solar_plus_cheap is conditionally
-        // hidden by the entity's ``options`` property when no dynamic
-        // tariff is configured (Q1 resolution).
+        // select entity itself — solar_plus_cheap is greyed out when the
+        // tariff has no cheaper hours (``tariff_available``, #885, #1385).
         // (#980) Pause: the shared duration dropdown + THIS charger's button.
         // It lives beside the mode because that is what it sets — Off for a
         // while, then back — and because setting the mode back is how a
@@ -1210,8 +1209,8 @@ class SEMEVStatusCard extends SEMLitBase {
         const chargeModeOptions = chargeModeAttrs.options || CHARGE_MODES;
         // (#885 matrix, decision 3) One rule, two severities. A mode that
         // CANNOT function without its prerequisite is DISABLED with the
-        // reason (solar_plus_cheap without a dynamic tariff has no cheap
-        // windows to use — the #277 Q1 ghost-option protection, kept, but
+        // reason (solar_plus_cheap on a tariff with no cheaper hours has no
+        // cheap windows to use, #1385 — the #277 Q1 protection, kept, but
         // visible instead of hidden). A mode that functions PARTIALLY gets
         // an INFO below instead (solar_plus_battery works on live surplus
         // from day one; the forecast bypass and dynamic floor wake when
@@ -1495,8 +1494,8 @@ class SEMEVStatusCard extends SEMLitBase {
                     <!-- #277 Phase B.2: one named Charge mode selector
                          replaces the legacy ev_grid_charging + nested
                          ev_tariff_mode toggles. Options come from the HA
-                         entity itself (solar_plus_cheap is hidden when no
-                         dynamic tariff is configured, per Q1). The hint
+                         entity itself (solar_plus_cheap is greyed out when
+                         the tariff has no cheaper hours, #1385). The hint
                          line under it explains what the selected mode
                          actually does — cuts the toggle-soup mystery the
                          #247 review flagged. -->

@@ -13,8 +13,9 @@ Phase A is purely additive:
 
 These tests pin the four moving pieces:
   1. ``_derive_charge_mode`` — the migration's decision tree
-  2. ``SEMPerChargerSelect`` options behaviour (Q1: hide
-     ``solar_plus_cheap`` when no dynamic tariff)
+  2. ``SEMPerChargerSelect`` options behaviour (Q1 hid
+     ``solar_plus_cheap`` with no dynamic tariff; since #885 it is always
+     listed and greyed when the tariff has no cheap hours, #1385)
   3. The full migration loop in ``async_migrate_entry``
   4. ``_effective_charge_mode_for`` equivalence (stored vs derived)
 """
@@ -166,7 +167,8 @@ def _build_charge_mode_select(
 
 
 class TestChargeModeOptions:
-    """Q1: ``solar_plus_cheap`` only appears when tariff_mode == 'dynamic'."""
+    """Q1, then #885 and #1385: ``solar_plus_cheap`` is always listed; the
+    tariff says whether it can be picked."""
 
     def test_solar_plus_cheap_always_listed_gate_moved_to_attribute(self):
         """(#885 matrix, decision 3) supersedes the #277 Q1 HIDE rule.
@@ -183,9 +185,25 @@ class TestChargeModeOptions:
             assert set(sel.options) == set(EV_CHARGE_MODES.keys()), tariff_mode
 
     def test_the_tariff_gate_now_lives_on_the_attribute(self):
+        # (#1385) The tariff answers, not its mode name: a one-price static
+        # tariff and a calendar with no peak block have no cheap hours; a
+        # dynamic one has. A calendar with two rates is in
+        # test_1385_schedule_tariff_cheap_mode.py.
+        from custom_components.solar_energy_management.tariff.calendar_provider import (
+            CalendarTariffProvider,
+        )
+        from custom_components.solar_energy_management.tariff.tariff_provider import (
+            DynamicTariffProvider, StaticTariffProvider,
+        )
+        providers = {
+            "static": StaticTariffProvider(peak_rate=0.3, off_peak_rate=0.3),
+            "calendar": CalendarTariffProvider(MagicMock(), rules=[]),
+            "dynamic": DynamicTariffProvider.__new__(DynamicTariffProvider),
+        }
         for tariff_mode, avail in (("static", False), ("calendar", False),
                                    ("dynamic", True)):
             sel = _build_charge_mode_select(tariff_mode=tariff_mode)
+            sel.coordinator._tariff_provider = providers[tariff_mode]
             a = sel.extra_state_attributes
             assert a is not None, tariff_mode
             assert a.get("tariff_available") is avail, (tariff_mode, a)
