@@ -36,6 +36,7 @@ _ROLE_OF_KEY: dict[str, str] = {
     "battery_force_discharge_control_entity": "control",
     "battery_strategy_control_entity": "control",
     "battery_charge_select_entity": "control",     # (#1346)
+    "battery_hold_select_entity": "control",       # (#1362)
     "battery_power_direction_entity": "control",
 }
 _ROLE_OF_LIST_KEY = {list_key: "control" for list_key, _ in PER_BATTERY_ENTITY_LISTS}

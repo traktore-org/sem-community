@@ -16,7 +16,9 @@ from custom_components.solar_energy_management import _SET_OPTION_STRUCTURAL_KEY
 ROOT = Path(__file__).resolve().parent.parent
 SETTINGS = ROOT / "dashboard" / "card" / "src" / "util" / "next-settings.js"
 KEYS = ("battery_charge_select_entity", "battery_charge_select_option",
-        "battery_force_charge_switch", "battery_target_soc_entity")
+        "battery_force_charge_switch", "battery_target_soc_entity",
+        # the hold select, one shared setting like the charge select
+        "battery_hold_select_entity", "battery_hold_select_option")
 
 
 def test_every_charge_key_reloads_the_entry():
@@ -41,5 +43,5 @@ def test_the_screen_has_a_picker_for_the_switch_and_the_target():
 def test_the_built_bundle_has_the_fields():
     dist = (ROOT / "dashboard" / "card" / "dist" / "sem-cards.js").read_text()
     for word in ("config_charge_switch_entity", "config_charge_target_entity",
-                 "config_charge_select_option"):
+                 "config_charge_select_option", "config_hold_select_option"):
         assert word in dist, word

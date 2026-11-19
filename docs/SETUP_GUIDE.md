@@ -267,6 +267,19 @@ With the select and option set, SEM charges through them. Some inverters have on
 
 Tesla Powerwall example: the select is the operating mode, the target is the backup reserve, and the switch is "allow grid charging". Each value is saved before SEM changes it. If Home Assistant stops during a charge, SEM puts the values back when it starts again.
 
+### Battery held through a mode select
+
+Some inverters have no number that limits discharge, only a mode select. One option stops the battery giving, and the house runs from the grid.
+
+| Field | What to set |
+|---|---|
+| **Discharge-hold select** | The mode select. |
+| **Option that stops discharge** | The option that keeps the battery, such as `Utility`. |
+
+Turn on **House as a battery sink**. SEM then keeps the battery in cheap hours for the dear hours that follow, and puts the select back after. A hand change is left alone. SEM writes the select at most 12 times a day and checks that the hold works.
+
+Some inverters charge from the grid only in this mode. So a grid charge also sets the hold option, and the next normal cycle puts the mode back.
+
 ## 9. Heat pump and hot water
 
 ### What is SG-Ready?

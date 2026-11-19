@@ -66,6 +66,10 @@ class ForcedChargeRecord:
         #: (#1346) entity → when SEM changed it (epoch seconds): a record
         #: older than two days is not acted on after a restart
         self._since: dict[str, float] = {}
+        #: (#1362) entity → when a hold on it was refused (epoch seconds)
+        self._refused: dict[str, float] = {}
+        #: (#1362) entity → [day, writes SEM made to it that day]
+        self._wrote: dict[str, list] = {}
         self._loaded = store is None
         self._readable = store is not None
         self._lock = asyncio.Lock()
@@ -102,6 +106,44 @@ class ForcedChargeRecord:
             else:
                 owners.discard(battery_id)
             return False
+
+    async def refuse(self, entity_id: str) -> None:
+        """(#1362) A hold on this select was refused: kept across a restart."""
+        async with self._lock:
+            await self._load()
+            self._refused[str(entity_id or "")] = time.time()
+            await self._save()
+
+    async def refused_at(self, entity_id: str) -> "float | None":
+        """(#1362) When a hold on it was refused (epoch seconds), or None."""
+        async with self._lock:
+            await self._load()
+            return self._refused.get(str(entity_id or ""))
+
+    async def clear_refusal(self, entity_id: str) -> None:
+        async with self._lock:
+            await self._load()
+            if self._refused.pop(str(entity_id or ""), None) is not None:
+                await self._save()
+
+    async def count_write(self, entity_id: str, day: str) -> int:
+        """(#1362) One select write SEM made today; the count of ``day``."""
+        entity_id = str(entity_id or "")
+        async with self._lock:
+            await self._load()
+            row = self._wrote.get(entity_id)
+            if not row or row[0] != day:
+                row = self._wrote[entity_id] = [day, 0]
+            row[1] += 1
+            await self._save()
+            return row[1]
+
+    async def writes_on(self, entity_id: str, day: str) -> int:
+        """(#1362) Writes SEM made to this select on ``day``."""
+        async with self._lock:
+            await self._load()
+            row = self._wrote.get(str(entity_id or ""))
+            return int(row[1]) if row and row[0] == day else 0
 
     async def prior_of(self, entity_id: str) -> "str | None":
         """(#1346) The option a select showed before SEM's start, or None."""
@@ -229,10 +271,23 @@ class ForcedChargeRecord:
         self._since = {e: float(t) for e, t in (since.items() if isinstance(since, dict) else ())
                        if e in self._prior and isinstance(t, (int, float))
                        and not isinstance(t, bool)}
+        self._load_hold_limits(record)
         if self._running:
             _LOGGER.info("Battery: SEM started a forced charge on %s and has "
                          "not seen it stop (#1181)",
                          ", ".join(sorted(self._running)))
+
+    def _load_hold_limits(self, record: dict) -> None:
+        """(#1362) The hold's refusal times and daily write counts; a part
+        that cannot be read is left out, never a reason to drop the rest."""
+        refused = record.get("refused", {})
+        self._refused = {e: float(t) for e, t in (
+            refused.items() if isinstance(refused, dict) else ())
+            if isinstance(t, (int, float)) and not isinstance(t, bool)}
+        wrote = record.get("wrote", {})
+        self._wrote = {e: [str(r[0]), int(r[1])] for e, r in (
+            wrote.items() if isinstance(wrote, dict) else ())
+            if isinstance(r, list) and len(r) == 2 and isinstance(r[1], int)}
 
     async def _save(self) -> bool:
         if self._store is None:
@@ -245,6 +300,10 @@ class ForcedChargeRecord:
                     record["option"] = dict(self._option)
                 if self._since:
                     record["since"] = dict(self._since)
+            if self._refused:       # (#1362)
+                record["refused"] = dict(self._refused)
+            if self._wrote:
+                record["wrote"] = {e: list(r) for e, r in self._wrote.items()}
             await self._store.async_save(record)
         except Exception as exc:  # noqa: BLE001
             log_on_change(_LOGGER, "forced_charge_record:save", logging.WARNING,

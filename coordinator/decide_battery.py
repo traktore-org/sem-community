@@ -674,9 +674,13 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         view, _cap_forced_charge(view, _decide_battery(view)))
     # (#1179) what the pack showed rides along, for the limit's floor rule
     idle_soc, moves = pack_reading(view)
-    if idle_soc is None and not moves:
+    rt = view.runtime
+    pack_w = (float(rt.last_known_w) if getattr(rt, "power_read", False) is True
+              and rt.last_known_w == rt.last_known_w else None)
+    if idle_soc is None and not moves and pack_w is None:
         return decision
-    return replace(decision, pack_idle_soc=idle_soc, pack_moves=moves)
+    return replace(decision, pack_idle_soc=idle_soc, pack_moves=moves,
+                   pack_w=pack_w)
 
 
 def _decide_battery(view: "BatteryView") -> BatteryDecision:

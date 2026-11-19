@@ -682,6 +682,10 @@ async def async_get_config_entry_diagnostics(
                     "battery_charge_select_entity") or None,
                 "battery_charge_select_option": full_cfg.get(
                     "battery_charge_select_option") or None,
+                "battery_hold_select_entity": full_cfg.get(
+                    "battery_hold_select_entity") or None,
+                "battery_hold_select_option": full_cfg.get(
+                    "battery_hold_select_option") or None,
                 "battery_force_discharge_control_entity": full_cfg.get(
                     "battery_force_discharge_control_entity") or None,
                 "battery_force_discharge_entities": full_cfg.get(
@@ -707,6 +711,10 @@ async def async_get_config_entry_diagnostics(
         _rec = getattr(coordinator, "_forced_charge_record_obj", None)
         if isinstance(_rec, ForcedChargeRecord):
             battery_info["forced_charge_running"] = _rec.snapshot()
+        # (#1362) each select SEM turned to a hold option and has not put back
+        _held = getattr(coordinator, "_battery_hold_record_obj", None)
+        if isinstance(_held, ForcedChargeRecord):
+            battery_info["battery_hold_running"] = _held.snapshot()
         # #709 — Deye forced-grid-charge observability. Read-only. Keep the
         # generic payload unchanged when no Deye adapter exists.
         deye_info = _build_deye_diagnostics(_adapters)

@@ -7563,6 +7563,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         "battery_operating_mode_entity",
         "deye_system_work_mode_entity",
         "battery_charge_select_entity",       # (#1346)
+        "battery_hold_select_entity",         # (#1362)
     )
 
     def _sweep_orphan_repairs(self) -> None:
@@ -9399,6 +9400,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         ctx["charge_target_hold"] = self._charge_target_hold()
         # (#1181) …and one record of the forced charges SEM started
         ctx["forced_charge_record"] = self._forced_charge_record()
+        # (#1362) …and one of the selects SEM turned to a hold option
+        ctx["battery_hold_record"] = self._battery_hold_record()
         # (#1275) …and one record of the sales per device: a stop to a device
         # ends every pack's sale on it
         sales = getattr(self, "_device_sales_obj", None)
@@ -9496,6 +9499,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001 — a store never costs a cycle
                 store = None
         record = self._forced_charge_record_obj = ForcedChargeRecord(store)
+        return record
+
+    def _battery_hold_record(self):
+        """(#1362) The selects SEM turned to a hold option, for the whole
+        entry: the grid charge's record class in its own file, so a restore
+        of one never waits for the other."""
+        record = getattr(self, "_battery_hold_record_obj", None)
+        if record is not None:
+            return record
+        from .battery_adapters.charge_record import ForcedChargeRecord
+        entry_id = str(getattr(
+            getattr(self, "config_entry", None), "entry_id", "") or "")
+        store = None
+        if entry_id:
+            try:
+                from homeassistant.helpers.storage import Store
+                store = Store(self.hass, 1, f"sem.battery_hold.{entry_id}")
+            except Exception:  # noqa: BLE001 — a store never costs a cycle
+                store = None
+        record = self._battery_hold_record_obj = ForcedChargeRecord(store)
         return record
 
     def _warn_battery_entity_collision(self, battery_id: str, pbc: dict) -> None:

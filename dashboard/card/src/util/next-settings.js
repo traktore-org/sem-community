@@ -49,6 +49,8 @@ export const STRUCTURAL_KEYS = new Set([
     // pair, the charge switch and target, the inverter's end-of-discharge level
     'battery_charge_select_entity', 'battery_charge_select_option',
     'battery_force_charge_switch', 'battery_target_soc_entity', 'battery_discharge_end_soc_entity',
+    // (#1362) the select that holds the battery, and its hold option
+    'battery_hold_select_entity', 'battery_hold_select_option',
     'battery_discharge_control_entity', 'battery_charge_end_soc_entity',
     'battery_discharge_protection_enabled', 'battery_setpoint_bidirectional',
     'battery_setpoint_model', 'battery_power_direction_entity',
@@ -516,6 +518,7 @@ export const ENTITY_FIELDS = {
     battery_charge_end_soc_entity: { domain: ['number', 'sensor', 'input_number'], labelKey: 'config_batt_charge_end_entity' },
     battery_discharge_end_soc_entity: { domain: ['number', 'sensor', 'input_number'], labelKey: 'config_batt_discharge_end_entity' },
     battery_charge_select_entity: { domain: ['select', 'input_select'], labelKey: 'config_charge_select_entity' },
+    battery_hold_select_entity: { domain: ['select', 'input_select'], labelKey: 'config_hold_select_entity' },
     battery_force_charge_switch: { domain: ['switch', 'input_boolean'], labelKey: 'config_charge_switch_entity' },
     battery_target_soc_entity: { domain: ['number', 'input_number'], labelKey: 'config_charge_target_entity' },
     battery_force_discharge_control_entity: { domain: 'number', labelKey: 'config_force_discharge_entity' },
@@ -661,6 +664,7 @@ function batteryWiring(o, cur, n = 0, states = null, t = (k) => k) {
         ['config_ext_ctrl_mode', ext],
     ];
     items.push(...chargeFields(o, n, states, t));
+    items.push(...holdFields(o, states, t));
     if (ext && ext.value !== 'none') items.push(e('battery_external_control_indicator'));
     if (n < 2) items.push(e('battery_force_discharge_control_entity'), e('battery_strategy_control_entity'));
     if (o.battery_strategy_control_entity) {
@@ -715,6 +719,28 @@ function chargeFields(o, n, states, t) {
     }
     if (n > 1) items.push(['config_charge_switch_entity', text(t('config_charge_switch_one_battery'))]);
     else items.push(e('battery_force_charge_switch'), e('battery_target_soc_entity'));
+    return items;
+}
+
+/**
+ * (#1362) The hold select: one shared setting, for one battery and for
+ * several. For an inverter with no discharge-limit number, SEM sets the
+ * option to keep the battery for a dearer hour, and for a grid charge.
+ */
+function holdFields(o, states, t) {
+    const items = [[ENTITY_FIELDS.battery_hold_select_entity.labelKey, optEntity(o, 'battery_hold_select_entity')]];
+    const listed = o.battery_hold_select_entity && states
+        ? states[o.battery_hold_select_entity]?.attributes?.options : null;
+    if (o.battery_hold_select_entity) {
+        const choices = Array.isArray(listed) ? listed.map((v) => ({ value: String(v), label: String(v) })) : [];
+        items.push(['config_hold_select_option',
+            optSelect(o, 'battery_hold_select_option', withCurrent([{ value: '', label: '-' }, ...choices], o.battery_hold_select_option), '')]);
+    }
+    const hasSel = !!o.battery_hold_select_entity, hasOpt = !!o.battery_hold_select_option;
+    if (hasSel !== hasOpt) {
+        items.push([hasSel ? 'config_hold_select_option' : 'config_hold_select_entity',
+            text(t(hasSel ? 'config_hold_select_need_option' : 'config_hold_select_need_select'))]);
+    }
     return items;
 }
 
@@ -1165,6 +1191,7 @@ export function applyPlan(pending, states) {
     }
     // (#1346) a cleared grid-charge select takes its option with it
     if (options.battery_charge_select_entity === '') options.battery_charge_select_option = '';
+    if (options.battery_hold_select_entity === '') options.battery_hold_select_option = '';   // (#1362)
     if (Object.keys(chargers).length) options.ev_chargers = Object.values(chargers);
     if (pvNames) options.pv_string_names = pvNames;
     return { entityWrites, options, listEdits, reload };
