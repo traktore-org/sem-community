@@ -806,13 +806,71 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if await self.charge_record.prior_of(entity) is not None:
             if not await self.charge_record.started(entity, self._battery()):
                 return self._select_failed("SEM could not save its record")
+            # (#1377) a pack joining a charge another pack started owns the
+            # permit too: the first pack's stop must not turn it off
+            permit = permit_switch(self.config)
+            if permit and await self.charge_record.prior_of(permit) is not None:
+                await self.charge_record.started(permit, self._battery())
             self._active, self._target_soc = True, command.target_soc
             refused = await self._check_permit(entity)
             if refused is not None:
                 return refused
+        elif self._join_needs_writes():
+            # (#1377) The option was set by someone else, but where a permit
+            # switch or a charge target is set up, the option alone is a
+            # mode, not a charge: a battery whose time-based mode is the
+            # option charges from the grid only with the permit ON and the
+            # reserve raised. SEM sets those two and puts back only them.
+            return await self._join_with_permit_and_target(entity, command)
         return ChargeStatus(status=ChargeCommandStatus.CHARGING,
                             target_soc=command.target_soc,
                             message="Select already shows the charge option")
+
+    def _join_needs_writes(self) -> bool:
+        return bool(permit_switch(self.config)
+                    or self.config.get("battery_target_soc_entity", ""))
+
+    async def _join_with_permit_and_target(
+            self, entity: str, command: ChargeCommand) -> ChargeStatus:
+        """(#1377) The select goes in the record with the option it shows
+        as its prior: a restart then adopts the charge and its stop puts the
+        permit and the reserve back, while the select itself is never
+        written (its prior is the option). Every later cycle takes the
+        branch above, so this runs once per charge."""
+        if self._sel_spent:              # given up in this attempt: no rewrite
+            return self._select_failed(self._sel_spent)
+        state, _options = read_select(self.hass, entity)
+        unsaved = await self._note_started(prior=state, option=state)
+        if unsaved is not None:                        # before any write
+            return unsaved
+        unsaved = await self._note_permit_started()
+        if unsaved is not None:
+            await self.charge_record.stopped(entity)
+            return unsaved
+        wrote = []
+        try:
+            target = self.config.get("battery_target_soc_entity", "")
+            if target:
+                await self.target_hold.write(target, int(command.target_soc))
+                wrote.append("reserve")
+            if permit_switch(self.config):
+                before = self._permit_writes
+                await self._permit_on()
+                if self._permit_writes > before:
+                    wrote.append("permit")
+        except Exception as exc:  # noqa: BLE001
+            await self._release_target()
+            await self._put_permit_back()
+            await self.charge_record.stopped(entity)
+            return self._select_failed(f"start failed: {exc}")
+        self._active, self._target_soc = True, command.target_soc
+        # the option counts as seen: a mode changed by hand since ends the
+        # charge (the "went back by itself" rule), SEM does not force it back
+        self._sel_writes, self._sel_seen = max(self._sel_writes, 1), True
+        return ChargeStatus(
+            status=ChargeCommandStatus.CHARGING, target_soc=command.target_soc,
+            message=("Select already showed the charge option; set: "
+                     + (", ".join(wrote) or "nothing, both already set")))
 
     async def _check_permit(self, entity: str) -> "ChargeStatus | None":
         """(#1377) SEM turned the permit on and it reads OFF: a switch that
@@ -874,6 +932,8 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             return self._select_failed(f"{entity} is unavailable — the charge "
                                        "option is put back when it answers")
         if not shared and state == charge_option(self.hass, entity, option):
+            if prior == state:           # (#1377) it showed the option before
+                return None
             return await self._put_select_back(entity, option, prior, options)
         return None
 

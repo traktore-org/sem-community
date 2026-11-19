@@ -108,12 +108,50 @@ def battery_actuation_diag(hass, coordinator) -> dict:
                         "seen": _g(ad, "last_unverified_seen", "") or None,
                     },
                 },
+                "charge_path": _charge_path(ad, _state),            # (#1377)
                 "last_intent": getattr(intent, "value", intent) if intent else None,
                 "last_error": _g(ad, "_last_error", None),
             }
         except Exception as exc:  # noqa: BLE001 — one battery never costs the rest
             out[str(bid)] = {"error": str(exc)}
     return out
+
+
+def _charge_path(ad, read) -> dict:
+    """(#1377) How a grid charge reaches the battery: the select and its
+    option, the switch, the charge target — each with what it reads now —
+    and what SEM last did with them. A battery report showed "commanded
+    force_charge, not observed" and none of these, so it could not tell a
+    write that never went out from one the battery ignored."""
+    try:
+        return _charge_path_of(ad, read)
+    except Exception as exc:  # noqa: BLE001 — the block never costs the rest
+        return {"error": str(exc)}
+
+
+def _charge_path_of(ad, read) -> dict:
+    cfg = getattr(ad, "_config", None) or {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    ca = getattr(ad, "_charge_adapter", None)
+    select = str(cfg.get("battery_charge_select_entity") or "") or None
+    switch = str(cfg.get("battery_force_charge_switch") or "") or None
+    target = str(cfg.get("battery_target_soc_entity") or "") or None
+    return {
+        "select": {"entity": select, "reads": read(select),
+                   "option": cfg.get("battery_charge_select_option") or None},
+        # beside a select the switch is the permit; alone it is the start
+        "switch": {"entity": switch, "reads": read(switch),
+                   "role": ("permit" if select and switch
+                            else "start" if switch else None)},
+        "target": {"entity": target, "reads": read(target)},
+        "active": bool(getattr(ca, "_active", False)) if ca else None,
+        "target_soc": getattr(ca, "_target_soc", None) if ca else None,
+        "select_writes": getattr(ca, "_sel_writes", None) if ca else None,
+        "permit_writes": getattr(ca, "_permit_writes", None) if ca else None,
+        "given_up": getattr(ca, "_sel_spent", None) if ca else None,
+        "last": getattr(ad, "_last_charge_message", None),
+    }
 
 
 async def pacing_actuation_diag(hass, coordinator) -> dict:
