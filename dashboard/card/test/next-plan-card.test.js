@@ -237,6 +237,45 @@ test('(#1390) prices below zero are drawn below the zero line, inside the lane',
     assert.ok(mixed.at.get(0.3) < mixed.at.get(0.12) && mixed.at.get(0.12) < mixed.at.get(-0.04));
 });
 
+test('(#1321) prices all above zero use the lane: the cheapest low, the dearest high', () => {
+    const now = Date.now();
+    const h0 = Math.floor(now / HOUR) * HOUR;
+    // a quarter-hour tariff between 0.15 and 0.25: cheapest in the middle,
+    // dearest at the end
+    const prices = [];
+    for (let i = 0; i < 40; i++) prices.push(i >= 34 ? 0.25 : i === 18 ? 0.15 : 0.18 + (i % 4) * 0.01);
+    const upcoming = prices.map((p, i) => ({ t: isoAt(h0 + i * 900e3), price: p }));
+    const el = makeCard({
+        'sensor.sem_energy_plan': S('idle', planAround(now)),
+        'sensor.sem_tariff_current_import_rate': S(prices[0], { is_dynamic: true, price_level: 'normal', upcoming }),
+    });
+    el._chargers = ['keba'];
+    el._stats = []; el._fc = {};
+    const d = el._chartData(el._plan());
+    const { lay, svg: chart } = el._chartSvg(d, el._plan());
+    const out = text(chart);
+    const paths = [...out.matchAll(/<path d="([^"]*)" fill="none"/g)].map((m) => m[1]);
+    const line = paths.find((p) => (p.match(/L/g) || []).length >= d.price.steps.length);
+    const nums = line.replace(/[ML]/g, ' ').trim().split(/\s+/).map(Number);
+    const ys = [];
+    for (let i = 1; i < nums.length; i += 2) ys.push(nums[i]);
+    const laneH = lay.price[1] - lay.price[0];
+    assert.ok(laneH >= 70, `the lane is ${laneH} px`);
+    const spread = Math.max(...ys) - Math.min(...ys);
+    assert.ok(spread > laneH * 0.5, `0.15 to 0.25 spans ${spread} of ${laneH} px`);
+    for (const y of ys) assert.ok(y >= lay.price[0] && y <= lay.price[1], `y ${y} inside the lane`);
+    // the average label sits at the end of its line further from the min and
+    // max labels
+    const avg = out.match(/<text class="avg" x="([\d.]+)"[^>]*text-anchor="(start|end)"/);
+    assert.ok(avg, 'the average is labelled');
+    const X = (ms) => Math.max(0, Math.min(lay.W, (ms - d.win.start) / (d.win.end - d.win.start) * lay.W));
+    const st = d.price.steps;
+    const chips = [st.find((x) => x.p === d.price.max), st.find((x) => x.p === d.price.min)].map((x) => X((x.s + x.e) / 2));
+    const far = (x) => Math.min(...chips.map((c) => Math.abs(c - x)));
+    assert.equal(avg[2], far(X(st[0].s)) > far(X(st[st.length - 1].e)) ? 'start' : 'end');
+    assert.match(out, /paint-order="stroke"/);
+});
+
 test('the range switch is remembered and clears a picked block', (t) => {
     t.mock.timers.enable({ apis: ['Date'], now: PINNED });
     const el = makeCard({ 'sensor.sem_energy_plan': S('idle', planAround(Date.now())) });
