@@ -281,6 +281,8 @@ def _energy_plan_attrs(
         "why_codes": plan.get("why_codes") or [],
         # (#638 C7) per-demand plan-vs-reactive attribution, live.
         "coverage": plan.get("coverage") or {},
+        # (#1081) plain words for a device the plan holds no ask from
+        "coverage_why": plan.get("coverage_why") or {},
         # (#638, the last string) the shadow arbitrage advisor's verdict
         # with its numbers — the morning plan-vs-Sankey audit reads it
         # here. Small by construction (a few blocks at most).
@@ -3730,6 +3732,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "cop_used": d.get("heat_pump_cop"),
                 "cop_source": d.get("heat_pump_cop_source"),
                 "outdoor_c": d.get("heat_pump_cop_outdoor_c"),
+                # (#1081) a code, not a sentence: the card words it
+                "cop_hint": ("set_cop_curve"
+                             if d.get("heat_pump_cop_source") == "flat" else None),
             })
         elif self.entity_description.key in ("daily_costs", "monthly_costs", "yearly_costs"):
             # (#1321) what SEM paid per bought kWh against the hours'
