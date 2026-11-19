@@ -232,12 +232,12 @@ def _energy_plan_attrs(
         "demands": plan.get("demands") or [],
         "slots": [{
             "start": s.get("start"), "end": s.get("end"),
-            # PRICE-ASK: a field name of the published slot, not a level
             # (#1390) what a grid kWh costs in the slot: the price lane draws
             # it. A sun slot's own ``price`` is the feed-in rate the sun
             # earns, so it sends its ``buy`` (None: not known) instead. Same
             # bytes as a grid slot; the card has no other use for it.
             "price": s.get("buy") if s.get("sun") else s.get("price"),
+            # PRICE-ASK: a field name of the published slot, not a level
             "cheap": s.get("cheap"),
             "home_grid_w": s.get("home_grid_w"),
             # (#1085) only when the slot has a reading: no key, no bytes
