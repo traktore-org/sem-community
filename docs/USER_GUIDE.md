@@ -2270,7 +2270,7 @@ never acts unless you say so:
 **With an AI assistant in Home Assistant** (OpenAI, Anthropic, Google,
 Ollama ...) that may control Home Assistant, SEM's tools are there
 automatically; no sentence file needed. Ask it the same questions in
-your own words. It also gets a read-only tool, `SemSetupStatus`, that
+your own words. It also gets a read-only tool, `solar_energy_management__SemSetupStatus`, that
 tells it how SEM is set up: watch-only or not, chargers, battery,
 forecast source, tariff, open repairs and version. When no grid charge is
 set up for the battery, it lists the selects on the battery and their options,
@@ -2279,7 +2279,7 @@ tools (target, skip tonight, charge now, back to normal) show up only
 while the **Voice commands** switch is on. With several SEM entries,
 the first loaded one answers.
 
-If you tell the AI about a problem with SEM, it can use `SemDraftIssue` to
+If you tell the AI about a problem with SEM, it can use `solar_energy_management__SemDraftIssue` to
 prepare a bug report: text, recent SEM warnings and a prefilled GitHub link.
 It posts nothing and holds no token; you open the link, check the text
 (tokens, emails, addresses and entity ids are removed), attach the
@@ -2288,6 +2288,8 @@ diagnostics file and press Submit.
 **Without an AI assistant**, Home Assistant does not learn a new sentence on its own; you give it
 one, once. Create `config/custom_sentences/en/solar_energy_management.yaml`
 with:
+
+These are intent names for sentence files. AI tools and MCP clients (such as Claude Desktop) see the same tools as `solar_energy_management__SemWhyBattery` and so on.
 
 ```yaml
 language: "en"

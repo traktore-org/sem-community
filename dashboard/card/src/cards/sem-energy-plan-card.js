@@ -25,6 +25,7 @@ import { battIndexes, homeCover } from '../util/plan-cover.js';
 import { coldHeaters } from '../util/heater-questions.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { heatCostRows } from '../util/heat-cost-table.js';
+import { noAskKey } from '../util/plan-no-ask.js';
 
 const DEFAULT_ENTITY = 'sensor.sem_energy_plan';
 
@@ -129,8 +130,10 @@ class SEMEnergyPlanCard extends SEMLitBase {
 
     // (#638 C7) the gate's named doubt, translated — never internal
     // jargon on a rendered surface.
-    _covKey(reason) {
+    _covKey(reason, whyKey) {
         if (!reason || reason === 'covered') return null;
+        // (#1081) a named cause beats the bare "not in plan"
+        if (reason === 'not in plan' && whyKey) return whyKey;
         if (reason.startsWith('verdict')) return 'energy_plan_cov_yields';
         const m = {
             'no plan': 'energy_plan_cov_no_plan',
@@ -146,8 +149,8 @@ class SEMEnergyPlanCard extends SEMLitBase {
     // (#638 C7) the reactive-fallback chip — the user-facing twin of the
     // "#638 coverage" log line: a demand the plan does not cover right now
     // is visibly reactive, never silently so.
-    _covChip(reason) {
-        const key = this._covKey(reason);
+    _covChip(reason, whyKey) {
+        const key = this._covKey(reason, whyKey);
         if (!key) return nothing;
         return html`<span class="chip chip-reactive"
             title="${this._t('energy_plan_reactive_tip')} — ${this._t(key)}"
@@ -831,7 +834,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                         <span class="name">${name}</span>
                                     </div>
                                     ${this._liveChip(live)}
-                                    ${act ? this._covChip((a.coverage || {})[d.id]) : nothing}
+                                    ${act ? this._covChip((a.coverage || {})[d.id], noAskKey(a, d.id)) : nothing}
                                 </div>
                                 ${hasStrip ? html`
                                     <div class="track">

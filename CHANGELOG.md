@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **The battery plan asks only for what the pack can still take** (#1388). A block with no cheaper hour left no longer says "cheapest hours".
+- 🐛 **No more HA 2026.11 warnings about SEM's AI tools** (#1389). Tool names now start with `solar_energy_management__`.
+- 🐛 **Heat pump cost sensor shows the outdoor temperature even without a COP curve; the plan says why a heat pump has no ask** (#1081).
 - ✨ **Rename a charger on the Devices screen** (#1386). Tap the Name row on its card; entity ids stay the same.
 - 🐛 **A planned battery charge now raises the plan's battery level** (#1377). The end level and the hours after the charge no longer stay at 0 %.
 - 🐛 **Letting SEM take control also turns on plan execution** (#1377). The Plan card says "not applied" instead of "observation" while it is off.

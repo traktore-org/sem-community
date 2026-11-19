@@ -520,7 +520,8 @@ class TestTheQuietPlanIsNotUnreadable:
 
         card = (root / "dashboard" / "card" / "src" / "cards"
                 / "sem-energy-plan-card.js").read_text()
-        block = card.split("_covKey(reason)", 1)[1].split("}", 1)[0]
+        # (#1081) the method may take more arguments: find it by name
+        block = re.split(r"_covKey\(reason[^)]*\)\s*\{", card, maxsplit=1)[1].split("}", 1)[0]
         mapped = dict(re.findall(r"'([^']+)':\s*'(energy_plan_cov_[a-z_]+)'",
                                  block))
 

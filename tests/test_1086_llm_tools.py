@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 from homeassistant.components import llm as ha_llm
+from homeassistant.helpers import llm as llm_helper
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.llm import LLM_API_ASSIST, LLMContext, ToolInput
 from homeassistant.setup import async_setup_component
@@ -23,6 +24,11 @@ from custom_components.solar_energy_management.assist_intents import (
     EXPLAIN_HANDLERS, WRITE_HANDLERS, async_register_intents,
 )
 from custom_components.solar_energy_management.const import DOMAIN
+
+
+def _data(result):
+    """Tool answer as a dict: a ToolResult on HA 2026.11+, a dict on the floor."""
+    return getattr(result, "data", result)
 
 
 def _ctx():
@@ -65,7 +71,7 @@ def test_sem_not_loaded_returns_none_without_raising(hass):
 def test_assist_gets_explain_tools_and_setup_tool_but_no_write_tools(hass):
     _load(hass, _coordinator(hass))
     result = sem_llm.async_get_tools(hass, _ctx(), LLM_API_ASSIST)
-    expected = {c.intent_type for c in EXPLAIN_HANDLERS} | {sem_llm.TOOL_SETUP_STATUS, sem_llm.TOOL_DRAFT_ISSUE}
+    expected = {sem_llm.TOOL_PREFIX + c.intent_type for c in EXPLAIN_HANDLERS} | {sem_llm.TOOL_SETUP_STATUS, sem_llm.TOOL_DRAFT_ISSUE}
     assert _names(result.tools) == expected
     assert result.prompt and len(result.prompt.split()) <= 80
 
@@ -73,7 +79,7 @@ def test_assist_gets_explain_tools_and_setup_tool_but_no_write_tools(hass):
 def test_write_tools_appear_only_with_the_switch_on(hass):
     _load(hass, _coordinator(hass, assist_write_intents_enabled=True))
     result = sem_llm.async_get_tools(hass, _ctx(), LLM_API_ASSIST)
-    assert {c.intent_type for c in WRITE_HANDLERS} <= _names(result.tools)
+    assert {sem_llm.TOOL_PREFIX + c.intent_type for c in WRITE_HANDLERS} <= _names(result.tools)
 
 
 def test_every_tool_has_a_short_plain_description(hass):
@@ -86,8 +92,8 @@ def test_every_tool_has_a_short_plain_description(hass):
 async def test_setup_status_for_a_watch_only_install_without_charger(sem_real_hass):
     _load(sem_real_hass, _coordinator(sem_real_hass))
     sem_real_hass.config.language = "en"
-    out = await sem_llm.SetupStatusTool().async_call(
-        sem_real_hass, ToolInput(tool_name="x", tool_args={}), _ctx())
+    out = _data(await sem_llm.SetupStatusTool().async_call(
+        sem_real_hass, ToolInput(tool_name="x", tool_args={}), _ctx()))
     assert out["watch_only"] is True
     assert "changes nothing" in out["watch_only_note"]
     assert out["chargers"] == {"count": 0, "names": []}
@@ -117,8 +123,8 @@ async def test_setup_status_reads_chargers_tariff_recommendation_and_repairs(sem
 
 
 async def test_setup_tool_without_sem_says_so(hass):
-    out = await sem_llm.SetupStatusTool().async_call(
-        hass, ToolInput(tool_name="x", tool_args={}), _ctx())
+    out = _data(await sem_llm.SetupStatusTool().async_call(
+        hass, ToolInput(tool_name="x", tool_args={}), _ctx()))
     assert "error" in out
 
 
@@ -133,8 +139,8 @@ async def test_ha_llm_component_discovers_the_platform(sem_real_hass):
 
 async def test_setup_tool_never_raises_on_a_charger_that_is_not_a_dict(sem_real_hass):
     _load(sem_real_hass, _coordinator(sem_real_hass, ev_chargers=["not a dict"]))
-    out = await sem_llm.SetupStatusTool().async_call(
-        sem_real_hass, ToolInput(tool_name="x", tool_args={}), _ctx())
+    out = _data(await sem_llm.SetupStatusTool().async_call(
+        sem_real_hass, ToolInput(tool_name="x", tool_args={}), _ctx()))
     assert out == {"error": "SEM status is not available yet."}
 
 
@@ -142,8 +148,8 @@ async def test_setup_tool_guards_a_battery_check_that_raises(sem_real_hass, monk
     import custom_components.solar_energy_management.coordinator.coordinator as c
     monkeypatch.setattr(c, "battery_unseen", MagicMock(side_effect=RuntimeError("x")))
     _load(sem_real_hass, _coordinator(sem_real_hass))
-    out = await sem_llm.SetupStatusTool().async_call(
-        sem_real_hass, ToolInput(tool_name="x", tool_args={}), _ctx())
+    out = _data(await sem_llm.SetupStatusTool().async_call(
+        sem_real_hass, ToolInput(tool_name="x", tool_args={}), _ctx()))
     assert out == {"error": "SEM status is not available yet."}
 
 
@@ -172,8 +178,8 @@ async def _draft(hass, coord=None, **args):
         ev_chargers=[{"id": "a", "name": "Anna car"}])
     _load(hass, coord)
     args.setdefault("what_happened", TEXT)
-    return await sem_llm.DraftIssueTool().async_call(
-        hass, ToolInput(tool_name="x", tool_args=args), _ctx())
+    return _data(await sem_llm.DraftIssueTool().async_call(
+        hass, ToolInput(tool_name="x", tool_args=args), _ctx()))
 
 
 async def test_draft_contains_no_secret_in_body_or_url(sem_real_hass):
@@ -231,12 +237,12 @@ async def test_draft_works_without_system_log(sem_real_hass):
 
 async def test_draft_without_sem_or_with_bad_input_never_raises(sem_real_hass):
     tool = sem_llm.DraftIssueTool()
-    no_sem = await tool.async_call(
-        sem_real_hass, ToolInput(tool_name="x", tool_args={"what_happened": "a"}), _ctx())
+    no_sem = _data(await tool.async_call(
+        sem_real_hass, ToolInput(tool_name="x", tool_args={"what_happened": "a"}), _ctx()))
     assert "error" in no_sem
     _load(sem_real_hass, _coordinator(sem_real_hass))
-    bad = await tool.async_call(
-        sem_real_hass, ToolInput(tool_name="x", tool_args={}), _ctx())
+    bad = _data(await tool.async_call(
+        sem_real_hass, ToolInput(tool_name="x", tool_args={}), _ctx()))
     assert "title" in bad or "error" in bad
 
 
@@ -264,3 +270,33 @@ async def test_draft_details_block_is_bounded(sem_real_hass):
     block = out["body"].split("<details>")[1].split("</details>")[0]
     assert len(block) <= 2000 + 200
     assert "<summary>Diagnostics extract</summary>" in out["body"]
+
+
+# ---- (#1389) HA 2026.11 tool requirements ------------------------------
+
+def test_every_tool_name_carries_the_domain_prefix_and_integration(hass):
+    _load(hass, _coordinator(hass, assist_write_intents_enabled=True))
+    tools = sem_llm.async_get_tools(hass, _ctx(), LLM_API_ASSIST).tools
+    assert tools
+    for tool in tools:
+        assert tool.name.startswith(f"{DOMAIN}__"), tool.name
+        assert getattr(tool, "integration", None) == DOMAIN, tool.name
+
+
+async def test_tools_raise_no_deprecation_warning_on_ha(sem_real_hass, caplog):
+    import logging
+    assert await async_setup_component(sem_real_hass, "llm", {})
+    _load(sem_real_hass, _coordinator(sem_real_hass))
+    sem_real_hass.config.components.add(DOMAIN)
+    caplog.set_level(logging.DEBUG)
+    api = await llm_helper.async_get_api(sem_real_hass, LLM_API_ASSIST, _ctx())
+    tool = next(t for t in api.tools if t.name == sem_llm.TOOL_SETUP_STATUS)
+    result = await tool.async_call(sem_real_hass, ToolInput(tool_name=tool.name, tool_args={}), _ctx())
+    if hasattr(llm_helper, "ToolResult"):  # HA 2026.11+ rejects a bare dict
+        assert isinstance(result, llm_helper.ToolResult)
+    assert "watch_only" in _data(result)
+    bad = [r.getMessage() for r in caplog.records
+           if "solar_energy_management" in r.getMessage()
+           and ("not prefixed" in r.getMessage() or "without an integration" in r.getMessage()
+                or "JSON object" in r.getMessage())]
+    assert not bad
