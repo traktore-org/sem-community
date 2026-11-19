@@ -185,7 +185,7 @@ test("(#1390) tomorrow on a schedule tariff: its own prices, not the plan's nigh
     assert.equal(priceAt(next, Date.parse('2026-11-20T10:00:00+01:00')), 0.32);
 });
 
-test('(#1390) the tariff\'s rates come before the plan\'s slots; a sun slot is drawn at its buy price', () => {
+test('(#1390) the tariff\'s rates come before the plan\'s slots', () => {
     const now = Date.parse('2026-11-19T08:26:00+01:00');
     const z = (s) => new Date(Date.parse(s)).toISOString();
     const today = chartWindow(now, 'today', TZ);
@@ -197,18 +197,7 @@ test('(#1390) the tariff\'s rates come before the plan\'s slots; a sun slot is d
     const hourly = [{ start: z('2026-11-19T06:00:00+01:00'), end: z('2026-11-19T07:00:00+01:00'), price: 0.21 }];
     const a = priceModel({ win: today, tz: TZ, nowMs: now, slots: hourly, rates, isDynamic: false, level: 'normal' });
     assert.equal(priceAt(a, Date.parse('2026-11-19T06:45:00+01:00')), 0.32);
-    // a sun slot's price is the feed-in rate; the lane draws what a grid kWh costs there
-    const sun = [
-        { start: z('2026-11-19T09:00:00+01:00'), end: z('2026-11-19T10:00:00+01:00'), price: 0.30 },
-        { start: z('2026-11-19T10:00:00+01:00'), end: z('2026-11-19T11:00:00+01:00'), price: 0.06, buy: 0.32 },
-        { start: z('2026-11-19T11:00:00+01:00'), end: z('2026-11-19T12:00:00+01:00'), price: 0.06, buy: null },
-    ];
-    // a dynamic tariff past its curve: no rates, only the plan's slots
-    const d = priceModel({ win: today, tz: TZ, nowMs: now, slots: sun, rates: null, isDynamic: true, level: 'normal' });
-    assert.equal(d.flat, false);
-    assert.equal(priceAt(d, Date.parse('2026-11-19T10:30:00+01:00')), 0.32);
-    assert.equal(priceAt(d, Date.parse('2026-11-19T11:30:00+01:00')), null, 'no buy price known: a gap, not 0.06');
-    assert.ok(!d.steps.some((s) => s.p === 0.06));
+    assert.equal(priceAt(a, Date.parse('2026-11-19T06:15:00+01:00')), 0.21);
 });
 
 test('(#1390) one price stays one price; an hour the rates cannot price is a gap', () => {
@@ -216,7 +205,7 @@ test('(#1390) one price stays one price; an hour the rates cannot price is a gap
     const z = (s) => new Date(Date.parse(s)).toISOString();
     const tomorrow = chartWindow(now, 'tomorrow', TZ);
     const whole = [{ start: z('2026-11-19T00:00:00+01:00'), end: z('2026-11-21T00:00:00+01:00'), price: 0.3661347 }];
-    // the plan's slot is exact, the schedule rounded to 4 decimals: still one price
+    // the rates are exact, the plan's slot rounded to 4 decimals: still one price
     const night = [{ start: z('2026-11-20T00:00:00+01:00'), end: z('2026-11-20T07:00:00+01:00'), price: 0.3661 }];
     const one = priceModel({ win: tomorrow, tz: TZ, nowMs: now, slots: night, rates: whole, isDynamic: false, level: 'flat' });
     assert.equal(one.flat, true);
@@ -239,4 +228,14 @@ test('(#1390) one price stays one price; an hour the rates cannot price is a gap
         { start: z('2026-11-20T12:00:00+01:00'), end: z('2026-11-21T00:00:00+01:00'), price: 0.2101 },
     ], isDynamic: false, level: 'normal' });
     assert.deepEqual(two.steps.map((s) => s.p), [0.21, 0.2101]);
+    // today: the recorder's means and the rates, the same rate a 4th decimal apart, are one price
+    const today = chartWindow(now, 'today', TZ);
+    const past = [];
+    for (let h = 0; h < 8; h++) past.push({ t: Date.parse('2026-11-19T00:00:00+01:00') + h * 3600e3, p: 0.3661 });
+    const t1 = priceModel({ win: today, tz: TZ, nowMs: now, past, rates: whole, isDynamic: false, level: 'flat' });
+    assert.equal(t1.flat, true);
+    // a past hour the recorder has not answered is no gap: the next 24 h at 00:30 start yesterday 22:00
+    const early = Date.parse('2026-11-19T00:30:00+01:00');
+    const t2 = priceModel({ win: chartWindow(early, 'next', TZ), tz: TZ, nowMs: early, rates: whole, isDynamic: false, level: 'flat' });
+    assert.deepEqual([t2.flat, t2.price], [true, 0.3661347]);
 });

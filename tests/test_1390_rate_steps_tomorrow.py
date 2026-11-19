@@ -271,9 +271,9 @@ from .test_638_shadow_mode import freeze_targets  # noqa: E402,F401
 
 
 @pytest.mark.unit
-def test_a_sun_slot_carries_its_buy_price(freeze_targets, monkeypatch):
+def test_a_sun_slot_is_published_at_its_grid_price(freeze_targets, monkeypatch):
     """The plan card drew a sun hour at the feed-in rate (0.1 here) as if a
-    grid kWh cost that. The published slot now says what it costs."""
+    grid kWh cost that. The plan keeps both; the card gets the grid price."""
     from custom_components.solar_energy_management.sensor import (
         _energy_plan_attrs,
     )
@@ -285,9 +285,22 @@ def test_a_sun_slot_carries_its_buy_price(freeze_targets, monkeypatch):
         assert s["price"] == pytest.approx(0.1)     # what the sun earns
         assert s["buy"] == pytest.approx(0.6)       # Sunday: off-peak
     assert all("buy" not in s for s in rest)
-    published = _energy_plan_attrs(plan)["slots"]
-    by_start = {s["start"]: s for s in published}
+    published = {s["start"]: s for s in _energy_plan_attrs(plan)["slots"]}
     for s in sun:
-        assert by_start[s["start"]]["buy"] == s["buy"]
+        assert published[s["start"]]["price"] == s["buy"]
+        assert "buy" not in published[s["start"]]  # no bytes added
     for s in rest:
-        assert "buy" not in by_start[s["start"]]
+        assert published[s["start"]]["price"] == s["price"]
+
+
+@pytest.mark.unit
+def test_a_sun_slot_with_no_known_grid_price_sends_none():
+    """Not the feed-in rate in its place."""
+    from custom_components.solar_energy_management.sensor import (
+        _energy_plan_attrs,
+    )
+    slot = {"start": "2026-11-19T10:00:00+01:00",
+            "end": "2026-11-19T11:00:00+01:00", "price": 0.06,
+            "cheap": False, "sun": True, "buy": None, "home_grid_w": 0.0}
+    out = _energy_plan_attrs({"demands": [], "slots": [slot]})["slots"]
+    assert out[0]["price"] is None

@@ -111,9 +111,9 @@ export function sunModel({ win, nowMs, actual = [], forecast = {} }) {
 /**
  * The price lane. upcoming: [{ t, price }] 15-min slots; rates: a schedule
  * or two-rate tariff's own [{ start, end, price }] for today and tomorrow
- * (#1390), null on a dynamic tariff; slots: the plan's [{ start, end, price,
- * buy? }]; schedule: [{ start 'HH:MM', end, avg_price }] for today. The
- * first source that covers a 15-minute cell wins.
+ * (#1390), null on a dynamic tariff; slots: the plan's [{ start, end, price }]
+ * (a sun slot sends its grid price); schedule: [{ start 'HH:MM', end,
+ * avg_price }] for today. The first source that covers a 15-minute cell wins.
  * → { flat, price, steps: [{ s, e, p }], gaps: [{ s, e }], min, max, avg }
  */
 export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = null, schedule = [], past = [], isDynamic, level, todayAvg }) {
@@ -136,10 +136,7 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = 
         if (Number.isFinite(s) && Number.isFinite(e) && e > s && Number.isFinite(p)) sources.push([s, e, p, 0.75]);
     }
     for (const sl of slots || []) {
-        // (#1390) A sun slot's price is the feed-in rate the sun earns; what
-        // a grid kWh costs there is its `buy` (null: not known).
-        const s = Date.parse(sl?.start), e = Date.parse(sl?.end);
-        const p = num(sl && 'buy' in sl ? sl.buy : sl?.price);
+        const s = Date.parse(sl?.start), e = Date.parse(sl?.end), p = num(sl?.price);
         if (Number.isFinite(s) && Number.isFinite(e) && e > s && Number.isFinite(p)) sources.push([s, e, p, 1]);
     }
     const day0 = zonedMidnight(nowMs, tz);
@@ -157,8 +154,8 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = 
         cells.push({ s: t, e: t + CELL, p: hit ? hit[2] : null });
     }
     const known = cells.filter((c) => c.p !== null).map((c) => c.p);
-    let min = known.length ? Math.min(...known) : null;
-    let max = known.length ? Math.max(...known) : null;
+    const min = known.length ? Math.min(...known) : null;
+    const max = known.length ? Math.max(...known) : null;
     const dynamic = isDynamic === true || (isDynamic !== false && level !== 'flat');
     // (#1385) A schedule or a two-rate tariff is not dynamic, but its hours
     // still hold two prices: they decide, not the mode name. Today's 'flat'
@@ -167,7 +164,8 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = 
     // (#1390) One that sends its own rates is drawn from them: an hour they
     // cannot price is a gap, never one price for the whole window.
     const ruled = !dynamic && Array.isArray(rates);
-    const gapless = known.length === cells.length;
+    // a past hour the recorder has not answered yet is no gap in the tariff
+    const gapless = cells.every((c) => c.p !== null || c.e <= nowMs);
     const flat = known.length === 0 ? (!ruled && (!dynamic || level === 'flat'))
         : (samePrice(min, max) && (gapless || !ruled)) || (dynamic && level === 'flat');
     const avgNum = num(todayAvg);
@@ -183,18 +181,16 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = 
             continue;
         }
         const st = steps[steps.length - 1];
-        if (st && st.e === c.s && samePrice(st.p, c.p)) st.e = c.e; else steps.push({ s: c.s, e: c.e, p: c.p });
+        if (st && st.e === c.s && Math.abs(st.p - c.p) < 1e-9) st.e = c.e; else steps.push({ s: c.s, e: c.e, p: c.p });
     }
-    // the chips name a step's own price
-    if (steps.length) { min = Math.min(...steps.map((x) => x.p)); max = Math.max(...steps.map((x) => x.p)); }
     const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : null;
     return { flat: false, price: null, steps, gaps, min, max, avg };
 }
 
 /**
- * (#1390) Two prices that differ only past the 4th decimal are one price:
- * the curve and the schedule are sent rounded to 4 decimals, the plan's
- * slots and the rates are not.
+ * (#1390) For "one price": two prices that differ only past the 4th decimal
+ * are the same. The curve and the schedule are sent rounded to 4 decimals;
+ * the plan's slots, the rates and the recorder's means are not.
  */
 function samePrice(a, b) {
     return Math.abs(a - b) <= 5e-5 + 1e-9;

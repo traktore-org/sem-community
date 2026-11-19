@@ -6967,11 +6967,13 @@ the evening the next 24 h had a gap where the peak is known. **Fixed:** the coor
 tomorrow, read through `tariff_price_at` (the plan's accessor) per quarter hour, stepped in UTC, an
 hour with no known price left out (`day_ledger.rate_runs`). `priceModel` reads them before the
 plan's slots (a slot is an hour priced at its start). Swept, same lane: a sun slot's `price` is the
-feed-in rate, so a sunny hour was drawn at 0.06; the slot now carries `buy` (the grid price, None
-when unknown) and the lane draws that. A tariff that sends rates is one price only with no gap, and
-prices that differ past the 4th decimal (rounded curve, exact slots) are one price. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` (the reporter's helper through
+feed-in rate, so a sunny hour was drawn at 0.06; the plan's slot now keeps `buy` (the grid price,
+None when unknown) and the sensor sends that as the slot's `price` (no bytes added). A tariff that
+sends rates is one price only when no hour from now on is unknown, and prices that differ past the
+4th decimal (rounded curve, exact rates) are one price. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` (the reporter's helper through
 the real provider, both clock changes, the real sensor) and the #1390 case in
-`dashboard/card/test/next-plan-chart.test.js`. **Left open:** a dynamic tariff on a 15-min market
+`dashboard/card/test/next-plan-chart.test.js`. **Left open:** a past hour is the recorder's mean,
+so a rate change at :30 is drawn as one blended hour (what was paid); a dynamic tariff on a 15-min market
 still sends 48 points (12 h) in `upcoming`; tomorrow past that is drawn as a gap, not as a price.
 A calendar's holiday sensor speaks for today but is read for tomorrow's hours too.
 Refs #1372 #994 #1310 #1362 #1368 #1369 #1385 #1390.
