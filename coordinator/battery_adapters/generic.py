@@ -450,6 +450,8 @@ class GenericBatteryAdapter(BatteryControlAdapter):
     def charge_refused(self) -> bool:
         """(#1346) The inverter did not take the charge command lately: the
         plan leaves this pack's charge out and says why."""
+        if self._hold_wired() and self._hold.refused:    # (#1362) no mode, no charge
+            return True
         return bool(getattr(self._charge_adapter, "charge_refused", False))
 
     @property
@@ -635,6 +637,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         err = await self._hold.release(
             self._hand_back if urgent is None else urgent)
         if err is None:
+            self._charge_took_hold = False              # (#1362)
             self._clear_hold_error()
             return True
         if err != SETTLING:
@@ -686,12 +689,6 @@ class GenericBatteryAdapter(BatteryControlAdapter):
                 self._last_error = "bidirectional charge write failed"
                 # _last_intent intentionally NOT updated — retry next cycle (#589)
             return
-        # (#1362) Some inverters charge from the grid only in one mode, the
-        # mode where the house runs from the grid and the battery does not
-        # give: the hold option. With a hold select set, a grid charge holds
-        # too, through the hold's own record, checks and put-back. The next
-        # normal cycle releases it; a hold still wanted keeps it.
-        hold_err = await self._hold_for_charge()
         ok_zero = await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         if not ok_zero:
             self._last_error = "mutual-exclusion zero-write failed"
@@ -701,6 +698,14 @@ class GenericBatteryAdapter(BatteryControlAdapter):
                 "GenericBatteryAdapter: no forced-charge backend — "
                 "command_force_charge ignored",
             )
+            return
+        # (#1362) Some inverters charge from the grid only in one mode, the
+        # mode where the house runs from the grid and the battery does not
+        # give: the hold option. With a hold select set, the charge waits
+        # until the select shows it, and goes out only then. A mode that
+        # cannot be set means no charge, said, never a charge counted that
+        # the inverter cannot make.
+        if not await self._hold_for_charge():
             return
         from .force_charge import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
@@ -718,22 +723,52 @@ class GenericBatteryAdapter(BatteryControlAdapter):
                 # (#1346) a select that refused or flipped back: an earlier
                 # write left FORCE_CHARGE here, and nothing may count it
                 self._last_intent = None
+            if self._charge_took_hold:                  # (#1362) no charge: give it back
+                await self._release_hold(urgent=True)
         else:
-            self._last_error = (f"{self.HOLD_ERROR}: {hold_err}"
-                                if hold_err else None)          # (#1362)
+            self._last_error = None
             self._last_intent = BatteryIntent.FORCE_CHARGE
 
-    async def _hold_for_charge(self) -> "str | None":
-        """(#1362) Put the hold select on its option for a grid charge. None:
-        held, settling or not set up; else why it is not held (the charge
-        still goes out: the inverter may charge without it)."""
+    #: (#1362) the select went to the hold option for a grid charge (it did
+    #: not show it before): a charge that does not start gives it back
+    _charge_took_hold = False
+
+    async def _hold_for_charge(self) -> bool:
+        """(#1362) Put the hold select on its option for a grid charge. True:
+        the charge may go out (no hold select, or it shows the option). False:
+        no charge this cycle — the select is on its way (the charge starts
+        when it shows), or it cannot be set (``last_error`` says why and
+        nothing counts a charge). The hold's discharge watch does not judge
+        a charge start."""
         if not self._hold_wired():
-            return None
-        err = await self._hold.hold(self._pack_w)
-        if err is None or err == SETTLING:
-            self._clear_hold_error()
-            return None
-        return err
+            return True
+        was_held = self._hold.active
+        err = await self._hold.hold(None, for_charge=True)
+        if self._hold.active and not was_held:
+            self._charge_took_hold = True
+        if err == SETTLING:
+            return False
+        if err is not None:
+            # Each hold error already left the select right: a refusal put it
+            # back, a hand change is the user's, the rest wrote nothing. No
+            # reset here, or the next cycle would write the mode again.
+            if not self._hold.active:
+                self._charge_took_hold = False
+            if self._last_intent is BatteryIntent.FORCE_CHARGE:
+                # a charge that was running loses its mode: stop it, so the
+                # charge source goes back and nothing counts a charge
+                try:
+                    await self._charge_adapter.stop_forced_charge()
+                except Exception:  # noqa: BLE001 — best effort, said below
+                    _LOGGER.debug("charge stop after a lost mode", exc_info=True)
+                self._last_intent = None
+            self._last_error = (f"{self.HOLD_ERROR}: {err} — no grid charge "
+                                "without that mode")
+            return False
+        if not self._hold.shows():          # written, not shown yet: wait
+            return False
+        self._clear_hold_error()
+        return True
 
     async def command_stop_force_charge(self) -> None:
         if self._force_charge_already_stopped():

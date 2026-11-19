@@ -46,9 +46,9 @@ SETTLING = "settling"
 #: after a hold (Off, unload and a restore after a refusal never wait)
 MIN_HOLD_S = 30 * 60.0
 #: select writes SEM may make to the hold select in one local day (the
-#: count is on disk and starts again at the day roll). A start or a partial
-#: release over it stays in the current option; a put-back is never held
-#: back by it: a battery SEM cannot release stays held.
+#: count is on disk and starts again at the day roll). A start over it
+#: stays in the current option; a put-back is never held back by it: it
+#: gives the battery back to the house (#1362).
 MAX_WRITES_PER_DAY = 12
 #: the select must show the hold option within this long after a write (a
 #: cloud integration is slow); then ONE re-send, then the hold is refused
@@ -98,6 +98,9 @@ class SelectHold:
         self._wrote_at: Optional[float] = None
         self._discharging_since: Optional[float] = None
         self._adopted = False
+        #: (#1362) the hold was asked for a grid charge: its put-back never
+        #: waits for the minimum hold (that rule stops flip-flop, not a charge)
+        self._for_charge = False
 
     def _battery(self) -> str:
         return str(self.config.get("battery_id", "") or "")
@@ -118,6 +121,7 @@ class SelectHold:
         """The attempt ends: the next hold may write again."""
         self._writes, self._seen, self._spent = 0, False, None
         self._discharging_since = None
+        self._for_charge = False
 
     @staticmethod
     def _day() -> str:
@@ -146,7 +150,8 @@ class SelectHold:
         if at is not None and not self.refused:
             await self.record.clear_refusal(entity)
 
-    async def hold(self, pack_w: Optional[float] = None) -> Optional[str]:
+    async def hold(self, pack_w: Optional[float] = None,
+                   for_charge: bool = False) -> Optional[str]:
         """None: the battery is held. ``SETTLING``: not yet, no error. Any
         other text: why it is not. ``pack_w`` is this battery's own power
         (SEM's sign: below 0 is discharge), for the check that the inverter
@@ -156,6 +161,7 @@ class SelectHold:
         if chosen is None:
             return "no hold select set"
         entity, option = chosen
+        self._for_charge = for_charge
         await self._read_refusal(entity)
         if self.refused:
             await self._release(entity, option, urgent=True)
@@ -174,6 +180,14 @@ class SelectHold:
             return await self._join(entity, pack_w)
         return await self._not_shown(entity, option, wanted, state)
 
+    def shows(self) -> bool:
+        """(#1362) The hold select shows the hold option now."""
+        chosen = hold_setup(self.config)
+        if chosen is None:
+            return False
+        state, _ = read_select(self.hass, chosen[0])
+        return state is not None and state == listed_option(self.hass, *chosen)
+
     async def _not_shown(self, entity: str, option: str, wanted: str,
                          state: str) -> Optional[str]:
         if self._spent:
@@ -189,7 +203,7 @@ class SelectHold:
                 return await self._refuse(
                     entity, option, f"{entity} did not show '{wanted}' after "
                     "a second write — the hold is refused")
-        elif self._recent():
+        elif self._recent() and not self._for_charge:
             return SETTLING
         capped = await self._capped(entity)
         return capped or await self._write(entity, wanted, state)
@@ -266,6 +280,7 @@ class SelectHold:
         (normal, a partial limit) waits out the minimum hold and the day's
         write limit; Off, an unload and a refusal never wait."""
         chosen = hold_setup(self.config)
+        urgent = urgent or self._for_charge     # (#1362) a charge's put-back
         self.forget()
         if chosen is None:
             return None
@@ -276,12 +291,10 @@ class SelectHold:
         if not await self.record.running(entity, self._battery()):
             self.active = False
             return None
-        if not urgent:
-            if self._recent():
-                return SETTLING
-            capped = await self._capped(entity)
-            if capped:
-                return capped
+        # (#1362) a put-back gives the battery back to the house: the day's
+        # write limit never holds it back, only the writes that take it away
+        if not urgent and self._recent():
+            return SETTLING
         if await self.record.others(entity, self._battery()):
             await self.record.left(entity, self._battery())
             self.active = False
