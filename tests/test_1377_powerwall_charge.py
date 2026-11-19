@@ -361,3 +361,96 @@ class TestReview:
         assert hass.read(PERMIT) == "on"                 # observer: nothing sent
         await fresh.async_adopt_running_charge()
         assert hass.read(PERMIT) == "off"
+
+
+class TestTheModeAlreadyShowsTheOption:
+    """(#1377, beta.20) The operating mode already read "autonomous" when the
+    charge began — time-based control, or a mode left from a test. SEM saw
+    "the select already shows the charge option", wrote neither the reserve
+    nor the permit, and still reported charging: "commanded force_charge,
+    not observed", 0 W."""
+
+    async def test_the_reserve_and_the_permit_are_still_set(self):
+        hass = _Hass(mode="autonomous")
+        a = _adapter(hass, _Store(), _Store())
+        await actuate_battery(_charge(), a)
+        assert float(hass.read(RESERVE)) == 100
+        assert hass.read(PERMIT) == "on"
+        assert hass.writes("select") == [], "the mode is already right"
+
+    async def test_once_per_charge_not_every_cycle(self):
+        hass = _Hass(mode="autonomous")
+        a = _adapter(hass, _Store(), _Store())
+        for _ in range(3):
+            await actuate_battery(_charge(), a)
+        assert _shape(hass) == [("number", "set_value", 100),
+                                ("switch", "turn_on", PERMIT)]
+
+    async def test_the_stop_puts_back_only_what_sem_changed(self):
+        hass = _Hass(mode="autonomous")
+        a = _adapter(hass, _Store(), _Store())
+        await actuate_battery(_charge(), a)
+        await actuate_battery(_stop(), a)
+        assert float(hass.read(RESERVE)) == 20
+        assert hass.read(PERMIT) == "off"
+        assert hass.read(MODE) == "autonomous", "the mode was the user's"
+        assert hass.writes("select") == []
+
+    async def test_a_permit_already_on_stays_the_users(self):
+        hass = _Hass(mode="autonomous", permit="on")
+        a = _adapter(hass, _Store(), _Store())
+        await actuate_battery(_charge(), a)
+        await actuate_battery(_stop(), a)
+        assert hass.writes("switch") == []
+        assert hass.read(PERMIT) == "on"
+        assert float(hass.read(RESERVE)) == 20
+
+    async def test_a_permit_that_ignores_turn_on_is_given_up_not_rewritten(self):
+        hass = _Hass(mode="autonomous")
+        hass.refuse_permit = True
+        a = _adapter(hass, _Store(), _Store())
+        for _ in range(12):
+            await actuate_battery(_charge(), a)
+        turn_ons = [c for c in hass.writes("switch") if c[1] == "turn_on"]
+        assert len(turn_ons) == 2, "the start and one retry, then no more"
+        assert float(hass.read(RESERVE)) == 20, "the reserve went back"
+        assert a.last_error and "did not turn on" in a.last_error
+
+    async def test_without_a_permit_or_target_nothing_changes(self):
+        # a select-only setup (another brand): the option alone is the
+        # charge, so a select already on it is joined as before, unwritten
+        hass = _Hass(mode="autonomous")
+        a = GenericBatteryAdapter(hass, {
+            "battery_charge_select_entity": MODE,
+            "battery_charge_select_option": "autonomous",
+            "forced_charge_record": ForcedChargeRecord(_Store()),
+            "battery_id": "b1"})
+        await actuate_battery(_charge(), a)
+        assert hass.calls == []
+
+    async def test_observer_sends_nothing_here_either(self):
+        hass = _Hass(mode="autonomous")
+        controller = SimpleNamespace(publish_observer_decision=lambda **kw: None)
+        await actuate_battery(_charge(), _adapter(hass, _Store(), _Store()),
+                              observer=True, controller=controller)
+        assert hass.calls == []
+
+
+class TestTheDiagnosticsShowTheChargePath:
+    async def test_the_three_entities_and_what_sem_did(self):
+        from custom_components.solar_energy_management.coordinator.battery_diag import (
+            battery_actuation_diag,
+        )
+        hass = _Hass(mode="autonomous")
+        a = _adapter(hass, _Store(), _Store())
+        await actuate_battery(_charge(), a)
+        coord = SimpleNamespace(_battery_adapters={"b1": a})
+        path = battery_actuation_diag(hass, coord)["b1"]["charge_path"]
+        assert path["select"] == {"entity": MODE, "reads": "autonomous",
+                                  "option": "autonomous"}
+        assert path["switch"] == {"entity": PERMIT, "reads": "on", "role": "permit"}
+        assert path["target"]["entity"] == RESERVE
+        assert float(path["target"]["reads"]) == 100
+        assert path["active"] is True
+        assert path["set_beside_an_option_already_on"] is True
+        assert path["last"].startswith("start: charging")

@@ -715,6 +715,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         """(#1346) A stop ends the attempt: the next start may try again."""
         self._sel_writes, self._sel_seen = 0, False
         self._permit_writes = self._permit_off_reads = 0
+        self._join_wrote = False                        # (#1377)
         self._sel_spent = None
         self._sel_stop_miss = (0, ())
 
@@ -810,9 +811,51 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             refused = await self._check_permit(entity)
             if refused is not None:
                 return refused
+        elif self._join_needs_writes():
+            # (#1377) The option was set by someone else, but where a permit
+            # switch or a charge target is set up, the option alone is a
+            # mode, not a charge: a battery whose time-based mode is the
+            # option charges from the grid only with the permit ON and the
+            # reserve raised. SEM sets those two, once per attempt, and puts
+            # back only them: the mode stays the user's.
+            return await self._join_with_permit_and_target(entity, command)
         return ChargeStatus(status=ChargeCommandStatus.CHARGING,
                             target_soc=command.target_soc,
                             message="Select already shows the charge option")
+
+    #: (#1377) the reserve and permit were set for a select SEM did not set
+    _join_wrote: bool = False
+
+    def _join_needs_writes(self) -> bool:
+        return bool(permit_switch(self.config)
+                    or self.config.get("battery_target_soc_entity", ""))
+
+    async def _join_with_permit_and_target(
+            self, entity: str, command: ChargeCommand) -> ChargeStatus:
+        if self._sel_spent:              # given up in this attempt: no rewrite
+            return self._select_failed(self._sel_spent)
+        if not self._join_wrote:
+            unsaved = await self._note_permit_started()   # before any write
+            if unsaved is not None:
+                return unsaved
+            try:
+                target = self.config.get("battery_target_soc_entity", "")
+                if target:
+                    await self.target_hold.write(target, int(command.target_soc))
+                await self._permit_on()
+            except Exception as exc:  # noqa: BLE001
+                await self._release_target()
+                await self._put_permit_back()
+                return self._select_failed(f"start failed: {exc}")
+            self._join_wrote = True
+        self._active, self._target_soc = True, command.target_soc
+        refused = await self._check_permit(entity)
+        if refused is not None:
+            return refused
+        return ChargeStatus(status=ChargeCommandStatus.CHARGING,
+                            target_soc=command.target_soc,
+                            message="Select already showed the charge option; "
+                                    "reserve and permit set")
 
     async def _check_permit(self, entity: str) -> "ChargeStatus | None":
         """(#1377) SEM turned the permit on and it reads OFF: a switch that
