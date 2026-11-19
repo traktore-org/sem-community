@@ -6958,7 +6958,25 @@ chart drew one price for any tariff that is not dynamic (**fixed**: what the hou
 real provider and the real coordinator; an AST count of every compare with `"dynamic"`, each with
 its reason. **Left open (choice):** the "cheap now" hint and the #1321 price-paid compare stay
 dynamic-only.
-Refs #1372 #994 #1310 #1362 #1368 #1369 #1385.
+**Round 3 (#1390) — the card had no price for tomorrow.** Same reporter, the plan card's price
+lane: "Fixed · 0.21" on the schedule tariff. Round 2 fixed the word; on "Tomorrow" it still said
+one price. A schedule or two-rate tariff sends no `upcoming` curve, `schedule_today` ends at
+midnight, and the plan's slots end in the morning: tomorrow had only night hours at 0.21. Late in
+the evening the next 24 h had a gap where the peak is known. **Fixed:** the coordinator publishes
+`tariff_rate_steps` (sensor attribute `rate_steps`) for any tariff that is not dynamic: today and
+tomorrow, read through `tariff_price_at` (the plan's accessor) per quarter hour, stepped in UTC, an
+hour with no known price left out (`day_ledger.rate_runs`). `priceModel` reads them before the
+plan's slots (a slot is an hour priced at its start). Swept, same lane: a sun slot's `price` is the
+feed-in rate, so a sunny hour was drawn at 0.06; the plan's slot now keeps `buy` (the grid price,
+None when unknown) and the sensor sends that as the slot's `price` (no bytes added). A tariff that
+sends rates is one price only when no hour from now on is unknown, and prices that differ past the
+4th decimal (rounded curve, exact rates) are one price. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` (the reporter's helper through
+the real provider, both clock changes, the real sensor) and the #1390 case in
+`dashboard/card/test/next-plan-chart.test.js`. **Left open:** a past hour is the recorder's mean,
+so a rate change at :30 is drawn as one blended hour (what was paid); a dynamic tariff on a 15-min market
+still sends 48 points (12 h) in `upcoming`; tomorrow past that is drawn as a gap, not as a price.
+A calendar's holiday sensor speaks for today but is read for tomorrow's hours too.
+Refs #1372 #994 #1310 #1362 #1368 #1369 #1385 #1390.
 
 ### 183. Several things put back in one chain — the first that fails stops the rest — GUARDED
 

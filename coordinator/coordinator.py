@@ -6915,6 +6915,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                      or _td.level_absence))}
                     for p in (_td.upcoming_prices or [])[:48]
                 ]
+                # (#1390) A schedule or a two-rate tariff has no curve in
+                # ``upcoming``, and ``schedule_today`` ends at midnight: the
+                # plan card drew tomorrow from the plan's night hours alone,
+                # one rate, and called it a fixed price. Its own prices
+                # for today and tomorrow, from the plan's price accessor.
+                result["tariff_rate_steps"] = None
+                if not _td.is_dynamic:
+                    try:
+                        from .day_ledger import rate_runs
+                        _day0 = dt_util.start_of_local_day()
+                        result["tariff_rate_steps"] = rate_runs(
+                            self._tariff_provider, _day0,
+                            _day0 + timedelta(days=2))
+                    except Exception as e:  # noqa: BLE001 — no runs, no lane
+                        _LOGGER.debug("Tariff rate runs failed (#1390): %s", e)
                 result["tariff_currency"] = _td.currency
                 result["tariff_today_min_price"] = _td.today_min_price
                 result["tariff_today_max_price"] = _td.today_max_price
@@ -13972,8 +13987,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # slot is cheap for the packer at any tariff.
                     # PRICE-ASK: a field name of the published slot, not a level
                     "cheap": bool(s.tariff_cheap),
-                    **({"sun": True} if s.cap_override_w is not None
-                       else {}),
+                    # (#1390) a sun slot's ``price`` is the feed-in rate;
+                    # ``buy`` is what a grid kWh costs there (None: unknown)
+                    **({"sun": True, "buy": s.import_price}
+                       if s.cap_override_w is not None else {}),
                     "home_w": round(s.home_w, 1),
                     "soc_kwh": round(s.soc_kwh, 2),
                     "home_grid_w": round(s.home_grid_w, 1),

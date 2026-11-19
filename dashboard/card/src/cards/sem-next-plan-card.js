@@ -381,7 +381,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const win = chartWindow(now, this._range, tz);
         const sun = sunModel({ win, nowMs: now, actual: this._stats || [], forecast: this._fc || {} });
         const tar = this._attrs('sensor.sem_tariff_current_import_rate');
-        const price = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, schedule: tar.schedule_today, past: this._priceStats || [],
+        const price = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, rates: tar.rate_steps, schedule: tar.schedule_today, past: this._priceStats || [],
             isDynamic: tar.is_dynamic, level: tar.price_level || this._str('sensor.sem_tariff_price_level'), todayAvg: tar.today_avg });
         const rows = planRows({ win, nowMs: now, plan, names: {
             charger: (cid) => (this._chargers.includes(cid) ? this._chargerName(cid) : ''),

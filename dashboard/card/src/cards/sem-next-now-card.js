@@ -392,7 +392,7 @@ class SEMNextNowCard extends SEMNextBase {
         // row names; coloured 'expensive' here, the two would disagree.
         if (tar.is_dynamic === false) return nothing;
         const plan = this._attrs('sensor.sem_energy_plan');
-        const pm = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, schedule: tar.schedule_today,
+        const pm = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, rates: tar.rate_steps, schedule: tar.schedule_today,
             isDynamic: tar.is_dynamic, level: tar.price_level || this._str('sensor.sem_tariff_price_level'), todayAvg: tar.today_avg });
         const strip = priceStrip(pm, win, now, {
             cheap: this._num('number.sem_cheap_price_threshold'), expensive: this._num('number.sem_expensive_price_threshold') });
