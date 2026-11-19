@@ -3053,7 +3053,8 @@
     "why_reason_comfort_warm": "V místnosti je dost teplo. Není co plánovat.",
     "why_reason_comfort_not_far": "Místnost není dost pod Držet na, aby se spustil chod.",
     "why_reason_load_no_min_runtime": "Není nastavena denní minimální doba chodu, proto není co plánovat. Nastavte ji v Zařízení › toto zařízení.",
-    "hp_cop_flat_hint": "COP je pevný. Přidejte křivku COP v Zařízení › tepelné čerpadlo › COP podle venkovní teploty, aby sledoval venkovní teplotu."
+    "hp_cop_flat_hint": "COP je pevný. Přidejte křivku COP v Zařízení › tepelné čerpadlo › COP podle venkovní teploty, aby sledoval venkovní teplotu.",
+    "why_reason_comfort_mode": "SEM nesmí toto zařízení provozovat z přebytku. Nastavte režim Přebytek v Zařízení › toto zařízení."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -6109,7 +6110,8 @@
     "why_reason_comfort_warm": "Rummet er varmt nok. Intet at planlægge.",
     "why_reason_comfort_not_far": "Rummet ligger ikke langt nok under Hold ved til at starte en kørsel.",
     "why_reason_load_no_min_runtime": "Ingen daglig mindste køretid er sat, så der er intet at planlægge. Indstil en under Enheder › denne enhed.",
-    "hp_cop_flat_hint": "COP er fast. Tilføj en COP-kurve under Enheder › varmepumpe › COP efter udetemperatur for at følge udetemperaturen."
+    "hp_cop_flat_hint": "COP er fast. Tilføj en COP-kurve under Enheder › varmepumpe › COP efter udetemperatur for at følge udetemperaturen.",
+    "why_reason_comfort_mode": "SEM må ikke køre denne enhed på overskud. Sæt tilstanden til Overskud under Enheder › denne enhed."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -9165,7 +9167,8 @@
     "why_reason_comfort_warm": "Der Raum ist warm genug. Nichts zu planen.",
     "why_reason_comfort_not_far": "Der Raum liegt nicht weit genug unter Halten bei, um einen Lauf zu starten.",
     "why_reason_load_no_min_runtime": "Keine tägliche Mindestlaufzeit gesetzt, daher gibt es nichts zu planen. Setze eine unter Geräte › dieses Gerät.",
-    "hp_cop_flat_hint": "Der COP ist fest. Füge unter Geräte › Wärmepumpe › COP nach Außentemperatur eine COP-Kurve hinzu, damit er der Außentemperatur folgt."
+    "hp_cop_flat_hint": "Der COP ist fest. Füge unter Geräte › Wärmepumpe › COP nach Außentemperatur eine COP-Kurve hinzu, damit er der Außentemperatur folgt.",
+    "why_reason_comfort_mode": "SEM darf dieses Gerät nicht mit Überschuss betreiben. Stelle den Modus unter Geräte › dieses Gerät auf Überschuss."
   },
   "en": {
     "% of limit": "% of limit",
@@ -12221,7 +12224,8 @@
     "why_reason_comfort_warm": "The room is warm enough. Nothing to plan.",
     "why_reason_comfort_not_far": "The room is not far enough below Keep at to start a run.",
     "why_reason_load_no_min_runtime": "No daily minimum runtime set, so there is nothing to plan. Set one in Devices › this device.",
-    "hp_cop_flat_hint": "The COP is fixed. Add a COP curve in Devices › heat pump › COP by outdoor temperature to follow the outdoor temperature."
+    "hp_cop_flat_hint": "The COP is fixed. Add a COP curve in Devices › heat pump › COP by outdoor temperature to follow the outdoor temperature.",
+    "why_reason_comfort_mode": "SEM may not run this device on surplus. Set its mode to Surplus in Devices › this device."
   },
   "es": {
     "% of limit": "% del límite",
@@ -15277,7 +15281,8 @@
     "why_reason_comfort_warm": "La sala está suficientemente caliente. Nada que planificar.",
     "why_reason_comfort_not_far": "La sala no está lo bastante por debajo de Mantener en para iniciar un ciclo.",
     "why_reason_load_no_min_runtime": "No hay tiempo mínimo diario definido, así que no hay nada que planificar. Define uno en Dispositivos › este dispositivo.",
-    "hp_cop_flat_hint": "El COP es fijo. Añade una curva de COP en Dispositivos › bomba de calor › COP según temperatura exterior para seguir la temperatura exterior."
+    "hp_cop_flat_hint": "El COP es fijo. Añade una curva de COP en Dispositivos › bomba de calor › COP según temperatura exterior para seguir la temperatura exterior.",
+    "why_reason_comfort_mode": "SEM no puede usar este dispositivo con excedente. Pon su modo en Excedente en Dispositivos › este dispositivo."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -18333,7 +18338,8 @@
     "why_reason_comfort_warm": "Huone on riittävän lämmin. Ei suunniteltavaa.",
     "why_reason_comfort_not_far": "Huone ei ole tarpeeksi Pidä-arvon alapuolella käynnin aloittamiseen.",
     "why_reason_load_no_min_runtime": "Päivittäistä vähimmäiskäyntiaikaa ei ole asetettu, joten ei ole mitään suunniteltavaa. Aseta se kohdassa Laitteet › tämä laite.",
-    "hp_cop_flat_hint": "COP on kiinteä. Lisää COP-käyrä kohdassa Laitteet › lämpöpumppu › COP ulkolämpötilan mukaan, jotta se seuraa ulkolämpötilaa."
+    "hp_cop_flat_hint": "COP on kiinteä. Lisää COP-käyrä kohdassa Laitteet › lämpöpumppu › COP ulkolämpötilan mukaan, jotta se seuraa ulkolämpötilaa.",
+    "why_reason_comfort_mode": "SEM ei saa käyttää tätä laitetta ylijäämällä. Aseta tilaksi Ylijäämä kohdassa Laitteet › tämä laite."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -21389,7 +21395,8 @@
     "why_reason_comfort_warm": "La pièce est assez chaude. Rien à planifier.",
     "why_reason_comfort_not_far": "La pièce n'est pas assez sous Maintenir à pour lancer un cycle.",
     "why_reason_load_no_min_runtime": "Aucune durée minimale quotidienne définie, donc rien à planifier. Définissez-en une dans Appareils › cet appareil.",
-    "hp_cop_flat_hint": "Le COP est fixe. Ajoutez une courbe de COP dans Appareils › pompe à chaleur › COP selon la température extérieure pour suivre la température extérieure."
+    "hp_cop_flat_hint": "Le COP est fixe. Ajoutez une courbe de COP dans Appareils › pompe à chaleur › COP selon la température extérieure pour suivre la température extérieure.",
+    "why_reason_comfort_mode": "SEM ne peut pas piloter cet appareil au surplus. Réglez son mode sur Surplus dans Appareils › cet appareil."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -24445,7 +24452,8 @@
     "why_reason_comfort_warm": "A szoba elég meleg. Nincs mit tervezni.",
     "why_reason_comfort_not_far": "A szoba nincs elég messze a Tartás alatt egy futás indításához.",
     "why_reason_load_no_min_runtime": "Nincs napi minimális futásidő beállítva, ezért nincs mit tervezni. Állítson be egyet: Eszközök › ez az eszköz.",
-    "hp_cop_flat_hint": "A COP rögzített. Adjon hozzá COP-görbét: Eszközök › hőszivattyú › COP a külső hőmérséklet szerint, hogy kövesse a külső hőmérsékletet."
+    "hp_cop_flat_hint": "A COP rögzített. Adjon hozzá COP-görbét: Eszközök › hőszivattyú › COP a külső hőmérséklet szerint, hogy kövesse a külső hőmérsékletet.",
+    "why_reason_comfort_mode": "A SEM nem működtetheti ezt az eszközt többletből. Állítsa a módot Többletre: Eszközök › ez az eszköz."
   },
   "it": {
     "% of limit": "% del limite",
@@ -27501,7 +27509,8 @@
     "why_reason_comfort_warm": "L'ambiente è abbastanza caldo. Niente da pianificare.",
     "why_reason_comfort_not_far": "L'ambiente non è abbastanza sotto Mantieni a per avviare un ciclo.",
     "why_reason_load_no_min_runtime": "Nessun tempo minimo giornaliero impostato, quindi non c'è nulla da pianificare. Impostane uno in Dispositivi › questo dispositivo.",
-    "hp_cop_flat_hint": "Il COP è fisso. Aggiungi una curva COP in Dispositivi › pompa di calore › COP per temperatura esterna per seguire la temperatura esterna."
+    "hp_cop_flat_hint": "Il COP è fisso. Aggiungi una curva COP in Dispositivi › pompa di calore › COP per temperatura esterna per seguire la temperatura esterna.",
+    "why_reason_comfort_mode": "SEM non può usare questo dispositivo con il surplus. Imposta la modalità su Surplus in Dispositivi › questo dispositivo."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -30557,7 +30566,8 @@
     "why_reason_comfort_warm": "De kamer is warm genoeg. Niets te plannen.",
     "why_reason_comfort_not_far": "De kamer ligt niet ver genoeg onder Houden op om een run te starten.",
     "why_reason_load_no_min_runtime": "Geen dagelijkse minimale looptijd ingesteld, dus er is niets te plannen. Stel er een in onder Apparaten › dit apparaat.",
-    "hp_cop_flat_hint": "De COP is vast. Voeg een COP-curve toe onder Apparaten › warmtepomp › COP per buitentemperatuur om de buitentemperatuur te volgen."
+    "hp_cop_flat_hint": "De COP is vast. Voeg een COP-curve toe onder Apparaten › warmtepomp › COP per buitentemperatuur om de buitentemperatuur te volgen.",
+    "why_reason_comfort_mode": "SEM mag dit apparaat niet op overschot laten draaien. Zet de modus op Overschot onder Apparaten › dit apparaat."
   },
   "no": {
     "% of limit": "% av grense",
@@ -33613,7 +33623,8 @@
     "why_reason_comfort_warm": "Rommet er varmt nok. Ingenting å planlegge.",
     "why_reason_comfort_not_far": "Rommet ligger ikke langt nok under Hold ved til å starte en kjøring.",
     "why_reason_load_no_min_runtime": "Ingen daglig minste driftstid satt, så det er ingenting å planlegge. Sett en under Enheter › denne enheten.",
-    "hp_cop_flat_hint": "COP er fast. Legg til en COP-kurve under Enheter › varmepumpe › COP etter utetemperatur for å følge utetemperaturen."
+    "hp_cop_flat_hint": "COP er fast. Legg til en COP-kurve under Enheter › varmepumpe › COP etter utetemperatur for å følge utetemperaturen.",
+    "why_reason_comfort_mode": "SEM har ikke lov til å kjøre denne enheten på overskudd. Sett modusen til Overskudd under Enheter › denne enheten."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -36669,7 +36680,8 @@
     "why_reason_comfort_warm": "W pokoju jest dość ciepło. Nic do zaplanowania.",
     "why_reason_comfort_not_far": "Pokój nie jest dość daleko poniżej Utrzymuj na, aby rozpocząć cykl.",
     "why_reason_load_no_min_runtime": "Nie ustawiono dziennego minimalnego czasu pracy, więc nie ma nic do zaplanowania. Ustaw go w Urządzenia › to urządzenie.",
-    "hp_cop_flat_hint": "COP jest stały. Dodaj krzywą COP w Urządzenia › pompa ciepła › COP wg temperatury zewnętrznej, aby podążał za temperaturą zewnętrzną."
+    "hp_cop_flat_hint": "COP jest stały. Dodaj krzywą COP w Urządzenia › pompa ciepła › COP wg temperatury zewnętrznej, aby podążał za temperaturą zewnętrzną.",
+    "why_reason_comfort_mode": "SEM nie może uruchamiać tego urządzenia na nadwyżce. Ustaw tryb Nadwyżka w Urządzenia › to urządzenie."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -39725,7 +39737,8 @@
     "why_reason_comfort_warm": "A divisão está quente o suficiente. Nada a planear.",
     "why_reason_comfort_not_far": "A divisão não está suficientemente abaixo de Manter em para iniciar um ciclo.",
     "why_reason_load_no_min_runtime": "Nenhum tempo mínimo diário definido, por isso não há nada a planear. Defina um em Dispositivos › este dispositivo.",
-    "hp_cop_flat_hint": "O COP é fixo. Adicione uma curva de COP em Dispositivos › bomba de calor › COP por temperatura exterior para seguir a temperatura exterior."
+    "hp_cop_flat_hint": "O COP é fixo. Adicione uma curva de COP em Dispositivos › bomba de calor › COP por temperatura exterior para seguir a temperatura exterior.",
+    "why_reason_comfort_mode": "O SEM não pode usar este dispositivo com excedente. Defina o modo como Excedente em Dispositivos › este dispositivo."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -42781,7 +42794,8 @@
     "why_reason_comfort_warm": "Camera este suficient de caldă. Nimic de planificat.",
     "why_reason_comfort_not_far": "Camera nu este destul de sub Menține la pentru a porni o rulare.",
     "why_reason_load_no_min_runtime": "Niciun timp minim zilnic setat, deci nu e nimic de planificat. Setați unul în Dispozitive › acest dispozitiv.",
-    "hp_cop_flat_hint": "COP-ul este fix. Adăugați o curbă COP în Dispozitive › pompă de căldură › COP după temperatura exterioară pentru a urmări temperatura exterioară."
+    "hp_cop_flat_hint": "COP-ul este fix. Adăugați o curbă COP în Dispozitive › pompă de căldură › COP după temperatura exterioară pentru a urmări temperatura exterioară.",
+    "why_reason_comfort_mode": "SEM nu poate folosi acest dispozitiv din surplus. Setați modul pe Surplus în Dispozitive › acest dispozitiv."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -45837,7 +45851,8 @@
     "why_reason_comfort_warm": "Rummet är varmt nog. Inget att planera.",
     "why_reason_comfort_not_far": "Rummet ligger inte tillräckligt långt under Håll vid för att starta en körning.",
     "why_reason_load_no_min_runtime": "Ingen daglig minsta drifttid inställd, så det finns inget att planera. Ställ in en under Enheter › den här enheten.",
-    "hp_cop_flat_hint": "COP är fast. Lägg till en COP-kurva under Enheter › värmepump › COP efter utetemperatur för att följa utetemperaturen."
+    "hp_cop_flat_hint": "COP är fast. Lägg till en COP-kurva under Enheter › värmepump › COP efter utetemperatur för att följa utetemperaturen.",
+    "why_reason_comfort_mode": "SEM får inte köra den här enheten på överskott. Ställ in läget på Överskott under Enheter › den här enheten."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -48893,6 +48908,7 @@
     "why_reason_comfort_warm": "房间已足够温暖。无需计划。",
     "why_reason_comfort_not_far": "房间离“保持在”还不够低，无法启动运行。",
     "why_reason_load_no_min_runtime": "未设置每日最短运行时间，因此无需计划。请在 设备 › 此设备 中设置。",
-    "hp_cop_flat_hint": "COP 为固定值。请在 设备 › 热泵 › 按室外温度的 COP 中添加 COP 曲线，使其随室外温度变化。"
+    "hp_cop_flat_hint": "COP 为固定值。请在 设备 › 热泵 › 按室外温度的 COP 中添加 COP 曲线，使其随室外温度变化。",
+    "why_reason_comfort_mode": "SEM 不可用盈余电力运行此设备。请在 设备 › 此设备 中把模式设为盈余。"
   }
 }

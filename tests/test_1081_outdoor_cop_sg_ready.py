@@ -102,21 +102,56 @@ def test_blocker_none_when_it_asks():
     assert hp.comfort_plan_blocker() is None
 
 
-def test_coverage_why_gives_codes_for_comment_and_load():
+def test_coverage_why_gives_codes_for_comfort_and_load():
     hp = _pump(_hass())            # no band, no daily minimum runtime
-    ctl = SimpleNamespace(get_devices_sorted=lambda: [hp])
-    c = SimpleNamespace(_surplus_controller=ctl)
-    c._plan_coverage_view = lambda: {"comfort:heat_pump": "not in plan",
-                                     "load:heat_pump": "not in plan",
-                                     "ev:x": "not in plan"}
-    why = SEMCoordinator._plan_coverage_why(c)
-    assert why == {"comfort:heat_pump": RC.LOAD_NOASK_NO_BAND,
-                   "load:heat_pump": RC.LOAD_NOASK_NO_MIN_RUNTIME}
+    view = {"comfort:heat_pump": "not in plan", "load:heat_pump": "not in plan",
+            "ev:x": "not in plan"}
+    assert _why(hp, {}, view) == {
+        "comfort:heat_pump": RC.LOAD_NOASK_NO_BAND,
+        "load:heat_pump": RC.LOAD_NOASK_NO_MIN_RUNTIME}
 
 
 def test_a_covered_pump_needs_no_note():
     hp = _pump(_hass())
-    c = SimpleNamespace(_surplus_controller=SimpleNamespace(
-        get_devices_sorted=lambda: [hp]))
-    c._plan_coverage_view = lambda: {"comfort:heat_pump": "covered"}
-    assert SEMCoordinator._plan_coverage_why(c) == {}
+    assert _why(hp, {}, {"comfort:heat_pump": "covered"}) == {}
+
+
+def test_blocker_names_the_mode_first():
+    from custom_components.solar_energy_management.devices.base import (
+        DeviceControlMode,
+    )
+    hp = _banded(_hass(room=19.5))          # would say solar only otherwise
+    hp.control_mode = DeviceControlMode.OFF
+    assert hp.comfort_plan_blocker() == RC.LOAD_NOASK_MODE
+
+
+def _why(hp, plan, view):
+    c = SimpleNamespace(
+        _surplus_controller=SimpleNamespace(get_devices_sorted=lambda: [hp]),
+        _energy_plan_shadow=plan)
+    c._plan_coverage_view = lambda: view
+    c._no_ask_code = SEMCoordinator._no_ask_code
+    return SEMCoordinator._plan_coverage_why(c)
+
+
+def test_a_banded_pump_gets_no_min_runtime_note():
+    hp = _banded(_hass(room=19.5))          # band set, no daily minimum
+    assert _why(hp, {}, {"load:heat_pump": "not in plan"}) == {}
+
+
+def test_the_builders_own_record_wins():
+    hp = _pump(_hass())
+    plan = {"not_scheduled": [{"id": "load:heat_pump", "why": "load_mode"}]}
+    assert _why(hp, plan, {"load:heat_pump": "not in plan"}) == {
+        "load:heat_pump": RC.LOAD_NOASK_MODE}
+    plan = {"not_scheduled": [{"id": "load:heat_pump", "why": "day_only"}]}
+    assert _why(hp, plan, {"load:heat_pump": "not in plan"}) == {}
+
+
+def test_a_flat_cop_reads_no_outdoor_sensor_unless_one_is_picked():
+    hass = _hass()
+    reads = []
+    c = SimpleNamespace(hass=hass, config={})
+    c._outdoor_temperature_or_none = lambda: reads.append(1) or 5.0
+    assert SEMCoordinator._heat_pump_cop_view(c, _pump(hass)) == (3.0, "flat", None)
+    assert reads == []

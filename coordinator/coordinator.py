@@ -11676,9 +11676,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return None, None, None
         cop = float(getattr(hp_controller, "cop", 3.0) or 3.0)
         source = "flat"
-        outdoor = self._outdoor_temperature_or_none()
         from .heat_cost import device_cop_at, device_has_cop_shape
-        if device_has_cop_shape(hp_controller):
+        shaped = device_has_cop_shape(hp_controller)
+        # a flat COP reads the outdoor sensor only when the user picked one
+        outdoor = (self._outdoor_temperature_or_none()
+                   if shaped or (getattr(self, "config", None) or {}).get(
+                       CONF_OUTDOOR_TEMPERATURE_ENTITY) else None)
+        if shaped:
             now_cop, source = device_cop_at(hp_controller, outdoor)
             if now_cop:
                 cop = float(now_cop)
@@ -11687,31 +11691,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     def _plan_coverage_why(self) -> dict:
         """(#1081) A reason CODE for each ``comfort:``/``load:<device>`` the
         plan does not hold, saying why that device asked for nothing (the
-        card turns it into words in the user's language). Read-only."""
+        card turns it into words in the user's language). Read-only.
+
+        The plan builder's own ``not_scheduled`` record answers first (one
+        owner for "why not planned"); the device's own check answers only
+        where the builder recorded nothing."""
         from . import reason_codes as RC
         out = {}
         ctl = getattr(self, "_surplus_controller", None)
         devs = {str(d.device_id): d for d in
                 (ctl.get_devices_sorted() if ctl else [])}
+        plan = getattr(self, "_energy_plan_shadow", None)
+        recorded = {str(r.get("id")): r.get("why")
+                    for r in ((plan or {}).get("not_scheduled") or [])
+                    if isinstance(r, dict)}
         for did, state in (self._plan_coverage_view() or {}).items():
             kind, _, dev_id = did.partition(":")
             dev = devs.get(dev_id)
             if state != "not in plan" or dev is None:
                 continue
             try:
-                if kind == "comfort":
-                    fn = getattr(dev, "comfort_plan_blocker", None)
-                    why = fn() if callable(fn) else None
-                elif kind == "load" and not getattr(
-                        dev, "daily_min_runtime_sec", 0):
-                    why = RC.LOAD_NOASK_NO_MIN_RUNTIME
-                else:
-                    why = None
+                why = self._no_ask_code(kind, dev, recorded.get(f"load:{dev_id}"), RC)
             except Exception:  # noqa: BLE001 — a note, never a cycle
                 why = None
             if isinstance(why, str) and why:
                 out[did] = why
         return out
+
+    @staticmethod
+    def _no_ask_code(kind, dev, recorded, RC):
+        """(#1081) One device's reason code, or None when nothing true can
+        be said. ``recorded`` is the builder's ``not_scheduled`` word."""
+        if kind == "comfort":
+            fn = getattr(dev, "comfort_plan_blocker", None)
+            return fn() if callable(fn) else None
+        if kind != "load":
+            return None
+        if recorded:
+            return RC.LOAD_NOASK_MODE if recorded == "load_mode" else None
+        if _band_engaged(dev) or getattr(dev, "daily_min_runtime_sec", 0):
+            return None     # the band leads / a runtime is set
+        return RC.LOAD_NOASK_NO_MIN_RUNTIME
 
     def _plan_gate_now(self, demand_id: str, now=None):
         """THE verdict for one demand — the kill-switch rule included.

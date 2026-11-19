@@ -2011,6 +2011,10 @@ class ComfortBandMixin:
         reason code (``reason_codes.LOAD_NOASK_*``), or None when it asks.
         Same order as ``_comfort_goal_demand``; read-only."""
         from ..coordinator import reason_codes as RC
+        # the plan builder looks at the mode first
+        if getattr(self, "control_mode",
+                   DeviceControlMode.SURPLUS) != DeviceControlMode.SURPLUS:
+            return RC.LOAD_NOASK_MODE
         if getattr(self, "vacation", False) is True:
             return RC.LOAD_NOASK_AWAY
         if not (self.comfort_target and self.comfort_limit):

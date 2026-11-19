@@ -24,7 +24,7 @@ test('no reason, no key; junk is refused', () => {
 
 test('every code the plan can name has a sentence in every language', () => {
     const tr = JSON.parse(fs.readFileSync(new URL('../../translations.json', import.meta.url)));
-    const codes = ['comfort_away', 'comfort_no_band', 'comfort_band_wrong', 'comfort_no_room_reading',
+    const codes = ['comfort_mode', 'comfort_away', 'comfort_no_band', 'comfort_band_wrong', 'comfort_no_room_reading',
         'comfort_too_cold', 'comfort_solar_only', 'comfort_warm', 'comfort_not_far', 'load_no_min_runtime'];
     for (const lang of Object.keys(tr)) {
         for (const c of codes) assert.ok(tr[lang]['why_reason_' + c], `${lang} ${c}`);

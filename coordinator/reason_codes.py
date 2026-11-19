@@ -131,6 +131,7 @@ LOAD_COMFORT_GOAL_BATTERY = "comfort_goal_battery"
 # (#1349) it would heat from the house battery, but the battery is at its reserve
 LOAD_BATTERY_RESERVE = "battery_reserve"
 # (#1081) why a device asked the plan for nothing — the plan's coverage notes
+LOAD_NOASK_MODE = "comfort_mode"
 LOAD_NOASK_AWAY = "comfort_away"
 LOAD_NOASK_NO_BAND = "comfort_no_band"
 LOAD_NOASK_BAND_WRONG = "comfort_band_wrong"
