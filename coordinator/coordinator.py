@@ -528,19 +528,27 @@ def _fleet_capacity_of(coordinator, power) -> float:
     return float(getattr(coordinator, "battery_capacity_kwh", 0.0) or 0.0)
 
 
-def _capped_by_headroom(deficit: float, dec, scheduler, power) -> float:
-    """(#1388) The battery's plan demand: the deficit, but never more than
-    the room up to the scheduler's target, on the capacity it plans with.
-    Unreadable pieces leave the deficit as it is."""
+def _battery_room_kwh(coordinator, dec, scheduler, power) -> Optional[float]:
+    """(#1388) The room the pack has now up to the scheduler's target, in
+    kWh: per pack when several report (the fleet SOC is a plain average, so
+    a small full pack must not hide a big empty one), else (target - SOC)
+    on the fleet capacity SEM uses. None when a reading is missing."""
     try:
-        soc = float(power.battery_soc)
         target = float(dec.target_soc)
-        usable = float(scheduler._config.battery_usable_capacity_kwh)
+        soc = float(power.battery_soc)
     except (AttributeError, TypeError, ValueError):
-        return deficit
-    if usable <= 0 or target <= 0:
-        return deficit
-    return min(deficit, max(0.0, target - soc) / 100.0 * usable)
+        return None
+    if target <= 0:
+        return None
+    units = getattr(power, "batteries", None) or {}
+    if (isinstance(units, dict) and len(units) > 1 and all(
+            isinstance(getattr(u, "soc_pct", None), (int, float))
+            for u in units.values())):
+        return sum(max(0.0, target - float(u.soc_pct)) / 100.0
+                   * float(coordinator._pack_share_kwh(bid, power))
+                   for bid, u in units.items())
+    cap = _fleet_capacity_of(coordinator, power)
+    return max(0.0, target - soc) / 100.0 * cap if cap > 0 else None
 
 
 def battery_unseen(coordinator) -> bool:
@@ -13861,11 +13869,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1367) Plan only the charge SEM can send: a pack whose
             # adapter takes no charge command gets none, and the card says
             # so instead of showing a charge that never happens.
-            # (#1388) The scheduler's deficit is the day's; the pack takes only
-            # what is left up to the target. The rest is house demand the grid
-            # covers, not a battery charge (a 23.7 kWh ask on a 9.7 kWh pack).
-            deficit = _capped_by_headroom(deficit, dec, scheduler, power)
+            # (#1388) The scheduler's deficit is the day's; the packer caps it
+            # to the pack's room where the charge lands. The rest is house
+            # demand the grid covers, not a battery charge.
             plan_deficit = deficit
+            batt_room = _battery_room_kwh(self, dec, scheduler, power)
             batt_max_w = float(getattr(
                 getattr(scheduler, "_config", None),
                 "battery_max_charge_power_w", 5000.0))
@@ -13897,6 +13905,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # hour is closed to it, a sun hour stays open (the sun
                     # fills the pack). Cheap day hours are #1073.
                     sun_waits_until=plan_day_end,
+                    room_kwh=batt_room,
                 ))
 
             # ── Readiness, before anything gets stamped ─────────────────

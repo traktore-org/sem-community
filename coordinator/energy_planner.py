@@ -121,6 +121,12 @@ class Demand:
     #: within the grid limit. False = the sun slot offers the surplus only,
     #: exactly as before.
     grid_in_sun: bool = False
+    #: (#1388) A battery charge: the room the pack has up to the scheduler's
+    #: target at the stamp (kWh). The packer asks the room at the CHARGE slot
+    #: in its own walked path — a night that drains the pack opens more room
+    #: later — so the ask never exceeds what the pack can take there. None =
+    #: no cap, exactly as before.
+    room_kwh: Optional[float] = None
 
 
 @dataclass
@@ -630,7 +636,9 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 code = "before_deadline"
         if code == "cheapest_hours" and not any(
                 _price(d, j) is not None and _price(d, j) > price + 1e-9
-                and _in_time(d, j) for j in idx):
+                and _eligible(d, j)
+                and _grant(d, j) >= max(_W_EPS, float(d.min_power_w))
+                for j in idx):
             code = "no_cheaper_hour"   # (#1388) it had no choice, so no "cheapest"
         return {"code": code, "params": params}
 
@@ -682,6 +690,14 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
 
     for d in sorted(demands, key=lambda d: (d.priority, d.id)):
         need = max(0.0, float(d.energy_kwh))
+        fill_to = None
+        if d.kind == "battery" and d.source != "battery" and d.room_kwh is not None:
+            # (#1388) the pack's room, read where the charge lands (the
+            # walked level), not at the stamp: the most any slot can take
+            fill_to = float(d.room_kwh) + initial_soc
+            need = min(need, max(
+                [0.0] + [fill_to - ledger[i].soc_kwh for i in idx
+                         if _in_time(d, i)]))
         planned = 0.0
         relaxed_kwh = 0.0               # (#1081) booked in not-cheap hours
         cost = 0.0
@@ -793,6 +809,10 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             else:
                 grant = _grant(d, i)
                 want = need - planned
+                if fill_to is not None:
+                    want = min(want, fill_to - s.soc_kwh)
+                    if want <= 1e-9:
+                        continue
                 if d.cheap_only_kwh > 0 and not _cheap(d, i):
                     # (#1081) an hour that is not cheap serves Keep at only
                     want = min(want, need - d.cheap_only_kwh - relaxed_kwh)
