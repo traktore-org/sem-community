@@ -7,6 +7,7 @@ from functools import partial
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from custom_components.solar_energy_management.coordinator import reason_codes as RC
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
 )
@@ -73,7 +74,7 @@ def test_no_pump_no_view():
 # ── why the plan holds no ask ────────────────────────────────────────────
 
 def test_blocker_no_band():
-    assert "No comfort band" in _pump(_hass()).comfort_plan_blocker()
+    assert _pump(_hass()).comfort_plan_blocker() == RC.LOAD_NOASK_NO_BAND
 
 
 def _banded(hass, **kw):
@@ -86,12 +87,12 @@ def _banded(hass, **kw):
 def test_blocker_grid_not_allowed_for_a_cool_room():
     hp = _banded(_hass(room=19.5))
     assert hp.top_up_policy == "solar_only"
-    assert "Grid power is not allowed" in hp.comfort_plan_blocker()
+    assert hp.comfort_plan_blocker() == RC.LOAD_NOASK_SOLAR_ONLY
 
 
 def test_blocker_warm_room():
     hp = _banded(_hass(room=23.0))
-    assert "warm enough" in hp.comfort_plan_blocker()
+    assert hp.comfort_plan_blocker() == RC.LOAD_NOASK_WARM
 
 
 def test_blocker_none_when_it_asks():
@@ -101,12 +102,21 @@ def test_blocker_none_when_it_asks():
     assert hp.comfort_plan_blocker() is None
 
 
-def test_coverage_why_names_only_the_uncovered_pump():
-    hp = _pump(_hass())
+def test_coverage_why_gives_codes_for_comment_and_load():
+    hp = _pump(_hass())            # no band, no daily minimum runtime
     ctl = SimpleNamespace(get_devices_sorted=lambda: [hp])
     c = SimpleNamespace(_surplus_controller=ctl)
     c._plan_coverage_view = lambda: {"comfort:heat_pump": "not in plan",
-                                     "load:heat_pump": "not in plan"}
+                                     "load:heat_pump": "not in plan",
+                                     "ev:x": "not in plan"}
     why = SEMCoordinator._plan_coverage_why(c)
-    assert list(why) == ["comfort:heat_pump"]
-    assert "No comfort band" in why["comfort:heat_pump"]
+    assert why == {"comfort:heat_pump": RC.LOAD_NOASK_NO_BAND,
+                   "load:heat_pump": RC.LOAD_NOASK_NO_MIN_RUNTIME}
+
+
+def test_a_covered_pump_needs_no_note():
+    hp = _pump(_hass())
+    c = SimpleNamespace(_surplus_controller=SimpleNamespace(
+        get_devices_sorted=lambda: [hp]))
+    c._plan_coverage_view = lambda: {"comfort:heat_pump": "covered"}
+    assert SEMCoordinator._plan_coverage_why(c) == {}

@@ -11685,21 +11685,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return cop, source, outdoor
 
     def _plan_coverage_why(self) -> dict:
-        """(#1081) A plain sentence for each ``comfort:<device>`` the plan
-        does not hold, saying why that device asked for nothing. Read-only;
-        empty when every one is covered or the device gives no reason."""
+        """(#1081) A reason CODE for each ``comfort:``/``load:<device>`` the
+        plan does not hold, saying why that device asked for nothing (the
+        card turns it into words in the user's language). Read-only."""
+        from . import reason_codes as RC
         out = {}
         ctl = getattr(self, "_surplus_controller", None)
         devs = {str(d.device_id): d for d in
                 (ctl.get_devices_sorted() if ctl else [])}
         for did, state in (self._plan_coverage_view() or {}).items():
-            dev = devs.get(did.split(":", 1)[-1])
-            fn = getattr(dev, "comfort_plan_blocker", None)
-            if state != "not in plan" or not did.startswith("comfort:") \
-                    or not callable(fn):
+            kind, _, dev_id = did.partition(":")
+            dev = devs.get(dev_id)
+            if state != "not in plan" or dev is None:
                 continue
             try:
-                why = fn()
+                if kind == "comfort":
+                    fn = getattr(dev, "comfort_plan_blocker", None)
+                    why = fn() if callable(fn) else None
+                elif kind == "load" and not getattr(
+                        dev, "daily_min_runtime_sec", 0):
+                    why = RC.LOAD_NOASK_NO_MIN_RUNTIME
+                else:
+                    why = None
             except Exception:  # noqa: BLE001 — a note, never a cycle
                 why = None
             if isinstance(why, str) and why:

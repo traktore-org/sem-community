@@ -3732,6 +3732,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "cop_used": d.get("heat_pump_cop"),
                 "cop_source": d.get("heat_pump_cop_source"),
                 "outdoor_c": d.get("heat_pump_cop_outdoor_c"),
+                # (#1081) a code, not a sentence: the card words it
+                "cop_hint": ("set_cop_curve"
+                             if d.get("heat_pump_cop_source") == "flat" else None),
             })
         elif self.entity_description.key in ("daily_costs", "monthly_costs", "yearly_costs"):
             # (#1321) what SEM paid per bought kWh against the hours'
