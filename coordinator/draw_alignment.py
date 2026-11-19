@@ -1,7 +1,8 @@
 """(#1394) A device's draw as it stood when the house reading was taken.
 
 The live base load is ``home - sum(device draws)``. ``home`` comes from the
-grid, solar and battery meters; a Huawei grid meter reports every 15-20 s.
+grid, solar and battery meters; a grid meter read over modbus may report
+only every 15-20 s.
 A smart plug reports every second. When a plug's load switches on between
 two grid reports, the plug already shows it and ``home`` does not yet:
 19.11 05:18:29, house 647 W (grid read 05:18:21), coffee machine 1334 W,
