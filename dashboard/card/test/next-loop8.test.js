@@ -1,7 +1,14 @@
 // (#1321) review loop 8
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { whyLines, gotCheapest } from '../src/util/plan-why.js';
+import { mount, text, S } from './card-harness.js';
+// (#1321) lit is faked by the harness; modules load after it (CI has no node_modules)
+const { whyLines, gotCheapest } = await import('../src/util/plan-why.js');
+const { refillKwh } = await import('../src/util/next-devices-battery.js');
+const { aboveReserve } = await import('../src/util/next-battery-line.js');
+const { sunModel, sunRuns } = await import('../src/util/next-plan-chart.js');
+const { nowLead, repeatsNextBlock } = await import('../src/util/next-lead.js');
+const { groups, sentenceText } = await import('../src/util/next-settings.js');
 
 const HOUR = 3600e3;
 const NOW = Date.parse('2026-11-18T10:00:00Z');
@@ -25,8 +32,6 @@ test('1: with timeline_omitted the tariff prices still tell whether the cheapest
     assert.equal(whyLines(own, NOW, 4, UP)[0].code, 'cheapest_hours');
 });
 
-import { refillKwh } from '../src/util/next-devices-battery.js';
-import { aboveReserve } from '../src/util/next-battery-line.js';
 
 test('5: Devices says the battery refill the Plan names, not the forecast alone', () => {
     const plan = { blocks: [
@@ -46,7 +51,6 @@ test('4: "more than the battery holds" compares with what is above the reserve',
     assert.equal(aboveReserve({}), null);
 });
 
-import { sunModel, sunRuns } from '../src/util/next-plan-chart.js';
 
 test('L: the sun line runs to the last reading, not the last whole hour', () => {
     const now = Date.parse('2026-11-18T11:43:00Z');
@@ -63,7 +67,6 @@ test('L: the sun line runs to the last reading, not the last whole hour', () => 
     assert.equal(sunModel({ win, nowMs: now, actual, liveW: null }).points.length, bare.points.length);
 });
 
-import { mount, text, S } from './card-harness.js';
 
 const WORDS = {
     next_would_limit: 'discharge limited to {kw}', next_battery_charging: 'Battery charging',
@@ -111,8 +114,6 @@ test('7: the surplus tile is labelled and says plainly what the parts are', () =
     assert.doesNotMatch(out, /next_in_use_by|Counted/);
 });
 
-import { nowLead, repeatsNextBlock } from '../src/util/next-lead.js';
-import { groups, sentenceText } from '../src/util/next-settings.js';
 
 test('L: a heading about the car charge is not repeated by a "Next:" line', () => {
     const lead = nowLead({ night: false, observer: true, solarW: 700, gridW: 0, batteryW: -200,

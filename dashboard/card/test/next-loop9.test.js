@@ -1,15 +1,17 @@
 // (#1321) review loop 9
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { whyLines, gotCheapest } from '../src/util/plan-why.js';
-import { demandFigures, kwhAhead, batteryFullAt, shortfalls } from '../src/util/plan-facts.js';
-import { todayRows, nightStart } from '../src/util/next-today-rows.js';
-import { refillKwh } from '../src/util/next-devices-battery.js';
-import { upToShown, knownCapacity, capacityUnset } from '../src/util/charger-questions.js';
-import { startCode, startLine } from '../src/util/why-rows.js';
-import { copLearnLine } from '../src/util/heat-pump-cost.js';
-import { powerBar } from '../src/util/next-power-bar.js';
-import { sentenceText, groups } from '../src/util/next-settings.js';
+// (#1321) lit is faked by the harness; modules load after it (CI has no node_modules)
+import './card-harness.js';
+const { whyLines, gotCheapest } = await import('../src/util/plan-why.js');
+const { demandFigures, kwhAhead, batteryFullAt, shortfalls } = await import('../src/util/plan-facts.js');
+const { todayRows, nightStart } = await import('../src/util/next-today-rows.js');
+const { refillKwh } = await import('../src/util/next-devices-battery.js');
+const { upToShown, knownCapacity, capacityUnset } = await import('../src/util/charger-questions.js');
+const { startCode, startLine } = await import('../src/util/why-rows.js');
+const { copLearnLine } = await import('../src/util/heat-pump-cost.js');
+const { powerBar } = await import('../src/util/next-power-bar.js');
+const { sentenceText, groups } = await import('../src/util/next-settings.js');
 
 const HOUR = 3600e3;
 const NOW = Date.parse('2026-11-18T10:00:00Z');
