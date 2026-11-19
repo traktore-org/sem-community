@@ -84,6 +84,11 @@ DECLARED_AUTHORITIES = {
                      "night persists whole (to_dict/from_dict incl. last_ts) "
                      "and a restart across it prices its outage as a gap, "
                      "which refuses the night rather than mislabeling it"),
+    ("coordinator/battery_adapters/hold_select.py", "hold-select write count day (#1362)"):
+        ("calendar", "survives — the count of SEM's writes to the hold "
+                     "select is saved in the hold record WITH its local "
+                     "date; a restart the same day keeps counting, one across "
+                     "midnight finds yesterday's date and starts again at 0"),
     ("coordinator/coordinator.py", "_tracker_date init"):
         ("calendar", "n/a — the hour arrays it guards start empty anyway; "
                      "the decay that USED to ride on it moved out in #645"),
