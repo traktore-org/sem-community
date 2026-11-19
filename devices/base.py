@@ -2006,6 +2006,30 @@ class ComfortBandMixin:
             offset_c=0.0, active_rate_c_per_h=on.rate_c_per_h,
             rated_power_w=rated) or 0.0) if below else 0.0
         return max(0.0, float(total_kwh) - float(base))
+    def comfort_plan_blocker(self) -> Optional[str]:
+        """(#1081) Why the plan got NO comfort ask from this device, in plain
+        words, or None when it asks. Same order as ``_comfort_goal_demand``;
+        read-only, for the plan's coverage notes."""
+        if getattr(self, "vacation", False) is True:
+            return "House is away."
+        if not (self.comfort_target and self.comfort_limit):
+            return "No comfort band set (Keep at and Too cold at)."
+        state, bad = self._comfort_band_peek()
+        if bad:
+            return "Comfort band is wrong: Too cold at must be below Keep at."
+        if self._comfort_reading() is None:
+            return "No room temperature reading."
+        if state == "forced":
+            return "Room is below Too cold at: heated at once, not planned."
+        if state != "willing":
+            return "Already warm enough (comfort band is satisfied)."
+        if not self.comfort_goal_may_buy():
+            return ("Grid power is not allowed (set Finish overnight via: "
+                    "Grid), so the sun alone keeps it warm.")
+        if not self.is_active and not self.comfort_goal_wants_start():
+            return "Room is not far enough below Keep at to start a run."
+        return None
+
     # The band speaks through the three generic properties every surplus
     # pass already reads — no new controller clauses; peak shed,
     # anti-cycling, priority and LIFO apply to comfort runs unchanged.

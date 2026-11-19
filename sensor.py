@@ -281,6 +281,8 @@ def _energy_plan_attrs(
         "why_codes": plan.get("why_codes") or [],
         # (#638 C7) per-demand plan-vs-reactive attribution, live.
         "coverage": plan.get("coverage") or {},
+        # (#1081) plain words for a device the plan holds no ask from
+        "coverage_why": plan.get("coverage_why") or {},
         # (#638, the last string) the shadow arbitrage advisor's verdict
         # with its numbers — the morning plan-vs-Sankey audit reads it
         # here. Small by construction (a few blocks at most).

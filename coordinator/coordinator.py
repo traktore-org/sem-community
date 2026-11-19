@@ -7228,7 +7228,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 {**_onp,
                  "actuation": bool(getattr(
                      self, "_energy_plan_actuation", False)),
-                 "coverage": self._plan_coverage_view()}
+                 "coverage": self._plan_coverage_view(),
+                 "coverage_why": self._plan_coverage_why()}
                 if isinstance(_onp, dict) else _onp)
             # (#638 consolidation / #722) the NEXT energy day's books,
             # previewed for the card's Tomorrow view — live like
@@ -8563,26 +8564,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._feed_cop_learners()          # (#1081)
         except Exception:  # noqa: BLE001 — learning never costs a cycle
             _LOGGER.debug("COP learner failed", exc_info=True)
-        _hp_cop = (float(getattr(hp_controller, "cop", 3.0) or 3.0)
-                  if hp_controller is not None else None)
-        # (#1081) with a COP curve, the COP at the outdoor temperature now;
-        # without one (or with no reading) the flat COP, as before.
-        # (#1081) …or the curve it learned from its heat meter, when the
-        # user chose that (``device_cop_at``, the one reader).
-        _hp_cop_source = "flat" if hp_controller is not None else None
-        _hp_cop_outdoor = None
-        from .heat_cost import device_has_cop_shape as _has_shape
-        if hp_controller is not None and _has_shape(hp_controller):
-            # read the outdoor temperature only for a curve: without one
-            # nothing here changes, not even what is read
-            from .heat_cost import device_cop_at as _device_cop_at
-            _hp_cop_outdoor = self._outdoor_temperature_or_none()
-            _cop_now, _hp_cop_source = _device_cop_at(
-                hp_controller, _hp_cop_outdoor)
-            if _cop_now:
-                _hp_cop = float(_cop_now)
-            if _hp_cop_source == "flat":
-                _hp_cop_outdoor = None
+        _hp_cop, _hp_cop_source, _hp_cop_outdoor = self._heat_pump_cop_view(
+            hp_controller)
         from .heat_cost import heat_pump_price as _heat_pump_price_fn
         _hp_price = None
         if hp_controller is not None:
@@ -11681,6 +11664,46 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             gate = self._plan_gate_now(str(demand_id), now)
             out[str(demand_id)] = "covered" if gate.covered else (
                 str(gate.reason) or "uncovered")
+        return out
+
+    def _heat_pump_cop_view(self, hp_controller) -> tuple:
+        """(#1081) ``(cop, source, outdoor_c)`` for the cost-of-heat sensor.
+
+        With a COP curve, or a learned one, the COP at the outdoor
+        temperature now; without one the flat COP. The outdoor reading is
+        always taken, so the sensor shows what SEM saw even on a flat COP."""
+        if hp_controller is None:
+            return None, None, None
+        cop = float(getattr(hp_controller, "cop", 3.0) or 3.0)
+        source = "flat"
+        outdoor = self._outdoor_temperature_or_none()
+        from .heat_cost import device_cop_at, device_has_cop_shape
+        if device_has_cop_shape(hp_controller):
+            now_cop, source = device_cop_at(hp_controller, outdoor)
+            if now_cop:
+                cop = float(now_cop)
+        return cop, source, outdoor
+
+    def _plan_coverage_why(self) -> dict:
+        """(#1081) A plain sentence for each ``comfort:<device>`` the plan
+        does not hold, saying why that device asked for nothing. Read-only;
+        empty when every one is covered or the device gives no reason."""
+        out = {}
+        ctl = getattr(self, "_surplus_controller", None)
+        devs = {str(d.device_id): d for d in
+                (ctl.get_devices_sorted() if ctl else [])}
+        for did, state in (self._plan_coverage_view() or {}).items():
+            dev = devs.get(did.split(":", 1)[-1])
+            fn = getattr(dev, "comfort_plan_blocker", None)
+            if state != "not in plan" or not did.startswith("comfort:") \
+                    or not callable(fn):
+                continue
+            try:
+                why = fn()
+            except Exception:  # noqa: BLE001 — a note, never a cycle
+                why = None
+            if isinstance(why, str) and why:
+                out[did] = why
         return out
 
     def _plan_gate_now(self, demand_id: str, now=None):
