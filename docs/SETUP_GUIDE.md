@@ -278,6 +278,8 @@ Some inverters have no number that limits discharge, only a mode select. One opt
 
 Turn on **House as a battery sink**. SEM then keeps the battery in cheap hours for the dear hours that follow, and puts the select back after. A hand change is left alone. SEM writes the select at most 12 times a day and checks that the hold works.
 
+Some inverters charge from the grid only in this mode. So a grid charge also sets the hold option, and the next normal cycle puts the mode back.
+
 ## 9. Heat pump and hot water
 
 ### What is SG-Ready?

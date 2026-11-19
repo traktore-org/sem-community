@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **A grid charge sets the mode too** (#1362). With a hold select set, a grid charge also sets its option. Some inverters charge only then.
 - ✨ **Hold the battery through a mode select** (#1362). For inverters with no discharge limit: SEM keeps it for dear hours and checks the hold works.
 - 💥 **One dashboard** (#1321). The classic dashboard is retired: an unchanged one is replaced, a changed one stays with a Repair. Settings are on System, Devices.
 - 📝 **Shorter docs for the new dashboard** (#1321). Every guide is rewritten for the five screens and checked against the code. New screenshots.
