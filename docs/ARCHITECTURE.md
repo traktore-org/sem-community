@@ -1371,6 +1371,13 @@ and `charge_pacing.py`'s writer both check it too, found missing in
 review the same day the feature shipped. A restart never reads as
 "steered" (an unreadable indicator changes nothing), and a flickering
 indicator holds active for `HOLD_S` (300 s) past its last true reading.
+In `yield` mode an empty indicator field means "steered all the time"
+(#1391). A yielded charger skips the stability layer and gets
+`yielded_charger_decision` (IDLE, 0 A, reason code `charger_yielded`), so
+the card and the start ladder do not describe an act SEM never makes; the
+phase guard can still turn that IDLE into its stop (#1381). Off keeps its
+RELEASE. The fleet loop counts the yielded charger's measured draw in the
+sun and night budgets of the next charger, and skips its phase-switch tick.
 
 ### Charge pacing writer (#820)
 

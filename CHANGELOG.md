@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Phase guard stops a "SEM yields" charger when a phase is over its limit** (#1381). Only that stop is sent; small loads stay on.
 - 🐛 **Cheapest-hours car waits out the peak on a two-rate tariff** (#1387). Before, it could start in a peak hour.
 - 🐛 **Cheapest-hours car can use a cheap hour with thin sun** (#1383). The grid covers what the sun lacks, at the grid price.
+- 🐛 **"Yes, SEM yields" with no signal now always yields** (#1391). Before, SEM kept steering the charger, and the card said it was starting the car.
 
 # [2.3.0-beta.20] — 18.11.2026
 
