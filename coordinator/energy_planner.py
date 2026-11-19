@@ -43,9 +43,11 @@ _W_EPS = 1.0              # grants below 1 W are noise
 #:   no_price_yet    — an hour with no price published (Keep-at goals)
 #:   from_battery    — drawn from the home battery, not the grid
 #:   sun_plus_grid   — a thin sun hour, the rest from the grid (#1383)
+#:   no_cheaper_hour — no dearer hour was open to the load: the block sits
+#:                     there because nothing else is left, not by price (#1388)
 REASON_CODES = ("top_up_late", "one_block", "solar", "cheap_hours",
                 "cheapest_hours", "before_deadline", "no_price_yet",
-                "from_battery", "sun_plus_grid")
+                "from_battery", "sun_plus_grid", "no_cheaper_hour")
 
 
 # ---------------------------------------------------------------------------
@@ -622,6 +624,10 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     _price(d, j) is not None and _price(d, j) < price
                     and ledger[j].end > d.deadline for j in idx):
                 code = "before_deadline"
+        if code == "cheapest_hours" and not any(
+                _price(d, j) is not None and _price(d, j) > price + 1e-9
+                and _in_time(d, j) for j in idx):
+            code = "no_cheaper_hour"   # (#1388) it had no choice, so no "cheapest"
         return {"code": code, "params": params}
 
     def _book_grid(s, d, power, e_kwh):

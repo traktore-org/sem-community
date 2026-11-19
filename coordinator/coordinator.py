@@ -528,6 +528,21 @@ def _fleet_capacity_of(coordinator, power) -> float:
     return float(getattr(coordinator, "battery_capacity_kwh", 0.0) or 0.0)
 
 
+def _capped_by_headroom(deficit: float, dec, scheduler, power) -> float:
+    """(#1388) The battery's plan demand: the deficit, but never more than
+    the room up to the scheduler's target, on the capacity it plans with.
+    Unreadable pieces leave the deficit as it is."""
+    try:
+        soc = float(power.battery_soc)
+        target = float(dec.target_soc)
+        usable = float(scheduler._config.battery_usable_capacity_kwh)
+    except (AttributeError, TypeError, ValueError):
+        return deficit
+    if usable <= 0 or target <= 0:
+        return deficit
+    return min(deficit, max(0.0, target - soc) / 100.0 * usable)
+
+
 def battery_unseen(coordinator) -> bool:
     """(#1063 round 2) No battery SEM can see — the one question every
     battery surface asks: the pack size, the plan, the tomorrow preview,
@@ -13846,6 +13861,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1367) Plan only the charge SEM can send: a pack whose
             # adapter takes no charge command gets none, and the card says
             # so instead of showing a charge that never happens.
+            # (#1388) The scheduler's deficit is the day's; the pack takes only
+            # what is left up to the target. The rest is house demand the grid
+            # covers, not a battery charge (a 23.7 kWh ask on a 9.7 kWh pack).
+            deficit = _capped_by_headroom(deficit, dec, scheduler, power)
             plan_deficit = deficit
             batt_max_w = float(getattr(
                 getattr(scheduler, "_config", None),
