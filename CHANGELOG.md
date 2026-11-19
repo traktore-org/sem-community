@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 💥 **One dashboard** (#1321). The classic dashboard is retired: an unchanged one is replaced, a changed one stays with a Repair. Settings are on System, Devices.
 - 📝 **Shorter docs for the new dashboard** (#1321). Every guide is rewritten for the five screens and checked against the code. New screenshots.
-- 🐛 **Grid charge with the mode already set** (#1377). When the battery's mode already shows the charge option, SEM still raises the reserve and allows grid charging.
+- 🐛 **Grid charge with the mode already set** (#1377). If the mode already shows the charge option, SEM still raises the reserve and allows grid charging.
 - 🐛 **A run under way reads as running** (#1321). The screens say "charging until 14:45", not "waits for 15:00".
 - 🐛 **Plainer battery and settings** (#1321). The battery line says what a full battery gives; an unset car size reads "not set".
 - 🐛 **One figure per device** (#1321). Plan, Now and Devices count only runs still ahead. Coming up names the car and drops cars not plugged in.
