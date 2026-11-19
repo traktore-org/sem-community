@@ -642,6 +642,24 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             code = "no_cheaper_hour"   # (#1388) it had no choice, so no "cheapest"
         return {"code": code, "params": params}
 
+    def _extend_block(d, i, want):
+        """(#1388) Grow this demand's block in slot ``i`` by up to ``want``
+        kWh within its own power cap and the slot's headroom; the kWh added."""
+        k = own_block[(d.id, i)]
+        old = allocations[k]
+        h = _hours(d, i)
+        p_cap = min(float(d.max_power_w), ledger[i].headroom_w + old.power_w)
+        add = min(want, p_cap / 1000.0 * h - old.energy_kwh)
+        if add <= 1e-9:
+            return 0.0
+        total = old.energy_kwh + add
+        power = min(p_cap, max(float(d.min_power_w), total / h * 1000.0))
+        run_h = min(h, total / (power / 1000.0))
+        _book_grid(ledger[i], d, power - old.power_w, add)
+        allocations[k] = replace(
+            old, power_w=power, end=old.start + timedelta(hours=run_h))
+        return add
+
     def _room_at(fill_to, i):
         """(#1388) What a charge in slot ``i`` may add: it lifts every later
         level too, so the highest level from here on must stay under
@@ -705,6 +723,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         queue += [(d, True) for d, _ in queue
                   if d.kind == "battery" and d.source != "battery"
                   and d.room_kwh is not None]
+    own_block = {}                  # (demand id, slot) -> allocation index
     first = {}                      # id -> (result index, planned, needed)
     for d, again in queue:
         need = max(0.0, float(d.energy_kwh))
@@ -803,6 +822,13 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             h = _hours(d, i)
             if h <= 0 or not _eligible(d, i):
                 continue
+            if again and (d.id, i) in own_block:
+                # (#1388) one block per demand per slot: the top-up grows it
+                got = _extend_block(d, i, min(need - planned,
+                                              _room_at(fill_to, i)))
+                planned += got
+                cost += got * (allocations[own_block[(d.id, i)]].price or 0.0)
+                continue
             if d.source == "battery":
                 # From the WALKED state: what the trajectory leaves above the
                 # floor after home's ACTUAL battery share this slot (clamped
@@ -882,6 +908,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             allocations.append(Allocation(
                 demand_id=d.id, start=begin, end=end, power_w=power,
                 price=price, reason=why, **code))
+            if fill_to is not None:
+                own_block[(d.id, i)] = len(allocations) - 1
             last_block_end[d.id] = end
             if d.cheap_only_kwh > 0 and not _cheap(d, i):
                 relaxed_kwh += e_kwh

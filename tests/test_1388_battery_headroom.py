@@ -215,3 +215,33 @@ def test_a_tier2_load_drain_is_charged_back_in_either_order(bp, lp):
 def test_a_night_without_a_tier2_load_is_unchanged():
     got, _ = _probe(0, 1, load=False)
     assert got == pytest.approx(0.5, abs=0.01)
+
+
+def _tier2_plan(prices, limit_w=5000.0, home_w=0.0):
+    t0 = datetime(2026, 11, 19, 21, 0)
+    slots = [LedgerSlot(start=t0 + timedelta(hours=n),
+                        end=t0 + timedelta(hours=n + 1), price=p, home_w=home_w)
+             for n, p in enumerate(prices)]
+    led = build_night_ledger(slots, soc_kwh=9.0, floor_kwh=0.0,
+                             max_discharge_w=5000.0, peak_limit_w=limit_w,
+                             capacity_kwh=9.5)
+    bat = Demand(id="battery", kind="battery", energy_kwh=9.0, max_power_w=2200,
+                 source="grid", room_kwh=0.5, priority=0)
+    load = Demand(id="load:h", kind="load", energy_kwh=6.0, max_power_w=2000,
+                  source="battery", priority=1)
+    return pack_night([bat, load], led, max_discharge_w=5000.0,
+                      peak_limit_w=limit_w)
+
+
+@pytest.mark.parametrize("prices", [[0.40] * 6 + [0.10] * 3, [0.10] * 9])
+def test_one_block_per_slot_and_never_over_the_power_cap(prices):
+    plan = _tier2_plan(prices)
+    seen = {}
+    for a in plan.allocations:
+        if a.demand_id == "battery":
+            key = a.start.replace(minute=0)
+            assert key not in seen, "two blocks of one demand in one slot"
+            seen[key] = a
+            assert a.power_w <= 2200 + 1e-6
+    got = sum(a.energy_kwh for a in seen.values())
+    assert got == pytest.approx(6.5, abs=0.1)
