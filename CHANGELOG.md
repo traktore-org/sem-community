@@ -23,8 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Cheapest-hours car waits out the peak on a two-rate tariff** (#1387). Before, it could start in a peak hour.
 - 🐛 **Cheapest-hours car can use a cheap hour with thin sun** (#1383). The grid covers what the sun lacks, at the grid price.
 - 🐛 **"Yes, SEM yields" with no signal now always yields** (#1391). Before, SEM kept steering the charger, and the card said it was starting the car.
-- 🐛 **Price and plan shows both rates of a schedule or two-rate tariff, today and tomorrow** (#1390). Before, it showed one fixed price.
-- 🐛 **Price and plan shows the grid price in sunny hours** (#1390). Before, it could show the feed-in price there.
+- 🐛 **Price and plan shows a schedule or two-rate tariff's real prices, today, tomorrow and in sunny hours** (#1390). Before, it showed one fixed price.
 
 # [2.3.0-beta.20] — 18.11.2026
 
