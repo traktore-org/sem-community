@@ -55,7 +55,13 @@ PHACC = "pytest-homeassistant-custom-component"
 _LEG = re.compile(
     r'-\s*ha:\s*"(?P<ha>[^"]+)"\s*\n\s*python-version:\s*"(?P<py>[^"]+)"'
     r'(?:\s*\n\s*phacc:\s*"(?P<phacc>[^"]+)")?'
+    # (#1313) an experimental rung installs a newer HA on top of its plugin
+    r'(?:(?:\s*\n\s*#[^\n]*)*\s*\n\s*ha-next:\s*"(?P<next>[^"]+)")?'
 )
+
+
+#: ``ha`` label -> the HA an experimental rung installs on top (#1313).
+_HA_NEXT: dict[str, str] = {}
 
 
 def _matrix_legs() -> list[tuple[str, str, str | None]]:
@@ -74,6 +80,9 @@ def _matrix_legs() -> list[tuple[str, str, str | None]]:
     block = block[:block.find("steps:")]
     legs = [(g["ha"], g["py"], g["phacc"]) for g in
             (mm.groupdict() for mm in _LEG.finditer(block))]
+    _HA_NEXT.clear()
+    _HA_NEXT.update({g["ha"]: g["next"] for g in
+                     (mm.groupdict() for mm in _LEG.finditer(block)) if g["next"]})
     assert legs, f"no `include:` legs after the `ha:` matrix in {WORKFLOW.name}"
     assert [ha for ha, _, _ in legs] == labels, (
         f"the `ha:` list {labels} and the `include:` legs "
@@ -163,12 +172,17 @@ def test_every_matrix_leg_has_a_pin_that_applies_to_it():
     )
 
 
+def _installed(ha: str, py: str, phacc: str | None) -> str | None:
+    """The HA a leg really runs: an experimental rung's own HA, else the pin."""
+    return _HA_NEXT.get(ha) or _ha_for(py, phacc)
+
+
 def test_1298_every_leg_is_labelled_by_the_ha_it_installs():
     """The check name is the HA version. A leg labelled 2026.10 that installs
     2026.8 is the #787 blind spot with a better name."""
-    wrong = [(ha, _ha_for(py, phacc)) for ha, py, phacc in _matrix_legs()
-             if _ha_for(py, phacc) is not None
-             and not _ha_for(py, phacc).startswith(ha + ".")]
+    wrong = [(ha, _installed(ha, py, phacc)) for ha, py, phacc in _matrix_legs()
+             if _installed(ha, py, phacc) is not None
+             and not _installed(ha, py, phacc).startswith(ha + ".")]
     assert not wrong, (
         f"matrix legs whose `ha:` label is not the HA they install: {wrong}"
     )
@@ -176,15 +190,13 @@ def test_1298_every_leg_is_labelled_by_the_ha_it_installs():
 
 def test_1298_the_version_prod_runs_is_a_rung():
     """The newest rung follows the HA on PROD. (No live read here — the test
-    must not reach the dev box.) PROD runs 2026.11 since 04.11, but no phacc
-    release supports it yet; #1313 adds that rung and moves this line."""
-    covered = {_ha_for(py, phacc) for _, py, phacc in _matrix_legs()} - {None}
+    must not reach the dev box.) PROD runs 2026.11 since 04.11; until a phacc
+    release supports it, the 2026.11 rung is experimental (#1313)."""
+    covered = {_installed(ha, py, phacc) for ha, py, phacc in _matrix_legs()} - {None}
     newest = max(covered, key=lambda v: tuple(int(p) for p in v.split(".")))
-    assert newest.startswith("2026.10."), (
-        f"the newest HA under test is {newest}; expected 2026.10.x until a "
-        "phacc release supports 2026.11 (#1313). "
-        "Bump the `phacc` of the PROD rung (and its `# rung:` line) when "
-        "PROD moves."
+    assert newest.startswith("2026.11."), (
+        f"the newest HA under test is {newest}; expected 2026.11.x, the HA "
+        "PROD runs (#1313). Bump the PROD rung when PROD moves."
     )
 
 

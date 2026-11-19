@@ -30,6 +30,12 @@ jobs:
     # tests/requirements_test.txt — and the list reads:
     #   HA 2026.8.2  on 3.14 (the hacs.json floor)    -> check "test HA 2026.8"
     #   HA 2026.10.4 on 3.14 (`phacc` pin)            -> check "test HA 2026.10"
+    #   HA 2026.11.2 on 3.14 (EXPERIMENTAL, #1313)    -> check "test HA 2026.11 (experimental)"
+    #     The test plugin has no 2026.11 release yet, so this rung installs
+    #     the 2026.10 plugin and HA 2026.11 on top, with a startup shim
+    #     (tests/ci/ha_next_sitecustomize.py). It runs and turns red like
+    #     any rung — no continue-on-error — but it is NOT a required check
+    #     until the plugin ships 2026.11; then drop the shim and require it.
     # (#1313) The 3.13 -> HA 2026.2.3 rung went with the 2026.2 floor.
     # (28.09.2026) The check is NAMED by the HA version, not the Python: "3.13"
     # kept reading as a Python rung to drop, when it is really the old-HA test.
@@ -52,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ha: ["2026.8", "2026.10"]
+        ha: ["2026.8", "2026.10", "2026.11"]
         # Keep in step with `--splits` below and PARTS in test-gate.
         part: [1, 2, 3, 4, 5, 6, 7, 8]
         include:
@@ -64,6 +70,11 @@ jobs:
             # Coverage is measured on ONE rung: the same code runs on both,
             # and measuring it slows every part down.
             cov: "--cov=custom_components.solar_energy_management --cov-report="
+          - ha: "2026.11"
+            python-version: "3.14"
+            phacc: "0.13.375"
+            # (#1313) experimental: HA on top of the 2026.10 plugin, plus the shim
+            ha-next: "2026.11.2"
 
     steps:
       - uses: actions/checkout@v4
@@ -83,6 +94,12 @@ jobs:
           pip install -r tests/requirements_test.txt
           if [ -n "${{ matrix.phacc }}" ]; then
             pip install "pytest-homeassistant-custom-component==${{ matrix.phacc }}"
+          fi
+          if [ -n "${{ matrix.ha-next }}" ]; then
+            # (#1313) newer HA than the plugin pins: pip warns, that is expected
+            pip install "homeassistant==${{ matrix.ha-next }}"
+            cp tests/ci/ha_next_sitecustomize.py \
+              "$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/sitecustomize.py"
           fi
           # From /tmp: at the repo root SEM's select.py shadows the stdlib
           # select and the import goes circular (CI red on 03.11, #1298).
@@ -130,7 +147,7 @@ jobs:
   # an explicit count of successful parts — not `needs.test.result`, which
   # would mix both rungs into one answer.
   test-gate:
-    name: test HA ${{ matrix.ha }}
+    name: test HA ${{ matrix.ha }}${{ matrix.ha == '2026.11' && ' (experimental)' || '' }}
     needs: test
     if: always()
     runs-on: ubuntu-latest
@@ -139,7 +156,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ha: ["2026.8", "2026.10"]
+        ha: ["2026.8", "2026.10", "2026.11"]
     steps:
       - name: Every part of HA ${{ matrix.ha }} passed
         env:

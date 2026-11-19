@@ -104,8 +104,22 @@ def _names(domain: str, lang: str, keys) -> dict:
     def load(code):
         path = _ha_component(domain) / "translations" / f"{code}.json"
         return json.loads(path.read_text()).get("entity", {}).get("sensor", {})
+
+    def device_class_names(code):
+        # (#1313) HA 2026.11 dropped names that equal the sensor type's own
+        # name (Tibber's "power"); HA then names the entity by its device
+        # class, from the sensor component's translations.
+        path = _ha_component("sensor") / "translations" / f"{code}.json"
+        return json.loads(path.read_text()).get("entity_component", {})
+
     tr, en = load(lang), load("en")
-    return {k: (tr.get(k) or en[k])["name"] for k in keys}
+    dc, dc_en = device_class_names(lang), device_class_names("en")
+
+    def name(k):
+        found = tr.get(k) or en.get(k) or dc.get(k) or dc_en.get(k)
+        assert found, f"HA names no '{k}' for {domain}"
+        return found["name"]
+    return {k: name(k) for k in keys}
 
 
 class _Meter:
@@ -370,9 +384,17 @@ def _crawler():
 
 
 def _strings_vocab(domain: str) -> dict:
-    keys = json.loads((_ha_component(domain) / "strings.json").read_text())[
-        "entity"]["sensor"]
-    return {"sensor": {k: {"options": ()} for k in keys}}
+    """What the crawler reads: strings.json's sensor keys plus the
+    ``translation_key=`` literals in sensor.py (#1313: HA 2026.11 drops a
+    name from strings.json when it equals the sensor type's own name)."""
+    keys = set(json.loads((_ha_component(domain) / "strings.json").read_text())[
+        "entity"]["sensor"])
+    src = _ha_component(domain) / "sensor.py"
+    if src.exists():
+        keys |= set(re.findall(
+            r'(?:^|\s)translation_key\s*=\s*["\']([a-z0-9_]{3,60})["\']',
+            src.read_text()))
+    return {"sensor": {k: {"options": ()} for k in sorted(keys)}}
 
 
 class TestTheRosterCarriesThePair:
@@ -443,9 +465,8 @@ class TestTheRosterCarriesThePair:
                 ("p1_monitor", ("nl", "de", "fy"),
                  ("power_consumption", "power_production")),
                 ("tibber", ("de", "sv"), ("power", "power_production"))):
-            strings = json.loads((_ha_component(domain) / "strings.json")
-                                 .read_text())["entity"]["sensor"]
-            assert set(keys) <= set(strings), domain
+            # the keys the integration declares, as the crawler reads them
+            assert set(keys) <= set(_strings_vocab(domain)["sensor"]), domain
             for lang in langs:
                 for key, name in _names(domain, lang, keys).items():
                     assert not any(w in _slug(name) for w in words), (
@@ -509,3 +530,31 @@ class TestTheBrandRuleGuard:
                 else:
                     continue
                 assert key != "any", (path.name, getattr(node, "lineno", it.lineno))
+
+
+class TestHA2611DroppedNames:
+    """(#1313) HA 2026.11 drops a name from strings.json when it equals the
+    sensor type's own name; the key lives on only as ``translation_key=`` in
+    the platform module. The crawler must still see it, or the next roster
+    built against 2026.11 loses Tibber's grid pair."""
+
+    def test_a_key_only_in_the_code_is_still_in_the_vocabulary(self, monkeypatch):
+        crawler = _crawler()
+        strings = json.dumps({"entity": {"sensor": {
+            "power_production": {"name": "Power production"}}}}).encode()
+        sensor_py = (b'SensorEntityDescription(key="power", '
+                     b'translation_key="power", native_unit_of_measurement="W")\n'
+                     b'SensorEntityDescription(key="internal_only")\n')
+
+        def fake_get(url, key, *, offline, ttl_s=0.0):
+            if url.endswith("/strings.json"):
+                return strings
+            if url.endswith("/sensor.py"):
+                return sensor_py
+            return None
+
+        monkeypatch.setattr(crawler, "_get", fake_get)
+        vocab = crawler._mine_entity_vocabulary_raw("", "tibber", "core", offline=True)
+        assert {"power", "power_production"} <= set(vocab["sensor"])
+        # only translation_key literals join, never a bare key=
+        assert "internal_only" not in vocab["sensor"]

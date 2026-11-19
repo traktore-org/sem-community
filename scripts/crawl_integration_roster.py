@@ -714,6 +714,25 @@ def _mine_vocabulary_raw(repo: str, domain: str, origin: str, *,
     return out
 
 
+def _source_translation_keys(repo: str, domain: str, origin: str, *,
+                             offline: bool) -> Dict[str, set]:
+    """``translation_key="…"`` literals per platform module (#1313)."""
+    found: Dict[str, set] = {}
+    for url in _source_urls(repo, domain, origin):
+        plat = url.rsplit("/", 1)[-1][:-3]
+        if plat not in _PLATFORMS:
+            continue
+        raw = _get(url, f"src_{domain}_{_url_key(url)}", offline=offline)
+        if not raw:
+            continue
+        text = raw.decode("utf-8", "replace")
+        keys = set(re.findall(
+            r'(?:^|\s)translation_key\s*=\s*["\']([a-z0-9_]{3,60})["\']', text))
+        if keys:
+            found.setdefault(plat, set()).update(keys)
+    return found
+
+
 def _mine_entity_vocabulary_raw(repo: str, domain: str, origin: str, *,
                     offline: bool) -> Dict[str, Dict[str, dict]]:
     """The entity vocabulary an integration DECLARES, per platform.
@@ -750,6 +769,14 @@ def _mine_entity_vocabulary_raw(repo: str, domain: str, origin: str, *,
                     opts = tuple(sorted(body["state"]))
                 out.setdefault(platform, {})[key] = {"options": opts}
         if out:
+            # (#1313) HA 2026.11 drops a name from strings.json when it equals
+            # the sensor type's own name (Tibber's ``power``); the key lives on
+            # only as ``translation_key=`` in the platform module. Add those —
+            # never ``key=``, never overwriting what strings.json declared.
+            for plat, keys in _source_translation_keys(repo, domain, origin,
+                                                       offline=offline).items():
+                for key in keys:
+                    out.setdefault(plat, {}).setdefault(key, {"options": ()})
             return out
 
     for url in _source_urls(repo, domain, origin):
