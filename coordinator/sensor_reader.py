@@ -6655,11 +6655,20 @@ class SensorReader:
         self._clear_unavailable_repair(entity_id)
 
         # (#1394) When each meter of the house balance last reported, so the
-        # live base load can take device draws at the same moment.
-        if name in self._FAST_POWER_NAMES:
+        # live base load can take device draws at the same moment. The
+        # OLDEST report per name: a split pair or a multi-unit sum reads one
+        # name several times. A meter at 0 W carries no part of the house
+        # load (solar at night, the export half while importing), so its
+        # report time says nothing about lag and is left out.
+        if name in self._FAST_POWER_NAMES and value:
             seen = self._last_report(state)
             if seen is not None:
-                self._fast_reports[name] = seen[0]
+                prior = self._fast_reports.get(name)
+                try:
+                    if prior is None or seen[0] < prior:
+                        self._fast_reports[name] = seen[0]
+                except TypeError:   # a naive next to an aware stamp
+                    pass
 
         # W3 — observe-only frozen-sensor detection (does NOT alter value).
         # Wrapped so the audit can NEVER break the read.

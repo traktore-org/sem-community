@@ -168,3 +168,60 @@ class TestTheCycle:
         # before — and the 19.11 number comes back.
         base, _ = await _the_morning(timed=False)
         assert base[1] == pytest.approx(647 - 1334, abs=1)
+
+
+# ── review findings (the reader's per-meter time) ──────────────────────
+
+def _reader_with(states_by_id):
+    rig = CycleRig(config=dict(WIRED), states={})
+    states = _TimedStates()
+    for eid, (value, changed, reported) in states_by_id.items():
+        states.put(eid, value, changed, reported)
+    rig.hass.states = states
+    reader = rig.coord._sensor_reader
+    reader.hass = rig.hass
+    reader._fast_reports = {}
+    return reader
+
+
+class TestTheReaderKeepsTheOldestReport:
+    def test_a_split_pair_keeps_the_older_half(self):
+        # import read 1 s ago, export read 20 s ago: the pair is only as
+        # recent as its older half — whichever is read first
+        now = datetime.now(timezone.utc)
+        for order in (("sensor.imp", "sensor.exp"), ("sensor.exp", "sensor.imp")):
+            reader = _reader_with({
+                "sensor.imp": (650, now - timedelta(seconds=1), now - timedelta(seconds=1)),
+                "sensor.exp": (5, now - timedelta(seconds=20), now - timedelta(seconds=20)),
+            })
+            for eid in order:
+                reader._read_sensor(eid, "grid")
+            assert reader._fast_reports["grid"] == now - timedelta(seconds=20), order
+
+    def test_a_meter_at_zero_says_nothing_about_lag(self):
+        # solar at night, polled every 55 s: it holds no part of the house
+        # load, so it must not pull the house time back
+        now = datetime.now(timezone.utc)
+        reader = _reader_with({
+            "sensor.grid": (-650, now - timedelta(seconds=4), now - timedelta(seconds=4)),
+            "sensor.solar": (0, now - timedelta(hours=3), now - timedelta(seconds=55)),
+        })
+        reader._read_sensor("sensor.grid", "grid")
+        reader._read_sensor("sensor.solar", "solar")
+        assert "solar" not in reader._fast_reports
+        assert reader.house_complete_at() == now - timedelta(seconds=4)
+
+    def test_only_house_meters_count(self):
+        now = datetime.now(timezone.utc)
+        reader = _reader_with({"sensor.soc": (55, now, now)})
+        reader._read_sensor("sensor.soc", "battery_soc")
+        assert reader._fast_reports == {}
+
+
+class TestMixedClocksNeverBreakTheCycle:
+    def test_a_naive_device_stamp_keeps_the_live_value(self):
+        naive = datetime(2026, 11, 19, 5, 18, 28)
+        assert DrawHistory().as_of("plug", 1334.0, naive, _t(8)) == 1334.0
+
+    def test_a_naive_report_means_no_alignment(self):
+        assert house_complete_at({"grid": datetime(2026, 11, 19, 5, 18, 21)}, NOW) is None

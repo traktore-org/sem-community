@@ -42,23 +42,30 @@ class DrawHistory:
         """
         if changed_at is None:
             return watts
-        hist = self._seen.setdefault(key, deque(maxlen=DEPTH))
-        if not hist or hist[-1][0] != changed_at:
-            hist.append((changed_at, watts))
-        if when is None or changed_at <= when or changed_at - when > MAX_SHIFT:
-            return watts
-        # The device changed after the house reading: use what it held then.
-        for t, w in reversed(hist):
-            if t <= when:
-                return w
+        try:
+            hist = self._seen.setdefault(key, deque(maxlen=DEPTH))
+            if not hist or hist[-1][0] != changed_at:
+                hist.append((changed_at, watts))
+            if when is None or changed_at <= when or changed_at - when > MAX_SHIFT:
+                return watts
+            # The device changed after the house reading: use what it held then.
+            for t, w in reversed(hist):
+                if t <= when:
+                    return w
+        except TypeError:            # a naive next to an aware stamp
+            self._seen.pop(key, None)
         return watts                 # nothing older seen yet: as before
 
 
 def house_complete_at(reports: Dict[str, datetime],
                       now: datetime) -> Optional[datetime]:
     """The time the house balance was complete: the OLDEST recent report
-    among the meters it is made of. A report older than ``MAX_SHIFT`` is a
-    flat sensor an integration does not re-send, not a slow one, and is left
-    out; with none left the answer is None (no alignment)."""
-    recent = [t for t in reports.values() if now - t <= MAX_SHIFT]
-    return min(recent) if recent else None
+    among the meters it is made of (the reader leaves out meters at 0 W).
+    A report older than ``MAX_SHIFT`` is a flat sensor an integration does
+    not re-send, not a slow one, and is left out; with none left the answer
+    is None (no alignment)."""
+    try:
+        recent = [t for t in reports.values() if now - t <= MAX_SHIFT]
+        return min(recent) if recent else None
+    except TypeError:                # a naive next to an aware stamp
+        return None
