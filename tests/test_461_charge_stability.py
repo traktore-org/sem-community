@@ -534,9 +534,9 @@ class TestWiring:
         assert len(sites) >= 2, sites
         assert calls(SEMCoordinator._yield_or_stabilise, "filter")
 
-    def test_config_card_exposes_the_delays(self) -> None:
-        body = (Path(__file__).parent.parent / "dashboard" / "card" / "src"
-                / "cards" / "sem-config-card.js").read_text()
+    def test_the_dashboard_exposes_the_delays(self) -> None:
+        from ._dashboard_src import dashboard_src
+        body = dashboard_src()
         assert "number.sem_ev_enable_delay_seconds" in body
         assert "number.sem_ev_disable_delay_seconds" in body
 

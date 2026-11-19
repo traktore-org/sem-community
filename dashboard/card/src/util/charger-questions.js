@@ -49,6 +49,28 @@ export function chargerSays(states, t, plainReason) {
 }
 
 /**
+ * (#1321) The fleet line, split by charger when it would contradict one.
+ * The engine's fleet reason says "No car is plugged in" while any charger
+ * may hold a car; then each connected charger speaks with its own last
+ * decision's reason. Returns [{cid|null, title, text}].
+ */
+export function chargerSaysEach(states, chargerIds, t, plainReason) {
+    const fleet = chargerSays(states, t, plainReason);
+    if (!fleet) return [];
+    const ids = Array.isArray(chargerIds) ? chargerIds : [];
+    const on = ids.filter((cid) => states?.[`binary_sensor.sem_charger_${cid}_connected`]?.state === 'on');
+    const code = states?.['sensor.sem_charging_strategy']?.attributes?.reason_code;
+    if (code !== 'charger_no_car' || !on.length) return [{ cid: null, ...fleet }];
+    const per = states?.['sensor.sem_charging_state']?.attributes?.per_charger_last_decision || {};
+    return on.map((cid) => {
+        const rec = per[cid] || per[`charger_${cid}`] || null;
+        const own = rec && rec.reason_code !== 'charger_no_car';
+        const text = own ? (plainReason({ reason_code: rec.reason_code, params: rec.params }, t) || '') : '';
+        return { cid, title: fleet.title, text };
+    });
+}
+
+/**
  * (#1321) The charge plan in one line: "Ready by 07:00 · 20–100 kWh · Mon–Sun".
  * `runs` = weekday runs [{from, to, time}] (0 = Monday); `dayName(i)` names a day.
  * Returns {time, range, days}; each part is '' when unknown.
@@ -64,4 +86,32 @@ export function chargePlanSummary({ chargeBy = '', min = null, max = null, unit 
     const span = (r) => (r.from === r.to ? dayName(r.from) : `${dayName(r.from)}–${dayName(r.to)}`);
     const days = list.length ? list.map((r) => (one ? span(r) : `${span(r)} ${r.time}`)).join(', ') : '';
     return { time, range, days };
+}
+
+/**
+ * (#1321) The car's battery size when the owner set it. The number entity
+ * always holds a value; `set_by_user: false` says it is only the factory
+ * default, which must read as unknown. A server that sends no flag is trusted.
+ */
+export function knownCapacity(value, attrs) {
+    if (capacityUnset(attrs)) return null;
+    return Number.isFinite(value) ? value : null;
+}
+
+/** (#1321) The server says the capacity is only the factory default: every screen reads that one flag. */
+export const capacityUnset = (attrs) => !!attrs && attrs.set_by_user === false;
+
+/**
+ * (#1321) The "Up to" figure of a kWh target, never above the car's battery.
+ * → { max, full }: `max` the number to show (null when the car is unknown and
+ * the figure is only the setting's own ceiling), `full` true when the text
+ * should say "full" instead of a number.
+ */
+export function upToShown({ max, capacity, bound, isSoc, unset = false }) {
+    if (max === null || max === undefined) return { max: null, full: false };
+    if (isSoc) return { max, full: false };
+    // an unknown car: the figure is only the setting's own number, so it reads "full" (#1321)
+    if (unset) return { max: null, full: true };
+    if (Number.isFinite(capacity) && capacity > 0) return { max: Math.min(max, capacity), full: false };
+    return { max, full: Number.isFinite(bound) && max >= bound };
 }

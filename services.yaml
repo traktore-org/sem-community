@@ -1,12 +1,8 @@
 generate_dashboard:
   name: Generate SEM Dashboard
   description: >
-    Generate and install the SEM v6.0 dashboard with 7 views:
-    Home (system diagram + solar summary), Energy (Sankey + gauges),
-    Battery (SOC zones), EV (session tracking), Control, Costs, System.
-
-    Installs the SVG system diagram, registers the dashboard in the
-    sidebar, and restarts HA to apply changes.
+    Generate and install the SEM dashboard: five screens (Now, Plan,
+    Devices, Insights, System), registered in the sidebar.
   fields:
     dashboard_title:
       name: Dashboard Title
@@ -26,7 +22,7 @@ generate_dashboard:
         text:
     template:
       name: Template
-      description: "next (default) = SEM Next, five screens by question, at /sem-next; classic = the old nine-tab dashboard at /sem-dashboard, kept for one release"
+      description: "next (default) builds the SEM dashboard. classic is retired: it is accepted as an alias for next and logs a warning."
       required: false
       default: "next"
       example: "next"
@@ -35,6 +31,13 @@ generate_dashboard:
           options:
             - "classic"
             - "next"
+    restart:
+      name: Restart on first install
+      description: "When the dashboard cannot appear live (Home Assistant has not loaded it yet), restart Home Assistant 5 seconds later. Turn off to leave the restart to you."
+      required: false
+      default: true
+      selector:
+        boolean:
 
 sync_priorities_from_dashboard:
   name: Sync Priorities from Dashboard
@@ -630,7 +633,7 @@ get_config:
     response. Home Assistant's own `config_entries/get` strips both for
     security, so this is the only way to read back option-only fields.
 
-    Used by the dashboard's Configuration tab. Read-only.
+    Used by the dashboard's System screen. Read-only.
   fields:
     entry_id:
       name: Config Entry ID
@@ -671,7 +674,7 @@ set_option:
     Write one or more configuration options, merging them into the SEM
     config entry exactly as the Options flow does.
 
-    Used by the dashboard's Configuration tab. Prefer the UI — this service
+    Used by the dashboard's System screen. Prefer the UI — this service
     does not validate the way the config flow does, and an unknown key is
     stored rather than rejected.
   fields:

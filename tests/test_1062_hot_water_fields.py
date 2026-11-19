@@ -323,14 +323,9 @@ class TestTheDeadFieldsAreGone:
         with pytest.raises(TypeError):
             HotWaterController(hass=_Hass(), max_temperature=60.0)
 
-    def test_the_config_card_offers_no_minimum(self):
-        """The card's option inventory — the same extraction the #637 routing
-        guard classifies — no longer holds the minimum. (The max row was a
-        stepper on the number entity, which no longer exists.)"""
-        from .test_637_live_options import _card_option_keys
-        options = _card_option_keys()
-        assert "hot_water_legionella_target" in options  # the extraction works
-        assert "hot_water_minimum_temperature" not in options
+    # (#1321) "The settings screen offers no minimum" moved to
+    # dashboard/card/test/next-settings.test.js (the classic Configuration
+    # card this test read is gone).
 
     def test_the_removed_entity_is_swept_from_the_registry(self):
         """An install that has the entity from an older version loses it on

@@ -43,16 +43,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Poslední krok! SEM automaticky zjistil entitu pro řízení vybíjení vašeho střídače: {discharge_entity}\n\nPonechte volbu panelu ZAPNUTOU a SEM pro vás vytvoří svůj panel Lovelace. **Poznámka: přibližně 5 sekund po dokončení instalace se Home Assistant restartuje.**\n\nVše ostatní — včetně limitu špičky ze sítě — používá bezpečné výchozí hodnoty, které můžete upravit hned po nastavení: limit špičky posuvníkem na kartě **Ovládání**, vše ostatní na kartě **Konfigurace** v panelu SEM — včetně nabíječek EV, tepelného čerpadla, tarifu a zón baterie.",
+        "description": "Poslední krok! SEM automaticky zjistil entitu pro řízení vybíjení vašeho střídače: {discharge_entity}\n\nPonechte volbu panelu ZAPNUTOU a SEM pro vás vytvoří svůj panel Lovelace. **Poznámka: přibližně 5 sekund po dokončení instalace se Home Assistant restartuje.**\n\nVše ostatní — včetně limitu špičky ze sítě — používá bezpečné výchozí hodnoty, které můžete upravit hned po nastavení: limit špičky na obrazovce **Zařízení**, vše ostatní na obrazovce **Systém** panelu SEM — včetně nabíječek EV, tepelného čerpadla, tarifu a zón baterie.",
         "data": {
           "battery_capacity_kwh": "Kapacita domácí baterie (kWh)",
-          "generate_dashboard_on_install": "Vygenerovat nyní panel SEM (restartuje HA)",
-          "diagram_style": "Styl systémového diagramu"
+          "generate_dashboard_on_install": "Vygenerovat nyní panel SEM (restartuje HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Celková využitelná kapacita vaší domácí baterie (NIKOLI baterie EV) v kWh. Používá ji strategie nabíjení řízená předpovědí k odhadu, jak velký solární deficit dokáže baterie překlenout. Ověřte ve specifikaci svého měniče.",
-          "generate_dashboard_on_install": "Je-li zapnuto, SEM vytvoří panel Lovelace ihned po dokončení tohoto kroku a přibližně o 5 s později restartuje Home Assistant, aby se nový panel zobrazil. Kdykoli později jej můžete znovu vytvořit ručně pomocí služby solar_energy_management.generate_dashboard.",
-          "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť)."
+          "generate_dashboard_on_install": "Je-li zapnuto, SEM vytvoří panel Lovelace ihned po dokončení tohoto kroku a přibližně o 5 s později restartuje Home Assistant, aby se nový panel zobrazil. Kdykoli později jej můžete znovu vytvořit ručně pomocí služby solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -133,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Vyberte síťový elektroměr",
-        "description": "SEM nenašel senzor výkonu sítě. Bez něj SEM neví, co nakupujete nebo dodáváte.\n\nVyberte ho níže, nebo stiskněte **Odeslat** a přeskočte. Můžete ho nastavit později na kartě Konfigurace.\n\nSlunce: {solar}. Baterie: {battery}.",
+        "description": "SEM nenašel senzor výkonu sítě. Bez něj SEM neví, co nakupujete nebo dodáváte.\n\nVyberte ho níže, nebo stiskněte **Odeslat** a přeskočte. Můžete ho nastavit později na obrazovce Systém.\n\nSlunce: {solar}. Baterie: {battery}.",
         "data": {
           "grid_power_sensor": "Výkon sítě"
         },
@@ -168,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Nabíječka EV",
-        "description": "Tip: většina nastavení je nyní na panelu SEM → karta Konfigurace (barevně, živě). Tento průvodce zůstává pro instalace bez panelu.\n\nZkontrolujte a upravte přiřazení entit vaší nabíječky EV. Pole SOC vozidla se použijí, jen pokud zadáte senzor SOC baterie vozidla.",
+        "description": "Tip: většina nastavení je na panelu SEM: na obrazovkách Zařízení a Systém. Tento průvodce zůstává pro instalace bez panelu.\n\nZkontrolujte a upravte přiřazení entit vaší nabíječky EV. Pole SOC vozidla se použijí, jen pokud zadáte senzor SOC baterie vozidla.",
         "data": {
           "ev_connected_sensor": "Stav připojení EV",
           "ev_charging_sensor": "Stav nabíjení EV",
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Cíl solárního ohřevu teplé vody (°C)",
           "legionella_target_temp": "Cíl dezinfekce proti legionele (°C)",
           "legionella_interval_hours": "Max. počet hodin mezi dezinfekčními cykly",
-          "diagram_style": "Styl systémového diagramu",
           "battery_assist_min_surplus": "Podpora baterie – min. solární přebytek (W)",
           "grid_sign_invert": "Obrátit znaménko síťového výkonu",
           "battery_operating_mode_entity": "Entita provozního režimu baterie (sledovaná)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Měsíční poplatek za rezervovaný příkon na kW špičky (CHF/kW/měsíc). Nastavte 0, pokud vaše smlouva takový poplatek nemá.",
           "observer_mode": "Je-li ZAPNUTO, SEM vše sleduje a počítá, ale nikdy neodešle volání služby do hardwaru. Použijte na testovacím/přípravném HA, který zrcadlí produkční instalaci.",
           "battery_discharge_control_entity": "Entita Number, která řídí limit vybíjecího výkonu měniče (např. number.batteries_maximale_entladeleistung u Huawei). Při instalaci se zjistí automaticky; zde ji můžete v případě potřeby přepsat.",
-          "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť).",
           "hot_water_solar_target": "Cílová teplota (°C) pro ohřev teplé vody podporovaný sluncem. SEM přitopí bojler, když je k dispozici přebytek.",
           "legionella_target_temp": "Teplota (°C), které musí systém teplé vody dosáhnout během dezinfekčního cyklu proti legionele.",
           "legionella_interval_hours": "Maximální počet hodin mezi dezinfekčními cykly proti legionele, než SEM vynutí ohřev.",
@@ -1884,7 +1880,7 @@
       "message": "Pro {device_id} nebyl nalezen žádný plán spotřebiče. Zkontrolujte ID zařízení, které jste použili u služby schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "Řízení zátěže je vypnuté, takže není co aktualizovat v seznamu odpojení. Zapněte ho v Konfigurace → Řízení zátěže na panelu SEM a zkuste to znovu."
+      "message": "Řízení zátěže je vypnuté, takže není co aktualizovat v seznamu odpojení. Zapněte ho v Systém → Řízení zátěže na panelu SEM a zkuste to znovu."
     },
     "load_management_failed_to_start": {
       "message": "Řízení zátěže je zapnuté, ale nepodařilo se ho spustit, takže SEM nemůže použít svůj seznam zařízení. Zkontrolujte protokol Home Assistant na \"Failed to initialize load management\" a znovu načtěte integraci."
@@ -1973,14 +1969,14 @@
         "step": {
           "confirm": {
             "title": "Nahlásit toto SEM",
-            "description": "**{name}** má nastavený procentní cíl nabíjení, ale vozidlo právě teď nehlásí stav nabití, takže SEM nemůže zastavit *přesně* na **{target}%**.\n\nNenabíjí ale naslepo: od posledního skutečného odečtu v této relaci počítá skutečně dodanou energii a zastaví, jakmile tento naměřený součet dosáhne vašeho cíle — překročení je jen to, co si auto od onoho odečtu vzalo. Pokud v této relaci nedorazil žádný skutečný odečet (nebo se SEM restartoval během nabíjení), není se od čeho odrazit a nabíjí se, dokud auto samo krátce před plným nesníží výkon.\n\nAby limit padl přesně, nastavte pro tuto nabíječku **skutečný senzor SOC vozidla** (Konfigurace → Nabíječky EV). Procenta baterie na nástěnce jsou *odhadovaný* SOC od SEM, který se pro tvrdý limit záměrně ignoruje (může se rozejít). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečný odečet SOC.\n\nSEM se domnívá, že jde o jeho vlastní chybu. Pokud můžete, otevřete hlášení chyby tlačítkem v upozornění — formulář už bude vyplněný. Případně zkopírujte níže uvedený kontext do e-mailu nebo příspěvku na fóru. Tento dialog nic nikam neodesílá.\n\n```\n{context}\n```\n\nPotvrzením upozornění zavřete."
+            "description": "**{name}** má nastavený procentní cíl nabíjení, ale vozidlo právě teď nehlásí stav nabití, takže SEM nemůže zastavit *přesně* na **{target}%**.\n\nNenabíjí ale naslepo: od posledního skutečného odečtu v této relaci počítá skutečně dodanou energii a zastaví, jakmile tento naměřený součet dosáhne vašeho cíle — překročení je jen to, co si auto od onoho odečtu vzalo. Pokud v této relaci nedorazil žádný skutečný odečet (nebo se SEM restartoval během nabíjení), není se od čeho odrazit a nabíjí se, dokud auto samo krátce před plným nesníží výkon.\n\nAby limit padl přesně, nastavte pro tuto nabíječku **skutečný senzor SOC vozidla** (Systém → Nabíječky). Procenta baterie na nástěnce jsou *odhadovaný* SOC od SEM, který se pro tvrdý limit záměrně ignoruje (může se rozejít). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečný odečet SOC.\n\nSEM se domnívá, že jde o jeho vlastní chybu. Pokud můžete, otevřete hlášení chyby tlačítkem v upozornění — formulář už bude vyplněný. Případně zkopírujte níže uvedený kontext do e-mailu nebo příspěvku na fóru. Tento dialog nic nikam neodesílá.\n\n```\n{context}\n```\n\nPotvrzením upozornění zavřete."
           }
         }
       }
     },
     "unmanaged_charger_found": {
       "title": "SEM našel nabíječku, kterou neřídí",
-      "description": "Zařízení **{name}** vypadá jako nabíječka EV, ale v SEM žádná není nastavena — SEM se jí proto nedotýká (nalezeno {count} kandidátů).\n\nAby SEM optimalizoval nabíjení sluncem a levnými tarify, přidejte ji v Nastavení → Zařízení a služby → SEM → Konfigurovat. Tím se také objeví karta EV s režimy nabíjení.\n\nPokud to nabíječka není, upozornění ignorujte — SEM ji stejně řídit nebude."
+      "description": "Zařízení **{name}** vypadá jako nabíječka EV, ale v SEM žádná není nastavena — SEM se jí proto nedotýká (nalezeno {count} kandidátů).\n\nAby SEM optimalizoval nabíjení sluncem a levnými tarify, přidejte ji v Nastavení → Zařízení a služby → SEM → Konfigurovat. Tím se také objeví na obrazovce Devices s režimy nabíjení.\n\nPokud to nabíječka není, upozornění ignorujte — SEM ji stejně řídit nebude."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace v režimu YAML — přidejte zdroje karet SEM",
@@ -1988,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Ovládací entita nabíječky nefunguje: {name}",
-      "description": "SEM používá **`{entity_id}`** k {capability} na **{name}**, ale tato entita je `{reason}` — každý příkaz zmizí. Zkontrolujte entitu ve **Vývojářských nástrojích → Stavy** a opravte ji u zdroje, nebo SEM přesměrujte v **Konfigurace → Nabíječky EV**."
+      "description": "SEM používá **`{entity_id}`** k {capability} na **{name}**, ale tato entita je `{reason}` — každý příkaz zmizí. Zkontrolujte entitu ve **Vývojářských nástrojích → Stavy** a opravte ji u zdroje, nebo SEM přesměrujte v **Systém → Nabíječky**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Nastavenou hodnotu výkonu baterie nelze zapsat: {entity_id}",
@@ -2008,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Řízení exportu Deye nelze použít: {entity_id}",
-      "description": "SEM nemůže použít {entity_id} pro řízení exportu: {reason}. Zkontrolujte výběrovou entitu a tři popisky voleb v Konfigurace → Inteligence baterie."
+      "description": "SEM nemůže použít {entity_id} pro řízení exportu: {reason}. Zkontrolujte výběrovou entitu a tři popisky voleb v Systém → Pravidla baterie."
     },
     "battery_operating_mode_unexpected": {
       "title": "Baterie je v režimu „{mode}“ — SEM plánuje, jako by byla v „{expected}“",
@@ -2020,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "Noční historii baterie nelze sestavit",
-      "description": "SEM nemohl sestavit noční historii, protože tato instalace nemá senzor **{missing}**.\n\nSEM se učí, kolik z baterie lze bezpečně utratit, sledováním toho, kolik z ní dům přes noc odebere, a chce pět dobrých nocí, než uvede číslo. Sestavení čte *vlastní* zaznamenanou historii měřidla, abyste nemuseli čekat — ale to měřidlo musí existovat.\n\n**Co udělat:** přidejte kumulativní senzor energie (kWh, ne watty) pro **{missing}** do panelu Energie v Home Assistantu a na kartě Baterie znovu stiskněte **Sestavit z historie**. Čekáním nic neztratíte — SEM čte historii měřidla, takže to bude fungovat stejně dobře později. Mezitím záznam pokračuje, jedna noc denně."
+      "description": "SEM nemohl sestavit noční historii, protože tato instalace nemá senzor **{missing}**.\n\nSEM se učí, kolik z baterie lze bezpečně utratit, sledováním toho, kolik z ní dům přes noc odebere, a chce pět dobrých nocí, než uvede číslo. Sestavení čte *vlastní* zaznamenanou historii měřidla, abyste nemuseli čekat — ale to měřidlo musí existovat.\n\n**Co udělat:** přidejte kumulativní senzor energie (kWh, ne watty) pro **{missing}** do panelu Energie v Home Assistantu a na obrazovce Devices znovu stiskněte **Sestavit z historie**. Čekáním nic neztratíte — SEM čte historii měřidla, takže to bude fungovat stejně dobře později. Mezitím záznam pokračuje, jedna noc denně."
     },
     "battery_night_backfill_incomplete": {
       "title": "Sestavené noci nevidí podíl sítě",
@@ -2036,19 +2032,19 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Platforma baterie je uzamčena na Generic na instalaci {brand}",
-      "description": "Platforma baterie SEM je nastavena na **Generic / jiná**, ale je načtena integrace {brand}. Starší verze průvodce nastavením nabízely jen Generic a Deye a výchozí byla Generic, takže jediný průchod touto stránkou degradoval instalaci {brand} na obecný adaptér — bez vynuceného nabíjení, bez idempotentních zápisů registru. Otevřete **Konfigurace → Plánovač baterie** a nastavte **Platforma nabíjení baterie** na **Automatická detekce**. Pokud je Generic záměrná volba (baterie s vlastními řídicími entitami), nastavte tuto entitu a upozornění zmizí."
+      "description": "Platforma baterie SEM je nastavena na **Generic / jiná**, ale je načtena integrace {brand}. Starší verze průvodce nastavením nabízely jen Generic a Deye a výchozí byla Generic, takže jediný průchod touto stránkou degradoval instalaci {brand} na obecný adaptér — bez vynuceného nabíjení, bez idempotentních zápisů registru. Otevřete **Nastavení → Zařízení a služby → SEM → Konfigurovat → Plánovač nabíjení baterie** a nastavte **Platforma nabíjení baterie** na **Automatická detekce**. Pokud je Generic záměrná volba (baterie s vlastními řídicími entitami), nastavte tuto entitu a upozornění zmizí."
     },
     "split_grid_guessed": {
       "title": "SEM kontroluje dva odhadnuté elektroměry sítě",
-      "description": "SEM nemá senzor výkonu sítě, a proto odhadl podle názvu: **{import_entity}** pro odběr ze sítě a **{export_entity}** pro dodávku do sítě. SEM je nepoužije, dokud neodpovídají vašim počítadlům energie ze sítě, takže výkon sítě zatím ukazuje 0. Jak vybrat elektroměr: otevřete panel SEM, kartu ⚙ **Konfigurace** a nahoře zvolte **Všechna nastavení**. Pak nastavte **Výkon sítě** v sekci **Zdroje senzorů**. Pokud má váš elektroměr jeden senzor pro odběr a jeden pro dodávku, nastavte místo toho **Senzor importu ze sítě** a **Senzor exportu do sítě** v sekci **Tarif a ceny**."
+      "description": "SEM nemá senzor výkonu sítě, a proto odhadl podle názvu: **{import_entity}** pro odběr ze sítě a **{export_entity}** pro dodávku do sítě. SEM je nepoužije, dokud neodpovídají vašim počítadlům energie ze sítě, takže výkon sítě zatím ukazuje 0. Jak vybrat elektroměr: otevřete panel SEM, kartu **Systém** a nahoře zvolte **Všechna nastavení**. Pak nastavte **Výkon sítě** v sekci **Co SEM čte**. Pokud má váš elektroměr jeden senzor pro odběr a jeden pro dodávku, nastavte místo toho **Senzor importu ze sítě** a **Senzor exportu do sítě** v sekci **Co SEM čte**."
     },
     "battery_control_write_not_taken": {
       "title": "Zápis řízení baterie se neujal: {entity_id}",
-      "description": "SEM nastavil **`{entity_id}`** na **{wanted}**; v následujících cyklech stále četl **{seen}**, {strikes}krát za sebou. Volání neselhalo — registr hodnotu prostě nepodržel. **Řešení:** nastav entitu ručně v Nástroje pro vývojáře → Stavy. Pokud nedrží, je to špatná entita pro tuto roli: vyber jinou v kartě Konfigurace. Pokud drží ručně, ale ne pro SEM, napiš nám značku a entitu. Zmizí, jakmile se zápis projeví."
+      "description": "SEM nastavil **`{entity_id}`** na **{wanted}**; v následujících cyklech stále četl **{seen}**, {strikes}krát za sebou. Volání neselhalo — registr hodnotu prostě nepodržel. **Řešení:** nastav entitu ručně v Nástroje pro vývojáře → Stavy. Pokud nedrží, je to špatná entita pro tuto roli: vyber jinou v **Systém → Pravidla baterie**. Pokud drží ručně, ale ne pro SEM, napiš nám značku a entitu. Zmizí, jakmile se zápis projeví."
     },
     "soc_zones_out_of_order": {
       "title": "Zóny SOC baterie jsou v nesprávném pořadí",
-      "description": "Vaše zóny baterie čtou **Priorita {priority}% · Vyrovnávací {buffer}% · Automatický start {auto_start}%**, ale SEM očekává, že porostou v tomto pořadí: Priorita je rezerva, kterou nikdy neutratíte, Vyrovnávací je bod, kde podpora baterie končí, a Automatický start je bod, kdy je pack dost plný, aby dával energii volně.\n\nSEM používá jako hranice **{used}** — stejná tři čísla, seřazená — takže žádná zóna se nepřeskočí a nic se nechová nepředvídatelně. Upozorňuje vás proto, že rozložení, které jste zadali, téměř jistě není to, co jste chtěli.\n\nOpravte to v **Konfigurace → Zóny baterie**. Libovolné hodnoty jsou v pořádku, pokud rostou; široké zóny nevadí — 20 / 30 / 50 je naprosto dobré rozložení u velkého packu."
+      "description": "Vaše zóny baterie čtou **Priorita {priority}% · Vyrovnávací {buffer}% · Automatický start {auto_start}%**, ale SEM očekává, že porostou v tomto pořadí: Priorita je rezerva, kterou nikdy neutratíte, Vyrovnávací je bod, kde podpora baterie končí, a Automatický start je bod, kdy je pack dost plný, aby dával energii volně.\n\nSEM používá jako hranice **{used}** — stejná tři čísla, seřazená — takže žádná zóna se nepřeskočí a nic se nechová nepředvídatelně. Upozorňuje vás proto, že rozložení, které jste zadali, téměř jistě není to, co jste chtěli.\n\nOpravte to v **Systém → Pravidla baterie**. Libovolné hodnoty jsou v pořádku, pokud rostou; široké zóny nevadí — 20 / 30 / 50 je naprosto dobré rozložení u velkého packu."
     },
     "previous_install_leftovers": {
       "title": "Nalezeny soubory z předchozí instalace SEM",
@@ -2056,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "Kontakt SG-Ready {contact} nelze ovládat",
-      "description": "**{entity_id}** je nastaven jako SG-Ready {contact}, ale je to entita typu text/number/select a jeho hodnota **{missing}** není nastavena — SEM tedy nemá co zapsat a každý příkaz SG-Ready pro toto tepelné čerpadlo selže. Otevřete **Konfigurace → Tepelné čerpadlo** a vyplňte u tohoto kontaktu obě hodnoty, ZAP i VYP, nebo ho nasměrujte na entitu typu switch."
+      "description": "**{entity_id}** je nastaven jako SG-Ready {contact}, ale je to entita typu text/number/select a jeho hodnota **{missing}** není nastavena — SEM tedy nemá co zapsat a každý příkaz SG-Ready pro toto tepelné čerpadlo selže. Otevřete **Systém → Tepelné čerpadlo a teplá voda** a vyplňte u tohoto kontaktu obě hodnoty, ZAP i VYP, nebo ho nasměrujte na entitu typu switch."
     },
     "split_grid_rejected": {
       "title": "SEM nemohl najít vaše elektroměry sítě",
-      "description": "SEM nemá senzor výkonu sítě a jeho odhady podle názvu nejsou váš elektroměr sítě: **{import_entity}** pro odběr, **{export_entity}** pro dodávku. Neodpovídají vašim počítadlům energie ze sítě, nebo jeden z nich chybí. SEM raději neukazuje žádný výkon sítě než chybný. Jak vybrat elektroměr: otevřete panel SEM, kartu ⚙ **Konfigurace** a nahoře zvolte **Všechna nastavení**. Pak nastavte **Výkon sítě** v sekci **Zdroje senzorů**. Pokud má váš elektroměr jeden senzor pro odběr a jeden pro dodávku, nastavte místo toho **Senzor importu ze sítě** a **Senzor exportu do sítě** v sekci **Tarif a ceny**."
+      "description": "SEM nemá senzor výkonu sítě a jeho odhady podle názvu nejsou váš elektroměr sítě: **{import_entity}** pro odběr, **{export_entity}** pro dodávku. Neodpovídají vašim počítadlům energie ze sítě, nebo jeden z nich chybí. SEM raději neukazuje žádný výkon sítě než chybný. Jak vybrat elektroměr: otevřete panel SEM, kartu **Systém** a nahoře zvolte **Všechna nastavení**. Pak nastavte **Výkon sítě** v sekci **Co SEM čte**. Pokud má váš elektroměr jeden senzor pro odběr a jeden pro dodávku, nastavte místo toho **Senzor importu ze sítě** a **Senzor exportu do sítě** v sekci **Co SEM čte**."
     },
     "power_sensor_not_found": {
       "title": "Žádný senzor výkonu pro {energy_entity}",
-      "description": "Panel Energie počítá **{energy_entity}** v kWh, ale SEM pro něj nenašel žádný senzor výkonu (W). SEM proto čte tento výkon jako 0 W a toky energie i přebytek jsou špatně. Opravíte to přidáním senzoru výkonu k této položce v panelu Energie. Nebo otevřete dashboard SEM, kartu ⚙ **Konfigurace**, a nahoře zvolte **Všechna nastavení**. Pak nastavte senzor v sekci **Zdroje senzorů**. Pokud žádný senzor výkonu neexistuje, můžete toto upozornění ignorovat."
+      "description": "Panel Energie počítá **{energy_entity}** v kWh, ale SEM pro něj nenašel žádný senzor výkonu (W). SEM proto čte tento výkon jako 0 W a toky energie i přebytek jsou špatně. Opravíte to přidáním senzoru výkonu k této položce v panelu Energie. Nebo otevřete dashboard SEM, kartu **Systém**, a nahoře zvolte **Všechna nastavení**. Pak nastavte senzor v sekci **Co SEM čte**. Pokud žádný senzor výkonu neexistuje, můžete toto upozornění ignorovat."
     },
     "power_sensor_not_found_unit": {
       "title": "Žádný senzor výkonu pro {energy_entity}",
@@ -2089,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM nevidí vaši dodávku do sítě",
-      "description": "Je nastaven jen senzor importu ze sítě **{import_entity}**, takže SEM čte export jako 0 W. Ale vaše počítadlo exportu **{export_entity}** ukazuje, že energie šla do sítě. Oprava: otevřete panel SEM, kartu ⚙ **Konfigurace** a nahoře zvolte **Všechna nastavení**. Pak nastavte **Senzor exportu do sítě** v sekci **Tarif a ceny**. Nebo vymažte **Senzor importu ze sítě** a SEM si dvojici najde sám."
+      "description": "Je nastaven jen senzor importu ze sítě **{import_entity}**, takže SEM čte export jako 0 W. Ale vaše počítadlo exportu **{export_entity}** ukazuje, že energie šla do sítě. Oprava: otevřete panel SEM, kartu **Systém** a nahoře zvolte **Všechna nastavení**. Pak nastavte **Senzor exportu do sítě** v sekci **Co SEM čte**. Nebo vymažte **Senzor importu ze sítě** a SEM si dvojici najde sám."
     },
     "unseen_power_row": {
       "title": "SEM nevidí celý výkon solárů nebo baterie",
@@ -2109,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "Třetí strana zapisuje do {name}",
-      "description": "Něco jiného než SEM neustále mění **{name}** a SEM a ta strana si navzájem ruší práci. Na kartě Konfigurace SEM nastavte toto zařízení na *Ano, SEM ustoupí* a vyberte entitu, která ukazuje, kdy má řízení druhá strana."
+      "description": "Něco jiného než SEM neustále mění **{name}** a SEM a ta strana si navzájem ruší práci. Na obrazovce **Systém** zapněte **Všechna nastavení** a u tohoto zařízení (v **Pravidla baterie** nebo **Nabíječky**) nastavte **řízeno jinou stranou** na *Ano, SEM ustoupí* a vyberte entitu, která ukazuje, kdy má řízení druhá strana."
     },
     "heater_no_rise": {
       "title": "Zásobník teplé vody se neohřívá",
@@ -2122,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Volba nabíjení ze sítě je stále zapnutá: {entity}",
       "description": "Volba **{entity}** je stále na **{option}** a SEM ji nemůže vrátit: dřívější možnost už v seznamu není. Vraťte ji ručně. Do té doby se baterie může dál nabíjet ze sítě. Zmizí, jakmile se volba změní."
+    },
+    "classic_dashboard_kept": {
+      "title": "Starý panel SEM stále existuje",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Starý panel SEM stále existuje",
+            "description": "Starý panel SEM na `/{path}` byl vyřazen. Upravili jste ho, proto SEM nechal jeho rozvržení beze změny. Jeho karty SEM nyní ukazují odkaz na nový panel SEM. Potvrzením starý panel smažete."
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -2130,12 +2137,6 @@
         "disabled": "Zakázáno",
         "grid_only": "Pouze distribuční síť",
         "hybrid_load_port": "Distribuční síť + výstup Load/EPS hybridního střídače"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (vestavěný)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

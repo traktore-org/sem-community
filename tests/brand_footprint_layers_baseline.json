@@ -1,6 +1,6 @@
 {
   "_comment": "#855 layers: brand mentions per generic file; may only shrink. Regenerate: scripts/audit_brand_footprint.py --layers-baseline",
-  "total": 1067,
+  "total": 1064,
   "per_file": {
     "__init__.py": 50,
     "analytics/day_tags.py": 1,
@@ -53,7 +53,6 @@
     "devices/hot_water_controller.py": 1,
     "devices/power_setpoint.py": 1,
     "diagnostics.py": 19,
-    "features/dashboard_generator.py": 3,
     "features/device_registry.py": 5,
     "features/load_device_discovery.py": 25,
     "features/load_management.py": 9,

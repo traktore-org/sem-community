@@ -1063,8 +1063,8 @@ class TestAProposalCanActuallyBeAccepted:
         read_by = " ".join(
             f.read_text() for f in (root / "coordinator").rglob("*.py"))
         flow_src = (root / "config_flow.py").read_text()
-        card_src = (root / "dashboard" / "card" / "src" / "cards"
-                    / "sem-config-card.js").read_text()
+        from ._dashboard_src import dashboard_src
+        card_src = dashboard_src()
         for role, key in lex.SEM_CONFIG_KEY_FOR_ROLE.items():
             assert (f'"{key}"' in read_by or f'"{key}"' in flow_src
                     or key in card_src), (
@@ -1121,17 +1121,6 @@ class TestANearMissIsAnOfferNotAChore:
         misses = hd.build_detection_report(registry=_registry(ents))["near_misses"]
         assert misses and misses[0]["suggested_charger"]["ev_current_control_entity"] \
             == "number.zap_current"
-
-    def test_the_card_offers_the_action_before_the_report(self):
-        """Both paths exist in the card, and the offer comes first: a user
-        with a fixable near miss should never be sent to GitHub."""
-        import pathlib as _p
-        root = _p.Path(__file__).resolve().parent.parent
-        card = (root / "dashboard" / "card" / "src" / "cards"
-                / "sem-config-card.js").read_text()
-        assert "_addSuggestedCharger" in card
-        assert "_reportNearMissUrl" in card
-        assert card.index("suggested_charger?.id") < card.index("_reportNearMissUrl(m)")
 
 
 @pytest.mark.unit

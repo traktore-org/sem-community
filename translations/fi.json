@@ -43,16 +43,14 @@
       },
       "hardware": {
         "title": "Laitteisto",
-        "description": "Viimeinen vaihe! SEM tunnisti automaattisesti invertterisi purkuohjauksen entiteetin: {discharge_entity}\n\nJätä koontinäyttövalinta PÄÄLLE, niin SEM rakentaa Lovelace-koontinäyttönsä puolestasi. **Huomaa: tämä käynnistää Home Assistantin uudelleen noin 5 sekuntia asennuksen valmistumisen jälkeen.**\n\nKaikki muu — myös verkon huipputehon raja — käyttää turvallisia oletusarvoja, joita voit säätää heti asennuksen jälkeen: huipputehon rajan välilehden **Ohjaus** liukusäätimellä, kaiken muun SEM-koontinäytön välilehdellä **Asetukset** — mukaan lukien sähköauton laturit, lämpöpumppu, tariffi ja akkualueet.",
+        "description": "Viimeinen vaihe! SEM tunnisti automaattisesti invertterisi purkuohjauksen entiteetin: {discharge_entity}\n\nJätä koontinäyttövalinta PÄÄLLE, niin SEM rakentaa Lovelace-koontinäyttönsä puolestasi. **Huomaa: tämä käynnistää Home Assistantin uudelleen noin 5 sekuntia asennuksen valmistumisen jälkeen.**\n\nKaikki muu — myös verkon huipputehon raja — käyttää turvallisia oletusarvoja, joita voit säätää heti asennuksen jälkeen: huipputehon rajan **Laitteet**-näytöllä, kaiken muun SEM-koontinäytön **Järjestelmä**-näytöllä — mukaan lukien sähköauton laturit, lämpöpumppu, tariffi ja akkualueet.",
         "data": {
           "battery_capacity_kwh": "Kotiakun kapasiteetti (kWh)",
-          "generate_dashboard_on_install": "Luo SEM-koontinäyttö nyt (käynnistää HA:n uudelleen)",
-          "diagram_style": "Järjestelmäkaavion tyyli"
+          "generate_dashboard_on_install": "Luo SEM-koontinäyttö nyt (käynnistää HA:n uudelleen)"
         },
         "data_description": {
           "battery_capacity_kwh": "Kotiakkusi (EI sähköauton) käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Ennusteohjattu latausstrategia käyttää tätä arvioidakseen, kuinka paljon akku voi paikata aurinkovajetta. Tarkista invertterin tekniset tiedot.",
-          "generate_dashboard_on_install": "Kun tämä on käytössä, SEM luo Lovelace-koontinäytön heti tämän vaiheen päätyttyä ja käynnistää Home Assistantin uudelleen noin 5 s myöhemmin, jotta uusi koontinäyttö tulee näkyviin. Voit aina luoda sen myöhemmin uudelleen palvelulla solar_energy_management.generate_dashboard.",
-          "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen)."
+          "generate_dashboard_on_install": "Kun tämä on käytössä, SEM luo Lovelace-koontinäytön heti tämän vaiheen päätyttyä ja käynnistää Home Assistantin uudelleen noin 5 s myöhemmin, jotta uusi koontinäyttö tulee näkyviin. Voit aina luoda sen myöhemmin uudelleen palvelulla solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -133,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Valitse verkkomittarisi",
-        "description": "SEM ei löytänyt verkkotehon anturia. Ilman sitä SEM ei tiedä, mitä ostat tai myyt.\n\nValitse se alta tai ohita painamalla **Lähetä**. Voit asettaa sen myöhemmin Asetukset-välilehdellä.\n\nAurinko: {solar}. Akku: {battery}.",
+        "description": "SEM ei löytänyt verkkotehon anturia. Ilman sitä SEM ei tiedä, mitä ostat tai myyt.\n\nValitse se alta tai ohita painamalla **Lähetä**. Voit asettaa sen myöhemmin Järjestelmä-näytöllä.\n\nAurinko: {solar}. Akku: {battery}.",
         "data": {
           "grid_power_sensor": "Verkkoteho"
         },
@@ -168,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Sähköauton laturi",
-        "description": "Vinkki: useimmat asetukset ovat nyt SEM-koontinäytöllä → Määritykset-välilehti (värikäs, reaaliaikainen). Tämä kulku jää käyttöön ilman koontinäyttöä.\n\nTarkista ja päivitä sähköauton laturin entiteettien määritykset. Ajoneuvon SOC-kenttiä käytetään vain, jos annat ajoneuvon akun SOC-anturin.",
+        "description": "Vinkki: useimmat asetukset ovat SEM-koontinäytöllä: Laitteet- ja Järjestelmä-näytöillä. Tämä kulku jää käyttöön ilman koontinäyttöä.\n\nTarkista ja päivitä sähköauton laturin entiteettien määritykset. Ajoneuvon SOC-kenttiä käytetään vain, jos annat ajoneuvon akun SOC-anturin.",
         "data": {
           "ev_connected_sensor": "Sähköauto yhdistetty",
           "ev_charging_sensor": "Sähköauton lataustila",
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Käyttöveden aurinkolämmityksen tavoite (°C)",
           "legionella_target_temp": "Legionelladesinfioinnin tavoite (°C)",
           "legionella_interval_hours": "Enimmäisaika desinfiointijaksojen välillä (tuntia)",
-          "diagram_style": "Järjestelmäkaavion tyyli",
           "battery_assist_min_surplus": "Akkutuki – vähimmäisaurinkoylijäämä (W)",
           "grid_sign_invert": "Käännä verkkotehon etumerkki",
           "battery_operating_mode_entity": "Akun käyttötila-entiteetti (tarkkailtu)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Kuukausittainen tehomaksu huipputehon kilowattia kohti (CHF/kW/kk). Aseta arvoon 0, jos sopimuksessasi ei ole tehomaksua.",
           "observer_mode": "Kun tämä on PÄÄLLÄ, SEM seuraa ja laskee kaiken, mutta ei koskaan lähetä palvelukutsua laitteistolle. Käytä testi- tai staging-HA:ssa, joka jäljittelee tuotantoasennusta.",
           "battery_discharge_control_entity": "Number-entiteetti, joka ohjaa invertterin purkutehon rajaa (esim. number.batteries_maximale_entladeleistung Huaweilla). Tunnistetaan automaattisesti asennuksessa; ohita tässä tarvittaessa.",
-          "diagram_style": "Valitse järjestelmäkaavio Koti-välilehdellä. 'SEM' käyttää sisäänrakennettua animoitua kaaviota. 'K-Flow' käyttää K-Flow HACS-korttia (asennettava erikseen).",
           "hot_water_solar_target": "Tavoitelämpötila (°C) auringolla avustetulle käyttöveden lämmitykselle. SEM boostaa varaajaa, kun ylijäämää on saatavilla.",
           "legionella_target_temp": "Lämpötila (°C), johon käyttövesijärjestelmän on yllettävä legionelladesinfiointijakson aikana.",
           "legionella_interval_hours": "Enimmäistuntimäärä legionelladesinfiointijaksojen välillä, ennen kuin SEM pakottaa lämmityksen.",
@@ -1884,7 +1880,7 @@
       "message": "Laitteelle {device_id} ei löytynyt laiteaikataulua. Tarkista laitetunnus, jota käytit palvelun schedule_appliance kanssa."
     },
     "load_management_disabled": {
-      "message": "Kuormanhallinta on pois päältä, joten päivitettävää irtikytkentälistaa ei ole. Kytke se päälle SEM-kojelaudan kohdasta Asetukset → Kuormanhallinta ja yritä uudelleen."
+      "message": "Kuormanhallinta on pois päältä, joten päivitettävää irtikytkentälistaa ei ole. Kytke se päälle SEM-kojelaudan kohdasta Järjestelmä → Kuormanhallinta ja yritä uudelleen."
     },
     "load_management_failed_to_start": {
       "message": "Kuormanhallinta on päällä, mutta se ei käynnistynyt, joten SEM ei voi käyttää laitelistaansa. Tarkista Home Assistantin lokista \"Failed to initialize load management\" ja lataa integraatio uudelleen."
@@ -1973,14 +1969,14 @@
         "step": {
           "confirm": {
             "title": "Ilmoita tästä SEM:lle",
-            "description": "**{name}** on asetettu prosentuaaliseen lataustavoitteeseen, mutta ajoneuvo ei juuri nyt raportoi varaustasoaan, joten SEM ei voi pysähtyä *tarkalleen* kohtaan **{target}%**.\n\nSe ei silti lataa sokkona: viimeisimmästä tämän istunnon todellisesta lukemasta lähtien se laskee tosiasiassa toimitetun energian ja pysäyttää latauksen, kun mitattu summa saavuttaa tavoitteesi — ylitys on vain se, minkä auto on ottanut kyseisen lukeman jälkeen. Jos tässä istunnossa ei ole saapunut yhtään todellista lukemaa (tai SEM käynnistyi uudelleen kesken latauksen), vertailukohtaa ei ole ja lataus jatkuu, kunnes auto itse laskee tehoa lähellä täyttä.\n\nJotta raja osuisi kohdalleen, määritä tälle latausasemalle **todellinen ajoneuvon SOC-anturi** (Asetukset → EV-laturit). Koontinäytön akkuprosentti on SEM:n *arvioitu* varaustaso, joka jätetään tarkoituksella huomiotta kovassa rajassa (se voi ajautua). Tämä korjaus poistuu automaattisesti heti, kun todellinen SOC-lukema on taas saatavilla.\n\nSEM arvelee, että tämä vika on sen oma. Jos voit, avaa vikaraportti ilmoituksen painikkeella — lomake on jo valmiiksi täytetty. Voit myös kopioida alla olevan kontekstin sähköpostiin tai foorumiviestiin. Tämä ikkuna ei lähetä mitään minnekään.\n\n```\n{context}\n```\n\nVahvista, niin ilmoitus suljetaan."
+            "description": "**{name}** on asetettu prosentuaaliseen lataustavoitteeseen, mutta ajoneuvo ei juuri nyt raportoi varaustasoaan, joten SEM ei voi pysähtyä *tarkalleen* kohtaan **{target}%**.\n\nSe ei silti lataa sokkona: viimeisimmästä tämän istunnon todellisesta lukemasta lähtien se laskee tosiasiassa toimitetun energian ja pysäyttää latauksen, kun mitattu summa saavuttaa tavoitteesi — ylitys on vain se, minkä auto on ottanut kyseisen lukeman jälkeen. Jos tässä istunnossa ei ole saapunut yhtään todellista lukemaa (tai SEM käynnistyi uudelleen kesken latauksen), vertailukohtaa ei ole ja lataus jatkuu, kunnes auto itse laskee tehoa lähellä täyttä.\n\nJotta raja osuisi kohdalleen, määritä tälle latausasemalle **todellinen ajoneuvon SOC-anturi** (Järjestelmä → Laturit). Koontinäytön akkuprosentti on SEM:n *arvioitu* varaustaso, joka jätetään tarkoituksella huomiotta kovassa rajassa (se voi ajautua). Tämä korjaus poistuu automaattisesti heti, kun todellinen SOC-lukema on taas saatavilla.\n\nSEM arvelee, että tämä vika on sen oma. Jos voit, avaa vikaraportti ilmoituksen painikkeella — lomake on jo valmiiksi täytetty. Voit myös kopioida alla olevan kontekstin sähköpostiin tai foorumiviestiin. Tämä ikkuna ei lähetä mitään minnekään.\n\n```\n{context}\n```\n\nVahvista, niin ilmoitus suljetaan."
           }
         }
       }
     },
     "unmanaged_charger_found": {
       "title": "SEM löysi latauslaitteen, jota se ei ohjaa",
-      "description": "Laite **{name}** näyttää sähköauton laturilta, mutta SEM:iin ei ole määritetty laturia — joten SEM ei koske siihen ({count} ehdokasta löytyi).\n\nLisää se kohdassa Asetukset → Laitteet ja palvelut → SEM → Määritä, niin SEM voi optimoida latauksen auringolla ja halvoilla tariffeilla. Samalla tulee näkyviin EV-välilehti lataustiloineen.\n\nJos tämä ei ole laturi, jätä ilmoitus huomiotta — SEM ei ohjaa sitä joka tapauksessa."
+      "description": "Laite **{name}** näyttää sähköauton laturilta, mutta SEM:iin ei ole määritetty laturia — joten SEM ei koske siihen ({count} ehdokasta löytyi).\n\nLisää se kohdassa Asetukset → Laitteet ja palvelut → SEM → Määritä, niin SEM voi optimoida latauksen auringolla ja halvoilla tariffeilla. Samalla se tulee näkyviin Devices-näytölle lataustiloineen.\n\nJos tämä ei ole laturi, jätä ilmoitus huomiotta — SEM ei ohjaa sitä joka tapauksessa."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace YAML-tilassa — lisää SEM:n korttiresurssit",
@@ -1988,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Latauslaitteen ohjausentiteetti ei toimi: {name}",
-      "description": "SEM käyttää entiteettiä **`{entity_id}`** toimintoon {capability} laitteella **{name}**, mutta entiteetti on `{reason}` — jokainen komento katoaa. Tarkista entiteetti kohdassa **Kehittäjätyökalut → Tilat** ja korjaa se lähteessä tai osoita SEM uudelleen: **Asetukset → EV-laturit**."
+      "description": "SEM käyttää entiteettiä **`{entity_id}`** toimintoon {capability} laitteella **{name}**, mutta entiteetti on `{reason}` — jokainen komento katoaa. Tarkista entiteetti kohdassa **Kehittäjätyökalut → Tilat** ja korjaa se lähteessä tai osoita SEM uudelleen: **Järjestelmä → Laturit**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Akun tehon asetusarvoa ei voi kirjoittaa: {entity_id}",
@@ -2008,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Deye-vientiohjausta ei voi käyttää: {entity_id}",
-      "description": "SEM ei voi käyttää kohdetta {entity_id} vientiohjaukseen: {reason}. Tarkista select-entiteetti ja kolme vaihtoehdon nimeä kohdasta Asetukset → Akun äly."
+      "description": "SEM ei voi käyttää kohdetta {entity_id} vientiohjaukseen: {reason}. Tarkista select-entiteetti ja kolme vaihtoehdon nimeä kohdasta Järjestelmä → Akun säännöt."
     },
     "battery_operating_mode_unexpected": {
       "title": "Akku on tilassa “{mode}” — SEM suunnittelee ikään kuin se olisi “{expected}”",
@@ -2020,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "Akun yöhistoriaa ei voi rakentaa",
-      "description": "SEM ei voinut rakentaa yöhistoriaa, koska tässä asennuksessa ei ole **{missing}** -anturia.\n\nSEM oppii, kuinka paljon akusta voi turvallisesti käyttää seuraamalla, mitä talo ottaa siitä yön aikana, ja haluaa viisi hyvää yötä ennen kuin se antaa luvun. Rakentaminen lukee mittarin *oman* tallennetun historian, jotta sinun ei tarvitse odottaa — mutta mittarin on oltava olemassa.\n\n**Tee näin:** lisää kumulatiivinen energia-anturi (kWh, ei wattia) kohteelle **{missing}** Home Assistantin energianäkymään ja paina Akku-välilehdellä uudelleen **Rakenna historiasta**. Odottaminen ei maksa mitään — SEM lukee mittarin historian, joten se toimii yhtä hyvin myöhemmin. Sillä välin tallennus jatkuu, yksi yö päivässä."
+      "description": "SEM ei voinut rakentaa yöhistoriaa, koska tässä asennuksessa ei ole **{missing}** -anturia.\n\nSEM oppii, kuinka paljon akusta voi turvallisesti käyttää seuraamalla, mitä talo ottaa siitä yön aikana, ja haluaa viisi hyvää yötä ennen kuin se antaa luvun. Rakentaminen lukee mittarin *oman* tallennetun historian, jotta sinun ei tarvitse odottaa — mutta mittarin on oltava olemassa.\n\n**Tee näin:** lisää kumulatiivinen energia-anturi (kWh, ei wattia) kohteelle **{missing}** Home Assistantin energianäkymään ja paina Devices-näytöllä uudelleen **Rakenna historiasta**. Odottaminen ei maksa mitään — SEM lukee mittarin historian, joten se toimii yhtä hyvin myöhemmin. Sillä välin tallennus jatkuu, yksi yö päivässä."
     },
     "battery_night_backfill_incomplete": {
       "title": "Rakennetut yöt eivät näe verkon osuutta",
@@ -2036,19 +2032,19 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Akkualusta on lukittu Genericiin {brand}-asennuksessa",
-      "description": "SEM:n akkualustaksi on asetettu **Generic / muu**, mutta {brand}-integraatio on ladattu. Asetusvelhon aiemmat versiot tarjosivat vain Generic- ja Deye-vaihtoehdot ja valitsivat oletuksena Genericin, joten kyseisen sivun läpikäynti kerran alensi {brand}-asennuksen yleiseen sovittimeen — ei pakkolatausta, ei idempotentteja rekisterikirjoituksia. Avaa **Asetukset → Akun latausajastin** ja aseta **Akun latausalusta** arvoon **Automaattinen tunnistus**. Jos Generic on tarkoituksellinen valinta (akku, jolla on omat ohjausentiteettinsä), aseta kyseinen entiteetti, niin ilmoitus poistuu."
+      "description": "SEM:n akkualustaksi on asetettu **Generic / muu**, mutta {brand}-integraatio on ladattu. Asetusvelhon aiemmat versiot tarjosivat vain Generic- ja Deye-vaihtoehdot ja valitsivat oletuksena Genericin, joten kyseisen sivun läpikäynti kerran alensi {brand}-asennuksen yleiseen sovittimeen — ei pakkolatausta, ei idempotentteja rekisterikirjoituksia. Avaa **Asetukset → Laitteet ja palvelut → SEM → Määritä → Akun latausajastin** ja aseta **Akun latausalusta** arvoon **Automaattinen tunnistus**. Jos Generic on tarkoituksellinen valinta (akku, jolla on omat ohjausentiteettinsä), aseta kyseinen entiteetti, niin ilmoitus poistuu."
     },
     "split_grid_guessed": {
       "title": "SEM tarkistaa kahta arvattua verkkomittaria",
-      "description": "SEM:llä ei ole verkon tehoanturia, joten se arvasi nimen perusteella: **{import_entity}** verkosta tuontiin ja **{export_entity}** verkkoon vientiin. SEM ei käytä niitä ennen kuin ne vastaavat verkon energialaskureitasi, joten verkon teho näyttää toistaiseksi 0. Näin valitset mittarisi: avaa SEM-koontinäyttö, välilehti ⚙ **Asetukset**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon teho** osiossa **Anturilähteet**. Jos mittarissasi on yksi anturi tuonnille ja toinen viennille, aseta sen sijaan **Verkon tuontianturi** ja **Verkon vientianturi** osiossa **Tariffi ja hinnoittelu**."
+      "description": "SEM:llä ei ole verkon tehoanturia, joten se arvasi nimen perusteella: **{import_entity}** verkosta tuontiin ja **{export_entity}** verkkoon vientiin. SEM ei käytä niitä ennen kuin ne vastaavat verkon energialaskureitasi, joten verkon teho näyttää toistaiseksi 0. Näin valitset mittarisi: avaa SEM-koontinäyttö, välilehti **Järjestelmä**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon teho** osiossa **Mitä SEM lukee**. Jos mittarissasi on yksi anturi tuonnille ja toinen viennille, aseta sen sijaan **Verkon tuontianturi** ja **Verkon vientianturi** osiossa **Mitä SEM lukee**."
     },
     "battery_control_write_not_taken": {
       "title": "Akun ohjauskirjoitus ei jää voimaan: {entity_id}",
-      "description": "SEM asetti kohteen **`{entity_id}`** arvoon **{wanted}**; seuraavilla jaksoilla se luki yhä **{seen}**, {strikes} kertaa peräkkäin. Kutsu ei epäonnistunut — rekisteri ei vain pitänyt arvoa. **Korjaus:** aseta entiteetti käsin kohdassa Kehittäjätyökalut → Tilat. Jos arvo ei pysy, se on väärä entiteetti tähän rooliin: valitse toinen Asetukset-kortista. Jos se pysyy käsin mutta ei SEM:lle, kerro meille merkki ja entiteetti. Katoaa heti, kun kirjoitus näkyy."
+      "description": "SEM asetti kohteen **`{entity_id}`** arvoon **{wanted}**; seuraavilla jaksoilla se luki yhä **{seen}**, {strikes} kertaa peräkkäin. Kutsu ei epäonnistunut — rekisteri ei vain pitänyt arvoa. **Korjaus:** aseta entiteetti käsin kohdassa Kehittäjätyökalut → Tilat. Jos arvo ei pysy, se on väärä entiteetti tähän rooliin: valitse toinen kohdasta **Järjestelmä → Akun säännöt**. Jos se pysyy käsin mutta ei SEM:lle, kerro meille merkki ja entiteetti. Katoaa heti, kun kirjoitus näkyy."
     },
     "soc_zones_out_of_order": {
       "title": "Akun SOC-vyöhykkeet ovat väärässä järjestyksessä",
-      "description": "Akkusi vyöhykkeet lukevat **Prioriteetti {priority}% · Puskuri {buffer}% · Autokäynnistys {auto_start}%**, mutta SEM odottaa niiden nousevan tässä järjestyksessä: Prioriteetti on reservi, jota et koskaan kuluta, Puskuri on raja, jossa akkutuki päättyy, ja Autokäynnistys on raja, jossa akku on tarpeeksi täynnä antaakseen vapaasti.\n\nSEM käyttää arvoja **{used}** rajoina — samat kolme lukua, järjestettynä — jotta mikään vyöhyke ei jää väliin eikä mikään käyttäydy arvaamattomasti. Se kertoo tästä, koska kirjoittamasi järjestys ei lähes varmasti ole se, mitä tarkoitit.\n\nKorjaa se kohdassa **Asetukset → Akun vyöhykkeet**. Mikä tahansa arvo käy, kunhan ne nousevat; leveät vyöhykkeet ovat ihan hyviä — 20 / 30 / 50 on täysin toimiva järjestys suurelle akulle."
+      "description": "Akkusi vyöhykkeet lukevat **Prioriteetti {priority}% · Puskuri {buffer}% · Autokäynnistys {auto_start}%**, mutta SEM odottaa niiden nousevan tässä järjestyksessä: Prioriteetti on reservi, jota et koskaan kuluta, Puskuri on raja, jossa akkutuki päättyy, ja Autokäynnistys on raja, jossa akku on tarpeeksi täynnä antaakseen vapaasti.\n\nSEM käyttää arvoja **{used}** rajoina — samat kolme lukua, järjestettynä — jotta mikään vyöhyke ei jää väliin eikä mikään käyttäydy arvaamattomasti. Se kertoo tästä, koska kirjoittamasi järjestys ei lähes varmasti ole se, mitä tarkoitit.\n\nKorjaa se kohdassa **Järjestelmä → Akun säännöt**. Mikä tahansa arvo käy, kunhan ne nousevat; leveät vyöhykkeet ovat ihan hyviä — 20 / 30 / 50 on täysin toimiva järjestys suurelle akulle."
     },
     "previous_install_leftovers": {
       "title": "Aiemman SEM-asennuksen jäänteitä löytyi",
@@ -2056,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready-koskettimen {contact} ohjaus epäonnistuu",
-      "description": "**{entity_id}** on asetettu SG-Readyn koskettimeksi {contact}, mutta se on teksti-/number-/select-entiteetti eikä sen **{missing}**-arvoa ole määritetty — joten SEM:llä ei ole mitään kirjoitettavaa, ja jokainen tämän lämpöpumpun SG-Ready-komento epäonnistuu. Avaa **Asetukset → Lämpöpumppu** ja täytä sekä PÄÄLLÄ- että POIS-arvo tälle koskettimelle, tai osoita se kytkinentiteettiin sen sijaan."
+      "description": "**{entity_id}** on asetettu SG-Readyn koskettimeksi {contact}, mutta se on teksti-/number-/select-entiteetti eikä sen **{missing}**-arvoa ole määritetty — joten SEM:llä ei ole mitään kirjoitettavaa, ja jokainen tämän lämpöpumpun SG-Ready-komento epäonnistuu. Avaa **Järjestelmä → Lämpöpumppu ja lämmin vesi** ja täytä sekä PÄÄLLÄ- että POIS-arvo tälle koskettimelle, tai osoita se kytkinentiteettiin sen sijaan."
     },
     "split_grid_rejected": {
       "title": "SEM ei löytänyt verkkomittareitasi",
-      "description": "SEM:llä ei ole verkon tehoanturia, eivätkä sen nimen perusteella arvaamat anturit ole verkkomittarisi: **{import_entity}** tuonnille, **{export_entity}** viennille. Ne eivät vastaa verkon energialaskureitasi, tai toinen niistä puuttuu. SEM jättää verkon tehon mieluummin näyttämättä kuin näyttää väärän arvon. Näin valitset mittarisi: avaa SEM-koontinäyttö, välilehti ⚙ **Asetukset**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon teho** osiossa **Anturilähteet**. Jos mittarissasi on yksi anturi tuonnille ja toinen viennille, aseta sen sijaan **Verkon tuontianturi** ja **Verkon vientianturi** osiossa **Tariffi ja hinnoittelu**."
+      "description": "SEM:llä ei ole verkon tehoanturia, eivätkä sen nimen perusteella arvaamat anturit ole verkkomittarisi: **{import_entity}** tuonnille, **{export_entity}** viennille. Ne eivät vastaa verkon energialaskureitasi, tai toinen niistä puuttuu. SEM jättää verkon tehon mieluummin näyttämättä kuin näyttää väärän arvon. Näin valitset mittarisi: avaa SEM-koontinäyttö, välilehti **Järjestelmä**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon teho** osiossa **Mitä SEM lukee**. Jos mittarissasi on yksi anturi tuonnille ja toinen viennille, aseta sen sijaan **Verkon tuontianturi** ja **Verkon vientianturi** osiossa **Mitä SEM lukee**."
     },
     "power_sensor_not_found": {
       "title": "Ei tehoanturia kohteelle {energy_entity}",
-      "description": "Energia-paneeli laskee **{energy_entity}** kWh:na, mutta SEM ei löytänyt sille tehoanturia (W). SEM lukee siksi tämän tehon 0 W:ksi, joten energiavirrat ja ylijäämä ovat väärin. Korjaa se lisäämällä tehoanturi tähän kohtaan Energia-paneelissa. Tai avaa SEM-hallintapaneeli, välilehti ⚙ **Asetukset**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten anturi osiossa **Anturilähteet**. Jos tehoanturia ei ole, voit ohittaa tämän ilmoituksen."
+      "description": "Energia-paneeli laskee **{energy_entity}** kWh:na, mutta SEM ei löytänyt sille tehoanturia (W). SEM lukee siksi tämän tehon 0 W:ksi, joten energiavirrat ja ylijäämä ovat väärin. Korjaa se lisäämällä tehoanturi tähän kohtaan Energia-paneelissa. Tai avaa SEM-hallintapaneeli, välilehti **Järjestelmä**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten anturi osiossa **Mitä SEM lukee**. Jos tehoanturia ei ole, voit ohittaa tämän ilmoituksen."
     },
     "power_sensor_not_found_unit": {
       "title": "Ei tehoanturia kohteelle {energy_entity}",
@@ -2089,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM ei näe verkkoon vientiäsi",
-      "description": "Vain verkon tuontianturi **{import_entity}** on asetettu, joten SEM lukee viennin arvona 0 W. Mutta vientilaskurisi **{export_entity}** näyttää, että sähköä meni verkkoon. Korjaa avaamalla SEM-koontinäyttö, välilehti ⚙ **Asetukset**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon vientianturi** osiossa **Tariffi ja hinnoittelu**. Tai tyhjennä **Verkon tuontianturi**, niin SEM etsii parin itse."
+      "description": "Vain verkon tuontianturi **{import_entity}** on asetettu, joten SEM lukee viennin arvona 0 W. Mutta vientilaskurisi **{export_entity}** näyttää, että sähköä meni verkkoon. Korjaa avaamalla SEM-koontinäyttö, välilehti **Järjestelmä**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon vientianturi** osiossa **Mitä SEM lukee**. Tai tyhjennä **Verkon tuontianturi**, niin SEM etsii parin itse."
     },
     "unseen_power_row": {
       "title": "SEM ei näe kaikkea aurinko- tai akkutehoasi",
@@ -2109,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "Toinen osapuoli kirjoittaa kohteeseen {name}",
-      "description": "Jokin muu kuin SEM muuttaa kohdetta **{name}** jatkuvasti, ja SEM ja se osapuoli kumoavat toistensa työn. Aseta laite SEM:n Asetukset-välilehdellä tilaan *Kyllä, SEM väistyy* ja valitse entiteetti, joka näyttää, milloin toinen osapuoli ohjaa."
+      "description": "Jokin muu kuin SEM muuttaa kohdetta **{name}** jatkuvasti, ja SEM ja se osapuoli kumoavat toistensa työn. Kytke **Järjestelmä**-näytöllä päälle **Kaikki asetukset** ja aseta laitteelle (kohdassa **Akun säännöt** tai **Laturit**) **toisen osapuolen ohjaama** tilaan *Kyllä, SEM väistyy* ja valitse entiteetti, joka näyttää, milloin toinen osapuoli ohjaa."
     },
     "heater_no_rise": {
       "title": "Lämminvesivaraaja ei lämpene",
@@ -2122,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Verkkolatauksen valinta on yhä päällä: {entity}",
       "description": "Valinta **{entity}** on yhä arvossa **{option}**, eikä SEM voi palauttaa sitä: aiempaa vaihtoehtoa ei enää ole luettelossa. Palauta se käsin. Siihen asti akku voi jatkaa latausta verkosta. Poistuu, kun valintaa muutetaan."
+    },
+    "classic_dashboard_kept": {
+      "title": "Vanha SEM-näkymä on yhä olemassa",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Vanha SEM-näkymä on yhä olemassa",
+            "description": "Vanha SEM-näkymä osoitteessa `/{path}` on poistettu käytöstä. Muokkasit sitä, joten SEM jätti sen asettelun ennalleen. Sen SEM-kortit näyttävät nyt linkin uuteen SEM-näkymään. Vahvista, niin vanha poistetaan."
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -2130,12 +2137,6 @@
         "disabled": "Poistettu käytöstä",
         "grid_only": "Vain verkkosyöttö",
         "hybrid_load_port": "Sähköverkko + hybridi-invertterin Load/EPS-lähtö"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (sisäänrakennettu)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

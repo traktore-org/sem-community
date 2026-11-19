@@ -17,15 +17,6 @@ test('hot water counts as set up only when its settings exist', () => {
     assert.equal(hotWaterSetUp({ 'number.sem_legionella_target_temp': { state: '60' } }), true);
 });
 
-test('both cards take the rule from the shared util', () => {
-    const cards = new URL('../src/cards/', import.meta.url);
-    const cfg = fs.readFileSync(new URL('sem-config-card.js', cards), 'utf8');
-    const ctl = fs.readFileSync(new URL('sem-control-card.js', cards), 'utf8');
-    assert.ok(cfg.includes("from '../util/settings-applies.js'") && cfg.includes('taxesApply(basis)'));
-    assert.ok(!cfg.includes('disabled: allIn'), 'the tax fields are hidden, not greyed');
-    assert.ok(ctl.includes('hotWaterSetUp(this._hass?.states)'));
-});
-
 test('SEM runs a load only in its own two modes', () => {
     assert.equal(loadRunsBySem('solar_only'), true);
     assert.equal(loadRunsBySem('solar_battery'), true);

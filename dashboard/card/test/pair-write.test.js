@@ -88,15 +88,3 @@ test('nothing to write is never "in use"', () => {
     assert.equal(writeIsSaved(null, {}), false);
     assert.equal(writeIsSaved(proposalWrite({ config_key: null }, undefined, {}), {}), false);
 });
-
-test('the card saves what proposalWrite says, in one call', () => {
-    const src = readFileSync(new URL('../src/cards/sem-config-card.js', import.meta.url), 'utf8');
-    const rows = src.slice(src.indexOf('const useButton'), src.indexOf('const prober'));
-    assert.match(rows, /this\._saveOptions\(write, fieldKey\)/);
-    assert.doesNotMatch(rows, /_saveOption\(p\.config_key/,
-        'a button that writes one key saves half a pair');
-    assert.equal((rows.match(/proposalWrite\(p, /g) || []).length, 2,
-        'the row and each alternative ask proposalWrite');
-    assert.match(rows, /const altOk = !a\.action \|\| a\.action === 'set_option'/,
-        'a runner-up the gate refused gets no button');
-});

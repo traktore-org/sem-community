@@ -13,7 +13,6 @@ card surface so it can't silently regress:
 - every language carries the new translation keys.
 """
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -28,44 +27,7 @@ _KEYS = ("grid_power_sensor", "solar_production_sensor", "battery_power_sensor",
 
 @pytest.mark.unit
 class TestSensorSourcesSection:
-    def test_section_registered(self):
-        src = _CARD.read_text(encoding="utf-8")
-        assert "id: 'sensor_sources'" in src
-        assert "sensor_sources: (T) => this._renderSensorSources(T)" in src
-        m = re.search(r"id: 'sensor_sources'.*?docs: '([^']+)'", src, re.S)
-        assert m and "#sensor-source-overrides" in m.group(1)
 
-    def test_every_picker_renders_in_the_section(self):
-        src = _CARD.read_text(encoding="utf-8")
-        m = re.search(r"_renderSensorSources\(T\) \{(.*?)\n    \}", src, re.S)
-        assert m, "_renderSensorSources not found"
-        body = m.group(1)
-        for key in _KEYS:
-            assert f"'{key}'" in body, f"{key} picker missing from the section"
-        # failure honesty: every picker carries its unavailable-override warning
-        # Derived, not a literal: a picker added without its warning is the
-        # #696 defect — an override that stops reporting must be SEEN.
-        assert body.count("_sourceUnavailableWarning") == len(_KEYS)
-
-    def test_keys_are_card_structural(self):
-        src = _CARD.read_text(encoding="utf-8")
-        m = re.search(r"const STRUCTURAL_KEYS = new Set\(\[(.*?)\]\)", src, re.S)
-        assert m
-        keys = set(re.findall(r"'([^']+)'", m.group(1)))
-        missing = set(_KEYS) - keys
-        assert not missing, (
-            f"{missing} not card-structural — their edits would commit "
-            "per-field (a reload per keystroke) instead of one Apply batch"
-        )
-
-    def test_moved_pickers_render_exactly_once(self):
-        """battery_power_sensor moved out of Battery & zones and
-        solar_production_sensor out of Tariff — each key must have exactly ONE
-        picker on the whole card, or two pickers fight over one option."""
-        src = _CARD.read_text(encoding="utf-8")
-        for key in _KEYS:
-            count = len(re.findall(rf"_renderPicker\('{key}'", src))
-            assert count == 1, f"{key} rendered {count}× (expected exactly 1)"
 
     def test_translations_cover_all_languages(self):
         tr = json.loads(_TRANSLATIONS.read_text(encoding="utf-8"))

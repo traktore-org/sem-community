@@ -81,6 +81,8 @@ BATTERY_PEAK_HOLD = "battery_peak_hold"
 BATTERY_PEAK_HOLD_COVER = "battery_peak_hold_cover"
 BATTERY_CAR_NOT_ALLOWED = "battery_car_not_allowed"
 BATTERY_CAR_LEVEL_UNKNOWN = "battery_car_level_unknown"
+# (#1321) the card words this when the car level is known after all
+BATTERY_CAR_LEVEL_KNOWN = "battery_car_level_known"
 BATTERY_CAR_BELOW_FLOOR = "battery_car_below_floor"
 BATTERY_CAR_BELOW_RESERVE = "battery_car_below_reserve"
 BATTERY_CAR_LOW_SUN = "battery_car_low_sun"
@@ -121,6 +123,11 @@ LOAD_DAILY_MAX = "daily_max"
 LOAD_STOP_CONDITION = "stop_condition"
 LOAD_PLAN_WAIT = "plan_wait"
 LOAD_NO_SOURCE = "no_source"
+# (#1321) the card words these when the same decision is only held ("stays off"), not made now
+LOAD_NO_SOURCE_HELD = "no_source_held"
+LOAD_PEAK_SHED_HELD = "peak_shed_held"
+LOAD_PHASE_GUARD_HELD = "phase_guard_held"
+LOAD_SURPLUS_SHORT_HELD = "surplus_short_held"
 # (#1102) the heater ladder: each rung names itself
 LOAD_COMFORT_FLOOR = "comfort_floor"
 # (#1344) too cold while the house is away: back above the limit, no further
@@ -177,6 +184,7 @@ PARAMS: Dict[str, Tuple[str, ...]] = {
     CHARGER_PLAN_OVERRIDE_RUN: ("time",),
     BATTERY_FEEDS_CAR: ("floor",),
     BATTERY_CAR_BELOW_FLOOR: ("floor",),
+    BATTERY_CAR_LEVEL_KNOWN: ("soc",),
     EXPORT_NOT_WORTH: ("value", "threshold"),
 }
 

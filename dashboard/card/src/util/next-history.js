@@ -18,6 +18,7 @@
  * day that is the day's total; per hour the hours are differenced.
  */
 import { startOfDayInHaTz } from './time-zone.js';
+import { fmtNum } from './next-number.js';
 
 export const PERIOD_KEYS = ['day', 'yesterday', 'week', 'month', 'year'];
 const HOUR = 3600e3;
@@ -112,16 +113,21 @@ export function nearestIndex(ts, starts) {
     return dist <= step * 0.75 ? best : -1;
 }
 
-/** Increments of a counter that resets: a drop means the counter started over. */
+/**
+ * Increments of a daily counter. A drop to under half is a restart (the new
+ * value is what it counted since); a smaller drop is a correction or a flicker
+ * of the source, never use: it adds nothing and the high mark stays, so the
+ * climb back is not counted twice (#1321).
+ */
 export function diffCumulative(values) {
     const out = [];
     let prev = null;
     for (const raw of values || []) {
         const v = Number(raw);
         if (!Number.isFinite(v)) { out.push(0); continue; }
-        if (prev === null || v < prev) out.push(Math.max(0, v));
-        else out.push(v - prev);
-        prev = v;
+        if (prev === null || v <= prev * 0.5) { out.push(Math.max(0, v)); prev = v; }
+        else if (v < prev) out.push(0);
+        else { out.push(v - prev); prev = v; }
     }
     return out;
 }
@@ -191,7 +197,7 @@ export function smooth(pts) {
 }
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-const gridText = (g) => (g >= 10 ? String(Math.round(g)) : g.toFixed(1));
+const gridText = (g) => (g >= 10 ? fmtNum(Math.round(g), 0) : fmtNum(g, 1));
 
 /** A round axis top: 5-steps above 5, else 1-steps, never 0. */
 function niceMax(v) {
@@ -231,7 +237,7 @@ export function stackModel(series, colors, labels, w = 600, h = 150, highlightIn
         });
         if (lab) labelOut.push({ x: x + ww / 2, y: h - 6, text: lab, strong: i === highlightIndex });
         if (totals[i] > 0 && (n <= 12 || i === highlightIndex)) {
-            totalOut.push({ x: x + ww / 2, y: y(totals[i]) - 4, text: totals[i] >= 10 ? String(Math.round(totals[i])) : totals[i].toFixed(1) });
+            totalOut.push({ x: x + ww / 2, y: y(totals[i]) - 4, text: totals[i] >= 10 ? fmtNum(Math.round(totals[i]), 0) : fmtNum(totals[i], 1) });
         }
     });
     return { w, h, empty, max, grid, bars, labels: labelOut, totals: totalOut, slots, sums: totals };

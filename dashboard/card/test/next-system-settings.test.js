@@ -42,6 +42,7 @@ const CTX = { options: OPTS, currency: 'CHF', chargers: [{ cid: 'keba', name: 'K
 
 const all = (opts = OPTS, st = states()) => slotsOf(groups(st, t, { ...CTX, options: opts }));
 const find = (slots, pred) => slots.find(pred);
+const partsOf = (opts, st) => groups(st, t, { ...CTX, options: opts }).flatMap((g) => [...g.sentence, ...g.more]);
 
 test('the four sources are pickers that show what SEM found until overridden', () => {
     const reads = groups(states(), t, CTX).find((g) => g.key === 'reads');
@@ -51,7 +52,7 @@ test('the four sources are pickers that show what SEM found until overridden', (
     assert.equal(solar.fallback, 'sensor.pv');
     assert.deepEqual(solar.domains, ['sensor']);
     assert.equal(solar.deviceClass, 'power');
-    assert.equal(slotText(solar, t, solar.value, states()), 'Inverter input power (auto)');
+    assert.equal(slotText(solar, t, solar.value, states()), 'Inverter input');
     assert.equal(slotText(solar, t, 'sensor.my_grid', states()), 'My grid meter');
     const house = find(reads.sentence, (p) => p && p.option === 'house_power_sensor');
     assert.equal(slotText(house, t, '', states()), 'next_computed');
@@ -148,6 +149,42 @@ test('battery wiring: strategy values only with a strategy entity, scheduler tun
     }
     const active = find(s, (x) => x.option === 'battery_strategy_active_value');
     assert.equal(slotText(active, t, ''), 'api');
+});
+
+test('grid-charge fields: the select pair, the charge switch and target, the end-of-discharge level (#1362)', () => {
+    const st = { ...states(), 'select.charge_mode': { state: 'a', attributes: { options: ['a', 'grid_charge'] } } };
+    let s = all(OPTS, st);
+    for (const k of ['battery_charge_select_entity', 'battery_force_charge_switch', 'battery_target_soc_entity',
+                     'battery_discharge_end_soc_entity']) {
+        assert.ok(find(s, (x) => x.option === k), k);
+    }
+    assert.ok(!find(s, (x) => x.option === 'battery_charge_select_option'), 'the option shows once a select is chosen');
+    s = all({ ...OPTS, battery_charge_select_entity: 'select.charge_mode' }, st);
+    const opt = find(s, (x) => x.option === 'battery_charge_select_option');
+    assert.deepEqual(opt.options.map((o) => o.value), ['', 'a', 'grid_charge']);
+    const need = find(partsOf({ ...OPTS, battery_charge_select_entity: 'select.charge_mode' }, st), (x) => x && x.ro && x.value === 'config_charge_select_need_option');
+    assert.ok(need, 'half a pair is said out loud');
+    const plan = applyPlan({ x: { slot: find(s, (y) => y.option === 'battery_charge_select_entity'), value: '' } }, st);
+    assert.equal(plan.options.battery_charge_select_option, '', 'a cleared select takes its option with it');
+    assert.ok(plan.reload);
+});
+
+test('grid-charge fields: with two batteries the switch and target give way to one line saying why', () => {
+    const st = { ...states(), 'sensor.sem_battery_b1_power': { state: '0', attributes: {} }, 'sensor.sem_battery_b2_power': { state: '0', attributes: {} } };
+    const s = all(OPTS, st);
+    assert.ok(find(s, (x) => x.option === 'battery_charge_select_entity'), 'the pair is shared, so it stays');
+    assert.ok(!find(s, (x) => x.option === 'battery_force_charge_switch'));
+    assert.ok(!find(s, (x) => x.option === 'battery_target_soc_entity'));
+    assert.ok(find(partsOf(OPTS, st), (x) => x && x.ro && x.value === 'config_charge_switch_one_battery'));
+});
+
+test('the peak-hold switch and the heat pump step-down have a home (#1323)', () => {
+    const st = { ...states(), 'switch.sem_battery_peak_hold_enabled': sw(false) };
+    const s = all({ ...OPTS, heat_pump_climate_entity: 'climate.hp' }, st);
+    assert.ok(find(s, (x) => x.id === 'switch.sem_battery_peak_hold_enabled'));
+    const step = find(s, (x) => x.option === 'heat_pump_step_down');
+    assert.deepEqual(step.options.map((o) => o.value), ['off', 'setpoint', 'block']);
+    assert.equal(step.value, 'off');
 });
 
 test('a setpoint model outside the list keeps its value as an option', () => {

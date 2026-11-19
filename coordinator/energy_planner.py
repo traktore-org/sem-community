@@ -265,6 +265,9 @@ def battery_at_end(ledger, floor_kwh, capacity_kwh) -> Optional[dict]:
             "at": s.end.isoformat()}
 
 
+_ONE_RATE_MIN_HOURS = 3.0
+
+
 def demand_why(allocations, ledger, source: str = "grid",
                cop_at=None) -> Optional[dict]:
     """(#1321) One reason code for where a demand's runs landed, for the
@@ -275,6 +278,8 @@ def demand_why(allocations, ledger, source: str = "grid",
     * ``on_sun`` — every run sits in a sun slot;
     * ``before_departure`` — a run is the late top-up before the deadline;
     * ``unpriced_hours`` — a run had no published price;
+    * ``short_window`` — too little of the night is left to choose hours by
+      price (the ledger spans under ``_ONE_RATE_MIN_HOURS``);
     * ``one_rate`` — the night has one price, so the hours are not chosen
       by price;
     * ``cheapest_hours`` — otherwise: the cheapest priced hours, with the
@@ -306,6 +311,11 @@ def demand_why(allocations, ledger, source: str = "grid",
         return {"code": "unpriced_hours", "params": span}
     prices = {round(float(s.price), 4) for s in ledger if s.price is not None}
     if len(prices) <= 1:
+        # (#1321) a window of an hour or two has one price whatever the tariff
+        # is: "one rate all night" would be false when the prices vary later
+        hours = sum(getattr(s, "hours", 0.0) or 0.0 for s in ledger)
+        if hours < _ONE_RATE_MIN_HOURS:
+            return {"code": "short_window", "params": span}
         return {"code": "one_rate", "params": span}
     kwh = sum(a.energy_kwh for a in runs)
     avg = (sum(a.energy_kwh * float(a.price) for a in runs) / kwh) if kwh > 0 else None

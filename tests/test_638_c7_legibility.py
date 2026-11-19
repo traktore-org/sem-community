@@ -336,8 +336,9 @@ class TestEveryLeftOutLoadIsNamed:
                 "no_rated_power"} <= codes, (
             "the load whys moved — this pin is reading the wrong lines")
         card = (root / "dashboard" / "card" / "src" / "cards"
-                / "sem-energy-plan-card.js").read_text()
-        assert "'energy_plan_why_' + r.why" in card
+                / "sem-next-plan-card.js").read_text()
+        # (#1321) the SEM dashboard's plan card reads the why through its key
+        assert "'energy_plan_why_' + code" in card
         langs = json.loads(
             (root / "dashboard" / "translations.json").read_text())
         for code in sorted(codes):
@@ -447,22 +448,15 @@ class TestALeftOutRowIsNamed:
                 "label": None} in rows
 
     def test_the_card_prefers_the_label_over_the_id_slug(self):
+        """(#1053, #1321) The SEM dashboard's plan card names a row through
+        the one plan-id reader: the demand's label first, the kind in the
+        user's language otherwise, never the slug."""
         import pathlib
         root = pathlib.Path(__file__).resolve().parent.parent
         card = (root / "dashboard" / "card" / "src" / "cards"
-                / "sem-energy-plan-card.js").read_text()
-        # (#1053) The fallback is the demand's kind in the user's language,
-        # not the slug: "ev_charger_1" reached a Dutch card as a name.
-        assert card.count("_demandName(r.label, r.id)") == 2, (
-            "both the quiet-night and the planned-night lists render the "
-            "name, falling back to the kind only when there is none")
+                / "sem-next-plan-card.js").read_text()
+        assert "planIdName(" in card and "label: () => l.label" in card
         assert "split(':').pop()" not in card
-
-
-# The reasons for which "the plan is unreadable" IS the honest sentence:
-# the plan really did break trust and the user can do nothing but wait for
-# the next stamp. Every OTHER reason owes the user a specific sentence.
-_UNREADABLE_IS_HONEST = {"malformed block", "unreadable plan", "no span"}
 
 
 @pytest.mark.unit
@@ -503,36 +497,3 @@ class TestTheQuietPlanIsNotUnreadable:
         broken["demands"] = [{"id": "battery", "status": "fits"}]
         gate = plan_gate(broken, "battery", self.NOW)
         assert gate.reason == "no span"
-
-    def test_every_gate_reason_has_a_card_sentence(self):
-        """Systematic pin: a reason the gate can emit that the card cannot
-        translate renders as "unreadable" — the bug class, not one bug.
-        Adding a reason now forces either a card key or an explicit entry
-        in the honest-unreadable set."""
-        import json
-        import pathlib
-        import re
-        root = pathlib.Path(__file__).resolve().parent.parent
-        src = (root / "coordinator" / "energy_plan_actuation.py").read_text()
-        reasons = set(re.findall(r'PlanGate\(reason=[\'"]([^\'"{]+)[\'"]', src))
-        reasons.add("actuation off")  # the coordinator's own kill-switch reason
-        assert "nothing planned" in reasons
-
-        card = (root / "dashboard" / "card" / "src" / "cards"
-                / "sem-energy-plan-card.js").read_text()
-        # (#1081) the method may take more arguments: find it by name
-        block = re.split(r"_covKey\(reason[^)]*\)\s*\{", card, maxsplit=1)[1].split("}", 1)[0]
-        mapped = dict(re.findall(r"'([^']+)':\s*'(energy_plan_cov_[a-z_]+)'",
-                                 block))
-
-        unmapped = {r for r in reasons
-                    if r not in mapped and r not in _UNREADABLE_IS_HONEST}
-        assert not unmapped, (
-            f"gate reasons with no card sentence: {sorted(unmapped)} — "
-            "either map them in _covKey or declare them honestly unreadable")
-
-        langs = json.loads(
-            (root / "dashboard" / "translations.json").read_text())
-        for reason, key in mapped.items():
-            missing = [lg for lg, t in langs.items() if not t.get(key)]
-            assert not missing, f"{key} ({reason}) missing in {missing}"

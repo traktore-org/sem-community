@@ -150,8 +150,7 @@ class TestCoordinatorFeed:
 
 
 class TestDashboardRow:
-    def test_the_energy_tab_has_the_row(self):
-        with open(os.path.join(_HERE, "dashboard", "sem_dashboard_template.yaml"),
-                  encoding="utf-8") as f:
-            text = f.read()
-        assert "sensor.sem_pv_health" in text
+    def test_the_insights_screen_has_the_row(self):
+        # (#1321) the Insights screen reads it
+        from ._dashboard_src import dashboard_src
+        assert "pv_health" in dashboard_src()

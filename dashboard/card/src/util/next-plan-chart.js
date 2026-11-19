@@ -71,7 +71,7 @@ const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v))
  * the actual; what comes after the last actual hour is the forecast.
  * → { points: [{ s, e, kw, kwh, actual }], totalKwh, peak, hasForecast }
  */
-export function sunModel({ win, nowMs, actual = [], forecast = {} }) {
+export function sunModel({ win, nowMs, actual = [], forecast = {}, liveW = null }) {
     const pts = [];
     let lastActualEnd = win.start;
     for (const a of actual) {
@@ -99,6 +99,11 @@ export function sunModel({ win, nowMs, actual = [], forecast = {} }) {
         pts.push({ s, e, kw: Math.max(0, wh) / 1000 / h, kwh: Math.max(0, wh) / 1000, actual: false });
         hasForecast = true;
     });
+    // the reading of this minute closes the measured line at now, not at the last whole hour (#1321)
+    const live = num(liveW);
+    if (liveW !== null && Number.isFinite(live) && nowMs > win.start && nowMs < win.end && nowMs > lastActualEnd) {
+        pts.push({ s: nowMs - 1, e: nowMs, kw: Math.max(0, live) / 1000, kwh: 0, actual: true, live: true });
+    }
     pts.sort((p, q) => p.s - q.s);
     const totalKwh = pts.reduce((a, p) => {
         const ov = Math.max(0, Math.min(p.e, win.end) - Math.max(p.s, win.start)) / (p.e - p.s);
@@ -280,4 +285,33 @@ export function focusBlock(rows, nowMs, pickedKey) {
 /** What runs at `ms`: the rows with a block over it. */
 export function runningAt(rows, ms) {
     return rows.filter((r) => r.blocks.some((b) => b.s <= ms && ms < b.e));
+}
+
+/**
+ * (#1321) The sun lane's curves: runs of touching periods, each a smooth curve through the
+ * period midpoints. A curve falls to the base only where the sun really sets or rises: the
+ * newest measured run stops at its last reading, and the forecast that follows it starts
+ * from there, so no fake 0 appears at "now". `X` maps time to x, `SY` kW to y.
+ * → [{ actual, xy: [[x, y]], open: { start, end } }]; the card draws them.
+ */
+export function sunRuns(points, X, SY) {
+    const out = [];
+    const lastActual = (points || []).filter((p) => p.actual).reduce((a, p) => Math.max(a, p.e), -Infinity);
+    for (const actual of [true, false]) {
+        const pts = (points || []).filter((p) => p.actual === actual);
+        const runs = [];
+        for (const p of pts) {
+            const last = runs[runs.length - 1];
+            if (last && (p.live || p.s - last[last.length - 1].e < 40 * 60e3)) last.push(p); else runs.push([p]);
+        }
+        runs.forEach((run, i) => {
+            const first = run[0], end = run[run.length - 1];
+            const openEnd = actual && i === runs.length - 1;
+            const openStart = !actual && i === 0 && Number.isFinite(lastActual) && first.s - lastActual < 40 * 60e3;
+            const mid = run.map((p) => [X((p.s + p.e) / 2), SY(p.kw)]);
+            const xy = [...(openStart ? [] : [[X(first.s), SY(0)]]), ...mid, ...(openEnd ? [] : [[X(end.e), SY(0)]])];
+            out.push({ actual, xy, open: { start: openStart, end: openEnd } });
+        });
+    }
+    return out;
 }

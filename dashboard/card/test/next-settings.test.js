@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { groups, applyPlan, pendingKey, slotText, slotsOf, setupItems, loadSources,
-         unavailableCount, reserveIds, STRUCTURAL_KEYS } from '../src/util/next-settings.js';
+         unavailableCount, reserveIds, STRUCTURAL_KEYS, sentenceText } from '../src/util/next-settings.js';
 
 // Keys as variables; the stub returns the key with its placeholders so a
 // fragment's shape is visible without English in the asserts.
@@ -27,7 +27,7 @@ const TEXT = {
     next_pay_thresholds_plain: 'cheap means below {cheap}, expensive above {expensive}',
     [K_BATT_ZONES]: 'fill the battery first below {priority}, buffer at {buffer}, help the house above {autostart}',
     next_batt_zones_two: 'fill the battery first below {priority}, buffer at {buffer}',
-    next_batt_spend: 'spend forecast sun {v}',
+    next_batt_spend_on: 'SEM may use battery energy that forecast sun will refill.', next_batt_spend_off: 'SEM does not use it.',
     next_batt_sell: 'sell {v}',
     next_ch_name_control: '{name} controls {control}',
     next_ch_amps: '{min} to {max}',
@@ -150,7 +150,9 @@ test('a missing entity drops its fragment; the sentence still reads', () => {
     assert.ok(batt.sentence.some((p) => p && p.kind === 'action' && p.nav && p.action === 'open_battery'));
     // the flags asked on the battery row are not asked here a second time
     const txt = strings(batt.sentence);
-    assert.ok(txt.includes('Spend forecast sun '));
+    // (#1321) the switch is a full sentence, never "...refill: on."
+    assert.ok(batt.sentence.some((p) => p && p.kind === 'switch' && p.words && p.words.on === 'next_batt_spend_on'));
+    assert.ok(sentenceText(batt.sentence, t, states).includes('SEM may use battery energy that forecast sun will refill.'));
     assert.ok(!txt.includes('sell '));
 });
 
@@ -196,9 +198,9 @@ test('the observer switch is never a settings slot', () => {
 });
 
 test('slotText: units, decimals from the step, on/off words, a zero label', () => {
-    assert.equal(slotText({ kind: 'number', value: 0.28, step: 0.01, unit: 'CHF/kWh' }, t), '0.28 CHF/kWh');
-    assert.equal(slotText({ kind: 'number', value: 5, step: 0.1, unit: 'kW' }, t), '5.0 kW');
-    assert.equal(slotText({ kind: 'number', value: 30, step: 5, unit: 's' }, t), '30 s');
+    assert.equal(slotText({ kind: 'number', value: 0.28, step: 0.01, unit: 'CHF/kWh' }, t), '0.28\u00a0CHF/kWh');
+    assert.equal(slotText({ kind: 'number', value: 5, step: 0.1, unit: 'kW' }, t), '5.0\u00a0kW');
+    assert.equal(slotText({ kind: 'number', value: 30, step: 5, unit: 's' }, t), '30\u00a0s');
     assert.equal(slotText({ kind: 'number', value: 0, step: 1, unit: 'days', zeroKey: 'config_retention_off' }, t), 'config_retention_off');
     assert.equal(slotText({ kind: 'switch', value: true }, t), 'on');
     assert.equal(slotText({ kind: 'number', value: 7.5, step: 0.5, unit: 'h', clock: true }, t), '07:30');
@@ -283,4 +285,43 @@ test('one battery shows no per-battery rows', async () => {
                      'sensor.sem_battery_b1_power': { state: '0', attributes: {} } };
     const g = groups(states, (k) => k, { options: { battery_slot_units: ['u1'] } }).find((x) => x.key === 'battery');
     assert.equal(g.more.filter((p) => p && typeof p === 'object' && Number.isInteger(p.listIdx)).length, 0);
+});
+
+// (#830, #1321) Everyday stays small: the sentences of the System screen are
+// what a new user sees, All settings holds the rest. Raising a ceiling is a
+// decision, not a detail. Neither view may hide a setting the other has.
+const MAX_GROUPS = 7;
+const MAX_EVERYDAY_SLOTS = 20;
+
+test('Everyday is shrink-only: few groups, few value slots in the sentences', () => {
+    const g = groups(fullStates(), t, CTX);
+    const everyday = g.reduce((n, x) => n + slotsOf([{ sentence: x.sentence }]).length, 0);
+    assert.ok(g.length <= MAX_GROUPS, `${g.length} groups`);
+    assert.ok(everyday <= MAX_EVERYDAY_SLOTS, `Everyday grew to ${everyday} value slots`);
+});
+
+test('every group keeps its settings reachable: the full list holds what the sentence shows or more', () => {
+    for (const x of groups(fullStates(), t, CTX)) {
+        assert.ok(Array.isArray(x.more), x.key);
+        assert.ok(x.sentence.length > 0, `${x.key} says something`);
+    }
+});
+
+// (#897, #1321) Next keeps the arm switch under All settings of "What SEM may
+// do"; the old rule (Everyday) is a design question for the polish step.
+test('the load management arm switch and the peak ceiling are reachable on the System screen (#897)', () => {
+    const may = groups(fullStates(), t, CTX).find((x) => x.key === 'may');
+    const keys = slotsOf([may]).map((s) => s.option || s.id);
+    assert.ok(keys.includes('load_management_enabled'), keys.join(','));
+    assert.ok(keys.includes('target_peak_limit') || keys.includes('peak_limit_unlimited'), keys.join(','));
+});
+
+test('the System screen offers no hot-water minimum (#1062)', () => {
+    const states = { ...fullStates(), 'number.sem_legionella_target_temp': { state: '60', attributes: { min: 50, max: 70, step: 1 } },
+        'number.sem_legionella_interval_hours': { state: '168', attributes: { min: 24, max: 336, step: 1 } } };
+    const g = groups(states, t, { ...CTX, options: { ...OPTS, hot_water_entity: 'switch.boiler' } });
+    const slots = slotsOf(g);
+    const names = JSON.stringify(slots);
+    assert.match(names, /hot_water_temperature_sensor/);  // the hot-water slots are there
+    assert.doesNotMatch(names, /hot_water_minimum_temperature/);
 });

@@ -1,210 +1,134 @@
-# Tariff models — what SEM claims, per model
+# Tariff models
 
-SEM's price **level** (`sensor.sem_tariff_price_level`) answers one question:
-*is this hour better or worse than the others?* It is a **comparison**, and a
-comparison needs two prices that differ.
-
-The vocabulary is Tibber's. Tibber classifies each hour against a **3-day
-moving average** — ≤ 60 % `very_cheap`, 60–90 % `cheap`, 90–115 % `normal`,
-115–140 % `expensive`, ≥ 140 % `very_expensive` — and its own enum carries a
-**"missing data"** state beside the five words. SEM had kept the words and
-dropped both the reference and the absence, which is how a flat tariff came
-to be published as `cheap` and a battery came to be held all night for an
-expensive hour that could not arrive (#994).
-
-So: **when nothing was compared, SEM says `unknown`.** Everything that would
-have waited for a better hour acts now instead — the same rule the export
-side has followed since #921: *an unknown price is OPEN, never CLOSED*.
+SEM's price level (`sensor.sem_tariff_price_level`) answers one question:
+is this hour cheaper or dearer than the others? A level needs two prices
+that differ. If there is nothing to compare, SEM says so.
 
 ## What each model gets
 
-| model | what SEM compares | the level you get |
+| Model | What SEM compares | Level you get |
 |---|---|---|
-| **Flat / single rate** | nothing — there is one price | **`unknown`**. Nothing waits, nothing holds, no cheap blocks are drawn. |
-| **HT/NT (two rates, a clock)** | the two configured rates, *on a day that contains both* | `cheap` in NT, `normal` in HT — **only when the rates differ**. A weekend, which is NT all day, has one price and therefore no level. |
-| **Multi-tier ToU** (Spanish 2.0TD, US "Nighttime Savers") | the distinct tier prices (#728) | the tier's own level; tier detection is unchanged. |
-| **Dynamic / spot** (Nord Pool, Tibber, EPEX, ENTSO-e, aWATTar…) | today's own curve, by percentile | the five words; `unknown` when the curve is missing, has fewer than four points, or is flat. |
-| **Variable peak (VPP)** | today's curve — it *is* a curve | as dynamic. |
-| **Critical peak (CPP)** | **not modelled** | an announced critical event is not a percentile of today. See *Known limitations*. |
-| **Block / tiered by consumption** (e.g. 31 ct → 42 ct past a monthly baseline) | **not modelled** | the price depends on the month's cumulative kWh, not on the hour. A level cannot express it. |
-| **Demand charge** (highest 15-min average) | not a price level at all | untouched — the peak guard (#864) owns that axis, on its own units. |
+| **Flat / single rate** | Nothing. There is one price. | *No price difference* (`flat`) |
+| **HT/NT (two rates, by clock)** | The two rates, on a day that has both | Cheap in NT, normal in HT. A weekend has one price, so no level. |
+| **Multi-tier time-of-use** | The distinct tier prices | The tier's own level |
+| **Dynamic / spot** (Nord Pool, Tibber, EPEX, ENTSO-e, aWATTar) | Today's price curve, by percentile | The five levels. *No prices available* (`no_prices`) if the curve is missing or too short. |
+| **Critical peak** | Not modelled | See [limits](#not-modelled) |
+| **Block by consumption** | Not modelled | See [limits](#not-modelled) |
 
-## Why "flat" is measured relatively
+The five levels are very cheap, cheap, normal, expensive and very expensive.
+A negative price is always its own level.
 
-A flat test written as "the two rates differ by less than 0.001/kWh" is the
-#359 defect in miniature: an absolute cutoff calibrated for one currency. It
-was re-fixed twice on the configuration surface alone — for a Slovak tariff
-at 1.69/kWh (#417) and a Sri Lankan one three orders of magnitude away
-(#549). SEM therefore asks whether the spread is at least **0.5 % of the
-day's own average**, which keeps a 1 ct HT/NT split on a 30 ct tariff (3.3 %)
-and rejects float noise, in any currency.
+### Not modelled
 
-## Where the level comes from, and how to check
+- **Critical peak events.** SEM does not know an event is coming. Event hours
+  show as expensive once they are in the price curve.
+- **Block tariffs.** The price depends on this month's total kWh, not on the
+  hour. SEM classes the hours by their time structure only. Savings use the rate
+  the price entity reports.
 
-`sensor.sem_tariff_price_level` carries `classifier_path` — *how* the level
-was reached (`percentile_active`, `tou_tiers(...)`, `static_ht_nt`,
-`calendar_schedule`, `negative_price_shortcircuit`, and the fallbacks). Since
-#994 it also reports when there was nothing to classify:
-`static_no_comparison`, `calendar_no_comparison`,
-`percentile_fallback_flat_day`, `percentile_fallback_cache_empty`,
-`percentile_fallback_too_few_prices`.
+Neither is dangerous: SEM does not act on a level it does not have.
 
-When the sensor shows no comparative level it says which of two things
-happened, because they are not the same and only one of them is yours to fix:
+## Flat is measured relative to the day
 
-| state | card label | meaning |
+A day is flat when its spread is less than 0.5 % of the day's average. This
+works for any currency. A 1 ct HT/NT split on a 30 ct tariff is 3.3 %, so it
+counts.
+
+## Why there is no level, and what to do
+
+| Sensor state | Card label | Meaning | What to do |
+|---|---|---|---|
+| `flat` | No price difference | The hours do not differ. | Nothing. This is the right answer for a flat contract. |
+| `no_prices` | No prices available | Nothing to compare. The price entity is missing, empty or too short. | Check the price entity. |
+
+The `classifier_path` attribute says how the level was reached.
+
+## Negative prices
+
+A negative price is handled on its own. It is not compared with other hours.
+
+- The export guard closes on the export rate's own sign.
+- A negative import price allows the battery to force-charge from the grid.
+
+A negative hour is one you are paid for, so it always shows as negative, even
+if the price entity publishes only the current state.
+
+## ENTSO-e
+
+Choose **Dynamic** and leave the price entity empty. SEM finds the
+[ENTSO-e integration](https://github.com/JaccoR/hass-entso-e) and reads
+the current price and the day-ahead curve.
+
+- Set ENTSO-e's energy unit to kWh. SEM does not read per-MWh prices.
+- ENTSO-e gives the wholesale price only: no tax, no grid fee, no margin.
+  Add these in one place only, or they count twice:
+  - in ENTSO-e's own setup (price modifier and VAT), or
+  - in SEM's tax fields, with **price basis** set to **Spot price (no taxes)**
+    (the options flow calls it **What your import price includes**).
+
+## Tax is never added twice
+
+**price basis** says what your price already has. It is a row in **How I pay** on **System**. The options flow calls it **What your import price includes**.
+
+| Setting | Use it when | SEM adds |
 |---|---|---|
-| `flat` | No price difference | the comparison WAS made and the hours do not differ — a single rate, two equal rates, a weekend under HT/NT, a day with no spread. On a flat contract this is the correct and final answer. |
-| `no_prices` | No prices available | the comparison could NOT be made — nothing cached yet, fewer than four points, a price entity that will not read. Worth a look at your price entity. |
+| **All-in (taxes included)** (default) | A rate from your bill, Tibber, any price that already has tax | Nothing |
+| **Spot price incl. VAT** | A market price with VAT, no energy tax | Markup and energy tax, each with VAT |
+| **Spot price (no taxes)** | Nord Pool raw, ENTSO-e raw | Markup, energy tax, and VAT on the sum |
 
-Neither is the word `unknown`, which in Home Assistant reads as a broken
-sensor and hid the difference between a contract and a fault.
+Markup, energy tax and VAT are only added to a spot price. SEM refuses them
+next to All-in. With every field at 0, the prices are unchanged.
 
-The path always describes the **same** answer the level came from. It did not
-always: the string was set as a side-effect and read back afterwards, and
-because every read of the price curve classifies all of today's slots, a day
-with one negative slot could publish `normal` beside
-`negative_price_shortcircuit` (seen on the test rig, 20.09). If you ever see a
-path that cannot explain the level beside it, that is a bug worth reporting —
-not a quirk of your tariff.
+The preset **Netherlands from 2027** fills energy tax and 21 % VAT and sets
+the price to **Spot price (no taxes)**. Check the tax rate against your bill.
+The preset **None** adds nothing.
 
-## Negative prices are not a comparison
+Tax moves every hour the same way, so the level (cheap, dear) does not change.
 
-A negative price is an **absolute** fact and is handled as one: the export
-guard closes the meter on the *export* rate's own sign (#921/#955), and the
-battery's negative-price force charge reads the raw import price. Neither
-goes through the comparative path, so a flat tariff changes neither.
+## Feed-in fee
 
-`NEGATIVE` is also the one level the comparative vocabulary passes through
-without a spread behind it. Being paid to consume says nothing about any
-other hour and needs nothing from one, so a spot entity that publishes only
-its current state — no curve, nothing to compute a spread from — still holds
-the pack for the house in a negative hour.
-
-## ENTSO-e: a market price (#1051)
-
-SEM finds the [ENTSO-e integration](https://github.com/JaccoR/hass-entso-e)
-by itself: choose Dynamic and leave the price entity empty. It reads two of
-ENTSO-e's sensors, because ENTSO-e splits what SEM needs over two: the price
-now from *Current electricity market price*, and the day-ahead curve from
-*Average electricity price*, which is where ENTSO-e keeps it. The average
-sensor's own value is the day's average, so it is never read as the price
-now. An entity name given in the ENTSO-e setup changes nothing.
-
-- **Per kWh.** ENTSO-e can report per MWh. SEM reads prices per kWh, so it
-  does not take a per-MWh setup and says so in the log. Set the ENTSO-e
-  energy scale to kWh.
-- **A market price is not what you pay.** ENTSO-e publishes the wholesale
-  day-ahead price: no tax, no grid fee, no supplier margin. The level does
-  not mind — adding a fee to every hour, or VAT on every hour, keeps the
-  hours in the same order. The cost figures do mind. Add the rest in one of
-  two places, not both, or it counts twice:
-  - in ENTSO-e's own setup (advanced options: a price modifier template
-    and VAT). Every price SEM reads is then what you pay, and a negative
-    hour is one you are paid for.
-  - as SEM's *Variable network-owner fee* (Tariff & Advanced). SEM adds it
-    to every imported kWh. VAT on the market price cannot be expressed this
-    way, and the level keeps reading the market price: a negative market
-    hour reads `negative` even when the fee makes your price positive.
-  - as SEM's tax fields with *What your import price includes* set to
-    *Spot price* (see below). This one can add VAT.
-
-## What a kWh is worth (#1077)
-
-When net metering ends (the Netherlands, 1 January 2027), a bought kWh and a
-sold kWh are different money. SEM can work with both:
-
-    bought kWh = (price + markup + energy tax) × (1 + VAT) + network fee
-    sold kWh   = export price − feed-in fee
-
-Set it under Tariff & Advanced, or on the Config tab (All settings). The
-preset *Netherlands from 2027* fills energy tax (the 2026 rate, 0.0916 per
-kWh excl. VAT — check your bill) and 21 % VAT, and sets the price to *Spot
-price*. It is for a raw market price (Nord Pool, ENTSO-e); a price that
-already has tax, like Tibber's, needs no preset. Enter your supplier's markup
-and feed-in fee yourself. The preset *None* adds nothing.
-
-A markup, energy tax or VAT is only added to a spot price, so SEM refuses
-them next to *All-in*. With every field
-at 0, all prices are exactly what they were.
-
-### Tax is never added twice
-
-*What your import price includes* says what your price already has:
-
-| setting | use it when | SEM adds |
+| Model | What SEM uses | What the fees sensor counts |
 |---|---|---|
-| **All-in** (default) | Tibber, a rate you typed off your bill, any price that already has tax | nothing |
-| **Spot price incl. VAT** | a market price with VAT on it, but no energy tax | markup and tax, each with VAT |
-| **Spot price** | Nord Pool raw, ENTSO-e | markup, tax, and VAT on the whole sum |
+| **Per kWh** | The fee | kWh exported × fee |
+| **Tiers by kWh per year** | The fee of the tier this year's export is in | kWh × that fee |
+| **Fixed per month** | Nothing. The month costs the same. | The monthly sum |
 
-So the default never adds tax. Static and Calendar rates are what you pay,
-so leave them on All-in. Pick a spot setting only when your price sensor
-shows the bare market price. If your price integration adds tax itself
-(ENTSO-e's modifier, Nord Pool's VAT option), use All-in.
+Tiers are written `kWh this year : fee`, for example `0:0, 1000:0.02, 3000:0.05`.
+The yearly export counter starts at 0 on 1 January.
 
-The price level (cheap / expensive) does not change: tax and VAT move every
-hour the same way.
+The sensors appear once a value field is set, daily and yearly:
 
-### Feed-in fee
+- **Self-consumption value**: solar used at home or in the car, valued at
+  the bought price minus the sold price.
+- **Export value**: exported kWh at the export price, before fees.
+- **Feed-in fees**: what the fee took. Export value minus fees is your export
+  revenue.
 
-| model | what SEM uses to decide | what the fees sensor counts |
-|---|---|---|
-| **Per kWh** | the fee, off every exported kWh | kWh × fee |
-| **Tiers** | the fee of the tier this year's export is in | kWh × that fee |
-| **Fixed per month** | 0 — the month costs the same whatever SEM does | the monthly sum, by the hour |
+## Stop exporting below
 
-Tiers are written `kWh this year : fee per kWh`, for example
-`0:0, 1000:0.02, 3000:0.05`. This year's export is the yearly export counter;
-it starts at 0 on 1 January. The yearly fees sensor shows it, the fee now,
-and where the next tier starts.
+Field **Stop exporting below** (per kWh). When a sold kWh is worth less
+than this, SEM stops exporting. The battery and the loads take the sun first.
+SEM never buys to do this.
 
-### Stop exporting below (#1090)
+Default 0: the meter closes only below zero. It needs the **Export guard**
+switch.
 
-When a sold kWh is worth less than this, SEM stops exporting: the battery
-and the loads take the sun first, and charge pacing lifts its limit. SEM
-does not buy for it — grid charging still needs a negative import price.
-Default 0: the meter closes only below zero, as before. It needs the
-*Export guard* switch, which cuts the inverter's export.
+## A tariff per device
 
-### Sensors
+A device can have its own price, for example a heat pump on its own meter.
+Nothing set means the house tariff.
 
-They appear once a value field is set, daily and yearly:
-
-- **Self-consumption value** — solar used at home or in the car, times
-  (bought price − sold price). What using it was worth over selling it.
-- **Export value** — exported kWh at the export price before the fee.
-- **Feed-in fees** — what the fee took. Export value − fees is your export
-  revenue (fixed monthly fees aside).
-
-## A tariff per device (#812)
-
-Some houses buy a device's power on a second contract, for example a heat
-pump behind its own meter at a lower price. A device can have its own
-tariff. Nothing set = the house tariff, as before.
-
-| field | what it does |
+| Field | Use |
 |---|---|
-| **Own rate** | a fixed price per kWh |
-| **Own price entity** | a sensor (or `input_number`) with the device's price, when it changes by the hour |
-| **Own meter (kWh)** | optional: the kWh counter of the device's own meter |
+| **Own rate** | A fixed price per kWh |
+| **Own price entity** | A sensor with a price that changes by the hour |
+| **Own meter (kWh)** | Optional. The device's own kWh counter |
 
-Where: for a heat pump, in its settings (Configuration card → **Heat pump**,
-or the heat pump step of **Configure**; each extra heat pump has the same
-three fields). For any other load, in its goals on the Load Priority card,
-under **Own tariff**.
+Set it on the device, under **Device tariff**.
 
-What it changes:
-
-- **Cheap and expensive hours** for that device follow its own price. A
-  price entity is classed like the house price. A fixed rate is one price,
-  so it is never cheap and never expensive.
-- **The energy plan** places the device's hours by its own price.
-- **Cost**: a sensor *<device> tariff cost today* = the device's grid kWh ×
-  its own price. With an own meter, the grid kWh are what the meter counted.
-  Without one, SEM estimates them: the device's use × the share of the house
-  load that came from the grid.
-
-When the price entity cannot be read, SEM uses the own rate if one is set.
-With no own rate, the device falls back to the house tariff for its hours
-and its cost until the price reads again.
+- The device's cheap and expensive hours follow its own price. A fixed rate
+  is never cheap and never dear.
+- Its cost sensor is the device's grid kWh × its own price. Without an own
+  meter, SEM estimates the grid share.
+- If the own price entity cannot be read, SEM uses the own rate. With no own
+  rate, it uses the house tariff until the price reads again.

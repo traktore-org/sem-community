@@ -16,7 +16,9 @@
  *   type: custom:sem-next-devices-card
  */
 
+import { effectivePlan, planRuns, nextRun } from '../util/plan-facts.js';
 import { SEMNextBase, html, css, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
+import { haDefined, ensureHaElements } from '../util/ha-elements.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from '../util/peak-questions.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -27,11 +29,11 @@ import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
 } from './load-config-modal.js';
-import { deviceRows, statePill, nextBlock, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, weekdaySummary, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
+import { deviceRows, statePill, surplusInUse, ratedKey, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
-import { chargePlanSummary, targetEntities } from '../util/charger-questions.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
+import { wouldFor, wouldList, wouldLine, startCode } from '../util/why-rows.js';
 
 const DOMAIN = 'solar_energy_management';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -77,20 +79,23 @@ function writeOpen(map) {
     try { window.localStorage.setItem(OPEN_KEY, JSON.stringify(map)); } catch (e) { /* private window: nothing kept */ }
 }
 
+/** (#1321) "Normal" and "Normal operation" say one thing: show the longer once. */
+function sameWords(a, b) {
+    const x = String(a || '').trim().toLowerCase(), y = String(b || '').trim().toLowerCase();
+    return !!x && !!y && (y.startsWith(x) || x.startsWith(y));
+}
+
 const devicesCss = css`
-    .cpchip { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 6px 36px; padding: 4px 10px; border-radius: 999px;
-        border: 1px solid var(--n-line); background: var(--n-bg2, transparent); color: var(--n-fg); font: inherit; font-size: 12.5px; cursor: pointer; max-width: calc(100% - 36px); }
-    .cpchip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .cpchip ha-icon { --mdc-icon-size: 15px; color: var(--n-fg2); flex: 0 0 auto; }
-    .cpchip:focus-visible { outline: 2px solid var(--n-accent, currentColor); outline-offset: 2px; }
     .addform { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 6px; }
     .addform label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--n-fg2); }
-    .addform input.txt { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--n-line); background: var(--n-card2); color: var(--n-fg); font: inherit; }
+    .addform input.txt { max-width: none; }
+    .addform ha-textfield { max-width: none; }
     .addform .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .addform .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     ha-entity-picker { display: block; }
-    .grid { align-items: start; grid-template-columns: minmax(0, 1fr); max-width: 980px; }
+    .grid { align-items: start; grid-template-columns: minmax(0, 1fr); }
     .dev.folded .body { display: none; }
+    .dev .would { margin: 2px 0 6px 40px; }
     .dev.folded .head { margin-bottom: 0; }
     .dev .fold { border: 0; background: none; color: var(--n-fg3); cursor: pointer; padding: 4px; border-radius: 8px; display: inline-flex; }
     .dev .fold ha-icon { transition: transform .15s; }
@@ -99,7 +104,7 @@ const devicesCss = css`
     .dev .name.tap { cursor: pointer; }
     .period button.pill { border: 0; cursor: pointer; }
     .grid.reorder { grid-template-columns: 1fr; }
-    .dev.dragging { opacity: .95; z-index: 20; position: relative; box-shadow: 0 10px 26px rgba(0, 0, 0, .35); cursor: grabbing; }
+    .dev.dragging { opacity: .95; z-index: 20; position: relative; outline: 2px solid var(--n-accent); cursor: grabbing; }
     .dev.drop-above { box-shadow: 0 -3px 0 0 var(--n-accent); }
     .dev.drop-below { box-shadow: 0 3px 0 0 var(--n-accent); }
     .dev .live { font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -109,7 +114,7 @@ const devicesCss = css`
     .dayin { display: flex; flex-direction: column; font-size: 11px; color: var(--n-fg3); gap: 2px; }
     .dayin input { max-width: 96px; padding: 2px 6px; }
     .days .help { flex: 1 0 100%; margin: 0; }
-    .banner { display: flex; gap: 10px; align-items: flex-start; background: var(--n-card2); border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; }
+    .banner { display: flex; gap: 10px; align-items: flex-start; background: var(--n-card2); border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; }
     .banner ha-icon { color: var(--n-warn); }
     .banner.bad ha-icon { color: var(--n-bad); }
 `;
@@ -117,12 +122,11 @@ const devicesCss = css`
 class SEMNextDevicesCard extends SEMNextBase {
     static get styles() { return [nextCss, devicesCss]; }
     static get properties() {
-        return { ...super.properties, _edit: { state: true }, _reorder: { state: true }, _open: { state: true }, _adding: { state: true }, _addForm: { state: true }, _addBusy: { state: true }, _tick: { state: true } };
+        return { ...super.properties, _reorder: { state: true }, _open: { state: true }, _adding: { state: true }, _addForm: { state: true }, _addBusy: { state: true }, _tick: { state: true } };
     }
 
     constructor() {
         super();
-        this._edit = null;
         this._reorder = false;
         this._open = readOpen();
         this._adding = false;
@@ -179,10 +183,6 @@ class SEMNextDevicesCard extends SEMNextBase {
 
     updated(changed) {
         super.updated(changed);
-        if (changed.has('_edit') && this._edit) {
-            const el = this.renderRoot.querySelector('[data-edit] input, [data-edit] select');
-            if (el && el.focus) el.focus();
-        }
         this._watchSessions();
         this._afterRender();
     }
@@ -197,6 +197,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         const rows = deviceRows(devices, this._chargers, {
             hasBattery: this._has('sensor.sem_battery_soc'),
             chargerName: (cid) => this._chargerName(cid),
+            loadName: (id, info) => this._loadName(id, info),
+            states: st,
         });
         for (const r of rows) {
             if (r.type === 'charger') { r.name = this._chargerName(r.cid); r.icon = 'mdi:ev-station'; continue; }
@@ -214,9 +216,23 @@ class SEMNextDevicesCard extends SEMNextBase {
      * Several ids: the earliest of them (a heater's run-time block and its Keep at block).
      */
     _plannedAt(...planIds) {
-        const plan = this._attrs('sensor.sem_energy_plan');
-        const next = nextBlock(plan.blocks, planIds, Date.now());
-        return next ? this._hhmm(next.start) : '';
+        const r = this._nextPlanned(planIds);
+        return r && !r.running ? this._clockDay(r.s) : '';
+    }
+
+    /** The end (HH:MM) of a run of these plan ids that is under way now, or '' (#1321). */
+    _plannedUntil(...planIds) {
+        const r = this._nextPlanned(planIds);
+        return r && r.running ? this._clockDay(r.e) : '';
+    }
+
+    _nextPlanned(planIds) {
+        // (#1321) the same plan every screen reads; tomorrow's hour says tomorrow
+        const plan = effectivePlan(this._attrs('sensor.sem_energy_plan'));
+        // a run under way is the next run; not the next change of watts inside it
+        const now = Date.now();
+        const want = new Set(planIds.map(String));
+        return nextRun(planRuns(plan, (id) => want.has(id), now), now);
     }
 
     /** The pill's words: the state, then why when the engine names a cause. */
@@ -237,7 +253,7 @@ class SEMNextDevicesCard extends SEMNextBase {
                 powerW: this._powerW('sensor.sem_charger_' + cid + '_power'),
                 amps: this._num('sensor.sem_charger_' + cid + '_commanded_current'),
                 paused, pausedUntil: paused ? this._hhmm(modeAttrs.paused_until) : '',
-                plannedAt: this._plannedAt('ev:' + cid),
+                plannedAt: this._plannedAt('ev:' + cid), plannedUntil: this._plannedUntil('ev:' + cid), observer: this._observer(),
                 connected: connId ? this._str(connId) === 'on' : null,
             };
         }
@@ -254,6 +270,8 @@ class SEMNextDevicesCard extends SEMNextBase {
         return {
             powerW: row.powerEntity ? this._powerW(row.powerEntity) : null,
             plannedAt: this._plannedAt('load:' + row.id, 'comfort:' + row.id),
+            plannedUntil: this._plannedUntil('load:' + row.id, 'comfort:' + row.id), observer: this._observer(),
+            sunW: this._powerW('sensor.sem_solar_power'),
             fmtTemp: (c) => this._temp(c),
             parentName: parent ? parent.name : '',
         };
@@ -262,7 +280,7 @@ class SEMNextDevicesCard extends SEMNextBase {
     // ── services ──
     _svc(service, data) {
         if (!this._hass) return Promise.resolve();
-        return this._hass.callService(DOMAIN, service, data, undefined, false).catch((err) => this._showError(err));
+        return this._call(DOMAIN, service, data, undefined, false).catch((err) => this._showError(err));
     }
 
     _dev(deviceId, property, value) {
@@ -276,62 +294,41 @@ class SEMNextDevicesCard extends SEMNextBase {
         this._callService('time', 'set_value', { entity_id: id, time: value.length === 5 ? value + ':00' : value });
     }
 
-    // ── inline editors (one open at a time; Enter or a change commits, Escape or blur closes) ──
-    _inline(key, text, editor, o = {}) {
-        if (this._edit === key) return html`<span class="edit" data-edit>${editor()}</span>`;
-        return this._val(text, () => { this._edit = key; }, { disabled: this._obs() || !!o.disabled });
-    }
+    /** Every row on this screen puts its sub line under the label, as HA's settings rows do. */
+    _row(icon, text, value, sub, o = {}) { return super._row(icon, text, value, sub, { help: true, ...o }); }
 
-    _keys(commit) {
-        return (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); commit(e); }
-            if (e.key === 'Escape') { e.preventDefault(); this._edit = null; }
+    // ── editable values (#1321): the value shows as plain text in its row; a tap opens the one edit dialog ──
+    /** A value that opens its editor; `editor()` gives the dialog's spec, `o.label` its title. */
+    _inline(key, text, editor, o = {}) {
+        // the dialog is named after the row the value sits in
+        const open = (e) => {
+            const row = e && e.currentTarget && e.currentTarget.closest ? e.currentTarget.closest('.row') : null;
+            const title = o.label || (row && row.querySelector('.t') ? row.querySelector('.t').textContent.trim() : '');
+            this._editDialog({ title, ...editor() });
         };
+        return this._vbtn(text, open, { disabled: !!o.disabled });
     }
 
     _numEdit(key, { value, min, max, step, unit, onCommit }) {
-        const commit = (e) => {
-            const v = parseFloat(e.target.value);
-            this._edit = null;
-            if (Number.isFinite(v)) onCommit(v);
-        };
-        return html`<input type="number" .value=${value == null ? '' : String(value)}
-            min=${min ?? nothing} max=${max ?? nothing} step=${step ?? nothing}
-            @keydown=${this._keys(commit)} @change=${commit} @blur=${() => { this._edit = null; }}>${unit ? html`<span class="sm muted">${unit}</span>` : nothing}`;
+        return { kind: 'number', value, min, max, step, unit, onCommit };
     }
 
-    /** (#1081) One text box: Enter or a change commits, Escape closes. */
+    /** (#1081) One text box. */
     _textEdit(key, { value, placeholder, onCommit }) {
-        const commit = (e) => { const v = e.target.value; this._edit = null; onCommit(v); };
-        return html`<input type="text" .value=${value || ''} placeholder=${placeholder || nothing}
-            @keydown=${this._keys(commit)} @change=${commit} @blur=${() => { this._edit = null; }}>`;
+        return { kind: 'text', value: value || '', placeholder, onCommit };
     }
 
     _selEdit(key, { value, options, onCommit }) {
-        return html`<select @change=${(e) => { const v = e.target.value; this._edit = null; onCommit(v); }}
-            @keydown=${this._keys(() => { this._edit = null; })} @blur=${() => { this._edit = null; }}>
-            ${(options || []).map((o) => html`<option value=${o.key} ?selected=${o.key === value}>${o.label}</option>`)}</select>`;
+        return { kind: 'select', value, options: (options || []).map((o) => ({ value: o.key, label: o.label })), onCommit };
     }
 
     _timeEdit(key, { value, onCommit }) {
-        const commit = (e) => { const v = e.target.value; this._edit = null; if (v) onCommit(v); };
-        return html`<input type="time" .value=${value || ''} @keydown=${this._keys(commit)} @change=${commit} @blur=${() => { this._edit = null; }}>`;
+        return { kind: 'time', value: value || '', onCommit };
     }
 
-    /** Two numbers (At least · Up to) with one OK: a blur between the two must not close it. */
+    /** Two numbers (At least · Up to) in one dialog. */
     _pairEdit(key, { a, b, unit, onCommit }) {
-        const commit = (e) => {
-            const box = e.currentTarget.closest('[data-edit]');
-            const ins = box ? box.querySelectorAll('input') : [];
-            const x = ins[0] ? parseFloat(ins[0].value) : NaN, y = ins[1] ? parseFloat(ins[1].value) : NaN;
-            this._edit = null;
-            onCommit(Number.isFinite(x) ? x : null, Number.isFinite(y) ? y : null);
-        };
-        const inp = (v) => html`<input type="number" .value=${v.value == null ? '' : String(v.value)}
-            min=${v.min ?? nothing} max=${v.max ?? nothing} step=${v.step ?? nothing} @keydown=${this._keys(commit)}>`;
-        return html`${inp(a)} – ${inp(b)} <span class="sm muted">${unit}</span>
-            ${this._btn(this._t('next_ok'), commit, { small: true })}
-            ${this._btn(this._t('next_cancel'), () => { this._edit = null; }, { small: true, ghost: true })}`;
+        return { kind: 'pair', a, b, unit, onCommit };
     }
 
     /** "{a} and {b}" with templates in the slots. */
@@ -414,16 +411,15 @@ class SEMNextDevicesCard extends SEMNextBase {
         }
         const listId = 'ents-' + domains.join('-') + (o.filter ? '-f' : '');
         const ids = entityOptions(this._hass?.states, domains, o.filter);
+        // a native input: a datalist only attaches to one
         return html`<input class="txt" list=${listId} .value=${value || ''} placeholder=${o.label || ''}
             @change=${(e) => onChange(e.target.value.trim())}>
             <datalist id=${listId}>${ids.map((id) => html`<option value=${id}></option>`)}</datalist>`;
     }
 
-    /** An inline entity editor: commits on choice, an empty choice clears, Cancel closes. */
+    /** An entity editor: the dialog's picker; an empty choice clears. */
     _entEdit(key, { value, domains, filter, onCommit }) {
-        return html`${this._entityField(value, domains, (v) => { this._edit = null; onCommit(v); }, { filter })}
-            ${value ? this._btn(this._t('action_none'), () => { this._edit = null; onCommit(''); }, { small: true, ghost: true }) : nothing}
-            ${this._btn(this._t('next_cancel'), () => { this._edit = null; }, { small: true, ghost: true })}`;
+        return { kind: 'entity', value, domains, filter, allowClear: true, onCommit };
     }
 
     _setAdd(field, value) { this._addForm = { ...this._addForm, [field]: value }; }
@@ -433,7 +429,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         if (error) { this._toast(this._t(error), true); return; }
         this._addBusy = true;
         try {
-            await this._hass.callService(DOMAIN, 'register_surplus_device', data, undefined, false);
+            await this._call(DOMAIN, 'register_surplus_device', data, undefined, false);
             this._toast(this._tf('next_add_done', { name: data.name }));
             this._adding = false;
             this._addForm = {};
@@ -446,26 +442,26 @@ class SEMNextDevicesCard extends SEMNextBase {
 
     _addSheet(rows) {
         const t = (k) => this._t(k);
-        const dis = this._obs() || this._addBusy;
+        const dis = this._addBusy;
         const f = this._addForm || {};
         const loose = unmanagedLoads(rows);
         const known = loose.length
             ? html`<div class="rows">${loose.map((r) => {
                 const w = r.powerEntity ? this._powerW(r.powerEntity) : null;
                 return this._row('mdi:power-plug-outline', r.name,
-                    this._btn(t('next_add_control_it'), () => this._showConfigureModal(r.id, r.name), { small: true, disabled: this._obs() }),
+                    this._btn(t('next_add_control_it'), () => this._showConfigureModal(r.id, r.name), { small: true }),
                     w === null ? t('next_add_measured_only') : this._kw(w) + ' · ' + t('next_add_measured_only'));
             })}</div>`
             : html`<p class="help">${t('next_add_none_loose')}</p>`;
         const form = html`<div class="addform">
-            <label>${t('next_add_name')}<input class="txt" .value=${f.name || ''} @input=${(e) => this._setAdd('name', e.target.value)}></label>
+            <label>${t('next_add_name')}${this._input({ cls: 'txt', value: f.name || '', onInput: (e) => this._setAdd('name', e.target.value) })}</label>
             <label>${t('next_add_switch')}${this._entityField(f.entity, SWITCH_DOMAINS, (v) => this._setAdd('entity', v))}</label>
             <label>${t('next_add_power_sensor')}${this._entityField(f.power, ['sensor'], (v) => this._setAdd('power', v),
                 { filter: (st) => ['W', 'kW'].includes(st?.attributes?.unit_of_measurement) })}</label>
             <div class="two">
-                <label>${t('next_add_rated')}<input class="txt" type="number" min="0" step="50" .value=${f.rated || ''} @input=${(e) => this._setAdd('rated', e.target.value)}></label>
-                <label>${t('next_priority')}<input class="txt" type="number" min="1" max="10" step="1" .value=${f.priority || ''}
-                    placeholder=${String(Math.min(10, rows.length + 1))} @input=${(e) => this._setAdd('priority', e.target.value)}></label>
+                <label>${t('next_add_rated')}${this._input({ cls: 'txt', type: 'number', min: 0, step: 50, value: f.rated || '', onInput: (e) => this._setAdd('rated', e.target.value) })}</label>
+                <label>${t('next_priority')}${this._input({ cls: 'txt', type: 'number', min: 1, max: 10, step: 1, value: f.priority || '',
+                    placeholder: String(Math.min(10, rows.length + 1)), onInput: (e) => this._setAdd('priority', e.target.value) })}</label>
             </div>
             <p class="help">${t('next_add_starts_off')}</p>
             <div class="acts">
@@ -502,27 +498,6 @@ class SEMNextDevicesCard extends SEMNextBase {
         this._tick++;
     }
 
-    /** (#1321) The charge plan in one line, always visible: "Ready by 07:00 · 20–100 kWh · Mon–Sun" + a pencil. */
-    _chargePlanChip(row) {
-        const cid = row.cid;
-        const typeId = this._chargerEntity('select', cid, 'ev_target_type');
-        const type = typeId ? (this._str(typeId) || 'kwh') : 'kwh';
-        const te = targetEntities(cid, type);
-        const timeId = this._chargerEntity('time', cid, 'target_time');
-        const chargeBy = timeId ? this._hhmm(this._str(timeId)) : '';
-        const dep = ((this._attrs('sensor.sem_charging_state').per_charger_departure || {})[cid]) || {};
-        const runs = weekdaySummary(dep.by_weekday || {}, chargeBy || dep.default || '');
-        const s = chargePlanSummary({
-            chargeBy, unit: type === 'soc' ? '%' : 'kWh',
-            min: this._has(te.atLeast) ? this._num(te.atLeast) : null, max: this._has(te.upTo) ? this._num(te.upTo) : null,
-            runs, dayName: (i) => this._dayName(i),
-        });
-        const parts = [s.time ? this._tf('next_cp_ready_by', { time: s.time }) : '', s.range, s.days].filter(Boolean);
-        if (!parts.length) return nothing;
-        return html`<button type="button" class="cpchip" title=${this._t('next_cp_edit')} aria-label=${this._t('next_cp_edit')}
-            @click=${() => this._openChargePlan(cid)}>${this._icon('mdi:calendar-clock', 's')}<span>${parts.join(' · ')}</span>${this._icon('mdi:pencil', 's')}</button>`;
-    }
-
     /** A charge plan another screen asked for, read once. */
     _takeOpenRequest() {
         let cid = null;
@@ -533,7 +508,7 @@ class SEMNextDevicesCard extends SEMNextBase {
     _afterRender() {
         if (this._chargers && this._chargers.length && !this._openTaken) { this._openTaken = true; this._takeOpenRequest(); }
         if (this._scrollTo) {
-            const el = this.renderRoot && this.renderRoot.querySelector(`section[data-id="${this._scrollTo}"]`);
+            const el = this.renderRoot && this.renderRoot.querySelector(`[data-id="${this._scrollTo}"]`);
             if (el) { this._scrollTo = null; el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
         }
     }
@@ -630,34 +605,26 @@ class SEMNextDevicesCard extends SEMNextBase {
 
     // ── configure dialog (the classic Load Priority card's, unchanged in behaviour) ──
     async _ensureEntityPicker() {
-        if (customElements.get('ha-entity-picker')) return;
-        try {
-            const helpers = await window.loadCardHelpers?.();
-            if (helpers?.createCardElement) {
-                const el = await helpers.createCardElement({ type: 'entities', entities: [] });
-                await el.constructor?.getConfigElement?.();
-            }
-        } catch (e) { /* the text input stays */ }
+        await ensureHaElements(['ha-entity-picker', 'ha-dialog'], 3000);
     }
 
     async _showConfigureModal(deviceId, deviceName) {
-        const existing = this.renderRoot.getElementById('sem-config-modal');
-        if (existing) existing.remove();
         const dev = findDeviceForConfig(this._rowsNow(), deviceId);
         const energySensor = dev?.energySensor || '';
         const values = controlToFormValues(dev?.control);
         const hasManual = dev?.control?.discovered_via === 'manual_mapping';
         await this._ensureEntityPicker();
-        const overlay = document.createElement('div');
-        overlay.id = 'sem-config-modal';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:center;justify-content:center';
         const isLoad = dev && dev.type === 'load';
-        overlay.innerHTML = buildLoadConfigModalHTML({
-            deviceName, values, t: (k) => this._t(k), hasManual,
-            behindRelay: isLoad ? !!dev.behindRelay : null,
-            inUse: !hasManual && !values.entity ? (dev?.controlEntity || '') : '',
+        // (#1321) one dialog helper in the base: ha-dialog or the plain overlay, Escape, focus back
+        const { el: overlay, close } = this._dialog({
+            id: 'sem-config-modal', title: `${this._t('configure_device')}: ${deviceName}`,
+            build: (useDialog) => buildLoadConfigModalHTML({
+                deviceName, values, t: (k) => this._t(k), hasManual,
+                behindRelay: isLoad ? !!dev.behindRelay : null,
+                inUse: !hasManual && !values.entity ? (dev?.controlEntity || '') : '',
+                dialog: useDialog, textfield: haDefined('ha-textfield'),
+            }),
         });
-        this.renderRoot.appendChild(overlay);
         const typeSel = overlay.querySelector('#cfg-type');
         const entityGroup = overlay.querySelector('#cfg-entity-group');
         const serviceGroup = overlay.querySelector('#cfg-service-group');
@@ -685,20 +652,22 @@ class SEMNextDevicesCard extends SEMNextBase {
         typeSel.addEventListener('change', applyType);
         const relay = overlay.querySelector('#cfg-relay');
         if (relay && dev) {
+            // (#1321) one tap only asks: the switch and the device change on the confirm
             relay.addEventListener('click', () => {
                 const on = !relay.classList.contains('on');
-                relay.classList.toggle('on', on);
-                relay.setAttribute('aria-checked', String(on));
-                this._dev(dev.id, 'behind_operator_relay', String(on));
+                this._askFirst(this._t('cfg_behind_operator_relay'), () => {
+                    relay.classList.toggle('on', on);
+                    relay.setAttribute('aria-checked', String(on));
+                    this._dev(dev.id, 'behind_operator_relay', String(on));
+                }, { body: this._t('next_confirm_relay'), okLabel: this._t('next_yes') });
             });
         }
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-        overlay.querySelector('#cfg-cancel').addEventListener('click', () => overlay.remove());
+        overlay.querySelector('#cfg-cancel').addEventListener('click', () => close());
         const removeBtn = overlay.querySelector('#cfg-remove');
         if (removeBtn) {
             removeBtn.addEventListener('click', () => {
-                this._hass.callService(DOMAIN, 'remove_device_control_mapping', { energy_sensor: energySensor })
-                    .then(() => overlay.remove()).catch((err) => showError(err.message));
+                this._askFirst(removeBtn.textContent.trim(), () => this._call(DOMAIN, 'remove_device_control_mapping', { energy_sensor: energySensor })
+                    .then(() => close()).catch((err) => showError(err.message)), { body: this._t('next_confirm_clear_mapping') });
             });
         }
         overlay.querySelector('#cfg-save').addEventListener('click', () => {
@@ -706,8 +675,8 @@ class SEMNextDevicesCard extends SEMNextBase {
             if (picker) formVals.entity = (picker.value || '').trim();
             let data;
             try { data = formValuesToServiceData(energySensor, formVals); } catch (err) { showError(this._t(err.message)); return; }
-            this._hass.callService(DOMAIN, 'set_device_control_mapping', data)
-                .then(() => overlay.remove()).catch((err) => showError(err.message));
+            this._call(DOMAIN, 'set_device_control_mapping', data)
+                .then(() => close()).catch((err) => showError(err.message));
         });
     }
 
@@ -717,6 +686,11 @@ class SEMNextDevicesCard extends SEMNextBase {
         const v = this._num(id);
         if (v === null) return null;
         return (this._unitOf(id) || '').toLowerCase() === 'w' ? v : v * 1000;
+    }
+
+    /** Measured watts of the running devices, capped at the house; see surplusInUse. */
+    _inUse(rows, surplusW = null) {
+        return surplusInUse(rows, (r) => this._live(r).powerW, this._powerW('sensor.sem_home_consumption_power'), surplusW);
     }
 
     _surplus(rows) {
@@ -732,8 +706,15 @@ class SEMNextDevicesCard extends SEMNextBase {
         const marginW = this._kwSensorW('sensor.sem_peak_margin');
         const tiles = [];
         if (total !== null) {
-            tiles.push({ label: t('next_surplus'), value: this._fmtKw(total), unit: 'kW',
-                sub: given === null && free === null ? '' : this._tf('next_given_free', { given: this._fmtKw(given ?? 0), free: this._fmtKw(free ?? 0) }) });
+            // (#1321) "in use" counts measured power only: a switch's configured size is an estimate, shown apart
+            // …never more than the house draws; a sensor that reads more than the house is named
+            const use = this._inUse(rows, total);
+            const nums = { given: this._fmtKw(use.measuredW), est: this._fmtKw(use.estW), free: this._fmtKw(use.leftW ?? 0) };
+            const base = given === null && free === null ? ''
+                : this._tf(use.leftW === null ? (use.estW > 0 ? 'next_given_est' : 'next_given_only') : use.estW > 0 ? 'next_given_free_est' : 'next_given_free', nums);
+            const bad = use.over.length ? this._tf('next_sensor_over_house', { names: use.over.join(', ') }) : '';
+            const sub = [base, bad].filter(Boolean).join(' · ');
+            tiles.push({ label: t('next_surplus_now'), value: this._fmtKw(total), unit: 'kW', sub });
         }
         if (active !== null || totalN !== null) {
             tiles.push({ label: t('next_active'), value: active === null ? '—' : Math.round(active), unit: totalN === null ? '' : this._tf('next_of_n', { n: Math.round(totalN) }),
@@ -741,13 +722,14 @@ class SEMNextDevicesCard extends SEMNextBase {
         }
         if (peakE) {
             tiles.push({ label: t('next_peak'), value: this._fmtKw(peakW), unit: uncapped ? t('uncapped') : this._tf('next_of_kw', { kw: this._fmtKw(limitW) }),
-                sub: uncapped || marginW === null ? t('next_15min') : this._tf('next_15min_margin', { kw: this._fmtKw(marginW) }) });
+                // (#1321) a phone tile is a third of the width: the margin alone, not three lines
+                sub: uncapped || marginW === null ? t('next_15min') : this._tf(this._narrow() ? 'next_margin_short' : 'next_15min_margin', { kw: this._fmtKw(marginW) }) });
         }
         if (!tiles.length) return nothing;
         const pctSensor = this._num('sensor.sem_current_vs_peak_percentage');
         const pct = uncapped ? 0 : (pctSensor !== null ? pctSensor : (limitW && peakW !== null ? (peakW / limitW) * 100 : 0));
-        const dis = this._obs();
-        const parts = {};
+        const dis = false;   // (#1321) the peak limit is SEM's own setting: editable while watching
+        const peakRows = [];
         const sent = [];
         if (peakE) {
             // (#1354) the peak limit is ONE question, the same model as the classic card
@@ -757,15 +739,16 @@ class SEMNextDevicesCard extends SEMNextBase {
                 this._svc('update_target_peak', { target_peak_limit: w.target_peak_limit ?? q.kw, peak_limit_unlimited: w.peak_limit_unlimited });
             };
             // a limit that is not read shows no number (no fallback in its place)
-            parts.limit = this._inline('peak', limit === null ? '—' : this._kw(q.kw * 1000), () => this._numEdit('peak', {
-                value: q.kw, min: PEAK_KW.min, max: PEAK_KW.max, step: PEAK_KW.slider, unit: 'kW',
-                onCommit: (v) => send(true, v) }));
-            parts.answer = this._val(t(q.limited ? PEAK_TEXT.limit : PEAK_TEXT.none),
-                () => send(!q.limited, q.kw), { disabled: dis || limit === null });
-            sent.push(this._sentence(q.limited ? t(PEAK_TEXT.label) + ' {limit} · {answer}.' : '{answer}.', parts));
-            sent.push(t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone));
+            // (#1321) a switch (limit on or off) and, when on, its level as the next row
+            peakRows.push(this._setRow({ label: this._lbl('next_peak_limit'), help: t(q.limited ? PEAK_TEXT.sub : PEAK_TEXT.subNone),
+                disabled: dis || limit === null, toggle: { on: q.limited, onChange: (on) => send(!!on, q.kw) } }));
+            if (q.limited) {
+                peakRows.push(this._setRow({ label: this._lbl('next_row_peak_level'), value: limit === null ? '—' : this._kw(q.kw * 1000), disabled: dis,
+                    onTap: () => this._editDialog({ title: this._lbl('next_row_peak_level'), kind: 'number', value: q.kw,
+                        min: PEAK_KW.min, max: PEAK_KW.max, step: PEAK_KW.slider, unit: 'kW', onCommit: (v) => send(true, v) }) }));
+            }
             const slot = uncapped ? null : slotStatus({ targetKw: limit, usedKwh: peakE.attributes?.peak_slot_used_kwh, allowedW: peakE.attributes?.peak_slot_allowed_w });
-            if (slot) sent.push(this._tf('next_sent_slot', { used: slot.usedKwh.toFixed(2), budget: slot.budgetKwh.toFixed(2) }));
+            if (slot) sent.push(this._tf('next_sent_slot', { used: this._fmt(slot.usedKwh, 2), budget: this._fmt(slot.budgetKwh, 2) }));
         }
         const month = this._kwSensorW('sensor.sem_monthly_consecutive_peak');
         if (month !== null) sent.push(this._tf('next_sent_month_peak', { kw: this._kw(month) }));
@@ -773,19 +756,22 @@ class SEMNextDevicesCard extends SEMNextBase {
         // (#1371) only what SEM could really shed: nothing is said when that
         // is nothing (load management off), and a device in mode Off is not counted
         if (shed !== null && shed > 0) sent.push(this._tf('next_sent_can_shed', { kw: this._kw(shed), n: rows.filter((r) => r.type === 'load' && r.hasControlHandle && r.isControllable && r.mergedMode !== 'off').length }));
-        const status = this._valLabel('load_management_status');
-        const recRaw = this._str('sensor.sem_load_management_recommendation');
-        const rec = recRaw ? (this._t(recRaw) || recRaw) : '';
+        // (#1321) "warning" is the engine's low warning level: say it only when the peak is near the limit
+        const calm = this._str('sensor.sem_load_management_status') === 'warning' && !uncapped && pct !== null && pct < 80;
+        const status = calm ? '' : this._valLabel('load_management_status');
+        const recRaw = calm ? '' : this._str('sensor.sem_load_management_recommendation');
+        const rec = recRaw ? (this._t(recRaw === 'Monitor - approaching peak limit' ? 'next_peak_close' : recRaw) || recRaw) : '';
         const lm = this._attrs('sensor.sem_load_management_status');
         const op = lm.shed_signal_active === true ? this._tf('operator_limit_banner', {
-            kw: typeof lm.shed_signal_cap_kw === 'number' ? lm.shed_signal_cap_kw.toFixed(1) : '?',
-            time: lm.shed_signal_since ? this._hhmm(lm.shed_signal_since) : '?' }) : '';
+            kw: typeof lm.shed_signal_cap_kw === 'number' ? this._fmt(lm.shed_signal_cap_kw, 1) : '—',
+            time: lm.shed_signal_since ? this._hhmm(lm.shed_signal_since) : '—' }) : '';
         return this._sec(t('next_surplus_peak'), html`
             ${op ? html`<div class="banner">${this._icon('mdi:transmission-tower-export')}<div class="sm">${op}</div></div>` : nothing}
-            ${this._tiles(tiles, { three: true })}
+            ${this._tiles(tiles, { three: true, stack: this._narrow() })}
             ${peakE && !uncapped ? html`<div style="margin:10px 0 6px">${this._track(pct, C.grid)}</div>` : nothing}
+            ${peakRows.length ? html`<div class="rows">${peakRows}</div>` : nothing}
             ${sent.length ? html`<p class="sent">${sent.map((s, i) => html`${i ? ' ' : ''}${s}`)}</p>` : nothing}
-            ${status || rec ? html`<p class="help">${status}${status && rec ? ' · ' : ''}${rec}</p>` : nothing}`, { cls: 'span2' });
+            ${status || rec ? html`<p class="help">${sameWords(status, rec) ? rec : html`${status}${status && rec ? ' · ' : ''}${rec}`}</p>` : nothing}`, { cls: 'span2' });
     }
 
     // ── one device card ──
@@ -798,32 +784,36 @@ class SEMNextDevicesCard extends SEMNextBase {
         const liveText = row.type === 'battery' && w !== null
             ? (w < 0 ? '−' : '') + this._kw(Math.abs(w))
             : (w !== null && (row.type !== 'load' || w > 10 || row.isOn) ? this._kw(w)
-                : (row.rating > 0 && row.ratingMeasured ? html`<span class="dim">~${this._kw(row.rating)}</span>`
-                    : (row.rating > 0 ? html`<span class="dim">${t('rating_not_measured')}</span>` : (w === null ? '' : this._kw(w)))));
+                : (row.rating > 0 ? html`<span class="dim">${this._tf(ratedKey(row, w), { kw: this._kw(row.rating) })}</span>` : (w === null ? '' : this._kw(w))));
         const dis = this._obs();
         const open = !this._reorder && this._isOpen(row);
         const body = !open ? nothing
             : row.type === 'charger' ? chargerBody(this, row) : row.type === 'battery' ? batteryBody(this, row) : loadBody(this, row);
         const locked = (row.dependsOn || []).length > 0;
+        // (#1321) watch-only: the same "would ..." line System shows, one helper
+        const dec = this._obs() ? wouldFor(row, wouldList(this._attrs('switch.sem_observer_mode'))) : null;
+        // (#1321) a load off and about to start says it in its own line: no second "Would" above it
+        const would = dec && !startCode(row, pill) ? wouldLine(dec, (k) => this._t(k)) : '';
         const toggle = () => { if (!this._reorder) this._toggleOpen(row); };
-        return html`<section class="card dev ${open ? '' : 'folded'}" data-id=${row.id} style="--c:${color}">
+        return html`<ha-card class="card dev ${open ? '' : 'folded'}" data-id=${row.id} style="--c:${color}">
             <div class="head">
                 <span class="handle" title=${locked ? t('locked_under_parent') : t('drag_to_reorder')}
                     @pointerdown=${locked ? nothing : (e) => this._dragStart(e, row.id)}>${this._icon(locked ? 'mdi:subdirectory-arrow-right' : 'mdi:drag-vertical')}</span>
                 <span class="rank" title=${t('next_priority')}>${i + 1}</span>
-                <div class="name tap" @click=${toggle}>${this._icon(row.icon)}<span>${row.name}</span>${this._pill(this._pillText(pill), pill.cls)}</div>
+                <div class="name tap" role="button" tabindex="0" aria-expanded=${open ? 'true' : 'false'} @click=${toggle}
+                    @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}>${this._icon(row.icon)}<span title=${row.name}>${row.name}</span>${this._pill(this._pillText(pill), pill.cls)}</div>
                 <span class="live muted sm">${liveText}</span>
                 ${row.type === 'load' && !row.lockedByOperator ? this._pill(t(verdictKey(row)), '', { icon: 'mdi:hand-back-left-outline' }) : nothing}
                 <div class="arrows">
-                    <button type="button" data-mv="-1" aria-label=${t('move_up')} ?disabled=${locked || dis} @click=${() => this._move(row.id, -1)}>${this._icon('mdi:arrow-up')}</button>
-                    <button type="button" data-mv="1" aria-label=${t('move_down')} ?disabled=${locked || dis} @click=${() => this._move(row.id, 1)}>${this._icon('mdi:arrow-down')}</button>
+                    <button type="button" data-mv="-1" aria-label=${t('move_up')} ?disabled=${locked} @click=${() => this._move(row.id, -1)}>${this._icon('mdi:arrow-up')}</button>
+                    <button type="button" data-mv="1" aria-label=${t('move_down')} ?disabled=${locked} @click=${() => this._move(row.id, 1)}>${this._icon('mdi:arrow-down')}</button>
                 </div>
                 ${row.type === 'load' ? html`<button type="button" class="gear" aria-label=${t('configure')} @click=${() => this._showConfigureModal(row.id, row.name)}>${this._icon('mdi:cog-outline')}</button>` : nothing}
                 <button type="button" class="fold" aria-expanded=${open ? 'true' : 'false'} aria-label=${t(open ? 'next_fold_device' : 'next_open_device')}
                     @click=${toggle}>${this._icon('mdi:chevron-down')}</button>
             </div>
-            ${row.type === 'charger' && !this._reorder ? this._chargePlanChip(row) : nothing}
-            ${open ? html`<div class="body">${body}</div>` : nothing}</section>`;
+            ${would ? html`<div class="would xs dim">${would}</div>` : nothing}
+            ${open ? html`<div class="body">${body}</div>` : nothing}</ha-card>`;
     }
 
     render() {
@@ -838,7 +828,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         const dis = this._obs();
         const toolbar = html`<div class="period">
             ${this._btn(this._reorder ? t('next_done_btn') : t('next_reorder'), () => this._toggleReorder(),
-                { primary: this._reorder, icon: this._reorder ? 'mdi:check' : 'mdi:swap-vertical', disabled: dis || n < 2 })}
+                { primary: this._reorder, icon: this._reorder ? 'mdi:check' : 'mdi:swap-vertical', disabled: n < 2 })}
             <button type="button" class="pill" aria-expanded=${this._adding ? 'true' : 'false'} @click=${() => this._toggleAdd()}>${this._icon(this._adding ? 'mdi:close' : 'mdi:plus', 's')}${t(this._adding ? 'next_cancel' : 'next_add_device')}</button>
             ${!this._reorder && !this._all && n > 1 ? (() => {
                 const allOpen = rows.every((r) => this._isOpen(r));

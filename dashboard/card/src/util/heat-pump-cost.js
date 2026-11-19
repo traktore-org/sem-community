@@ -127,14 +127,15 @@ export function copSourceOptions(goals) {
 
 /** The learner's line: "Learned from 54 hours, -6 to 11 °C", "Learning:
  *  12 hours so far", or "" without a heat meter. */
-export function copLearnLine(learn, t) {
+export function copLearnLine(learn, t, used = 'learned') {
     if (!learn || learn.state === 'no_meter') return '';
     if (learn.state === 'looks_electric') return t('hp_cop_looks_electric');
     // a thermometer that does not move teaches nothing: say so first
     const hours = String(Math.round(num(learn.hours) || 0));
     if (learn.state === 'learned') {
-        // what it learned before still counts: say both
-        return t('hp_cop_learned_from').replace('{hours}', hours)
+        // (#1321) a curve the pump does not use is not "learned from": one line, one truth
+        const key = used === 'learned' ? 'hp_cop_learned_from' : 'hp_cop_learned_idle';
+        return t(key).replace('{hours}', hours)
             .replace('{tmin}', fmt(num(learn.tmin))).replace('{tmax}', fmt(num(learn.tmax)))
             + (learn.temp_stuck ? ' ' + t('hp_cop_temp_stuck') : '');
     }

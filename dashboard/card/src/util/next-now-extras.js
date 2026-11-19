@@ -68,8 +68,16 @@ export function deviceChips({ batterySoc = null, cars = [], heaters = [] } = {})
     if (batterySoc !== null && Number.isFinite(batterySoc)) chips.push({ kind: 'battery', label: null, state: null, soc: Math.round(batterySoc) });
     for (const c of cars) {
         const state = c.charging ? 'charging' : (c.connected === false ? 'unplugged' : (c.connected ? 'plugged' : null));
-        chips.push({ kind: 'car', label: c.name, state, soc: Number.isFinite(c.soc) ? Math.round(c.soc) : null });
+        // (#1321) no car, no level: an old reading would pass for the car's
+        const soc = state === 'unplugged' ? null : c.soc;
+        chips.push({ kind: 'car', label: c.name, state, soc: Number.isFinite(soc) ? Math.round(soc) : null });
     }
     for (const h of heaters) chips.push({ kind: 'heater', label: h.name, state: h.on ? 'on' : 'off', soc: null });
     return chips;
+}
+
+/** (#1321) The assistant's "No recommendations" filler is not a tip: show a row only for a real one. */
+export function isRealTip(text) {
+    const s = String(text || '').trim();
+    return s !== '' && !/^no recommendations/i.test(s);
 }

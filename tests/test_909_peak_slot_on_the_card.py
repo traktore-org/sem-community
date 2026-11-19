@@ -69,18 +69,4 @@ class TestTheCardReadsThem:
         with open(p, encoding="utf-8") as fh:
             return fh.read()
 
-    def test_it_reads_the_slot_attributes(self):
-        src = self._card()
-        assert "peak_slot_allowed_w" in src and "peak_slot_used_kwh" in src
 
-    def test_it_says_average_not_current_peak(self):
-        src = self._card()
-        assert "peak_15min_avg" in src, "the 15-minute average must be named"
-
-    def test_it_shows_the_instantaneous_draw_beside_it(self):
-        src = self._card()
-        assert "importKw" in src and "peak_right_now" in src
-
-    def test_the_helpers_are_the_shared_pure_ones(self):
-        src = self._card()
-        assert "from '../util/peak-slot.js'" in src

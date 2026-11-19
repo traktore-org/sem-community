@@ -232,13 +232,14 @@ class TestTheSignalHasCallers:
 
     def test_the_relay_is_in_the_gui_and_the_options_flow(self):
         assert '"shed_signal_entity"' in self._src("config_flow.py")
-        card = self._src("dashboard/card/src/cards/sem-config-card.js")
+        from ._dashboard_src import dashboard_src
+        card = dashboard_src()
         assert "'shed_signal_entity'" in card and "'shed_signal_limit'" in card
 
     def test_the_device_switch_is_in_the_gui_and_the_service(self):
         assert '"behind_operator_relay"' in self._src("__init__.py")
-        assert "behind_operator_relay" in self._src(
-            "dashboard/card/src/cards/sem-load-priority-card.js")
+        from ._dashboard_src import dashboard_src
+        assert "behind_operator_relay" in dashboard_src()
         assert '"behind_operator_relay"' in self._src(
             "features/device_registry.py")
 

@@ -43,16 +43,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Letzter Schritt! SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere — einschließlich Ihres Netz-Spitzenwert-Limits — verwendet sichere Standardwerte, die Sie direkt nach der Einrichtung anpassen können: das Spitzenwert-Limit über den Schieberegler im **Steuerung**-Tab, alles andere im **Konfiguration**-Tab des SEM-Dashboards — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
+        "description": "Letzter Schritt! SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere — einschließlich Ihres Netz-Spitzenwert-Limits — verwendet sichere Standardwerte, die Sie direkt nach der Einrichtung anpassen können: das Spitzenwert-Limit auf dem Bildschirm **Geräte**, alles andere auf dem Bildschirm **System** des SEM-Dashboards — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
         "data": {
           "battery_capacity_kwh": "Hausbatterie-Kapazität (kWh)",
-          "generate_dashboard_on_install": "SEM-Dashboard jetzt erstellen (startet HA neu)",
-          "diagram_style": "Systemdiagramm-Stil"
+          "generate_dashboard_on_install": "SEM-Dashboard jetzt erstellen (startet HA neu)"
         },
         "data_description": {
           "battery_capacity_kwh": "Gesamte nutzbare Kapazität Ihrer Hausbatterie (NICHT des EV) in kWh. Wird von der prognosegesteuerten Ladestrategie verwendet, um abzuschätzen, wie viel Batterie ein Solardefizit überbrücken kann. Sehen Sie im Datenblatt Ihres Wechselrichters nach.",
-          "generate_dashboard_on_install": "Wenn aktiviert, erstellt SEM das Lovelace-Dashboard direkt nach Abschluss dieses Schritts und startet Home Assistant etwa 5 s später neu, damit das neue Dashboard sichtbar wird. Sie können es später jederzeit manuell über den Dienst solar_energy_management.generate_dashboard erneut ausführen.",
-          "diagram_style": "Wählen Sie das Systemdiagramm für den Haus-Tab. 'SEM' verwendet das integrierte animierte Diagramm. 'K-Flow' verwendet die K-Flow HACS-Karte (muss separat installiert werden)."
+          "generate_dashboard_on_install": "Wenn aktiviert, erstellt SEM das Lovelace-Dashboard direkt nach Abschluss dieses Schritts und startet Home Assistant etwa 5 s später neu, damit das neue Dashboard sichtbar wird. Sie können es später jederzeit manuell über den Dienst solar_energy_management.generate_dashboard erneut ausführen."
         }
       },
       "reconfigure": {
@@ -133,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Wähle deinen Netzzähler",
-        "description": "SEM hat keinen Sensor für die Netzleistung gefunden. Ohne ihn weiß SEM nicht, was du kaufst oder einspeist.\n\nWähle ihn unten oder drücke **Senden**, um zu überspringen. Du kannst ihn später im Tab Konfiguration setzen.\n\nSolar: {solar}. Batterie: {battery}.",
+        "description": "SEM hat keinen Sensor für die Netzleistung gefunden. Ohne ihn weiß SEM nicht, was du kaufst oder einspeist.\n\nWähle ihn unten oder drücke **Senden**, um zu überspringen. Du kannst ihn später auf dem Bildschirm System setzen.\n\nSolar: {solar}. Batterie: {battery}.",
         "data": {
           "grid_power_sensor": "Netzleistung"
         },
@@ -168,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "EV-Ladegerät",
-        "description": "Tipp: Die meisten Einstellungen sind jetzt im SEM-Dashboard → Tab Konfiguration (farbig, live). Dieser Dialog bleibt für Setups ohne Dashboard.\n\nÜberprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
+        "description": "Tipp: Die meisten Einstellungen sind im SEM-Dashboard: auf den Bildschirmen Geräte und System. Dieser Dialog bleibt für Setups ohne Dashboard.\n\nÜberprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
         "data": {
           "ev_connected_sensor": "EV-Verbindungsstatus",
           "ev_charging_sensor": "EV-Ladestatus",
@@ -229,7 +227,6 @@
           "hot_water_solar_target": "Warmwasser Solar-Heizziel (°C)",
           "legionella_target_temp": "Legionellen-Desinfektionsziel (°C)",
           "legionella_interval_hours": "Max. Stunden zwischen Desinfektionszyklen",
-          "diagram_style": "Systemdiagramm-Stil",
           "grid_sign_invert": "Vorzeichen der Netzleistung umkehren",
           "battery_operating_mode_entity": "Batterie-Betriebsmodus-Entität (beobachtet)",
           "battery_charge_end_soc_entity": "Ladeende-Stand der Batterie (optional)",
@@ -253,7 +250,6 @@
           "demand_charge_rate": "Monatlicher Leistungspreis pro kW Spitzenlast (CHF/kW/Monat). Auf 0 setzen, wenn Ihr Vertrag keinen Leistungspreis hat.",
           "observer_mode": "Wenn EIN, überwacht und berechnet SEM alles, sendet aber nie einen Dienstaufruf an die Hardware. Auf einem Test-/Staging-HA verwenden, das eine Produktivinstallation spiegelt.",
           "battery_discharge_control_entity": "Number-Entität, die das Entladeleistungs-Limit des Wechselrichters steuert (z. B. number.batteries_maximale_entladeleistung bei Huawei). Wird bei der Installation automatisch erkannt; hier bei Bedarf überschreiben.",
-          "diagram_style": "Wählen Sie das Systemdiagramm für den Haus-Tab. 'SEM' verwendet das integrierte animierte Diagramm. 'K-Flow' verwendet die K-Flow HACS-Karte (muss separat installiert werden).",
           "hot_water_solar_target": "Zieltemperatur (°C) für die solarunterstützte Warmwasserbereitung. SEM heizt den Boiler auf, wenn Überschuss verfügbar ist.",
           "legionella_target_temp": "Temperatur (°C), die das Warmwassersystem während eines Legionellen-Desinfektionszyklus erreichen muss.",
           "legionella_interval_hours": "Maximale Anzahl Stunden zwischen Legionellen-Desinfektionszyklen, bevor SEM eine Aufheizung erzwingt.",
@@ -1884,7 +1880,7 @@
       "message": "Kein Geräteplan für {device_id} gefunden. Prüfen Sie die Geräte-ID, die Sie mit dem Dienst schedule_appliance verwendet haben."
     },
     "load_management_disabled": {
-      "message": "Das Lastmanagement ist ausgeschaltet, daher gibt es keine Abwurfliste zu aktualisieren. Schalte es auf dem SEM-Dashboard unter Konfiguration → Lastmanagement ein und versuche es erneut."
+      "message": "Das Lastmanagement ist ausgeschaltet, daher gibt es keine Abwurfliste zu aktualisieren. Schalte es auf dem SEM-Dashboard unter System → Lastmanagement ein und versuche es erneut."
     },
     "load_management_failed_to_start": {
       "message": "Das Lastmanagement ist eingeschaltet, konnte aber nicht starten, daher kann SEM seine Geräteliste nicht verwenden. Prüfe das Home-Assistant-Protokoll auf \"Failed to initialize load management\" und lade die Integration neu."
@@ -1973,14 +1969,14 @@
         "step": {
           "confirm": {
             "title": "An SEM melden",
-            "description": "**{name}** ist auf ein prozentuales Ladeziel eingestellt, aber Ihr Fahrzeug meldet derzeit keinen Ladestand — SEM kann deshalb nicht *genau* bei **{target}%** stoppen.\n\nBlind lädt SEM aber nicht: Ab dem letzten echten Messwert dieser Sitzung zählt es die tatsächlich gelieferte Energie mit und stoppt, sobald diese gemessene Summe Ihr Ziel erreicht — überschritten wird nur, was das Auto seit diesem Messwert aufgenommen hat. Kam in dieser Sitzung überhaupt kein echter Messwert an (oder wurde SEM mitten im Ladevorgang neu gestartet), fehlt der Bezugspunkt, und es wird geladen, bis das Auto selbst kurz vor Voll abregelt.\n\nDamit die Grenze exakt trifft, hinterlegen Sie einen **echten Fahrzeug-SOC-Sensor** für diese Ladestation (Konfiguration → EV-Ladestationen). Die Batterie-% im Dashboard sind SEMs *geschätzter* Ladestand, den es für die harte Grenze bewusst ignoriert (er kann driften). Diese Reparatur verschwindet automatisch, sobald wieder ein echter SOC-Wert verfügbar ist.\n\nSEM hält dies für einen eigenen Fehler. Öffnen Sie nach Möglichkeit über den Hinweis einen Bug-Report — das Formular ist bereits ausgefüllt. Alternativ kopieren Sie den untenstehenden Kontext. Dieser Dialog sendet nichts.\n\n```\n{context}\n```\n\nBestätigen schließt den Hinweis."
+            "description": "**{name}** ist auf ein prozentuales Ladeziel eingestellt, aber Ihr Fahrzeug meldet derzeit keinen Ladestand — SEM kann deshalb nicht *genau* bei **{target}%** stoppen.\n\nBlind lädt SEM aber nicht: Ab dem letzten echten Messwert dieser Sitzung zählt es die tatsächlich gelieferte Energie mit und stoppt, sobald diese gemessene Summe Ihr Ziel erreicht — überschritten wird nur, was das Auto seit diesem Messwert aufgenommen hat. Kam in dieser Sitzung überhaupt kein echter Messwert an (oder wurde SEM mitten im Ladevorgang neu gestartet), fehlt der Bezugspunkt, und es wird geladen, bis das Auto selbst kurz vor Voll abregelt.\n\nDamit die Grenze exakt trifft, hinterlegen Sie einen **echten Fahrzeug-SOC-Sensor** für diese Ladestation (System → Wallboxen). Die Batterie-% im Dashboard sind SEMs *geschätzter* Ladestand, den es für die harte Grenze bewusst ignoriert (er kann driften). Diese Reparatur verschwindet automatisch, sobald wieder ein echter SOC-Wert verfügbar ist.\n\nSEM hält dies für einen eigenen Fehler. Öffnen Sie nach Möglichkeit über den Hinweis einen Bug-Report — das Formular ist bereits ausgefüllt. Alternativ kopieren Sie den untenstehenden Kontext. Dieser Dialog sendet nichts.\n\n```\n{context}\n```\n\nBestätigen schließt den Hinweis."
           }
         }
       }
     },
     "unmanaged_charger_found": {
       "title": "SEM hat eine Wallbox gefunden, die es nicht steuert",
-      "description": "Das Gerät **{name}** sieht nach einer Wallbox aus, in SEM ist aber keine Wallbox konfiguriert — SEM lässt sie deshalb unangetastet ({count} Kandidat(en) gefunden).\n\nDamit SEM das Laden mit Solarstrom und günstigen Tarifen optimieren kann, füge sie unter Einstellungen → Geräte & Dienste → SEM → Konfigurieren hinzu. Damit erscheint auch der EV-Tab mit den Lademodi.\n\nFalls das keine Wallbox ist, ignoriere diesen Hinweis — SEM steuert das Gerät so oder so nicht."
+      "description": "Das Gerät **{name}** sieht nach einer Wallbox aus, in SEM ist aber keine Wallbox konfiguriert — SEM lässt sie deshalb unangetastet ({count} Kandidat(en) gefunden).\n\nDamit SEM das Laden mit Solarstrom und günstigen Tarifen optimieren kann, füge sie unter Einstellungen → Geräte & Dienste → SEM → Konfigurieren hinzu. Damit erscheint sie auch auf dem Bildschirm Devices mit den Lademodi.\n\nFalls das keine Wallbox ist, ignoriere diesen Hinweis — SEM steuert das Gerät so oder so nicht."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace im YAML-Modus — SEM-Kartenressourcen eintragen",
@@ -1988,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Steuer-Entität der Wallbox funktioniert nicht: {name}",
-      "description": "SEM soll **`{entity_id}`** verwenden, um {capability} bei **{name}**, aber diese Entität ist `{reason}` — jeder Befehl von SEM läuft ins Leere. SEM zeigt weiterhin einen Sollstrom an; die Wallbox folgt ihm nicht.\n\nHäufige Ursachen: Die Entität wurde umbenannt oder entfernt, oder eine Template-Entität konnte nicht geladen werden (ein Template-`number` mit einer ungültigen Option lädt nur als `restored` und schluckt Schreibvorgänge stillschweigend).\n\nPrüfe die Entität unter **Entwicklerwerkzeuge → Zustände**. Fehlt sie dort oder ist sie nicht verfügbar, behebe es an der Quelle; ist sie dauerhaft weg, stelle SEM neu ein unter **Konfiguration → EV-Ladestationen**."
+      "description": "SEM soll **`{entity_id}`** verwenden, um {capability} bei **{name}**, aber diese Entität ist `{reason}` — jeder Befehl von SEM läuft ins Leere. SEM zeigt weiterhin einen Sollstrom an; die Wallbox folgt ihm nicht.\n\nHäufige Ursachen: Die Entität wurde umbenannt oder entfernt, oder eine Template-Entität konnte nicht geladen werden (ein Template-`number` mit einer ungültigen Option lädt nur als `restored` und schluckt Schreibvorgänge stillschweigend).\n\nPrüfe die Entität unter **Entwicklerwerkzeuge → Zustände**. Fehlt sie dort oder ist sie nicht verfügbar, behebe es an der Quelle; ist sie dauerhaft weg, stelle SEM neu ein unter **System → Wallboxen**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Batterie-Leistungssollwert kann nicht geschrieben werden: {entity_id}",
@@ -2008,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Deye-Exportsteuerung nicht nutzbar: {entity_id}",
-      "description": "SEM kann {entity_id} nicht für die Exportsteuerung nutzen: {reason}. Prüfen Sie die Auswahl-Entität und die drei Optionsnamen unter Konfiguration → Batterie-Intelligenz."
+      "description": "SEM kann {entity_id} nicht für die Exportsteuerung nutzen: {reason}. Prüfen Sie die Auswahl-Entität und die drei Optionsnamen unter System → Batterieregeln."
     },
     "battery_operating_mode_unexpected": {
       "title": "Batterie ist in „{mode}“ — SEM plant, als wäre sie in „{expected}“",
@@ -2020,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "Batterie-Nachtverlauf kann nicht aufgebaut werden",
-      "description": "SEM konnte den Batterie-Nachtverlauf nicht aufbauen, weil diese Installation keinen **{missing}**-Sensor hat.\n\nSEM lernt, wie viel der Batterie sicher ausgegeben werden kann, indem es beobachtet, was das Haus ihr über Nacht entnimmt, und möchte fünf gute Nächte, bevor es eine Zahl nennt. Der Aufbau liest den *eigenen* aufgezeichneten Verlauf des Zählers, damit Sie nicht warten müssen — aber dieser Zähler muss vorhanden sein.\n\n**Zu tun:** Fügen Sie einen kumulativen Energiesensor (kWh, nicht Watt) für **{missing}** zum Energie-Dashboard von Home Assistant hinzu und drücken Sie auf der Batterie-Seite erneut **Aus Verlauf aufbauen**. Durch Warten geht nichts verloren — SEM liest den Verlauf des Zählers, es funktioniert später genauso gut. Die Aufzeichnung läuft unterdessen weiter, eine Nacht pro Tag."
+      "description": "SEM konnte den Batterie-Nachtverlauf nicht aufbauen, weil diese Installation keinen **{missing}**-Sensor hat.\n\nSEM lernt, wie viel der Batterie sicher ausgegeben werden kann, indem es beobachtet, was das Haus ihr über Nacht entnimmt, und möchte fünf gute Nächte, bevor es eine Zahl nennt. Der Aufbau liest den *eigenen* aufgezeichneten Verlauf des Zählers, damit Sie nicht warten müssen — aber dieser Zähler muss vorhanden sein.\n\n**Zu tun:** Fügen Sie einen kumulativen Energiesensor (kWh, nicht Watt) für **{missing}** zum Energie-Dashboard von Home Assistant hinzu und drücken Sie auf dem Bildschirm Devices erneut **Aus Verlauf aufbauen**. Durch Warten geht nichts verloren — SEM liest den Verlauf des Zählers, es funktioniert später genauso gut. Die Aufzeichnung läuft unterdessen weiter, eine Nacht pro Tag."
     },
     "battery_night_backfill_incomplete": {
       "title": "Aufgebaute Nächte kennen den Netzanteil nicht",
@@ -2036,19 +2032,19 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Batterieplattform bei einer {brand}-Installation auf Allgemein festgelegt",
-      "description": "SEMs Batterieplattform ist auf **Allgemein / andere** gesetzt, aber die {brand}-Integration ist geladen. Frühere Versionen des Optionsassistenten boten nur Allgemein und Deye an und wählten standardmäßig Allgemein, sodass einmaliges Durchklicken dieser Seite eine {brand}-Installation auf den generischen Adapter herabstufte — kein Zwangsladen, keine idempotenten Register-Schreibvorgänge. Öffnen Sie **Konfiguration → Batterie-Planer** und setzen Sie **Batterie-Ladeplattform** auf **Automatisch (empfohlen)**. Wenn Allgemein eine bewusste Wahl ist (eine Batterie mit eigenen Steuerentitäten), legen Sie diese Entität fest, und dieser Hinweis verschwindet."
+      "description": "SEMs Batterieplattform ist auf **Allgemein / andere** gesetzt, aber die {brand}-Integration ist geladen. Frühere Versionen des Optionsassistenten boten nur Allgemein und Deye an und wählten standardmäßig Allgemein, sodass einmaliges Durchklicken dieser Seite eine {brand}-Installation auf den generischen Adapter herabstufte — kein Zwangsladen, keine idempotenten Register-Schreibvorgänge. Öffnen Sie **Einstellungen → Geräte & Dienste → SEM → Konfigurieren → Batterie-Ladeplaner** und setzen Sie **Batterie-Ladeplattform** auf **Automatisch (empfohlen)**. Wenn Allgemein eine bewusste Wahl ist (eine Batterie mit eigenen Steuerentitäten), legen Sie diese Entität fest, und dieser Hinweis verschwindet."
     },
     "split_grid_guessed": {
       "title": "SEM prüft zwei geratene Netzzähler",
-      "description": "SEM hat keinen Netzleistungs-Sensor und hat nach Namen geraten: **{import_entity}** für den Netzbezug und **{export_entity}** für die Einspeisung. SEM nutzt sie erst, wenn sie zu deinen Netz-Energiezählern passen; bis dahin steht die Netzleistung auf 0. So wählst du deinen Zähler: Öffne das SEM-Dashboard, Tab ⚙ **Konfiguration**, und wähle oben **Alle Einstellungen**. Setze dann **Netzleistung** im Abschnitt **Sensorquellen**. Hat dein Zähler je einen Sensor für Bezug und Einspeisung, setze stattdessen **Netz-Bezug-Sensor** und **Netz-Einspeise-Sensor** im Abschnitt **Tarif & Preise**."
+      "description": "SEM hat keinen Netzleistungs-Sensor und hat nach Namen geraten: **{import_entity}** für den Netzbezug und **{export_entity}** für die Einspeisung. SEM nutzt sie erst, wenn sie zu deinen Netz-Energiezählern passen; bis dahin steht die Netzleistung auf 0. So wählst du deinen Zähler: Öffne das SEM-Dashboard, Tab **System**, und wähle oben **Alle Einstellungen**. Setze dann **Netzleistung** im Abschnitt **Was SEM liest**. Hat dein Zähler je einen Sensor für Bezug und Einspeisung, setze stattdessen **Netz-Bezug-Sensor** und **Netz-Einspeise-Sensor** im Abschnitt **Was SEM liest**."
     },
     "battery_control_write_not_taken": {
       "title": "Ein Batterie-Steuerwert wird nicht übernommen: {entity_id}",
-      "description": "SEM hat **`{entity_id}`** auf **{wanted}** gesetzt; in den folgenden Zyklen stand dort weiter **{seen}**, {strikes} Mal in Folge. Der Aufruf schlug nicht fehl — das Register hat den Wert nur nicht behalten. **Lösung:** setze die Entität von Hand unter Entwicklerwerkzeuge → Zustände. Hält der Wert nicht, ist es die falsche Entität für diese Rolle: wähle in der Konfigurationskarte eine andere. Hält er von Hand, aber nicht für SEM, nenne uns Marke und Entität. Verschwindet, sobald ein Schreibvorgang übernommen wird."
+      "description": "SEM hat **`{entity_id}`** auf **{wanted}** gesetzt; in den folgenden Zyklen stand dort weiter **{seen}**, {strikes} Mal in Folge. Der Aufruf schlug nicht fehl — das Register hat den Wert nur nicht behalten. **Lösung:** setze die Entität von Hand unter Entwicklerwerkzeuge → Zustände. Hält der Wert nicht, ist es die falsche Entität für diese Rolle: wähle unter **System → Batterieregeln** eine andere. Hält er von Hand, aber nicht für SEM, nenne uns Marke und Entität. Verschwindet, sobald ein Schreibvorgang übernommen wird."
     },
     "soc_zones_out_of_order": {
       "title": "Batterie-SOC-Zonen sind nicht in der richtigen Reihenfolge",
-      "description": "Ihre Batteriezonen zeigen **Priorität {priority}% · Puffer {buffer}% · Auto-Start {auto_start}%**, aber SEM erwartet, dass sie in dieser Reihenfolge ansteigen: Priorität ist die Reserve, die Sie nie verbrauchen, Puffer ist dort, wo die Batterieunterstützung endet, und Auto-Start ist dort, wo der Speicher voll genug ist, um frei abzugeben.\n\nSEM verwendet **{used}** als Grenzwerte — dieselben drei Zahlen, sortiert —, sodass keine Zone übersprungen wird und nichts unvorhersehbar reagiert. SEM zeigt dies an, weil die eingegebene Reihenfolge mit ziemlicher Sicherheit nicht die gemeinte ist.\n\nBeheben Sie es unter **Konfiguration → Batterie-Zonen**. Jeder Wert ist erlaubt, solange sie aufsteigend sind; breite Zonen sind in Ordnung — 20 / 30 / 50 ist bei einem großen Speicher eine völlig taugliche Aufteilung."
+      "description": "Ihre Batteriezonen zeigen **Priorität {priority}% · Puffer {buffer}% · Auto-Start {auto_start}%**, aber SEM erwartet, dass sie in dieser Reihenfolge ansteigen: Priorität ist die Reserve, die Sie nie verbrauchen, Puffer ist dort, wo die Batterieunterstützung endet, und Auto-Start ist dort, wo der Speicher voll genug ist, um frei abzugeben.\n\nSEM verwendet **{used}** als Grenzwerte — dieselben drei Zahlen, sortiert —, sodass keine Zone übersprungen wird und nichts unvorhersehbar reagiert. SEM zeigt dies an, weil die eingegebene Reihenfolge mit ziemlicher Sicherheit nicht die gemeinte ist.\n\nBeheben Sie es unter **System → Batterieregeln**. Jeder Wert ist erlaubt, solange sie aufsteigend sind; breite Zonen sind in Ordnung — 20 / 30 / 50 ist bei einem großen Speicher eine völlig taugliche Aufteilung."
     },
     "previous_install_leftovers": {
       "title": "Dateien einer früheren SEM-Installation gefunden",
@@ -2056,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready-Kontakt {contact} kann nicht angesteuert werden",
-      "description": "**{entity_id}** ist als SG-Ready {contact} eingestellt, ist aber eine Text-/Zahlen-/Auswahl-Entität, und ihr **{missing}**-Wert ist nicht konfiguriert — SEM hat daher nichts zu schreiben, und jeder SG-Ready-Befehl für diese Wärmepumpe schlägt fehl. Öffnen Sie **Konfiguration → Wärmepumpe** und füllen Sie sowohl den EIN- als auch den AUS-Wert für diesen Kontakt aus, oder verweisen Sie stattdessen auf eine Schalter-Entität."
+      "description": "**{entity_id}** ist als SG-Ready {contact} eingestellt, ist aber eine Text-/Zahlen-/Auswahl-Entität, und ihr **{missing}**-Wert ist nicht konfiguriert — SEM hat daher nichts zu schreiben, und jeder SG-Ready-Befehl für diese Wärmepumpe schlägt fehl. Öffnen Sie **System → Wärmepumpe und Warmwasser** und füllen Sie sowohl den EIN- als auch den AUS-Wert für diesen Kontakt aus, oder verweisen Sie stattdessen auf eine Schalter-Entität."
     },
     "split_grid_rejected": {
       "title": "SEM konnte deine Netzleistungs-Zähler nicht finden",
-      "description": "SEM hat keinen Netzleistungs-Sensor, und die nach Namen geratenen Sensoren sind nicht dein Netzzähler: **{import_entity}** für den Bezug, **{export_entity}** für die Einspeisung. Sie passen nicht zu deinen Netz-Energiezählern, oder einer der beiden fehlt. SEM zeigt lieber keine Netzleistung als eine falsche. So wählst du deinen Zähler: Öffne das SEM-Dashboard, Tab ⚙ **Konfiguration**, und wähle oben **Alle Einstellungen**. Setze dann **Netzleistung** im Abschnitt **Sensorquellen**. Hat dein Zähler je einen Sensor für Bezug und Einspeisung, setze stattdessen **Netz-Bezug-Sensor** und **Netz-Einspeise-Sensor** im Abschnitt **Tarif & Preise**."
+      "description": "SEM hat keinen Netzleistungs-Sensor, und die nach Namen geratenen Sensoren sind nicht dein Netzzähler: **{import_entity}** für den Bezug, **{export_entity}** für die Einspeisung. Sie passen nicht zu deinen Netz-Energiezählern, oder einer der beiden fehlt. SEM zeigt lieber keine Netzleistung als eine falsche. So wählst du deinen Zähler: Öffne das SEM-Dashboard, Tab **System**, und wähle oben **Alle Einstellungen**. Setze dann **Netzleistung** im Abschnitt **Was SEM liest**. Hat dein Zähler je einen Sensor für Bezug und Einspeisung, setze stattdessen **Netz-Bezug-Sensor** und **Netz-Einspeise-Sensor** im Abschnitt **Was SEM liest**."
     },
     "power_sensor_not_found": {
       "title": "Kein Leistungssensor für {energy_entity}",
-      "description": "Das Energie-Dashboard zählt **{energy_entity}** in kWh, aber SEM hat dafür keinen Leistungssensor (W) gefunden. SEM liest diese Leistung als 0 W, daher sind die Energieflüsse und der Überschuss falsch. Füge dazu den Leistungssensor zu diesem Eintrag im Energie-Dashboard hinzu. Oder öffne das SEM-Dashboard, Tab ⚙ **Konfiguration**, und wähle oben **Alle Einstellungen**. Setze dann den Sensor im Abschnitt **Sensorquellen**. Gibt es keinen Leistungssensor, kannst du diesen Hinweis ignorieren."
+      "description": "Das Energie-Dashboard zählt **{energy_entity}** in kWh, aber SEM hat dafür keinen Leistungssensor (W) gefunden. SEM liest diese Leistung als 0 W, daher sind die Energieflüsse und der Überschuss falsch. Füge dazu den Leistungssensor zu diesem Eintrag im Energie-Dashboard hinzu. Oder öffne das SEM-Dashboard, Tab **System**, und wähle oben **Alle Einstellungen**. Setze dann den Sensor im Abschnitt **Was SEM liest**. Gibt es keinen Leistungssensor, kannst du diesen Hinweis ignorieren."
     },
     "power_sensor_not_found_unit": {
       "title": "Kein Leistungssensor für {energy_entity}",
@@ -2089,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM sieht deine Netzeinspeisung nicht",
-      "description": "Nur der Netz-Bezug-Sensor **{import_entity}** ist gesetzt, daher liest SEM die Einspeisung als 0 W. Dein Einspeisezähler **{export_entity}** zeigt aber, dass Strom ins Netz ging. Öffne zur Behebung das SEM-Dashboard, Tab ⚙ **Konfiguration**, und wähle oben **Alle Einstellungen**. Setze dann den **Netz-Einspeise-Sensor** im Abschnitt **Tarif & Preise**. Oder leere den **Netz-Bezug-Sensor**, dann sucht SEM das Paar selbst."
+      "description": "Nur der Netz-Bezug-Sensor **{import_entity}** ist gesetzt, daher liest SEM die Einspeisung als 0 W. Dein Einspeisezähler **{export_entity}** zeigt aber, dass Strom ins Netz ging. Öffne zur Behebung das SEM-Dashboard, Tab **System**, und wähle oben **Alle Einstellungen**. Setze dann den **Netz-Einspeise-Sensor** im Abschnitt **Was SEM liest**. Oder leere den **Netz-Bezug-Sensor**, dann sucht SEM das Paar selbst."
     },
     "unseen_power_row": {
       "title": "SEM sieht nicht deine ganze Solar- oder Batterieleistung",
@@ -2109,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "Ein Dritter schreibt an {name}",
-      "description": "Etwas anderes als SEM ändert ständig **{name}**, und SEM und dieser Dritte machen sich gegenseitig rückgängig. Stelle dieses Gerät im Tab Konfiguration von SEM auf *Ja, SEM hält sich zurück* und wähle die Entität, die zeigt, wann der Dritte die Kontrolle hat."
+      "description": "Etwas anderes als SEM ändert ständig **{name}**, und SEM und dieser Dritte machen sich gegenseitig rückgängig. Schalte auf dem Bildschirm **System** die Option **Alle Einstellungen** ein und stelle **fremdgesteuert** für dieses Gerät (unter **Batterieregeln** oder **Wallboxen**) auf *Ja, SEM hält sich zurück* und wähle die Entität, die zeigt, wann der Dritte die Kontrolle hat."
     },
     "heater_no_rise": {
       "title": "Warmwasserspeicher wird nicht warm",
@@ -2122,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Die Netzladung-Auswahl steht noch auf Laden: {entity}",
       "description": "Die Auswahl **{entity}** steht noch auf **{option}**, und SEM kann sie nicht zurücksetzen: die frühere Option fehlt in der Liste. Stelle sie von Hand zurück. Bis dahin lädt die Batterie womöglich weiter aus dem Netz. Verschwindet, sobald die Auswahl geändert wird."
+    },
+    "classic_dashboard_kept": {
+      "title": "Das alte SEM-Dashboard ist noch da",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Das alte SEM-Dashboard ist noch da",
+            "description": "Das alte SEM-Dashboard unter `/{path}` ist abgelöst. Du hast es geändert, daher hat SEM sein Layout nicht angefasst. Seine SEM-Karten zeigen jetzt einen Link zum neuen SEM-Dashboard. Bestätige, um das alte zu löschen."
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -2130,12 +2137,6 @@
         "disabled": "Deaktiviert",
         "grid_only": "Nur Netzversorgung",
         "hybrid_load_port": "Stromnetz + Load/EPS-Ausgang des Hybridwechselrichters"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (integriert)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

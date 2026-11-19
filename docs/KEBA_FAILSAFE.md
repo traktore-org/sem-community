@@ -1,101 +1,46 @@
-# KEBA failsafe & steady charging
+# KEBA charger failsafe
 
-## What the failsafe is
+The KEBA charger has its own failsafe. If the charger gets no new current
+setting for a set time, it falls back to a fixed current. The failsafe is a
+setting on the charger. SEM manages it.
 
-The **failsafe** is a safety watchdog **built into your KEBA charger** (not into
-SEM). It's a dead-man's switch: *if the controller setting the charge current
-goes silent (crash, network drop), fall back to a safe current after a timeout.*
-Its built-in fallback default is **6 A**.
+If the charger's failsafe is on while SEM sets the current, the charger can
+fall back between SEM's commands. The current then flips, and some cars
+(for example Renault Zoe) stop charging.
 
-It exists to protect house wiring when a load-management controller disappears.
-On a typical single-car installation it protects against very little.
+## Default: SEM manages the failsafe
 
-## Why it can cause a problem
+The option `keba_arm_failsafe` is on by default. It has no row on the
+screens.
 
-SEM dynamically sets the charge current. If the charger's own short failsafe is
-active, the charger keeps **reverting to its 6 A fallback** between SEM's
-commands while SEM re-asserts the target — producing a **6↔9 A oscillation**. A
-steady-needing car (e.g. a Renault Zoe) sees the shaking offer and refuses to
-charge, sitting in standby.
+When a charge starts, SEM sets the charger's failsafe to:
 
-## How SEM handles it by default (you usually do nothing)
+- Timeout: 600 s, so the charger does not fall back during charging.
+- Fallback: 6 A, or the charger's minimum current if higher.
 
-By default (`keba_arm_failsafe = true`), SEM uses **managed-neutralize**: it arms
-its own **long, non-tripping** failsafe that overwrites the box's short built-in
-one, and re-writes it every cycle so it never fires during normal operation. The
-result is a steady offer and a smooth charge — **with no action required from
-you**, and no Repair. This is the recommended default and needs nothing at the
-charger.
+When SEM stops a charge, it sets a dead-man's switch:
 
-> The real KEBA P30 built-in failsafe generally **cannot** be disabled over UDP
-> or via Home Assistant's `keba.set_failsafe` service (it rejects a timeout of
-> `0`), which is exactly why SEM neutralizes it by overwriting rather than trying
-> to switch it off.
+- Timeout: 10 s. Fallback: 0 A. Saved on the charger.
+- Sent 0.5 s after the stop. Checked 30 s later. If the fallback is still
+  above 0 A, SEM sends it again, up to three times.
 
-## The opt-out: "don't-arm" mode (evcc-style)
+Some integrations raise a 0 A fallback to 6 A. Then the charger can start
+again on its own after a stop.
 
-If you set `keba_arm_failsafe = false`, SEM leaves the box's failsafe alone (the
-approach **evcc** uses). In that mode, if your charger's built-in failsafe reads
-**on**, SEM raises the Repair *"KEBA failsafe is enabled"* to guide you to disable
-it at the charger — because in don't-arm mode SEM won't neutralize it for you.
-Only use this mode if your box **can** actually have its failsafe disabled at the
-hardware level. The steps below are for that case.
+## Option off: disable the failsafe at the charger
 
-`keba_arm_failsafe` has no UI toggle yet — it's a config-entry option for advanced
-users. If you need to set it, ask in the project's issues for the current way.
+If `keba_arm_failsafe` is off, SEM does not change the failsafe. If the
+charger's failsafe is on, SEM shows the Repair **KEBA failsafe is enabled —
+disable it for steady charging**.
 
-## How to disable it at the charger (don't-arm mode only, timeout = 0)
+Disable it at the charger: send `failsafe 0 0 1` over UDP, or set the
+failsafe timeout to 0 with the KEBA KeContact tools. The Repair clears when
+the failsafe is off.
 
-Pick whichever you can do:
+Use this option only if your charger can disable its failsafe.
 
-### Option A — KEBA UDP command (most direct)
-The KEBA P30 accepts a UDP command on port **7090** (requires DIP switch **1.3 =
-ON** for full UDP control). Send a failsafe command with **timeout 0**, persisted:
+## SEM never calls keba.authorize
 
-```
-failsafe 0 0 1
-```
-
-(`timeout=0` disables it, `fallback=0`, `persist=1` so it survives a reboot.)
-You can send this from any machine on the network, e.g.:
-
-```bash
-echo -n "failsafe 0 0 1" | nc -u -w1 <charger-ip> 7090
-```
-
-### Option B — KEBA KeContact tooling
-Use KEBA's own configuration tool / KeContact portal for your P30/P40 model to
-set the **failsafe timeout to 0**.
-
-## After disabling
-
-Once the charger reports the failsafe **off**, this Repair clears automatically,
-SEM holds a steady offer, and the car charges smoothly. No SEM restart needed.
-
-## Which mode should I use?
-
-For almost everyone, **leave the default** (`keba_arm_failsafe = true`): SEM
-neutralizes the flap by managing a long non-tripping failsafe itself, so charging
-is steady out of the box with nothing to configure. Only switch to don't-arm mode
-(and disable the failsafe at the charger) if you specifically want the evcc-style
-setup and your box supports disabling its failsafe at the hardware level.
-
----
-References: [evcc — KEBA failsafe out-of-sync](https://github.com/evcc-io/evcc/discussions/21093) ·
-[KEBA P30 Modbus/UDP programmers guide](https://www.keba.com)
-
-## Post-stop auto-start retries (vehicle-driven, bounded)
-
-Observed live (2026-07-23 overnight, KEBA P30 + Renault Zoe): after SEM
-ends a session via `keba.disable` (e.g. night target reached), the vehicle
-re-requests charging every ~11 minutes and the KEBA auto-authorizes it.
-SEM's session-ownership guard (#552) kills each rogue session **within one
-coordinator cycle** (≤10 s command latency; the 20–40 s power tail is
-KEBA reading decay), and the #553 runaway cap bounds each at 1 kWh.
-
-Measured cost: ~0.03–0.05 kWh per retry, +0.38 kWh over a full retry
-window. The energy lands on the daily counter, so kWh-mode night targets
-self-correct. SEM deliberately does **not** engage the KEBA
-authentication lock to refuse the retries: a failure while locked would
-strand the vehicle unable to charge at all (see the reverted 2026-06-02
-`keba.authorize` experiment) — a worse failure mode than a bounded leak.
+SEM does not use the charger's RFID authorization. After a stop, the car
+can ask again and the charger can start again. SEM stops the session again
+with the dead-man's switch above.

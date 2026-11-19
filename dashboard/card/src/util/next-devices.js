@@ -110,7 +110,7 @@ export function overnightWrites(source) {
     ];
 }
 
-function rowFromMap(id, info) {
+function rowFromMap(id, info, nameFor, states = null) {
     const i = info || {};
     const type = i.device_type === 'battery' ? 'battery'
         : (i.device_type === 'ev_charger' || i.device_type === 'ev_charging') ? 'charger' : 'load';
@@ -119,14 +119,14 @@ function rowFromMap(id, info) {
     return {
         id, type, kind, inMap: true,
         cid: type === 'charger' ? (chargerIdOf(id) || id) : null,
-        name: i.name || id.replace(/^(load_device_|energy_dashboard_)/, '').replace(/_/g, ' '),
+        name: nameFor ? nameFor(id, i) : (i.name || id.replace(/^(load_device_|energy_dashboard_)/, '').replace(/_/g, ' ')),
         priority: Number.isFinite(pr) ? pr : 999,
         icon: iconFor(i, kind),
         powerEntity: i.power_entity || '',
         rating: Number(i.power_rating) || 0,
         // (#1326) false only when SEM says the rating is its 1 kW placeholder.
         ratingMeasured: i.rating_measured !== false,
-        isOn: !!i.is_on,
+        isOn: runningNow(i, null, switchStateOf(i, states)),
         isShed: !!i.is_shed,
         shedReason: i.shed_reason || null,
         shedPhase: i.shed_phase || null,
@@ -165,8 +165,8 @@ function rowFromMap(id, info) {
  * and the battery the map does not know. `chargers` = charger ids from
  * the base; `hasBattery` = a battery SOC sensor exists.
  */
-export function deviceRows(devices, chargers = [], { hasBattery = false, chargerName } = {}) {
-    const rows = Object.entries(devices || {}).map(([id, info]) => rowFromMap(id, info));
+export function deviceRows(devices, chargers = [], { hasBattery = false, chargerName, loadName, states = null } = {}) {
+    const rows = Object.entries(devices || {}).map(([id, info]) => rowFromMap(id, info, loadName, states));
     rows.sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
     const seenCid = new Set(rows.filter((r) => r.type === 'charger').map((r) => r.cid));
     for (const cid of chargers || []) {
@@ -200,10 +200,29 @@ export function deviceRows(devices, chargers = [], { hasBattery = false, charger
  * `live` carries what only the entities know: power, amps, pause, the
  * planned start, the battery status and boost.
  */
+/**
+ * (#1321) ONE rule for "this load is on": switched on or active, or drawing power.
+ * Now, Devices and Why now all ask this, so a device never reads on in one place
+ * and waiting in another. `info` is a sensor.sem_controllable_devices_count entry.
+ */
+export function runningNow(info, powerW = null, switchState = null) {
+    if (Number.isFinite(powerW) && powerW > 10) return true;
+    // a switch that reports nothing is unknown, never on from a stale is_on
+    if (switchState === 'unavailable' || switchState === 'unknown') return false;
+    return !!(info && info.is_on);
+}
+
+/** The state of a device's switch entity in `states`, or null when it has none. */
+export function switchStateOf(info, states) {
+    const id = info && info.switch_entity;
+    const st = id ? states?.[id]?.state : undefined;
+    return st == null ? null : String(st);
+}
+
 export function statePill(row, live = {}) {
     const p = (key, params = {}, cls = '') => ({ key, params, cls });
     if (row.lockedByOperator) return p('locked_by_grid_operator', {}, 'warn');
-    if (row.isShed) return p(shedReasonKey(row.shedReason), { phase: row.shedPhase || '?' }, 'bad');
+    if (row.isShed) return p(shedReasonKey(row.shedReason), { phase: row.shedPhase || '—' }, 'bad');
     const w = Number.isFinite(live.powerW) ? live.powerW : null;
     if (row.type === 'charger') {
         if (live.paused) return p('next_st_paused', { time: live.pausedUntil || '' }, 'warn');
@@ -212,6 +231,7 @@ export function statePill(row, live = {}) {
                 ? p('next_st_charging_a', { amps: Math.round(live.amps) }, 'ok')
                 : p('next_st_charging', {}, 'ok');
         }
+        if (live.plannedUntil) return p(live.observer ? 'next_st_would_charge_until' : 'next_st_charges_until', { time: live.plannedUntil });
         if (live.plannedAt) return p('next_st_waits_for', { time: live.plannedAt });
         if (live.connected === false) return p('next_st_unplugged');
         if (row.mergedMode === 'off') return p('next_st_off');
@@ -227,7 +247,7 @@ export function statePill(row, live = {}) {
         return p('next_st_rests');
     }
     if (row.blockedBy) return p('next_st_waiting_for', { parent: live.parentName || row.blockedBy });
-    const running = row.isOn || (w !== null && w > 10);
+    const running = runningNow({ is_on: row.isOn }, w);  // row.isOn already reads the switch state
     // (#1369) the last sentence per device keeps sensor noise from flipping it
     const heater = heaterSays(row, { ...live, prevKey: _heaterPrev.get(row.id) }, running);
     _heaterPrev.set(row.id, heater ? heater.key : '');
@@ -236,6 +256,7 @@ export function statePill(row, live = {}) {
     if (row.mergedMode === 'off') return p('next_st_off_mode');
     // (#1321) peak-only: SEM never starts it, it only pauses it at a peak
     if (row.mergedMode === 'peak_only' || row.mergedMode === 'peak') return p('next_st_off_peak_only');
+    if (live.plannedUntil) return p(live.observer ? 'next_st_would_run_until' : 'next_st_runs_until', { time: live.plannedUntil });
     if (live.plannedAt) return p('next_st_waits_for', { time: live.plannedAt });
     return { ...p('next_st_off'), why: becauseKey(row.intent) };
 }
@@ -404,4 +425,53 @@ export function registerPayload(form, rows = []) {
     const power = String(form.power || '').trim();
     if (power) data.power_entity_id = power;
     return { data };
+}
+
+/**
+ * (#1321) The surplus tile's "in use": the watts running devices draw by
+ * measurement, never more than the house itself uses. A device whose own reading
+ * is more than the whole house is a wrong sensor; it is left out and named in
+ * `over`. `rows` are the Devices rows, `liveOf(row)` their live watts.
+ * → { measuredW, estW, names: [who is counted], over: [who reads too much] }
+ */
+export function surplusInUse(rows, liveOf, houseW = null, surplusW = null) {
+    let measuredW = 0, estW = 0, unmetered = false;
+    const names = [], over = [];
+    for (const r of rows || []) {
+        if (r.type === 'battery') continue;
+        const live = liveOf(r);
+        const on = r.type === 'charger' ? live !== null && live > 50 : r.isOn || (live !== null && live > 10);
+        if (!on) continue;
+        if (live === null) { unmetered = true; if (r.rating > 0) estW += r.rating; continue; }
+        if (Number.isFinite(houseW) && live > houseW + 50) { over.push(r.name); continue; }
+        measuredW += Math.max(0, live);
+        names.push(r.name);
+    }
+    if (Number.isFinite(houseW)) measuredW = Math.min(measuredW, Math.max(0, houseW));
+    // (#1321) an estimate never exceeds what the house still draws beyond the measured part
+    if (Number.isFinite(houseW)) estW = Math.min(estW, Math.max(0, houseW - measuredW));
+    // "left" = surplus minus measured use; unknown while a running device has no reading (its size is a guess)
+    const leftW = Number.isFinite(surplusW) && estW === 0 && !unmetered ? Math.max(0, surplusW - measuredW) : null;
+    return { measuredW, estW, leftW, names, over };
+}
+
+/**
+ * (#1321) The power a device shows when it draws nothing now: its rated size,
+ * said as rated (never "~2 kW", which reads as live power). Without a meter, or
+ * with a size SEM only assumed, it also says "not measured". → translation key
+ */
+export function ratedKey(row, liveW) {
+    return liveW === null || row.ratingMeasured === false ? 'next_rated_x_unmeasured' : 'next_rated_x';
+}
+
+/**
+ * (#1321) A load SEM leaves as it is that runs anyway (the user's own switch, a
+ * thermostat): System shows its live power and says SEM did not start it, the
+ * same facts Devices shows. `row` is a would-decision, `info` the device entry.
+ */
+export function runsNotStartedBySem(row, info, powerW, switchState) {
+    if (!row || (row.kind || row.device_kind) !== 'load' || !info) return false;
+    const action = String(row.action || '');
+    if (action && action !== 'hold' && action !== 'idle') return false;
+    return runningNow(info, powerW, switchState);
 }

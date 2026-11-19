@@ -43,16 +43,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Laatste stap! SEM heeft de ontlaad-besturingsentiteit van je omvormer automatisch gedetecteerd: {discharge_entity}\n\nLaat de dashboardoptie AAN staan zodat SEM automatisch je Lovelace-dashboard voor je aanmaakt. **Let op: dit veroorzaakt ongeveer 5 seconden na het voltooien van de installatie een herstart van Home Assistant.**\n\nVoor al het overige — inclusief je piekvermogenlimiet — gebruikt SEM veilige standaardwaardes die je direct na de installatie kunt aanpassen: de piekvermogenlimiet via de schuifregelaar op het tabblad **Besturing**, de rest via het tabblad **Configuratie** van het SEM-dashboard — waaronder EV-laders, warmtepomp, tarief en batterijzones.",
+        "description": "Laatste stap! SEM heeft de ontlaad-besturingsentiteit van je omvormer automatisch gedetecteerd: {discharge_entity}\n\nLaat de dashboardoptie AAN staan zodat SEM automatisch je Lovelace-dashboard voor je aanmaakt. **Let op: dit veroorzaakt ongeveer 5 seconden na het voltooien van de installatie een herstart van Home Assistant.**\n\nVoor al het overige — inclusief je piekvermogenlimiet — gebruikt SEM veilige standaardwaardes die je direct na de installatie kunt aanpassen: de piekvermogenlimiet op het scherm **Apparaten**, de rest op het scherm **Systeem** van het SEM-dashboard — waaronder EV-laders, warmtepomp, tarief en batterijzones.",
         "data": {
           "battery_capacity_kwh": "Thuis Batterij Capaciteit (kWh)",
-          "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)",
-          "diagram_style": "Systeemdiagram stijl"
+          "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)"
         },
         "data_description": {
           "battery_capacity_kwh": "Totale capaciteit van je thuis batterij in kWh. Wordt gebruikt om voorspellingen te doen ten behoeve van de laad en ontlaad strategie.",
-          "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen.",
-          "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren)."
+          "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen."
         }
       },
       "reconfigure": {
@@ -133,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Kies je netmeter",
-        "description": "SEM vond geen sensor voor het netvermogen. Zonder die sensor weet SEM niet wat je koopt of teruglevert.\n\nKies hem hieronder, of druk op **Verzenden** om over te slaan. Je kunt hem later instellen in het tabblad Configuratie.\n\nZon: {solar}. Batterij: {battery}.",
+        "description": "SEM vond geen sensor voor het netvermogen. Zonder die sensor weet SEM niet wat je koopt of teruglevert.\n\nKies hem hieronder, of druk op **Verzenden** om over te slaan. Je kunt hem later instellen op het scherm Systeem.\n\nZon: {solar}. Batterij: {battery}.",
         "data": {
           "grid_power_sensor": "Netvermogen"
         },
@@ -168,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "EV-lader",
-        "description": "Tip: de meeste instellingen staan nu op het SEM-dashboard → tabblad Configuratie (kleurrijk, live). Deze flow blijft voor installaties zonder dashboard.\n\nControleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
+        "description": "Tip: de meeste instellingen staan op het SEM-dashboard: de schermen Apparaten en Systeem. Deze flow blijft voor installaties zonder dashboard.\n\nControleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
         "data": {
           "ev_connected_sensor": "EV-verbindingsstatus",
           "ev_charging_sensor": "EV-laadstatus",
@@ -229,7 +227,6 @@
           "hot_water_solar_target": "Doeltemperatuur zonneboiler (°C)",
           "legionella_target_temp": "Legionella desinfectie doeltemperatuur (°C)",
           "legionella_interval_hours": "Maximaal aantal uren tussen desinfectiecycli",
-          "diagram_style": "Systeemdiagram stijl",
           "grid_sign_invert": "Teken van netvermogen omkeren",
           "battery_operating_mode_entity": "Batterij-bedrijfsmodus-entiteit (gevolgd)",
           "battery_charge_end_soc_entity": "Laadeinde-niveau van de batterij (optioneel)",
@@ -253,7 +250,6 @@
           "demand_charge_rate": "Maandelijkse capaciteitstarief per kW piekvermogen (Euro/kW/maand). Zet op 0 als dit niet van toepassing is.",
           "observer_mode": "Indien AAN, monitort en berekent SEM alles, maar stuurt geen commando's naar hardware. Te gebruiken in een test-/acceptatieomgeving.",
           "battery_discharge_control_entity": "Nummer-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig.",
-          "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren).",
           "hot_water_solar_target": "Doeltemperatuur (°C) voor zonnegenereerde warmwaterverwarming. SEM activeert de ketel wanneer er overschot beschikbaar is.",
           "legionella_target_temp": "Temperatuur (°C) die het warmwatersysteem moet bereiken tijdens een legionella-desinfectiecyclus.",
           "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert.",
@@ -1884,7 +1880,7 @@
       "message": "Geen apparaatschema gevonden voor {device_id}. Controleer de apparaat-ID die je bij de service schedule_appliance hebt gebruikt."
     },
     "load_management_disabled": {
-      "message": "Lastbeheer staat uit, dus er is geen afschakellijst om bij te werken. Zet het aan via Configuratie → Lastbeheer op het SEM-dashboard en probeer het opnieuw."
+      "message": "Lastbeheer staat uit, dus er is geen afschakellijst om bij te werken. Zet het aan via Systeem → Lastbeheer op het SEM-dashboard en probeer het opnieuw."
     },
     "load_management_failed_to_start": {
       "message": "Lastbeheer staat aan maar kon niet starten, dus SEM kan zijn apparatenlijst niet gebruiken. Controleer het Home Assistant-logboek op \"Failed to initialize load management\" en herlaad de integratie."
@@ -1973,14 +1969,14 @@
         "step": {
           "confirm": {
             "title": "Aan SEM melden",
-            "description": "**{name}** heeft een laaddoel in procenten, maar uw voertuig meldt op dit moment geen laadtoestand — SEM kan daardoor niet *precies* bij **{target}%** stoppen.\n\nBlind laden doet SEM echter niet: vanaf de laatste echte meting van deze sessie telt het de werkelijk geleverde energie mee en stopt het zodra dat gemeten totaal uw doel bereikt — de overschrijding is alleen wat de auto sinds die meting heeft opgenomen. Is er in deze sessie helemaal geen echte meting binnengekomen (of is SEM tijdens het laden herstart), dan ontbreekt het ankerpunt en wordt er geladen tot de auto zelf bijna vol terugregelt.\n\nVoor een limiet die exact uitkomt, koppelt u een **echte voertuig-SOC-sensor** aan deze laadpaal (Configuratie → EV-laadpalen). Het batterijpercentage op het dashboard is SEM's *geschatte* SOC, die het voor de harde limiet bewust negeert (die kan afwijken). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-meting beschikbaar is.\n\nSEM denkt dat deze fout bij SEM zelf ligt. Open als het kan een bugmelding met de knop in de melding — het formulier is dan al ingevuld. Kopieer anders de context hieronder in een e-mail of forumbericht. Dit venster verstuurt nergens iets naartoe.\n\n```\n{context}\n```\n\nBevestig om de melding te sluiten."
+            "description": "**{name}** heeft een laaddoel in procenten, maar uw voertuig meldt op dit moment geen laadtoestand — SEM kan daardoor niet *precies* bij **{target}%** stoppen.\n\nBlind laden doet SEM echter niet: vanaf de laatste echte meting van deze sessie telt het de werkelijk geleverde energie mee en stopt het zodra dat gemeten totaal uw doel bereikt — de overschrijding is alleen wat de auto sinds die meting heeft opgenomen. Is er in deze sessie helemaal geen echte meting binnengekomen (of is SEM tijdens het laden herstart), dan ontbreekt het ankerpunt en wordt er geladen tot de auto zelf bijna vol terugregelt.\n\nVoor een limiet die exact uitkomt, koppelt u een **echte voertuig-SOC-sensor** aan deze laadpaal (Systeem → Laders). Het batterijpercentage op het dashboard is SEM's *geschatte* SOC, die het voor de harde limiet bewust negeert (die kan afwijken). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-meting beschikbaar is.\n\nSEM denkt dat deze fout bij SEM zelf ligt. Open als het kan een bugmelding met de knop in de melding — het formulier is dan al ingevuld. Kopieer anders de context hieronder in een e-mail of forumbericht. Dit venster verstuurt nergens iets naartoe.\n\n```\n{context}\n```\n\nBevestig om de melding te sluiten."
           }
         }
       }
     },
     "unmanaged_charger_found": {
       "title": "SEM vond een laadpunt dat het niet beheert",
-      "description": "Het apparaat **{name}** lijkt op een laadpunt, maar er is geen laadpunt geconfigureerd in SEM — SEM laat het dus met rust ({count} kandidaat(en) gevonden).\n\nVoeg het toe via Instellingen → Apparaten & Diensten → SEM → Configureren om laden met zon en goedkope tarieven te laten optimaliseren. Daarmee verschijnt ook het EV-tabblad met de laadmodi.\n\nIs dit geen laadpunt? Negeer deze melding — SEM stuurt het hoe dan ook niet aan."
+      "description": "Het apparaat **{name}** lijkt op een laadpunt, maar er is geen laadpunt geconfigureerd in SEM — SEM laat het dus met rust ({count} kandidaat(en) gevonden).\n\nVoeg het toe via Instellingen → Apparaten & Diensten → SEM → Configureren om laden met zon en goedkope tarieven te laten optimaliseren. Daarmee verschijnt het ook op het scherm Devices met de laadmodi.\n\nIs dit geen laadpunt? Negeer deze melding — SEM stuurt het hoe dan ook niet aan."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace in YAML-modus — voeg SEM-kaartbronnen toe",
@@ -1988,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Besturingsentiteit van de laadpaal werkt niet: {name}",
-      "description": "SEM gebruikt **`{entity_id}`** om {capability} op **{name}**, maar die entiteit is `{reason}` — elke opdracht komt nergens aan. Controleer de entiteit in **Ontwikkelhulpmiddelen → Statussen** en herstel deze bij de bron, of wijs SEM opnieuw aan via **Configuratie → EV-laadpalen**."
+      "description": "SEM gebruikt **`{entity_id}`** om {capability} op **{name}**, maar die entiteit is `{reason}` — elke opdracht komt nergens aan. Controleer de entiteit in **Ontwikkelhulpmiddelen → Statussen** en herstel deze bij de bron, of wijs SEM opnieuw aan via **Systeem → Laders**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Batterij-vermogensinstelpunt kan niet worden geschreven: {entity_id}",
@@ -2008,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Deye-exportbesturing kan niet worden gebruikt: {entity_id}",
-      "description": "SEM kan {entity_id} niet gebruiken voor exportbesturing: {reason}. Controleer de select-entiteit en de drie optielabels onder Configuratie → Batterij-intelligentie."
+      "description": "SEM kan {entity_id} niet gebruiken voor exportbesturing: {reason}. Controleer de select-entiteit en de drie optielabels onder Systeem → Accuregels."
     },
     "battery_operating_mode_unexpected": {
       "title": "Batterij staat in “{mode}” — SEM plant alsof hij in “{expected}” stond",
@@ -2020,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "Batterij-nachtgeschiedenis kan niet worden opgebouwd",
-      "description": "SEM kon de batterij-nachtgeschiedenis niet opbouwen, omdat deze installatie geen **{missing}**-sensor heeft.\n\nSEM leert hoeveel van uw batterij veilig besteed kan worden door te kijken wat uw huis er 's nachts uit haalt, en wil vijf goede nachten voordat het een cijfer geeft. Opbouwen leest de *eigen* opgeslagen historie van de teller zodat u niet hoeft te wachten — maar die teller moet wel bestaan.\n\n**Te doen:** voeg een cumulatieve energiesensor (kWh, geen watt) voor **{missing}** toe aan het Energiedashboard van Home Assistant en druk op het Batterij-tabblad opnieuw op **Uit historie opbouwen**. Wachten kost niets — SEM leest de historie van de teller, dus het werkt later net zo goed. Ondertussen loopt de registratie door, één nacht per dag."
+      "description": "SEM kon de batterij-nachtgeschiedenis niet opbouwen, omdat deze installatie geen **{missing}**-sensor heeft.\n\nSEM leert hoeveel van uw batterij veilig besteed kan worden door te kijken wat uw huis er 's nachts uit haalt, en wil vijf goede nachten voordat het een cijfer geeft. Opbouwen leest de *eigen* opgeslagen historie van de teller zodat u niet hoeft te wachten — maar die teller moet wel bestaan.\n\n**Te doen:** voeg een cumulatieve energiesensor (kWh, geen watt) voor **{missing}** toe aan het Energiedashboard van Home Assistant en druk op het scherm Devices opnieuw op **Uit historie opbouwen**. Wachten kost niets — SEM leest de historie van de teller, dus het werkt later net zo goed. Ondertussen loopt de registratie door, één nacht per dag."
     },
     "battery_night_backfill_incomplete": {
       "title": "Opgebouwde nachten zien het aandeel van het net niet",
@@ -2036,19 +2032,19 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Batterijplatform vastgezet op Algemeen bij een {brand}-installatie",
-      "description": "SEM's batterijplatform staat op **Algemeen / anders**, maar de {brand}-integratie is geladen. Eerdere versies van de optiewizard boden alleen Algemeen en Deye aan en kozen standaard Algemeen, waardoor het eenmalig doorlopen van die pagina een {brand}-installatie degradeerde naar de algemene adapter — geen geforceerd laden, geen idempotente registerschrijfacties. Open **Configuratie → Batterijplanner** en zet **Batterij-laadplatform** op **Automatisch (aanbevolen)**. Als Algemeen een bewuste keuze is (een batterij met eigen besturingsentiteiten), stel die entiteit dan in en verdwijnt deze melding."
+      "description": "SEM's batterijplatform staat op **Algemeen / anders**, maar de {brand}-integratie is geladen. Eerdere versies van de optiewizard boden alleen Algemeen en Deye aan en kozen standaard Algemeen, waardoor het eenmalig doorlopen van die pagina een {brand}-installatie degradeerde naar de algemene adapter — geen geforceerd laden, geen idempotente registerschrijfacties. Open **Instellingen → Apparaten & Diensten → SEM → Configureren → Batterij laadschema** en zet **Batterij-laadplatform** op **Automatisch (aanbevolen)**. Als Algemeen een bewuste keuze is (een batterij met eigen besturingsentiteiten), stel die entiteit dan in en verdwijnt deze melding."
     },
     "split_grid_guessed": {
       "title": "SEM controleert twee geraden netmeters",
-      "description": "SEM heeft geen netvermogensensor en heeft daarom op naam geraden: **{import_entity}** voor netimport en **{export_entity}** voor netexport. SEM gebruikt ze pas als ze overeenkomen met je energietellers van het net, dus het netvermogen staat voorlopig op 0. Zo kies je je meter: open het SEM-dashboard, tabblad ⚙ **Configuratie**, en kies bovenaan **Alle instellingen**. Stel daarna **Netvermogen** in bij sectie **Sensorbronnen**. Heeft je meter één sensor voor import en één voor export, stel dan in plaats daarvan **Netimportsensor** en **Netexportsensor** in bij sectie **Tarief & prijzen**."
+      "description": "SEM heeft geen netvermogensensor en heeft daarom op naam geraden: **{import_entity}** voor netimport en **{export_entity}** voor netexport. SEM gebruikt ze pas als ze overeenkomen met je energietellers van het net, dus het netvermogen staat voorlopig op 0. Zo kies je je meter: open het SEM-dashboard, tabblad **Systeem**, en kies bovenaan **Alle instellingen**. Stel daarna **Netvermogen** in bij sectie **Wat SEM leest**. Heeft je meter één sensor voor import en één voor export, stel dan in plaats daarvan **Netimportsensor** en **Netexportsensor** in bij sectie **Wat SEM leest**."
     },
     "battery_control_write_not_taken": {
       "title": "Een batterij-stuurwaarde wordt niet overgenomen: {entity_id}",
-      "description": "SEM zette **`{entity_id}`** op **{wanted}**; in de volgende cycli stond er nog **{seen}**, {strikes} keer op rij. De aanroep faalde niet — het register hield de waarde niet vast. **Oplossing:** zet de entiteit met de hand in Ontwikkelhulpmiddelen → Statussen. Houdt hij niet vast, dan is het de verkeerde entiteit voor deze rol: kies een andere in de configuratiekaart. Houdt hij wel met de hand maar niet voor SEM, meld ons dan merk en entiteit. Verdwijnt zodra een schrijfactie wordt overgenomen."
+      "description": "SEM zette **`{entity_id}`** op **{wanted}**; in de volgende cycli stond er nog **{seen}**, {strikes} keer op rij. De aanroep faalde niet — het register hield de waarde niet vast. **Oplossing:** zet de entiteit met de hand in Ontwikkelhulpmiddelen → Statussen. Houdt hij niet vast, dan is het de verkeerde entiteit voor deze rol: kies een andere onder **Systeem → Accuregels**. Houdt hij wel met de hand maar niet voor SEM, meld ons dan merk en entiteit. Verdwijnt zodra een schrijfactie wordt overgenomen."
     },
     "soc_zones_out_of_order": {
       "title": "Batterij-SOC-zones staan in de verkeerde volgorde",
-      "description": "Je batterijzones tonen **Prioriteit {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, maar SEM verwacht dat ze in die volgorde oplopen: Prioriteit is de reserve die je nooit verbruikt, Buffer is waar batterijondersteuning stopt, en Auto-start is waar het pakket vol genoeg is om vrij te geven.\n\nSEM gebruikt **{used}** als grenzen — dezelfde drie getallen, gesorteerd — zodat geen zone wordt overgeslagen en niets onvoorspelbaar gedraagt. Dit wordt gemeld omdat de ingevoerde indeling vrijwel zeker niet de bedoelde is.\n\nLos het op via **Configuratie → Batterijzones**. Elke waarde is toegestaan zolang ze oplopen; brede zones zijn prima — 20 / 30 / 50 is bij een groot pakket een prima indeling."
+      "description": "Je batterijzones tonen **Prioriteit {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, maar SEM verwacht dat ze in die volgorde oplopen: Prioriteit is de reserve die je nooit verbruikt, Buffer is waar batterijondersteuning stopt, en Auto-start is waar het pakket vol genoeg is om vrij te geven.\n\nSEM gebruikt **{used}** als grenzen — dezelfde drie getallen, gesorteerd — zodat geen zone wordt overgeslagen en niets onvoorspelbaar gedraagt. Dit wordt gemeld omdat de ingevoerde indeling vrijwel zeker niet de bedoelde is.\n\nLos het op via **Systeem → Accuregels**. Elke waarde is toegestaan zolang ze oplopen; brede zones zijn prima — 20 / 30 / 50 is bij een groot pakket een prima indeling."
     },
     "previous_install_leftovers": {
       "title": "Bestanden van een eerdere SEM-installatie gevonden",
@@ -2056,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready-contact {contact} kan niet worden aangestuurd",
-      "description": "**{entity_id}** is ingesteld als SG-Ready {contact}, maar het is een tekst-/getal-/select-entiteit en de **{missing}**-waarde is niet geconfigureerd — SEM heeft dus niets om te schrijven, en elk SG-Ready-commando voor deze warmtepomp mislukt. Open **Configuratie → Warmtepomp** en vul zowel de AAN- als de UIT-waarde voor dit contact in, of wijs in plaats daarvan een schakelaar-entiteit aan."
+      "description": "**{entity_id}** is ingesteld als SG-Ready {contact}, maar het is een tekst-/getal-/select-entiteit en de **{missing}**-waarde is niet geconfigureerd — SEM heeft dus niets om te schrijven, en elk SG-Ready-commando voor deze warmtepomp mislukt. Open **Systeem → Warmtepomp en warm water** en vul zowel de AAN- als de UIT-waarde voor dit contact in, of wijs in plaats daarvan een schakelaar-entiteit aan."
     },
     "split_grid_rejected": {
       "title": "SEM kon je netvermogensmeters niet vinden",
-      "description": "SEM heeft geen netvermogensensor, en wat het op naam heeft geraden is niet je netmeter: **{import_entity}** voor import, **{export_entity}** voor export. Ze komen niet overeen met je energietellers van het net, of een van de twee ontbreekt. SEM toont liever geen netvermogen dan een verkeerd. Zo kies je je meter: open het SEM-dashboard, tabblad ⚙ **Configuratie**, en kies bovenaan **Alle instellingen**. Stel daarna **Netvermogen** in bij sectie **Sensorbronnen**. Heeft je meter één sensor voor import en één voor export, stel dan in plaats daarvan **Netimportsensor** en **Netexportsensor** in bij sectie **Tarief & prijzen**."
+      "description": "SEM heeft geen netvermogensensor, en wat het op naam heeft geraden is niet je netmeter: **{import_entity}** voor import, **{export_entity}** voor export. Ze komen niet overeen met je energietellers van het net, of een van de twee ontbreekt. SEM toont liever geen netvermogen dan een verkeerd. Zo kies je je meter: open het SEM-dashboard, tabblad **Systeem**, en kies bovenaan **Alle instellingen**. Stel daarna **Netvermogen** in bij sectie **Wat SEM leest**. Heeft je meter één sensor voor import en één voor export, stel dan in plaats daarvan **Netimportsensor** en **Netexportsensor** in bij sectie **Wat SEM leest**."
     },
     "power_sensor_not_found": {
       "title": "Geen vermogenssensor voor {energy_entity}",
-      "description": "Het Energiedashboard telt **{energy_entity}** in kWh, maar SEM vond er geen vermogenssensor (W) voor. SEM leest dit vermogen als 0 W, dus de energiestromen en het overschot kloppen niet. Voeg daarom de vermogenssensor toe aan deze regel in het Energiedashboard. Of open het SEM-dashboard, tab ⚙ **Configuratie**, en kies bovenaan **Alle instellingen**. Stel dan de sensor in bij sectie **Sensorbronnen**. Is er geen vermogenssensor, dan kun je deze melding negeren."
+      "description": "Het Energiedashboard telt **{energy_entity}** in kWh, maar SEM vond er geen vermogenssensor (W) voor. SEM leest dit vermogen als 0 W, dus de energiestromen en het overschot kloppen niet. Voeg daarom de vermogenssensor toe aan deze regel in het Energiedashboard. Of open het SEM-dashboard, **Systeem**, en kies bovenaan **Alle instellingen**. Stel dan de sensor in bij sectie **Wat SEM leest**. Is er geen vermogenssensor, dan kun je deze melding negeren."
     },
     "power_sensor_not_found_unit": {
       "title": "Geen vermogenssensor voor {energy_entity}",
@@ -2089,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM ziet je teruglevering niet",
-      "description": "Alleen de netimportsensor **{import_entity}** is ingesteld, dus SEM leest export als 0 W. Maar je exportteller **{export_entity}** laat zien dat er stroom naar het net ging. Open om dit op te lossen het SEM-dashboard, tabblad ⚙ **Configuratie**, en kies bovenaan **Alle instellingen**. Stel daarna de **Netexportsensor** in bij sectie **Tarief & prijzen**. Of maak de **Netimportsensor** leeg, dan zoekt SEM het paar zelf."
+      "description": "Alleen de netimportsensor **{import_entity}** is ingesteld, dus SEM leest export als 0 W. Maar je exportteller **{export_entity}** laat zien dat er stroom naar het net ging. Open om dit op te lossen het SEM-dashboard, tabblad **Systeem**, en kies bovenaan **Alle instellingen**. Stel daarna de **Netexportsensor** in bij sectie **Wat SEM leest**. Of maak de **Netimportsensor** leeg, dan zoekt SEM het paar zelf."
     },
     "unseen_power_row": {
       "title": "SEM ziet niet al je zonne- of batterijvermogen",
@@ -2109,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "Een andere partij schrijft naar {name}",
-      "description": "Iets anders dan SEM verandert steeds **{name}**, en SEM en die partij maken elkaars werk ongedaan. Zet dit apparaat in SEM's tabblad Configuratie op *Ja, SEM houdt zich in* en kies de entiteit die laat zien wanneer de andere partij de controle heeft."
+      "description": "Iets anders dan SEM verandert steeds **{name}**, en SEM en die partij maken elkaars werk ongedaan. Zet op het scherm **Systeem** **Alle instellingen** aan en zet **extern gestuurd** voor dit apparaat (onder **Accuregels** of **Laders**) op *Ja, SEM houdt zich in* en kies de entiteit die laat zien wanneer de andere partij de controle heeft."
     },
     "heater_no_rise": {
       "title": "Warmwaterboiler wordt niet warm",
@@ -2122,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "De selectie voor netladen staat nog aan: {entity}",
       "description": "De selectie **{entity}** staat nog op **{option}**, en SEM kan haar niet terugzetten: de eerdere optie staat niet meer in de lijst. Zet haar met de hand terug. Tot dan laadt de batterij mogelijk door vanaf het net. Verdwijnt zodra de selectie verandert."
+    },
+    "classic_dashboard_kept": {
+      "title": "Het oude SEM-dashboard staat er nog",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Het oude SEM-dashboard staat er nog",
+            "description": "Het oude SEM-dashboard op `/{path}` is vervallen. Je hebt het aangepast, dus SEM liet de indeling staan. De SEM-kaarten erin tonen nu een link naar het nieuwe SEM-dashboard. Bevestig om het oude te verwijderen."
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -2130,12 +2137,6 @@
         "disabled": "Uitgeschakeld",
         "grid_only": "Alleen netvoeding",
         "hybrid_load_port": "Net + Load/EPS-uitgang van de hybride omvormer"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (ingebouwd)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

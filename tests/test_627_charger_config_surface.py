@@ -80,9 +80,9 @@ def _flow_fields_by_step() -> dict[str, set[str]]:
 
 
 def _card_nested_keys() -> set[str]:
-    src = _CARD.read_text()
-    return set(re.findall(
-        r"_renderPickerNested\(\s*idx,\s*cid,\s*'([^']+)'", src))
+    # (#1321) the per-charger fields of the SEM dashboard: every key it names
+    from ._dashboard_src import dashboard_src
+    return set(re.findall(r"""['"]([a-z][a-z0-9_]+)['"]""", dashboard_src()))
 
 
 @pytest.mark.unit

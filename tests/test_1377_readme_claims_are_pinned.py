@@ -47,10 +47,9 @@ def _languages() -> int:
     return len(list((ROOT / "translations").glob("*.json")))
 
 
-def _classic_views() -> int:
-    text = (ROOT / "dashboard" / "sem_dashboard_template.yaml").read_text(encoding="utf-8")
-    paths = re.findall(r"^  - title: (\w+)", text, re.MULTILINE)
-    return len([p for p in paths if p != "Simulation"])  # shown only on a switch (#1083)
+def _screens() -> int:
+    text = (ROOT / "dashboard" / "sem_next_template.yaml").read_text(encoding="utf-8")
+    return len(re.findall(r"^    path: \w+", text, re.MULTILINE))
 
 
 def _discharge_list_ok(names: str) -> list:
@@ -87,7 +86,7 @@ def _check_languages(m):
 
 
 def _check_views(m):
-    return int(m.group(1)) == _classic_views(), f"template has {_classic_views()} views"
+    return int(m.group(1)) == _screens(), f"template has {_screens()} screens"
 
 
 def _check_ha_floor(m):
@@ -123,9 +122,9 @@ CLAIMS = (
     ("entity count", r"\*\*([\d,]+)\+ sensors and entities\*\*", _check_entities),
     ("sensor count", r"SEM creates (\d+)\+ sensors", _check_sensors),
     ("languages", r"in (\d+) languages", _check_languages),
-    ("classic views", r"classic dashboard\*\* keeps its (\d+) views", _check_views),
+    ("dashboard screens", r"dashboard has (\d+) screens", _check_views),
     ("HA floor", r"\*\*Home Assistant (2026\.\d+\.\d+)\*\* or newer", _check_ha_floor),
-    ("session history", r"last (\d+) sessions per charger", _check_sessions),
+    ("session history", r"last (\d+) sessions for all chargers", _check_sessions),
     ("tested-live trio", r"Sessy \(NL\), Huawei LUNA2000 and Sonnen work automatically and are tested live", _check_live_trio),
     ("discharge list", r"\*\*Battery discharge control auto-detected for:\*\* ([^\n]+)", _check_discharge),
     ("powerwall", r"Tesla Powerwall reads automatically; its grid charge needs a setup step", _check_powerwall),
@@ -137,7 +136,7 @@ UNPINNABLE = (
     "'works with any inverter with HA sensors' (open-ended)",
     "'auto-detects both sign conventions' (per-brand pipeline tests, #129)",
     "battery capacity auto-detected from the inverter (depends on the integration)",
-    "the 4 colour-named dashboard screenshots and their captions",
+    "the dashboard screenshots and their captions",
 )
 
 

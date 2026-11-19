@@ -230,44 +230,11 @@ def test_no_card_prints_a_word_sensor_raw():
         + "\n".join(hits))
 
 
-def test_the_support_text_is_the_only_raw_reader():
-    """The exemption tag is for the copied diagnostics only — support reads
-    SEM's own words there. Anything else tagged is a hole in the lint."""
-    tagged = [
-        (p.name, line.strip())
-        for p in sorted((CARD_SRC / "cards").glob("*.js"))
-        for line in p.read_text().splitlines()
-        if "#1053: raw for support" in line
-    ]
-    assert tagged and {n for n, _ in tagged} == {"sem-system-card.js"}
-    src = (CARD_SRC / "cards" / "sem-system-card.js").read_text()
-    body = src[src.index("_copyDiagnostics() {"):]
-    body = body[:body.index("_writeClipboard(text)")]
-    for _, line in tagged:
-        assert line in body, f"tagged outside the support text: {line}"
-
-
 # The card checks below read JavaScript as text on purpose: the Python suite
 # has no JS parser, and what they pin is the call the card makes.
 
-def test_the_load_list_status_goes_through_the_label():
-    card = (CARD_SRC / "cards" / "sem-load-priority-card.js").read_text()
-    assert "stateLabel('load_management_status'" in card
-
 
 # ── The chart's own words ───────────────────────────────────────────────────
-
-def test_every_chart_preset_word_is_a_translation_key():
-    """The forecast chart's legend read "actual" in Dutch: the series name
-    is passed to the translator, and no language had the key."""
-    data = json.loads(TRANSLATIONS.read_text(encoding="utf-8"))
-    src = (CARD_SRC / "cards" / "sem-chart-card.js").read_text()
-    block = src[src.index("const PRESETS = {"):]
-    block = block[:block.index("\n};")]
-    words = set(re.findall(r"(?:name|title):\s*'([^']+)'", block))
-    assert {"forecast", "actual"} <= words
-    missing = sorted(w for w in words if w not in data["en"])
-    assert not missing, f"chart words with no translation key: {missing}"
 
 
 # ── The energy plan's names ─────────────────────────────────────────────────
@@ -394,13 +361,6 @@ def test_every_plan_row_and_the_review_go_through_the_names():
             keys = {k.value for k in n.keys if isinstance(k, ast.Constant)}
             if {"id", "why"} <= keys:
                 assert "label" in keys, f"line {n.lineno}: a row with no name"
-
-
-def test_the_plan_card_never_prints_a_demand_id():
-    card = (CARD_SRC / "cards" / "sem-energy-plan-card.js").read_text()
-    assert "split(':').pop()" not in card
-    assert "_demandName(r.d.label, r.d.demand_id, r.d.kind)" in card
-    assert card.count("_demandName(r.label, r.id)") == 2
 
 
 def test_tomorrows_asks_send_no_name_rather_than_an_id_or_english():

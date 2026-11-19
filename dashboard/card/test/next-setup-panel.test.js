@@ -234,7 +234,7 @@ test('a refused save shows the error in the panel', async () => {
     assert.match(text(el.render()), /nope/);
 });
 
-test('flip asks for the response and reports it; observer mode sends nothing', async () => {
+test('flip asks for the response and reports it; watch only still flips (SEM config)', async () => {
     const { el, calls } = makePanel('check');
     await new Promise((r) => setTimeout(r, 0));
     await el._flip('grid');
@@ -244,7 +244,7 @@ test('flip asks for the response and reports it; observer mode sends nothing', a
     const obs = makePanel('check', { 'switch.sem_observer_mode': S('on') });
     await new Promise((r) => setTimeout(r, 0));
     await obs.el._flip('battery');
-    assert.equal(obs.calls.filter((c) => c.service.startsWith('flip_')).length, 0);
+    assert.equal(obs.calls.filter((c) => c.service.startsWith('flip_')).length, 1);
 });
 
 test('hardware render: add button, report link, proposals, census and close event', async () => {

@@ -102,6 +102,18 @@ class TestEnergyAssistantAnalyze:
         general_tips = [t for t in tips if t["category"] == "general"]
         assert any("excellent" in t["title"].lower() or "well optimized" in t["description"].lower() for t in general_tips)
 
+    def test_self_consumption_excellent_needs_a_sunny_day(self, mock_hass):
+        """(#1321) 96 % of 0.6 kWh is not praise: no tip on a day with almost no sun."""
+        ea = EnergyAssistant(mock_hass)
+        ea.analyze(self_consumption_rate=96.0, daily_solar_kwh=0.6)
+        assert not [t for t in ea.get_all_tips() if t["category"] == "general"]
+
+    def test_self_consumption_excellent_from_two_kwh(self, mock_hass):
+        """(#1321) the floor is 2 kWh of today's solar, inclusive."""
+        ea = EnergyAssistant(mock_hass)
+        ea.analyze(self_consumption_rate=96.0, daily_solar_kwh=2.0)
+        assert [t for t in ea.get_all_tips() if t["category"] == "general"]
+
     def test_self_consumption_low(self, mock_hass):
         """< 40% with solar > 5kWh -> improvement tip."""
         ea = EnergyAssistant(mock_hass)

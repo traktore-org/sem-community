@@ -441,8 +441,8 @@ class TestTheSettings:
             assert f'"{key}"' in init, key
 
     def test_the_card_offers_every_field(self):
-        card = (ROOT / "dashboard" / "card" / "src" / "cards"
-                / "sem-config-card.js").read_text(encoding="utf-8")
+        from ._dashboard_src import dashboard_src
+        card = dashboard_src()
         for key in vl.VALUE_OPTION_KEYS:
             assert f"'{key}'" in card, key
 
@@ -550,13 +550,6 @@ class TestTheBasisCheck:
             encoding="utf-8"))
         for lang, table in cards.items():
             assert table.get("config_value_needs_spot_basis"), lang
-
-    def test_the_card_greys_the_amounts_on_all_in(self):
-        card = (ROOT / "dashboard" / "card" / "src" / "cards"
-                / "sem-config-card.js").read_text(encoding="utf-8")
-        # (#1354) on all-in the three fields are not asked at all
-        assert "taxesApply(basis)" in card
-        assert "config_value_needs_spot_basis" in card
 
 
 class TestTheFlowRefusesTheClash:

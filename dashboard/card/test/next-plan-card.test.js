@@ -42,7 +42,6 @@ globalThis.localStorage = { getItem: () => null, setItem() {} };
 globalThis.navigator ??= {};
 globalThis.semLocalize = (key) => '«' + key + '»';
 const { knownNum } = await import('../src/cards/sem-next-plan-card.js');
-await import('../src/cards/sem-energy-plan-card.js');
 
 function text(part) {
     if (part == null || typeof part === 'symbol' || part === false) return '';
@@ -90,8 +89,8 @@ test('battery row: no raw planner text, honest floor, no Back to plan for a stan
     const plan = { why: 'ev_targets={x}, battery_deficit=0.00 kWh', why_codes: ['battery_no_deficit'], slots: [], batt_runs: [] };
     const out = text(el._batteryRow(plan, [], []));
     assert.match(out, /energy_plan_whyc_battery_no_deficit/);
-    assert.match(out, /next_batt_below_floor/);
-    assert.doesNotMatch(out, /next_batt_holds/);
+    assert.match(out, /next_batt_now_pct/);
+    assert.match(out, /next_why_batt_floor_short/);
     assert.doesNotMatch(out, /next_back_to_plan/);
     assert.match(out, /title=ev_targets/);   // raw text only as the tooltip
     assert.doesNotMatch(out.replace(/title=[^>]*/, ''), /battery_deficit=/);
@@ -115,7 +114,7 @@ test('a full car shows its status only, no Skip or Start now', () => {
     const el = makeCard();
     const out = text(el._chargerRow('keba', {}, [], [], [{ id: 'ev:keba', why: 'car_full' }]));
     assert.match(out, /energy_plan_why_car_full/);
-    for (const k of ['next_skip', 'next_start_now', 'next_charge_now']) assert.doesNotMatch(out, new RegExp(k), k);
+    for (const k of ['next_skip_tonight', 'next_start_now', 'next_full_power']) assert.doesNotMatch(out, new RegExp(k), k);
     const other = text(el._chargerRow('keba', {}, [], [], []));
     assert.match(other, /next_start_now/);
 });
@@ -143,6 +142,7 @@ test('Charge now is the backend force override: no mode flip, Back to plan clear
 // ── the chart: sun, price and plan on one clock ──
 const HOUR = 3600e3;
 const isoAt = (ms) => new Date(ms).toISOString();
+const PINNED = Date.parse('2026-11-18T10:47:00+01:00');   // (#1321) a fixed clock: the time of day must not decide a result
 function planAround(now) {
     const h0 = Math.floor(now / HOUR) * HOUR;
     const slots = [];
@@ -150,7 +150,8 @@ function planAround(now) {
     return { slots, batt_runs: [[0, 3]], blocks: [{ id: 'ev:keba', start: isoAt(h0 + 2 * HOUR), end: isoAt(h0 + 4 * HOUR), power_w: 4000 }], computed_at: isoAt(now) };
 }
 
-test('flat tariff: one price said once, no made-up sun, every row labelled', () => {
+test('flat tariff: one price said once, no made-up sun, every row labelled', (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: PINNED });
     const now = Date.now();
     const el = makeCard({
         'sensor.sem_energy_plan': S('idle', planAround(now)),
@@ -170,7 +171,8 @@ test('flat tariff: one price said once, no made-up sun, every row labelled', () 
     assert.doesNotMatch(out, /NaN|undefined/);
 });
 
-test('dynamic tariff: steps with min, max and average; unknown prices hatched; forecast drawn with its total', () => {
+test('dynamic tariff: steps with min, max and average; unknown prices hatched; forecast drawn with its total', (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: PINNED });
     const now = Date.now();
     const h0 = Math.floor(now / HOUR) * HOUR;
     const upcoming = [];
@@ -185,7 +187,7 @@ test('dynamic tariff: steps with min, max and average; unknown prices hatched; f
     const out = text(el._stripSec(el._plan()));
     assert.match(out, /next_price_avg/);
     assert.match(out, /next_prices_later/);
-    assert.match(out, /4\.0 kWh/);                        // the sun total chip
+    assert.match(out, /next_chip_sun_day/);               // the sun bubble names its day
     assert.doesNotMatch(out, /next_price_flat|next_chip_forecast_kwh/);
     el._hover = h0 + 30 * 60e3;
     const tip = text(el._stripSec(el._plan()));
@@ -235,7 +237,8 @@ test('(#1390) prices below zero are drawn below the zero line, inside the lane',
     assert.ok(mixed.at.get(0.3) < mixed.at.get(0.12) && mixed.at.get(0.12) < mixed.at.get(-0.04));
 });
 
-test('the range switch is remembered and clears a picked block', () => {
+test('the range switch is remembered and clears a picked block', (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: PINNED });
     const el = makeCard({ 'sensor.sem_energy_plan': S('idle', planAround(Date.now())) });
     const saved = [];
     globalThis.localStorage = { getItem: () => null, setItem: (k, v) => saved.push([k, v]) };
@@ -255,6 +258,14 @@ test('(#1081) a heat pump planned on the price of heat names its COP', () => {
         { from: '2026-11-14T13:00:00+01:00', to: '2026-11-14T15:00:00+01:00', cop: 4.18 });
     assert.match(out, /COP 4\.2$/);
     assert.doesNotMatch(out, /\{cop\}/);
+});
+
+test('(#1081) a load with no ask says why, from the plan reason code', () => {
+    const el = makeCard({ 'sensor.sem_energy_plan': S('ok', { coverage_why: { 'comfort:heat_pump': 'comfort_no_band' } }) });
+    const out = text(el._loadRow('comfort:heat_pump', {}, [], [], []));
+    assert.match(out, /why_reason_comfort_no_band/);
+    const plain = text(makeCard()._loadRow('comfort:heat_pump', {}, [], [], []));
+    assert.doesNotMatch(plain, /why_reason_/);
 });
 
 // (#1377) watch-only off + plan execution off = "not applied", never "observation"
@@ -280,29 +291,4 @@ test('Plan screen: watch-only still reads as shadow, live still reads live', () 
     assert.doesNotMatch(watch, /energy_plan_off/);
     const live = text(makeCard(planStates('off', 'on'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: true }));
     assert.match(live, /next_pill_live/);
-});
-
-function energyCard(observer, actuation) {
-    const el = new (customElements.get('sem-energy-plan-card'))();
-    el.hass = { states: planStates(observer, actuation), language: 'en', config: {} };
-    return el;
-}
-
-test('Energy plan card: control on, plan execution off says not applied, not observation', () => {
-    const el = energyCard('off', 'off');
-    const chip = text(el._modeChip(false));
-    assert.match(chip, /energy_plan_off_note/);
-    assert.match(chip, /energy_plan_off/);
-    assert.doesNotMatch(chip, /energy_plan_shadow/);
-    const foot = text(el._footNote(false));
-    assert.match(foot, /energy_plan_off_note/);
-    assert.match(foot, /energy_plan_turn_on/);
-});
-
-test('Energy plan card: watch-only keeps the observation words', () => {
-    const el = energyCard('on', 'off');
-    assert.match(text(el._modeChip(false)), /energy_plan_shadow/);
-    assert.match(text(el._footNote(false)), /energy_plan_shadow_note/);
-    assert.doesNotMatch(text(el._footNote(false)), /energy_plan_turn_on/);
-    assert.match(text(energyCard('off', 'on')._modeChip(true)), /energy_plan_active/);
 });
