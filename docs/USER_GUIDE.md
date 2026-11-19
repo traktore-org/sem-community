@@ -467,6 +467,7 @@ The **preset** **Netherlands from 2027** fills tax and VAT.
 - A device another party steers: set **Steered by another party** on the device.
   Choose to yield (SEM writes nothing while the steering indicator is on) or
   to keep control and get a Repair when SEM sees writes it did not make.
+  If you yield and pick no indicator, SEM always yields.
   The one exception to yielding: if a phase is over its limit and the phase guard
   enforces, SEM stops that charger. It never starts it again.
 

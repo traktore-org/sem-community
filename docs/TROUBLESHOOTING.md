@@ -221,7 +221,7 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Symptom:** A setting keeps changing back. A Repair says another party writes to the device.
 
-**Fix:** If the other party should win, set **Steered by another party** to **Yes, SEM yields** in `All settings` for that device. Then pick the entity that shows when the other party is in control. If the other party should not control it, stop its program.
+**Fix:** If the other party should win, set **Steered by another party** to **Yes, SEM yields** in `All settings` for that device. Then pick the entity that shows when the other party is in control. Leave it empty and SEM always yields. If the other party should not control it, stop its program.
 
 ### The Plan screen shows nothing
 
