@@ -188,3 +188,30 @@ def test_a_dearer_slot_that_is_full_is_not_a_choice():
                              max_discharge_w=0.0, peak_limit_w=5000.0)
     plan = pack_night([_batt()], led, max_discharge_w=0.0, peak_limit_w=5000.0)
     assert {a.code for a in plan.allocations} == {"no_cheaper_hour"}
+
+
+def _probe(battery_prio, load_prio, load=True):
+    led = _draining_ledger([0.40] * 6 + [0.10] * 3, soc=9.0, cap=9.5, home_w=0.0)
+    bat = Demand(id="battery", kind="battery", energy_kwh=9.0, max_power_w=2200,
+                 source="grid", room_kwh=0.5, priority=battery_prio)
+    ds = [bat]
+    if load:
+        ds.append(Demand(id="load:h", kind="load", energy_kwh=6.0,
+                         max_power_w=2000, source="battery", priority=load_prio))
+    plan = pack_night(ds, led)
+    got = sum(a.energy_kwh for a in plan.allocations if a.demand_id == "battery")
+    res = {r.demand_id: r for r in plan.results}
+    return got, res["battery"]
+
+
+@pytest.mark.parametrize("bp,lp", [(0, 1), (1, 0)])
+def test_a_tier2_load_drain_is_charged_back_in_either_order(bp, lp):
+    got, res = _probe(bp, lp)
+    assert got == pytest.approx(6.5, abs=0.1)
+    assert res.planned_kwh == pytest.approx(got, abs=0.01)
+    assert res.status == "fits"
+
+
+def test_a_night_without_a_tier2_load_is_unchanged():
+    got, _ = _probe(0, 1, load=False)
+    assert got == pytest.approx(0.5, abs=0.01)

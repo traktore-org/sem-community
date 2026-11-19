@@ -642,6 +642,13 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             code = "no_cheaper_hour"   # (#1388) it had no choice, so no "cheapest"
         return {"code": code, "params": params}
 
+    def _room_at(fill_to, i):
+        """(#1388) What a charge in slot ``i`` may add: it lifts every later
+        level too, so the highest level from here on must stay under
+        ``fill_to``."""
+        return fill_to - max(level_after_charge(ledger[j])
+                             for j in range(i, len(ledger)))
+
     def _book_grid(s, d, power, e_kwh):
         """(#1377) One bookkeeping for every grid placement: the power is
         spent, and a battery charge also raises the pack's trajectory."""
@@ -688,15 +695,28 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 best, best_cost = cells, run_cost
         return best
 
-    for d in sorted(demands, key=lambda d: (d.priority, d.id)):
+    queue = [(d, False) for d in sorted(
+        demands, key=lambda d: (d.priority, d.id))]
+    # (#1388) A battery-sourced load packed after a charge lowers the walk
+    # the charge's room was read from. Once everything is booked, each
+    # room-capped charge reads the FINAL walk again and takes what it
+    # missed. Only nights with such a load get a second pass.
+    if any(d.source == "battery" for d, _ in queue):
+        queue += [(d, True) for d, _ in queue
+                  if d.kind == "battery" and d.source != "battery"
+                  and d.room_kwh is not None]
+    first = {}                      # id -> (result index, planned, needed)
+    for d, again in queue:
         need = max(0.0, float(d.energy_kwh))
+        if again:
+            need = max(0.0, need - first[d.id][1])
         fill_to = None
         if d.kind == "battery" and d.source != "battery" and d.room_kwh is not None:
             # (#1388) the pack's room, read where the charge lands (the
             # walked level), not at the stamp: the most any slot can take
             fill_to = float(d.room_kwh) + initial_soc
             need = min(need, max(
-                [0.0] + [fill_to - ledger[i].soc_kwh for i in idx
+                [0.0] + [_room_at(fill_to, i) for i in idx
                          if _in_time(d, i)]))
         planned = 0.0
         relaxed_kwh = 0.0               # (#1081) booked in not-cheap hours
@@ -810,7 +830,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 grant = _grant(d, i)
                 want = need - planned
                 if fill_to is not None:
-                    want = min(want, fill_to - s.soc_kwh)
+                    want = min(want, _room_at(fill_to, i))
                     if want <= 1e-9:
                         continue
                 if d.cheap_only_kwh > 0 and not _cheap(d, i):
@@ -900,6 +920,19 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         codes = block_code + codes
         status = ("fits" if planned >= need * FIT_EPS or need <= 1e-9
                   else "partial" if planned > 0 else "yields")
+        if again:
+            at, p0, n0, c0 = first[d.id]
+            planned, need = p0 + planned, n0 + need
+            cost = (c0 or 0.0) + cost if cost_known and c0 is not None else None
+            status = ("fits" if planned >= need * FIT_EPS or need <= 1e-9
+                      else "partial" if planned > 0 else "yields")
+            results[at] = replace(
+                results[at], status=status, planned_kwh=round(planned, 3),
+                needed_kwh=round(need, 3),
+                est_cost=None if cost is None else round(cost, 4))
+            continue
+        first[d.id] = (len(results), planned, need,
+                       cost if cost_known else None)
         results.append(DemandResult(
             demand_id=d.id, status=status, planned_kwh=round(planned, 3),
             needed_kwh=round(need, 3),
