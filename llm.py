@@ -25,14 +25,21 @@ from homeassistant.helpers.llm import (
 )
 from homeassistant.loader import async_get_integration
 
+try:  # HA 2026.11+: tools return a ToolResult (#1389); the 2026.8 floor has none
+    from homeassistant.helpers.llm import ToolResult
+except ImportError:  # pragma: no cover - exercised on the floor venv only
+    ToolResult = None  # type: ignore[assignment,misc]
+
 from .assist_intents import (
     EXPLAIN_HANDLERS, WRITE_HANDLERS, _coordinator_for, write_intents_enabled,
 )
 from .const import DOMAIN
 from .setup_status import issue_titles, setup_facts
 
-TOOL_SETUP_STATUS = "SemSetupStatus"
-TOOL_DRAFT_ISSUE = "SemDraftIssue"
+# (#1389) HA wants every tool name to start with the integration domain.
+TOOL_PREFIX = f"{DOMAIN}__"
+TOOL_SETUP_STATUS = f"{TOOL_PREFIX}SemSetupStatus"
+TOOL_DRAFT_ISSUE = f"{TOOL_PREFIX}SemDraftIssue"
 _LOGGER = logging.getLogger(__name__)
 _NOT_READY = {"error": "SEM status is not available yet."}
 _logged_failure = False
@@ -53,6 +60,11 @@ PROMPT = (
 )
 
 
+def _result(data: dict) -> Any:
+    """A ToolResult where HA has one, else the plain dict (2026.8 floor)."""
+    return data if ToolResult is None else ToolResult(data=data)
+
+
 def _handlers_by_type(hass: HomeAssistant) -> dict[str, intent.IntentHandler]:
     return {h.intent_type: h for h in intent.async_get(hass)}
 
@@ -60,8 +72,11 @@ def _handlers_by_type(hass: HomeAssistant) -> dict[str, intent.IntentHandler]:
 def _tools_for(hass: HomeAssistant, classes: tuple) -> list[Tool]:
     """IntentTools for the handlers SEM registered; a missing one is skipped."""
     registered = _handlers_by_type(hass)
-    return [IntentTool(c.intent_type, registered[c.intent_type])
-            for c in classes if c.intent_type in registered]
+    tools = [IntentTool(TOOL_PREFIX + c.intent_type, registered[c.intent_type])
+             for c in classes if c.intent_type in registered]
+    for tool in tools:
+        tool.integration = DOMAIN  # (#1389) the floor's IntentTool has no kwarg
+    return tools
 
 
 async def build_setup_status(hass: HomeAssistant, coordinator: Any) -> dict:
@@ -99,6 +114,7 @@ class SetupStatusTool(Tool):
     """Read-only: how SEM is set up."""
 
     name = TOOL_SETUP_STATUS
+    integration = DOMAIN
     description = (
         "Summarise how SEM is set up: watch-only mode, chargers, battery, "
         "grid charge of the battery (set or not; if not, the selects on the "
@@ -108,21 +124,22 @@ class SetupStatusTool(Tool):
 
     async def async_call(
         self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
-    ) -> dict:
+    ) -> Any:
         coordinator = _coordinator_for(hass)
         if coordinator is None:
-            return {"error": "SEM is not running."}
+            return _result({"error": "SEM is not running."})
         try:
-            return await build_setup_status(hass, coordinator)
+            return _result(await build_setup_status(hass, coordinator))
         except Exception:  # noqa: BLE001 — a half-started SEM must not raise into the AI
             _note_failure("SemSetupStatus")
-            return dict(_NOT_READY)
+            return _result(dict(_NOT_READY))
 
 
 class DraftIssueTool(Tool):
     """Read-only: prepares a bug report for a person to post."""
 
     name = TOOL_DRAFT_ISSUE
+    integration = DOMAIN
     description = (
         "Use when the user reports a problem with SEM and wants to tell its "
         "developers. Only prepares a draft; SEM posts nothing. Show the draft "
@@ -136,20 +153,20 @@ class DraftIssueTool(Tool):
 
     async def async_call(
         self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
-    ) -> dict:
+    ) -> Any:
         coordinator = _coordinator_for(hass)
         if coordinator is None:
-            return {"error": "SEM is not running."}
+            return _result({"error": "SEM is not running."})
         try:
             from .issue_draft import build_draft
             args = tool_input.tool_args
             status = await build_setup_status(hass, coordinator)
-            return build_draft(
+            return _result(build_draft(
                 hass, coordinator.config, status,
-                str(args.get("what_happened") or ""), str(args.get("expected") or ""))
+                str(args.get("what_happened") or ""), str(args.get("expected") or "")))
         except Exception:  # noqa: BLE001 — never raise into the AI
             _note_failure("SemDraftIssue")
-            return {"error": "Could not prepare a draft."}
+            return _result({"error": "Could not prepare a draft."})
 
 
 @callback
