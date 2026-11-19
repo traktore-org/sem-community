@@ -472,17 +472,22 @@ class SEMNextPlanCard extends SEMNextBase {
                 <line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${C.grid}" stroke-width="2"></line>`);
             parts.push(this._svgChip(W / 2, y - 26, this._tf('next_price_flat', { price: this._fmt(pm.price, 2), cur }), 'var(--n-fg)', 'var(--n-card)', 0, W));
         } else if (pm.steps.length) {
-            const PY = (v) => py1 - (py1 - py0 - 4) * v / (pm.max * 1.12);
+            // (#1390) Scaled from the lower of 0 and the cheapest price, filled
+            // to the zero line: a price below zero is drawn below it, not
+            // upside down (and a top price of 0 does not divide by 0).
+            const bottom = Math.min(0, pm.min), span = (Math.max(0, pm.max) - bottom) * 1.12 || 1;
+            const PY = (v) => py1 - (py1 - py0 - 4) * (v - bottom) / span;
+            const base = PY(0);
             let line = '', area = '';
             let prev = null;
             for (const st of pm.steps) {
                 const x0 = X(st.s), x1 = X(st.e), y = PY(st.p);
-                if (!prev || prev.e !== st.s) { line += `${line ? ' ' : ''}M${x0} ${y}`; if (prev) area += ` L${X(prev.e)} ${py1} Z`; area += `${area ? ' ' : ''}M${x0} ${py1} L${x0} ${y}`; }
+                if (!prev || prev.e !== st.s) { line += `${line ? ' ' : ''}M${x0} ${y}`; if (prev) area += ` L${X(prev.e)} ${base} Z`; area += `${area ? ' ' : ''}M${x0} ${base} L${x0} ${y}`; }
                 else line += ` L${x0} ${y}`;
                 line += ` L${x1} ${y}`; area += ` L${x0} ${y} L${x1} ${y}`;
                 prev = st;
             }
-            area += ` L${X(prev.e)} ${py1} Z`;
+            area += ` L${X(prev.e)} ${base} Z`;
             parts.push(svg`<path d="${area}" fill="url(#${gid}p)"></path><path d="${line}" fill="none" stroke="${C.grid}" stroke-width="2" stroke-linejoin="round"></path>`);
             const knownW = X(pm.steps[pm.steps.length - 1].e) - X(pm.steps[0].s);
             if (pm.avg !== null && knownW > 140) {

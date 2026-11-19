@@ -192,6 +192,49 @@ test('dynamic tariff: steps with min, max and average; unknown prices hatched; f
     assert.match(tip, /next_tip_price/);
 });
 
+test('(#1390) prices below zero are drawn below the zero line, inside the lane', () => {
+    const now = Date.now();
+    const h0 = Math.floor(now / HOUR) * HOUR;
+    // the price line's y per step, read from the drawn path ("M x y L x y …")
+    const lane = (prices) => {
+        const upcoming = prices.map((p, i) => ({ t: isoAt(h0 + i * 900e3), price: p }));
+        const el = makeCard({
+            'sensor.sem_energy_plan': S('idle', planAround(now)),
+            'sensor.sem_tariff_current_import_rate': S(prices[0], { is_dynamic: true, price_level: 'normal', upcoming }),
+        });
+        el._chargers = ['keba'];
+        el._stats = []; el._fc = {};
+        const d = el._chartData(el._plan());
+        const { lay, svg: chart } = el._chartSvg(d, el._plan());
+        const out = text(chart);
+        const paths = [...out.matchAll(/<path d="([^"]*)" fill="none"/g)].map((m) => m[1]);
+        const line = paths.find((p) => (p.match(/L/g) || []).length >= d.price.steps.length);
+        assert.ok(line, 'the price line is drawn');
+        const nums = line.replace(/[ML]/g, ' ').trim().split(/\s+/).map(Number);
+        const ys = [];
+        for (let i = 1; i < nums.length; i += 2) ys.push(nums[i]);
+        const at = new Map();
+        // each step adds "x0 y" (or "M x0 y") then "x1 y": two points per step
+        d.price.steps.forEach((st, i) => at.set(st.p, ys[2 * i + 1]));
+        return { out, at, lay };
+    };
+    const inside = (r) => { for (const y of r.at.values()) assert.ok(y >= r.lay.price[0] && y <= r.lay.price[1], `y ${y} inside the lane`); };
+    // all below zero: the dearest (-0.01) sits highest, the cheapest (-0.05) lowest
+    const neg = lane([-0.01, -0.01, -0.05, -0.05, -0.03, -0.03, -0.01, -0.02]);
+    assert.doesNotMatch(neg.out, /NaN|Infinity/);
+    assert.ok(neg.at.get(-0.05) > neg.at.get(-0.01), 'a cheaper price is drawn lower');
+    inside(neg);
+    // the top price is 0: no division by zero
+    const zero = lane([0, 0, -0.02, -0.02, 0, 0, -0.01, -0.01]);
+    assert.doesNotMatch(zero.out, /NaN|Infinity/);
+    inside(zero);
+    // both signs: every step stays inside the lane, the dearest highest
+    const mixed = lane([0.12, 0.12, -0.04, -0.04, 0.3, 0.3, 0.05, 0.05]);
+    assert.doesNotMatch(mixed.out, /NaN|Infinity/);
+    inside(mixed);
+    assert.ok(mixed.at.get(0.3) < mixed.at.get(0.12) && mixed.at.get(0.12) < mixed.at.get(-0.04));
+});
+
 test('the range switch is remembered and clears a picked block', () => {
     const el = makeCard({ 'sensor.sem_energy_plan': S('idle', planAround(Date.now())) });
     const saved = [];

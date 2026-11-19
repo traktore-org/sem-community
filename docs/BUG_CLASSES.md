@@ -6970,7 +6970,9 @@ plan's slots (a slot is an hour priced at its start). Swept, same lane: a sun sl
 feed-in rate, so a sunny hour was drawn at 0.06; the plan's slot now keeps `buy` (the grid price,
 None when unknown) and the sensor sends that as the slot's `price` (no bytes added). A tariff that
 sends rates is one price only when no hour from now on is unknown, and prices that differ past the
-4th decimal (rounded curve, exact rates) are one price. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` (the reporter's helper through
+4th decimal (rounded curve, exact rates) are one price. Same lane: the scale started at 0, so
+prices below zero were drawn upside down or under the lane; it now starts at the cheapest price
+and fills to the zero line. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` (the reporter's helper through
 the real provider, both clock changes, the real sensor) and the #1390 case in
 `dashboard/card/test/next-plan-chart.test.js`. **Left open:** a past hour is the recorder's mean,
 so a rate change at :30 is drawn as one blended hour (what was paid); a dynamic tariff on a 15-min market
