@@ -12,6 +12,7 @@ import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
 import { startCode, startLine } from './why-rows.js';
 import { goalPct, modeWrites, overnightSource, overnightWrites, isTemperature, statePill, modeHelpKey, runningNow, ratedKey } from './next-devices.js';
+import { noAskKey } from './plan-no-ask.js';
 import { loadRunsBySem } from './settings-applies.js';
 import { cleanName } from './next-names.js';
 import { fmtNum } from './next-number.js';
@@ -308,7 +309,8 @@ export function loadBody(card, row) {
         rows.push(card._row('mdi:heat-pump-outline', t('next_cost_of_heat'),
             coh === null ? '—' : tf('next_per_kwh_heat', { v: card._money(coh) }),
             until ? tf(card._observer() ? 'next_st_would_run_until' : 'next_st_runs_until', { time: until })
-                : (nextAt ? tf('next_hp_next_run', { time: nextAt }) : t('next_nothing_planned'))));
+                : (nextAt ? tf('next_hp_next_run', { time: nextAt })
+                    : t(noAskKey(card._attrs('sensor.sem_energy_plan'), 'comfort:' + row.id, 'load:' + row.id) || 'next_nothing_planned'))));
         // (#1081) the COP by outdoor temperature: what it is now, then the
         // 2–3 points as text "−7:2.5, 12:4.2"; empty = one fixed COP
         if (Object.prototype.hasOwnProperty.call(g, 'cop_curve')) {
@@ -403,7 +405,10 @@ export function copCurveRow(card, row, g, send) {
             if (c) send('cop_curve', formatCopCurve(c));
         },
     }));
-    const sub = [nowText, t('hp_cop_curve_hint')].filter(Boolean).join(' · ');
+    // (#1081) a flat COP does not follow the outdoor temperature: say where
+    // the curve is set
+    const flatHint = now && now.source === 'flat' && !curve ? t('hp_cop_flat_hint') : '';
+    const sub = [nowText, flatHint || t('hp_cop_curve_hint')].filter(Boolean).join(' · ');
     return card._row('mdi:thermometer-lines', t('hp_cop_curve_section'), val, sub, { more: true });
 }
 

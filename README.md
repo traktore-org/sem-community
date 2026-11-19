@@ -101,7 +101,7 @@ Home Assistant's AI assistant can use SEM's tools. Nothing to install.
 - **Report a problem:** the assistant prepares a bug report with versions and recent warnings. You read it and post it yourself.
 - **Change a plan** only after you turn on **Voice commands** in SEM.
 
-Other AI apps, such as Claude Desktop or Claude Code, can use SEM through Home Assistant's **Model Context Protocol Server** integration. Connect the app to `http://<your-ha>:8123/api/mcp` with a long-lived token.
+Other AI apps, such as Claude Desktop or Claude Code, can use SEM through Home Assistant's **Model Context Protocol Server** integration. Connect the app to `http://<your-ha>:8123/api/mcp` with a long-lived token. The tools are named `solar_energy_management__SemWhyBattery` and so on.
 
 ## Supported hardware
 

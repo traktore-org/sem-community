@@ -39,7 +39,7 @@ before it left.
 
 | Need | Source | Rule |
 |---|---|---|
-| Battery pre-charge | Grid | Cheapest priced hours |
+| Battery pre-charge | Grid | Cheapest priced hours. Asks only for the room the pack has left. A block with no cheaper hour left says "No cheaper hour left". |
 | Car by its **Charge by** time | Grid | Cheapest hours before the time. Never from the home battery. |
 | Load with an **At least** goal | Grid | Only hours with a cheap price level |
 | Load finished overnight from the battery | Battery | Earliest hours. Uses only the battery energy above the floor, after the house. |
@@ -85,7 +85,9 @@ A device in **Off** or **Peak only** mode is not planned.
 - One row per need, with its time window and its kWh.
 - **Not scheduled** lists the devices left out, with the reason. For
   example: "no car connected", "car is already full", "already at its
-  target", "daytime only, does not run at night".
+  target", "daytime only, does not run at night". A heat pump that is not in the plan
+  says why on this screen and on its **Devices** row, for example that it has
+  no comfort band or minimum run time.
 
 Other places:
 

@@ -403,7 +403,8 @@ Extra notes:
   SEM uses it in an expensive hour, or near the peak limit. A step-down lasts at least 15 minutes.
 - **Own tariff**: a fixed rate or price entity for a heat pump on its own meter.
 - **COP by outdoor temperature**: two or three points, for example "-7 °C: 2.5, 12 °C: 4.2".
-  Leave empty for one fixed COP.
+  Leave empty for one fixed COP. The COP follows the outdoor temperature only
+  once you set this curve.
 - **COP used**: **Fixed COP** or **Learned**.
 - **Heat meter**: a kWh total meter. SEM learns the COP from it.
 - **Heat or cool by the outdoor forecast**: the season follows the next day's forecast.
@@ -514,9 +515,12 @@ Each hint is one message. Automations can use the event
 
 An AI assistant in Home Assistant can use SEM's tools. Ask it in your own words.
 
-- `SemSetupStatus` (read-only) tells the assistant how SEM is set up.
+- AI assistants and MCP clients (such as Claude Desktop) see the tools as
+  `solar_energy_management__SemSetupStatus` and so on. The intent names in
+  sentence files stay the same.
+- `solar_energy_management__SemSetupStatus` (read-only) tells the assistant how SEM is set up.
 - The four change tools appear only when Voice commands is on.
-- `SemDraftIssue` prepares a bug report. It posts nothing. Check the text,
+- `solar_energy_management__SemDraftIssue` prepares a bug report. It posts nothing. Check the text,
   attach the diagnostics file and submit it yourself. Tokens, e-mail addresses and
   entity names are removed.
 

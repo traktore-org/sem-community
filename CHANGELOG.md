@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 💥 **One dashboard** (#1321). The classic dashboard is retired: an unchanged one is replaced, a changed one stays with a Repair. Settings are on System, Devices.
 - 📝 **Shorter docs for the new dashboard** (#1321). Every guide is rewritten for the five screens and checked against the code. New screenshots.
 - 🐛 **A run under way reads as running** (#1321). The screens say "charging until 14:45", not "waits for 15:00".
 - 🐛 **Plainer battery and settings** (#1321). The battery line says what a full battery gives; an unset car size reads "not set".
@@ -63,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Fewer duplicates on the SEM screens** (#1321). One sources row, one power number, one battery mode control, rare settings under More.
 - ✨ **Easier to use** (#1321). Plain button labels, Observer mode as a switch, outlined tiles, 40 px touch targets, Insights topics as a dropdown on phones.
 - ✨ **Numbers follow your language and keyboard works everywhere** (#1321). 3,5 kW in German; Enter and Space work on every control; dialogs close with Escape.
+- 🐛 **The battery plan asks only for what the pack can still take** (#1388). A block with no cheaper hour left no longer says "cheapest hours".
+- 🐛 **No more HA 2026.11 warnings about SEM's AI tools** (#1389). Tool names now start with `solar_energy_management__`.
+- 🐛 **Heat pump cost sensor shows the outdoor temperature even without a COP curve; the plan says why a heat pump has no ask** (#1081).
 - ✨ **Rename a charger on the Devices screen** (#1386). Tap the Name row on its card; entity ids stay the same.
 - 🐛 **A planned battery charge now raises the plan's battery level** (#1377). The end level and the hours after the charge no longer stay at 0 %.
 - 🐛 **Letting SEM take control also turns on plan execution** (#1377). The Plan card says "not applied" instead of "observation" while it is off.

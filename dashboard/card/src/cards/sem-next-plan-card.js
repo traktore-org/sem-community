@@ -13,6 +13,7 @@
 
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { planIdName } from '../util/plan-ids.js';
+import { noAskKey } from '../util/plan-no-ask.js';
 import { batteryFacts, batteryNeedText } from '../util/next-battery-line.js';
 import { reviewRows } from '../util/next-review.js';
 import { planNoteText } from '../util/plan-notes.js';
@@ -862,7 +863,10 @@ class SEMNextPlanCard extends SEMNextBase {
         const win = this._windowOf(blocks, id);
         const kwh = win ? kwhAhead({ blocks }, (x) => x === id, Date.now()) : Number(d?.planned_kwh) || 0;
         const bits = [];
-        if (d?.note || d?.notes) bits.push(this._noteText(d) || '');
+        // (#1081) a device with no ask says why: the plan's own reason code
+        const noAsk = win ? null : noAskKey(this._attrs('sensor.sem_energy_plan'), id, 'comfort:' + key, 'load:' + key);
+        if (noAsk) bits.push(t(noAsk));
+        else if (d?.note || d?.notes) bits.push(this._noteText(d) || '');
         else if (d?.status) bits.push(t('next_status_' + d.status));
         else if (ns) bits.push(this._whyText(ns));
         const ov = this._overrideOf(key);

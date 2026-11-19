@@ -260,6 +260,14 @@ test('(#1081) a heat pump planned on the price of heat names its COP', () => {
     assert.doesNotMatch(out, /\{cop\}/);
 });
 
+test('(#1081) a load with no ask says why, from the plan reason code', () => {
+    const el = makeCard({ 'sensor.sem_energy_plan': S('ok', { coverage_why: { 'comfort:heat_pump': 'comfort_no_band' } }) });
+    const out = text(el._loadRow('comfort:heat_pump', {}, [], [], []));
+    assert.match(out, /why_reason_comfort_no_band/);
+    const plain = text(makeCard()._loadRow('comfort:heat_pump', {}, [], [], []));
+    assert.doesNotMatch(plain, /why_reason_/);
+});
+
 // (#1377) watch-only off + plan execution off = "not applied", never "observation"
 function planStates(observer, actuation) {
     return { 'switch.sem_observer_mode': S(observer), 'switch.sem_energy_plan_actuation': S(actuation) };

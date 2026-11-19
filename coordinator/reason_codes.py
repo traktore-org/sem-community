@@ -137,6 +137,17 @@ LOAD_COMFORT_GOAL = "comfort_goal"
 LOAD_COMFORT_GOAL_BATTERY = "comfort_goal_battery"
 # (#1349) it would heat from the house battery, but the battery is at its reserve
 LOAD_BATTERY_RESERVE = "battery_reserve"
+# (#1081) why a device asked the plan for nothing — the plan's coverage notes
+LOAD_NOASK_MODE = "comfort_mode"
+LOAD_NOASK_AWAY = "comfort_away"
+LOAD_NOASK_NO_BAND = "comfort_no_band"
+LOAD_NOASK_BAND_WRONG = "comfort_band_wrong"
+LOAD_NOASK_NO_READING = "comfort_no_room_reading"
+LOAD_NOASK_TOO_COLD = "comfort_too_cold"
+LOAD_NOASK_SOLAR_ONLY = "comfort_solar_only"
+LOAD_NOASK_WARM = "comfort_warm"
+LOAD_NOASK_NOT_FAR = "comfort_not_far"
+LOAD_NOASK_NO_MIN_RUNTIME = "load_no_min_runtime"
 LOAD_LEGIONELLA = "legionella"
 # (#1321) the user's one-off on a load: run now / not now
 LOAD_OVERRIDE_RUN = "load_override_run"

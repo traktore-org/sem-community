@@ -2006,6 +2006,34 @@ class ComfortBandMixin:
             offset_c=0.0, active_rate_c_per_h=on.rate_c_per_h,
             rated_power_w=rated) or 0.0) if below else 0.0
         return max(0.0, float(total_kwh) - float(base))
+    def comfort_plan_blocker(self) -> Optional[str]:
+        """(#1081) Why the plan got NO comfort ask from this device, as a
+        reason code (``reason_codes.LOAD_NOASK_*``), or None when it asks.
+        Same order as ``_comfort_goal_demand``; read-only."""
+        from ..coordinator import reason_codes as RC
+        # the plan builder looks at the mode first
+        if getattr(self, "control_mode",
+                   DeviceControlMode.SURPLUS) != DeviceControlMode.SURPLUS:
+            return RC.LOAD_NOASK_MODE
+        if getattr(self, "vacation", False) is True:
+            return RC.LOAD_NOASK_AWAY
+        if not (self.comfort_target and self.comfort_limit):
+            return RC.LOAD_NOASK_NO_BAND
+        state, bad = self._comfort_band_peek()
+        if bad:
+            return RC.LOAD_NOASK_BAND_WRONG
+        if self._comfort_reading() is None:
+            return RC.LOAD_NOASK_NO_READING
+        if state == "forced":
+            return RC.LOAD_NOASK_TOO_COLD
+        if state != "willing":
+            return RC.LOAD_NOASK_WARM
+        if not self.comfort_goal_may_buy():
+            return RC.LOAD_NOASK_SOLAR_ONLY
+        if not self.is_active and not self.comfort_goal_wants_start():
+            return RC.LOAD_NOASK_NOT_FAR
+        return None
+
     # The band speaks through the three generic properties every surplus
     # pass already reads — no new controller clauses; peak shed,
     # anti-cycling, priority and LIFO apply to comfort runs unchanged.
