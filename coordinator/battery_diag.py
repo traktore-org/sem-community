@@ -123,7 +123,16 @@ def _charge_path(ad, read) -> dict:
     and what SEM last did with them. A battery report showed "commanded
     force_charge, not observed" and none of these, so it could not tell a
     write that never went out from one the battery ignored."""
+    try:
+        return _charge_path_of(ad, read)
+    except Exception as exc:  # noqa: BLE001 — the block never costs the rest
+        return {"error": str(exc)}
+
+
+def _charge_path_of(ad, read) -> dict:
     cfg = getattr(ad, "_config", None) or {}
+    if not isinstance(cfg, dict):
+        cfg = {}
     ca = getattr(ad, "_charge_adapter", None)
     select = str(cfg.get("battery_charge_select_entity") or "") or None
     switch = str(cfg.get("battery_force_charge_switch") or "") or None
@@ -140,8 +149,6 @@ def _charge_path(ad, read) -> dict:
         "target_soc": getattr(ca, "_target_soc", None) if ca else None,
         "select_writes": getattr(ca, "_sel_writes", None) if ca else None,
         "permit_writes": getattr(ca, "_permit_writes", None) if ca else None,
-        "set_beside_an_option_already_on": (
-            bool(getattr(ca, "_join_wrote", False)) if ca else None),
         "given_up": getattr(ca, "_sel_spent", None) if ca else None,
         "last": getattr(ad, "_last_charge_message", None),
     }

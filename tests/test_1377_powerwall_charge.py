@@ -452,5 +452,62 @@ class TestTheDiagnosticsShowTheChargePath:
         assert path["target"]["entity"] == RESERVE
         assert float(path["target"]["reads"]) == 100
         assert path["active"] is True
-        assert path["set_beside_an_option_already_on"] is True
         assert path["last"].startswith("start: charging")
+
+
+class TestTheJoinedChargeEndsCleanly:
+    """(#1377 review) Every way a joined charge ends puts back the reserve
+    and the permit, and never writes the mode."""
+
+    async def test_a_restart_mid_charge_puts_the_permit_and_reserve_back(self):
+        hass, rec, hold = _Hass(mode="autonomous"), _Store(), _Store()
+        await actuate_battery(_charge(), _adapter(hass, rec, hold))
+        fresh = _adapter(hass, rec, hold)               # a new lifetime
+        await fresh.async_adopt_running_charge()
+        await actuate_battery(_stop(), fresh)
+        assert hass.read(PERMIT) == "off"
+        assert float(hass.read(RESERVE)) == 20
+        assert hass.read(MODE) == "autonomous"
+        assert hass.writes("select") == []
+
+    async def test_the_unload_abort_puts_the_permit_back(self):
+        hass = _Hass(mode="autonomous")
+        a = _adapter(hass, _Store(), _Store())
+        await actuate_battery(_charge(), a)
+        await async_release_batteries_on_unload(
+            SimpleNamespace(_observer_mode=False, _battery_adapters={"b1": a}))
+        assert hass.read(PERMIT) == "off"
+        assert hass.read(MODE) == "autonomous"
+        assert hass.writes("select") == []
+
+    async def test_a_mode_changed_by_hand_ends_the_charge_and_is_not_forced_back(self):
+        hass, hold = _Hass(mode="autonomous"), _Store()
+        a = _adapter(hass, _Store(), hold)
+        await actuate_battery(_charge(), a)
+        hass.put(MODE, "self_consumption")              # the user's choice
+        await actuate_battery(_charge(), a)
+        assert hass.writes("select") == []
+        assert hass.read(PERMIT) == "off"
+        # the reserve is released: it goes back on the next cycle without
+        # a charge (the hold's own rule, #1180)
+        assert json.loads(hold.raw)["entities"][RESERVE]["pending"] is True
+
+    async def test_two_packs_on_one_mode_the_first_stop_keeps_the_permit(self):
+        # one record and one hold for the whole install, as the coordinator
+        # hands them to every adapter
+        hass = _Hass(mode="autonomous")
+        shared = {"forced_charge_record": ForcedChargeRecord(_Store()),
+                  "charge_target_hold": ChargeTargetHold(
+                      hass, _Store(), configured=(RESERVE,))}
+        a = _adapter(hass, _Store(), _Store(), **shared)
+        b = _adapter(hass, _Store(), _Store(), battery_id="b2", **shared)
+        await actuate_battery(_charge(), a)
+        await actuate_battery(BatteryDecision(
+            battery_id="b2", intent=BatteryIntent.FORCE_CHARGE, target_soc=100.0,
+            charge_power_w=5000.0, duration_min=240), b)
+        await actuate_battery(_stop(), a)
+        assert hass.read(PERMIT) == "on", "b2 still charges"
+        await actuate_battery(BatteryDecision(
+            battery_id="b2", intent=BatteryIntent.STOP_FORCE_CHARGE), b)
+        assert hass.read(PERMIT) == "off"
+        assert hass.writes("select") == []
