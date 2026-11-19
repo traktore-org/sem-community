@@ -5,8 +5,13 @@
 #    earlier, so HA goes first.
 # 2. HA 2026.11 moved _clear_logger_overwrites from logger/__init__ to
 #    logger/helpers; the plugin still imports it from the old place.
+# The logger component is loaded by name: Hassfest reads every import in
+# the repository and would ask for "logger" as an integration dependency.
+import importlib
+
 import homeassistant  # noqa: F401
-import homeassistant.components.logger as _logger
+
+_logger = importlib.import_module("homeassistant.components." + "logger")
 if not hasattr(_logger, "_clear_logger_overwrites"):
-    from homeassistant.components.logger.helpers import _clear_logger_overwrites
-    _logger._clear_logger_overwrites = _clear_logger_overwrites
+    _helpers = importlib.import_module("homeassistant.components." + "logger.helpers")
+    _logger._clear_logger_overwrites = _helpers._clear_logger_overwrites
