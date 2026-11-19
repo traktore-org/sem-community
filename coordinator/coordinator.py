@@ -13987,8 +13987,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # slot is cheap for the packer at any tariff.
                     # PRICE-ASK: a field name of the published slot, not a level
                     "cheap": bool(s.tariff_cheap),
-                    **({"sun": True} if s.cap_override_w is not None
-                       else {}),
+                    # (#1390) a sun slot's ``price`` is the feed-in rate;
+                    # ``buy`` is what a grid kWh costs there (None: unknown)
+                    **({"sun": True, "buy": s.import_price}
+                       if s.cap_override_w is not None else {}),
                     "home_w": round(s.home_w, 1),
                     "soc_kwh": round(s.soc_kwh, 2),
                     "home_grid_w": round(s.home_grid_w, 1),

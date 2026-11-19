@@ -234,6 +234,9 @@ def _energy_plan_attrs(
             "start": s.get("start"), "end": s.get("end"),
             # PRICE-ASK: a field name of the published slot, not a level
             "price": s.get("price"), "cheap": s.get("cheap"),
+            # (#1390) a sun slot's price is the feed-in rate: the price lane
+            # draws what a grid kWh costs there (None: not known)
+            **({"buy": s.get("buy")} if s.get("sun") else {}),
             "home_grid_w": s.get("home_grid_w"),
             # (#1085) only when the slot has a reading: no key, no bytes
             **({"co2": s["co2"]} if s.get("co2") is not None else {}),

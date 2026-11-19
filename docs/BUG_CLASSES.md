@@ -6965,8 +6965,11 @@ midnight, and the plan's slots end in the morning: tomorrow had only night hours
 the evening the next 24 h had a gap where the peak is known. **Fixed:** the coordinator publishes
 `tariff_rate_steps` (sensor attribute `rate_steps`) for any tariff that is not dynamic: today and
 tomorrow, read through `tariff_price_at` (the plan's accessor) per quarter hour, stepped in UTC, an
-hour with no known price left out (`day_ledger.rate_runs`). `priceModel` reads them after the
-plan's slots. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` (the reporter's helper through
+hour with no known price left out (`day_ledger.rate_runs`). `priceModel` reads them before the
+plan's slots (a slot is an hour priced at its start). Swept, same lane: a sun slot's `price` is the
+feed-in rate, so a sunny hour was drawn at 0.06; the slot now carries `buy` (the grid price, None
+when unknown) and the lane draws that. A tariff that sends rates is one price only with no gap, and
+prices that differ past the 4th decimal (rounded curve, exact slots) are one price. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` (the reporter's helper through
 the real provider, both clock changes, the real sensor) and the #1390 case in
 `dashboard/card/test/next-plan-chart.test.js`. **Left open:** a dynamic tariff on a 15-min market
 still sends 48 points (12 h) in `upcoming`; tomorrow past that is drawn as a gap, not as a price.

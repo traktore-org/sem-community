@@ -100,9 +100,9 @@ class TestTheReportersSchedule:
         _contiguous(runs)
 
     @pytest.mark.asyncio
-    async def test_each_run_is_the_plan_s_own_price(self):
-        """The same accessor as the plan's slots: the lane and the plan
-        cannot disagree about an hour."""
+    async def test_no_quarter_inside_a_run_has_another_price(self):
+        """Merging never hides a change: every quarter of a run reads the
+        run's price through the plan's own accessor."""
         p = await _calendar()
         with patch(f"{CAL}.dt_util.now", return_value=NOW):
             runs = rate_runs(p, DAY0, DAY0 + timedelta(days=2))
@@ -262,3 +262,32 @@ def test_rate_steps_are_not_recorded():
     """A card helper, re-sent every cycle: kept out of the recorder (#581)."""
     from custom_components.solar_energy_management.sensor import SEMSolarSensor
     assert "rate_steps" in SEMSolarSensor._unrecorded_attributes
+
+
+# ── a sun slot's price is the feed-in rate; the lane needs the buy price ──
+
+from .test_1310_one_rate_day_is_cheap import _stamp_sunday  # noqa: E402
+from .test_638_shadow_mode import freeze_targets  # noqa: E402,F401
+
+
+@pytest.mark.unit
+def test_a_sun_slot_carries_its_buy_price(freeze_targets, monkeypatch):
+    """The plan card drew a sun hour at the feed-in rate (0.1 here) as if a
+    grid kWh cost that. The published slot now says what it costs."""
+    from custom_components.solar_energy_management.sensor import (
+        _energy_plan_attrs,
+    )
+    plan, _ = _stamp_sunday(monkeypatch)
+    sun = [s for s in plan["slots"] if s.get("sun")]
+    rest = [s for s in plan["slots"] if not s.get("sun")]
+    assert sun and rest, "the stamp needs sun hours and grid hours"
+    for s in sun:
+        assert s["price"] == pytest.approx(0.1)     # what the sun earns
+        assert s["buy"] == pytest.approx(0.6)       # Sunday: off-peak
+    assert all("buy" not in s for s in rest)
+    published = _energy_plan_attrs(plan)["slots"]
+    by_start = {s["start"]: s for s in published}
+    for s in sun:
+        assert by_start[s["start"]]["buy"] == s["buy"]
+    for s in rest:
+        assert "buy" not in by_start[s["start"]]

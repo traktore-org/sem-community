@@ -285,7 +285,7 @@ def rate_runs(prov, start, end, step=RATE_RUN_STEP) -> list:
         e = min(t + step, stop)
         p = tariff_price_at(prov, t.astimezone(tz))
         if p is not None and math.isfinite(p):
-            p = round(p, 4)
+            # not rounded: the same number as the plan's slot for this hour
             last = runs[-1] if runs else None
             if last is not None and last["_e"] == t and last["price"] == p:
                 last["_e"] = e
