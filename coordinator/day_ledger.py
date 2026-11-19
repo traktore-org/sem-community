@@ -27,7 +27,7 @@ input arrives as a value or a callable.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .energy_planner import LedgerSlot
 from .price_view import PriceView
@@ -259,6 +259,42 @@ def tariff_price_at(prov, ts):
         except Exception:  # noqa: BLE001 — unpriced, honestly
             return None
     return None
+
+
+#: (#1390) A calendar's windows start on the quarter hour.
+RATE_RUN_STEP = timedelta(minutes=15)
+
+
+def rate_runs(prov, start, end, step=RATE_RUN_STEP) -> list:
+    """(#1390) The tariff's own prices from ``start`` to ``end``, as runs
+    ``[{"start", "end", "price"}]`` in the shape of the plan's slots.
+
+    For a tariff whose prices are a rule (a schedule, two rates): the plan
+    card draws its price lane from them where the plan's slots end, so
+    tomorrow's peak is not drawn as one price. Read through
+    ``tariff_price_at`` (the plan's own accessor) once per ``step``,
+    stepped in UTC so a clock change neither skips nor repeats an hour. A
+    step with no known price is left out. ``start`` must be tz-aware; the
+    runs are written in its time zone.
+    """
+    tz = start.tzinfo
+    t = start.astimezone(timezone.utc)
+    stop = end.astimezone(timezone.utc)
+    runs: list = []
+    while t < stop:
+        e = min(t + step, stop)
+        p = tariff_price_at(prov, t.astimezone(tz))
+        if p is not None and math.isfinite(p):
+            p = round(p, 4)
+            last = runs[-1] if runs else None
+            if last is not None and last["_e"] == t and last["price"] == p:
+                last["_e"] = e
+            else:
+                runs.append({"_s": t, "_e": e, "price": p})
+        t = e
+    return [{"start": r["_s"].astimezone(tz).isoformat(),
+             "end": r["_e"].astimezone(tz).isoformat(),
+             "price": r["price"]} for r in runs]
 
 
 def tariff_export_rate_at(prov, ts, fallback: float) -> float:

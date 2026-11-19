@@ -110,11 +110,13 @@ export function sunModel({ win, nowMs, actual = [], forecast = {} }) {
 
 /**
  * The price lane. upcoming: [{ t, price }] 15-min slots; slots: the plan's
- * [{ start, end, price }]; schedule: [{ start 'HH:MM', end, avg_price }] for
- * today. The first source that covers a 15-minute cell wins.
+ * [{ start, end, price }]; rates: a schedule or two-rate tariff's own
+ * [{ start, end, price }] for today and tomorrow (#1390); schedule:
+ * [{ start 'HH:MM', end, avg_price }] for today. The first source that
+ * covers a 15-minute cell wins.
  * → { flat, price, steps: [{ s, e, p }], gaps: [{ s, e }], min, max, avg }
  */
-export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], schedule = [], past = [], isDynamic, level, todayAvg }) {
+export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = [], schedule = [], past = [], isDynamic, level, todayAvg }) {
     const sources = [];
     // what the tariff sensor really read, hour by hour (recorder means): the past only
     for (const h of past || []) {
@@ -128,6 +130,13 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], schedule
     for (const sl of slots || []) {
         const s = Date.parse(sl?.start), e = Date.parse(sl?.end), p = num(sl?.price);
         if (Number.isFinite(s) && Number.isFinite(e) && e > s && Number.isFinite(p)) sources.push([s, e, p, 1]);
+    }
+    // (#1390) The plan's slots end in the morning and the schedule at
+    // midnight: tomorrow's peak hours came from no source, and the night
+    // hours alone read as one price.
+    for (const r of rates || []) {
+        const s = Date.parse(r?.start), e = Date.parse(r?.end), p = num(r?.price);
+        if (Number.isFinite(s) && Number.isFinite(e) && e > s && Number.isFinite(p)) sources.push([s, e, p, 1.5]);
     }
     const day0 = zonedMidnight(nowMs, tz);
     const clock = (hhmm) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || '')); return m ? day0 + (+m[1] * 60 + +m[2]) * 60e3 : NaN; };

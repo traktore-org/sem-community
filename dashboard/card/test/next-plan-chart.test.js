@@ -145,3 +145,49 @@ test('(#1385) a schedule with two rates is drawn with both, not as one price', (
     // a dynamic tariff keeps its own word for a flat day
     assert.equal(priceModel({ win, tz: TZ, nowMs: NOW, slots, isDynamic: true, level: 'flat' }).flat, true);
 });
+
+test("(#1390) tomorrow on a schedule tariff: its own prices, not the plan's night hours as one price", () => {
+    // @lostcontrol's tariff: 0.21 from 23:00 to 07:00 and 12:00 to 17:00, 0.32 the rest. At 08:26
+    // the plan's slots end at 07:00 tomorrow and the schedule covers today only.
+    const now = Date.parse('2026-11-19T08:26:00+01:00');
+    const z = (s) => new Date(Date.parse(s)).toISOString();
+    const day = (d, n) => [
+        { start: z(`${d}T00:00:00+01:00`), end: z(`${d}T07:00:00+01:00`), price: 0.21 },
+        { start: z(`${d}T07:00:00+01:00`), end: z(`${d}T12:00:00+01:00`), price: 0.32 },
+        { start: z(`${d}T12:00:00+01:00`), end: z(`${d}T17:00:00+01:00`), price: 0.21 },
+        { start: z(`${d}T17:00:00+01:00`), end: z(`${d}T23:00:00+01:00`), price: 0.32 },
+        { start: z(`${d}T23:00:00+01:00`), end: z(`${n}T00:00:00+01:00`), price: 0.21 },
+    ];
+    const rates = [...day('2026-11-19', '2026-11-20'), ...day('2026-11-20', '2026-11-21')];
+    const slots = [
+        { start: z('2026-11-19T08:26:00+01:00'), end: z('2026-11-19T12:00:00+01:00'), price: 0.32 },
+        { start: z('2026-11-19T12:00:00+01:00'), end: z('2026-11-19T17:00:00+01:00'), price: 0.21 },
+        { start: z('2026-11-19T17:00:00+01:00'), end: z('2026-11-19T23:00:00+01:00'), price: 0.32 },
+        { start: z('2026-11-19T23:00:00+01:00'), end: z('2026-11-20T07:00:00+01:00'), price: 0.21 },
+    ];
+    const args = { tz: TZ, nowMs: now, slots, isDynamic: false, level: 'normal', todayAvg: 0.265 };
+    const tomorrow = chartWindow(now, 'tomorrow', TZ);
+    // before: the night hours alone, one price — "Fixed · 0.21"
+    const before = priceModel({ win: tomorrow, ...args });
+    assert.deepEqual([before.flat, before.price], [true, 0.21]);
+    // now: tomorrow's peak hours are drawn, with no gap
+    const pm = priceModel({ win: tomorrow, ...args, rates });
+    assert.equal(pm.flat, false);
+    assert.deepEqual(pm.steps.map((s) => s.p), [0.21, 0.32, 0.21, 0.32, 0.21]);
+    assert.deepEqual(pm.gaps, []);
+    assert.equal(priceAt(pm, Date.parse('2026-11-20T09:00:00+01:00')), 0.32);
+    assert.equal(priceAt(pm, Date.parse('2026-11-20T13:00:00+01:00')), 0.21);
+    // late evening, the next 24 h run into tomorrow's day: no gap after the plan ends
+    const late = Date.parse('2026-11-19T22:10:00+01:00');
+    const next = priceModel({ ...args, win: chartWindow(late, 'next', TZ), nowMs: late, rates });
+    assert.deepEqual(next.gaps, []);
+    assert.equal(priceAt(next, Date.parse('2026-11-20T10:00:00+01:00')), 0.32);
+    // the plan's own slot wins where both speak (same accessor, finer start)
+    const odd = priceModel({ win: chartWindow(now, 'today', TZ), ...args, slots: [{ start: z('2026-11-19T08:26:00+01:00'), end: z('2026-11-19T09:00:00+01:00'), price: 0.5 }], rates });
+    assert.equal(priceAt(odd, Date.parse('2026-11-19T08:40:00+01:00')), 0.5);
+    // a tariff at one price is still one price, with its rates
+    const one = rates.map((r) => ({ ...r, price: 0.21 }));
+    assert.deepEqual((({ flat, price }) => [flat, price])(priceModel({ win: tomorrow, ...args, rates: one })), [true, 0.21]);
+    // a dynamic tariff sends none (null): nothing changes
+    assert.deepEqual(priceModel({ win: tomorrow, ...args, rates: null }).flat, true);
+});

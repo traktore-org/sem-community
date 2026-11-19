@@ -6915,6 +6915,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                      or _td.level_absence))}
                     for p in (_td.upcoming_prices or [])[:48]
                 ]
+                # (#1390) A schedule or a two-rate tariff has no curve in
+                # ``upcoming``, and ``schedule_today`` ends at midnight: the
+                # plan card drew tomorrow from the plan's night hours alone,
+                # one rate, and called it a fixed price. Its own prices
+                # for today and tomorrow, from the plan's price accessor.
+                result["tariff_rate_steps"] = None
+                if not _td.is_dynamic:
+                    try:
+                        from .day_ledger import rate_runs
+                        _day0 = dt_util.start_of_local_day()
+                        result["tariff_rate_steps"] = rate_runs(
+                            self._tariff_provider, _day0,
+                            _day0 + timedelta(days=2))
+                    except Exception as e:  # noqa: BLE001 — no runs, no lane
+                        _LOGGER.debug("Tariff rate runs failed (#1390): %s", e)
                 result["tariff_currency"] = _td.currency
                 result["tariff_today_min_price"] = _td.today_min_price
                 result["tariff_today_max_price"] = _td.today_max_price

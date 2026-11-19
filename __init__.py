@@ -7209,6 +7209,7 @@ async def _async_register_phase_services(
         "tariff_today_min_price", "tariff_today_max_price", "tariff_today_avg_price",
         "tariff_next_cheap_start", "tariff_next_cheap_end",
         "tariff_upcoming", "tariff_schedule_today",
+        "tariff_rate_steps",   # (#1390)
         # v1.7.2-beta.3: classifier visibility for the "all day cheap"
         # class of misclassifications. ``tariff_today_prices_count``
         # of 0 means SEM isn't seeing per-hour data — JS card will
