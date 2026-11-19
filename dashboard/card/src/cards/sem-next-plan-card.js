@@ -520,8 +520,10 @@ class SEMNextPlanCard extends SEMNextBase {
         const LBL = narrow ? 26 : 112;
         const W = Math.max(160, (this._w || 720) - LBL);
         // room on top for the now label (y 4–18) and the sun total chip (y 22–40)
-        const sun = [46, 94], price = [118, 168];
-        const planY = 190, rowH = 26;
+        // (#1321) the price lane is 74 px tall: a 15-minute tariff moves in
+        // small steps that a 50 px lane flattened into one line
+        const sun = [46, 94], price = [116, 190];
+        const planY = 212, rowH = 26;
         const planEnd = planY + Math.max(1, d.rows.length) * rowH;
         const axisY = planEnd + 16;
         return { narrow, LBL, W, sun, price, planY, rowH, planEnd, axisY, H: axisY + 22 };
@@ -577,9 +579,15 @@ class SEMNextPlanCard extends SEMNextBase {
             // (#1390) Scaled from the lower of 0 and the cheapest price, filled
             // to the zero line: a price below zero is drawn below it, not
             // upside down (and a top price of 0 does not divide by 0).
-            const bottom = Math.min(0, pm.min), span = (Math.max(0, pm.max) - bottom) * 1.12 || 1;
+            // (#1321) With every price above zero the scale starts a little
+            // below the cheapest one, not at 0: 0.15 against 0.25 is the
+            // difference that matters, and from 0 it was a flat line. The
+            // labels and the tooltip still give the real prices.
+            const rise = pm.max - pm.min;
+            const bottom = pm.min < 0 ? pm.min : (rise > 0 ? Math.max(0, pm.min - rise * 0.6) : 0);
+            const span = (Math.max(0, pm.max) - bottom) * 1.12 || 1;
             const PY = (v) => py1 - (py1 - py0 - 4) * (v - bottom) / span;
-            const base = PY(0);
+            const base = PY(Math.max(0, bottom));
             let line = '', area = '';
             let prev = null;
             for (const st of pm.steps) {
@@ -592,13 +600,19 @@ class SEMNextPlanCard extends SEMNextBase {
             area += ` L${X(prev.e)} ${base} Z`;
             parts.push(svg`<path d="${area}" fill="url(#${gid}p)"></path><path d="${line}" fill="none" stroke="${C.grid}" stroke-width="2" stroke-linejoin="round"></path>`);
             const knownW = X(pm.steps[pm.steps.length - 1].e) - X(pm.steps[0].s);
+            const lo = pm.steps.find((st) => st.p === pm.min), hi = pm.steps.find((st) => st.p === pm.max);
             if (pm.avg !== null && knownW > 140) {
                 const ay = PY(pm.avg);
                 const ax0 = X(pm.steps[0].s), ax1 = X(pm.steps[pm.steps.length - 1].e);
+                // (#1321) the label goes to the end further from the min and max
+                // labels, on a card-coloured halo so the price line never runs
+                // through it
+                const chipX = [hi, lo].filter(Boolean).map((st) => X((st.s + st.e) / 2));
+                const far = (x) => Math.min(...chipX.map((c) => Math.abs(c - x)), Infinity);
+                const atStart = far(ax0) > far(ax1);
                 parts.push(svg`<line x1="${ax0}" x2="${ax1}" y1="${ay}" y2="${ay}" stroke="${C.fg3}" stroke-dasharray="3 4"></line>
-                    <text x="${ax1 - 2}" y="${ay - 4}" text-anchor="end" font-size="10" fill="${C.fg3}">${this._tf('next_price_avg', { price: this._price(pm.avg) })}</text>`);
+                    <text class="avg" x="${atStart ? ax0 + 4 : ax1 - 4}" y="${ay - 5}" text-anchor="${atStart ? 'start' : 'end'}" font-size="10" fill="${C.fg3}" stroke="var(--n-card)" stroke-width="3" stroke-linejoin="round" paint-order="stroke">${this._tf('next_price_avg', { price: this._price(pm.avg) })}</text>`);
             }
-            const lo = pm.steps.find((st) => st.p === pm.min), hi = pm.steps.find((st) => st.p === pm.max);
             if (hi && knownW > 60) parts.push(this._svgChip(X((hi.s + hi.e) / 2), PY(hi.p) - 22, this._fmt(hi.p, 2), 'var(--n-fg)', 'var(--n-card)', 0, W));
             if (lo && lo !== hi && knownW > 140) parts.push(this._svgChip(X((lo.s + lo.e) / 2), Math.min(py1 - 18, PY(lo.p) + 5), this._fmt(lo.p, 2), 'var(--n-fg)', 'var(--n-card)', 0, W));
             for (const g of pm.gaps) {
