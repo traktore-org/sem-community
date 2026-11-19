@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.21] — 19.11.2026
+
 - 💥 **One dashboard** (#1321). The classic dashboard is retired: an unchanged one is replaced, a changed one stays with a Repair. Settings are on System, Devices.
 - 📝 **Shorter docs for the new dashboard** (#1321). Every guide is rewritten for the five screens and checked against the code. New screenshots.
 - 🐛 **No false negative base load** (#1394). A plug that reports before the grid meter no longer pushes the live base load below zero.
