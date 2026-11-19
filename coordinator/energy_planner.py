@@ -635,7 +635,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     and ledger[j].end > d.deadline for j in idx):
                 code = "before_deadline"
         if code == "cheapest_hours" and not any(
-                _price(d, j) is not None and _price(d, j) > price + 1e-9
+                _price(d, j) is not None
+                and _rank_price(d, j) > _rank_price(d, i) + 1e-9
                 and _eligible(d, j)
                 and _grant(d, j) >= max(_W_EPS, float(d.min_power_w))
                 for j in idx):
