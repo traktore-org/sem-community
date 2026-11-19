@@ -9,6 +9,7 @@ cycle. Per device the user picks one of three modes:
   control, SEM writes nothing to that device. It never stops or starts the
   device itself: it only holds its hands still. The device's measured draw
   stays in the home's accounting, so every other device plans around it.
+  With no indicator picked, SEM yields all the time (#1391).
 * ``observe`` — SEM keeps control, and a Repair tells the user when it sees
   writes it did not make.
 
@@ -120,7 +121,14 @@ class ExternalControlBook:
                 del self._tracks[key]
         for key, spec in self._specs.items():
             tr = self._tracks.setdefault(key, _Track())
-            reading = read_indicator(hass, spec.entity)
+            if spec.entity.strip():
+                reading = read_indicator(hass, spec.entity)
+            else:
+                # (#1391) No signal picked. In yield mode the user said
+                # another party steers this device and named nothing that
+                # says when, so it is steered all the time: an empty field
+                # is not a signal that says "off". Observe needs no signal.
+                reading = True if spec.mode == MODE_YIELD else None
             if reading is True:
                 if not tr.active:
                     tr.active, tr.since = True, now_wall
@@ -171,7 +179,7 @@ class ExternalControlBook:
         tr = self._tracks.get(key)
         if spec is None or tr is None:
             return ""
-        who = spec.label or spec.entity
+        who = spec.label or spec.entity or "another party"
         if tr.active and tr.since is not None:
             at = tr.since.strftime("%H:%M")
             tail = "SEM yielding" if spec.mode == MODE_YIELD else "SEM still driving"
@@ -179,3 +187,38 @@ class ExternalControlBook:
         if tr.suspect:
             return f"{name}: SEM sees writes it did not make"
         return ""
+
+
+def yielded_charger_decision(decision: Any) -> Any:
+    """(#1391) The decision of a charger SEM yields to another party.
+
+    SEM sends nothing to it, so its own wish must not be shown or counted
+    as an act: no "SEM starts charging" line on the card, no start ladder
+    that later reads as a car that declined, and no amps or watts of SEM's
+    that other chargers and loads plan around (the coordinator counts the
+    charger's real draw instead). An IDLE at 0 A, not a release: the phase
+    guard still turns an IDLE into its own stop when a phase is over its
+    limit (#1381), and that stop is the one write that goes out. A charger
+    set to Off keeps its RELEASE: Off never gets that stop (#898).
+    """
+    from . import reason_codes as RC
+    from .charger_types import ChargerIntent, rewrite
+    if decision.intent is ChargerIntent.RELEASE:
+        # Off is already hands-off (#898), and the phase guard leaves a
+        # RELEASE alone; an IDLE would hand it a stop Off never gets.
+        return decision
+    return rewrite(
+        decision,
+        intent=ChargerIntent.IDLE,
+        commanded_amps=0,
+        budget_w=0.0,
+        redirect_w=0.0,
+        assist_w=0.0,
+        peak_paused=False,
+        capped_by_limit=False,
+        reason="yields to another party (the charger's setting) — SEM "
+               f"holds its commands; SEM's own plan: {decision.intent.value}, "
+               f"{decision.reason}",
+        reason_code=RC.CHARGER_YIELDED,
+        reason_params={},
+    )

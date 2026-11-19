@@ -114,12 +114,14 @@ export function sunModel({ win, nowMs, actual = [], forecast = {}, liveW = null 
 }
 
 /**
- * The price lane. upcoming: [{ t, price }] 15-min slots; slots: the plan's
- * [{ start, end, price }]; schedule: [{ start 'HH:MM', end, avg_price }] for
- * today. The first source that covers a 15-minute cell wins.
+ * The price lane. upcoming: [{ t, price }] 15-min slots; rates: a schedule
+ * or two-rate tariff's own [{ start, end, price }] for today and tomorrow
+ * (#1390), null on a dynamic tariff; slots: the plan's [{ start, end, price }]
+ * (a sun slot sends its grid price); schedule: [{ start 'HH:MM', end,
+ * avg_price }] for today. The first source that covers a 15-minute cell wins.
  * → { flat, price, steps: [{ s, e, p }], gaps: [{ s, e }], min, max, avg }
  */
-export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], schedule = [], past = [], isDynamic, level, todayAvg }) {
+export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = null, schedule = [], past = [], isDynamic, level, todayAvg }) {
     const sources = [];
     // what the tariff sensor really read, hour by hour (recorder means): the past only
     for (const h of past || []) {
@@ -129,6 +131,14 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], schedule
     for (const u of upcoming || []) {
         const s = Date.parse(u?.t), p = num(u?.price);
         if (Number.isFinite(s) && Number.isFinite(p)) sources.push([s, s + CELL, p, 0]);
+    }
+    // (#1390) The plan's slots end in the morning and the schedule at
+    // midnight: tomorrow's peak hours came from no source, and the night
+    // hours alone read as one price. The tariff's own rates come before the
+    // plan's slots: a slot is an hour long and priced at its start.
+    for (const r of rates || []) {
+        const s = Date.parse(r?.start), e = Date.parse(r?.end), p = num(r?.price);
+        if (Number.isFinite(s) && Number.isFinite(e) && e > s && Number.isFinite(p)) sources.push([s, e, p, 0.75]);
     }
     for (const sl of slots || []) {
         const s = Date.parse(sl?.start), e = Date.parse(sl?.end), p = num(sl?.price);
@@ -156,8 +166,13 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], schedule
     // still hold two prices: they decide, not the mode name. Today's 'flat'
     // (a weekend at one rate) does not flatten Monday's peak in the window.
     // A dynamic tariff keeps its own word for a flat day.
-    const flat = known.length === 0 ? (!dynamic || level === 'flat')
-        : (max - min < 1e-6 || (dynamic && level === 'flat'));
+    // (#1390) One that sends its own rates is drawn from them: an hour they
+    // cannot price is a gap, never one price for the whole window.
+    const ruled = !dynamic && Array.isArray(rates);
+    // a past hour the recorder has not answered yet is no gap in the tariff
+    const gapless = cells.every((c) => c.p !== null || c.e <= nowMs);
+    const flat = known.length === 0 ? (!ruled && (!dynamic || level === 'flat'))
+        : (samePrice(min, max) && (gapless || !ruled)) || (dynamic && level === 'flat');
     const avgNum = num(todayAvg);
     if (flat) {
         const price = known.length ? known[0] : (Number.isFinite(avgNum) ? avgNum : null);
@@ -175,6 +190,15 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], schedule
     }
     const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : null;
     return { flat: false, price: null, steps, gaps, min, max, avg };
+}
+
+/**
+ * (#1390) For "one price": two prices that differ only past the 4th decimal
+ * are the same. The curve and the schedule are sent rounded to 4 decimals;
+ * the plan's slots, the rates and the recorder's means are not.
+ */
+function samePrice(a, b) {
+    return Math.abs(a - b) <= 5e-5 + 1e-9;
 }
 
 /** The price at `ms`, or null. */

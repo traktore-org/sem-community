@@ -194,6 +194,49 @@ test('dynamic tariff: steps with min, max and average; unknown prices hatched; f
     assert.match(tip, /next_tip_price/);
 });
 
+test('(#1390) prices below zero are drawn below the zero line, inside the lane', () => {
+    const now = Date.now();
+    const h0 = Math.floor(now / HOUR) * HOUR;
+    // the price line's y per step, read from the drawn path ("M x y L x y …")
+    const lane = (prices) => {
+        const upcoming = prices.map((p, i) => ({ t: isoAt(h0 + i * 900e3), price: p }));
+        const el = makeCard({
+            'sensor.sem_energy_plan': S('idle', planAround(now)),
+            'sensor.sem_tariff_current_import_rate': S(prices[0], { is_dynamic: true, price_level: 'normal', upcoming }),
+        });
+        el._chargers = ['keba'];
+        el._stats = []; el._fc = {};
+        const d = el._chartData(el._plan());
+        const { lay, svg: chart } = el._chartSvg(d, el._plan());
+        const out = text(chart);
+        const paths = [...out.matchAll(/<path d="([^"]*)" fill="none"/g)].map((m) => m[1]);
+        const line = paths.find((p) => (p.match(/L/g) || []).length >= d.price.steps.length);
+        assert.ok(line, 'the price line is drawn');
+        const nums = line.replace(/[ML]/g, ' ').trim().split(/\s+/).map(Number);
+        const ys = [];
+        for (let i = 1; i < nums.length; i += 2) ys.push(nums[i]);
+        const at = new Map();
+        // each step adds "x0 y" (or "M x0 y") then "x1 y": two points per step
+        d.price.steps.forEach((st, i) => at.set(st.p, ys[2 * i + 1]));
+        return { out, at, lay };
+    };
+    const inside = (r) => { for (const y of r.at.values()) assert.ok(y >= r.lay.price[0] && y <= r.lay.price[1], `y ${y} inside the lane`); };
+    // all below zero: the dearest (-0.01) sits highest, the cheapest (-0.05) lowest
+    const neg = lane([-0.01, -0.01, -0.05, -0.05, -0.03, -0.03, -0.01, -0.02]);
+    assert.doesNotMatch(neg.out, /NaN|Infinity/);
+    assert.ok(neg.at.get(-0.05) > neg.at.get(-0.01), 'a cheaper price is drawn lower');
+    inside(neg);
+    // the top price is 0: no division by zero
+    const zero = lane([0, 0, -0.02, -0.02, 0, 0, -0.01, -0.01]);
+    assert.doesNotMatch(zero.out, /NaN|Infinity/);
+    inside(zero);
+    // both signs: every step stays inside the lane, the dearest highest
+    const mixed = lane([0.12, 0.12, -0.04, -0.04, 0.3, 0.3, 0.05, 0.05]);
+    assert.doesNotMatch(mixed.out, /NaN|Infinity/);
+    inside(mixed);
+    assert.ok(mixed.at.get(0.3) < mixed.at.get(0.12) && mixed.at.get(0.12) < mixed.at.get(-0.04));
+});
+
 test('the range switch is remembered and clears a picked block', (t) => {
     t.mock.timers.enable({ apis: ['Date'], now: PINNED });
     const el = makeCard({ 'sensor.sem_energy_plan': S('idle', planAround(Date.now())) });
@@ -215,4 +258,29 @@ test('(#1081) a heat pump planned on the price of heat names its COP', () => {
         { from: '2026-11-14T13:00:00+01:00', to: '2026-11-14T15:00:00+01:00', cop: 4.18 });
     assert.match(out, /COP 4\.2$/);
     assert.doesNotMatch(out, /\{cop\}/);
+});
+
+// (#1377) watch-only off + plan execution off = "not applied", never "observation"
+function planStates(observer, actuation) {
+    return { 'switch.sem_observer_mode': S(observer), 'switch.sem_energy_plan_actuation': S(actuation) };
+}
+
+test('Plan screen: control on, plan execution off says not applied and offers the switch', async () => {
+    const el = makeCard(planStates('off', 'off'));
+    const calls = [];
+    el.hass.callService = async (d, s, data) => { calls.push([d, s, data]); };
+    const out = text(el._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: false }));
+    assert.match(out, /energy_plan_off/);
+    assert.match(out, /energy_plan_turn_on/);
+    assert.doesNotMatch(out, /next_pill_shadow/);
+    el._toggleSwitch('switch.sem_energy_plan_actuation');
+    assert.deepEqual(calls[0], ['switch', 'turn_on', { entity_id: 'switch.sem_energy_plan_actuation' }]);
+});
+
+test('Plan screen: watch-only still reads as shadow, live still reads live', () => {
+    const watch = text(makeCard(planStates('on', 'off'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: false }));
+    assert.match(watch, /next_pill_shadow/);
+    assert.doesNotMatch(watch, /energy_plan_off/);
+    const live = text(makeCard(planStates('off', 'on'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: true }));
+    assert.match(live, /next_pill_live/);
 });

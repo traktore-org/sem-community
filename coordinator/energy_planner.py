@@ -42,9 +42,10 @@ _W_EPS = 1.0              # grants below 1 W are noise
 #:                     a cheaper hour lies after it
 #:   no_price_yet    — an hour with no price published (Keep-at goals)
 #:   from_battery    — drawn from the home battery, not the grid
+#:   sun_plus_grid   — a thin sun hour, the rest from the grid (#1383)
 REASON_CODES = ("top_up_late", "one_block", "solar", "cheap_hours",
                 "cheapest_hours", "before_deadline", "no_price_yet",
-                "from_battery")
+                "from_battery", "sun_plus_grid")
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +114,11 @@ class Demand:
     #: of heat); the kWh asked and the cost reported stay electricity. None
     #: = ranked by price, exactly as before.
     cop_at: Any = field(default=None, compare=False)
+    #: (#1383) In a sun slot the surplus is thinner than this demand's minimum
+    #: power: it may take the rest from the grid, at the slot's import price,
+    #: within the grid limit. False = the sun slot offers the surplus only,
+    #: exactly as before.
+    grid_in_sun: bool = False
 
 
 @dataclass
@@ -154,10 +160,18 @@ class LedgerSlot:
                                     # slot start — the discharge limit is an
                                     # instantaneous bottleneck, not an average)
     batt_in_kwh: float = 0.0        # pre-charge raising the trajectory (G4 hook)
+    cap_kwh: float = 0.0            # (#1377) pack capacity; 0 = unknown, no cap
     grid_committed_w: float = 0.0   # grid power already allocated here — a
                                     # re-walk must NOT resurrect spent headroom
     # explicit per-slot cap override (compat path); None = derive from peak
     cap_override_w: Optional[float] = None
+    # (#1383) What a kWh from the grid costs in a sun slot (``price`` holds the
+    # export rate there). None = unknown: the slot offers the surplus only.
+    import_price: Optional[float] = None
+    # (#1383) Is the TARIFF at a cheap level this hour (execution's word)?
+    # The live gate tops the car up from the grid by day only then, so the
+    # plan assists a thin sun slot only then.
+    import_cheap: bool = False
 
     @property
     def hours(self) -> float:
@@ -169,15 +183,26 @@ class LedgerSlot:
 # ---------------------------------------------------------------------------
 
 def build_night_ledger(slots, *, soc_kwh, floor_kwh, max_discharge_w,
-                       peak_limit_w) -> list:
+                       peak_limit_w, capacity_kwh=0.0) -> list:
     """Walk the night once: home draws the battery down to the sunrise floor
     (bounded by discharge power), the remainder lands on the meter, and the
     grid headroom per slot follows. ``_walk`` re-runs whenever packing
     changes the battery's path — a Tier-2 draw empties it EARLIER, the
     takeover hour moves, and later grid headroom shrinks."""
     ledger = sorted(slots, key=lambda s: s.start)
+    for s in ledger:
+        s.cap_kwh = float(capacity_kwh or 0.0)
     _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w)
     return ledger
+
+
+def level_after_charge(s, soc=None) -> float:
+    """(#1377) Pack level once this slot's planned charge has arrived,
+    held at the pack's capacity: the one place the trajectory is capped."""
+    lvl = (float(s.soc_kwh) if soc is None else float(soc)) + float(
+        getattr(s, "batt_in_kwh", 0.0) or 0.0)
+    cap = float(getattr(s, "cap_kwh", 0.0) or 0.0)
+    return min(lvl, cap) if cap > 0 else lvl
 
 
 def _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w) -> None:
@@ -186,7 +211,7 @@ def _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w) -> None:
         s.soc_kwh = soc
         h = s.hours
         # Pre-charge raises the trajectory (energy arrives this slot).
-        soc += s.batt_in_kwh
+        soc = level_after_charge(s, soc)
         # Home draws battery first — energy above the floor, power-bounded.
         home_kwh = s.home_w * h / 1000.0
         avail = max(0.0, soc - floor_kwh)
@@ -219,7 +244,9 @@ def battery_at_end(ledger, floor_kwh, capacity_kwh) -> Optional[dict]:
     if not ledger or not capacity_kwh or capacity_kwh <= 0:
         return None
     s = ledger[-1]
-    soc = float(s.soc_kwh) + float(getattr(s, "batt_in_kwh", 0.0) or 0.0)
+    soc = level_after_charge(s)
+    if capacity_kwh and not getattr(s, "cap_kwh", 0.0):
+        soc = min(soc, float(capacity_kwh))
     avail = max(0.0, soc - float(floor_kwh))
     batt_home = float(getattr(s, "home_batt_kwh", 0.0) or 0.0)
     batt_loads = min(float(getattr(s, "batt_out_kwh", 0.0) or 0.0),
@@ -413,9 +440,60 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         it has one (unknown there = the house price), else the house's."""
         s = ledger[i]
         if d.tariff is None:
-            return s.price
+            sun = _sun_grid(d, i)
+            return s.price if sun is None else _blend(s, sun[1], d.min_power_w)
         own = d.tariff.price_at(s.start)
         return s.price if own is None else own
+
+    def _sun_grid(d, i):
+        """(#1383) ``(grant_w, sun_w)`` when sun slot ``i`` is thinner than
+        this demand's minimum power and the demand may take the rest from
+        the grid, within the grid limit; else None. A load that fits the
+        surplus never lands here: it keeps the surplus at the export price."""
+        s = ledger[i]
+        if (not d.grid_in_sun or d.source == "battery" or d.tariff is not None
+                or s.cap_override_w is None or s.import_price is None
+                or not s.import_cheap):
+            return None
+        sun_w = max(0.0, float(s.cap_override_w) - s.grid_committed_w)
+        min_w = max(_W_EPS, float(d.min_power_w))
+        if min(float(d.max_power_w), sun_w) >= min_w:
+            return None
+        if peak_limit_w and peak_limit_w > 0:
+            drawn = max(0.0, s.grid_committed_w - float(s.cap_override_w))
+            room = max(0.0, peak_limit_w - s.home_grid_w - drawn)
+        else:
+            room = float("inf")
+        grant = min(float(d.max_power_w), sun_w + room)
+        return (grant, sun_w) if grant >= min_w else None
+
+    def _blend(s, sun_w, power_w):
+        """(#1383) The price of ``power_w`` in a sun slot: the part the sun
+        covers at the export rate, the rest at the import price."""
+        if power_w <= 0:
+            return s.price
+        from_sun = min(power_w, sun_w)
+        export = 0.0 if s.price is None else float(s.price)
+        return (from_sun * export
+                + (power_w - from_sun) * float(s.import_price)) / power_w
+
+    def _grant(d, i):
+        """What grid demand ``d`` may draw in slot ``i``: the headroom, or
+        in a thin sun slot the surplus plus the grid's share (#1383)."""
+        base = min(float(d.max_power_w), ledger[i].headroom_w)
+        if base >= max(_W_EPS, float(d.min_power_w)):
+            return base
+        sun = _sun_grid(d, i)
+        return base if sun is None else sun[0]
+
+    def _slot_price(d, i, power):
+        """The price of ``power`` W of ``d`` in slot ``i`` (a thin sun slot
+        blends, #1383); at the slot's own price otherwise."""
+        sun = _sun_grid(d, i)
+        p = _price(d, i)
+        if sun is None or p is None:
+            return p
+        return _blend(ledger[i], sun[1], power)
 
     _one_price_memo: dict = {}
     _cheap_ref_memo: dict = {}
@@ -443,7 +521,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
     def _order(d):
         """Grid demands walk the cheapest slots first — by their own price
         (by the price of heat for a heat pump with a COP curve)."""
-        if d.tariff is None and d.cop_at is None:
+        if (d.tariff is None and d.cop_at is None
+                and not (d.grid_in_sun and any(_sun_grid(d, j) for j in idx))):
             priced = list(by_price)
         else:
             priced = sorted((i for i in idx if _price(d, i) is not None),
@@ -524,22 +603,28 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         """What a grid demand would take from slot ``i`` toward ``want``
         kWh: ``(power_w, run_h)``, or None when the slot cannot serve it.
         The same sizing as the slot-wise path below."""
-        s = ledger[i]
         h = _hours(d, i)
         if h <= 0 or _price(d, i) is None or not _eligible(d, i):
             return None
-        grant = min(float(d.max_power_w), s.headroom_w)
+        grant = _grant(d, i)
         if grant < max(_W_EPS, float(d.min_power_w)):
             return None
         power = min(grant, max(float(d.min_power_w), want / h * 1000.0))
         return power, min(h, want / (power / 1000.0))
 
-    def _why(d, i, code, price):
+    def _why(d, i, code, price, power=0.0):
         """(#1321) The reason code for a grid block of ``d`` in slot ``i``:
         a sun slot says solar; a price pick says before_deadline when a
         cheaper priced hour lies past the deadline, else ``code``."""
         if ledger[i].cap_override_w is not None:
-            return {"code": "solar", "params": {}}
+            # (#1383) a thin sun slot topped up from the grid says so
+            # this block's own grid share: its power beyond the sun left
+            # BEFORE it was booked (a block fully on sun stays "solar")
+            sun_left = max(0.0, float(ledger[i].cap_override_w)
+                           - (ledger[i].grid_committed_w - power))
+            over = power > sun_left + _W_EPS
+            return {"code": "sun_plus_grid" if over else "solar",
+                    "params": {}}
         params = {"price": round(float(price), 4)}
         if d.deadline is not None:
             params["deadline"] = d.deadline.isoformat()
@@ -548,6 +633,16 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     and ledger[j].end > d.deadline for j in idx):
                 code = "before_deadline"
         return {"code": code, "params": params}
+
+    def _book_grid(s, d, power, e_kwh):
+        """(#1377) One bookkeeping for every grid placement: the power is
+        spent, and a battery charge also raises the pack's trajectory."""
+        s.grid_committed_w += power   # survives trajectory re-walks
+        s.headroom_w -= power
+        if d.kind == "battery":
+            s.batt_in_kwh += e_kwh
+            _walk(ledger, initial_soc, floor_kwh,
+                  max_discharge_w, peak_limit_w)
 
     def _cheapest_run(d, need):
         """(#1023) The cheapest run of back-to-back priced, eligible slots
@@ -620,8 +715,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 if _p is None:
                     late_unpriced = True
                 price = 0.0 if _p is None else float(_p)
-                s.grid_committed_w += power
-                s.headroom_w -= power
+                _book_grid(s, d, power, power / 1000.0 * run_h)
                 allocations.append(Allocation(
                     demand_id=d.id, start=begin, end=hi, power_w=power,
                     price=price,
@@ -646,15 +740,14 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     begin = _begin(d, i)
                     end = begin + timedelta(hours=run_h)
                     price = float(_price(d, i))
-                    s.grid_committed_w += power
-                    s.headroom_w -= power
+                    _book_grid(s, d, power, power / 1000.0 * run_h)
                     allocations.append(Allocation(
                         demand_id=d.id, start=begin, end=end, power_w=power,
                         price=price,
                         reason=(f"{d.id}: {power:.0f} W {begin:%H:%M}–"
                                 f"{end:%H:%M} @ {price:.3f} (one block, "
                                 f"headroom left {s.headroom_w:.0f} W)"),
-                        **_why(d, i, "one_block", price)))
+                        **_why(d, i, "one_block", price, power)))
                     last_block_end[d.id] = max(
                         last_block_end.get(d.id, end), end)
                     planned += power / 1000.0 * run_h
@@ -678,7 +771,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 # From the WALKED state: what the trajectory leaves above the
                 # floor after home's ACTUAL battery share this slot (clamped
                 # by the walk, not the raw home ask) and draws already booked.
-                avail = max(0.0, s.soc_kwh + s.batt_in_kwh - floor_kwh
+                avail = max(0.0, level_after_charge(s) - floor_kwh
                             - s.home_batt_kwh - s.batt_out_kwh)
                 if avail <= 1e-9:
                     continue
@@ -698,7 +791,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 grant = min(float(d.max_power_w), power_left)
                 want = min(need - planned, avail)
             else:
-                grant = min(float(d.max_power_w), s.headroom_w)
+                grant = _grant(d, i)
                 want = need - planned
                 if d.cheap_only_kwh > 0 and not _cheap(d, i):
                     # (#1081) an hour that is not cheap serves Keep at only
@@ -719,7 +812,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             if run_h <= 0:
                 continue
             end = begin + timedelta(hours=run_h)
-            _p = 0.0 if d.source == "battery" else _price(d, i)
+            _p = 0.0 if d.source == "battery" else _slot_price(d, i, power)
             price = None if _p is None else float(_p)   # (#1102) unpriced: unknown
             if price is None:
                 cost_known = False
@@ -733,8 +826,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                        f"from battery (trajectory leaves "
                        f"{max(0.0, s.soc_kwh - floor_kwh):.1f} kWh above floor)")
             else:
-                s.grid_committed_w += power   # survives trajectory re-walks
-                s.headroom_w -= power
+                _book_grid(s, d, power, e_kwh)
                 why = (f"{d.id}: {power:.0f} W {begin:%H:%M}–{end:%H:%M} "
                        + (f"@ {price:.3f} (slot #{own_rank[i]} cheapest, "
                           if price is not None else "unpriced (no price published, ")
@@ -744,9 +836,9 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             elif price is None:
                 code = {"code": "no_price_yet", "params": {}}
             elif d.needs_cheap_level and _cheap(d, i):
-                code = _why(d, i, "cheap_hours", price)
+                code = _why(d, i, "cheap_hours", price, power)
             else:
-                code = _why(d, i, "cheapest_hours", price)
+                code = _why(d, i, "cheapest_hours", price, power)
             allocations.append(Allocation(
                 demand_id=d.id, start=begin, end=end, power_w=power,
                 price=price, reason=why, **code))

@@ -6513,6 +6513,13 @@ async def _async_register_phase_services(
         # ``test_set_option_ev_chargers_partial_submit_preserves_sibling``
         # in the test_services_real.py framework tests.
         if isinstance(options.get("ev_chargers"), list):
+            # (#1386) a charger's name is typed on the dashboard: one line,
+            # at most 60 characters, like a load's (#1341)
+            from .features.device_registry import clean_load_name
+            options = {**options, "ev_chargers": [
+                {**c, "name": clean_load_name(c["name"])}
+                if isinstance(c, dict) and "name" in c else c
+                for c in options["ev_chargers"]]}
             existing_list = (
                 (target_entry.options or {}).get("ev_chargers")
                 or (target_entry.data or {}).get("ev_chargers")
@@ -7249,6 +7256,7 @@ async def _async_register_phase_services(
         "tariff_today_min_price", "tariff_today_max_price", "tariff_today_avg_price",
         "tariff_next_cheap_start", "tariff_next_cheap_end",
         "tariff_upcoming", "tariff_schedule_today",
+        "tariff_rate_steps",   # (#1390)
         # v1.7.2-beta.3: classifier visibility for the "all day cheap"
         # class of misclassifications. ``tariff_today_prices_count``
         # of 0 means SEM isn't seeing per-hour data — JS card will

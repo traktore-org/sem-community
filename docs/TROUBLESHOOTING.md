@@ -247,6 +247,12 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:** In **Settings › Devices & services › Solar Energy Management › Configure › Battery Charge Scheduler**, set **Battery charge platform** to **Auto-detect**. Keep **Generic** only if the battery has its own control entities.
 
+### A home without a battery makes no night plan
+
+**Symptom:** No battery, but **Solar + cheapest hours** charges at once.
+
+**Fix:** Update SEM. A battery platform of **Generic** alone no longer counts as a battery.
+
 ### The inverter refuses forced discharge
 
 **Fix:** Check that the battery power setpoint entity is the right one. Read the error in the Repair. Restart SEM to try again.

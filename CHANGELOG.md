@@ -63,7 +63,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Fewer duplicates on the SEM screens** (#1321). One sources row, one power number, one battery mode control, rare settings under More.
 - ✨ **Easier to use** (#1321). Plain button labels, Observer mode as a switch, outlined tiles, 40 px touch targets, Insights topics as a dropdown on phones.
 - ✨ **Numbers follow your language and keyboard works everywhere** (#1321). 3,5 kW in German; Enter and Space work on every control; dialogs close with Escape.
+- ✨ **Rename a charger on the Devices screen** (#1386). Tap the Name row on its card; entity ids stay the same.
+- 🐛 **A planned battery charge now raises the plan's battery level** (#1377). The end level and the hours after the charge no longer stay at 0 %.
+- 🐛 **Letting SEM take control also turns on plan execution** (#1377). The Plan card says "not applied" instead of "observation" while it is off.
+- 🐛 **Night plan made on homes without a battery** (#1376). A saved "generic" setting is no battery, so cheapest hours wait for the cheap block.
+- 🐛 **A one-phase car is spotted** (#1376). A slow ramp no longer hides it. Always (max) names the charger's own current limit.
 - 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
+- 🐛 **Phase guard stops a "SEM yields" charger when a phase is over its limit** (#1381). Only that stop is sent; small loads stay on.
+- 🐛 **Cheapest-hours car waits out the peak on a two-rate tariff** (#1387). Before, it could start in a peak hour.
+- 🐛 **Cheapest-hours car can use a cheap hour with thin sun** (#1383). The grid covers what the sun lacks, at the grid price.
+- 🐛 **"Yes, SEM yields" with no signal now always yields** (#1391). Before, SEM kept steering the charger, and the card said it was starting the car.
+- 🐛 **Price and plan shows a schedule or two-rate tariff's real prices, today, tomorrow and in sunny hours** (#1390). Before, it showed one fixed price.
 
 # [2.3.0-beta.20] — 18.11.2026
 

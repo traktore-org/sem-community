@@ -35,14 +35,11 @@ EV_DRAWING_W = 100.0
 CHARGERS_FIRST_CYCLES = 2
 
 
-def over_phases(snapshot: Mapping[str, Any]) -> Dict[str, float]:
-    """``{"L3": 7.0}`` — the phases measured over their limit, by the larger
-    excess of the two lanes. A phase the guard could not read is not "over":
-    the guard already fails closed on it (the chargers stop), and loads are
-    never shed on a guess."""
-    out: Dict[str, float] = {}
+def _over_readings(snapshot: Mapping[str, Any]):
+    """Yield ``(phase, current_a, limit_a)`` for each fresh reading over its
+    limit, both lanes."""
     if not isinstance(snapshot, Mapping):
-        return out
+        return
     for lane in ("grid", "inverter"):
         phases = snapshot.get(lane)
         if not isinstance(phases, Mapping):
@@ -54,12 +51,31 @@ def over_phases(snapshot: Mapping[str, Any]) -> Dict[str, float]:
             if not reading.get("data_fresh") or reading.get("reason") != "over_limit":
                 continue
             try:
-                excess = float(reading["current_a"]) - float(reading["limit_a"])
+                current = float(reading["current_a"])
+                limit = float(reading["limit_a"])
             except (KeyError, TypeError, ValueError):
                 continue
-            if excess > 0:
-                out[name] = max(out.get(name, 0.0), round(excess, 3))
+            if current - limit > 0:
+                yield name, current, limit
+
+
+def over_phases(snapshot: Mapping[str, Any]) -> Dict[str, float]:
+    """``{"L3": 7.0}`` — the phases measured over their limit, by the larger
+    excess of the two lanes. A phase the guard could not read is not "over":
+    the guard already fails closed on it (the chargers stop), and loads are
+    never shed on a guess."""
+    out: Dict[str, float] = {}
+    for name, current, limit in _over_readings(snapshot):
+        out[name] = max(out.get(name, 0.0), round(current - limit, 3))
     return out
+
+
+def worst_over(snapshot: Mapping[str, Any]):
+    """``("L2", 31.2, 25.0)`` for the phase furthest over, or ``None``."""
+    rows = list(_over_readings(snapshot))
+    if not rows:
+        return None
+    return max(rows, key=lambda r: r[1] - r[2])
 
 
 def single_phase_supply(snapshot: Mapping[str, Any]) -> bool:

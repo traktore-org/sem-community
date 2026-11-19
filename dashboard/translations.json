@@ -2518,7 +2518,12 @@
     "next_copy_by_hand": "Tento prohlížeč zde kopírování nepovoluje. Text je označený: zkopírujte ho a vložte do hlášení.",
     "next_close": "Zavřít",
     "next_period": "Období",
-    "next_runs_span": "v {n} úsecích, {window}"
+    "next_runs_span": "v {n} úsecích, {window}",
+    "energy_plan_off": "neuplatněno",
+    "energy_plan_off_note": "Provádění plánu je vypnuté, SEM tento plán neuplatňuje.",
+    "energy_plan_turn_on": "Zapnout provádění plánu",
+    "next_reason_sun_plus_grid": "Přebytek slunce plus síť v levné hodině",
+    "why_reason_charger_yielded": "Tuto nabíječku řídí druhá strana, proto do ní SEM nic neposílá."
   },
   "da": {
     "/year": "/år",
@@ -5039,7 +5044,12 @@
     "next_copy_by_hand": "Denne browser tillader ikke kopiering her. Teksten er markeret: kopiér den og indsæt den i din rapport.",
     "next_close": "Luk",
     "next_period": "Periode",
-    "next_runs_span": "i {n} omgange, {window}"
+    "next_runs_span": "i {n} omgange, {window}",
+    "energy_plan_off": "ikke anvendt",
+    "energy_plan_off_note": "Planudførelse er slået fra, så SEM anvender ikke denne plan.",
+    "energy_plan_turn_on": "Slå planudførelse til",
+    "next_reason_sun_plus_grid": "Overskydende sol plus net i en billig time",
+    "why_reason_charger_yielded": "En anden part styrer laderen, så SEM sender intet til den."
   },
   "de": {
     "/year": "/Jahr",
@@ -7560,7 +7570,12 @@
     "next_copy_by_hand": "Dieser Browser erlaubt hier kein Kopieren. Der Text ist markiert: kopieren Sie ihn und fügen Sie ihn in Ihre Meldung ein.",
     "next_close": "Schliessen",
     "next_period": "Zeitraum",
-    "next_runs_span": "in {n} Abschnitten, {window}"
+    "next_runs_span": "in {n} Abschnitten, {window}",
+    "energy_plan_off": "nicht angewendet",
+    "energy_plan_off_note": "Die Planausführung ist aus, SEM wendet diesen Plan nicht an.",
+    "energy_plan_turn_on": "Planausführung einschalten",
+    "next_reason_sun_plus_grid": "Solarüberschuss plus Netz in einer günstigen Stunde",
+    "why_reason_charger_yielded": "Ein Dritter steuert diese Ladestation, daher sendet SEM nichts an sie."
   },
   "en": {
     "/year": "/year",
@@ -10081,7 +10096,12 @@
     "next_copy_by_hand": "This browser does not allow copying here. The text is selected: copy it, then paste it in your report.",
     "next_close": "Close",
     "next_period": "Period",
-    "next_runs_span": "in {n} runs, {window}"
+    "next_runs_span": "in {n} runs, {window}",
+    "energy_plan_off": "not applied",
+    "energy_plan_off_note": "Plan execution is off, so SEM does not apply this plan.",
+    "energy_plan_turn_on": "Turn on plan execution",
+    "next_reason_sun_plus_grid": "Spare sun plus grid at a cheap hour",
+    "why_reason_charger_yielded": "Another party controls this charger, so SEM sends it nothing."
   },
   "es": {
     "/year": "/año",
@@ -12602,7 +12622,12 @@
     "next_copy_by_hand": "Este navegador no permite copiar aquí. El texto está seleccionado: cópielo y péguelo en su informe.",
     "next_close": "Cerrar",
     "next_period": "Periodo",
-    "next_runs_span": "en {n} veces, {window}"
+    "next_runs_span": "en {n} veces, {window}",
+    "energy_plan_off": "no aplicado",
+    "energy_plan_off_note": "La ejecución del plan está desactivada, así que SEM no aplica este plan.",
+    "energy_plan_turn_on": "Activar la ejecución del plan",
+    "next_reason_sun_plus_grid": "Excedente solar más red en una hora barata",
+    "why_reason_charger_yielded": "Un tercero controla este cargador, así que SEM no le envía nada."
   },
   "fi": {
     "/year": "/vuosi",
@@ -15123,7 +15148,12 @@
     "next_copy_by_hand": "Tämä selain ei salli kopiointia tässä. Teksti on valittu: kopioi se ja liitä se ilmoitukseesi.",
     "next_close": "Sulje",
     "next_period": "Jakso",
-    "next_runs_span": "{n} jaksossa, {window}"
+    "next_runs_span": "{n} jaksossa, {window}",
+    "energy_plan_off": "ei käytössä",
+    "energy_plan_off_note": "Suunnitelman suoritus on pois päältä, joten SEM ei toteuta tätä suunnitelmaa.",
+    "energy_plan_turn_on": "Ota suunnitelman suoritus käyttöön",
+    "next_reason_sun_plus_grid": "Ylimääräinen aurinko plus verkko halvalla tunnilla",
+    "why_reason_charger_yielded": "Toinen osapuoli ohjaa tätä laturia, joten SEM ei lähetä sille mitään."
   },
   "fr": {
     "/year": "/an",
@@ -17644,7 +17674,12 @@
     "next_copy_by_hand": "Ce navigateur ne permet pas de copier ici. Le texte est sélectionné : copiez-le, puis collez-le dans votre rapport.",
     "next_close": "Fermer",
     "next_period": "Période",
-    "next_runs_span": "en {n} fois, {window}"
+    "next_runs_span": "en {n} fois, {window}",
+    "energy_plan_off": "non appliqué",
+    "energy_plan_off_note": "L'exécution du plan est désactivée : SEM n'applique pas ce plan.",
+    "energy_plan_turn_on": "Activer l'exécution du plan",
+    "next_reason_sun_plus_grid": "Surplus solaire plus réseau à une heure creuse",
+    "why_reason_charger_yielded": "Un tiers pilote cette borne, SEM ne lui envoie donc rien."
   },
   "hu": {
     "/year": "/év",
@@ -20165,7 +20200,12 @@
     "next_copy_by_hand": "Ez a böngésző itt nem engedi a másolást. A szöveg ki van jelölve: másolja ki, és illessze be a bejelentésbe.",
     "next_close": "Bezárás",
     "next_period": "Időszak",
-    "next_runs_span": "{n} szakaszban, {window}"
+    "next_runs_span": "{n} szakaszban, {window}",
+    "energy_plan_off": "nincs alkalmazva",
+    "energy_plan_off_note": "A terv végrehajtása ki van kapcsolva, ezért a SEM nem alkalmazza ezt a tervet.",
+    "energy_plan_turn_on": "Terv végrehajtásának bekapcsolása",
+    "next_reason_sun_plus_grid": "Napelemes többlet plusz hálózat olcsó órában",
+    "why_reason_charger_yielded": "Ezt a töltőt egy másik fél irányítja, ezért a SEM nem küld neki semmit."
   },
   "it": {
     "/year": "/anno",
@@ -22686,7 +22726,12 @@
     "next_copy_by_hand": "Questo browser non consente di copiare qui. Il testo è selezionato: copialo e incollalo nella segnalazione.",
     "next_close": "Chiudi",
     "next_period": "Periodo",
-    "next_runs_span": "in {n} volte, {window}"
+    "next_runs_span": "in {n} volte, {window}",
+    "energy_plan_off": "non applicato",
+    "energy_plan_off_note": "L'esecuzione del piano è disattivata, quindi SEM non applica questo piano.",
+    "energy_plan_turn_on": "Attiva l'esecuzione del piano",
+    "next_reason_sun_plus_grid": "Surplus solare più rete in un'ora economica",
+    "why_reason_charger_yielded": "Un terzo controlla questa colonnina, quindi SEM non le invia nulla."
   },
   "nl": {
     "/year": "/jaar",
@@ -25207,7 +25252,12 @@
     "next_copy_by_hand": "Deze browser staat kopiëren hier niet toe. De tekst is geselecteerd: kopieer hem en plak hem in je melding.",
     "next_close": "Sluiten",
     "next_period": "Periode",
-    "next_runs_span": "in {n} keer, {window}"
+    "next_runs_span": "in {n} keer, {window}",
+    "energy_plan_off": "niet toegepast",
+    "energy_plan_off_note": "Planuitvoering staat uit, dus SEM past dit plan niet toe.",
+    "energy_plan_turn_on": "Planuitvoering aanzetten",
+    "next_reason_sun_plus_grid": "Zonne-overschot plus net op een goedkoop uur",
+    "why_reason_charger_yielded": "Een andere partij bestuurt deze laadpaal, dus SEM schrijft er niets naar."
   },
   "no": {
     "/year": "/år",
@@ -27728,7 +27778,12 @@
     "next_copy_by_hand": "Denne nettleseren tillater ikke kopiering her. Teksten er merket: kopier den og lim den inn i rapporten.",
     "next_close": "Lukk",
     "next_period": "Periode",
-    "next_runs_span": "i {n} omganger, {window}"
+    "next_runs_span": "i {n} omganger, {window}",
+    "energy_plan_off": "ikke brukt",
+    "energy_plan_off_note": "Planutførelse er av, så SEM bruker ikke denne planen.",
+    "energy_plan_turn_on": "Slå på planutførelse",
+    "next_reason_sun_plus_grid": "Overskuddssol pluss nett i en billig time",
+    "why_reason_charger_yielded": "En annen part styrer laderen, så SEM sender ingenting til den."
   },
   "pl": {
     "/year": "/rok",
@@ -30249,7 +30304,12 @@
     "next_copy_by_hand": "Ta przeglądarka nie pozwala tu kopiować. Tekst jest zaznaczony: skopiuj go i wklej do zgłoszenia.",
     "next_close": "Zamknij",
     "next_period": "Okres",
-    "next_runs_span": "w {n} etapach, {window}"
+    "next_runs_span": "w {n} etapach, {window}",
+    "energy_plan_off": "niezastosowany",
+    "energy_plan_off_note": "Wykonywanie planu jest wyłączone, więc SEM nie stosuje tego planu.",
+    "energy_plan_turn_on": "Włącz wykonywanie planu",
+    "next_reason_sun_plus_grid": "Nadwyżka słońca plus sieć w tanią godzinę",
+    "why_reason_charger_yielded": "Tą ładowarką steruje druga strona, więc SEM nic do niej nie wysyła."
   },
   "pt": {
     "/year": "/ano",
@@ -32770,7 +32830,12 @@
     "next_copy_by_hand": "Este navegador não permite copiar aqui. O texto está selecionado: copie-o e cole-o no seu relato.",
     "next_close": "Fechar",
     "next_period": "Período",
-    "next_runs_span": "em {n} vezes, {window}"
+    "next_runs_span": "em {n} vezes, {window}",
+    "energy_plan_off": "não aplicado",
+    "energy_plan_off_note": "A execução do plano está desligada, por isso o SEM não aplica este plano.",
+    "energy_plan_turn_on": "Ligar a execução do plano",
+    "next_reason_sun_plus_grid": "Excedente solar mais rede numa hora barata",
+    "why_reason_charger_yielded": "Outra parte controla este carregador, por isso o SEM não lhe envia nada."
   },
   "ro": {
     "/year": "/an",
@@ -35291,7 +35356,12 @@
     "next_copy_by_hand": "Acest browser nu permite copierea aici. Textul este selectat: copiați-l și lipiți-l în raport.",
     "next_close": "Închide",
     "next_period": "Perioadă",
-    "next_runs_span": "în {n} etape, {window}"
+    "next_runs_span": "în {n} etape, {window}",
+    "energy_plan_off": "neaplicat",
+    "energy_plan_off_note": "Execuția planului este oprită, deci SEM nu aplică acest plan.",
+    "energy_plan_turn_on": "Pornește execuția planului",
+    "next_reason_sun_plus_grid": "Surplus solar plus rețea într-o oră ieftină",
+    "why_reason_charger_yielded": "Altă parte controlează acest încărcător, deci SEM nu îi trimite nimic."
   },
   "sv": {
     "/year": "/år",
@@ -37812,7 +37882,12 @@
     "next_copy_by_hand": "Den här webbläsaren tillåter inte kopiering här. Texten är markerad: kopiera den och klistra in den i din rapport.",
     "next_close": "Stäng",
     "next_period": "Period",
-    "next_runs_span": "i {n} omgångar, {window}"
+    "next_runs_span": "i {n} omgångar, {window}",
+    "energy_plan_off": "inte tillämpad",
+    "energy_plan_off_note": "Planutförandet är av, så SEM tillämpar inte den här planen.",
+    "energy_plan_turn_on": "Slå på planutförande",
+    "next_reason_sun_plus_grid": "Överskottssol plus nät en billig timme",
+    "why_reason_charger_yielded": "En annan part styr laddaren, så SEM skickar ingenting till den."
   },
   "zh": {
     "/year": "/年",
@@ -40333,6 +40408,11 @@
     "next_copy_by_hand": "此浏览器不允许在此复制。文本已选中：请复制后粘贴到您的报告中。",
     "next_close": "关闭",
     "next_period": "时间段",
-    "next_runs_span": "分 {n} 次，{window}"
+    "next_runs_span": "分 {n} 次，{window}",
+    "energy_plan_off": "未应用",
+    "energy_plan_off_note": "计划执行已关闭，SEM 不会应用此计划。",
+    "energy_plan_turn_on": "开启计划执行",
+    "next_reason_sun_plus_grid": "多余的光伏电加电网，在低价时段",
+    "why_reason_charger_yielded": "另一方正在控制这个充电桩，所以 SEM 不向它发送任何指令。"
   }
 }

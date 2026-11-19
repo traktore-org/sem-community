@@ -248,8 +248,13 @@ def _energy_plan_attrs(
         "demands": plan.get("demands") or [],
         "slots": [{
             "start": s.get("start"), "end": s.get("end"),
+            # (#1390) what a grid kWh costs in the slot: the price lane draws
+            # it. A sun slot's own ``price`` is the feed-in rate the sun
+            # earns, so it sends its ``buy`` (None: not known) instead. Same
+            # bytes as a grid slot; the card has no other use for it.
+            "price": s.get("buy") if s.get("sun") else s.get("price"),
             # PRICE-ASK: a field name of the published slot, not a level
-            "price": s.get("price"), "cheap": s.get("cheap"),
+            "cheap": s.get("cheap"),
             "home_grid_w": s.get("home_grid_w"),
             # (#1085) only when the slot has a reading: no key, no bytes
             **({"co2": s["co2"]} if s.get("co2") is not None else {}),
@@ -2704,6 +2709,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "today_plan",
         "upcoming",
         "schedule_today",
+        "rate_steps",   # (#1390) the price lane's rule prices, today+tomorrow
         "schedule_surplus_hours",
         "schedule_ev_hours",
         "energy_dashboard",
@@ -3556,6 +3562,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "next_cheap_end": d.get("tariff_next_cheap_end"),
                 "upcoming": d.get("tariff_upcoming"),
                 "schedule_today": d.get("tariff_schedule_today"),
+                # (#1390) a schedule or two-rate tariff's prices for today
+                # and tomorrow; None on a dynamic tariff (``upcoming``)
+                "rate_steps": d.get("tariff_rate_steps"),
             })
         elif self.entity_description.key == "heat_pump_registration_status":
             # #432: surface WHY the heat pump is or is not registered.

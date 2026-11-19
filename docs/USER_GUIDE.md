@@ -82,6 +82,7 @@ are left out.
 
 - The name is on the left. The value is on the right.
 - Tap a row. A small dialog asks for the new value.
+- To rename a charger, tap the **Name** row on its card on **Devices**. Entity ids do not change.
 - An on/off setting is a switch on the row.
 - **Devices** rows save at once.
 - **System** rows are collected. Press **Apply** at the bottom to save them together.
@@ -460,10 +461,13 @@ The **preset** **Netherlands from 2027** fills tax and VAT.
   - SEM reads everything and shows what it would do.
   - Device actions are blocked and say **Watch only: not sent**.
   - SEM's own settings stay editable.
+- Turning watch only off also turns on plan execution if it was off. Turning it on leaves plan execution as it is.
 - A new install starts in watch only.
 - A device another party steers: set **Steered by another party** on the device.
   Choose to yield (SEM writes nothing while the steering indicator is on) or
   to keep control and get a Repair when SEM sees writes it did not make.
+  The one exception to yielding: if a phase is over its limit and the phase guard
+  enforces, SEM stops that charger. It never starts it again.
 
 ---
 

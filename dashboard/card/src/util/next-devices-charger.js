@@ -6,6 +6,7 @@
  */
 
 import { html, nothing } from '../base/sem-next-base.js';
+import { chargerRenameWrite } from './charger-name.js';
 import { resolveChargerSoc } from './charger-soc.js';
 import { effectivePlan, kwhAhead } from './plan-facts.js';
 import { targetModel, weekdaySummary } from './next-devices.js';
@@ -212,6 +213,12 @@ export function chargerBody(card, row) {
     const lateLabel = (m) => (m ? tf('ev_dep_minutes', { n: m }) : t('ev_dep_late_off'));
     // (#1321) every setting of this charger is a row: tap it, a dialog opens; a boolean is a switch
     const setRows = [];
+    // (#1386) the name: a SEM setting, so it stays open in watch-only mode
+    setRows.push(card._setRow({ label: t('next_add_name'), value: row.name || '—',
+        onTap: () => card._editDialog({ title: t('next_add_name'), ...card._textEdit('name:' + cid, { value: row.name, onCommit: (v) => {
+            const w = chargerRenameWrite(cid, v);
+            if (w && w.ev_chargers[0].name !== row.name) card._svc('set_option', { options: w });
+        } }) }) }));
     const srow = (label, value, spec, o = {}) => card._setRow({ label, value, disabled: dis || !!o.disabled, help: o.help || '', more: !!o.more,
         onTap: () => card._editDialog({ title: label, ...spec }) });
     if (timeId) {

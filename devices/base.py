@@ -470,6 +470,7 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # (#1079) Set each cycle by the coordinator from the user's
         # external-control mode; True = another party steers, SEM yields.
         self.external_yield: bool = False
+        self.phase_guard_override: bool = False  # (#1381)
         self.yielded_commands: list = []
         self._commanded_claim: bool = False  # backing field, see _sem_commanded
         # Monotonic anchor for the "belief says on but the entity reads off"
@@ -1098,7 +1099,10 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # exception — it does not steer, it keeps the box's own safety net
         # set, and withholding it would let that net lapse. A device nobody
         # told is a device that acts (same default as observer_mode).
+        # (#1381) The phase guard's own stop is the one write that goes
+        # out anyway: the fuse comes first. Stamped per cycle by actuate.
         if (getattr(self, "external_yield", False) is True
+                and getattr(self, "phase_guard_override", False) is not True
                 and service != "set_failsafe"):
             if not hasattr(self, "yielded_commands"):
                 self.yielded_commands = []

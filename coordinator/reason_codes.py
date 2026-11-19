@@ -56,6 +56,8 @@ CHARGER_RAMP = "charger_ramp"
 CHARGER_HOLD_STEADY = "charger_hold_steady"
 CHARGER_PLAN_OVERRIDE_STOP = "charger_plan_override_stop"
 CHARGER_PLAN_OVERRIDE_RUN = "charger_plan_override_run"
+# (#1391) another party steers this charger; SEM yields and sends nothing
+CHARGER_YIELDED = "charger_yielded"
 
 # ── batteries ────────────────────────────────────────────────────────
 BATTERY_OFF = "battery_off"

@@ -396,12 +396,13 @@ class TestWatchedOrChosenIsABattery:
         v = module_verdict({"battery_operating_mode_entity": "select.bat_mode"}, ED_EMPTY, True)
         assert v[Module.BATTERY] is Presence.PRESENT
 
-    @pytest.mark.parametrize("platform", ["generic", "huawei", "deye", "goodwe"])
+    @pytest.mark.parametrize("platform", ["huawei", "deye", "goodwe"])
     def test_an_explicit_platform_is_a_battery(self, platform):
         v = module_verdict({"battery_charge_platform": platform}, ED_EMPTY, True)
         assert v[Module.BATTERY] is Presence.PRESENT
 
-    @pytest.mark.parametrize("platform", ["auto", "AUTO", " auto "])
+    @pytest.mark.parametrize(
+        "platform", ["auto", "AUTO", " auto ", "generic", " Generic "])
     def test_the_default_platform_is_not(self, platform):
         v = module_verdict({"battery_charge_platform": platform}, ED_EMPTY, True)
         assert v[Module.BATTERY] is Presence.ABSENT

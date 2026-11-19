@@ -27,7 +27,7 @@ input arrives as a value or a callable.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .energy_planner import LedgerSlot
 from .price_view import PriceView
@@ -146,6 +146,13 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
             except Exception:  # noqa: BLE001 — no level is not cheap
                 tariff_cheap = False
         if surplus_w >= surplus_margin_w:
+            # (#1383) what a grid kWh costs here, for a load too big for
+            # the surplus; the slot's ``price`` stays the export rate
+            try:
+                p_in = price_at(t)
+                import_price = float(p_in) if p_in is not None else None
+            except Exception:  # noqa: BLE001 — unknown, the surplus only
+                import_price = None
             slots.append(LedgerSlot(
                 start=t, end=slot_end,
                 # (#871) NOT max(0.0, …). The clamp made a negative export rate
@@ -154,7 +161,8 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 # still handles an absent rate, the only case the clamp covered.
                 price=rate_at(t),
                 level_cheap=True, tariff_cheap=tariff_cheap, home_w=0.0,
-                cap_override_w=surplus_w,
+                cap_override_w=surplus_w, import_price=import_price,
+                import_cheap=level_cheap,
                 solar_w=solar_w, home_gross_w=home_w,
                 co2=co2,
             ))
@@ -251,6 +259,42 @@ def tariff_price_at(prov, ts):
         except Exception:  # noqa: BLE001 — unpriced, honestly
             return None
     return None
+
+
+#: (#1390) A calendar's windows start on the quarter hour.
+RATE_RUN_STEP = timedelta(minutes=15)
+
+
+def rate_runs(prov, start, end, step=RATE_RUN_STEP) -> list:
+    """(#1390) The tariff's own prices from ``start`` to ``end``, as runs
+    ``[{"start", "end", "price"}]`` in the shape of the plan's slots.
+
+    For a tariff whose prices are a rule (a schedule, two rates): the plan
+    card draws its price lane from them where the plan's slots end, so
+    tomorrow's peak is not drawn as one price. Read through
+    ``tariff_price_at`` (the plan's own accessor) once per ``step``,
+    stepped in UTC so a clock change neither skips nor repeats an hour. A
+    step with no known price is left out. ``start`` must be tz-aware; the
+    runs are written in its time zone.
+    """
+    tz = start.tzinfo
+    t = start.astimezone(timezone.utc)
+    stop = end.astimezone(timezone.utc)
+    runs: list = []
+    while t < stop:
+        e = min(t + step, stop)
+        p = tariff_price_at(prov, t.astimezone(tz))
+        if p is not None and math.isfinite(p):
+            # not rounded: the same number as the plan's slot for this hour
+            last = runs[-1] if runs else None
+            if last is not None and last["_e"] == t and last["price"] == p:
+                last["_e"] = e
+            else:
+                runs.append({"_s": t, "_e": e, "price": p})
+        t = e
+    return [{"start": r["_s"].astimezone(tz).isoformat(),
+             "end": r["_e"].astimezone(tz).isoformat(),
+             "price": r["price"]} for r in runs]
 
 
 def tariff_export_rate_at(prov, ts, fallback: float) -> float:

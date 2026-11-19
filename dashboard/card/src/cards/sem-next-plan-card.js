@@ -471,7 +471,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const win = chartWindow(now, this._range, tz);
         const sun = sunModel({ win, nowMs: now, actual: this._stats || [], forecast: this._fc || {}, liveW: this._powerW('sensor.sem_solar_power') });
         const tar = this._attrs('sensor.sem_tariff_current_import_rate');
-        const price = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, schedule: tar.schedule_today, past: this._priceStats || [],
+        const price = priceModel({ win, tz, nowMs: now, upcoming: tar.upcoming, slots: plan.slots, rates: tar.rate_steps, schedule: tar.schedule_today, past: this._priceStats || [],
             isDynamic: tar.is_dynamic, level: tar.price_level || this._str('sensor.sem_tariff_price_level'), todayAvg: tar.today_avg });
         const rows = planRows({ win, nowMs: now, plan, names: {
             charger: (cid) => (this._chargers.includes(cid) ? this._chargerName(cid) : ''),
@@ -573,17 +573,22 @@ class SEMNextPlanCard extends SEMNextBase {
                 <line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${C.grid}" stroke-width="2"></line>`);
             parts.push(this._svgChip(W / 2, y - 26, this._tf('next_price_flat', { price: this._price(pm.price), cur }), 'var(--n-fg)', 'var(--n-card)', 0, W));
         } else if (pm.steps.length) {
-            const PY = (v) => py1 - (py1 - py0 - 4) * v / (pm.max * 1.12);
+            // (#1390) Scaled from the lower of 0 and the cheapest price, filled
+            // to the zero line: a price below zero is drawn below it, not
+            // upside down (and a top price of 0 does not divide by 0).
+            const bottom = Math.min(0, pm.min), span = (Math.max(0, pm.max) - bottom) * 1.12 || 1;
+            const PY = (v) => py1 - (py1 - py0 - 4) * (v - bottom) / span;
+            const base = PY(0);
             let line = '', area = '';
             let prev = null;
             for (const st of pm.steps) {
                 const x0 = X(st.s), x1 = X(st.e), y = PY(st.p);
-                if (!prev || prev.e !== st.s) { line += `${line ? ' ' : ''}M${x0} ${y}`; if (prev) area += ` L${X(prev.e)} ${py1} Z`; area += `${area ? ' ' : ''}M${x0} ${py1} L${x0} ${y}`; }
+                if (!prev || prev.e !== st.s) { line += `${line ? ' ' : ''}M${x0} ${y}`; if (prev) area += ` L${X(prev.e)} ${base} Z`; area += `${area ? ' ' : ''}M${x0} ${base} L${x0} ${y}`; }
                 else line += ` L${x0} ${y}`;
                 line += ` L${x1} ${y}`; area += ` L${x0} ${y} L${x1} ${y}`;
                 prev = st;
             }
-            area += ` L${X(prev.e)} ${py1} Z`;
+            area += ` L${X(prev.e)} ${base} Z`;
             parts.push(svg`<path d="${area}" fill="url(#${gid}p)"></path><path d="${line}" fill="none" stroke="${C.grid}" stroke-width="2" stroke-linejoin="round"></path>`);
             const knownW = X(pm.steps[pm.steps.length - 1].e) - X(pm.steps[0].s);
             if (pm.avg !== null && knownW > 140) {
@@ -717,7 +722,14 @@ class SEMNextPlanCard extends SEMNextBase {
             const prices = tmw ? ' · ' + t(tmw.prices === 'final' ? 'next_prices_final' : 'next_prices_pending') : '';
             out.push(this._pill(t('next_pill_provisional') + prices));
         } else if (plan.computed_at) {
-            out.push(this._pill(plan.actuation ? t('next_pill_live') : t('next_pill_shadow'), plan.actuation ? 'ok' : ''));
+            // (#1377) not applied is not "shadow": watch-only is off, so say it and offer the switch
+            const off = !plan.actuation && !this._obs() && this._str('switch.sem_energy_plan_actuation') === 'off';
+            if (off) {
+                out.push(this._pill(t('energy_plan_off'), 'warn'));
+                out.push(this._btn(t('energy_plan_turn_on'), () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { small: true, primary: true }));
+            } else {
+                out.push(this._pill(plan.actuation ? t('next_pill_live') : t('next_pill_shadow'), plan.actuation ? 'ok' : ''));
+            }
         }
         return out;
     }
