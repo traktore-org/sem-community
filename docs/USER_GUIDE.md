@@ -2289,6 +2289,8 @@ diagnostics file and press Submit.
 one, once. Create `config/custom_sentences/en/solar_energy_management.yaml`
 with:
 
+These are intent names for sentence files. AI tools and MCP clients (such as Claude Desktop) see the same tools as `solar_energy_management__SemWhyBattery` and so on.
+
 ```yaml
 language: "en"
 intents:
