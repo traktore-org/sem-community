@@ -158,6 +158,66 @@ class TestPerChargerNumbers:
 
 
 @pytest.mark.unit
+class TestPerChargerSetByUser:
+    """(#1321) the card must tell the factory default from the owner's value."""
+
+    def _num(self, stored, factory=40):
+        chargers = [{"id": "c1", **({"ev_battery_capacity_kwh": stored} if stored is not None else {})}]
+        coord = _mock_coordinator(chargers)
+        coord.config = {"ev_chargers": chargers}
+        desc = NumberEntityDescription(key="charger_c1_ev_battery_capacity_kwh")
+        return SEMPerChargerNumber(coord, desc, _mock_entry(chargers), "c1",
+                                   "ev_battery_capacity_kwh", stored or factory,
+                                   default=factory)
+
+    def test_unset_default_is_not_the_owners_value(self):
+        assert self._num(None).extra_state_attributes == {"set_by_user": False}
+
+    def test_stored_factory_value_is_not_the_owners_value(self):
+        assert self._num(40).extra_state_attributes == {"set_by_user": False}
+
+    def test_a_stored_other_value_is_the_owners(self):
+        assert self._num(52).extra_state_attributes == {"set_by_user": True}
+
+    @pytest.mark.asyncio
+    async def test_writing_the_default_value_counts_as_set(self, monkeypatch):
+        num = self._num(None)
+        num.hass = MagicMock()
+        num.async_write_ha_state = MagicMock()
+        monkeypatch.setattr("custom_components.solar_energy_management.persist_per_charger_option",
+                            lambda *a, **k: None)
+        await num.async_set_native_value(40)
+        assert num.extra_state_attributes == {"set_by_user": True}
+
+    @pytest.mark.asyncio
+    async def test_owner_flag_survives_a_restart_with_the_default_value(self):
+        """(#1321) the real writer stores the flag next to the value; a new
+        entity built from the stored options reads it, default size or not."""
+        chargers = [{"id": "c1"}]
+        entry = _mock_entry(chargers)
+        coord = _mock_coordinator(chargers)
+        coord.config = {"ev_chargers": chargers}
+        entry.entry_id = "e"
+        hass = MagicMock()
+        desc = NumberEntityDescription(key="charger_c1_ev_battery_capacity_kwh")
+        num = SEMPerChargerNumber(coord, desc, entry, "c1",
+                                  "ev_battery_capacity_kwh", 40, default=40)
+        num.hass = hass
+        num.async_write_ha_state = MagicMock()
+        await num.async_set_native_value(40)
+        stored = hass.config_entries.async_update_entry.call_args.kwargs["options"]
+        # restart: a fresh entity over the stored charger list
+        coord2 = _mock_coordinator(stored["ev_chargers"])
+        coord2.config = {"ev_chargers": stored["ev_chargers"]}
+        again = SEMPerChargerNumber(coord2, desc, _mock_entry(stored["ev_chargers"]),
+                                    "c1", "ev_battery_capacity_kwh", 40, default=40)
+        assert again.extra_state_attributes == {"set_by_user": True}
+
+    def test_an_install_without_the_flag_keeps_a_stored_other_value(self):
+        assert self._num(52).extra_state_attributes == {"set_by_user": True}
+
+
+@pytest.mark.unit
 class TestPerChargerSwitches:
     """Test per-charger night charging switch entities."""
 

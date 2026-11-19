@@ -60,7 +60,7 @@ test('a load without a heating band keeps its texts, and off names a cause', () 
     const plain = (intent, over = {}) => deviceRows({ pump: { name: 'Pump', priority: 1, control_mode: 'surplus', is_on: false, intent, ...over } }, [])[0];
     assert.equal(heaterSays(plain(null), {}), null);
     assert.deepEqual(pill(plain({ on: false, source: null, code: 'target_met' })), { key: 'next_st_off', params: {}, cls: '', why: 'hq_because_ran_enough' });
-    assert.equal(pill(plain({ on: false, source: null, code: 'no_source' })).why, 'hq_because_no_sun');
+    assert.equal(pill(plain({ on: false, source: null, code: 'no_source' })).why, 'hq_because_no_source');
     assert.equal(pill(plain(null)).why, '');
     assert.equal(pill(plain({ on: false, code: 'plan_wait' }), { plannedAt: '13:30' }).key, 'next_st_waits_for');
     // (#1349) a cooling band says the same with its own words

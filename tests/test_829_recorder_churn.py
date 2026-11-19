@@ -148,15 +148,6 @@ class TestLiveValuesDoNotRideStableEntities:
             "the rating fallback returns the raw live reading"
         )
 
-    def test_priority_card_reads_live_power_from_the_entity(self):
-        from pathlib import Path
-        card = (Path(__file__).resolve().parent.parent / "dashboard" / "card"
-                / "src" / "cards" / "sem-load-priority-card.js").read_text()
-        assert "info.power_entity" in card and "states[info.power_entity]" in card, (
-            "the priority card must read live power from the device's own "
-            "entity now that the map no longer carries it"
-        )
-
 
 @pytest.mark.unit
 class TestTipsRotateForTheEyeNotTheRecorder:
@@ -195,7 +186,6 @@ class TestMismatchCounterDoesNotChurn:
         assert coarse_cycles(10) == 10
         assert coarse_cycles(47) == 40
         assert coarse_cycles(3144) == 3000
-
 
 
 @pytest.mark.unit

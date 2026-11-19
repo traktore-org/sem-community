@@ -148,18 +148,3 @@ class TestTheBoundsHaveOneHome:
         assert not [k for k in BOUNDS if k.startswith("anti_cycle_") and
                     k != "anti_cycle_window_min"]
 
-    def test_the_card_no_longer_hardcodes_the_range(self):
-        from pathlib import Path
-        src = (Path(__file__).resolve().parent.parent / "dashboard" / "card"
-               / "src" / "cards" / "sem-load-priority-card.js").read_text()
-        i = src.index("_renderAntiCycle(device) {")
-        body = src[i:i + 3000]
-        # CODE only — the comment above the input explains what the old
-        # hardcode was, and quoting it is not re-declaring it. The first
-        # draft of this test failed on its own explanatory comment.
-        code = "\n".join(l for l in body.split("\n")
-                        if not l.strip().startswith("//"))
-        assert 'max="120"' not in code, (
-            "the anti-cycle range is re-declared in JS — a second copy of "
-            "consts/bounds.py")
-        assert "_antiCycleBounds()" in code

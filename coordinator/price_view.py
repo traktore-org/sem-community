@@ -230,6 +230,37 @@ class PriceView:
         words through ``answer_for_level`` themselves."""
         return getattr(self._p, "get_price_level_at", None)
 
+    def has_fixed_cheap_rate(self) -> bool:
+        """(#1387) A schedule of cheap hours, not a moving price."""
+        reader = getattr(self._p, "has_fixed_cheap_rate", None)
+        if not callable(reader):
+            return False
+        try:
+            return reader() is True
+        except Exception:  # noqa: BLE001 — a provider that cannot say has none
+            return False
+
+    def hold_level_at_fn(self) -> Optional[Callable[[datetime], Any]]:
+        """(#1387) ``level_at_fn`` for the hold-through-dear-hours rule.
+
+        A two-rate tariff marks its peak NORMAL, so a rule that holds only
+        through EXPENSIVE hours let the car start in the peak. For a tariff
+        that has a fixed schedule of cheap hours (``has_fixed_cheap_rate``:
+        not a dynamic one) every priced hour that is not cheap reads
+        EXPENSIVE. A dynamic tariff keeps its own words. No answer stays
+        no answer: silence is not a dear hour (#925).
+        """
+        raw = self.level_at_fn()
+        if raw is None or not self.has_fixed_cheap_rate():
+            return raw
+
+        def level_at(t: datetime) -> Any:
+            lvl = raw(t)
+            if not _name(lvl) or is_cheap_name(lvl):
+                return lvl
+            return PriceLevel.EXPENSIVE
+        return level_at
+
     def now(self) -> PriceAnswer:
         """The live question: the state now, for acting now."""
         return self.at(None)
@@ -276,6 +307,19 @@ class PriceView:
         if own is None or getattr(own, "same_as_price_level", False):
             return None
         return self.rate_cheap_at
+
+    def has_cheap_rate(self) -> bool:
+        """(#1385) Can the tariff call any hour cheap at all? A setting that
+        waits for cheap hours is offered only then. Not ``tariff_mode ==
+        "dynamic"``: a schedule or a two-rate tariff has cheap hours too.
+        Only a provider that says ``True`` has them."""
+        reader = getattr(self._p, "has_cheap_rate", None)
+        if not callable(reader):
+            return False
+        try:
+            return reader() is True
+        except Exception:  # noqa: BLE001 — a provider that cannot say has none
+            return False
 
     # ── comparing hours ───────────────────────────────────────────────
 

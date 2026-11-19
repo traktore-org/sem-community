@@ -1,8 +1,6 @@
 /**
- * (#1321) SEM Next: the Setup check and the Detected-hardware review, in
- * the new dashboard. Same reads and writes as the classic Setup card
- * (sem-config-card.js _renderOverview / _renderSourceCheck /
- * _renderDetectedHardware): get_config to read the options, set_option to
+ * (#1321) The Setup check and the Detected-hardware review of the SEM
+ * dashboard: get_config to read the options, set_option to
  * save a proposal, chargerAddPlan for "Add this charger", flip_*_sign for a
  * wrong direction. The System screen mounts it with kind 'check' or
  * 'hardware' and listens for 'sem-next-close' (detail.goto names the setup
@@ -45,7 +43,7 @@ export function whyNoButton(p) {
         case 'observe_only': return { key: 'config_proposed_observe_only' };
         case 'not_loaded': return { key: 'config_proposed_not_loaded' };
         case 'no_unit': return { key: 'config_proposed_no_unit', vars: { wanted: p.unit_wanted || '' } };
-        case 'unit_mismatch': return { key: 'config_proposed_unit_mismatch', vars: { seen: p.unit_seen || '?', wanted: p.unit_wanted || '' } };
+        case 'unit_mismatch': return { key: 'config_proposed_unit_mismatch', vars: { seen: p.unit_seen || '—', wanted: p.unit_wanted || '' } };
         case 'options_unmapped': return { key: 'config_proposed_options_unmapped',
             vars: { missing: (p.values_missing || []).join(', '), options: (p.options || []).join(', ') } };
         case 'pair_incomplete': return { key: 'config_proposed_pair_incomplete', vars: { missing: (p.missing_role || []).join(', ') } };
@@ -218,7 +216,7 @@ class SEMNextSetupPanel extends SEMNextBase {
     async _loadOptions() {
         if (!this._hass) return;
         try {
-            const resp = await this._hass.callService(DOMAIN, 'get_config', {}, undefined, false, true);
+            const resp = await this._call(DOMAIN, 'get_config', {}, undefined, false, true);
             const cfg = resp?.response?.config;
             if (cfg && typeof cfg === 'object') this._options = cfg;
             if (resp?.response?.entry_id) this._entryId = resp.response.entry_id;
@@ -236,7 +234,7 @@ class SEMNextSetupPanel extends SEMNextBase {
         this._err = '';
         this._status = { ...this._status, [field]: 'saving' };
         try {
-            await this._hass.callService(DOMAIN, 'set_option',
+            await this._call(DOMAIN, 'set_option',
                 { options: { ...write }, ...(this._entryId ? { entry_id: this._entryId } : {}) }, undefined, false);
             this._status = { ...this._status, [field]: 'ok' };
             this._options = { ...(this._options || {}), ...write };
@@ -255,7 +253,7 @@ class SEMNextSetupPanel extends SEMNextBase {
         this._busy = true;
         this._err = '';
         try {
-            await this._hass.callService(DOMAIN, 'set_option',
+            await this._call(DOMAIN, 'set_option',
                 { options: { ev_chargers: [plan.charger] }, ...(this._entryId ? { entry_id: this._entryId } : {}) }, undefined, false);
             await this._loadOptions();
         } catch (err) {
@@ -265,13 +263,20 @@ class SEMNextSetupPanel extends SEMNextBase {
         }
     }
 
+    /** (#1321) A tap only asks; the flip runs on the confirm button. */
+    _askFlip(which) {
+        this._confirmDo({ title: this._t(which === 'battery' ? 'next_row_flip_battery' : 'next_row_flip_grid'),
+            body: this._t(which === 'battery' ? 'next_flip_battery_body' : 'next_flip_grid_body'),
+            okLabel: this._t('next_flip_ok'), run: () => this._flip(which) });
+    }
+
     async _flip(which) {
-        if (this._busy || !this._hass || this._obs()) return;
+        if (this._busy || !this._hass) return;
         this._busy = true;
         this._err = '';
         this._msg = '';
         try {
-            const res = await this._hass.callService(DOMAIN, which === 'battery' ? 'flip_battery_sign' : 'flip_grid_sign',
+            const res = await this._call(DOMAIN, which === 'battery' ? 'flip_battery_sign' : 'flip_grid_sign',
                 {}, undefined, false, true);
             const payload = res && res.response ? res.response : res;
             let copied = false;
@@ -332,7 +337,6 @@ class SEMNextSetupPanel extends SEMNextBase {
             ''));
         const reads = m.sources.map((r) => this._row('', t('config_check_' + r.key),
             (r.dir ? t('config_check_' + r.dir) + ' ' : '') + fmtWatts(r.w), ''));
-        const obs = this._obs();
         return html`
             ${this._sec(head, html`<div class="bar"><i class=${m.allDone ? 'done' : ''} style=${'width:' + m.pct + '%'}></i></div>
                 <div class="rows">${items}</div>
@@ -341,8 +345,8 @@ class SEMNextSetupPanel extends SEMNextBase {
             ${this._sec(t('config_check_intro'), html`<div class="rows">${reads}</div>
                 <p class="help">${t('config_check_question')}</p>
                 <div class="acts">
-                    ${this._btn(t('config_check_grid_wrong'), () => this._flip('grid'), { small: true, icon: 'mdi:swap-vertical-bold', disabled: this._busy || obs })}
-                    ${m.hasBattery ? this._btn(t('config_check_battery_wrong'), () => this._flip('battery'), { small: true, icon: 'mdi:swap-vertical-bold', disabled: this._busy || obs }) : nothing}
+                    ${this._btn(t('config_check_grid_wrong'), () => this._askFlip('grid'), { small: true, icon: 'mdi:swap-vertical-bold', disabled: this._busy })}
+                    ${m.hasBattery ? this._btn(t('config_check_battery_wrong'), () => this._askFlip('battery'), { small: true, icon: 'mdi:swap-vertical-bold', disabled: this._busy }) : nothing}
                 </div>
                 <p class="help">${t('config_check_wrong_sensor')}</p>`)}`;
     }
@@ -351,7 +355,7 @@ class SEMNextSetupPanel extends SEMNextBase {
         const st = this._status[field];
         if (!write) return nothing;
         return html`${this._btn(st === 'saving' ? this._t('config_proposed_using') : this._t('config_proposed_use'),
-            () => this._save(write, field), { small: true, primary: true, disabled: st === 'saving' || this._obs() })}${st === 'ok' ? html` <span class="ok">✓</span>` : nothing}`;
+            () => this._save(write, field), { small: true, primary: true, disabled: st === 'saving' })}${st === 'ok' ? html` <span class="ok">✓</span>` : nothing}`;
     }
 
     _proposal(p, field) {
@@ -378,7 +382,6 @@ class SEMNextSetupPanel extends SEMNextBase {
         const report = this._attrs(REPORT).detection_report || null;
         const m = hardwareModel(report, this._options, knownChargerIds(this._hass.states, this._options));
         if (!m) return html`<p class="help">${t('config_detect_none')}</p>`;
-        const obs = this._obs();
         const gaps = [];
         if (m.unknown.length) {
             gaps.push(this._row('mdi:help-circle-outline', t('config_census_unknown'),
@@ -394,7 +397,7 @@ class SEMNextSetupPanel extends SEMNextBase {
             <div class="mono">${x.entities.join(', ')}</div>
             <div class="acts">
                 ${x.action === 'add' ? (x.plan && x.plan.action === 'add'
-                    ? this._btn(t('config_near_miss_add'), () => this._addCharger(x.suggested), { small: true, primary: true, icon: 'mdi:ev-station', disabled: this._busy || obs })
+                    ? this._btn(t('config_near_miss_add'), () => this._addCharger(x.suggested), { small: true, primary: true, icon: 'mdi:ev-station', disabled: this._busy })
                     : this._pill(t('config_detect_configured'), 'ok')) : nothing}
                 ${x.action === 'watch' ? html`<span class="dim sm">${t(x.watchKey)}</span>` : nothing}
                 ${x.action === 'report' && x.reportUrl ? html`<a class="btn sm" target="_blank" rel="noopener" href=${x.reportUrl}>${t('config_near_miss_report')}</a>` : nothing}

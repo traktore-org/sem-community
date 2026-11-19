@@ -544,18 +544,16 @@ class TestTheRepairNamesARealPlace:
         cards = json.loads((_ROOT / "dashboard" / "translations.json").read_text(
             encoding="utf-8"))
         labels = {**cards["en"], **cards["zh" if lang == "zh-Hans" else lang]}
-        for label_key in ("Configuration", "config_advanced_label",
-                          "config_section_sensor_sources", "config_grid_power_sensor",
-                          "config_section_tariff", "config_grid_import_entity",
+        # The labels the new dashboard shows: System screen → All settings →
+        # What SEM reads (#1321; the classic Configuration tab is gone).
+        for label_key in ("System", "next_all_settings", "next_g_reads",
+                          "config_grid_power_sensor", "config_grid_import_entity",
                           "config_grid_export_entity"):
             want = labels.get(label_key) or label_key
             assert f"**{want}**" in text, (lang, label_key)
 
-    def test_both_places_are_on_the_config_card(self):
-        card = (_ROOT / "dashboard" / "card" / "src" / "cards"
-                / "sem-config-card.js").read_text(encoding="utf-8")
-        body = card.split("_renderSensorSources(T) {", 1)[1].split("\n    }", 1)[0]
-        assert "'grid_power_sensor'" in body
-        tariff = card.split("_renderTariff(T) {", 1)[1].split("\n    _render", 1)[0]
-        assert "'grid_import_power_entity'" in tariff
-        assert "'grid_export_power_entity'" in tariff
+    def test_both_places_are_on_the_dashboard(self):
+        from ._dashboard_src import dashboard_src
+        card = dashboard_src()
+        for key in ("grid_power_sensor", "grid_import_power_entity", "grid_export_power_entity"):
+            assert f"'{key}'" in card, key

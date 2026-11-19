@@ -14,6 +14,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - ✨ **Hold the battery through a mode select** (#1362). For inverters with no discharge limit: SEM keeps it for dear hours and checks the hold works.
+- 💥 **One dashboard** (#1321). The classic dashboard is retired: an unchanged one is replaced, a changed one stays with a Repair. Settings are on System, Devices.
+- 📝 **Shorter docs for the new dashboard** (#1321). Every guide is rewritten for the five screens and checked against the code. New screenshots.
+- 🐛 **No false negative base load** (#1394). A plug that reports before the grid meter no longer pushes the live base load below zero.
+- 🐛 **Grid charge with the mode already set** (#1377). If the mode already shows the charge option, SEM still raises the reserve and allows grid charging.
+- 🐛 **A run under way reads as running** (#1321). The screens say "charging until 14:45", not "waits for 15:00".
+- 🐛 **Plainer battery and settings** (#1321). The battery line says what a full battery gives; an unset car size reads "not set".
+- 🐛 **One figure per device** (#1321). Plan, Now and Devices count only runs still ahead. Coming up names the car and drops cars not plugged in.
+- 🐛 **Plainer lines** (#1321). Unset car size reads "not set". Heat pump off and about to start says so in one line.
+- 🐛 **No braces in checks** (#1321). Repair titles show their values. A car size you set to the default stays yours.
+- 🐛 **Plan and Devices agree** (#1321). "Cheapest hours" uses tariff prices. Battery refill is the plan's. A charge not running says planned.
+- 🐛 **Clearer wording** (#1321). Tonight's need is compared with what the battery gives above its reserve. Plainer surplus and morning lines.
+- 🐛 **True plan reasons** (#1321). "Cheapest hours" only when the car got them; each battery block names its reason; one battery size.
+- 🐛 **Named checks, no guessed car size** (#1321). The headline names every check; an unset car battery is unknown; watch-only Devices say what SEM would do.
+- 🐛 **Plainer System and Plan** (#1321). One battery sentence everywhere; no buttons without a car; Coming up follows the plan; clearer units and tips.
+- 🐛 **Honest numbers and names** (#1321). Off devices show rated size, not live power. The headline names each check. Sources that disagree say so.
+- 🐛 **House by source adds up** (#1321). A small counter drop is no longer read as use. Parts match the total. Flow counters never step back.
+- 🐛 **One battery sentence** (#1321). Plan, Now and Decisions say what tonight needs and when the battery may help the car.
+- 🐛 **Figures agree** (#1321). A car shows at most its need. A running heat pump shows running. Surplus stays under house use.
+- 🐛 **Plainer words, round two** (#1321). Contacts by role, the headline names what to check, and no Sell button while selling is off.
+- 🐛 **One number, one rounding** (#1321). The car's planned kWh, its need and the sun figure agree on every screen; the plan names who is short.
+- 🐛 **Plainer Devices and Plan** (#1321). Surplus counts measured power only; a switch that is unavailable is not on; two learners have their own names.
+- 🐛 **Clearer setup, dialogs and tips** (#1321). Set up with checks is one line; dialog buttons stay in view; no praise tip on a dark day.
+- 🐛 **Plans show real hours** (#1321). A car with two runs shows two windows, one kWh figure and one next start on every screen.
+- 🐛 **A device is either on or waiting** (#1321). Now, Devices and Why now use one rule; Health says no power reading.
+- ✨ **Every confirm says what it does** (#1321). Each action explains itself; the relay switch asks first; repeated battery limits fold into one row.
+- 🐛 **Plainer words** (#1321). Learning shows nights out of nights needed; no solar tip for zero export; one CO₂ format; peak warning only near the limit.
+- 🐛 **Dialog buttons show on HA 2026.11** (#1321). Cancel, OK and Save were drawn at zero size, so nothing could be confirmed or saved.
+- 🐛 **Fewer repeats, clearer words** (#1321). One power figure, one Phases row, the peak switch first; names and numbers agree.
+- 🐛 **One plan on every screen** (#1321). Headline, chart, list and Now name the same car hours; past hours are gone; tomorrow's say tomorrow.
+- 🐛 **A day plan keeps its hours** (#1321). A busy quarter-hour day no longer drops who takes energy and when.
+- 🐛 **Actions ask first** (#1321). Sign flips, replan, pause, boost and clean up ask first; a tap alone changes nothing.
+- 🐛 **Each fact reads one source** (#1321). Heat pump state, car plug status, grid kWh, house kWh and the battery floor now agree on every screen.
+- 🐛 **Plan words match the time** (#1321). A passed deadline says tomorrow; the plan says this morning, today or tonight; no false "one rate".
+- ✨ **Watch only has one name and settings stay editable** (#1321). Only writes that move a device are refused, at the moment of the write.
+- 🐛 **No engine text on screen** (#1321). "What SEM would do" shows plain sentences; names you typed are kept; source names are plain.
+- 🐛 **Plainer Now, Devices and System screens** (#1321). One mode control per car, schedule shown once, fewer repeats, units on values, readable light mode.
+- ✨ **Settings are Home Assistant rows** (#1321). Name left, value right; tap a row to change it. On/off settings are a switch.
+- 🐛 **Screens show true values and plain names** (#1321). Plan line matches chart, one bar scale, one price format, no entity ids.
+- 🐛 **Plainer words in all languages** (#1321). Solar, Export and Charge by each have one name; jargon is gone.
+- ✨ **The SEM dashboard looks like Home Assistant** (#1321). Real cards, your theme's colours and fonts, and HA's own switch, buttons, fields, dialog and messages.
+- 🐛 **Replacing the old dashboard never restarts Home Assistant** (#1321). A new dashboard that cannot load at once shows up after your next restart.
+- 🐛 **Repair texts name the screens of the SEM dashboard** (#1321). They no longer send you to tabs that are gone.
+- ✨ **The Plan screen shows last night's review again** (#1321). What each device used, the battery's night and the sun kept.
+- 🐛 **Source health tiles show names, not entity ids** (#1321). The id is in the more-info dialog.
+- ✨ **One dashboard: the new one** (#1321). The classic dashboard, its cards and the diagram style option are gone.
+- ✨ **An unchanged classic dashboard is replaced on first start** (#1321). A changed one stays, its SEM cards link to the new one.
+- 🐛 **Removed cards show a short notice, not a red error** (#1321). On any dashboard, with a link to the SEM dashboard.
+- ✨ **The System screen has the grid-charge, discharge-end, peak-hold and heat pump step-down settings** (#1321). They only had a place on the old Configuration tab.
+- 🐛 **Links between screens work at any dashboard address** (#1321). Also the welcome message and phone notifications.
+- 📝 **Dashboard Guide rewritten for the five screens** (#1321). README shows only the new dashboard.
+- 🐛 **Fewer duplicates on the SEM screens** (#1321). One sources row, one power number, one battery mode control, rare settings under More.
+- ✨ **Easier to use** (#1321). Plain button labels, Observer mode as a switch, outlined tiles, 40 px touch targets, Insights topics as a dropdown on phones.
+- ✨ **Numbers follow your language and keyboard works everywhere** (#1321). 3,5 kW in German; Enter and Space work on every control; dialogs close with Escape.
+- 🐛 **The battery plan asks only for what the pack can still take** (#1388). A block with no cheaper hour left no longer says "cheapest hours".
+- 🐛 **No more HA 2026.11 warnings about SEM's AI tools** (#1389). Tool names now start with `solar_energy_management__`.
+- 🐛 **Heat pump cost sensor shows the outdoor temperature even without a COP curve; the plan says why a heat pump has no ask** (#1081).
+- ✨ **Rename a charger on the Devices screen** (#1386). Tap the Name row on its card; entity ids stay the same.
+- 🐛 **A planned battery charge now raises the plan's battery level** (#1377). The end level and the hours after the charge no longer stay at 0 %.
+- 🐛 **Letting SEM take control also turns on plan execution** (#1377). The Plan card says "not applied" instead of "observation" while it is off.
+- 🐛 **Night plan made on homes without a battery** (#1376). A saved "generic" setting is no battery, so cheapest hours wait for the cheap block.
+- 🐛 **A one-phase car is spotted** (#1376). A slow ramp no longer hides it. Always (max) names the charger's own current limit.
+- 🐛 **"Solar + cheapest hours" can be picked with a schedule or two-rate tariff** (#1385). Before, only a dynamic tariff allowed it.
+- 🐛 **Phase guard stops a "SEM yields" charger when a phase is over its limit** (#1381). Only that stop is sent; small loads stay on.
+- 🐛 **Cheapest-hours car waits out the peak on a two-rate tariff** (#1387). Before, it could start in a peak hour.
+- 🐛 **Cheapest-hours car can use a cheap hour with thin sun** (#1383). The grid covers what the sun lacks, at the grid price.
+- 🐛 **"Yes, SEM yields" with no signal now always yields** (#1391). Before, SEM kept steering the charger, and the card said it was starting the car.
+- 🐛 **Price and plan shows a schedule or two-rate tariff's real prices, today, tomorrow and in sunny hours** (#1390). Before, it showed one fixed price.
+
+# [2.3.0-beta.20] — 18.11.2026
+
+- 🐛 **Loads SEM switched off come back after a restart** (#896). Also on unload, stop or crash; hand changes are left alone.
+- 🐛 **A switch named router, NAS or server is never switched off** (#896). A warning shows; “surplus” becomes “peak only”.
+- 🐛 **Daily energy flows no longer step back for a few minutes** (#1382). A missing meter read no longer changes their split.
+- 🐛 **A device's own tariff cost no longer shows yesterday's cost after midnight** (#1382). Also no blank after a restart.
+
+# [2.3.0-beta.19] — 17.11.2026
+
+- 🐛 **A charging current set through a select picks an offered step** (#1376). Never more current than SEM asked for.
+- 📝 **Repair texts name menus that exist** (#1371). A test checks every path against the real menus and dashboard sections.
+- 🐛 **Night battery charge counts the whole next day and the battery's floor** (#1377). An empty battery now charges before dear hours.
+- 🐛 **"Why" answers from what a device does now** (#1086). A missing reading counts as unknown, never as 0.
+- 📝 **Docs and README claims are now tested** (#1377). Each setting the guides name has a dashboard field; README claims match the code.
+
+- ✨ **An AI assistant can tell you how to set up a grid charge** (#1362). It names the battery's selects and options to pick.
+- 🐛 **The heat pump reads its climate entity's room temperature** (#1380). A picked thermometer still comes first, on every device.
+- ✨ **SEM finds a grid-charge and a hold select by their options** (#1362). Any inverter; the card offers it with the right option.
 
 # [2.3.0-beta.18] — 17.11.2026
 

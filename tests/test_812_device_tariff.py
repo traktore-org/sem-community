@@ -16,7 +16,6 @@ optionally its own meter.
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -586,18 +585,20 @@ class TestTheSettingsAreEverywhere:
             _SET_OPTION_STRUCTURAL_KEYS,
         )
         assert set(FLOW_KEYS) <= _SET_OPTION_STRUCTURAL_KEYS
-        card = (ROOT / "dashboard/card/src/cards/sem-config-card.js").read_text("utf-8")
+        from ._dashboard_src import dashboard_src
+        card = dashboard_src()
         for k in FLOW_KEYS:
             assert f"'{k}'" in card
 
     def test_the_config_card_shows_them(self):
-        card = (ROOT / "dashboard/card/src/cards/sem-config-card.js").read_text("utf-8")
+        from ._dashboard_src import dashboard_src
+        card = dashboard_src()
         for k in FLOW_KEYS:
-            assert re.search(rf"_render\w+\('{k}'", card), k
+            assert f"'{k}'" in card, k
 
     def test_the_load_card_shows_them_per_device(self):
-        card = (ROOT / "dashboard/card/src/cards/sem-load-priority-card.js").read_text("utf-8")
-        assert "_renderOwnTariff(device)" in card
+        from ._dashboard_src import dashboard_src
+        card = dashboard_src()
         for k in ("tariff_rate", "tariff_entity", "tariff_meter"):
             assert f"'{k}'" in card
 

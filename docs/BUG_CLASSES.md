@@ -6546,7 +6546,8 @@ Refs #1149 #1095 #1143 #1141 #1144 #1150 #1154.
 **Guard:** `tests/test_1153_sensorless_charger_restart.py` replays the chain (confirm, view, decide, stability, reconciler) cycle by cycle: a draw, then hours at 0 W with surplus — a start offer, no "disconnected", no PARK_OFF in every surplus mode and always_max, a bounded count of give-ups over eight empty hours, a draw ending the backoff; a charger with a plug sensor still idles and parks; the session survives an unknown and ends on a reported unplug. Extended: `test_610_full_car_backoff.py` (the backoff and streak survive an unknown plug; no interruption spent), `test_park_on_disconnect.py` (observe; no park), `test_638_plug_confirmation.py` (a confirmed "no" without a sensor is unknown), `test_638_night3_findings.py` (one helper for the plan and the view), `test_584_per_charger_connected.py` (no notification on a start offer), `test_ev_connected_physics_defence.py` (the reader and the view at rest and drawing). The scenario harness declares a plug sensor, since its timeline's `ev_connected` is one's answer. Five mutants of the fix are killed.
 **Sweep question:** where a boolean is filled from a sensor that may not exist, does any consumer read the fallback False as the sensor saying no?
 **Left open:** (1) a sensor-less charger's session is no longer ended when its draw stops: nothing can say the car left, so it runs on across pauses and later charges. (2) A new car plugged into a sensor-less charger during a backoff waits for the backoff to end (at most 80 minutes); the box's own auto-start, where it has one, is not held. (3) In a multi-charger home a charger with no sensor of its own still took the fleet value in `build_charger_view` (#1150, closed: class 149). (4) always_max is outside the stability layer: an empty sensor-less charger in that mode holds one standing offer at its maximum (one start, no ladder, no repeats).
-Refs #1153 #638 #285 #610 #975 #1011 #584.
+**Second instance — #1391, "Yes, SEM yields" with no signal.** **Symptom:** a Zaptec set to "Controlled by another party: Yes, SEM yields" with the signal field left empty. SEM kept writing to it: the decision log showed "SEM starts charging" at 6 → 8 → … → 16 A, and the card said the car did not start and SEM would try again. **Root shape:** `ExternalControlBook.update` read the signal with `read_indicator`, which answers None for an empty entity id, and None means "keep what we knew", which starts as "not steered". So an empty field read as a signal that says "nobody steers", and the mode did nothing. **Closure:** in yield mode an empty (or blank) signal is steered all the time, from the first look; observe needs no signal; a picked signal that cannot be read keeps #1079's restart rule. The help text says so in all 16 languages. **Swept:** the battery's yield (same book, same rule); and what a yielded charger still did while its writes were held back. Both charger paths (`_yield_or_stabilise`, the fleet loop and the single-charger branch) now skip the stability layer for a yielded charger, forget its start ladder and #610 backoff (`ChargeStability.stand_aside`, the reset a mode change does, #975's count kept), and give it `yielded_charger_decision`: IDLE at 0 A with `charger_yielded` as its reason code. So the card says another party steers it, and no ladder arms a "car declined" backoff for the hand-back. IDLE, not RELEASE, so the phase guard still turns it into its stop over a limit (#1381); a charger set to Off keeps its RELEASE and gets no such stop (#898, review). In the fleet loop the sun and night budgets count the yielded charger's measured draw (`_yielded_draw_w`), not SEM's wish: home power leaves car charging out, so with 0 W the next charger would spend the same sun (review). The phase-switch tick is skipped for it: its entity switch is gated on observer mode only (review). **Guard:** `tests/test_1391_yield_without_signal.py` — the book (charger, battery, blank, observe, a picked missing signal, a signal picked later), the yielded decision (the #1381 stop; Off keeps RELEASE), the ladder skipped and forgotten, two real chargers on 8 kW of sun (the second starts when the yielded one draws nothing, and not when it draws 7 kW), and the real setup: an always_max charger with a car gets 16 A without the setting and nothing with it, from the card's own `set_option` write to the cycle. `test_461_charge_stability.py`'s anchor now asks for `_yield_or_stabilise` at both branches and the filter inside it. **Left open:** a picked signal whose entity never appears (renamed, removed) still reads "not steered" for ever; how long "missing" may last before it counts as steered is a design choice. A battery saved as "yield" with no signal on an older build, restarted while SEM held a limit or a forced charge, keeps that leftover: a yielded battery gets no startup restore (#1079). Whether the first start of a no-signal yield should hand SEM's own writes back is a design choice. At night a yielded charger can still show a night state (`charging_state`); its reason line says it yields.
+Refs #1153 #638 #285 #610 #975 #1011 #584 #1391 #1079 #1381.
 
 ### 149. A fleet OR read as one unit's answer — a sibling's car is this charger's — GUARDED
 **Symptom:** in a multi-charger home a charger with no plug or charging sensor of its own counted as connected and charging whenever another charger was (#1150). The redirect veto struck it for a draw it never made and vetoed its redirect for the plug-in (#899), the phase planner and sequencer were told it charged (#804/#1008), the pack consent counted its mode for a car it did not have (#1130), and "charging started" could be pushed for it (#584).
@@ -6946,7 +6947,38 @@ and the two provider files, no code may call a level accessor, use `PriceLevel.<
 with a level word. An exception carries `# PRICE-ASK: <reason>`.
 **Left open:** a device with its own tariff is still planned with the live question about later
 hours (`PlanTariff.cheap_at` → `cheap_seen_from_now`). No real data to prove a change on.
-Refs #1372 #994 #1310 #1362 #1368 #1369.
+**Round 2 (#1385) — "has cheap hours" read from the mode name.** "Solar + cheapest hours" was
+greyed out for a schedule tariff with 0.32 and 0.21: the select said `tariff_available` only when
+`tariff_mode == "dynamic"`, while the plan already used the 0.21 hours. A two-rate static tariff
+had the same block. **Fixed:** `PriceView.has_cheap_rate()` asks the provider
+(`has_cheap_rate`: static = two rates and a peak window; calendar = two rates and a peak block in
+the week; dynamic = yes). Swept, same shape in SEM Next: the money row said "one rate" and the plan
+chart drew one price for any tariff that is not dynamic (**fixed**: what the hours hold decides).
+**Guard:** `tests/test_1385_schedule_tariff_cheap_mode.py` — the reporter's schedule through the
+real provider and the real coordinator; an AST count of every compare with `"dynamic"`, each with
+its reason. **Left open (choice):** the "cheap now" hint and the #1321 price-paid compare stay
+dynamic-only.
+**Round 3 (#1390) — the card had no price for tomorrow.** Same reporter, the plan card's price
+lane: "Fixed · 0.21" on the schedule tariff. Round 2 fixed the word; on "Tomorrow" it still said
+one price. A schedule or two-rate tariff sends no `upcoming` curve, `schedule_today` ends at
+midnight, and the plan's slots end in the morning: tomorrow had only night hours at 0.21. Late in
+the evening the next 24 h had a gap where the peak is known. **Fixed:** the coordinator publishes
+`tariff_rate_steps` (sensor attribute `rate_steps`) for any tariff that is not dynamic: today and
+tomorrow, read through `tariff_price_at` (the plan's accessor) per quarter hour, stepped in UTC, an
+hour with no known price left out (`day_ledger.rate_runs`). `priceModel` reads them before the
+plan's slots (a slot is an hour priced at its start). Swept, same lane: a sun slot's `price` is the
+feed-in rate, so a sunny hour was drawn at 0.06; the plan's slot now keeps `buy` (the grid price,
+None when unknown) and the sensor sends that as the slot's `price` (no bytes added). A tariff that
+sends rates is one price only when no hour from now on is unknown, and prices that differ past the
+4th decimal (rounded curve, exact rates) are one price. Same lane: the scale started at 0, so
+prices below zero were drawn upside down or under the lane; it now starts at the cheapest price
+and fills to the zero line. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` (the reporter's helper through
+the real provider, both clock changes, the real sensor) and the #1390 case in
+`dashboard/card/test/next-plan-chart.test.js`. **Left open:** a past hour is the recorder's mean,
+so a rate change at :30 is drawn as one blended hour (what was paid); a dynamic tariff on a 15-min market
+still sends 48 points (12 h) in `upcoming`; tomorrow past that is drawn as a gap, not as a price.
+A calendar's holiday sensor speaks for today but is read for tomorrow's hours too.
+Refs #1372 #994 #1310 #1362 #1368 #1369 #1385 #1390.
 
 ### 183. Several things put back in one chain — the first that fails stops the rest — GUARDED
 
@@ -6971,3 +7003,13 @@ Refs #1373 #1306.
 **Guard:** `tests/test_1081_setpoint_restore.py`.
 **Left open:** a memo that expired while the unit showed SEM's value: that value is later taken as the user's (rare, same outcome as the expiry).
 Refs #1081 #1323.
+
+### 186. A daily counter whose base is picked by this cycle's reads — one missing read makes it step back — GUARDED
+
+**What happens.** The flow split (grid to house, sun to battery …) is published as daily counters. #1324 fitted it to the day's totals, but the totals were picked each cycle: the day's rows while the home row was the meters' balance, the split's own sums for the rest otherwise, the raw split when no counter read or when `booking_day` was unset (the skipped first cycle after a restart). One missing read moved every counter by the whole gap between the bases, up to about 1 kWh, and back. A tool that reads a drop as a reset (a utility meter, some charts) then counts the day again: on a test system a chart showed 15.1 kWh grid against 8.1 kWh imported (#1382).
+**The rule.** A value published as a running total takes its base from the setup and the day, never from what this cycle read. With grid or battery counters set up, the flow fit always takes the day's solar, grid and battery rows and the midnight EV mirror (the split's own EV sum on the mirror's first day); the house is the balance; the day is the split's own (`FlowCalculator.flow_day`). A cycle that reads less changes nothing.
+**Guard:** `tests/test_1382_one_flow_base.py` — real cycles where the home balance runs, stands down and no counter reads publish the same split (the old rule moved it); a skipped cycle after a restart; a new day's empty rows; the EV follows its counter, not a power read above it; a day of changing reads at fixed ratios (old rule: 0.42 kWh back). An AST check: `calendar_day_totals` reads nothing `calculate_energy` sets empty each cycle, nor `booking_day`.
+**Sweep question:** does another published total read `_counter_backed`, `booking_day` or another per-cycle set to choose where it comes from?
+**Swept:** the home row stands down from its stored value (continuous, not rebuilt); `_settle_meter_gaps` reads the backing for one event, not a total. `_device_tariff_books` read `booking_day`, which a skipped cycle never set: nothing after a restart, yesterday's cost under today's reset across midnight. Fixed: `calculate_energy` sets it before a skipped cycle returns.
+**Left open:** the fit itself re-divides the whole day each cycle, so a cell can still drift down when a row's ratio to the split changes (a counter catch-up, a coarse meter step), and a row's kWh SEM never watched (an outage) go to the house. An EV catch-up with no EV flow yet cannot be placed, and each charger's flows take the fleet's EV factor (#1384).
+Refs #1382 #1324.

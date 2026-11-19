@@ -94,9 +94,10 @@ class TestThePlanSaysWhetherArbitrageCanAct:
 @pytest.mark.unit
 class TestTheCardHidesAClosedFeature:
     def test_the_advisor_row_is_gated_on_enabled(self):
+        # (#1321) the SEM dashboard's plan card (one face, no quiet copy)
         card = (ROOT / "dashboard" / "card" / "src" / "cards"
-                / "sem-energy-plan-card.js").read_text()
-        body = card.split("_renderArb(arb)", 1)[1].split("_renderIdle", 1)[0]
+                / "sem-next-plan-card.js").read_text()
+        body = card.split("const arb = plan.arbitrage;", 1)[1].split("rows.push", 1)[0]
         assert "arb.enabled" in body, (
             "the card must not render the advisor's verdict on an install "
             "where arbitrage cannot act (PROD, 16.08)")

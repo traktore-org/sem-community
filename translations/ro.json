@@ -43,16 +43,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Ultimul pas! SEM a detectat automat entitatea de control al descărcării invertorului dvs.: {discharge_entity}\n\nLăsați opțiunea tabloului de bord PORNITĂ pentru ca SEM să vă creeze tabloul Lovelace. **Notă: aceasta repornește Home Assistant la aproximativ 5 secunde după terminarea instalării.**\n\nTot restul — inclusiv limita de vârf a rețelei — folosește valori implicite sigure pe care le puteți ajusta imediat după configurare: limita de vârf din glisorul filei **Control**, tot restul din fila **Configurare** a tabloului SEM — inclusiv încărcătoarele VE, pompa de căldură, tariful și zonele bateriei.",
+        "description": "Ultimul pas! SEM a detectat automat entitatea de control al descărcării invertorului dvs.: {discharge_entity}\n\nLăsați opțiunea tabloului de bord PORNITĂ pentru ca SEM să vă creeze tabloul Lovelace. **Notă: aceasta repornește Home Assistant la aproximativ 5 secunde după terminarea instalării.**\n\nTot restul — inclusiv limita de vârf a rețelei — folosește valori implicite sigure pe care le puteți ajusta imediat după configurare: limita de vârf pe ecranul **Dispozitive**, tot restul pe ecranul **Sistem** al tabloului SEM — inclusiv încărcătoarele VE, pompa de căldură, tariful și zonele bateriei.",
         "data": {
           "battery_capacity_kwh": "Capacitatea bateriei casnice (kWh)",
-          "generate_dashboard_on_install": "Generează acum tabloul de bord SEM (repornește HA)",
-          "diagram_style": "Stilul diagramei de sistem"
+          "generate_dashboard_on_install": "Generează acum tabloul de bord SEM (repornește HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei casnice (NU a celei din EV), în kWh. Folosită de strategia de încărcare bazată pe prognoză pentru a estima cât poate acoperi bateria dintr-un deficit solar. Consultați specificațiile invertorului.",
-          "generate_dashboard_on_install": "Când este activat, SEM creează tabloul de bord Lovelace imediat după încheierea acestui pas și apoi repornește Home Assistant după circa 5 s, pentru ca noul tablou de bord să devină vizibil. Îl puteți regenera oricând manual mai târziu prin serviciul solar_energy_management.generate_dashboard.",
-          "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat)."
+          "generate_dashboard_on_install": "Când este activat, SEM creează tabloul de bord Lovelace imediat după încheierea acestui pas și apoi repornește Home Assistant după circa 5 s, pentru ca noul tablou de bord să devină vizibil. Îl puteți regenera oricând manual mai târziu prin serviciul solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -133,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Alege contorul de rețea",
-        "description": "SEM nu a găsit un senzor de putere a rețelei. Fără el, SEM nu știe ce cumperi sau trimiți în rețea.\n\nAlege-l mai jos sau apasă **Trimite** ca să sari. Îl poți seta mai târziu în fila Configurare.\n\nSolar: {solar}. Baterie: {battery}.",
+        "description": "SEM nu a găsit un senzor de putere a rețelei. Fără el, SEM nu știe ce cumperi sau trimiți în rețea.\n\nAlege-l mai jos sau apasă **Trimite** ca să sari. Îl poți seta mai târziu pe ecranul Sistem.\n\nSolar: {solar}. Baterie: {battery}.",
         "data": {
           "grid_power_sensor": "Putere rețea"
         },
@@ -168,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Încărcător EV",
-        "description": "Sfat: majoritatea setărilor sunt acum pe tabloul SEM → fila Configurare (colorat, live). Acest flux rămâne pentru instalări fără tablou de bord.\n\nVerificați și actualizați asocierile de entități ale încărcătorului VE. Câmpurile SOC ale vehiculului sunt folosite doar dacă furnizați un senzor SOC al bateriei vehiculului.",
+        "description": "Sfat: majoritatea setărilor sunt pe tabloul SEM: ecranele Dispozitive și Sistem. Acest flux rămâne pentru instalări fără tablou de bord.\n\nVerificați și actualizați asocierile de entități ale încărcătorului VE. Câmpurile SOC ale vehiculului sunt folosite doar dacă furnizați un senzor SOC al bateriei vehiculului.",
         "data": {
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Țintă de încălzire solară a apei calde (°C)",
           "legionella_target_temp": "Țintă dezinfecție anti-legionella (°C)",
           "legionella_interval_hours": "Ore maxime între ciclurile de dezinfecție",
-          "diagram_style": "Stilul diagramei de sistem",
           "battery_assist_min_surplus": "Asistență baterie – surplus solar min. (W)",
           "grid_sign_invert": "Inversează semnul puterii din rețea",
           "battery_operating_mode_entity": "Entitate mod de funcționare baterie (urmărită)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Taxa lunară de putere per kW de vârf (CHF/kW/lună). Setați 0 dacă în contractul dumneavoastră nu există o taxă de putere.",
           "observer_mode": "Când este ACTIV, SEM monitorizează și calculează totul, dar nu trimite niciodată un apel de serviciu către hardware. Folosiți-l pe un HA de test/staging care oglindește o instalare de producție.",
           "battery_discharge_control_entity": "Entitatea Number care controlează limita de putere de descărcare a invertorului (de ex. number.batteries_maximale_entladeleistung la Huawei). Detectată automat la instalare; suprascrieți-o aici dacă este nevoie.",
-          "diagram_style": "Alegeți diagrama de sistem de pe fila Acasă. 'SEM' folosește diagrama animată integrată. 'K-Flow' folosește cardul K-Flow HACS (trebuie instalat separat).",
           "hot_water_solar_target": "Temperatura țintă (°C) pentru încălzirea apei calde asistată solar. SEM stimulează boilerul atunci când există surplus.",
           "legionella_target_temp": "Temperatura (°C) pe care sistemul de apă caldă trebuie să o atingă în timpul unui ciclu de dezinfecție anti-legionella.",
           "legionella_interval_hours": "Numărul maxim de ore între ciclurile de dezinfecție anti-legionella înainte ca SEM să forțeze o încălzire.",
@@ -1884,7 +1880,7 @@
       "message": "Nu a fost găsită nicio programare de aparat pentru {device_id}. Verificați ID-ul dispozitivului folosit cu serviciul schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "Gestionarea sarcinilor este oprită, deci nu există o listă de deconectare de actualizat. Porniți-o din Configurare → Gestionarea sarcinilor pe panoul SEM și încercați din nou."
+      "message": "Gestionarea sarcinilor este oprită, deci nu există o listă de deconectare de actualizat. Porniți-o din Sistem → Gestionarea sarcinilor pe panoul SEM și încercați din nou."
     },
     "load_management_failed_to_start": {
       "message": "Gestionarea sarcinilor este pornită, dar nu a reușit să pornească, deci SEM nu își poate folosi lista de dispozitive. Verificați jurnalul Home Assistant pentru \"Failed to initialize load management\" și reîncărcați integrarea."
@@ -1973,14 +1969,14 @@
         "step": {
           "confirm": {
             "title": "Raportează aceasta către SEM",
-            "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Configurare → EV → Entitate SOC vehicul). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă.\n\nSEM crede că această eroare îi aparține. Dacă puteți, deschideți un raport de eroare cu butonul din notificare — formularul vine deja completat. Dacă preferați, copiați contextul de mai jos într-un e-mail sau o postare pe forum. Acest dialog nu trimite nimic nicăieri.\n\n```\n{context}\n```\n\nConfirmați pentru a închide notificarea."
+            "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Sistem → Încărcătoare). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă.\n\nSEM crede că această eroare îi aparține. Dacă puteți, deschideți un raport de eroare cu butonul din notificare — formularul vine deja completat. Dacă preferați, copiați contextul de mai jos într-un e-mail sau o postare pe forum. Acest dialog nu trimite nimic nicăieri.\n\n```\n{context}\n```\n\nConfirmați pentru a închide notificarea."
           }
         }
       }
     },
     "unmanaged_charger_found": {
       "title": "SEM a găsit un încărcător pe care nu îl gestionează",
-      "description": "Dispozitivul **{name}** pare un încărcător EV, dar niciunul nu este configurat în SEM — deci SEM nu îl atinge ({count} candidat(i) găsiți).\n\nPentru ca SEM să optimizeze încărcarea cu energie solară și tarife ieftine, adaugă-l în Setări → Dispozitive și servicii → SEM → Configurare. Astfel apare și fila EV cu modurile de încărcare.\n\nDacă nu este un încărcător, ignoră acest mesaj — SEM nu îl va controla oricum."
+      "description": "Dispozitivul **{name}** pare un încărcător EV, dar niciunul nu este configurat în SEM — deci SEM nu îl atinge ({count} candidat(i) găsiți).\n\nPentru ca SEM să optimizeze încărcarea cu energie solară și tarife ieftine, adaugă-l în Setări → Dispozitive și servicii → SEM → Configurare. Astfel apare și pe ecranul Devices cu modurile de încărcare.\n\nDacă nu este un încărcător, ignoră acest mesaj — SEM nu îl va controla oricum."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace în mod YAML — adaugă resursele de carduri SEM",
@@ -1988,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Entitatea de control a stației nu funcționează: {name}",
-      "description": "SEM folosește **`{entity_id}`** pentru a {capability} pe **{name}**, dar acea entitate este `{reason}` — fiecare comandă se pierde. Verifică entitatea în **Instrumente pentru dezvoltatori → Stări** și repar-o la sursă, sau reorientează SEM din **Setări → Dispozitive și servicii → SEM → Configurare → Stație → Editare**."
+      "description": "SEM folosește **`{entity_id}`** pentru a {capability} pe **{name}**, dar acea entitate este `{reason}` — fiecare comandă se pierde. Verifică entitatea în **Instrumente pentru dezvoltatori → Stări** și repar-o la sursă, sau reorientează SEM din **Sistem → Încărcătoare**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Valoarea de referință a puterii bateriei nu poate fi scrisă: {entity_id}",
@@ -2008,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Controlul exportului Deye nu poate fi folosit: {entity_id}",
-      "description": "SEM nu poate folosi {entity_id} pentru controlul exportului: {reason}. Verificați entitatea select și cele trei etichete de opțiuni din Configuration → Battery intelligence."
+      "description": "SEM nu poate folosi {entity_id} pentru controlul exportului: {reason}. Verificați entitatea select și cele trei etichete de opțiuni din Sistem → Reguli baterie."
     },
     "battery_operating_mode_unexpected": {
       "title": "Bateria este în „{mode}” — SEM planifică ca și cum ar fi „{expected}”",
@@ -2020,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "Istoricul nocturn al bateriei nu poate fi reconstruit",
-      "description": "SEM nu a putut reconstrui istoricul nocturn, deoarece această instalare nu are un senzor **{missing}**.\n\nSEM învață cât din baterie poate fi cheltuit în siguranță urmărind ce consumă casa din ea peste noapte și vrea cinci nopți bune înainte de a oferi o cifră. Reconstrucția citește istoricul *propriu* al contorului ca să nu fie nevoie să așteptați — dar acel contor trebuie să existe.\n\n**De făcut:** adăugați un senzor de energie cumulată (kWh, nu wați) pentru **{missing}** în tabloul Energie din Home Assistant, apoi apăsați din nou **Reconstruiește din istoric** pe fila Baterie. Așteptarea nu costă nimic — SEM citește istoricul contorului, deci va funcționa la fel de bine mai târziu. Între timp înregistrarea continuă, o noapte pe zi."
+      "description": "SEM nu a putut reconstrui istoricul nocturn, deoarece această instalare nu are un senzor **{missing}**.\n\nSEM învață cât din baterie poate fi cheltuit în siguranță urmărind ce consumă casa din ea peste noapte și vrea cinci nopți bune înainte de a oferi o cifră. Reconstrucția citește istoricul *propriu* al contorului ca să nu fie nevoie să așteptați — dar acel contor trebuie să existe.\n\n**De făcut:** adăugați un senzor de energie cumulată (kWh, nu wați) pentru **{missing}** în tabloul Energie din Home Assistant, apoi apăsați din nou **Reconstruiește din istoric** pe ecranul Devices. Așteptarea nu costă nimic — SEM citește istoricul contorului, deci va funcționa la fel de bine mai târziu. Între timp înregistrarea continuă, o noapte pe zi."
     },
     "battery_night_backfill_incomplete": {
       "title": "Nopțile reconstruite nu văd aportul rețelei",
@@ -2040,15 +2036,15 @@
     },
     "split_grid_guessed": {
       "title": "SEM verifică două contoare de rețea ghicite",
-      "description": "SEM nu are un senzor de putere a rețelei, așa că a ghicit după nume: **{import_entity}** pentru importul din rețea și **{export_entity}** pentru exportul în rețea. SEM nu le folosește până când nu se potrivesc cu contoarele dvs. de energie ale rețelei, așa că deocamdată puterea rețelei arată 0. Pentru a alege contorul: deschideți tabloul SEM, fila ⚙ **Configurare**, și alegeți **Toate setările** din partea de sus. Apoi setați **Putere rețea** în secțiunea **Surse de senzori**. Dacă contorul dvs. are un senzor pentru import și unul pentru export, setați în schimb **Senzor import rețea** și **Senzor export rețea** în secțiunea **Tarif și prețuri**."
+      "description": "SEM nu are un senzor de putere a rețelei, așa că a ghicit după nume: **{import_entity}** pentru importul din rețea și **{export_entity}** pentru exportul în rețea. SEM nu le folosește până când nu se potrivesc cu contoarele dvs. de energie ale rețelei, așa că deocamdată puterea rețelei arată 0. Pentru a alege contorul: deschideți tabloul SEM, fila **Sistem**, și alegeți **Toate setările** din partea de sus. Apoi setați **Putere rețea** în secțiunea **Ce citește SEM**. Dacă contorul dvs. are un senzor pentru import și unul pentru export, setați în schimb **Senzor import rețea** și **Senzor export rețea** în secțiunea **Ce citește SEM**."
     },
     "battery_control_write_not_taken": {
       "title": "O scriere de control al bateriei nu este preluată: {entity_id}",
-      "description": "SEM a setat **`{entity_id}`** la **{wanted}**; în ciclurile următoare citea în continuare **{seen}**, de {strikes} ori la rând. Apelul nu a eșuat — registrul pur și simplu nu a păstrat valoarea. **Rezolvare:** setează entitatea manual în Unelte pentru dezvoltatori → Stări. Dacă nu se păstrează, e entitatea greșită pentru acest rol: alege alta în cardul Configurare. Dacă se păstrează manual, dar nu pentru SEM, spune-ne marca și entitatea. Dispare de îndată ce o scriere este reflectată."
+      "description": "SEM a setat **`{entity_id}`** la **{wanted}**; în ciclurile următoare citea în continuare **{seen}**, de {strikes} ori la rând. Apelul nu a eșuat — registrul pur și simplu nu a păstrat valoarea. **Rezolvare:** setează entitatea manual în Unelte pentru dezvoltatori → Stări. Dacă nu se păstrează, e entitatea greșită pentru acest rol: alege alta în **Sistem → Reguli baterie**. Dacă se păstrează manual, dar nu pentru SEM, spune-ne marca și entitatea. Dispare de îndată ce o scriere este reflectată."
     },
     "soc_zones_out_of_order": {
       "title": "Zonele SOC ale bateriei sunt în ordine greșită",
-      "description": "Zonele bateriei dvs. citesc **Prioritate {priority}% · Tampon {buffer}% · Pornire automată {auto_start}%**, dar SEM se așteaptă ca ele să crească în această ordine: Prioritate este rezerva pe care n-o cheltuiți niciodată, Tampon este unde se oprește asistența bateriei, iar Pornire automată este unde bateria e suficient de plină ca să cedeze liber.\n\nSEM folosește **{used}** ca limite — aceleași trei numere, sortate — astfel încât nicio zonă nu este omisă și nimic nu se comportă imprevizibil. Vă anunță pentru că aranjamentul introdus aproape sigur nu este cel dorit.\n\nCorectați în **Setări → Dispozitive și servicii → SEM → Configurare → Baterie** sau în fila Configurare a tabloului de bord. Sunt permise orice valori atât timp cât sunt crescătoare; zonele largi sunt în regulă — 20 / 30 / 50 este un aranjament perfect valid pe o baterie mare."
+      "description": "Zonele bateriei dvs. citesc **Prioritate {priority}% · Tampon {buffer}% · Pornire automată {auto_start}%**, dar SEM se așteaptă ca ele să crească în această ordine: Prioritate este rezerva pe care n-o cheltuiți niciodată, Tampon este unde se oprește asistența bateriei, iar Pornire automată este unde bateria e suficient de plină ca să cedeze liber.\n\nSEM folosește **{used}** ca limite — aceleași trei numere, sortate — astfel încât nicio zonă nu este omisă și nimic nu se comportă imprevizibil. Vă anunță pentru că aranjamentul introdus aproape sigur nu este cel dorit.\n\nCorectați în **Sistem → Reguli baterie**. Sunt permise orice valori atât timp cât sunt crescătoare; zonele largi sunt în regulă — 20 / 30 / 50 este un aranjament perfect valid pe o baterie mare."
     },
     "previous_install_leftovers": {
       "title": "Au fost găsite fișiere de la o instalare SEM anterioară",
@@ -2056,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "Contactul SG-Ready {contact} nu poate fi comandat",
-      "description": "**{entity_id}** este setat ca SG-Ready {contact}, dar este o entitate text/number/select, iar valoarea sa **{missing}** nu este configurată — așa că SEM nu are ce scrie și fiecare comandă SG-Ready pentru această pompă de căldură eșuează. Deschideți **Setări → Dispozitive și servicii → SEM → Configurare → Pompă de căldură** (sau fila Configurare a tabloului de bord) și completați atât valoarea ON cât și OFF pentru acest contact, sau îndreptați-l către o entitate switch."
+      "description": "**{entity_id}** este setat ca SG-Ready {contact}, dar este o entitate text/number/select, iar valoarea sa **{missing}** nu este configurată — așa că SEM nu are ce scrie și fiecare comandă SG-Ready pentru această pompă de căldură eșuează. Deschideți **Sistem → Pompă de căldură și apă caldă** și completați atât valoarea ON cât și OFF pentru acest contact, sau îndreptați-l către o entitate switch."
     },
     "split_grid_rejected": {
       "title": "SEM nu a putut găsi contoarele dvs. de putere din rețea",
-      "description": "SEM nu are un senzor de putere a rețelei, iar senzorii ghiciți după nume nu sunt contorul dvs. de rețea: **{import_entity}** pentru import, **{export_entity}** pentru export. Nu se potrivesc cu contoarele dvs. de energie ale rețelei, sau unul dintre cei doi lipsește. SEM preferă să nu arate nicio putere a rețelei decât una greșită. Pentru a alege contorul: deschideți tabloul SEM, fila ⚙ **Configurare**, și alegeți **Toate setările** din partea de sus. Apoi setați **Putere rețea** în secțiunea **Surse de senzori**. Dacă contorul dvs. are un senzor pentru import și unul pentru export, setați în schimb **Senzor import rețea** și **Senzor export rețea** în secțiunea **Tarif și prețuri**."
+      "description": "SEM nu are un senzor de putere a rețelei, iar senzorii ghiciți după nume nu sunt contorul dvs. de rețea: **{import_entity}** pentru import, **{export_entity}** pentru export. Nu se potrivesc cu contoarele dvs. de energie ale rețelei, sau unul dintre cei doi lipsește. SEM preferă să nu arate nicio putere a rețelei decât una greșită. Pentru a alege contorul: deschideți tabloul SEM, fila **Sistem**, și alegeți **Toate setările** din partea de sus. Apoi setați **Putere rețea** în secțiunea **Ce citește SEM**. Dacă contorul dvs. are un senzor pentru import și unul pentru export, setați în schimb **Senzor import rețea** și **Senzor export rețea** în secțiunea **Ce citește SEM**."
     },
     "power_sensor_not_found": {
       "title": "Niciun senzor de putere pentru {energy_entity}",
-      "description": "Panoul Energie numără **{energy_entity}** în kWh, dar SEM nu a găsit niciun senzor de putere (W) pentru el. SEM citește deci această putere ca 0 W, iar fluxurile de energie și surplusul sunt greșite. Pentru a remedia, adăugați senzorul de putere la această intrare din panoul Energie. Sau deschideți panoul SEM, fila ⚙ **Configurare**, și alegeți **Toate setările** sus. Apoi setați senzorul în secțiunea **Surse de senzori**. Dacă nu există niciun senzor de putere, puteți ignora această notificare."
+      "description": "Panoul Energie numără **{energy_entity}** în kWh, dar SEM nu a găsit niciun senzor de putere (W) pentru el. SEM citește deci această putere ca 0 W, iar fluxurile de energie și surplusul sunt greșite. Pentru a remedia, adăugați senzorul de putere la această intrare din panoul Energie. Sau deschideți panoul SEM, fila **Sistem**, și alegeți **Toate setările** sus. Apoi setați senzorul în secțiunea **Ce citește SEM**. Dacă nu există niciun senzor de putere, puteți ignora această notificare."
     },
     "power_sensor_not_found_unit": {
       "title": "Niciun senzor de putere pentru {energy_entity}",
@@ -2089,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM nu vede exportul în rețea",
-      "description": "Doar senzorul de import din rețea **{import_entity}** este setat, deci SEM citește exportul ca 0 W. Dar contorul dvs. de export **{export_entity}** arată că s-a trimis energie în rețea. Pentru a remedia, deschideți tabloul SEM, fila ⚙ **Configurare**, și alegeți **Toate setările** din partea de sus. Apoi setați **Senzor export rețea** în secțiunea **Tarif și prețuri**. Sau goliți **Senzor import rețea**, iar SEM caută singur perechea."
+      "description": "Doar senzorul de import din rețea **{import_entity}** este setat, deci SEM citește exportul ca 0 W. Dar contorul dvs. de export **{export_entity}** arată că s-a trimis energie în rețea. Pentru a remedia, deschideți tabloul SEM, fila **Sistem**, și alegeți **Toate setările** din partea de sus. Apoi setați **Senzor export rețea** în secțiunea **Ce citește SEM**. Sau goliți **Senzor import rețea**, iar SEM caută singur perechea."
     },
     "unseen_power_row": {
       "title": "SEM nu vede toată puterea solară sau a bateriei",
@@ -2109,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "O altă parte scrie în {name}",
-      "description": "Altceva decât SEM schimbă mereu **{name}**, iar SEM și acea parte își anulează reciproc munca. În fila Configurare a SEM, setează acest dispozitiv pe *Da, SEM se retrage* și alege entitatea care arată când cealaltă parte are controlul."
+      "description": "Altceva decât SEM schimbă mereu **{name}**, iar SEM și acea parte își anulează reciproc munca. Pe ecranul **Sistem**, activează **Toate setările** și setează **condus de altcineva** pentru acest dispozitiv (în **Reguli baterie** sau **Încărcătoare**) pe *Da, SEM se retrage* și alege entitatea care arată când cealaltă parte are controlul."
     },
     "heater_no_rise": {
       "title": "Boilerul nu se încălzește",
@@ -2122,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Selecția pentru încărcarea din rețea e încă activă: {entity}",
       "description": "Selecția **{entity}** e încă pe **{option}**, iar SEM nu o poate readuce: opțiunea de dinainte nu mai e în listă. Readu-o manual. Până atunci bateria poate continua să se încarce din rețea. Dispare când selecția se schimbă."
+    },
+    "classic_dashboard_kept": {
+      "title": "Vechiul panou SEM mai există",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Vechiul panou SEM mai există",
+            "description": "Vechiul panou SEM de la `/{path}` a fost retras. L-ai modificat, așa că SEM i-a lăsat aspectul neschimbat. Cardurile lui SEM arată acum un link către noul panou SEM. Confirmă pentru a-l șterge pe cel vechi."
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -2130,12 +2137,6 @@
         "disabled": "Dezactivat",
         "grid_only": "Doar alimentare din rețea",
         "hybrid_load_port": "Rețea + ieșire Load/EPS a invertorului hibrid"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (integrat)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

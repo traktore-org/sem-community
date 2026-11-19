@@ -280,7 +280,9 @@ class TestTheUserCanReadIt:
 
     def test_the_card_renders_the_review(self):
         card = (REPO / "dashboard" / "card" / "src" / "cards"
-                / "sem-energy-plan-card.js").read_text(encoding="utf-8")
+                / "sem-next-plan-card.js").read_text(encoding="utf-8")
+        card += (REPO / "dashboard" / "card" / "src" / "util"
+                 / "next-review.js").read_text(encoding="utf-8")
         assert "review" in card
         assert "energy_plan_review_" in card, (
             "the card must translate the verdict codes, not print them")

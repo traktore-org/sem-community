@@ -475,6 +475,23 @@ class ChargeStability:
         self._latched.pop(cid, None)
         self._sem_session.discard(cid)
 
+    def stand_aside(self, cid: str) -> None:
+        """Forget this charger's start offers, as a mode change does.
+
+        Also (#1391) every cycle that another party steers the charger and
+        SEM yields: SEM sends nothing then, so a car that does not draw has
+        declined nobody. A start ladder kept running would arm the #610
+        backoff, and the hand-back would open with "the car did not start".
+        The plug-in's interruption count (#975) stays: the box's own
+        counter does not reset either.
+        """
+        self._reset(cid)
+        self._peak_wait.discard(cid)
+        self._giveup_streak.pop(cid, None)
+        self._giveup_backoff_until.pop(cid, None)
+        self._car_floor_a.pop(cid, None)   # (#893) new plug, new floor
+        self._draw_amps.pop(cid, None)
+
     def session_churn_factor(self, cid: str) -> float:
         """(#975) How much this session's own churn has widened the delays.
 
@@ -576,15 +593,10 @@ class ChargeStability:
             or decision.intent is ChargerIntent.DISABLE
             or decision.intent is ChargerIntent.RELEASE   # (#898) hands-off
         ):
-            self._reset(cid)
-            self._peak_wait.discard(cid)
             # #610 — an unplug / mode change / DISABLE ends the full-car
             # backoff: a plug or user status change is exactly the signal
             # that should re-open start offers.
-            self._giveup_streak.pop(cid, None)
-            self._giveup_backoff_until.pop(cid, None)
-            self._car_floor_a.pop(cid, None)   # (#893) new plug, new floor
-            self._draw_amps.pop(cid, None)
+            self.stand_aside(cid)
             # (#975) A new PLUG-IN is a new interruption budget — and only a
             # plug-in. A mode change or a user OFF does not reset the
             # charger's own session counter, so it must not reset ours.

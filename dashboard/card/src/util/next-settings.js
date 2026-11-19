@@ -6,9 +6,8 @@
  * arrays of text and value slots. A slot is bound to an entity
  * (`number.*` / `select.*` / `switch.*`, written directly) or to an
  * integration option (`set_option`, several keys in one call). Field ids,
- * option keys, ranges and defaults are copied from `cards/sem-config-card.js`
- * (SECTIONS and its renderers), the structural keys from its STRUCTURAL_KEYS
- * (mirror of `__init__.py:_SET_OPTION_STRUCTURAL_KEYS`).
+ * option keys, ranges and defaults follow the options flow, the structural
+ * keys mirror `__init__.py:_SET_OPTION_STRUCTURAL_KEYS`.
  *
  * A missing entity or an unloaded option leaves its slot out: the fragment
  * that needs it is dropped, the sentence is built from the fragments that
@@ -23,12 +22,16 @@
  * setup card's picker for the same key (ENTITY_FIELDS).
  */
 
+import { fmtPrice } from './next-format.js';
+import { displayName, entityName } from './next-names.js';
 import { priceAddOns } from './settings-applies.js';
 import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from './peak-questions.js';
 import { BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
+import { fmtNum } from './next-number.js';
+import { capacityUnset } from './charger-questions.js';
 
-// (#528) option keys that reload the entry when written — copied from
-// cards/sem-config-card.js STRUCTURAL_KEYS.
+// (#528) option keys that reload the entry when written — a subset of
+// `__init__.py:_SET_OPTION_STRUCTURAL_KEYS` (tests/test_528).
 export const STRUCTURAL_KEYS = new Set([
     'battery_soc_sensor', 'tariff_schedule_entity',
     'grid_power_sensor', 'solar_production_sensor', 'battery_power_sensor', 'house_power_sensor',
@@ -42,6 +45,12 @@ export const STRUCTURAL_KEYS = new Set([
     'heat_pump_rated_power', 'hot_water_rated_power',
     'hot_water_entity', 'hot_water_power_sensor', 'hot_water_temperature_sensor',
     'battery_force_discharge_control_entity', 'battery_strategy_control_entity',
+    // (#1346, #1362, #1358) read at adapter construction: the grid-charge select
+    // pair, the charge switch and target, the inverter's end-of-discharge level
+    'battery_charge_select_entity', 'battery_charge_select_option',
+    'battery_force_charge_switch', 'battery_target_soc_entity', 'battery_discharge_end_soc_entity',
+    // (#1362) the select that holds the battery, and its hold option
+    'battery_hold_select_entity', 'battery_hold_select_option',
     'battery_discharge_control_entity', 'battery_charge_end_soc_entity',
     'battery_discharge_protection_enabled', 'battery_setpoint_bidirectional',
     'battery_setpoint_model', 'battery_power_direction_entity',
@@ -67,7 +76,8 @@ function numSlot(states, id, o = {}) {
     const v = num(e.state);
     if (v === null) return null;
     const a = e.attributes || {};
-    return { id, kind: 'number', value: v, unit: o.unit ?? (a.unit_of_measurement || ''),
+    // (#1321) the server says the value is only the factory default: the row says "not set", as Devices does
+    return { id, kind: 'number', value: v, unit: o.unit ?? (a.unit_of_measurement || ''), unset: !!o.unsetFlag && capacityUnset(a),
              min: num(a.min), max: num(a.max), step: num(a.step) ?? 1, zeroKey: o.zeroKey || null, clock: !!o.clock };
 }
 
@@ -75,6 +85,11 @@ function switchSlot(states, id) {
     const e = st(states, id);
     if (!alive(e)) return null;
     return { id, kind: 'switch', value: e.state === 'on' };
+}
+
+/** The forecast-spending switch as a sentence part: its words say what on and off mean. */
+function spendSentence(slot) {
+    return slot ? [{ ...slot, words: { on: 'next_batt_spend_on', off: 'next_batt_spend_off' } }] : [];
 }
 
 /** `labelOf(value)` gives the option's label key. */
@@ -223,21 +238,31 @@ export function decimalsOf(step) {
     return 3;
 }
 
-function nameOf(states, id) {
-    const n = states?.[id]?.attributes?.friendly_name;
-    return n ? String(n) : String(id);
+function nameOf(hass, id) {
+    // the full hass names the HA device (Inverter, Power meter); a bare states map names the entity
+    return entityName(hass && hass.states ? hass : { states: hass }, id);
+}
+
+/** (#1321) A per-month demand price in words: "4.3 CHF/kW/Mt" is not read as a unit by anyone. */
+function unitWords(unit, t) {
+    // the entity's own unit "kWh/100km" reads "kWh/100 km", as every other screen says it
+    if (/\/100km$/.test(unit)) return unit.replace(/100km$/, '100 km');
+    const m = /^(.+?)\/kW\/(?:Mt|mo|month|mois|mes|Monat)$/i.exec(unit);
+    return m ? t('next_per_kw_month').replace('{cur}', m[1]) : unit;
 }
 
 /** The words a slot shows when it is not being edited; `states` names an entity slot. */
-export function slotText(slot, t, value = slot.value, states = null) {
+export function slotText(slot, t, value = slot.value, states = null, plain = false) {
     if (!slot) return '';
     if (slot.kind === 'entity') {
         if (value) return nameOf(states, value);
-        if (slot.fallback) return String(t('next_entity_auto')).replace('{name}', nameOf(states, slot.fallback));
+        // (#1321) what SEM found reads as its name, with no "(found)" after it
+        if (slot.fallback) return nameOf(states, slot.fallback);
         return t(slot.emptyKey || 'config_notif_none');
     }
     if (slot.kind === 'text' && (value === '' || value == null)) return slot.placeholder || '—';
     if (slot.kind === 'number') {
+        if (slot.unset && value === slot.value) return t('next_not_set');
         if (slot.zeroKey && Number(value) === 0) return t(slot.zeroKey);
         const v = Number(value);
         if (!Number.isFinite(v)) return '—';
@@ -245,10 +270,14 @@ export function slotText(slot, t, value = slot.value, states = null) {
             const h = Math.floor(v), m = Math.round((v - h) * 60);
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         }
-        const s = v.toFixed(decimalsOf(slot.step));
-        return slot.unit ? `${s} ${slot.unit}` : s;
+        // (#1321) a power of 1 kW or more reads in kW, as every other screen shows it
+        if (slot.unit === 'W' && Math.abs(v) >= 1000) return `${fmtNum(v / 1000, v % 100 ? 2 : 1)}\u00a0kW`;
+        // (#1321) a price per kWh reads the same here as on Now and Plan
+        const s = /\/kWh$/.test(slot.unit || '') ? fmtPrice(v) : fmtNum(v, decimalsOf(slot.step));
+        // (#1321) a no-break space keeps "2.0 °C" on one line
+        return slot.unit ? `${s}\u00a0${unitWords(slot.unit, t)}` : s;
     }
-    if (slot.kind === 'switch') return value ? t('next_on') : t('next_off');
+    if (slot.kind === 'switch') return slot.words ? t(value ? slot.words.on : slot.words.off) : (value ? t('next_on') : t('next_off'));
     if (slot.kind === 'select') {
         const o = (slot.options || []).find((x) => String(x.value) === String(value));
         if (!o) return String(value ?? '');
@@ -277,6 +306,9 @@ function frag(t, key, slots) {
 }
 
 /** Capitalise the sentence when it opens with text; a name or value may open it as is. */
+/** Sentence case for a row label that is stored in lower case for sentences. */
+const upFirst = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+
 function capFirst(parts) {
     const s = parts[0];
     if (typeof s !== 'string') return parts;
@@ -310,18 +342,140 @@ function join(...sentences) {
 /** The All-settings list: "label value · label value". */
 function more(t, items) {
     const out = [];
+    const kept = [];
     let n = 0;
     for (const it of items) {
         const [labelKey, slot] = it;
         if (!slot) continue;
         if (n) out.push(' · ');
         out.push((typeof labelKey === 'object' ? labelKey.raw : t(labelKey)) + ' ', slot);
+        kept.push({ labelKey, slot });
         n += 1;
     }
-    return { parts: out, count: n };
+    return { parts: out, count: n, items: kept };
 }
 
-// ── option vocabularies (labels are keys from sem-config-card.js) ──
+// ── settings rows (#1321) ──
+// The same slots, as Home Assistant settings rows: a label, the value, a tap
+// to edit. The model above stays the one source; nothing here adds a key.
+
+/** The row label of a slot that the sentence asks without naming it. */
+const ROW_LABEL = {
+    tariff_mode: 'config_tariff_mode',
+    tariff_classification_mode: 'config_tariff_class_mode',
+    electricity_import_rate: 'config_import_rate',
+    'number.sem_electricity_import_rate': 'config_import_rate',
+    electricity_off_peak_rate: 'config_off_peak_rate',
+    electricity_export_rate: 'next_row_export_rate',
+    'number.sem_electricity_export_rate': 'next_row_export_rate',
+    import_vat_percent: 'next_more_vat',
+    import_markup: 'next_more_markup',
+    import_energy_tax: 'next_more_energy_tax',
+    grid_import_surcharge: 'next_more_grid_fee',
+    'number.sem_cheap_price_threshold': 'next_row_cheap_below',
+    'number.sem_expensive_price_threshold': 'next_row_expensive_above',
+    peak_limit_unlimited: 'next_peak_limit',
+    target_peak_limit: 'next_row_peak_level',
+    inverter_ac_limit_w: 'next_more_ac_limit',
+    'switch.sem_forecast_spending_enabled': 'next_row_spend_sun',
+    heat_pump_rated_power: 'config_hp_rated_power',
+    hot_water_rated_power: 'config_hw_rated_power',
+    heat_pump_boost_offset: 'next_row_boost',
+    'number.sem_heat_pump_boost_offset': 'next_row_boost',
+    heat_pump_tariff_rate: 'next_more_own_tariff',
+    'number.sem_hot_water_solar_target': 'next_row_hw_target',
+    'number.sem_legionella_target_temp': 'next_row_legionella_temp',
+    'number.sem_legionella_interval_hours': 'next_row_legionella_interval',
+    'select.sem_hints': 'next_row_hints',
+    mobile_notification_service: 'next_row_hints_to',
+    'number.sem_update_interval': 'next_row_update_every',
+    'switch.sem_ev_morning_window_enabled': 'next_row_morning',
+    'number.sem_ev_morning_window_hours': 'next_row_morning_hours',
+    'number.sem_night_start_offset_min': 'next_night_offset',
+    'number.sem_night_latest_end': 'next_night_end',
+    'switch.sem_vacation_mode': 'next_row_vacation',
+    status_retention_days: 'next_row_keep_history',
+};
+const ACTION_LABEL = {
+    flip_grid_sign: 'next_row_flip_grid', flip_battery_sign: 'next_row_flip_battery',
+    open_battery: 'next_bq_levels_open',
+};
+const CHARGER_ID_LABEL = [
+    [/^number\.sem_charger_.+_ev_phases$/, 'config_ev_phases'],
+    [/^number\.sem_charger_.+_minimum_current$/, 'next_row_min_current'],
+    [/^number\.sem_charger_.+_maximum_current$/, 'next_row_max_current'],
+];
+// One line of help under a row: the setting's own help text, where it has one.
+const ROW_HELP = {
+    heat_pump_rated_power: 'config_help_hp_rated_power',
+    hot_water_rated_power: 'config_help_hw_rated_power',
+    heat_pump_tariff_rate: 'config_help_hp_tariff_rate',
+};
+
+/** Sentence case, and the unit in brackets dropped: the value carries it. */
+export function rowText(s) {
+    const x = String(s || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+    return x ? x.charAt(0).toUpperCase() + x.slice(1) : x;
+}
+
+/** The label key a slot has as a row, or null. */
+export function rowLabelKey(slot) {
+    if (!slot) return null;
+    if (slot.action) return ACTION_LABEL[slot.action] || slot.labelKey || null;
+    if (slot.id) {
+        const hit = CHARGER_ID_LABEL.find(([re]) => re.test(slot.id));
+        if (hit) return hit[1];
+        if (ROW_LABEL[slot.id]) return ROW_LABEL[slot.id];
+    }
+    if (slot.option === 'ev_chargers' && slot.key === 'ev_target_type') return 'next_goal_unit';
+    if (slot.option && ROW_LABEL[slot.option]) return ROW_LABEL[slot.option];
+    if (slot.option && ENTITY_FIELDS[slot.option]) return ENTITY_FIELDS[slot.option].labelKey;
+    if (slot.option === 'ev_chargers' && CHARGER_ENTITY_FIELDS[slot.key]) return CHARGER_ENTITY_FIELDS[slot.key].labelKey;
+    return null;
+}
+
+/**
+ * The rows of one group: the slots its sentence asks (everyday, `more: false`)
+ * then the All-settings list (`more: true`). `prefix` names a charger.
+ * A row is { label, help, slot, more }; a slot shows once.
+ */
+export function rowsFor(sentence, items, t, prefix = '') {
+    const out = [];
+    const seen = new Set();
+    const add = (label, slot, more) => {
+        if (!slot) return;
+        const id = pendingKey(slot) || label;
+        if (seen.has(id)) return;
+        seen.add(id);
+        const hk = slot.option && ROW_HELP[slot.option];
+        out.push({ label: prefix ? `${prefix} · ${label}` : label, help: hk ? t(hk) : '', slot, more });
+    };
+    for (const p of sentence || []) {
+        if (!p || typeof p !== 'object' || p.ro) continue;
+        if (!(p.id || p.option || p.action)) continue;
+        const key = rowLabelKey(p);
+        // (#1321) a slot with no label key reads "Setting", never its raw id (a test holds every slot to a key)
+        add(key ? rowText(t(key)) : rowText(t('next_row_setting')), p, false);
+    }
+    for (const it of items || []) {
+        const l = it.labelKey;
+        add(typeof l === 'object' ? rowText(l.raw) : rowText(t(l)), it.slot, true);
+    }
+    return out;
+}
+
+/** The sentence as plain text (no editing): slots read as their value. */
+export function sentenceText(parts, t, states, valueOf = (s) => s.value) {
+    const txt = (parts || []).map((p) => {
+        if (typeof p === 'string') return p;
+        if (!p || typeof p !== 'object' || p.kind === 'action' || p.silent) return '';
+        return slotText(p, t, valueOf(p), states, true);
+    }).join('');
+    // a dropped action leaves its brackets and spaces behind
+    return txt.replace(/,\s*\)/g, ')').replace(/\(\s*,\s*/g, '(').replace(/\s*\(\s*\)/g, '').replace(/\s+([.,])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+}
+
+// ── option vocabularies (labels are translation keys) ──
 
 const TARIFF_MODES = [
     { value: 'static', labelKey: 'next_tariff_static' },
@@ -343,11 +497,11 @@ const FORECAST_SOURCES = [
     { value: 'open_meteo', label: 'Open-Meteo' }, { value: 'helios', label: 'Helios' },
 ];
 const HINT_LABEL = (v) => ({ off: 'off', weekly: 'weekly', all: 'all' }[v] || null);
+const HP_STEP_DOWN = ['off', 'setpoint', 'block'].map((v) => ({ value: v, labelKey: 'config_hp_step_down_' + v }));
 const SETPOINT_MODELS = ['signed', 'inverted', 'direction_select'].map((v) => ({ value: v, label: v }));
 
-// Entity fields of the classic setup card (sem-config-card.js _renderPicker /
-// _renderPickerNested): the same option key, domains and device class, so a
-// pick here is the same pick there. 'power', 'co2_intensity' and
+// Entity fields: the option key, the domains and the device class an entity
+// picker is filtered by. 'power', 'co2_intensity' and
 // 'outdoor_temperature' are filters (util/detect-rows.js), not device classes.
 const CONTACT_DOMAINS = ['switch', 'input_boolean', 'text', 'input_text', 'number', 'input_number', 'select', 'input_select'];
 const VALUE_CONTACT_DOMAINS = new Set(['text', 'input_text', 'number', 'input_number', 'select', 'input_select']);
@@ -362,6 +516,11 @@ export const ENTITY_FIELDS = {
     battery_discharge_control_entity: { domain: 'number', labelKey: 'config_batt_discharge_entity' },
     battery_external_control_indicator: { domain: EXT_INDICATOR_DOMAINS, labelKey: 'config_ext_ctrl_entity' },
     battery_charge_end_soc_entity: { domain: ['number', 'sensor', 'input_number'], labelKey: 'config_batt_charge_end_entity' },
+    battery_discharge_end_soc_entity: { domain: ['number', 'sensor', 'input_number'], labelKey: 'config_batt_discharge_end_entity' },
+    battery_charge_select_entity: { domain: ['select', 'input_select'], labelKey: 'config_charge_select_entity' },
+    battery_hold_select_entity: { domain: ['select', 'input_select'], labelKey: 'config_hold_select_entity' },
+    battery_force_charge_switch: { domain: ['switch', 'input_boolean'], labelKey: 'config_charge_switch_entity' },
+    battery_target_soc_entity: { domain: ['number', 'input_number'], labelKey: 'config_charge_target_entity' },
     battery_force_discharge_control_entity: { domain: 'number', labelKey: 'config_force_discharge_entity' },
     battery_strategy_control_entity: { domain: 'select', labelKey: 'config_strategy_entity' },
     battery_power_direction_entity: { domain: 'select', labelKey: 'config_direction_entity' },
@@ -450,7 +609,7 @@ export function pvStrings(states) {
     return out;
 }
 
-/** The Setup check rows, as sem-config-card.js builds them (its _setupItems). */
+/** The Setup check rows. */
 export function setupItems(states, options) {
     const o = options || {};
     const chargers = Object.keys(states || {}).some((id) => /^number\.sem_charger_.+_minimum_current$/.test(id));
@@ -470,7 +629,7 @@ export function setupItems(states, options) {
 }
 
 /** Loads with a power entity, for the freshness tiles (chargers and the battery have their own). */
-export function loadSources(states) {
+export function loadSources(states, hass = { states }) {
     const devs = st(states, 'sensor.sem_controllable_devices_count')?.attributes?.devices;
     const out = [];
     const list = devs && typeof devs === 'object' ? Object.entries(devs) : [];
@@ -478,7 +637,7 @@ export function loadSources(states) {
         if (!d || typeof d !== 'object') continue;
         if (d.device_type === 'ev_charger' || d.device_type === 'battery') continue;
         if (!d.power_entity) continue;
-        out.push({ id, name: d.name || id, entity: d.power_entity });
+        out.push({ id, name: displayName(hass, { name: d.name, entity: d.power_entity, id }), entity: d.power_entity });
     }
     return out;
 }
@@ -492,7 +651,7 @@ export function unavailableCount(states) {
 }
 
 /** How SEM reaches the battery (classic Battery zones + Tariff "battery control"). */
-function batteryWiring(o, cur, n = 0) {
+function batteryWiring(o, cur, n = 0, states = null, t = (k) => k) {
     if (!o) return [];
     const e = (k) => [ENTITY_FIELDS[k].labelKey, optEntity(o, k)];
     const ext = optSelect(o, 'battery_external_control_mode', EXT_MODES, 'none');
@@ -501,8 +660,11 @@ function batteryWiring(o, cur, n = 0) {
         e('battery_cycles_sensor'),
         e('battery_discharge_control_entity'),
         e('battery_charge_end_soc_entity'),
+        e('battery_discharge_end_soc_entity'),
         ['config_ext_ctrl_mode', ext],
     ];
+    items.push(...chargeFields(o, n, states, t));
+    items.push(...holdFields(o, states, t));
     if (ext && ext.value !== 'none') items.push(e('battery_external_control_indicator'));
     if (n < 2) items.push(e('battery_force_discharge_control_entity'), e('battery_strategy_control_entity'));
     if (o.battery_strategy_control_entity) {
@@ -530,6 +692,54 @@ function batteryWiring(o, cur, n = 0) {
             ['config_deye_system_work_mode', optSwitch(o, 'deye_system_work_mode_control', false)],
             e('deye_system_work_mode_entity'),
         );
+    }
+    return items;
+}
+
+/**
+ * (#1362) The grid-charge fields. The select pair is one shared setting, so it
+ * shows for one battery and for several. The switch and the target are shared
+ * too, but one pack's stop would undo another's charge: with several batteries
+ * a line says so instead (#1377).
+ */
+function chargeFields(o, n, states, t) {
+    const e = (k) => [ENTITY_FIELDS[k].labelKey, optEntity(o, k)];
+    const items = [e('battery_charge_select_entity')];
+    const listed = o.battery_charge_select_entity && states
+        ? states[o.battery_charge_select_entity]?.attributes?.options : null;
+    if (o.battery_charge_select_entity) {
+        const choices = Array.isArray(listed) ? listed.map((v) => ({ value: String(v), label: String(v) })) : [];
+        items.push(['config_charge_select_option',
+            optSelect(o, 'battery_charge_select_option', withCurrent([{ value: '', label: '-' }, ...choices], o.battery_charge_select_option), '')]);
+    }
+    const hasSel = !!o.battery_charge_select_entity, hasOpt = !!o.battery_charge_select_option;
+    if (hasSel !== hasOpt) {
+        items.push([hasSel ? 'config_charge_select_option' : 'config_charge_select_entity',
+            text(t(hasSel ? 'config_charge_select_need_option' : 'config_charge_select_need_select'))]);
+    }
+    if (n > 1) items.push(['config_charge_switch_entity', text(t('config_charge_switch_one_battery'))]);
+    else items.push(e('battery_force_charge_switch'), e('battery_target_soc_entity'));
+    return items;
+}
+
+/**
+ * (#1362) The hold select: one shared setting, for one battery and for
+ * several. For an inverter with no discharge-limit number, SEM sets the
+ * option to keep the battery for a dearer hour, and for a grid charge.
+ */
+function holdFields(o, states, t) {
+    const items = [[ENTITY_FIELDS.battery_hold_select_entity.labelKey, optEntity(o, 'battery_hold_select_entity')]];
+    const listed = o.battery_hold_select_entity && states
+        ? states[o.battery_hold_select_entity]?.attributes?.options : null;
+    if (o.battery_hold_select_entity) {
+        const choices = Array.isArray(listed) ? listed.map((v) => ({ value: String(v), label: String(v) })) : [];
+        items.push(['config_hold_select_option',
+            optSelect(o, 'battery_hold_select_option', withCurrent([{ value: '', label: '-' }, ...choices], o.battery_hold_select_option), '')]);
+    }
+    const hasSel = !!o.battery_hold_select_entity, hasOpt = !!o.battery_hold_select_option;
+    if (hasSel !== hasOpt) {
+        items.push([hasSel ? 'config_hold_select_option' : 'config_hold_select_entity',
+            text(t(hasSel ? 'config_hold_select_need_option' : 'config_hold_select_need_select'))]);
     }
     return items;
 }
@@ -600,6 +810,7 @@ export function groups(states, t, ctx = {}) {
         const markup = optNum(o, 'import_markup', { min: 0, max: 10000, step: 0.0001, unit: perKwh, default: 0 });
         const tax = optNum(o, 'import_energy_tax', { min: 0, max: 10000, step: 0.0001, unit: perKwh, default: 0 });
         const isSet = (slot) => !!slot && Number(slot.value) > 0;
+        const byRange = modeV === 'dynamic' && !!basis && basis.value !== 'static';
         const first = modeV === 'dynamic'
             ? (frag(t, 'next_pay_dynamic', { mode, provider }) || frag(t, 'next_pay_mode', { mode }))
             : modeV === 'calendar'
@@ -614,12 +825,14 @@ export function groups(states, t, ctx = {}) {
                 adds.fee && isSet(fee) ? frag(t, 'next_pay_plus_fee', { fee }) : null,
             ]),
             clause([frag(t, 'next_pay_export', { export: exportRate })]),
-            clause([frag(t, 'next_pay_thresholds', { cheap, expensive, basis }) || frag(t, 'next_pay_thresholds_plain', { cheap, expensive })]),
+            // (#1321) by price range the fixed thresholds are not used: naming them contradicts the hours SEM calls cheap
+            clause([byRange ? frag(t, 'next_pay_by_range', { basis })
+                : (frag(t, 'next_pay_thresholds', { cheap, expensive, basis }) || frag(t, 'next_pay_thresholds_plain', { cheap, expensive }))]),
         );
         const m = more(t, [
             ['next_more_demand_charge', numSlot(states, 'number.sem_demand_charge_rate')
                 || optNum(o, 'demand_charge_rate', { min: 0, max: 100000, step: 0.01, unit: `${cur}/kW`, default: 4.32 })],
-            ['next_more_off_peak', modeV === 'calendar' ? null : offPeak],
+            ['next_more_off_peak', modeV === 'calendar' || modeV === 'dynamic' ? null : offPeak],
             ['next_more_fee_model', feeModel],
             ['next_more_fee_amount', feeV === 'per_kwh' || feeV === 'fixed_monthly'
                 ? optNum(o, 'feed_in_fee', { min: 0, max: 100000, step: 0.0001, unit: feeV === 'fixed_monthly' ? `${cur}/${t('next_month_short')}` : perKwh, default: 0 }) : null],
@@ -635,7 +848,7 @@ export function groups(states, t, ctx = {}) {
                 .map((k) => [ENTITY_FIELDS[k].labelKey, optEntity(o, k)]) : []),
             [ENTITY_FIELDS.tariff_schedule_entity.labelKey, modeV === 'calendar' ? optEntity(o, 'tariff_schedule_entity') : null],
         ]);
-        out.push({ key: 'pay', titleKey: 'next_g_pay', diagnoseSection: DIAGNOSE.pay, sentence, more: m.parts, count: m.count });
+        out.push({ key: 'pay', titleKey: 'next_g_pay', diagnoseSection: DIAGNOSE.pay, sentence, more: m.parts, count: m.count, rows: rowsFor(sentence, m.items, t) });
     }
 
     // 2 · What SEM may do
@@ -649,13 +862,14 @@ export function groups(states, t, ctx = {}) {
         const limit = pq ? { ...optNum(o, 'target_peak_limit', { ...kwRange, default: PEAK_KW.fallback }), value: pq.kw } : null;
         const warn = optNum(o, 'warning_peak_level', { ...kwRange, default: 4.5 });
         const shed = optNum(o, 'emergency_peak_level', { ...kwRange, default: 6 });
-        const ac = optNum(o, 'inverter_ac_limit_w', { min: 0, max: 100000, step: 100, unit: 'W', default: 0 });
+        const ac = optNum(o, 'inverter_ac_limit_w', { min: 0, max: 100000, step: 100, unit: 'W', default: 0, zeroKey: 'next_none' });
         const acSet = ac && ac.value > 0 ? ac : null;
         const relay = o && o.shed_signal_entity ? o.shed_signal_entity : null;
         const sentence = join(
+            // (#1321) the switch is the first row and says nothing in the prose: "Use a limit." is gone
             !pq ? [] : pq.limited
-                ? [t(PEAK_TEXT.label) + ' ', limit, ' · ', answer, '. ', t(PEAK_TEXT.sub)]
-                : [answer, '. ', t(PEAK_TEXT.subNone)],
+                ? [{ ...answer, silent: true }, t(PEAK_TEXT.label) + ' ', limit, '. ', t(PEAK_TEXT.sub)]
+                : [{ ...answer, silent: true }, t(PEAK_TEXT.none), '. ', t(PEAK_TEXT.subNone)],
             clause([frag(t, 'next_may_ac', { ac: acSet })]),
         );
         const m = more(t, [
@@ -677,7 +891,7 @@ export function groups(states, t, ctx = {}) {
                 ['config_vpp_reserve_soc', optNum(o, 'vpp_reserve_soc', { min: 5, max: 80, step: 5, unit: '%', default: 20 })],
             ] : []),
         ]);
-        out.push({ key: 'may', titleKey: 'next_g_may', diagnoseSection: DIAGNOSE.may, sentence, more: m.parts, count: m.count });
+        out.push({ key: 'may', titleKey: 'next_g_may', diagnoseSection: DIAGNOSE.may, sentence, more: m.parts, count: m.count, rows: rowsFor(sentence, m.items, t) });
     }
 
     // 3 · Battery rules (only with a battery)
@@ -692,19 +906,21 @@ export function groups(states, t, ctx = {}) {
             clause([frag(t, 'next_batt_zones', lvSlots)
                 || frag(t, 'next_batt_zones_two', { priority: lvSlots.priority, buffer: lvSlots.buffer })], ', ', '. '),
             [{ kind: 'action', action: 'open_battery', labelKey: 'next_bq_levels_open', nav: true }],
-            clause([frag(t, 'next_batt_spend', { v: switchSlot(states, 'switch.sem_forecast_spending_enabled') })]),
+            // (#1321) the switch reads as a full sentence, never "...will refill: on."
+            spendSentence(switchSlot(states, 'switch.sem_forecast_spending_enabled')),
         );
         const m = more(t, [
             ['next_more_max_discharge', numSlot(states, BATTERY_QUESTIONS.discharge_max.entity)],
             ['next_more_drain_floor', numSlot(states, 'number.sem_battery_morning_drain_floor_soc')],
             ['next_more_house_sink', switchSlot(states, 'switch.sem_battery_house_sink_enabled')],
+            ['battery_peak_hold', switchSlot(states, 'switch.sem_battery_peak_hold_enabled')],
             ['next_more_protection', optSwitch(o, 'battery_discharge_protection_enabled', true)],
-            ...batteryWiring(o, cur, batteryCount(states)),
+            ...batteryWiring(o, cur, batteryCount(states), states, t),
             ...batteryListItems(o, batteryCount(states), t),
             ['next_more_scheduler', optSwitch(o, 'battery_charge_scheduler_enabled', false)],
             ...(o && o.battery_charge_scheduler_enabled ? batteryScheduler(o, cur) : []),
         ]);
-        out.push({ key: 'battery', titleKey: 'next_g_battery', diagnoseSection: DIAGNOSE.battery, sentence, more: m.parts, count: m.count });
+        out.push({ key: 'battery', titleKey: 'next_g_battery', diagnoseSection: DIAGNOSE.battery, sentence, more: m.parts, count: m.count, rows: rowsFor(sentence, m.items, t) });
     }
 
     // 4 · Chargers
@@ -712,23 +928,27 @@ export function groups(states, t, ctx = {}) {
         const chargers = ctx.chargers || [];
         const control = text(labels.control);
         const sentences = [];
+        const evRows = [];
         const moreItems = [];
         for (const c of chargers) {
             const cid = c.cid;
             const name = text(c.name || cid);
             const phases = numSlot(states, `number.sem_charger_${cid}_ev_phases`);
-            const min = numSlot(states, `number.sem_charger_${cid}_minimum_current`, { unit: '' });
+            const min = numSlot(states, `number.sem_charger_${cid}_minimum_current`);
             const max = numSlot(states, `number.sem_charger_${cid}_maximum_current`);
             const entry = o ? (o.ev_chargers || []).find((x) => x && x.id === cid) : null;
             const types = entry && entry.vehicle_soc_entity ? TARGET_TYPES : TARGET_TYPES.slice(0, 1);
             const type = chargerSlot(o, cid, 'ev_target_type', 'select', { options: types, def: 'kwh' });
             sentences.push(clause([
-                frag(t, 'next_ch_name_control', { name, control }) || frag(t, 'next_ch_name', { name }),
+                // (#1321) current control reads as what it does: SEM sets the current
+                (labels.controlRaw === 'number' ? frag(t, 'next_ch_name_sets', { name }) : frag(t, 'next_ch_name_control', { name, control })) || frag(t, 'next_ch_name', { name }),
                 frag(t, 'next_ch_phases', { phases }),
                 frag(t, 'next_ch_amps', { min, max }),
             ]));
             sentences.push(clause([frag(t, 'next_ch_targets', { type })]));
-            const lab = (key) => (chargers.length > 1 ? { raw: `${c.name || cid} · ${t(key)}` } : key);
+            // (#1321) the rows say which charger when there are several
+            evRows.push(...rowsFor(sentences.slice(-2).flat(), [], t, chargers.length > 1 ? (c.name || cid) : ''));
+            const lab = (key) => (chargers.length > 1 ? { raw: `${c.name || cid} · ${key.startsWith('next_more_') ? upFirst(t(key)) : t(key)}` } : key);
             const ce = (key) => [lab(CHARGER_ENTITY_FIELDS[key].labelKey), chargerSlot(o, cid, key, 'entity')];
             const ext = chargerSlot(o, cid, 'external_control_mode', 'select', { options: EXT_MODES, def: 'none' });
             moreItems.push(
@@ -740,7 +960,7 @@ export function groups(states, t, ctx = {}) {
                 [lab('next_more_ext_control'), ext],
                 ...(ext && ext.value !== 'none' ? [ce('external_control_indicator')] : []),
                 [lab('next_more_finish_by_departure'), chargerSlot(o, cid, 'finish_by_departure', 'switch')],
-                [lab('next_more_capacity'), numSlot(states, `number.sem_charger_${cid}_ev_battery_capacity_kwh`)],
+                [lab('next_more_capacity'), numSlot(states, `number.sem_charger_${cid}_ev_battery_capacity_kwh`, { unsetFlag: true })],
                 [lab('next_more_use'), numSlot(states, `number.sem_charger_${cid}_ev_kwh_per_100km`)],
                 [lab('next_more_phase_switching'), chargerSlot(o, cid, 'ev_phase_switching_enabled', 'switch')],
                 ce('ev_phase_switch_entity'),
@@ -761,7 +981,7 @@ export function groups(states, t, ctx = {}) {
         );
         const sentence = chargers.length ? join(...sentences) : [t('next_ch_none')];
         const m = more(t, moreItems);
-        out.push({ key: 'chargers', titleKey: 'next_g_chargers', diagnoseSection: DIAGNOSE.chargers, sentence, more: m.parts, count: m.count });
+        out.push({ key: 'chargers', titleKey: 'next_g_chargers', diagnoseSection: DIAGNOSE.chargers, sentence, more: m.parts, count: m.count, rows: [...evRows, ...rowsFor([], m.items, t)] });
     }
 
     // 5 · Heat pump and hot water (the pickers set one up from scratch)
@@ -814,6 +1034,8 @@ export function groups(states, t, ctx = {}) {
             e('heat_pump_temperature_sensor'),
             ['next_more_max_setpoint', hpSet ? optNum(o, 'heat_pump_max_setpoint', { min: 30, max: 80, step: 1, unit: '°C', default: 55 }) : null],
             ['next_more_invert_contacts', hpSet ? optSwitch(o, 'heat_pump_invert_sg_ready', false) : null],
+            // (#1323) step down in a shortfall: off unless picked, read each cycle
+            ['config_hp_step_down', hpSet ? optSelect(o, 'heat_pump_step_down', HP_STEP_DOWN, 'off') : null],
             ['next_more_own_tariff', hpSet && !hpRateSet ? hpRate : null],
             hpSet ? e('heat_pump_tariff_entity') : null,
             hpSet ? e('heat_pump_tariff_meter') : null,
@@ -823,7 +1045,7 @@ export function groups(states, t, ctx = {}) {
             e('hot_water_power_sensor'),
             e('hot_water_energy_sensor'),
         ].filter(Boolean));
-        out.push({ key: 'heat', titleKey: 'next_g_heat', diagnoseSection: DIAGNOSE.heat, sentence, more: m.parts, count: m.count });
+        out.push({ key: 'heat', titleKey: 'next_g_heat', diagnoseSection: DIAGNOSE.heat, sentence, more: m.parts, count: m.count, rows: rowsFor(sentence, m.items, t) });
     }
 
     // 6 · What SEM reads (an empty override shows what SEM found on its own)
@@ -833,7 +1055,8 @@ export function groups(states, t, ctx = {}) {
         const solar = src('solar_production_sensor', ed.solar?.power);
         const grid = src('grid_power_sensor', ed.grid?.power);
         const battery = hasBattery(states) ? src('battery_power_sensor', ed.battery?.power) : null;
-        const gridSign = text(labels.gridSign);
+        // (#1321) it follows a comma in the sentence: "Grid Power (HA Convention), flipped"
+        const gridSign = text(labels.gridSign ? String(labels.gridSign).replace(/^./, (c) => c.toLowerCase()) : '');
         const flipGrid = action('flip_grid_sign', 'next_flip_sign');
         const flipBatt = action('flip_battery_sign', 'next_flip_sign');
         const house = src('house_power_sensor', '', { emptyKey: 'next_computed' });
@@ -855,7 +1078,7 @@ export function groups(states, t, ctx = {}) {
             ['next_more_system_size', numSlot(states, 'number.sem_system_size_kwp')],
             ['next_more_forecast', optSelect(o, 'solar_forecast_source', FORECAST_SOURCES, 'auto')],
         ]);
-        out.push({ key: 'reads', titleKey: 'next_g_reads', diagnoseSection: DIAGNOSE.reads, sentence, more: m.parts, count: m.count });
+        out.push({ key: 'reads', titleKey: 'next_g_reads', diagnoseSection: DIAGNOSE.reads, sentence, more: m.parts, count: m.count, rows: rowsFor(sentence, m.items, t) });
     }
 
     // 7 · Notifications and more
@@ -866,7 +1089,8 @@ export function groups(states, t, ctx = {}) {
             ? optSelect(o, 'mobile_notification_service', [{ value: '', labelKey: 'config_notif_none' }, ...services], '')
             : (o && o.mobile_notification_service ? text(o.mobile_notification_service) : null);
         const sentence = join(
-            clause([frag(t, 'next_misc_hints_to', { hints, service }) || frag(t, 'next_misc_hints', { hints })]),
+            // no service picked: "hints Off", never "hints Off to None"
+            clause([(o && o.mobile_notification_service ? frag(t, 'next_misc_hints_to', { hints, service }) : null) || frag(t, 'next_misc_hints', { hints })]),
             clause([frag(t, 'next_misc_interval', { interval: numSlot(states, 'number.sem_update_interval') })]),
             clause([frag(t, 'next_misc_morning', { on: switchSlot(states, 'switch.sem_ev_morning_window_enabled'),
                                                    hours: numSlot(states, 'number.sem_ev_morning_window_hours') })]),
@@ -885,7 +1109,7 @@ export function groups(states, t, ctx = {}) {
             ['next_more_mobile_notes', optSwitch(o, 'enable_mobile_notifications', false)],
             ['next_more_clean_up', action('purge_status_history', 'next_run')],
         ]);
-        out.push({ key: 'misc', titleKey: 'next_g_misc', diagnoseSection: DIAGNOSE.misc, sentence, more: m.parts, count: m.count });
+        out.push({ key: 'misc', titleKey: 'next_g_misc', diagnoseSection: DIAGNOSE.misc, sentence, more: m.parts, count: m.count, rows: rowsFor(sentence, m.items, t) });
     }
 
     return out;
@@ -965,6 +1189,9 @@ export function applyPlan(pending, states) {
             if (STRUCTURAL_KEYS.has(slot.option)) reload = true;
         }
     }
+    // (#1346) a cleared grid-charge select takes its option with it
+    if (options.battery_charge_select_entity === '') options.battery_charge_select_option = '';
+    if (options.battery_hold_select_entity === '') options.battery_hold_select_option = '';   // (#1362)
     if (Object.keys(chargers).length) options.ev_chargers = Object.values(chargers);
     if (pvNames) options.pv_string_names = pvNames;
     return { entityWrites, options, listEdits, reload };

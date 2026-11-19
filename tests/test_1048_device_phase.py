@@ -237,18 +237,3 @@ async def test_the_service_stores_a_phase_and_refuses_a_typo(
     assert registry.phase_for("pool_pump") == "L3"
 
 
-def test_the_card_strings_are_in_every_language():
-    import json
-    import re
-    tables = json.loads((ROOT / "dashboard" / "translations.json")
-                        .read_text(encoding="utf-8"))
-    keys = ("load_phase_label", "load_phase_tooltip", "load_phase_unknown",
-            "load_phase_3ph", "load_phase_measured_hint", "shed_phase")
-    for lang, table in tables.items():
-        for key in keys:
-            assert table.get(key), (lang, key)
-            want = set(re.findall(r"\{(\w+)\}", tables["en"][key]))
-            assert set(re.findall(r"\{(\w+)\}", table[key])) == want, (lang, key)
-    src = (ROOT / "dashboard" / "card" / "src" / "cards"
-           / "sem-load-priority-card.js").read_text(encoding="utf-8")
-    assert set(re.findall(r"'(load_phase_[a-z_0-9]+)'", src)) <= set(keys)

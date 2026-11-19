@@ -99,7 +99,8 @@ test('a holding battery names no floor and says it keeps its charge for the hous
 
 test('a spending battery names tonight\'s floor', () => {
     const el = makeCard(states('spending'));
-    assert.match(el._lead().sub, /next_why_batt_floor_short/);
+    // the sentence names the need when the sensor has it, the floor alone when it has not
+    assert.match(el._lead().sub, /next_batt_need_above|next_why_batt_floor_short/);
     assert.match(text(el._why()), /next_why_batt_floor/);
 });
 
@@ -131,4 +132,30 @@ test('a surplus window with no sun left today is not shown', () => {
     const st = states();
     st['sensor.sem_forecast_remaining_today_kwh'] = S(3.2);
     assert.match(text(makeCard(st)._signals()), /next_best_surplus/);
+});
+
+test('(#1385) a schedule with two rates names the level and the next cheap hour, not "one rate"', () => {
+    const st = states();
+    st['sensor.sem_tariff_current_import_rate'] = S(0.32, { is_dynamic: false, price_level: 'normal', next_cheap_start: '2026-11-08T20:00:00+00:00' });
+    st['sensor.sem_tariff_price_level'] = S('normal');
+    const out = text(makeCard(st)._moneySec());
+    assert.match(out, /next_price_now/);
+    assert.doesNotMatch(out, /next_one_rate/);
+    assert.match(out, /next_next_cheap/);
+    // the same tariff on a day with one price still says one rate
+    st['sensor.sem_tariff_current_import_rate'] = S(0.32, { is_dynamic: false, price_level: 'flat' });
+    st['sensor.sem_tariff_price_level'] = S('flat');
+    assert.match(text(makeCard(st)._moneySec()), /next_one_rate/);
+});
+
+test('(#1385) the threshold-coloured price strip stays for a price that moves', () => {
+    const h0 = Math.floor(Date.now() / 3600e3) * 3600e3;
+    const slots = [];
+    for (let i = 0; i < 24; i++) slots.push({ start: new Date(h0 + i * 3600e3).toISOString(), end: new Date(h0 + (i + 1) * 3600e3).toISOString(), price: i < 8 ? 0.21 : 0.32 });
+    const st = states();
+    st['sensor.sem_energy_plan'] = S('idle', { slots });
+    st['sensor.sem_tariff_current_import_rate'] = S(0.21, { is_dynamic: false, price_level: 'cheap' });
+    assert.equal(text(makeCard(st)._priceStrip()), '');
+    st['sensor.sem_tariff_current_import_rate'] = S(0.21, { is_dynamic: true, price_level: 'cheap' });
+    assert.match(text(makeCard(st)._priceStrip()), /next_price_strip/);
 });

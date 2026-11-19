@@ -67,3 +67,10 @@ export function capacityConsequence({ measuredKwh, nameplateKwh, t }) {
     if (Math.abs(delta) < 0.05) return t('capacity_matches_nameplate');
     return t('capacity_using_measured');
 }
+
+/** A trust figure as a percent: the sensors publish a fraction (0.58), an older attribute a percent. */
+export function trustPct(v) {
+    const n = Number(v);
+    if (v === null || v === undefined || v === '' || !Number.isFinite(n)) return null;
+    return n <= 1.5 ? n * 100 : n;
+}

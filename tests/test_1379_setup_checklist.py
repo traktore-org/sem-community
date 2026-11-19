@@ -40,7 +40,7 @@ async def test_fresh_watch_only_install_with_nothing(sem_real_hass):
     assert out["watch_only"] is True
     assert (out["done"], out["total"]) == (1, 5)  # only the dashboard
     assert out["must_open"] is False
-    assert out["repairs"] == {"count": 0, "first": None}
+    assert out["repairs"] == {"count": 0, "first": None, "titles": []}
     assert _by_key(out)["price"]["done"] is False
 
 
@@ -96,6 +96,8 @@ async def test_open_repairs_are_counted_with_the_first_title(sem_real_hass):
     out = await build_setup_checklist(sem_real_hass, _coord(sem_real_hass))
     assert out["repairs"]["count"] == 2
     assert out["repairs"]["first"] in ("first_issue", "second_issue")
+    # (#1321) every title is published, so the dashboard can name each one
+    assert sorted(out["repairs"]["titles"]) == ["first_issue", "second_issue"]
 
 
 async def test_ai_tool_and_checklist_read_the_same_facts(sem_real_hass):
@@ -135,3 +137,28 @@ async def test_helpers_price_and_weather_are_not_hardware(sem_real_hass):
     coord._configured_entity_ids = lambda: {"sensor.pv2", "sensor.price", "input_boolean.x"}
     out = await build_setup_checklist(sem_real_hass, coord)
     assert _by_key(out)["hardware"]["brands"] == ["huawei_solar"]
+
+
+async def test_repair_titles_fill_their_placeholders(sem_real_hass):
+    """(#1321) a title with {name} reads with the value, never with braces,
+    in the checklist and in the AI tool alike; a missing value loses braces."""
+    from unittest.mock import patch
+    texts = {
+        f"component.{DOMAIN}.issues.stuck.title": "Charger cannot be stopped: {name}",
+        f"component.{DOMAIN}.issues.bare.title": "Check {energy_entity} now",
+    }
+    ir.async_create_issue(
+        sem_real_hass, DOMAIN, "a", is_fixable=False,
+        severity=ir.IssueSeverity.WARNING, translation_key="stuck",
+        translation_placeholders={"name": "Garage"})
+    ir.async_create_issue(
+        sem_real_hass, DOMAIN, "b", is_fixable=False,
+        severity=ir.IssueSeverity.WARNING, translation_key="bare")
+    target = "custom_components.solar_energy_management.setup_status.async_get_translations"
+    with patch(target, return_value=texts):
+        out = await build_setup_checklist(sem_real_hass, _coord(sem_real_hass))
+        ai = await sem_llm.build_setup_status(sem_real_hass, _coord(sem_real_hass))
+    want = ["Charger cannot be stopped: Garage", "Check energy_entity now"]
+    assert sorted(out["repairs"]["titles"]) == sorted(want)
+    assert sorted(ai["open_repairs"]) == sorted(want)
+    assert not any("{" in t for t in out["repairs"]["titles"])

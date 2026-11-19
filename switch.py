@@ -143,53 +143,6 @@ SWITCH_TYPES = [
 
 SIMULATION_TAB = "simulation_tab"
 
-
-def regenerate_dashboard(hass: HomeAssistant) -> None:
-    """(#1083) Rebuild the SEM dashboard through the ``generate_dashboard``
-    service — the one path, not a second generator chain.
-
-    Only when the dashboard is live: the service's first-install branch
-    restarts Home Assistant, and flipping a switch must never do that."""
-    from .const import DOMAIN
-
-    try:
-        ll_data = hass.data.get("lovelace")
-        dashboards = getattr(ll_data, "dashboards", None)
-        if dashboards is None and isinstance(ll_data, dict):
-            dashboards = ll_data.get("dashboards")
-        # (#1321) each live dashboard from its own template: SEM Next is the
-        # service's default now, so the classic one must be asked for by name.
-        live = [t for path, t in (("sem-dashboard", "classic"), ("sem-next", "next"))
-                if isinstance(dashboards, dict) and path in dashboards]
-    except Exception:  # noqa: BLE001
-        live = []
-    if not live:
-        _LOGGER.debug("no live SEM dashboard — nothing to regenerate")
-        return
-
-    async def _run() -> None:
-        for template in live:
-            try:
-                await hass.services.async_call(
-                    DOMAIN, "generate_dashboard", {"template": template}, blocking=True)
-            except Exception as err:  # noqa: BLE001 — a switch flip never fails on this
-                _LOGGER.warning("Dashboard regeneration failed (%s): %s", template, err)
-
-    hass.async_create_task(_run(), "sem simulation tab dashboard")
-
-
-def notify_simulation_tab(hass: HomeAssistant, on: bool) -> None:
-    """(#1083) Tell the person to reload — the browser keeps the old views."""
-    from homeassistant.components import persistent_notification
-
-    persistent_notification.async_create(
-        hass,
-        "SEM: reload the page to see the Simulation tab." if on
-        else "SEM: reload the page — the Simulation tab is gone.",
-        title="SEM",
-        notification_id="sem_simulation_tab",
-    )
-
 # (#778 phase 6) Switch key -> its slot in the nested ``battery_permissions``
 # dict. That dict is the ONE representation the resolver reads; persisting a
 # flat ``battery_may_export`` option beside it would create a second spelling
@@ -549,7 +502,7 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
 
     def _simulation_tab_changed(self, on: bool) -> None:
         """(#1083) On: backfill day tags in the background. Off: stop it.
-        Either way the dashboard is rebuilt and the person told to reload."""
+        The Insights screen shows or hides the tab itself (#1321)."""
         from .coordinator import day_tag_store
         try:
             if on:
@@ -558,8 +511,6 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
                 day_tag_store.cancel_backfill(self.coordinator)
         except Exception:  # noqa: BLE001 — a backfill never fails the flip
             _LOGGER.debug("day-tag backfill not changed", exc_info=True)
-        regenerate_dashboard(self.hass)
-        notify_simulation_tab(self.hass, on)
 
     @property
     def is_on(self) -> bool:
@@ -662,6 +613,26 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         except Exception as e:
             _LOGGER.warning("Failed to refresh coordinator when turning on %s: %s", self.entity_description.key, e)
 
+    async def _arm_plan_execution(self) -> None:
+        """(#1377) Letting SEM take control also turns plan execution on.
+
+        Every way to leave watch-only (the card button, this switch, a
+        service call) ends here. With plan execution left off, SEM controls
+        the hardware but ignores the plan, and the user sees no reason.
+        Turning watch-only ON never comes here.
+        """
+        entity_id = "switch.sem_energy_plan_actuation"
+        state = self.hass.states.get(entity_id) if self.hass else None
+        if state is None or state.state != "off":
+            return
+        _LOGGER.info("SEM takes control: turning on plan execution (%s) "
+                     "so the plan is applied", entity_id)
+        try:
+            await self.hass.services.async_call(
+                "switch", "turn_on", {"entity_id": entity_id}, blocking=True)
+        except Exception as e:  # noqa: BLE001 — control is already handed over
+            _LOGGER.warning("Could not turn on plan execution: %s", e)
+
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
         _LOGGER.info("Turning off %s", self.entity_description.key)
@@ -674,6 +645,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._energy_plan_actuation = False  # #638 G4 — immediate
         self._persist_flag(False)  # reload-durable (see _persist_flag)
         self.async_write_ha_state()  # reflect immediately (#259)
+        if self.entity_description.key == "observer_mode":
+            await self._arm_plan_execution()
         if self.entity_description.key == SIMULATION_TAB:
             self._simulation_tab_changed(False)
 

@@ -24,16 +24,3 @@ test('the slider end is "no limit"; elsewhere a limit', () => {
     assert.deepEqual(sliderAnswer(7.5), { limited: true, kw: 7.5 });
     assert.equal(clampPeakKw(''), null);
 });
-
-test('the classic cards ask it with the shared words', () => {
-    const cards = new URL('../src/cards/', import.meta.url);
-    const cfg = fs.readFileSync(new URL('sem-config-card.js', cards), 'utf8');
-    const lpc = fs.readFileSync(new URL('sem-load-priority-card.js', cards), 'utf8');
-    assert.ok(cfg.includes('_renderPeakQuestion(opts)') && cfg.includes('peakWrites(limited, kw)'));
-    assert.ok(!cfg.includes("'config_lm_unlimited'"), 'no separate "No grid limit" switch');
-    assert.ok(lpc.includes('sliderAnswer(toVal(ev.clientX))') && lpc.includes('PEAK_TEXT.label'));
-    for (const f of ['sem-load-priority-card.js', 'sem-control-card.js', 'sem-home-status-card.js', 'sem-tab-header.js']) {
-        const src = fs.readFileSync(new URL(f, cards), 'utf8');
-        assert.ok(src.includes('PEAK_TEXT.none'), `${f} says "No limit" in the shared word`);
-    }
-});

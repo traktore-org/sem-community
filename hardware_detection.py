@@ -3081,6 +3081,76 @@ def propose_for_installed(registry, *, limit_per_domain: int = 8,
     return out
 
 
+#: (#1362) a power reading on these words marks the device as the battery's
+#: or the inverter's own
+_POWER_DEVICE_WORDS = ("solar", "pv", "grid", "meter", "batter", "inverter")
+
+
+def _power_device_ids(registry) -> set:
+    """Device ids that carry a solar / grid / battery power sensor."""
+    out = set()
+    for e in registry.entities.values():
+        eid = str(e.entity_id).lower()
+        if (e.disabled_by or not e.device_id or not eid.startswith("sensor.")
+                or str(getattr(e, "original_device_class", "")) != "power"):
+            continue
+        if any(w in eid for w in _POWER_DEVICE_WORDS):
+            out.add(e.device_id)
+    return out
+
+
+def _live_options(state_of, eid: str) -> list:
+    st = state_of(eid) if state_of else None
+    raw = getattr(st, "attributes", None) or {}
+    opts = raw.get("options") if hasattr(raw, "get") else None
+    return [str(o) for o in opts] if isinstance(opts, (list, tuple)) else []
+
+
+def propose_option_roles(registry, *, state_of=None,
+                         configured_entities=None) -> list:
+    """(#1362) A grid-charge and a hold select, proposed by their OPTIONS.
+
+    Roster rows (above) are keyed on the integration; an integration SEM has
+    no vocabulary for still has selects whose option words say what they do.
+    Only selects on the device of a solar / grid / battery power sensor;
+    two candidates of one role on a device are ambiguous: nothing; a select
+    SEM already uses: nothing. Needs the live options: no state, no proposal.
+    """
+    try:
+        from .consts import role_lexicon as lex
+    except Exception:  # noqa: BLE001
+        return []
+    if registry is None or state_of is None:
+        return []
+    used = {str(e) for e in (configured_entities or ()) if e}
+    devices = _power_device_ids(registry)
+    candidates = [e for e in registry.entities.values()
+                  if not e.disabled_by and str(e.entity_id).startswith("select.")
+                  and e.device_id in devices and str(e.entity_id) not in used]
+    # (#964) one physical unit per bucket, through the one grouping helper
+    found: Dict[tuple, list] = {}
+    for unit, unit_entities in group_entities_by_unit(candidates).items():
+        for e in unit_entities:
+            eid = str(e.entity_id)
+            name = " ".join(str(x or "") for x in (
+                eid, getattr(e, "translation_key", ""), getattr(e, "original_name", "")))
+            for role, opt in lex.option_roles(_live_options(state_of, eid), name).items():
+                found.setdefault((e.platform, str(unit), role), []).append((eid, opt))
+    rows: Dict[tuple, Dict[str, Any]] = {}
+    for (dom, dev, role), hits in sorted(found.items(), key=str):
+        if len(hits) != 1:
+            continue
+        (eid, opt), (key, opt_key) = hits[0], lex.OPTION_ROLE_KEYS[role]
+        rows.setdefault((str(dom), str(dev)), {})[role] = {
+            "entity": eid, "option": opt, "matched_key": opt,
+            "source": "options", "config_key": key, "option_key": opt_key,
+            "action": ("set_option" if role in lex.OPTION_ROLES_WIRED
+                       else "observe_only"),
+            "write_extra": {opt_key: opt}}
+    return [{"domain": d, "roster": describe_domain(d), "proposed_roles": r}
+            for (d, _dev), r in sorted(rows.items())]
+
+
 #: The four reads a first install cannot start without, and the SEM config
 #: key each fills. ``grid_power`` fills the IMPORT slot: SEM's reader
 #: auto-detects the sign, so one signed meter is the normal shape.
@@ -4503,6 +4573,10 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
             device_ident_of=_device_ident_of(hass),
             program_entities=program_entities,
             program_platform=program_platform)
+        # (#1362) selects found by their option words, any integration
+        _opt_rows = propose_option_roles(
+            registry, state_of=_state_of, configured_entities=configured_entities)
+        report["roster_proposals"].extend(_opt_rows)
         # (#915) whether proposals were judged against live states, so the
         # coordinator can rebuild an unjudged (boot-time) report once HA is up
         report["judged"] = bool(_state_of is not None)

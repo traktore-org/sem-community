@@ -34,21 +34,3 @@ test('the flag decides, never the number', () => {
     assert.equal(isUncapped(st('0', undefined)), false);
     assert.equal(isUncapped(undefined), false);
 });
-
-test('the Control card shows no percent or margin when uncapped', () => {
-    const src = readFileSync(new URL('../src/cards/sem-control-card.js', import.meta.url), 'utf8');
-    const body = src.slice(src.indexOf('_renderPeakSection(T) {'));
-    const section = body.slice(0, body.indexOf('\n    _render', 10));
-    assert.match(section, /isUncapped\(/, 'peak section must ask the flag');
-    // (#1354) in the shared word of the peak question, "No limit"
-    assert.match(section, /uncapped\s*\?\s*this\._t\(PEAK_TEXT\.none\)/, 'margin tile must say there is no limit');
-});
-
-test('the Control-tab header and the Home card use it', () => {
-    for (const f of ['sem-tab-header.js', 'sem-home-status-card.js']) {
-        const src = readFileSync(new URL(`../src/cards/${f}`, import.meta.url), 'utf8');
-        assert.match(src, /peakLimitText\(/, `${f} must render the limit through peakLimitText`);
-        assert.doesNotMatch(src, /_(getState|val)\('target_peak_limit'/,
-            `${f} must not print the bare limit number`);
-    }
-});

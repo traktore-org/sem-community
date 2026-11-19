@@ -60,3 +60,22 @@ export function priceLevelColor(level, fallback = '#888') {
         default:               return fallback;
     }
 }
+
+/**
+ * (#1321) What the tariff is, from the states: 'dynamic', 'flat' (one rate, a
+ * real answer) or 'none' (no prices to compare: never "one rate"). One reader
+ * for the Now, Plan and Insights screens.
+ */
+export function tariffKind(states) {
+    const rate = states && states['sensor.sem_tariff_current_import_rate'];
+    const a = (rate && rate.attributes) || {};
+    const lv = states && states['sensor.sem_tariff_price_level'];
+    const own = lv && !['unknown', 'unavailable', ''].includes(String(lv.state)) ? String(lv.state).toLowerCase() : '';
+    const level = own || String(a.price_level || '').toLowerCase();
+    if (level === LEVEL_NO_PRICES) return 'none';
+    // (#1385) not `is_dynamic`: a schedule or two-rate tariff is not dynamic but
+    // has cheaper hours; only the level 'flat' means one price
+    if (level === LEVEL_FLAT) return 'flat';
+    if (!level) return rate && !['unknown', 'unavailable', ''].includes(String(rate.state)) ? 'flat' : 'none';
+    return 'dynamic';
+}

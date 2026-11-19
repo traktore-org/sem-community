@@ -61,7 +61,7 @@ export function zoneBands(levels) {
  * publishes: its power (+ charge / − discharge), its scheduler state and
  * target, and tonight's floor. `{now:{key,params}, next:{key,params}|null}`.
  */
-export function batterySays({ powerW, schedulerState, schedulerTarget, floorPct } = {}) {
+export function batterySays({ powerW, schedulerState, schedulerTarget, floorPct, socPct } = {}) {
     const w = finite(powerW);
     const kw = (x) => (Math.abs(x) / 1000).toFixed(1);
     let now;
@@ -79,7 +79,8 @@ export function batterySays({ powerW, schedulerState, schedulerTarget, floorPct 
         next = { key: 'bq_next_charging_to', params: { target: Math.round(target) } };
     } else if (st === 'discharging_arbitrage') {
         next = { key: 'bq_next_selling', params: {} };
-    } else if (floor !== null && floor > 0) {
+    } else if (floor !== null && floor > 0 && !(finite(socPct) !== null && finite(socPct) < floor)) {
+        // (#1321) "keeps 100 % for the morning" at 20 % is false: below the floor it keeps nothing
         next = { key: 'bq_next_keeps', params: { floor: Math.round(floor) } };
     }
     return { now, next };
@@ -93,6 +94,7 @@ export function batterySaysFromStates(states) {
         schedulerState: s('sensor.sem_battery_scheduler_state'),
         schedulerTarget: s('sensor.sem_battery_scheduler_target_soc'),
         floorPct: s('sensor.sem_battery_dynamic_floor_pct'),
+        socPct: s('sensor.sem_battery_soc'),
     });
 }
 

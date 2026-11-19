@@ -44,6 +44,7 @@ from .external_control import (
     Spec,
     friendly_name,
     normalise_mode,
+    yielded_charger_decision,
 )
 
 from ..consts.core import CAPABILITY_MISS_CONFIRM_READS, CAPABILITY_MISS_HOLD_S
@@ -101,6 +102,7 @@ from .health_check import (
     home_members, HealthCheck, sem_ev_chargers,
 )
 from .units import energy_state_to_kwh, power_state_to_watts, temperature_state_to_celsius
+from ..devices.temperature import asked_temperature  # (#1380)
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
 from .departure import (
@@ -194,6 +196,18 @@ EV_CLAMP_HOLD_S = 900.0
 #: (#1199) A draw above this counts, so a car that never reaches the 500 W
 #: charging flag still keeps the cap.
 EV_CLAMP_DRAW_W = 100.0
+
+
+def _yielded_draw_w(view) -> float:
+    """(#1391) What a charger another party steers draws now, in watts.
+
+    The other party's commitment, as far as SEM can see it: SEM sends that
+    charger nothing, so there is no setpoint or decision of SEM's to count.
+    A charger with no reading draws nothing here."""
+    try:
+        return max(0.0, float(getattr(view.power, "power_w", 0.0) or 0.0))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _f_or_none(value):
@@ -512,6 +526,29 @@ def _fleet_capacity_of(coordinator, power) -> float:
         except (TypeError, ValueError):
             pass
     return float(getattr(coordinator, "battery_capacity_kwh", 0.0) or 0.0)
+
+
+def _battery_room_kwh(coordinator, dec, scheduler, power) -> Optional[float]:
+    """(#1388) The room the pack has now up to the scheduler's target, in
+    kWh: per pack when several report (the fleet SOC is a plain average, so
+    a small full pack must not hide a big empty one), else (target - SOC)
+    on the fleet capacity SEM uses. None when a reading is missing."""
+    try:
+        target = float(dec.target_soc)
+        soc = float(power.battery_soc)
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if target <= 0:
+        return None
+    units = getattr(power, "batteries", None) or {}
+    if (isinstance(units, dict) and len(units) > 1 and all(
+            isinstance(getattr(u, "soc_pct", None), (int, float))
+            for u in units.values())):
+        return sum(max(0.0, target - float(u.soc_pct)) / 100.0
+                   * float(coordinator._pack_share_kwh(bid, power))
+                   for bid, u in units.items())
+    cap = _fleet_capacity_of(coordinator, power)
+    return max(0.0, target - soc) / 100.0 * cap if cap > 0 else None
 
 
 def battery_unseen(coordinator) -> bool:
@@ -1523,6 +1560,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # #589 3a — warn-once-per-episode flag for enrichment-tail degradation.
         self._enrich_degraded = False
         self._load_manager = None  # Load management coordinator (external)
+        self._shed_orphans = None  # (#896) restore-only helper while LM is off
         self._device_registry = None  # UnifiedDeviceRegistry (set by __init__.py)
 
         if self._observer_mode:
@@ -2174,18 +2212,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     def fleet_battery_capacity_kwh(self, power=None) -> float:
         """(#1306) The fleet's nameplate: with two or more packs read this
         cycle, the sum of their own capacities (own sensor, else their
-        share of the setting — ``_unit_capacity_kwh``); one pack or none
+        share of the setting — ``_pack_share_kwh``); one pack or none
         read is ``battery_capacity_kwh`` exactly as before."""
         units = getattr(power, "batteries", None) or {}
         if len(units) < 2:
             return float(self.battery_capacity_kwh or 0.0)
         total = 0.0
         for bid in units:
-            total += self._unit_capacity_kwh(bid, power)
+            total += self._pack_share_kwh(bid, power)
         return total if total > 0 else float(self.battery_capacity_kwh or 0.0)
 
-    def _unit_capacity_kwh(self, battery_id: str, power=None) -> float:
-        """(#1306) One pack's kWh: its own capacity sensor when it has one;
+    def _pack_share_kwh(self, battery_id: str, power=None) -> float:
+        """(#1306) One pack's kWh for the scheduler: its own size
+        (``BatteryPower.capacity_kwh``, the reader's ``_unit_size_kwh``) when it has one;
         else the configured total, minus what the other packs declare,
         split among the undeclared packs by their discharge ceilings (a
         pack that can give 5 kW is taken for twice one that can give 2.5)."""
@@ -2961,7 +3000,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # running is Solcast. A MISS counts only from a read taken while HA
         # was running; the readers answer None for an earlier one, and the
         # caller then falls back to the stored running-time verdict.
-        facts: Dict[str, Optional[bool]] = {"solar_forecast": None, "export_limit": None}
+        facts: Dict[str, Optional[bool]] = {
+            "solar_forecast": None, "export_limit": None, "battery": None}
         reader = getattr(self, "_forecast_reader", None)
         if reader is not None:
             try:
@@ -2971,6 +3011,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001 — no answer is UNKNOWN, never a crash
                 pass
         sensors = getattr(self, "_sensor_reader", None)
+        # (#1376) A battery SEM READS (a measured SOC, or a detected pack):
+        # a hit only. No reading is "not asked", never "no battery".
+        # Only asked for a saved "generic" platform, the one case it decides.
+        if str((self.config or {}).get("battery_charge_platform") or ""
+               ).strip().lower() == "generic":
+            def _num(v):
+                return isinstance(v, (int, float)) and not isinstance(v, bool)
+            if (_num(getattr(sensors, "_last_valid_soc", None))
+                    or _num(getattr(sensors, "_soc_step_candidate", None))
+                    or (_num(getattr(self, "_detected_battery_capacity_kwh", None))
+                        and self._detected_battery_capacity_kwh > 0)):
+                facts["battery"] = True
         if sensors is not None:
             config = self.config or {}
             try:
@@ -3285,6 +3337,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception as e:
                 _LOGGER.warning("Failed to initialize load management: %s", e)
                 self._load_manager = None
+        elif not load_management_enabled and self._shed_orphans is None:
+            # (#896) Off must not strand what SEM shed while it was on.
+            try:
+                from ..features.shed_ledger import OrphanRecovery
+                helper = OrphanRecovery(self.hass, lambda: self._observer_mode)
+                if await helper.async_start():
+                    self._shed_orphans = helper
+            except Exception as e:  # noqa: BLE001 — never costs a setup
+                _LOGGER.warning("Shed recovery could not start: %s", e)
 
     def _get_initial_data(self) -> Dict[str, Any]:
         """Get initial data with defaults."""
@@ -3988,6 +4049,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         SEM yields. ``charger:<id>`` or ``battery``."""
         book = getattr(self, "_external_control", None)
         return bool(book is not None and book.yielding(key))
+
+    def _yields_charger(self, cid: str) -> bool:
+        """(#1391) SEM sends this charger nothing this cycle: another party
+        steers it and the user said SEM yields. Observer mode is not a
+        yield (``_refresh_external_control``)."""
+        return (not getattr(self, "_observer_mode", False)
+                and self.external_yielding(f"charger:{cid}"))
+
+    def _yield_or_stabilise(self, cid: str, decision, view, adapter,
+                            now_mono: float):
+        """(#1391) The stability layer for a charger SEM steers; for one it
+        yields to another party, the yielded decision instead. SEM sends
+        that charger nothing, so its start ladder, its "SEM starts charging"
+        line and its amps would describe acts that never happen. Observer
+        mode is not a yield (``_refresh_external_control``): it runs the
+        charger's normal decision."""
+        if self._yields_charger(cid):
+            self._charge_stability.stand_aside(cid)
+            return yielded_charger_decision(decision)
+        return self._charge_stability.filter(
+            decision, view, adapter,
+            **self._charge_stability_kwargs(),
+            now_ts=now_mono,
+        )
 
     def observer_withheld_commands(self) -> dict:
         """(#855, audit F7) THIS cycle's withheld hardware commands, keyed by
@@ -4749,10 +4834,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             energy_flows = self._flow_calculator.integrate_energy_flows(
                 book_flows, self.update_interval.total_seconds(),
             )
-            # (#1324) On a meter-backed day the split adds up to the meters.
-            # The integrator keeps its raw sums; only the published copy fits.
+            # (#1324) With meters set up the split adds up to the day's rows,
+            # on one base all day (#1382). The integrator keeps its raw sums;
+            # only the published copy fits.
             _day_totals = getattr(self._energy_calculator, "calendar_day_totals", None)
-            _day_totals = _day_totals() if callable(_day_totals) else None
+            _day_totals = (_day_totals(getattr(self._flow_calculator, "flow_day", None))
+                           if callable(_day_totals) else None)
             if isinstance(_day_totals, dict):
                 from .flow_calculator import fit_flows_to_totals
                 energy_flows = fit_flows_to_totals(energy_flows, _day_totals)
@@ -5351,6 +5438,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # Brand quirks (KEBA's 6A min, self-resume — #315/#346/#353)
                         # live entirely in ChargerAdapter, not in the actuator.
                         from .actuate import actuate
+                        from .active_phase_guard import yield_override_reason
                         from .build_view import build_charger_view
                         from .charger_adapters import adapter_for
                         from .decide import decide as decide_v2
@@ -5498,11 +5586,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # state display + actuation so the sensor state,
                         # strategy string and contactor all agree on the
                         # held decision.
-                        decision = self._charge_stability.filter(
-                            decision, view, adapter,
-                            **self._charge_stability_kwargs(),
-                            now_ts=_now_mono_cycle,
-                        )
+                        # (#1391) A charger SEM yields to another party
+                        # gets no start ladder and shows no act of SEM's.
+                        _yielded = self._yields_charger(cid)
+                        decision = self._yield_or_stabilise(
+                            cid, decision, view, adapter, _now_mono_cycle)
                         # Safety write gate is deliberately LAST: stability
                         # logic must never bridge or ramp around an emergency
                         # phase-guard stop.
@@ -5519,20 +5607,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # stop→switch→settle sequence. AFTER the safety gate
                         # on purpose: the tick only ever weakens a CHARGE
                         # into IDLE and passes emergency stops untouched.
-                        decision = await self._phase_switch_tick(
-                            cid, charger_cfg, decision, view.power,
-                            _now_mono_cycle,
-                            setpoint_a=int(float(getattr(
-                                getattr(adapter, "_device", None),
-                                "_current_setpoint", 0) or 0)),
-                            # (#1008) never ask for three phases the meter
-                            # cannot pay for this quarter hour.
-                            peak_allowed_w=getattr(
-                                view.fleet, "peak_slot_allowed_w", None),
-                            # (#1015) the device that can set its phases by
-                            # one current per phase, when it can
-                            device=getattr(adapter, "_device", None),
-                        )
+                        # (#1391) Not for a charger another party steers:
+                        # SEM plans no phases for a box it does not drive,
+                        # and the entity switch in the tick is gated on
+                        # observer mode only.
+                        if not _yielded:
+                            decision = await self._phase_switch_tick(
+                                cid, charger_cfg, decision, view.power,
+                                _now_mono_cycle,
+                                setpoint_a=int(float(getattr(
+                                    getattr(adapter, "_device", None),
+                                    "_current_setpoint", 0) or 0)),
+                                # (#1008) never ask for three phases the
+                                # meter cannot pay for this quarter hour.
+                                peak_allowed_w=getattr(
+                                    view.fleet, "peak_slot_allowed_w", None),
+                                # (#1015) the device that can set its phases
+                                # by one current per phase, when it can
+                                device=getattr(adapter, "_device", None),
+                            )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
                         # can distinguish "SEM idle, EV at 0W is correct"
@@ -5674,6 +5767,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 observer=self._observer_mode,
                                 controller=self._surplus_controller,
                                 yielded=self.external_yielding(f"charger:{cid}"),
+                                phase_override=yield_override_reason(self, decision),
                             )
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
@@ -5694,6 +5788,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         voltage=adapter.voltage,
                                         max_current_a=adapter.max_current_a,
                                     )
+                                elif _yielded:
+                                    # (#1391) SEM wrote no setpoint; the
+                                    # other party's draw is what is taken.
+                                    self._night_committed_w += _yielded_draw_w(view)
                                 else:
                                     self._night_committed_w += max(0.0, (
                                         ev_dev._current_setpoint * ev_dev.phases * ev_dev.voltage
@@ -5711,12 +5809,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # tests/test_665_allocator_coverage.py fails CI if
                             # the reset or this call disappears.
                             from .charger_types import solar_commitment_w
-                            self._solar_committed_w_per_cycle += solar_commitment_w(
-                                decision,
-                                phases=adapter.phases,
-                                voltage=adapter.voltage,
-                                max_current_a=adapter.max_current_a,
-                            )
+                            # (#1391) A charger another party steers commits
+                            # nothing of SEM's, but its draw is real, and the
+                            # home's power leaves car charging out: without
+                            # it here the next charger spends the same sun.
+                            self._solar_committed_w_per_cycle += (
+                                _yielded_draw_w(view) if _yielded else
+                                solar_commitment_w(
+                                    decision,
+                                    phases=adapter.phases,
+                                    voltage=adapter.voltage,
+                                    max_current_a=adapter.max_current_a,
+                                ))
                             # (#864) The peak slot's twin: what THIS charger
                             # was offered is unavailable to the next one, and
                             # it cannot show up in grid_import yet because the
@@ -5754,6 +5858,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # Single-charger legacy path — also flipped to the new pipeline.
                 # Build a synthetic per-charger view from the global config.
                 from .actuate import actuate
+                from .active_phase_guard import yield_override_reason
                 from .build_view import build_charger_view
                 from .charger_adapters import adapter_for
                 from .decide import decide as decide_v2
@@ -5822,12 +5927,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
                 decision = decide_v2(view)
                 # Hysteresis stability layer (#461 flapping) — the
-                # single-charger legacy branch needs the same protection.
-                decision = self._charge_stability.filter(
-                    decision, view, adapter,
-                    **self._charge_stability_kwargs(),
-                    now_ts=_now_mono_cycle,
-                )
+                # single-charger legacy branch needs the same protection,
+                # and the same #1391 yield.
+                decision = self._yield_or_stabilise(
+                    cid, decision, view, adapter, _now_mono_cycle)
                 from .active_phase_guard import filter_charger_decision
                 decision = filter_charger_decision(
                     self, decision, adapter=adapter, power=view.power,
@@ -5844,6 +5947,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         observer=self._observer_mode,
                         controller=self._surplus_controller,
                         yielded=self.external_yielding(f"charger:{cid}"),
+                        phase_override=yield_override_reason(self, decision),
                     )
                     self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
@@ -5888,7 +5992,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
+                try:
+                    await self._load_manager.async_sync_observer(self._observer_mode)
+                except Exception:  # noqa: BLE001 — never costs a cycle
+                    _LOGGER.debug("shed recovery on observer off failed", exc_info=True)
                 self._load_manager._observer_mode = self._observer_mode
+                # (#896) switched off at runtime: shed loads go back
+                try:
+                    await self._load_manager.async_sync_enabled(self.config.get(
+                        "load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED))
+                except Exception:  # noqa: BLE001 — never costs a cycle
+                    _LOGGER.debug("shed restore on LM off failed", exc_info=True)
                 # (#1084) its sheds and restores go to the decision log too
                 self._load_manager.decision_log = self.decision_log
                 try:
@@ -6824,6 +6938,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                      or _td.level_absence))}
                     for p in (_td.upcoming_prices or [])[:48]
                 ]
+                # (#1390) A schedule or a two-rate tariff has no curve in
+                # ``upcoming``, and ``schedule_today`` ends at midnight: the
+                # plan card drew tomorrow from the plan's night hours alone,
+                # one rate, and called it a fixed price. Its own prices
+                # for today and tomorrow, from the plan's price accessor.
+                result["tariff_rate_steps"] = None
+                if not _td.is_dynamic:
+                    try:
+                        from .day_ledger import rate_runs
+                        _day0 = dt_util.start_of_local_day()
+                        result["tariff_rate_steps"] = rate_runs(
+                            self._tariff_provider, _day0,
+                            _day0 + timedelta(days=2))
+                    except Exception as e:  # noqa: BLE001 — no runs, no lane
+                        _LOGGER.debug("Tariff rate runs failed (#1390): %s", e)
                 result["tariff_currency"] = _td.currency
                 result["tariff_today_min_price"] = _td.today_min_price
                 result["tariff_today_max_price"] = _td.today_max_price
@@ -7010,7 +7139,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # window open exactly as the night will (D3), so the
                                 # strip never promises a start in the peak band.
                                 _lvl = PriceView(getattr(
-                                    self, "_tariff_provider", None)).level_at_fn()  # (#1372)
+                                    self, "_tariff_provider", None)).hold_level_at_fn()  # (#1372, #1387)
                                 if (self._tariff_optimized_for(_pcfg) and _lvl is not None
                                         and _night_start and _ev_deadline_dt
                                         and _ev_rate_kw > 0):
@@ -7122,7 +7251,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 {**_onp,
                  "actuation": bool(getattr(
                      self, "_energy_plan_actuation", False)),
-                 "coverage": self._plan_coverage_view()}
+                 "coverage": self._plan_coverage_view(),
+                 "coverage_why": self._plan_coverage_why()}
                 if isinstance(_onp, dict) else _onp)
             # (#638 consolidation / #722) the NEXT energy day's books,
             # previewed for the card's Tomorrow view — live like
@@ -7349,7 +7479,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         caps = {}
         for bid, _ad in adapters:
             try:
-                caps[bid] = float(self._unit_capacity_kwh(bid, power) or 0.0)
+                caps[bid] = float(self._pack_share_kwh(bid, power) or 0.0)
             except (TypeError, ValueError, AttributeError):
                 caps[bid] = 0.0
         total = sum(caps.values())
@@ -8268,14 +8398,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # partition checks depend on seeing it.
             # (#1044) Home members only: ``home`` has already taken out
             # the draw of the chargers ``ev_power`` read.
+            # (#1394) Each draw as it stood when ``home`` was complete: a
+            # plug that reports every second is ahead of a grid meter that
+            # reports every 15-20 s, and its new load is not in ``home`` yet.
+            from .draw_alignment import DrawHistory
+            _history = getattr(self, "_draw_history", None)
+            if not isinstance(_history, DrawHistory):
+                _history = self._draw_history = DrawHistory()
+            _house_at = None
+            _complete_at = getattr(getattr(self, "_sensor_reader", None),
+                                   "house_complete_at", None)
+            if callable(_complete_at):
+                _house_at = _complete_at()
+            if not isinstance(_house_at, datetime):
+                _house_at = None
             _controlled_w = 0.0
             for device in home_members(
                     self._surplus_controller._devices.values(),
                     chargers_outside_home(sem_ev_chargers(self), power)):
                 try:
-                    _controlled_w += float(device.observed_power_w() or 0.0)
+                    _w = float(device.observed_power_w() or 0.0)
                 except (AttributeError, TypeError, ValueError):
                     continue
+                _controlled_w += _history.as_of(
+                    str(getattr(device, "device_id", id(device))), _w,
+                    self._power_changed_at(device), _house_at)
             energy.true_baseload_power = round(
                 float(power.home_consumption_power or 0.0) - _controlled_w, 1
             )
@@ -8414,11 +8561,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         hp_current_temp: Optional[float] = None
         if hp_controller is not None:
-            try:
-                t = hp_controller.get_current_temperature() if hasattr(hp_controller, "get_current_temperature") else None
-                hp_current_temp = float(t) if t is not None else None
-            except (ValueError, TypeError, AttributeError):
-                hp_current_temp = None
+            hp_current_temp = asked_temperature(hp_controller)  # #1380
 
         # #570: wire the registered controller's LIVE SG-Ready state into
         # the sensor surface — the override the comment above promised but
@@ -8462,26 +8605,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._feed_cop_learners()          # (#1081)
         except Exception:  # noqa: BLE001 — learning never costs a cycle
             _LOGGER.debug("COP learner failed", exc_info=True)
-        _hp_cop = (float(getattr(hp_controller, "cop", 3.0) or 3.0)
-                  if hp_controller is not None else None)
-        # (#1081) with a COP curve, the COP at the outdoor temperature now;
-        # without one (or with no reading) the flat COP, as before.
-        # (#1081) …or the curve it learned from its heat meter, when the
-        # user chose that (``device_cop_at``, the one reader).
-        _hp_cop_source = "flat" if hp_controller is not None else None
-        _hp_cop_outdoor = None
-        from .heat_cost import device_has_cop_shape as _has_shape
-        if hp_controller is not None and _has_shape(hp_controller):
-            # read the outdoor temperature only for a curve: without one
-            # nothing here changes, not even what is read
-            from .heat_cost import device_cop_at as _device_cop_at
-            _hp_cop_outdoor = self._outdoor_temperature_or_none()
-            _cop_now, _hp_cop_source = _device_cop_at(
-                hp_controller, _hp_cop_outdoor)
-            if _cop_now:
-                _hp_cop = float(_cop_now)
-            if _hp_cop_source == "flat":
-                _hp_cop_outdoor = None
+        _hp_cop, _hp_cop_source, _hp_cop_outdoor = self._heat_pump_cop_view(
+            hp_controller)
         from .heat_cost import heat_pump_price as _heat_pump_price_fn
         _hp_price = None
         if hp_controller is not None:
@@ -8613,11 +8738,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             clear_heater_no_rise(self.hass, did)
                 except Exception as e:  # noqa: BLE001 — never break the cycle
                     _LOGGER.debug("Heating check failed: %s", e)
-            try:
-                t = hw_controller.get_current_temperature() if hasattr(hw_controller, "get_current_temperature") else None
-                hw_current_temp = float(t) if t is not None else None
-            except (ValueError, TypeError, AttributeError):
-                hw_current_temp = None
+            hw_current_temp = asked_temperature(hw_controller)  # #1380
             try:
                 hw_hours_since_leg = float(hw_controller.hours_since_legionella) if hasattr(hw_controller, "hours_since_legionella") else None
             except (ValueError, TypeError, AttributeError):
@@ -11058,7 +11179,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     last_known_soc=float(bp.soc_pct or 0.0),
                     last_known_w=float(bp.power_w or 0.0),
                     # (#1306) its own nameplate, else its share of the fleet
-                    capacity_kwh=self._unit_capacity_kwh(battery_id, power),
+                    capacity_kwh=self._pack_share_kwh(battery_id, power),
                     # (#932) "populated → it reported this cycle" was false:
                     # a HELD reading is populated too. Per-unit flag when the
                     # reading carries one, else the fleet's — never a bare
@@ -11474,7 +11595,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         correction = self._forecast_tracker.correction_factor
 
-        expected_consumption = self._predictor.predict_consumption_today_kwh(now)
+        # (#1377) The same span as the forecast above: the plan day. The
+        # evening plans tomorrow, so it needs tomorrow's whole use, not
+        # the few hours of today that remain.
+        if plans_today:
+            expected_consumption = self._predictor.predict_consumption_today_kwh(now)
+        else:
+            _day0 = datetime.combine(plan_day, datetime.min.time(),
+                                     tzinfo=now.tzinfo)
+            expected_consumption = self._predictor.predict_consumption_for_day_kwh(_day0)
         if expected_consumption <= 0:
             expected_consumption = 12.0
 
@@ -11516,6 +11645,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         _set_cap = getattr(scheduler, "set_fleet_capacity_kwh", None)
         if callable(_set_cap):
             _set_cap(_fleet_capacity_of(self, power))   # (#1306)
+        # (#1377) The dear hours before solar, and the floor the plan reports.
+        _floor_soc = _battery_floor_for(self)[0]
+        _bridge = self._plan_bridge_slots(now, plan_day, plans_today)
         scheduler.evaluate(
             current_soc=power.battery_soc,
             forecast_tomorrow_kwh=forecast_tomorrow,
@@ -11527,11 +11659,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             forecast_available=forecast.available,
             forecast_age_hours=forecast_age,
             current_price=current_price,
+            floor_soc=_floor_soc,
+            bridge_slots=_bridge,
         )
 
         # (#638 G3) SHADOW: the joint energy plan, computed + logged next
         # to the reactive planners it replaced.
         self._shadow_energy_plan(scheduler, energy, power)
+
+    def _plan_bridge_slots(self, now, plan_day, plans_today: bool) -> list:
+        """(#1377) The hours the battery must carry on the plan day: from
+        its start (from now, in the small hours) until the sun covers the
+        house, each with its price. [] when the profile is unknown."""
+        from .battery_charge_scheduler import bridge_slots
+        try:
+            start = (now.replace(minute=0, second=0, microsecond=0)
+                     if plans_today else datetime.combine(
+                         plan_day, datetime.min.time(), tzinfo=now.tzinfo))
+            cons = self._predictor.predict_consumption_24h(start)
+            sun = self._predictor.predict_solar_24h(start)
+            price_at = getattr(self._tariff_provider, "get_price_at", None)
+            return bridge_slots(start, cons, sun, price_at)
+        except Exception:  # noqa: BLE001 — no bridge is the safe answer
+            return []
 
     def _ev_blocks_for(self, cid: str, now=None) -> "Optional[list]":
         """(#742) THIS charger's blocks from the stamped plan — only when
@@ -11578,6 +11728,73 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             out[str(demand_id)] = "covered" if gate.covered else (
                 str(gate.reason) or "uncovered")
         return out
+
+    def _heat_pump_cop_view(self, hp_controller) -> tuple:
+        """(#1081) ``(cop, source, outdoor_c)`` for the cost-of-heat sensor.
+
+        With a COP curve, or a learned one, the COP at the outdoor
+        temperature now; without one the flat COP. The outdoor reading is
+        always taken, so the sensor shows what SEM saw even on a flat COP."""
+        if hp_controller is None:
+            return None, None, None
+        cop = float(getattr(hp_controller, "cop", 3.0) or 3.0)
+        source = "flat"
+        from .heat_cost import device_cop_at, device_has_cop_shape
+        shaped = device_has_cop_shape(hp_controller)
+        # a flat COP reads the outdoor sensor only when the user picked one
+        outdoor = (self._outdoor_temperature_or_none()
+                   if shaped or (getattr(self, "config", None) or {}).get(
+                       CONF_OUTDOOR_TEMPERATURE_ENTITY) else None)
+        if shaped:
+            now_cop, source = device_cop_at(hp_controller, outdoor)
+            if now_cop:
+                cop = float(now_cop)
+        return cop, source, outdoor
+
+    def _plan_coverage_why(self) -> dict:
+        """(#1081) A reason CODE for each ``comfort:``/``load:<device>`` the
+        plan does not hold, saying why that device asked for nothing (the
+        card turns it into words in the user's language). Read-only.
+
+        The plan builder's own ``not_scheduled`` record answers first (one
+        owner for "why not planned"); the device's own check answers only
+        where the builder recorded nothing."""
+        from . import reason_codes as RC
+        out = {}
+        ctl = getattr(self, "_surplus_controller", None)
+        devs = {str(d.device_id): d for d in
+                (ctl.get_devices_sorted() if ctl else [])}
+        plan = getattr(self, "_energy_plan_shadow", None)
+        recorded = {str(r.get("id")): r.get("why")
+                    for r in ((plan or {}).get("not_scheduled") or [])
+                    if isinstance(r, dict)}
+        for did, state in (self._plan_coverage_view() or {}).items():
+            kind, _, dev_id = did.partition(":")
+            dev = devs.get(dev_id)
+            if state != "not in plan" or dev is None:
+                continue
+            try:
+                why = self._no_ask_code(kind, dev, recorded.get(f"load:{dev_id}"), RC)
+            except Exception:  # noqa: BLE001 — a note, never a cycle
+                why = None
+            if isinstance(why, str) and why:
+                out[did] = why
+        return out
+
+    @staticmethod
+    def _no_ask_code(kind, dev, recorded, RC):
+        """(#1081) One device's reason code, or None when nothing true can
+        be said. ``recorded`` is the builder's ``not_scheduled`` word."""
+        if kind == "comfort":
+            fn = getattr(dev, "comfort_plan_blocker", None)
+            return fn() if callable(fn) else None
+        if kind != "load":
+            return None
+        if recorded:
+            return RC.LOAD_NOASK_MODE if recorded == "load_mode" else None
+        if _band_engaged(dev) or getattr(dev, "daily_min_runtime_sec", 0):
+            return None     # the band leads / a runtime is set
+        return RC.LOAD_NOASK_NO_MIN_RUNTIME
 
     def _plan_gate_now(self, demand_id: str, now=None):
         """THE verdict for one demand — the kill-switch rule included.
@@ -13130,7 +13347,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _peak_w = 0.0
                 ledger2 = build_night_ledger(
                     slots2, soc_kwh=soc_seed, floor_kwh=_floor2,
-                    max_discharge_w=_md_w, peak_limit_w=_peak_w)
+                    max_discharge_w=_md_w, peak_limit_w=_peak_w,
+                    capacity_kwh=cap_kwh2)
                 plan2 = pack_night(
                     demands2, ledger2, floor_kwh=_floor2,
                     max_discharge_w=_md_w, peak_limit_w=_peak_w)
@@ -13520,6 +13738,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     contiguous=bool(cfg.get("ev_plan_one_block", False)),
                     # (#1023) the late charge right before departure
                     late_s=late_charge_s(cfg),
+                    # (#1383) cheap-hours mode: a thin sun hour may be topped
+                    # up from the grid at its import price — but only for the
+                    # Min floor, the one need the live gate buys grid for
+                    # (``kwh`` is that floor: bound="min", > 0.1 as in decide)
+                    grid_in_sun=bool(self._tariff_optimized_for(cfg)
+                                     and float(kwh) > 0.1),
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)
@@ -13735,7 +13959,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1367) Plan only the charge SEM can send: a pack whose
             # adapter takes no charge command gets none, and the card says
             # so instead of showing a charge that never happens.
+            # (#1388) The scheduler's deficit is the day's; the packer caps it
+            # to the pack's room where the charge lands. The rest is house
+            # demand the grid covers, not a battery charge.
             plan_deficit = deficit
+            batt_room = _battery_room_kwh(self, dec, scheduler, power)
             batt_max_w = float(getattr(
                 getattr(scheduler, "_config", None),
                 "battery_max_charge_power_w", 5000.0))
@@ -13767,6 +13995,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # hour is closed to it, a sun hour stays open (the sun
                     # fills the pack). Cheap day hours are #1073.
                     sun_waits_until=plan_day_end,
+                    room_kwh=batt_room,
                 ))
 
             # ── Readiness, before anything gets stamped ─────────────────
@@ -13876,8 +14105,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # slot is cheap for the packer at any tariff.
                     # PRICE-ASK: a field name of the published slot, not a level
                     "cheap": bool(s.tariff_cheap),
-                    **({"sun": True} if s.cap_override_w is not None
-                       else {}),
+                    # (#1390) a sun slot's ``price`` is the feed-in rate;
+                    # ``buy`` is what a grid kWh costs there (None: unknown)
+                    **({"sun": True, "buy": s.import_price}
+                       if s.cap_override_w is not None else {}),
                     "home_w": round(s.home_w, 1),
                     "soc_kwh": round(s.soc_kwh, 2),
                     "home_grid_w": round(s.home_grid_w, 1),
@@ -14148,7 +14379,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             ledger = build_night_ledger(
                 slots, soc_kwh=soc_kwh, floor_kwh=floor_kwh,
-                max_discharge_w=max_discharge_w, peak_limit_w=peak_w)
+                max_discharge_w=max_discharge_w, peak_limit_w=peak_w,
+                capacity_kwh=cap_kwh)
             # ── Arbitrage advice (#638, the last string) ────────────────
             # The advisor reads the SAME walked ledger the pack consumes
             # — prices on both horizons, the home's hour-by-hour grid
@@ -18321,6 +18553,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except (AttributeError, TypeError, ValueError) as e:
             _LOGGER.debug("Failed to restore daily energy for %s: %s",
                           getattr(device, "device_id", "?"), e)
+
+    def _power_changed_at(self, device) -> Optional[datetime]:
+        """(#1394) When the device's power sensor last changed value, or None
+        when its draw does not come from a readable power sensor."""
+        eid = getattr(device, "power_entity_id", None)
+        if not isinstance(eid, str) or not eid:
+            return None
+        try:
+            state = self.hass.states.get(eid)
+        except AttributeError:
+            return None
+        if state is None or state.state in ("unknown", "unavailable", None, ""):
+            return None
+        changed = getattr(state, "last_updated", None)
+        return changed if isinstance(changed, datetime) else None
 
     def _file_device_energy(self, meter_day, power) -> None:
         """(#769) File each device's just-booked kWh into the ledger.

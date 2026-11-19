@@ -56,6 +56,8 @@ CHARGER_RAMP = "charger_ramp"
 CHARGER_HOLD_STEADY = "charger_hold_steady"
 CHARGER_PLAN_OVERRIDE_STOP = "charger_plan_override_stop"
 CHARGER_PLAN_OVERRIDE_RUN = "charger_plan_override_run"
+# (#1391) another party steers this charger; SEM yields and sends nothing
+CHARGER_YIELDED = "charger_yielded"
 
 # ── batteries ────────────────────────────────────────────────────────
 BATTERY_OFF = "battery_off"
@@ -79,6 +81,8 @@ BATTERY_PEAK_HOLD = "battery_peak_hold"
 BATTERY_PEAK_HOLD_COVER = "battery_peak_hold_cover"
 BATTERY_CAR_NOT_ALLOWED = "battery_car_not_allowed"
 BATTERY_CAR_LEVEL_UNKNOWN = "battery_car_level_unknown"
+# (#1321) the card words this when the car level is known after all
+BATTERY_CAR_LEVEL_KNOWN = "battery_car_level_known"
 BATTERY_CAR_BELOW_FLOOR = "battery_car_below_floor"
 BATTERY_CAR_BELOW_RESERVE = "battery_car_below_reserve"
 BATTERY_CAR_LOW_SUN = "battery_car_low_sun"
@@ -119,6 +123,11 @@ LOAD_DAILY_MAX = "daily_max"
 LOAD_STOP_CONDITION = "stop_condition"
 LOAD_PLAN_WAIT = "plan_wait"
 LOAD_NO_SOURCE = "no_source"
+# (#1321) the card words these when the same decision is only held ("stays off"), not made now
+LOAD_NO_SOURCE_HELD = "no_source_held"
+LOAD_PEAK_SHED_HELD = "peak_shed_held"
+LOAD_PHASE_GUARD_HELD = "phase_guard_held"
+LOAD_SURPLUS_SHORT_HELD = "surplus_short_held"
 # (#1102) the heater ladder: each rung names itself
 LOAD_COMFORT_FLOOR = "comfort_floor"
 # (#1344) too cold while the house is away: back above the limit, no further
@@ -128,6 +137,17 @@ LOAD_COMFORT_GOAL = "comfort_goal"
 LOAD_COMFORT_GOAL_BATTERY = "comfort_goal_battery"
 # (#1349) it would heat from the house battery, but the battery is at its reserve
 LOAD_BATTERY_RESERVE = "battery_reserve"
+# (#1081) why a device asked the plan for nothing — the plan's coverage notes
+LOAD_NOASK_MODE = "comfort_mode"
+LOAD_NOASK_AWAY = "comfort_away"
+LOAD_NOASK_NO_BAND = "comfort_no_band"
+LOAD_NOASK_BAND_WRONG = "comfort_band_wrong"
+LOAD_NOASK_NO_READING = "comfort_no_room_reading"
+LOAD_NOASK_TOO_COLD = "comfort_too_cold"
+LOAD_NOASK_SOLAR_ONLY = "comfort_solar_only"
+LOAD_NOASK_WARM = "comfort_warm"
+LOAD_NOASK_NOT_FAR = "comfort_not_far"
+LOAD_NOASK_NO_MIN_RUNTIME = "load_no_min_runtime"
 LOAD_LEGIONELLA = "legionella"
 # (#1321) the user's one-off on a load: run now / not now
 LOAD_OVERRIDE_RUN = "load_override_run"
@@ -164,6 +184,7 @@ PARAMS: Dict[str, Tuple[str, ...]] = {
     CHARGER_PLAN_OVERRIDE_RUN: ("time",),
     BATTERY_FEEDS_CAR: ("floor",),
     BATTERY_CAR_BELOW_FLOOR: ("floor",),
+    BATTERY_CAR_LEVEL_KNOWN: ("soc",),
     EXPORT_NOT_WORTH: ("value", "threshold"),
 }
 

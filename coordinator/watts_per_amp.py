@@ -83,8 +83,42 @@ _IMPLIED_AGREEMENT: float = 0.25
 #: How close the agreed number must sit to a real phase count. An implied
 #: 2.0 is nobody's answer and must stay unspoken.
 _IMPLIED_TIGHTNESS: float = 0.35
+#: Setpoints the agreeing top of the ladder needs (#1376).
+_PLATEAU_MIN_POINTS: int = 3
 
 Key = Tuple[str, int, int]
+
+
+def _top_plateau(implied: Dict[int, float]) -> Optional[list]:
+    """(#1376) The implied phase counts of the HIGH setpoints that agree,
+    or None when they do not make a ladder.
+
+    A car that is slow to follow a new current reads LOW at the setpoints
+    SEM has only just stepped onto (a Go 2 with an e-Niro: 0.49 at 8 A,
+    0.80-0.88 from 12 A up). Lag only ever lowers a draw, so walk down
+    from the highest setpoint and keep every one within
+    ``_IMPLIED_AGREEMENT`` of it. Three guards against a power cap, whose
+    ``W/A ∝ 1/amps`` curve rises as the offer falls:
+
+    * when setpoints are left out, at least ``_PLATEAU_MIN_POINTS`` agree,
+      spread ``_SPREAD_MIN`` apart;
+    * every setpoint left out reads BELOW the plateau — a ramp does, a cap
+      reads above it."""
+    top = max(implied)
+    anchor = implied[top]
+    kept = {a: v for a, v in implied.items()
+            if abs(v - anchor) <= _IMPLIED_AGREEMENT}
+    dropped = {a: v for a, v in implied.items() if a not in kept}
+    # A ladder that agrees all the way down needs no more than two points
+    # (the rule before #1376); leaving points out asks for three.
+    if dropped and len(kept) < _PLATEAU_MIN_POINTS:
+        return None
+    if len(kept) < 2 or top / min(kept) < _SPREAD_MIN:
+        return None
+    mean = sum(kept.values()) / len(kept)
+    if any(v >= mean for v in dropped.values()):
+        return None
+    return list(kept.values())
 
 
 # ── the pure conversions ─────────────────────────────────────────────────
@@ -290,10 +324,8 @@ class WattsPerAmpLearner:
             measured = next((p for p in _PHASE_COUNTS if p >= bound), None)
         # ── under-determined: only the ladder can answer ──
         elif len(implied) >= 2:
-            lo, hi = min(implied), max(implied)
-            vals = list(implied.values())
-            if (lo > 0 and hi / lo >= _SPREAD_MIN
-                    and max(vals) - min(vals) <= _IMPLIED_AGREEMENT):
+            vals = _top_plateau(implied)
+            if vals is not None:
                 mean = sum(vals) / len(vals)
                 near = min(_PHASE_COUNTS, key=lambda p: abs(mean - p))
                 if near < ph and abs(mean - near) < _IMPLIED_TIGHTNESS:

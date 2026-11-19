@@ -56,7 +56,16 @@ Open an issue with the `enhancement` label. Describe the use case, not just the 
 - Python: follow existing patterns in the codebase
 - No new dependencies unless absolutely necessary
 - Add tests for new features
-- Update translations (15 languages: de, en, es, fr, it, nl, pt, pl, sv, cs, da, fi, hu, ro, no) for user-facing text
+- Update translations for user-facing text (see "Dashboard, cards and translations" below)
+
+### Dashboard, cards and translations
+
+1. Edit the card source in `dashboard/card/src/cards/`.
+2. Build the bundle: `cd dashboard/card && npm run build`. It writes `dashboard/card/dist/sem-cards.js`. Commit that file.
+3. Edit the screen template in `dashboard/sem_next_template.yaml` if the layout changes.
+4. For user-facing text, edit `dashboard/translations.json` (all 16 languages), then run `python3 scripts/regenerate_localize.py`. Never edit `dashboard/card/sem-localize*.js`.
+5. Card tests: `cd dashboard/card && npm test`.
+6. Deploy (see Development Setup), restart Home Assistant, then call the `generate_dashboard` service. It applies template and translation changes.
 
 ### Adding a charger or inverter brand (#814)
 
@@ -77,8 +86,8 @@ Support is DATA first. Adding a brand means three things, and CI checks two of t
    export the row stays `requested` and the brand sits in the ratchet's
    shrink-only gap list.
 
-Users see what detection did on the dashboard **Configuration → Detected
-hardware** (evidence per role, near-misses named); when triaging a report, ask
+Users see what detection did on the dashboard: **System → Health → Hardware**
+(evidence per role, near-misses named); when triaging a report, ask
 for that section or the diagnostics download — the same report is in both.
 
 #### Which brand next? Ask the roster (#915)

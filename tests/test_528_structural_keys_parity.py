@@ -1,6 +1,6 @@
-"""#528 — the Config card's STRUCTURAL_KEYS must mirror the backend.
+"""#528 — the System screen's STRUCTURAL_KEYS must mirror the backend (#1321).
 
-The card stages entity-picker edits behind an Apply button ONLY for keys that
+The screen stages entity-picker edits behind an Apply button ONLY for keys that
 actually trigger an entry reload (the backend's _SET_OPTION_STRUCTURAL_KEYS).
 If the card staged a key the backend treats as live, Apply would do nothing
 visible (a silent "pending" that never reloads). Guard: every key the card
@@ -12,14 +12,15 @@ import re
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
-_CARD = _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js"
+_CARD = _ROOT / "dashboard" / "card" / "src" / "util" / "next-settings.js"
 _INIT = _ROOT / "__init__.py"
 
 
 def _js_structural_keys() -> set[str]:
     src = _CARD.read_text(encoding="utf-8")
-    m = re.search(r"const STRUCTURAL_KEYS = new Set\(\[(.*?)\]\)", src, re.S)
-    assert m, "STRUCTURAL_KEYS Set literal not found in sem-config-card.js"
+    src = re.sub(r"//[^\n]*", "", src)
+    m = re.search(r"export const STRUCTURAL_KEYS = new Set\(\[(.*?)\]\)", src, re.S)
+    assert m, "STRUCTURAL_KEYS Set literal not found in next-settings.js"
     return set(re.findall(r"'([^']+)'", m.group(1)))
 
 

@@ -55,40 +55,14 @@ def test_the_user_guide_states_the_real_default():
     assert m.group(1) == str(DEFAULT_LOAD_MANAGEMENT_ENABLED).lower()
 
 
-def _essential_controls():
-    src = CARD.read_text(encoding="utf-8")
-    m = re.search(r"const ESSENTIAL_CONTROLS = new Set\(\[(.*?)\]\)", src,
-                  re.DOTALL)
-    assert m
-    return set(re.findall(r"'([a-z0-9_]+)'", m.group(1)))
-
-
 def test_the_arm_switch_and_its_ceiling_are_reachable_without_advanced():
     """The shedder can switch off house circuits. Its on/off and the number it
     defends must be one toggle away from nobody — the default view."""
-    ctrls = _essential_controls()
-    assert "load_management_enabled" in ctrls
-    assert "target_peak_limit" in ctrls
+    # (#1321) the slot grouping is pinned in dashboard/card/test/next-settings.test.js;
+    # here: both keys are on the screen
+    import re
+    from ._dashboard_src import dashboard_src
+    words = set(re.findall(r"['\"]([a-z][a-z0-9_]+)['\"]", dashboard_src()))
+    assert {"load_management_enabled", "target_peak_limit"} <= words
 
 
-def test_the_card_fallback_agrees_with_the_constant():
-    """The card cannot import the Python constant; its literal fallback for an
-    absent key is pinned here instead."""
-    src = CARD.read_text(encoding="utf-8")
-    m = re.search(
-        r"_renderOptionToggle\('load_management_enabled',\s*'config_lm_enabled',"
-        r"\s*opts,\s*'config_help_lm_enabled',\s*(true|false)\)", src)
-    assert m, "the load management toggle moved"
-    assert m.group(1) == str(DEFAULT_LOAD_MANAGEMENT_ENABLED).lower()
-
-
-def test_a_setup_overview_route_lands_in_the_default_view():
-    """The Setup overview's "optional" chip is how a user reaches load
-    management once it is off. Its click opened a section the default view
-    filters out — a route to nowhere. A section the user asked for is shown."""
-    src = CARD.read_text(encoding="utf-8")
-    m = re.search(r"_openSection\(id\) \{(.*?)\n    \}", src, re.DOTALL)
-    assert m and "this._revealed" in m.group(1), (
-        "_openSection no longer reveals the section it routes to")
-    assert "|| this._revealed.has(s.id)" in src, (
-        "the section filter ignores a section the user routed to")

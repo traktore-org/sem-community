@@ -395,6 +395,11 @@ class FlowCalculator:
         self._per_string_accumulators: Dict[str, Dict[str, float]] = {}
         self._current_date: date = dt_util.now().date()
 
+    @property
+    def flow_day(self) -> date:
+        """(#1382) The calendar day the integrated split belongs to."""
+        return self._current_date
+
     @staticmethod
     def calculate_power_flows(power: PowerReadings) -> PowerFlows:
         """Calculate instantaneous power flows using priority-based allocation (#349).

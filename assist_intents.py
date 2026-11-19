@@ -50,7 +50,8 @@ from homeassistant.helpers import config_validation as cv, intent
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
 from .coordinator.plan_override import MAX_OVERRIDE_MINUTES
-from .coordinator.decision_log import KIND_BATTERY, KIND_CHARGER, DecisionLog
+from .coordinator.decision_log import (
+    KIND_BATTERY, KIND_CHARGER, DecisionLog, current)
 from .plain_reasons import DATA_KEY as PLAIN_REASONS_DATA_KEY, plain_sentence
 
 _LOGGER = logging.getLogger(__name__)
@@ -151,15 +152,9 @@ def _why_sentence(coordinator: SEMCoordinator, kind: str, device_id: str) -> str
     log = getattr(coordinator, "decision_log", None)
     if not isinstance(log, DecisionLog) or not device_id:
         return _NO_ANSWER
-    rec = log.last(kind, device_id)
+    # (#1086) the record while it still fits, else the live reason
+    rec = current(kind, device_id, coordinator)
     if rec is None:
-        # (#1379) the log holds a charger only once SEM SENT it something; a
-        # car that waits for its window has no entry. Its live reason does.
-        if kind == KIND_CHARGER:
-            live = (getattr(coordinator, "data", None) or {}).get(
-                f"charger_{device_id}_strategy")
-            if isinstance(live, str) and live.strip():
-                return live.strip()
         return _NO_ANSWER
     catalogue = coordinator.hass.data.get(PLAIN_REASONS_DATA_KEY, {})
     lang = getattr(coordinator.hass.config, "language", "en")

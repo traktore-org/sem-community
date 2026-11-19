@@ -381,34 +381,89 @@ _DASHBOARD_PATH = "sem-dashboard"
 _DASHBOARD_STORE = f"lovelace.{_DASHBOARD_PATH}"
 
 
+def running_dashboards_collection(hass):
+    """HA's own dashboards collection, when Lovelace is loaded, else None.
+
+    Lovelace keeps the collection to itself; the only public handle is the
+    websocket command it registered (its handler wraps a bound method of the
+    object that owns it). Writing through it keeps HA's list, the sidebar and
+    the stored view config in step, so HA never writes an old list back.
+    """
+    try:
+        entry = (getattr(hass, "data", None) or {}).get("websocket_api", {}).get("lovelace/dashboards/delete")
+        stack = [entry[0] if isinstance(entry, tuple) else entry]
+        for _ in range(16):
+            if not stack:
+                return None
+            fn = stack.pop()
+            owner = getattr(fn, "__self__", None)
+            found = getattr(owner, "storage_collection", None)
+            if found is not None and hasattr(found, "async_delete_item"):
+                return found
+            wrapped = getattr(fn, "__wrapped__", None)
+            if wrapped is not None:
+                stack.append(wrapped)
+            for cell in getattr(fn, "__closure__", None) or ():
+                try:
+                    inner = cell.cell_contents
+                except ValueError:
+                    continue
+                if callable(inner):
+                    stack.append(inner)
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("SEM cleanup: no running dashboards collection", exc_info=True)
+    return None
+
+
+async def async_dashboard_item(hass, url_path: str) -> dict | None:
+    """The dashboard row for ``url_path``, looked up by its URL, never by an
+    assumed id (a dashboard made in the UI has a slug id of its own)."""
+    from homeassistant.helpers.storage import Store
+
+    collection = running_dashboards_collection(hass)
+    items = list(collection.async_items()) if collection is not None else None
+    if items is None:
+        data = await Store(hass, 1, "lovelace_dashboards").async_load() or {}
+        items = list(data.get("items") or [])
+    return next((dict(i) for i in items if i.get("url_path") == url_path), None)
+
+
 async def async_remove_dashboard(hass, path: str = _DASHBOARD_PATH) -> bool:
     """Delete the generated dashboard and its sidebar entry. Explicit only.
 
-    Returns True when something was removed. The two halves are separate
-    files — the view config (``lovelace.sem-dashboard``) and the row in
-    ``lovelace_dashboards`` that puts it in the sidebar — and leaving either
-    behind gives a broken sidebar entry or an invisible orphan, so both go or
-    neither does.
+    Returns True when something was removed. Through HA's running collection
+    when Lovelace is loaded (list, sidebar and view config go together, and HA
+    keeps no stale copy). Otherwise the two stored halves — the view config
+    ``lovelace.<id>`` and the row in ``lovelace_dashboards`` — go together or
+    not at all, found by ``url_path``.
     """
     from homeassistant.helpers.storage import Store
 
+    item = await async_dashboard_item(hass, path)
+    if item is None:
+        return False
+    collection = running_dashboards_collection(hass)
+    if collection is not None:
+        try:
+            await collection.async_delete_item(item["id"])
+            return True
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("SEM cleanup: the running collection refused, using the files", exc_info=True)
     removed = False
     try:
-        await Store(hass, 1, f"lovelace.{path}").async_remove()
+        await Store(hass, 1, f"lovelace.{item['id']}").async_remove()
         removed = True
     except Exception:  # noqa: BLE001
-        _LOGGER.debug("SEM cleanup: no dashboard store to remove",
-                      exc_info=True)
+        _LOGGER.debug("SEM cleanup: no dashboard store to remove", exc_info=True)
     try:
         store = Store(hass, 1, "lovelace_dashboards")
         data = await store.async_load() or {}
         items = list(data.get("items") or [])
-        keep = [i for i in items if i.get("id") != path]
+        keep = [i for i in items if i.get("url_path") != path]
         if len(keep) != len(items):
             data["items"] = keep
             await store.async_save(data)
             removed = True
     except Exception:  # noqa: BLE001
-        _LOGGER.debug("SEM cleanup: could not drop the sidebar entry",
-                      exc_info=True)
+        _LOGGER.debug("SEM cleanup: could not drop the sidebar entry", exc_info=True)
     return removed

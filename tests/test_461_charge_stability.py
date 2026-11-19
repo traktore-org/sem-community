@@ -520,16 +520,23 @@ class TestScope:
 @pytest.mark.unit
 class TestWiring:
     def test_coordinator_filters_both_pipeline_branches(self) -> None:
-        body = (Path(__file__).parent.parent / "coordinator"
-                / "coordinator.py").read_text()
-        assert body.count("self._charge_stability.filter(") >= 2, (
-            "#461 anchor — the stability filter must wrap decide() in "
-            "BOTH the multi-charger loop and the single-charger branch."
+        """#461 anchor — the stability filter must wrap decide() in BOTH the
+        multi-charger loop and the single-charger branch. (#1391) Both now
+        reach it through ``_yield_or_stabilise``, which runs the filter for
+        every charger SEM does not yield to another party."""
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
         )
+        from .ast_contracts import call_sites, calls
 
-    def test_config_card_exposes_the_delays(self) -> None:
-        body = (Path(__file__).parent.parent / "dashboard" / "card" / "src"
-                / "cards" / "sem-config-card.js").read_text()
+        sites = [s for s in call_sites("_yield_or_stabilise")
+                 if s[0] == "coordinator/coordinator.py"]
+        assert len(sites) >= 2, sites
+        assert calls(SEMCoordinator._yield_or_stabilise, "filter")
+
+    def test_the_dashboard_exposes_the_delays(self) -> None:
+        from ._dashboard_src import dashboard_src
+        body = dashboard_src()
         assert "number.sem_ev_enable_delay_seconds" in body
         assert "number.sem_ev_disable_delay_seconds" in body
 

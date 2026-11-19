@@ -94,6 +94,7 @@ def _fake_self(devices=()):
         _expected_night_home_w=lambda energy: 400.0,
         # The execution gate the plan has to mirror (#638 finding #4).
         _mode_allows_night_charging=lambda cfg: True,
+        _tariff_optimized_for=lambda cfg: False,   # (#1383)
         # The peak authority execution uses — load manager first, config
         # ``target_peak_limit`` (kW) behind it (#638 finding #5).
         _get_peak_limit_w=lambda: 6000.0,

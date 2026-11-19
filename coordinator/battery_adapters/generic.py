@@ -47,6 +47,14 @@ class _StrategyOption:
         setattr(obj, self._raw, value)
 
 
+def _charge_message(what: str, status) -> str:
+    """(#1377) The charge path's last answer, for the diagnostics."""
+    try:
+        return f"{what}: {status.status.value} — {status.message}"
+    except AttributeError:
+        return f"{what}: {status!r}"
+
+
 class GenericBatteryAdapter(BatteryControlAdapter):
     _strategy_active = _StrategyOption()
     _strategy_idle = _StrategyOption()
@@ -695,6 +703,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             duration_minutes=duration_min,
         )
         status = await self._charge_adapter.start_forced_charge(cmd)
+        self._last_charge_message = _charge_message("start", status)  # (#1377)
         if status.status is ChargeCommandStatus.FAILED:
             self._last_error = f"start_forced_charge failed: {status.message}"
             # _last_intent intentionally NOT updated — retry next cycle (#589)
@@ -716,6 +725,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if self._charge_adapter is not None:
             from .force_charge import ChargeCommandStatus
             status = await self._charge_adapter.stop_forced_charge()
+            self._last_charge_message = _charge_message("stop", status)  # (#1377)
             # #757 honest retry: a failed stop must not record the intent, or
             # the guard above would suppress the retry (#589 class 4).
             if status.status is ChargeCommandStatus.FAILED:

@@ -10,11 +10,14 @@
  * without one.
  */
 
+import { fmtNum } from './next-number.js';
+import { kwhIn, houseKwhIn } from './plan-facts.js';
+
 const IMPORT_W = 100;   // below this the grid is "quiet"
 const SUN_W = 100;      // the roof gives something above this
 
 function fmt1(v) {
-    return Number.isFinite(v) ? (Math.round(v * 10) / 10).toFixed(1) : '';
+    return Number.isFinite(v) ? fmtNum(Math.round(v * 10) / 10, 1) : '';
 }
 function fmt0(v) {
     return Number.isFinite(v) ? String(Math.round(v)) : '';
@@ -56,7 +59,12 @@ export function nowLead(f) {
             main = { key: 'next_lead_car_sun', params: { kw: fmt1(car.powerW / 1000) } };
         }
     } else if (car && car.present && Number.isFinite(car.remainingKwh) && car.remainingKwh > 0.1) {
-        main = { key: 'next_lead_car_waits', params: { kwh: fmt1(car.remainingKwh), time: car.targetTime || '' } };
+        // (#1321) the plan's own hours when it has them: the same window the Plan screen shows
+        const short = Number.isFinite(car.plannedKwh) && car.plannedKwh < car.remainingKwh - 0.05;
+        main = car.planWindow
+            ? { key: short ? 'next_lead_car_planned_part' : 'next_lead_car_planned',
+                params: { kwh: fmt1(car.remainingKwh), planned: fmt1(car.plannedKwh), window: car.planWindow } }
+            : { key: 'next_lead_car_waits', params: { kwh: fmt1(car.remainingKwh), time: car.targetTime || '' } };
     } else if (sun && exporting) {
         main = { key: 'next_lead_sun_export', params: { kw: fmt1(f.gridW / 1000) } };
     } else if (sun && bat && Number.isFinite(f.batteryW) && f.batteryW > IMPORT_W) {
@@ -89,6 +97,9 @@ export function nowLead(f) {
     return { prefix, main, sub };
 }
 
+/** (#1321) A heading about the car's planned charge already says who, when and how much: no "Next:" line repeats it. */
+export const repeatsNextBlock = (mainKey) => /^next_lead_car_/.test(String(mainKey));
+
 /** Fill {name} placeholders. Nested {key, params} values are rendered with t first. */
 export function fill(text, params, t) {
     let out = String(text || '');
@@ -106,9 +117,13 @@ export { coldHeaters } from './heater-questions.js';
 export function planLead(a, extra) {
     const ok = a && typeof a === 'object' && Array.isArray(a.blocks);
     if (!ok || !a.computed_at) return { main: { key: 'next_plan_none', params: {} }, sub: null };
-    const evKwh = kwhOf(a.blocks, (id) => String(id).startsWith('ev:'));
+    // (#1321) the window the chart shows, from now on: the headline counts what
+    // is still to come inside it, never a block that has run or one outside it
+    const from = Number.isFinite(extra?.nowMs) ? extra.nowMs : -Infinity;
+    const to = extra?.win && Number.isFinite(extra.win.end) ? extra.win.end : Infinity;
+    const evKwh = kwhIn(a.blocks, (id) => id.startsWith('ev:'), from, to);
     // (#1321) a heater's Keep at run is a load run too (plan id comfort:<id>)
-    const loadKwh = kwhOf(a.blocks, (id) => String(id).startsWith('load:') || String(id).startsWith('comfort:'));
+    const loadKwh = kwhIn(a.blocks, (id) => id.startsWith('load:') || id.startsWith('comfort:'), from, to);
     // A heater below its start line with no hour planned: "nothing planned"
     // would read as "nothing is needed". Say what is missing instead.
     const cold = extra?.cold || null;
@@ -116,12 +131,28 @@ export function planLead(a, extra) {
         ? { key: (cold.cool ? 'hq_plan_above_no_hour' : 'hq_plan_below_no_hour') + (cold.time ? '' : '_plain'),
             params: { name: cold.name, keep: cold.keep, time: cold.time || '' } }
         : { key: 'next_plan_quiet', params: {} };
-    const main = evKwh > 0.05
-        ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh) } }
-        : (loadKwh > 0.05 ? { key: 'next_plan_loads', params: { kwh: fmt1(loadKwh) } } : quiet);
+    // (#1321) one number for "from the grid": the Expected tile reads the same
+    // planGridKwh, so the line and the tile never differ
+    const windowed = Number.isFinite(from) || Number.isFinite(to);
+    const houseKwh = windowed ? houseKwhIn(a, from, to) : houseGridKwh(a);
+    const gridKwh = windowed ? loadKwh + houseKwh : planGridKwh(a);
+    const when = extra?.when || '';
+    // (#1321) the biggest taker in the window is named. Without slots the house
+    // figure covers the whole plan, not the window: it names nothing then.
+    const slotsKnown = !windowed || (Array.isArray(a.slots) && a.slots.length > 0);
+    const houseRank = slotsKnown || (evKwh <= 0.05 && loadKwh <= 0.05) ? houseKwh : 0;
+    const top = Math.max(evKwh, loadKwh, houseRank);
+    const main = top <= 0.05 ? quiet
+        : evKwh === top ? { key: 'next_plan_car', params: { kwh: fmt1(evKwh), when } }
+        : loadKwh === top ? { key: 'next_plan_loads', params: { kwh: fmt1(gridKwh), when } }
+        : { key: 'next_plan_house', params: { kwh: fmt1(houseKwh), when } };
     // (#1321) hours with no price yet give no cost: say so, not "cost ,"
-    const sub = { key: extra?.cost ? 'next_plan_sub' : 'next_plan_sub_nocost', params: {
-        time: extra?.computedAt || '', cost: extra?.cost || '',
+    // (#1321) …and name whose cost is missing, when it is known
+    // (#1321) …and only when a run really lacks a price: no clause for a plan whose runs all have one
+    const subKey = extra?.cost ? 'next_plan_sub' : (extra?.costMissing === false ? 'next_plan_sub_plain'
+        : (extra?.costUnknownFor ? 'next_plan_sub_nocost_who' : 'next_plan_sub_nocost'));
+    const sub = { key: subKey, params: {
+        time: extra?.computedAt || '', cost: extra?.cost || '', who: extra?.costUnknownFor || '',
         fits: extra?.fitsKey || '', sun: fmt1(extra?.sunTomorrowKwh) } };
     return { main, sub };
 }
@@ -134,6 +165,28 @@ export function kwhOf(blocks, pick) {
         const s = Date.parse(b.start), e = Date.parse(b.end);
         if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) continue;
         kwh += (Number(b.power_w) || 0) * (e - s) / 3.6e9;
+    }
+    return kwh;
+}
+
+/** Everything the plan buys from the grid: its blocks (not battery output) plus the house's own draw. */
+export function planGridKwh(plan) {
+    const blocks = plan && Array.isArray(plan.blocks) ? plan.blocks : [];
+    return kwhOf(blocks, (id) => !String(id).startsWith('battery_out')) + houseGridKwh(plan);
+}
+
+/**
+ * kWh the house itself draws from the grid over the plan (plan.house_grid,
+ * the planner's sum of the slots' home_grid_w; the slots when it is missing).
+ * The one source for the Plan line, the Grid cost tile and the chart's lane.
+ */
+export function houseGridKwh(plan) {
+    const v = plan && plan.house_grid ? Number(plan.house_grid.kwh) : NaN;
+    if (Number.isFinite(v)) return Math.max(0, v);
+    let kwh = 0;
+    for (const s of (plan && Array.isArray(plan.slots) ? plan.slots : [])) {
+        const w = Number(s?.home_grid_w), a = Date.parse(s?.start), b = Date.parse(s?.end);
+        if (w > 0 && Number.isFinite(a) && Number.isFinite(b) && b > a) kwh += w * (b - a) / 3.6e9;
     }
     return kwh;
 }

@@ -15,7 +15,6 @@ pytestmark = pytest.mark.skipif(
     reason="pytest-homeassistant-custom-component not installed; CI runs these",
 )
 
-import yaml  # noqa: E402
 from homeassistant.helpers import entity_registry as er  # noqa: E402
 
 from custom_components.solar_energy_management.const import DOMAIN  # noqa: E402
@@ -117,19 +116,6 @@ async def test_a_minimal_install_builds_the_core_and_nothing_else(
             if _registered(hass, entry, platform, d.key) is is_module:
                 wrong.append((platform, d.key, "exists" if is_module else "missing"))
     assert not wrong, wrong
-
-
-@pytest.mark.asyncio
-async def test_the_minimal_dashboard_has_no_battery_or_ev_tab(
-        hass, enable_custom_integrations, monkeypatch):
-    from custom_components.solar_energy_management.features.dashboard_generator import (
-        DashboardGenerator,
-    )
-    _dashboard(monkeypatch)
-    await _setup(hass, _minimal_entry())
-    tpl = yaml.safe_load(TEMPLATE.read_text(encoding="utf-8"))
-    DashboardGenerator(hass)._prune_absent_modules(tpl)
-    assert {"battery", "ev"}.isdisjoint(v.get("path") for v in tpl["views"])
 
 
 @pytest.mark.asyncio

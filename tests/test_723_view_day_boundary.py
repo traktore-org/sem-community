@@ -138,37 +138,6 @@ def _balancing_cards():
 @pytest.mark.unit
 class TestBalancingViewsUseOneBoundary723:
 
-    def test_the_template_still_has_a_balancing_view(self):
-        """A guard over zero inputs is not a guard (BUG_CLASSES class 8)."""
-        assert _balancing_cards(), (
-            "no balancing card found in the dashboard template — either the "
-            "Sankey was removed (then remove this guard) or the card type "
-            "changed (then update BALANCING_CARDS)."
-        )
-
-    def test_every_balancing_view_draws_a_single_day_boundary(self):
-        fields = _daily_field_boundaries()
-        for card in _balancing_cards():
-            entities = sorted(set(
-                re.findall(r"sensor\.sem_[a-z0-9_]+", yaml.safe_dump(card))
-            ))
-            by_boundary: dict[str, list[str]] = {}
-            for entity in entities:
-                if entity in KNOWN_MIXED_ENTITIES:
-                    continue
-                boundary = _entity_boundary(entity, fields)
-                if boundary:
-                    by_boundary.setdefault(boundary, []).append(entity)
-            assert len(by_boundary) <= 1, (
-                f"{card['type']} — {BALANCING_CARDS[card['type']]} — mixes day "
-                "boundaries, so its arrows cannot add up:\n"
-                + "\n".join(
-                    f"  {b}: {', '.join(e)}" for b, e in sorted(by_boundary.items())
-                )
-                + "\n\nEvery quantity in one balancing view must share a "
-                  "boundary. Feed it the mirror accumulated on the view's own "
-                  "boundary instead of the one the producer happens to use."
-            )
 
     def test_the_known_exemption_expires_once_the_fix_lands(self):
         """The allowlist may not outlive the thing that justified it.
@@ -197,29 +166,6 @@ class TestBalancingViewsUseOneBoundary723:
             f"{sorted(still_referenced)} still feed a balancing view — finish "
             "the swap: point the Sankey's EV nodes at the calendar-day sensor "
             "and empty KNOWN_MIXED_ENTITIES."
-        )
-
-    def test_the_guard_would_actually_catch_the_original_bug(self):
-        """Refute-the-guard: with the exemption lifted, the live template must
-        fail. A guard that passes on the known-bad input is decoration.
-
-        Skips (rather than fails) once the template no longer references the
-        exempted entity — at that point the instance is fixed, the main test
-        covers correctness, and the leftover chore is pruning the allowlist
-        (asserted above), not re-proving a bug that no longer exists.
-        """
-        fields = _daily_field_boundaries()
-        card = _balancing_cards()[0]
-        entities = set(re.findall(r"sensor\.sem_[a-z0-9_]+", yaml.safe_dump(card)))
-        if not entities & KNOWN_MIXED_ENTITIES:
-            pytest.skip("instance fixed — the exempted entity left the view")
-        boundaries = {
-            b for b in (_entity_boundary(e, fields) for e in entities) if b
-        }
-        assert boundaries == {"calendar", "ev-deadline"}, (
-            f"expected the un-exempted Sankey to still mix boundaries, got "
-            f"{boundaries or 'none'} — if the instance is fixed, remove the "
-            "exemption (see the test above)."
         )
 
 

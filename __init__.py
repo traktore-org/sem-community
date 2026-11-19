@@ -471,7 +471,9 @@ def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check,
     return missing
 
 
-def build_welcome_message(config: dict, presence: dict | None = None) -> str:
+def build_welcome_message(
+    config: dict, presence: dict | None = None, dashboard_path: str | None = "sem-next",
+) -> str:
     """The first-run checklist, describing THIS install (#805 fix 2).
 
     The old text told everyone to "pick an EV charge mode on the EV tab",
@@ -501,21 +503,21 @@ def build_welcome_message(config: dict, presence: dict | None = None) -> str:
 
     lines = ["1. Confirm solar is reporting on the Energy tab"]
     if has_ev:
-        lines.append("2. Pick a charge mode on the EV tab "
+        lines.append("2. Pick a charge mode on the Devices screen "
                      "(solar only, min + solar, solar + cheap, always max)")
     else:
         lines.append("2. Add your EV charger to let SEM manage charging — "
                      "Settings → Devices & Services → SEM → Configure. "
                      "Until then SEM leaves it alone.")
     if has_battery:
-        lines.append("3. Set your battery reserve on the Battery tab")
+        lines.append("3. Set your battery reserve on the Devices screen")
     else:
         lines.append("3. Add your home battery, if you have one — "
                      "same Configure screen")
 
     return (
         "👋 Welcome! Your SEM dashboard is ready at "
-        "[Open the SEM Dashboard](/sem-dashboard/home).\n\n"
+        f"[Open the SEM Dashboard]({f'/{dashboard_path}/now' if dashboard_path else '/'}).\n\n"
         "**First-day checklist:**\n"
         + "\n".join(lines)
         + "\n\n**What SEM does right now:** it watches, and it controls "
@@ -716,8 +718,12 @@ def _merge_ev_chargers_by_id(existing: list, incoming: list) -> list:
 
 def persist_per_charger_option(
     hass, entry, coordinator, charger_id: str, key: str, value,
+    by_owner: bool = False,
 ) -> None:
     """Persist ONE per-charger option without an integration reload.
+
+    * (#1321) ``by_owner`` also stores ``<key>_by_owner`` so a value that
+      equals the factory default still reads as the owner's after a restart.
 
     Single write path for every per-charger entity platform (#485 K2 —
     select/number/time each carried a ~30-line copy of this hardening,
@@ -745,6 +751,8 @@ def persist_per_charger_option(
     for charger in ev_chargers:
         if charger.get("id") == charger_id:
             charger[key] = value
+            if by_owner:
+                charger[f"{key}_by_owner"] = True
             forget_on_mode_write(charger, key, value)    # (#980)
             break
     else:
@@ -754,6 +762,8 @@ def persist_per_charger_option(
             {"id": charger_id},
         )
         recovered[key] = value
+        if by_owner:
+            recovered[f"{key}_by_owner"] = True
         forget_on_mode_write(recovered, key, value)      # (#980)
         ev_chargers.append(recovered)
         _LOGGER.warning(
@@ -3558,13 +3568,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     _welcome_fired = entry.options.get("_welcome_notification_fired", False)
     if not _welcome_fired and not full_config.get("observer_mode"):
         try:
+            from .features.dashboard_generator import sem_dashboard_path
             await hass.services.async_call(
                 "persistent_notification",
                 "create",
                 {
                     "notification_id": "sem_first_install_welcome",
                     "title": "Solar Energy Management installed",
-                    "message": build_welcome_message(full_config, coordinator.setup_presence),
+                    "message": build_welcome_message(
+                        full_config, coordinator.setup_presence, sem_dashboard_path(hass)),
                 },
                 blocking=False,
             )
@@ -3576,6 +3588,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         except Exception as err:
             # Non-critical — never fail the setup over a notification.
             _LOGGER.debug("Welcome notification skipped: %s", err)
+
+    # (#1321) once per install: the classic dashboard is retired. Waits for
+    # Home Assistant to be started (the lovelace registry exists) and for this
+    # setup to finish (the flag write must not reload an entry still starting).
+    async def _retire_classic_dashboard(_now=None) -> None:
+        from .dashboard_migration import async_retire_classic
+        try:
+            await async_retire_classic(hass, entry)
+        except Exception as err:  # noqa: BLE001 — never fail the setup over a dashboard
+            _LOGGER.warning("Classic dashboard retirement failed: %s", err)
+
+    if not entry.options.get("_classic_retired"):
+        from homeassistant.helpers.event import async_call_later as _later
+        from homeassistant.helpers.start import async_at_started
+
+        @callback
+        def _schedule_retirement(_hass=None) -> None:
+            entry.async_on_unload(_later(hass, 10, _retire_classic_dashboard))
+
+        entry.async_on_unload(async_at_started(hass, _schedule_retirement))
 
     # Schedule post-startup tasks (non-blocking)
     _schedule_post_startup_tasks(hass, entry, full_config, coordinator)
@@ -4035,6 +4067,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             # "watching" for every install and silently stop handing hardware
             # back — with no log and no failing test.
             _was_observer = bool(getattr(coordinator, "_observer_mode", False))
+            # (#896) What the load shedder switched off goes back on first:
+            # a shed circuit may be the one feeding the router or this host,
+            # and nothing is left to restore it once this lifetime is gone.
+            # Through the shedder's own observer gate, one write per load.
+            _lm = getattr(coordinator, "_load_manager", None)
+            if _lm is not None:
+                try:
+                    await _lm.async_shutdown()
+                except Exception as exc:  # noqa: BLE001 — teardown must finish
+                    _LOGGER.warning("shed loads not restored on unload: %s", exc)
+            _so = getattr(coordinator, "_shed_orphans", None)
+            if _so is not None:
+                try:
+                    await _so.async_shutdown()
+                except Exception as exc:  # noqa: BLE001 — teardown must finish
+                    _LOGGER.warning("shed loads not restored on unload: %s", exc)
             # The re-adoption hook goes with the lifetime that owns it: it
             # closes over this entry and this coordinator, and a hook left on
             # a coordinator HA is done with keeps both alive.
@@ -4697,22 +4745,20 @@ async def _async_register_services(
     async def async_generate_dashboard_service(call) -> None:
         """Generate and install the SEM dashboard with all assets."""
         from .features.dashboard_generator import (
-            CLASSIC_DASHBOARD_TITLE, NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
+            NEXT_DASHBOARD_ICON, NEXT_DASHBOARD_PATH, NEXT_DASHBOARD_TITLE,
         )
+        # (#1321) "classic" is a deprecated alias; the generator warns once.
         template = call.data.get("template", "next")
         dashboard_title = call.data.get("dashboard_title", "Solar Energy Management")
         dashboard_path = call.data.get("dashboard_path", "sem-dashboard")
-        # (#1321) SEM Next lives beside the classic dashboard: with the
-        # default title/path it lands at /sem-next, never over /sem-dashboard.
-        if template == "next":
-            if dashboard_path == "sem-dashboard":
-                dashboard_path = NEXT_DASHBOARD_PATH
-            if dashboard_title == "Solar Energy Management":
-                dashboard_title = NEXT_DASHBOARD_TITLE
-        elif dashboard_title == "Solar Energy Management":
-            # the main name belongs to the default dashboard now
-            dashboard_title = CLASSIC_DASHBOARD_TITLE
-        dashboard_icon = NEXT_DASHBOARD_ICON if template == "next" else "mdi:solar-power"
+        # With the default title/path the dashboard lands at /sem-next.
+        if dashboard_path == "sem-dashboard":
+            dashboard_path = NEXT_DASHBOARD_PATH
+        if dashboard_title == "Solar Energy Management":
+            dashboard_title = NEXT_DASHBOARD_TITLE
+        dashboard_icon = NEXT_DASHBOARD_ICON
+        # (#1321) a migration passes restart=False: it never restarts HA.
+        allow_restart = call.data.get("restart", True)
 
         try:
             from .dashboard_generator import DashboardGenerator
@@ -5053,7 +5099,7 @@ async def _async_register_services(
                     "Dashboard updated live: %s at /%s — no restart needed",
                     dashboard_title, dashboard_path,
                 )
-            else:
+            elif allow_restart:
                 await hass.services.async_call(
                     "persistent_notification", "create",
                     {
@@ -5077,6 +5123,25 @@ async def _async_register_services(
 
                 from homeassistant.helpers.event import async_call_later
                 async_call_later(hass, 5, _delayed_restart)
+            else:
+                # Saved and registered, but Lovelace has not loaded it yet.
+                await hass.services.async_call(
+                    "persistent_notification", "create",
+                    {
+                        "title": "SEM Dashboard Created",
+                        "message": (
+                            f"Dashboard **{dashboard_title}** is ready with {len(views)} views.\n\n"
+                            f"It appears in the sidebar after the next Home Assistant restart. "
+                            f"SEM does not restart it for you.\n\n"
+                            f"Address: /lovelace/{dashboard_path}"
+                        ),
+                        "notification_id": "sem_dashboard_success",
+                    },
+                )
+                _LOGGER.info(
+                    "Dashboard created: %s at /%s — visible after the next restart",
+                    dashboard_title, dashboard_path,
+                )
 
         except Exception as e:
             _LOGGER.error("Dashboard generation failed: %s", e, exc_info=True)
@@ -5093,7 +5158,8 @@ async def _async_register_services(
             schema=vol.Schema({
                 vol.Optional("dashboard_title", default="Solar Energy Management"): cv.string,
                 vol.Optional("dashboard_path", default="sem-dashboard"): cv.string,
-                vol.Optional("template", default="next"): vol.In(["classic", "next"]),
+                vol.Optional("template", default="next"): vol.In(["classic", "next"]),  # "classic" = deprecated alias (#1321)
+                vol.Optional("restart", default=True): cv.boolean,
             }),
         )
         _LOGGER.debug("Registered service: %s.generate_dashboard", DOMAIN)
@@ -6059,12 +6125,9 @@ async def _async_install_card_assets(
                     if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
                         shutil.copy2(src, dst)
                         cards.append(fname)
-        # Copy Lit bundle from dist/ + vendored chart libs from vendor/
-        # (#617 — sem-chart-card loads Chart.js from the local vendor path
-        # first; without this sync the file 404s under HA's /local→www
-        # route and the CDN fallback silently reintroduces the internet
-        # dependency).
-        for sub in ("dist", "vendor"):
+        # Copy the Lit bundle from dist/ (#1321: the vendored Chart.js went
+        # with the classic dashboard).
+        for sub in ("dist",):
             sub_src_dir = os.path.join(card_src_dir, sub)
             sub_www_dir = os.path.join(card_www_dir, sub)
             if os.path.isdir(sub_src_dir):
@@ -6454,6 +6517,13 @@ async def _async_register_phase_services(
         # ``test_set_option_ev_chargers_partial_submit_preserves_sibling``
         # in the test_services_real.py framework tests.
         if isinstance(options.get("ev_chargers"), list):
+            # (#1386) a charger's name is typed on the dashboard: one line,
+            # at most 60 characters, like a load's (#1341)
+            from .features.device_registry import clean_load_name
+            options = {**options, "ev_chargers": [
+                {**c, "name": clean_load_name(c["name"])}
+                if isinstance(c, dict) and "name" in c else c
+                for c in options["ev_chargers"]]}
             existing_list = (
                 (target_entry.options or {}).get("ev_chargers")
                 or (target_entry.data or {}).get("ev_chargers")
@@ -7190,6 +7260,7 @@ async def _async_register_phase_services(
         "tariff_today_min_price", "tariff_today_max_price", "tariff_today_avg_price",
         "tariff_next_cheap_start", "tariff_next_cheap_end",
         "tariff_upcoming", "tariff_schedule_today",
+        "tariff_rate_steps",   # (#1390)
         # v1.7.2-beta.3: classifier visibility for the "all day cheap"
         # class of misclassifications. ``tariff_today_prices_count``
         # of 0 means SEM isn't seeing per-hour data — JS card will

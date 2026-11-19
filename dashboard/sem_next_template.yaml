@@ -1,10 +1,9 @@
 # ============================================================
-# SEM Next — the second dashboard (#1321)
+# SEM dashboard (#1321)
 # ============================================================
 # Five screens, each named by the question a user has. Every screen is one
 # bundled SEM card that opens with a line in words, then shows the detail.
-# This dashboard is created on request (service generate_dashboard with
-# template: next) and never replaces the classic one at /sem-dashboard.
+# It is the only SEM dashboard, built by the service generate_dashboard.
 # ============================================================
 
 title: SEM-dashboard

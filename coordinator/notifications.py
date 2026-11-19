@@ -765,13 +765,14 @@ class NotificationManager:
         })
 
         from ..utils.translate import get_text
+        from ..features.dashboard_generator import sem_dashboard_url
         await self._send_mobile_notification(
             get_text(self.hass, "notif_battery_full",
                 "Battery full ({soc:.0f}%) — surplus available for appliances or export.",
                 soc=soc),
             channel=_CHANNEL_ALERTS,
             group="sem_alerts",
-            actions=[{"action": "URI", "title": get_text(self.hass, "notif_open_dashboard", "Open Dashboard"), "uri": "/sem-dashboard/overview"}],
+            actions=[{"action": "URI", "title": get_text(self.hass, "notif_open_dashboard", "Open Dashboard"), "uri": sem_dashboard_url(self.hass)}],
         )
 
     async def notify_high_grid_import(self, power_w: float, peak_pct: float) -> None:
@@ -793,13 +794,14 @@ class NotificationManager:
         })
 
         from ..utils.translate import get_text
+        from ..features.dashboard_generator import sem_dashboard_url
         await self._send_mobile_notification(
             get_text(self.hass, "notif_high_grid_import",
                 "High grid import: {power_w:.0f}W ({peak_pct:.0f}% of peak limit). Consider reducing loads.",
                 power_w=power_w, peak_pct=peak_pct),
             channel=_CHANNEL_ALERTS,
             group="sem_alerts",
-            actions=[{"action": "URI", "title": get_text(self.hass, "notif_open_dashboard", "Open Dashboard"), "uri": "/sem-dashboard/overview"}],
+            actions=[{"action": "URI", "title": get_text(self.hass, "notif_open_dashboard", "Open Dashboard"), "uri": sem_dashboard_url(self.hass)}],
         )
 
     async def notify_daily_summary(self, data: Dict[str, Any]) -> None:

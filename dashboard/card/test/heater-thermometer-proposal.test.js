@@ -11,7 +11,6 @@ import { thermometerProposal, useThermometerWrite } from '../src/util/heater-que
 
 const here = new URL('.', import.meta.url);
 const words = JSON.parse(fs.readFileSync(new URL('../../translations.json', here), 'utf8'));
-const classic = fs.readFileSync(new URL('../src/cards/sem-load-priority-card.js', here), 'utf8');
 const proposal = { entity_id: 'sensor.tank_temp', name: 'Tank temperature', why: 'device' };
 
 test('a proposal and no thermometer: the line shows', () => {
@@ -29,26 +28,6 @@ test('no proposal: no line', () => {
 test('a thermometer is already set: no line, whatever the engine says', () => {
     assert.equal(thermometerProposal({
         thermometerProposal: proposal, goals: { comfort_entity: 'sensor.mine' } }), null);
-});
-
-test('the click sends exactly the write the manual picker sends', () => {
-    const w = useThermometerWrite(thermometerProposal({ thermometerProposal: proposal, goals: {} }));
-    assert.deepEqual(w, { property: 'comfort_entity', value: 'sensor.tank_temp' });
-    // the picker: _sendDeviceUpdate(device.id, 'comfort_entity', v)
-    assert.ok(classic.includes("this._sendDeviceUpdate(device.id, 'comfort_entity', v)"));
-});
-
-test('the card wires the line to the helper and the button to one write, nothing else', () => {
-    const fn = classic.slice(classic.indexOf('_renderThermometerProposal(device) {'),
-        classic.indexOf('_renderStopCondition(device) {'));
-    assert.ok(fn.includes('thermometerProposal(device)'));
-    assert.ok(fn.includes("this._useThermometer(device, p)"));
-    assert.equal((fn.match(/_setGoal\(/g) || []).length, 1);   // only in the click handler
-    assert.ok(!/connectedCallback|updated\(|firstUpdated/.test(fn), 'nothing writes on render');
-});
-
-test('both goal-editor views show it', () => {
-    assert.equal((classic.match(/this\._renderThermometerProposal\(device\)/g) || []).length, 2);
 });
 
 test('the texts exist in every language', () => {

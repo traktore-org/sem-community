@@ -13,6 +13,8 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { renderButton, renderAlert } from '../util/ha-ui.js';
+import { ensureHaElements } from '../util/ha-elements.js';
 import { semDefineCard } from '../base/sem-shared.js';
 import {
     CHECKLIST_ENTITY, OBSERVER_SWITCH, readChecklist, isWatchOnly, viewModel,
@@ -29,7 +31,6 @@ class SEMSetupChecklistCard extends SEMLitBase {
     static get properties() {
         return {
             ...super.properties,
-            layout: { type: String },
             _hidden: { state: true },
             _reopened: { state: true },
             _confirming: { state: true },
@@ -38,15 +39,9 @@ class SEMSetupChecklistCard extends SEMLitBase {
 
     constructor() {
         super();
-        this.layout = 'classic';
         this._hidden = readHidden();
         this._reopened = false;
         this._confirming = false;
-    }
-
-    setConfig(config) {
-        super.setConfig(config);
-        if (config.layout === 'next') this.layout = 'next';
     }
 
     _hide() { this._reopened = false; this._hidden = true; writeHidden(true); }
@@ -59,7 +54,7 @@ class SEMSetupChecklistCard extends SEMLitBase {
     }
 
     _go(key) {
-        const target = rowTarget(key, this.layout, window.location.pathname);
+        const target = rowTarget(key, window.location.pathname);
         try { if (target.store) window.sessionStorage.setItem(target.store[0], target.store[1]); } catch (e) { /* the page still opens */ }
         window.history.pushState(null, '', target.path);
         window.dispatchEvent(new CustomEvent('location-changed', { bubbles: true, composed: true }));
@@ -69,28 +64,29 @@ class SEMSetupChecklistCard extends SEMLitBase {
         return Object.entries(vars).reduce((t, [k, v]) => t.split('{' + k + '}').join(v), this._t(key));
     }
 
+    _btn(label, onClick, o = {}) { return renderButton(label, onClick, o, (mdi) => html`<ha-icon icon="${mdi}"></ha-icon>`); }
+
+    connectedCallback() {
+        super.connectedCallback();
+        ensureHaElements(['ha-alert', 'ha-button'])
+            .then(() => this.requestUpdate()).catch(() => { /* the native look stays */ });
+    }
+
     _banner() {
         if (this._confirming) {
-            return html`<section class="banner" aria-label=${this._t('setup_watch_title')}>
-                <div class="txt"><strong>${this._t('setup_confirm_text')}</strong></div>
-                <div class="btns">
-                    <button type="button" class="btn primary" @click=${() => this._takeControl()}>${this._t('setup_confirm_yes')}</button>
-                    <button type="button" class="btn ghost" @click=${() => { this._confirming = false; }}>${this._t('setup_confirm_no')}</button>
-                </div></section>`;
+            return html`<div class="gap">${renderAlert('warning', this._t('setup_confirm_text'), '', html`
+                ${this._btn(this._t('setup_confirm_yes'), () => this._takeControl(), { primary: true, small: true })}
+                ${this._btn(this._t('setup_confirm_no'), () => { this._confirming = false; }, { ghost: true, small: true })}`)}</div>`;
         }
-        return html`<section class="banner" aria-label=${this._t('setup_watch_title')}>
-            <div class="head"><ha-icon icon="mdi:eye-outline"></ha-icon>
-                <div class="txt"><strong>${this._t('setup_watch_title')}</strong>
-                    <span>${this._t('setup_watch_body')}</span></div></div>
-            <button type="button" class="btn primary" @click=${() => { this._confirming = true; }}>${this._t('setup_take_control')}</button>
-        </section>`;
+        return html`<div class="gap">${renderAlert('info', this._t('setup_watch_title'), this._t('setup_watch_body'),
+            this._btn(this._t('setup_take_control'), () => { this._confirming = true; }, { primary: true, small: true }))}</div>`;
     }
 
     _row(done, title, sub, action) {
         return html`<div class="row">
             <ha-icon class=${done ? 'ok' : 'todo'} icon=${done ? ICON_OK : ICON_TODO}></ha-icon>
             <div class="txt"><span class="t">${title}</span>${sub ? html`<span class="s">${sub}</span>` : nothing}</div>
-            ${action ? html`<button type="button" class="btn small" @click=${action.fn}>${action.label}</button>` : nothing}
+            ${action ? this._btn(action.label, action.fn, { small: true }) : nothing}
         </div>`;
     }
 
@@ -125,29 +121,42 @@ class SEMSetupChecklistCard extends SEMLitBase {
         if (!repairs.count) return nothing;
         const title = repairs.count === 1 ? this._t('setup_check_one')
             : this._fill('setup_check_n', { n: repairs.count });
-        return this._row(false, title, repairs.first || '',
+        return this._row(false, title, (Array.isArray(repairs.titles) && repairs.titles.length ? repairs.titles.join(' · ') : repairs.first) || '',
             { label: this._t('setup_btn_open'), fn: () => this._go('repairs') });
     }
 
+    /** (#1321) All steps done: one line, tap to open the list; the check-up row only when it needs action. */
+    _complete(vm) {
+        // (#1321) never "complete" beside "2 things to check": one line says both
+        const n = vm.repairs.count;
+        // (#1321) a check mark only when nothing is open
+        const title = n ? `${this._t('next_set_up')} · ${n === 1 ? this._t('setup_check_one') : this._fill('setup_check_n', { n })}` : this._t('setup_complete');
+        return html`<ha-card class="list done" aria-label=${this._t('setup_list_title')}>
+            <button type="button" class="one" aria-expanded="false" @click=${() => this._reopen()}>
+                <ha-icon class=${n ? '' : 'ok'} icon=${n ? 'mdi:information-outline' : ICON_OK}></ha-icon><span class="t">${title}</span><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+            ${this._repairsRow(vm.repairs)}
+        </ha-card>`;
+    }
+
     _list(c, vm) {
-        return html`<section class="list" aria-label=${this._t('setup_list_title')}>
+        return html`<ha-card class="list" aria-label=${this._t('setup_list_title')}>
             <div class="lhead">
                 <span class="cap">${this._t('setup_list_title')} · ${this._fill('setup_of', { done: vm.done, total: vm.total })}</span>
-                <button type="button" class="link" @click=${() => this._hide()}>${this._t('setup_hide')}</button>
+                ${this._btn(this._t('setup_hide'), () => this._hide(), { ghost: true, small: true })}
             </div>
             <div class="bar" role="progressbar" aria-valuenow=${vm.pct} aria-valuemin="0" aria-valuemax="100"
                 aria-label=${this._t('setup_list_title')}><div class="fill" style="width:${vm.pct}%"></div></div>
             ${c.items.map((i) => this._itemRow(i))}
             ${this._repairsRow(vm.repairs)}
             <div class="hint">${this._t('setup_ai_hint')}</div>
-        </section>`;
+        </ha-card>`;
     }
 
     _chip(vm, watchOnly) {
         return html`<div class="chip-row">
             ${watchOnly ? nothing : html`<span class="chip ok"><ha-icon icon=${ICON_OK}></ha-icon>${this._t('setup_chip_control')}</span>`}
-            <button type="button" class="chip link" @click=${() => this._reopen()}>
-                ${this._fill('setup_chip_setup', { done: vm.done, total: vm.total })}</button>
+            ${vm.done >= vm.total ? nothing : html`<button type="button" class="chip link" @click=${() => this._reopen()}>
+                ${this._fill('setup_chip_setup', { done: vm.done, total: vm.total })}</button>`}
         </div>`;
     }
 
@@ -157,7 +166,7 @@ class SEMSetupChecklistCard extends SEMLitBase {
         const watchOnly = isWatchOnly(this._hass.states, c);
         const vm = viewModel(c, watchOnly, this._hidden, this._reopened);
         return html`${vm.banner ? this._banner() : nothing}
-            ${vm.list ? this._list(c, vm) : this._chip(vm, watchOnly)}`;
+            ${vm.list ? (vm.complete && !this._reopened ? this._complete(vm) : this._list(c, vm)) : this._chip(vm, watchOnly)}`;
     }
 
     getCardSize() { return 3; }
@@ -165,40 +174,43 @@ class SEMSetupChecklistCard extends SEMLitBase {
 
     static get styles() {
         return css`
-            :host { display: block; font-family: 'Segoe UI','Roboto',sans-serif; color: var(--primary-text-color); }
-            .banner { border: 1px solid #5BC8D873; background: #5BC8D81A; border-radius: 14px; padding: 14px;
-                display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
-            .head { display: flex; gap: 10px; align-items: flex-start; }
-            .head ha-icon { color: #5BC8D8; --mdc-icon-size: 22px; flex: none; }
-            .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-            .txt strong { font-size: 15px; }
-            .txt span { font-size: 13px; line-height: 1.45; color: var(--secondary-text-color); }
-            .btns { display: flex; gap: 8px; flex-wrap: wrap; }
-            .btn { min-height: 44px; border-radius: 10px; padding: 0 16px; font-size: 14px; font-weight: 600; font-family: inherit;
-                cursor: pointer; border: 1px solid transparent; }
-            .btn.primary { background: #5BC8D8; color: #0c1214; }
-            .btn.ghost { background: transparent; color: var(--primary-text-color); border-color: var(--divider-color); }
-            .btn.small { min-width: 72px; border-radius: 8px; font-size: 13px; background: transparent;
-                color: #8DC892; border-color: #8DC89299; flex: none; }
-            .list { border: 1px solid var(--divider-color); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;
-                background: var(--card-background-color); }
+            :host { display: block; color: var(--primary-text-color); font-size: var(--ha-font-size-m, 14px); }
+            .gap { margin-bottom: 16px; }
+            .aact { display: flex; gap: 8px; flex: none; white-space: nowrap; }
+            ha-alert ha-button { white-space: nowrap; min-width: max-content; }
+            .alert { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--primary-color);
+                background: color-mix(in srgb, var(--primary-color) 12%, var(--card-background-color, #fff)); }
+            .alert.warning { border-color: var(--warning-color, #ffa600); background: color-mix(in srgb, var(--warning-color, #ffa600) 12%, var(--card-background-color, #fff)); }
+            .atxt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+            .atxt span { color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 13px); }
+            .aact { display: flex; gap: 8px; flex-wrap: wrap; }
+            .btn { min-height: 36px; border-radius: 20px; padding: 0 16px; font: inherit; font-weight: var(--ha-font-weight-medium, 500); cursor: pointer;
+                border: 1px solid var(--divider-color); background: transparent; color: var(--primary-color); display: inline-flex; align-items: center; gap: 6px; }
+            .btn.primary { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: transparent; }
+            .btn.ghost { border-color: transparent; }
+            .btn.sm { min-height: 32px; padding: 0 12px; font-size: var(--ha-font-size-s, 13px); }
+            ha-card.list { display: block; padding: 16px; margin-bottom: 16px; color: var(--primary-text-color);
+                background: var(--ha-card-background, var(--card-background-color, #fff)); border-radius: var(--sem-card-radius, 12px);
+                border: var(--sem-card-border-width, 1px) solid var(--sem-card-border-color, var(--divider-color, #e0e0e0)); box-shadow: var(--ha-card-box-shadow, none); }
+            .one { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+            .one .t { flex: 1; font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); }
+            ha-card.list.done { padding-top: 4px; padding-bottom: 4px; }
             .lhead { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; }
-            .cap { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--secondary-text-color); font-weight: 600; }
-            .link { background: none; border: none; color: var(--secondary-text-color); font-size: 12px; font-family: inherit;
-                cursor: pointer; min-height: 44px; padding: 0 8px; }
+            .cap { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); }
             .bar { height: 6px; border-radius: 3px; background: var(--divider-color); overflow: hidden; margin-bottom: 6px; }
-            .fill { height: 6px; background: #8DC892; }
-            .row { display: flex; gap: 10px; align-items: center; min-height: 52px; border-top: 1px solid var(--divider-color); }
+            .fill { height: 6px; background: var(--success-color, #43a047); }
+            .row { display: flex; gap: 12px; align-items: center; min-height: 52px; border-top: 1px solid var(--divider-color); }
             .row ha-icon { --mdc-icon-size: 20px; flex: none; }
-            .row .ok { color: #8DC892; }
+            .row .ok { color: var(--success-color, #43a047); }
             .row .todo { color: var(--secondary-text-color); }
-            .row .t { font-size: 14px; color: var(--primary-text-color); }
-            .row .s { font-size: 12px; color: var(--secondary-text-color); }
-            .hint { font-size: 12px; color: var(--secondary-text-color); padding-top: 10px; border-top: 1px solid var(--divider-color); }
-            .chip-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-            .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border-radius: 22px;
-                font-size: 13px; font-weight: 600; font-family: inherit; border: 1px solid var(--divider-color); background: transparent; }
-            .chip.ok { color: #8DC892; border-color: #8DC89266; }
+            .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+            .row .t { font-size: var(--ha-font-size-m, 14px); color: var(--primary-text-color); }
+            .row .s { font-size: var(--ha-font-size-s, 12px); color: var(--secondary-text-color); }
+            .hint { font-size: var(--ha-font-size-s, 12px); color: var(--secondary-text-color); padding-top: 10px; border-top: 1px solid var(--divider-color); }
+            .chip-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+            .chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 16px;
+                font-size: var(--ha-font-size-s, 13px); font-weight: var(--ha-font-weight-medium, 500); font-family: inherit; border: 1px solid var(--divider-color); background: transparent; color: var(--primary-text-color); }
+            .chip.ok { color: var(--success-color, #43a047); }
             .chip.link { color: var(--secondary-text-color); cursor: pointer; }
             .chip ha-icon { --mdc-icon-size: 18px; }
         `;

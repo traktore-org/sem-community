@@ -226,6 +226,10 @@ class ControllableDevice(SetpointMemoMixin, ABC):
     # device goal); ``_tariff_level`` / ``tariff_inputs`` are stamped each
     # cycle by ``DeviceTariffs.stamp``.
     tariff_rate: float = 0.0
+    # (#1380) the device's own climate / water_heater entity whose
+    # ``current_temperature`` is its thermometer of last resort; see
+    # ``devices/temperature.py``, the one reader. None = it has none.
+    own_temperature_entity_id: Optional[str] = None
     tariff_entity: str = ""
     tariff_meter: str = ""
     _tariff_level: Optional[str] = None
@@ -466,6 +470,7 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # (#1079) Set each cycle by the coordinator from the user's
         # external-control mode; True = another party steers, SEM yields.
         self.external_yield: bool = False
+        self.phase_guard_override: bool = False  # (#1381)
         self.yielded_commands: list = []
         self._commanded_claim: bool = False  # backing field, see _sem_commanded
         # Monotonic anchor for the "belief says on but the entity reads off"
@@ -1094,7 +1099,10 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # exception — it does not steer, it keeps the box's own safety net
         # set, and withholding it would let that net lapse. A device nobody
         # told is a device that acts (same default as observer_mode).
+        # (#1381) The phase guard's own stop is the one write that goes
+        # out anyway: the fuse comes first. Stamped per cycle by actuate.
         if (getattr(self, "external_yield", False) is True
+                and getattr(self, "phase_guard_override", False) is not True
                 and service != "set_failsafe"):
             if not hasattr(self, "yielded_commands"):
                 self.yielded_commands = []
@@ -1998,6 +2006,34 @@ class ComfortBandMixin:
             offset_c=0.0, active_rate_c_per_h=on.rate_c_per_h,
             rated_power_w=rated) or 0.0) if below else 0.0
         return max(0.0, float(total_kwh) - float(base))
+    def comfort_plan_blocker(self) -> Optional[str]:
+        """(#1081) Why the plan got NO comfort ask from this device, as a
+        reason code (``reason_codes.LOAD_NOASK_*``), or None when it asks.
+        Same order as ``_comfort_goal_demand``; read-only."""
+        from ..coordinator import reason_codes as RC
+        # the plan builder looks at the mode first
+        if getattr(self, "control_mode",
+                   DeviceControlMode.SURPLUS) != DeviceControlMode.SURPLUS:
+            return RC.LOAD_NOASK_MODE
+        if getattr(self, "vacation", False) is True:
+            return RC.LOAD_NOASK_AWAY
+        if not (self.comfort_target and self.comfort_limit):
+            return RC.LOAD_NOASK_NO_BAND
+        state, bad = self._comfort_band_peek()
+        if bad:
+            return RC.LOAD_NOASK_BAND_WRONG
+        if self._comfort_reading() is None:
+            return RC.LOAD_NOASK_NO_READING
+        if state == "forced":
+            return RC.LOAD_NOASK_TOO_COLD
+        if state != "willing":
+            return RC.LOAD_NOASK_WARM
+        if not self.comfort_goal_may_buy():
+            return RC.LOAD_NOASK_SOLAR_ONLY
+        if not self.is_active and not self.comfort_goal_wants_start():
+            return RC.LOAD_NOASK_NOT_FAR
+        return None
+
     # The band speaks through the three generic properties every surplus
     # pass already reads — no new controller clauses; peak shed,
     # anti-cycling, priority and LIFO apply to comfort runs unchanged.
@@ -2553,18 +2589,15 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
                             else "target_temp_low")
         return self._attribute_temp_c(raw)
 
+    @property
+    def own_temperature_entity_id(self):
+        return self.entity_id or None
+
     def _comfort_fallback_reading(self):
-        """Zero-config thermometer: the climate entity's own
-        ``current_temperature``. The attribute carries no unit — it is in
-        the install's display unit, so conversion follows
-        ``hass.config.units``; anything unrecognised is assumed °C."""
-        if not self.entity_id:
-            return None
-        state = self.hass.states.get(self.entity_id)
-        if state is None:
-            return None
-        raw = (state.attributes or {}).get("current_temperature")
-        return self._attribute_temp_c(raw)
+        """Zero-config thermometer: the climate entity's own reading, via the
+        one device-temperature owner (#1380)."""
+        from .temperature import read_device_temperature
+        return read_device_temperature(self.hass, self)
 
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a climate unit that SEM is running at (re-)registration.
@@ -3426,6 +3459,26 @@ class CurrentControlDevice(ControllableDevice):
             return
         self._charger_service_settled = known is not None
 
+    def _select_amp_option(self, entity_id: str, amps: float) -> str:
+        """(HA forum, a cloud charger) a current select may offer only some
+        steps (8, 10, 12 … A or "16 A"): the largest offered option at or
+        below ``amps`` — never above what SEM asked for. When the select's
+        options cannot be read, or none is at or below, the plain amp string
+        as before (the write then says whether the charger takes it)."""
+        plain = str(int(amps))
+        state = self.hass.states.get(entity_id) if entity_id else None
+        options = (state.attributes.get("options") if state is not None else None) or []
+        best: tuple[float, str] | None = None
+        for opt in options:
+            digits = "".join(ch for ch in str(opt) if ch.isdigit() or ch == ".")
+            try:
+                value = float(digits)
+            except ValueError:
+                continue
+            if value <= amps + 1e-9 and (best is None or value > best[0]):
+                best = (value, str(opt))
+        return best[1] if best is not None else plain
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)
@@ -3535,7 +3588,8 @@ class CurrentControlDevice(ControllableDevice):
             elif _entity_svc_domain == "select":
                 # Amps exposed as a select: options are amp strings.
                 target = self.current_entity_id or self.charger_service_entity_id
-                await self.send("select", "select_option", {"entity_id": target, "option": str(int(current))})
+                await self.send("select", "select_option",
+                                {"entity_id": target, "option": self._select_amp_option(target, current)})
             elif self._phase_command(current) is not None:
                 # (#1015) one current per phase: the phase choice and the
                 # amps are ONE write. Never for a stop — see _phase_command.

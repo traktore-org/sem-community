@@ -86,8 +86,14 @@ export function formValuesToServiceData(energySensor, v) {
     };
 }
 
+// (#1321) HA's theme variables only: the box follows the light and dark theme.
 const FIELD_STYLE =
-    'width:100%;padding:8px;margin:6px 0 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);color:inherit;box-sizing:border-box';
+    'width:100%;padding:8px;margin:6px 0 12px;border-radius:4px 4px 0 0;border:0;border-bottom:1px solid var(--secondary-text-color);background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit;box-sizing:border-box';
+// (#1321) a choice list in the rounded chip look of the dashboard's other choices
+const CHOICE_STYLE =
+    'appearance:none;-webkit-appearance:none;width:100%;height:40px;margin:6px 0 12px;padding:0 36px 0 16px;border-radius:20px;border:1px solid var(--divider-color);background:var(--card-background-color,var(--secondary-background-color)) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724%27 height=%2724%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23888%27 d=%27M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z%27/%3E%3C/svg%3E") no-repeat right 10px center/20px;color:var(--primary-text-color);font:inherit;box-sizing:border-box';
+const LABEL_STYLE = 'font-size:var(--ha-font-size-s,12px);color:var(--secondary-text-color)';
+const NOTE_STYLE = 'font-size:var(--ha-font-size-s,12px);color:var(--secondary-text-color);margin:-6px 0 12px;max-width:340px';
 
 /**
  * Build the modal's inner HTML (the dialog box). Pure → returns a string so
@@ -112,65 +118,82 @@ export function cleanLoadName(raw) {
     return String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim().slice(0, LOAD_NAME_MAX).trim();
 }
 
-export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = false, behindRelay = null, inUse = '', ownName = null, autoName = '' }) {
+export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = false, behindRelay = null, inUse = '', ownName = null, autoName = '', dialog = false, textfield = false }) {
     const v = values;
     const isService = v.type === 'service';
     const opt = (val, label) =>
         `<option value="${val}" ${v.type === val ? 'selected' : ''}>${label}</option>`;
-    return `
-        <div style="background:var(--card-background-color,#1e1e2e);border-radius:12px;padding:24px;min-width:320px;max-width:90vw;color:var(--primary-text-color,#e0e0e0)">
-            <div style="font-weight:700;margin-bottom:16px">${t('configure_device')}: ${escapeHtml(deviceName)}</div>
-            ${inUse ? `<div class="cfg-in-use" style="font-size:13px;opacity:0.8;margin-bottom:12px">${escapeHtml(t('cfg_in_use_hint').replace(/\{entity\}/g, inUse))}</div>` : ''}
+    // ha-textfield when HA has it, else a native input in HA's look
+    const field = (id, type, value, extra = '') => (textfield
+        ? `<ha-textfield id="${id}" type="${type}" value="${escapeHtml(value)}" ${extra} style="display:block;margin:6px 0 12px"></ha-textfield>`
+        : `<input id="${id}" type="${type}" ${extra} value="${escapeHtml(value)}" style="${FIELD_STYLE}">`);
+    const label = (text) => `<label style="${LABEL_STYLE}">${text}</label>`;
+    const btn = (id, text, slot, kind) => (dialog
+        ? `<ha-button id="${id}" appearance="${kind}">${text}</ha-button>`
+        : `<button id="${id}" style="padding:0 16px;min-height:36px;border-radius:20px;border:0;cursor:pointer;font:inherit;${kind === 'filled'
+            ? 'background:var(--primary-color);color:var(--text-primary-color)'
+            : 'background:transparent;color:var(--primary-color)'}">${text}</button>`);
+    const form = `
+            ${inUse ? `<div class="cfg-in-use" style="${LABEL_STYLE};margin-bottom:12px">${escapeHtml(t('cfg_in_use_hint').replace(/\{entity\}/g, inUse))}</div>` : ''}
             ${ownName === null ? '' : `
-            <label style="font-size:13px;opacity:0.7">${t('cfg_own_name')}</label>
-            <input id="cfg-name" type="text" maxlength="${LOAD_NAME_MAX}" placeholder="${escapeHtml(autoName)}" value="${escapeHtml(ownName)}" style="${FIELD_STYLE}">
-            <div style="font-size:12px;opacity:.65;font-style:italic;margin:-6px 0 12px;max-width:340px">${t('cfg_own_name_hint')}</div>`}
-            <label style="font-size:13px;opacity:0.7">${t('control_type')}</label>
-            <select id="cfg-type" style="${FIELD_STYLE}">
+            ${label(t('cfg_own_name'))}
+            ${field('cfg-name', 'text', ownName, `maxlength="${LOAD_NAME_MAX}" placeholder="${escapeHtml(autoName)}"`)}
+            <div style="${NOTE_STYLE}">${t('cfg_own_name_hint')}</div>`}
+            ${label(t('control_type'))}
+            <select id="cfg-type" style="${CHOICE_STYLE}">
                 ${opt('switch', t('mode_switch'))}
                 ${opt('current', t('mode_current'))}
                 ${opt('input_boolean', t('mode_input_boolean'))}
                 ${opt('service', t('mode_service'))}
             </select>
             <div id="cfg-entity-group" style="display:${isService ? 'none' : 'block'}">
-                <label style="font-size:13px;opacity:0.7">${t('control_entity')}</label>
-                <input id="cfg-entity" type="text" placeholder="switch.example" value="${escapeHtml(v.entity)}" style="${FIELD_STYLE}">
+                ${label(t('control_entity'))}
+                ${field('cfg-entity', 'text', v.entity, 'placeholder="switch.example"')}
             </div>
             <div id="cfg-service-group" style="display:${isService ? 'block' : 'none'}">
-                <label style="font-size:13px;opacity:0.7">${t('svc_service')}</label>
-                <input id="cfg-service" type="text" placeholder="keba.set_current" value="${escapeHtml(v.service)}" style="${FIELD_STYLE}">
-                <label style="font-size:13px;opacity:0.7">${t('svc_param')}</label>
-                <input id="cfg-param" type="text" placeholder="current" value="${escapeHtml(v.param)}" style="${FIELD_STYLE}">
+                ${label(t('svc_service'))}
+                ${field('cfg-service', 'text', v.service, 'placeholder="keba.set_current"')}
+                ${label(t('svc_param'))}
+                ${field('cfg-param', 'text', v.param, 'placeholder="current"')}
                 <div style="display:flex;gap:8px">
                     <div style="flex:1">
-                        <label style="font-size:13px;opacity:0.7">${t('svc_shed_value')}</label>
-                        <input id="cfg-shed" type="number" value="${escapeHtml(v.shed_value)}" style="${FIELD_STYLE}">
+                        ${label(t('svc_shed_value'))}
+                        ${field('cfg-shed', 'number', v.shed_value)}
                     </div>
                     <div style="flex:1">
-                        <label style="font-size:13px;opacity:0.7">${t('svc_restore_value')}</label>
-                        <input id="cfg-restore" type="number" value="${escapeHtml(v.restore_value)}" style="${FIELD_STYLE}">
+                        ${label(t('svc_restore_value'))}
+                        ${field('cfg-restore', 'number', v.restore_value)}
                     </div>
                 </div>
             </div>
             ${behindRelay === null ? '' : `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 2px">
-                <span style="font-size:14px">${t('cfg_behind_operator_relay')}</span>
+                <span>${t('cfg_behind_operator_relay')}</span>
                 <span id="cfg-relay" role="switch" aria-checked="${behindRelay ? 'true' : 'false'}" class="${behindRelay ? 'on' : ''}"
                       style="cursor:pointer"></span>
             </div>
-            <div style="font-size:12px;opacity:.65;font-style:italic;margin:0 0 12px;max-width:340px">${t('cfg_help_behind_operator_relay')}</div>
+            <div style="${NOTE_STYLE};margin-top:0">${t('cfg_help_behind_operator_relay')}</div>
             <style>
-                #cfg-relay { width:36px;height:20px;border-radius:10px;background:rgba(127,127,127,.45);position:relative;display:inline-block;flex:none;transition:background .15s }
-                #cfg-relay::after { content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s }
-                #cfg-relay.on { background:#4caf50 }
-                #cfg-relay.on::after { left:18px }
+                #cfg-relay { width:36px;height:14px;border-radius:7px;background:color-mix(in srgb,var(--secondary-text-color) 45%,transparent);position:relative;display:inline-block;flex:none;transition:background .15s }
+                #cfg-relay::after { content:'';position:absolute;left:0;top:-3px;width:20px;height:20px;border-radius:50%;background:var(--secondary-text-color);transition:left .15s,background .15s }
+                #cfg-relay.on { background:color-mix(in srgb,var(--primary-color) 50%,transparent) }
+                #cfg-relay.on::after { left:16px;background:var(--primary-color) }
             </style>`}
-            <div class="cfg-error" style="color:#f44336;font-size:13px;margin:4px 0 8px;display:none"></div>
-            <div style="display:flex;gap:8px;align-items:center">
-                ${hasManual ? `<button id="cfg-remove" style="padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:transparent;color:#f44336">${t('clear_mapping')}</button>` : ''}
-                <div style="flex:1"></div>
-                <button id="cfg-cancel" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;background:rgba(255,255,255,0.1);color:inherit">${t('cancel')}</button>
-                <button id="cfg-save" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;background:#4caf50;color:white">${t('save')}</button>
+            <div class="cfg-error" style="color:var(--error-color);font-size:var(--ha-font-size-m,14px);margin:4px 0 8px;display:none"></div>`;
+    // (#1321) a footer row in the content: HA 2026.11's dialog has no primaryAction slot
+    const actions = `<div class="dlg-actions" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:16px">${hasManual ? btn('cfg-remove', t('clear_mapping'), '', 'plain') : ''}
+        <div style="flex:1"></div>
+        ${btn('cfg-cancel', t('cancel'), '', 'plain')}
+        ${btn('cfg-save', t('save'), '', 'filled')}</div>`;
+    if (dialog) return `${form}${actions}`;
+    return `
+        <div class="dlg-box">
+            <div class="dlg-title">${t('configure_device')}: ${escapeHtml(deviceName)}</div>
+            ${form}
+            <div class="dlg-actions">${hasManual ? btn('cfg-remove', t('clear_mapping'), '', 'plain') : ''}
+                <div class="grow"></div>
+                ${btn('cfg-cancel', t('cancel'), '', 'plain')}
+                ${btn('cfg-save', t('save'), '', 'filled')}
             </div>
         </div>`;
 }

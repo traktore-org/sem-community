@@ -1,7 +1,6 @@
 """Tests for dashboard generator."""
 import os
 import pytest
-import yaml
 from unittest.mock import MagicMock, AsyncMock, patch
 
 from custom_components.solar_energy_management.features.dashboard_generator import (
@@ -29,64 +28,6 @@ def generator(mock_hass):
 class TestDashboardTemplate:
     """Test the dashboard YAML template loads correctly."""
 
-    def test_template_file_exists(self):
-        """Template file should exist at expected path."""
-        template_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "dashboard",
-            "sem_dashboard_template.yaml",
-        )
-        assert os.path.exists(template_path), f"Template not found: {template_path}"
-
-    def test_template_valid_yaml(self):
-        """Template should be valid YAML."""
-        template_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "dashboard",
-            "sem_dashboard_template.yaml",
-        )
-        with open(template_path) as f:
-            data = yaml.safe_load(f)
-        assert data is not None
-        assert "views" in data
-
-    def test_template_has_9_views(self):
-        """Dashboard should have exactly 9 tabs (Configuration #442, Simulation #1083)."""
-        template_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "dashboard",
-            "sem_dashboard_template.yaml",
-        )
-        with open(template_path) as f:
-            data = yaml.safe_load(f)
-        views = data.get("views", [])
-        assert len(views) == 9, f"Expected 9 views, got {len(views)}"
-
-    def test_template_view_paths(self):
-        """Each view should have the expected path."""
-        template_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "dashboard",
-            "sem_dashboard_template.yaml",
-        )
-        with open(template_path) as f:
-            data = yaml.safe_load(f)
-        paths = [v.get("path") for v in data.get("views", [])]
-        expected = ["home", "energy", "battery", "ev", "control", "config", "costs",
-                    "system", "simulation"]
-        assert paths == expected
-
-    def test_template_no_overview_tab(self):
-        """Overview tab was removed in v2.6."""
-        template_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "dashboard",
-            "sem_dashboard_template.yaml",
-        )
-        with open(template_path) as f:
-            data = yaml.safe_load(f)
-        paths = [v.get("path") for v in data.get("views", [])]
-        assert "overview" not in paths
 
     def test_all_custom_cards_exist(self):
         """The shipped SEM card assets should exist.
@@ -216,93 +157,6 @@ class TestContentHashCacheBust:
         )
 
 
-class TestWeatherSubstitution:
-    """Test weather entity substitution in the dashboard generator."""
-
-    def test_weather_entity_substituted(self, mock_hass, generator):
-        """Weather card entity should be replaced with actual weather entity."""
-        # Mock weather entity
-        weather_state = MagicMock()
-        weather_state.entity_id = "weather.home_assistant"
-        mock_hass.states.async_all.return_value = [weather_state]
-
-        template = {
-            "views": [
-                {
-                    "cards": [
-                        {"type": "custom:sem-weather-card", "entity": "weather.home"},
-                    ]
-                }
-            ]
-        }
-
-        generator._substitute_weather_entity(template)
-        card = template["views"][0]["cards"][0]
-        assert card["entity"] == "weather.home_assistant"
-
-    def test_weather_card_removed_if_no_entity(self, mock_hass, generator):
-        """Weather card should be removed if no weather entity exists."""
-        mock_hass.states.async_all.return_value = []
-
-        template = {
-            "views": [
-                {
-                    "cards": [
-                        {"type": "custom:mushroom-template-card"},
-                        {"type": "custom:sem-weather-card", "entity": "weather.home"},
-                    ]
-                }
-            ]
-        }
-
-        generator._substitute_weather_entity(template)
-        cards = template["views"][0]["cards"]
-        assert len(cards) == 1
-        assert cards[0]["type"] == "custom:mushroom-template-card"
-
-    def test_forecast_entity_filtered(self, mock_hass, generator):
-        """weather.forecast_* entities should be filtered out."""
-        forecast = MagicMock()
-        forecast.entity_id = "weather.forecast_home"
-        real = MagicMock()
-        real.entity_id = "weather.openweathermap"
-        mock_hass.states.async_all.return_value = [forecast, real]
-
-        template = {
-            "views": [
-                {
-                    "cards": [
-                        {"type": "custom:sem-weather-card", "entity": "weather.home"},
-                    ]
-                }
-            ]
-        }
-
-        generator._substitute_weather_entity(template)
-        assert template["views"][0]["cards"][0]["entity"] == "weather.openweathermap"
-
-    def test_prefers_entity_with_current_data(self, mock_hass, generator):
-        """#516: a weather entity that is unavailable or carries no current
-        temperature is skipped in favour of one that actually has data —
-        even when the broken one is listed first. RienduPre's tile showed
-        "?" / "—°C" because the generator picked a data-less entity."""
-        broken = MagicMock()
-        broken.entity_id = "weather.broken"
-        broken.state = "unavailable"
-        broken.attributes = {}
-        good = MagicMock()
-        good.entity_id = "weather.knmi"
-        good.state = "cloudy"
-        good.attributes = {"temperature": 14}
-        mock_hass.states.async_all.return_value = [broken, good]  # broken first
-
-        template = {"views": [{"cards": [
-            {"type": "custom:sem-weather-card", "entity": "weather.home"},
-        ]}]}
-        generator._substitute_weather_entity(template)
-        assert template["views"][0]["cards"][0]["entity"] == "weather.knmi"
-
-
 def _make_device(power_entity, priority=5, is_ev=False, device_type="switch",
                  friendly_name=None, daily_energy_entity=None):
     """Helper to build a device dict for load manager tests."""
@@ -334,144 +188,6 @@ def _setup_coordinator(mock_hass, devices, ev_power_sensor="sensor.ev_power"):
     coord.config = {"ev_charging_power_sensor": ev_power_sensor}
     mock_hass.data[DOMAIN] = {"entry1": coord}
     return coord
-
-
-@pytest.mark.unit
-class TestFlowCardDeviceInjection:
-    """Test _update_flow_card_devices in DashboardGenerator."""
-
-    @pytest.mark.asyncio
-    async def test_no_coordinator_returns_early(self, mock_hass, generator):
-        """No DOMAIN in hass.data → template unchanged."""
-        mock_hass.data = {}
-        template = _flow_card_template()
-        await generator._update_flow_card_devices(template)
-        card = template["views"][0]["cards"][0]
-        assert "entities" not in card
-
-    @pytest.mark.asyncio
-    async def test_no_load_manager_returns_early(self, mock_hass, generator):
-        """coordinator._load_manager is None → early return."""
-        coord = MagicMock()
-        coord._load_manager = None
-        mock_hass.data[DOMAIN] = {"entry1": coord}
-        template = _flow_card_template()
-        await generator._update_flow_card_devices(template)
-        card = template["views"][0]["cards"][0]
-        assert "entities" not in card
-
-    @pytest.mark.asyncio
-    async def test_empty_devices_returns_early(self, mock_hass, generator):
-        """Empty device dict → early return."""
-        _setup_coordinator(mock_hass, {})
-        template = _flow_card_template()
-        await generator._update_flow_card_devices(template)
-        card = template["views"][0]["cards"][0]
-        assert "entities" not in card
-
-    @pytest.mark.asyncio
-    async def test_ev_excluded_by_is_ev_flag(self, mock_hass, generator):
-        """Devices with is_ev=True should be filtered out."""
-        devices = {
-            "ev1": _make_device("sensor.ev_charger", is_ev=True),
-            "heater": _make_device("sensor.heater_power"),
-        }
-        _setup_coordinator(mock_hass, devices)
-        template = _flow_card_template()
-        await generator._update_flow_card_devices(template)
-        individual = template["views"][0]["cards"][0]["entities"]["individual"]
-        entities = [d["entity"] for d in individual]
-        assert "sensor.ev_charger" not in entities
-        assert "sensor.heater_power" in entities
-
-    @pytest.mark.asyncio
-    async def test_ev_excluded_by_power_entity_match(self, mock_hass, generator):
-        """Device matching ev_charging_power_sensor config should be excluded."""
-        devices = {
-            "charger": _make_device("sensor.ev_power"),
-            "pump": _make_device("sensor.pump_power"),
-        }
-        _setup_coordinator(mock_hass, devices, ev_power_sensor="sensor.ev_power")
-        template = _flow_card_template()
-        await generator._update_flow_card_devices(template)
-        individual = template["views"][0]["cards"][0]["entities"]["individual"]
-        entities = [d["entity"] for d in individual]
-        assert "sensor.ev_power" not in entities
-        assert "sensor.pump_power" in entities
-
-    @pytest.mark.asyncio
-    async def test_max_6_devices(self, mock_hass, generator):
-        """Only 6 devices should be injected even if more are available."""
-        devices = {
-            f"dev{i}": _make_device(f"sensor.dev{i}_power", priority=i)
-            for i in range(8)
-        }
-        _setup_coordinator(mock_hass, devices)
-        template = _flow_card_template()
-        await generator._update_flow_card_devices(template)
-        individual = template["views"][0]["cards"][0]["entities"]["individual"]
-        assert len(individual) == 6
-
-    @pytest.mark.asyncio
-    async def test_priority_sorting(self, mock_hass, generator):
-        """Devices should be ordered by priority (lower = first)."""
-        devices = {
-            "low": _make_device("sensor.low", priority=10),
-            "high": _make_device("sensor.high", priority=1),
-            "mid": _make_device("sensor.mid", priority=5),
-        }
-        _setup_coordinator(mock_hass, devices)
-        template = _flow_card_template()
-        await generator._update_flow_card_devices(template)
-        individual = template["views"][0]["cards"][0]["entities"]["individual"]
-        entities = [d["entity"] for d in individual]
-        assert entities == ["sensor.high", "sensor.mid", "sensor.low"]
-
-    @pytest.mark.asyncio
-    async def test_entity_prefix_skips_injection(self, mock_hass, generator):
-        """Card with entity_prefix should not get individual devices injected."""
-        devices = {"dev": _make_device("sensor.dev_power")}
-        _setup_coordinator(mock_hass, devices)
-        template = _flow_card_template(entity_prefix="sensor.sem_")
-        await generator._update_flow_card_devices(template)
-        card = template["views"][0]["cards"][0]
-        assert "entities" not in card
-
-    @pytest.mark.asyncio
-    async def test_deduplication(self, mock_hass, generator):
-        """Existing individual entries should not be duplicated."""
-        devices = {
-            "heater": _make_device("sensor.heater_power"),
-            "pump": _make_device("sensor.pump_power"),
-        }
-        _setup_coordinator(mock_hass, devices)
-        template = _flow_card_template()
-        card = template["views"][0]["cards"][0]
-        card["entities"] = {
-            "individual": [{"entity": "sensor.heater_power", "name": "Existing"}]
-        }
-        await generator._update_flow_card_devices(template)
-        individual = card["entities"]["individual"]
-        heater_entries = [d for d in individual if d["entity"] == "sensor.heater_power"]
-        assert len(heater_entries) == 1
-        assert heater_entries[0]["name"] == "Existing"  # original preserved
-        assert len(individual) == 2  # existing + pump
-
-    @pytest.mark.asyncio
-    async def test_color_and_daily_energy(self, mock_hass, generator):
-        """Colors should cycle from palette, daily_energy added when present."""
-        devices = {
-            "dev1": _make_device("sensor.d1", priority=1, daily_energy_entity="sensor.d1_daily"),
-            "dev2": _make_device("sensor.d2", priority=2),
-        }
-        _setup_coordinator(mock_hass, devices)
-        template = _flow_card_template()
-        await generator._update_flow_card_devices(template)
-        individual = template["views"][0]["cards"][0]["entities"]["individual"]
-        assert individual[0]["color"] == "#FF8A65"
-        assert individual[1]["color"] == "#AED581"
-        assert individual[0]["daily_energy"] == "sensor.d1_daily"
-        assert "daily_energy" not in individual[1]
 
 
 @pytest.mark.unit
@@ -567,7 +283,6 @@ class TestDashboardCleanupLogic:
                 added.append(url)
         assert added == []
         assert len(resources["items"]) == 1
-
 
 
 # Per-charger EV display is now handled by sem-ev-status-card.js (#193)

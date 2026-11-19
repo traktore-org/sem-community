@@ -1284,8 +1284,7 @@ imports `analytics/`, never the reverse. User limits:
 four hardware modules gained five **capabilities**: `DYNAMIC_TARIFF`,
 `EXPORT_LIMIT`, `SOLAR_FORECAST`, `PV_SIZE`, `INVESTMENT`. Same three states
 (present / absent / unknown), same consumers: `kept_descriptions` skips the
-entities, `absent_entity_ids` lets the dashboard generator prune their
-references, the config card renders nothing for a missing entity.
+entities, `absent_entity_ids` names the missing ones.
 
 - Tariff, plant size and investment are read from SEM's own options and are
   never unknown.
@@ -1371,6 +1370,13 @@ and `charge_pacing.py`'s writer both check it too, found missing in
 review the same day the feature shipped. A restart never reads as
 "steered" (an unreadable indicator changes nothing), and a flickering
 indicator holds active for `HOLD_S` (300 s) past its last true reading.
+In `yield` mode an empty indicator field means "steered all the time"
+(#1391). A yielded charger skips the stability layer and gets
+`yielded_charger_decision` (IDLE, 0 A, reason code `charger_yielded`), so
+the card and the start ladder do not describe an act SEM never makes; the
+phase guard can still turn that IDLE into its stop (#1381). Off keeps its
+RELEASE. The fleet loop counts the yielded charger's measured draw in the
+sun and night budgets of the next charger, and skips its phase-switch tick.
 
 ### Charge pacing writer (#820)
 
@@ -1387,112 +1393,113 @@ mode still hands the register back.
 
 ---
 
+## Dashboard and cards
+
+The SEM dashboard has five screens: Now, Plan, Devices, Insights and System.
+
+| Part | Where |
+|---|---|
+| Template (screens and cards) | `dashboard/sem_next_template.yaml` |
+| Generator | `features/dashboard_generator.py`, `DashboardGenerator.generate_dashboard()`, called by the `generate_dashboard` service |
+| Card sources | `dashboard/card/src/cards/sem-next-*.js`, `sem-setup-checklist-card.js`, `sem-simulation-card.js`, `sem-retired-card.js` |
+| Bundle | `dashboard/card/dist/sem-cards.js`, built by Rollup |
+
+- The generator has one template. Passing `classic` logs a warning and builds the same dashboard.
+- The cards are LitElement. After any change in `src/`, run `cd dashboard/card && npm run build`. A deploy only copies files.
+- The bundle loads as a Lovelace module on every start. Its URL carries the version, so a restart loads a new bundle.
+- A hand-placed card of a removed type shows `sem-retired-card.js`, a short note with a link.
+- Guide for users: `docs/DASHBOARD_GUIDE.md`.
+
 ## Translation / i18n Architecture
 
-SEM uses a **hybrid two-layer translation system** because Home Assistant has two different language settings that affect different parts of the UI.
+SEM has two language settings. Each one covers different text.
 
 ### The Two Language Settings
 
 | Setting | Where configured | Scope | Affects |
 |---------|-----------------|-------|---------|
-| **System language** | Settings → General → Language | One per HA instance | Config flow, entity names, mushroom card labels, dashboard template strings |
-| **User language** | User profile → Language | Per user | SEM custom cards (sem-flow-card, sem-chart-card, etc.) |
+| **System language** | Settings → General → Language | One per HA instance | Config flow, entity names, dashboard screen text |
+| **User language** | User profile → Language | Per user | SEM card text |
 
-A household may have the system set to German, but one user's profile set to English. In that case, mushroom card titles appear in German (system), while SEM custom cards appear in English (user profile).
+A household may set the system to German and one user's profile to English. Then the screen titles are German, and the SEM cards are English for that user.
 
 ### Layer 1: Server-Side Translation (System Language)
 
 **When:** Dashboard generation (`generate_dashboard` service call)
 **Source:** `hass.config.language` (system language)
 **File:** `features/dashboard_generator.py` → `_translate_dashboard()`
-**Translates:** All YAML-based card content — mushroom titles, labels, tab names, template strings
+**Translates:** Plain text in the template: `title`, `subtitle`, `primary`, `secondary`, `name`, `label`, `content`
 
 **How it works:**
-1. Loads `dashboard/translations.json` (single source of truth, 1341 keys × 16 languages)
+1. Loads `dashboard/translations.json` (16 languages)
 2. Builds a reverse lookup: English text → translated text
-3. Walks the entire dashboard YAML tree
-4. Replaces exact-match English strings in translatable fields: `title`, `subtitle`, `primary`, `secondary`, `name`, `label`, `content`
-5. For Jinja-templated fields (containing `{{ }}` or `{% %}`): splits on Jinja blocks using regex, translates only the literal text between them
+3. Walks the dashboard YAML tree
+4. Replaces exact-match English strings in the fields above
+5. For Jinja-templated fields (containing `{{ }}` or `{% %}`): translates only the literal text between the Jinja blocks
 6. Writes the translated dashboard to Lovelace storage
 
 **What this means for users:**
-- Mushroom cards, section headers, and static labels are translated **once** at generation time
-- All users see the **same language** for these elements (the system language)
-- To change: update system language → re-run `generate_dashboard` service
-- Third-party cards (mushroom, apexcharts, sankey) cannot use runtime translation — they only read stored YAML
+- Template text is translated **once**, at generation time
+- All users see the same language for it (the system language)
+- To change it: update the system language, then call `generate_dashboard`
 
 ### Layer 2: Runtime Per-User Translation (User Language)
 
-**When:** Every render cycle in the browser
-**Source:** `hass.language` (current user's profile language)
-**File:** `dashboard/card/sem-localize.js` → `semLocalize(key, lang)`
-**Translates:** All SEM custom card content (labels, status text, error messages)
+**When:** Every render in the browser
+**Source:** `hass.language` (user profile language)
+**File:** `dashboard/card/sem-localize.js` → `window.semLocalize(key, lang)`
+**Translates:** All SEM card text
 
 **How it works:**
-1. `sem-localize.js` is auto-generated from `translations.json`. Since the #738 split it carries English inline as the fallback floor and lazily injects the viewer's own language as a sibling `sem-localize.<lang>.js`
-2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`. **Only the loader is a resource** — the per-language siblings are assets it fetches over `/local`, and registering them as resources is a bug (#901): the table then arrives from two URLs with different cache keys, and every language loads on every page
-3. Fires `sem-localize-ready` CustomEvent when loaded (and again after a language table is injected, so cards re-render)
-4. SEM cards extend `SEMLitBase` (in `src/base/sem-lit-base.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
-5. Cards re-render when the user's language changes (detected in `_checkLocaleChange()`)
-
-**Placeholder pattern:** When Python sensor values contain translatable words (e.g. "tomorrow" in surplus window), the coordinator outputs `{tomorrow}` as a placeholder. Cards replace it with `this._t('tomorrow')` before display. This bridges the server→client translation gap without duplicating translation logic in Python.
+1. `sem-localize.js` is generated from `translations.json`. It holds English inline as the fallback. It loads the viewer's language file, `sem-localize.<lang>.js`, from the same folder.
+2. Only the loader is a Lovelace resource. The per-language files are fetched by the loader. Do not register them as resources, or every language loads on every page.
+3. Fires `sem-localize-ready` when loaded, and again when a language table arrives, so cards re-render.
+4. SEM cards extend `SEMLitBase` (`src/base/sem-lit-base.js`). Its `_t(key)` calls `semLocalize(key, hass.language)`.
 
 **Fallback chain:** user language → English → raw key
 
 **What this means for users:**
-- Each user sees SEM custom cards in **their own profile language**
-- Two users viewing the same dashboard can see different languages for SEM cards
-- Language changes take effect immediately (no dashboard regeneration needed)
+- Each user sees SEM card text in their own profile language
+- A language change takes effect at once. No regeneration needed.
 
-### Which Cards Use Which Layer?
+### Which Layer Shows What
 
-| Card Type | Translation Layer | Language Source | Example |
-|-----------|------------------|----------------|---------|
-| Mushroom chips/entities | Server-side | System language | "Solar Power", "Battery SOC" |
-| Mushroom template cards | Server-side | System language | "Peak Management", "Optimization Score" |
-| Section titles (sem-title-card) | Runtime per-user | User profile | Tab headers with live Jinja subtitles |
-| sem-flow-card | Runtime per-user | User profile | Node labels, status text |
-| sem-chart-card | Runtime per-user | User profile | Chart titles, axis labels, legends |
-| sem-battery-card | Runtime per-user | User profile | "Charging", "Discharging", "Idle" |
-| sem-ev-status-card | Runtime per-user | User profile | Mode labels, session stats |
-| sem-charger-status-card | Runtime per-user | User profile | Charger status, power labels |
-| sem-period-selector-card | Runtime per-user | User profile | "Today", "This Week", "This Month" |
-| sem-solar-summary-card | Runtime per-user | User profile | Production stats, forecast |
-| sem-weather-card | Runtime per-user | User profile | Weather labels |
-| Sankey chart (3rd party) | Server-side | System language | Node names in energy flow |
-| ApexCharts (3rd party) | Server-side | System language | Chart titles, series names |
+| Text | Layer | Language source |
+|------|-------|----------------|
+| Screen titles and template labels (Now, Plan, Devices, Insights, System) | 1 | System language |
+| Text inside the screen cards, setup check and simulation | 2 | User profile |
 
 ### Single Source of Truth
 
-Both layers read from the same file: **`dashboard/translations.json`**
+Both layers read the same file: **`dashboard/translations.json`**
 
 ```
-dashboard/translations.json          ← single source (1341 keys × 16 languages)
+dashboard/translations.json          ← single source (16 languages)
     │
     ├──→ dashboard_generator.py      reads at generation time (server-side)
     │
-    └──→ sem-localize.js             auto-generated copy for browser (runtime)
+    └──→ dashboard/card/sem-localize*.js   generated for the browser (runtime)
 ```
 
-**Important:** `sem-localize.js` must be regenerated whenever `translations.json` changes. It is a generated artifact — never edit it directly.
+**Important:** Run `python3 scripts/regenerate_localize.py` after every change to `translations.json`. The generator is `dashboard/card/build_localize.py`. Never edit the generated files.
 
 ### Supported Languages
 
-Czech (cs), Danish (da), German (de), English (en), Spanish (es), Finnish (fi), French (fr), Hungarian (hu), Italian (it), Dutch (nl), Norwegian (no), Polish (pl), Portuguese (pt), Romanian (ro), Swedish (sv)
+Czech (cs), Danish (da), German (de), English (en), Spanish (es), Finnish (fi), French (fr), Hungarian (hu), Italian (it), Dutch (nl), Norwegian (no), Polish (pl), Portuguese (pt), Romanian (ro), Swedish (sv), Chinese (zh)
 
 ### Adding a New Language
 
-1. Add the language code and all 1341 keys to `dashboard/translations.json`
+1. Add the language code and all keys to `dashboard/translations.json`
 2. Create `translations/{lang}.json` with config flow and entity translations (mirror `strings.json` structure)
-3. Regenerate `sem-localize.js` from `translations.json`
-4. Deploy and call `generate_dashboard` to apply server-side translations
+3. Run `python3 scripts/regenerate_localize.py`
+4. Deploy, then call `generate_dashboard`
 
 ### Adding a New Translation Key
 
 1. Add the key to **all 16 languages** in `translations.json`
-2. Regenerate `sem-localize.js`
-3. Use `_t('key_name')` in custom card JS, or use the English text directly in dashboard template YAML (server-side translation handles the lookup)
+2. Run `python3 scripts/regenerate_localize.py`
+3. Use `_t('key_name')` in card JS, or the English text in the template YAML (server-side translation handles the lookup)
 
 ## AI assistant tools (#1086)
 
-`llm.py` is a Home Assistant LLM platform: `async_get_tools(hass, llm_context, api_id)` returns SEM's tools for the Assist tool set, so any AI agent allowed to control Home Assistant — and HA's MCP Server — sees them. It wraps the intent handlers in `assist_intents.py` (four explain, four write) and adds two read-only tools: `SemSetupStatus` and `SemDraftIssue` (`issue_draft.py`, a redacted bug-report draft that the user posts). Write tools exist only while the Voice commands switch is on; `write_intents_enabled()` is the one check, read again at call time.
+`llm.py` is a Home Assistant LLM platform: `async_get_tools(hass, llm_context, api_id)` returns SEM's tools for the Assist tool set, so any AI agent allowed to control Home Assistant — and HA's MCP Server — sees them. It wraps the intent handlers in `assist_intents.py` (four explain, four write) and adds two read-only tools: `SemSetupStatus` and `SemDraftIssue` (`issue_draft.py`, a redacted bug-report draft that the user posts). Every tool name starts with `solar_energy_management__`, carries `integration`, and returns a `ToolResult` where HA has one (#1389). Write tools exist only while the Voice commands switch is on; `write_intents_enabled()` is the one check, read again at call time.

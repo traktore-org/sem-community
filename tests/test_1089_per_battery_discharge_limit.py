@@ -282,16 +282,4 @@ class TestEveryPerBatteryListHasARow:
         src = (ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js").read_text()
         return set(re.findall(r"_renderBatteryListPicker\(\s*'([a-z_]+)'", src))
 
-    def test_the_scans_find_something(self):
-        assert LIST_KEY in self._overlaid_list_keys()
-        assert {"battery_force_discharge_entities", "battery_strategy_entities"} <= self._card_rows()
 
-    def test_each_list_has_a_row(self):
-        missing = self._overlaid_list_keys() - self._card_rows()
-        assert not missing, (
-            f"per-battery lists with no per-battery field on the Config tab: {sorted(missing)}")
-
-    def test_the_built_card_has_the_rows(self):
-        dist = (ROOT / "dashboard" / "card" / "dist" / "sem-cards.js").read_text()
-        assert LIST_KEY in dist, "dist/sem-cards.js not rebuilt after #1089"
-        assert "config_help_batt_discharge_entity_each" in dist

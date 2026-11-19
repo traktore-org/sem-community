@@ -21,7 +21,8 @@ import logging
 import time
 
 from .charger_adapters.base import ChargerAdapter
-from .charger_types import ChargerDecision, ChargerPower, commanded_power_w
+from . import reason_codes as RC
+from .charger_types import ChargerDecision, ChargerPower, commanded_power_w, rewrite
 from .decision_log import log_of
 from ..utils.log_gate import log_on_change
 
@@ -80,6 +81,7 @@ async def actuate(
     observer: bool = False,
     controller=None,
     yielded: bool = False,
+    phase_override: str = "",
 ) -> None:
     """Apply a per-charger decision through the reconciler.
 
@@ -127,11 +129,38 @@ async def actuate(
     # mode, when on, still takes its own path below. Nothing is stopped or
     # started here, and the box's failsafe is left as it is.
     _ydev = getattr(adapter, "_device", None)
-    if _ydev is not None:
-        try:
-            _ydev.external_yield = bool(yielded) and not observer
-        except AttributeError:  # a frozen test double
-            pass
+    _override = bool(phase_override) and yielded and not observer
+    if _override:
+        # (#1381) The fuse comes first: the guard's stop goes out even though
+        # SEM yields. A safety stop, so the contactor's minimum ON time does
+        # not hold it. The send seam lets only this cycle's stop through; the
+        # failsafe stays unarmed, so the other party's session is not ended.
+        decision = rewrite(decision, reason_code=RC.CHARGER_PHASE_STOP,
+                           safety_stop=True)
+        log_on_change(
+            _LOGGER, f"yield-override:ev:{decision.charger_id}",
+            logging.WARNING,
+            "phase guard overrides yield: %s — stopping %s. SEM will not "
+            "restart it; the other party owns it",
+            phase_override, decision.charger_id,
+        )
+    try:
+        if _ydev is not None:
+            try:
+                _ydev.external_yield = bool(yielded) and not observer
+                _ydev.phase_guard_override = _override
+            except AttributeError:  # a frozen test double
+                pass
+        if _override:
+            await reconciler.reconcile_and_apply(
+                decision, adapter, power, time.monotonic())
+            return
+    finally:
+        if _override and _ydev is not None:
+            try:
+                _ydev.phase_guard_override = False
+            except AttributeError:
+                pass
     if yielded and not observer:
         log_on_change(
             _LOGGER, f"yield:ev:{decision.charger_id}", logging.INFO,

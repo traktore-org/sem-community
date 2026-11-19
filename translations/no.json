@@ -43,16 +43,14 @@
       },
       "hardware": {
         "title": "Maskinvare",
-        "description": "Siste trinn! SEM fant automatisk inverterens entitet for utladingsstyring: {discharge_entity}\n\nLa dashbord-valget stå PÅ, så bygger SEM Lovelace-dashbordet sitt for deg. **Merk: dette starter Home Assistant på nytt omtrent 5 sekunder etter at installasjonen er ferdig.**\n\nAlt annet — også toppgrensen din mot nettet — bruker trygge standardverdier som du kan justere rett etter oppsettet: toppgrensen med glidebryteren på fanen **Kontroll**, alt annet på fanen **Konfigurasjon** på SEM-dashbordet — blant annet elbilladere, varmepumpe, tariff og batterisoner.",
+        "description": "Siste trinn! SEM fant automatisk inverterens entitet for utladingsstyring: {discharge_entity}\n\nLa dashbord-valget stå PÅ, så bygger SEM Lovelace-dashbordet sitt for deg. **Merk: dette starter Home Assistant på nytt omtrent 5 sekunder etter at installasjonen er ferdig.**\n\nAlt annet — også toppgrensen din mot nettet — bruker trygge standardverdier som du kan justere rett etter oppsettet: toppgrensen på skjermen **Enheter**, alt annet på skjermen **System** på SEM-dashbordet — blant annet elbilladere, varmepumpe, tariff og batterisoner.",
         "data": {
           "battery_capacity_kwh": "Husbatteriets kapasitet (kWh)",
-          "generate_dashboard_on_install": "Generer SEM-dashbordet nå (starter HA på nytt)",
-          "diagram_style": "Systemdiagram stil"
+          "generate_dashboard_on_install": "Generer SEM-dashbordet nå (starter HA på nytt)"
         },
         "data_description": {
           "battery_capacity_kwh": "Total brukbar kapasitet på husbatteriet ditt (IKKE elbilen) i kWh. Brukes av den prognosestyrte ladestrategien til å anslå hvor mye batteriet kan dekke et solunderskudd. Se spesifikasjonen for inverteren din.",
-          "generate_dashboard_on_install": "Når dette er aktivert, oppretter SEM Lovelace-dashbordet umiddelbart etter at dette steget er fullført, og starter deretter Home Assistant på nytt etter ca. 5 s slik at det nye dashbordet blir synlig. Du kan alltid kjøre det manuelt senere via tjenesten solar_energy_management.generate_dashboard.",
-          "diagram_style": "Velg systemdiagram på Hjem-fanen. 'SEM' bruker det innebygde animerte diagrammet. 'K-Flow' bruker K-Flow HACS-kortet (må installeres separat)."
+          "generate_dashboard_on_install": "Når dette er aktivert, oppretter SEM Lovelace-dashbordet umiddelbart etter at dette steget er fullført, og starter deretter Home Assistant på nytt etter ca. 5 s slik at det nye dashbordet blir synlig. Du kan alltid kjøre det manuelt senere via tjenesten solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -133,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Velg nettmåleren din",
-        "description": "SEM fant ingen sensor for netteffekt. Uten den vet ikke SEM hva du kjøper eller sender ut.\n\nVelg den nedenfor, eller trykk **Send** for å hoppe over. Du kan sette den senere i fanen Konfigurasjon.\n\nSol: {solar}. Batteri: {battery}.",
+        "description": "SEM fant ingen sensor for netteffekt. Uten den vet ikke SEM hva du kjøper eller sender ut.\n\nVelg den nedenfor, eller trykk **Send** for å hoppe over. Du kan sette den senere på skjermen System.\n\nSol: {solar}. Batteri: {battery}.",
         "data": {
           "grid_power_sensor": "Netteffekt"
         },
@@ -168,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "EV Lader",
-        "description": "Tips: de fleste innstillinger finnes nå på SEM-dashbordet → fanen Konfigurasjon (fargerikt, live). Denne flyten beholdes for oppsett uten dashbord.\n\nGå gjennom og oppdater entitetskoblingene for elbilladeren din. Feltene for kjøretøyets SOC brukes bare hvis du oppgir en SOC-sensor for kjøretøyets batteri.",
+        "description": "Tips: de fleste innstillinger finnes på SEM-dashbordet: skjermene Enheter og System. Denne flyten beholdes for oppsett uten dashbord.\n\nGå gjennom og oppdater entitetskoblingene for elbilladeren din. Feltene for kjøretøyets SOC brukes bare hvis du oppgir en SOC-sensor for kjøretøyets batteri.",
         "data": {
           "ev_connected_sensor": "EV Tilkoblingsstatus",
           "ev_charging_sensor": "EV Ladestatus",
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Mål for solvarmet varmtvann (°C)",
           "legionella_target_temp": "Mål for legionelladesinfeksjon (°C)",
           "legionella_interval_hours": "Maks. timer mellom desinfeksjonssykluser",
-          "diagram_style": "Systemdiagram stil",
           "battery_assist_min_surplus": "Batteristøtte – min. soloverskudd (W)",
           "grid_sign_invert": "Snu fortegn for netteffekt",
           "battery_operating_mode_entity": "Batteriets driftsmodus-entitet (overvåket)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Månedlig effektledd per kW topplast (CHF/kW/måned). Sett til 0 hvis avtalen din ikke har effektledd.",
           "observer_mode": "Når denne er PÅ, overvåker og beregner SEM alt, men sender aldri et tjenestekall til maskinvaren. Brukes på en test-/staging-HA som speiler en produksjonsinstallasjon.",
           "battery_discharge_control_entity": "Number-entitet som styrer inverterens grense for utladeeffekt (f.eks. number.batteries_maximale_entladeleistung på Huawei). Oppdages automatisk ved installasjon; overstyr her ved behov.",
-          "diagram_style": "Velg systemdiagram på Hjem-fanen. 'SEM' bruker det innebygde animerte diagrammet. 'K-Flow' bruker K-Flow HACS-kortet (må installeres separat).",
           "hot_water_solar_target": "Måltemperatur (°C) for solstøttet varmtvannsoppvarming. SEM booster berederen når det er overskudd tilgjengelig.",
           "legionella_target_temp": "Temperaturen (°C) varmtvannssystemet må nå under en legionelladesinfeksjonssyklus.",
           "legionella_interval_hours": "Maksimalt antall timer mellom legionelladesinfeksjonssykluser før SEM tvinger fram en oppvarming.",
@@ -1884,7 +1880,7 @@
       "message": "Fant ingen apparatplan for {device_id}. Kontroller enhets-ID-en du brukte med tjenesten schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "Laststyring er slått av, så det finnes ingen utkoblingsliste å oppdatere. Slå den på under Konfigurasjon → Laststyring på SEM-dashbordet, og prøv igjen."
+      "message": "Laststyring er slått av, så det finnes ingen utkoblingsliste å oppdatere. Slå den på under System → Laststyring på SEM-dashbordet, og prøv igjen."
     },
     "load_management_failed_to_start": {
       "message": "Laststyring er slått på, men kunne ikke starte, så SEM kan ikke bruke enhetslisten sin. Sjekk Home Assistant-loggen for \"Failed to initialize load management\" og last integrasjonen på nytt."
@@ -1973,14 +1969,14 @@
         "step": {
           "confirm": {
             "title": "Rapporter dette til SEM",
-            "description": "**{name}** er satt til et lademål i prosent, men kjøretøyet rapporterer ikke ladenivået sitt akkurat nå, så SEM kan ikke stoppe *nøyaktig* ved **{target}%**.\n\nDen lader likevel ikke i blinde: fra den siste ekte avlesningen i denne økten teller den energien som faktisk er levert, og stopper når den målte summen når målet ditt — overskridelsen er bare det bilen har tatt siden den avlesningen. Har det ikke kommet noen ekte avlesning i det hele tatt i denne økten (eller startet SEM på nytt midt i ladingen), mangler referansepunktet, og ladingen fortsetter til bilen selv trapper ned nær fullt.\n\nFor en grense som treffer, koble en **ekte SOC-sensor for kjøretøyet** til denne laderen (Konfigurasjon → EV → Kjøretøyets SOC-entitet). Batteriprosenten på dashbordet er SEMs *estimerte* SOC, som bevisst ignoreres for den harde grensen (den kan drifte). Denne reparasjonen forsvinner automatisk så snart en ekte SOC-avlesning er tilgjengelig igjen.\n\nSEM mener at denne feilen er dens egen. Hvis du kan, åpne en feilrapport med knappen i varselet — skjemaet er allerede fylt ut. Du kan også kopiere konteksten nedenfor til en e-post eller et foruminnlegg. Denne dialogen sender ingenting noe sted.\n\n```\n{context}\n```\n\nBekreft for å lukke varselet."
+            "description": "**{name}** er satt til et lademål i prosent, men kjøretøyet rapporterer ikke ladenivået sitt akkurat nå, så SEM kan ikke stoppe *nøyaktig* ved **{target}%**.\n\nDen lader likevel ikke i blinde: fra den siste ekte avlesningen i denne økten teller den energien som faktisk er levert, og stopper når den målte summen når målet ditt — overskridelsen er bare det bilen har tatt siden den avlesningen. Har det ikke kommet noen ekte avlesning i det hele tatt i denne økten (eller startet SEM på nytt midt i ladingen), mangler referansepunktet, og ladingen fortsetter til bilen selv trapper ned nær fullt.\n\nFor en grense som treffer, koble en **ekte SOC-sensor for kjøretøyet** til denne laderen (System → Ladere). Batteriprosenten på dashbordet er SEMs *estimerte* SOC, som bevisst ignoreres for den harde grensen (den kan drifte). Denne reparasjonen forsvinner automatisk så snart en ekte SOC-avlesning er tilgjengelig igjen.\n\nSEM mener at denne feilen er dens egen. Hvis du kan, åpne en feilrapport med knappen i varselet — skjemaet er allerede fylt ut. Du kan også kopiere konteksten nedenfor til en e-post eller et foruminnlegg. Denne dialogen sender ingenting noe sted.\n\n```\n{context}\n```\n\nBekreft for å lukke varselet."
           }
         }
       }
     },
     "unmanaged_charger_found": {
       "title": "SEM fant en lader den ikke styrer",
-      "description": "Enheten **{name}** ser ut som en elbillader, men ingen lader er satt opp i SEM — så SEM lar den være ({count} kandidat(er) funnet).\n\nLegg den til under Innstillinger → Enheter og tjenester → SEM → Konfigurer for at SEM skal optimalisere lading med sol og billige tariffer. Da dukker også EV-fanen med lademodusene opp.\n\nEr det ikke en lader? Se bort fra dette — SEM styrer den uansett ikke."
+      "description": "Enheten **{name}** ser ut som en elbillader, men ingen lader er satt opp i SEM — så SEM lar den være ({count} kandidat(er) funnet).\n\nLegg den til under Innstillinger → Enheter og tjenester → SEM → Konfigurer for at SEM skal optimalisere lading med sol og billige tariffer. Da vises den også på skjermen Devices med lademodusene.\n\nEr det ikke en lader? Se bort fra dette — SEM styrer den uansett ikke."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace i YAML-modus — legg til SEMs kortressurser",
@@ -1988,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "Ladeboksens styringsentitet virker ikke: {name}",
-      "description": "SEM bruker **`{entity_id}`** til å {capability} på **{name}**, men den entiteten er `{reason}` — hver kommando forsvinner. Sjekk entiteten i **Utviklerverktøy → Tilstander** og fiks den ved kilden, eller pek SEM et annet sted via **Innstillinger → Enheter og tjenester → SEM → Konfigurer → Ladeboks → Rediger**."
+      "description": "SEM bruker **`{entity_id}`** til å {capability} på **{name}**, men den entiteten er `{reason}` — hver kommando forsvinner. Sjekk entiteten i **Utviklerverktøy → Tilstander** og fiks den ved kilden, eller pek SEM et annet sted via **System → Ladere**."
     },
     "battery_force_discharge_unsupported": {
       "title": "Batteriets effektsettpunkt kan ikke skrives: {entity_id}",
@@ -2008,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "Deye-eksportstyring kan ikke brukes: {entity_id}",
-      "description": "SEM kan ikke bruke {entity_id} til eksportstyring: {reason}. Sjekk velgerentiteten og navnene på de tre valgene under Konfigurasjon → Batteriintelligens."
+      "description": "SEM kan ikke bruke {entity_id} til eksportstyring: {reason}. Sjekk velgerentiteten og navnene på de tre valgene under System → Batteriregler."
     },
     "battery_operating_mode_unexpected": {
       "title": "Batteriet er i «{mode}» — SEM planlegger som om det var «{expected}»",
@@ -2020,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "Batteriets natthistorikk kan ikke bygges opp",
-      "description": "SEM kunne ikke bygge opp natthistorikken fordi denne installasjonen mangler en **{missing}**-sensor.\n\nSEM lærer hvor mye av batteriet som trygt kan brukes ved å se hva huset tar ut av det om natten, og vil ha fem gode netter før det oppgir et tall. Oppbyggingen leser målerens *egen* registrerte historikk slik at du slipper å vente — men måleren må finnes.\n\n**Slik gjør du:** legg til en akkumulert energisensor (kWh, ikke watt) for **{missing}** i Home Assistants energioversikt, og trykk på **Bygg opp fra historikk** på Batteri-fanen igjen. Å vente koster ingenting — SEM leser målerens historikk, så det fungerer like godt senere. I mellomtiden fortsetter registreringen, én natt per dag."
+      "description": "SEM kunne ikke bygge opp natthistorikken fordi denne installasjonen mangler en **{missing}**-sensor.\n\nSEM lærer hvor mye av batteriet som trygt kan brukes ved å se hva huset tar ut av det om natten, og vil ha fem gode netter før det oppgir et tall. Oppbyggingen leser målerens *egen* registrerte historikk slik at du slipper å vente — men måleren må finnes.\n\n**Slik gjør du:** legg til en akkumulert energisensor (kWh, ikke watt) for **{missing}** i Home Assistants energioversikt, og trykk på **Bygg opp fra historikk** på skjermen Devices igjen. Å vente koster ingenting — SEM leser målerens historikk, så det fungerer like godt senere. I mellomtiden fortsetter registreringen, én natt per dag."
     },
     "battery_night_backfill_incomplete": {
       "title": "Oppbygde netter ser ikke nettets andel",
@@ -2036,19 +2032,19 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Batteriplattform låst til Generisk på en {brand}-installasjon",
-      "description": "SEMs batteriplattform er satt til **Generisk/annen**, men {brand}-integrasjonen er lastet inn. Tidligere versjoner av innstillingsveiviseren tilbød bare Generisk og Deye og valgte Generisk som standard, så ett gjennomløp av den siden degraderte da en {brand}-installasjon til den generiske adapteren — ingen tvangslading, ingen idempotente registerskrivinger. Åpne **Innstillinger → Integrasjoner → SEM → Konfigurer → Batteriplanlegger** og sett **Batteriets ladeplattform** til **Automatisk deteksjon**. Hvis Generisk er et bevisst valg (et batteri med sine egne styringsentiteter), sett den entiteten, og denne meldingen forsvinner."
+      "description": "SEMs batteriplattform er satt til **Generisk/annen**, men {brand}-integrasjonen er lastet inn. Tidligere versjoner av innstillingsveiviseren tilbød bare Generisk og Deye og valgte Generisk som standard, så ett gjennomløp av den siden degraderte da en {brand}-installasjon til den generiske adapteren — ingen tvangslading, ingen idempotente registerskrivinger. Åpne **Innstillinger → Enheter og tjenester → SEM → Konfigurer → Batterilade planlegger** og sett **Batteriets ladeplattform** til **Automatisk deteksjon**. Hvis Generisk er et bevisst valg (et batteri med sine egne styringsentiteter), sett den entiteten, og denne meldingen forsvinner."
     },
     "split_grid_guessed": {
       "title": "SEM sjekker to gjettede nettmålere",
-      "description": "SEM har ingen netteffekt-sensor, så den gjettet ut fra navnet: **{import_entity}** for nettimport og **{export_entity}** for netteksport. SEM bruker dem ikke før de stemmer med energitellerne dine for nettet, så netteffekten viser 0 inntil videre. Slik velger du måleren din: åpne SEM-dashbordet, fanen ⚙ **Konfigurasjon**, og velg **Alle innstillinger** øverst. Sett deretter **Netteffekt** i delen **Sensorkilder**. Har måleren din én sensor for import og én for eksport, setter du i stedet **Nettimport-sensor** og **Netteksport-sensor** i delen **Tariff og priser**."
+      "description": "SEM har ingen netteffekt-sensor, så den gjettet ut fra navnet: **{import_entity}** for nettimport og **{export_entity}** for netteksport. SEM bruker dem ikke før de stemmer med energitellerne dine for nettet, så netteffekten viser 0 inntil videre. Slik velger du måleren din: åpne SEM-dashbordet, fanen **System**, og velg **Alle innstillinger** øverst. Sett deretter **Netteffekt** i delen **Hva SEM leser**. Har måleren din én sensor for import og én for eksport, setter du i stedet **Nettimport-sensor** og **Netteksport-sensor** i delen **Hva SEM leser**."
     },
     "battery_control_write_not_taken": {
       "title": "En batteristyringsskriving tas ikke: {entity_id}",
-      "description": "SEM satte **`{entity_id}`** til **{wanted}**; i de neste syklusene leste den fortsatt **{seen}**, {strikes} ganger på rad. Kallet feilet ikke — registeret beholdt bare ikke verdien. **Løsning:** sett entiteten for hånd i Utviklerverktøy → Tilstander. Holder den ikke, er det feil entitet for rollen: velg en annen i konfigurasjonskortet. Holder den for hånd, men ikke for SEM, fortell oss merke og entitet. Forsvinner så snart en skriving speiles."
+      "description": "SEM satte **`{entity_id}`** til **{wanted}**; i de neste syklusene leste den fortsatt **{seen}**, {strikes} ganger på rad. Kallet feilet ikke — registeret beholdt bare ikke verdien. **Løsning:** sett entiteten for hånd i Utviklerverktøy → Tilstander. Holder den ikke, er det feil entitet for rollen: velg en annen under **System → Batteriregler**. Holder den for hånd, men ikke for SEM, fortell oss merke og entitet. Forsvinner så snart en skriving speiles."
     },
     "soc_zones_out_of_order": {
       "title": "Batteriets SOC-soner er i feil rekkefølge",
-      "description": "Batterisonene dine leser **Prioritet {priority}% · Buffer {buffer}% · Autostart {auto_start}%**, men SEM forventer at de stiger i den rekkefølgen: Prioritet er reserven du aldri bruker, Buffer er der batteriassistanse stopper, og Autostart er der batteriet er fullt nok til å gi fritt.\n\nSEM bruker **{used}** som grenser — de samme tre tallene, sortert — slik at ingen sone hoppes over og ingenting oppfører seg uforutsigbart. Den forteller deg dette fordi rekkefølgen du tastet inn, nesten helt sikkert ikke er den du mente.\n\nRett det i **Innstillinger → Enheter og tjenester → SEM → Konfigurer → Batteri** eller på dashbordets Konfigurasjon-fane. Alle verdier er tillatt så lenge de stiger; brede soner er greit — 20/30/50 er et helt fint oppsett på en stor pakke."
+      "description": "Batterisonene dine leser **Prioritet {priority}% · Buffer {buffer}% · Autostart {auto_start}%**, men SEM forventer at de stiger i den rekkefølgen: Prioritet er reserven du aldri bruker, Buffer er der batteriassistanse stopper, og Autostart er der batteriet er fullt nok til å gi fritt.\n\nSEM bruker **{used}** som grenser — de samme tre tallene, sortert — slik at ingen sone hoppes over og ingenting oppfører seg uforutsigbart. Den forteller deg dette fordi rekkefølgen du tastet inn, nesten helt sikkert ikke er den du mente.\n\nRett det i **System → Batteriregler**. Alle verdier er tillatt så lenge de stiger; brede soner er greit — 20/30/50 er et helt fint oppsett på en stor pakke."
     },
     "previous_install_leftovers": {
       "title": "Filer fra en tidligere SEM-installasjon ble funnet",
@@ -2056,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "SG-Ready-relé {contact} kan ikke styres",
-      "description": "**{entity_id}** er satt som SG-Ready {contact}, men det er en text-/number-/select-entitet, og dens **{missing}**-verdi er ikke konfigurert — så SEM har ingenting å skrive, og hver SG-Ready-kommando til denne varmepumpen feiler. Åpne **Innstillinger → Enheter og tjenester → SEM → Konfigurer → Varmepumpe** (eller dashbordets Konfigurasjon-fane), og fyll ut både ON- og OFF-verdien for dette reléet, eller pek det mot en bryter-entitet i stedet."
+      "description": "**{entity_id}** er satt som SG-Ready {contact}, men det er en text-/number-/select-entitet, og dens **{missing}**-verdi er ikke konfigurert — så SEM har ingenting å skrive, og hver SG-Ready-kommando til denne varmepumpen feiler. Åpne **System → Varmepumpe og varmtvann**, og fyll ut både ON- og OFF-verdien for dette reléet, eller pek det mot en bryter-entitet i stedet."
     },
     "split_grid_rejected": {
       "title": "SEM fant ikke nettmålerne dine",
-      "description": "SEM har ingen netteffekt-sensor, og det den gjettet ut fra navnet, er ikke nettmåleren din: **{import_entity}** for import, **{export_entity}** for eksport. De stemmer ikke med energitellerne dine for nettet, eller en av de to mangler. SEM viser heller ingen netteffekt enn en feil. Slik velger du måleren din: åpne SEM-dashbordet, fanen ⚙ **Konfigurasjon**, og velg **Alle innstillinger** øverst. Sett deretter **Netteffekt** i delen **Sensorkilder**. Har måleren din én sensor for import og én for eksport, setter du i stedet **Nettimport-sensor** og **Netteksport-sensor** i delen **Tariff og priser**."
+      "description": "SEM har ingen netteffekt-sensor, og det den gjettet ut fra navnet, er ikke nettmåleren din: **{import_entity}** for import, **{export_entity}** for eksport. De stemmer ikke med energitellerne dine for nettet, eller en av de to mangler. SEM viser heller ingen netteffekt enn en feil. Slik velger du måleren din: åpne SEM-dashbordet, fanen **System**, og velg **Alle innstillinger** øverst. Sett deretter **Netteffekt** i delen **Hva SEM leser**. Har måleren din én sensor for import og én for eksport, setter du i stedet **Nettimport-sensor** og **Netteksport-sensor** i delen **Hva SEM leser**."
     },
     "power_sensor_not_found": {
       "title": "Ingen effektsensor for {energy_entity}",
-      "description": "Energi-dashbordet teller **{energy_entity}** i kWh, men SEM fant ingen effektsensor (W) for den. SEM leser derfor denne effekten som 0 W, og energiflytene og overskuddet blir feil. Rett det ved å legge effektsensoren til denne oppføringen i Energi-dashbordet. Eller åpne SEM-dashbordet, fanen ⚙ **Konfigurasjon**, og velg **Alle innstillinger** øverst. Sett deretter sensoren i delen **Sensorkilder**. Finnes det ingen effektsensor, kan du ignorere denne meldingen."
+      "description": "Energi-dashbordet teller **{energy_entity}** i kWh, men SEM fant ingen effektsensor (W) for den. SEM leser derfor denne effekten som 0 W, og energiflytene og overskuddet blir feil. Rett det ved å legge effektsensoren til denne oppføringen i Energi-dashbordet. Eller åpne SEM-dashbordet, fanen **System**, og velg **Alle innstillinger** øverst. Sett deretter sensoren i delen **Hva SEM leser**. Finnes det ingen effektsensor, kan du ignorere denne meldingen."
     },
     "power_sensor_not_found_unit": {
       "title": "Ingen effektsensor for {energy_entity}",
@@ -2089,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM ser ikke netteksporten din",
-      "description": "Bare netimport-sensoren **{import_entity}** er satt, så SEM leser eksporten som 0 W. Men eksporttelleren din **{export_entity}** viser at strøm gikk til nettet. Slik retter du det: åpne SEM-dashbordet, fanen ⚙ **Konfigurasjon**, og velg **Alle innstillinger** øverst. Sett deretter **Netteksport-sensor** i delen **Tariff og priser**. Eller tøm **Nettimport-sensor**, så finner SEM paret selv."
+      "description": "Bare netimport-sensoren **{import_entity}** er satt, så SEM leser eksporten som 0 W. Men eksporttelleren din **{export_entity}** viser at strøm gikk til nettet. Slik retter du det: åpne SEM-dashbordet, fanen **System**, og velg **Alle innstillinger** øverst. Sett deretter **Netteksport-sensor** i delen **Hva SEM leser**. Eller tøm **Nettimport-sensor**, så finner SEM paret selv."
     },
     "unseen_power_row": {
       "title": "SEM ser ikke all sol- eller batterieffekten din",
@@ -2109,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "En annen part skriver til {name}",
-      "description": "Noe annet enn SEM endrer hele tiden **{name}**, og SEM og den parten angrer hverandres arbeid. Sett enheten til *Ja, SEM viker* i SEMs fane Konfigurasjon, og velg entiteten som viser når den andre parten har styringen."
+      "description": "Noe annet enn SEM endrer hele tiden **{name}**, og SEM og den parten angrer hverandres arbeid. Slå på **Alle innstillinger** på skjermen **System**, og sett **styrt av en annen part** for enheten (under **Batteriregler** eller **Ladere**) til *Ja, SEM viker*, og velg entiteten som viser når den andre parten har styringen."
     },
     "heater_no_rise": {
       "title": "Varmtvannsberederen blir ikke varm",
@@ -2122,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "Valget for nettlading står fortsatt på: {entity}",
       "description": "Valget **{entity}** står fortsatt på **{option}**, og SEM kan ikke sette det tilbake: det tidligere alternativet finnes ikke lenger i listen. Sett det tilbake for hånd. Til da kan batteriet fortsette å lade fra nettet. Forsvinner når valget endres."
+    },
+    "classic_dashboard_kept": {
+      "title": "Det gamle SEM-dashbordet finnes fortsatt",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Det gamle SEM-dashbordet finnes fortsatt",
+            "description": "Det gamle SEM-dashbordet på `/{path}` er utgått. Du har endret det, så SEM lot oppsettet stå. SEM-kortene i det viser nå en lenke til det nye SEM-dashbordet. Bekreft for å slette det gamle."
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -2130,12 +2137,6 @@
         "disabled": "Deaktivert",
         "grid_only": "Kun nettforsyning",
         "hybrid_load_port": "Nett + hybridinverterens Load/EPS-utgang"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (innebygd)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

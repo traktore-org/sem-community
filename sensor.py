@@ -170,6 +170,21 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _demand_rows(demands: Any, blocks: List[Dict[str, Any]]) -> List[Any]:
+    """(#1321) Each demand names its own runs, ``[[start, end, watts], ...]``.
+
+    One source for who runs when: a card that has to drop the blocks (a day
+    on a quarter-hour market) still draws the real hours, and a gap between
+    two runs stays a gap. The first-to-last span in ``why.params`` never did.
+    """
+    runs: Dict[Any, List[List[Any]]] = {}
+    for b in blocks:
+        runs.setdefault(b["id"], []).append([b["start"], b["end"], b["power_w"]])
+    return [{**d, "runs": runs[d["id"]]}
+            if isinstance(d, dict) and d.get("id") in runs else d
+            for d in demands or []]
+
+
 def _batt_runs(slots: Any) -> List[List[int]]:
     """(#1063) ``[[first, last], ...]`` — the slot indexes the plan marked
     ``batt`` (the battery covered the house), merged into runs."""
@@ -215,6 +230,7 @@ def _energy_plan_attrs(
         # Daytime: no plan to project, but the review still has to reach the
         # card — it is the record of LAST night, not of tonight's.
         return {k: v for k, v in (extra or {}).items() if v}
+    merged_blocks = _merge_plan_blocks(plan.get("blocks"))
     attrs: Dict[str, Any] = {
         "computed_at": plan.get("computed_at"),
         "fits": plan.get("fits"),
@@ -232,8 +248,13 @@ def _energy_plan_attrs(
         "demands": plan.get("demands") or [],
         "slots": [{
             "start": s.get("start"), "end": s.get("end"),
+            # (#1390) what a grid kWh costs in the slot: the price lane draws
+            # it. A sun slot's own ``price`` is the feed-in rate the sun
+            # earns, so it sends its ``buy`` (None: not known) instead. Same
+            # bytes as a grid slot; the card has no other use for it.
+            "price": s.get("buy") if s.get("sun") else s.get("price"),
             # PRICE-ASK: a field name of the published slot, not a level
-            "price": s.get("price"), "cheap": s.get("cheap"),
+            "cheap": s.get("cheap"),
             "home_grid_w": s.get("home_grid_w"),
             # (#1085) only when the slot has a reading: no key, no bytes
             **({"co2": s["co2"]} if s.get("co2") is not None else {}),
@@ -246,7 +267,7 @@ def _energy_plan_attrs(
         # never marked a slot, and the card then keeps its old drawing.
         "batt_runs": (_batt_runs(plan.get("slots"))
                       if "has_battery" in plan else None),
-        "blocks": _merge_plan_blocks(plan.get("blocks")),
+        "blocks": merged_blocks,
         # A string here means the battery figures behind this plan came from
         # a SUBSET of the fleet (#638 finding #3) — the card says so rather
         # than presenting a degraded plan as a healthy one.
@@ -276,6 +297,8 @@ def _energy_plan_attrs(
         "why_codes": plan.get("why_codes") or [],
         # (#638 C7) per-demand plan-vs-reactive attribution, live.
         "coverage": plan.get("coverage") or {},
+        # (#1081) plain words for a device the plan holds no ask from
+        "coverage_why": plan.get("coverage_why") or {},
         # (#638, the last string) the shadow arbitrage advisor's verdict
         # with its numbers — the morning plan-vs-Sankey audit reads it
         # here. Small by construction (a few blocks at most).
@@ -302,10 +325,29 @@ def _energy_plan_attrs(
         attrs.pop("heat_cost")
         attrs["heat_cost_omitted"] = True
     if _too_big():
+        # (#1321) the slots are the bulk; the merged blocks are a few rows and
+        # carry who takes energy and when. Keep them: without them the card
+        # drew a chart with nothing planned beside a list that had windows.
         attrs["slots"] = []
-        attrs["blocks"] = []
         attrs["batt_runs"] = []
         attrs["timeline_omitted"] = True
+        if _too_big():
+            # (#1321) the blocks go; each demand's own runs say the same in
+            # fewer bytes, so a gap between two runs stays a gap. Never both:
+            # runs beside the blocks pushed a normal quarter-hour day over.
+            attrs["blocks"] = []
+            attrs["demands"] = _demand_rows(attrs["demands"], merged_blocks)
+        # Still too big: drop the runs of the demand with the most runs
+        # first, so a car's two hours survive a load that cycles all day.
+        while _too_big():
+            with_runs = [dem for dem in attrs["demands"]
+                         if isinstance(dem, dict) and dem.get("runs")]
+            if not with_runs:
+                break
+            longest = max(with_runs, key=lambda dem: len(dem["runs"]))
+            attrs["demands"] = [
+                {k: v for k, v in dem.items() if k != "runs"} if dem is longest else dem
+                for dem in attrs["demands"]]
     # (#758) The timeline is the biggest term, but it is not the only one,
     # and going over means the recorder keeps NOTHING. If dropping it was
     # not enough, drop what rode along and say so — the plan itself is what
@@ -2591,7 +2633,8 @@ def _decision_attributes(coordinator, key: str) -> Dict[str, Any]:
     ``load_management_status`` the loads'.
     """
     from .coordinator.decision_log import (
-        KIND_BATTERY, KIND_CHARGER, KIND_LOAD, DecisionLog)
+        KIND_BATTERY, KIND_CHARGER, KIND_LOAD, DecisionLog, current,
+        current_by_kind)
     try:
         log = getattr(coordinator, "decision_log", None)
         if not isinstance(log, DecisionLog):
@@ -2603,15 +2646,15 @@ def _decision_attributes(coordinator, key: str) -> Dict[str, Any]:
                 for k, v in data.items()
                 if isinstance(k, str) and k.startswith("charger_")
                 and k.endswith("_strategy")}
-            return {"per_charger_last_decision": log.last_by_kind(KIND_CHARGER),
+            return {"per_charger_last_decision": current_by_kind(KIND_CHARGER, coordinator),
                     "per_charger_strategy": strategies}
         if key == "battery_status":
-            return {"per_battery_last_decision": log.last_by_kind(KIND_BATTERY)}
+            return {"per_battery_last_decision": current_by_kind(KIND_BATTERY, coordinator)}
         if key.startswith("battery_") and key.endswith("_status"):
             bid = key[len("battery_"):-len("_status")]
             # per-battery sensors only (b1, b2 …), not battery_priority_status
             if re.fullmatch(r"b\d+", bid):
-                return {"last_decision": log.last(KIND_BATTERY, bid)}
+                return {"last_decision": current(KIND_BATTERY, bid, coordinator)}
         if key == "load_management_status":
             return {"per_device_last_decision": log.last_by_kind(KIND_LOAD)}
     except Exception:  # noqa: BLE001 — attributes never break the entity
@@ -2668,6 +2711,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "today_plan",
         "upcoming",
         "schedule_today",
+        "rate_steps",   # (#1390) the price lane's rule prices, today+tomorrow
         "schedule_surplus_hours",
         "schedule_ev_hours",
         "energy_dashboard",
@@ -3520,6 +3564,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "next_cheap_end": d.get("tariff_next_cheap_end"),
                 "upcoming": d.get("tariff_upcoming"),
                 "schedule_today": d.get("tariff_schedule_today"),
+                # (#1390) a schedule or two-rate tariff's prices for today
+                # and tomorrow; None on a dynamic tariff (``upcoming``)
+                "rate_steps": d.get("tariff_rate_steps"),
             })
         elif self.entity_description.key == "heat_pump_registration_status":
             # #432: surface WHY the heat pump is or is not registered.
@@ -3720,6 +3767,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "cop_used": d.get("heat_pump_cop"),
                 "cop_source": d.get("heat_pump_cop_source"),
                 "outdoor_c": d.get("heat_pump_cop_outdoor_c"),
+                # (#1081) a code, not a sentence: the card words it
+                "cop_hint": ("set_cop_curve"
+                             if d.get("heat_pump_cop_source") == "flat" else None),
             })
         elif self.entity_description.key in ("daily_costs", "monthly_costs", "yearly_costs"):
             # (#1321) what SEM paid per bought kWh against the hours'

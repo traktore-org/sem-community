@@ -13,7 +13,6 @@ import {
 
 const here = new URL('.', import.meta.url);
 const words = JSON.parse(fs.readFileSync(new URL('../../translations.json', here), 'utf8'));
-const classic = fs.readFileSync(new URL('../src/cards/sem-load-priority-card.js', here), 'utf8');
 
 const band = (reading, over = {}) => ({
     state: 'willing', hvac: 'heat', reading_c: reading,
@@ -58,21 +57,6 @@ test('without buying allowed it is disabled', () => {
 test('the write is the stored goal as a bool string', () => {
     assert.deepEqual(preheatWrites(true), [{ property: 'preheat', value: 'true' }]);
     assert.deepEqual(preheatWrites(false), [{ property: 'preheat', value: 'false' }]);
-});
-
-test('the card draws the tick under the sun row, disabled without buy, and writes it', () => {
-    const sun = classic.indexOf("q.keys.sunMax), this._t(q.keys.sunMaxSub)");
-    const tick = classic.indexOf('this._renderPreheatTick(device, q)');
-    assert.ok(sun > 0 && tick > sun, 'the tick comes after the sun row');
-    assert.ok(classic.includes('preheatWrites(e.target.checked)'));
-    assert.ok(classic.includes('?disabled=${!pre.enabled}'));
-    assert.ok(classic.includes('.checked=${pre.on}'), 'stored on stays checked while disabled');
-    assert.ok(classic.includes("'hq_sub_no_buy'"), 'the existing no-buy words');
-    assert.ok(classic.includes("'hq_preheat_sub'"));
-    // never a backtick inside the lit template of the tick
-    const body = classic.slice(classic.indexOf('_renderPreheatTick(device, q) {'), classic.indexOf('_renderBuyQuestion(device, q) {'));
-    const tpl = body.slice(body.indexOf('return html`'));
-    assert.equal((tpl.match(/`/g) || []).length, 2);
 });
 
 test('a planned pre-heat says it, with the top and the start', () => {

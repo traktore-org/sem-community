@@ -869,6 +869,7 @@ class SensorReader:
             {"solar", "grid", "grid_import", "grid_export", "battery"}
         )
         self._STALE_THRESHOLD_S = 600  # 10 min: a fast power sensor stale this long is frozen
+        self._fast_reports: dict = {}  # (#1394) name -> last report, this cycle
         # (#912) per config entry: (monotonic stamp, any sibling reported within
         # the threshold). A flat entity from a LIVE integration is honest —
         # integrations that skip identical writes (foxess_modbus) never advance
@@ -1278,6 +1279,7 @@ class SensorReader:
         self._battery_read_is_pair = False    # (#1215) per-cycle
         self._input_reads = {}                # (#818) per-cycle
         self._input_dark = {}                 # (#818) per-cycle
+        self._fast_reports = {}               # (#1394) per-cycle
         self._unit_soc_cycle = {}             # (#1285) per-cycle
         self._unit_soc_confirmed = False
         self._unit_soc_held = False
@@ -6197,7 +6199,7 @@ class SensorReader:
                     return float(lst[slot])
             except (TypeError, ValueError):
                 pass
-        return self._unit_capacity_kwh(power_entity)
+        return self._unit_size_sensor_kwh(power_entity)
 
     def _soc_by_size(self, levels: list, sizes: list) -> float:
         """(#1373) The home's level of several batteries: each level counts
@@ -6652,6 +6654,22 @@ class SensorReader:
             self._sensor_unavailable_since.pop(entity_id, None)
         self._clear_unavailable_repair(entity_id)
 
+        # (#1394) When each meter of the house balance last reported, so the
+        # live base load can take device draws at the same moment. The
+        # OLDEST report per name: a split pair or a multi-unit sum reads one
+        # name several times. A meter at 0 W carries no part of the house
+        # load (solar at night, the export half while importing), so its
+        # report time says nothing about lag and is left out.
+        if name in self._FAST_POWER_NAMES and value:
+            seen = self._last_report(state)
+            if seen is not None:
+                prior = self._fast_reports.get(name)
+                try:
+                    if prior is None or seen[0] < prior:
+                        self._fast_reports[name] = seen[0]
+                except TypeError:   # a naive next to an aware stamp
+                    pass
+
         # W3 — observe-only frozen-sensor detection (does NOT alter value).
         # Wrapped so the audit can NEVER break the read.
         try:
@@ -6829,6 +6847,17 @@ class SensorReader:
             return True
         except Exception:  # noqa: BLE001 — never break a read over this
             return False
+
+    def house_complete_at(self):
+        """(#1394) When this cycle's house balance was complete: the oldest
+        recent report among its grid, solar and battery meters, or None."""
+        try:
+            import homeassistant.util.dt as _dt
+            from .draw_alignment import house_complete_at
+            return house_complete_at(dict(getattr(self, "_fast_reports", {}) or {}),
+                                     _dt.utcnow())
+        except Exception:  # noqa: BLE001 — a missing time only skips the alignment
+            return None
 
     @staticmethod
     def _last_report(state) -> Optional[tuple]:
@@ -8132,8 +8161,11 @@ class SensorReader:
         self._capacity_entity_by_power[power_entity] = found
         return found
 
-    def _unit_capacity_kwh(self, power_entity: str) -> float:
-        """(#1306) One pack's own nameplate kWh, 0.0 when it has none."""
+    def _unit_size_sensor_kwh(self, power_entity: str) -> float:
+        """(#1306) One pack's own size SENSOR in kWh, 0.0 when it has none.
+        Only ``_unit_size_kwh`` calls this (the setting comes first there);
+        everyone else reads ``BatteryPower.capacity_kwh``. Not the
+        coordinator's ``_pack_share_kwh`` (a split of the global setting)."""
         eid = self._auto_detect_unit_capacity(power_entity)
         if not eid:
             return 0.0

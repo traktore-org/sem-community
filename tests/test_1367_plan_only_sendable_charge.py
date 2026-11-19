@@ -41,7 +41,7 @@ def _plan(monkeypatch, adapters, caps=None, deficit=4.0):
     fake.time_manager = _DayCapableTime()
     fake._tariff_provider = _MiddayAndNightCheap()
     fake._live_battery_adapters = lambda: list(adapters.items())
-    fake._unit_capacity_kwh = lambda bid, power=None: (caps or {}).get(bid, 0.0)
+    fake._pack_share_kwh = lambda bid, power=None: (caps or {}).get(bid, 0.0)
     fake._charge_command_share = (
         lambda power=None: SEMCoordinator._charge_command_share(fake, power))
     fixed = datetime(2026, 7, 29, 22, 0, tzinfo=TZ)

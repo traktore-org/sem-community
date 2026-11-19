@@ -23,6 +23,9 @@ _LOGGER = logging.getLogger(__name__)
 # advancing them every 10 s coordinator cycle only churned the recorder.
 TIP_ROTATION_INTERVAL_S = 300.0
 
+# (#1321) Below this much export a surplus tip has nothing to offer.
+_MIN_EXPORT_KWH = 1.0
+
 
 @dataclass
 class EnergyTip:
@@ -241,6 +244,10 @@ class EnergyAssistant:
         """Analyze surplus/export patterns."""
         if daily_solar_kwh <= 0:
             return
+        if solar_export_kwh < _MIN_EXPORT_KWH:
+            # (#1321) "100% exported" of next to nothing: a diverter would
+            # capture ~0.0 kWh, so there is no tip to give
+            return
 
         export_pct = (solar_export_kwh / daily_solar_kwh * 100)
         if export_pct > 100:
@@ -288,7 +295,8 @@ class EnergyAssistant:
         from ..utils.translate import get_text
         _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
 
-        if self_consumption_rate > 80:
+        # (#1321) praise needs a day with sun: 96 % of 0.6 kWh is not "well optimized"
+        if self_consumption_rate > 80 and daily_solar_kwh >= 2:
             self._tips.append(EnergyTip(
                 category="general",
                 title=_t("tip_excellent_self_title", "Excellent self-consumption"),
@@ -536,7 +544,10 @@ class EnergyAssistant:
         if len(recent) < 3:
             return "stable"
 
-        values = [d.get(metric, 0) for d in recent]
+        # (#1022) a day without this metric is skipped, not counted as 0
+        values = [d[metric] for d in recent if d.get(metric) is not None]
+        if len(values) < 3:
+            return "stable"
         first_half = sum(values[:len(values)//2]) / max(1, len(values)//2)
         second_half = sum(values[len(values)//2:]) / max(1, len(values) - len(values)//2)
 

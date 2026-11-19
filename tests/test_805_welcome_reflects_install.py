@@ -23,7 +23,7 @@ class TestTheChecklistMatchesReality:
 
     def test_no_charger_invites_instead_of_pointing_at_a_missing_tab(self):
         msg = build_welcome_message({})
-        assert "EV tab" not in msg, (
+        assert "Devices screen" not in msg, (
             "#595 removes the EV tab without a charger — naming it here is "
             "the #803 dead end"
         )
@@ -32,43 +32,44 @@ class TestTheChecklistMatchesReality:
 
     def test_a_configured_charger_gets_the_real_instruction(self):
         msg = build_welcome_message({"ev_chargers": [{"name": "Wallbox"}]})
-        assert "EV tab" in msg
+        assert "Devices screen" in msg
         assert "charge mode" in msg.lower()
 
     def test_the_legacy_single_charger_key_counts_too(self):
         msg = build_welcome_message({"ev_charging_power_sensor": "sensor.wb"})
-        assert "EV tab" in msg
+        assert "Devices screen" in msg
 
     def test_no_battery_does_not_send_you_to_a_battery_tab(self):
         msg = build_welcome_message({})
-        assert "Battery tab" not in msg
+        assert "Devices screen" not in msg
 
     def test_a_battery_install_gets_its_reserve_line(self):
         msg = build_welcome_message({"battery_soc_sensor": "sensor.soc"})
-        assert "Battery tab" in msg
+        assert "Devices screen" in msg
         assert "reserve" in msg.lower()
 
     def test_capacity_alone_does_not_claim_a_battery(self):
         # (#923) The Settings step saves battery_capacity_kwh with a default
         # for every install — it is not evidence, and a Battery tab it points
         # to would not exist on a battery-less install.
-        assert "Battery tab" not in build_welcome_message({"battery_capacity_kwh": 10})
+        assert "Devices screen" not in build_welcome_message({"battery_capacity_kwh": 10})
 
     def test_the_setup_verdict_wins(self):
         # A battery declared only in HA's Energy Dashboard: the config has no
         # battery key, the coordinator's verdict says PRESENT.
         verdict = {m: Presence.ABSENT for m in Module} | {Module.BATTERY: Presence.PRESENT}
-        assert "Battery tab" in build_welcome_message({}, verdict)
+        assert "Devices screen" in build_welcome_message({}, verdict)
 
     def test_an_unknown_battery_is_invited_not_directed(self):
         verdict = {m: Presence.UNKNOWN for m in Module}
         msg = build_welcome_message({}, verdict)
-        assert "Battery tab" not in msg
+        assert "Devices screen" not in msg
         assert "Add your home battery" in msg
 
     def test_the_dashboard_link_is_always_there(self):
         for cfg in ({}, {"battery_soc_sensor": "sensor.soc"}):
-            assert "/sem-dashboard/home" in build_welcome_message(cfg)
+            assert "/sem-next/now" in build_welcome_message(cfg)
+            assert "/mine/now" in build_welcome_message(cfg, None, "mine")
 
     def test_it_says_what_sem_will_control_before_it_controls_it(self):
         # The promise "everything else has sensible defaults" hid that SEM

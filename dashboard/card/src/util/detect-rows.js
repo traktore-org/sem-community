@@ -105,7 +105,8 @@ export function chargerAddPlan(suggested, existingIds, count) {
  *  nothing to save, or no whole pair can be made from this choice. */
 export function proposalWrite(p, entity, saved) {
     if (!p || !p.config_key || !entity) return null;
-    if (!p.pair) return { [p.config_key]: entity };
+    // (#1362) a select proposal also writes the option that means the role
+    if (!p.pair) return { [p.config_key]: entity, ...(p.write_extra || {}) };
     const partners = p.pair[entity];
     if (!partners || !Object.keys(partners).length) return null;
     const out = { [p.config_key]: entity };

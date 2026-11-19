@@ -1405,8 +1405,13 @@ def commands_leave(adapter) -> bool:
     observer mode or an external yield — so nothing the reconciler decides
     this cycle reaches the box."""
     dev = getattr(adapter, "_device", None)
-    return not (getattr(dev, "observer_mode", False) is True
-                or getattr(dev, "external_yield", False) is True)
+    if getattr(dev, "observer_mode", False) is True:
+        return False
+    # (#1381) the phase guard's stop is the one write a yield lets through, so
+    # the dwell, the ceasefire and the contactor record must run for it
+    if getattr(dev, "phase_guard_override", False) is True:
+        return True
+    return getattr(dev, "external_yield", False) is not True
 
 
 def observe(adapter, power) -> ObservedState:

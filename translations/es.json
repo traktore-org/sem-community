@@ -43,16 +43,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "¡Último paso! SEM ha detectado automáticamente la entidad de control de descarga de su inversor: {discharge_entity}\n\nDeje la opción del panel ACTIVADA para que SEM cree su panel de Lovelace por usted. **Nota: esto reinicia Home Assistant unos 5 segundos después de terminar la instalación.**\n\nTodo lo demás — incluido su límite de pico de red — usa valores seguros por defecto que puede ajustar justo después de la configuración: el límite de pico con el control deslizante de la pestaña **Control**, todo lo demás en la pestaña **Configuración** del panel de SEM — incluidos cargadores de VE, bomba de calor, tarifa y zonas de batería.",
+        "description": "¡Último paso! SEM ha detectado automáticamente la entidad de control de descarga de su inversor: {discharge_entity}\n\nDeje la opción del panel ACTIVADA para que SEM cree su panel de Lovelace por usted. **Nota: esto reinicia Home Assistant unos 5 segundos después de terminar la instalación.**\n\nTodo lo demás — incluido su límite de pico de red — usa valores seguros por defecto que puede ajustar justo después de la configuración: el límite de pico en la pantalla **Dispositivos**, todo lo demás en la pantalla **Sistema** del panel de SEM — incluidos cargadores de VE, bomba de calor, tarifa y zonas de batería.",
         "data": {
           "battery_capacity_kwh": "Capacidad de la batería doméstica (kWh)",
-          "generate_dashboard_on_install": "Generar ahora el panel SEM (reinicia HA)",
-          "diagram_style": "Estilo del diagrama del sistema"
+          "generate_dashboard_on_install": "Generar ahora el panel SEM (reinicia HA)"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacidad útil total de su batería doméstica (NO la del VE) en kWh. La utiliza la estrategia de carga basada en previsión para estimar cuánto puede cubrir la batería un déficit solar. Consulte las especificaciones de su inversor.",
-          "generate_dashboard_on_install": "Si se activa, SEM crea el panel Lovelace inmediatamente al terminar este paso y después reinicia Home Assistant unos 5 s más tarde para que el nuevo panel sea visible. Siempre puede volver a generarlo manualmente más adelante con el servicio solar_energy_management.generate_dashboard.",
-          "diagram_style": "Elija qué diagrama del sistema usar en la pestaña Inicio. 'SEM' usa el diagrama animado integrado. 'K-Flow' usa la tarjeta K-Flow HACS (debe instalarse por separado)."
+          "generate_dashboard_on_install": "Si se activa, SEM crea el panel Lovelace inmediatamente al terminar este paso y después reinicia Home Assistant unos 5 s más tarde para que el nuevo panel sea visible. Siempre puede volver a generarlo manualmente más adelante con el servicio solar_energy_management.generate_dashboard."
         }
       },
       "reconfigure": {
@@ -133,7 +131,7 @@
       },
       "pick_grid": {
         "title": "Elige tu contador de red",
-        "description": "SEM no encontró un sensor de potencia de red. Sin él, SEM no sabe lo que compras o viertes.\n\nElígelo abajo o pulsa **Enviar** para saltar. Puedes ajustarlo más tarde en la pestaña Configuración.\n\nSolar: {solar}. Batería: {battery}.",
+        "description": "SEM no encontró un sensor de potencia de red. Sin él, SEM no sabe lo que compras o viertes.\n\nElígelo abajo o pulsa **Enviar** para saltar. Puedes ajustarlo más tarde en la pantalla Sistema.\n\nSolar: {solar}. Batería: {battery}.",
         "data": {
           "grid_power_sensor": "Potencia de red"
         },
@@ -168,7 +166,7 @@
     "step": {
       "ev_charger": {
         "title": "Cargador VE",
-        "description": "Consejo: la mayoría de los ajustes están ahora en el panel SEM → pestaña Configuración (a color, en vivo). Este flujo permanece para instalaciones sin panel.\n\nRevise y actualice las asignaciones de entidades de su cargador de VE. Los campos de SOC del vehículo solo se utilizan si proporciona un sensor de SOC de batería del vehículo.",
+        "description": "Consejo: la mayoría de los ajustes están en el panel SEM: las pantallas Dispositivos y Sistema. Este flujo permanece para instalaciones sin panel.\n\nRevise y actualice las asignaciones de entidades de su cargador de VE. Los campos de SOC del vehículo solo se utilizan si proporciona un sensor de SOC de batería del vehículo.",
         "data": {
           "ev_connected_sensor": "Estado de conexión VE",
           "ev_charging_sensor": "Estado de carga VE",
@@ -228,7 +226,6 @@
           "hot_water_solar_target": "Objetivo de calentamiento solar del agua caliente (°C)",
           "legionella_target_temp": "Objetivo de desinfección antilegionela (°C)",
           "legionella_interval_hours": "Horas máximas entre ciclos de desinfección",
-          "diagram_style": "Estilo del diagrama del sistema",
           "battery_assist_min_surplus": "Asistencia batería – mín. excedente solar (W)",
           "grid_sign_invert": "Invertir el signo de la potencia de red",
           "battery_operating_mode_entity": "Entidad de modo de funcionamiento de la batería (observada)",
@@ -252,7 +249,6 @@
           "demand_charge_rate": "Término de potencia mensual por kW de pico (CHF/kW/mes). Póngalo a 0 si su contrato no tiene término de potencia.",
           "observer_mode": "Si está ACTIVADO, SEM monitoriza y calcula todo pero nunca envía una llamada de servicio al hardware. Úselo en un HA de prueba o preproducción que replique una instalación en producción.",
           "battery_discharge_control_entity": "Entidad Number que controla el límite de potencia de descarga del inversor (p. ej. number.batteries_maximale_entladeleistung en Huawei). Se detecta automáticamente durante la instalación; puede sobrescribirla aquí si hace falta.",
-          "diagram_style": "Elija qué diagrama del sistema usar en la pestaña Inicio. 'SEM' usa el diagrama animado integrado. 'K-Flow' usa la tarjeta K-Flow HACS (debe instalarse por separado).",
           "hot_water_solar_target": "Temperatura objetivo (°C) para el calentamiento del agua caliente con apoyo solar. SEM activa el boost de la caldera cuando hay excedente disponible.",
           "legionella_target_temp": "Temperatura (°C) que el sistema de agua caliente debe alcanzar durante un ciclo de desinfección antilegionela.",
           "legionella_interval_hours": "Horas máximas entre ciclos de desinfección antilegionela antes de que SEM fuerce un calentamiento.",
@@ -1884,7 +1880,7 @@
       "message": "No se ha encontrado ninguna programación de electrodoméstico para {device_id}. Comprueba el ID de dispositivo que usaste con el servicio schedule_appliance."
     },
     "load_management_disabled": {
-      "message": "La gestión de cargas está desactivada, así que no hay lista de desconexión que actualizar. Actívala en Configuración → Gestión de cargas en el panel de SEM e inténtalo de nuevo."
+      "message": "La gestión de cargas está desactivada, así que no hay lista de desconexión que actualizar. Actívala en Sistema → Gestión de cargas en el panel de SEM e inténtalo de nuevo."
     },
     "load_management_failed_to_start": {
       "message": "La gestión de cargas está activada pero no pudo iniciarse, así que SEM no puede usar su lista de dispositivos. Revisa el registro de Home Assistant en busca de \"Failed to initialize load management\" y recarga la integración."
@@ -1973,14 +1969,14 @@
         "step": {
           "confirm": {
             "title": "Informar de esto a SEM",
-            "description": "**{name}** tiene un objetivo de carga en porcentaje, pero su vehículo no está informando su estado de carga en este momento, por lo que SEM no puede detenerse *exactamente* en **{target}%**.\n\nAun así no carga a ciegas: desde la última lectura real de esta sesión contabiliza la energía realmente entregada y se detiene en cuanto ese total medido alcanza su objetivo — el exceso es solo lo que el coche haya tomado desde esa lectura. Si en esta sesión no ha llegado ninguna lectura real (o SEM se reinició durante la carga), no hay referencia desde la que contar y la carga continúa hasta que el propio coche reduce potencia, casi lleno.\n\nPara un límite que caiga en el número exacto, configure un **sensor real de SOC del vehículo** para este cargador (Configuración → VE → Entidad de SOC del vehículo). El % de batería del panel es el SOC *estimado* de SEM, que ignora deliberadamente para el límite estricto (puede desviarse). Esta reparación desaparece automáticamente en cuanto vuelva a haber una lectura real de SOC.\n\nSEM cree que este fallo es suyo. Si puede, abra un informe de error con el botón del aviso — el formulario llega ya rellenado. Si lo prefiere, copie el contexto de abajo en un correo o en una publicación del foro. Este diálogo no envía nada a ningún sitio.\n\n```\n{context}\n```\n\nConfirme para cerrar el aviso."
+            "description": "**{name}** tiene un objetivo de carga en porcentaje, pero su vehículo no está informando su estado de carga en este momento, por lo que SEM no puede detenerse *exactamente* en **{target}%**.\n\nAun así no carga a ciegas: desde la última lectura real de esta sesión contabiliza la energía realmente entregada y se detiene en cuanto ese total medido alcanza su objetivo — el exceso es solo lo que el coche haya tomado desde esa lectura. Si en esta sesión no ha llegado ninguna lectura real (o SEM se reinició durante la carga), no hay referencia desde la que contar y la carga continúa hasta que el propio coche reduce potencia, casi lleno.\n\nPara un límite que caiga en el número exacto, configure un **sensor real de SOC del vehículo** para este cargador (Sistema → Cargadores). El % de batería del panel es el SOC *estimado* de SEM, que ignora deliberadamente para el límite estricto (puede desviarse). Esta reparación desaparece automáticamente en cuanto vuelva a haber una lectura real de SOC.\n\nSEM cree que este fallo es suyo. Si puede, abra un informe de error con el botón del aviso — el formulario llega ya rellenado. Si lo prefiere, copie el contexto de abajo en un correo o en una publicación del foro. Este diálogo no envía nada a ningún sitio.\n\n```\n{context}\n```\n\nConfirme para cerrar el aviso."
           }
         }
       }
     },
     "unmanaged_charger_found": {
       "title": "SEM encontró un cargador que no gestiona",
-      "description": "El dispositivo **{name}** parece un cargador de VE, pero no hay ninguno configurado en SEM, así que SEM no lo toca ({count} candidato(s) encontrado(s)).\n\nPara que SEM optimice la carga con solar y tarifas baratas, añádelo en Ajustes → Dispositivos y servicios → SEM → Configurar. Eso también activa la pestaña VE con los modos de carga.\n\nSi no es un cargador, ignora este aviso — SEM tampoco lo controlará."
+      "description": "El dispositivo **{name}** parece un cargador de VE, pero no hay ninguno configurado en SEM, así que SEM no lo toca ({count} candidato(s) encontrado(s)).\n\nPara que SEM optimice la carga con solar y tarifas baratas, añádelo en Ajustes → Dispositivos y servicios → SEM → Configurar. Eso también la añade a la pantalla Devices con los modos de carga.\n\nSi no es un cargador, ignora este aviso — SEM tampoco lo controlará."
     },
     "lovelace_yaml_mode": {
       "title": "Lovelace en modo YAML — añade los recursos de tarjetas de SEM",
@@ -1988,7 +1984,7 @@
     },
     "charger_control_entity_broken": {
       "title": "La entidad de control del cargador no funciona: {name}",
-      "description": "SEM usa **`{entity_id}`** para {capability} en **{name}**, pero esa entidad está `{reason}`: cada comando se pierde. Revisa la entidad en **Herramientas para desarrolladores → Estados** y corrígela en el origen, o vuelve a apuntar SEM en **Ajustes → Dispositivos y servicios → SEM → Configurar → Cargador → Editar**."
+      "description": "SEM usa **`{entity_id}`** para {capability} en **{name}**, pero esa entidad está `{reason}`: cada comando se pierde. Revisa la entidad en **Herramientas para desarrolladores → Estados** y corrígela en el origen, o vuelve a apuntar SEM en **Sistema → Cargadores**."
     },
     "battery_force_discharge_unsupported": {
       "title": "No se puede escribir la consigna de potencia de la batería: {entity_id}",
@@ -2008,7 +2004,7 @@
     },
     "deye_system_work_mode_invalid": {
       "title": "No se puede usar el control de exportación Deye: {entity_id}",
-      "description": "SEM no puede usar {entity_id} para el control de exportación: {reason}. Compruebe la entidad select y las tres etiquetas de opción en Configuración → Inteligencia de la batería."
+      "description": "SEM no puede usar {entity_id} para el control de exportación: {reason}. Compruebe la entidad select y las tres etiquetas de opción en Sistema → Reglas de batería."
     },
     "battery_operating_mode_unexpected": {
       "title": "La batería está en “{mode}” — SEM planifica como si estuviera en “{expected}”",
@@ -2020,7 +2016,7 @@
     },
     "battery_night_backfill_blocked": {
       "title": "El historial nocturno de la batería no se puede reconstruir",
-      "description": "SEM no pudo reconstruir el historial nocturno porque esta instalación no tiene un sensor de **{missing}**.\n\nSEM aprende cuánta batería se puede gastar con seguridad observando lo que su casa le extrae por la noche, y quiere cinco noches buenas antes de dar una cifra. La reconstrucción lee el historial *propio* del contador para que no tenga que esperar, pero ese contador debe existir.\n\n**Qué hacer:** añada un sensor de energía acumulada (kWh, no vatios) para **{missing}** al panel de Energía de Home Assistant y vuelva a pulsar **Reconstruir desde el historial** en la pestaña Batería. Esperar no cuesta nada: SEM lee el historial del contador, así que funcionará igual de bien más tarde. Mientras tanto el registro continúa, una noche por día."
+      "description": "SEM no pudo reconstruir el historial nocturno porque esta instalación no tiene un sensor de **{missing}**.\n\nSEM aprende cuánta batería se puede gastar con seguridad observando lo que su casa le extrae por la noche, y quiere cinco noches buenas antes de dar una cifra. La reconstrucción lee el historial *propio* del contador para que no tenga que esperar, pero ese contador debe existir.\n\n**Qué hacer:** añada un sensor de energía acumulada (kWh, no vatios) para **{missing}** al panel de Energía de Home Assistant y vuelva a pulsar **Reconstruir desde el historial** en la pantalla Devices. Esperar no cuesta nada: SEM lee el historial del contador, así que funcionará igual de bien más tarde. Mientras tanto el registro continúa, una noche por día."
     },
     "battery_night_backfill_incomplete": {
       "title": "Las noches reconstruidas no ven la aportación de la red",
@@ -2036,19 +2032,19 @@
     },
     "battery_platform_pinned_generic": {
       "title": "Plataforma de batería fijada en Genérica en una instalación {brand}",
-      "description": "La plataforma de batería de SEM está fijada en **Genérica / otra**, pero la integración {brand} está cargada. Versiones anteriores del asistente de opciones solo ofrecían Genérica y Deye, y usaban Genérica por defecto, así que pasar por esa página una vez degradó una instalación {brand} al adaptador genérico — sin carga forzada, sin escrituras de registro idempotentes. Abra **Ajustes → Integraciones → SEM → Configurar → Planificador de batería** y fije **Plataforma de carga de la batería** en **Detección automática**. Si Genérica es una elección deliberada (una batería con sus propias entidades de control), configure esa entidad y este aviso desaparecerá."
+      "description": "La plataforma de batería de SEM está fijada en **Genérica / otra**, pero la integración {brand} está cargada. Versiones anteriores del asistente de opciones solo ofrecían Genérica y Deye, y usaban Genérica por defecto, así que pasar por esa página una vez degradó una instalación {brand} al adaptador genérico — sin carga forzada, sin escrituras de registro idempotentes. Abra **Ajustes → Dispositivos y servicios → SEM → Configurar → Planificador de carga de batería** y fije **Plataforma de carga de la batería** en **Detección automática**. Si Genérica es una elección deliberada (una batería con sus propias entidades de control), configure esa entidad y este aviso desaparecerá."
     },
     "split_grid_guessed": {
       "title": "SEM está comprobando dos medidores de red adivinados",
-      "description": "SEM no tiene sensor de potencia de red, así que adivinó por el nombre: **{import_entity}** para la importación de red y **{export_entity}** para la exportación a red. SEM no los usa hasta que coincidan con sus contadores de energía de red, así que por ahora la potencia de red marca 0. Para elegir su medidor: abra el panel de SEM, pestaña ⚙ **Configuración**, y elija **Todos los ajustes** arriba. Luego ajuste **Potencia de red** en la sección **Fuentes de sensores**. Si su medidor tiene un sensor para la importación y otro para la exportación, ajuste en su lugar **Sensor de importación de red** y **Sensor de exportación a red** en la sección **Tarifa y precios**."
+      "description": "SEM no tiene sensor de potencia de red, así que adivinó por el nombre: **{import_entity}** para la importación de red y **{export_entity}** para la exportación a red. SEM no los usa hasta que coincidan con sus contadores de energía de red, así que por ahora la potencia de red marca 0. Para elegir su medidor: abra el panel de SEM, pestaña **Sistema**, y elija **Todos los ajustes** arriba. Luego ajuste **Potencia de red** en la sección **Qué lee SEM**. Si su medidor tiene un sensor para la importación y otro para la exportación, ajuste en su lugar **Sensor de importación de red** y **Sensor de exportación a red** en la sección **Qué lee SEM**."
     },
     "battery_control_write_not_taken": {
       "title": "Una escritura de control de batería no se aplica: {entity_id}",
-      "description": "SEM puso **`{entity_id}`** en **{wanted}**; en los ciclos siguientes seguía leyendo **{seen}**, {strikes} veces seguidas. La llamada no falló — el registro no conservó el valor. **Solución:** fija la entidad a mano en Herramientas para desarrolladores → Estados. Si no se mantiene, es la entidad equivocada para este papel: elige otra en la tarjeta de Configuración. Si se mantiene a mano pero no para SEM, dinos la marca y la entidad. Desaparece en cuanto una escritura se refleja."
+      "description": "SEM puso **`{entity_id}`** en **{wanted}**; en los ciclos siguientes seguía leyendo **{seen}**, {strikes} veces seguidas. La llamada no falló — el registro no conservó el valor. **Solución:** fija la entidad a mano en Herramientas para desarrolladores → Estados. Si no se mantiene, es la entidad equivocada para este papel: elige otra en **Sistema → Reglas de batería**. Si se mantiene a mano pero no para SEM, dinos la marca y la entidad. Desaparece en cuanto una escritura se refleja."
     },
     "soc_zones_out_of_order": {
       "title": "Las zonas de SOC de la batería están desordenadas",
-      "description": "Sus zonas de batería marcan **Prioridad {priority}% · Buffer {buffer}% · Auto-inicio {auto_start}%**, pero SEM espera que asciendan en ese orden: Prioridad es la reserva que nunca gasta, Buffer es donde se detiene la asistencia de la batería, y Auto-inicio es donde la batería está lo bastante llena como para ceder libremente.\n\nSEM está usando **{used}** como límites — los mismos tres números, ordenados — para que no se salte ninguna zona y nada se comporte de forma impredecible. Se lo indica porque la disposición que ha escrito casi con toda seguridad no es la que quería.\n\nCorríjalo en **Ajustes → Dispositivos y servicios → SEM → Configurar → Batería** o en la pestaña Configuración del panel. Se permite cualquier valor siempre que asciendan; las zonas anchas están bien — 20 / 30 / 50 es una disposición perfectamente válida en una batería grande."
+      "description": "Sus zonas de batería marcan **Prioridad {priority}% · Buffer {buffer}% · Auto-inicio {auto_start}%**, pero SEM espera que asciendan en ese orden: Prioridad es la reserva que nunca gasta, Buffer es donde se detiene la asistencia de la batería, y Auto-inicio es donde la batería está lo bastante llena como para ceder libremente.\n\nSEM está usando **{used}** como límites — los mismos tres números, ordenados — para que no se salte ninguna zona y nada se comporte de forma impredecible. Se lo indica porque la disposición que ha escrito casi con toda seguridad no es la que quería.\n\nCorríjalo en **Sistema → Reglas de batería**. Se permite cualquier valor siempre que asciendan; las zonas anchas están bien — 20 / 30 / 50 es una disposición perfectamente válida en una batería grande."
     },
     "previous_install_leftovers": {
       "title": "Se han encontrado archivos de una instalación anterior de SEM",
@@ -2056,15 +2052,15 @@
     },
     "heat_pump_contact_values_missing": {
       "title": "No se puede controlar el contacto SG-Ready {contact}",
-      "description": "**{entity_id}** está configurada como {contact} SG-Ready, pero es una entidad text/number/select y su valor **{missing}** no está configurado — así que SEM no tiene nada que escribir y toda orden SG-Ready para esta bomba de calor falla. Abra **Ajustes → Integraciones → SEM → Configurar → Bomba de calor** (o la pestaña Configuración del panel) y rellene tanto el valor ON como el OFF para este contacto, o apúntelo a una entidad switch en su lugar."
+      "description": "**{entity_id}** está configurada como {contact} SG-Ready, pero es una entidad text/number/select y su valor **{missing}** no está configurado — así que SEM no tiene nada que escribir y toda orden SG-Ready para esta bomba de calor falla. Abra **Sistema → Bomba de calor y agua caliente** y rellene tanto el valor ON como el OFF para este contacto, o apúntelo a una entidad switch en su lugar."
     },
     "split_grid_rejected": {
       "title": "SEM no pudo encontrar sus medidores de potencia de red",
-      "description": "SEM no tiene sensor de potencia de red, y lo que adivinó por el nombre no es su medidor de red: **{import_entity}** para la importación, **{export_entity}** para la exportación. No coinciden con sus contadores de energía de red, o falta uno de los dos. SEM prefiere no mostrar potencia de red antes que mostrar una incorrecta. Para elegir su medidor: abra el panel de SEM, pestaña ⚙ **Configuración**, y elija **Todos los ajustes** arriba. Luego ajuste **Potencia de red** en la sección **Fuentes de sensores**. Si su medidor tiene un sensor para la importación y otro para la exportación, ajuste en su lugar **Sensor de importación de red** y **Sensor de exportación a red** en la sección **Tarifa y precios**."
+      "description": "SEM no tiene sensor de potencia de red, y lo que adivinó por el nombre no es su medidor de red: **{import_entity}** para la importación, **{export_entity}** para la exportación. No coinciden con sus contadores de energía de red, o falta uno de los dos. SEM prefiere no mostrar potencia de red antes que mostrar una incorrecta. Para elegir su medidor: abra el panel de SEM, pestaña **Sistema**, y elija **Todos los ajustes** arriba. Luego ajuste **Potencia de red** en la sección **Qué lee SEM**. Si su medidor tiene un sensor para la importación y otro para la exportación, ajuste en su lugar **Sensor de importación de red** y **Sensor de exportación a red** en la sección **Qué lee SEM**."
     },
     "power_sensor_not_found": {
       "title": "Sin sensor de potencia para {energy_entity}",
-      "description": "El panel de Energía cuenta **{energy_entity}** en kWh, pero SEM no encontró ningún sensor de potencia (W) para él. SEM lee esta potencia como 0 W, por lo que los flujos de energía y el excedente son incorrectos. Para corregirlo, añada el sensor de potencia a esta entrada del panel de Energía. O abra el panel de SEM, pestaña ⚙ **Configuración**, y elija **Todos los ajustes** arriba. Luego configure el sensor en la sección **Fuentes de sensores**. Si no existe ningún sensor de potencia, puede ignorar este aviso."
+      "description": "El panel de Energía cuenta **{energy_entity}** en kWh, pero SEM no encontró ningún sensor de potencia (W) para él. SEM lee esta potencia como 0 W, por lo que los flujos de energía y el excedente son incorrectos. Para corregirlo, añada el sensor de potencia a esta entrada del panel de Energía. O abra el panel de SEM, pestaña **Sistema**, y elija **Todos los ajustes** arriba. Luego configure el sensor en la sección **Qué lee SEM**. Si no existe ningún sensor de potencia, puede ignorar este aviso."
     },
     "power_sensor_not_found_unit": {
       "title": "Sin sensor de potencia para {energy_entity}",
@@ -2089,7 +2085,7 @@
     },
     "half_grid_pair": {
       "title": "SEM no ve su exportación a la red",
-      "description": "Solo el sensor de importación de red **{import_entity}** está ajustado, así que SEM lee la exportación como 0 W. Pero su contador de exportación **{export_entity}** muestra que salió energía a la red. Para corregirlo, abra el panel de SEM, pestaña ⚙ **Configuración**, y elija **Todos los ajustes** arriba. Luego ajuste el **Sensor de exportación a red** en la sección **Tarifa y precios**. O vacíe el **Sensor de importación de red**, y SEM buscará el par por sí mismo."
+      "description": "Solo el sensor de importación de red **{import_entity}** está ajustado, así que SEM lee la exportación como 0 W. Pero su contador de exportación **{export_entity}** muestra que salió energía a la red. Para corregirlo, abra el panel de SEM, pestaña **Sistema**, y elija **Todos los ajustes** arriba. Luego ajuste el **Sensor de exportación a red** en la sección **Qué lee SEM**. O vacíe el **Sensor de importación de red**, y SEM buscará el par por sí mismo."
     },
     "unseen_power_row": {
       "title": "SEM no ve toda su potencia solar o de batería",
@@ -2109,7 +2105,7 @@
     },
     "external_write_seen": {
       "title": "Un tercero escribe en {name}",
-      "description": "Algo distinto de SEM cambia **{name}** una y otra vez, y SEM y ese tercero se deshacen el trabajo. En la pestaña Configuración de SEM, pon este dispositivo en *Sí, SEM cede* y elige la entidad que muestra cuándo el tercero tiene el control."
+      "description": "Algo distinto de SEM cambia **{name}** una y otra vez, y SEM y ese tercero se deshacen el trabajo. En la pantalla **Sistema**, activa **Todos los ajustes** y pon **controlado por otro** de este dispositivo (en **Reglas de batería** o **Cargadores**) en *Sí, SEM cede* y elige la entidad que muestra cuándo el tercero tiene el control."
     },
     "heater_no_rise": {
       "title": "El termo no se calienta",
@@ -2122,6 +2118,17 @@
     "charge_select_stuck": {
       "title": "La selección de carga de red sigue activa: {entity}",
       "description": "La selección **{entity}** sigue en **{option}**, y SEM no puede devolverla: la opción anterior ya no está en la lista. Vuélvela a poner a mano. Hasta entonces la batería puede seguir cargando desde la red. Desaparece cuando se cambia la selección."
+    },
+    "classic_dashboard_kept": {
+      "title": "El panel antiguo de SEM sigue ahí",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "El panel antiguo de SEM sigue ahí",
+            "description": "El panel antiguo de SEM en `/{path}` se ha retirado. Lo cambiaste, así que SEM dejó su diseño como estaba. Sus tarjetas de SEM ahora muestran un enlace al nuevo panel de SEM. Confirma para borrar el antiguo."
+          }
+        }
+      }
     }
   },
   "selector": {
@@ -2130,12 +2137,6 @@
         "disabled": "Desactivado",
         "grid_only": "Solo suministro de red",
         "hybrid_load_port": "Red + salida Load/EPS del inversor híbrido"
-      }
-    },
-    "diagram_style": {
-      "options": {
-        "sem": "SEM (integrado)",
-        "kflow": "K-Flow (HACS)"
       }
     },
     "tariff_mode": {

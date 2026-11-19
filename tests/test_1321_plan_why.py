@@ -44,7 +44,9 @@ def test_cheapest_hours_carry_the_average_price():
 
 @pytest.mark.unit
 @pytest.mark.parametrize("allocs, ledger, source, code", [
-    ([_a(0, 0.36)], [_slot(0, 0.36), _slot(1, 0.36)], "grid", "one_rate"),
+    ([_a(0, 0.36)], [_slot(h, 0.36) for h in range(4)], "grid", "one_rate"),
+    # 07:16 with 13 minutes of night left: one slot, one price, but not "all night"
+    ([_a(0, 0.36)], [_slot(0, 0.36)], "grid", "short_window"),
     ([_a(0, 0.0)], [_slot(0, 0.0, sun=True)], "grid", "on_sun"),
     ([_a(3, 0.40, late=True)], LEDGER, "grid", "before_departure"),
     ([_a(1, None)], [_slot(1, None), _slot(2, 0.2)], "grid", "unpriced_hours"),
@@ -71,6 +73,6 @@ def test_every_code_has_a_text_in_every_language():
     import json
     from pathlib import Path
     d = json.loads((Path(__file__).resolve().parent.parent / "dashboard" / "translations.json").read_text())
-    for code in ("from_battery", "on_sun", "before_departure", "unpriced_hours", "one_rate", "cheapest_hours"):
+    for code in ("from_battery", "on_sun", "before_departure", "unpriced_hours", "one_rate", "short_window", "cheapest_hours"):
         for lang, texts in d.items():
             assert f"plan_why_{code}" in texts, (lang, code)

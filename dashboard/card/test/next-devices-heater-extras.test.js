@@ -39,6 +39,7 @@ function fakeCard(obs = false) {
         _row(icon, label, val, sub, o) { return { icon, label, val, sub, o }; },
         _btn(label, onClick, o) { return { btn: label, onClick, o }; },
         _val: (text, onTap, o) => ({ text, onTap, o }), _seg: () => null,
+        _switch: (on, onChange, o) => ({ sw: true, on, onChange, o }),
         _inline: () => null, _entEdit: () => null, _textEdit: () => null, _selEdit: () => null,
         _sentence: () => '', _powerW: () => null, _money: (v) => String(v), _kw: String,
         _live: () => ({}), _pillText: (p) => p.key, _callService() {}, _showConfigureModal() {}, _showError() {},
@@ -75,9 +76,9 @@ test('no proposal row without a proposal or with a thermometer set', () => {
         .some((x) => /hq_found_thermometer/.test(x.label)), false);
 });
 
-test('the proposal button is disabled in observer mode', () => {
+test('the proposal button stays usable in watch only (it is a SEM setting)', () => {
     const r = rowsOf(fakeCard(true), { thermometer_proposal: PROP }).find((x) => /hq_found_thermometer/.test(x.label));
-    assert.equal(r.val.o.disabled, true);
+    assert.equal(!!r.val.o.disabled, false);
 });
 
 const BAND = { goals: { comfort_target: 55, comfort_limit: 40, comfort_entity: 'sensor.t', overnight_source: 'grid' },
@@ -93,21 +94,19 @@ test('the pre-heat checkbox sends preheat true and false', () => {
     const sent = [];
     const send = (p, v) => sent.push([p, v]);
     const box = preheatRow(fakeCard(), { on: false, enabled: true }, false, send).val;
-    const change = box.values.find((v) => typeof v === 'function');
-    change({ target: { checked: true } });
-    change({ target: { checked: false } });
+    box.onChange(true);
+    box.onChange(false);
     assert.deepEqual(sent, [['preheat', 'true'], ['preheat', 'false']]);
 });
 
 test('without grid buying the tick stays checked when stored on, disabled, with the no-buy words', () => {
     const r = preheatRow(fakeCard(), { on: true, enabled: false }, false, () => {}, '40 °C');
-    const vals = r.val.values;
-    assert.equal(vals[1], true);   // checked
-    assert.equal(vals[2], true);   // disabled
+    assert.equal(r.val.on, true);          // checked
+    assert.equal(r.val.o.disabled, true);  // disabled
     assert.match(r.sub, /hq_sub_no_buy .*40 °C/);
 });
 
 test('in observer mode the tick is disabled even with buying allowed', () => {
     const r = preheatRow(fakeCard(), { on: false, enabled: true }, true, () => {});
-    assert.equal(r.val.values[2], true);
+    assert.equal(r.val.o.disabled, true);
 });

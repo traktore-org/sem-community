@@ -350,6 +350,12 @@ def build_charger_view(
         if _hw is not None and _hw > 0:
             _cfg_max = cfg_resolved.get("ev_max_current")
             try:
+                if _cfg_max is not None and float(_cfg_max) > _hw:
+                    # (#1376) The charger's own limit is lower than what
+                    # was asked of it: keep the asked number, so the
+                    # reason can say who holds the line (the entity's max
+                    # may be a placeholder: the text only asks to check).
+                    cfg_resolved["hardware_limited_from_a"] = int(float(_cfg_max))
                 _hw = min(_hw, float(_cfg_max)) if _cfg_max is not None else _hw
             except (TypeError, ValueError):
                 pass

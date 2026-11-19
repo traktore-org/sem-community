@@ -52,11 +52,7 @@ DOC_BASE = (
 # Back-compat aliases: a second tag serving an already-registered card.
 # These deliberately omit the picker entry so the card is not listed
 # twice. Every entry here is a RENAME, never a new card.
-ALIAS_TAGS = {
-    # dashboards generated before the #638 rename still say
-    # custom:sem-overnight-plan-card
-    "sem-overnight-plan-card",
-}
+ALIAS_TAGS: set[str] = set()  # (#1321) the one alias went with the classic dashboard
 
 
 def _split_top_level_args(text: str) -> list[str]:

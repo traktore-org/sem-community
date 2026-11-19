@@ -15,10 +15,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FLOW = (ROOT / "config_flow.py").read_text()
-CARD = (ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js").read_text()
-# (#1354) the battery questions keep their entity ids in one shared module
-CARD += (ROOT / "dashboard" / "card" / "src" / "util" / "battery-questions.js").read_text()
-BATT = (ROOT / "dashboard" / "card" / "src" / "cards" / "sem-battery-card.js").read_text()
+# (#1321) the SEM dashboard's sources: the one place a setting can have a field
+from ._dashboard_src import dashboard_src  # noqa: E402
+
+CARD = dashboard_src()
+BATT = CARD
 STRINGS = json.loads((ROOT / "strings.json").read_text())
 
 
@@ -55,9 +56,6 @@ class TestItem6ClippingGuardHasAnInput:
 
     def test_flow_declares_the_ac_limit(self):
         assert _flow_declares("inverter_ac_limit_w") == 1
-
-    def test_card_renders_it(self):
-        assert "'inverter_ac_limit_w'" in CARD
 
 
 class TestItem2BatterySectionOnTheConfigTab:
@@ -116,9 +114,6 @@ class TestItem3TheCounterfactual:
         assert '"battery_last_night_surplus_kwh"' in src
         assert 'result["battery_last_night_surplus_kwh"]' in src
 
-    def test_card_renders_it(self):
-        assert "_renderLastNightLine" in BATT and "last_night_surplus" in BATT
-
 
 class TestItem4WouldBeCapAndReasonCodes:
     def test_every_guard_carries_a_code(self):
@@ -146,8 +141,6 @@ class TestItem4WouldBeCapAndReasonCodes:
 
 
 class TestItem7RenderWhatIsPublished:
-    def test_rate_caveat_is_rendered(self):
-        assert "_renderRateCaveat" in BATT and "rate_caveat" in BATT
 
     def test_docs_links_follow_the_running_version(self):
         from custom_components.solar_energy_management.coordinator import repair_issues as ri

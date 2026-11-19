@@ -332,9 +332,30 @@ def test_an_oversized_night_drops_the_chart_not_the_answer():
     plan["demands"] = plan["demands"] * 4
     attrs = _energy_plan_attrs(plan)
     assert attrs["timeline_omitted"] is True
-    assert attrs["slots"] == [] and attrs["blocks"] == []
+    assert attrs["slots"] == []
     # The demands ARE the answer — they survive, and so does the verdict.
     assert attrs["demands"] and attrs["takeover"]
+    assert _size(attrs) <= _PLAN_ATTR_BUDGET_BYTES
+
+
+def test_1321_blocks_go_last_when_they_alone_overflow():
+    plan = _synthetic_plan(slots=96, demands=12, blocks_per_demand=60)
+    for i, b in enumerate(plan["blocks"]):
+        b["power_w"] = 100.0 + i      # no two touch, so merging cannot save it
+    attrs = _energy_plan_attrs(plan)
+    assert attrs["slots"] == [] and attrs["blocks"] == []
+    assert attrs["demands"] and _size(attrs) <= _PLAN_ATTR_BUDGET_BYTES
+
+
+def test_1321_slots_overflow_alone_keeps_who_takes_energy_and_when():
+    """(#1321) A day on a quarter-hour market is too big only because of its
+    slots. The few merged blocks must survive: the chart and the headline
+    read who takes energy, and when, from them."""
+    plan = _synthetic_plan(slots=200, demands=3, blocks_per_demand=1)
+    attrs = _energy_plan_attrs(plan)
+    assert attrs["timeline_omitted"] is True
+    assert attrs["slots"] == [] and attrs["batt_runs"] == []
+    assert {b["id"] for b in attrs["blocks"]} == {f"load:device_{d}" for d in range(3)}
     assert _size(attrs) <= _PLAN_ATTR_BUDGET_BYTES
 
 
@@ -346,31 +367,6 @@ def test_projection_of_a_missing_plan_is_empty():
 # ---------------------------------------------------------------------------
 # The card
 # ---------------------------------------------------------------------------
-
-def test_card_is_in_the_bundle_entry():
-    entry = (REPO / "dashboard" / "card" / "src" / "sem-cards.js").read_text()
-    assert "./cards/sem-energy-plan-card.js" in entry
-    dist = (REPO / "dashboard" / "card" / "dist" / "sem-cards.js").read_text()
-    assert "sem-energy-plan-card" in dist, (
-        "dist/ is stale — run 'cd dashboard/card && npm run build'. The "
-        "deploy scripts only rsync; they do NOT build.")
-
-
-def test_card_is_placed_on_the_control_tab_above_loads():
-    """(#638 G4 + consolidation 2026-08-08) The Energy Plan card IS the
-    Control tab's timeline now — the old Today's Schedule card retired
-    into it (night shading, now marker, Today|Tomorrow all render from
-    the plan entity). Pin the ORDER above Load Management and pin the
-    retirement: a schedule card creeping back is a second data path."""
-    tpl = (REPO / "dashboard" / "sem_dashboard_template.yaml").read_text()
-    assert tpl.count("custom:sem-energy-plan-card") == 1, (
-        "the plan card must live in exactly one place")
-    assert "custom:sem-schedule-card" not in tpl, (
-        "the schedule card retired into the Energy Plan card — one "
-        "timeline, one data source")
-    card = tpl.index("custom:sem-energy-plan-card")
-    loads = tpl.index("title: Load Management")
-    assert card < loads
 
 
 def test_card_localization_keys_exist_in_every_language():
@@ -392,22 +388,3 @@ def test_generated_localize_bundle_is_in_sync():
             f"scripts/regenerate_localize.py")
 
 
-def test_card_asks_only_for_keys_that_exist():
-    """The inverse guard: any ``_t('...')`` in the card source must be a key
-    we actually ship. Catches a typo the CARD_KEYS list would otherwise
-    happily bless.
-
-    Both patterns anchor on what CLOSES the literal — a comma or the call's
-    own paren. A key built by concatenation (``'energy_plan_review_' + code``)
-    is a prefix, not a key, and belongs to whichever test owns that code
-    list (#755: ``test_755_demand_review.py``); matching it here would
-    report the prefix as a missing translation forever.
-    """
-    import re
-    src = CARD_SRC.read_text(encoding="utf-8")
-    asked = set(re.findall(r"_t\(\s*'([a-z0-9_]+)'\s*\)", src))
-    asked |= set(re.findall(r"_format\(\s*'([a-z0-9_]+)'\s*[,)]", src))
-    data = json.loads(
-        (REPO / "dashboard" / "translations.json").read_text(encoding="utf-8"))
-    unknown = sorted(k for k in asked if k not in data["en"])
-    assert not unknown, f"card asks for keys that do not exist: {unknown}"

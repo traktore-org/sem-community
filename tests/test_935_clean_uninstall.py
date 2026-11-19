@@ -255,14 +255,14 @@ class TestTheDashboardIsOfferedNeverTaken:
                 removed_keys.append(self.key)
 
             async def async_load(self):
-                return {"items": [{"id": "sem-dashboard"}, {"id": "mine"}]}
+                return {"items": [{"id": "sem_slug", "url_path": "sem-dashboard"}, {"id": "mine", "url_path": "mine-x"}]}
 
             async def async_save(self, data):
                 saved.update(data)
 
         monkeypatch.setattr("homeassistant.helpers.storage.Store", FakeStore)
         assert _run(cleanup.async_remove_dashboard(SimpleNamespace())) is True
-        assert "lovelace.sem-dashboard" in removed_keys
+        assert "lovelace.sem_slug" in removed_keys, "the store is named by the item's id, not its URL"
         assert [i["id"] for i in saved["items"]] == ["mine"], (
             "someone else's dashboard must survive")
 
