@@ -869,6 +869,7 @@ class SensorReader:
             {"solar", "grid", "grid_import", "grid_export", "battery"}
         )
         self._STALE_THRESHOLD_S = 600  # 10 min: a fast power sensor stale this long is frozen
+        self._fast_reports: dict = {}  # (#1394) name -> last report, this cycle
         # (#912) per config entry: (monotonic stamp, any sibling reported within
         # the threshold). A flat entity from a LIVE integration is honest —
         # integrations that skip identical writes (foxess_modbus) never advance
@@ -1278,6 +1279,7 @@ class SensorReader:
         self._battery_read_is_pair = False    # (#1215) per-cycle
         self._input_reads = {}                # (#818) per-cycle
         self._input_dark = {}                 # (#818) per-cycle
+        self._fast_reports = {}               # (#1394) per-cycle
         self._unit_soc_cycle = {}             # (#1285) per-cycle
         self._unit_soc_confirmed = False
         self._unit_soc_held = False
@@ -6652,6 +6654,13 @@ class SensorReader:
             self._sensor_unavailable_since.pop(entity_id, None)
         self._clear_unavailable_repair(entity_id)
 
+        # (#1394) When each meter of the house balance last reported, so the
+        # live base load can take device draws at the same moment.
+        if name in self._FAST_POWER_NAMES:
+            seen = self._last_report(state)
+            if seen is not None:
+                self._fast_reports[name] = seen[0]
+
         # W3 — observe-only frozen-sensor detection (does NOT alter value).
         # Wrapped so the audit can NEVER break the read.
         try:
@@ -6829,6 +6838,17 @@ class SensorReader:
             return True
         except Exception:  # noqa: BLE001 — never break a read over this
             return False
+
+    def house_complete_at(self):
+        """(#1394) When this cycle's house balance was complete: the oldest
+        recent report among its grid, solar and battery meters, or None."""
+        try:
+            import homeassistant.util.dt as _dt
+            from .draw_alignment import house_complete_at
+            return house_complete_at(dict(getattr(self, "_fast_reports", {}) or {}),
+                                     _dt.utcnow())
+        except Exception:  # noqa: BLE001 — a missing time only skips the alignment
+            return None
 
     @staticmethod
     def _last_report(state) -> Optional[tuple]:
