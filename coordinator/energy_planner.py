@@ -316,6 +316,10 @@ def demand_why(allocations, ledger, source: str = "grid",
             cop = sum(k * c for k, c in cops) / sum(k for k, _ in cops)
             return {"code": "cheapest_heat",
                     "params": {**span, "cop": round(cop, 1)}}
+    codes = {getattr(a, "code", None) for a in runs}
+    if "no_cheaper_hour" in codes and "cheapest_hours" not in codes:
+        # (#1388) the blocks' own judgement: nothing was picked by price
+        return {"code": "no_cheaper_hour", "params": span}
     return {"code": "cheapest_hours",
             "params": {**span, **({"price": round(avg, 3)} if avg is not None else {})}}
 

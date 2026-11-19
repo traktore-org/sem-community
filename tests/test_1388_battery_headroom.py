@@ -108,3 +108,24 @@ def test_the_only_hour_left_does_not_say_cheapest_hours():
 def test_a_real_pick_still_says_cheapest_hours():
     plan = pack_night([_batt()], _led([0.407, 0.20, 0.45]))
     assert {a.code for a in plan.allocations} == {"cheapest_hours"}
+
+
+def _why(prices, kwh=0.3, deadline=None):
+    from custom_components.solar_energy_management.coordinator.energy_planner import demand_why
+    led = _led(prices)
+    d = _batt(kwh)
+    if deadline:
+        d = Demand(id="battery", kind="battery", energy_kwh=kwh,
+                   max_power_w=2200, source="grid", deadline=deadline)
+    plan = pack_night([d], led)
+    return demand_why(plan.allocations, led, "grid")["code"]
+
+
+def test_the_summary_follows_the_block_for_the_only_hour_left():
+    dl = datetime(2026, 11, 19, 7, 0)       # the dearer slot lies past it
+    assert _why([0.407, 0.407, 0.407, 0.407, 0.60], deadline=dl) == "no_cheaper_hour"
+
+
+def test_the_summary_keeps_cheapest_hours_when_any_block_is_a_real_pick():
+    # 0.3 kWh at 2.2 kW takes one slot; the 0.2 slot is the pick
+    assert _why([0.407, 0.20, 0.45]) == "cheapest_hours"
