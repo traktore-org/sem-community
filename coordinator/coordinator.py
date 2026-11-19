@@ -44,6 +44,7 @@ from .external_control import (
     Spec,
     friendly_name,
     normalise_mode,
+    yielded_charger_decision,
 )
 
 from ..consts.core import CAPABILITY_MISS_CONFIRM_READS, CAPABILITY_MISS_HOLD_S
@@ -195,6 +196,18 @@ EV_CLAMP_HOLD_S = 900.0
 #: (#1199) A draw above this counts, so a car that never reaches the 500 W
 #: charging flag still keeps the cap.
 EV_CLAMP_DRAW_W = 100.0
+
+
+def _yielded_draw_w(view) -> float:
+    """(#1391) What a charger another party steers draws now, in watts.
+
+    The other party's commitment, as far as SEM can see it: SEM sends that
+    charger nothing, so there is no setpoint or decision of SEM's to count.
+    A charger with no reading draws nothing here."""
+    try:
+        return max(0.0, float(getattr(view.power, "power_w", 0.0) or 0.0))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _f_or_none(value):
@@ -4014,6 +4027,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         book = getattr(self, "_external_control", None)
         return bool(book is not None and book.yielding(key))
 
+    def _yields_charger(self, cid: str) -> bool:
+        """(#1391) SEM sends this charger nothing this cycle: another party
+        steers it and the user said SEM yields. Observer mode is not a
+        yield (``_refresh_external_control``)."""
+        return (not getattr(self, "_observer_mode", False)
+                and self.external_yielding(f"charger:{cid}"))
+
+    def _yield_or_stabilise(self, cid: str, decision, view, adapter,
+                            now_mono: float):
+        """(#1391) The stability layer for a charger SEM steers; for one it
+        yields to another party, the yielded decision instead. SEM sends
+        that charger nothing, so its start ladder, its "SEM starts charging"
+        line and its amps would describe acts that never happen. Observer
+        mode is not a yield (``_refresh_external_control``): it runs the
+        charger's normal decision."""
+        if self._yields_charger(cid):
+            self._charge_stability.stand_aside(cid)
+            return yielded_charger_decision(decision)
+        return self._charge_stability.filter(
+            decision, view, adapter,
+            **self._charge_stability_kwargs(),
+            now_ts=now_mono,
+        )
+
     def observer_withheld_commands(self) -> dict:
         """(#855, audit F7) THIS cycle's withheld hardware commands, keyed by
         device — the "exact service calls it withheld" half of the seam's
@@ -5526,11 +5563,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # state display + actuation so the sensor state,
                         # strategy string and contactor all agree on the
                         # held decision.
-                        decision = self._charge_stability.filter(
-                            decision, view, adapter,
-                            **self._charge_stability_kwargs(),
-                            now_ts=_now_mono_cycle,
-                        )
+                        # (#1391) A charger SEM yields to another party
+                        # gets no start ladder and shows no act of SEM's.
+                        _yielded = self._yields_charger(cid)
+                        decision = self._yield_or_stabilise(
+                            cid, decision, view, adapter, _now_mono_cycle)
                         # Safety write gate is deliberately LAST: stability
                         # logic must never bridge or ramp around an emergency
                         # phase-guard stop.
@@ -5547,20 +5584,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # stop→switch→settle sequence. AFTER the safety gate
                         # on purpose: the tick only ever weakens a CHARGE
                         # into IDLE and passes emergency stops untouched.
-                        decision = await self._phase_switch_tick(
-                            cid, charger_cfg, decision, view.power,
-                            _now_mono_cycle,
-                            setpoint_a=int(float(getattr(
-                                getattr(adapter, "_device", None),
-                                "_current_setpoint", 0) or 0)),
-                            # (#1008) never ask for three phases the meter
-                            # cannot pay for this quarter hour.
-                            peak_allowed_w=getattr(
-                                view.fleet, "peak_slot_allowed_w", None),
-                            # (#1015) the device that can set its phases by
-                            # one current per phase, when it can
-                            device=getattr(adapter, "_device", None),
-                        )
+                        # (#1391) Not for a charger another party steers:
+                        # SEM plans no phases for a box it does not drive,
+                        # and the entity switch in the tick is gated on
+                        # observer mode only.
+                        if not _yielded:
+                            decision = await self._phase_switch_tick(
+                                cid, charger_cfg, decision, view.power,
+                                _now_mono_cycle,
+                                setpoint_a=int(float(getattr(
+                                    getattr(adapter, "_device", None),
+                                    "_current_setpoint", 0) or 0)),
+                                # (#1008) never ask for three phases the
+                                # meter cannot pay for this quarter hour.
+                                peak_allowed_w=getattr(
+                                    view.fleet, "peak_slot_allowed_w", None),
+                                # (#1015) the device that can set its phases
+                                # by one current per phase, when it can
+                                device=getattr(adapter, "_device", None),
+                            )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
                         # can distinguish "SEM idle, EV at 0W is correct"
@@ -5723,6 +5765,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         voltage=adapter.voltage,
                                         max_current_a=adapter.max_current_a,
                                     )
+                                elif _yielded:
+                                    # (#1391) SEM wrote no setpoint; the
+                                    # other party's draw is what is taken.
+                                    self._night_committed_w += _yielded_draw_w(view)
                                 else:
                                     self._night_committed_w += max(0.0, (
                                         ev_dev._current_setpoint * ev_dev.phases * ev_dev.voltage
@@ -5740,12 +5786,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # tests/test_665_allocator_coverage.py fails CI if
                             # the reset or this call disappears.
                             from .charger_types import solar_commitment_w
-                            self._solar_committed_w_per_cycle += solar_commitment_w(
-                                decision,
-                                phases=adapter.phases,
-                                voltage=adapter.voltage,
-                                max_current_a=adapter.max_current_a,
-                            )
+                            # (#1391) A charger another party steers commits
+                            # nothing of SEM's, but its draw is real, and the
+                            # home's power leaves car charging out: without
+                            # it here the next charger spends the same sun.
+                            self._solar_committed_w_per_cycle += (
+                                _yielded_draw_w(view) if _yielded else
+                                solar_commitment_w(
+                                    decision,
+                                    phases=adapter.phases,
+                                    voltage=adapter.voltage,
+                                    max_current_a=adapter.max_current_a,
+                                ))
                             # (#864) The peak slot's twin: what THIS charger
                             # was offered is unavailable to the next one, and
                             # it cannot show up in grid_import yet because the
@@ -5852,12 +5904,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
                 decision = decide_v2(view)
                 # Hysteresis stability layer (#461 flapping) — the
-                # single-charger legacy branch needs the same protection.
-                decision = self._charge_stability.filter(
-                    decision, view, adapter,
-                    **self._charge_stability_kwargs(),
-                    now_ts=_now_mono_cycle,
-                )
+                # single-charger legacy branch needs the same protection,
+                # and the same #1391 yield.
+                decision = self._yield_or_stabilise(
+                    cid, decision, view, adapter, _now_mono_cycle)
                 from .active_phase_guard import filter_charger_decision
                 decision = filter_charger_decision(
                     self, decision, adapter=adapter, power=view.power,
