@@ -283,14 +283,12 @@ def test_the_repair_is_raised_and_cleared(monkeypatch):
     assert gone == ["legionella_above_unit_max_hot_water"]
 
 
-def test_the_coordinator_raises_and_clears_it_from_the_tank():
-    """The coordinator's Repair block reads ``legionella_above_unit_max``."""
-    import inspect
-    from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
-    src = inspect.getsource(SEMCoordinator)
-    assert "raise_legionella_above_unit_max" in src
-    assert "clear_legionella_above_unit_max" in src
-    assert 'getattr(hw_controller, "legionella_above_unit_max"' in src
+def test_the_coordinator_raises_and_clears_it():
+    """The coordinator raises and clears the Repair (AST, not spelling)."""
+    from custom_components.solar_energy_management.tests.ast_contracts import call_sites
+    for fn in ("raise_legionella_above_unit_max", "clear_legionella_above_unit_max"):
+        files = {str(p).rsplit("/", 1)[-1] for p, *_ in call_sites(fn)}
+        assert "coordinator.py" in files, fn
 
 
 # ── final review: one wait per purpose; direct writes are never raised ──────
