@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **Device cards fold again** (#1400). With All settings on, every card on Devices stayed open, and Fold all was gone.
 - 🐛 **Links stay on the SEM dashboard** (#1397). The notices after building it named /lovelace/sem-next, which opens the Home Assistant start screen.
+- 🐛 **A heat pump pre-heats before its limit** (#1395). With cheap hours allowed, the run is planned before the room gets too cold.
+- 🐛 **A refused setpoint waits** (#1396). After a device refuses a setpoint, SEM waits 5, 15, then 60 minutes, and stays inside its range.
 
 # [2.3.0-beta.22] — 20.11.2026
 

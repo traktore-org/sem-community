@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "A tartály nem éri el a legionella-célt",
+      "description": "{name}: a tartály legfeljebb {max} °C-ot fogad el, a {target} °C-os legionella-cél alatt. Az SEM {max} °C-ra fűt, ami talán nem fertőtleníti a tartályt. Csökkentsd a célt, vagy ellenőrizd a tartály maximumát. Az üzenet magától eltűnik."
     }
   },
   "selector": {

@@ -252,6 +252,8 @@ _DOCS_ANCHORS = {
     "heater_no_rise": "the-hot-water-tank-draws-power-but-does-not-warm",
     # (#1369) the user's stop sits below the Legionella target
     "legionella_below_stop": "legionella-cycle-not-running",
+    # (#1396) the tank's own maximum is below the Legionella target
+    "legionella_above_unit_max": "legionella-cycle-not-running",
     "sensor_unavailable": "a-configured-sensor-is-unavailable",
     # (#900) the options wizard pinned a brand install to the generic adapter
     "battery_platform_pinned_generic": "the-battery-platform-is-pinned-to-generic",
@@ -1512,7 +1514,8 @@ def clear_orphan_hot_water_repairs(
                 if eid not in keep_temp:
                     candidates.append(issue_id)
             elif (issue_id.startswith("heater_no_rise_")
-                  or issue_id.startswith("legionella_below_stop_")) and not keep_entity:
+                  or issue_id.startswith("legionella_below_stop_")
+                  or issue_id.startswith("legionella_above_unit_max_")) and not keep_entity:
                 # (#1369) no tank left in the settings: nothing to warm
                 candidates.append(issue_id)
         for issue_id in candidates:
@@ -2137,6 +2140,37 @@ def raise_legionella_below_stop(hass: HomeAssistant, tank_id: str, *, name: str,
         )
     except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
         _LOGGER.debug("issue_registry.create failed for legionella stop %s: %s", tank_id, e)
+
+
+def _legionella_max_issue_id(tank_id: str) -> str:
+    return f"legionella_above_unit_max_{tank_id}"
+
+
+def raise_legionella_above_unit_max(hass: HomeAssistant, tank_id: str, *,
+                                    name: str, max_c: float,
+                                    target_c: float) -> None:
+    """(#1396) The tank accepts at most ``max_c``, below the Legionella
+    target: SEM heats to the maximum, which may not disinfect the tank."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN, issue_id=_legionella_max_issue_id(tank_id),
+            is_fixable=False, is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="legionella_above_unit_max",
+            learn_more_url=next_step_url("docs", "legionella_above_unit_max", **_versions(hass)),
+            translation_placeholders={
+                "name": name, "max": f"{max_c:.0f}", "target": f"{target_c:.0f}"},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for legionella max %s: %s", tank_id, e)
+
+
+def clear_legionella_above_unit_max(hass: HomeAssistant, tank_id: str) -> None:
+    """(#1396) The target fits the tank again (or no maximum is known)."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _legionella_max_issue_id(tank_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for legionella max %s: %s", tank_id, e)
 
 
 def clear_legionella_below_stop(hass: HomeAssistant, tank_id: str) -> None:

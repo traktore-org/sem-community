@@ -544,10 +544,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                 self._last_step_down_path = "at_minimum"
                 return False
             try:
-                sent = await self.send(
-                    "climate", "set_temperature",
-                    {"entity_id": self.climate_entity_id, "temperature": target},
-                    why="step down")
+                # (#1396) capped, sent directly: no target wait delays it
+                sent = await self.sp_send_capped(
+                    "climate", self.climate_entity_id, target, why="step down")
             except Exception as e:  # noqa: BLE001
                 _LOGGER.error("%s: step-down setpoint write failed: %s", self.name, e)
                 self._last_step_down_path = "setpoint_failed"
@@ -578,11 +577,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                 return False
         if self._step_restore_setpoint is not None and self.climate_entity_id:
             try:
-                sent = await self.send(
-                    "climate", "set_temperature",
-                    {"entity_id": self.climate_entity_id,
-                     "temperature": self._step_restore_setpoint},
-                    why="step down released")
+                sent = await self.sp_send_capped(      # (#1396) capped, direct
+                    "climate", self.climate_entity_id,
+                    self._step_restore_setpoint, why="step down released")
             except Exception as e:  # noqa: BLE001
                 _LOGGER.error("%s: step-down release write failed: %s", self.name, e)
                 self._last_step_down_path = "release_failed"

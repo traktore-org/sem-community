@@ -317,6 +317,7 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:**
 1. Check **Stop when** on the boiler. If it is below the Legionella target, SEM skips the run. Raise **Stop when** or lower the target.
+1. A Repair says the tank cannot reach the target: the tank accepts less than the Legionella target. SEM heats to the tank's maximum. Lower the target, or check the tank's own maximum.
 2. Check the interval under `System › Heat pump and hot water`.
 3. Check that the boiler entity is available.
 
@@ -442,6 +443,7 @@ Each Repair is a notice in `Settings › System › Repairs`. The key names the 
 | `hot_water_temperature_sensor_unavailable` | The hot water sensor is unavailable. See [Hot water temperature sensor unavailable](#hot-water-temperature-sensor-unavailable). |
 | `heater_no_rise` | The tank draws power but does not warm. See [The hot water tank draws power but does not warm](#the-hot-water-tank-draws-power-but-does-not-warm). |
 | `legionella_below_stop` | The Legionella target is above **Stop when**. See [Legionella cycle not running](#legionella-cycle-not-running). |
+| `legionella_above_unit_max` | The tank accepts less than the Legionella target. See [Legionella cycle not running](#legionella-cycle-not-running). |
 
 ## Copy diagnostics and Diagnose
 

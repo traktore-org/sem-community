@@ -37,6 +37,17 @@ SETPOINT_MATCH_K = 0.5
 SETPOINT_SAME_K = 0.05
 
 
+#: (#1396) After the device refuses a setpoint, the next try waits this long
+#: (one step per refusal in a row, the last repeats). A cloud unit refused a
+#: target every 10 s — some 8,600 calls a day against a per-account limit.
+SETPOINT_BACKOFF_S = (5 * 60.0, 15 * 60.0, 60 * 60.0)
+
+
+def _mono() -> float:
+    """Monotonic seconds; a function so tests can move the clock."""
+    return time.monotonic()
+
+
 def _now() -> float:
     return time.time()
 
@@ -132,18 +143,120 @@ class SetpointMemoMixin:
             "at": kept["at"] if kept else _now(),
             "entity": entity_id, "domain": domain}
 
+    def sp_unit_range(self, entity_id: Optional[str]) -> tuple:
+        """(#1396) The unit's own ``(min_temp, max_temp)``, each None when the
+        entity does not give a number."""
+        hass = getattr(self, "hass", None)
+        state = hass.states.get(entity_id) if (hass and entity_id) else None
+        attrs = getattr(state, "attributes", None) or {}
+        return _num(attrs.get("min_temp")), _num(attrs.get("max_temp"))
+
+    def _sp_capped(self, entity_id: Optional[str], target: float,
+                   raise_to_min: bool = False) -> float:
+        """(#1396) The ONE cap every ``set_temperature`` of a device uses: never
+        above the unit's ``max_temp`` (a value above it is refused, every time),
+        remembered (``sp_above_max``) and said once. ``raise_to_min`` lifts a
+        value to ``min_temp`` — only for SEM's own raise targets: a step-down,
+        release, restore, climate start or tank minimum is never raised."""
+        lo, hi = self.sp_unit_range(entity_id)
+        if not raise_to_min:
+            lo = None
+        capped = float(target)
+        if hi is not None and capped > hi:
+            capped = hi
+            seen = getattr(self, "_sp_above_max", None)
+            if not isinstance(seen, dict):
+                seen = self._sp_above_max = {}
+            seen[str(entity_id)] = {"wanted": float(target), "unit_max": hi}
+            log_on_change(
+                _LOGGER, f"setpoint-above-max:{getattr(self, 'device_id', '')}:{entity_id}",
+                logging.WARNING,
+                "%s: %.1f is above what %s accepts (%.1f) — SEM writes %.1f "
+                "(#1396)", getattr(self, "name", ""), float(target), entity_id,
+                hi, hi)
+        if lo is not None and capped < lo:
+            capped = lo
+        return capped
+
+    @property
+    def sp_above_max(self) -> dict:
+        """(#1396) entity → {wanted, unit_max} for values the unit cannot take."""
+        seen = getattr(self, "_sp_above_max", None)
+        return dict(seen) if isinstance(seen, dict) else {}
+
+    async def sp_send_capped(self, domain: str, entity_id: str,
+                             temperature: float, why: str = ""):
+        """(#1396) ``set_temperature`` of any value, capped at the unit's
+        range. Sends directly: a refusal raises as before, and the caller's
+        own retry stands."""
+        return await self.send(
+            domain, "set_temperature",
+            {"entity_id": entity_id,
+             "temperature": self._sp_capped(entity_id, temperature)}, why=why)
+
+    def _sp_waits(self) -> dict:
+        waits = getattr(self, "_sp_wait", None)
+        if not isinstance(waits, dict):
+            waits = self._sp_wait = {}
+        return waits
+
+    @staticmethod
+    def _sp_wait_key(entity_id, purpose: str) -> str:
+        return f"{entity_id}|{purpose or 'everyday'}"
+
+    def sp_refused_for(self, entity_id: Optional[str],
+                       purpose: Optional[str] = None) -> bool:
+        """(#1396) SEM's target of this ``purpose`` was refused by the unit and
+        its next try waits. ``purpose`` None: any purpose of this unit."""
+        now = _mono()
+        if purpose is not None:
+            w = self._sp_waits().get(self._sp_wait_key(entity_id, purpose))
+            return bool(w) and now < w[1]
+        prefix = f"{entity_id}|"
+        return any(k.startswith(prefix) and now < w[1]
+                   for k, w in self._sp_waits().items())
+
+    @property
+    def sp_refused(self) -> bool:
+        """(#1396) Some unit of this device refused SEM's target and waits."""
+        now = _mono()
+        return any(now < w[1] for w in self._sp_waits().values())
+
     async def sp_write_target(self, domain: str, entity_id: str, target: float,
-                              why: str = "") -> bool:
+                              why: str = "", purpose: str = "everyday") -> bool:
         """``set_temperature`` to SEM's target, remembering the setpoint the
-        unit shows first. Returns what ``send`` returns."""
+        unit shows first. Returns what ``send`` returns.
+
+        (#1396) Capped at the unit's range. SEM's OWN target only: after the
+        unit refuses it (the service raises), the next target write of the
+        same ``purpose`` to that unit waits 5, 15, then 60 minutes, whatever
+        the value — said once per wait, not every cycle. Only a write that
+        lands ends the wait. Purposes: ``everyday`` (solar, grid, Keep at and
+        pre-heat targets, which alternate and share one wait), ``legionella``
+        and ``boost`` — a refused one never holds back another. Returns False
+        on a refusal instead of raising. Restores, step-downs and minimums
+        send directly, as before."""
+        target = self._sp_capped(entity_id, target, raise_to_min=True)
+        key = self._sp_wait_key(entity_id, purpose)
+        if self.sp_refused_for(entity_id, purpose):
+            return False
         self._sp_begin(entity_id, target)
         try:
             sent = await self.send(
                 domain, "set_temperature",
                 {"entity_id": entity_id, "temperature": target}, why=why)
-        except Exception:
+        except Exception as e:  # noqa: BLE001 — the unit said no
             self._sp_pending = None
-            raise
+            n = int((self._sp_waits().get(key) or (0, 0.0))[0])
+            wait = SETPOINT_BACKOFF_S[min(n, len(SETPOINT_BACKOFF_S) - 1)]
+            self._sp_waits()[key] = (n + 1, _mono() + wait)
+            _LOGGER.warning(
+                "%s: %s refused the setpoint %.1f (%s) — SEM tries again in "
+                "%d min (#1396)", getattr(self, "name", ""), entity_id,
+                float(target), e, int(wait // 60))
+            return False
+        if sent:
+            self._sp_waits().pop(key, None)
         self._sp_commit(domain, entity_id, target, bool(sent))
         return bool(sent)
 
@@ -175,9 +288,7 @@ class SetpointMemoMixin:
                          self.name, entity)
             return "hand_changed"
         try:
-            sent = await self.send(
-                domain, "set_temperature",
-                {"entity_id": entity, "temperature": restore}, why=why)
+            sent = await self.sp_send_capped(domain, entity, restore, why=why)
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("%s: could not restore the setpoint of %s: %s",
                             self.name, entity, e)

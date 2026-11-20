@@ -826,6 +826,22 @@ def _plan_heat_cost(controller, demands, allocations, ledger, cop_fn) -> dict:
 #: moves an old battery flip (a disk that refuses is not asked every cycle)
 _FLIP_STORE_RETRY_S = 300.0
 
+
+def comfort_deadline(ask: dict, night_end):
+    """(#1395) When a comfort ask is due: its own deadline, else the night's
+    end — and a Keep at goal before the room reaches its too-cold limit
+    (``limit_at``) when that comes first. Past the limit SEM heats at any
+    price, so a goal packed into the night's cheapest hours after it was
+    bought at the plain rate anyway."""
+    deadline = ask.get("deadline") or night_end
+    limit_at = ask.get("limit_at")
+    try:
+        if limit_at is not None and (deadline is None or limit_at < deadline):
+            return limit_at
+    except TypeError:   # a naive next to an aware time: keep the deadline
+        pass
+    return deadline
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -8716,6 +8732,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._legionella_stop_repair_up = False
             except Exception as e:  # noqa: BLE001 — never break the cycle
                 _LOGGER.debug("Legionella stop repair failed: %s", e)
+            # (#1396) the tank's own maximum is below the Legionella target:
+            # say it in Repairs, clear it when the target fits
+            try:
+                from .repair_issues import (
+                    clear_legionella_above_unit_max, raise_legionella_above_unit_max)
+                _did = str(getattr(hw_controller, "device_id", "hot_water"))
+                _max = getattr(hw_controller, "legionella_above_unit_max", None)
+                _max = _max if isinstance(_max, (int, float)) and not isinstance(_max, bool) else None
+                _up = getattr(self, "_legionella_max_repair_up", None)
+                if _max is not None and _up is not True:
+                    raise_legionella_above_unit_max(
+                        self.hass, _did,
+                        name=str(getattr(hw_controller, "name", _did)),
+                        max_c=float(_max),
+                        target_c=float(hw_controller.legionella_target_temp))
+                    self._legionella_max_repair_up = True
+                elif _max is None and _up is not False:
+                    clear_legionella_above_unit_max(self.hass, _did)
+                    self._legionella_max_repair_up = False
+            except Exception as e:  # noqa: BLE001 — never break the cycle
+                _LOGGER.debug("Legionella max repair failed: %s", e)
             # (#1369) heating that does not warm the tank is a fault
             if hasattr(hw_controller, "check_heating_works"):
                 try:
@@ -13922,11 +13959,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     did = dev.device_id
                     labels[f"comfort:{did}"] = (
                         str(getattr(dev, "name", "") or "").strip() or None)
+                    _deadline = comfort_deadline(ask, night_end)  # (#1395)
                     demands.append(Demand(
                         id=f"comfort:{did}", kind="comfort",
                         energy_kwh=float(ask["energy_kwh"]),
                         max_power_w=rated, min_power_w=rated,
-                        deadline=ask.get("deadline") or night_end,
+                        deadline=_deadline,
                         priority=int(getattr(dev, "priority", 0) or 0),
                         source="grid",
                         needs_cheap_level=True,

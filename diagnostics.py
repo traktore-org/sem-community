@@ -85,6 +85,48 @@ def _call_dict_or_none(fn):
         return None
 
 
+def _comfort_devices(coordinator: Any) -> dict[str, Any]:
+    """(#1395) Each device with a comfort band: what the user set, what it
+    reads, and why the plan got no ask from it. A heat pump report could not
+    say whether "Yes, in cheap hours" was set at all — these were missing.
+    Read-only and None-safe: one odd device never costs the download."""
+    out: dict[str, Any] = {}
+    ctl = getattr(coordinator, "_surplus_controller", None)
+    try:
+        devices = ctl.get_devices_sorted() if ctl else []
+    except Exception:  # noqa: BLE001
+        return out
+    for dev in devices:
+        if not hasattr(dev, "comfort_plan_blocker"):
+            continue
+        row: dict[str, Any] = {}
+        for key, fn in (
+                ("keep_at", lambda d: getattr(d, "comfort_target", None)),
+                ("never_colder_than", lambda d: getattr(d, "comfort_limit", None)),
+                ("extra", lambda d: getattr(d, "comfort_offset", None)),
+                ("purchase_policy", lambda d: getattr(d, "top_up_policy", None)),
+                ("battery_overnight", lambda d: getattr(d, "battery_eligible_overnight", None)),
+                ("control_mode", lambda d: getattr(getattr(d, "control_mode", None), "value", None)),
+                ("comfort_state", lambda d: d.comfort_state),
+                ("reading_c", lambda d: d._comfort_reading()),
+                ("start_gap_c", lambda d: d.comfort_goal_start_gap_c()),
+                ("run_power_w", lambda d: d.comfort_run_power_w()),
+                ("learned_cooling", lambda d: bool(getattr(d, "_comfort_off_samples", None))),
+                ("no_ask_because", lambda d: d.comfort_plan_blocker()),
+                # (#1396) a set target above what the unit accepts
+                ("targets_above_unit_max", lambda d: {
+                    k: f"{v['wanted']:g} > {v['unit_max']:g}"
+                    for k, v in getattr(d, "sp_above_max", {}).items()} or None),
+                ("setpoint_waiting", lambda d: getattr(d, "sp_refused", None))):
+            try:
+                value = fn(dev)
+            except Exception:  # noqa: BLE001
+                value = None
+            row[key] = value if isinstance(value, (str, int, float, bool, type(None), dict)) else str(value)
+        out[str(getattr(dev, "device_id", "?"))] = row
+    return out
+
+
 def _foreign_logs(hass: HomeAssistant) -> list[str]:
     """(#820) The buffer's FOREIGN lines; never raises."""
     from .utils.log_buffer import SEMLogBuffer
@@ -807,6 +849,7 @@ async def async_get_config_entry_diagnostics(
             },
             "night_targets": _dict_or_none(
                 getattr(coordinator, "_night_target_per_charger_map", None)),
+            "comfort_devices": _comfort_devices(coordinator),   # (#1395)
         },
         # (#1084) why each command changed — the last 200 changes, oldest
         # first. In memory only, so it starts empty after a restart.

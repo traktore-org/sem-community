@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Tanken når inte legionellamålet",
+      "description": "{name}: tanken tar högst {max} °C, under legionellamålet {target} °C. SEM värmer till {max} °C, vilket kanske inte desinficerar tanken. Sänk målet eller kontrollera tankens maximum. Meddelandet försvinner av sig självt."
     }
   },
   "selector": {

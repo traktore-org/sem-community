@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Zasobnik nie osiąga celu antylegionella",
+      "description": "{name}: zasobnik przyjmuje najwyżej {max} °C, poniżej celu antylegionella {target} °C. SEM grzeje do {max} °C, co może nie zdezynfekować zasobnika. Obniż cel lub sprawdź maksimum zasobnika. Komunikat zniknie sam."
     }
   },
   "selector": {
