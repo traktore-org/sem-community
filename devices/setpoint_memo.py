@@ -37,6 +37,17 @@ SETPOINT_MATCH_K = 0.5
 SETPOINT_SAME_K = 0.05
 
 
+#: (#1396) After the device refuses a setpoint, the next try waits this long
+#: (one step per refusal in a row, the last repeats). A cloud unit refused a
+#: target every 10 s — some 8,600 calls a day against a per-account limit.
+SETPOINT_BACKOFF_S = (5 * 60.0, 15 * 60.0, 60 * 60.0)
+
+
+def _mono() -> float:
+    """Monotonic seconds; a function so tests can move the clock."""
+    return time.monotonic()
+
+
 def _now() -> float:
     return time.time()
 
@@ -132,18 +143,66 @@ class SetpointMemoMixin:
             "at": kept["at"] if kept else _now(),
             "entity": entity_id, "domain": domain}
 
+    def _sp_capped(self, entity_id: Optional[str], target: float) -> float:
+        """(#1396) The target inside the unit's own ``min_temp``/``max_temp``:
+        a value outside them is refused by the device, every time."""
+        hass = getattr(self, "hass", None)
+        state = hass.states.get(entity_id) if (hass and entity_id) else None
+        attrs = getattr(state, "attributes", None) or {}
+        lo, hi = _num(attrs.get("min_temp")), _num(attrs.get("max_temp"))
+        capped = float(target)
+        if hi is not None and capped > hi:
+            capped = hi
+        if lo is not None and capped < lo:
+            capped = lo
+        if capped != float(target):
+            log_on_change(
+                _LOGGER, f"setpoint-cap:{getattr(self, 'device_id', '')}",
+                logging.INFO,
+                "%s: %.1f is outside what %s takes (%s–%s) — SEM writes %.1f "
+                "(#1396)", getattr(self, "name", ""), float(target), entity_id,
+                lo, hi, capped)
+        return capped
+
+    @property
+    def sp_refused(self) -> bool:
+        """(#1396) The unit refused SEM's setpoint and the next try waits."""
+        until = getattr(self, "_sp_retry_at", None)
+        return until is not None and _mono() < until
+
     async def sp_write_target(self, domain: str, entity_id: str, target: float,
                               why: str = "") -> bool:
         """``set_temperature`` to SEM's target, remembering the setpoint the
-        unit shows first. Returns what ``send`` returns."""
+        unit shows first. Returns what ``send`` returns.
+
+        (#1396) The target is capped at the unit's own range. A write the unit
+        refuses (the service raises) returns False and the next try waits
+        5, 15, then 60 minutes — said once per wait, not every cycle. A
+        changed target or a write that lands starts afresh."""
+        target = self._sp_capped(entity_id, target)
+        key = (entity_id, round(float(target), 2))
+        if getattr(self, "_sp_refused_key", None) != key:
+            self._sp_refusals, self._sp_retry_at = 0, None
+        elif self.sp_refused:
+            return False
         self._sp_begin(entity_id, target)
         try:
             sent = await self.send(
                 domain, "set_temperature",
                 {"entity_id": entity_id, "temperature": target}, why=why)
-        except Exception:
+        except Exception as e:  # noqa: BLE001 — the device said no
             self._sp_pending = None
-            raise
+            n = int(getattr(self, "_sp_refusals", 0) or 0)
+            wait = SETPOINT_BACKOFF_S[min(n, len(SETPOINT_BACKOFF_S) - 1)]
+            self._sp_refusals, self._sp_refused_key = n + 1, key
+            self._sp_retry_at = _mono() + wait
+            _LOGGER.warning(
+                "%s: %s refused the setpoint %.1f (%s) — SEM tries again in "
+                "%d min (#1396)", getattr(self, "name", ""), entity_id,
+                float(target), e, int(wait // 60))
+            return False
+        if sent:
+            self._sp_refusals, self._sp_retry_at, self._sp_refused_key = 0, None, None
         self._sp_commit(domain, entity_id, target, bool(sent))
         return bool(sent)
 

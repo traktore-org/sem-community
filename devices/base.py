@@ -4892,7 +4892,13 @@ class SetpointDevice(ControllableDevice):
         target = min(self.max_setpoint, self.normal_setpoint + self.boost_offset)
         try:
             # (#1081) remembers the setpoint the unit shows before SEM moves it
-            await self.sp_write_target("climate", self.climate_entity_id, target)
+            sent = await self.sp_write_target("climate", self.climate_entity_id, target)
+            if not sent and self.sp_refused:
+                # (#1396) the unit refused it: not boosted, and the next try
+                # waits — no error line every cycle
+                self._status.state = DeviceState.ERROR
+                self._status.error_message = "setpoint refused by the unit"
+                return 0.0
             self._boosted = True
             self._status.state = DeviceState.ACTIVE
             self._status.current_consumption_w = self.rated_power

@@ -1013,7 +1013,9 @@ class HotWaterController(SwitchDevice):
             sent = await self.sp_write_target(
                 "water_heater", self.entity_id, target, why="hot water heating")
             if not sent:
-                self._last_activation_path = "water_heater_withheld"
+                # (#1396) refused by the unit (the next try waits) or withheld
+                self._last_activation_path = (
+                    "water_heater_refused" if self.sp_refused else "water_heater_withheld")
                 return 0.0
             # Try turn_on if supported
             try:
@@ -1068,7 +1070,9 @@ class HotWaterController(SwitchDevice):
             sent = await self.sp_write_target(
                 "climate", self.entity_id, target, why="hot water heating")
             if not sent:
-                self._last_activation_path = "climate_withheld"
+                # (#1396) refused by the unit (the next try waits) or withheld
+                self._last_activation_path = (
+                    "climate_refused" if self.sp_refused else "climate_withheld")
                 return 0.0
             await self.send(
                 "climate", "set_hvac_mode",
