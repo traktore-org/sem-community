@@ -379,16 +379,22 @@ test('(#1400) with All settings on, Open all and Fold all are offered and work',
     assert.ok(rows.every((r) => !el._isOpen(r)));
 });
 
-// (#1400) Reorder folds every card and ignores a tap on the name: the name is no button there.
-test('(#1400) in Reorder the device name is no button', () => {
+// (#1400) Reorder folds every card, ignores a tap on the name and hides the add sheet:
+// the name and the Add device pill are no buttons there.
+test('(#1400) in Reorder the device name and Add device are no buttons', () => {
     const el = makeCard(states());
     const car = el._rowsNow().find((r) => r.id === 'load_device_keba');
     assert.match(text(el._shell(car, 0)), /class="name tap" role="button" tabindex="0" aria-expanded=true/);
+    assert.match(text(el.render()), /next_add_device/);
+    el._adding = true;   // a sheet left open when Reorder starts
     el._toggleReorder();
     const out = text(el._shell(car, 0));
     assert.match(out, /<div class="name">/);
     assert.doesNotMatch(out, /class="name tap"|aria-expanded=(true|false) @click/);
     assert.ok(out.includes('class="card dev folded" data-id=load_device_keba'));
+    const page = text(el.render());
+    assert.doesNotMatch(page, /next_add_device|next_cancel/);
+    assert.match(page, /next_done_btn/);
 });
 
 test('observer mode disables the controls and reorder writes the order on Done', async () => {

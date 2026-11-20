@@ -706,7 +706,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${d?B`<div class="would xs dim">${d}</div>`:H}
             ${l?B`<div class="body">${_}</div>`:H}</ha-card>`}render(){if(!this._hass)return H;const e=e=>this._t(e),t=this._rowsNow(),s=t.length,n=0===s?e("next_dev_none"):1===s?this._tf("next_dev_lead_one",{first:t[0].name}):this._tf("next_dev_lead2",{n:s,first:t[0].name,last:t[s-1].name}),r=e(s?"next_dev_lead2_sub":"next_no_loads"),i=this._obs(),a=B`<div class="period">
             ${this._btn(this._reorder?e("next_done_btn"):e("next_reorder"),()=>this._toggleReorder(),{primary:this._reorder,icon:this._reorder?"mdi:check":"mdi:swap-vertical",disabled:s<2})}
-            <button type="button" class="pill" aria-expanded=${this._adding?"true":"false"} @click=${()=>this._toggleAdd()}>${this._icon(this._adding?"mdi:close":"mdi:plus","s")}${e(this._adding?"next_cancel":"next_add_device")}</button>
+            ${this._reorder?H:B`<button type="button" class="pill" aria-expanded=${this._adding?"true":"false"} @click=${()=>this._toggleAdd()}>${this._icon(this._adding?"mdi:close":"mdi:plus","s")}${e(this._adding?"next_cancel":"next_add_device")}</button>`}
             ${!this._reorder&&s>1?(()=>{const s=t.every(e=>this._isOpen(e));return B`<button type="button" class="pill" @click=${()=>this._setAllOpen(t,!s)}>${this._icon(s?"mdi:unfold-less-horizontal":"mdi:unfold-more-horizontal","s")}${e(s?"next_fold_all":"next_open_all")}</button>`})():H}
             ${this._reorder?B`<span class="dim sm">${e("next_reorder_hint")}</span>`:H}
             ${i?B`<span class="dim sm">${e("next_observing_hint")}</span>`:H}
