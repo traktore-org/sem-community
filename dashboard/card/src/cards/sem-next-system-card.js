@@ -117,14 +117,18 @@ class SEMNextSystemCard extends SEMNextBase {
         this._confirmObs = false;
         this._diagBusy = false;
         this._optionsAsked = false;
-        // (#1379) the Home checklist can open the setup check directly
-        this._panel = takeStored(OPEN_PANEL_KEY);
+        // (#1379) the Home checklist can open the setup check directly: read in connectedCallback
+        this._panel = '';
         this._chargerBusy = false;
         this._confirmRemove = '';
     }
 
     // (#1379) a Home checklist tap while this screen is already built
     connectedCallback() {
+        // (#1398) on every connect, first or return: HA puts this same card back, and the tap was
+        // made while it was off the page, so the route listener below never heard it
+        const p = takeStored(OPEN_PANEL_KEY);
+        if (p) this._panel = p;
         super.connectedCallback();
         this._onRoute = () => setTimeout(() => { const p = takeStored(OPEN_PANEL_KEY); if (p) this._panel = p; }, 0);
         window.addEventListener('location-changed', this._onRoute);

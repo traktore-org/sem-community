@@ -197,7 +197,7 @@ export function chargerBody(card, row) {
     btns.push(card._btn(t('next_sessions'), () => card._go(card._screen('insights') + '#car'), { small: true, ghost: true, icon: 'mdi:history' }));
 
     // ── sheet rows ──
-    const depEditor = card._depOpen && card._depOpen[cid] ? html`<div class="days">
+    const depEditor = card._depOpen && card._depOpen[cid] ? html`<div class="days" data-plan=${cid}>
         ${DAYS.map((d, i) => html`<label class="dayin"><span>${card._dayName(i)}</span>
             ${card._input({ type: 'time', value: own[d] || '', placeholder: depDefault, disabled: dis, label: card._dayName(i),
                 onChange: (e) => { const map = { ...own }; const v = e.target.value; if (!v || v === depDefault) delete map[d]; else map[d] = v; card._svc('set_charger_departure', { charger_id: cid, by_weekday: map }); } })}</label>`)}
