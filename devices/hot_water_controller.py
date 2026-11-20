@@ -476,6 +476,11 @@ class HotWaterController(SwitchDevice):
         hi = self.legionella_above_unit_max
         return float(hi) if hi is not None else float(self.legionella_target_temp)
 
+    def _sp_purpose(self) -> str:
+        """(#1396) Which wait a refused tank target starts: a Legionella run's
+        own, or the everyday one (solar, Keep at, pre-heat)."""
+        return "legionella" if self._legionella_cycle_active else "everyday"
+
     @property
     def legionella_hold_minutes(self) -> int:
         """Hold duration based on target temperature."""
@@ -1045,11 +1050,13 @@ class HotWaterController(SwitchDevice):
             target = self._active_target_temp()
             # (#1081) remembers the tank's own setpoint before SEM moves it
             sent = await self.sp_write_target(
-                "water_heater", self.entity_id, target, why="hot water heating")
+                "water_heater", self.entity_id, target, why="hot water heating",
+                purpose=self._sp_purpose())
             if not sent:
                 # (#1396) refused by the unit (the next try waits) or withheld
                 self._last_activation_path = (
-                    "water_heater_refused" if self.sp_refused else "water_heater_withheld")
+                    "water_heater_refused" if self.sp_refused_for(self.entity_id, self._sp_purpose())
+                    else "water_heater_withheld")
                 return 0.0
             # Try turn_on if supported
             try:
@@ -1108,11 +1115,13 @@ class HotWaterController(SwitchDevice):
         try:
             target = self._active_target_temp()
             sent = await self.sp_write_target(
-                "climate", self.entity_id, target, why="hot water heating")
+                "climate", self.entity_id, target, why="hot water heating",
+                purpose=self._sp_purpose())
             if not sent:
                 # (#1396) refused by the unit (the next try waits) or withheld
                 self._last_activation_path = (
-                    "climate_refused" if self.sp_refused else "climate_withheld")
+                    "climate_refused" if self.sp_refused_for(self.entity_id, self._sp_purpose())
+                    else "climate_withheld")
                 return 0.0
             await self.send(
                 "climate", "set_hvac_mode",

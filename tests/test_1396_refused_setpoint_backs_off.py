@@ -291,3 +291,65 @@ def test_the_coordinator_raises_and_clears_it_from_the_tank():
     assert "raise_legionella_above_unit_max" in src
     assert "clear_legionella_above_unit_max" in src
     assert 'getattr(hw_controller, "legionella_above_unit_max"' in src
+
+
+# ── final review: one wait per purpose; direct writes are never raised ──────
+
+async def test_a_refused_everyday_target_does_not_hold_back_legionella(clock):
+    hass = _Hass()
+    hass.unit(TANK, temperature=48.0, current_temperature=40.0, max_temp=70)
+    dev = _legionella(hass, target=65.0)
+    hass.refuse = True
+    await dev._activate_water_heater()                 # everyday 55 refused
+    assert dev.sp_refused_for(TANK, "everyday")
+    hass.refuse = False
+    clock["now"] += 30                                 # well inside that wait
+    dev._legionella_cycle_active = True
+    await dev._activate_water_heater()                 # Legionella goes at once
+    assert hass.landed[-1] == 65.0
+
+
+async def test_a_refused_target_does_not_hold_back_a_boost(clock):
+    hass = _Hass()
+    hass.unit(UNIT, temperature=20.0, min_temp=10, max_temp=30)
+    dev = SetpointDevice(hass, "hp", "Pump", 2000.0, climate_entity_id=UNIT,
+                         normal_setpoint=20.0, boost_offset=2.0)
+    hass.refuse = True
+    await dev.sp_write_target("climate", UNIT, 21.0)   # an everyday target refused
+    hass.refuse = False
+    clock["now"] += 30
+    assert await dev.activate(3000) > 0
+    assert hass.landed[-1] == 22.0
+
+
+async def test_a_refused_legionella_starts_only_its_own_wait(clock):
+    hass = _Hass()
+    hass.unit(TANK, temperature=48.0, current_temperature=40.0, max_temp=70)
+    dev = _legionella(hass, target=65.0)
+    dev._legionella_cycle_active = True
+    hass.refuse = True
+    await dev._activate_water_heater()
+    assert dev.sp_refused_for(TANK, "legionella")
+    assert not dev.sp_refused_for(TANK, "everyday")
+
+
+async def test_a_step_down_below_the_units_minimum_is_never_raised(clock):
+    from custom_components.solar_energy_management.devices.heat_pump_controller import (
+        HeatPumpController, STEP_DOWN_SETPOINT)
+    hass = _Hass()
+    hass.unit(UNIT, temperature=22.0, min_temp=25, max_temp=30)
+    dev = HeatPumpController(hass=hass, climate_entity_id=UNIT, rated_power=2500.0,
+                             boost_offset=2.0)
+    dev.step_down_action = STEP_DOWN_SETPOINT
+    dev.min_setpoint = 15.0
+    await dev.step_down()
+    assert 25.0 not in hass.landed
+    assert all(v < 22.0 for v in hass.landed), hass.landed
+
+
+async def test_sems_own_raise_target_is_lifted_to_the_minimum(clock):
+    hass = _Hass()
+    hass.unit(TANK, temperature=48.0, current_temperature=40.0, min_temp=50, max_temp=70)
+    dev = _tank(hass, target=45.0)
+    await dev._activate_water_heater()
+    assert hass.landed[-1] == 50

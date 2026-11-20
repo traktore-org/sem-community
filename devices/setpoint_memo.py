@@ -151,12 +151,16 @@ class SetpointMemoMixin:
         attrs = getattr(state, "attributes", None) or {}
         return _num(attrs.get("min_temp")), _num(attrs.get("max_temp"))
 
-    def _sp_capped(self, entity_id: Optional[str], target: float) -> float:
-        """(#1396) The value inside the unit's own range — the ONE cap every
-        ``set_temperature`` of a device uses: a value outside the range is
-        refused by the unit, every time. A target above the unit's maximum
-        is remembered (``sp_above_max``) and said once."""
+    def _sp_capped(self, entity_id: Optional[str], target: float,
+                   raise_to_min: bool = False) -> float:
+        """(#1396) The ONE cap every ``set_temperature`` of a device uses: never
+        above the unit's ``max_temp`` (a value above it is refused, every time),
+        remembered (``sp_above_max``) and said once. ``raise_to_min`` lifts a
+        value to ``min_temp`` — only for SEM's own raise targets: a step-down,
+        release, restore, climate start or tank minimum is never raised."""
         lo, hi = self.sp_unit_range(entity_id)
+        if not raise_to_min:
+            lo = None
         capped = float(target)
         if hi is not None and capped > hi:
             capped = hi
@@ -196,10 +200,21 @@ class SetpointMemoMixin:
             waits = self._sp_wait = {}
         return waits
 
-    def sp_refused_for(self, entity_id: Optional[str]) -> bool:
-        """(#1396) The unit refused SEM's last target and the next try waits."""
-        w = self._sp_waits().get(str(entity_id))
-        return bool(w) and _mono() < w[1]
+    @staticmethod
+    def _sp_wait_key(entity_id, purpose: str) -> str:
+        return f"{entity_id}|{purpose or 'everyday'}"
+
+    def sp_refused_for(self, entity_id: Optional[str],
+                       purpose: Optional[str] = None) -> bool:
+        """(#1396) SEM's target of this ``purpose`` was refused by the unit and
+        its next try waits. ``purpose`` None: any purpose of this unit."""
+        now = _mono()
+        if purpose is not None:
+            w = self._sp_waits().get(self._sp_wait_key(entity_id, purpose))
+            return bool(w) and now < w[1]
+        prefix = f"{entity_id}|"
+        return any(k.startswith(prefix) and now < w[1]
+                   for k, w in self._sp_waits().items())
 
     @property
     def sp_refused(self) -> bool:
@@ -208,18 +223,22 @@ class SetpointMemoMixin:
         return any(now < w[1] for w in self._sp_waits().values())
 
     async def sp_write_target(self, domain: str, entity_id: str, target: float,
-                              why: str = "") -> bool:
+                              why: str = "", purpose: str = "everyday") -> bool:
         """``set_temperature`` to SEM's target, remembering the setpoint the
         unit shows first. Returns what ``send`` returns.
 
         (#1396) Capped at the unit's range. SEM's OWN target only: after the
-        unit refuses it (the service raises), the next target write to that
-        unit waits 5, 15, then 60 minutes, whatever the value — said once
-        per wait, not every cycle. Only a write that lands ends the wait.
-        Restores, step-downs and minimums send directly, as before."""
-        target = self._sp_capped(entity_id, target)
-        key = str(entity_id)
-        if self.sp_refused_for(key):
+        unit refuses it (the service raises), the next target write of the
+        same ``purpose`` to that unit waits 5, 15, then 60 minutes, whatever
+        the value — said once per wait, not every cycle. Only a write that
+        lands ends the wait. Purposes: ``everyday`` (solar, grid, Keep at and
+        pre-heat targets, which alternate and share one wait), ``legionella``
+        and ``boost`` — a refused one never holds back another. Returns False
+        on a refusal instead of raising. Restores, step-downs and minimums
+        send directly, as before."""
+        target = self._sp_capped(entity_id, target, raise_to_min=True)
+        key = self._sp_wait_key(entity_id, purpose)
+        if self.sp_refused_for(entity_id, purpose):
             return False
         self._sp_begin(entity_id, target)
         try:
