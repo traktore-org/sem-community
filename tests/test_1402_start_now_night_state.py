@@ -153,14 +153,45 @@ class TestStartNowAtNight:
         assert res["charger_zap_charging_state"] == CS.TARIFF_WAITING_FOR_CHEAP
         assert _amps_sent(rig, "zap") == []
 
+    @pytest.mark.parametrize("sol_first", [True, False])
+    async def test_either_order_and_no_floor_key(self, sol_first):
+        """Review find: with the Solar-only charger FIRST in order, the loop
+        read a ``pc_target`` no line had set and the cycle failed on every
+        turn. With it second, it read the charger before's target. Here the
+        Solar-only charger has no ``daily_ev_target`` key at all (the usual
+        case), in both orders."""
+        sol = _charger("sol", mode="solar_only", priority=1 if sol_first else 9)
+        sol.pop("daily_ev_target")
+        zap = _charger(priority=5)
+        rig = _night_rig([zap, sol])
+        _override(rig, "sol", "force")
+        res = await rig.tick()
+        assert _amps_sent(rig, "sol") == [16]
+        assert res["charger_sol_charging_state"] == CS.NIGHT_CHARGING_ACTIVE
+        assert res["charger_zap_charging_state"] == CS.TARIFF_WAITING_FOR_CHEAP
+
+    @pytest.mark.parametrize("sol_first", [True, False])
+    async def test_a_forced_charger_that_does_not_charge_is_not_charging(
+            self, sol_first):
+        """Car unplugged: nothing is sent, so the state must not say
+        charging — on the old draft it took the other charger's target."""
+        sol = _charger("sol", mode="solar_only", priority=1 if sol_first else 9)
+        sol.pop("daily_ev_target")
+        rig = _night_rig([_charger(priority=5), sol])
+        rig.hass.states.set("binary_sensor.sol_connected", "off")
+        _override(rig, "sol", "force")
+        res = await rig.tick()
+        assert _amps_sent(rig, "sol") == []
+        assert res.get("charger_sol_charging_state") != CS.NIGHT_CHARGING_ACTIVE
+
     async def test_an_off_charger_stays_hands_off(self):
         """Off outranks a one-off, as for batteries: nothing is sent."""
         rig = _night_rig([_charger(), _charger("off1", mode="off")])
         _override(rig, "off1", "force")
         res = await rig.tick()
         assert _amps_sent(rig, "off1") == []
-        assert res.get("charger_off1_charging_state") not in (
-            CS.NIGHT_CHARGING_ACTIVE,)
+        assert "charger_off1_charging_state" not in res, (
+            "the gate leaves an off charger out of the loop")
 
     async def test_saved_always_max_with_the_target_met_says_charging(self):
         """Same rule without an override: always_max ignores the plan."""
@@ -303,6 +334,14 @@ class TestTheGate:
         coord = self._coord()
         assert not coord._night_gate_skips(
             "z", _charger("z", mode="solar_plus_cheap"), dt_util.now())
+
+    def test_a_vpp_boost_does_not_hide_start_now(self):
+        """A grid boost turns the coordinator's mode into always_max; the
+        gate still sees the user's Solar-only mode and the override."""
+        coord = self._coord(self._forced("s"))
+        coord._vpp_ev_override = "boost"
+        cfg = _charger("s", mode="solar_only", daily_ev_target=0)
+        assert not coord._night_gate_skips("s", cfg, dt_util.now())
 
     def test_a_bad_override_store_leaves_it_out(self):
         coord = self._coord({"s": "not an override"})

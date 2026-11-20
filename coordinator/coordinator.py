@@ -2002,9 +2002,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         keeps it ``off``."""
         if self._mode_allows_night_charging(charger_cfg):
             return False
+        from ..consts.ev_charge_modes import effective_charge_mode_for
         from . import plan_override as _po
         try:
-            mode = self._effective_charge_mode_for(charger_cfg)
+            # The user's mode, as ``_mode_allows_night_charging`` reads it —
+            # not ``_effective_charge_mode_for``, which a VPP boost turns
+            # into always_max and so hides the override.
+            mode = effective_charge_mode_for(
+                getattr(self, "hass", None),
+                getattr(self, "config", {}) or {}, charger_cfg)
             return _po.charger_mode_for(
                 getattr(self, "_plan_overrides", None) or {},
                 cid, mode, now) == mode
@@ -5375,10 +5381,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # (``_night_gate_skips``). It runs always_max, which
                         # ignores the plan: no night plan, no plan row and no
                         # "target not reachable" notice for it.
-                        if ((_night_state
-                                and self._mode_allows_night_charging(charger_cfg))
-                                or _gap):
-                            pc_target = charging_context.night_target_kwh
+                        _night_capable = self._mode_allows_night_charging(charger_cfg)
+                        # Set for every charger, here: a value left from the
+                        # charger before would be read below as this one's.
+                        pc_target = charging_context.night_target_kwh
+                        if (_night_state and _night_capable) or _gap:
                             if pc_target > 0.1:
                                 plan = self._compute_night_plan(
                                     charger_cfg, pc_target, energy, night_over=_gap)
@@ -5446,7 +5453,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 charging_context.night_departure_floor = bool(
                                     getattr(plan, "to_departure", False))
                                 await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
-                        if _night_state:
+                        if _night_state and _night_capable:
                             # (#629 slice 3) the tri-state resolution is pure —
                             # see ev_night_targets.resolve_night_effective_state.
                             from .ev_night_targets import resolve_night_effective_state
@@ -5456,6 +5463,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 ChargingState.TARIFF_WAITING_FOR_CHEAP,
                                 ChargingState.NIGHT_TARGET_REACHED,
                             )
+                        elif _night_state:
+                            # (#1402) Let in by Start now only: its mode has no
+                            # night charge, so the state is its own, not the
+                            # fleet's. It reads "charging" once the decision
+                            # charges (``night_state_after_decision``).
+                            effective_state = ChargingState.NIGHT_DISABLED
 
                         # #526: surface (as a repair) when an SOC-% cap can't be
                         # enforced because no real vehicle SOC is readable.
