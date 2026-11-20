@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **The "dashboard ready" notice opens the dashboard** (#1397). It named /lovelace/sem-next, which opens the Home Assistant start screen. It now links /sem-next.
+
+# [2.3.0-beta.22] — 20.11.2026
+
 - 🐛 **The charge plan pencil works every time** (#1398). "Charge by" on Plan opens the day times on Devices, also after you visited Devices before.
 - 🐛 **A readable price line** (#1321). The price lane is taller, and prices above zero are scaled from the cheapest, so 15-minute steps show.
 - ✨ **A grid charge sets the mode too** (#1362). With a hold select set, a grid charge also sets its option. Some inverters charge only then.

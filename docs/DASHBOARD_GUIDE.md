@@ -59,7 +59,9 @@ A sensor that is missing leaves its row out.
 
 The next 24 hours as one timeline.
 
-- Price bars show cheap and expensive hours.
+- The price line shows cheap and dear hours, in 15-minute steps if your tariff
+  has them. The scale starts just below the cheapest price, so small steps show.
+  The labels give the real prices.
 - The sun forecast is a curve.
 - Blocks show planned runs. Solid blocks are running. Dashed blocks are planned.
   Tap a block for its reason.
