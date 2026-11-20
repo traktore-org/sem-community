@@ -7024,3 +7024,14 @@ Refs #1382 #1324.
 **Sweep question:** where does this address come from — the page the user is on, the path SEM registered, or a name written in the code?
 **Left open:** `sem-retired-card.js` looks only for `sem-next` and `sem-dashboard`: on a custom `dashboard_path` it shows no link (no wrong link). A dashboard shown inside another panel (HA's `embedded` mode) has no dashboard in the address; not seen with SEM.
 Refs #1397 #1398 #1321.
+
+### 188. A view switch forces a fold open, and the fold control stays drawn — the tap does nothing — GUARDED
+
+**What happens.** On Devices, every card stayed open and its fold arrow did nothing; **Open all / Fold all** was gone (#1400, beta.21). The cause was **All settings**: `_isOpen()` returned "open" for every card while it was on, and hid the toolbar pill. The tap was saved but never read. Beta.21 removed the old Configuration tab, whose "advanced" choice is kept under the same browser key, so users who had it on landed in All settings.
+**The rule.** A fold is the user's own tap, the same in every view. All settings decides which rows an open card shows; it opens and folds no card. A control that a mode makes useless is not drawn as a control in that mode (Reorder: the name is no button there).
+It is class 47's shape on screen: one switch carried two things, which rows an open card shows and which cards are open.
+**Where it lives:** `sem-next-devices-card.js` `_isOpen()` and the toolbar (**fixed**); in Reorder, the device name and the **Add device** pill, whose sheet Reorder hides (**fixed**: plain text, and no pill; the arrow was already hidden). Swept and right: the charge plan days (`_depOpen`), the Now card's flow list (`_io`), the Replay day rows (`_openDay`), the System `<details>` folds — no mode forces any of them.
+**Guard:** `dashboard/card/test/next-devices.test.js` — for All settings on and off, at phone and desk width, the real fold arrow of every card flips it and the card draws as the tap left it; Open all / Fold all is offered with All settings on and works; switching All settings keeps the folds; in Reorder the name is no button and Add device is not drawn. Red on the old card (3 of 3).
+**Sweep question:** while this mode is on, does every control drawn still change what it says it changes?
+**Left open:** Reorder stays on when you leave Devices; back there, cards stay folded until **Done** (older than #1400; ending it there would drop or save an order unasked). On a phone the System battery link opens Devices with the battery card folded, as in Everyday.
+Refs #1400 #1321.

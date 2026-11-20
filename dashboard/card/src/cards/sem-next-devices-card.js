@@ -486,9 +486,10 @@ class SEMNextDevicesCard extends SEMNextBase {
     }
 
     // ── fold ──
-    /** Chargers and batteries start open, loads folded; a tap is remembered. */
+    /** Chargers and batteries start open, loads folded; a tap is remembered.
+     *  (#1400) All settings does not open a card: it says which rows an open
+     *  card shows. Forced open, the fold arrow did nothing and Fold all was hidden. */
     _isOpen(row) {
-        if (this._all) return true;
         const v = this._open[row.id];
         return v === undefined ? defaultOpen(row.type, this._narrow()) : !!v;
     }
@@ -811,13 +812,17 @@ class SEMNextDevicesCard extends SEMNextBase {
         // (#1321) a load off and about to start says it in its own line: no second "Would" above it
         const would = dec && !startCode(row, pill) ? wouldLine(dec, (k) => this._t(k)) : '';
         const toggle = () => { if (!this._reorder) this._toggleOpen(row); };
+        const nameParts = html`${this._icon(row.icon)}<span title=${row.name}>${row.name}</span>${this._pill(this._pillText(pill), pill.cls)}`;
         return html`<ha-card class="card dev ${open ? '' : 'folded'}" data-id=${row.id} style="--c:${color}">
             <div class="head">
                 <span class="handle" title=${locked ? t('locked_under_parent') : t('drag_to_reorder')}
                     @pointerdown=${locked ? nothing : (e) => this._dragStart(e, row.id)}>${this._icon(locked ? 'mdi:subdirectory-arrow-right' : 'mdi:drag-vertical')}</span>
                 <span class="rank" title=${t('next_priority')}>${i + 1}</span>
-                <div class="name tap" role="button" tabindex="0" aria-expanded=${open ? 'true' : 'false'} @click=${toggle}
-                    @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}>${this._icon(row.icon)}<span title=${row.name}>${row.name}</span>${this._pill(this._pillText(pill), pill.cls)}</div>
+                ${this._reorder
+                    // (#1400) Reorder folds every card: the name is no button there, a tap would do nothing
+                    ? html`<div class="name">${nameParts}</div>`
+                    : html`<div class="name tap" role="button" tabindex="0" aria-expanded=${open ? 'true' : 'false'} @click=${toggle}
+                    @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}>${nameParts}</div>`}
                 <span class="live muted sm">${liveText}</span>
                 ${row.type === 'load' && !row.lockedByOperator ? this._pill(t(verdictKey(row)), '', { icon: 'mdi:hand-back-left-outline' }) : nothing}
                 <div class="arrows">
@@ -845,8 +850,9 @@ class SEMNextDevicesCard extends SEMNextBase {
         const toolbar = html`<div class="period">
             ${this._btn(this._reorder ? t('next_done_btn') : t('next_reorder'), () => this._toggleReorder(),
                 { primary: this._reorder, icon: this._reorder ? 'mdi:check' : 'mdi:swap-vertical', disabled: n < 2 })}
-            <button type="button" class="pill" aria-expanded=${this._adding ? 'true' : 'false'} @click=${() => this._toggleAdd()}>${this._icon(this._adding ? 'mdi:close' : 'mdi:plus', 's')}${t(this._adding ? 'next_cancel' : 'next_add_device')}</button>
-            ${!this._reorder && !this._all && n > 1 ? (() => {
+            ${this._reorder ? nothing   // (#1400) Reorder hides the add sheet: a pill there would open nothing
+                : html`<button type="button" class="pill" aria-expanded=${this._adding ? 'true' : 'false'} @click=${() => this._toggleAdd()}>${this._icon(this._adding ? 'mdi:close' : 'mdi:plus', 's')}${t(this._adding ? 'next_cancel' : 'next_add_device')}</button>`}
+            ${!this._reorder && n > 1 ? (() => {
                 const allOpen = rows.every((r) => this._isOpen(r));
                 return html`<button type="button" class="pill" @click=${() => this._setAllOpen(rows, !allOpen)}>${this._icon(allOpen ? 'mdi:unfold-less-horizontal' : 'mdi:unfold-more-horizontal', 's')}${t(allOpen ? 'next_fold_all' : 'next_open_all')}</button>`;
             })() : nothing}
