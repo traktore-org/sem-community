@@ -1921,7 +1921,8 @@ class ComfortBandMixin:
             banking_energy_kwh, learn_drift, time_to_limit,
         )
         if goal:
-            return self._comfort_goal_demand(banking_energy_kwh, learn_drift)
+            return self._comfort_goal_demand(banking_energy_kwh, learn_drift,
+                                             now=now, time_to_limit=time_to_limit)
         off = learn_drift(list(getattr(self, "_comfort_off_samples", None)
                                or ()))
         if off is None:
@@ -1951,7 +1952,8 @@ class ComfortBandMixin:
         return {"energy_kwh": kwh, "deadline": deadline}
 
 
-    def _comfort_goal_demand(self, banking_energy_kwh, learn_drift):
+    def _comfort_goal_demand(self, banking_energy_kwh, learn_drift, now=None,
+                             time_to_limit=None):
         """(#1102) Energy to reach Keep at, or None when already there.
         (#1081) With the pre-heat tick in effect and a learned heating rate,
         the ask reaches the top (Keep at + Extra) instead."""
@@ -1959,7 +1961,7 @@ class ComfortBandMixin:
         if temp is None:
             return None
         direction = self._comfort_direction()
-        target_c, _offset_c, _limit_c = self._comfort_thresholds_c()
+        target_c, _offset_c, limit_c = self._comfort_thresholds_c()
         on = learn_drift(list(getattr(self, "_comfort_on_samples", None) or ()))
         keep_c = target_c
         if on is not None and self.comfort_preheat_on():
@@ -1990,6 +1992,19 @@ class ComfortBandMixin:
         if not kwh:
             return None
         ask = {"energy_kwh": kwh, "deadline": None}
+        # (#1395) When the room will reach its too-cold limit, from the learned
+        # cooling rate: the plan must place the run before that, not in the
+        # night's cheapest hours. Past the limit SEM heats at any price — the
+        # very cost the cheap hours were meant to avoid. No learned rate, no
+        # time: the plan keeps the night's end, as before.
+        if now is not None and callable(time_to_limit):
+            off = learn_drift(list(getattr(self, "_comfort_off_samples", None)
+                                   or ()))
+            if off is not None:
+                limit_at = time_to_limit(off, current_c=temp, limit_c=limit_c,
+                                         direction=direction, now=now)
+                if limit_at is not None:
+                    ask["limit_at"] = limit_at
         if target_c != keep_c:
             # (#1081) the part above Keep at is bought in cheap hours only
             ask["cheap_only_kwh"] = self._preheat_extra_kwh(

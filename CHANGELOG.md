@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A heat pump pre-heats before its limit** (#1395). With cheap hours allowed, the run is planned before the room gets too cold, not in the night.
 - 🐛 **A refused setpoint waits** (#1396). A target the device refuses is retried after 5, 15, then 60 minutes, and stays inside the device's range.
 - 🐛 **A readable price line** (#1321). The price lane is taller, and prices above zero are scaled from the cheapest, so 15-minute steps show.
 - ✨ **A grid charge sets the mode too** (#1362). With a hold select set, a grid charge also sets its option. Some inverters charge only then.

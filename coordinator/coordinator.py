@@ -826,6 +826,22 @@ def _plan_heat_cost(controller, demands, allocations, ledger, cop_fn) -> dict:
 #: moves an old battery flip (a disk that refuses is not asked every cycle)
 _FLIP_STORE_RETRY_S = 300.0
 
+
+def comfort_deadline(ask: dict, night_end):
+    """(#1395) When a comfort ask is due: its own deadline, else the night's
+    end — and a Keep at goal before the room reaches its too-cold limit
+    (``limit_at``) when that comes first. Past the limit SEM heats at any
+    price, so a goal packed into the night's cheapest hours after it was
+    bought at the plain rate anyway."""
+    deadline = ask.get("deadline") or night_end
+    limit_at = ask.get("limit_at")
+    try:
+        if limit_at is not None and (deadline is None or limit_at < deadline):
+            return limit_at
+    except TypeError:   # a naive next to an aware time: keep the deadline
+        pass
+    return deadline
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -13922,11 +13938,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     did = dev.device_id
                     labels[f"comfort:{did}"] = (
                         str(getattr(dev, "name", "") or "").strip() or None)
+                    _deadline = comfort_deadline(ask, night_end)  # (#1395)
                     demands.append(Demand(
                         id=f"comfort:{did}", kind="comfort",
                         energy_kwh=float(ask["energy_kwh"]),
                         max_power_w=rated, min_power_w=rated,
-                        deadline=ask.get("deadline") or night_end,
+                        deadline=_deadline,
                         priority=int(getattr(dev, "priority", 0) or 0),
                         source="grid",
                         needs_cheap_level=True,
