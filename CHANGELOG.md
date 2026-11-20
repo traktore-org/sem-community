@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **The "dashboard ready" notice opens the dashboard** (#1397). It named /lovelace/sem-next, which opens the Home Assistant start screen. It now links /sem-next.
+- 🐛 **Links stay on the SEM dashboard** (#1397). The notices after building it named /lovelace/sem-next, which opens the Home Assistant start screen.
 
 # [2.3.0-beta.22] — 20.11.2026
 

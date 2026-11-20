@@ -5106,7 +5106,7 @@ async def _async_register_services(
                         "title": "SEM Dashboard Created",
                         "message": (
                             f"Dashboard **{dashboard_title}** created with {len(views)} views.\n\n"
-                            f"Open it: [/{dashboard_path}](/{dashboard_path})\n\n"
+                            f"Address: /{dashboard_path}\n\n"
                             f"Home Assistant will restart in 5 seconds to apply the first install."
                         ),
                         "notification_id": "sem_dashboard_success",

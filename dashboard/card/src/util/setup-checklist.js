@@ -67,10 +67,14 @@ export function brandLabel(domain) {
     return String(domain).split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-/** The sibling screen of the page we are on: the dashboard URL is never assumed (#1321). */
+/**
+ * The sibling screen of the page we are on: the dashboard URL is never assumed (#1321).
+ * (#1397) HA puts the view in the address; a bare dashboard address keeps its
+ * dashboard and gets the view added, never "/<view>", which is no page in HA.
+ */
 export function sibling(pathname, view) {
     const parts = String(pathname || '').split('/').filter(Boolean);
-    if (parts.length) parts[parts.length - 1] = view; else parts.push(view);
+    if (parts.length > 1) parts[parts.length - 1] = view; else parts.push(view);
     return '/' + parts.join('/');
 }
 

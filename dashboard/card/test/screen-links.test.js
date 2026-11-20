@@ -63,6 +63,18 @@ test('the address helpers keep the dashboard and swap the screen', () => {
     assert.equal(rowTarget('repairs', '/sem-dashboard/now').path, '/config/repairs', "HA's own page");
 });
 
+test('a bare dashboard address keeps its dashboard', () => {
+    // HA puts the view in the address; if one is ever missing, "/devices" is no page in HA
+    for (const dash of DASHBOARDS) {
+        assert.equal(sibling(`/${dash}`, 'devices'), `/${dash}/devices`);
+        assert.equal(sibling(`/${dash}/`, 'devices'), `/${dash}/devices`);
+        assert.equal(navTarget(`/${dash}`, 'open_battery'), `/${dash}/devices`);
+        globalThis.location.pathname = `/${dash}`;
+        assert.equal(mount('sem-next-plan-card', CHARGER)._screen('devices'), `/${dash}/devices`);
+    }
+    assert.equal(sibling('', 'devices'), '/devices', 'no address at all: nothing to keep');
+});
+
 function sources(dir) {
     return readdirSync(dir).flatMap((f) => {
         const p = join(dir, f);
@@ -72,12 +84,19 @@ function sources(dir) {
 
 const SRC = new URL('../src/', import.meta.url).pathname;
 const FIXED_SEM_ADDRESS = /['"`]\/(sem-next|sem-dashboard)\b/;
+// the dashboard's name alone, as beta.20's link card had it: href="/${NEXT_PATH}/now"
+const SEM_DASHBOARD_NAME = /['"`](sem-next|sem-dashboard)['"`/]/;
+// it may only ask HA which of them exists, and link to that one
+const ASKS_HA = new Set(['cards/sem-retired-card.js']);
 
 test('no card names a fixed SEM dashboard address', () => {
     const files = sources(SRC);
     assert.ok(files.length > 20, 'the scan reads the cards');
     const hits = files.filter((f) => FIXED_SEM_ADDRESS.test(readFileSync(f, 'utf8')));
     assert.deepEqual(hits, []);
+    const named = files.filter((f) => SEM_DASHBOARD_NAME.test(readFileSync(f, 'utf8')))
+        .map((f) => f.slice(SRC.length));
+    assert.deepEqual(named, [...ASKS_HA], 'only the retired card names the dashboard');
     const bundle = readFileSync(new URL('../dist/sem-cards.js', import.meta.url), 'utf8');
     assert.ok(!FIXED_SEM_ADDRESS.test(bundle), 'the built bundle has none either');
 });

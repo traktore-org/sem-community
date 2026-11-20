@@ -29,6 +29,7 @@ import { PEAK_KW, PEAK_TEXT, peakQuestion, peakWrites } from './peak-questions.j
 import { BATTERY_QUESTIONS, batteryLevels } from './battery-questions.js';
 import { fmtNum } from './next-number.js';
 import { capacityUnset } from './charger-questions.js';
+import { sibling } from './setup-checklist.js';
 
 // (#528) option keys that reload the entry when written — a subset of
 // `__init__.py:_SET_OPTION_STRUCTURAL_KEYS` (tests/test_528).
@@ -213,9 +214,7 @@ function action(name, labelKey) { return { kind: 'action', action: name, labelKe
 export function navTarget(pathname, action) {
     const screen = { open_battery: 'devices' }[action];
     if (!screen) return pathname || '';
-    const parts = String(pathname || '').split('/').filter(Boolean);
-    if (parts.length) parts[parts.length - 1] = screen; else parts.push(screen);
-    return '/' + parts.join('/');
+    return sibling(pathname, screen);
 }
 
 export function pendingKey(slot) {

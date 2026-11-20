@@ -33,7 +33,7 @@ def _dict_values(fn: ast.AST, key: str) -> list[ast.expr]:
             for k, v in zip(node.keys, node.values, strict=True):
                 if isinstance(k, ast.Constant) and k.value == key:
                     out.append(v)
-    return out
+    return sorted(out, key=lambda v: v.lineno)   # in source order
 
 
 def _messages() -> list[str]:
@@ -62,10 +62,14 @@ def test_every_notice_gives_the_dashboard_address():
         assert set(addresses) == {f"/{PATH}"}, text
 
 
-def test_a_notice_link_opens_the_dashboard():
-    """The two notices shown while the dashboard is live link to it."""
-    links = [m for t in _messages() for m in re.findall(r"\]\(([^)]*)\)", t)]
-    assert links == [f"/{PATH}", f"/{PATH}"]
+def test_only_the_live_notice_links_the_dashboard():
+    """Only the "updated" notice is shown while the dashboard is loaded.
+
+    The other two wait for a restart: a link there would open the start screen,
+    and Home Assistant does not keep a notice across a restart.
+    """
+    links = [re.findall(r"\]\(([^)]*)\)", t) for t in _messages()]
+    assert links == [[f"/{PATH}"], [], []]
 
 
 def _py_files():
