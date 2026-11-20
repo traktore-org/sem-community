@@ -195,6 +195,16 @@ def charger_mode_for(
     return "always_max"
 
 
+def skips_charger(
+    overrides: Mapping[str, PlanOverride], charger_id: str, now: datetime,
+) -> bool:
+    """(#1402) Does a one-off ``skip`` hold for this charger now? The night
+    state reads it: "waiting for cheap" is not true on a night the user
+    skipped."""
+    rec = active_override(overrides, charger_id, now)
+    return rec is not None and rec.action == "skip"
+
+
 def apply_to_charger_decision(
     overrides: Mapping[str, PlanOverride], charger_id: str,
     decision: Any, now: datetime,
