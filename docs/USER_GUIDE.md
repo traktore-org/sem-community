@@ -375,6 +375,7 @@ Extra notes:
 - A heater with no thermometer asks **Run it each day for** instead.
 - A cooling unit asks the same questions, turned round.
 - Away mode: no keep-at runs, nothing bought. Only the never-colder limit heats.
+- SEM sends only temperatures inside the device's own range. If the device refuses one, SEM waits 5, 15, then 60 minutes before it tries again.
 
 ### Order of decisions
 
