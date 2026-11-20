@@ -25,6 +25,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { moveToIndex, computeDropIndex } from '../util/drag-reorder.js';
 import { slotStatus, isUncapped } from '../util/peak-slot.js';
 import { downloadBase64 } from '../util/download.js';
+import { takeStored } from '../util/setup-checklist.js';
 import {
     ENTITY_DOMAINS, controlToFormValues, formValuesToServiceData, buildLoadConfigModalHTML,
     readFormValues, findDeviceForConfig,
@@ -38,6 +39,12 @@ import { wouldFor, wouldList, wouldLine, startCode } from '../util/why-rows.js';
 const DOMAIN = 'solar_energy_management';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const HOLD_MS = 15000;
+
+/** Run fn once the browser has drawn the next frame. */
+function afterPaint(fn) {
+    if (typeof requestAnimationFrame !== 'function') { setTimeout(fn, 0); return; }
+    requestAnimationFrame(() => setTimeout(fn, 0));
+}
 
 const IDS = [
     'sensor.sem_controllable_devices_count', 'sensor.sem_energy_plan', 'sensor.sem_charging_state',
@@ -179,6 +186,8 @@ class SEMNextDevicesCard extends SEMNextBase {
     disconnectedCallback() {
         super.disconnectedCallback();
         if (this._drag) this._dragEnd({ type: 'pointercancel' });
+        // (#1398) a scroll that did not happen does not wait for a later visit
+        this._scrollTo = null;
     }
 
     updated(changed) {
@@ -494,22 +503,29 @@ class SEMNextDevicesCard extends SEMNextBase {
         this._open = { ...this._open, [CHARGER_PREFIX + cid]: true };
         writeOpen(this._open);
         this._depOpen = { ...this._depOpen, [cid]: true };
-        this._scrollTo = CHARGER_PREFIX + cid;
+        this._scrollTo = cid;
         this._tick++;
     }
 
-    /** A charge plan another screen asked for, read once. */
-    _takeOpenRequest() {
-        let cid = null;
-        try { cid = window.sessionStorage.getItem(OPEN_CHARGE_PLAN_KEY); if (cid) window.sessionStorage.removeItem(OPEN_CHARGE_PLAN_KEY); } catch (e) { cid = null; }
+    // (#1398) A charge plan the Plan screen asked for. HA keeps this card when you leave
+    // Devices and puts the same one back, so the request is read on every return, not once.
+    connectedCallback() {
+        const cid = takeStored(OPEN_CHARGE_PLAN_KEY);
         if (cid) this._openChargePlan(cid);
+        super.connectedCallback();
     }
 
     _afterRender() {
-        if (this._chargers && this._chargers.length && !this._openTaken) { this._openTaken = true; this._takeOpenRequest(); }
         if (this._scrollTo) {
-            const el = this.renderRoot && this.renderRoot.querySelector(`[data-id="${this._scrollTo}"]`);
-            if (el) { this._scrollTo = null; el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+            // (#1398) to the day times that just opened, so the tap is seen; the card when they are not drawn
+            const root = this.renderRoot;
+            const days = root && root.querySelector(`[data-plan="${this._scrollTo}"]`);
+            const el = days || (root && root.querySelector(`[data-id="${CHARGER_PREFIX + this._scrollTo}"]`));
+            if (el) {
+                this._scrollTo = null;
+                // after the next frame: HA sets a screen's scroll position once it has drawn it
+                afterPaint(() => el.scrollIntoView({ block: days ? 'center' : 'start', behavior: 'smooth' }));
+            }
         }
     }
 
