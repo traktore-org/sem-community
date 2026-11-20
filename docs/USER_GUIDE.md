@@ -371,6 +371,7 @@ A heater with a thermometer has four questions. The same questions are on
 Extra notes:
 
 - **Also in the cheapest-heat hours**: heats above *Keep it at* in cheap hours only.
+- With **Yes, in cheap hours**, SEM plans the heating before the temperature falls to **Never colder than**. It learns how fast the room or tank cools.
 - A heater with no thermometer asks **Run it each day for** instead.
 - A cooling unit asks the same questions, turned round.
 - Away mode: no keep-at runs, nothing bought. Only the never-colder limit heats.
