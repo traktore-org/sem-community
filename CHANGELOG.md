@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Device cards fold again** (#1400). With All settings on, every card on Devices stayed open, and Fold all was gone.
 - 🐛 **Links stay on the SEM dashboard** (#1397). The notices after building it named /lovelace/sem-next, which opens the Home Assistant start screen.
 
 # [2.3.0-beta.22] — 20.11.2026
