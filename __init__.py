@@ -5090,7 +5090,7 @@ async def _async_register_services(
                         "message": (
                             f"Dashboard **{dashboard_title}** regenerated with {len(views)} views.\n\n"
                             f"Changes are live now — refresh the browser if cards look stale.\n\n"
-                            f"Access at: /lovelace/{dashboard_path}"
+                            f"Open it: [/{dashboard_path}](/{dashboard_path})"
                         ),
                         "notification_id": "sem_dashboard_success",
                     },
@@ -5106,7 +5106,7 @@ async def _async_register_services(
                         "title": "SEM Dashboard Created",
                         "message": (
                             f"Dashboard **{dashboard_title}** created with {len(views)} views.\n\n"
-                            f"Access at: /lovelace/{dashboard_path}\n\n"
+                            f"Address: /{dashboard_path}\n\n"
                             f"Home Assistant will restart in 5 seconds to apply the first install."
                         ),
                         "notification_id": "sem_dashboard_success",
@@ -5133,7 +5133,7 @@ async def _async_register_services(
                             f"Dashboard **{dashboard_title}** is ready with {len(views)} views.\n\n"
                             f"It appears in the sidebar after the next Home Assistant restart. "
                             f"SEM does not restart it for you.\n\n"
-                            f"Address: /lovelace/{dashboard_path}"
+                            f"Address: /{dashboard_path}"
                         ),
                         "notification_id": "sem_dashboard_success",
                     },
