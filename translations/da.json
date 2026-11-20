@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Beholderen når ikke legionellamålet",
+      "description": "{name}: beholderen tager højst {max} °C, under legionellamålet {target} °C. SEM varmer til {max} °C, hvilket måske ikke desinficerer beholderen. Sænk målet, eller tjek beholderens maksimum. Meddelelsen forsvinder af sig selv."
     }
   },
   "selector": {

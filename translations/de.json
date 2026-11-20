@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Speicher erreicht das Legionellen-Ziel nicht",
+      "description": "{name}: Der Speicher nimmt höchstens {max} °C an, weniger als das Legionellen-Ziel {target} °C. SEM heizt auf {max} °C; das desinfiziert den Speicher womöglich nicht. Senke das Ziel oder prüfe das Maximum des Speichers. Die Meldung verschwindet von selbst."
     }
   },
   "selector": {

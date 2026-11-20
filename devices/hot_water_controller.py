@@ -442,19 +442,39 @@ class HotWaterController(SwitchDevice):
         self._last_legionella_path = path
         return f"legionella_{path}"
 
+    def _legionella_unit_max(self) -> "float | None":
+        """(#1396) The tank's own max_temp: the live number when it gives one
+        (and remembered), else the last known one while a run is on — a tank
+        that goes unavailable mid-run keeps its run's reach. None when no
+        number was ever seen: then everything is as before."""
+        try:
+            _lo, hi = self.sp_unit_range(self.entity_id)
+        except Exception:  # noqa: BLE001
+            hi = None
+        if hi is not None:
+            self._legionella_known_max = hi
+            return hi
+        if self._legionella_cycle_active:
+            return getattr(self, "_legionella_known_max", None)
+        return None
+
+    @property
+    def legionella_above_unit_max(self) -> "float | None":
+        """(#1396) The tank's max when the set Legionella target is above it
+        (the tank cannot reach the target), else None."""
+        hi = self._legionella_unit_max()
+        if hi is not None and hi < float(self.legionella_target_temp):
+            return hi
+        return None
+
     @property
     def legionella_reach_c(self) -> float:
         """(#1396) The temperature a Legionella run waits for: the set target,
-        or the unit's own maximum when that is lower — the unit is never sent
-        more, so a run waiting for more would never end."""
-        target = float(self.legionella_target_temp)
-        try:
-            _lo, hi = self.sp_unit_range(self.entity_id)
-        except Exception:  # noqa: BLE001 — no range read: the set target
-            hi = None
-        if hi is not None and hi < target:
-            return float(hi)
-        return target
+        or the tank's own maximum when the tank reports a lower one — it is
+        never sent more, so a run waiting for more would never end. A
+        Repair says the target cannot be reached."""
+        hi = self.legionella_above_unit_max
+        return float(hi) if hi is not None else float(self.legionella_target_temp)
 
     @property
     def legionella_hold_minutes(self) -> int:
@@ -623,7 +643,7 @@ class HotWaterController(SwitchDevice):
             self._last_temperature_safety_path = "configured_sensor_broken"
             return False
         if self._legionella_cycle_active:
-            if temp < self.legionella_reach_c:        # (#1396) the unit's max at most
+            if temp < self.legionella_reach_c:        # (#1396) the tank's max at most
                 self._last_temperature_safety_path = "in_legionella_cycle_below_target"
                 return True
             self._last_temperature_safety_path = "in_legionella_cycle_at_target"
@@ -703,7 +723,7 @@ class HotWaterController(SwitchDevice):
         temp = self.get_current_temperature()
         if temp is None:
             return True
-        floor = self.legionella_reach_c          # (#1396) the unit's max at most
+        floor = self.legionella_reach_c          # (#1396) the tank's max at most
         if self._legionella_hold_start is not None:
             floor -= LEGIONELLA_HOLD_DIP_K   # the hold's own noise margin
         return temp < floor
@@ -1053,16 +1073,25 @@ class HotWaterController(SwitchDevice):
         except Exception:
             # (#1081) A tank with no off: its minimum IS SEM's off state, so
             # the setpoint it had is not put back — SEM holds it at the minimum
-            self._sp_memo = None
             log_on_change(
                 _LOGGER, f"tank-no-off:{self.device_id}", logging.INFO,
                 "%s: tank has no off; SEM holds it at its minimum (#1081)",
                 self.name)
-            # (#1396) the one capped writer; a refusal waits and says so there
-            result = await self.sp_send_temperature(
-                "water_heater", self.entity_id, self.min_temperature,
-                why="hot water off")
-            sent = result != "withheld"   # a refused write still reads idle
+            try:
+                # (#1396) capped at the tank's range, sent directly
+                sent = await self.sp_send_capped(
+                    "water_heater", self.entity_id, self.min_temperature,
+                    why="hot water off")
+            except Exception as e:
+                # (#1396) refused: the tank still holds SEM's target. The
+                # memo stays and the tank is not counted idle, so the next
+                # cycle tries the minimum again.
+                _LOGGER.error("Failed to deactivate water_heater: %s", e)
+                self._last_deactivation_path = "water_heater_minimum_refused"
+                return
+            if sent:
+                # the memo goes only once the minimum has landed
+                self._sp_memo = None
         else:
             if sent:
                 # (#1081) off first: the tank's own setpoint goes back after
@@ -1249,7 +1278,7 @@ class HotWaterController(SwitchDevice):
                     if gap > LEGIONELLA_UNREAD_HOLD_GRACE_MIN:
                         self._hold_unread_min = float(getattr(self, "_hold_unread_min", 0.0)) + gap
                 self._unread_since = None
-            reach = self.legionella_reach_c       # (#1396) the unit's max at most
+            reach = self.legionella_reach_c       # (#1396) the tank's max at most
             in_hold = temp is not None and (
                 temp >= reach
                 or (self._legionella_hold_start is not None

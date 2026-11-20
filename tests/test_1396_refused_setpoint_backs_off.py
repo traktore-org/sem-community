@@ -150,7 +150,7 @@ async def test_a_refused_boost_is_not_counted_as_boosted(clock):
     assert len(hass.writes()) == 1
 
 
-# ── review: one wait per unit, every writer, a target above the unit's max ──
+# ── review: one wait per unit for SEM's target; every write capped ──────
 
 async def test_alternating_targets_wait_as_one_unit(clock):
     """Solar and grid targets taking turns must not restart the wait."""
@@ -165,41 +165,8 @@ async def test_alternating_targets_wait_as_one_unit(clock):
     assert len(hass.writes()) == 3
 
 
-async def test_a_refused_restore_waits_too_and_is_kept(clock):
-    hass = _Hass()
-    hass.unit(UNIT, temperature=20.0, min_temp=10, max_temp=30)
-    dev = SetpointDevice(hass, "hp", "Pump", 2000.0, climate_entity_id=UNIT,
-                         normal_setpoint=20.0, boost_offset=2.0)
-    await dev.activate(3000)                           # 22 out, 20 remembered
-    hass.refuse = True
-    for _ in range(30):                                # the sweep, 5 minutes
-        await dev.sp_release_orphan()
-        await dev.deactivate()
-        clock["now"] += 10
-    restores = [w for w in hass.writes() if w == 20.0]
-    assert len(restores) == 1, "one try, then the wait"
-    assert dev._sp_memo, "the restore is kept, not dropped"
-    hass.refuse = False
-    clock["now"] += 5 * 60
-    await dev.deactivate()
-    assert hass.writes()[-1] == 20.0 and not dev._sp_memo
-
-
-async def test_a_owed_restore_goes_before_a_new_target(clock):
-    hass = _Hass()
-    hass.unit(UNIT, temperature=20.0, min_temp=10, max_temp=30)
-    dev = SetpointDevice(hass, "hp", "Pump", 2000.0, climate_entity_id=UNIT,
-                         normal_setpoint=20.0, boost_offset=2.0)
-    await dev.activate(3000)
-    hass.refuse = True
-    await dev.deactivate()                             # restore refused
-    hass.refuse = False
-    clock["now"] += 5 * 60 + 1
-    await dev.activate(3000)                           # SEM wants 22 again
-    assert hass.landed[-2:] == [20.0, 22.0], "the restore lands first"
-
-
-async def test_a_refused_step_down_waits(clock):
+async def test_a_step_down_is_not_delayed_by_a_refused_target(clock):
+    """(review 2) Only SEM's own target waits: a price step-down goes at once."""
     from custom_components.solar_energy_management.devices.heat_pump_controller import (
         HeatPumpController, STEP_DOWN_SETPOINT)
     hass = _Hass()
@@ -207,33 +174,120 @@ async def test_a_refused_step_down_waits(clock):
     dev = HeatPumpController(hass=hass, climate_entity_id=UNIT, rated_power=2500.0)
     dev.step_down_action = STEP_DOWN_SETPOINT
     hass.refuse = True
-    for _ in range(30):
-        await dev.step_down()
-        clock["now"] += 10
-    assert len(hass.writes()) == 1
-    assert dev._last_step_down_path == "setpoint_failed"
+    await dev.sp_write_target("climate", UNIT, 23.0)  # SEM's target refused
+    assert dev.sp_refused_for(UNIT)
+    hass.refuse = False
+    clock["now"] += 30                                 # well inside the wait
+    assert await dev.step_down() is True
+    assert hass.landed[-1] < 21.0
 
 
-async def test_legionella_ends_at_the_units_maximum(clock, caplog):
+async def test_every_write_is_capped(clock):
+    """(review 2) Restores and minimums are capped too, through one helper."""
+    hass = _Hass()
+    hass.unit(UNIT, temperature=20.0, min_temp=10, max_temp=25)
+    dev = SetpointDevice(hass, "hp", "Pump", 2000.0, climate_entity_id=UNIT,
+                         normal_setpoint=28.0, boost_offset=2.0)
+    dev._boosted = True
+    await dev.deactivate()                            # no memo: the normal setpoint
+    assert hass.landed[-1] == 25
+
+
+async def test_a_refused_tank_minimum_keeps_the_memo_and_tries_again(clock):
+    """(review 1) A tank with no off: the minimum refused must not drop the
+    user's setpoint nor read idle."""
+    hass = _Hass()
+    hass.unit(TANK, temperature=48.0, current_temperature=40.0, min_temp=30, max_temp=60)
+    real = hass._call
+
+    async def no_off(domain, service, data=None, **kw):
+        if service == "turn_off":
+            raise RuntimeError("no off")
+        return await real(domain, service, data, **kw)
+    hass.services.async_call.side_effect = no_off
+    dev = _tank(hass)
+    await dev._activate_water_heater()                 # 55 out, 48 remembered
+    assert dev.is_active and dev._sp_memo
+    hass.refuse = True
+    await dev._deactivate_water_heater()
+    assert dev._sp_memo, "the user's setpoint is kept"
+    assert dev.is_active, "not counted idle"
+    assert dev._last_deactivation_path == "water_heater_minimum_refused"
+    hass.refuse = False
+    await dev._deactivate_water_heater()               # the next cycle
+    assert hass.landed[-1] == dev.min_temperature
+    assert not dev._sp_memo and not dev.is_active
+
+
+def _legionella(hass, target=65.0):
+    return HotWaterController(hass=hass, entity_id=TANK, rated_power=2000.0,
+                              solar_target_temp=55.0, legionella_target_temp=target)
+
+
+async def test_legionella_ends_at_the_tanks_maximum(clock, caplog):
     hass = _Hass()
     hass.unit(TANK, temperature=48.0, current_temperature=60.0, max_temp=60)
-    dev = HotWaterController(hass=hass, entity_id=TANK, rated_power=2000.0,
-                             solar_target_temp=55.0, legionella_target_temp=65.0)
+    dev = _legionella(hass)
     assert dev.legionella_reach_c == 60.0
+    assert dev.legionella_above_unit_max == 60.0
     dev._legionella_cycle_active = True
     assert dev.is_temperature_safe() is False, "60 °C is all this tank takes"
     with caplog.at_level(logging.WARNING):
         await dev._activate_water_heater()
         await dev._activate_water_heater()
     assert hass.writes()[-1] == 60
-    above = [r for r in caplog.records if "above what" in r.getMessage()]
-    assert len(above) == 1, "said once"
-    assert dev.sp_above_max[TANK] == {"wanted": 65.0, "unit_max": 60.0}
+    assert len([r for r in caplog.records if "above what" in r.getMessage()]) == 1
 
 
-def test_without_a_unit_range_legionella_waits_for_its_target():
+def test_legionella_without_a_max_is_unchanged():
     hass = _Hass()
-    hass.unit(TANK, temperature=48.0, current_temperature=60.0)
-    dev = HotWaterController(hass=hass, entity_id=TANK, rated_power=2000.0,
-                             legionella_target_temp=65.0)
-    assert dev.legionella_reach_c == 65.0
+    hass.unit(TANK, temperature=48.0, current_temperature=59.5)
+    dev = _legionella(hass, target=60.0)
+    assert dev.legionella_reach_c == 60.0
+    assert dev.legionella_above_unit_max is None
+    dev._legionella_cycle_active = True
+    assert dev.is_temperature_safe() is True, "59.5 is below 60: heat on, as before"
+
+
+def test_a_tank_gone_unavailable_mid_run_keeps_its_reach():
+    hass = _Hass()
+    hass.unit(TANK, temperature=48.0, current_temperature=55.0, max_temp=58)
+    dev = _legionella(hass)
+    dev._legionella_cycle_active = True
+    assert dev.legionella_reach_c == 58.0
+    hass.unit(TANK, state="unavailable")               # attributes gone
+    assert dev.legionella_reach_c == 58.0
+    dev._legionella_cycle_active = False
+    assert dev.legionella_reach_c == 65.0, "outside a run: nothing assumed"
+
+
+def test_a_max_above_the_target_changes_nothing():
+    hass = _Hass()
+    hass.unit(TANK, temperature=48.0, current_temperature=55.0, max_temp=75)
+    dev = _legionella(hass)
+    assert dev.legionella_reach_c == 65.0 and dev.legionella_above_unit_max is None
+
+
+def test_the_repair_is_raised_and_cleared(monkeypatch):
+    from custom_components.solar_energy_management.coordinator import repair_issues as ri
+    made, gone = [], []
+    monkeypatch.setattr(ri.ir, "async_create_issue",
+                        lambda hass, **kw: made.append((kw["issue_id"], kw["translation_key"],
+                                                        kw["translation_placeholders"])))
+    monkeypatch.setattr(ri.ir, "async_delete_issue",
+                        lambda hass, domain, issue_id: gone.append(issue_id))
+    ri.raise_legionella_above_unit_max(object(), "hot_water", name="Tank", max_c=60, target_c=65)
+    ri.clear_legionella_above_unit_max(object(), "hot_water")
+    assert made == [("legionella_above_unit_max_hot_water", "legionella_above_unit_max",
+                     {"name": "Tank", "max": "60", "target": "65"})]
+    assert gone == ["legionella_above_unit_max_hot_water"]
+
+
+def test_the_coordinator_raises_and_clears_it_from_the_tank():
+    """The coordinator's Repair block reads ``legionella_above_unit_max``."""
+    import inspect
+    from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+    src = inspect.getsource(SEMCoordinator)
+    assert "raise_legionella_above_unit_max" in src
+    assert "clear_legionella_above_unit_max" in src
+    assert 'getattr(hw_controller, "legionella_above_unit_max"' in src

@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "水箱达不到防军团菌目标",
+      "description": "{name}：水箱最高只接受 {max} °C，低于防军团菌目标 {target} °C。SEM 加热到 {max} °C，可能无法为水箱消毒。请降低目标，或检查水箱自身的最高温度。此提示会自行消失。"
     }
   },
   "selector": {

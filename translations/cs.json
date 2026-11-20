@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Zásobník nedosáhne cíle proti legionele",
+      "description": "{name}: zásobník přijme nejvýše {max} °C, méně než cíl proti legionele {target} °C. SEM ohřeje na {max} °C, což zásobník nemusí vydezinfikovat. Snižte cíl nebo zkontrolujte maximum zásobníku. Hlášení zmizí samo."
     }
   },
   "selector": {

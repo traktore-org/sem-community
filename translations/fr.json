@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Le ballon n'atteint pas la cible légionellose",
+      "description": "{name} : le ballon accepte au plus {max} °C, sous la cible légionellose de {target} °C. SEM chauffe à {max} °C, ce qui peut ne pas désinfecter le ballon. Baissez la cible ou vérifiez le maximum du ballon. Ce message disparaît tout seul."
     }
   },
   "selector": {

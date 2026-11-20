@@ -92,6 +92,9 @@ KEYED = {
     "raise_legionella_below_stop":
         "cleared the cycle the stop no longer blocks the run; "
         "clear_orphan_hot_water_repairs once no tank is configured (#1369)",
+    "raise_legionella_above_unit_max":
+        "cleared the cycle the target fits the tank's maximum; "
+        "clear_orphan_hot_water_repairs once no tank is configured (#1396)",
     "raise_heater_no_rise":
         "clear_orphan_hot_water_repairs once no tank is configured; a warming "
         "run clears it, also after a restart (#1369)",

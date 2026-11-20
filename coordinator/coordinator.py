@@ -8732,6 +8732,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._legionella_stop_repair_up = False
             except Exception as e:  # noqa: BLE001 — never break the cycle
                 _LOGGER.debug("Legionella stop repair failed: %s", e)
+            # (#1396) the tank's own maximum is below the Legionella target:
+            # say it in Repairs, clear it when the target fits
+            try:
+                from .repair_issues import (
+                    clear_legionella_above_unit_max, raise_legionella_above_unit_max)
+                _did = str(getattr(hw_controller, "device_id", "hot_water"))
+                _max = getattr(hw_controller, "legionella_above_unit_max", None)
+                _max = _max if isinstance(_max, (int, float)) and not isinstance(_max, bool) else None
+                _up = getattr(self, "_legionella_max_repair_up", None)
+                if _max is not None and _up is not True:
+                    raise_legionella_above_unit_max(
+                        self.hass, _did,
+                        name=str(getattr(hw_controller, "name", _did)),
+                        max_c=float(_max),
+                        target_c=float(hw_controller.legionella_target_temp))
+                    self._legionella_max_repair_up = True
+                elif _max is None and _up is not False:
+                    clear_legionella_above_unit_max(self.hass, _did)
+                    self._legionella_max_repair_up = False
+            except Exception as e:  # noqa: BLE001 — never break the cycle
+                _LOGGER.debug("Legionella max repair failed: %s", e)
             # (#1369) heating that does not warm the tank is a fault
             if hasattr(hw_controller, "check_heating_works"):
                 try:

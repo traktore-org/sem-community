@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Tank cannot reach the Legionella target",
+      "description": "{name}: the tank accepts at most {max} °C, below the Legionella target {target} °C. SEM heats to {max} °C, which may not disinfect the tank. Lower the target, or check the tank's own maximum. This clears by itself."
     }
   },
   "selector": {

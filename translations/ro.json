@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Rezervorul nu atinge ținta antilegionella",
+      "description": "{name}: rezervorul acceptă cel mult {max} °C, sub ținta antilegionella de {target} °C. SEM încălzește la {max} °C, ceea ce poate să nu dezinfecteze rezervorul. Coboară ținta sau verifică maximul rezervorului. Mesajul dispare singur."
     }
   },
   "selector": {

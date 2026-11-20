@@ -543,13 +543,15 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             if target >= live:
                 self._last_step_down_path = "at_minimum"
                 return False
-            # (#1396) the one capped writer; a refusal waits and says so there
-            result = await self.sp_send_temperature(
-                "climate", self.climate_entity_id, target, why="step down")
-            if result in ("refused", "waiting"):
+            try:
+                # (#1396) capped, sent directly: no target wait delays it
+                sent = await self.sp_send_capped(
+                    "climate", self.climate_entity_id, target, why="step down")
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.error("%s: step-down setpoint write failed: %s", self.name, e)
                 self._last_step_down_path = "setpoint_failed"
                 return False
-            if result != "sent":
+            if not sent:
                 self._last_step_down_path = "withheld"
                 return False
             self._step_restore_setpoint = live
@@ -574,15 +576,14 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                     else "release_failed")
                 return False
         if self._step_restore_setpoint is not None and self.climate_entity_id:
-            # (#1396) the one capped writer: a refused release is tried again
-            # on the wait, not every cycle, and never dropped
-            result = await self.sp_send_temperature(
-                "climate", self.climate_entity_id, self._step_restore_setpoint,
-                why="step down released")
-            if result in ("refused", "waiting"):
+            try:
+                sent = await self.sp_send_capped(      # (#1396) capped, direct
+                    "climate", self.climate_entity_id,
+                    self._step_restore_setpoint, why="step down released")
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.error("%s: step-down release write failed: %s", self.name, e)
                 self._last_step_down_path = "release_failed"
                 return False
-            sent = result == "sent"
             if not sent:
                 self._last_step_down_path = "release_withheld"
                 return False

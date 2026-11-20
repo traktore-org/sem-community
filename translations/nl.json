@@ -2129,6 +2129,10 @@
           }
         }
       }
+    },
+    "legionella_above_unit_max": {
+      "title": "Boiler haalt het legionelladoel niet",
+      "description": "{name}: de boiler neemt hoogstens {max} °C aan, onder het legionelladoel {target} °C. SEM verwarmt tot {max} °C; dat desinfecteert de boiler mogelijk niet. Verlaag het doel of controleer het maximum van de boiler. Deze melding verdwijnt vanzelf."
     }
   },
   "selector": {
