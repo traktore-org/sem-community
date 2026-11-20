@@ -443,6 +443,20 @@ class HotWaterController(SwitchDevice):
         return f"legionella_{path}"
 
     @property
+    def legionella_reach_c(self) -> float:
+        """(#1396) The temperature a Legionella run waits for: the set target,
+        or the unit's own maximum when that is lower — the unit is never sent
+        more, so a run waiting for more would never end."""
+        target = float(self.legionella_target_temp)
+        try:
+            _lo, hi = self.sp_unit_range(self.entity_id)
+        except Exception:  # noqa: BLE001 — no range read: the set target
+            hi = None
+        if hi is not None and hi < target:
+            return float(hi)
+        return target
+
+    @property
     def legionella_hold_minutes(self) -> int:
         """Hold duration based on target temperature."""
         target = int(self.legionella_target_temp)
@@ -508,7 +522,7 @@ class HotWaterController(SwitchDevice):
         """(#1369) The user's stop sits below the Legionella target: a run
         can never reach it. SEM says so and starts no early run for it."""
         stop = self.user_stop_c()
-        return stop is not None and stop < float(self.legionella_target_temp)
+        return stop is not None and stop < self.legionella_reach_c   # (#1396)
 
     def band_top_c(self, *, peek: bool = False) -> Optional[float]:
         """(#1369) The top a USABLE comfort band sets, or None when the tank
@@ -609,7 +623,7 @@ class HotWaterController(SwitchDevice):
             self._last_temperature_safety_path = "configured_sensor_broken"
             return False
         if self._legionella_cycle_active:
-            if temp < self.legionella_target_temp:
+            if temp < self.legionella_reach_c:        # (#1396) the unit's max at most
                 self._last_temperature_safety_path = "in_legionella_cycle_below_target"
                 return True
             self._last_temperature_safety_path = "in_legionella_cycle_at_target"
@@ -689,7 +703,7 @@ class HotWaterController(SwitchDevice):
         temp = self.get_current_temperature()
         if temp is None:
             return True
-        floor = float(self.legionella_target_temp)
+        floor = self.legionella_reach_c          # (#1396) the unit's max at most
         if self._legionella_hold_start is not None:
             floor -= LEGIONELLA_HOLD_DIP_K   # the hold's own noise margin
         return temp < floor
@@ -769,7 +783,7 @@ class HotWaterController(SwitchDevice):
             if (self._entity_domain not in _SETPOINT_DOMAINS
                     and self._legionella_hold_start is not None):
                 temp = read()
-                tgt = float(self.legionella_target_temp)
+                tgt = self.legionella_reach_c            # (#1396)
                 if temp is None:
                     return bool(hold_stopped), None
                 # off above target + 0.5; once off, it stays off while the
@@ -1044,14 +1058,11 @@ class HotWaterController(SwitchDevice):
                 _LOGGER, f"tank-no-off:{self.device_id}", logging.INFO,
                 "%s: tank has no off; SEM holds it at its minimum (#1081)",
                 self.name)
-            try:
-                sent = await self.send(
-                    "water_heater", "set_temperature",
-                    {"entity_id": self.entity_id, "temperature": self.min_temperature},
-                    why="hot water off")
-            except Exception as e:
-                _LOGGER.error("Failed to deactivate water_heater: %s", e)
-                sent = True   # unchanged: a failed write still reads idle
+            # (#1396) the one capped writer; a refusal waits and says so there
+            result = await self.sp_send_temperature(
+                "water_heater", self.entity_id, self.min_temperature,
+                why="hot water off")
+            sent = result != "withheld"   # a refused write still reads idle
         else:
             if sent:
                 # (#1081) off first: the tank's own setpoint goes back after
@@ -1238,10 +1249,11 @@ class HotWaterController(SwitchDevice):
                     if gap > LEGIONELLA_UNREAD_HOLD_GRACE_MIN:
                         self._hold_unread_min = float(getattr(self, "_hold_unread_min", 0.0)) + gap
                 self._unread_since = None
+            reach = self.legionella_reach_c       # (#1396) the unit's max at most
             in_hold = temp is not None and (
-                temp >= self.legionella_target_temp
+                temp >= reach
                 or (self._legionella_hold_start is not None
-                    and temp >= float(self.legionella_target_temp) - LEGIONELLA_HOLD_DIP_K))
+                    and temp >= reach - LEGIONELLA_HOLD_DIP_K))
             if in_hold:
                 if self._legionella_hold_start is None:
                     self._legionella_hold_start = dt_util.now()
@@ -1289,7 +1301,7 @@ class HotWaterController(SwitchDevice):
                 # (#1369) a dip below the target during the hold: the hold
                 # starts over when it is back — time under 60 °C is no hold
                 if (self._legionella_hold_start is not None and temp is not None
-                        and temp < float(self.legionella_target_temp) - LEGIONELLA_HOLD_DIP_K):
+                        and temp < reach - LEGIONELLA_HOLD_DIP_K):
                     self._legionella_hold_start = None
                     self._hold_unread_min = 0.0
                     self._hold_stopped = False

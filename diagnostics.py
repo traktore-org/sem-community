@@ -112,12 +112,17 @@ def _comfort_devices(coordinator: Any) -> dict[str, Any]:
                 ("start_gap_c", lambda d: d.comfort_goal_start_gap_c()),
                 ("run_power_w", lambda d: d.comfort_run_power_w()),
                 ("learned_cooling", lambda d: bool(getattr(d, "_comfort_off_samples", None))),
-                ("no_ask_because", lambda d: d.comfort_plan_blocker())):
+                ("no_ask_because", lambda d: d.comfort_plan_blocker()),
+                # (#1396) a set target above what the unit accepts
+                ("targets_above_unit_max", lambda d: {
+                    k: f"{v['wanted']:g} > {v['unit_max']:g}"
+                    for k, v in getattr(d, "sp_above_max", {}).items()} or None),
+                ("setpoint_waiting", lambda d: getattr(d, "sp_refused", None))):
             try:
                 value = fn(dev)
             except Exception:  # noqa: BLE001
                 value = None
-            row[key] = value if isinstance(value, (str, int, float, bool, type(None))) else str(value)
+            row[key] = value if isinstance(value, (str, int, float, bool, type(None), dict)) else str(value)
         out[str(getattr(dev, "device_id", "?"))] = row
     return out
 

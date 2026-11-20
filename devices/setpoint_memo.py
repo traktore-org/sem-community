@@ -143,76 +143,121 @@ class SetpointMemoMixin:
             "at": kept["at"] if kept else _now(),
             "entity": entity_id, "domain": domain}
 
-    def _sp_capped(self, entity_id: Optional[str], target: float) -> float:
-        """(#1396) The target inside the unit's own ``min_temp``/``max_temp``:
-        a value outside them is refused by the device, every time."""
+    def sp_unit_range(self, entity_id: Optional[str]) -> tuple:
+        """(#1396) The unit's own ``(min_temp, max_temp)``, each None when the
+        entity does not say."""
         hass = getattr(self, "hass", None)
         state = hass.states.get(entity_id) if (hass and entity_id) else None
         attrs = getattr(state, "attributes", None) or {}
-        lo, hi = _num(attrs.get("min_temp")), _num(attrs.get("max_temp"))
+        return _num(attrs.get("min_temp")), _num(attrs.get("max_temp"))
+
+    def _sp_capped(self, entity_id: Optional[str], target: float) -> float:
+        """(#1396) The target inside the unit's own range: a value outside it
+        is refused by the device, every time. A target ABOVE the unit's
+        maximum is remembered (``sp_above_max``) and said once: a run that
+        waits for that temperature must know the unit stops below it."""
+        lo, hi = self.sp_unit_range(entity_id)
         capped = float(target)
         if hi is not None and capped > hi:
             capped = hi
+            seen = getattr(self, "_sp_above_max", None)
+            if not isinstance(seen, dict):
+                seen = self._sp_above_max = {}
+            seen[str(entity_id)] = {"wanted": float(target), "unit_max": hi}
+            log_on_change(
+                _LOGGER, f"setpoint-above-max:{getattr(self, 'device_id', '')}:{entity_id}",
+                logging.WARNING,
+                "%s: the set target %.1f is above what %s accepts (%.1f) — SEM "
+                "writes %.1f (#1396)", getattr(self, "name", ""), float(target),
+                entity_id, hi, hi)
         if lo is not None and capped < lo:
             capped = lo
-        if capped != float(target):
-            log_on_change(
-                _LOGGER, f"setpoint-cap:{getattr(self, 'device_id', '')}",
-                logging.INFO,
-                "%s: %.1f is outside what %s takes (%s–%s) — SEM writes %.1f "
-                "(#1396)", getattr(self, "name", ""), float(target), entity_id,
-                lo, hi, capped)
         return capped
 
     @property
+    def sp_above_max(self) -> dict:
+        """(#1396) entity → {wanted, unit_max} for targets the unit cannot take."""
+        seen = getattr(self, "_sp_above_max", None)
+        return dict(seen) if isinstance(seen, dict) else {}
+
+    def _sp_waits(self) -> dict:
+        waits = getattr(self, "_sp_wait", None)
+        if not isinstance(waits, dict):
+            waits = self._sp_wait = {}
+        return waits
+
+    def sp_refused_for(self, entity_id: Optional[str]) -> bool:
+        """(#1396) This unit refused SEM's last setpoint and the next try waits."""
+        w = self._sp_waits().get(str(entity_id))
+        return bool(w) and _mono() < w[1]
+
+    @property
     def sp_refused(self) -> bool:
-        """(#1396) The unit refused SEM's setpoint and the next try waits."""
-        until = getattr(self, "_sp_retry_at", None)
-        return until is not None and _mono() < until
+        """(#1396) Some unit of this device refused and its next try waits."""
+        now = _mono()
+        return any(now < w[1] for w in self._sp_waits().values())
+
+    async def sp_send_temperature(self, domain: str, entity_id: str,
+                                  temperature: float, why: str = "") -> str:
+        """(#1396) THE ``set_temperature`` write of a device: every SEM target,
+        restore, step-down and minimum goes through here. Capped at the
+        unit's range; after the unit refuses (the service raises) the next
+        write to that unit waits 5, 15, then 60 minutes, whatever its value;
+        only a write that lands ends the wait. Returns ``sent``,
+        ``withheld`` (observer/yield), ``refused`` (raised now) or ``waiting``."""
+        temperature = self._sp_capped(entity_id, temperature)
+        key = str(entity_id)
+        if self.sp_refused_for(key):
+            return "waiting"
+        try:
+            sent = await self.send(
+                domain, "set_temperature",
+                {"entity_id": entity_id, "temperature": temperature}, why=why)
+        except Exception as e:  # noqa: BLE001 — the device said no
+            n = int((self._sp_waits().get(key) or (0, 0.0))[0])
+            wait = SETPOINT_BACKOFF_S[min(n, len(SETPOINT_BACKOFF_S) - 1)]
+            self._sp_waits()[key] = (n + 1, _mono() + wait)
+            _LOGGER.warning(
+                "%s: %s refused the setpoint %.1f (%s) — SEM tries again in "
+                "%d min (#1396)", getattr(self, "name", ""), entity_id,
+                float(temperature), e, int(wait // 60))
+            return "refused"
+        if not sent:
+            return "withheld"
+        self._sp_waits().pop(key, None)
+        return "sent"
 
     async def sp_write_target(self, domain: str, entity_id: str, target: float,
                               why: str = "") -> bool:
         """``set_temperature`` to SEM's target, remembering the setpoint the
-        unit shows first. Returns what ``send`` returns.
+        unit shows first. Returns whether it went out.
 
-        (#1396) The target is capped at the unit's own range. A write the unit
-        refuses (the service raises) returns False and the next try waits
-        5, 15, then 60 minutes — said once per wait, not every cycle. A
-        changed target or a write that lands starts afresh."""
+        (#1396) Through ``sp_send_temperature``: capped, and waiting after a
+        refusal. A restore the unit still owes goes first: no new target is
+        written over a setpoint SEM has not been able to put back."""
         target = self._sp_capped(entity_id, target)
-        key = (entity_id, round(float(target), 2))
-        if getattr(self, "_sp_refused_key", None) != key:
-            self._sp_refusals, self._sp_retry_at = 0, None
-        elif self.sp_refused:
+        if self.sp_refused_for(entity_id):
             return False
+        if getattr(self, "_sp_restore_owed", False) and self._sp_memo:
+            outcome = await self.sp_restore(why or "setpoint restored")
+            if outcome in ("waiting", "failed", "withheld", "unreadable"):
+                return False
         self._sp_begin(entity_id, target)
-        try:
-            sent = await self.send(
-                domain, "set_temperature",
-                {"entity_id": entity_id, "temperature": target}, why=why)
-        except Exception as e:  # noqa: BLE001 — the device said no
+        result = await self.sp_send_temperature(domain, entity_id, target, why=why)
+        if result != "sent":
             self._sp_pending = None
-            n = int(getattr(self, "_sp_refusals", 0) or 0)
-            wait = SETPOINT_BACKOFF_S[min(n, len(SETPOINT_BACKOFF_S) - 1)]
-            self._sp_refusals, self._sp_refused_key = n + 1, key
-            self._sp_retry_at = _mono() + wait
-            _LOGGER.warning(
-                "%s: %s refused the setpoint %.1f (%s) — SEM tries again in "
-                "%d min (#1396)", getattr(self, "name", ""), entity_id,
-                float(target), e, int(wait // 60))
             return False
-        if sent:
-            self._sp_refusals, self._sp_retry_at, self._sp_refused_key = 0, None, None
-        self._sp_commit(domain, entity_id, target, bool(sent))
-        return bool(sent)
+        self._sp_commit(domain, entity_id, target, True)
+        return True
 
     # ── the way back ────────────────────────────────────────────────────
 
     async def sp_restore(self, why: str = "setpoint restored") -> str:
         """Write the remembered setpoint back. Returns ``none`` (no memo),
         ``written``, ``unchanged``, ``hand_changed``, ``expired``,
-        ``unreadable``, ``withheld`` or ``failed``. Only ``unreadable``,
-        ``withheld`` and ``failed`` keep the memo for a later try."""
+        ``unreadable``, ``withheld``, ``failed`` or ``waiting`` (#1396: the
+        unit refused before and the next try waits). Only ``unreadable``,
+        ``withheld``, ``failed`` and ``waiting`` keep the memo for a later try."""
         memo = self._sp_memo
         if not memo:
             return "none"
@@ -233,16 +278,15 @@ class SetpointMemoMixin:
                          "its setpoint is left as it is (#1081)",
                          self.name, entity)
             return "hand_changed"
-        try:
-            sent = await self.send(
-                domain, "set_temperature",
-                {"entity_id": entity, "temperature": restore}, why=why)
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.warning("%s: could not restore the setpoint of %s: %s",
-                            self.name, entity, e)
-            return "failed"
-        if not sent:
+        # (#1396) the same capped, waiting writer: a refused restore is kept
+        # and tried again on the wait, not every cycle
+        result = await self.sp_send_temperature(domain, entity, restore, why=why)
+        if result in ("refused", "waiting"):
+            self._sp_restore_owed = True
+            return "failed" if result == "refused" else "waiting"
+        if result == "withheld":
             return "withheld"
+        self._sp_restore_owed = False
         self._sp_memo = None
         _LOGGER.info("%s: setpoint of %s put back to %.1f (#1081)",
                      self.name, entity, restore)

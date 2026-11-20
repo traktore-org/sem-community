@@ -2702,19 +2702,17 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         self._status.activation_count += 1
 
         if self.target_temperature is not None:
-            try:
-                sent = await self.send("climate", "set_temperature", {"entity_id": self.entity_id,
-                     "temperature": self.target_temperature})
+            # (#1396) the one capped writer; a refusal waits there and says
+            # so itself. Non-fatal: the unit runs in the right mode, only the
+            # comfort setpoint did not take. Stay ACTIVE.
+            result = await self.sp_send_temperature(
+                "climate", self.entity_id, self.target_temperature)
+            if result == "sent":
                 self._sp_commit("climate", self.entity_id,
-                                self.target_temperature, bool(sent))
-            except Exception as e:
+                                self._sp_capped(self.entity_id, self.target_temperature),
+                                True)
+            else:
                 self._sp_pending = None
-                # Non-fatal: the unit is running in the right mode, only the
-                # comfort setpoint didn't take. Stay ACTIVE.
-                _LOGGER.warning(
-                    "%s: set hvac_mode but not target temperature: %s",
-                    self.name, e,
-                )
 
         if self.target_temperature is not None:
             _LOGGER.info(
@@ -4939,8 +4937,12 @@ class SetpointDevice(ControllableDevice):
             # configured one only when nothing was remembered
             outcome = await self.sp_restore("setpoint restored")
             if outcome == "none":
-                await self.send("climate", "set_temperature", {"entity_id": self.climate_entity_id, "temperature": self.normal_setpoint})
-            elif outcome in ("unreadable", "withheld", "failed"):
+                # (#1396) the one capped writer; a refusal waits there
+                result = await self.sp_send_temperature(
+                    "climate", self.climate_entity_id, self.normal_setpoint)
+                if result in ("refused", "waiting"):
+                    return
+            elif outcome in ("unreadable", "withheld", "failed", "waiting"):
                 return   # the memo stays; the coordinator's sweep tries again
             self._boosted = False
             self._status.state = DeviceState.IDLE
