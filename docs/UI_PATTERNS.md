@@ -86,7 +86,8 @@ them, waits with a timeout and the card renders again.
   read with `getAllSettings()` and set with `setAllSettings()` (`util/view-mode.js`,
   kept per browser). Everyday keeps open what is used daily; the rest sits in
   folds. A warning that needs action is never folded. Folding must never make
-  a setting unreachable.
+  a setting unreachable. All settings never opens or folds a device card: that
+  fold is the user's own tap (#1400).
 - Help text explains what an option does, not its label. No hover-only hints.
 - One number once per screen. If the header shows it, the card does not.
 - One mode picker per device. If the UI merges backend fields, decompose in

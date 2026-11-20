@@ -259,6 +259,7 @@ function makeCard(st, extra = {}) {
 test('the card renders every device with its body, the surplus section and the lead', () => {
     const el = makeCard(states());
     el._all = true;
+    el._setAllOpen(el._rowsNow(), true);   // (#1400) All settings opens no card
     const out = text(el.render());
     assert.match(out, /next_dev_lead2/);
     assert.match(out, /next_surplus_peak/);
@@ -288,7 +289,7 @@ test('(#1373) each battery shows its size beside its reserve; an unset size is a
     assert.doesNotMatch(out, /undefined|NaN/);
 });
 
-test('loads start folded, chargers and the battery open; a tap and All settings open them', () => {
+test('loads start folded, chargers and the battery open; a tap opens or folds them', () => {
     const el = makeCard(states());
     const rows = el._rowsNow();
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
@@ -308,8 +309,86 @@ test('loads start folded, chargers and the battery open; a tap and All settings 
     assert.match(out, /load_mode_help_sem/);
     assert.match(out, /next_fold_all/);
     el._setAllOpen(rows, false);
+    assert.ok(rows.every((r) => !el._isOpen(r)));
+});
+
+/** The first handler bound after `marker` in a template (the click of that button). */
+function handlerAfter(part, marker) {
+    if (!part || typeof part !== 'object') return null;
+    if (Array.isArray(part)) {
+        for (const p of part) { const f = handlerAfter(p, marker); if (f) return f; }
+        return null;
+    }
+    if (!part.tpl) return null;
+    const at = part.strings.findIndex((x) => x.includes(marker));
+    if (at >= 0) {
+        for (let j = at; j < part.values.length; j++) if (typeof part.values[j] === 'function') return part.values[j];
+    }
+    for (const v of part.values) { const f = handlerAfter(v, marker); if (f) return f; }
+    return null;
+}
+
+// (#1400) All settings says which rows an open card shows; it opens no card.
+// When it forced every card open, the fold arrow did nothing and Fold all was gone.
+// Every view the arrow is drawn in: a tap on it folds or opens that card.
+test('(#1400) in every view, the fold arrow folds and opens each card', () => {
+    const saved = globalThis.matchMedia;
+    try {
+        for (const all of [false, true]) {
+            for (const phone of [false, true]) {
+                globalThis.matchMedia = () => ({ matches: phone });
+                const el = makeCard(states());
+                el._all = all;
+                for (const [i, row] of el._rowsNow().entries()) {
+                    const at = `all=${all} phone=${phone} ${row.id}`;
+                    const fold = handlerAfter(el._shell(row, i), 'class="fold"');
+                    assert.equal(typeof fold, 'function', at);
+                    const before = el._isOpen(row);
+                    fold();
+                    assert.equal(el._isOpen(row), !before, at + ': one tap');
+                    const drawn = text(el.render()).includes(`class="card dev folded" data-id=${row.id}`);
+                    assert.equal(drawn, before, at + ': drawn as the tap left it');
+                    handlerAfter(el._shell(row, i), 'class="fold"')();
+                    assert.equal(el._isOpen(row), before, at + ': a second tap');
+                }
+            }
+        }
+    } finally {
+        if (saved === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = saved;
+    }
+});
+
+test('(#1400) with All settings on, Open all and Fold all are offered and work', () => {
+    const el = makeCard(states());
     el._all = true;
+    const rows = el._rowsNow();
+    // the same first view as Everyday
+    assert.equal(el._isOpen(rows.find((r) => r.id === 'load_device_keba')), true);
+    assert.equal(el._isOpen(rows.find((r) => r.id === 'heat_pump')), false);
+    const pill = () => handlerAfter(el.render(), 'class="pill" @click=');
+    assert.match(text(el.render()), /next_open_all/);
+    pill()();
     assert.ok(rows.every((r) => el._isOpen(r)));
+    assert.match(text(el.render()), /next_fold_all/);
+    pill()();
+    assert.ok(rows.every((r) => !el._isOpen(r)));
+    // switching All settings off and on again keeps the folds
+    el._all = false;
+    assert.ok(rows.every((r) => !el._isOpen(r)));
+    el._all = true;
+    assert.ok(rows.every((r) => !el._isOpen(r)));
+});
+
+// (#1400) Reorder folds every card and ignores a tap on the name: the name is no button there.
+test('(#1400) in Reorder the device name is no button', () => {
+    const el = makeCard(states());
+    const car = el._rowsNow().find((r) => r.id === 'load_device_keba');
+    assert.match(text(el._shell(car, 0)), /class="name tap" role="button" tabindex="0" aria-expanded=true/);
+    el._toggleReorder();
+    const out = text(el._shell(car, 0));
+    assert.match(out, /<div class="name">/);
+    assert.doesNotMatch(out, /class="name tap"|aria-expanded=(true|false) @click/);
+    assert.ok(out.includes('class="card dev folded" data-id=load_device_keba'));
 });
 
 test('observer mode disables the controls and reorder writes the order on Done', async () => {
@@ -384,6 +463,7 @@ test('a load SEM can not switch is shown as measured only, without modes or perm
         power_entity: 'sensor.hp_power', goals: {}, progress: {},
     };
     const el = makeCard(st); el._all = true;
+    el._setAllOpen(el._rowsNow(), true);   // (#1400) All settings opens no card
     const row = el._rowsNow().find((r) => r.id === 'meter');
     assert.equal(row.hasControlHandle, false);
     const out = text(el.render());
@@ -459,6 +539,7 @@ test('a load shows its stop sensor and thermometer pickers and writes them', () 
     const calls = [];
     const el = makeCard(states(), { callService: async (d, s, data) => { calls.push([s, data]); return true; } });
     el._all = true;
+    el._setAllOpen(el._rowsNow(), true);   // (#1400) All settings opens no card
     const out = text(el.render());
     assert.match(out, /next_stop_when/);
     assert.match(out, /next_own_thermometer/);
