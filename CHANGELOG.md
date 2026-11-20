@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The charge plan pencil works every time** (#1398). "Charge by" on Plan opens the day times on Devices, also after you visited Devices before.
 - 🐛 **A readable price line** (#1321). The price lane is taller, and prices above zero are scaled from the cheapest, so 15-minute steps show.
 - ✨ **A grid charge sets the mode too** (#1362). With a hold select set, a grid charge also sets its option. Some inverters charge only then.
 - ✨ **Hold the battery through a mode select** (#1362). For inverters with no discharge limit: SEM keeps it for dear hours and checks the hold works.
