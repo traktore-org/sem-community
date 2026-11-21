@@ -396,3 +396,24 @@ test('Plan screen: watch-only still reads as shadow, live still reads live', () 
     const live = text(makeCard(planStates('off', 'on'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: true }));
     assert.match(live, /next_pill_live/);
 });
+
+// (#1408) the battery's house runs index the slots; the size trim sends them by time instead
+test('(#1408) battery row: "to house" times also when the slots were dropped', () => {
+    const el = makeCard();
+    const s = '2026-11-21T22:00:00+01:00', e = '2026-11-22T02:15:00+01:00';
+    const full = { slots: [{ start: s, end: '2026-11-22T00:00:00+01:00' }, { start: '2026-11-22T00:00:00+01:00', end: e }], batt_runs: [[0, 1]] };
+    const trimmed = { timeline_omitted: true, slots: [], batt_runs: [], batt_times: [[s, e]] };
+    const want = `next_to_house» ${el._hhmm(s)} – ${el._hhmm(e)}`;
+    assert.ok(text(el._batteryRow(full, [], [])).includes(want), 'from the slots');
+    assert.ok(text(el._batteryRow(trimmed, [], [])).includes(want), 'from the times the trim keeps');
+    assert.ok(!text(el._batteryRow({ slots: [], batt_runs: [] }, [], [])).includes('next_to_house'), 'no run, no line');
+});
+
+test('(#1408) a home with no battery select still lists the battery when the trimmed plan uses it', () => {
+    const el = makeCard();
+    delete el.hass.states['select.sem_battery_mode'];
+    const rows = (plan) => text(el._deviceSec(plan));
+    const trimmed = { timeline_omitted: true, slots: [], blocks: [], demands: [], batt_runs: [], batt_times: [['2026-11-21T22:00:00+01:00', '2026-11-22T02:15:00+01:00']] };
+    assert.match(rows(trimmed), /next_to_house/);
+    assert.doesNotMatch(rows({ ...trimmed, batt_times: [] }), /next_to_house/);
+});

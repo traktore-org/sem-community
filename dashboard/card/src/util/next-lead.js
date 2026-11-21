@@ -11,7 +11,7 @@
  */
 
 import { fmtNum } from './next-number.js';
-import { kwhIn, houseKwhIn } from './plan-facts.js';
+import { kwhIn, houseKwhIn, houseWindowed } from './plan-facts.js';
 
 const IMPORT_W = 100;   // below this the grid is "quiet"
 const SUN_W = 100;      // the roof gives something above this
@@ -137,9 +137,10 @@ export function planLead(a, extra) {
     const houseKwh = windowed ? houseKwhIn(a, from, to) : houseGridKwh(a);
     const gridKwh = windowed ? loadKwh + houseKwh : planGridKwh(a);
     const when = extra?.when || '';
-    // (#1321) the biggest taker in the window is named. Without slots the house
-    // figure covers the whole plan, not the window: it names nothing then.
-    const slotsKnown = !windowed || (Array.isArray(a.slots) && a.slots.length > 0);
+    // (#1321) the biggest taker in the window is named. From a sensor that sends
+    // neither slots nor hours the house figure covers the whole plan, not the
+    // window: it names nothing then. (#1408) The hours cut to the window too.
+    const slotsKnown = !windowed || houseWindowed(a);
     const houseRank = slotsKnown || (evKwh <= 0.05 && loadKwh <= 0.05) ? houseKwh : 0;
     const top = Math.max(evKwh, loadKwh, houseRank);
     const main = top <= 0.05 ? quiet
@@ -178,7 +179,7 @@ export function planGridKwh(plan) {
 /**
  * kWh the house itself draws from the grid over the plan (plan.house_grid,
  * the planner's sum of the slots' home_grid_w; the slots when it is missing).
- * The one source for the Plan line, the Grid cost tile and the chart's lane.
+ * The whole plan, for the Grid cost tile; a window reads houseKwhIn.
  */
 export function houseGridKwh(plan) {
     const v = plan && plan.house_grid ? Number(plan.house_grid.kwh) : NaN;

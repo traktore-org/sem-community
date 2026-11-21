@@ -8,6 +8,7 @@
  */
 
 import { planIdName, planIdParts } from './plan-ids.js';
+import { battHouseRuns, houseSegments } from './plan-facts.js';
 
 const HOUR = 3600e3;
 const CELL = 15 * 60e3;
@@ -251,15 +252,14 @@ export function planRows({ win, nowMs, plan, names = {} }) {
         }
     };
     fromBlocks(a.blocks, false);
-    for (const r of Array.isArray(a.batt_runs) ? a.batt_runs : []) {
-        const s0 = Array.isArray(r) ? slots[r[0]] : null, s1 = Array.isArray(r) ? slots[r[1]] : null;
-        if (!s0 || !s1) continue;
+    // (#1408) the slots when the plan sends them; else the times the size trim keeps
+    for (const r of battHouseRuns(a)) {
         let kwh = 0;
-        for (let i = r[0]; i <= r[1]; i++) {
+        if (r.first !== null) for (let i = r.first; i <= r.last; i++) {
             const sl = slots[i]; const w = num(sl?.home_w);
             if (sl && Number.isFinite(w)) kwh += Math.max(0, w) * (Date.parse(sl.end) - Date.parse(sl.start)) / 3.6e9;
         }
-        add(row('battery_out', 'battery_out', ''), Date.parse(s0.start), Date.parse(s1.end), kwh);
+        add(row('battery_out', 'battery_out', ''), r.s, r.e, kwh);
     }
     for (const sl of slots) {
         const w = num(sl?.home_grid_w);
@@ -267,6 +267,7 @@ export function planRows({ win, nowMs, plan, names = {} }) {
         const s = Date.parse(sl.start), e = Date.parse(sl.end);
         add(row('grid', 'grid', ''), s, e, w * (e - s) / 3.6e9);
     }
+    if (!slots.length) for (const g of houseSegments(a)) add(row('grid', 'grid', ''), g.s, g.e, g.kwh);
     const tmw = a.tomorrow && typeof a.tomorrow === 'object' ? a.tomorrow : null;
     if (tmw && tmw.provisional && Array.isArray(tmw.provisional.blocks)) fromBlocks(tmw.provisional.blocks, true);
     const order = { ev: 0, battery_in: 1, battery_out: 2, grid: 3, load: 4 };

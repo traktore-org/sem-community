@@ -19,7 +19,7 @@ import { batteryFacts, batteryNeedText } from '../util/next-battery-line.js';
 import { reviewRows } from '../util/next-review.js';
 import { planNoteText } from '../util/plan-notes.js';
 import { whyLines, batteryEnd } from '../util/plan-why.js';
-import { effectivePlan, planRuns, runsText, shortfalls, dayOffset, kwhAhead } from '../util/plan-facts.js';
+import { effectivePlan, planRuns, runsText, shortfalls, dayOffset, kwhAhead, battHouseRuns } from '../util/plan-facts.js';
 import { trustPct } from '../util/forecast-evidence.js';
 import { tariffKind } from '../util/price-level.js';
 import { OPEN_CHARGE_PLAN_KEY, runningNow, switchStateOf } from '../util/next-devices.js';
@@ -838,8 +838,8 @@ class SEMNextPlanCard extends SEMNextBase {
     _batteryRow(plan, blocks, demands, notSched = []) {
         const t = (k) => this._t(k);
         const obs = this._obs();
-        const slots = Array.isArray(plan.slots) ? plan.slots : [];
-        const runs = Array.isArray(plan.batt_runs) ? plan.batt_runs : [];
+        // (#1408) by time: from the slots, or from the times the size trim keeps
+        const runs = battHouseRuns(plan);
         const parts = [];
         const soc = this._num('sensor.sem_battery_soc');
         const line = soc === null ? '' : batteryNeedText((k, p) => this._tf(k, p), (k) => this._t(k), batteryFacts(this));
@@ -847,9 +847,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const inWin = this._windowOf(blocks.filter((b) => /battery/.test(String(b.id)) && !String(b.id).startsWith('battery_out')).map((b) => ({ ...b, id: 'battery' })), 'battery');
         const late = blocks.some((b) => /battery/.test(String(b.id)) && !String(b.id).startsWith('battery_out') && this._chargeIsLate(Date.parse(b.start), Date.parse(b.end)));
         if (inWin) parts.push(`${t(late ? 'next_battery_charge_planned' : 'next_battery_charging')} ${inWin}`);
-        const first = runs.length && Array.isArray(runs[0]) ? slots[runs[0][0]] : null;
-        const last = runs.length && Array.isArray(runs[runs.length - 1]) ? slots[runs[runs.length - 1][1]] : null;
-        if (first && last) parts.push(`${t('next_to_house')} ${this._hhmm(first.start)} – ${this._hhmm(last.end)}`);
+        if (runs.length) parts.push(`${t('next_to_house')} ${this._hhmm(new Date(runs[0].s))} – ${this._hhmm(new Date(runs[runs.length - 1].e))}`);
         const d = demands.find((x) => /battery/.test(String(x.id)));
         const arb = plan.arbitrage;
         // (#1367) a battery SEM cannot charge says so, instead of nothing
@@ -905,7 +903,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const notSched = Array.isArray(plan.not_scheduled) ? plan.not_scheduled : [];
         const rows = this._chargers.map((cid) => this._chargerRow(cid, plan, blocks, demands, notSched));
         const hasBattery = plan.has_battery !== false
-            && (this._has('select.sem_battery_mode') || blocks.some((b) => String(b.id).startsWith('battery')) || (Array.isArray(plan.batt_runs) && plan.batt_runs.length > 0));
+            && (this._has('select.sem_battery_mode') || blocks.some((b) => String(b.id).startsWith('battery')) || battHouseRuns(plan).length > 0);
         if (hasBattery) rows.push(this._batteryRow(plan, blocks, demands, notSched));
         const loadIds = new Set();
         // (#1321) a heater's Keep at run (comfort:<id>) is listed like its run time
