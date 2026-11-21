@@ -4114,8 +4114,11 @@ only while paused, and HA skips a press on an unavailable entity without an erro
 `ChargerAdapter.resume_pressable()` reads that answer; `observe()` carries it as
 `ObservedState.resume_pressable` (only beside a car KNOWN to be plugged in), and the CHARGE rows
 prepend an ENABLE (a press) while nothing flows — `RESUME_PRESS_GAP_S` apart, at most
-`RESUME_PRESS_MAX` per stretch with no draw, counted afresh on a draw, a new wish to charge or a new
-car. A refused press is logged and claims nothing. **Guard:** `tests/test_1399_resume_press.py`
+`RESUME_PRESS_MAX` per stretch with no draw, counted afresh on a draw, a new car or a pause from
+charging of `RESUME_RESET_S` (a flapping decision does not reset it). Observer mode and a yield
+spend a separate "would" count (#1305), and only a button that IS the session start is pressed. A
+refused press is logged and claims nothing; a claiming press records SEM's yes (#935) the way
+`start_session` does. **Guard:** `tests/test_1399_resume_press.py`
 drives the real reconciler, adapter and device against a box model with the two rules above; the
 vacuity twin reads the button as never pressable and the box stays paused with 16 A written.
 `tools/zaptec_sim`'s button now follows the pause the same way.
