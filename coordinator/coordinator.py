@@ -1186,6 +1186,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self._tariff_pause_warned: bool = False  # #274/L1 one-time provider-error warn
         self._night_global_fallback_logged: set[str] = set()
         self._notification_manager = NotificationManager(hass, config)
+        # (#1404) the manager ties each charger's notice to its own display
+        self._notification_manager.charger_identities = self._charger_identities
 
         # Storage will be initialized with entry_id later
         self._storage: Optional[SEMStorage] = None
@@ -1430,6 +1432,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # populated by ``PerChargerContext.__exit__`` (not by the loop
         # body directly) — pcc owns the write path now.
         self._effective_states_per_charger: Dict[str, tuple] = {}
+        # (#1404) Beside it, each charger's decided ``(amps, watts)`` this
+        # cycle, written by the same ``PerChargerContext.__exit__``. The
+        # charger notice reads it instead of the fleet budget current.
+        self._offers_per_charger: Dict[str, tuple] = {}
 
         # v1.6.14: short-lived pointer to the currently active
         # ``PerChargerContext`` so ``ev_control._this_charger_power``
@@ -4977,6 +4983,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
                     per_charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
                     if per_charger_soc_entity:
+                        # (#1404) its own sensor only; unavailable = no level
+                        self._cycle_vehicle_soc = None
                         soc_state = self.hass.states.get(per_charger_soc_entity)
                         if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                             try:
@@ -5233,6 +5241,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # Reset before the loop so a removed charger's stale
                 # state doesn't fire on the next cycle.
                 self._effective_states_per_charger = {}
+                self._offers_per_charger = {}
                 # Reset the fleet-level commanded-amps tracker so the
                 # stall path can tell "SEM isn't asking for charge this
                 # cycle" from "SEM asked but EV refused" (see comment on
@@ -5307,6 +5316,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         charger_cfg = pcc.charger_cfg
                         per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
                         if per_soc_entity:
+                            # (#1404) A charger with its own sensor reads only
+                            # that sensor. Dark, it has no level: the seed is
+                            # the flat sensor, another car's in a fleet, and
+                            # it cleared this charger's SOC-cap Repair and
+                            # sized its plan. No level plans the full pack
+                            # (``_calculate_remaining_need``).
+                            self._cycle_vehicle_soc = None
                             soc_st = self.hass.states.get(per_soc_entity)
                             if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                                 try:
@@ -5469,10 +5485,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # fleet's. It reads "charging" once the decision
                             # charges (``night_state_after_decision``).
                             effective_state = ChargingState.NIGHT_DISABLED
-
-                        # #526: surface (as a repair) when an SOC-% cap can't be
-                        # enforced because no real vehicle SOC is readable.
-                        self._maybe_warn_soc_cap(cid, charger_cfg, cycle_soc_local, effective_state)
 
                         # v1.6.14: write the effective state to ``pcc``;
                         # ``__exit__`` persists it into
@@ -5792,6 +5804,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             else:
                                 _no_draw.pop(cid, None)
                         pcc.effective_state = effective_state
+                        # (#1404) The notice names THIS charger's amps and
+                        # watts, from the decision its state was just read
+                        # from — not the fleet budget current.
+                        from .charger_types import commanded_power_w as _offer_w
+                        pcc.offered_amps = int(decision.commanded_amps or 0)
+                        pcc.offered_w = float(_offer_w(
+                            decision,
+                            # the phases it charges on now (#804), else rated
+                            phases=int(getattr(self, "_phase_believed", {}).get(cid)
+                                       or adapter.phases),
+                            voltage=adapter.voltage,
+                            max_current_a=adapter.max_current_a,
+                        ) or 0.0)
+                        # #526: surface (as a repair) when an SOC-% cap can't be
+                        # enforced because no real vehicle SOC is readable.
+                        # (#1404) After the decision: the state it reads is
+                        # this charger's own, not the fleet's from before.
+                        self._maybe_warn_soc_cap(
+                            cid, charger_cfg, cycle_soc_local,
+                            effective_state, mode_off=(_view_mode == "off"))
 
                         # (#899) Commit-then-measure: the redirect counts only
                         # while the meter agrees. Import above tolerance with
@@ -14809,11 +14841,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # the fleet flag: a sensor-less charger offered current while a
             # sibling charges has no car SEM can vouch for (#1153).
             from .ev_availability import charger_state
+            # (#1404) Each charger's notice names its own decided amps and
+            # watts. ``calculated_current`` is the fleet budget, sized from
+            # the first charger's config: on a fleet it showed that
+            # charger's amps on every charger.
+            offers = getattr(self, "_offers_per_charger", None)
+            if not isinstance(offers, dict):
+                offers = {}
             for cid, (eff_state, name) in per_charger_states.items():
                 if not charger_state(cid, power, self.config, "connected"):
                     continue
+                offer = offers.get(cid)
+                amps, watts = (offer if isinstance(offer, tuple)
+                               and len(offer) == 2 else (0, 0.0))
                 await self._notification_manager.notify_state_change(
-                    eff_state, common_data, charger_id=cid, charger_name=name,
+                    eff_state,
+                    {**common_data, "calculated_current": amps,
+                     "available_power": watts},
+                    charger_id=cid, charger_name=name,
                 )
         else:
             await self._notification_manager.notify_state_change(
@@ -15342,15 +15387,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return full
         return max(max_val, min_val)
 
-    def _maybe_warn_soc_cap(self, cid, charger_cfg, real_soc, charging_state) -> None:
+    def _maybe_warn_soc_cap(self, cid, charger_cfg, real_soc, charging_state,
+                            *, mode_off: bool = False) -> None:
         """#526: raise/clear a repair when a SOC-% charge cap can't be enforced.
 
         A ``%`` target needs a readable vehicle SOC to stop at the cap. When the
         car isn't reporting SOC (``real_soc is None``) but the charger is
         actively solar-charging, SEM keeps charging to taper (RienduPre: "car
         went past 80%"). Surface it as a persistent repair instead of silently
-        overshooting; clear it the moment a real SOC returns or the charger
-        stops / isn't on a SOC target.
+        overshooting; clear it the moment a real SOC returns, the target is
+        not a percent, the car is unplugged, or the charger is set to Off
+        (#1404: not when a charge merely pauses).
 
         (#708) ``charging_state`` is the FLEET state — the per-charger loop
         hands the same value to every charger, so one car drawing raised the
@@ -15366,6 +15413,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         connected sensor) defaults to True: the fallback is the pre-#708
         behaviour, so missing tracking can never silently disable the cap
         warning on a charger that does have a car on it.
+
+        (#1404) ``charging_state`` is THIS charger's state after its own
+        decision. It used to be the state from before the decision, so an
+        Always max charger at full power while the home battery was low read
+        "Pause" and cleared the Repair. The Repair now stays until what it
+        says stops being true: a real SOC returns, the target is not a
+        percent, or the car is unplugged. A pause for a cloud keeps it; it
+        used to clear and come back with every cloud.
         """
         cfg = charger_cfg or {}
         ttype = (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
@@ -15374,13 +15429,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                      or {}).get(cid, True)
         charging = charging_state in self.SOLAR_CHARGING_STATES
         from . import repair_issues as _ri
-        if ttype == "soc" and real_soc is None and charging and connected:
+        if ttype != "soc" or real_soc is not None or not connected or mode_off:
+            # (#1404 review) Off: SEM charges nothing, so nothing to enforce.
+            _ri.clear_soc_cap_unenforceable(self.hass, cid)
+        elif charging:
             target = self._resolve_target(cfg, "ev_target_soc", "max", 80, 100)
             _ri.raise_soc_cap_unenforceable(
                 self.hass, cid, name=charger_display_name(self.hass, cfg), target_soc=target,
             )
-        else:
-            _ri.clear_soc_cap_unenforceable(self.hass, cid)
+        # else: a SOC target, no SOC, a car on the plug, not charging now —
+        # the Repair stays as it is.
+
+    def _charger_identities(self) -> Dict[str, frozenset]:
+        """(#1404) Each charger's integration names: the domain of its
+        service (the part before the dot) and the integration that owns
+        each entity it is built from. The notification manager
+        ties a display service to the one charger it is named for."""
+        out: Dict[str, frozenset] = {}
+        reader = getattr(self, "_sensor_reader", None)
+        for cid, dev in (getattr(self, "_ev_devices", None) or {}).items():
+            names = set()
+            svc = str(getattr(dev, "charger_service", "") or "").strip().lower()
+            if "." in svc:
+                names.add(svc.split(".", 1)[0])
+            for attr in ("current_entity_id", "charger_service_entity_id",
+                         "power_entity_id"):
+                eid = getattr(dev, attr, None)
+                if not isinstance(eid, str) or not eid or reader is None:
+                    continue
+                try:
+                    platform = reader._owner_platform(eid)
+                except Exception:  # noqa: BLE001 — unknown is no name
+                    platform = None
+                if isinstance(platform, str) and platform:
+                    names.add(platform.lower())
+            out[str(cid)] = frozenset(names)
+        return out
 
     def _resolve_charger_soc(self, cid: str, cfg: dict) -> float | None:
         """Per-charger vehicle SOC: real sensor, else anchored virtual SOC, else None."""

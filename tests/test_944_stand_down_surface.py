@@ -372,7 +372,9 @@ class TestTheChargerNotification:
     async def test_it_goes_through_the_existing_charger_path(self):
         nm, hass = _nm(enable_charger_notifications=True)
         await _notify(nm)
-        nm._send_charger_notification.assert_awaited_once_with("SEM stood down")
+        # (#1404) to the display of the charger that stood down
+        nm._send_charger_notification.assert_awaited_once_with(
+            "SEM stood down", charger_id=_CID)
         name, payload = hass.bus.async_fire.call_args.args
         assert name.endswith("_notification")
         assert payload["event"] == "charger_stop_war_stand_down"

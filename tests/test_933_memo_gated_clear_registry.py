@@ -66,8 +66,9 @@ DECLARED: dict[str, str] = {
         "once on its first retire (#944); the Repair is non-persistent anyway",
     "coordinator/coordinator.py::SEMCoordinator._async_update_data":
         "not a Repair memo: _effective_states_per_charger is this cycle's "
-        "per-charger state, and _maybe_warn_soc_cap raises or clears on the "
-        "current verdict every cycle",
+        "per-charger state, and _maybe_warn_soc_cap clears on the current "
+        "facts every cycle (a real SOC, no percent target, no car) and "
+        "raises while the charger's own decision charges (#1404)",
     "coordinator/coordinator.py::SEMCoordinator._check_battery_platform_pin":
         "the verdict memo means 'decided yet?' (hasattr), never None; one "
         "install-wide verdict once every battery answered this cycle, and "
