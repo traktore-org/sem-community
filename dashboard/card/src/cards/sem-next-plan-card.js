@@ -51,7 +51,7 @@ export function knownNum(v) {
     return Number.isFinite(n) ? n : NaN;
 }
 import { laneModel } from '../util/next-timeline.js';
-import { minutesToPlanEnd } from '../util/next-strip.js';
+import { minutesToPlanEnd, planEndMs } from '../util/next-strip.js';
 import { chartWindow, chartTicks, sunModel, sunRuns, priceModel, priceAt, planRows, focusBlock, runningAt, RANGES } from '../util/next-plan-chart.js';
 import {
     WHY_KINDS, actionWords, changeLabel, deviceName, mergePerDay, earlierKey, filterRecords, isToday, plainReason, offStartReason, rowTime, whyChips,
@@ -304,10 +304,13 @@ class SEMNextPlanCard extends SEMNextBase {
 
     /** (#1321) Heaters below their start line with no hour in the plan. */
     _cold(plan) {
-        const slots = Array.isArray(plan.slots) ? plan.slots : [];
-        const end = slots.length ? slots[slots.length - 1].end : '';
-        const time = end && Number.isFinite(Date.parse(end)) ? this._hhmm(end) : '';
-        return coldHeaters(this._devices(), plan.blocks, Date.now())
+        // (#1406) the plan's end, also when the sensor dropped the slots; one
+        // that has passed names no time. Plain HH:MM: the sentence has its own
+        // word before {time}, so "before tomorrow 07:00" breaks in some languages.
+        const now = Date.now();
+        const end = planEndMs(plan);
+        const time = end > now ? this._hhmm(new Date(end)) : '';
+        return coldHeaters(this._devices(), plan.blocks, now)
             .map((h) => ({ ...h, keep: this._temp(h.keepC), time }));
     }
 
@@ -822,8 +825,8 @@ class SEMNextPlanCard extends SEMNextBase {
         } else if (ov) {
             btns.push(this._btn(t('next_back_to_plan'), () => this._overrideClear(cid), { small: true, disabled: obs }));
         } else {
-            btns.push(this._btn(t('next_skip_tonight'), () => this._override(cid, 'skip', minutesToPlanEnd(plan, new Date()), plan), { small: true, disabled: obs }));
-            btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date()), plan), { small: true, primary: true, disabled: obs }));
+            btns.push(this._btn(t('next_skip_tonight'), () => this._override(cid, 'skip', minutesToPlanEnd(plan, new Date(), 720, this._nightEnd()), plan), { small: true, disabled: obs }));
+            btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date(), 720, this._nightEnd()), plan), { small: true, primary: true, disabled: obs }));
             if (mode) btns.push(this._btn(t('next_full_power'), () => { this._confirm = cid; }, { small: true, ghost: true, disabled: obs || mode === 'always_max' }));
         }
         // (#1321) the charge plan lives on the charger's Devices card: one tap there
@@ -928,6 +931,9 @@ class SEMNextPlanCard extends SEMNextBase {
         return this._sec(t('next_per_device'), html`<div class="rows">${rows}</div>
             <p class="help">${this._obs() ? t('next_observing_hint') : t('next_override_help')}</p>`);
     }
+
+    /** (#1406) The night end the planner ends a new plan at, for an override pressed before a plan stands. */
+    _nightEnd() { return { end: this._str('sensor.sem_night_end_time'), tz: this._hass?.config?.time_zone }; }
 
     async _override(deviceId, action, minutes, plan) {
         const mins = Math.max(1, Math.min(1440, Math.round(Number(minutes) || 60)));

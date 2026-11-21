@@ -213,6 +213,30 @@ def _batt_runs(slots: Any) -> List[List[int]]:
     return runs
 
 
+def _plan_ends_at(slots: Any) -> Optional[str]:
+    """(#1406) The plan's end: the latest slot end, as the plan wrote it.
+
+    Sent on its own key so the size trim below never takes it. The Plan
+    card's "Skip tonight" and "Start now" last until this time; with the
+    slots trimmed away, the card had only a 12-hour guess. Latest by time,
+    not by text: across a clock change the offsets differ. A row with no
+    readable, zoned end is skipped; none at all gives None."""
+    best: Optional[datetime] = None
+    best_text: Optional[str] = None
+    for row in slots if isinstance(slots, list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get("end"), str):
+            continue
+        try:
+            at = datetime.fromisoformat(row["end"])
+        except ValueError:
+            continue
+        if at.tzinfo is None:
+            continue
+        if best is None or at > best:
+            best, best_text = at, row["end"]
+    return best_text
+
+
 def _energy_plan_attrs(
     plan: Any, extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -247,6 +271,9 @@ def _energy_plan_attrs(
     merged_blocks = _merge_plan_blocks(plan.get("blocks"))
     attrs: Dict[str, Any] = {
         "computed_at": plan.get("computed_at"),
+        # (#1406) read from the FULL slots, before any trim below; no trim
+        # step touches it, so the card always knows when the plan ends
+        "ends_at": _plan_ends_at(plan.get("slots")),
         "fits": plan.get("fits"),
         "total_cost": plan.get("total_cost"),
         # (#1325) the parts of total_cost: placed demands and the house's
