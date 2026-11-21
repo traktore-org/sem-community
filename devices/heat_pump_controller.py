@@ -419,6 +419,7 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         and nobody spends its watts twice. The climate setpoint is still
         reverted either way: the two surfaces fail independently.
         """
+        sg_was = self._hp_status.sg_ready_state
         relay_ok = await self._set_sg_ready_state(SGReadyState.NORMAL)
         withheld = not relay_ok and self._last_relay_path == "withheld"
         self._last_deactivation_path = (
@@ -433,6 +434,16 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                 # (#1335) the contacts did not move: the pump still boosts,
                 # whatever the setpoint did — keep the belief
                 self._status.state = was
+            elif self._boosted and not (self._contacts_asked(SGReadyState.BOOST)
+                                        or self._contacts_asked(SGReadyState.FORCE_ON)):
+                # (#1409) no contact can boost this pump: the setpoint is the
+                # boost, and it did not go back (held back, or it failed).
+                # The pump still boosts, so the belief stays; the next cycle
+                # tries the stand-down again.
+                self._status.state = was
+                self._hp_status.sg_ready_state = sg_was
+                self._last_deactivation_path += "_kept"
+                return
 
         if withheld:
             # (#1335) observer / yield held the write back: the pump did
@@ -819,10 +830,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         """
         if self.sg_ready_service:
             entities = [self.sg_ready_state_entity] if self.sg_ready_state_entity else []
-        elif self.relay1_entity_id and self.relay2_entity_id:
-            entities = [self.relay1_entity_id, self.relay2_entity_id]
         else:
-            entities = []
+            # (#1409) a lone relay is read too: relay 2 alone boosts the pump
+            entities = [e for e in (self.relay1_entity_id, self.relay2_entity_id) if e]
         if not entities:
             return True, None
         values = []
@@ -839,8 +849,15 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             return True, None
         # (#801) A contact's boolean comes off its own surface: "on"/"off"
         # for a switch, the configured ON/OFF value for a text/number/select.
-        c1 = self._contact_is_on(1, self.relay1_entity_id, values[0])
-        c2 = self._contact_is_on(2, self.relay2_entity_id, values[1])
+        # (#1409) A relay that is not configured reads as its NORMAL value,
+        # the way ``_relays_sent`` leaves it: the pair is what the pump sees,
+        # read through the standard table (relay 2 alone on = BOOST).
+        n1, n2 = self._relays_for(SGReadyState.NORMAL)
+        read = iter(values)
+        c1 = (self._contact_is_on(1, self.relay1_entity_id, next(read))
+              if self.relay1_entity_id else n1)
+        c2 = (self._contact_is_on(2, self.relay2_entity_id, next(read))
+              if self.relay2_entity_id else n2)
         if c1 is None or c2 is None:
             return True, None
         pair = (c1, c2)

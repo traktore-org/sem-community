@@ -247,6 +247,59 @@ class TestTwins:
         assert hass._states["switch.sg2"].state == "off"
         assert not hp.is_active
 
+    async def test_a_held_back_stop_keeps_a_climate_only_pump_on(self, clock):
+        """No contacts: the setpoint is the boost. A stop that did not go
+        back leaves the pump boosting, so SEM keeps believing it."""
+        hass = _Hass()
+        hass.nibe("heat", setpoint=20.0)
+        hp = _pump(hass)
+        assert await hp.activate(3000.0) == 2000.0
+        hp._sp_memo = None                         # nothing remembered: normal
+        hp.min_on_seconds = 0
+        hp.observer_mode = True
+        await hp.deactivate()
+        assert hp.withheld_commands[-1]["service"] == "climate.set_temperature"
+        assert hp.is_active
+        assert hp.sg_ready_state == SGReadyState.BOOST
+        assert hp.to_dict()["deactivation_path"] == "normal+climate_kept"
+        hp.observer_mode = False
+        await hp.deactivate()
+        assert not hp.is_active
+        assert hp.sg_ready_state == SGReadyState.NORMAL
+        assert hass._states[NIBE].attributes["temperature"] == 21.0
+
+    async def test_with_contacts_a_failed_setpoint_stop_still_stands_down(self, clock):
+        """The contacts went back to NORMAL: the pump stops boosting, the two
+        surfaces fail apart, as before."""
+        hass = _Hass()
+        hass.nibe("heat", setpoint=20.0)
+        hass.switch("switch.sg1")
+        hass.switch("switch.sg2")
+        hp = _pump(hass, relay1_entity_id="switch.sg1", relay2_entity_id="switch.sg2")
+        assert await hp.activate(3000.0) == 2000.0
+        hp._sp_memo = None
+        hp.min_on_seconds = 0
+        hass.nibe("auto")                          # now refuses the normal
+        await hp.deactivate()
+        assert not hp.is_active
+        assert hass._states["switch.sg2"].state == "off"
+
+    async def test_a_lone_relay_boost_is_taken_back_after_a_restart(self, clock):
+        """Relay 2 alone left on across a restart reads as BOOST: SEM owns it
+        again, so the stand-down turns it off (#914)."""
+        hass = _Hass()
+        hass.nibe("heat", setpoint=23.0)
+        hass.switch("switch.sg2", "on")
+        hp = _pump(hass, relay2_entity_id="switch.sg2")
+        assert hp._read_sg_ready_state() == (True, SGReadyState.BOOST)
+        assert hp.adopt_if_running() is True
+        assert hp.is_active
+        hass.switch("switch.sg2", "off")
+        assert _pump(hass, relay2_entity_id="switch.sg2")._read_sg_ready_state() == (
+            True, SGReadyState.NORMAL)
+        hass.switch("switch.sg1", "on")            # relay 1 alone: never a boost
+        assert _pump(hass, relay1_entity_id="switch.sg1").adopt_if_running() is False
+
     async def test_both_relays_send_the_standard_table(self, clock):
         hass = _Hass()
         hp = _pump(hass, relay1_entity_id="switch.sg1", relay2_entity_id="switch.sg2")
@@ -383,16 +436,17 @@ class TestSiblingsWithheld:
 # ── guard: an activate never drops the answer of the write it made ─────────
 
 def _dropped_answers(tree: ast.AST) -> list:
-    """Bare ``await ….send(…)`` statements inside any ``activate`` or
-    ``deactivate`` method, or a bare ``await super().activate(…)`` inside an
-    ``activate``: the answer (sent? withheld? watts?) is thrown away, and the
+    """Bare ``await ….send(…)`` / ``await ….sp_send_capped(…)`` statements
+    inside any ``activate`` or ``deactivate`` method, or a bare
+    ``await super().activate(…)`` inside an ``activate``: the answer (sent? withheld? watts?) is thrown away, and the
     device is then believed on, or off, regardless."""
     found = []
     for fn in ast.walk(tree):
         if not (isinstance(fn, ast.AsyncFunctionDef)
                 and fn.name in ("activate", "deactivate")):
             continue
-        dropped = ("send", "activate") if fn.name == "activate" else ("send",)
+        dropped = ("send", "sp_send_capped") + (
+            ("activate",) if fn.name == "activate" else ())
         for node in ast.walk(fn):
             if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Await)):
                 continue
@@ -422,5 +476,6 @@ def test_the_guard_catches_a_dropped_answer():
         "        return 1\n"
         "    async def deactivate(self):\n"
         "        await self.send('a', 'c', {})\n"
+        "        await self.sp_send_capped('climate', 'x', 21.0)\n"
         "        await super().deactivate()\n")
-    assert len(_dropped_answers(probe)) == 3
+    assert len(_dropped_answers(probe)) == 4
