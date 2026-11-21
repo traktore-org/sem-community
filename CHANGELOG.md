@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A refused setpoint no longer shows the heat pump on** (#1409). A NIBE in "auto" refused it; SEM showed a boost. Now it shows idle.
+- 🐛 **One SG-Ready contact no longer stops the pump** (#1409). With only contact 1 set, force-on sent "blocked". That contact now stays at normal.
 - 🐛 **Skip tonight lasts all night** (#1406). On a large plan, Skip tonight and Start now ended after 12 hours. Now they end with the plan.
 - 🐛 **Right amps and phases when another system charges** (#1407). Cards showed 0 A and 3 phases. SEM now reads the charger's own phase currents.
 - 🐛 **A paused Zaptec resumes** (#1399). Start now wrote 20 A into a paused charger and never pressed Resume charging. SEM now presses it.
