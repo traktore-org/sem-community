@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Plan headline counts only hours to come** (#1408). On a large plan it counted the house's grid kWh from the start. Now it counts from now.
 - 🐛 **A refused setpoint no longer shows the heat pump on** (#1409). A NIBE in "auto" refused it; SEM showed a boost. Now it shows idle.
 - 🐛 **One SG-Ready contact no longer stops the pump** (#1409). With only contact 1 set, force-on sent "blocked". That contact now stays at normal.
 - 🐛 **Skip tonight lasts all night** (#1406). On a large plan, Skip tonight and Start now ended after 12 hours. Now they end with the plan.
