@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Always max says full power** (#1403). By day, Always max and Start now showed "Battery assist". Now "Charging at full power"; raw state solar_full_power.
+- 🐛 **Notification events carry the charger text** (#1403). Events for states with only a charger display text had an empty message.
 - 🐛 **Start now says charging** (#1402). At night the charger state kept "Waiting for cheap price window" while SEM sent full current.
 - 🐛 **Start now works on a Solar-only charger at night** (#1402). It sent nothing while another charger charged. Skip tonight now reads "Night charging disabled".
 
