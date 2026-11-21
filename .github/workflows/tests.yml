@@ -163,10 +163,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PARTS: 8
         run: |
-          gh api --paginate \
-            "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100" \
-            --jq '.jobs[] | select(.name | startswith("HA ${{ matrix.ha }} part ")) | "\(.name)\t\(.conclusion)"' \
-            > parts.txt
+          # (#1313) A part that has just finished can still read "null" in the
+          # API for a few seconds; read again (up to ~1 min) before judging.
+          for try in 1 2 3 4 5 6; do
+            gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100" \
+              --jq '.jobs[] | select(.name | startswith("HA ${{ matrix.ha }} part ")) | "\(.name)\t\(.conclusion)"' \
+              > parts.txt
+            grep -q $'\tnull$' parts.txt || break
+            sleep 10
+          done
           cat parts.txt
           seen=$(wc -l < parts.txt)
           passed=$(grep -c $'\tsuccess$' parts.txt || true)
