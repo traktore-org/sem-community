@@ -34,7 +34,7 @@ Set up SEM in about 10 minutes. You need Home Assistant 2026.8 or newer.
 
 5. **Generate the dashboard.** On the last step, leave **Generate the SEM dashboard now** on, and press **Submit**. SEM restarts Home Assistant once.
 
-6. **Open SEM.** Select **SEM-dashboard** in the sidebar. The **Now** screen shows what SEM sees and a checklist of what is left.
+6. **Open SEM.** Select **SEM-dashboard** (older installs: **Solar Energy Management**) in the sidebar. The **Now** screen shows what SEM sees and a checklist of what is left.
 
    ![First-run checklist](images/sem_checklist.png)
 

@@ -67,6 +67,15 @@ const SOLAR_IDS = ['monthly_solar_yield_energy', 'yearly_solar_yield_energy', 'p
 const flowId = (src, sink) => `${S}flow_${src}_to_${sink}_energy`;
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+/** (#1321) The Insights tab is remembered per user, like the Plan range. */
+export const INSIGHTS_TAB_KEY = 'sem-next-insights-tab';
+export function readInsightsTab() {
+    try { return localStorage.getItem(INSIGHTS_TAB_KEY) || ''; } catch (e) { return ''; }
+}
+function writeInsightsTab(tab) {
+    try { localStorage.setItem(INSIGHTS_TAB_KEY, tab); } catch (e) { /* this page only */ }
+}
+
 class SEMNextInsightsCard extends SEMNextBase {
     static get properties() {
         return { _period: { state: true }, _tab: { state: true }, _hist: { state: true }, _hover: { state: true },
@@ -77,7 +86,10 @@ class SEMNextInsightsCard extends SEMNextBase {
     constructor() {
         super();
         this._period = 'day';
-        this._tab = 'energy';
+        // (#1321) the tab last picked by this user; a #tab in the address wins
+        const kept = readInsightsTab();
+        this._tab = TABS.some(([k]) => k === kept) ? kept : 'energy';
+        this._onLocation = () => this._tabFromHash();
         this._hist = null;
         this._histKey = '';
         this._hover = -1;
@@ -89,10 +101,24 @@ class SEMNextInsightsCard extends SEMNextBase {
         this._needKey = '';
     }
 
+    /** (#1321) A #tab in the address opens that tab, also while HA keeps this
+     *  card attached (the Sessions link on a charger goes to #car). */
+    _tabFromHash() {
+        const h = (typeof window !== 'undefined' && window.location ? window.location.hash : '').slice(1);
+        if (TABS.some(([k]) => k === h) && h !== this._tab) {
+            this._tab = h; this._hover = -1;
+            writeInsightsTab(h);
+            if (this._hass) this._load();
+        }
+    }
+
     connectedCallback() {
         super.connectedCallback();
-        const h = (typeof window !== 'undefined' && window.location ? window.location.hash : '').slice(1);
-        if (TABS.some(([k]) => k === h)) this._tab = h;
+        this._tabFromHash();
+        if (typeof window !== 'undefined' && window.addEventListener) {
+            window.addEventListener('location-changed', this._onLocation);
+            window.addEventListener('hashchange', this._onLocation);
+        }
         if (typeof ResizeObserver !== 'undefined') {
             this._ro = new ResizeObserver((entries) => {
                 const w = Math.round(entries[0]?.contentRect?.width || 0);
@@ -104,6 +130,10 @@ class SEMNextInsightsCard extends SEMNextBase {
     }
 
     disconnectedCallback() {
+        if (typeof window !== 'undefined' && window.removeEventListener) {
+            window.removeEventListener('location-changed', this._onLocation);
+            window.removeEventListener('hashchange', this._onLocation);
+        }
         if (this._ro) { this._ro.disconnect(); this._ro = null; }
         clearInterval(this._refresh);
         this._refresh = null;
@@ -381,7 +411,7 @@ class SEMNextInsightsCard extends SEMNextBase {
             const sub = [Number.isFinite(Number(a.ratio_7d)) && a.ratio_7d !== null ? this._tf('next_pct_7d', { pct: Math.round(Number(a.ratio_7d) * 100) }) : '',
                          Number.isFinite(Number(a.downtime_min_today)) && a.downtime_min_today !== null ? this._tf('next_dark_minutes', { min: Math.round(a.downtime_min_today) }) : '',
                          a.snow ? this._t('next_snow') : ''].filter(Boolean).join(' · ');
-            rows.push(this._row('mdi:solar-panel', this._t('next_pv_health'), this._pill(this._t('next_health_' + health) || health, cls), sub, { onClick: () => this._moreInfo(S + 'pv_health') }));
+            rows.push(this._row('mdi:solar-panel', this._t('next_pv_health'), this._pill(this._tCode('next_health_', health), cls), sub, { onClick: () => this._moreInfo(S + 'pv_health') }));
         }
         const win = this._str(S + 'best_surplus_window');
         if (win) rows.push(this._row('mdi:weather-sunset', this._t('next_best_window'), win, '', { onClick: () => this._moreInfo(S + 'best_surplus_window') }));
@@ -681,6 +711,7 @@ class SEMNextInsightsCard extends SEMNextBase {
     _pick(period) { this._period = period; this._hover = -1; this._load(); }
     _pickTab(tab) {
         this._tab = tab; this._hover = -1;
+        writeInsightsTab(tab);
         try { window.history.replaceState(null, '', '#' + tab); } catch (_e) { /* no history */ }
         this._load();
     }

@@ -8,6 +8,7 @@
  * force for 30/60/120 min; the four-way mode sits under All settings.
  */
 
+import { codeText } from './code-text.js';
 import { html, nothing } from '../base/sem-next-base.js';
 import { antiCyclePlaceholder, antiCycleBounds, antiCycleValue } from './load-sections.js';
 import { startCode, startLine } from './why-rows.js';
@@ -218,8 +219,8 @@ export function loadBody(card, row) {
         } else {
             const src = overnightSource(g);
             rows.push(...goalRows(card._lbl('next_goal')));
-            rows.push(srow(card._lbl('next_row_overnight'), t('overnight_' + src), card._selEdit('ov:' + id, {
-                value: src, options: ['off', 'battery', 'grid'].map((s) => ({ key: s, label: t('overnight_' + s) })),
+            rows.push(srow(card._lbl('next_row_overnight'), codeText(t, 'overnight_', src), card._selEdit('ov:' + id, {
+                value: src, options: ['off', 'battery', 'grid'].map((s) => ({ key: s, label: codeText(t, 'overnight_', s) })),
                 onCommit: (s) => { for (const w of overnightWrites(s)) send(w.property, w.value); } })));
         }
         const bounds = antiCycleBounds(card._attrs('sensor.sem_controllable_devices_count'));
@@ -470,12 +471,12 @@ export function copSourceRow(card, row, g, send) {
     const t = (k) => card._t(k);
     const cur = copSourceOf(g);
     const opts = copSourceOptions(g);
-    const label = t('hp_cop_source_' + cur);
+    const label = codeText(t, 'hp_cop_source_', cur);
     const key = 'copsrc:' + row.id;
     const val = opts.length > 1
         ? card._inline(key, label, () => card._selEdit(key, {
             value: cur,
-            options: opts.map((o) => ({ key: o, label: t('hp_cop_source_' + o) })),
+            options: opts.map((o) => ({ key: o, label: codeText(t, 'hp_cop_source_', o) })),
             onCommit: (v) => send('cop_source', v),
         }))
         : label;

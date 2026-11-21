@@ -45,12 +45,17 @@ class SEMRetiredCard extends SEMLitBase {
 
     /** The live SEM dashboard, whichever URL it has. */
     async _findDashboard() {
+        // (#1321) the dashboards this user can open, as the frontend already
+        // knows them (any user); the admin-only list only as a second source
+        const panels = this._hass.panels || {};
+        const known = CANDIDATES.find((p) => panels[p]);
+        if (known) { this._path = known; return; }
         try {
             const list = await this._hass.callWS({ type: 'lovelace/dashboards/list' });
             const hit = CANDIDATES.find((p) => Array.isArray(list) && list.some((d) => d.url_path === p));
             this._path = hit || '';
         } catch (e) {
-            this._path = '';
+            this._path = '';             // no link to a dashboard that may not exist
         }
     }
 
@@ -63,10 +68,23 @@ class SEMRetiredCard extends SEMLitBase {
         `;
     }
 
+    /** (#1321) Through HA's router, as HA's own links do: no full page reload. */
+    _open(e) {
+        if (e && (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1)) return;   // a new tab stays a new tab
+        if (e) e.preventDefault();
+        const path = '/' + this._path;
+        try {
+            window.history.pushState(null, '', path);
+            window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
+        } catch (_e) {
+            window.location.assign(path);
+        }
+    }
+
     render() {
         return html`<ha-card><div class="row">
             <span>${this._t('retired_card')}</span>
-            ${this._path ? html`<a href="/${this._path}">${this._t('retired_card_open')}</a>` : ''}
+            ${this._path ? html`<a href="/${this._path}" @click=${(e) => this._open(e)}>${this._t('retired_card_open')}</a>` : ''}
         </div></ha-card>`;
     }
 }

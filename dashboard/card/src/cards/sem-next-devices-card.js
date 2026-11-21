@@ -126,6 +126,12 @@ const devicesCss = css`
     .banner.bad ha-icon { color: var(--n-bad); }
 `;
 
+/** (#1321) How long a charge-plan jump waits for its charger to be drawn. */
+export const SCROLL_WAIT_MS = 30000;
+let _narrowAtLoad = null;
+/** For tests: forget the page-load width decision. */
+export function _resetNarrow() { _narrowAtLoad = null; }
+
 class SEMNextDevicesCard extends SEMNextBase {
     static get styles() { return [nextCss, devicesCss]; }
     static get properties() {
@@ -496,7 +502,12 @@ class SEMNextDevicesCard extends SEMNextBase {
 
     /** (#1321) A phone-width screen: every card starts folded there. */
     _narrow() {
-        try { return !!(window.matchMedia && window.matchMedia(`(max-width: ${PHONE_MAX_PX}px)`).matches); } catch (e) { return false; }
+        // (#1321) decided once per page load: a card nobody touched must not
+        // fold or open while the window is resized across the phone width
+        if (_narrowAtLoad === null) {
+            try { _narrowAtLoad = !!(window.matchMedia && window.matchMedia(`(max-width: ${PHONE_MAX_PX}px)`).matches); } catch (e) { _narrowAtLoad = false; }
+        }
+        return _narrowAtLoad;
     }
 
     /** (#1321) Open a charger's card at its charge plan, e.g. from the Plan screen. */
@@ -505,6 +516,7 @@ class SEMNextDevicesCard extends SEMNextBase {
         writeOpen(this._open);
         this._depOpen = { ...this._depOpen, [cid]: true };
         this._scrollTo = cid;
+        this._scrollSince = Date.now();
         this._tick++;
     }
 
@@ -517,6 +529,9 @@ class SEMNextDevicesCard extends SEMNextBase {
     }
 
     _afterRender() {
+        // (#1321) a charger that has not appeared after a while: stop waiting,
+        // so a late one does not jump the page long after the tap
+        if (this._scrollTo && Date.now() - (this._scrollSince || 0) > SCROLL_WAIT_MS) this._scrollTo = null;
         if (this._scrollTo) {
             // (#1398) to the day times that just opened, so the tap is seen; the card when they are not drawn
             const root = this.renderRoot;

@@ -5,6 +5,7 @@
  * card's entity helpers and every write through its service helpers.
  */
 
+import { codeText } from './code-text.js';
 import { html, nothing } from '../base/sem-next-base.js';
 import { chargerRenameWrite } from './charger-name.js';
 import { resolveChargerSoc } from './charger-soc.js';
@@ -93,7 +94,7 @@ export function chargerBody(card, row) {
         floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? hintNight : '')].filter(Boolean).join(' ') : '';
     const nextCheap = mode === 'solar_plus_cheap' && cs.ev_next_cheap_window ? card._hhmm(cs.ev_next_cheap_window) : '';
     const pausedUntil = mode === 'off' && modeAttrs.paused_until ? card._hhmm(modeAttrs.paused_until) : '';
-    const resumeMode = modeAttrs.pause_resume_mode ? (t('charge_mode_' + modeAttrs.pause_resume_mode) || modeAttrs.pause_resume_mode) : '';
+    const resumeMode = modeAttrs.pause_resume_mode ? codeText(t, 'charge_mode_', modeAttrs.pause_resume_mode) : '';
 
     // ── stats ──
     const powerW = card._powerW(S('power'));
@@ -213,9 +214,12 @@ export function chargerBody(card, row) {
     const lateLabel = (m) => (m ? tf('ev_dep_minutes', { n: m }) : t('ev_dep_late_off'));
     // (#1321) every setting of this charger is a row: tap it, a dialog opens; a boolean is a switch
     const setRows = [];
+    // (#1321) a pause length with no text reads "2 hours", never "2_hours"
+    const pauseLabel = (o) => { const k = 'pause_duration_' + o; const v = t(k); return v && v !== k ? v : String(o || '').replace(/_/g, ' '); };
     // (#1386) the name: a SEM setting, so it stays open in watch-only mode
-    setRows.push(card._setRow({ label: t('next_add_name'), value: row.name || '—',
-        onTap: () => card._editDialog({ title: t('next_add_name'), ...card._textEdit('name:' + cid, { value: row.name, onCommit: (v) => {
+    // (#1321) "Name in SEM", as the device settings call it: the charger's own name stays
+    setRows.push(card._setRow({ label: t('cfg_own_name'), value: row.name || '—',
+        onTap: () => card._editDialog({ title: t('cfg_own_name'), ...card._textEdit('name:' + cid, { value: row.name, onCommit: (v) => {
             const w = chargerRenameWrite(cid, v);
             if (w && w.ev_chargers[0].name !== row.name) card._svc('set_option', { options: w });
         } }) }) }));
@@ -248,8 +252,8 @@ export function chargerBody(card, row) {
     const durId = 'select.sem_pause_duration';
     if (card._has(pauseBtn) && card._has(durId) && card._str(durId)) {
         const dur = card._str(durId);
-        setRows.push(srow(rowText(t('pause_charging') + ' ' + t('next_for')), t('pause_duration_' + dur) || dur, card._selEdit('pausedur', {
-            value: dur, options: (card._attrs(durId).options || []).map((o) => ({ key: o, label: t('pause_duration_' + o) || o })), onCommit: (v) => card._selectOption(durId, v) })));
+        setRows.push(srow(rowText(t('pause_charging') + ' ' + t('next_for')), pauseLabel(dur), card._selEdit('pausedur', {
+            value: dur, options: (card._attrs(durId).options || []).map((o) => ({ key: o, label: pauseLabel(o) })), onCommit: (v) => card._selectOption(durId, v) })));
     }
     moreRows.push(card._setRow({ label: card._lbl('ev_dep_one_block'), disabled: dis, toggle: { on: oneBlock, onChange: (v) => send({ one_block: v }) } }));
     moreRows.push(srow(card._lbl('ev_dep_late_charge'), lateLabel(lateMin), card._selEdit('late:' + cid, {
@@ -260,7 +264,7 @@ export function chargerBody(card, row) {
         const pm = phaseId ? card._str(phaseId) : '';
         const pOpts = phaseId ? (card._attrs(phaseId).options || ['auto', '1', '3']) : [];
         moreRows.push(card._row('mdi:sine-wave', t('next_phases'),
-            phaseId ? card._seg(pOpts.map((o) => ({ key: o, label: t('phase_mode_' + o) || o })), pm, (o) => card._selectOption(phaseId, o), { small: true, disabled: dis })
+            phaseId ? card._seg(pOpts.map((o) => ({ key: o, label: codeText(t, 'phase_mode_', o) })), pm, (o) => card._selectOption(phaseId, o), { small: true, disabled: dis })
                 : phaseStatus(card, cid),
             phaseId ? phaseStatus(card, cid) : ''));
     }

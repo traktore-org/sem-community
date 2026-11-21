@@ -240,7 +240,7 @@ On the battery card on **Devices**, set the levels. **System › Battery rules**
 | **Below this the battery fills first** | Priority level (default 30 %). All spare sun goes to the battery. The car waits. |
 | **From this the battery may help the car** | Below it the battery stays for the house. |
 | **From this it may help fully** | Auto-start level (default 90 %). Still only with enough spare sun. |
-| **Spare sun the battery needs to help the car** | Solar Gate (default 1200 W). Shown only while **May the battery help charge the car?** is on. |
+| **Spare sun the battery needs to help the car** | Spare sun before the battery helps (default 1200 W). Shown only while **May the battery help charge the car?** is on. |
 
 Set **May the battery help charge the car?** and **May the battery sell to the grid?** on the same card.
 
@@ -312,7 +312,7 @@ Then open the boiler's row on **Devices**. It asks four questions:
 
 | Question | Row |
 |---|---|
-| Which temperature SEM keeps? | **Keep it at** |
+| Which temperature SEM keeps? | **Keep at** |
 | Below which temperature SEM heats at once, at any price? | **Never colder than** |
 | How hot may free sun heat it? | **With spare sun, heat up to** |
 | May SEM buy power for it? | **May SEM buy power for it?** (No, sun only, or Yes, in cheap hours) |

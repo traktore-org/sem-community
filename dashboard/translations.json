@@ -1917,7 +1917,7 @@
     "next_more_scheduler": "plánovač",
     "next_more_ext_control": "Řídí jiný systém",
     "next_more_finish_by_departure": "dokončit do odjezdu",
-    "next_more_capacity": "kapacita",
+    "next_more_capacity": "velikost baterie auta",
     "next_more_use": "použití",
     "next_more_phase_switching": "přepínání fází",
     "next_more_enable_delay": "zpoždění startu",
@@ -2543,7 +2543,12 @@
     "why_reason_comfort_not_far": "Místnost není dost pod Držet na, aby se spustil chod.",
     "why_reason_load_no_min_runtime": "Není nastavena denní minimální doba chodu, proto není co plánovat. Nastavte ji v Zařízení › toto zařízení.",
     "hp_cop_flat_hint": "COP je pevný. Přidejte křivku COP v Zařízení › tepelné čerpadlo › COP podle venkovní teploty, aby sledoval venkovní teplotu.",
-    "why_reason_comfort_mode": "SEM nesmí toto zařízení provozovat z přebytku. Nastavte režim Přebytek v Zařízení › toto zařízení."
+    "why_reason_comfort_mode": "SEM nesmí toto zařízení provozovat z přebytku. Nastavte režim Přebytek v Zařízení › toto zařízení.",
+    "next_code_unknown": "Neznámé",
+    "next_status_missed": "zmeškáno",
+    "config_setpoint_model_signed": "Plus vybíjí, minus nabíjí",
+    "config_setpoint_model_inverted": "Plus nabíjí, minus vybíjí",
+    "config_setpoint_model_direction_select": "Směr nastaví výběr"
   },
   "da": {
     "/year": "/år",
@@ -4463,7 +4468,7 @@
     "next_more_scheduler": "skema",
     "next_more_ext_control": "Styres af et andet system",
     "next_more_finish_by_departure": "klar til afgang",
-    "next_more_capacity": "kapacitet",
+    "next_more_capacity": "bilens batteristørrelse",
     "next_more_use": "brug",
     "next_more_phase_switching": "fasekobling",
     "next_more_enable_delay": "startforsinkelse",
@@ -5089,7 +5094,12 @@
     "why_reason_comfort_not_far": "Rummet ligger ikke langt nok under Hold ved til at starte en kørsel.",
     "why_reason_load_no_min_runtime": "Ingen daglig mindste køretid er sat, så der er intet at planlægge. Indstil en under Enheder › denne enhed.",
     "hp_cop_flat_hint": "COP er fast. Tilføj en COP-kurve under Enheder › varmepumpe › COP efter udetemperatur for at følge udetemperaturen.",
-    "why_reason_comfort_mode": "SEM må ikke køre denne enhed på overskud. Sæt tilstanden til Overskud under Enheder › denne enhed."
+    "why_reason_comfort_mode": "SEM må ikke køre denne enhed på overskud. Sæt tilstanden til Overskud under Enheder › denne enhed.",
+    "next_code_unknown": "Ukendt",
+    "next_status_missed": "misset",
+    "config_setpoint_model_signed": "Plus aflader, minus oplader",
+    "config_setpoint_model_inverted": "Plus oplader, minus aflader",
+    "config_setpoint_model_direction_select": "En vælger sætter retningen"
   },
   "de": {
     "/year": "/Jahr",
@@ -7009,7 +7019,7 @@
     "next_more_scheduler": "Ladeplaner",
     "next_more_ext_control": "Von einem anderen System gesteuert",
     "next_more_finish_by_departure": "fertig zur Abfahrt",
-    "next_more_capacity": "Kapazität",
+    "next_more_capacity": "Größe der Autobatterie",
     "next_more_use": "Verbrauch",
     "next_more_phase_switching": "Phasenumschaltung",
     "next_more_enable_delay": "Startverzögerung",
@@ -7635,7 +7645,12 @@
     "why_reason_comfort_not_far": "Der Raum liegt nicht weit genug unter Halten bei, um einen Lauf zu starten.",
     "why_reason_load_no_min_runtime": "Keine tägliche Mindestlaufzeit gesetzt, daher gibt es nichts zu planen. Setze eine unter Geräte › dieses Gerät.",
     "hp_cop_flat_hint": "Der COP ist fest. Füge unter Geräte › Wärmepumpe › COP nach Außentemperatur eine COP-Kurve hinzu, damit er der Außentemperatur folgt.",
-    "why_reason_comfort_mode": "SEM darf dieses Gerät nicht mit Überschuss betreiben. Stelle den Modus unter Geräte › dieses Gerät auf Überschuss."
+    "why_reason_comfort_mode": "SEM darf dieses Gerät nicht mit Überschuss betreiben. Stelle den Modus unter Geräte › dieses Gerät auf Überschuss.",
+    "next_code_unknown": "Unbekannt",
+    "next_status_missed": "verpasst",
+    "config_setpoint_model_signed": "Plus entlädt, Minus lädt",
+    "config_setpoint_model_inverted": "Plus lädt, Minus entlädt",
+    "config_setpoint_model_direction_select": "Eine Auswahl setzt die Richtung"
   },
   "en": {
     "/year": "/year",
@@ -7756,7 +7771,7 @@
     "allocation": "Allocation",
     "annual_savings": "Annual savings",
     "assist_max_power": "Battery → EV assist limit",
-    "assist_min_surplus": "Solar Gate",
+    "assist_min_surplus": "Spare sun before the battery helps",
     "at_least": "At least",
     "autarky": "Autarky",
     "auto_mode": "Auto (Forecast)",
@@ -7863,14 +7878,14 @@
     "hq_now": "{reading} now.",
     "hq_sub_sun_free": "Spare sun before then heats it for free.",
     "hq_sub_no_buy": "SEM buys no power for it. Below {limit} it would heat at once.",
-    "hq_keep": "Keep it at",
+    "hq_keep": "Keep at",
     "hq_keep_sub": "SEM heats to this.",
     "hq_floor": "Never colder than",
     "hq_floor_sub": "Below this it heats at once, at any price.",
     "hq_sun_max": "With spare sun, heat up to",
-    "hq_sun_max_sub": "Free heat stored for later. It moves with “Keep it at”.",
+    "hq_sun_max_sub": "Free heat stored for later. It moves with “Keep at”.",
     "hq_preheat": "Also in the cheapest-heat hours",
-    "hq_preheat_sub": "In a cheap hour SEM heats on to the top, not only to “Keep it at”. Stores cheap heat.",
+    "hq_preheat_sub": "In a cheap hour SEM heats on to the top, not only to “Keep at”. Stores cheap heat.",
     "hq_st_preheating": "pre-heating to {top} in a cheap hour",
     "hq_st_preheats_at": "pre-heats to {top} from {start}",
     "hq_buy": "May SEM buy power for it?",
@@ -7928,7 +7943,7 @@
     "hq_ceiling": "Never warmer than",
     "hq_ceiling_sub": "Above this it cools at once, at any price.",
     "hq_sun_min": "With spare sun, cool down to",
-    "hq_sun_min_sub": "Free cooling stored for later. It moves with “Keep it at”.",
+    "hq_sun_min_sub": "Free cooling stored for later. It moves with “Keep at”.",
     "hq_err_above_keep": "Must be at most {keep}.",
     "hq_buy_sub_band_battery": "Battery: it reaches {keep} at night from the house battery, while the battery is above its reserve.",
     "hq_sub_no_buy_cool": "SEM buys no power for it. Above {limit} it would cool at once.",
@@ -7950,7 +7965,7 @@
     "config_battery_power_sensor": "Battery power sensor",
     "config_battery_soc_sensor": "Battery charge level sensor",
     "config_bs_block_mode": "Charge in one block",
-    "config_bs_capacity": "Battery capacity",
+    "config_bs_capacity": "Battery size",
     "config_bs_cycle_cost": "Cycle cost",
     "config_bs_efficiency": "Roundtrip efficiency",
     "config_bs_force_neg": "Force charge on negative price",
@@ -8660,7 +8675,7 @@
     "years": "years",
     "yes": "Yes",
     "yesterday": "Yesterday",
-    "zone_help_assist_max_power": "How much the home battery may give the EV — a sub-limit inside the total discharge limit below. Applies only to battery-assist charging (SOC above the buffer, real solar past the Solar Gate).",
+    "zone_help_assist_max_power": "How much the home battery may give the EV — a sub-limit inside the total discharge limit below. Applies only to battery-assist charging (SOC above the buffer, real spare sun above the threshold).",
     "zone_help_assist_min_surplus": "Minimum real solar surplus before the home battery helps charge the EV — in any mode. Below this the battery is reserved for the house. 0 = battery supports the EV everywhere, including overnight.",
     "zone_help_autostart": "From this SOC the home battery may give the car its full help, still only with enough spare sun.",
     "zone_legend_surplus": "Surplus",
@@ -8705,8 +8720,8 @@
     "price_level_flat": "No price difference",
     "price_level_no_prices": "No prices available",
     "config_house_power_sensor": "House power sensor",
-    "config_setpoint_model": "Setpoint model",
-    "config_direction_entity": "Charge/discharge direction select",
+    "config_setpoint_model": "How SEM sends the power value",
+    "config_direction_entity": "Charge or discharge selector",
     "config_direction_val_discharge": "Direction: discharge value",
     "config_direction_val_charge": "Direction: charge value",
     "pause_charging": "Pause",
@@ -9555,7 +9570,7 @@
     "next_more_scheduler": "scheduler",
     "next_more_ext_control": "Controlled by another system",
     "next_more_finish_by_departure": "finish by departure",
-    "next_more_capacity": "capacity",
+    "next_more_capacity": "car battery size",
     "next_more_use": "use",
     "next_more_phase_switching": "phase switching",
     "next_more_enable_delay": "start delay",
@@ -10181,7 +10196,12 @@
     "why_reason_comfort_not_far": "The room is not far enough below Keep at to start a run.",
     "why_reason_load_no_min_runtime": "No daily minimum runtime set, so there is nothing to plan. Set one in Devices › this device.",
     "hp_cop_flat_hint": "The COP is fixed. Add a COP curve in Devices › heat pump › COP by outdoor temperature to follow the outdoor temperature.",
-    "why_reason_comfort_mode": "SEM may not run this device on surplus. Set its mode to Surplus in Devices › this device."
+    "why_reason_comfort_mode": "SEM may not run this device on surplus. Set its mode to Surplus in Devices › this device.",
+    "next_code_unknown": "Unknown",
+    "next_status_missed": "missed",
+    "config_setpoint_model_signed": "Plus discharges, minus charges",
+    "config_setpoint_model_inverted": "Plus charges, minus discharges",
+    "config_setpoint_model_direction_select": "A selector sets the direction"
   },
   "es": {
     "/year": "/año",
@@ -12101,7 +12121,7 @@
     "next_more_scheduler": "planificador",
     "next_more_ext_control": "Controlado por otro sistema",
     "next_more_finish_by_departure": "terminar a la salida",
-    "next_more_capacity": "capacidad",
+    "next_more_capacity": "tamaño de la batería del coche",
     "next_more_use": "consumo",
     "next_more_phase_switching": "cambio de fases",
     "next_more_enable_delay": "retardo de inicio",
@@ -12727,7 +12747,12 @@
     "why_reason_comfort_not_far": "La sala no está lo bastante por debajo de Mantener en para iniciar un ciclo.",
     "why_reason_load_no_min_runtime": "No hay tiempo mínimo diario definido, así que no hay nada que planificar. Define uno en Dispositivos › este dispositivo.",
     "hp_cop_flat_hint": "El COP es fijo. Añade una curva de COP en Dispositivos › bomba de calor › COP según temperatura exterior para seguir la temperatura exterior.",
-    "why_reason_comfort_mode": "SEM no puede usar este dispositivo con excedente. Pon su modo en Excedente en Dispositivos › este dispositivo."
+    "why_reason_comfort_mode": "SEM no puede usar este dispositivo con excedente. Pon su modo en Excedente en Dispositivos › este dispositivo.",
+    "next_code_unknown": "Desconocido",
+    "next_status_missed": "perdido",
+    "config_setpoint_model_signed": "Positivo descarga, negativo carga",
+    "config_setpoint_model_inverted": "Positivo carga, negativo descarga",
+    "config_setpoint_model_direction_select": "Un selector fija el sentido"
   },
   "fi": {
     "/year": "/vuosi",
@@ -14647,7 +14672,7 @@
     "next_more_scheduler": "ajastin",
     "next_more_ext_control": "Toinen järjestelmä ohjaa",
     "next_more_finish_by_departure": "valmis lähtöön mennessä",
-    "next_more_capacity": "kapasiteetti",
+    "next_more_capacity": "auton akun koko",
     "next_more_use": "käyttö",
     "next_more_phase_switching": "vaihekytkentä",
     "next_more_enable_delay": "aloitusviive",
@@ -15273,7 +15298,12 @@
     "why_reason_comfort_not_far": "Huone ei ole tarpeeksi Pidä-arvon alapuolella käynnin aloittamiseen.",
     "why_reason_load_no_min_runtime": "Päivittäistä vähimmäiskäyntiaikaa ei ole asetettu, joten ei ole mitään suunniteltavaa. Aseta se kohdassa Laitteet › tämä laite.",
     "hp_cop_flat_hint": "COP on kiinteä. Lisää COP-käyrä kohdassa Laitteet › lämpöpumppu › COP ulkolämpötilan mukaan, jotta se seuraa ulkolämpötilaa.",
-    "why_reason_comfort_mode": "SEM ei saa käyttää tätä laitetta ylijäämällä. Aseta tilaksi Ylijäämä kohdassa Laitteet › tämä laite."
+    "why_reason_comfort_mode": "SEM ei saa käyttää tätä laitetta ylijäämällä. Aseta tilaksi Ylijäämä kohdassa Laitteet › tämä laite.",
+    "next_code_unknown": "Tuntematon",
+    "next_status_missed": "jäi väliin",
+    "config_setpoint_model_signed": "Plus purkaa, miinus lataa",
+    "config_setpoint_model_inverted": "Plus lataa, miinus purkaa",
+    "config_setpoint_model_direction_select": "Valinta asettaa suunnan"
   },
   "fr": {
     "/year": "/an",
@@ -17193,7 +17223,7 @@
     "next_more_scheduler": "planificateur",
     "next_more_ext_control": "Piloté par un autre système",
     "next_more_finish_by_departure": "fini au départ",
-    "next_more_capacity": "capacité",
+    "next_more_capacity": "taille de la batterie de la voiture",
     "next_more_use": "consommation",
     "next_more_phase_switching": "commutation de phases",
     "next_more_enable_delay": "délai de démarrage",
@@ -17819,7 +17849,12 @@
     "why_reason_comfort_not_far": "La pièce n'est pas assez sous Maintenir à pour lancer un cycle.",
     "why_reason_load_no_min_runtime": "Aucune durée minimale quotidienne définie, donc rien à planifier. Définissez-en une dans Appareils › cet appareil.",
     "hp_cop_flat_hint": "Le COP est fixe. Ajoutez une courbe de COP dans Appareils › pompe à chaleur › COP selon la température extérieure pour suivre la température extérieure.",
-    "why_reason_comfort_mode": "SEM ne peut pas piloter cet appareil au surplus. Réglez son mode sur Surplus dans Appareils › cet appareil."
+    "why_reason_comfort_mode": "SEM ne peut pas piloter cet appareil au surplus. Réglez son mode sur Surplus dans Appareils › cet appareil.",
+    "next_code_unknown": "Inconnu",
+    "next_status_missed": "manqué",
+    "config_setpoint_model_signed": "Plus décharge, moins charge",
+    "config_setpoint_model_inverted": "Plus charge, moins décharge",
+    "config_setpoint_model_direction_select": "Un sélecteur fixe le sens"
   },
   "hu": {
     "/year": "/év",
@@ -19739,7 +19774,7 @@
     "next_more_scheduler": "ütemező",
     "next_more_ext_control": "Másik rendszer vezérli",
     "next_more_finish_by_departure": "kész az indulásra",
-    "next_more_capacity": "kapacitás",
+    "next_more_capacity": "az autó akkumulátorának mérete",
     "next_more_use": "használat",
     "next_more_phase_switching": "fázisváltás",
     "next_more_enable_delay": "indítási késleltetés",
@@ -20365,7 +20400,12 @@
     "why_reason_comfort_not_far": "A szoba nincs elég messze a Tartás alatt egy futás indításához.",
     "why_reason_load_no_min_runtime": "Nincs napi minimális futásidő beállítva, ezért nincs mit tervezni. Állítson be egyet: Eszközök › ez az eszköz.",
     "hp_cop_flat_hint": "A COP rögzített. Adjon hozzá COP-görbét: Eszközök › hőszivattyú › COP a külső hőmérséklet szerint, hogy kövesse a külső hőmérsékletet.",
-    "why_reason_comfort_mode": "A SEM nem működtetheti ezt az eszközt többletből. Állítsa a módot Többletre: Eszközök › ez az eszköz."
+    "why_reason_comfort_mode": "A SEM nem működtetheti ezt az eszközt többletből. Állítsa a módot Többletre: Eszközök › ez az eszköz.",
+    "next_code_unknown": "Ismeretlen",
+    "next_status_missed": "elmaradt",
+    "config_setpoint_model_signed": "Plusz kisüt, mínusz tölt",
+    "config_setpoint_model_inverted": "Plusz tölt, mínusz kisüt",
+    "config_setpoint_model_direction_select": "Egy választó adja meg az irányt"
   },
   "it": {
     "/year": "/anno",
@@ -22285,7 +22325,7 @@
     "next_more_scheduler": "pianificatore",
     "next_more_ext_control": "Controllato da un altro sistema",
     "next_more_finish_by_departure": "finire alla partenza",
-    "next_more_capacity": "capacità",
+    "next_more_capacity": "dimensione della batteria dell'auto",
     "next_more_use": "consumo",
     "next_more_phase_switching": "commutazione fasi",
     "next_more_enable_delay": "ritardo avvio",
@@ -22911,7 +22951,12 @@
     "why_reason_comfort_not_far": "L'ambiente non è abbastanza sotto Mantieni a per avviare un ciclo.",
     "why_reason_load_no_min_runtime": "Nessun tempo minimo giornaliero impostato, quindi non c'è nulla da pianificare. Impostane uno in Dispositivi › questo dispositivo.",
     "hp_cop_flat_hint": "Il COP è fisso. Aggiungi una curva COP in Dispositivi › pompa di calore › COP per temperatura esterna per seguire la temperatura esterna.",
-    "why_reason_comfort_mode": "SEM non può usare questo dispositivo con il surplus. Imposta la modalità su Surplus in Dispositivi › questo dispositivo."
+    "why_reason_comfort_mode": "SEM non può usare questo dispositivo con il surplus. Imposta la modalità su Surplus in Dispositivi › questo dispositivo.",
+    "next_code_unknown": "Sconosciuto",
+    "next_status_missed": "mancato",
+    "config_setpoint_model_signed": "Positivo scarica, negativo carica",
+    "config_setpoint_model_inverted": "Positivo carica, negativo scarica",
+    "config_setpoint_model_direction_select": "Un selettore imposta la direzione"
   },
   "nl": {
     "/year": "/jaar",
@@ -24831,7 +24876,7 @@
     "next_more_scheduler": "planner",
     "next_more_ext_control": "Door een ander systeem bestuurd",
     "next_more_finish_by_departure": "klaar bij vertrek",
-    "next_more_capacity": "capaciteit",
+    "next_more_capacity": "grootte van de autobatterij",
     "next_more_use": "verbruik",
     "next_more_phase_switching": "fasewisseling",
     "next_more_enable_delay": "startvertraging",
@@ -25457,7 +25502,12 @@
     "why_reason_comfort_not_far": "De kamer ligt niet ver genoeg onder Houden op om een run te starten.",
     "why_reason_load_no_min_runtime": "Geen dagelijkse minimale looptijd ingesteld, dus er is niets te plannen. Stel er een in onder Apparaten › dit apparaat.",
     "hp_cop_flat_hint": "De COP is vast. Voeg een COP-curve toe onder Apparaten › warmtepomp › COP per buitentemperatuur om de buitentemperatuur te volgen.",
-    "why_reason_comfort_mode": "SEM mag dit apparaat niet op overschot laten draaien. Zet de modus op Overschot onder Apparaten › dit apparaat."
+    "why_reason_comfort_mode": "SEM mag dit apparaat niet op overschot laten draaien. Zet de modus op Overschot onder Apparaten › dit apparaat.",
+    "next_code_unknown": "Onbekend",
+    "next_status_missed": "gemist",
+    "config_setpoint_model_signed": "Plus ontlaadt, min laadt",
+    "config_setpoint_model_inverted": "Plus laadt, min ontlaadt",
+    "config_setpoint_model_direction_select": "Een keuzelijst zet de richting"
   },
   "no": {
     "/year": "/år",
@@ -27377,7 +27427,7 @@
     "next_more_scheduler": "tidsplanlegger",
     "next_more_ext_control": "Styres av et annet system",
     "next_more_finish_by_departure": "ferdig til avreise",
-    "next_more_capacity": "kapasitet",
+    "next_more_capacity": "bilens batteristørrelse",
     "next_more_use": "bruk",
     "next_more_phase_switching": "fasebytte",
     "next_more_enable_delay": "startforsinkelse",
@@ -28003,7 +28053,12 @@
     "why_reason_comfort_not_far": "Rommet ligger ikke langt nok under Hold ved til å starte en kjøring.",
     "why_reason_load_no_min_runtime": "Ingen daglig minste driftstid satt, så det er ingenting å planlegge. Sett en under Enheter › denne enheten.",
     "hp_cop_flat_hint": "COP er fast. Legg til en COP-kurve under Enheter › varmepumpe › COP etter utetemperatur for å følge utetemperaturen.",
-    "why_reason_comfort_mode": "SEM har ikke lov til å kjøre denne enheten på overskudd. Sett modusen til Overskudd under Enheter › denne enheten."
+    "why_reason_comfort_mode": "SEM har ikke lov til å kjøre denne enheten på overskudd. Sett modusen til Overskudd under Enheter › denne enheten.",
+    "next_code_unknown": "Ukjent",
+    "next_status_missed": "gikk tapt",
+    "config_setpoint_model_signed": "Pluss lader ut, minus lader",
+    "config_setpoint_model_inverted": "Pluss lader, minus lader ut",
+    "config_setpoint_model_direction_select": "En velger setter retningen"
   },
   "pl": {
     "/year": "/rok",
@@ -29923,7 +29978,7 @@
     "next_more_scheduler": "harmonogram",
     "next_more_ext_control": "Steruje inny system",
     "next_more_finish_by_departure": "gotowe do wyjazdu",
-    "next_more_capacity": "pojemność",
+    "next_more_capacity": "rozmiar baterii auta",
     "next_more_use": "zastosowanie",
     "next_more_phase_switching": "przełączanie faz",
     "next_more_enable_delay": "opóźnienie startu",
@@ -30549,7 +30604,12 @@
     "why_reason_comfort_not_far": "Pokój nie jest dość daleko poniżej Utrzymuj na, aby rozpocząć cykl.",
     "why_reason_load_no_min_runtime": "Nie ustawiono dziennego minimalnego czasu pracy, więc nie ma nic do zaplanowania. Ustaw go w Urządzenia › to urządzenie.",
     "hp_cop_flat_hint": "COP jest stały. Dodaj krzywą COP w Urządzenia › pompa ciepła › COP wg temperatury zewnętrznej, aby podążał za temperaturą zewnętrzną.",
-    "why_reason_comfort_mode": "SEM nie może uruchamiać tego urządzenia na nadwyżce. Ustaw tryb Nadwyżka w Urządzenia › to urządzenie."
+    "why_reason_comfort_mode": "SEM nie może uruchamiać tego urządzenia na nadwyżce. Ustaw tryb Nadwyżka w Urządzenia › to urządzenie.",
+    "next_code_unknown": "Nieznane",
+    "next_status_missed": "pominięte",
+    "config_setpoint_model_signed": "Plus rozładowuje, minus ładuje",
+    "config_setpoint_model_inverted": "Plus ładuje, minus rozładowuje",
+    "config_setpoint_model_direction_select": "Kierunek ustawia wybór"
   },
   "pt": {
     "/year": "/ano",
@@ -32469,7 +32529,7 @@
     "next_more_scheduler": "agendador",
     "next_more_ext_control": "Controlado por outro sistema",
     "next_more_finish_by_departure": "terminar até à partida",
-    "next_more_capacity": "capacidade",
+    "next_more_capacity": "tamanho da bateria do carro",
     "next_more_use": "uso",
     "next_more_phase_switching": "troca de fases",
     "next_more_enable_delay": "atraso de arranque",
@@ -33095,7 +33155,12 @@
     "why_reason_comfort_not_far": "A divisão não está suficientemente abaixo de Manter em para iniciar um ciclo.",
     "why_reason_load_no_min_runtime": "Nenhum tempo mínimo diário definido, por isso não há nada a planear. Defina um em Dispositivos › este dispositivo.",
     "hp_cop_flat_hint": "O COP é fixo. Adicione uma curva de COP em Dispositivos › bomba de calor › COP por temperatura exterior para seguir a temperatura exterior.",
-    "why_reason_comfort_mode": "O SEM não pode usar este dispositivo com excedente. Defina o modo como Excedente em Dispositivos › este dispositivo."
+    "why_reason_comfort_mode": "O SEM não pode usar este dispositivo com excedente. Defina o modo como Excedente em Dispositivos › este dispositivo.",
+    "next_code_unknown": "Desconhecido",
+    "next_status_missed": "perdido",
+    "config_setpoint_model_signed": "Positivo descarrega, negativo carrega",
+    "config_setpoint_model_inverted": "Positivo carrega, negativo descarrega",
+    "config_setpoint_model_direction_select": "Um seletor define a direção"
   },
   "ro": {
     "/year": "/an",
@@ -35015,7 +35080,7 @@
     "next_more_scheduler": "planificator",
     "next_more_ext_control": "Controlat de alt sistem",
     "next_more_finish_by_departure": "gata până la plecare",
-    "next_more_capacity": "capacitate",
+    "next_more_capacity": "mărimea bateriei mașinii",
     "next_more_use": "utilizare",
     "next_more_phase_switching": "comutare faze",
     "next_more_enable_delay": "întârziere pornire",
@@ -35641,7 +35706,12 @@
     "why_reason_comfort_not_far": "Camera nu este destul de sub Menține la pentru a porni o rulare.",
     "why_reason_load_no_min_runtime": "Niciun timp minim zilnic setat, deci nu e nimic de planificat. Setați unul în Dispozitive › acest dispozitiv.",
     "hp_cop_flat_hint": "COP-ul este fix. Adăugați o curbă COP în Dispozitive › pompă de căldură › COP după temperatura exterioară pentru a urmări temperatura exterioară.",
-    "why_reason_comfort_mode": "SEM nu poate folosi acest dispozitiv din surplus. Setați modul pe Surplus în Dispozitive › acest dispozitiv."
+    "why_reason_comfort_mode": "SEM nu poate folosi acest dispozitiv din surplus. Setați modul pe Surplus în Dispozitive › acest dispozitiv.",
+    "next_code_unknown": "Necunoscut",
+    "next_status_missed": "ratat",
+    "config_setpoint_model_signed": "Plus descarcă, minus încarcă",
+    "config_setpoint_model_inverted": "Plus încarcă, minus descarcă",
+    "config_setpoint_model_direction_select": "Un selector stabilește direcția"
   },
   "sv": {
     "/year": "/år",
@@ -37561,7 +37631,7 @@
     "next_more_scheduler": "schemaläggare",
     "next_more_ext_control": "Styrs av ett annat system",
     "next_more_finish_by_departure": "klar till avresa",
-    "next_more_capacity": "kapacitet",
+    "next_more_capacity": "bilens batteristorlek",
     "next_more_use": "användning",
     "next_more_phase_switching": "fasbyte",
     "next_more_enable_delay": "startfördröjning",
@@ -38187,7 +38257,12 @@
     "why_reason_comfort_not_far": "Rummet ligger inte tillräckligt långt under Håll vid för att starta en körning.",
     "why_reason_load_no_min_runtime": "Ingen daglig minsta drifttid inställd, så det finns inget att planera. Ställ in en under Enheter › den här enheten.",
     "hp_cop_flat_hint": "COP är fast. Lägg till en COP-kurva under Enheter › värmepump › COP efter utetemperatur för att följa utetemperaturen.",
-    "why_reason_comfort_mode": "SEM får inte köra den här enheten på överskott. Ställ in läget på Överskott under Enheter › den här enheten."
+    "why_reason_comfort_mode": "SEM får inte köra den här enheten på överskott. Ställ in läget på Överskott under Enheter › den här enheten.",
+    "next_code_unknown": "Okänd",
+    "next_status_missed": "missat",
+    "config_setpoint_model_signed": "Plus laddar ur, minus laddar",
+    "config_setpoint_model_inverted": "Plus laddar, minus laddar ur",
+    "config_setpoint_model_direction_select": "En väljare sätter riktningen"
   },
   "zh": {
     "/year": "/年",
@@ -40107,7 +40182,7 @@
     "next_more_scheduler": "调度器",
     "next_more_ext_control": "由其他系统控制",
     "next_more_finish_by_departure": "出发前完成",
-    "next_more_capacity": "容量",
+    "next_more_capacity": "车辆电池容量",
     "next_more_use": "用途",
     "next_more_phase_switching": "相数切换",
     "next_more_enable_delay": "启动延迟",
@@ -40733,6 +40808,11 @@
     "why_reason_comfort_not_far": "房间离“保持在”还不够低，无法启动运行。",
     "why_reason_load_no_min_runtime": "未设置每日最短运行时间，因此无需计划。请在 设备 › 此设备 中设置。",
     "hp_cop_flat_hint": "COP 为固定值。请在 设备 › 热泵 › 按室外温度的 COP 中添加 COP 曲线，使其随室外温度变化。",
-    "why_reason_comfort_mode": "SEM 不可用盈余电力运行此设备。请在 设备 › 此设备 中把模式设为盈余。"
+    "why_reason_comfort_mode": "SEM 不可用盈余电力运行此设备。请在 设备 › 此设备 中把模式设为盈余。",
+    "next_code_unknown": "未知",
+    "next_status_missed": "已错过",
+    "config_setpoint_model_signed": "正值放电，负值充电",
+    "config_setpoint_model_inverted": "正值充电，负值放电",
+    "config_setpoint_model_direction_select": "由选择器设定方向"
   }
 }

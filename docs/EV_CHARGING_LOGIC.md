@@ -13,10 +13,10 @@ Default: **Min + Solar**.
 | Mode | Grid | Home battery | What it does |
 |---|---|---|---|
 | **Solar only** | Never by day. At night only with an *At least* floor you set on this charger | Never for the car. Exception: forecast-led spending | Spare sun only. Idles at night unless you set a floor. |
-| **Solar + battery** | Never by day. At night only with an *At least* floor | Helps down to the higher of the Buffer SOC and tonight's floor | Spare sun plus the pack. Above the Solar Gate it always helps. Below it, only when tonight's forecast budget is positive. |
+| **Solar + battery** | Never by day. At night only with an *At least* floor | Helps down to the higher of the Buffer SOC and tonight's floor | Spare sun plus the pack. Above the spare-sun threshold it always helps. Below it, only when tonight's forecast budget is positive. |
 | **Solar + cheapest hours** | Only in cheap hours, up to the floor | Never | Spare sun by day. Grid only at cheap, very cheap or negative prices. Needs a tariff with cheaper hours: dynamic, or a schedule or two-rate tariff. |
 | **Min + Solar** | Up to the floor (*At least*) | Helps above the Buffer SOC | Tops up to *At least* by the *Charge by* time. Spare sun adds up to *Up to*. Nothing owed means no grid. |
-| **Always (max)** | Whatever it takes | Held to the house, unless the pack is above the Buffer SOC and spare sun passes the Solar Gate | Full speed whenever a car is plugged in, day or night, at any price. Stops at *Up to*. A floor of 0 does not stop it. |
+| **Always (max)** | Whatever it takes | Held to the house, unless the pack is above the Buffer SOC and spare sun passes the threshold | Full speed whenever a car is plugged in, day or night, at any price. Stops at *Up to*. A floor of 0 does not stop it. |
 | **Off** | None | None | Hands-off. Switching to Off stops a running charge once, whoever started it. Then SEM sends nothing: no start, no stop, no current. SEM still reads the power and counts the energy. |
 
 - A charge that you start elsewhere in Home Assistant runs untouched, also
@@ -103,7 +103,7 @@ The home battery can feed the car when solar is not enough.
 | Setting | Visible name | Effect |
 |---|---|---|
 | Buffer SOC | *Buffer SOC* | The battery helps the car only above this level. Below it the battery is off-limits to the car |
-| Solar Gate | *Solar Gate* | The real surplus (solar minus house) needed before the battery helps, in every mode. Default 1200 W. Set 0 to allow it at any time, also at night |
+| Spare sun before the battery helps | *Spare sun before the battery helps* | The real surplus (solar minus house) needed before the battery helps, in every mode. Default 1200 W. Set 0 to allow it at any time, also at night |
 | Battery → EV assist limit | *Battery → EV assist limit* | The most the battery may give the cars. One allowance for the whole house |
 
 - With the battery at or above the Buffer SOC and the surplus past the Solar

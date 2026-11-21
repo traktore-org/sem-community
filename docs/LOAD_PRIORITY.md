@@ -78,7 +78,7 @@ Each load has a **Mode** on the **Devices** screen.
 | **Off** | Monitors only. SEM never switches it, and the peak guard never sheds it |
 | **Peak only** | Your automations run it. SEM never starts it. It switches it off while the grid peak is at risk, and on again when the peak falls |
 | **SEM runs it** | Starts on spare sun. Stops when the house buys power from the grid for it, or when the sun makes less than the load draws. It never starts on the battery |
-| **SEM runs it, battery may help** | As *SEM runs it*. By day the battery may help, down to the Buffer SOC (or tonight's floor if that is higher). The help starts only when at least the Solar Gate (1200 W default) goes to the grid |
+| **SEM runs it, battery may help** | As *SEM runs it*. By day the battery may help, down to the Buffer SOC (or tonight's floor if that is higher). The help starts only when at least the **Spare sun before the battery helps** (1200 W default) goes to the grid |
 
 - A load that SEM started on sun stops when the sun stops, even if its power
   sensor reads 0 W. A load you switched on yourself stays on.
