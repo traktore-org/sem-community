@@ -182,7 +182,7 @@ class TestStartNowAtNight:
         _override(rig, "sol", "force")
         res = await rig.tick()
         assert _amps_sent(rig, "sol") == []
-        assert res.get("charger_sol_charging_state") != CS.NIGHT_CHARGING_ACTIVE
+        assert res.get("charger_sol_charging_state") == CS.NIGHT_DISABLED
 
     async def test_an_off_charger_stays_hands_off(self):
         """Off outranks a one-off, as for batteries: nothing is sent."""
