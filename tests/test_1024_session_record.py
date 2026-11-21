@@ -212,6 +212,7 @@ class TestOneWriter:
             _session_data=SessionData(active=False, energy_kwh=4.0),
             _ev_taper_detector=det,
             _cycle_vehicle_soc=None,
+            _own_vehicle_soc=lambda cid: None,   # (#1405)
             _storage=MagicMock(),
         )
         power = SimpleNamespace(ev_connected=False)

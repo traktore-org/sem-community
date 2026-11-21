@@ -467,6 +467,7 @@ class TestSwapRetirementInterleaved:
     def test_two_chargers_three_cycles_full_field_matrix(self):
         from unittest.mock import MagicMock
         coord = self._coord()
+        coord.config["ev_chargers"] = [{"id": "a"}, {"id": "b"}]
         primary = MagicMock(name="primary")
         coord._ev_device = primary          # registration (out-of-loop)
         coord._cycle_vehicle_soc = 50.0     # global per-cycle SOC read
@@ -475,13 +476,15 @@ class TestSwapRetirementInterleaved:
         # ── cycle 1: A stalls + overrides SOC; B stays clean ──────────
         with self._ctx(coord, "a", dev_a):
             assert coord._ev_device is dev_a
-            assert coord._cycle_vehicle_soc == 50.0   # seeded from global
+            assert coord._cycle_vehicle_soc == 50.0   # first charger: the flat one
             coord._ev_stalled_since = 111.0
             coord._ev_reenable_attempts = 2
             coord._cycle_vehicle_soc = 81.0           # per-charger entity
         with self._ctx(coord, "b", dev_b):
             assert coord._ev_device is dev_b
-            assert coord._cycle_vehicle_soc == 50.0, "A's SOC override leaked into B"
+            # (#1405) B has no sensor: no level — never A's override,
+            # never the flat sensor (the first charger's car)
+            assert coord._cycle_vehicle_soc is None, "A's SOC override leaked into B"
             assert coord._ev_stalled_since is None, "A's stall leaked into B"
             assert coord._ev_reenable_attempts == 0
             coord._ev_charge_refused = True
