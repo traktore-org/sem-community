@@ -184,6 +184,7 @@ class NotificationManager:
         # which knows the chargers. Empty: no charger list to tie a display
         # to, so the first display found takes every notice (as before).
         self.charger_identities: Callable[[], Mapping[str, frozenset]] = dict
+        self._display_unowned_logged: set = set()
         self._mobile_service_checked: bool = False
         self._mobile_service_available: bool = True
         self._mobile_service_name: str = ""
@@ -347,9 +348,14 @@ class NotificationManager:
             return
         service = self._display_for(services, charger_id)
         if service is None:
-            _LOGGER.debug(
-                "No display belongs to charger %s alone; notice not sent: %s",
-                charger_id, message)
+            # Once per charger at INFO: a display that goes quiet says why.
+            if charger_id not in self._display_unowned_logged:
+                self._display_unowned_logged.add(charger_id)
+                _LOGGER.info(
+                    "Charger %s has no display of its own among %s; its "
+                    "notices are not shown on a display (#1404)",
+                    charger_id or "(none)",
+                    ", ".join(f"notify.{s}" for s in services))
             return
 
         try:

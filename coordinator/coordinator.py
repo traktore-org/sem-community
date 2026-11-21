@@ -5313,11 +5313,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # untouched, nothing to restore.
                         charger_cfg = pcc.charger_cfg
                         per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
+                        # (#1404 review) this charger's own reading, for the
+                        # SOC-cap Repair: with its own sensor dark, the seed
+                        # left above is the flat sensor — another car's.
+                        _own_soc = None
                         if per_soc_entity:
                             soc_st = self.hass.states.get(per_soc_entity)
                             if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                                 try:
                                     self._cycle_vehicle_soc = finite_float(soc_st.state)
+                                    _own_soc = self._cycle_vehicle_soc
                                 except (ValueError, TypeError):
                                     _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
                         # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245).
@@ -5802,7 +5807,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         pcc.offered_amps = int(decision.commanded_amps or 0)
                         pcc.offered_w = float(_offer_w(
                             decision,
-                            phases=adapter.phases,
+                            # the phases it charges on now (#804), else rated
+                            phases=int(getattr(self, "_phase_believed", {}).get(cid)
+                                       or adapter.phases),
                             voltage=adapter.voltage,
                             max_current_a=adapter.max_current_a,
                         ) or 0.0)
@@ -5810,7 +5817,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # enforced because no real vehicle SOC is readable.
                         # (#1404) After the decision: the state it reads is
                         # this charger's own, not the fleet's from before.
-                        self._maybe_warn_soc_cap(cid, charger_cfg, cycle_soc_local, effective_state)
+                        # A charger with no sensor of its own keeps the flat
+                        # one (the same SOC its plan reads).
+                        self._maybe_warn_soc_cap(
+                            cid, charger_cfg,
+                            _own_soc if per_soc_entity else cycle_soc_local,
+                            effective_state, mode_off=(_view_mode == "off"))
 
                         # (#899) Commit-then-measure: the redirect counts only
                         # while the meter agrees. Import above tolerance with
@@ -15374,15 +15386,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return full
         return max(max_val, min_val)
 
-    def _maybe_warn_soc_cap(self, cid, charger_cfg, real_soc, charging_state) -> None:
+    def _maybe_warn_soc_cap(self, cid, charger_cfg, real_soc, charging_state,
+                            *, mode_off: bool = False) -> None:
         """#526: raise/clear a repair when a SOC-% charge cap can't be enforced.
 
         A ``%`` target needs a readable vehicle SOC to stop at the cap. When the
         car isn't reporting SOC (``real_soc is None``) but the charger is
         actively solar-charging, SEM keeps charging to taper (RienduPre: "car
         went past 80%"). Surface it as a persistent repair instead of silently
-        overshooting; clear it the moment a real SOC returns or the charger
-        stops / isn't on a SOC target.
+        overshooting; clear it the moment a real SOC returns, the target is
+        not a percent, the car is unplugged, or the charger is set to Off
+        (#1404: not when a charge merely pauses).
 
         (#708) ``charging_state`` is the FLEET state — the per-charger loop
         hands the same value to every charger, so one car drawing raised the
@@ -15414,7 +15428,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                      or {}).get(cid, True)
         charging = charging_state in self.SOLAR_CHARGING_STATES
         from . import repair_issues as _ri
-        if ttype != "soc" or real_soc is not None or not connected:
+        if ttype != "soc" or real_soc is not None or not connected or mode_off:
+            # (#1404 review) Off: SEM charges nothing, so nothing to enforce.
             _ri.clear_soc_cap_unenforceable(self.hass, cid)
         elif charging:
             target = self._resolve_target(cfg, "ev_target_soc", "max", 80, 100)

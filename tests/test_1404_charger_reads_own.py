@@ -101,6 +101,19 @@ class TestTheNoticeNamesThisChargersAmps:
         assert last["b"]["available_power"] == pytest.approx(
             last["b"]["calculated_current"] * 1 * 230)
 
+    async def test_the_watts_follow_the_phases_it_charges_on(self):
+        """(review) After a 3 → 1 phase switch the watts are one phase's."""
+        rig = _two_solar_chargers()
+        rig.coord._phase_believed = {"a": 1}
+        seen = _capture_notices(rig)
+        for _ in range(3):
+            await rig.tick()
+        rig.coord._phase_believed = {"a": 1}
+        await rig.tick()
+        last = {cid: data for cid, _state, data in seen[-2:]}
+        assert last["a"]["available_power"] == pytest.approx(
+            last["a"]["calculated_current"] * 1 * 230)
+
     async def test_the_charger_text_says_its_own_amps(self):
         rig = _two_solar_chargers()
         seen = _capture_notices(rig)
@@ -202,6 +215,16 @@ class TestTheNoticeGoesToItsChargersDisplay:
         assert _sent(hass) == []
         await nm._send_charger_notification("A text", charger_id="a")
         assert _sent(hass) == [("keba", "A text")]
+
+    async def test_a_quiet_display_says_why_once(self, caplog):
+        nm, hass = _nm(["keba"], IDS)
+        with caplog.at_level("INFO"):
+            for _ in range(3):
+                await nm._send_charger_notification("B text", charger_id="b")
+        lines = [r for r in caplog.records
+                 if "no display of its own" in r.getMessage()]
+        assert len(lines) == 1 and lines[0].levelname == "INFO"
+        assert "notify.keba" in lines[0].getMessage()
 
     async def test_one_charger_keeps_its_display(self):
         nm, hass = _nm(["keba"], {"z": frozenset()})
@@ -319,6 +342,50 @@ class TestTheRepairReadsThisChargersDecision:
         assert "b" in [c.args[1] for c in clear_it.call_args_list]
 
 
+@pytest.mark.asyncio
+class TestTheRepairReadsThisChargersOwnLevel:
+
+    async def test_a_dark_own_sensor_is_no_level(self):
+        """(review) The flat sensor is car A's. With charger b's own
+        sensor dark, b used to read car A's 55 % and clear its Repair."""
+        rig = _soc_rig()
+        rig.coord.config["vehicle_soc_entity"] = "sensor.car_a_soc"
+        rig.hass.states.set("sensor.car_a_soc", 55)
+        with patch.object(_ri, "raise_soc_cap_unenforceable") as raise_it, \
+                patch.object(_ri, "clear_soc_cap_unenforceable") as clear_it:
+            await rig.tick()
+        assert "b" in [c.args[1] for c in raise_it.call_args_list]
+        assert "b" not in [c.args[1] for c in clear_it.call_args_list]
+
+    async def test_a_charger_with_no_sensor_of_its_own_reads_the_flat_one(self):
+        """Unchanged: one charger, its level only in the flat setting."""
+        rig = _day_rig([_charger("b", mode="always_max", ev_target_type="soc",
+                                 ev_target_soc=80)],
+                       solar=2000, grid=8000, soc=20, ev=11000)
+        rig.coord.config["vehicle_soc_entity"] = "sensor.car_soc"
+        rig.hass.states.set("sensor.car_soc", 55)
+        with patch.object(_ri, "raise_soc_cap_unenforceable") as raise_it, \
+                patch.object(_ri, "clear_soc_cap_unenforceable") as clear_it:
+            await rig.tick()
+        assert "b" not in [c.args[1] for c in raise_it.call_args_list]
+        assert "b" in [c.args[1] for c in clear_it.call_args_list]
+
+    async def test_off_clears_it(self):
+        """(review) Off charges nothing, so there is nothing to enforce. A
+        pause keeps the Repair; Off does not."""
+        rig = _soc_rig()
+        with patch.object(_ri, "raise_soc_cap_unenforceable") as raise_it:
+            await rig.tick()
+        assert "b" in [c.args[1] for c in raise_it.call_args_list]
+        rig.coord.config["ev_chargers"][1]["charge_mode"] = "off"
+        with patch.object(_ri, "raise_soc_cap_unenforceable") as raise_it, \
+                patch.object(_ri, "clear_soc_cap_unenforceable") as clear_it:
+            res = await rig.tick()
+        assert res["charger_b_charging_state"] != CS.SOLAR_FULL_POWER
+        assert "b" not in [c.args[1] for c in raise_it.call_args_list]
+        assert "b" in [c.args[1] for c in clear_it.call_args_list]
+
+
 class _Coord:
     _maybe_warn_soc_cap = SEMCoordinator._maybe_warn_soc_cap
     _resolve_target = SEMCoordinator._resolve_target
@@ -356,6 +423,13 @@ class TestTheRepairDoesNotFollowTheClouds:
         CS.SOLAR_CHARGING_ACTIVE, CS.SOLAR_FULL_POWER, CS.SOLAR_MIN_PV])
     def test_a_charge_raises_it(self, state):
         assert _verdict(_Coord(), CFG, None, state) == (1, 0)
+
+    @pytest.mark.parametrize("state", [CS.SOLAR_IDLE, CS.SOLAR_CHARGING_ACTIVE])
+    def test_off_clears_it(self, state):
+        with patch.object(_ri, "raise_soc_cap_unenforceable") as raise_it, \
+                patch.object(_ri, "clear_soc_cap_unenforceable") as clear_it:
+            _Coord()._maybe_warn_soc_cap("b", CFG, None, state, mode_off=True)
+        assert (raise_it.call_count, clear_it.call_count) == (0, 1)
 
     @pytest.mark.parametrize("state", [CS.SOLAR_CHARGING_ACTIVE, CS.SOLAR_IDLE])
     def test_what_ends_it_clears_it(self, state):
