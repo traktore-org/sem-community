@@ -192,6 +192,17 @@ class PerChargerContext:
     (e.g. skipped for night, observer mode); ``__exit__`` then omits
     the write."""
 
+    offered_amps: Optional[int] = None
+    """(#1404) THIS charger's decided amps for the current cycle — the
+    final decision its effective state reads, set even when SEM only
+    watches. Persisted with the state to
+    ``coord._offers_per_charger[cid]`` as ``(amps, watts)``, so the
+    charger notice "Solar: {current}A" names this charger's amps, not the
+    fleet budget."""
+
+    offered_w: Optional[float] = None
+    """(#1404) The watts that decision commands (``commanded_power_w``)."""
+
     charger_name: Optional[str] = None
     """Display name for the charger; persisted alongside
     ``effective_state``. Falls back to ``cid`` if the config omits
@@ -371,6 +382,14 @@ class PerChargerContext:
                     self.effective_state,
                     self.charger_name or self.cid,
                 )
+                # (#1404) the amps and watts beside the state they belong to
+                offers = getattr(coord, "_offers_per_charger", None)
+                if isinstance(offers, dict):
+                    if self.offered_amps is not None:
+                        offers[self.cid] = (
+                            int(self.offered_amps), float(self.offered_w or 0.0))
+                    else:
+                        offers.pop(self.cid, None)
         finally:
             # Unbind UNCONDITIONALLY (review: the pointer is now the SOLE
             # per-charger dispatch mechanism — a stale binding would make

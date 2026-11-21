@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Any, Optional
+from typing import Callable, Dict, Any, Mapping, Optional
 
 from homeassistant.core import CoreState, HomeAssistant
 
@@ -61,6 +61,50 @@ _HINT_DEFAULTS = {
         " · {ev} kWh into the car · {cost:.2f} {currency}."),
     "hint_msg_weekly_co2": "Your solar avoided {co2} kg of CO₂ this week.",
 }
+
+
+# Charger display services SEM finds by name, in the order it tries them.
+_DISPLAY_PATTERNS = (
+    "keba_display", "keba",
+    "easee", "wallbox", "goecharger", "go_echarger",
+    "ocpp", "openevse", "zaptec",
+)
+
+
+def _display_token(service: str) -> Optional[str]:
+    """The integration a display service is named for: ``keba`` for
+    ``keba_display``, ``goecharger`` for ``go_echarger``. None when the
+    name matches no display pattern."""
+    name = (service or "").lower()
+    for pattern in _DISPLAY_PATTERNS:
+        if pattern in name:
+            return pattern.replace("_display", "").replace("_", "")
+    return None
+
+
+def display_owner(service: str,
+                  identities: Mapping[str, frozenset]) -> Optional[str]:
+    """(#1404) The one charger a display service belongs to, or None.
+
+    ``identities`` maps each charger id to the names of its integrations
+    (its service domain and the platform of each entity it is built from).
+    With one charger, the display is that charger's, as it always was.
+    With more, the display belongs to the one charger whose integration
+    the service is named for. Two such chargers, or none: SEM cannot tell
+    whose display it is, and sends no charger's notice there. Before, every
+    charger's notice went to the first display found, so charger B's state
+    showed on charger A's display.
+    """
+    if len(identities) == 1:
+        return next(iter(identities))
+    token = _display_token(service)
+    if token is None:
+        return None
+    owners = [
+        cid for cid, names in identities.items()
+        if any(token in str(n).lower().replace("_", "") for n in names or ())
+    ]
+    return owners[0] if len(owners) == 1 else None
 
 
 _GUARD_LANES = ("grid", "inverter")
@@ -135,6 +179,11 @@ class NotificationManager:
         self._charger_notify_checked: bool = False
         self._charger_notify_available: bool = True
         self._charger_notify_service: str = ""
+        self._charger_notify_services: list = []
+        # (#1404) Each charger's integration names, from the coordinator,
+        # which knows the chargers. Empty: no charger list to tie a display
+        # to, so the first display found takes every notice (as before).
+        self.charger_identities: Callable[[], Mapping[str, frozenset]] = dict
         self._mobile_service_checked: bool = False
         self._mobile_service_available: bool = True
         self._mobile_service_name: str = ""
@@ -264,7 +313,8 @@ class NotificationManager:
             })
 
         if keba_enabled and messages.get("charger"):
-            await self._send_charger_notification(messages["charger"])
+            await self._send_charger_notification(
+                messages["charger"], charger_id=charger_id)
 
         if mobile_enabled and messages.get("mobile"):
             elapsed = time.monotonic() - self._last_mobile_time
@@ -280,40 +330,84 @@ class NotificationManager:
                     group="sem_charging",
                 )
 
-    async def _send_charger_notification(self, message: str) -> None:
+    async def _send_charger_notification(
+        self, message: str, *, charger_id: Optional[str] = None,
+    ) -> None:
         """Send notification to EV charger display.
 
         Supports any charger that exposes a notify.* service (KEBA, Easee,
         Wallbox, etc.). Auto-detects available charger notification services.
         Falls back gracefully if none available.
-        """
-        if not self._charger_notify_checked:
-            self._charger_notify_checked = True
-            # Try configured service, then auto-detect from available notify services
-            # charger_notification_service and keba_notification_service were never set via UI
-            service = self._auto_detect_charger_notify_service()
-            self._charger_notify_service = service
-            self._charger_notify_available = bool(service) and self.hass.services.has_service("notify", service)
-            if not self._charger_notify_available:
-                _LOGGER.info("No charger notification service available")
-            else:
-                _LOGGER.info("Using charger notification service: notify.%s", service)
 
-        if not self._charger_notify_available:
+        (#1404) ``charger_id`` names the charger the message is about. It
+        goes only to that charger's display (``display_owner``).
+        """
+        services = self._display_services()
+        if not services:
+            return
+        service = self._display_for(services, charger_id)
+        if service is None:
+            _LOGGER.debug(
+                "No display belongs to charger %s alone; notice not sent: %s",
+                charger_id, message)
             return
 
         try:
             service_data: dict = {"message": message}
             # KEBA-specific: display timing parameters
-            if "keba" in self._charger_notify_service:
+            if "keba" in service:
                 service_data["data"] = {"min_time": 3, "max_time": 10}
 
             await self.hass.services.async_call(
-                "notify", self._charger_notify_service, service_data,
+                "notify", service, service_data,
             )
             _LOGGER.debug("Sent charger notification: %s", message)
         except Exception as e:
             _LOGGER.warning("Failed to send charger notification: %s", e)
+
+    def _display_services(self) -> list:
+        """Every charger display service found, checked once per session."""
+        if not self._charger_notify_checked:
+            self._charger_notify_checked = True
+            # Try configured service, then auto-detect from available notify services
+            # charger_notification_service and keba_notification_service were never set via UI
+            self._charger_notify_services = [
+                s for s in self._detect_charger_notify_services()
+                if self.hass.services.has_service("notify", s)
+            ]
+            self._charger_notify_service = (
+                self._charger_notify_services[0]
+                if self._charger_notify_services else "")
+            self._charger_notify_available = bool(self._charger_notify_services)
+            if not self._charger_notify_available:
+                _LOGGER.info("No charger notification service available")
+            else:
+                _LOGGER.info("Using charger notification service(s): %s",
+                             ", ".join(f"notify.{s}" for s in self._charger_notify_services))
+
+        if not self._charger_notify_available:
+            return []
+        if self._charger_notify_services:
+            return list(self._charger_notify_services)
+        return [self._charger_notify_service] if self._charger_notify_service else []
+
+    def _display_for(self, services: list, charger_id: Optional[str]) -> Optional[str]:
+        """(#1404) The display a notice about ``charger_id`` goes to."""
+        try:
+            identities = dict(self.charger_identities() or {})
+        except Exception:  # noqa: BLE001 — never break a notice over this
+            _LOGGER.debug("charger identities unreadable", exc_info=True)
+            identities = {}
+        if not identities:
+            return services[0]
+        if charger_id is None:
+            # A notice about no charger: only a home with one charger can
+            # say whose display it is.
+            return services[0] if len(identities) == 1 else None
+        for service in services:
+            if display_owner(service, identities) == charger_id:
+                return service
+        return None
 
     def _auto_detect_charger_notify_service(self) -> str:
         """Auto-detect charger notification service from available notify services.
@@ -321,20 +415,21 @@ class NotificationManager:
         Checks for known charger display services: KEBA, Easee, Wallbox, etc.
         Returns the first match or empty string if none found.
         """
-        charger_patterns = [
-            "keba_display", "keba",
-            "easee", "wallbox", "goecharger", "go_echarger",
-            "ocpp", "openevse", "zaptec",
-        ]
+        found = self._detect_charger_notify_services()
+        return found[0] if found else ""
+
+    def _detect_charger_notify_services(self) -> list:
+        """Every notify service named like a charger display, in pattern order."""
+        out: list = []
         try:
             services = self.hass.services.async_services().get("notify", {})
-            for pattern in charger_patterns:
+            for pattern in _DISPLAY_PATTERNS:
                 for service_name in services:
-                    if pattern in service_name.lower():
-                        return service_name
+                    if pattern in service_name.lower() and service_name not in out:
+                        out.append(service_name)
         except Exception:
             pass
-        return ""
+        return out
 
     async def _send_mobile_notification(
         self,
@@ -1096,7 +1191,8 @@ class NotificationManager:
             return
         from ..utils.translate import get_text
         await self._send_charger_notification(
-            get_text(self.hass, "notif_charger_stood_down", "SEM stood down"))
+            get_text(self.hass, "notif_charger_stood_down", "SEM stood down"),
+            charger_id=charger_id)
 
     def clear_deadline_warning(
         self, charger_name: str | None = None, flag_key: str | None = None,
