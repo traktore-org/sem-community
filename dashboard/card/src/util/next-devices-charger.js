@@ -6,6 +6,7 @@
  */
 
 import { codeText } from './code-text.js';
+import { chargerAmps } from './charger-amps.js';
 import { html, nothing } from '../base/sem-next-base.js';
 import { chargerRenameWrite } from './charger-name.js';
 import { resolveChargerSoc } from './charger-soc.js';
@@ -98,7 +99,8 @@ export function chargerBody(card, row) {
 
     // ── stats ──
     const powerW = card._powerW(S('power'));
-    const amps = card._num(S('commanded_current'));
+    // (#1407) the charger's own current first; SEM's command only while it sends one
+    const amps = chargerAmps(card, cid);
     const phases = phaseCount(card, cid);
     const daily = card._num(S('daily_energy'));
     const sunToday = sunShareToday(card, cid);

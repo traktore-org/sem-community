@@ -3266,6 +3266,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     cid = k[len("charger_"):-len("_active_phases")]
                     _per_charger_phases[cid] = {
                         "active_phases": v,
+                        # (#1407) the charger's own highest phase current, A;
+                        # None when it has no per-phase sensors
+                        "measured_current": self.coordinator.data.get(
+                            f"charger_{cid}_measured_current"),
                         "switch_entity": self.coordinator.data.get(
                             f"charger_{cid}_phase_switch_entity"),
                         "switch_valid": self.coordinator.data.get(

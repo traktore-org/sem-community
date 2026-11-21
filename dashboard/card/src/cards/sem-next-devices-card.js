@@ -32,6 +32,7 @@ import {
 } from './load-config-modal.js';
 import { deviceRows, statePill, surplusInUse, ratedKey, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
+import { chargerAmps } from '../util/charger-amps.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
 import { wouldFor, wouldList, wouldLine, startCode } from '../util/why-rows.js';
@@ -266,7 +267,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             const connId = this._chargerEntity('binary_sensor', cid, 'connected');
             return {
                 powerW: this._powerW('sensor.sem_charger_' + cid + '_power'),
-                amps: this._num('sensor.sem_charger_' + cid + '_commanded_current'),
+                amps: chargerAmps(this, cid),   // (#1407)
                 paused, pausedUntil: paused ? this._hhmm(modeAttrs.paused_until) : '',
                 plannedAt: this._plannedAt('ev:' + cid), plannedUntil: this._plannedUntil('ev:' + cid), observer: this._observer(),
                 connected: connId ? this._str(connId) === 'on' : null,

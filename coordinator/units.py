@@ -118,6 +118,13 @@ _ENERGY_TO_KWH = {
     "gwh": 1_000_000.0,
 }
 
+# (#1407) unit (stripped + lowercased) → multiplier to reach amperes
+_CURRENT_TO_A = {
+    "": 1.0,            # missing unit → assume A
+    "a": 1.0,
+    "ma": 0.001,
+}
+
 # Temperature is affine, not a simple multiplier, so it can't share ``_convert``.
 # Units are matched after ``normalize_unit`` (stripped + lowercased), so "°C",
 # "C" and "Celsius" all collapse to their entry. hardware_detection only ever
@@ -170,6 +177,12 @@ def power_state_to_watts(state, default: Optional[float] = None) -> Optional[flo
     behaviour is unchanged.
     """
     return _convert(state, _POWER_TO_W, default)
+
+
+def current_state_to_amps(state, default: Optional[float] = None) -> Optional[float]:
+    """(#1407) A current sensor's state in AMPERES, or ``default`` if it
+    isn't readable. ``mA`` is scaled; a missing unit is taken as A."""
+    return _convert(state, _CURRENT_TO_A, default)
 
 
 def energy_state_to_kwh(state, default: Optional[float] = None) -> Optional[float]:

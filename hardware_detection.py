@@ -6482,6 +6482,37 @@ def phase_readback_entity(dev_entities) -> Optional[str]:
     return _first_hit(dev_entities, lex.PHASE_READBACK_RULE)
 
 
+def phase_current_legs(dev_entities) -> Optional[Tuple[str, str, str]]:
+    """(#1407) The device's own measured current on phase 1, 2 and 3 — three
+    sensors, in phase order. None unless each phase has exactly one: two
+    sensors that both say "phase 1" leave the count unknown (class 52), and
+    a box that measures only some phases cannot say how many a car uses.
+
+    Read by key (translation key, unique id), never by the entity id, which
+    is in the user's language. A current is a sensor HA calls ``current``
+    or one in A / mA (go-e's builds set no device class)."""
+    from .consts import role_lexicon as lex
+    legs: Dict[int, List[str]] = {}
+    for entry in dev_entities or ():
+        eid = str(getattr(entry, "entity_id", "") or "")
+        if not eid.startswith("sensor.") or getattr(entry, "disabled_by", None):
+            continue
+        unit = str(getattr(entry, "unit_of_measurement", "") or "").strip().lower()
+        if _declared_dc(entry) != "current" and unit not in ("a", "ma"):
+            continue
+        words = _role_words(entry)
+        if any(re.search(p, w, re.I)
+               for p in lex.PHASE_CURRENT_LEG_NOT for w in words):
+            continue
+        found = {int(m.group(1)) for w in words
+                 for m in [re.search(lex.PHASE_CURRENT_LEG, w, re.I)] if m}
+        if len(found) == 1:
+            legs.setdefault(found.pop(), []).append(eid)
+    if sorted(legs) != [1, 2, 3] or any(len(v) != 1 for v in legs.values()):
+        return None
+    return legs[1][0], legs[2][0], legs[3][0]
+
+
 def wire_phase_service(hass, device, charger_id: str, *, services_of=None) -> bool:
     """(#1015) Phases set by one current per phase, applied to a charger
     device — the ONE producer, as ``wire_current_entity`` is for the current
