@@ -347,6 +347,7 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             target_state = SGReadyState.BOOST
             self._last_activation_path = "boost"
 
+        state_before = self._hp_status.sg_ready_state
         relay_ok = await self._set_sg_ready_state(target_state)
         if not relay_ok and self._last_relay_path == "withheld":
             # (#1335) observer / yield: the seam held the write back. Not a
@@ -370,7 +371,17 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         if self.climate_entity_id:
             self._last_activation_path += "+climate"
             # Also boost temperature setpoint if climate entity configured
-            await super().activate(available_watts)
+            boosted = await super().activate(available_watts)
+            if boosted <= 0 and not self._contacts_asked(target_state):
+                # (#1409) No contact asked the pump for anything: the setpoint
+                # IS the boost. The unit refused it (a climate entity in
+                # "auto" may take no target), or it was withheld — the pump
+                # did not move, so SEM claims nothing: not ACTIVE, no watts,
+                # and the SG-Ready state it never left. When a contact moved,
+                # the pump boosts by it and the setpoint is extra.
+                self._hp_status.sg_ready_state = state_before
+                self._last_activation_path += f"+{self.boost_answer or 'failed'}"
+                return 0.0
 
         if self._stepped_down:
             # (#1323) a boost replaces the step-down: the contacts and the
@@ -408,6 +419,7 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         and nobody spends its watts twice. The climate setpoint is still
         reverted either way: the two surfaces fail independently.
         """
+        sg_was = self._hp_status.sg_ready_state
         relay_ok = await self._set_sg_ready_state(SGReadyState.NORMAL)
         withheld = not relay_ok and self._last_relay_path == "withheld"
         self._last_deactivation_path = (
@@ -422,6 +434,16 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
                 # (#1335) the contacts did not move: the pump still boosts,
                 # whatever the setpoint did — keep the belief
                 self._status.state = was
+            elif self._boosted and not (self._contacts_asked(SGReadyState.BOOST)
+                                        or self._contacts_asked(SGReadyState.FORCE_ON)):
+                # (#1409) no contact can boost this pump: the setpoint is the
+                # boost, and it did not go back (held back, or it failed).
+                # The pump still boosts, so the belief stays; the next cycle
+                # tries the stand-down again.
+                self._status.state = was
+                self._hp_status.sg_ready_state = sg_was
+                self._last_deactivation_path += "_kept"
+                return
 
         if withheld:
             # (#1335) observer / yield held the write back: the pump did
@@ -450,6 +472,19 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
     @property
     def is_stepped_down(self) -> bool:
         return self._stepped_down
+
+    def _contacts_asked(self, state: SGReadyState) -> bool:
+        """(#1409) Did the SG-Ready write for ``state`` ask the pump for
+        something? A service call always does. A contact does only when it
+        is set away from its NORMAL value: one relay alone writes the same
+        value for BOOST as for NORMAL, so nothing reaches the pump. A contact
+        that did move must stay SEM's, so the stand-down puts it back."""
+        if self.sg_ready_service:
+            return True
+        want, normal = self._relays_sent(state), self._relays_for(SGReadyState.NORMAL)
+        return any(eid and w != n for eid, w, n in (
+            (self.relay1_entity_id, want[0], normal[0]),
+            (self.relay2_entity_id, want[1], normal[1])))
 
     def _has_sg_surface(self) -> bool:
         return bool(self.sg_ready_service
@@ -670,6 +705,23 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             return (not r1, not r2)
         return (r1, r2)
 
+    def _relays_sent(self, state: SGReadyState) -> tuple[bool, bool]:
+        """(#1409) The pair the contacts are set to for ``state``.
+
+        A relay that is not configured stays at its NORMAL value on the pump.
+        With one relay alone, the pump could then read "blocked" where SEM
+        asked for more: relay 1 alone at FORCE_ON is 1:0. SEM sends "blocked"
+        only to mean it (#664: a step-down, which needs both relays), so that
+        relay stays at NORMAL. With both relays this is ``_relays_for``."""
+        r1, r2 = self._relays_for(state)
+        if state != SGReadyState.BLOCKED:
+            n1, n2 = self._relays_for(SGReadyState.NORMAL)
+            seen = (r1 if self.relay1_entity_id else n1,
+                    r2 if self.relay2_entity_id else n2)
+            if seen == self._relays_for(SGReadyState.BLOCKED):
+                return n1, n2
+        return r1, r2
+
     # ─── SG-Ready contacts (#801) ────────────────────────────
 
     def _contact_service(self, idx: int, entity_id: str, on: bool):
@@ -778,10 +830,9 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         """
         if self.sg_ready_service:
             entities = [self.sg_ready_state_entity] if self.sg_ready_state_entity else []
-        elif self.relay1_entity_id and self.relay2_entity_id:
-            entities = [self.relay1_entity_id, self.relay2_entity_id]
         else:
-            entities = []
+            # (#1409) a lone relay is read too: relay 2 alone boosts the pump
+            entities = [e for e in (self.relay1_entity_id, self.relay2_entity_id) if e]
         if not entities:
             return True, None
         values = []
@@ -798,8 +849,15 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             return True, None
         # (#801) A contact's boolean comes off its own surface: "on"/"off"
         # for a switch, the configured ON/OFF value for a text/number/select.
-        c1 = self._contact_is_on(1, self.relay1_entity_id, values[0])
-        c2 = self._contact_is_on(2, self.relay2_entity_id, values[1])
+        # (#1409) A relay that is not configured reads as its NORMAL value,
+        # the way ``_relays_sent`` leaves it: the pair is what the pump sees,
+        # read through the standard table (relay 2 alone on = BOOST).
+        n1, n2 = self._relays_for(SGReadyState.NORMAL)
+        read = iter(values)
+        c1 = (self._contact_is_on(1, self.relay1_entity_id, next(read))
+              if self.relay1_entity_id else n1)
+        c2 = (self._contact_is_on(2, self.relay2_entity_id, next(read))
+              if self.relay2_entity_id else n2)
         if c1 is None or c2 is None:
             return True, None
         pair = (c1, c2)
@@ -923,8 +981,10 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             self._hp_status.sg_ready_state = state
             return True
 
+        # (#1409) a lone relay never reads as "blocked" unless it is meant
+        relay1_on, relay2_on = self._relays_sent(state)
         # Prior relay1 value (for restore on a partial relay2 failure, I3).
-        prev_relay1_on, _ = self._relays_for(self._hp_status.sg_ready_state)
+        prev_relay1_on, _ = self._relays_sent(self._hp_status.sg_ready_state)
         relay1_called = False
 
         if self.relay1_entity_id:
