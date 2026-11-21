@@ -2317,7 +2317,9 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
                 return
 
         try:
-            await self.send("homeassistant", "turn_off", {"entity_id": self.entity_id})
+            if not await self.send("homeassistant", "turn_off",
+                                   {"entity_id": self.entity_id}):
+                return   # (#1409) withheld: still on, so still believed on
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
@@ -2751,7 +2753,9 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         # withheld write keeps the memo; the coordinator's sweep tries again.
         await self.sp_restore("setpoint restored")
         try:
-            await self.send("climate", "set_hvac_mode", {"entity_id": self.entity_id, "hvac_mode": "off"})
+            if not await self.send("climate", "set_hvac_mode",
+                                   {"entity_id": self.entity_id, "hvac_mode": "off"}):
+                return   # (#1409) withheld: still on, so still believed on
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
@@ -4977,6 +4981,8 @@ class SetpointDevice(ControllableDevice):
         self.boost_offset = boost_offset
         self._boosted = False
         self._min_power_change_interval = min_power_change_interval
+        #: (#1409) what the last boost write got: sent / refused / withheld / failed
+        self.boost_answer: Optional[str] = None
 
     @property
     def device_type(self) -> DeviceType:
@@ -4989,17 +4995,22 @@ class SetpointDevice(ControllableDevice):
         target = min(self.max_setpoint, self.normal_setpoint + self.boost_offset)
         try:
             # (#1081) remembers the setpoint the unit shows before SEM moves it
+            self.boost_answer = None
             sent = await self.sp_write_target("climate", self.climate_entity_id,
                                               target, purpose="boost")
             if not sent:
                 if self.sp_refused_for(self.climate_entity_id, "boost"):
                     # (#1396) the unit refused it: not boosted, and the next
                     # try waits — no error line every cycle
+                    self.boost_answer = "refused"
                     self._status.state = DeviceState.ERROR
                     self._status.error_message = "setpoint refused by the unit"
+                else:
+                    self.boost_answer = "withheld"
                 # (#1409) refused, or withheld (observer): nothing moved, so
                 # nothing is claimed
                 return 0.0
+            self.boost_answer = "sent"
             self._boosted = True
             self._status.state = DeviceState.ACTIVE
             self._status.current_consumption_w = self.rated_power
@@ -5010,6 +5021,7 @@ class SetpointDevice(ControllableDevice):
             _LOGGER.info("Boosted %s setpoint to %.1f", self.name, target)
             return self.rated_power
         except Exception as e:
+            self.boost_answer = "failed"
             _LOGGER.error("Failed to boost %s: %s", self.name, e)
             self._status.state = DeviceState.ERROR
             self._status.error_message = str(e)
@@ -5025,8 +5037,9 @@ class SetpointDevice(ControllableDevice):
             # configured one only when nothing was remembered
             outcome = await self.sp_restore("setpoint restored")
             if outcome == "none":
-                await self.sp_send_capped(       # (#1396) capped, direct
-                    "climate", self.climate_entity_id, self.normal_setpoint)
+                if not await self.sp_send_capped(  # (#1396) capped, direct
+                        "climate", self.climate_entity_id, self.normal_setpoint):
+                    return   # (#1409) withheld: the boost still stands
             elif outcome in ("unreadable", "withheld", "failed"):
                 return   # the memo stays; the coordinator's sweep tries again
             self._boosted = False

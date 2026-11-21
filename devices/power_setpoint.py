@@ -384,8 +384,9 @@ class PowerSetpointDevice(ComfortBandMixin, ControllableDevice):
             return
         low, _high, _step = self._bounds(scale)
         try:
-            await self.send(setpoint_domain(self.entity_id), "set_value",
-                            {"entity_id": self.entity_id, "value": low})
+            if not await self.send(setpoint_domain(self.entity_id), "set_value",
+                                   {"entity_id": self.entity_id, "value": low}):
+                return   # (#1409) withheld: still on, so still believed on
         except Exception as e:  # noqa: BLE001
             _LOGGER.error("Failed to stop %s: %s", self.name, e)
             return

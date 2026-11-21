@@ -42,6 +42,9 @@ from custom_components.solar_energy_management.devices.heat_pump_controller impo
     HeatPumpController,
     SGReadyState,
 )
+from custom_components.solar_energy_management.devices.power_setpoint import (
+    PowerSetpointDevice,
+)
 
 NIBE = "climate.smo_s40_climate_system_s1"
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -70,6 +73,12 @@ class _Hass:
 
     def switch(self, eid: str, state: str = "off"):
         self._states[eid] = SimpleNamespace(entity_id=eid, state=state, attributes={})
+
+    def number(self, eid: str, value: float = 0.0):
+        self._states[eid] = SimpleNamespace(
+            entity_id=eid, state=str(value),
+            attributes={"unit_of_measurement": "W", "min": 0, "max": 3000,
+                        "step": 100})
 
     async def _call(self, domain, service, data=None, **_kw):
         eid = data["entity_id"]
@@ -196,6 +205,67 @@ class TestTwins:
         assert hp.sg_ready_state == SGReadyState.BOOST
         assert hass._states["switch.sg2"].state == "on"
 
+    async def test_one_relay_alone_asks_nothing_for_boost(self, clock):
+        """Relay 1 alone writes the same value for BOOST as for NORMAL: the
+        pump hears nothing from it, so the refused setpoint decides."""
+        hass = _Hass()
+        hass.nibe("auto")
+        hass.switch("switch.sg1")
+        hp = _pump(hass, relay1_entity_id="switch.sg1")
+        assert await hp.activate(3000.0) == 0.0
+        assert not hp.is_active
+        assert hp.sg_ready_state == SGReadyState.NORMAL
+        assert hass._states["switch.sg1"].state == "off"
+        assert hp.to_dict()["activation_path"] == "boost+climate+refused"
+
+    async def test_one_relay_alone_never_sends_blocked(self, clock):
+        """Relay 1 alone at FORCE_ON would be 1:0, which a pump reads as
+        "blocked": it stays at NORMAL, and the refused setpoint decides."""
+        hass = _Hass()
+        hass.nibe("auto")
+        hass.switch("switch.sg1")
+        hp = _pump(hass, relay1_entity_id="switch.sg1", force_on_threshold=5000.0)
+        assert await hp.activate(8000.0) == 0.0
+        assert hass._states["switch.sg1"].state == "off"
+        assert not hp.is_active
+        inv = _pump(hass, relay1_entity_id="switch.sg1", invert_sg_ready=True)
+        assert inv._relays_sent(SGReadyState.FORCE_ON) == (True, True)   # NORMAL, NC
+        assert inv._relays_sent(SGReadyState.BLOCKED) == (False, True)   # meant
+
+    async def test_a_contact_that_moved_stays_sems(self, clock):
+        """Relay 2 alone at BOOST is set ON: it reached the pump, so SEM
+        keeps the pump as its own and the stand-down puts the contact back."""
+        hass = _Hass()
+        hass.nibe("auto")
+        hass.switch("switch.sg2")
+        hp = _pump(hass, relay2_entity_id="switch.sg2")
+        assert await hp.activate(3000.0) == 2000.0
+        assert hp.is_active
+        assert hass._states["switch.sg2"].state == "on"
+        hp.min_on_seconds = 0
+        await hp.deactivate()
+        assert hass._states["switch.sg2"].state == "off"
+        assert not hp.is_active
+
+    async def test_both_relays_send_the_standard_table(self, clock):
+        hass = _Hass()
+        hp = _pump(hass, relay1_entity_id="switch.sg1", relay2_entity_id="switch.sg2")
+        for st in SGReadyState:
+            assert hp._relays_sent(st) == hp._relays_for(st)
+
+    async def test_the_tag_names_this_cycles_answer(self, clock):
+        """A refusal, the wait runs out, then a held-back write: the tag says
+        withheld, not the ERROR left from the refusal."""
+        hass = _Hass()
+        hass.nibe("auto")
+        hp = _pump(hass)
+        await hp.activate(3000.0)
+        assert hp.to_dict()["activation_path"].endswith("+refused")
+        clock["now"] += 5 * 60 + 1
+        hp.observer_mode = True
+        assert await hp.activate(3000.0) == 0.0
+        assert hp.to_dict()["activation_path"] == "boost+climate+withheld"
+
     async def test_a_withheld_setpoint_claims_nothing(self, clock):
         hass = _Hass()
         hass.nibe("heat", setpoint=20.0)
@@ -248,6 +318,58 @@ class TestSiblingsWithheld:
         assert not dev.is_active
         assert dev._sp_pending is None
 
+    async def test_switch_stop(self):
+        hass = _Hass()
+        hass.switch("switch.heater")
+        dev = SwitchDevice(hass=hass, device_id="h", name="h", rated_power=1000.0,
+                           entity_id="switch.heater", min_on_time=0)
+        assert await dev.activate(1500.0) == 1000.0
+        dev.observer_mode = True
+        await dev.deactivate()
+        assert dev.withheld_commands[-1]["service"] == "homeassistant.turn_off"
+        assert dev.is_active                       # still on, still believed
+        dev.observer_mode = False
+        await dev.deactivate()
+        assert not dev.is_active
+
+    async def test_climate_stop(self):
+        hass = _Hass()
+        hass.nibe("heat")
+        dev = ClimateDevice(hass=hass, device_id="ac", name="ac", rated_power=900.0,
+                            entity_id=NIBE, hvac_mode="heat", min_on_time=0)
+        assert await dev.activate(1500.0) == 900.0
+        dev.observer_mode = True
+        await dev.deactivate()
+        assert dev.withheld_commands[-1]["service"] == "climate.set_hvac_mode"
+        assert dev.is_active
+
+    async def test_power_setpoint_stop(self):
+        hass = _Hass()
+        hass.number("number.heater_w")
+        dev = PowerSetpointDevice(hass=hass, device_id="w", name="w",
+                                  rated_power=3000.0, entity_id="number.heater_w")
+        dev._status.state = DeviceState.ACTIVE
+        dev.observer_mode = True
+        await dev.deactivate()
+        assert dev.withheld_commands[-1]["service"] == "number.set_value"
+        assert dev.is_active
+
+    async def test_setpoint_stop_with_nothing_remembered(self, clock):
+        hass = _Hass()
+        hass.nibe("heat", setpoint=20.0)
+        dev = SetpointDevice(hass=hass, device_id="sp", name="sp",
+                             rated_power=1500.0, climate_entity_id=NIBE)
+        assert await dev.activate(2000.0) == 1500.0
+        dev._sp_memo = None                        # nothing remembered: normal
+        dev.observer_mode = True
+        await dev.deactivate()
+        assert dev.withheld_commands[-1]["service"] == "climate.set_temperature"
+        assert dev.is_active and dev._boosted is True
+        dev.observer_mode = False
+        await dev.deactivate()
+        assert not dev.is_active
+        assert hass._states[NIBE].attributes["temperature"] == 21.0
+
     async def test_schedule(self):
         hass = _Hass()
         hass.switch("switch.dishwasher")
@@ -261,20 +383,23 @@ class TestSiblingsWithheld:
 # ── guard: an activate never drops the answer of the write it made ─────────
 
 def _dropped_answers(tree: ast.AST) -> list:
-    """Bare ``await ….send(…)`` / ``await super().activate(…)`` statements
-    inside any ``activate`` method: the answer (sent? withheld? watts?) is
-    thrown away, and the device is then claimed on regardless."""
+    """Bare ``await ….send(…)`` statements inside any ``activate`` or
+    ``deactivate`` method, or a bare ``await super().activate(…)`` inside an
+    ``activate``: the answer (sent? withheld? watts?) is thrown away, and the
+    device is then believed on, or off, regardless."""
     found = []
     for fn in ast.walk(tree):
-        if not (isinstance(fn, ast.AsyncFunctionDef) and fn.name == "activate"):
+        if not (isinstance(fn, ast.AsyncFunctionDef)
+                and fn.name in ("activate", "deactivate")):
             continue
+        dropped = ("send", "activate") if fn.name == "activate" else ("send",)
         for node in ast.walk(fn):
             if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Await)):
                 continue
             call = node.value.value
             if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
                 continue
-            if call.func.attr in ("send", "activate"):
+            if call.func.attr in dropped:
                 found.append(f"{fn.name}:{node.lineno}:{call.func.attr}")
     return found
 
@@ -294,5 +419,8 @@ def test_the_guard_catches_a_dropped_answer():
         "    async def activate(self, w):\n"
         "        await super().activate(w)\n"
         "        await self.send('a', 'b', {})\n"
-        "        return 1\n")
-    assert len(_dropped_answers(probe)) == 2
+        "        return 1\n"
+        "    async def deactivate(self):\n"
+        "        await self.send('a', 'c', {})\n"
+        "        await super().deactivate()\n")
+    assert len(_dropped_answers(probe)) == 3
