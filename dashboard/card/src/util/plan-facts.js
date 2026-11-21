@@ -238,10 +238,39 @@ export function kwhIn(blocks, pick, from, to) {
     return kwh;
 }
 
-/** The house's own grid kWh inside [from, to): the slots when the plan has them, else its total. */
+/**
+ * (#1408) The house's grid kWh per hour, { s (ms), kwh: [...] }, that the sensor sends when
+ * the size trim drops the slots; null when it sent none. Hour i runs from s + i h.
+ */
+export function houseHours(plan) {
+    const h = plan && plan.house_grid_hours;
+    const s = h && typeof h.start === 'string' ? Date.parse(h.start) : NaN;
+    return Number.isFinite(s) && Array.isArray(h.kwh) ? { s, kwh: h.kwh } : null;
+}
+
+/** (#1408) True when the house kWh can be cut to a window: the plan sent its slots or its hours. */
+export function houseWindowed(plan) {
+    return (Array.isArray(plan?.slots) && plan.slots.length > 0) || houseHours(plan) !== null;
+}
+
+/**
+ * The house's own grid kWh inside [from, to): the slots when the plan has them; when the size
+ * trim dropped them, its kWh per hour (an hour cut by the window counts by time, #1408); the
+ * plan total only from a sensor that sends neither (one from before #1408).
+ */
 export function houseKwhIn(plan, from, to) {
     const slots = plan && Array.isArray(plan.slots) ? plan.slots : [];
     if (!slots.length) {
+        const hours = houseHours(plan);
+        if (hours) {
+            let sum = 0;
+            hours.kwh.forEach((k, i) => {
+                const v = Number(k), s = hours.s + i * HOUR;
+                const a = Math.max(s, from), z = Math.min(s + HOUR, to);
+                if (v > 0 && z > a) sum += v * (z - a) / HOUR;
+            });
+            return sum;
+        }
         const v = plan && plan.house_grid ? Number(plan.house_grid.kwh) : NaN;
         return Number.isFinite(v) ? Math.max(0, v) : 0;
     }
@@ -253,6 +282,28 @@ export function houseKwhIn(plan, from, to) {
         if (z > a) kwh += w * (z - a) / 3.6e9;
     }
     return kwh;
+}
+
+/**
+ * (#1408) Where the plan has the battery cover the house: [{ s, e, first, last }] by time.
+ * From `batt_runs` (slot indexes `first`..`last`) while the plan sends its slots; from
+ * `batt_times` ([start, end], no indexes) when the size trim dropped them.
+ */
+export function battHouseRuns(plan) {
+    const slots = plan && Array.isArray(plan.slots) ? plan.slots : [];
+    const out = [];
+    const push = (s, e, first, last) => { if (Number.isFinite(s) && Number.isFinite(e) && e > s) out.push({ s, e, first, last }); };
+    if (slots.length) {
+        for (const r of (Array.isArray(plan.batt_runs) ? plan.batt_runs : [])) {
+            if (!Array.isArray(r) || !slots[r[0]] || !slots[r[1]]) continue;
+            push(Date.parse(slots[r[0]].start), Date.parse(slots[r[1]].end), r[0], r[1]);
+        }
+        return out;
+    }
+    for (const r of (plan && Array.isArray(plan.batt_times) ? plan.batt_times : [])) {
+        if (Array.isArray(r)) push(Date.parse(r[0]), Date.parse(r[1]), null, null);
+    }
+    return out;
 }
 
 /** Calendar day of `ms` in the home's zone, 'YYYY-MM-DD'. */

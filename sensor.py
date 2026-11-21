@@ -237,6 +237,82 @@ def _plan_ends_at(slots: Any) -> Optional[str]:
     return best_text
 
 
+def _zoned_span(row: Any) -> Optional[tuple]:
+    """(#1408) A slot row's ``(start, end)`` as zoned times; None when it
+    has no readable, zoned span."""
+    if not isinstance(row, dict):
+        return None
+    try:
+        s = datetime.fromisoformat(row.get("start"))
+        e = datetime.fromisoformat(row.get("end"))
+    except (TypeError, ValueError):
+        return None
+    if s.tzinfo is None or e.tzinfo is None or e <= s:
+        return None
+    return s, e
+
+
+#: (#1408) A plan is a night or a day and a night; a week of hours means a
+#: row with a wrong date, and the list would only grow.
+_HOUSE_HOURS_MAX = 7 * 24
+
+
+def _house_grid_hours(slots: Any) -> Optional[Dict[str, Any]]:
+    """(#1408) The house's own grid kWh per hour, read from the FULL slots.
+
+    The Plan card's headline counts the house's grid kWh from now to the
+    end of its chart. It read them from the slots. When the size trim
+    drops the slots, the card had only the whole plan's total, past hours
+    included: at 03:00 a plan made at 22:00 still counted the house from
+    22:00. The trim sends this in their place.
+
+    ``{"start", "kwh": [...]}``: hour ``i`` runs from ``start + i h`` to
+    ``start + (i + 1) h``; ``start`` is the first slot's start on its whole
+    hour, in its own offset. A slot that crosses an hour is split by time.
+    A row with no readable, zoned span is skipped; none at all gives None.
+    """
+    rows = []
+    for row in slots if isinstance(slots, list) else []:
+        span = _zoned_span(row)
+        if span is None:
+            continue
+        try:
+            w = float(row.get("home_grid_w") or 0.0)
+        except (TypeError, ValueError):
+            w = 0.0
+        rows.append((span[0], span[1], w if math.isfinite(w) and w > 0 else 0.0))
+    if not rows:
+        return None
+    first = min(r[0] for r in rows)
+    start = first.replace(minute=0, second=0, microsecond=0)
+    last = max(r[1] for r in rows)
+    count = math.ceil((last - start).total_seconds() / 3600.0)
+    if count > _HOUSE_HOURS_MAX:
+        return None
+    kwh = [0.0] * count
+    for s, e, w in rows:
+        at = s
+        while w > 0 and at < e:
+            i = int((at - start).total_seconds() // 3600)
+            upto = min(e, start + timedelta(hours=i + 1))
+            kwh[i] += w * (upto - at).total_seconds() / 3.6e6
+            at = upto
+    return {"start": start.isoformat(), "kwh": [round(k, 3) for k in kwh]}
+
+
+def _batt_times(slots: Any) -> List[List[str]]:
+    """(#1408) ``[[start, end], ...]`` — where the plan has the battery cover
+    the house, by time. ``batt_runs`` index the slots, so the trim that drops
+    the slots sends this in their place."""
+    rows = slots if isinstance(slots, list) else []
+    out: List[List[str]] = []
+    for first, last in _batt_runs(rows):
+        s, e = rows[first].get("start"), rows[last].get("end")
+        if isinstance(s, str) and isinstance(e, str):
+            out.append([s, e])
+    return out
+
+
 def _energy_plan_attrs(
     plan: Any, extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -372,6 +448,13 @@ def _energy_plan_attrs(
         attrs["slots"] = []
         attrs["batt_runs"] = []
         attrs["timeline_omitted"] = True
+        # (#1408) what the card read from the slots goes on its own keys,
+        # read from the FULL slots: the house's grid kWh per hour, and
+        # where the battery covers the house. A few hundred bytes for the
+        # many thousand the slots took; no trim step below drops them.
+        attrs["house_grid_hours"] = _house_grid_hours(plan.get("slots"))
+        attrs["batt_times"] = (_batt_times(plan.get("slots"))
+                               if "has_battery" in plan else None)
         if _too_big():
             # (#1321) the blocks go; each demand's own runs say the same in
             # fewer bytes, so a gap between two runs stays a gap. Never both:
