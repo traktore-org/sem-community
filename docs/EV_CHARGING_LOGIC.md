@@ -191,6 +191,8 @@ Some wallboxes switch between 1 and 3 phases. SEM supports three levels.
 - **Active phases (estimate).** SEM divides the measured power by the
   commanded amps to estimate the phases the car uses. It is shown in
   `sensor.sem_charging_state`, attribute `per_charger_phases`.
+  If the charger has its own current sensor per phase, SEM reads those first.
+  So amps and phases are right even when another system charges the car.
 - **Phase switch entity.** Name the wallbox's phase control with *Phase switch
   entity*. SEM checks that it exists and is a select, number or switch.
   - For a select, fill in *1-phase value* and *3-phase value* with the option
