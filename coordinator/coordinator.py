@@ -5313,16 +5313,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # untouched, nothing to restore.
                         charger_cfg = pcc.charger_cfg
                         per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
-                        # (#1404 review) this charger's own reading, for the
-                        # SOC-cap Repair: with its own sensor dark, the seed
-                        # left above is the flat sensor — another car's.
-                        _own_soc = None
                         if per_soc_entity:
+                            # (#1404) A charger with its own sensor reads only
+                            # that sensor. Dark, it has no level: the seed is
+                            # the flat sensor, another car's in a fleet, and
+                            # it cleared this charger's SOC-cap Repair and
+                            # sized its plan. No level plans the full pack
+                            # (``_calculate_remaining_need``).
+                            self._cycle_vehicle_soc = None
                             soc_st = self.hass.states.get(per_soc_entity)
                             if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                                 try:
                                     self._cycle_vehicle_soc = finite_float(soc_st.state)
-                                    _own_soc = self._cycle_vehicle_soc
                                 except (ValueError, TypeError):
                                     _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
                         # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245).
@@ -5817,11 +5819,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # enforced because no real vehicle SOC is readable.
                         # (#1404) After the decision: the state it reads is
                         # this charger's own, not the fleet's from before.
-                        # A charger with no sensor of its own keeps the flat
-                        # one (the same SOC its plan reads).
                         self._maybe_warn_soc_cap(
-                            cid, charger_cfg,
-                            _own_soc if per_soc_entity else cycle_soc_local,
+                            cid, charger_cfg, cycle_soc_local,
                             effective_state, mode_off=(_view_mode == "off"))
 
                         # (#899) Commit-then-measure: the redirect counts only

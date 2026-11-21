@@ -327,9 +327,10 @@ class PerChargerContext:
         # value. Must read BEFORE ``_current_pcc`` is bound below: the
         # coordinator property resolves to the pcc field once the pointer
         # is set. Chargers without their own ``vehicle_soc_entity`` keep
-        # seeing the global SOC (legacy semantics); the loop body's
-        # per-charger override lands on this context only and dies with
-        # it — nothing to restore.
+        # seeing the global SOC (legacy semantics); a charger WITH one reads
+        # only it, dark = None (#1404); the loop body's per-charger
+        # override lands on this context only and dies with it — nothing to
+        # restore.
         self.vehicle_soc = coord._cycle_vehicle_soc
 
         # Bind the context pointer. From here on the coordinator's

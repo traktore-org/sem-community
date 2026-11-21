@@ -357,6 +357,28 @@ class TestTheRepairReadsThisChargersOwnLevel:
         assert "b" in [c.args[1] for c in raise_it.call_args_list]
         assert "b" not in [c.args[1] for c in clear_it.call_args_list]
 
+    async def test_a_dark_own_sensor_plans_from_no_level(self):
+        """The same seed sized charger b's plan from car A's level. With
+        no level the plan counts the full pack, as documented."""
+        rig = _soc_rig()
+        rig.coord.config["vehicle_soc_entity"] = "sensor.car_a_soc"
+        rig.hass.states.set("sensor.car_a_soc", 55)
+        seen = []
+        real = rig.coord._calculate_remaining_need
+
+        def _spy(energy, vehicle_soc=None, charger_cfg=None, bound="min"):
+            seen.append(((charger_cfg or {}).get("id"), vehicle_soc))
+            return real(energy, vehicle_soc, charger_cfg, bound)
+
+        rig.coord._calculate_remaining_need = _spy
+        await rig.tick()
+        assert ("b", None) in seen
+        assert ("b", 55.0) not in seen
+        rig.hass.states.set("sensor.car_soc", 61)
+        seen.clear()
+        await rig.tick()
+        assert ("b", 61.0) in seen
+
     async def test_a_charger_with_no_sensor_of_its_own_reads_the_flat_one(self):
         """Unchanged: one charger, its level only in the flat setting."""
         rig = _day_rig([_charger("b", mode="always_max", ev_target_type="soc",
