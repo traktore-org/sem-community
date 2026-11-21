@@ -72,9 +72,9 @@ _DISPLAY_PATTERNS = (
 
 
 def _display_token(service: str) -> Optional[str]:
-    """The integration a display service is named for: ``keba`` for
-    ``keba_display``, ``goecharger`` for ``go_echarger``. None when the
-    name matches no display pattern."""
+    """The integration a display service is named for: the pattern it
+    matches, without a ``_display`` suffix and without underscores. None
+    when the name matches no display pattern."""
     name = (service or "").lower()
     for pattern in _DISPLAY_PATTERNS:
         if pattern in name:

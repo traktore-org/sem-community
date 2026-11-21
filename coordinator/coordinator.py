@@ -15441,8 +15441,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     def _charger_identities(self) -> Dict[str, frozenset]:
         """(#1404) Each charger's integration names: the domain of its
-        service (``keba`` from ``keba.set_current``) and the integration
-        that owns each entity it is built from. The notification manager
+        service (the part before the dot) and the integration that owns
+        each entity it is built from. The notification manager
         ties a display service to the one charger it is named for."""
         out: Dict[str, frozenset] = {}
         reader = getattr(self, "_sensor_reader", None)
