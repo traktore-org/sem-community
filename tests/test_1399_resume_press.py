@@ -306,19 +306,85 @@ def test_the_first_cycle_of_a_charge_presses_once_not_twice():
 
 
 @pytest.mark.unit
-def test_a_new_wish_to_charge_counts_afresh():
-    """A stretch with no draw spends its presses; a pause and a new charge
-    (after the gap) may press again."""
+def test_a_long_pause_from_charging_counts_afresh():
+    """A stretch with no draw spends its presses; after a pause from
+    charging of RESUME_RESET_S, a new charge may press again."""
     box = Box(hard_stopped=True, resumes=False)
     dev, sent = _rig(box, session_active=True)
     n = int(rc.RESUME_PRESS_GAP_S / CYCLE_S) * (rc.RESUME_PRESS_MAX + 1)
     rec = _run(box, dev, [_charge()] * n)
     spent = len(_presses(sent))
     assert spent == rc.RESUME_PRESS_MAX
-    gap_cycles = int(rc.RESUME_PRESS_GAP_S / CYCLE_S) + 1
-    _run(box, dev, [_idle()] * gap_cycles + [_charge()] * 2, rec=rec,
+    pause = int(rc.RESUME_RESET_S / CYCLE_S) + 1
+    _run(box, dev, [_idle()] * pause + [_charge()] * 2, rec=rec,
          start=n * CYCLE_S)
     assert len(_presses(sent)) == spent + 1, sent
+
+
+@pytest.mark.unit
+def test_a_flapping_decision_still_resumes_a_paused_box():
+    """Review: a start stamp on every transition kept the gap from ever
+    passing while the decision flapped (charge 60 s, idle 20 s)."""
+    box = Box(hard_stopped=False)
+    dev, sent = _rig(box, session_active=False)
+    rec = _run(box, dev, [_charge()] * 3)
+    assert box.charging
+    box.hard_stopped = True                     # paused from outside
+    _run(box, dev, ([_idle()] * 2 + [_charge()] * 6) * 10, rec=rec,
+         start=3 * CYCLE_S)
+    assert box.presses_taken == 1, sent
+
+
+@pytest.mark.unit
+def test_a_flapping_decision_cannot_reset_the_count():
+    """Review: an always-pressable button and a car that never draws, with
+    the decision flapping (charge 150 s, idle 30 s) for two hours — the
+    count holds, so at most RESUME_PRESS_MAX presses."""
+    box = Box(hard_stopped=True, resumes=False)
+    dev, sent = _rig(box, session_active=True)
+    _run(box, dev, ([_charge()] * 15 + [_idle()] * 3) * 40)
+    assert len(_presses(sent)) == rc.RESUME_PRESS_MAX, sent
+
+
+@pytest.mark.unit
+def test_observer_mode_does_not_spend_the_real_presses():
+    """Review: withheld presses counted against the real budget, so a paused
+    box seen in observer mode was never pressed once observer mode ended."""
+    box = Box(hard_stopped=True)
+    dev, sent = _rig(box, session_active=True)
+    dev.observer_mode = True
+    rec = _run(box, dev, [_charge()] * 50)
+    assert box.hard_stopped and not _presses(sent), sent   # nothing left
+    dev.observer_mode = False
+    _run(box, dev, [_charge()] * 3, rec=rec, start=50 * CYCLE_S)
+    assert box.charging, sent
+    assert len(_presses(sent)) == 1, sent
+
+
+@pytest.mark.unit
+def test_a_button_beside_another_start_is_not_a_resume_surface():
+    """Review: with a start service beside the button, a press claims no
+    session, and ``start_session`` would send its own start too."""
+    box = Box(hard_stopped=True)
+    dev, _ = _rig(box, session_active=True)
+    dev.start_service = "zaptec.resume_charging"
+    assert GenericAdapter(dev).resume_pressable() is False
+
+
+@pytest.mark.unit
+def test_a_claiming_press_forgets_the_park():
+    """Review: the press skips ``start_session``, which is where SEM records
+    that it said yes again (#935); the press records it instead."""
+    box = Box(hard_stopped=True)
+    dev, _ = _rig(box, session_active=False)
+    calls = []
+
+    async def _remember(parked):
+        calls.append(parked)
+
+    dev._remember_parked = _remember
+    _run(box, dev, [_charge()])
+    assert calls and calls[-1] is False, calls
 
 
 # ── a refused press ─────────────────────────────────────────────────────

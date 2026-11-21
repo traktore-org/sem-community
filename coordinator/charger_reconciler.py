@@ -225,9 +225,12 @@ CONTACTOR_MIN_OFF_S: float = 300.0
 # pressed. The gap covers the cloud's delay before the box reports the
 # resume; the count bounds a button that is always pressable (a brand whose
 # button does not follow the pause) to a few presses per stretch with no
-# draw. A draw, a new charge or a new car starts the count again.
+# draw. A draw, a new car, or a pause from charging of at least
+# ``RESUME_RESET_S`` starts the count again (a decision that flaps between
+# charge and idle does not).
 RESUME_PRESS_GAP_S: float = 120.0
 RESUME_PRESS_MAX: int = 3
+RESUME_RESET_S: float = 900.0
 
 
 class ChargerReconciler:
@@ -267,9 +270,14 @@ class ChargerReconciler:
         self._enable_attempts: int = 0
         self._enable_gave_up_at: float = 0.0
         # (#1399) the resume presses in this stretch with no draw, and the
-        # last one (-inf = never). See ``RESUME_PRESS_GAP_S``.
+        # last one (-inf = never). See ``RESUME_PRESS_GAP_S``. The "would"
+        # pair is the same count while nothing leaves (observer mode, a
+        # yield, #1305): a withheld press must not spend a real one.
         self._resume_presses: int = 0
         self._resume_pressed_at: float = float("-inf")
+        self._resume_would_presses: int = 0
+        self._resume_would_at: float = float("-inf")
+        self._resume_paused_since: Optional[float] = None
         # #548 actuation observability — record what the reconciler last DID
         # and whether the charger kept drawing against a stop, so the
         # ``diagnose`` service can show "SEM commanded stop N× but the box
@@ -542,14 +550,25 @@ class ChargerReconciler:
         return actions
 
     def _resume_press_due(self, now: float) -> bool:
-        """(#1399) Take one resume press if the gap and the count allow it."""
-        if self._resume_presses >= RESUME_PRESS_MAX:
+        """(#1399) Take one resume press if the gap and the count allow it.
+        While nothing leaves, the "would" pair is spent instead."""
+        if self._sending:
+            presses, last = self._resume_presses, self._resume_pressed_at
+        else:
+            presses, last = self._resume_would_presses, self._resume_would_at
+        if presses >= RESUME_PRESS_MAX or now - last < RESUME_PRESS_GAP_S:
             return False
-        if now - self._resume_pressed_at < RESUME_PRESS_GAP_S:
-            return False
-        self._resume_presses += 1
-        self._resume_pressed_at = now
+        if self._sending:
+            self._resume_presses += 1
+            self._resume_pressed_at = now
+        else:
+            self._resume_would_presses += 1
+            self._resume_would_at = now
         return True
+
+    def _reset_resume_count(self) -> None:
+        self._resume_presses = 0
+        self._resume_would_presses = 0
 
     def _gated_disable(self, now: float, *,
                        bypass_anticycle: bool = False) -> List[Action]:
@@ -643,12 +662,18 @@ class ChargerReconciler:
         (observer mode, external yield): the table still decides, the
         belief and the dwell clocks learn nothing."""
         self._sending = bool(sending)
-        # (#1399) A stretch of resume presses belongs to one wish to charge:
-        # any other wish ends it, and the next charge counts afresh. The
-        # last press time stays, so a quick flap cannot press twice inside
-        # the gap.
+        # (#1399) A pause from charging of RESUME_RESET_S ends a stretch of
+        # resume presses; a decision that flaps between charge and idle does
+        # not. The last press time always stays, so no flap presses twice
+        # inside the gap.
         if desired is not DesiredState.CHARGE:
-            self._resume_presses = 0
+            if self._resume_paused_since is None:
+                self._resume_paused_since = now
+        else:
+            if (self._resume_paused_since is not None
+                    and now - self._resume_paused_since >= RESUME_RESET_S):
+                self._reset_resume_count()
+            self._resume_paused_since = None
         # (#940) The floor applies only to a relay surface; latched per
         # cycle so every row below (and ``_gated_disable``) reads one
         # answer from one place.
@@ -751,7 +776,7 @@ class ChargerReconciler:
             self._parked_off = False
         else:
             self._end_stop_war()
-            self._resume_presses = 0      # (#1399) the next car counts afresh
+            self._reset_resume_count()    # (#1399) the next car counts afresh
             self._disconnect_run += 1
             if (self._seen_connected
                     and self._disconnect_run >= PARK_ON_DISCONNECT_CYCLES
@@ -978,7 +1003,7 @@ class ChargerReconciler:
         # first cycle of a charge the press comes first, ``ensure_enabled``
         # claims the session, and ``command_current`` does not press again.
         if observed.charging or observed.self_charging:
-            self._resume_presses = 0
+            self._reset_resume_count()
         elif observed.resume_pressable and self._resume_press_due(now):
             enable_actions.append(Action(ActionKind.ENABLE))
 
@@ -992,9 +1017,6 @@ class ChargerReconciler:
             # failsafe fed) — no re-arm spam needed.
             self._charging_intent_active = True
             self._last_write_at = now
-            # (#1399) the start may press a button itself (start_session):
-            # the gap before the next resume press runs from here
-            self._resume_pressed_at = now
             return self._stamp_close(
                 enable_actions + [Action(ActionKind.START_AND_WRITE, amps)], now)
         if amps and observed.setpoint_a != amps:
@@ -1180,15 +1202,16 @@ class ChargerReconciler:
                 self._stop_unenforceable_warned = False
             if action.kind is ActionKind.ENABLE:
                 # #536 — re-assert the start/stop switch (idempotent).
-                await adapter.ensure_enabled()
+                _left = await adapter.ensure_enabled()
                 _ent = str(getattr(_dev, "start_stop_entity", "") or "")
                 if _ent.startswith("button."):
                     # (#1399) a button has no "off": this is a resume press
-                    _LOGGER.info(
-                        "reconcile(%s): pressed %s — the car is plugged in, "
-                        "nothing flows and the button can be pressed (a "
-                        "paused charger) — %s", self.charger_id, _ent,
-                        decision.reason)
+                    if _left is not False:
+                        _LOGGER.info(
+                            "reconcile(%s): pressed %s — the car is plugged "
+                            "in, nothing flows and the button can be pressed "
+                            "(a paused charger) — %s", self.charger_id, _ent,
+                            decision.reason)
                 else:
                     _LOGGER.info("reconcile(%s): ENABLE — enable switch was "
                                  "off, re-asserting — %s", self.charger_id,
