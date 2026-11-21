@@ -3464,13 +3464,10 @@ class CurrentControlDevice(ControllableDevice):
 
     def _own_device_ids(self, reg) -> List[str]:
         """(#1407) The registry devices of this charger's own entities: the
-        box's service device, then the devices of its control, start/stop,
-        status, power and offer entities, in that order. Never a sibling
-        charger's: only entities this charger is set up with."""
+        devices of its control, start/stop, status, power and offer
+        entities, then the box's service device last (on some brands that
+        is a whole site, #1376). Only entities this charger is set up with."""
         ids: List[str] = []
-        sdid = getattr(self, "service_device_id", None)
-        if isinstance(sdid, str) and sdid:
-            ids.append(sdid)
         for eid in (self.current_entity_id, self.start_stop_entity,
                     self.charging_status_entity, self.power_entity_id,
                     self.current_sensor_entity_id, self.entity_id):
@@ -3478,6 +3475,9 @@ class CurrentControlDevice(ControllableDevice):
             dev = getattr(ent, "device_id", None)
             if isinstance(dev, str) and dev and dev not in ids:
                 ids.append(dev)
+        sdid = getattr(self, "service_device_id", None)
+        if isinstance(sdid, str) and sdid and sdid not in ids:
+            ids.append(sdid)
         return ids
 
     def _phase_leg_entities(self) -> Optional[tuple]:
@@ -3507,14 +3507,21 @@ class CurrentControlDevice(ControllableDevice):
             self.PHASE_LEGS_FOUND_S if found else self.PHASE_LEGS_MISSING_S)
         return found
 
-    def phase_leg_currents(self) -> Optional[List[float]]:
+    def phase_leg_currents(self, others=()) -> Optional[List[float]]:
         """(#1407) The current the charger measures on each phase, in A —
         whoever runs the charge, SEM or another system. None when the box
         has no such sensors or one of them gives no number: a missing phase
-        may be the one the car uses."""
+        may be the one the car uses. None too when one of ``others`` (the
+        other chargers) reads one of the same sensors: a reading two
+        chargers share says nothing about either (class 52)."""
         legs = self._phase_leg_entities()
         if not legs or self.hass is None:
             return None
+        for other in others or ():
+            reader = getattr(other, "_phase_leg_entities", None)
+            theirs = reader() if callable(reader) else None
+            if theirs and set(theirs) & set(legs):
+                return None
         from ..coordinator.units import current_state_to_amps
         out: List[float] = []
         for eid in legs:

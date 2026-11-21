@@ -80,9 +80,13 @@ def estimate_active_phases(
 #: of an amp (#1407: 0.02–0.04 A beside a 7.26 A phase).
 PHASE_LEG_ACTIVE_A = 1.0
 
+#: (#1407) Above this the charger's power says a charge flows — the same
+#: line the cards draw "charging" from.
+PHASE_LEG_FLOW_W = 50.0
+
 
 def phases_from_leg_currents(
-    currents,
+    currents, power_w=None,
 ) -> Tuple[Optional[float], Optional[int]]:
     """(#1407) (amps, phases) from the charger's own current on each phase.
 
@@ -91,6 +95,11 @@ def phases_from_leg_currents(
     that current the car draws nothing, so the count is None ("cannot
     tell"), not 0, and amps still says how little flows. (None, None) when
     there is no reading at all.
+
+    ``power_w`` is the charger's power this cycle. When it and the phases
+    disagree on whether a charge flows, one of them lags (a cloud poll, a
+    faster meter), and neither answer is shown: (None, None). Without it
+    the phases alone decide.
     """
     vals = []
     for c in currents or ():
@@ -104,6 +113,14 @@ def phases_from_leg_currents(
     if not vals:
         return None, None
     active = sum(1 for v in vals if v >= PHASE_LEG_ACTIVE_A)
+    if power_w is not None:
+        try:
+            p = float(power_w)
+        except (TypeError, ValueError):
+            p = None
+        if p is not None and _math.isfinite(p) \
+                and (p > PHASE_LEG_FLOW_W) != (active > 0):
+            return None, None
     return round(max(vals), 1), (active or None)
 
 

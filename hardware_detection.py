@@ -6492,10 +6492,14 @@ def phase_current_legs(dev_entities) -> Optional[Tuple[str, str, str]]:
     is in the user's language. A current is a sensor HA calls ``current``
     or one in A / mA (go-e's builds set no device class)."""
     from .consts import role_lexicon as lex
+    from .consts.core import DOMAIN
     legs: Dict[int, List[str]] = {}
     for entry in dev_entities or ():
         eid = str(getattr(entry, "entity_id", "") or "")
         if not eid.startswith("sensor.") or getattr(entry, "disabled_by", None):
+            continue
+        # (class 136) SEM's own per-phase sensors are never a charger's
+        if getattr(entry, "platform", None) == DOMAIN:
             continue
         unit = str(getattr(entry, "unit_of_measurement", "") or "").strip().lower()
         if _declared_dc(entry) != "current" and unit not in ("a", "ma"):

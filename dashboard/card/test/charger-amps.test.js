@@ -48,6 +48,17 @@ test('no phase sensors, nothing drawn: SEM\'s 0 A is true', () => {
     assert.equal(chargerAmps(fakeCard({ measured: null, commanded: 0, powerW: 0 }), 'c1'), 0);
 });
 
+/** A line that reads SEM's command (not one that only lists the entity to watch). */
+const readsCommand = (line) => /commanded_current/.test(line) && /_num\(|_str\(|_powerW\(|_attrs\(|states\?*\.?\[/.test(line);
+
+test('the scan finds the readers the report came from', () => {
+    // The old lines, so the scan below cannot pass vacuously.
+    assert.ok(readsCommand("    const amps = card._num(S('commanded_current'));"));
+    assert.ok(readsCommand("                amps: this._num('sensor.sem_charger_' + cid + '_commanded_current'),"));
+    assert.ok(readsCommand("            const amps = this._num(`sensor.sem_charger_${cid}_commanded_current`);"));
+    assert.ok(!readsCommand("    ['sensor', 'power'], ['sensor', 'commanded_current'], ['sensor', 'daily_energy'],"));
+});
+
 test('only the rule reads SEM\'s command for a card to show', () => {
     // The entity watch lists may name it; no card may read it on its own.
     const dirs = ['../src/cards/', '../src/util/'];
@@ -58,7 +69,7 @@ test('only the rule reads SEM\'s command for a card to show', () => {
             if (!f.endsWith('.js') || f === 'charger-amps.js') continue;
             const src = readFileSync(new URL(f, url), 'utf8');
             for (const line of src.split('\n')) {
-                if (/_commanded_current/.test(line) && /_num\(|_str\(|_powerW\(|states\?*\.?\[/.test(line)) readers.push(f + ': ' + line.trim());
+                if (readsCommand(line)) readers.push(f + ': ' + line.trim());
             }
         }
     }

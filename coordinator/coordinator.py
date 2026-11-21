@@ -6621,9 +6621,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # divides by SEM's command, so with SEM off (another system
                 # charging) it has nothing to divide by — the card then read
                 # "0 A" and the configured 3 phases for a 7 A one-phase car.
+                # Legs another charger also reads are no one's (class 52),
+                # and a reading the power disagrees with is shown as none.
                 _leg_reader = getattr(ev_dev, "phase_leg_currents", None)
                 _leg_amps, _leg_phases = phases_from_leg_currents(
-                    _leg_reader() if callable(_leg_reader) else None)
+                    _leg_reader(others=[d for c, d in self._ev_devices.items()
+                                        if c != cid])
+                    if callable(_leg_reader) else None,
+                    power_w=charger_power)
                 result[f"charger_{cid}_measured_current"] = _leg_amps
                 result[f"charger_{cid}_active_phases"] = (
                     _leg_phases if _leg_phases is not None

@@ -133,6 +133,26 @@ class TestTheLegs:
               for n in (1, 2, 3)]
         assert phase_current_legs(es) is None
 
+    @pytest.mark.parametrize("word", ["max", "requested", "allocated", "pilot",
+                                      "grid", "house", "installation"])
+    def test_a_dash_ends_a_word_too(self, word):
+        """Review: ``{serial}-{key}`` unique ids — ``abc123-max_current_l1``."""
+        es = [_leg(f"sensor.a_l{n}", f"abc123-{word}_current_l{n}")
+              for n in (1, 2, 3)]
+        assert phase_current_legs(es) is None
+
+    def test_a_serial_dash_key_leg_is_found(self):
+        es = [_leg(f"sensor.a_l{n}", f"abc123-current_l{n}") for n in (1, 2, 3)]
+        assert phase_current_legs(es) == tuple(f"sensor.a_l{n}" for n in (1, 2, 3))
+
+    def test_sems_own_sensors_are_never_a_chargers(self):
+        """Class 136: SEM's own per-phase diagnostics on the same device."""
+        es = [_leg(f"sensor.sem_diag_l{n}", f"diag_grid_l{n}_current_a")
+              for n in (1, 2, 3)]
+        for e in es:
+            e.platform = "solar_energy_management"
+        assert phase_current_legs(es) is None
+
     def test_voltage_and_power_legs_are_not_currents(self):
         es = [_leg(f"sensor.a_voltage_l{n}", f"a_voltage_l{n}", dc="voltage",
                    unit="V") for n in (1, 2, 3)]
@@ -180,6 +200,18 @@ class TestTheRule:
                                      [math.inf, 1, 1], ["x", 1, 1]])
     def test_no_reading(self, bad):
         assert phases_from_leg_currents(bad) == (None, None)
+
+    def test_power_agrees(self):
+        assert phases_from_leg_currents([7.26, 0.04, 0.02], power_w=1500) == (7.3, 1)
+        assert phases_from_leg_currents([0.04, 0.02, 0.0], power_w=0) == (0.0, None)
+
+    def test_lagging_phases_show_nothing(self):
+        """Review: power says 7 kW, the phases still read idle — not "0 A"."""
+        assert phases_from_leg_currents([0.04, 0.02, 0.0], power_w=7000) == (None, None)
+
+    def test_lagging_power_shows_nothing(self):
+        """The reverse: the charge ended, the phases still read 7 A."""
+        assert phases_from_leg_currents([7.0, 0.0, 0.0], power_w=0) == (None, None)
 
     def test_milliamps(self):
         st = SimpleNamespace(state="7260", attributes={"unit_of_measurement": "mA"})
@@ -270,6 +302,34 @@ class TestTheDeviceRead:
         assert _device(hass, "a").phase_leg_currents() == [7.0, 7.0, 7.0]
         assert _device(hass, "b").phase_leg_currents() == [16.0, 0.0, 0.0]
 
+    def test_two_chargers_on_one_set_of_legs_read_none(self, registry):
+        """Class 52: one set of phase sensors, two chargers (a two-socket
+        box) — the reading is neither charger's."""
+        _zaptec_registry(registry, dev="zaptec:a", prefix="a")
+        registry.entries.append(_leg("number.b_charger_max_current",
+                                     "b_charger_max_current", dev="zaptec:a"))
+        hass = make_hass({f"sensor.a_current_phase{n}": 7.0 for n in (1, 2, 3)})
+        a = _device(hass, "a")
+        b = CurrentControlDevice(hass, device_id="b", name="b",
+                                 current_entity_id="number.b_charger_max_current")
+        assert a.phase_leg_currents() == [7.0, 7.0, 7.0]
+        assert a.phase_leg_currents(others=[b]) is None
+        assert b.phase_leg_currents(others=[a]) is None
+
+    def test_the_service_device_is_asked_last(self, registry):
+        """A service device can be a whole site (#1376): the charger's own
+        entities' device comes first."""
+        _zaptec_registry(registry)
+        registry.entries += [_leg(f"sensor.site_l{n}", f"site_current_l{n}x",
+                                  dev="zaptec:site") for n in (1, 2, 3)]
+        registry.entries += [_leg(f"sensor.site_i_l{n}", f"s_i_l{n}",
+                                  dev="zaptec:site") for n in (1, 2, 3)]
+        hass = make_hass({f"sensor.zap_current_phase{n}": 4.0 for n in (1, 2, 3)})
+        dev = _device(hass)
+        dev.service_device_id = "zaptec:site"
+        assert dev._own_device_ids(registry)[-1] == "zaptec:site"
+        assert dev.phase_leg_currents() == [4.0, 4.0, 4.0]
+
     def test_a_sensor_turned_on_later_is_found(self, registry, monkeypatch):
         from custom_components.solar_energy_management.devices import base
         clock = [1000.0]
@@ -353,6 +413,33 @@ class TestTheCycle:
         res = await rig.tick()
         assert res["charger_zap_measured_current"] == 9.9
         assert res["charger_zap_active_phases"] == 3
+
+    async def test_lagging_phases_fall_back(self, registry):
+        """The power says a charge flows, the phases still read idle: no
+        measured amps, and no phase count from them."""
+        _zaptec_registry(registry)
+        rig = _rig("off", (0.04, 0.02, 0.0), 1500)
+        res = await rig.tick()
+        assert res["charger_zap_measured_current"] is None
+        assert res["charger_zap_active_phases"] is None
+
+    async def test_two_chargers_on_one_set_of_legs(self, registry):
+        """The real loop hands each charger the others: one set of phase
+        sensors on a two-socket box is neither socket's reading."""
+        _zaptec_registry(registry)
+        registry.entries.append(_leg("number.zap2_current", "zap2_current",
+                                     dev="zaptec:chg1"))
+        rig = _rig("off", (7.26, 0.04, 0.02), 1500)
+        second = {"id": "zap2", "name": "zap2", "ev_phases": 3,
+                  "ev_current_control_entity": "number.zap2_current",
+                  "ev_connected_sensor": "binary_sensor.zap_connected",
+                  "ev_power_sensor": "sensor.zap_total_charge_power",
+                  "charge_mode": "off"}
+        rig.coord.config["ev_chargers"].append(second)
+        rig._add_charger(second)
+        res = await rig.tick()
+        assert res["charger_zap_measured_current"] is None
+        assert res["charger_zap2_measured_current"] is None
 
     async def test_idle_box_reads_no_count(self, registry):
         _zaptec_registry(registry)

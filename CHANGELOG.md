@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Right amps and phases when another system charges** (#1407). Cards showed 0 A and 3 phases. SEM now reads the charger's own phase currents.
 - 🐛 **A paused Zaptec resumes** (#1399). Start now wrote 20 A into a paused charger and never pressed Resume charging. SEM now presses it.
 - 🐛 **The strategy sensor no longer reads unknown** (#1399). A text longer than 255 characters is cut, so HA keeps it.
 - 🐛 **The first charger counts from its own car** (#1405). When the main car setting named a fuller car on another charger, solar charging stopped early.
