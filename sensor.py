@@ -255,6 +255,10 @@ def _zoned_span(row: Any) -> Optional[tuple]:
 #: (#1408) A plan runs from now to the next night end, a day at most. More
 #: than two days of hours means a row with a wrong date; the list must not grow.
 _HOUSE_HOURS_MAX = 48
+#: (#1408) The house profile changes once an hour, so a real plan has a few
+#: runs. Past this many the runs are left out: the card spreads over whole
+#: hours then, and the list cannot grow to kilobytes.
+_HOUSE_RUNS_MAX = 24
 
 
 def _house_grid_hours(slots: Any) -> Optional[Dict[str, Any]]:
@@ -312,7 +316,8 @@ def _house_grid_hours(slots: Any) -> Optional[Dict[str, Any]]:
             kwh[i] += w * (upto - at).total_seconds() / 3.6e6
             at = upto
     return {"start": start.isoformat(), "kwh": [round(k, 3) for k in kwh],
-            "runs": [[r[2], r[3]] for r in runs]}
+            "runs": ([[r[2], r[3]] for r in runs]
+                     if len(runs) <= _HOUSE_RUNS_MAX else [])}
 
 
 def _batt_times(slots: Any) -> List[List[str]]:

@@ -228,3 +228,15 @@ def test_battery_times_follow_the_marked_slots():
     assert _batt_times(None) == [] and _batt_times("x") == []
     # a marked row without times names no run
     assert _batt_times([{"batt": True}]) == []
+
+
+def test_too_many_runs_are_left_out():
+    """Draw on and off every quarter-hour: past 24 runs the list goes, the
+    hours stay, and the card spreads over whole hours."""
+    t = datetime(2026, 11, 21, 22, 0, tzinfo=TZ1)
+    q = timedelta(minutes=15)
+    rows = [_row(t + i * q, 15, 400.0 if i % 2 == 0 else 0.0) for i in range(48)]
+    assert len(_house_grid_hours(rows[:47])["runs"]) == 24
+    h = _house_grid_hours(rows + [_row(t + 48 * q, 15, 400.0)])
+    assert h["runs"] == []
+    assert sum(h["kwh"]) == pytest.approx(25 * 0.1, abs=0.001)
