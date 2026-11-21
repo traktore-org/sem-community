@@ -347,6 +347,7 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
             target_state = SGReadyState.BOOST
             self._last_activation_path = "boost"
 
+        state_before = self._hp_status.sg_ready_state
         relay_ok = await self._set_sg_ready_state(target_state)
         if not relay_ok and self._last_relay_path == "withheld":
             # (#1335) observer / yield: the seam held the write back. Not a
@@ -370,7 +371,19 @@ class HeatPumpController(ComfortBandMixin, SetpointDevice):
         if self.climate_entity_id:
             self._last_activation_path += "+climate"
             # Also boost temperature setpoint if climate entity configured
-            await super().activate(available_watts)
+            boosted = await super().activate(available_watts)
+            if boosted <= 0 and self._last_relay_path == "no_relays_configured":
+                # (#1409) No contacts: the setpoint IS the boost. The unit
+                # refused it (a climate entity in "auto" may take no target),
+                # or it was withheld — the pump did not move, so SEM claims nothing:
+                # not ACTIVE, no watts, and the SG-Ready state it never left.
+                # With contacts the pump boosts by them; the setpoint is extra.
+                self._hp_status.sg_ready_state = state_before
+                self._last_activation_path += (
+                    "+refused" if self.sp_refused_for(self.climate_entity_id, "boost")
+                    else "+failed" if self._status.state == DeviceState.ERROR
+                    else "+withheld")
+                return 0.0
 
         if self._stepped_down:
             # (#1323) a boost replaces the step-down: the contacts and the

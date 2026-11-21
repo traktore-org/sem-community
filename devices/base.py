@@ -2289,7 +2289,9 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
                 return 0.0
 
         try:
-            await self.send("homeassistant", "turn_on", {"entity_id": self.entity_id})
+            if not await self.send("homeassistant", "turn_on",
+                                   {"entity_id": self.entity_id}):
+                return 0.0   # (#1409) withheld: nothing moved, nothing claimed
             self._status.state = DeviceState.ACTIVE
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
@@ -2682,13 +2684,16 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         # Set the mode first. If THIS fails the unit never turned on — report
         # ERROR and bail.
         try:
-            await self.send("climate", "set_hvac_mode", {"entity_id": self.entity_id, "hvac_mode": self.hvac_mode})
+            sent = await self.send("climate", "set_hvac_mode", {"entity_id": self.entity_id, "hvac_mode": self.hvac_mode})
         except Exception as e:
             self._sp_pending = None
             _LOGGER.error("Failed to activate %s: %s", self.name, e)
             self._status.state = DeviceState.ERROR
             self._status.error_message = str(e)
             return 0.0
+        if not sent:
+            self._sp_pending = None
+            return 0.0   # (#1409) withheld: the unit did not turn on
 
         # The mode is committed — the unit is now ON. Mark ACTIVE *before* the
         # optional setpoint write so a set_temperature failure can't leave us
@@ -4986,11 +4991,14 @@ class SetpointDevice(ControllableDevice):
             # (#1081) remembers the setpoint the unit shows before SEM moves it
             sent = await self.sp_write_target("climate", self.climate_entity_id,
                                               target, purpose="boost")
-            if not sent and self.sp_refused_for(self.climate_entity_id, "boost"):
-                # (#1396) the unit refused it: not boosted, and the next try
-                # waits — no error line every cycle
-                self._status.state = DeviceState.ERROR
-                self._status.error_message = "setpoint refused by the unit"
+            if not sent:
+                if self.sp_refused_for(self.climate_entity_id, "boost"):
+                    # (#1396) the unit refused it: not boosted, and the next
+                    # try waits — no error line every cycle
+                    self._status.state = DeviceState.ERROR
+                    self._status.error_message = "setpoint refused by the unit"
+                # (#1409) refused, or withheld (observer): nothing moved, so
+                # nothing is claimed
                 return 0.0
             self._boosted = True
             self._status.state = DeviceState.ACTIVE
@@ -5127,7 +5135,9 @@ class ScheduleDevice(ControllableDevice):
             return 0.0
 
         try:
-            await self.send("homeassistant", "turn_on", {"entity_id": self.entity_id})
+            if not await self.send("homeassistant", "turn_on",
+                                   {"entity_id": self.entity_id}):
+                return 0.0   # (#1409) withheld: the run did not start
             self._started = True
             self._start_time = datetime.now()
             self._status.state = DeviceState.ACTIVE
