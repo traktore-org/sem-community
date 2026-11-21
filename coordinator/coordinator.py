@@ -3616,10 +3616,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """#589 swap retirement — vehicle SOC for the ACTIVE charger.
 
         Inside the per-charger loop this resolves to ``_current_pcc.vehicle_soc``
-        (seeded from the global value at ``__enter__``, overridden by the loop
-        body when the charger has its own ``vehicle_soc_entity``); out-of-loop
-        it falls back to the global per-cycle value read from the primary
-        ``vehicle_soc_entity``. Replaces the ``_saved_vehicle_soc``
+        (seeded at ``__enter__`` with ``_own_vehicle_soc(cid)``: the charger's
+        own car level, #1405); out-of-loop it falls back to the per-cycle
+        value read from the main-settings ``vehicle_soc_entity`` — the first
+        charger's car, read for a charger only through ``_own_vehicle_soc``.
+        Replaces the ``_saved_vehicle_soc``
         snapshot/restore in ``PerChargerContext`` — the per-charger override
         dies with the context, so it cannot leak into the next charger."""
         pcc = getattr(self, "_current_pcc", None)
@@ -4977,12 +4978,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     saved_dev, saved_sess, saved_conn = (
                         self._ev_device, self._session_data, self._last_ev_connected
                     )
-                    # Per-charger vehicle SOC override (#193): this
-                    # charger's own car level only (#1404/#1405).
-                    saved_vehicle_soc = self._cycle_vehicle_soc
+                    # (#1405) No car level is set here: nothing in session
+                    # tracking reads one, and the old override wrote the
+                    # very value ``_own_vehicle_soc`` reads.
                     ev_chargers_cfg = self.config.get("ev_chargers", [])
                     charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
-                    self._cycle_vehicle_soc = self._own_vehicle_soc(cid)
                     self._ev_device = ev_dev
                     # (#846) the device's way back to the coordinator, so the
                     # adapter's amps↔watts conversions can consult the
@@ -5035,7 +5035,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._ev_device, self._session_data, self._last_ev_connected = (
                         saved_dev, saved_sess, saved_conn
                     )
-                    self._cycle_vehicle_soc = saved_vehicle_soc
                     power.ev_connected, power.ev_charging = saved_ev_connected, saved_ev_charging
                 # Primary charger session = first charger's session
                 primary_id = next(iter(self._ev_devices))
@@ -5305,9 +5304,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # property (#589), seeded by ``__enter__`` with
                         # THIS charger's own car level
                         # (``_own_vehicle_soc``, #1404/#1405): its own
-                        # sensor, dark = no level, which plans the full
-                        # pack (``_calculate_remaining_need``). Never
-                        # another car's level.
+                        # sensor (dark = no level, which plans the full
+                        # pack, ``_calculate_remaining_need``); the
+                        # main-settings one only for the first charger
+                        # with none of its own. Never another car's level.
                         charger_cfg = pcc.charger_cfg
                         # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245).
                         # #351 M9 — capture the per-charger SOC into a
@@ -15465,7 +15465,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         is no level (#1404). The car level in the main settings
         (``vehicle_soc_entity``) is the first charger's car, as setup
         has it: only the first charger, and only when it names no sensor
-        of its own, reads it. Any other charger with no sensor has no
+        of its own, reads it — unless another charger names that same
+        sensor as its own. Any other charger with no sensor has no
         level, never another car's (class 3). ``cid`` None is the
         one-charger shape with no charger list.
         """
@@ -15480,7 +15481,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         own = cfg.get("vehicle_soc_entity")
         if own:
             return self._read_vehicle_soc(own)
-        return flat if cid == self.primary_charger_id() else None
+        if cid != self.primary_charger_id():
+            return None
+        # The main-settings sensor named as another charger's own sensor
+        # is that car (a setting left from one-charger days): not ours.
+        main = self.config.get("vehicle_soc_entity")
+        if main and any(isinstance(c, dict) and c is not cfg
+                        and c.get("vehicle_soc_entity") == main
+                        for c in chargers):
+            return None
+        return flat
 
     def _resolve_charger_soc(self, cid: str, cfg: dict) -> float | None:
         """Per-charger vehicle SOC: real sensor, else anchored virtual SOC, else None."""

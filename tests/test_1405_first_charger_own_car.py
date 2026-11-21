@@ -34,7 +34,7 @@ from custom_components.solar_energy_management.coordinator.coordinator import (
 )
 
 from .ast_contracts import calls, reads_attribute
-from .test_1403_full_power_state import _charger, _day_rig
+from .test_1403_full_power_state import _amps_sent, _charger, _day_rig
 
 CAR_A = "sensor.car_a_soc"
 CAR_B = "sensor.car_b_soc"
@@ -99,12 +99,14 @@ class TestTheFirstChargerCountsFromItsOwnCar:
         charger a's 80 % target, so its surplus charge stopped."""
         rig = _fleet(a_soc="unavailable", b_soc=90)
         seen = _spy_need(rig)
-        for _ in range(2):
+        for _ in range(3):
             await rig.tick()
         a_max = [out for cid, _soc, bound, out in seen
                  if cid == "a" and bound == "max"]
         assert a_max, "charger a's need was never asked"
         assert all(out > 0.1 for out in a_max), a_max
+        assert any((v or 0) >= 6 for v in _amps_sent(rig, "a")), \
+            _amps_sent(rig, "a")
 
     async def test_a_working_own_sensor_is_not_capped_by_the_other_car(self):
         """Car A reads 60 %. The other car's 90 % anchored the first
@@ -163,6 +165,19 @@ class TestTheMainSettingIsTheFirstChargersCar:
         assert det._soc_anchor_value == 55.0
         assert ("a", 55.0) in [(c, s) for c, s, _b, _o in seen]
         assert rig.coord._last_ev_intelligence.estimated_soc_pct == 55.0
+
+    async def test_the_main_setting_named_by_another_charger_is_its_car(self):
+        """Review: charger a names no sensor; the main setting names car
+        B's sensor, which charger b names as its own. That is car B (a
+        setting left from one-charger days), so charger a has no level."""
+        rig = _fleet(a_soc="unavailable", b_soc=90, a_sensor=False)
+        seen = _spy_need(rig)
+        for _ in range(2):
+            await rig.tick()
+        assert rig.coord._ev_taper_detectors["a"]._soc_anchor_value != 90.0
+        assert rig.coord._ev_taper_detectors["a"].energy_accounted_soc() is None
+        assert ("a", 90.0) not in [(c, s) for c, s, _b, _o in seen]
+        assert ("b", 90.0) in [(c, s) for c, s, _b, _o in seen]
 
     async def test_first_charger_with_no_own_sensor_reads_the_main_one(self):
         rig = _fleet(b_soc=70, a_sensor=False)
@@ -254,6 +269,15 @@ class TestOwnVehicleSoc:
         assert c._own_vehicle_soc("b") is None
         assert c._own_vehicle_soc(None) == 55.0
 
+    def test_main_one_named_by_another_charger_is_not_the_first_cars(self):
+        c = self._coord([{"id": "a"}, {"id": "b", "vehicle_soc_entity": CAR_B}],
+                        {CAR_B: "90"}, flat=90.0)
+        c.config["vehicle_soc_entity"] = CAR_B
+        assert c._own_vehicle_soc("a") is None
+        assert c._own_vehicle_soc("b") == 90.0
+        c.config["vehicle_soc_entity"] = CAR_A      # a different sensor
+        assert c._own_vehicle_soc("a") == 90.0
+
     def test_an_id_less_entry_is_found_by_its_registration_id(self):
         c = self._coord([{"name": "x"}, {"vehicle_soc_entity": CAR_B}],
                         {CAR_B: "42"}, flat=55.0)
@@ -294,6 +318,27 @@ class TestNoDetectorIsFedTheMainSettingDirectly:
             if any(_is_flat_read(a) for a in args):
                 bad.append(f"{name} at line {node.lineno}")
         assert not bad, bad
+
+    def test_the_cycle_level_is_read_only_where_known(self):
+        """Out of a charger's context ``self._cycle_vehicle_soc`` IS the
+        main-settings car. Its reads are counted per function: the loop
+        (one, in a charger's context), the fleet car level and range
+        sensors (five), and the no-charger-list estimate (one). A new
+        read — a local copy included — must say whose car it means; use
+        ``_own_vehicle_soc(cid)`` for a charger."""
+        allowed = {"_async_update_data": 6, "_update_ev_intelligence": 1}
+        tree = ast.parse(textwrap.dedent(inspect.getsource(SEMCoordinator)))
+        counts: dict = {}
+        for fn in tree.body[0].body:
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for node in ast.walk(fn):
+                if (_is_flat_read(node) and node.attr == "_cycle_vehicle_soc"
+                        and isinstance(node.ctx, ast.Load)):
+                    counts[fn.name] = counts.get(fn.name, 0) + 1
+        assert counts, "premise: the known reads were found"
+        over = {k: v for k, v in counts.items() if v > allowed.get(k, 0)}
+        assert not over, over
 
     def test_the_flat_level_is_read_in_one_place(self):
         """Only the property and ``_own_vehicle_soc`` read the backing
