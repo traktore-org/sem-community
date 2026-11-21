@@ -305,10 +305,11 @@ class SEMNextPlanCard extends SEMNextBase {
     /** (#1321) Heaters below their start line with no hour in the plan. */
     _cold(plan) {
         // (#1406) the plan's end, also when the sensor dropped the slots; one
-        // that has passed names no time, and tomorrow's says so
+        // that has passed names no time. Plain HH:MM: the sentence has its own
+        // word before {time}, so "before tomorrow 07:00" breaks in some languages.
         const now = Date.now();
         const end = planEndMs(plan);
-        const time = end > now ? this._clockDay(end, now) : '';
+        const time = end > now ? this._hhmm(new Date(end)) : '';
         return coldHeaters(this._devices(), plan.blocks, now)
             .map((h) => ({ ...h, keep: this._temp(h.keepC), time }));
     }

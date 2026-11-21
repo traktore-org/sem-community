@@ -3,7 +3,7 @@
  * moved to next-plan-chart.js (sun, price and plan on one clock).
  */
 
-import { zoneOffsetMin, zonedMidnight } from './next-plan-chart.js';
+import { zoneOffsetMin } from './next-plan-chart.js';
 
 /**
  * (#1406) When the plan ends, in ms; NaN when it does not say. `ends_at` first:
@@ -26,11 +26,13 @@ export function planEndMs(plan) {
 export function nightEndMs(hhmm, nowMs, tz) {
     const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(String(hhmm ?? '').trim());
     if (!m || Number(m[1]) > 23 || Number(m[2]) > 59 || !Number.isFinite(nowMs)) return NaN;
-    const mins = Number(m[1]) * 60 + Number(m[2]);
+    const off = (ms) => zoneOffsetMin(ms, tz) * 60e3;
+    const day = new Date(nowMs + off(nowMs));   // the home's date, read in UTC fields
     for (const days of [0, 1, 2]) {
-        const mid = zonedMidnight(nowMs, tz, days);
-        // on a clock-change day the wall time is an hour away from midnight + minutes
-        const at = mid + mins * 60e3 + (zoneOffsetMin(mid, tz) - zoneOffsetMin(mid + mins * 60e3, tz)) * 60e3;
+        // the wall time as if it were UTC, then moved by the offset in force at it
+        // (twice: the first guess can sit on the other side of a clock change)
+        const wall = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + days, Number(m[1]), Number(m[2]));
+        const at = wall - off(wall - off(wall));
         if (at > nowMs) return at;
     }
     return NaN;

@@ -173,8 +173,11 @@ test('(#1406) a cold heater names the plan end also when the slots were dropped'
     const ends = Date.now() + 3 * 3600e3;
     const cold = el._cold({ timeline_omitted: true, slots: [], blocks: [], ends_at: new Date(ends).toISOString() });
     assert.equal(cold.length, 1);
-    assert.equal(cold[0].time, el._clockDay(ends));
-    assert.match(cold[0].time, /\d\d:\d\d/);
+    assert.equal(cold[0].time, el._hhmm(new Date(ends)));
+    assert.match(cold[0].time, /^\d\d:\d\d$/, 'a plain time: the sentence has its own word before it');
+    // tomorrow's end (any time of day): still a plain time, never "tomorrow 07:00"
+    const late = Date.now() + 23 * 3600e3;
+    assert.match(el._cold({ slots: [], blocks: [], ends_at: new Date(late).toISOString() })[0].time, /^\d\d:\d\d$/);
     // no end at all: no time, the plain sentence
     assert.equal(el._cold({ slots: [], blocks: [] })[0].time, '');
     // an end that has passed (last night's plan) names no time
@@ -182,12 +185,16 @@ test('(#1406) a cold heater names the plan end also when the slots were dropped'
 });
 
 test('(#1406) with no plan end ahead, Skip tonight lasts until the next night end', async () => {
-    const el = makeCard({ 'sensor.sem_night_end_time': S('07:00') });
+    // a night end three hours from now (home zone), so the answer is never 720 by chance
+    const at = new Date(Date.now() + 3 * 3600e3);
+    const hhmm = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
+    const el = makeCard({ 'sensor.sem_night_end_time': S(hhmm) });
     const calls = [];
     el.hass.callService = async (d, s, data) => { calls.push([d, s, data]); };
     el.__plan = { slots: [], blocks: [], demands: [] };   // no plan yet
     await pressed(el, 'next_skip_tonight')();
-    const want = Math.round((nightEndMs('07:00', Date.now(), 'Europe/Zurich') - Date.now()) / 60e3);
+    const want = Math.round((nightEndMs(hhmm, Date.now(), 'Europe/Zurich') - Date.now()) / 60e3);
+    assert.ok(want >= 178 && want <= 181, `want ${want}`);
     assert.ok(Math.abs(calls[0][2].minutes - want) <= 1, `minutes ${calls[0][2].minutes}, want ${want}`);
     // the night end sensor out: the old 12 hours
     calls.length = 0;

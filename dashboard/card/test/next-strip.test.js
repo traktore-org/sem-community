@@ -74,6 +74,15 @@ test('(#1406) nightEndMs across both clock changes is the wall time', () => {
     assert.equal(nightEndMs('07:00', at('2026-10-24T22:00:00+02:00'), ZH), at('2026-10-25T07:00:00+01:00'));
     // spring: 29.03.2026, 02:00 becomes 03:00 summer time
     assert.equal(nightEndMs('07:00', at('2026-03-28T22:00:00+01:00'), ZH), at('2026-03-29T07:00:00+02:00'));
+    // a time inside the spring gap lands after it, as in the planner (02:30 → 03:30 summer time)
+    assert.equal(nightEndMs('02:30', at('2026-03-28T22:00:00+01:00'), ZH), at('2026-03-29T03:30:00+02:00'));
+    // zones that change their clocks at midnight: Santiago, 05.04.2026 (00:00 -03 back to 23:00 -04)
+    // and 06.09.2026 (00:00 -04 forward to 01:00 -03)
+    assert.equal(nightEndMs('07:00', at('2026-04-04T22:00:00-03:00'), 'America/Santiago'), at('2026-04-05T07:00:00-04:00'));
+    assert.equal(nightEndMs('07:00', at('2026-09-05T22:00:00-04:00'), 'America/Santiago'), at('2026-09-06T07:00:00-03:00'));
+    // far from UTC
+    assert.equal(nightEndMs('07:00', at('2026-04-04T22:00:00+13:00'), 'Pacific/Auckland'), at('2026-04-05T07:00:00+12:00'));
+    assert.equal(nightEndMs('07:00', at('2026-11-01T01:30:00-07:00'), 'America/Los_Angeles'), at('2026-11-01T07:00:00-08:00'));
 });
 
 test('(#1406) nightEndMs: a state that is not a time gives NaN', () => {
