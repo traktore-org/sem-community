@@ -291,6 +291,7 @@ def test_messages_all_states(notifier, sample_data):
     states_with_keba = [
         ChargingState.SOLAR_CHARGING_ACTIVE,
         ChargingState.SOLAR_SUPER_CHARGING,
+        ChargingState.SOLAR_FULL_POWER,
         ChargingState.SOLAR_PAUSE_LOW_BATTERY,
         ChargingState.SOLAR_TARGET_REACHED,
         ChargingState.SOLAR_WAITING_BATTERY_PRIORITY,

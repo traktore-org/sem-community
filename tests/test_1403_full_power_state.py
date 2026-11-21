@@ -8,9 +8,8 @@ have given nothing. Real battery assist is ``CHARGE_AT_AMPS`` at set amps
 and already read "Solar mode - Charging active".
 
 Now ``CHARGE_MAX`` reads ``SOLAR_FULL_POWER`` — "Charging at full power" —
-and the notice says "Full power". The state keeps every role the old one
-had: an active solar status, the flap hold of the notices, the SOC-cap
-check's charging set.
+and the notice says "Full power". The state keeps the roles the old one
+had: an active solar status and the flap hold of the notices.
 
 The cycle tests run the real cycle (``CycleRig``): real devices, real
 loop, real ``decide()``; only the day clock is set.
@@ -42,6 +41,7 @@ from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
 )
 from custom_components.solar_energy_management.coordinator.decide import (
+    SOLAR_STATE_BY_INTENT,
     solar_state_from_decision,
 )
 from custom_components.solar_energy_management.coordinator import (
@@ -142,15 +142,26 @@ class TestFullPowerByDay:
 
 class TestTheRule:
 
+    def test_every_intent_is_in_the_table(self):
+        """A new intent must name its day state; the fallback would show it
+        as "System ready" while it charges."""
+        assert set(SOLAR_STATE_BY_INTENT) == set(ChargerIntent)
+
     @pytest.mark.parametrize("ceiling", [True, False])
-    def test_every_intent_has_a_state(self, ceiling):
-        """Every intent maps, and none to the battery-assist state: no
-        decision carries "the battery helps" as an intent."""
+    def test_no_intent_reads_battery_assist(self, ceiling):
+        """No decision carries "the battery helps" as an intent."""
         for intent in ChargerIntent:
             state = solar_state_from_decision(
                 intent, soc_ceiling_reached=ceiling)
             assert state in states_mod.STATUS_MESSAGES, intent
             assert state != CS.SOLAR_SUPER_CHARGING, intent
+
+    def test_a_charging_intent_reads_charging(self):
+        charging = {CS.SOLAR_CHARGING_ACTIVE, CS.SOLAR_FULL_POWER}
+        for intent in ChargerIntent:
+            sends = intent in (ChargerIntent.CHARGE_AT_AMPS,
+                               ChargerIntent.CHARGE_MAX)
+            assert (SOLAR_STATE_BY_INTENT[intent] in charging) is sends, intent
 
     def test_the_map(self):
         f = solar_state_from_decision
@@ -208,9 +219,25 @@ class TestWhatItSays:
         assert msgs["charger"] == "Full power"
         assert "mobile" not in msgs
 
+    @pytest.mark.asyncio
+    async def test_the_event_carries_the_charger_text(self):
+        """The notification event read a key ("keba") nothing sets, so a
+        state with only a charger text fired an empty message."""
+        hass = MagicMock()
+        hass.config.language = "en"
+        nm = notif_mod.NotificationManager(
+            hass, {"daily_ev_target": 10, "enable_charger_notifications": True})
+        nm._charger_notify_checked = True
+        nm._charger_notify_available = False
+        nm._pending_state_per_charger["_fleet"] = CS.SOLAR_FULL_POWER
+        nm._pending_state_since_per_charger["_fleet"] = -1e9  # flap hold over
+        await nm.notify_state_change(CS.SOLAR_FULL_POWER, {"calculated_current": 6})
+        fired = [c.args[1] for c in hass.bus.async_fire.call_args_list
+                 if c.args and str(c.args[0]).endswith("_notification")]
+        assert fired and fired[-1]["message"] == "Full power"
+
     def test_it_keeps_the_roles_of_the_old_state(self):
         assert CS.SOLAR_FULL_POWER in notif_mod._COOLDOWN_STATES
-        assert CS.SOLAR_FULL_POWER in SEMCoordinator.SOLAR_CHARGING_STATES
         d = SEMData()
         d.charging_state = CS.SOLAR_FULL_POWER
         assert d._get_solar_charging_status() == "active"

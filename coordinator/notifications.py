@@ -255,7 +255,9 @@ class NotificationManager:
         if messages.get("mobile") or messages.get("charger"):
             self.hass.bus.async_fire(f"{DOMAIN}_notification", {
                 "state": new_state,
-                "message": messages.get("mobile") or messages.get("keba", ""),
+                # (#1403) the charger text's key is "charger"; "keba" was
+                # never set, so a charger-only state fired an empty message.
+                "message": messages.get("mobile") or messages.get("charger", ""),
                 "category": "charging",
                 "charger_id": charger_id,
                 "charger_name": charger_name,

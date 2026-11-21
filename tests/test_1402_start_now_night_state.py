@@ -271,7 +271,8 @@ class TestTheRule:
             skipped=True) == CS.NIGHT_CHARGING_ACTIVE
 
     @pytest.mark.parametrize("state", [CS.SOLAR_IDLE, CS.SOLAR_CHARGING_ACTIVE,
-                                       CS.SOLAR_SUPER_CHARGING])
+                                       CS.SOLAR_SUPER_CHARGING,
+                                       CS.SOLAR_FULL_POWER])
     @pytest.mark.parametrize("skipped", [True, False])
     def test_a_day_state_passes_through(self, state, skipped):
         assert night_state_after_decision(

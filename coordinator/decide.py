@@ -38,6 +38,7 @@ from dataclasses import replace
 from typing import Dict, Optional
 
 from ..consts.core import DEFAULT_MAX_CHARGING_CURRENT, DEFAULT_PEAK_HYSTERESIS
+from ..consts.states import ChargingState as _CS
 from . import reason_codes as RC
 from .watts_per_amp import amps_that_fit, predict_watts
 from .charger_types import (
@@ -105,6 +106,17 @@ def _ev_reclaims(view: ChargerView) -> bool:
     )
 
 
+#: (#1403) Every intent names its day state here; a new intent must be
+#: added (tests/test_1403_full_power_state.py checks every member).
+SOLAR_STATE_BY_INTENT: Dict[ChargerIntent, str] = {
+    ChargerIntent.CHARGE_MAX: _CS.SOLAR_FULL_POWER,
+    ChargerIntent.CHARGE_AT_AMPS: _CS.SOLAR_CHARGING_ACTIVE,
+    ChargerIntent.IDLE: _CS.SOLAR_IDLE,
+    ChargerIntent.DISABLE: _CS.SOLAR_IDLE,
+    ChargerIntent.RELEASE: _CS.SOLAR_IDLE,
+}
+
+
 def solar_state_from_decision(intent, *, soc_ceiling_reached: bool) -> str:
     """The charger's day state, said from what the decision does.
 
@@ -117,16 +129,9 @@ def solar_state_from_decision(intent, *, soc_ceiling_reached: bool) -> str:
 
     #548 — an IDLE caused by the max-SOC ceiling reads "Target reached",
     not a bare "Idle"."""
-    from ..consts.states import ChargingState as CS
-
-    if intent is ChargerIntent.CHARGE_MAX:
-        return CS.SOLAR_FULL_POWER
-    if intent is ChargerIntent.CHARGE_AT_AMPS:
-        return CS.SOLAR_CHARGING_ACTIVE
     if intent is ChargerIntent.IDLE and soc_ceiling_reached:
-        return CS.SOLAR_TARGET_REACHED
-    # IDLE, DISABLE, RELEASE
-    return CS.SOLAR_IDLE
+        return _CS.SOLAR_TARGET_REACHED
+    return SOLAR_STATE_BY_INTENT.get(intent, _CS.SOLAR_IDLE)
 
 
 def solar_charge_display_override(intent, drawing: bool,
