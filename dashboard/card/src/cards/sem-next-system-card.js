@@ -197,7 +197,7 @@ class SEMNextSystemCard extends SEMNextBase {
     /** The value and status words of one source, as the old tile said them. */
     _freshLine(r) {
         const txt = r.state === 'ok' || r.state === 'old' ? (ageLabel(r.age) || this._t('next_fresh_ok'))
-            : r.state === 'missing' ? this._t(r.load ? 'next_no_power_reading' : 'next_no_reading') : this._t('next_fresh_' + r.state);
+            : r.state === 'missing' ? this._t(r.load ? 'next_no_power_reading' : 'next_no_reading') : this._tCode('next_fresh_', r.state);
         const st = this._hass.states[r.entity];
         const g = r.key === 'next_src_grid' ? gridReading(st?.state) : null;
         // the grid reads as Now says it: a size and import or export, not a signed number

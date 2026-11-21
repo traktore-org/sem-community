@@ -28,7 +28,7 @@ hardware you have. For daily use and settings, see the [User Guide](USER_GUIDE.m
 
 ## Open the dashboard
 
-- The dashboard is built on first install. It is called **SEM-dashboard** in the sidebar.
+- The dashboard is built on first install. It is called **SEM-dashboard** in the sidebar (older installs: **Solar Energy Management**).
 - To build it again: **Developer tools > Actions**, run `solar_energy_management.generate_dashboard`,
   then hard-refresh the browser (Ctrl+Shift+R).
 - Each screen has its own address, for example `/sem-next/now`. The links between screens work from any address.

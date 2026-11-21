@@ -36,7 +36,7 @@ and loads. This guide covers daily use and the settings.
 1. Install SEM with HACS, then restart Home Assistant.
 2. Go to **Settings > Devices & Services > Add integration > Solar Energy Management**.
 3. SEM finds your sensors and devices. Check each one. Fill in what it missed.
-4. Open the **SEM-dashboard** in the sidebar. The **Now** screen shows a
+4. Open the **SEM-dashboard** (older installs: **Solar Energy Management**) in the sidebar. The **Now** screen shows a
    setup checklist.
 5. SEM starts in **watch only**. It reads and decides, and sends no commands.
    When you are ready, press **Let SEM take control** on the checklist.
@@ -76,13 +76,26 @@ are left out.
 
 ---
 
+### Where is it?
+
+| Setting | Screen | Row |
+|---|---|---|
+| Charger name | **Devices**, charger card | **Name in SEM** |
+| Car battery size | **Devices**, charger card (turn on **All settings**) | **Car battery size** |
+| Night start and end | **System > Notifications and more** | **Night starts, minutes after sunset**, **Night ends** |
+| Tariff | **System > How I pay** | **Tariff mode** |
+| Battery reserve | **Devices**, battery card | **SEM sells down to no lower than** |
+| Heat pump or room temperature | **Devices**, heat pump card | **Keep at**, **Never colder than** |
+| Hot water top for spare sun | **Devices**, hot water card | **With spare sun, heat up to** |
+| May SEM buy power for a heater? | **Devices**, heater card | **May SEM buy power for it?** |
+
 ## Settings
 
 ### How a setting row works
 
 - The name is on the left. The value is on the right.
 - Tap a row. A small dialog asks for the new value.
-- To rename a charger, tap the **Name** row on its card on **Devices**. Entity ids do not change.
+- To rename a charger, tap the **Name in SEM** row on its card on **Devices**. Entity ids do not change.
 - An on/off setting is a switch on the row.
 - **Devices** rows save at once.
 - **System** rows are collected. Press **Apply** at the bottom to save them together.
@@ -173,6 +186,7 @@ Notes:
 
 ### Night
 
+- Both night settings are on **System > Notifications and more**.
 - Night starts at sunset plus **Night starts, minutes after sunset**
   (0 to 400, default 30).
 - Night ends at sunrise, or at **Night ends** (default 07:00), whichever is first.
@@ -180,7 +194,7 @@ Notes:
 
 ### Battery help for the car
 
-- **Solar Gate** is the spare sun the battery needs before it helps the car
+- **Spare sun before the battery helps** is the spare sun the battery needs before it helps the car
   (default 1200 W). It is on the battery card on **Devices**, shown only while
   **May the battery help charge the car?** is on. Below it the battery helps
   only when tonight's forecast budget is positive, or in a morning window you
@@ -229,7 +243,7 @@ Set the mode per battery, on **Devices**.
 Notes:
 
 - Force charge does not wait for a cheap hour.
-- The **reserve** (default 20 %) stops SEM's own sales. It does not stop the
+- The **reserve** (default 20 %; on the battery card on **Devices**: **SEM sells down to no lower than**) stops SEM's own sales. It does not stop the
   house from using the battery. The inverter's own limit does that.
 - Force discharge does not sell while SEM cannot read the battery level.
 
@@ -243,9 +257,9 @@ On **Devices** the battery shows three levels:
 | From this the battery may help the car | Buffer level (default 70 %) | Below it the battery stays for the house. |
 | From this it may help fully | Auto-start level (default 90 %) | Still only with enough spare sun. |
 
-- **Battery capacity** (kWh) sets how much energy the battery holds.
-- **Reserve** is the lowest level for sales.
-- **Solar Gate** is on the same card (see [Battery help for the car](#battery-help-for-the-car)).
+- **Battery size** (kWh) sets how much energy the battery holds.
+- **SEM sells down to no lower than** (the reserve) is the lowest level for sales.
+- **Spare sun before the battery helps** is on the same card (see [Battery help for the car](#battery-help-for-the-car)).
 
 ### Battery settings in **System > Battery rules**
 
@@ -256,7 +270,7 @@ On **Devices** the battery shows three levels:
   Shown only with one battery.
 - **End-of-charge level** and **End-of-discharge level**: the inverter's own limits.
   SEM reads them and counts from there.
-- **Setpoint model**: how SEM's watts reach the inverter.
+- **How SEM sends the power value**: how SEM's watts reach the inverter.
   - **Signed** (default): + discharge, − charge.
   - **Inverted**: − discharge, + charge.
   - **Direction select**: a select sets charge or discharge, then the watts follow.
@@ -363,14 +377,14 @@ A heater with a thermometer has four questions. The same questions are on
 
 | Question | Setting | What it means |
 |---|---|---|
-| Keep it at | **Keep it at** | The temperature to keep. Spare sun heats to it. |
+| Keep at | **Keep at** | The temperature to keep. Spare sun heats to it. |
 | Never colder than | **Never colder than** | Below this, SEM heats at once, at any price. |
 | Spare sun may heat up to | **With spare sun, heat up to** | How hot free sun may heat it. |
 | May SEM buy power? | **May SEM buy power for it?** | **No, sun only**, **Yes, in cheap hours**, or **Yes, from the house battery at night** (only with a house battery). |
 
 Extra notes:
 
-- **Also in the cheapest-heat hours**: heats above *Keep it at* in cheap hours only.
+- **Also in the cheapest-heat hours**: heats above *Keep at* in cheap hours only.
 - With **Yes, in cheap hours**, SEM plans the heating before the temperature falls to **Never colder than**. It learns how fast the room or tank cools.
 - A heater with no thermometer asks **Run it each day for** instead.
 - A cooling unit asks the same questions, turned round.
@@ -382,7 +396,7 @@ Extra notes:
 1. The stop temperature is reached: stop.
 2. A Legionella run is due: run to its target.
 3. The tank is colder than **Never colder than**: heat now.
-4. The tank is below **Keep it at**, SEM may buy power and the cheap hour is open: heat.
+4. The tank is below **Keep at**, SEM may buy power and the cheap hour is open: heat.
 5. Night, house battery chosen, battery above its reserve: heat from the battery.
 6. Spare sun: heat up to **With spare sun, heat up to**.
 
@@ -390,7 +404,7 @@ Extra notes:
 
 ### Hot water
 
-- **Hot water solar target**: the top temperature for sun.
+- **Hot water solar target**: the top temperature for sun. With a thermometer band it is the same as **With spare sun, heat up to** on the hot water card on **Devices**.
 - **Legionella temperature** and **Legionella interval**: SEM must reach the
   Legionella temperature on a set schedule. This cycle cannot be turned off.
 - A run that the tank does not finish is not counted. SEM tries again after one full interval.
@@ -735,7 +749,7 @@ default and its place now. Values are in the units shown.
 | `ev_target_type` | kWh | Devices > charger, unit (kWh or car %) |
 | `ev_target_soc` | 80 % | Devices > charger, At least, in car % |
 | `ev_target_soc_max` | — | Devices > charger, Up to, in car % |
-| `ev_battery_capacity_kwh` | 40 kWh | Devices > charger, car battery size |
+| `ev_battery_capacity_kwh` | 40 kWh | Devices > charger, Car battery size (All settings) |
 | `ev_charging_mode` | — | Devices > charger, Charge mode |
 | `ev_connected_sensor` | — | System > What SEM reads, car plugged in |
 | `ev_charging_power_sensor` | — | System > Chargers, Power sensor |
@@ -749,13 +763,13 @@ default and its place now. Values are in the units shown.
 | `battery_buffer_soc` | 70 % | Devices > battery, car may get help from |
 | `battery_auto_start_soc` | 90 % | Devices > battery, car may get full help from |
 | `battery_assist_max_power` | 4500 W | Devices > battery, help to the car |
-| `battery_assist_min_surplus` | 1200 W | Solar Gate, on the battery card |
+| `battery_assist_min_surplus` | 1200 W | Spare sun before the battery helps, on the battery card |
 | `battery_discharge_protection_enabled` | true | Devices > battery, discharge protection |
 | `battery_max_discharge_power` | 5000 W | Devices > battery, max discharge |
 | `battery_discharge_control_entity` | — | System > Battery rules, Discharge limit entity |
 | `battery_force_discharge_control_entity` | — | System > Battery rules, Forcible-discharge power entity |
-| `battery_setpoint_model` | signed | System > Battery rules, Setpoint model |
-| `battery_power_direction_entity` | — | System > Battery rules, Charge/discharge direction select |
+| `battery_setpoint_model` | signed | System > Battery rules, How SEM sends the power value |
+| `battery_power_direction_entity` | — | System > Battery rules, Charge or discharge selector |
 | `load_management_enabled` | false | System > What SEM may do, load management |
 | `target_peak_limit` | 5 kW | Limit grid draw to (Devices or System) |
 | `peak_limit_unlimited` | false | Limit grid draw to, No limit |

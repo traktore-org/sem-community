@@ -55,7 +55,7 @@ Each step is explained in the [Quick Start](docs/QUICK_START.md).
 2. **Restart Home Assistant.**
 3. Go to **Settings › Devices & services › Add integration** and add **Solar Energy Management**.
 4. **Confirm the sensors SEM found** (solar, grid and battery power, in watts). Choose your own if one is wrong.
-5. Open **SEM-dashboard** in the sidebar. SEM made the dashboard for you.
+5. Open **SEM-dashboard** (older installs: **Solar Energy Management**) in the sidebar. SEM made the dashboard for you.
 6. **Add your EV charger** under **System › Chargers**. The wizard does not ask for it.
 7. *Optional:* a **solar forecast** (Solcast, Forecast.Solar, Open-Meteo or Helios).
 8. *Optional:* a **dynamic tariff** (Tibber, Nordpool, ENTSO-e or aWATTar).

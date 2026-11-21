@@ -153,6 +153,14 @@ export class SEMLitBase extends LitElement {
             : key;
     }
 
+    /** (#1321) The text for a code SEM sends (a status, a health level). A
+     *  code with no text shows a plain word, never the code itself. */
+    _tCode(prefix, code, generic = 'next_code_unknown') {
+        const key = prefix + String(code ?? '');
+        const v = this._t(key);
+        return v && v !== key ? v : this._t(generic);
+    }
+
     // (#1053) A sensor whose state is a word SEM chose for its code
     // (`manual`, `negated`, `force_on`). Read it here, never with _val():
     // util/state-label.js maps the word to a label in the user's language.

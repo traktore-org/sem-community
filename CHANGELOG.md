@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Dashboard links and tabs hold** (#1321). A Sessions link opens the car tab; Insights keeps your tab; a charge-plan jump stops waiting after 30 s.
+- 🐛 **No raw codes, one name each** (#1321). Unknown codes read "Unknown". Car battery size, Keep at and Name in SEM are named one way.
+- 📝 **Where is it?** (#1321). The user guide has a table of where each common setting is.
 - 🔧 **Ready for HA 2027.10** (#1312). SEM reads a device's own config entry, not the list Home Assistant removes in 2027.10.
 - 🐛 **Each charger notice shows its own amps** (#1404). With two chargers, "Solar: 13A" showed the first charger's plan on both.
 - 🐛 **A charger notice goes to that charger's display** (#1404). With two chargers, charger B's state could show on charger A's display.

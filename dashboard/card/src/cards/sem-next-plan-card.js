@@ -462,7 +462,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const demands = Array.isArray(plan.demands) ? plan.demands : [];
         const d = demands.find((x) => x.id === fb.row.key);
         if (d?.note || d?.notes) return this._noteText(d) || '';
-        if (d?.status) return this._t('next_status_' + d.status);
+        if (d?.status) return this._tCode('next_status_', d.status);
         return this._tf(kind === 'ev' ? 'next_reason_ev_block' : 'next_reason_load_block', { kw, status: '', note: '' }).replace(/\s+/g, ' ').trim();
     }
 
@@ -788,7 +788,7 @@ class SEMNextPlanCard extends SEMNextBase {
     }
 
     _overrideText(ov) {
-        const word = this._t('next_override_' + ov.action);
+        const word = this._tCode('next_override_', ov.action);
         return ov.until ? this._tf('next_override_until', { action: word, time: ov.until }) : word;
     }
 
@@ -804,7 +804,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const ns = notSched.find((x) => x.id === id);
         const bits = [];
         if (d?.note || d?.notes) bits.push(this._noteText(d) || '');
-        else if (d?.status) bits.push(t('next_status_' + d.status));
+        else if (d?.status) bits.push(this._tCode('next_status_', d.status));
         else if (ns) bits.push(this._whyText(ns));
         else if (!win) bits.push(t('next_nothing_planned'));
         const ov = this._overrideOf(cid);
@@ -881,7 +881,7 @@ class SEMNextPlanCard extends SEMNextBase {
         const noAsk = win ? null : noAskKey(this._attrs('sensor.sem_energy_plan'), id, 'comfort:' + key, 'load:' + key);
         if (noAsk) bits.push(t(noAsk));
         else if (d?.note || d?.notes) bits.push(this._noteText(d) || '');
-        else if (d?.status) bits.push(t('next_status_' + d.status));
+        else if (d?.status) bits.push(this._tCode('next_status_', d.status));
         else if (ns) bits.push(this._whyText(ns));
         const ov = this._overrideOf(key);
         if (ov) bits.push(this._overrideText(ov));

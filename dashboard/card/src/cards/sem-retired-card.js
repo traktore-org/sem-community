@@ -33,7 +33,9 @@ class SEMRetiredCard extends SEMLitBase {
 
     constructor() {
         super();
-        this._path = '';
+        // (#1321) SEM's dashboard path is known: shown to every user, also one
+        // who may not list dashboards (only admins may)
+        this._path = CANDIDATES[0];
     }
 
     set hass(hass) {
@@ -50,7 +52,7 @@ class SEMRetiredCard extends SEMLitBase {
             const hit = CANDIDATES.find((p) => Array.isArray(list) && list.some((d) => d.url_path === p));
             this._path = hit || '';
         } catch (e) {
-            this._path = '';
+            this._path = CANDIDATES[0];   // not allowed to list: the known path
         }
     }
 
@@ -63,10 +65,23 @@ class SEMRetiredCard extends SEMLitBase {
         `;
     }
 
+    /** (#1321) Through HA's router, as HA's own links do: no full page reload. */
+    _open(e) {
+        if (e && (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1)) return;   // a new tab stays a new tab
+        if (e) e.preventDefault();
+        const path = '/' + this._path;
+        try {
+            window.history.pushState(null, '', path);
+            window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
+        } catch (_e) {
+            window.location.assign(path);
+        }
+    }
+
     render() {
         return html`<ha-card><div class="row">
             <span>${this._t('retired_card')}</span>
-            ${this._path ? html`<a href="/${this._path}">${this._t('retired_card_open')}</a>` : ''}
+            ${this._path ? html`<a href="/${this._path}" @click=${(e) => this._open(e)}>${this._t('retired_card_open')}</a>` : ''}
         </div></ha-card>`;
     }
 }
