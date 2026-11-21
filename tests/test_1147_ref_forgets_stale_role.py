@@ -276,3 +276,18 @@ def test_the_forgetting_runs_before_the_plug_check():
     names = [n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Name)]
     assert "forget_stale" in names
+
+
+async def test_1312_the_deprecated_config_entries_shim_is_not_read(hass, monkeypatch):
+    """(#1312) HA warns on ``DeviceEntry.config_entries`` and drops it in
+    2027.10. The device's own ``config_entry_id`` answers the same question:
+    with the shim made to fail, a sure device is still sure."""
+    from homeassistant.helpers import device_registry as dr
+
+    def gone(self):
+        raise AttributeError("config_entries was removed (HA 2027.10)")
+
+    monkeypatch.setattr(dr.DeviceEntry, "config_entries", property(gone))
+    zaptec, _reg, dev = await _go(hass)
+    zaptec.mock_state(hass, ConfigEntryState.LOADED)
+    assert cr.sure_devices(hass, [dev]) == {dev}

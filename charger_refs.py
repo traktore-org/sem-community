@@ -924,10 +924,13 @@ def sure_devices(hass, devices: Iterable[str]) -> set:
     out = set()
     for dev in devices or ():
         device = dreg.async_get(dev)
-        if device is None or not device.config_entries:
+        # (#1312) A device belongs to ONE config entry since HA 2026.8 (our
+        # floor); ``config_entries`` is a deprecated shim that stops working
+        # in HA 2027.10.
+        entry_id = getattr(device, "config_entry_id", None) if device else None
+        if not entry_id:
             continue
-        loaded = [hass.config_entries.async_get_entry(eid)
-                  for eid in device.config_entries]
+        loaded = [hass.config_entries.async_get_entry(entry_id)]
         if any(e is None or e.state is not ConfigEntryState.LOADED
                for e in loaded):
             continue
