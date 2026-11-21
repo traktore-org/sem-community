@@ -252,9 +252,9 @@ def _zoned_span(row: Any) -> Optional[tuple]:
     return s, e
 
 
-#: (#1408) A plan is a night or a day and a night; a week of hours means a
-#: row with a wrong date, and the list would only grow.
-_HOUSE_HOURS_MAX = 7 * 24
+#: (#1408) A plan runs from now to the next night end, a day at most. More
+#: than two days of hours means a row with a wrong date; the list must not grow.
+_HOUSE_HOURS_MAX = 48
 
 
 def _house_grid_hours(slots: Any) -> Optional[Dict[str, Any]]:
@@ -266,10 +266,14 @@ def _house_grid_hours(slots: Any) -> Optional[Dict[str, Any]]:
     included: at 03:00 a plan made at 22:00 still counted the house from
     22:00. The trim sends this in their place.
 
-    ``{"start", "kwh": [...]}``: hour ``i`` runs from ``start + i h`` to
-    ``start + (i + 1) h``; ``start`` is the first slot's start on its whole
-    hour, in its own offset. A slot that crosses an hour is split by time.
-    A row with no readable, zoned span is skipped; none at all gives None.
+    ``{"start", "kwh": [...], "runs": [[start, end], ...]}``: hour ``i``
+    runs from ``start + i h`` to ``start + (i + 1) h``; ``start`` is the
+    first slot's start on its whole hour, in its own offset. A slot that
+    crosses an hour is split by time. ``runs`` say when the house draws
+    (touching slots join), so the card spreads an hour's kWh over that
+    part only: a draw from 02:15 is not drawn from 02:00. A row with no
+    readable, zoned span is skipped; none at all gives None, and so does
+    a span longer than ``_HOUSE_HOURS_MAX`` hours.
     """
     rows = []
     for row in slots if isinstance(slots, list) else []:
@@ -280,24 +284,35 @@ def _house_grid_hours(slots: Any) -> Optional[Dict[str, Any]]:
             w = float(row.get("home_grid_w") or 0.0)
         except (TypeError, ValueError):
             w = 0.0
-        rows.append((span[0], span[1], w if math.isfinite(w) and w > 0 else 0.0))
+        rows.append((span[0], span[1], w if math.isfinite(w) and w > 0 else 0.0,
+                     row["start"], row["end"]))
     if not rows:
         return None
-    first = min(r[0] for r in rows)
-    start = first.replace(minute=0, second=0, microsecond=0)
+    rows.sort(key=lambda r: r[0])
+    start = rows[0][0].replace(minute=0, second=0, microsecond=0)
     last = max(r[1] for r in rows)
     count = math.ceil((last - start).total_seconds() / 3600.0)
     if count > _HOUSE_HOURS_MAX:
         return None
     kwh = [0.0] * count
-    for s, e, w in rows:
+    runs: List[List[Any]] = []        # [start, end, start text, end text]
+    for s, e, w, s_text, e_text in rows:
+        if w <= 0:
+            continue
+        if runs and runs[-1][1] == s:
+            runs[-1][1], runs[-1][3] = e, e_text
+        elif not runs or s > runs[-1][1]:
+            runs.append([s, e, s_text, e_text])
+        elif e > runs[-1][1]:         # rows that overlap: one run to the later end
+            runs[-1][1], runs[-1][3] = e, e_text
         at = s
-        while w > 0 and at < e:
+        while at < e:
             i = int((at - start).total_seconds() // 3600)
             upto = min(e, start + timedelta(hours=i + 1))
             kwh[i] += w * (upto - at).total_seconds() / 3.6e6
             at = upto
-    return {"start": start.isoformat(), "kwh": [round(k, 3) for k in kwh]}
+    return {"start": start.isoformat(), "kwh": [round(k, 3) for k in kwh],
+            "runs": [[r[2], r[3]] for r in runs]}
 
 
 def _batt_times(slots: Any) -> List[List[str]]:

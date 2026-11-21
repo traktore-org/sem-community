@@ -179,7 +179,7 @@ export function planGridKwh(plan) {
 /**
  * kWh the house itself draws from the grid over the plan (plan.house_grid,
  * the planner's sum of the slots' home_grid_w; the slots when it is missing).
- * The one source for the Plan line, the Grid cost tile and the chart's lane.
+ * The whole plan, for the Grid cost tile; a window reads houseKwhIn.
  */
 export function houseGridKwh(plan) {
     const v = plan && plan.house_grid ? Number(plan.house_grid.kwh) : NaN;

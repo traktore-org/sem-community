@@ -10,9 +10,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { houseKwhIn, houseWindowed, houseHours, battHouseRuns, effectivePlan } from '../src/util/plan-facts.js';
+import { houseKwhIn, houseWindowed, houseHours, houseSegments, battHouseRuns, effectivePlan } from '../src/util/plan-facts.js';
 import { planLead } from '../src/util/next-lead.js';
-import { planRows, chartWindow } from '../src/util/next-plan-chart.js';
+import { planRows, chartWindow, runningAt } from '../src/util/next-plan-chart.js';
 
 const TZ = 'Europe/Zurich';
 const FX = JSON.parse(readFileSync(new URL('./fixtures/house-hours-1408.json', import.meta.url), 'utf8'));
@@ -21,7 +21,7 @@ const close = (a, b, eps = 0.002) => assert.ok(Math.abs(a - b) < eps, `${a} vs $
 
 // the plan made at 22:00 as the sensor sends it: slots dropped, the hours kept
 const TRIMMED = { computed_at: '2026-11-21T22:00:00+01:00', timeline_omitted: true, slots: [], blocks: [], demands: [],
-    house_grid: FX.house_grid, house_grid_hours: FX.house_grid_hours, batt_runs: [], batt_times: [['2026-11-21T22:00:00+01:00', '2026-11-22T02:15:00+01:00']] };
+    house_grid: FX.house_grid, house_grid_hours: FX.house_grid_hours, batt_runs: [], batt_times: FX.batt_times };
 const FULL = { ...TRIMMED, timeline_omitted: undefined, slots: FX.slots, house_grid_hours: undefined, batt_times: undefined, batt_runs: [[0, 16]] };
 
 test('(#1408) the report: at 03:00 the headline counts the house from 03:00, not from 22:00', () => {
@@ -50,6 +50,9 @@ test('(#1408) the hours give what the slots give, on whole hours and inside them
     }
     // inside an hour the hour counts by time: 04:30 – 05:00 is half of 04:00's hour
     close(houseKwhIn(TRIMMED, at('2026-11-22T04:30:00+01:00'), at('2026-11-22T05:00:00+01:00')), 0.475 / 2);
+    // the 02:00 hour draws from 02:15 only: at 02:10 nothing of it has passed, as with the slots
+    close(houseKwhIn(TRIMMED, at('2026-11-22T02:10:00+01:00'), Infinity), houseKwhIn(FULL, at('2026-11-22T02:10:00+01:00'), Infinity));
+    close(houseKwhIn(TRIMMED, at('2026-11-22T02:00:00+01:00'), at('2026-11-22T02:15:00+01:00')), 0);
     // the whole plan: its own total
     close(houseKwhIn(TRIMMED, -Infinity, Infinity), FX.house_grid.kwh, 0.01);
 });
@@ -111,7 +114,7 @@ test('(#1408) the chart draws the house and battery lanes when the slots were dr
     const grid = rows.find((r) => r.kind === 'grid');
     assert.ok(grid, 'the house lane is drawn');
     assert.equal(grid.blocks.length, 1, 'touching hours join');
-    assert.equal(grid.blocks[0].s, at('2026-11-22T02:00:00+01:00'));
+    assert.equal(grid.blocks[0].s, at('2026-11-22T02:15:00+01:00'), 'from the draw, not from the whole hour');
     assert.equal(grid.blocks[0].e, at('2026-11-22T07:00:00+01:00'));
     close(grid.blocks[0].kwh, FX.house_grid.kwh, 0.01);
     const bat = rows.find((r) => r.kind === 'battery_out');
@@ -120,7 +123,9 @@ test('(#1408) the chart draws the house and battery lanes when the slots were dr
     // the same lanes, on the same hours, as with the slots
     const full = planRows({ win, nowMs: now, plan: FULL });
     const fg = full.find((r) => r.kind === 'grid');
-    assert.equal(fg.blocks[0].e, grid.blocks[0].e);
+    assert.deepEqual([fg.blocks[0].s, fg.blocks[0].e], [grid.blocks[0].s, grid.blocks[0].e]);
+    // 02:05: the battery covers the house; the grid does not, also without the slots
+    assert.deepEqual(runningAt(rows, at('2026-11-22T02:05:00+01:00')).map((r) => r.kind), ['battery_out']);
     close(fg.blocks[0].kwh, grid.blocks[0].kwh, 0.01);
     assert.deepEqual(full.find((r) => r.kind === 'battery_out').blocks.map((b) => [b.s, b.e]), bat.blocks.map((b) => [b.s, b.e]));
 });
@@ -146,4 +151,15 @@ test('(#1408) only battHouseRuns reads batt_runs: the sensor can drop the slots 
     }
     assert.deepEqual(found, [], 'read the battery runs through battHouseRuns');
     assert.ok(seen >= 1, 'the scan finds plan-facts.js itself (vacuity twin)');
+});
+
+test('(#1408) segments: an hour spreads over its draw; with no run named, over the whole hour', () => {
+    const start = '2026-11-21T22:00:00+01:00';
+    const segs = houseSegments({ house_grid_hours: { start, kwh: [0.6, 0, 0.3], runs: [['2026-11-21T22:20:00+01:00', '2026-11-21T22:40:00+01:00'], ['2026-11-21T22:50:00+01:00', '2026-11-21T23:10:00+01:00']] } });
+    // hour 22: 20 + 10 minutes drawing → 0.4 + 0.2; hour 23: 10 minutes named, 0 kWh, nothing; hour 00: no run → whole hour
+    assert.deepEqual(segs.map((g) => [new Date(g.s).toISOString().slice(11, 16), new Date(g.e).toISOString().slice(11, 16), Math.round(g.kwh * 1000) / 1000]),
+        [['21:20', '21:40', 0.4], ['21:50', '22:00', 0.2], ['23:00', '00:00', 0.3]]);
+    assert.deepEqual(houseSegments({ house_grid_hours: { start, kwh: [0.5] } }).map((g) => g.kwh), [0.5], 'no runs key: the whole hour');
+    assert.deepEqual(houseSegments({ house_grid_hours: { start, kwh: [0.5], runs: [['x', 'y'], 'bad', null] } }).map((g) => g.e - g.s), [3600e3]);
+    assert.deepEqual(houseSegments({}), []);
 });

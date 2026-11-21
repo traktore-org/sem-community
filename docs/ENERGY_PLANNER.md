@@ -100,7 +100,7 @@ Home Assistant stores at most 16 KiB of attributes for an entity. For a
 very large night, the timeline is left out. The attribute
 `timeline_omitted` is then `true`, and the card shows the list of needs
 instead. Two small attributes take the timeline's place: `house_grid_hours`
-(the house's grid kWh per hour) and `batt_times` (when the battery covers
+(the house's grid kWh per hour, and when it draws) and `batt_times` (when the battery covers
 the house).
 
 ## Comfort

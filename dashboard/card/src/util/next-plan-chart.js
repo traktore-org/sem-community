@@ -8,7 +8,7 @@
  */
 
 import { planIdName, planIdParts } from './plan-ids.js';
-import { battHouseRuns, houseHours } from './plan-facts.js';
+import { battHouseRuns, houseSegments } from './plan-facts.js';
 
 const HOUR = 3600e3;
 const CELL = 15 * 60e3;
@@ -267,11 +267,7 @@ export function planRows({ win, nowMs, plan, names = {} }) {
         const s = Date.parse(sl.start), e = Date.parse(sl.end);
         add(row('grid', 'grid', ''), s, e, w * (e - s) / 3.6e9);
     }
-    const hours = slots.length ? null : houseHours(a);
-    if (hours) hours.kwh.forEach((k, i) => {
-        const v = num(k), s = hours.s + i * 3600e3;
-        if (v > 0) add(row('grid', 'grid', ''), s, s + 3600e3, v);
-    });
+    if (!slots.length) for (const g of houseSegments(a)) add(row('grid', 'grid', ''), g.s, g.e, g.kwh);
     const tmw = a.tomorrow && typeof a.tomorrow === 'object' ? a.tomorrow : null;
     if (tmw && tmw.provisional && Array.isArray(tmw.provisional.blocks)) fromBlocks(tmw.provisional.blocks, true);
     const order = { ev: 0, battery_in: 1, battery_out: 2, grid: 3, load: 4 };

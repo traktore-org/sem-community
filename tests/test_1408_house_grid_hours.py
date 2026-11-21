@@ -78,13 +78,18 @@ def test_the_fixture_the_card_reads_is_what_the_sensor_sends():
     """One fixture, both sides: the card's test reads the same file."""
     fx = json.loads(FIXTURE.read_text())
     assert _house_grid_hours(fx["slots"]) == fx["house_grid_hours"]
+    assert _batt_times(fx["slots"]) == fx["batt_times"]
+    # by hand: the battery covers the house to 02:15, the grid from there
+    assert fx["batt_times"] == [["2026-11-21T22:00:00+01:00", "2026-11-22T02:15:00+01:00"]]
+    assert fx["house_grid_hours"]["runs"] == [["2026-11-22T02:15:00+01:00", "2026-11-22T07:00:00+01:00"]]
     # 02:00 – 03:00: 02:15 at 450 W, 02:30 at 500 W, 02:45 at 550 W
     assert fx["house_grid_hours"]["kwh"][4] == pytest.approx((450 + 500 + 550) * 0.25 / 1000)
     assert sum(fx["house_grid_hours"]["kwh"]) == pytest.approx(fx["house_grid"]["kwh"], abs=0.01)
 
 
 @pytest.mark.parametrize("shape,blocks_kept", [
-    (dict(slots=200, demands=3, blocks_per_demand=1), True),
+    # 190 quarter-hours: 47.5 h, inside the 48 h a list may cover
+    (dict(slots=190, demands=3, blocks_per_demand=1), True),
     (dict(slots=96, demands=12, blocks_per_demand=60), False),
     (dict(slots=96, demands=40, blocks_per_demand=60), False),   # runs dropped too
 ])
@@ -116,7 +121,7 @@ def test_the_last_trim_step_keeps_the_hours(monkeypatch):
 def test_a_plan_from_before_1063_sends_no_battery_times():
     """No ``has_battery``: the plan never marked a slot. None, as ``batt_runs``
     is, so the card keeps its old drawing."""
-    plan = _synthetic_plan(slots=200, demands=3, blocks_per_demand=1)
+    plan = _synthetic_plan(slots=190, demands=3, blocks_per_demand=1)
     attrs = _energy_plan_attrs(plan)
     assert attrs["timeline_omitted"] is True
     assert attrs["batt_times"] is None
@@ -142,7 +147,8 @@ def test_hours_count_from_the_first_slot_by_time_not_by_order():
     t = datetime(2026, 11, 21, 22, 0, tzinfo=TZ1)
     rows = [_row(t + timedelta(hours=1), 60, 500.0), _row(t, 60, 300.0)]
     assert _house_grid_hours(rows) == {
-        "start": "2026-11-21T22:00:00+01:00", "kwh": [0.3, 0.5]}
+        "start": "2026-11-21T22:00:00+01:00", "kwh": [0.3, 0.5],
+        "runs": [[rows[1]["start"], rows[0]["end"]]]}
 
 
 def test_the_autumn_clock_change_keeps_every_hour():
@@ -189,12 +195,28 @@ def test_a_bad_row_beside_good_ones_is_skipped():
     assert _house_grid_hours(rows)["kwh"] == [0.4]
 
 
-def test_a_row_a_week_away_sends_none():
-    """A wrong date must not grow a list of a thousand hours: None, and the
-    card keeps its old reading."""
+def test_a_row_days_away_sends_none():
+    """A wrong date must not grow a long list: None past two days. A real
+    plan (now to the next night end) stays well inside."""
     t = datetime(2026, 11, 21, 22, 0, tzinfo=TZ1)
-    rows = [_row(t, 60, 400.0), _row(t + timedelta(days=30), 60, 400.0)]
+    rows = [_row(t, 60, 400.0), _row(t + timedelta(hours=47), 60, 400.0)]
+    assert len(_house_grid_hours(rows)["kwh"]) == 48
+    rows = [_row(t, 60, 400.0), _row(t + timedelta(hours=48), 60, 400.0)]
     assert _house_grid_hours(rows) is None
+
+
+def test_the_runs_say_when_the_house_draws():
+    """Touching drawing slots join; a slot with no draw ends a run; rows
+    that overlap give one run to the later end."""
+    t = datetime(2026, 11, 21, 22, 0, tzinfo=TZ1)
+    q = timedelta(minutes=15)
+    rows = [_row(t + i * q, 15, w) for i, w in enumerate([0, 300, 300, 450, 0, 0, 200])]
+    h = _house_grid_hours(rows)
+    assert h["runs"] == [[rows[1]["start"], rows[3]["end"]], [rows[6]["start"], rows[6]["end"]]]
+    assert h["kwh"] == [round((300 + 300 + 450) * 0.25 / 1000, 3), 0.05]
+    over = [_row(t, 60, 100.0), _row(t + timedelta(minutes=30), 60, 100.0)]
+    assert _house_grid_hours(over)["runs"] == [[over[0]["start"], over[1]["end"]]]
+    assert _house_grid_hours([_row(t, 60, 0.0)])["runs"] == []
 
 
 def test_battery_times_follow_the_marked_slots():

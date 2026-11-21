@@ -1,5 +1,5 @@
 {
- "_note": "#1408: a night on a 15-minute market as the plan stores it; house_grid_hours is what sensor._house_grid_hours sends for it. tests/test_1408_house_grid_hours.py checks the backend against it, plan-house-hours.test.js the card.",
+ "_note": "#1408: a night on a 15-minute market as the plan stores it; house_grid_hours and batt_times are what sensor.py sends for it when the slots are dropped. tests/test_1408_house_grid_hours.py checks the sensor against it, plan-house-hours.test.js the card.",
  "slots": [
   {
    "start": "2026-11-21T22:00:00+01:00",
@@ -211,9 +211,21 @@
    0.475,
    0.475,
    0.475
+  ],
+  "runs": [
+   [
+    "2026-11-22T02:15:00+01:00",
+    "2026-11-22T07:00:00+01:00"
+   ]
   ]
  },
  "house_grid": {
   "kwh": 2.28
- }
+ },
+ "batt_times": [
+  [
+   "2026-11-21T22:00:00+01:00",
+   "2026-11-22T02:15:00+01:00"
+  ]
+ ]
 }

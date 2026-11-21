@@ -239,13 +239,40 @@ export function kwhIn(blocks, pick, from, to) {
 }
 
 /**
- * (#1408) The house's grid kWh per hour, { s (ms), kwh: [...] }, that the sensor sends when
- * the size trim drops the slots; null when it sent none. Hour i runs from s + i h.
+ * (#1408) The house's grid kWh per hour that the sensor sends when the size trim drops the
+ * slots: { s (ms), kwh: [...], runs: [{ s, e }] }; null when it sent none. Hour i runs from
+ * s + i h; `runs` say when the house draws.
  */
 export function houseHours(plan) {
     const h = plan && plan.house_grid_hours;
     const s = h && typeof h.start === 'string' ? Date.parse(h.start) : NaN;
-    return Number.isFinite(s) && Array.isArray(h.kwh) ? { s, kwh: h.kwh } : null;
+    if (!Number.isFinite(s) || !Array.isArray(h.kwh)) return null;
+    const runs = [];
+    for (const r of (Array.isArray(h.runs) ? h.runs : [])) {
+        const a = Array.isArray(r) ? Date.parse(r[0]) : NaN, z = Array.isArray(r) ? Date.parse(r[1]) : NaN;
+        if (Number.isFinite(a) && Number.isFinite(z) && z > a) runs.push({ s: a, e: z });
+    }
+    return { s, kwh: h.kwh, runs };
+}
+
+/**
+ * (#1408) The house's grid draw from those hours, [{ s, e, kwh }]: each hour's kWh spread over
+ * the part of it where the house draws (a draw from 02:15 starts at 02:15), the whole hour when
+ * no run says. Empty when the sensor sent no hours.
+ */
+export function houseSegments(plan) {
+    const h = houseHours(plan);
+    const out = [];
+    if (!h) return out;
+    h.kwh.forEach((k, i) => {
+        const v = Number(k), hs = h.s + i * HOUR, he = hs + HOUR;
+        if (!(v > 0)) return;
+        const parts = h.runs.map((r) => [Math.max(r.s, hs), Math.min(r.e, he)]).filter(([a, z]) => z > a);
+        const len = parts.reduce((t, [a, z]) => t + z - a, 0);
+        if (!(len > 0)) { out.push({ s: hs, e: he, kwh: v }); return; }
+        for (const [a, z] of parts) out.push({ s: a, e: z, kwh: v * (z - a) / len });
+    });
+    return out;
 }
 
 /** (#1408) True when the house kWh can be cut to a window: the plan sent its slots or its hours. */
@@ -255,20 +282,18 @@ export function houseWindowed(plan) {
 
 /**
  * The house's own grid kWh inside [from, to): the slots when the plan has them; when the size
- * trim dropped them, its kWh per hour (an hour cut by the window counts by time, #1408); the
- * plan total only from a sensor that sends neither (one from before #1408).
+ * trim dropped them, its hours (`houseSegments`; a part cut by the window counts by time,
+ * #1408); the plan total only from a sensor that sends neither (one from before #1408).
  */
 export function houseKwhIn(plan, from, to) {
     const slots = plan && Array.isArray(plan.slots) ? plan.slots : [];
     if (!slots.length) {
-        const hours = houseHours(plan);
-        if (hours) {
+        if (houseHours(plan)) {
             let sum = 0;
-            hours.kwh.forEach((k, i) => {
-                const v = Number(k), s = hours.s + i * HOUR;
-                const a = Math.max(s, from), z = Math.min(s + HOUR, to);
-                if (v > 0 && z > a) sum += v * (z - a) / HOUR;
-            });
+            for (const g of houseSegments(plan)) {
+                const a = Math.max(g.s, from), z = Math.min(g.e, to);
+                if (z > a) sum += g.kwh * (z - a) / (g.e - g.s);
+            }
             return sum;
         }
         const v = plan && plan.house_grid ? Number(plan.house_grid.kwh) : NaN;
