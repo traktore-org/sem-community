@@ -38,6 +38,7 @@ from dataclasses import replace
 from typing import Dict, Optional
 
 from ..consts.core import DEFAULT_MAX_CHARGING_CURRENT, DEFAULT_PEAK_HYSTERESIS
+from ..consts.states import ChargingState as _CS
 from . import reason_codes as RC
 from .watts_per_amp import amps_that_fit, predict_watts
 from .charger_types import (
@@ -103,6 +104,34 @@ def _ev_reclaims(view: ChargerView) -> bool:
         battery_priority=f.battery_priority,
         battery_commanded=f.battery_commanded,
     )
+
+
+#: (#1403) Every intent names its day state here; a new intent must be
+#: added (tests/test_1403_full_power_state.py checks every member).
+SOLAR_STATE_BY_INTENT: Dict[ChargerIntent, str] = {
+    ChargerIntent.CHARGE_MAX: _CS.SOLAR_FULL_POWER,
+    ChargerIntent.CHARGE_AT_AMPS: _CS.SOLAR_CHARGING_ACTIVE,
+    ChargerIntent.IDLE: _CS.SOLAR_IDLE,
+    ChargerIntent.DISABLE: _CS.SOLAR_IDLE,
+    ChargerIntent.RELEASE: _CS.SOLAR_IDLE,
+}
+
+
+def solar_state_from_decision(intent, *, soc_ceiling_reached: bool) -> str:
+    """The charger's day state, said from what the decision does.
+
+    (#1403) The state names only what the intent carries. ``CHARGE_MAX``
+    sends the full current and is blind to where the power comes from, so
+    it reads "Charging at full power" — it used to read "Battery assist",
+    while the grid often fed it and the battery gave nothing. Real battery
+    assist is ``CHARGE_AT_AMPS`` at set amps, the same state as any other
+    sized charge.
+
+    #548 — an IDLE caused by the max-SOC ceiling reads "Target reached",
+    not a bare "Idle"."""
+    if intent is ChargerIntent.IDLE and soc_ceiling_reached:
+        return _CS.SOLAR_TARGET_REACHED
+    return SOLAR_STATE_BY_INTENT.get(intent, _CS.SOLAR_IDLE)
 
 
 def solar_charge_display_override(intent, drawing: bool,
