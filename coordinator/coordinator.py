@@ -4983,6 +4983,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
                     per_charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
                     if per_charger_soc_entity:
+                        # (#1404) its own sensor only; unavailable = no level
+                        self._cycle_vehicle_soc = None
                         soc_state = self.hass.states.get(per_charger_soc_entity)
                         if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                             try:
