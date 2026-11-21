@@ -42,6 +42,7 @@ globalThis.localStorage = { getItem: () => null, setItem() {} };
 globalThis.navigator ??= {};
 globalThis.semLocalize = (key) => '«' + key + '»';
 const { knownNum } = await import('../src/cards/sem-next-plan-card.js');
+const { nightEndMs } = await import('../src/util/next-strip.js');
 
 function text(part) {
     if (part == null || typeof part === 'symbol' || part === false) return '';
@@ -169,12 +170,31 @@ for (const [label, action] of [['next_skip_tonight', 'skip'], ['next_start_now',
 test('(#1406) a cold heater names the plan end also when the slots were dropped', () => {
     const el = makeCard({ 'sensor.sem_controllable_devices_count': S(1, { devices: {
         boiler: { name: 'Boiler', comfort: { keep_c: 50, start_c: 45, reading_c: 40 } } } }) });
-    const ends = '2026-11-22T07:00:00+01:00';
-    const cold = el._cold({ timeline_omitted: true, slots: [], blocks: [], ends_at: ends });
+    const ends = Date.now() + 3 * 3600e3;
+    const cold = el._cold({ timeline_omitted: true, slots: [], blocks: [], ends_at: new Date(ends).toISOString() });
     assert.equal(cold.length, 1);
-    assert.equal(cold[0].time, '07:00');
+    assert.equal(cold[0].time, el._clockDay(ends));
+    assert.match(cold[0].time, /\d\d:\d\d/);
     // no end at all: no time, the plain sentence
     assert.equal(el._cold({ slots: [], blocks: [] })[0].time, '');
+    // an end that has passed (last night's plan) names no time
+    assert.equal(el._cold({ slots: [], blocks: [], ends_at: new Date(Date.now() - 600e3).toISOString() })[0].time, '');
+});
+
+test('(#1406) with no plan end ahead, Skip tonight lasts until the next night end', async () => {
+    const el = makeCard({ 'sensor.sem_night_end_time': S('07:00') });
+    const calls = [];
+    el.hass.callService = async (d, s, data) => { calls.push([d, s, data]); };
+    el.__plan = { slots: [], blocks: [], demands: [] };   // no plan yet
+    await pressed(el, 'next_skip_tonight')();
+    const want = Math.round((nightEndMs('07:00', Date.now(), 'Europe/Zurich') - Date.now()) / 60e3);
+    assert.ok(Math.abs(calls[0][2].minutes - want) <= 1, `minutes ${calls[0][2].minutes}, want ${want}`);
+    // the night end sensor out: the old 12 hours
+    calls.length = 0;
+    el._local = {};   // the first press stands as an override; start again
+    el.hass.states['sensor.sem_night_end_time'] = S('unavailable');
+    await pressed(el, 'next_skip_tonight')();
+    assert.equal(calls[0][2].minutes, 720);
 });
 
 // ── the chart: sun, price and plan on one clock ──

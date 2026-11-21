@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { minutesToPlanEnd, planEndMs } from '../src/util/next-strip.js';
+import { minutesToPlanEnd, nightEndMs, planEndMs } from '../src/util/next-strip.js';
 
 test('minutesToPlanEnd: to the last slot, 1..1440, a fallback without slots', () => {
     const now = new Date('2026-11-08T22:00:00+01:00');
@@ -53,6 +53,48 @@ test('(#1406) planEndMs: ends_at, else the last slot, else NaN', () => {
     assert.ok(Number.isNaN(planEndMs({ slots: [] })));
     assert.ok(Number.isNaN(planEndMs({ slots: [null] })));
     assert.ok(Number.isNaN(planEndMs(null)));
+});
+
+const ZH = 'Europe/Zurich';
+
+test('(#1406) nightEndMs: the next HH:MM after now in the home zone, the planner rule', () => {
+    const at = (iso) => Date.parse(iso);
+    assert.equal(nightEndMs('07:00', at('2026-11-21T09:23:00+01:00'), ZH), at('2026-11-22T07:00:00+01:00'));
+    assert.equal(nightEndMs('07:00', at('2026-11-21T06:00:00+01:00'), ZH), at('2026-11-21T07:00:00+01:00'));
+    // exactly at the time: the next one, as resolve_deadline (candidate <= now rolls a day)
+    assert.equal(nightEndMs('07:00', at('2026-11-21T07:00:00+01:00'), ZH), at('2026-11-22T07:00:00+01:00'));
+    assert.equal(nightEndMs('06:45:00', at('2026-11-21T23:00:00+01:00'), ZH), at('2026-11-22T06:45:00+01:00'));
+    // the home's zone, not the browser's: the same instant in New York
+    assert.equal(nightEndMs('07:00', at('2026-11-21T09:23:00+01:00'), 'America/New_York'), at('2026-11-21T07:00:00-05:00'));
+});
+
+test('(#1406) nightEndMs across both clock changes is the wall time', () => {
+    const at = (iso) => Date.parse(iso);
+    // autumn: 25.10.2026, 03:00 summer time becomes 02:00
+    assert.equal(nightEndMs('07:00', at('2026-10-24T22:00:00+02:00'), ZH), at('2026-10-25T07:00:00+01:00'));
+    // spring: 29.03.2026, 02:00 becomes 03:00 summer time
+    assert.equal(nightEndMs('07:00', at('2026-03-28T22:00:00+01:00'), ZH), at('2026-03-29T07:00:00+02:00'));
+});
+
+test('(#1406) nightEndMs: a state that is not a time gives NaN', () => {
+    const now = Date.parse('2026-11-21T09:23:00+01:00');
+    for (const bad of ['', 'unavailable', 'unknown', null, undefined, '25:00', '07:61', '7', 'x7:00'])
+        assert.ok(Number.isNaN(nightEndMs(bad, now, ZH)), String(bad));
+    assert.ok(Number.isNaN(nightEndMs('07:00', NaN, ZH)));
+});
+
+test('(#1406) with no plan end ahead the override lasts until the next night end, not 12 hours', () => {
+    const now = new Date('2026-11-21T07:20:00+01:00');
+    const night = { end: '07:00', tz: ZH };
+    // last night's plan, not yet replaced
+    assert.equal(minutesToPlanEnd({ ends_at: '2026-11-21T07:00:00+01:00', slots: [] }, now, 720, night), 23 * 60 + 40);
+    // no plan at all (just after a restart)
+    assert.equal(minutesToPlanEnd(null, now, 720, night), 23 * 60 + 40);
+    assert.equal(minutesToPlanEnd({}, now, 720, night), 23 * 60 + 40);
+    // a plan end ahead wins over the night end
+    assert.equal(minutesToPlanEnd({ ends_at: '2026-11-22T06:30:00+01:00' }, now, 720, night), 23 * 60 + 10);
+    // night end not known: the old fallback
+    assert.equal(minutesToPlanEnd(null, now, 720, { end: 'unavailable', tz: ZH }), 720);
 });
 
 function files(dir) {

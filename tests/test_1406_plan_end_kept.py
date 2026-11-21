@@ -71,24 +71,25 @@ def test_a_plan_that_fits_sends_the_same_end(freeze_targets, monkeypatch):
     assert attrs["ends_at"] == attrs["slots"][-1]["end"]
 
 
-@pytest.mark.parametrize("shape", [
+@pytest.mark.parametrize("shape,blocks_kept", [
     # slots alone overflow: slots go, blocks stay
-    dict(slots=200, demands=3, blocks_per_demand=1),
+    (dict(slots=200, demands=3, blocks_per_demand=1), True),
     # blocks overflow too: blocks go, runs stay
-    dict(slots=96, demands=12, blocks_per_demand=60),
+    (dict(slots=96, demands=12, blocks_per_demand=60), False),
 ])
-def test_every_trim_level_keeps_the_end(shape):
+def test_every_trim_level_keeps_the_end(shape, blocks_kept):
     plan = _synthetic_plan(**shape)
     for i, b in enumerate(plan["blocks"]):
         b["power_w"] = 100.0 + i          # no two touch: merging cannot save it
     attrs = _energy_plan_attrs(plan)
     assert attrs["timeline_omitted"] is True and attrs["slots"] == []
+    assert bool(attrs["blocks"]) is blocks_kept, "the shape did not reach its trim level"
     assert attrs["ends_at"] == plan["slots"][-1]["end"]
     assert _size(attrs) <= _PLAN_ATTR_BUDGET_BYTES
 
 
-def test_the_last_trim_step_keeps_the_end():
-    """Even when every demand's runs go, the end stays."""
+def test_the_runs_trim_step_keeps_the_end():
+    """When demands lose their runs too, the end stays."""
     plan = _synthetic_plan(slots=96, demands=40, blocks_per_demand=60)
     for i, b in enumerate(plan["blocks"]):
         b["power_w"] = 100.0 + i
@@ -96,6 +97,16 @@ def test_the_last_trim_step_keeps_the_end():
     assert attrs["blocks"] == []
     rows = [d for d in attrs["demands"] if isinstance(d, dict)]
     assert any("runs" not in d for d in rows), "no runs were dropped; the test proves nothing"
+    assert attrs["ends_at"] == plan["slots"][-1]["end"]
+
+
+def test_the_last_trim_step_keeps_the_end(monkeypatch):
+    """The last step drops the extras (``tomorrow``, ``review``). The end is
+    the plan's own, so it stays."""
+    plan = _synthetic_plan(slots=96, demands=3, blocks_per_demand=4)
+    monkeypatch.setattr(sensor_mod, "_PLAN_ATTR_BUDGET_BYTES", 1200)
+    attrs = _energy_plan_attrs(plan, extra={"review": {"rows": ["x" * 400] * 3}})
+    assert attrs.get("extras_omitted") is True, "the last step was not reached"
     assert attrs["ends_at"] == plan["slots"][-1]["end"]
 
 
