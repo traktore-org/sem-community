@@ -1225,6 +1225,15 @@ but round 1 could not reach it on a stock install and round 2 can. It also latch
 physically unplugged, and an install with no grid sensor reads 0.0 for ever, so the check is a
 silent no-op there. `diagnostics.charger_adapters[cid].battery_reclaim` now carries `vetoed` and
 `strikes` so a dump can at least say it happened. Refs #899 #576 #938 #925 #875.
+**Fourth instance (#1399, 21.11.2026) — a clamp on the copy nobody reads.** HA refuses a state
+longer than 255 characters. The coordinator clamped `charging_strategy` in `common_data`, and its
+comment called that the single writer — but `common_data` only feeds the notifications. The sensor
+reads the `SEMData` copy, which nothing clamped; once the #1391 yield put its own sentence in front
+of the reason, `sensor.sem_charging_strategy` read `unknown` and HA logged an ERROR every 10 s in
+@RVallen78's log. **Closure:** the clamp moved to where HA reads every text state of the sensor class
+(`sensor._fit_state` in `SEMSolarSensor._update_from_coordinator`). **Guard:**
+`tests/test_1399_state_fits.py` builds the reporter's own yielded text, proves it is over the limit,
+and requires the published state to fit.
 
 ### 30. Backend-honoured config key with no editable surface — GUARDED
 **Symptom:** a setting the runtime genuinely reads and acts on, which the user can never see or
@@ -4094,10 +4103,25 @@ on exactly the surface that is cycling — this class's #940 catch arriving thro
 predicate cannot see. `_looks_like_wallbox` also never inspects `current_entity_id`, so the typical
 Wallbox config (a bare `number.wallbox_*_charging_current`) gets `GenericAdapter` and #357's fix is
 off; and `charger_current_entity`, read three times there, is assigned nowhere in production (class
-74). (3) `ensure_enabled`'s `button.` branch is unreachable from the reconciler — `enable_state()`
-answers `(None, True)` for a stateless surface, so ENABLE is never emitted for one and #804's press
-arrives via `start_session` instead. Not a regression, but #804's resume surface is not the live
-path its tests imply.
+74). (3) CLOSED by #1399 (21.11.2026) — see the live catch below.
+**Live catch (#1399, 20.11.2026, @RVallen78's Zaptec Go 2 — button start):** open item (3) above,
+with a car attached. "Start now" wrote 20 A and the car drew 0 W all evening; the Zaptec app said
+"paused". The box had been paused by a "stop charging" command, which only "resume charging" undoes.
+SEM pressed that button only inside `start_session`, and only while `_session_active` was False —
+a flag set by SEM's LAST press, read as "the box is running". The reconciler never pressed a button
+at all. The box's own answer was there to read: the integration makes the resume button available
+only while paused, and HA skips a press on an unavailable entity without an error. **Closure:**
+`ChargerAdapter.resume_pressable()` reads that answer; `observe()` carries it as
+`ObservedState.resume_pressable` (only beside a car KNOWN to be plugged in), and the CHARGE rows
+prepend an ENABLE (a press) while nothing flows — `RESUME_PRESS_GAP_S` apart, at most
+`RESUME_PRESS_MAX` per stretch with no draw, counted afresh on a draw, a new car or a pause from
+charging of `RESUME_RESET_S` (a flapping decision does not reset it). Observer mode and a yield
+spend a separate "would" count (#1305), and only a button that IS the session start is pressed. A
+refused press is logged and claims nothing; a claiming press records SEM's yes (#935) the way
+`start_session` does. **Guard:** `tests/test_1399_resume_press.py`
+drives the real reconciler, adapter and device against a box model with the two rules above; the
+vacuity twin reads the button as never pressable and the box stays paused with 16 A written.
+`tools/zaptec_sim`'s button now follows the pause the same way.
 **Left open:** the stall-to-full path in `_update_ev_intelligence` ("0 W for 3 min under a
 ≥ 6 A command → SOC 100 %") reads an unanswered offer as a full pack — this class's inference with
 no latch in between. Its comment says legacy-only, but the code runs on every install and writes

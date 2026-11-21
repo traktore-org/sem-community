@@ -94,6 +94,11 @@ class ObservedState:
     SEM can start but not stop must keep charging normally while the
     un-stoppability is surfaced. Conflating them would turn a reporting
     gap into a total loss of surplus charging."""
+    resume_pressable: bool = False
+    """(#1399) The start surface is a button that HA would press now (the
+    entity is there and not ``unavailable``) and a car is KNOWN to be
+    plugged in. Defaults False: a charger that cannot say is never pressed
+    outside its session start, as before."""
     contactor_surface: bool = False
     """(#940) True when SEM's own start/stop flips a relay (a start/stop
     switch, a charge-mode select, a brand start/stop or enable/disable
@@ -203,6 +208,30 @@ STOP_REASSERT_DWELL_S: float = 60.0
 CONTACTOR_MIN_ON_S: float = 120.0
 CONTACTOR_MIN_OFF_S: float = 300.0
 
+# (#1399) THE RESUME PRESS — a charger started by a BUTTON.
+#
+# A charger paused by a "stop charging" command (its app, another
+# controller, a schedule) can hold the pause until someone presses "resume
+# charging". A higher current does not clear it. SEM pressed the button only
+# inside ``start_session``, and only when its own ``_session_active`` flag was
+# False — a flag about SEM's LAST press, read as "the box is running". Once
+# set, a pause nobody told SEM about was never undone: SEM wrote 20 A into a
+# paused box for the rest of the evening (@RVallen78).
+#
+# The box answers the question itself: the reporter's integration makes the
+# resume button AVAILABLE only while the charger is paused, and HA skips a
+# press on an unavailable entity without a word. So while SEM wants the car
+# to charge, the car is plugged in and nothing flows, a pressable button is
+# pressed. The gap covers the cloud's delay before the box reports the
+# resume; the count bounds a button that is always pressable (a brand whose
+# button does not follow the pause) to a few presses per stretch with no
+# draw. A draw, a new car, or a pause from charging of at least
+# ``RESUME_RESET_S`` starts the count again (a decision that flaps between
+# charge and idle does not).
+RESUME_PRESS_GAP_S: float = 120.0
+RESUME_PRESS_MAX: int = 3
+RESUME_RESET_S: float = 900.0
+
 
 class ChargerReconciler:
     """Per-charger convergence engine. One instance per charger, cached
@@ -240,6 +269,15 @@ class ChargerReconciler:
         self._enable_retry_interval_s: float = float(enable_retry_interval_s)
         self._enable_attempts: int = 0
         self._enable_gave_up_at: float = 0.0
+        # (#1399) the resume presses in this stretch with no draw, and the
+        # last one (-inf = never). See ``RESUME_PRESS_GAP_S``. The "would"
+        # pair is the same count while nothing leaves (observer mode, a
+        # yield, #1305): a withheld press must not spend a real one.
+        self._resume_presses: int = 0
+        self._resume_pressed_at: float = float("-inf")
+        self._resume_would_presses: int = 0
+        self._resume_would_at: float = float("-inf")
+        self._resume_paused_since: Optional[float] = None
         # #548 actuation observability — record what the reconciler last DID
         # and whether the charger kept drawing against a stop, so the
         # ``diagnose`` service can show "SEM commanded stop N× but the box
@@ -511,6 +549,27 @@ class ChargerReconciler:
                 break
         return actions
 
+    def _resume_press_due(self, now: float) -> bool:
+        """(#1399) Take one resume press if the gap and the count allow it.
+        While nothing leaves, the "would" pair is spent instead."""
+        if self._sending:
+            presses, last = self._resume_presses, self._resume_pressed_at
+        else:
+            presses, last = self._resume_would_presses, self._resume_would_at
+        if presses >= RESUME_PRESS_MAX or now - last < RESUME_PRESS_GAP_S:
+            return False
+        if self._sending:
+            self._resume_presses += 1
+            self._resume_pressed_at = now
+        else:
+            self._resume_would_presses += 1
+            self._resume_would_at = now
+        return True
+
+    def _reset_resume_count(self) -> None:
+        self._resume_presses = 0
+        self._resume_would_presses = 0
+
     def _gated_disable(self, now: float, *,
                        bypass_anticycle: bool = False) -> List[Action]:
         """One DISABLE per STOP_REASSERT_DWELL_S (#763 round 3), and never
@@ -603,6 +662,18 @@ class ChargerReconciler:
         (observer mode, external yield): the table still decides, the
         belief and the dwell clocks learn nothing."""
         self._sending = bool(sending)
+        # (#1399) A pause from charging of RESUME_RESET_S ends a stretch of
+        # resume presses; a decision that flaps between charge and idle does
+        # not. The last press time always stays, so no flap presses twice
+        # inside the gap.
+        if desired is not DesiredState.CHARGE:
+            if self._resume_paused_since is None:
+                self._resume_paused_since = now
+        else:
+            if (self._resume_paused_since is not None
+                    and now - self._resume_paused_since >= RESUME_RESET_S):
+                self._reset_resume_count()
+            self._resume_paused_since = None
         # (#940) The floor applies only to a relay surface; latched per
         # cycle so every row below (and ``_gated_disable``) reads one
         # answer from one place.
@@ -705,6 +776,7 @@ class ChargerReconciler:
             self._parked_off = False
         else:
             self._end_stop_war()
+            self._reset_resume_count()    # (#1399) the next car counts afresh
             self._disconnect_run += 1
             if (self._seen_connected
                     and self._disconnect_run >= PARK_ON_DISCONNECT_CYCLES
@@ -926,6 +998,15 @@ class ChargerReconciler:
             # we just raised, flapping it every cycle. Surface only.
             return enable_actions
 
+        # (#1399) A paused box that only a button can resume. See
+        # ``RESUME_PRESS_GAP_S``. Prepended like the #536 ENABLE, so on the
+        # first cycle of a charge the press comes first, ``ensure_enabled``
+        # claims the session, and ``command_current`` does not press again.
+        if observed.charging or observed.self_charging:
+            self._reset_resume_count()
+        elif observed.resume_pressable and self._resume_press_due(now):
+            enable_actions.append(Action(ActionKind.ENABLE))
+
         if not self._charging_intent_active:
             # Row 5 — TRANSITION into charging: open a session, arm the
             # failsafe, write. Gated on the desired transition (not on
@@ -1121,9 +1202,20 @@ class ChargerReconciler:
                 self._stop_unenforceable_warned = False
             if action.kind is ActionKind.ENABLE:
                 # #536 — re-assert the start/stop switch (idempotent).
-                await adapter.ensure_enabled()
-                _LOGGER.info("reconcile(%s): ENABLE — enable switch was off, "
-                             "re-asserting — %s", self.charger_id, decision.reason)
+                _left = await adapter.ensure_enabled()
+                _ent = str(getattr(_dev, "start_stop_entity", "") or "")
+                if _ent.startswith("button."):
+                    # (#1399) a button has no "off": this is a resume press
+                    if _left is not False:
+                        _LOGGER.info(
+                            "reconcile(%s): pressed %s — the car is plugged "
+                            "in, nothing flows and the button can be pressed "
+                            "(a paused charger) — %s", self.charger_id, _ent,
+                            decision.reason)
+                else:
+                    _LOGGER.info("reconcile(%s): ENABLE — enable switch was "
+                                 "off, re-asserting — %s", self.charger_id,
+                                 decision.reason)
             elif action.kind is ActionKind.REPORT_ENABLE_BLOCKED:
                 # #536 — switch present but uncontrollable (locked/eco-smart).
                 _LOGGER.warning(
@@ -1445,6 +1537,17 @@ def observe(adapter, power) -> ObservedState:
     _surface = getattr(getattr(adapter, "_device", None), "contactor_surface", None)
     if isinstance(_surface, bool):
         surface = _surface
+    # (#1399) A resume button HA would press now, beside a car that is KNOWN
+    # to be plugged in. An unknown plug presses nothing: a press is a start.
+    pressable = False
+    _press = getattr(adapter, "resume_pressable", None)
+    if callable(_press):
+        try:
+            pressable = _press() is True
+        except Exception as exc:  # noqa: BLE001 — never let observe() throw
+            _LOGGER.debug("resume_pressable() failed: %s", exc)
+    car_known = (getattr(power, "connected", False) is True
+                 and getattr(power, "plug_known", True) is not False)
     return ObservedState(
         charging=adapter.actual_charging(power),
         setpoint_a=setpoint,
@@ -1459,5 +1562,6 @@ def observe(adapter, power) -> ObservedState:
         enabled=enabled,
         enable_controllable=controllable,
         stop_controllable=stop_ok,
+        resume_pressable=pressable and car_known,
         contactor_surface=surface,
     )

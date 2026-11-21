@@ -13,6 +13,7 @@ adapter properties — different brands report different idle power
 """
 from __future__ import annotations
 
+import inspect
 import logging
 
 from abc import ABC, abstractmethod
@@ -227,8 +228,39 @@ class ChargerAdapter(ABC):
             return (None, False)
         return (running, True)
 
-    async def ensure_enabled(self) -> None:
-        """Idempotently assert the start/stop surface ON.
+    def resume_pressable(self) -> bool:
+        """(#1399) True when the start surface is a ``button.`` HA would
+        press now: the entity exists and is not ``unavailable``.
+
+        An integration may make its resume button available only while the
+        charger is paused (#1399: operation mode Connected_Finished with a
+        final stop), and HA skips a press on an unavailable entity without
+        an error. So "pressable" is the box's own answer to "does it need a
+        resume?" there. A never-pressed button reads ``unknown``, which is
+        pressable. Anything that cannot be read answers False: a press is a
+        start, and a start needs evidence."""
+        dev = getattr(self, "_device", None)
+        ent = str(getattr(dev, "start_stop_entity", None) or "")
+        if not ent.startswith("button."):
+            return False
+        # Only where the button IS the session start: elsewhere a press
+        # claims nothing and ``start_session`` would send its own start too.
+        starts_here = getattr(dev, "enable_entity_is_session_start", None)
+        try:
+            if callable(starts_here) and starts_here() is False:
+                return False
+            st = dev.hass.states.get(ent)
+        except Exception:  # noqa: BLE001 — a read never costs a cycle
+            return False
+        if st is None:
+            return False
+        state = getattr(st, "state", None)
+        return isinstance(state, str) and state not in ("", "unavailable")
+
+    async def ensure_enabled(self) -> bool:
+        """Idempotently assert the start/stop surface ON. (#1399) Returns
+        True when the command left for the box, False when it was withheld
+        (observer mode, a yield), refused, or there was nothing to send.
 
         ``switch.``/``input_boolean.`` → ``turn_on``. Not idempotent everywhere
         (#976: on OCPP it asks for a new transaction), which is why the
@@ -244,19 +276,29 @@ class ChargerAdapter(ABC):
         dev = self._device
         ent = getattr(dev, "start_stop_entity", None)
         if not ent:
-            return
+            return False
         ent = str(ent)
         if ent.startswith(("switch.", "input_boolean.")):
             # (#1042) turn_off for a switch named for the pause
-            await dev.send(ent.split(".")[0],
-                           switch_service(getattr(dev, "hass", None), ent,
-                                          run=True),
-                           {"entity_id": ent}, why="ensure_enabled")
+            sent = await dev.send(ent.split(".")[0],
+                                  switch_service(getattr(dev, "hass", None),
+                                                 ent, run=True),
+                                  {"entity_id": ent}, why="ensure_enabled")
         elif ent.startswith("button."):
-            await dev.send("button", "press", {"entity_id": ent},
-                           why="ensure_enabled (#804 resume surface)")
+            try:
+                sent = await dev.send("button", "press", {"entity_id": ent},
+                                      why="ensure_enabled (#804 resume surface)")
+            except Exception as e:  # noqa: BLE001 — a refused press is news, not a crash
+                # (#1399) The integration may refuse a press its cached state
+                # still allowed ("resume" on a box that has already
+                # resumed). Nothing was started, so nothing is claimed, and
+                # the current write after this action still goes out.
+                _LOGGER.info("%s: %s refused the press: %s",
+                             getattr(dev, "name", "charger"), ent, e)
+                return False
         else:
-            return
+            return False
+        left = sent is not False
         # (#940) Claim the SESSION only when this write IS the session start.
         #
         # ``_session_active`` is not a contactor flag — it is the flag
@@ -286,6 +328,24 @@ class ChargerAdapter(ABC):
                 _LOGGER.debug("enable_entity_is_session_start() failed: %s", e)
         if claims:
             dev._session_active = True
+            if left:
+                # (#1399) SEM said yes again, as ``start_session`` records it
+                # (#935): this claim skips that start, so it says so here,
+                # or a park from the last stop outlives this charge.
+                await self._forget_park(dev)
+        return left
+
+    @staticmethod
+    async def _forget_park(dev) -> None:
+        remember = getattr(dev, "_remember_parked", None)
+        if not callable(remember):
+            return
+        try:
+            res = remember(False)
+            if inspect.isawaitable(res):
+                await res
+        except Exception as e:  # noqa: BLE001 — bookkeeping never costs a cycle
+            _LOGGER.debug("_remember_parked(False) failed: %s", e)
 
     async def report_enable_blocked(self, now: "float | None" = None) -> None:
         """Surface an enable switch SEM cannot keep on — once it has been one
