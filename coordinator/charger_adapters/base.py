@@ -227,6 +227,30 @@ class ChargerAdapter(ABC):
             return (None, False)
         return (running, True)
 
+    def resume_pressable(self) -> bool:
+        """(#1399) True when the start surface is a ``button.`` HA would
+        press now: the entity exists and is not ``unavailable``.
+
+        An integration may make its resume button available only while the
+        charger is paused (#1399: operation mode Connected_Finished with a
+        final stop), and HA skips a press on an unavailable entity without
+        an error. So "pressable" is the box's own answer to "does it need a
+        resume?" there. A never-pressed button reads ``unknown``, which is
+        pressable. Anything that cannot be read answers False: a press is a
+        start, and a start needs evidence."""
+        dev = getattr(self, "_device", None)
+        ent = str(getattr(dev, "start_stop_entity", None) or "")
+        if not ent.startswith("button."):
+            return False
+        try:
+            st = dev.hass.states.get(ent)
+        except Exception:  # noqa: BLE001 — a read never costs a cycle
+            return False
+        if st is None:
+            return False
+        state = getattr(st, "state", None)
+        return isinstance(state, str) and state not in ("", "unavailable")
+
     async def ensure_enabled(self) -> None:
         """Idempotently assert the start/stop surface ON.
 
@@ -253,8 +277,17 @@ class ChargerAdapter(ABC):
                                           run=True),
                            {"entity_id": ent}, why="ensure_enabled")
         elif ent.startswith("button."):
-            await dev.send("button", "press", {"entity_id": ent},
-                           why="ensure_enabled (#804 resume surface)")
+            try:
+                await dev.send("button", "press", {"entity_id": ent},
+                               why="ensure_enabled (#804 resume surface)")
+            except Exception as e:  # noqa: BLE001 — a refused press is news, not a crash
+                # (#1399) The integration may refuse a press its cached state
+                # still allowed ("resume" on a box that has already
+                # resumed). Nothing was started, so nothing is claimed, and
+                # the current write after this action still goes out.
+                _LOGGER.info("%s: %s refused the press: %s",
+                             getattr(dev, "name", "charger"), ent, e)
+                return
         else:
             return
         # (#940) Claim the SESSION only when this write IS the session start.

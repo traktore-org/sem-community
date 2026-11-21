@@ -14795,9 +14795,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ERROR every cycle. The composed strategy (stability prefix +
             # mode reason + structural suffix) crossed that line live on
             # .175 the first time real hardware stacked all three. The STATE
-            # is a display string, so clamp it here at its single writer;
-            # the FULL text rides charging_strategy_reason, which becomes an
-            # attribute and has no such limit.
+            # is a display string, so clamp it; the FULL text rides
+            # charging_strategy_reason, which becomes an attribute and has no
+            # such limit. (#1399) This copy feeds the notifications only: the
+            # sensor reads the SEMData copy, so the sensor clamps every text
+            # state itself (``sensor._fit_state``).
             "charging_strategy": _clamp_state(
                 charging_context.charging_strategy),
             "charging_strategy_reason": charging_context.charging_strategy_reason,

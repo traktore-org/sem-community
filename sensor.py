@@ -68,6 +68,20 @@ CAR_DAY_SENSOR_KEYS = frozenset({"daily_ev_energy"})
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
 
+#: (#1399) HA refuses a state longer than this: the sensor reads "unknown"
+#: and HA logs an ERROR on every cycle.
+MAX_STATE_LEN = 255
+
+
+def _fit_state(value: Any) -> Any:
+    """(#1399) A text state HA will take: one longer than ``MAX_STATE_LEN``
+    is cut and ends in "…". The full text stays in the attributes that carry
+    it (``reason`` on the strategy sensor). Anything else passes as is."""
+    if isinstance(value, str) and len(value) > MAX_STATE_LEN:
+        return value[: MAX_STATE_LEN - 1] + "\u2026"
+    return value
+
+
 def _energy_plan_state(plan: Any) -> str:
     """(#638) Collapse tonight's plan to one verdict word.
 
@@ -3097,6 +3111,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 self._last_good_value = None
                 self._last_good_at = None
             self._stale_s = 0
+            # (#1399) Every text state, not one key: the strategy text grew
+            # past 255 once the yield reason was put in front of it.
+            value = _fit_state(value)
             if ((isinstance(value, (int, float)) and not isinstance(value, bool))
                     or (isinstance(value, str) and _HELD_TEXT_KEY.fullmatch(
                         self.entity_description.key))):
