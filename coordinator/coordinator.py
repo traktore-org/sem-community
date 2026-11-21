@@ -4977,20 +4977,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     saved_dev, saved_sess, saved_conn = (
                         self._ev_device, self._session_data, self._last_ev_connected
                     )
-                    # Per-charger vehicle SOC override (#193)
+                    # Per-charger vehicle SOC override (#193): this
+                    # charger's own car level only (#1404/#1405).
                     saved_vehicle_soc = self._cycle_vehicle_soc
                     ev_chargers_cfg = self.config.get("ev_chargers", [])
                     charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
-                    per_charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
-                    if per_charger_soc_entity:
-                        # (#1404) its own sensor only; unavailable = no level
-                        self._cycle_vehicle_soc = None
-                        soc_state = self.hass.states.get(per_charger_soc_entity)
-                        if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                            try:
-                                self._cycle_vehicle_soc = finite_float(soc_state.state)
-                            except (ValueError, TypeError):
-                                _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_charger_soc_entity, soc_state.state)
+                    self._cycle_vehicle_soc = self._own_vehicle_soc(cid)
                     self._ev_device = ev_dev
                     # (#846) the device's way back to the coordinator, so the
                     # adapter's amps↔watts conversions can consult the
@@ -5310,25 +5302,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
                         # Per-charger SOC target and surplus limit (#215).
                         # ``_cycle_vehicle_soc`` is a pcc-dispatching
-                        # property (#589): this write lands on the active
-                        # context and dies with it — the global value is
-                        # untouched, nothing to restore.
+                        # property (#589), seeded by ``__enter__`` with
+                        # THIS charger's own car level
+                        # (``_own_vehicle_soc``, #1404/#1405): its own
+                        # sensor, dark = no level, which plans the full
+                        # pack (``_calculate_remaining_need``). Never
+                        # another car's level.
                         charger_cfg = pcc.charger_cfg
-                        per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
-                        if per_soc_entity:
-                            # (#1404) A charger with its own sensor reads only
-                            # that sensor. Dark, it has no level: the seed is
-                            # the flat sensor, another car's in a fleet, and
-                            # it cleared this charger's SOC-cap Repair and
-                            # sized its plan. No level plans the full pack
-                            # (``_calculate_remaining_need``).
-                            self._cycle_vehicle_soc = None
-                            soc_st = self.hass.states.get(per_soc_entity)
-                            if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                                try:
-                                    self._cycle_vehicle_soc = finite_float(soc_st.state)
-                                except (ValueError, TypeError):
-                                    _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
                         # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245).
                         # #351 M9 — capture the per-charger SOC into a
                         # local before the calls so both reads see the
@@ -15466,6 +15446,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             out[str(cid)] = frozenset(names)
         return out
 
+    def _read_vehicle_soc(self, entity_id: str) -> float | None:
+        """One car level sensor's reading; dark or not a number = None."""
+        st = self.hass.states.get(entity_id)
+        if not st or st.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            return None
+        try:
+            return finite_float(st.state)
+        except (ValueError, TypeError):
+            _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)",
+                          entity_id, st.state)
+            return None
+
+    def _own_vehicle_soc(self, cid: str | None) -> float | None:
+        """(#1405) THIS charger's car level, read this cycle.
+
+        A charger that names a car level sensor reads only that one; dark
+        is no level (#1404). The car level in the main settings
+        (``vehicle_soc_entity``) is the first charger's car, as setup
+        has it: only the first charger, and only when it names no sensor
+        of its own, reads it. Any other charger with no sensor has no
+        level, never another car's (class 3). ``cid`` None is the
+        one-charger shape with no charger list.
+        """
+        flat = getattr(self, "_cycle_vehicle_soc_default", None)
+        if cid is None:
+            return flat
+        chargers = self.config.get("ev_chargers") or []
+        # the registration id: an id-less entry is ``ev_charger_<index>``
+        cfg = next((c for i, c in enumerate(chargers)
+                    if isinstance(c, dict)
+                    and (c.get("id") or f"ev_charger_{i}") == cid), None) or {}
+        own = cfg.get("vehicle_soc_entity")
+        if own:
+            return self._read_vehicle_soc(own)
+        return flat if cid == self.primary_charger_id() else None
+
     def _resolve_charger_soc(self, cid: str, cfg: dict) -> float | None:
         """Per-charger vehicle SOC: real sensor, else anchored virtual SOC, else None."""
         ent = cfg.get("vehicle_soc_entity")
@@ -16490,7 +16506,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # calls so both reads see the same value (mirrors the
         # per-charger-loop fix above).
         _primary_cfg = self._primary_charger_cfg()
-        cycle_soc_local = self._cycle_vehicle_soc
+        # (#1405) the first charger's own car level, never another car's
+        cycle_soc_local = self._own_vehicle_soc(self.primary_charger_id())
         remaining = self._calculate_remaining_need(
             energy, cycle_soc_local, _primary_cfg, bound="max"
         )
@@ -17432,8 +17449,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         else:
             self._full_stall_count = 0
 
-        # Virtual SOC (prefer real vehicle SOC if available)
-        estimated_soc = self._ev_taper_detector.get_virtual_soc(self._cycle_vehicle_soc)
+        # Virtual SOC (prefer real vehicle SOC if available).
+        # (#1405) The detector is the first charger's, so it is fed that
+        # car's own level: the main-settings sensor may name the car on
+        # another charger, and a fuller car there stopped this one early
+        # (its anchor caps the stop, #708). No charger list: the flat one.
+        primary_soc = (self._own_vehicle_soc(primary_id) if self._ev_devices
+                       else self._cycle_vehicle_soc)
+        estimated_soc = self._ev_taper_detector.get_virtual_soc(primary_soc)
 
         # Self-healing: if SOC is at 0% but car just charged, something is wrong
         # Reset to a reasonable estimate based on recent session energy
@@ -17465,7 +17488,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # reference (sensor / taper / stall) — do NOT prefill a guessed value.
         # Matches the per-charger path in _build_per_charger_intelligence. (#245)
         _d = self._ev_taper_detector
-        if self._cycle_vehicle_soc is None and not _d._soc_anchored and _d._energy_since_full == 0.0:
+        if primary_soc is None and not _d._soc_anchored and _d._energy_since_full == 0.0:
             estimated_soc_display: Optional[float] = None
         else:
             estimated_soc_display = round(estimated_soc, 1)
@@ -18288,9 +18311,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         charger."""
         if self._last_ev_connected and not power.ev_connected:
             if self._session_data.energy_kwh > 0:
+                # (#1405) the first charger's own car level ends its
+                # detector's session, never another car's
+                devices = getattr(self, "_ev_devices", None)
+                primary = next(iter(devices)) if devices else None
                 self._ev_taper_detector.on_session_end(
                     self._session_data.energy_kwh,
-                    end_soc=self._cycle_vehicle_soc,
+                    end_soc=self._own_vehicle_soc(primary),
                 )
             self._ev_taper_detector.reset_session()
 

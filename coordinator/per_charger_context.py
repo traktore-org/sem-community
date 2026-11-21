@@ -210,9 +210,9 @@ class PerChargerContext:
 
     vehicle_soc: Optional[float] = None
     """#589 swap retirement — THIS charger's vehicle SOC for the current
-    cycle. Seeded in ``__enter__`` from the coordinator's global
-    (primary-entity) cycle SOC, then overridden by the loop body when the
-    charger has its own ``vehicle_soc_entity``. The coordinator's
+    cycle. Seeded in ``__enter__`` from the coordinator's
+    ``_own_vehicle_soc(cid)``: its own sensor, else (first charger only)
+    the main-settings one, else None (#1405). The coordinator's
     ``_cycle_vehicle_soc`` property resolves to this field while the
     context is active, so the per-charger override can no longer leak
     into the next charger via a forgotten restore (the old
@@ -323,15 +323,14 @@ class PerChargerContext:
         # write-back to forget.
         self.state = coord._pcc_store.setdefault(self.cid, PerChargerState())
 
-        # Seed this charger's cycle SOC from the global (primary-entity)
-        # value. Must read BEFORE ``_current_pcc`` is bound below: the
-        # coordinator property resolves to the pcc field once the pointer
-        # is set. Chargers without their own ``vehicle_soc_entity`` keep
-        # seeing the global SOC (legacy semantics); a charger WITH one reads
-        # only it, dark = None (#1404); the loop body's per-charger
-        # override lands on this context only and dies with it — nothing to
+        # Seed this charger's cycle SOC: its OWN car's level (#1405). A
+        # charger with its own ``vehicle_soc_entity`` reads only it, dark =
+        # None (#1404); the main-settings sensor is the first charger's car
+        # only; any other charger with no sensor has no level — it used to
+        # read the flat sensor, another car's level. Any write in the loop
+        # body lands on this context only and dies with it — nothing to
         # restore.
-        self.vehicle_soc = coord._cycle_vehicle_soc
+        self.vehicle_soc = coord._own_vehicle_soc(self.cid)
 
         # Bind the context pointer. From here on the coordinator's
         # ``_ev_device`` property resolves to ``self.ev_dev``, so the

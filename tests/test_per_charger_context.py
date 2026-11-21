@@ -173,20 +173,22 @@ class TestSwapInvariant:
         from custom_components.solar_energy_management.coordinator.coordinator import (
             SEMCoordinator,
         )
-        coord = SEMCoordinator(MM(), {})
+        coord = SEMCoordinator(
+            MM(), {"ev_chargers": [{"id": "left"}, {"id": "right"}]})
         coord._cycle_vehicle_soc = 55.0  # global (primary-entity) cycle SOC
 
         with PerChargerContext(cid="left", ev_dev=MM(), charger_cfg={}, _coord=coord):
-            assert coord._cycle_vehicle_soc == 55.0  # seeded from global
+            assert coord._cycle_vehicle_soc == 55.0  # first charger: the flat one
             coord._cycle_vehicle_soc = 81.0  # per-charger entity override
             assert coord._cycle_vehicle_soc == 81.0
 
         # Post-loop: the global value is untouched by the override.
         assert coord._cycle_vehicle_soc == 55.0
 
-        # Next charger seeds from the GLOBAL value, not left's override.
+        # Next charger seeds fresh, not from left's override — and (#1405)
+        # not from the flat sensor either: that is the first charger's car.
         with PerChargerContext(cid="right", ev_dev=MM(), charger_cfg={}, _coord=coord):
-            assert coord._cycle_vehicle_soc == 55.0
+            assert coord._cycle_vehicle_soc is None
 
 
 class TestSkipFlag:
