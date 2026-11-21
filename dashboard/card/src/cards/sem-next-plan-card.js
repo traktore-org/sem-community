@@ -11,6 +11,7 @@
  *   type: custom:sem-next-plan-card
  */
 
+import { codeText } from '../util/code-text.js';
 import { SEMNextBase, html, css, svg, nothing, nextCss, NEXT_COLORS as C } from '../base/sem-next-base.js';
 import { planIdName } from '../util/plan-ids.js';
 import { noAskKey } from '../util/plan-no-ask.js';
@@ -862,7 +863,7 @@ class SEMNextPlanCard extends SEMNextBase {
             // (#1321) no Sell button while selling is off
             btns.push(this._btn(t('next_sell'), () => this._askFirst(t('next_sell'), () => this._selectOption('select.sem_battery_mode', 'force_discharge'), { body: t('next_confirm_sell') }), { small: true, disabled: obs }));
         }
-        const modeText = mode && mode !== 'auto' ? this._tf('next_mode_now', { mode: t('battery_mode_' + mode) || mode }) : '';
+        const modeText = mode && mode !== 'auto' ? this._tf('next_mode_now', { mode: codeText(t, 'battery_mode_', mode) }) : '';
         return this._devRow('mdi:home-battery', C.battery_out, t('next_src_battery'), parts.join(' · '), [sub, modeText].filter(Boolean).join(' · '), btns, plan.why ? String(plan.why) : '');
     }
 

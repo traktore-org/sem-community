@@ -8,6 +8,7 @@
  *
  * Not a dashboard card: registered with customElements.define only.
  */
+import { codeText } from '../util/code-text.js';
 import { SEMNextBase, html, css, nothing, nextCss } from '../base/sem-next-base.js';
 import { setupItems, CHARGER_ENTITY_FIELDS } from '../util/next-settings.js';
 import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
@@ -335,8 +336,8 @@ class SEMNextSetupPanel extends SEMNextBase {
             i.done ? html`<span class="ok">✓</span>`
                 : (i.optional ? t('config_setup_optional') : this._link(t('config_setup_action'), () => this._close(i.key))),
             ''));
-        const reads = m.sources.map((r) => this._row('', t('config_check_' + r.key),
-            (r.dir ? t('config_check_' + r.dir) + ' ' : '') + fmtWatts(r.w), ''));
+        const reads = m.sources.map((r) => this._row('', codeText(t, 'config_check_', r.key),
+            (r.dir ? codeText(t, 'config_check_', r.dir) + ' ' : '') + fmtWatts(r.w), ''));
         return html`
             ${this._sec(head, html`<div class="bar"><i class=${m.allDone ? 'done' : ''} style=${'width:' + m.pct + '%'}></i></div>
                 <div class="rows">${items}</div>

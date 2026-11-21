@@ -74,7 +74,8 @@ test('(#1081) COP used: learned is offered once learned, a pick is sent', () => 
     const card = fakeCard();
     const none = copSourceRow(card, { id: 'heat_pump' }, { cop_source: '', cop_learn: { state: 'not_enough', hours: 3 } },
         (p, v) => sent.push([p, v]));
-    assert.equal(none.val, 'hp_cop_source_flat');
+    // (#1321) a source with no text reads as words, never the key
+    assert.equal(none.val, 'Flat');
     assert.equal(none.sub, 'hp_cop_learning');
     const g = { cop_source: '', cop_curve: '-7:2.5, 12:4.2', cop_learn: { state: 'learned', hours: 40, tmin: -3, tmax: 9 } };
     copSourceRow(card, { id: 'heat_pump' }, g, (p, v) => sent.push([p, v]));

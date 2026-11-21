@@ -108,3 +108,55 @@ test('a code with no text shows a plain word, never the code', () => {
         assert.equal(el._tCode('next_health_', undefined), 'Unknown');
     } finally { delete globalThis.semLocalize; }
 });
+
+// ── 3 · watch-only: the departure days change only SEM's own setting ─────
+test('in watch-only, editing a departure day sends only SEM\'s own setting, nothing to the charger', async () => {
+    const { chargerBody } = await import('../src/util/next-devices-charger.js');
+    const el = mount('sem-next-devices-card', {
+        ...CHARGER,
+        'switch.sem_observer_mode': S('on'),
+        'time.sem_charger_c1_departure': S('07:00'),
+    });
+    el._depOpen = { c1: true };
+    const inputs = [];
+    const realInput = el._input.bind(el);
+    el._input = (spec) => { inputs.push(spec); return realInput(spec); };
+    chargerBody(el, { id: CHARGER_PREFIX + 'c1', type: 'charger', cid: 'c1', name: 'C1' });
+    const days = inputs.filter((s) => s.type === 'time');
+    assert.ok(days.length >= 7, `the seven day fields are drawn (${days.length})`);
+    assert.ok(days.every((s) => !s.disabled), 'open in watch-only');
+    el.__calls.length = 0;
+    days[0].onChange({ target: { value: '06:30' } });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.ok(el.__calls.length >= 1, 'the change went out');
+    for (const [domain, service] of el.__calls) {
+        assert.equal(domain, 'solar_energy_management');
+        assert.equal(service, 'set_charger_departure');
+    }
+});
+
+// ── 9 · codes in util/: words, never the code; a state reads "Unknown" ──────
+test('codeText gives the text, else plain words, or Unknown for a state', async () => {
+    const { codeText } = await import('../src/util/code-text.js');
+    const t = (k) => ({ battery_mode_auto: 'Automatic', next_code_unknown: 'Unknown' })[k] || k;
+    assert.equal(codeText(t, 'battery_mode_', 'auto'), 'Automatic');
+    assert.equal(codeText(t, 'battery_mode_', 'force_charge'), 'Force charge');
+    assert.equal(codeText(t, 'next_status_', 'odd', { unknown: true }), 'Unknown');
+    assert.equal(codeText(t, 'battery_mode_', ''), '');
+});
+
+// ── 3 (review 2) · a link to a tab remembers it and loads it ──────────────
+test('a #tab link remembers the tab and loads its data', () => {
+    local.clear(); listeners.clear();
+    globalThis.location.hash = '';
+    const el = mount('sem-next-insights-card', {});
+    let loads = 0;
+    el._load = () => { loads++; };
+    el.connectedCallback();
+    globalThis.location.hash = '#money';
+    fire('hashchange');
+    assert.equal(el._tab, 'money');
+    assert.equal(local.get(INSIGHTS_TAB_KEY), 'money');
+    assert.ok(loads >= 1, 'the money tab loads its data');
+    el.disconnectedCallback();
+});

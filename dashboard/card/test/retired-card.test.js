@@ -87,14 +87,24 @@ test('with no SEM dashboard listed there is no link, only the line', async () =>
     assert.doesNotMatch(text(el.render()), /retired_card_open/);
 });
 
-test('(#1321) a user who may not list dashboards still gets the link to SEM', async () => {
+test('(#1321) a user who may not list dashboards gets the link when the frontend knows the dashboard', async () => {
     const el = new (customElements.get('sem-gauge-card'))();
     el.setConfig({ type: 'custom:sem-gauge-card' });
     el._scheduleUpdate = () => {};
-    el.hass = { states: {}, language: 'en', callWS: async () => { throw new Error('admin only'); } };
+    el.hass = { states: {}, language: 'en', panels: { 'sem-next': { url_path: 'sem-next' } },
+        callWS: async () => { throw new Error('admin only'); } };
     await new Promise((r) => setTimeout(r, 0));
     assert.match(text(el.render()), /retired_card_open/);
     assert.equal(el._path, 'sem-next');
+});
+
+test('(#1321) no known SEM dashboard and no list: no link', async () => {
+    const el = new (customElements.get('sem-gauge-card'))();
+    el.setConfig({ type: 'custom:sem-gauge-card' });
+    el._scheduleUpdate = () => {};
+    el.hass = { states: {}, language: 'en', panels: {}, callWS: async () => { throw new Error('admin only'); } };
+    await new Promise((r) => setTimeout(r, 0));
+    assert.doesNotMatch(text(el.render()), /retired_card_open/);
 });
 
 test('the bundle imports the stub, and the card files are gone', () => {

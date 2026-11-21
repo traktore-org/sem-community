@@ -5,6 +5,7 @@
  * card's entity helpers and every write through its service helpers.
  */
 
+import { codeText } from './code-text.js';
 import { html, nothing } from '../base/sem-next-base.js';
 import { chargerRenameWrite } from './charger-name.js';
 import { resolveChargerSoc } from './charger-soc.js';
@@ -93,7 +94,7 @@ export function chargerBody(card, row) {
         floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? hintNight : '')].filter(Boolean).join(' ') : '';
     const nextCheap = mode === 'solar_plus_cheap' && cs.ev_next_cheap_window ? card._hhmm(cs.ev_next_cheap_window) : '';
     const pausedUntil = mode === 'off' && modeAttrs.paused_until ? card._hhmm(modeAttrs.paused_until) : '';
-    const resumeMode = modeAttrs.pause_resume_mode ? (t('charge_mode_' + modeAttrs.pause_resume_mode) || modeAttrs.pause_resume_mode) : '';
+    const resumeMode = modeAttrs.pause_resume_mode ? codeText(t, 'charge_mode_', modeAttrs.pause_resume_mode) : '';
 
     // ── stats ──
     const powerW = card._powerW(S('power'));
@@ -263,7 +264,7 @@ export function chargerBody(card, row) {
         const pm = phaseId ? card._str(phaseId) : '';
         const pOpts = phaseId ? (card._attrs(phaseId).options || ['auto', '1', '3']) : [];
         moreRows.push(card._row('mdi:sine-wave', t('next_phases'),
-            phaseId ? card._seg(pOpts.map((o) => ({ key: o, label: t('phase_mode_' + o) || o })), pm, (o) => card._selectOption(phaseId, o), { small: true, disabled: dis })
+            phaseId ? card._seg(pOpts.map((o) => ({ key: o, label: codeText(t, 'phase_mode_', o) })), pm, (o) => card._selectOption(phaseId, o), { small: true, disabled: dis })
                 : phaseStatus(card, cid),
             phaseId ? phaseStatus(card, cid) : ''));
     }

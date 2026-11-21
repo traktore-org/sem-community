@@ -5,6 +5,7 @@
  * exists only when its entity does.
  */
 
+import { codeText } from './code-text.js';
 import { html, nothing } from '../base/sem-next-base.js';
 import { providerName, trustPct } from './forecast-evidence.js';
 import { zonesModel } from './next-devices.js';
@@ -69,10 +70,11 @@ export function batteryBody(card, row) {
     const order = ['off', ...AUTO_MODES, 'force_charge', 'force_discharge'];
     const labelOf = { off: t('charge_mode_off'), force_charge: t('next_charge'), force_discharge: t('next_discharge') };
     const segItems = order.filter((o) => options.includes(o))
-        .map((o) => ({ key: o, label: labelOf[o] || t('battery_mode_' + o) || o }));
+        .map((o) => ({ key: o, label: labelOf[o] || codeText(t, 'battery_mode_', o) }));
     const segKey = mode;
     const pick = (key) => { if (modeId) card._selectOption(modeId, key); };
-    const hint = mode ? t('battery_mode_hint_' + mode) : '';
+    // a mode with no hint shows none, never the key
+    const hint = mode && t('battery_mode_hint_' + mode) !== 'battery_mode_hint_' + mode ? t('battery_mode_hint_' + mode) : '';
 
     // ── stats ──
     const soc = num('sensor.sem_battery_soc');
@@ -152,7 +154,7 @@ export function batteryBody(card, row) {
         if (Number.isFinite(nights)) subs.push(tf('next_nights_learned', { n: nights }));
         const rebuild = card._val(t('rebuild_nights'), () => card._askFirst(t('rebuild_nights'), () => card._svc('backfill_battery_nights', { days: 365 }), { body: t('next_confirm_rebuild') }), { disabled: dis });
         rows.push(card._row('mdi:weather-night', t('tonight'),
-            (t('planning_phase_' + sa.phase) || sa.phase) + (Number.isFinite(need) ? ' · ' + tf('next_needs_kwh', { kwh: card._fmt(need, 1) }) : ''),
+            codeText(t, 'planning_phase_', sa.phase) + (Number.isFinite(need) ? ' · ' + tf('next_needs_kwh', { kwh: card._fmt(need, 1) }) : ''),
             html`${subs.join(' · ')}${sa.phase === 'learning' ? html`${subs.length ? ' · ' : ''}${rebuild}` : ''}`));
     }
     const paceId = 'sensor.sem_battery_charge_pacing';
@@ -167,7 +169,7 @@ export function batteryBody(card, row) {
         const at = a.full_at ? card._hhmm(a.full_at) : '';
         let value = t('next_none');
         if (blocked) value = t(blocked);
-        else if (code !== 'none' && code !== 'night') value = (a.enabled ? '' : t('pacing_would') + ' ') + (t('pacing_' + code) || code) + (at ? ' · ' + t('pacing_full_by') + ' ' + at : '');
+        else if (code !== 'none' && code !== 'night') value = (a.enabled ? '' : t('pacing_would') + ' ') + codeText(t, 'pacing_', code) + (at ? ' · ' + t('pacing_full_by') + ' ' + at : '');
         moreRows.push(card._row('mdi:speedometer', t('charge_pacing'), value, capText));
         if (paceSw) moreRows.push(card._setRow({ label: card._lbl(Q.pacing.key), help: t(Q.pacing.sub), disabled: dis,
             toggle: { on: card._str(paceSw) === 'on', onChange: () => card._toggleSwitch(paceSw) } }));
@@ -192,9 +194,9 @@ export function batteryBody(card, row) {
             const id = 'select.sem_battery_' + bid + '_mode';
             const m = card._str(id);
             const lbl = (k) => (bats.length > 1 ? n + ' · ' : '') + card._lbl(k);
-            rows.push(card._setRow({ label: lbl('mode'), value: t('battery_mode_' + m) || m || '—', disabled: !card._has(id), blocked: card._devOff(id),
+            rows.push(card._setRow({ label: lbl('mode'), value: m ? codeText(t, 'battery_mode_', m) : '—', disabled: !card._has(id), blocked: card._devOff(id),
                 onTap: () => card._editDialog({ title: lbl('mode'), ...card._selEdit('bmode:' + bid, {
-                    value: m, options: (card._attrs(id).options || []).map((o) => ({ key: o, label: t('battery_mode_' + o) || o })),
+                    value: m, options: (card._attrs(id).options || []).map((o) => ({ key: o, label: codeText(t, 'battery_mode_', o) })),
                     onCommit: (o) => card._selectOption(id, o) }) }) }));
             const rid = 'number.sem_battery_' + bid + '_reserve_soc';
             if (card._has(rid)) {

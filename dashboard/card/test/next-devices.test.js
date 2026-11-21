@@ -266,8 +266,9 @@ test('the card renders every device with its body, the surplus section and the l
     assert.match(out, /operator_limit_banner/);
     for (const k of ['next_st_charging_a', 'next_st_on', 'next_st_waiting_for', 'next_st_to_house',
         'charge_mode_hint_solar_plus_cheap_surplus', 'ev_charge_by', 'Next_more_capacity', 'next_lifetime',
-        'load_mode_help_sem', 'Next_row_legionella_temp', 'next_sg_ready', 'battery_mode_hint_auto', 'Bq_priority',
-        'planning_phase_holding', 'charge_pacing', 'next_sell_window', 'next_evidence', 'health']) {
+        'load_mode_help_sem', 'Next_row_legionella_temp', 'next_sg_ready', 'Bq_priority',   // (#1321) a hint with no text is not drawn, so no key here
+        // a phase with no text reads as words (Holding)
+        'Holding', 'charge_pacing', 'next_sell_window', 'next_evidence', 'health']) {
         assert.match(out, new RegExp(k), k);
     }
     assert.doesNotMatch(out, /undefined|NaN/);

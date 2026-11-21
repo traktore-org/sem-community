@@ -37,7 +37,7 @@ export function splitStrategyReason(reason) {
 export function strategyWords(strat, t, plainReason) {
     const a = (strat && strat.attributes) || {};
     const { mode } = splitStrategyReason(String(a.reason || (strat && strat.state) || ''));
-    const label = mode ? t('charge_mode_' + mode) : '';
+    const label = mode ? t('charge_mode_' + mode) : '';   // a missing text falls back below
     const title = label && label !== 'charge_mode_' + mode ? label : t('ev_charger');
     const text = plainReason({ reason_code: a.reason_code, params: a.reason_params }, t) || '';
     return { title, text };

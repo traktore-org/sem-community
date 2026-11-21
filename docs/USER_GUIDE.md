@@ -87,6 +87,7 @@ are left out.
 | Battery reserve | **Devices**, battery card | **SEM sells down to no lower than** |
 | Heat pump or room temperature | **Devices**, heat pump card | **Keep at**, **Never colder than** |
 | Hot water top for spare sun | **Devices**, hot water card | **With spare sun, heat up to** |
+| Hot water maximum | none | SEM never sends more than the water heater accepts |
 | May SEM buy power for a heater? | **Devices**, heater card | **May SEM buy power for it?** |
 
 ## Settings
@@ -271,9 +272,9 @@ On **Devices** the battery shows three levels:
 - **End-of-charge level** and **End-of-discharge level**: the inverter's own limits.
   SEM reads them and counts from there.
 - **How SEM sends the power value**: how SEM's watts reach the inverter.
-  - **Signed** (default): + discharge, − charge.
-  - **Inverted**: − discharge, + charge.
-  - **Direction select**: a select sets charge or discharge, then the watts follow.
+  - **Plus discharges, minus charges** (default).
+  - **Plus charges, minus discharges**.
+  - **A selector sets the direction**: the **Charge or discharge selector** picks the direction, then the watts follow.
 - **Charge-power limit entity**: used by Charge pacing.
 
 ### Battery features

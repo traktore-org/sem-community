@@ -105,7 +105,11 @@ class SEMNextInsightsCard extends SEMNextBase {
      *  card attached (the Sessions link on a charger goes to #car). */
     _tabFromHash() {
         const h = (typeof window !== 'undefined' && window.location ? window.location.hash : '').slice(1);
-        if (TABS.some(([k]) => k === h) && h !== this._tab) { this._tab = h; this._hover = -1; }
+        if (TABS.some(([k]) => k === h) && h !== this._tab) {
+            this._tab = h; this._hover = -1;
+            writeInsightsTab(h);
+            if (this._hass) this._load();
+        }
     }
 
     connectedCallback() {

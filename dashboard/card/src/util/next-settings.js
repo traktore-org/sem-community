@@ -497,7 +497,7 @@ const FORECAST_SOURCES = [
 ];
 const HINT_LABEL = (v) => ({ off: 'off', weekly: 'weekly', all: 'all' }[v] || null);
 const HP_STEP_DOWN = ['off', 'setpoint', 'block'].map((v) => ({ value: v, labelKey: 'config_hp_step_down_' + v }));
-const SETPOINT_MODELS = ['signed', 'inverted', 'direction_select'].map((v) => ({ value: v, label: v }));
+const SETPOINT_MODELS = ['signed', 'inverted', 'direction_select'].map((v) => ({ value: v, labelKey: 'config_setpoint_model_' + v }));
 
 // Entity fields: the option key, the domains and the device class an entity
 // picker is filtered by. 'power', 'co2_intensity' and

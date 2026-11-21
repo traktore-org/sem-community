@@ -33,9 +33,7 @@ class SEMRetiredCard extends SEMLitBase {
 
     constructor() {
         super();
-        // (#1321) SEM's dashboard path is known: shown to every user, also one
-        // who may not list dashboards (only admins may)
-        this._path = CANDIDATES[0];
+        this._path = '';
     }
 
     set hass(hass) {
@@ -47,12 +45,17 @@ class SEMRetiredCard extends SEMLitBase {
 
     /** The live SEM dashboard, whichever URL it has. */
     async _findDashboard() {
+        // (#1321) the dashboards this user can open, as the frontend already
+        // knows them (any user); the admin-only list only as a second source
+        const panels = this._hass.panels || {};
+        const known = CANDIDATES.find((p) => panels[p]);
+        if (known) { this._path = known; return; }
         try {
             const list = await this._hass.callWS({ type: 'lovelace/dashboards/list' });
             const hit = CANDIDATES.find((p) => Array.isArray(list) && list.some((d) => d.url_path === p));
             this._path = hit || '';
         } catch (e) {
-            this._path = CANDIDATES[0];   // not allowed to list: the known path
+            this._path = '';             // no link to a dashboard that may not exist
         }
     }
 
