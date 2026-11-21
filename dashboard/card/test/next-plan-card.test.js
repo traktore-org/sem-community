@@ -139,6 +139,44 @@ test('Charge now is the backend force override: no mode flip, Back to plan clear
     assert.deepEqual(calls[0], ['solar_energy_management', 'plan_override_clear', { device_id: 'keba' }]);
 });
 
+// (#1406) the plan sensor drops its slots when the plan is too big; the end stays in ends_at
+function pressed(el, label) {
+    const btns = [];
+    el._btn = (l, fn) => { btns.push({ l: text(l), fn }); return ''; };
+    el._chargerRow('keba', el.__plan, [], [], []);
+    const b = btns.find((x) => x.l.includes(label));
+    assert.ok(b, label + ' is drawn');
+    return b.fn;
+}
+
+for (const [label, action] of [['next_skip_tonight', 'skip'], ['next_start_now', 'force']]) {
+    test(`(#1406) ${action}: a plan with its slots dropped lasts until its end, not 12 hours`, async () => {
+        const el = makeCard();
+        const calls = [];
+        el.hass.callService = async (d, s, data) => { calls.push([d, s, data]); };
+        const ends = Date.now() + (21 * 60 + 37) * 60e3;   // 09:23 → tomorrow 07:00
+        el.__plan = { timeline_omitted: true, slots: [], blocks: [], demands: [], ends_at: new Date(ends).toISOString() };
+        await pressed(el, label)();
+        assert.equal(calls.length, 1);
+        assert.deepEqual(calls[0].slice(0, 2), ['solar_energy_management', 'plan_override']);
+        assert.equal(calls[0][2].action, action);
+        assert.ok(Math.abs(calls[0][2].minutes - (21 * 60 + 37)) <= 1, `minutes ${calls[0][2].minutes}`);
+        // the old card sent 720 here
+        assert.notEqual(calls[0][2].minutes, 720);
+    });
+}
+
+test('(#1406) a cold heater names the plan end also when the slots were dropped', () => {
+    const el = makeCard({ 'sensor.sem_controllable_devices_count': S(1, { devices: {
+        boiler: { name: 'Boiler', comfort: { keep_c: 50, start_c: 45, reading_c: 40 } } } }) });
+    const ends = '2026-11-22T07:00:00+01:00';
+    const cold = el._cold({ timeline_omitted: true, slots: [], blocks: [], ends_at: ends });
+    assert.equal(cold.length, 1);
+    assert.equal(cold[0].time, '07:00');
+    // no end at all: no time, the plain sentence
+    assert.equal(el._cold({ slots: [], blocks: [] })[0].time, '');
+});
+
 // ── the chart: sun, price and plan on one clock ──
 const HOUR = 3600e3;
 const isoAt = (ms) => new Date(ms).toISOString();

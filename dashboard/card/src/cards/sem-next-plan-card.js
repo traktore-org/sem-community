@@ -51,7 +51,7 @@ export function knownNum(v) {
     return Number.isFinite(n) ? n : NaN;
 }
 import { laneModel } from '../util/next-timeline.js';
-import { minutesToPlanEnd } from '../util/next-strip.js';
+import { minutesToPlanEnd, planEndMs } from '../util/next-strip.js';
 import { chartWindow, chartTicks, sunModel, sunRuns, priceModel, priceAt, planRows, focusBlock, runningAt, RANGES } from '../util/next-plan-chart.js';
 import {
     WHY_KINDS, actionWords, changeLabel, deviceName, mergePerDay, earlierKey, filterRecords, isToday, plainReason, offStartReason, rowTime, whyChips,
@@ -304,9 +304,9 @@ class SEMNextPlanCard extends SEMNextBase {
 
     /** (#1321) Heaters below their start line with no hour in the plan. */
     _cold(plan) {
-        const slots = Array.isArray(plan.slots) ? plan.slots : [];
-        const end = slots.length ? slots[slots.length - 1].end : '';
-        const time = end && Number.isFinite(Date.parse(end)) ? this._hhmm(end) : '';
+        // (#1406) the plan's end, also when the sensor dropped the slots
+        const end = planEndMs(plan);
+        const time = Number.isFinite(end) ? this._hhmm(new Date(end)) : '';
         return coldHeaters(this._devices(), plan.blocks, Date.now())
             .map((h) => ({ ...h, keep: this._temp(h.keepC), time }));
     }
