@@ -5758,20 +5758,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 skipped=_skipped,
                             )
                         else:
-                            if decision.intent in (_CI.DISABLE, _CI.RELEASE):
-                                effective_state = ChargingState.SOLAR_IDLE
-                            elif decision.intent is _CI.IDLE:
-                                # #548 — an IDLE caused by the max-SOC ceiling
-                                # reads as "Target reached", not a bare "Idle".
-                                effective_state = (
-                                    ChargingState.SOLAR_TARGET_REACHED
-                                    if getattr(view, "soc_ceiling_reached", False)
-                                    else ChargingState.SOLAR_IDLE
-                                )
-                            elif decision.intent is _CI.CHARGE_MAX:
-                                effective_state = ChargingState.SOLAR_SUPER_CHARGING
-                            else:
-                                effective_state = ChargingState.SOLAR_CHARGING_ACTIVE
+                            # (#1403) CHARGE_MAX reads "Charging at full
+                            # power", not "Battery assist" (#548 target too).
+                            from .decide import solar_state_from_decision
+                            effective_state = solar_state_from_decision(
+                                decision.intent,
+                                soc_ceiling_reached=bool(getattr(
+                                    view, "soc_ceiling_reached", False)),
+                            )
                             # Cosmetic: if we're commanding a charge but the car
                             # isn't actually drawing past a ramp-up grace, show
                             # "ready" not "charging" so a satisfied/full car

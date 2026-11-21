@@ -1885,7 +1885,9 @@ class SEMData:
         charger sits at 0 A. Left out of ``solar_states`` so it falls through
         to the ``elif`` → ``"target_reached"``.
         """
-        solar_states = ["solar_charging_active", "solar_super_charging", "solar_min_pv"]
+        # (#1403) solar_full_power: the day state of a full-current charge.
+        solar_states = ["solar_charging_active", "solar_super_charging",
+                        "solar_full_power", "solar_min_pv"]
         if self.charging_state in solar_states:
             return "active"
         elif "solar" in self.charging_state.lower():

@@ -35,6 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 _COOLDOWN_STATES = {
     ChargingState.SOLAR_CHARGING_ACTIVE,
     ChargingState.SOLAR_SUPER_CHARGING,
+    ChargingState.SOLAR_FULL_POWER,     # (#1403)
     ChargingState.SOLAR_IDLE,
     ChargingState.SOLAR_MIN_PV,
 }
@@ -457,6 +458,12 @@ class NotificationManager:
         elif state == ChargingState.SOLAR_SUPER_CHARGING:
             messages["charger"] = _t("notif_charger_bat_solar",
                 "Bat+Sol: {current}A", current=calculated_current)
+
+        elif state == ChargingState.SOLAR_FULL_POWER:
+            # (#1403) Full current, from any source — it used to say
+            # "Bat+Sol". No amps: the fleet budget current is not this
+            # charger's.
+            messages["charger"] = _t("notif_charger_full_power", "Full power")
 
         elif state == ChargingState.SOLAR_PAUSE_LOW_BATTERY:
             messages["charger"] = (

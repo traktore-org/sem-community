@@ -105,6 +105,30 @@ def _ev_reclaims(view: ChargerView) -> bool:
     )
 
 
+def solar_state_from_decision(intent, *, soc_ceiling_reached: bool) -> str:
+    """The charger's day state, said from what the decision does.
+
+    (#1403) The state names only what the intent carries. ``CHARGE_MAX``
+    sends the full current and is blind to where the power comes from, so
+    it reads "Charging at full power" — it used to read "Battery assist",
+    while the grid often fed it and the battery gave nothing. Real battery
+    assist is ``CHARGE_AT_AMPS`` at set amps, the same state as any other
+    sized charge.
+
+    #548 — an IDLE caused by the max-SOC ceiling reads "Target reached",
+    not a bare "Idle"."""
+    from ..consts.states import ChargingState as CS
+
+    if intent is ChargerIntent.CHARGE_MAX:
+        return CS.SOLAR_FULL_POWER
+    if intent is ChargerIntent.CHARGE_AT_AMPS:
+        return CS.SOLAR_CHARGING_ACTIVE
+    if intent is ChargerIntent.IDLE and soc_ceiling_reached:
+        return CS.SOLAR_TARGET_REACHED
+    # IDLE, DISABLE, RELEASE
+    return CS.SOLAR_IDLE
+
+
 def solar_charge_display_override(intent, drawing: bool,
                                   no_draw_elapsed_s: float,
                                   grace_s: float = 90.0) -> Optional[str]:

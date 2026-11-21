@@ -628,6 +628,7 @@ class EVControlMixin:
     SOLAR_CHARGING_STATES = {
         ChargingState.SOLAR_CHARGING_ACTIVE,
         ChargingState.SOLAR_SUPER_CHARGING,
+        ChargingState.SOLAR_FULL_POWER,     # (#1403)
         ChargingState.SOLAR_CHARGING_ALLOWED,
         ChargingState.SOLAR_MIN_PV,
     }

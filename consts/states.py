@@ -28,6 +28,10 @@ class ChargingState:
     SOLAR_CHARGING_ALLOWED = "solar_charging_allowed"
     SOLAR_CHARGING_ACTIVE = "solar_charging_active"
     SOLAR_SUPER_CHARGING = "solar_super_charging"
+    # (#1403) SEM sends the charger's full current (``CHARGE_MAX``: Always
+    # max, or "Start now"). Grid, sun or battery may feed it — the text
+    # names none of them. Before, this showed "Battery assist".
+    SOLAR_FULL_POWER = "solar_full_power"
     SOLAR_PAUSE_LOW_BATTERY = "solar_pause_low_battery"
     SOLAR_TARGET_REACHED = "solar_target_reached"
 
@@ -83,6 +87,7 @@ STATUS_MESSAGES: Final = {
     ChargingState.SOLAR_CHARGING_ALLOWED: "Solar mode - Charging allowed",
     ChargingState.SOLAR_CHARGING_ACTIVE: "Solar mode - Charging active",
     ChargingState.SOLAR_SUPER_CHARGING: "Solar mode - Battery assist",
+    ChargingState.SOLAR_FULL_POWER: "Charging at full power",
     ChargingState.SOLAR_PAUSE_LOW_BATTERY: "Solar mode - Paused, battery low",
     ChargingState.SOLAR_TARGET_REACHED: "Solar mode - Daily target reached",
     ChargingState.SOLAR_MIN_PV: "Solar mode - Min+PV charging",
@@ -114,6 +119,7 @@ _STATE_TRANSLATION_KEYS: Final = {
     ChargingState.SOLAR_CHARGING_ALLOWED: "state_solar_allowed",
     ChargingState.SOLAR_CHARGING_ACTIVE: "state_solar_charging",
     ChargingState.SOLAR_SUPER_CHARGING: "state_solar_battery_assist",
+    ChargingState.SOLAR_FULL_POWER: "state_full_power",
     ChargingState.SOLAR_PAUSE_LOW_BATTERY: "state_solar_paused",
     ChargingState.SOLAR_TARGET_REACHED: "state_solar_target",
     ChargingState.SOLAR_MIN_PV: "state_solar_minpv",
