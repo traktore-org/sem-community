@@ -78,7 +78,7 @@ class _States:
             state, attrs = v, {}
         return SimpleNamespace(entity_id=entity_id, state=str(state),
                                attributes=dict(attrs), last_updated=None,
-                               last_reported=None)
+                               last_changed=None, last_reported=None)
 
     def async_all(self, *args, **kwargs):
         return []
