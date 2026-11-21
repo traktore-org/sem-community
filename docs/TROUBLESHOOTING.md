@@ -329,6 +329,8 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:** Set the second relay. Or set a climate entity and use the climate-only path.
 
+With only contact 1, SEM keeps it at normal. It never sends "blocked" by mistake, but it cannot boost the pump either.
+
 ### Heat pump SG-Ready contact values
 
 **Fix:** Under `System › Heat pump and hot water`, fill both the ON value and the OFF value of the contact. Or use a switch entity instead.
