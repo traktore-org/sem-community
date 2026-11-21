@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The first charger counts from its own car** (#1405). When the main car setting named a fuller car on another charger, solar charging stopped early.
 - 🔧 **Ready for HA 2027.10** (#1312). SEM reads a device's own config entry, not the list Home Assistant removes in 2027.10.
 - 🐛 **Each charger notice shows its own amps** (#1404). With two chargers, "Solar: 13A" showed the first charger's plan on both.
 - 🐛 **A charger notice goes to that charger's display** (#1404). With two chargers, charger B's state could show on charger A's display.
