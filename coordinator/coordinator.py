@@ -1989,6 +1989,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return mode_allows_night_charging(
             self.config, charger_cfg, getattr(self, "hass", None))
 
+    def _night_gate_skips(self, cid: str, charger_cfg: dict, now) -> bool:
+        """Does the night gate (#193) leave this charger out of tonight's
+        loop? Yes when its mode does not charge at night.
+
+        (#1402) Not while a one-off "Start now" holds: that gives
+        ``decide()`` a mode of its own (``plan_override.charger_mode_for``),
+        and the gate asks the same mode. Asking only the saved mode left a
+        Solar-only charger out of the loop, and the police pass (#740) kept
+        it stopped, so Start now did nothing while another charger charged
+        at night. A charger in ``off`` stays out: ``charger_mode_for``
+        keeps it ``off``."""
+        if self._mode_allows_night_charging(charger_cfg):
+            return False
+        from ..consts.ev_charge_modes import effective_charge_mode_for
+        from . import plan_override as _po
+        try:
+            # The user's mode, as ``_mode_allows_night_charging`` reads it —
+            # not ``_effective_charge_mode_for``, which a VPP boost turns
+            # into always_max and so hides the override.
+            mode = effective_charge_mode_for(
+                getattr(self, "hass", None),
+                getattr(self, "config", {}) or {}, charger_cfg)
+            return _po.charger_mode_for(
+                getattr(self, "_plan_overrides", None) or {},
+                cid, mode, now) == mode
+        except Exception:  # noqa: BLE001 — a bad override is no override
+            return True
+
     def _mode_uses_tariff(self, charger_cfg: dict) -> bool:
         """Does this charger's mode defer to tariff-cheap windows?
 
@@ -5230,7 +5258,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         ChargingState.TARIFF_WAITING_FOR_CHEAP,
                     ):
                         per_cfg = _chargers_by_id.get(cid, {})
-                        if not self._mode_allows_night_charging(per_cfg):
+                        if self._night_gate_skips(cid, per_cfg, _now_override):
                             # #740 night sibling: skip means "no night
                             # budget", not "no supervision" — a box that
                             # auto-starts masterless at night must still
@@ -5348,8 +5376,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # by day, in the gap after the night end.
                         _gap = (not _night_state
                                 and self._departure_gap_for(charger_cfg))
-                        if _night_state or _gap:
-                            pc_target = charging_context.night_target_kwh
+                        # (#1402) A charger whose mode does not charge at
+                        # night is here only through a one-off Start now
+                        # (``_night_gate_skips``). It runs always_max, which
+                        # ignores the plan: no night plan, no plan row and no
+                        # "target not reachable" notice for it.
+                        _night_capable = self._mode_allows_night_charging(charger_cfg)
+                        # Set for every charger, here: a value left from the
+                        # charger before would be read below as this one's.
+                        pc_target = charging_context.night_target_kwh
+                        if (_night_state and _night_capable) or _gap:
                             if pc_target > 0.1:
                                 plan = self._compute_night_plan(
                                     charger_cfg, pc_target, energy, night_over=_gap)
@@ -5417,7 +5453,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 charging_context.night_departure_floor = bool(
                                     getattr(plan, "to_departure", False))
                                 await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
-                        if _night_state:
+                        if _night_state and _night_capable:
                             # (#629 slice 3) the tri-state resolution is pure —
                             # see ev_night_targets.resolve_night_effective_state.
                             from .ev_night_targets import resolve_night_effective_state
@@ -5427,6 +5463,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 ChargingState.TARIFF_WAITING_FOR_CHEAP,
                                 ChargingState.NIGHT_TARGET_REACHED,
                             )
+                        elif _night_state:
+                            # (#1402) Let in by Start now only: its mode has no
+                            # night charge, so the state is its own, not the
+                            # fleet's. It reads "charging" once the decision
+                            # charges (``night_state_after_decision``).
+                            effective_state = ChargingState.NIGHT_DISABLED
 
                         # #526: surface (as a repair) when an SOC-% cap can't be
                         # enforced because no real vehicle SOC is readable.
@@ -5695,17 +5737,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # wins. Pre-fix the intent-derived state unconditionally
                         # clobbered NIGHT_TARGET_REACHED with
                         # SOLAR_CHARGING_ACTIVE.
-                        _NIGHT_STATES = (
-                            ChargingState.NIGHT_CHARGING_ACTIVE,
-                            ChargingState.TARIFF_WAITING_FOR_CHEAP,
-                            ChargingState.NIGHT_TARGET_REACHED,
-                            ChargingState.NIGHT_IDLE,
-                            ChargingState.NIGHT_DISABLED,
-                            ChargingState.NIGHT_TIME_EXPIRED,
-                            ChargingState.NIGHT_WAITING_FOR_WINDOW,
-                        )
-                        if effective_state not in _NIGHT_STATES:
-                            from .charger_types import ChargerIntent as _CI
+                        from ..consts.states import NIGHT_STATES as _NIGHT_STATES
+                        from .charger_types import ChargerIntent as _CI
+                        if effective_state in _NIGHT_STATES:
+                            # (#1402) The night state above came from the
+                            # SAVED mode's plan; a one-off override reaches
+                            # only decide(). Say it again from the decision
+                            # where the decision ignores that plan: Start
+                            # now (always_max) charging, or a skipped night.
+                            try:
+                                _skipped = _po.skips_charger(
+                                    self._plan_overrides, cid, _now_override)
+                            except Exception:  # noqa: BLE001 — a bad override is no override
+                                _skipped = False
+                            from .ev_night_targets import night_state_after_decision
+                            effective_state = night_state_after_decision(
+                                effective_state, mode=_view_mode,
+                                charging=decision.intent in (
+                                    _CI.CHARGE_AT_AMPS, _CI.CHARGE_MAX),
+                                skipped=_skipped,
+                            )
+                        else:
                             if decision.intent in (_CI.DISABLE, _CI.RELEASE):
                                 effective_state = ChargingState.SOLAR_IDLE
                             elif decision.intent is _CI.IDLE:

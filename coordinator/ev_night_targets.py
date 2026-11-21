@@ -89,6 +89,40 @@ def resolve_night_effective_state(base_state, charging_state, pc_target, plan,
     return night_active_state
 
 
+def night_state_after_decision(state, *, mode, charging, skipped):
+    """(#1402) The night state, said again from what the decision does.
+
+    ``resolve_night_effective_state`` picks the night state from the saved
+    mode's night plan, before ``decide()`` runs. Two things act without
+    that plan, so the state follows them, not the plan:
+
+    * ``always_max`` ignores the plan, whether it is the saved mode or the
+      mode a one-off "Start now" gives ``decide()``
+      (``plan_override.charger_mode_for``). While it charges, the state is
+      NIGHT_CHARGING_ACTIVE — not "waiting for cheap", "target reached" or
+      "disabled" while SEM sends the full current.
+    * A one-off "Skip tonight" stops what the plan would charge. While it
+      holds and the charger does not charge, a state that promises a charge
+      tonight reads NIGHT_DISABLED.
+
+    ``mode`` is the mode ``decide()`` ran with; ``charging`` is the final
+    decision's intent (after the override, the stability layer and the
+    safety gate). A day state passes through: the caller derives it from
+    the decision already. Every other night state passes through too."""
+    from ..consts.states import NIGHT_STATES, ChargingState as CS
+
+    if state not in NIGHT_STATES:
+        return state
+    if charging and mode == "always_max":
+        return CS.NIGHT_CHARGING_ACTIVE
+    if skipped and not charging and state in (
+            CS.NIGHT_CHARGING_ACTIVE,
+            CS.TARIFF_WAITING_FOR_CHEAP,
+            CS.NIGHT_WAITING_FOR_WINDOW):
+        return CS.NIGHT_DISABLED
+    return state
+
+
 def resolve_per_charger_mode(coord, cid, charger_cfg):
     """(#629 slice 4) Per-charger effective mode + the mismatch diagnostic.
 

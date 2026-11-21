@@ -221,7 +221,9 @@ class TestTheGateCallsThePolice:
             "coordinator", "coordinator.py",
         ).read_text()
         gate = re.search(
-            r"if not self\._mode_allows_night_charging\(per_cfg\):"
+            # (#1402) the gate asks ``_night_gate_skips``, which also sees a
+            # one-off Start now
+            r"if self\._night_gate_skips\(cid, per_cfg, _now_override\):"
             r"(.{0,1200}?)continue",
             src, re.DOTALL,
         )

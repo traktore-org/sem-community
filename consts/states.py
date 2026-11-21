@@ -47,6 +47,20 @@ class ChargingState:
     SOLAR_MIN_PV = "solar_min_pv"
 
 
+#: Every night state. The per-charger loop keeps one of these over the
+#: state it would derive from the decision (PR A); #1402 then says it
+#: again from the decision where the decision ignores the night plan.
+NIGHT_STATES: Final = frozenset({
+    ChargingState.NIGHT_CHARGING_ACTIVE,
+    ChargingState.TARIFF_WAITING_FOR_CHEAP,
+    ChargingState.NIGHT_TARGET_REACHED,
+    ChargingState.NIGHT_IDLE,
+    ChargingState.NIGHT_DISABLED,
+    ChargingState.NIGHT_TIME_EXPIRED,
+    ChargingState.NIGHT_WAITING_FOR_WINDOW,
+})
+
+
 # ============================================
 # STATUS MESSAGES
 # ============================================
