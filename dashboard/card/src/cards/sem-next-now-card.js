@@ -31,6 +31,7 @@ import { chartWindow, chartTicks, priceModel } from '../util/next-plan-chart.js'
 import { priceLevelColor } from '../util/price-level.js';
 import { sourceMix, priceStrip, deviceChips, isRealTip } from '../util/next-now-extras.js';
 import { resolveChargerSoc } from '../util/charger-soc.js';
+import { chargerAmps } from '../util/charger-amps.js';
 import { loadKind, runningNow, switchStateOf } from '../util/next-devices.js';
 import './sem-setup-checklist-card.js';
 
@@ -185,7 +186,7 @@ class SEMNextNowCard extends SEMNextBase {
     _carFact() {
         for (const cid of this._chargers) {
             const powerW = this._powerW(`sensor.sem_charger_${cid}_power`);
-            const amps = this._num(`sensor.sem_charger_${cid}_commanded_current`);
+            const amps = chargerAmps(this, cid);   // (#1407)
             const remaining = this._remainingKwh(cid);
             // (#1321) the plug sensor decides: an open target with no car plugged
             // in said "the car waits" above "No car is plugged in". Unknown plug

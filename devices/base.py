@@ -3456,6 +3456,81 @@ class CurrentControlDevice(ControllableDevice):
         return phases_from_readback(getattr(st, "attributes", None),
                                     PHASE_READBACK_ATTR_ENDINGS)
 
+    #: (#1407) How long a found (or not found) set of phase sensors is kept
+    #: before the registry is asked again: an integration that loads late,
+    #: or a sensor the user turns on or off, is seen within this time.
+    PHASE_LEGS_FOUND_S = 600.0
+    PHASE_LEGS_MISSING_S = 60.0
+
+    def _own_device_ids(self, reg) -> List[str]:
+        """(#1407) The registry devices of this charger's own entities: the
+        devices of its control, start/stop, status, power and offer
+        entities, then the box's service device last (on some brands that
+        is a whole site, #1376). Only entities this charger is set up with."""
+        ids: List[str] = []
+        for eid in (self.current_entity_id, self.start_stop_entity,
+                    self.charging_status_entity, self.power_entity_id,
+                    self.current_sensor_entity_id, self.entity_id):
+            ent = reg.async_get(eid) if isinstance(eid, str) and eid else None
+            dev = getattr(ent, "device_id", None)
+            if isinstance(dev, str) and dev and dev not in ids:
+                ids.append(dev)
+        sdid = getattr(self, "service_device_id", None)
+        if isinstance(sdid, str) and sdid and sdid not in ids:
+            ids.append(sdid)
+        return ids
+
+    def _phase_leg_entities(self) -> Optional[tuple]:
+        """(#1407) This charger's own per-phase current sensors (phase 1, 2,
+        3), or None when its device has no such three. Kept for a while,
+        then asked again, so a sensor that comes or goes is followed."""
+        now = time.monotonic()
+        if now < getattr(self, "_phase_legs_until", 0.0):
+            return getattr(self, "_phase_legs", None)
+        found = None
+        try:
+            if self.hass is not None:
+                from homeassistant.helpers import entity_registry as er
+                from ..hardware_detection import phase_current_legs
+                reg = er.async_get(self.hass)
+                for dev_id in self._own_device_ids(reg):
+                    found = phase_current_legs(
+                        er.async_entries_for_device(reg, dev_id))
+                    if found:
+                        break
+        except Exception:  # noqa: BLE001 — not found is "cannot read", asked again
+            _LOGGER.debug("%s: phase current sensors not found", self.name,
+                          exc_info=True)
+            found = None
+        self._phase_legs = found
+        self._phase_legs_until = now + (
+            self.PHASE_LEGS_FOUND_S if found else self.PHASE_LEGS_MISSING_S)
+        return found
+
+    def phase_leg_currents(self, others=()) -> Optional[List[float]]:
+        """(#1407) The current the charger measures on each phase, in A —
+        whoever runs the charge, SEM or another system. None when the box
+        has no such sensors or one of them gives no number: a missing phase
+        may be the one the car uses. None too when one of ``others`` (the
+        other chargers) reads one of the same sensors: a reading two
+        chargers share says nothing about either (class 52)."""
+        legs = self._phase_leg_entities()
+        if not legs or self.hass is None:
+            return None
+        for other in others or ():
+            reader = getattr(other, "_phase_leg_entities", None)
+            theirs = reader() if callable(reader) else None
+            if theirs and set(theirs) & set(legs):
+                return None
+        from ..coordinator.units import current_state_to_amps
+        out: List[float] = []
+        for eid in legs:
+            amps = current_state_to_amps(self.hass.states.get(eid))
+            if amps is None:
+                return None
+            out.append(amps)
+        return out
+
     def _settle_charger_service(self) -> None:
         """(#1376) Before a write through ``charger_service``: is it a whole
         site's current limit (a service whose only current field is the

@@ -843,6 +843,27 @@ PHASE_READBACK_RULE: Final[dict] = {
 }
 PHASE_READBACK_ATTR_ENDINGS: Final[tuple] = ("p1", "p2", "p3")
 
+#: (#1407) The charger's own measured current on one phase: one sensor per
+#: phase, the phase number in its key — Zaptec ``current_phase1``, Peblar
+#: ``current_phase_1``, go-e ``i_l1``, NRGkick ``l1_current``. Read from the
+#: translation key and unique id, which keep these English words in every
+#: language. A reading only: it shows the current and the phases a charge
+#: uses, whoever started it. Never a control.
+PHASE_CURRENT_LEG: Final[str] = (
+    r"(?:^|[-_.:])(?:l|phase[-_]?)([123])(?:[-_.:]|$)")
+#: (#1407) A current that is a limit, an offer, a request or a setting, not
+#: what flows — Zaptec's installation ``available_current_phase1``, Easee's
+#: ``dynamic_circuit_limit`` — or the current of another circuit the box
+#: meters (the house, the grid, the solar array). Unique ids are often
+#: ``{serial}-{key}``, so a dash or a dot ends a word too.
+PHASE_CURRENT_LEG_NOT: Final[tuple] = (
+    r"(?:^|[-_.:])(?:available|max|maximum|min|minimum|limits?|offered|offer|"
+    r"set|setpoint|target|requested|request|allocated|assigned|pilot|margin|"
+    r"rated|nominal|capacity|allowed|dynamic|circuit|fallback|offline|"
+    r"failsafe|house|household|grid|mains|utility|site|installation|"
+    r"solar|pv|photovoltaic|battery|inverter|shaper|equalizer)(?:[-_.:]|$)",
+)
+
 
 #: Every rule set the crawler may apply, by kind.
 ALL_RULE_SETS: Final[tuple] = ("ROLE_RULES", "READ_ROLE_RULES",

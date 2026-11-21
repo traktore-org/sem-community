@@ -6613,14 +6613,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # probed (evcc #30143's lesson). INERT: nothing writes to
                 # that entity until Phase B.
                 from .ev_phases import (
-                    estimate_active_phases, validate_phase_switch_entity,
+                    estimate_active_phases, phases_from_leg_currents,
+                    validate_phase_switch_entity,
                 )
-                result[f"charger_{cid}_active_phases"] = estimate_active_phases(
-                    charger_power,
-                    int(float(getattr(ev_dev, "_current_setpoint", 0) or 0)),
-                    float(_per_charger_cfg.get("ev_voltage")
-                          or self.config.get("ev_voltage") or 230),
-                )
+                # (#1407) The charger's own current on each phase comes
+                # first: it holds whoever runs the charge. The W/A estimate
+                # divides by SEM's command, so with SEM off (another system
+                # charging) it has nothing to divide by — the card then read
+                # "0 A" and the configured 3 phases for a 7 A one-phase car.
+                # Legs another charger also reads are no one's (class 52),
+                # and a reading the power disagrees with is shown as none.
+                _leg_reader = getattr(ev_dev, "phase_leg_currents", None)
+                _leg_amps, _leg_phases = phases_from_leg_currents(
+                    _leg_reader(others=[d for c, d in self._ev_devices.items()
+                                        if c != cid])
+                    if callable(_leg_reader) else None,
+                    power_w=charger_power)
+                result[f"charger_{cid}_measured_current"] = _leg_amps
+                result[f"charger_{cid}_active_phases"] = (
+                    _leg_phases if _leg_phases is not None
+                    else estimate_active_phases(
+                        charger_power,
+                        int(float(getattr(ev_dev, "_current_setpoint", 0) or 0)),
+                        float(_per_charger_cfg.get("ev_voltage")
+                              or self.config.get("ev_voltage") or 230),
+                    ))
                 _ps_entity, _ps_valid = validate_phase_switch_entity(
                     _per_charger_cfg.get("ev_phase_switch_entity"),
                     lambda eid: self.hass.states.get(eid) is not None,
