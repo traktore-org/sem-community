@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Each charger notice shows its own amps** (#1404). With two chargers, "Solar: 13A" showed the first charger's plan on both.
+- 🐛 **A charger notice goes to that charger's display** (#1404). With two chargers, charger B's state could show on charger A's display.
+- 🐛 **The SOC limit Repair follows the charger** (#1404). Always max at full power with a low home battery cleared it. A cloud no longer clears it.
 - 🐛 **Always max says full power** (#1403). By day, Always max and Start now showed "Battery assist". Now "Charging at full power"; raw state solar_full_power.
 - 🐛 **Notification events carry the charger text** (#1403). Events for states with only a charger display text had an empty message.
 - 🐛 **Start now says charging** (#1402). At night the charger state kept "Waiting for cheap price window" while SEM sent full current.
