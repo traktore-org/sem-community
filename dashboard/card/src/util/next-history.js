@@ -98,7 +98,7 @@ export function bucketsFor(period, now = new Date(), o = {}) {
 
 /** The statistics period to ask for: totals need day rows summed into a month. */
 export function fetchPeriodFor(buckets, kind) {
-    return kind === 'total' && buckets.period === 'month' ? 'day' : buckets.period;
+    return (kind === 'total' || kind === 'daysum') && buckets.period === 'month' ? 'day' : buckets.period;
 }
 
 /** Index of the bucket whose start is nearest to `ts`, or -1 outside the window. */
@@ -136,8 +136,9 @@ export function diffCumulative(values) {
  * One number per bucket. `points` are recorder rows {start, state, mean}
  * (`start` as ms or ISO). kind 'total' reads the counter's last state per
  * row, differencing hour rows; kind 'mean' averages the means that land in
- * a bucket. A bucket nobody wrote is null, so a chart can tell "0" from
- * "not yet".
+ * a bucket; kind 'daysum' adds up day means (a value that holds one day's
+ * amount, like today's forecast: a month is the sum of its days). A bucket
+ * nobody wrote is null, so a chart can tell "0" from "not yet".
  */
 export function bucketValues(points, buckets, kind = 'total') {
     const n = buckets.starts.length;

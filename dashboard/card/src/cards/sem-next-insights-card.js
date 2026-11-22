@@ -178,7 +178,7 @@ class SEMNextInsightsCard extends SEMNextBase {
 
     /** Which statistics this tab and period need: { total: [ids], mean: [ids] }, existing entities only. */
     _needs() {
-        const T = new Set(), M = new Set();
+        const T = new Set(), M = new Set(), D = new Set();
         if (!this._live()) {
             for (const k of ['house', 'solar', 'cost', 'saved', 'batt_saved', 'export_rev', 'car', 'batt_in', 'battery', 'co2']) T.add(S + PERIODS.day[k]);
             T.add(flowId('solar', 'home'));
@@ -197,21 +197,21 @@ class SEMNextInsightsCard extends SEMNextBase {
             for (const k of ['cost', 'saved', 'batt_saved', 'export_rev']) T.add(S + PERIODS.day[k]);
         } else if (this._tab === 'forecast') {
             if (this._hourly()) { M.add(S + 'solar_power'); M.add(S + 'forecast_power_now_w'); }
-            else { T.add(S + 'daily_solar_energy'); M.add(S + 'forecast_today_kwh'); }
+            else { T.add(S + 'daily_solar_energy'); D.add(S + 'forecast_today_kwh'); }
         }
-        return { total: [...T].filter((id) => this._has(id)), mean: [...M].filter((id) => this._has(id)) };
+        return { total: [...T].filter((id) => this._has(id)), mean: [...M].filter((id) => this._has(id)), daysum: [...D].filter((id) => this._has(id)) };
     }
 
     async _load() {
         if (!this._hass || this._tab === 'replay') return;
         const b = bucketsFor(this._period, new Date(), { tz: this._hass.config?.time_zone, lang: this._hass.language });
         const need = this._needs();
-        const key = [this._period, b.start.getTime(), need.total.join(','), need.mean.join(',')].join('|');
+        const key = [this._period, b.start.getTime(), need.total.join(','), need.mean.join(','), need.daysum.join(',')].join('|');
         if (key === this._histKey) return;
         this._histKey = key;
         const series = {};
         try {
-            for (const kind of ['total', 'mean']) {
+            for (const kind of ['total', 'mean', 'daysum']) {
                 const ids = need[kind];
                 if (!ids.length) continue;
                 const data = await fetchSeries(this._hass, ids, b.start.toISOString(), b.end.toISOString(), fetchPeriodFor(b, kind));
@@ -656,7 +656,7 @@ class SEMNextInsightsCard extends SEMNextBase {
         const sum = i >= 0 && i < b.n ? [[null, this._hoverLabel(b)], actual ? [C.solar, this._t('next_actual'), this._fmt(actual[i], 1) + unit] : null, expected ? [null, this._t('next_expected'), this._fmt(expected[i], 1) + unit] : null].filter(Boolean)
             : [[null, this._t('next_solid_dotted')], today !== null && fc ? [null, this._t('next_today').toLowerCase(), `${this._fmt(today, 1)} ${this._t('next_of')} ${this._fmt(fc, 1)} kWh · ${Math.round(today / fc * 100)} %`] : null,
                tom !== null ? [null, this._t('next_tomorrow').toLowerCase(), this._kwh(tom)] : null,
-               src || t1 !== null ? [null, [src || '', t1 !== null ? `${this._t('next_trusted')} ${this._pct(t1 * 100)}${t2 !== null ? ` / ${this._pct(t2 * 100)}` : ''}` : ''].filter(Boolean).join(' · ')] : null].filter(Boolean);
+               src || t1 !== null ? [null, [src || '', t1 !== null ? `${this._tf('next_trusted', { pct: Math.round(t1 * 100) })}${t2 !== null ? ` / ${this._pct(t2 * 100)}` : ''}` : ''].filter(Boolean).join(' · ')] : null].filter(Boolean);
         const main = this._sec(`${this._t('next_src_solar')} · ${this._t('next_forecast_actual')}`,
             html`${series.length ? this._line(model, this._t('next_forecast_actual')) : this._hint()}${model.empty ? nothing : html`<div class="sumrow">${this._legend(sum)}</div>`}`, { cls: 'span2' });
         return html`${main}${this._accuracyCard()}`;
@@ -678,7 +678,7 @@ class SEMNextInsightsCard extends SEMNextBase {
             const trust = this._num(id);
             const effect = trustConsequence({ available: spend[`forecast_d${n}_available`], trust, days: spend[`forecast_days_d${n}`], minDays: spend.forecast_min_days, t: (k) => this._t(k) });
             rows.push(this._row('mdi:weather-partly-cloudy', `${this._t(n === 1 ? 'next_tomorrow' : 'next_two_days')}${src ? ` · ${providerName(src) || src}` : ''}`,
-                trust === null ? this._t('next_learning') : `${this._t('next_trusted')} ${this._pct(trust * 100)}`, effect, { onClick: () => this._moreInfo(id) }));
+                trust === null ? this._t('next_learning') : this._tf('next_trusted', { pct: Math.round(trust * 100) }), effect, { onClick: () => this._moreInfo(id) }));
         }
         if (!rows.length) return nothing;
         return this._sec(this._t('next_accuracy'), html`<div class="rows">${rows}</div>`);

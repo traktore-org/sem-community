@@ -84,6 +84,17 @@ test('bucketValues: means average the rows that land in a bucket', () => {
     assert.deepEqual(bucketValues(rows, day, 'mean').slice(0, 3), [200, 50, null]);
 });
 
+test('bucketValues: a day forecast adds up to its month, not its average (year view)', () => {
+    const year = bucketsFor('year', NOW);
+    assert.equal(fetchPeriodFor(year, 'daysum'), 'day');
+    const days = [1, 2, 3].map((d) => ({ start: new Date(2026, 7, d).toISOString(), mean: 60 + d }));
+    const months = bucketValues(days, year, 'daysum');
+    assert.equal(months[7], 61 + 62 + 63);
+    assert.equal(months[6], null);
+    const month = bucketsFor('month', NOW);
+    assert.equal(fetchPeriodFor(month, 'daysum'), 'day');
+});
+
 test('sunCurve shapes the forecast between night end and night start and keeps the total', () => {
     const c = sunCurve(24, '07:00', '17:30');
     assert.equal(c.length, 24);
