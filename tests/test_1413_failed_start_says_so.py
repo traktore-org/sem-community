@@ -35,6 +35,9 @@ from custom_components.solar_energy_management.coordinator import (
 from custom_components.solar_energy_management.coordinator.actuate_battery import (
     actuate_battery,
 )
+from custom_components.solar_energy_management.coordinator.battery_adapters.charge_target import (
+    ChargeTargetHold,
+)
 from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
     GenericBatteryAdapter,
 )
@@ -74,6 +77,20 @@ class _FirstSaveFails(_Store):
             self.fail = False
             raise OSError("disk full")
         await super().async_save(data)
+
+
+class _Clock:
+    """The actuator's clock, moved by hand."""
+
+    def __init__(self, monkeypatch):
+        self.t = 1000.0
+        monkeypatch.setattr(actuate_mod, "_now", lambda: self.t)
+
+    def wait(self, s):
+        self.t += s
+
+
+WAIT = actuate_mod.NOT_STARTED_AFTER_S
 
 
 def _sc():
@@ -150,13 +167,21 @@ class TestTheRowFollowsTheAnswer:
         assert a.charge_refused is True
         assert _rows(sc)[-1] == NOT_STARTED
 
-    async def test_an_unreadable_reserve_says_not_started_then_charging(self):
-        sc = _sc()
+    async def test_an_unreadable_reserve_says_not_started_then_charging(
+            self, monkeypatch):
+        """Asked again each cycle (not given up): the row waits out the
+        window, then says so; the charge that follows is logged."""
+        clock, sc = _Clock(monkeypatch), _sc()
         hass = _Hass(mode="autonomous", reserve="unavailable")
         a = _adapter(hass, _Store(), _Store())
         await actuate_battery(_plan_charge(), a, controller=sc)
+        clock.wait(WAIT - 10)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        assert _rows(sc) == [], "inside the window: maybe a wait"
+        clock.wait(10)
         await actuate_battery(_plan_charge(), a, controller=sc)
         assert _rows(sc) == [NOT_STARTED]
+        assert RESERVE in sc.decision_log.records()[0]["text"]
         hass.put(RESERVE, "0")
         await actuate_battery(_plan_charge(), a, controller=sc)
         assert _rows(sc) == [NOT_STARTED, CHARGING]
@@ -170,6 +195,10 @@ class TestTheRowFollowsTheAnswer:
         assert [(r["new"], r["reason_code"], r["observer"]) for r in rows] == [
             ("force_charge 5000 W", RC.BATTERY_PLAN_CHARGE, True)]
         assert hass.calls == []
+
+
+async def _async_none(*a, **k):
+    return None
 
 
 class _Stub:
@@ -213,26 +242,77 @@ class TestEveryAnswerShape:
         await actuate_battery(_plan_charge(), _Stub(ret=True), controller=sc)
         assert _rows(sc) == [CHARGING]
 
-    async def test_a_brand_error_is_not_started(self):
-        sc = _sc()
+    async def test_a_brand_error_is_not_started_once_the_window_passed(
+            self, monkeypatch):
+        clock, sc = _Clock(monkeypatch), _sc()
         a = _Stub(intent=BatteryIntent.NORMAL, error="start_forced_charge failed")
         await actuate_battery(_plan_charge(), a, controller=sc)
+        assert _rows(sc) == []
+        clock.wait(WAIT)
+        await actuate_battery(_plan_charge(), a, controller=sc)
         assert _rows(sc) == [NOT_STARTED]
+        assert sc.decision_log.records()[0]["text"] == "start_forced_charge failed"
+
+    async def test_an_error_left_by_another_command_is_not_the_text(
+            self, monkeypatch):
+        """A discharge limit failed earlier; the start then neither sets
+        nor clears ``last_error`` (a mode still on its way)."""
+        clock, sc = _Clock(monkeypatch), _sc()
+        a = _Stub()
+        a.last_error = "limit write failed"
+        a._then = (None, "limit write failed", None)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        clock.wait(WAIT)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        rows = sc.decision_log.records()
+        assert _rows(sc) == [NOT_STARTED]
+        assert "limit" not in rows[0]["text"]
+
+    async def test_the_window_starts_again_after_another_intent(
+            self, monkeypatch):
+        clock, sc = _Clock(monkeypatch), _sc()
+        a = _Stub(error="waiting for select.mode to read charge")
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        clock.wait(WAIT - 10)
+        a.command_normal = _async_none
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.NORMAL), a, controller=sc)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        clock.wait(WAIT - 10)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        assert NOT_STARTED not in _rows(sc)
 
 
 class TestTheSaleFollowsTheSameRule:
-    async def test_a_sale_that_fails_says_not_started(self):
-        sc = _sc()
+    async def test_a_sale_that_fails_says_not_started(self, monkeypatch):
+        clock, sc = _Clock(monkeypatch), _sc()
         a = _Stub(error="power strategy reads nom — discharge setpoint withheld")
         for _ in range(3):
             await actuate_battery(_sale(), a, controller=sc)
+            clock.wait(WAIT)
         assert _rows(sc) == [("force_discharge", RC.BATTERY_SELL_NOT_STARTED)]
 
-    async def test_a_false_answer_with_an_error_is_not_started(self):
-        sc = _sc()
+    async def test_a_false_answer_with_an_error_is_not_started(self, monkeypatch):
+        clock, sc = _Clock(monkeypatch), _sc()
         a = _Stub(error="Deye write failed", ret=False)
         await actuate_battery(_sale(), a, controller=sc)
+        clock.wait(WAIT)
+        await actuate_battery(_sale(), a, controller=sc)
         assert _rows(sc) == [("force_discharge", RC.BATTERY_SELL_NOT_STARTED)]
+
+    async def test_a_failed_reassert_between_two_true_answers_writes_nothing(
+            self, monkeypatch):
+        """A Deye sale answers True or False and records no intent: one
+        False between two Trues is no row churn."""
+        clock, sc = _Clock(monkeypatch), _sc()
+        a = _Stub(ret=True)
+        await actuate_battery(_sale(), a, controller=sc)
+        a._then = (None, "Deye write failed", False)
+        await actuate_battery(_sale(), a, controller=sc)
+        clock.wait(30)
+        a._then = (None, None, True)
+        await actuate_battery(_sale(), a, controller=sc)
+        assert _rows(sc) == [("force_discharge 3000 W", RC.BATTERY_SELL)]
 
     async def test_twin_a_sale_that_goes_out(self):
         sc = _sc()
@@ -240,6 +320,85 @@ class TestTheSaleFollowsTheSameRule:
             sc = _sc()
             await actuate_battery(_sale(), a, controller=sc)
             assert _rows(sc) == [("force_discharge 3000 W", RC.BATTERY_SELL)]
+
+
+# ── planned waits on real adapters write no "not started" row ─────────
+
+class TestAPlannedWaitIsNotAFailure:
+    """Review (M1, M2): a start that lands a cycle or two later names an
+    error meanwhile ("waiting for …", "setpoint withheld"), or leaves one
+    from another command. Neither is a failed start."""
+
+    async def test_a_direction_select_that_shows_a_cycle_later(self, monkeypatch):
+        from unittest.mock import AsyncMock, Mock, patch
+
+        from .test_809_869_setpoint_models import DIR, SCALE, SP, _state
+        _Clock(monkeypatch)
+        for decision, start_dir, want in (
+                (_sale(), "charge", "force_discharge 3000 W"),
+                (_plan_charge(), "discharge", "force_charge 5000 W")):
+            st = {SP: _state(0, lo=0, hi=5000), DIR: _state(start_dir)}
+            hass = MagicMock()
+            hass.states.get = Mock(side_effect=lambda e, st=st: st.get(e))
+
+            async def call(domain, service, data=None, st=st, **kw):
+                if service == "select_option":
+                    st[DIR] = _state(data["option"])
+            hass.services.async_call = AsyncMock(side_effect=call)
+            a = GenericBatteryAdapter(hass, {
+                "battery_force_discharge_control_entity": SP,
+                "battery_max_discharge_power": 5000,
+                "battery_max_charge_power": 5000,
+                "battery_setpoint_model": "direction_select",
+                "battery_power_direction_entity": DIR, "battery_id": "b1"})
+            sc = _sc()
+            with patch(SCALE, return_value=1.0):
+                await actuate_battery(decision, a, controller=sc)
+                assert a.last_error, "the first cycle waits and says so"
+                for _ in range(2):
+                    await actuate_battery(decision, a, controller=sc)
+            assert [r["new"] for r in sc.decision_log.records()] == [want]
+
+    async def test_a_power_strategy_that_shows_late(self, monkeypatch):
+        from .test_978_strategy_readback import CFG, _rig
+        clock = _Clock(monkeypatch)
+        for decision, want in ((_plan_charge(), "force_charge 2200 W"),
+                               (_sale(), "force_discharge 1700 W")):
+            hass, _st = _rig(lag_reads=4)
+            a = GenericBatteryAdapter(hass, dict(CFG, battery_id="b1"))
+            sc = _sc()
+            for _ in range(4):
+                await actuate_battery(decision, a, controller=sc)
+                clock.wait(10)
+            news = [r["new"] for r in sc.decision_log.records()]
+            assert news and news[-1].startswith(want.split(" ")[0])
+            assert not any(r["reason_code"] in (
+                RC.BATTERY_CHARGE_NOT_STARTED, RC.BATTERY_SELL_NOT_STARTED)
+                for r in sc.decision_log.records())
+
+    async def test_a_hold_mode_settling_after_a_failed_limit(self, monkeypatch):
+        from . import test_1362_charge_sets_the_mode as T
+        clock, sc = _Clock(monkeypatch), _sc()
+        hass = T._Hass()
+        a = T._adapter(hass)
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.LIMIT_DISCHARGE,
+            discharge_limit_w=1500.0, reason="ev clamp"), a, controller=sc)
+        left = a.last_error
+        hass.refuse.add(T.MODE)                  # the mode has not shown yet
+        charge = BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.FORCE_CHARGE, target_soc=90.0,
+            charge_power_w=3000.0, duration_min=120, reason="plan block",
+            reason_code=RC.BATTERY_PLAN_CHARGE)
+        await actuate_battery(charge, a, controller=sc)
+        clock.wait(20)
+        hass.refuse.discard(T.MODE)
+        hass.put(T.MODE, T.UTILITY)
+        await actuate_battery(charge, a, controller=sc)
+        rows = [r for r in sc.decision_log.records() if r["new"].startswith("force")]
+        assert [(r["new"], r["reason_code"]) for r in rows] == [
+            ("force_charge 3000 W", RC.BATTERY_PLAN_CHARGE)]
+        assert left is None or all(left not in r["text"] for r in rows)
 
 
 # ── the plan: a charge target SEM could not set counts like a refusal ─
@@ -281,14 +440,19 @@ class TestTheAdapterRemembersTheTarget:
         ca._sel_unset_at -= ca.REFUSAL_MEMORY_S + 1
         assert a.charge_target_unset is False
 
-    async def test_the_switch_path_never_says_so(self):
+    async def test_the_switch_path_keeps_its_own_rule(self):
         """Without the select pair the switch starts the charge and the
-        target is a limit: its own rule, unchanged."""
-        hass = _Hass(reserve="unavailable")
+        target is a limit: a target the hold will not write starts the
+        charge anyway, and nothing leaves the plan."""
+        hass = _Hass(reserve="0")
         a = GenericBatteryAdapter(hass, {
             "battery_force_charge_switch": PERMIT,
-            "battery_target_soc_entity": RESERVE, "battery_id": "b1"})
+            "battery_target_soc_entity": RESERVE, "battery_id": "b1",
+            "charge_target_hold": ChargeTargetHold(
+                hass, _BadStore(), configured=(RESERVE,))})
         await actuate_battery(_plan_charge(), a)
+        assert hass.read(PERMIT) == "on", "the charge started"
+        assert float(hass.read(RESERVE)) == 0, "the hold wrote nothing"
         assert a.charge_target_unset is False
 
 
