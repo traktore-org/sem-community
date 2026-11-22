@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Plan no longer says the battery charges after a failed start** (#1413). The log says the charge has not started.
+
 # [2.3.0-beta.25] — 22.11.2026
 
 - 🐛 **System and Plan screens show if SEM acts** (#1377). If SEM cannot raise a Powerwall backup reserve, it starts no charge and says why.
