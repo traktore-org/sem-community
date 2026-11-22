@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Auto phase mode starts on 1 phase in thin sun** (#1412). An idle car never got 1 phase, so it never started in thin sun.
+- 🐛 **Minimum power follows the active phases** (#1412). After a switch to 1 phase, SEM still asked for 4140 W to start. Now 1380 W.
+- 🐛 **Phase switch values must fit the entity** (#1412). Values outside the number's range sent nothing, silently. The form now refuses them; a Repair names them.
 - 🐛 **Off and Pause show what the charger does** (#1407). The card said "No charge" or "paused" while another system charged.
 - 🐛 **Off sends no phase switch** (#1407). With phase switching on, SEM could still switch the phases of a charger set to Off.
 - 📝 **Min + Solar texts match what it does** (#1411). By day it waits for sun; the grid helps only if the night is too short.

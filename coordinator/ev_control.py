@@ -1095,14 +1095,22 @@ class EVControlMixin:
             SETTLE_S, STOP_WAIT_S, PhaseAutoPlanner, PhaseSwitchSequencer,
         )
         from .ev_phases import (
-            estimate_active_phases, phase_switch_command,
-            resolve_switch_values, validate_phase_switch_entity,
+            PHASE_LEG_FLOW_W, entity_bounds, estimate_active_phases,
+            phase_switch_command, resolve_switch_values,
+            switch_values_problem, validate_phase_switch_entity,
         )
 
         _, valid = validate_phase_switch_entity(
             entity, lambda e: self.hass.states.get(e) is not None)
         v1, v3, values_ready = resolve_switch_values(entity, charger_cfg)
-        ready = by_current or (bool(valid) and values_ready)
+        # (#1412) A value the entity cannot take is no capability: the write
+        # would be refused, and the stop before it would be for nothing.
+        values_problem = None
+        if entity and not by_current:
+            values_problem = switch_values_problem(
+                entity, v1, v3, entity_bounds(self.hass.states.get(entity)))
+        ready = by_current or (
+            bool(valid) and values_ready and not values_problem)
 
         if getattr(self, "_phase_sequencers", None) is None:
             self._phase_sequencers = {}
@@ -1234,11 +1242,20 @@ class EVControlMixin:
             # auto (Phase C): the planner answers from the power THIS
             # charger may draw — sustained starvation scales down,
             # sustained headroom scales up, caps protect the contactor.
+            # (#1412) ``idle``: SEM itself asks for no charge (the sun is
+            # below the minimum) and the car draws nothing — by the charger's
+            # own word AND by its power, so a draw the charging flag misses
+            # is still a draw. Only then may the planner answer without a
+            # belief: a charge SEM has asked for, or one that runs, gives the
+            # belief by its draw.
             desired = planner.desired(
                 now, believed, _power_on_offer_w(
                     decision, charger_cfg,
                     getattr(self, "config", {}) or {}, voltage,
                     peak_allowed_w=peak_allowed_w),
+                idle=(decision.intent is ChargerIntent.IDLE
+                      and not cp.charging and seq_idle
+                      and abs(float(cp.power_w or 0.0)) <= PHASE_LEG_FLOW_W),
             )
             # (#1008) …and the same give-up the manual target gets. Under
             # CHARGE_MAX the offer is a constant that always clears the
@@ -1315,6 +1332,10 @@ class EVControlMixin:
         if (contra["count"] >= PHASE_NOT_TAKING_AFTER
                 and contra["target"] is not None):
             self._phase_switch_states[cid] = "not_taking"
+        if values_problem:
+            # (#1412) said on the charger's phase state; the Repair is the
+            # coordinator's (``_check_phase_switch_values``)
+            self._phase_switch_states[cid] = "bad_values"
 
         # Only ever WEAKEN a charge into IDLE — an emergency stop from the
         # safety gate (DISABLE) must pass through untouched, which is also

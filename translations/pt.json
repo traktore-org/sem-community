@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Os dados do serviço SG-Ready têm de ser um objeto JSON.",
       "heat_pump_contact_values_missing": "Este contacto SG-Ready é uma entidade text/number/select, por isso o SEM precisa tanto do valor ON como do OFF para escrever. Preencha ambos, ou escolha uma entidade switch.",
       "calendar_needs_schedule": "O modo Calendário precisa de um horário de ponta. Escolha um auxiliar Agendamento ou outro modo de tarifa.",
-      "value_needs_spot_basis": "Uma margem, imposto sobre energia ou IVA só se aplicam a um preço spot. Escolha a base spot ou defina-os como 0."
+      "value_needs_spot_basis": "Uma margem, imposto sobre energia ou IVA só se aplicam a um preço spot. Escolha a base spot ou defina-os como 0.",
+      "phase_switch_value_out_of_range": "O valor para 1 fase ou 3 fases está fora do intervalo da entidade de comutação de fases. Introduza valores que a entidade aceite."
     }
   },
   "entity": {

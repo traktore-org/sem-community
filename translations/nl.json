@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "De SG-Ready-servicegegevens moeten een JSON-object zijn.",
       "heat_pump_contact_values_missing": "Dit SG-Ready-contact is een tekst-/getal-/select-entiteit, dus SEM heeft zowel de AAN- als de UIT-waarde nodig om te schrijven. Vul beide in, of kies een schakelaar-entiteit.",
       "calendar_needs_schedule": "Kalendermodus heeft een piekuren-schema nodig. Kies een Schema-helper of een andere tariefmodus.",
-      "value_needs_spot_basis": "Een opslag, energiebelasting of btw geldt alleen bij een spotprijs. Kies de spotbasis of zet ze op 0."
+      "value_needs_spot_basis": "Een opslag, energiebelasting of btw geldt alleen bij een spotprijs. Kies de spotbasis of zet ze op 0.",
+      "phase_switch_value_out_of_range": "De waarde voor 1 fase of 3 fasen valt buiten het bereik van de fase-omschakelentiteit. Voer waarden in die de entiteit accepteert."
     }
   },
   "entity": {

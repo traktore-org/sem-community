@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "SG-Ready servicedata skal være et JSON-objekt.",
       "heat_pump_contact_values_missing": "Dette SG-Ready-relæ er en text-/number-/select-entitet, så SEM har brug for både ON- og OFF-værdien at skrive. Udfyld begge, eller vælg en kontakt-entitet.",
       "calendar_needs_schedule": "Kalendertilstand kræver et spidslast-skema. Vælg en Tidsplan-hjælper eller en anden tarif-tilstand.",
-      "value_needs_spot_basis": "Et tillæg, elafgift eller moms gælder kun ved en spotpris. Vælg spotgrundlaget, eller sæt dem til 0."
+      "value_needs_spot_basis": "Et tillæg, elafgift eller moms gælder kun ved en spotpris. Vælg spotgrundlaget, eller sæt dem til 0.",
+      "phase_switch_value_out_of_range": "Værdien for 1 fase eller 3 faser ligger uden for området for faseskift-enheden. Indtast værdier, som enheden accepterer."
     }
   },
   "entity": {

@@ -1180,6 +1180,9 @@ class MinPlusSolarMode(ModeStrategy):
         return ChargerDecision(
             charger_id=cid, mode=mode_name,
             intent=ChargerIntent.IDLE,
+            # (#1412) what was on offer, as ``solar_only`` says it: the phase
+            # planner reads it to start an idle charger on one phase
+            budget_w=budget_w,
             reason=(
                 f"{mode_name} day Zone {zone}: budget={_cw(budget_w)}W "
                 f"below {min_amps}A min {tail}"

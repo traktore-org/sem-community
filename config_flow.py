@@ -319,6 +319,26 @@ def _mark_owner_values(before: dict, user_input: dict, charger: dict) -> None:
             charger[flag] = before[flag]
 
 
+def _phase_switch_values_misfit(hass: Any, values: dict) -> bool:
+    """(#1412) True when the 1-phase or 3-phase value does not fit the
+    number entity it is written to.
+
+    An install had 1000 and 4000 saved for a number that runs from 0 to 32,
+    so no phase switch could ever be written. Asked where the values are
+    typed; the running check is ``_check_phase_switch_values``. An entity
+    whose range cannot be read is not judged.
+    """
+    from .coordinator.ev_phases import (
+        entity_bounds, resolve_switch_values, switch_values_problem)
+
+    entity = (values or {}).get("ev_phase_switch_entity")
+    if not entity or hass is None:
+        return False
+    v1, v3, _ready = resolve_switch_values(entity, values)
+    return bool(switch_values_problem(
+        entity, v1, v3, entity_bounds(hass.states.get(entity))))
+
+
 def _merge_form_input(flow: Any, target: dict, user_input: dict) -> None:
     """Merge a submitted form into ``target``, honouring CLEARED fields.
 
@@ -2293,6 +2313,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Add an additional EV charger (#112)."""
         errors: dict[str, str] = {}
+        _typed: dict[str, Any] = {}
+
+        # (#1412) a value the phase switch number cannot take: ask again,
+        # with what was typed still in the form
+        if user_input is not None:
+            if _phase_switch_values_misfit(
+                    getattr(self, "hass", None), user_input):
+                errors["base"] = "phase_switch_value_out_of_range"
+                _typed = dict(user_input)
+                _typed["name"] = _typed.pop("charger_name", None)
+                user_input = None
 
         if user_input is not None:
             ev_chargers = list(self._data.get("ev_chargers", []))
@@ -2347,6 +2378,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             suggestions.setdefault("ev_phase_switch_entity", _sps.get("entity"))
             suggestions.setdefault("ev_phase_switch_value_1p", _sps.get("value_1p"))
             suggestions.setdefault("ev_phase_switch_value_3p", _sps.get("value_3p"))
+        if _typed:
+            suggestions = {**suggestions,
+                           **{k: v for k, v in _typed.items() if v is not None}}
 
         return self.async_show_form(
             step_id="ev_charger_add",
@@ -2574,6 +2608,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         if not charger:
             return await self.async_step_ev_charger_menu()
+
+        # (#1412) a value the phase switch number cannot take: nothing is
+        # saved, and the form comes back with what was typed
+        if user_input is not None:
+            _merged = dict(charger)
+            _merge_form_input(self, _merged, dict(user_input))
+            if _phase_switch_values_misfit(
+                    getattr(self, "hass", None), _merged):
+                errors["base"] = "phase_switch_value_out_of_range"
+                _merged["name"] = user_input.get(
+                    "charger_name", charger.get("name"))
+                _merged.pop("charger_name", None)
+                charger = _merged          # for the form only; not the list's row
+                user_input = None
 
         if user_input is not None:
             # Update charger with new values

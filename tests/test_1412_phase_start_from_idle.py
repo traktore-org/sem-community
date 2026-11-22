@@ -1,0 +1,592 @@
+"""(#1412) Phase mode "auto" could never reach one phase from an idle start.
+
+Three defects, one report (a charger that changes phases through a number
+entity, a small PV system in winter):
+
+1. The auto planner answered only once it had a phase belief, and the belief
+   comes from a measured draw. With less sun than three phases need at the
+   minimum current the car never started, so the belief never formed and the
+   planner never asked for one phase.
+2. After a switch to one phase the day decision still priced the minimum
+   current at the configured phase count (6 A = 4140 W instead of 1380 W).
+3. Switch values saved outside the number entity's range could never be
+   written, and nothing said so.
+
+The charger here is a fixture: a number entity with a range. No brand.
+"""
+from __future__ import annotations
+
+import ast
+import asyncio
+import inspect
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+from custom_components.solar_energy_management.coordinator import (
+    coordinator as coordinator_mod,
+    ev_control,
+)
+from custom_components.solar_energy_management.coordinator.build_view import (
+    FleetCycleState, build_charger_view,
+)
+from custom_components.solar_energy_management.coordinator.charger_types import (
+    ChargerDecision, ChargerIntent, ChargerPower,
+)
+from custom_components.solar_energy_management.coordinator.decide import decide
+from custom_components.solar_energy_management.coordinator.ev_phase_sequencer import (
+    AUTO_MAX_PER_SESSION, AUTO_MIN_INTERVAL_S, AUTO_START_DELAY_S,
+    PhaseAutoPlanner,
+)
+from custom_components.solar_energy_management.coordinator.ev_phases import (
+    switch_values_problem,
+)
+
+ONE_P_MIN_W = 6 * 230.0          # 1380 W
+THREE_P_MIN_W = 3 * 6 * 230.0    # 4140 W
+THIN_SUN_W = 2000.0              # covers one phase, not three
+
+
+# ── 1. the planner ──────────────────────────────────────────────────────
+
+class TestPlannerStartsOnOnePhase:
+
+    def _p(self):
+        return PhaseAutoPlanner(min_current_a=6, voltage=230.0)
+
+    def test_thin_sun_on_an_idle_charger_asks_for_one_phase(self):
+        p = self._p()
+        assert p.desired(0.0, None, THIN_SUN_W, idle=True) is None, (
+            "not on the first cycle: the sun must hold")
+        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
+                         idle=True) == 1
+
+    def test_a_cloud_starts_the_wait_again(self):
+        p = self._p()
+        p.desired(0.0, None, THIN_SUN_W, idle=True)
+        p.desired(200.0, None, 500.0, idle=True)          # below one phase
+        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
+                         idle=True) is None
+        assert p.desired(200.0 + 2 * AUTO_START_DELAY_S + 2, None,
+                         THIN_SUN_W, idle=True) == 1
+
+    def test_sun_for_three_phases_asks_for_nothing(self):
+        """The car starts as it is set up; the draw then gives the belief."""
+        p = self._p()
+        p.desired(0.0, None, THREE_P_MIN_W + 500, idle=True)
+        assert p.desired(AUTO_START_DELAY_S + 1, None, THREE_P_MIN_W + 500,
+                         idle=True) is None
+
+    def test_too_little_sun_for_one_phase_asks_for_nothing(self):
+        p = self._p()
+        p.desired(0.0, None, ONE_P_MIN_W - 100, idle=True)
+        assert p.desired(AUTO_START_DELAY_S + 1, None, ONE_P_MIN_W - 100,
+                         idle=True) is None
+
+    def test_a_charger_that_draws_is_never_started_cold(self):
+        """Unknown phases under load: only a measurement may answer."""
+        p = self._p()
+        p.desired(0.0, None, THIN_SUN_W, idle=False)
+        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
+                         idle=False) is None
+
+    def test_idle_defaults_to_false(self):
+        """A caller that says nothing about the charger gets today's answer."""
+        p = self._p()
+        p.desired(0.0, None, THIN_SUN_W)
+        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W) is None
+
+    def test_the_interval_between_switches_holds(self):
+        p = self._p()
+        p.note_switched(0.0)
+        p.desired(10.0, None, THIN_SUN_W, idle=True)
+        assert p.desired(10.0 + AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
+                         idle=True) is None
+        assert p.desired(AUTO_MIN_INTERVAL_S + 1, None, THIN_SUN_W,
+                         idle=True) == 1
+
+    def test_the_session_cap_holds(self):
+        p = self._p()
+        t = 0.0
+        for _ in range(AUTO_MAX_PER_SESSION):
+            p.note_switched(t)
+            t += AUTO_MIN_INTERVAL_S + 1
+        p.desired(t, None, THIN_SUN_W, idle=True)
+        assert p.desired(t + AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
+                         idle=True) is None
+
+    def test_a_new_car_waits_its_own_time(self):
+        p = self._p()
+        p.desired(0.0, None, THIN_SUN_W, idle=True)
+        p.new_session()
+        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
+                         idle=True) is None
+
+    def test_a_known_belief_is_decided_as_before(self):
+        p = self._p()
+        p.desired(0.0, 1, THIN_SUN_W, idle=True)
+        assert p.desired(AUTO_START_DELAY_S + 1, 1, THIN_SUN_W,
+                         idle=True) is None, "one phase and thin sun: stay"
+
+
+# ── 1. the per-charger tick ─────────────────────────────────────────────
+
+SWITCH = "number.wallbox_phase_threshold"
+
+
+def _host(cfg_over=None, observer=False, number_range=(0.0, 32.0)):
+    h = SimpleNamespace()
+    h._phase_switch_tick = ev_control.EVControlMixin._phase_switch_tick.__get__(h)
+    h._observer_mode = observer
+    h._surplus_controller = None
+    h.config = {}
+    state = MagicMock()
+    state.state = "0"
+    state.attributes = ({"min": number_range[0], "max": number_range[1]}
+                        if number_range else {})
+    h.hass = SimpleNamespace(
+        states=SimpleNamespace(get=lambda eid: state),
+        services=SimpleNamespace(async_call=AsyncMock()),
+    )
+    h.cfg = {
+        "ev_phase_switch_entity": SWITCH,
+        "ev_phase_switching_enabled": True,
+        "phase_mode": "auto",
+        "ev_phase_switch_value_1p": "32",
+        "ev_phase_switch_value_3p": "0",
+        "ev_voltage": 230,
+        "ev_min_current": 6,
+    }
+    h.cfg.update(cfg_over or {})
+    return h
+
+
+def _idle(budget=THIN_SUN_W):
+    return ChargerDecision(
+        charger_id="c1", mode="solar_only", intent=ChargerIntent.IDLE,
+        budget_w=budget, reason="solar_only: surplus below min — idle")
+
+
+def _cp(power_w=0.0, charging=False, connected=True):
+    return ChargerPower(charger_id="c1", power_w=power_w,
+                        connected=connected, charging=charging)
+
+
+def _run(h, decision, cp, t):
+    return asyncio.run(h._phase_switch_tick("c1", h.cfg, decision, cp, t))
+
+
+class TestTickStartsOnOnePhase:
+
+    def test_thin_sun_writes_the_one_phase_value_once(self):
+        h = _host()
+        _run(h, _idle(), _cp(), 0.0)
+        h.hass.services.async_call.assert_not_awaited()
+        _run(h, _idle(), _cp(), AUTO_START_DELAY_S + 1)
+        h.hass.services.async_call.assert_awaited_once()
+        call = h.hass.services.async_call.await_args
+        assert call.args[:2] == ("number", "set_value")
+        assert call.args[2] == {"entity_id": SWITCH, "value": 32.0}
+        # settle over: SEM believes one phase from here
+        _run(h, _idle(), _cp(), AUTO_START_DELAY_S + 100)
+        assert h._phase_believed["c1"] == 1
+        h.hass.services.async_call.assert_awaited_once()
+
+    def test_no_switch_while_the_charger_draws(self):
+        """Phases unknown and a car drawing: no start, no stop, no write."""
+        h = _host()
+        d = ChargerDecision(
+            charger_id="c1", mode="always_max",
+            intent=ChargerIntent.CHARGE_MAX, budget_w=0.0, reason="max")
+        for t in (0.0, AUTO_START_DELAY_S + 1, 2 * AUTO_START_DELAY_S):
+            out = _run(h, d, _cp(power_w=300.0, charging=True), t)
+            assert out is d
+        h.hass.services.async_call.assert_not_awaited()
+
+    def test_a_draw_the_charging_flag_misses_is_still_a_draw(self):
+        h = _host()
+        for t in (0.0, AUTO_START_DELAY_S + 1, 2 * AUTO_START_DELAY_S + 2):
+            _run(h, _idle(), _cp(power_w=300.0, charging=False), t)
+        h.hass.services.async_call.assert_not_awaited()
+
+    def test_a_charge_sem_asked_for_is_not_started_cold(self):
+        """SEM commands amps (a grid floor) and the car has not started yet:
+        the draw will give the phases. No switch to one phase under it."""
+        h = _host()
+        d = ChargerDecision(
+            charger_id="c1", mode="min_plus_solar",
+            intent=ChargerIntent.CHARGE_AT_AMPS, commanded_amps=6,
+            budget_w=THIN_SUN_W, reason="Min floor engaged")
+        for t in (0.0, AUTO_START_DELAY_S + 1, 2 * AUTO_START_DELAY_S + 2):
+            assert _run(h, d, _cp(), t) is d
+        h.hass.services.async_call.assert_not_awaited()
+
+    def test_no_car_no_switch(self):
+        h = _host()
+        for t in (0.0, AUTO_START_DELAY_S + 1):
+            _run(h, _idle(), _cp(connected=False), t)
+        h.hass.services.async_call.assert_not_awaited()
+
+    def test_observer_mode_writes_nothing(self):
+        h = _host(observer=True)
+        _run(h, _idle(), _cp(), 0.0)
+        _run(h, _idle(), _cp(), AUTO_START_DELAY_S + 1)
+        h.hass.services.async_call.assert_not_awaited()
+
+    def test_a_charger_with_phase_switching_off_is_untouched(self):
+        h = _host({"ev_phase_switching_enabled": False})
+        d = _idle()
+        for t in (0.0, AUTO_START_DELAY_S + 1):
+            assert _run(h, d, _cp(), t) is d
+        h.hass.services.async_call.assert_not_awaited()
+        assert getattr(h, "_phase_planners", None) is None, (
+            "no per-charger phase state is even made")
+
+    def test_a_charger_without_a_switch_is_untouched(self):
+        h = _host({"ev_phase_switch_entity": None,
+                   "ev_phase_switching_enabled": False})
+        d = _idle()
+        for t in (0.0, AUTO_START_DELAY_S + 1):
+            assert _run(h, d, _cp(), t) is d
+        h.hass.services.async_call.assert_not_awaited()
+
+    def test_manual_three_phases_is_not_overruled(self):
+        h = _host({"phase_mode": "3"})
+        _run(h, _idle(), _cp(), 0.0)
+        calls = h.hass.services.async_call.await_args_list
+        assert all(c.args[2]["value"] == 0.0 for c in calls), (
+            "the owner's choice of three phases is the only thing written")
+
+
+# ── 2. the decision's minimum power ─────────────────────────────────────
+
+def _view(charger_cfg, surplus_w, active_phases=None, mode="solar_only"):
+    power = MagicMock()
+    power.solar_power = surplus_w + 300.0
+    power.home_consumption_power = 300.0
+    power.battery_soc = None
+    power.battery_power = 0.0
+    power.grid_power = surplus_w
+    power.ev_power = 0.0
+    power.ev_power_per_charger = {}
+    power.ev_connected_per_charger = {"wb": True}
+    power.ev_charging_per_charger = {}
+    fleet = FleetCycleState(
+        power=power, config={}, is_night=False, tariff_level=None,
+        forecast_remaining_kwh=0.0)
+    kwargs = {}
+    if active_phases is not None:
+        kwargs["active_phases"] = active_phases
+    return build_charger_view(
+        fleet, charger_id="wb", charger_cfg=charger_cfg, mode=mode,
+        daily_ev_kwh=0.0, **kwargs)
+
+
+SWITCHING_CFG = {
+    "id": "wb", "ev_phases": 3, "ev_min_current": 6, "ev_max_current": 16,
+    "ev_voltage": 230, "ev_phase_switching_enabled": True,
+    "ev_phase_switch_entity": SWITCH,
+}
+
+
+class TestDecisionUsesTheActivePhases:
+
+    def test_the_view_carries_the_phases_sem_set(self):
+        view = _view(SWITCHING_CFG, THIN_SUN_W, active_phases=1)
+        assert view.config["ev_phases"] == 1
+
+    def test_unknown_phases_keep_the_configured_count(self):
+        view = _view(SWITCHING_CFG, THIN_SUN_W)
+        assert view.config["ev_phases"] == 3
+
+    def test_a_charger_that_cannot_switch_keeps_its_configured_count(self):
+        cfg = {**SWITCHING_CFG, "ev_phase_switching_enabled": False}
+        view = _view(cfg, THIN_SUN_W, active_phases=1)
+        assert view.config["ev_phases"] == 3
+
+    def test_a_count_that_is_no_phase_count_is_ignored(self):
+        view = _view(SWITCHING_CFG, THIN_SUN_W, active_phases=2)
+        assert view.config["ev_phases"] == 3
+
+    def test_the_stored_config_is_not_changed(self):
+        cfg = dict(SWITCHING_CFG)
+        _view(cfg, THIN_SUN_W, active_phases=1)
+        assert cfg["ev_phases"] == 3
+
+    def test_one_phase_charges_on_thin_sun(self):
+        """The report: on one phase the minimum is 1380 W, not 4140 W."""
+        on_three = decide(_view(SWITCHING_CFG, THIN_SUN_W))
+        assert on_three.intent is ChargerIntent.IDLE
+        on_one = decide(_view(SWITCHING_CFG, THIN_SUN_W, active_phases=1))
+        assert on_one.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert on_one.commanded_amps * 230 <= THIN_SUN_W
+
+
+class TestEveryViewIsBuiltWithTheActivePhases:
+    """A view built without them prices the minimum at the configured count
+    again. Every ``build_charger_view`` call in the coordinator passes it."""
+
+    def test_each_call_passes_active_phases(self):
+        tree = ast.parse(inspect.getsource(coordinator_mod))
+        calls = [n for n in ast.walk(tree)
+                 if isinstance(n, ast.Call)
+                 and getattr(n.func, "id", "") == "build_charger_view"]
+        assert len(calls) >= 3
+        missing = [c.lineno for c in calls
+                   if "active_phases" not in {k.arg for k in c.keywords}]
+        assert missing == [], f"build_charger_view without active_phases: {missing}"
+
+    def _coord(self, believed, contradictions=0, enabled=True):
+        c = SimpleNamespace()
+        c.config = {}
+        c._phase_believed = {"wb": believed} if believed else {}
+        c._phase_contradictions = {"wb": {"count": contradictions}}
+        cfg = {**SWITCHING_CFG, "ev_phase_switching_enabled": enabled}
+        c._ev_charger_cfg = lambda cid: cfg
+        cls = coordinator_mod.SEMCoordinator
+        c._active_phases_for = cls._active_phases_for.__get__(c)
+        return c
+
+    def test_the_belief_is_the_active_count(self):
+        assert self._coord(1)._active_phases_for("wb") == 1
+        assert self._coord(3)._active_phases_for("wb") == 3
+
+    def test_no_belief_is_no_count(self):
+        assert self._coord(None)._active_phases_for("wb") is None
+
+    def test_a_disputed_switch_keeps_the_measured_count(self):
+        """After a switch the box did not take, the belief IS the measured
+        draw — the latest reading, so the decision keeps it."""
+        assert self._coord(1, contradictions=1)._active_phases_for("wb") == 1
+
+    def test_two_is_no_count(self):
+        assert self._coord(2)._active_phases_for("wb") is None
+
+    def test_a_charger_that_cannot_switch_has_no_active_count(self):
+        assert self._coord(1, enabled=False)._active_phases_for("wb") is None
+
+
+# ── 3. switch values the entity cannot take ─────────────────────────────
+
+class TestSwitchValuesMustFitTheEntity:
+
+    def test_the_reported_values_do_not_fit(self):
+        why = switch_values_problem(SWITCH, "1000", "4000", (0.0, 32.0))
+        assert why and "1000" in why and "0" in why and "32" in why
+
+    def test_values_inside_the_range_fit(self):
+        assert switch_values_problem(SWITCH, "32", "0", (0.0, 32.0)) is None
+
+    def test_a_value_that_is_no_number_does_not_fit(self):
+        assert switch_values_problem(SWITCH, "one", "0", (0.0, 32.0))
+
+    def test_an_unknown_range_is_not_judged(self):
+        assert switch_values_problem(SWITCH, "1000", "4000", None) is None
+
+    def test_a_select_is_not_judged_by_a_range(self):
+        assert switch_values_problem("select.phases", "1", "3", (0.0, 32.0)) is None
+
+    def test_the_tick_never_writes_a_value_the_entity_cannot_take(self):
+        h = _host({"ev_phase_switch_value_1p": "1000",
+                   "ev_phase_switch_value_3p": "4000"})
+        d = _idle()
+        for t in (0.0, AUTO_START_DELAY_S + 1, 2 * AUTO_START_DELAY_S + 2):
+            assert _run(h, d, _cp(), t) is d
+        h.hass.services.async_call.assert_not_awaited()
+        assert h._phase_switch_states["c1"] == "bad_values"
+
+    def test_manual_mode_does_not_write_it_either(self):
+        h = _host({"phase_mode": "1", "ev_phase_switch_value_1p": "1000",
+                   "ev_phase_switch_value_3p": "4000"})
+        _run(h, _idle(), _cp(), 0.0)
+        h.hass.services.async_call.assert_not_awaited()
+        assert h._phase_switch_states["c1"] == "bad_values"
+
+
+class TestTheRepairNamesTheValue:
+    """The owner is told: the charger's phase switch is marked not valid and
+    the control-entity Repair names the entity and the value."""
+
+    def _coord(self, monkeypatch, v1="1000", v3="4000", number_range=(0.0, 32.0),
+               enabled=True, extra=None):
+        from custom_components.solar_energy_management.coordinator import (
+            repair_issues,
+        )
+        calls = {"raised": [], "cleared": []}
+        monkeypatch.setattr(
+            repair_issues, "raise_charger_control_entity_broken",
+            lambda hass, cid, **kw: calls["raised"].append((cid, kw)))
+        monkeypatch.setattr(
+            repair_issues, "clear_charger_control_entity_broken",
+            lambda hass, cid, eid: calls["cleared"].append((cid, eid)))
+        monkeypatch.setattr(
+            coordinator_mod, "charger_display_name", lambda hass, cfg: "Wallbox")
+        state = MagicMock()
+        state.attributes = ({"min": number_range[0], "max": number_range[1]}
+                            if number_range else {})
+        c = SimpleNamespace()
+        c.hass = SimpleNamespace(states=SimpleNamespace(get=lambda eid: state))
+        cls = coordinator_mod.SEMCoordinator
+        c._CONTROL_CAPABILITIES = cls._CONTROL_CAPABILITIES
+        c._PHASE_SWITCH_CAPABILITY = cls._PHASE_SWITCH_CAPABILITY
+        c._check_phase_switch_values = cls._check_phase_switch_values.__get__(c)
+        cfg = {"id": "wb", "ev_phase_switch_entity": SWITCH,
+               "ev_phase_switching_enabled": enabled,
+               "ev_phase_switch_value_1p": v1, "ev_phase_switch_value_3p": v3}
+        cfg.update(extra or {})
+        return c, cfg, calls
+
+    def test_values_outside_the_range_raise_one_repair(self, monkeypatch):
+        c, cfg, calls = self._coord(monkeypatch)
+        result = {"charger_wb_phase_switch_valid": True}
+        c._check_phase_switch_values("wb", cfg, result)
+        c._check_phase_switch_values("wb", cfg, result)
+        assert result["charger_wb_phase_switch_valid"] is False
+        assert len(calls["raised"]) == 1
+        cid, kw = calls["raised"][0]
+        assert cid == "wb" and kw["entity_id"] == SWITCH
+        assert "1000" in kw["reason"] and "32" in kw["reason"]
+
+    def test_fitting_values_clear_it(self, monkeypatch):
+        c, cfg, calls = self._coord(monkeypatch)
+        result = {}
+        c._check_phase_switch_values("wb", cfg, result)
+        cfg["ev_phase_switch_value_1p"], cfg["ev_phase_switch_value_3p"] = "32", "0"
+        result = {"charger_wb_phase_switch_valid": True}
+        c._check_phase_switch_values("wb", cfg, result)
+        assert result["charger_wb_phase_switch_valid"] is True
+        assert calls["cleared"] == [("wb", SWITCH)]
+
+    def test_a_repair_from_before_a_restart_is_cleared_once(self, monkeypatch):
+        c, cfg, calls = self._coord(monkeypatch, v1="32", v3="0")
+        c._check_phase_switch_values("wb", cfg, {})
+        c._check_phase_switch_values("wb", cfg, {})
+        assert calls["cleared"] == [("wb", SWITCH)] and not calls["raised"]
+
+    def test_a_range_that_cannot_be_read_says_nothing(self, monkeypatch):
+        c, cfg, calls = self._coord(monkeypatch, number_range=None)
+        result = {"charger_wb_phase_switch_valid": True}
+        c._check_phase_switch_values("wb", cfg, result)
+        assert result["charger_wb_phase_switch_valid"] is True
+        assert not calls["raised"] and not calls["cleared"]
+
+    def test_phase_switching_off_is_not_checked(self, monkeypatch):
+        c, cfg, calls = self._coord(monkeypatch, enabled=False)
+        c._check_phase_switch_values("wb", cfg, {})
+        assert not calls["raised"] and not calls["cleared"]
+
+    def test_another_checks_repair_is_not_cleared(self, monkeypatch):
+        """The same entity as the current control: that Repair has its owner."""
+        c, cfg, calls = self._coord(
+            monkeypatch, v1="32", v3="0",
+            extra={"ev_current_control_entity": SWITCH})
+        c._check_phase_switch_values("wb", cfg, {})
+        assert not calls["cleared"]
+
+
+class TestTheFormsRefuseValuesThatDoNotFit:
+    """Where the values are typed: the add and the edit form of a charger."""
+
+    def _flow(self, chargers, number_range=(0.0, 32.0)):
+        from unittest.mock import patch
+        from custom_components.solar_energy_management.config_flow import (
+            OptionsFlowHandler,
+        )
+        entry = MagicMock()
+        entry.data, entry.options = {}, {}
+        flow = OptionsFlowHandler(entry)
+        state = MagicMock()
+        state.attributes = {"min": number_range[0], "max": number_range[1]}
+        flow.hass = MagicMock()
+        flow.hass.data = {}
+        flow.hass.states.get = lambda eid: state
+        flow._data = {"ev_chargers": chargers}
+        flow._edit_charger_id = "c1"
+        shown = {}
+        flow.async_show_form = lambda **kw: shown.update(kw) or {"type": "form", **kw}
+        ctx = patch.object(type(flow), "config_entry",
+                           new_callable=lambda: property(lambda s: entry))
+        return flow, shown, ctx
+
+    BOX = {"id": "c1", "name": "Box", "ev_connected_sensor": "binary_sensor.x",
+           "ev_phase_switch_entity": SWITCH,
+           "ev_phase_switch_value_1p": "32", "ev_phase_switch_value_3p": "0"}
+
+    def test_edit_refuses_and_saves_nothing(self):
+        flow, shown, ctx = self._flow([dict(self.BOX)])
+        with ctx:
+            asyncio.run(flow.async_step_ev_charger_edit({
+                "charger_name": "Box", "ev_phase_switch_entity": SWITCH,
+                "ev_phase_switch_value_1p": "1000",
+                "ev_phase_switch_value_3p": "4000"}))
+        assert shown["errors"] == {"base": "phase_switch_value_out_of_range"}
+        assert shown["step_id"] == "ev_charger_edit"
+        saved = flow._data["ev_chargers"][0]
+        assert saved["ev_phase_switch_value_1p"] == "32"
+        assert saved["ev_phase_switch_value_3p"] == "0"
+
+    def test_edit_takes_values_that_fit(self):
+        flow, shown, ctx = self._flow([dict(self.BOX)])
+        flow.async_step_ev_charger_menu = AsyncMock(return_value={"type": "menu"})
+        with ctx:
+            asyncio.run(flow.async_step_ev_charger_edit({
+                "charger_name": "Box", "ev_phase_switch_entity": SWITCH,
+                "ev_phase_switch_value_1p": "16",
+                "ev_phase_switch_value_3p": "0"}))
+        assert not shown
+        assert flow._data["ev_chargers"][0]["ev_phase_switch_value_1p"] == "16"
+
+    def test_add_refuses_and_adds_nothing(self, monkeypatch):
+        from custom_components.solar_energy_management import hardware_detection
+        monkeypatch.setattr(
+            hardware_detection, "discover_all_ev_chargers_from_registry",
+            lambda hass: [])
+        flow, shown, ctx = self._flow([])
+        with ctx:
+            asyncio.run(flow.async_step_ev_charger_add({
+                "charger_name": "Second", "ev_connected_sensor": "binary_sensor.y",
+                "ev_phase_switch_entity": SWITCH,
+                "ev_phase_switch_value_1p": "1000",
+                "ev_phase_switch_value_3p": "4000"}))
+        assert shown["errors"] == {"base": "phase_switch_value_out_of_range"}
+        assert shown["step_id"] == "ev_charger_add"
+        assert flow._data["ev_chargers"] == []
+
+    def test_the_error_has_a_text(self):
+        import json
+        from pathlib import Path
+        root = Path(ev_control.__file__).resolve().parent.parent
+        strings = json.loads((root / "strings.json").read_text(encoding="utf-8"))
+        assert "phase_switch_value_out_of_range" in strings["options"]["error"]
+
+
+class TestTheNightPlanSizesOnTheActivePhases:
+    """One phase after a switch is 230 W per amp. The night plan and the
+    deadline floor size the car by this number: left at three phases, they
+    would plan 4.1 kW for a car that takes 1.4 kW."""
+
+    def _coord(self, believed, ema=None):
+        cls = coordinator_mod.SEMCoordinator
+        c = cls.__new__(cls)
+        c.config = {"ev_chargers": [SWITCHING_CFG]}
+        c._ev_wpa_ema = dict(ema or {})
+        c._last_commanded_amps_fleet = 0
+        c._phase_believed = {"wb": believed} if believed else {}
+        return c
+
+    def test_one_phase_is_one_phase_of_nameplate(self):
+        c = self._coord(1)
+        assert c._ev_watts_per_amp("wb", SWITCHING_CFG) == 230.0
+
+    def test_unknown_phases_keep_the_configured_nameplate(self):
+        c = self._coord(None)
+        assert c._ev_watts_per_amp("wb", SWITCHING_CFG) == 690.0
+
+    def test_an_average_learned_on_three_phases_is_capped_on_one(self):
+        c = self._coord(1, ema={"wb": 600.0})
+        assert c._ev_watts_per_amp("wb", SWITCHING_CFG) == 230.0
+
+    def test_a_charger_that_cannot_switch_is_unchanged(self):
+        cfg = {**SWITCHING_CFG, "ev_phase_switching_enabled": False}
+        c = self._coord(1, ema={"wb": 600.0})
+        c.config = {"ev_chargers": [cfg]}
+        assert c._ev_watts_per_amp("wb", cfg) == 600.0

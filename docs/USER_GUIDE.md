@@ -218,6 +218,11 @@ Notes:
 - Add a second or third charger with **Add a device** or **Add or detect a charger**.
 - Priority decides which charger gets spare sun first.
 - Phase switching (1 or 3 phase) is on the charger, when the wallbox supports it.
+  With phase mode **Auto**, SEM starts an idle car on 1 phase when the spare sun
+  covers 1 phase at the lowest current but not 3 (for example 1.4 kW to 4.1 kW
+  at 6 A). The sun must hold for 5 minutes first.
+- The values for 1 phase and 3 phases must be inside the range of the number
+  entity they are written to. If not, SEM sends no phase switch and raises a Repair.
 
 ### KEBA
 

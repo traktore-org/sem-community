@@ -149,6 +149,67 @@ def resolve_switch_values(entity_id: str, cfg: dict):
     return v1, v3, bool(v1 and v3)
 
 
+def active_phases(charger_cfg, believed) -> Optional[int]:
+    """(#1412) The phase count a charger runs on NOW, or None.
+
+    A charger that changes phases has no fixed count: what SEM set, or
+    measured, is the one this cycle's amps run on. ``believed`` is the
+    tick's belief for this charger. None for a charger that cannot switch
+    (its configured count is the truth) and while nothing is known — the
+    caller then keeps the configured count. 2 is no phase count SEM sets.
+    """
+    if not isinstance(charger_cfg, dict) \
+            or not charger_cfg.get("ev_phase_switching_enabled", False):
+        return None
+    return int(believed) if believed in (1, 3) else None
+
+
+def switch_values_problem(entity_id: str, value_1p, value_3p, bounds):
+    """(#1412) Why the entity cannot take these values, or None.
+
+    A number takes values inside its own range only. An install had 1000
+    and 4000 saved for a number that runs from 0 to 32: every switch SEM
+    sent was refused, and nothing said so. ``bounds`` is the entity's
+    ``(min, max)``, or None when it cannot be read — then nothing is judged.
+    Only numbers have a range; a select's options are checked where the
+    option is looked up, a switch has two states.
+    """
+    domain = str(entity_id or "").split(".", 1)[0]
+    if domain not in ("number", "input_number") or not bounds:
+        return None
+    try:
+        low, high = float(bounds[0]), float(bounds[1])
+    except (TypeError, ValueError, IndexError):
+        return None
+    if not (_math.isfinite(low) and _math.isfinite(high)) or low > high:
+        return None
+    for label, raw in (("1 phase", value_1p), ("3 phases", value_3p)):
+        if raw is None or raw == "":
+            continue
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            return f"given {raw} for {label}, which is not a number"
+        if not _math.isfinite(val) or not low <= val <= high:
+            return (f"given {raw} for {label}, outside its range "
+                    f"{low:g} to {high:g}")
+    return None
+
+
+def entity_bounds(state):
+    """(#1412) ``(min, max)`` of a number entity's state, or None."""
+    attrs = getattr(state, "attributes", None)
+    if not isinstance(attrs, dict):
+        return None
+    low, high = attrs.get("min"), attrs.get("max")
+    if low is None or high is None:
+        return None
+    try:
+        return float(low), float(high)
+    except (TypeError, ValueError):
+        return None
+
+
 def phase_switch_command(entity_id: str, value: str, hass):
     """The one service call a phase switch turns into, or None.
 

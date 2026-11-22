@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Die SG-Ready-Dienstdaten müssen ein JSON-Objekt sein.",
       "heat_pump_contact_values_missing": "Dieser SG-Ready-Kontakt ist eine Text-/Zahlen-/Auswahl-Entität, daher benötigt SEM sowohl den EIN- als auch den AUS-Wert zum Schreiben. Füllen Sie beide aus, oder wählen Sie eine Schalter-Entität.",
       "calendar_needs_schedule": "Der Kalender-Modus braucht einen Hochtarif-Zeitplan. Wähle einen Zeitplan-Helfer oder einen anderen Tarifmodus.",
-      "value_needs_spot_basis": "Aufschlag, Energiesteuer oder MwSt. gelten nur bei einem Spotpreis. Wähle die Spot-Basis oder setze sie auf 0."
+      "value_needs_spot_basis": "Aufschlag, Energiesteuer oder MwSt. gelten nur bei einem Spotpreis. Wähle die Spot-Basis oder setze sie auf 0.",
+      "phase_switch_value_out_of_range": "Der Wert für 1 Phase oder 3 Phasen liegt ausserhalb des Bereichs der Phasenumschalt-Entität. Geben Sie Werte ein, die die Entität annimmt."
     }
   },
   "entity": {
