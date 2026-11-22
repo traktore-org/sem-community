@@ -1,56 +1,81 @@
 """(#1411) Thin sun plus grid — one rule, for the plan and for the live gate.
 
 A sun hour is THIN when the spare sun is below a charger's minimum power.
-Today that sun leaves through the meter at the export price, and the car's
+That sun leaves through the meter at the export price, and the car's
 "At least" is bought from the grid later. Charging at the minimum NOW takes
 the spare sun and buys only the rest:
 
     blended = (sun · export + (min − sun) · import_now) / min
 
-It pays when that blended price is lower than the cheapest import price the
-car could still get before its deadline. Three tariffs, one sum:
+THE INVARIANT. The rule fires only when the blended price beats the
+cheapest alternative — the cheapest hour without spare sun the car may
+still use before its deadline — by the margin: ``blended <= (1 − margin) ×
+cheapest_other`` (10 % to start, 5 % to keep running). Nothing else about
+the prices is promised. In particular it is NOT "never when export >=
+import": on a dynamic tariff where this hour is the cheapest of the window
+(import now 0.10, later 0.25) the blend beats the alternative even with an
+export price of 0.30, and buying now is right.
 
-* export = import (net metering): the blend equals the import price, never
-  lower — the rule never fires, waiting costs nothing.
-* one price all day, export below import: any spare sun makes the blend
-  lower — it fires.
-* a cheaper night: it fires only from enough sun to beat the night price.
+On a ONE-PRICE tariff the invariant reduces to "export below import":
+
+* export = import (net metering): the blend equals the import price —
+  never 10 % below it. The rule never fires; waiting costs nothing.
+* export below import: it fires from enough sun to save 10 % (flat 0.30,
+  export 0.075, a 4.14 kW minimum: from about 550 W).
+* a cheaper night: only from enough sun to beat the night price by 10 %.
+
+The export price is the one stored in the tariff settings — the number SEM
+uses for every money figure. It has to be right for this mode.
 
 Pure: no clock reads, no I/O, no Home Assistant imports. ``energy_planner``
 prices and gates a thin sun slot with these functions, and
-``decide.SolarPlusCheapMode`` asks the same ones every cycle — so the plan
-on the card and what the charger does cannot hold two opinions.
+``decide.SolarPlusCheapMode`` asks the same ones every cycle — inside a
+thin-sun block of the stamped plan only, so the plan on the card and what
+the charger does cannot hold two opinions.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
 
-#: A blend this close to the reference is not "lower": a rounding tie must
-#: not start a grid charge (and a re-plan must not flip on it).
+#: A blend this close to the bar is not "below" it: a rounding tie must not
+#: start a grid charge (and a re-plan must not flip on it).
 PRICE_EPS = 1e-6
+
+#: The worth-it margin: the blended price must be at least this share below
+#: the cheapest alternative. A constant, not an option. Without it 200 W of
+#: sun on a flat 0.30 with a 0.075 export price "saved" 3 % and bought 95 %
+#: grid — Min + Solar by day under another name. The smaller margin keeps a
+#: running session through a price or a sun that drifts at the edge.
+START_MARGIN = 0.10
+RUN_MARGIN = 0.05
 
 #: Spare sun below this is meter noise, not a sun hour (the day ledger's
 #: ``DEFAULT_SURPLUS_MARGIN_W`` — the plan has no sun slot below it either).
+#: A running session keeps going down to a quarter of it.
 MIN_SUN_W = 200.0
-
-#: (#1411) Anti-flap. A session that is already charging keeps running
-#: through a thinner moment: a quarter of the starting sun is enough, and
-#: the price test is made as if the sun were a quarter stronger than it is
-#: right now. Starting stays strict. Without this a cloud at the threshold
-#: opens the contactor, and the sun a minute later closes it again — the
-#: churn class the stability layer exists for, which cannot bridge this
-#: stop because holding it buys grid power.
-#:
-#: The relaxation is on the SUN, never on the price itself: where no
-#: amount of sun makes the blend cheaper (export = import), a running
-#: session gets no pass either.
 RUN_SUN_FACTOR = 0.25
-RUN_SUN_BOOST = 1.25
 
 #: The battery "takes the sun" above this charge power: that sun is not
-#: leaving the property, so it has no export price to beat.
+#: leaving the property, so it has no export price to beat. A running
+#: session lets go only above the higher number — a pack trickling at the
+#: edge must not open and close the contactor.
 BATTERY_TAKES_W = 100.0
+BATTERY_TAKES_RUN_W = 500.0
+
+#: The pack may feed the car above its own surplus gate
+#: (``battery_assist_min_surplus_w``): no START there. A running session
+#: keeps going until the sun is this far above the gate, instead of
+#: stopping while the sun grows.
+PACK_GATE_RUN_EXTRA_W = 300.0
+
+#: "Strong sun later covers the need" stops a START at the need; a running
+#: session stops only when the forecast covers this much more.
+FORECAST_RUN_EXTRA_KWH = 1.0
+
+#: With a home battery the plan books a thin-sun block only where the pack
+#: is full: only then does that sun really leave through the meter.
+PACK_FULL_SHARE = 0.98
 
 
 def blended_price(sun_w: float, power_w: float,
@@ -70,14 +95,16 @@ def thin_sun_pays(*, sun_w: Optional[float], min_w: Optional[float],
                   import_price: Optional[float],
                   cheapest_other: Optional[float],
                   running: bool = False) -> bool:
-    """Does charging at ``min_w`` on ``sun_w`` of spare sun plus the grid
-    cost less than the cheapest other hour still open to the car?
+    """Is charging at ``min_w`` on ``sun_w`` of spare sun plus the grid
+    cheaper than the cheapest other hour still open to the car, by the
+    margin? ``blended <= (1 − margin) × cheapest_other`` — the invariant in
+    the module docstring, and the whole of it.
 
     Any unknown is a no: a price that could not be read buys nothing
     (#925). Strong sun (``sun_w >= min_w``) is not this rule's business —
     it needs no grid at all. ``running``: the car is already charging on
-    this rule — the two thresholds relax a little (``RUN_*``), so a
-    session does not end and restart on a thin cloud.
+    this rule — the smaller margin and the lower sun floor apply, so a
+    session does not end and restart at the edge.
     """
     if (sun_w is None or min_w is None or export_price is None
             or import_price is None or cheapest_other is None):
@@ -91,30 +118,56 @@ def thin_sun_pays(*, sun_w: Optional[float], min_w: Optional[float],
     floor_w = MIN_SUN_W * (RUN_SUN_FACTOR if running else 1.0)
     if need <= 0 or sun < floor_w or sun >= need:
         return False
-    priced_sun = min(sun * RUN_SUN_BOOST, need) if running else sun
-    return blended_price(priced_sun, need, export, imp) < ref - PRICE_EPS
+    margin = RUN_MARGIN if running else START_MARGIN
+    # ``abs``: a negative reference is beaten by going further below it
+    bar = ref - abs(ref) * margin
+    return blended_price(sun, need, export, imp) <= bar - PRICE_EPS
+
+
+def pack_out_of_the_way(soc_kwh: Optional[float],
+                        cap_kwh: Optional[float]) -> bool:
+    """May the PLAN count a sun hour's surplus as leaving the property?
+    Yes without a home battery, and with one only when it is full — a pack
+    with room takes that sun first, so there is nothing to beat."""
+    try:
+        cap = float(cap_kwh or 0.0)
+        if cap <= 0.0:
+            return True
+        return float(soc_kwh or 0.0) >= PACK_FULL_SHARE * cap
+    except (TypeError, ValueError):
+        return False
 
 
 @dataclass(frozen=True)
 class ThinSun:
     """What the live gate needs to ask the rule, for ONE charger, this cycle.
 
-    Built by the coordinator from the same tariff provider and the same
-    forecast the plan reads. The default is "not evaluated": every field
-    unknown, and the rule answers no — an install without prices, a broken
-    provider and a view built by an old call site all behave as before.
+    Built by the coordinator from the same tariff provider and the stamped
+    plan. The default is "not evaluated": every field unknown, and the rule
+    answers no — an install without prices, a broken provider and a view
+    built by an old call site all behave as before.
     """
 
-    #: What a kWh earns when it leaves the property. None = the user never
-    #: gave SEM an export price: the rule stays off.
+    #: What a kWh earns when it leaves the property. None = no export price
+    #: is stored (the key is absent or not a number): the rule stays off.
     export_price: Optional[float] = None
     #: What a kWh from the grid costs right now.
     import_now: Optional[float] = None
-    #: The cheapest import price from now to this charger's deadline.
+    #: The cheapest dark hour from now to this charger's deadline.
     cheapest_later: Optional[float] = None
     #: Energy (kWh) the forecast still expects today in hours whose spare
     #: sun reaches this charger's minimum power. None = no forecast.
     strong_sun_kwh: Optional[float] = None
+    #: The stamped plan has a "spare sun plus grid" block for this charger
+    #: that is open right now. The charger acts only there: where the plan
+    #: shows none — a pack with room, a sunnier thin hour picked instead —
+    #: it does not act either.
+    in_block: bool = False
+    #: Seconds since this rule started the running session; None = it
+    #: started none. Kept by the coordinator, read for the minimum block.
+    session_s: Optional[float] = None
+    #: The charger's minimum block (``ev_min_block_minutes``), in seconds.
+    min_block_s: float = 900.0
 
 
 NOT_EVALUATED = ThinSun()
@@ -129,15 +182,31 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
     """The live gate's answer → ``(fires, why)``.
 
     ``why`` is a short machine word for the reason text and the tests:
-    ``ok`` or the first condition that said no. The order is the order a
-    reader would ask in: is there a need, is the sun really spare, would
-    strong sun do it for free, is there room on the meter, does it pay.
+    ``ok``, ``held``, or the first condition that said no.
+
+    HARD limits end a session at once: the "At least" is met, the car is
+    gone (the mode answers that before it asks here), the tariff's peak
+    pause (likewise), and the peak limit (the senior clamps in ``decide``
+    act on every decision; ``grid_room_w`` only refuses a START).
+
+    Every other condition is SOFT. A session this rule started is HELD for
+    the charger's minimum block whatever the soft conditions say, and after
+    that each one is asked with its "keep running" threshold, which is
+    easier than the one that starts. So none of them can open and close the
+    contactor by hovering at its edge.
     """
     if t is None:
         return (False, "not_evaluated")
     if need_kwh is None or need_kwh <= 0.1:
         return (False, "no_need")
-    if battery_charge_w > BATTERY_TAKES_W:
+    # only a session THIS rule started runs on the easier thresholds: a car
+    # that is charging for another reason gets the strict start
+    run = bool(running and t.session_s is not None)
+    if run and float(t.session_s) < float(t.min_block_s):
+        return (True, "held")
+    if not t.in_block:
+        return (False, "no_plan_block")
+    if battery_charge_w > (BATTERY_TAKES_RUN_W if run else BATTERY_TAKES_W):
         return (False, "battery_takes_sun")
     if pack_could_pay:
         # The home battery is free to discharge into the car right now
@@ -145,7 +214,7 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
         # "grid's share" would come out of the pack, at a price this rule
         # never compared. The battery's rules decide then, not this one.
         return (False, "battery_would_pay")
-    if sun_w < MIN_SUN_W * (RUN_SUN_FACTOR if running else 1.0):
+    if sun_w < MIN_SUN_W * (RUN_SUN_FACTOR if run else 1.0):
         return (False, "no_sun")
     if sun_w >= min_w:
         return (False, "strong_sun")
@@ -153,19 +222,18 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
         return (False, "export_unknown")
     if t.strong_sun_kwh is None:
         return (False, "forecast_unknown")
-    if t.strong_sun_kwh >= float(need_kwh):
+    if t.strong_sun_kwh >= float(need_kwh) + (
+            FORECAST_RUN_EXTRA_KWH if run else 0.0):
         return (False, "forecast_covers")
     # ``grid_room_w``: the grid watts the peak limit leaves free right now;
     # None = no limit set (the absence of a ceiling is not a ceiling of 0).
-    if (not running and grid_room_w is not None
+    if (not run and grid_room_w is not None
             and (min_w - sun_w) > float(grid_room_w)):
-        # a running session is already inside the measured import; the
-        # senior peak clamps slow or stop it, not this start check
         return (False, "no_grid_room")
     if not thin_sun_pays(sun_w=sun_w, min_w=min_w,
                          export_price=t.export_price,
                          import_price=t.import_now,
-                         cheapest_other=t.cheapest_later, running=running):
+                         cheapest_other=t.cheapest_later, running=run):
         return (False, "not_cheaper")
     return (True, "ok")
 

@@ -50,9 +50,9 @@ EV_TARGET_TYPES = {
 # ``docs/plans/2026-05-30_ev_charge_mode_consolidation.md`` for the
 # full mapping, migration rules, and resolved design questions.
 #
-# ``solar_plus_cheap`` is greyed out in the card when the tariff has no
-# cheap hours (#885; #1385: any tariff with a cheap rate, not only a
-# dynamic one). Decision Q1, 2026-05-30. Constant lives in
+# ``solar_plus_cheap`` ("Solar + tariff") was greyed out in the card when
+# the tariff had no cheap hours (#885, #1385). Since #1411 it works on one
+# price too and no mode is greyed out. Constant lives in
 # ``consts/ev_charge_modes.py`` so the coordinator's read-side helper
 # imports the same source of truth (no duplicated tuple in
 # ``coordinator/coordinator.py``).

@@ -852,10 +852,12 @@ The coordinator owns all EV control (`ev.managed_externally = True`). The EV is 
   (#856); an expensive hour pauses every grid top-up
 - By day, thin sun (#1411): surplus below the charger's minimum plus the
   grid for the rest, for the Min only, when
-  `thin_sun.thin_sun_pays` says the blended price beats the cheapest dark
-  hour before the deadline. `ChargerView.thin_sun` carries the live prices
-  and the stamped plan's reference hours (`ThinSunRefs`); the planner's
-  `_sun_grid` asks the same functions, so plan and charger agree
+  `thin_sun.thin_sun_pays` says the blended price is 10 % below the
+  cheapest dark hour before the deadline. `ChargerView.thin_sun` carries
+  the live prices, the stamped plan's reference hours (`ThinSunRefs`),
+  whether a thin-sun block of the plan is open, and the session's age; the
+  planner's `_sun_grid` asks the same functions, and the charger acts only
+  inside the plan's block
 - At night: the plan's blocks, as every night-capable mode
 
 ### Pause States

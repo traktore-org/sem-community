@@ -183,8 +183,48 @@ def _thin_sun_of(host: Any, cid: str, charger_cfg: Any):
     try:
         result = fn(cid, charger_cfg) if callable(fn) else None
     except Exception:  # noqa: BLE001 — a rule input must never cost a cycle
+        # …but a rule that is silently off is a rule nobody can debug
+        _LOGGER.debug("#1411 thin-sun inputs skipped for %s", cid, exc_info=True)
         result = None
     return result if isinstance(result, ThinSun) else None
+
+
+def _in_thin_sun_block(plan: Any, cid: str, now: datetime) -> bool:
+    """(#1411) Is a "spare sun plus grid" block of this charger open in the
+    stamped plan right now? Read off the plan's own ``blocks`` rows (the
+    shape ``plan_blocks`` writes), so the card and the charger look at one
+    list. Anything unreadable is a no."""
+    try:
+        for b in (plan or {}).get("blocks") or ():
+            if b.get("id") != f"ev:{cid}" or b.get("reason") != "sun_plus_grid":
+                continue
+            start = datetime.fromisoformat(str(b.get("start")))
+            end = datetime.fromisoformat(str(b.get("end")))
+            if start <= now < end:
+                return True
+    except Exception:  # noqa: BLE001 — a plan nobody can read holds no block
+        return False
+    return False
+
+
+def _note_thin_sun(host: Any, cid: str, decision: Any) -> None:
+    """(#1411) Time the thin-sun session of one charger: the moment its
+    decision first carried the rule's reason code, kept while it does and
+    dropped the cycle it does not. ``_thin_sun_for`` hands the age to the
+    next cycle's view — the minimum block and the "keep running"
+    thresholds read it. Never raises: a host without the dict gets one."""
+    try:
+        from . import reason_codes as _rc
+        sessions = getattr(host, "_thin_sun_sessions", None)
+        if not isinstance(sessions, dict):
+            sessions = {}
+            host._thin_sun_sessions = sessions
+        if getattr(decision, "reason_code", None) == _rc.CHARGER_SUN_PLUS_GRID:
+            sessions.setdefault(str(cid), dt_util.now())
+        else:
+            sessions.pop(str(cid), None)
+    except Exception:  # noqa: BLE001 — bookkeeping must never cost a cycle
+        return
 
 
 def _export_known_of(host: Any) -> bool:
@@ -1572,6 +1612,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1411) per charger: the stamped plan's own dark and strong-sun
         # hours, the live thin-sun rule's reference (``thin_sun.ThinSunRefs``)
         self._thin_sun_refs: Dict[str, Any] = {}
+        # (#1411) per charger: when its running thin-sun session started
+        self._thin_sun_sessions: Dict[str, Any] = {}
         self._shadow_partial_since = None
         # (#638 G4) actuation opt-in — the plan's blocks feed the existing
         # night signals only while this is True. Seeded from the persisted
@@ -5653,6 +5695,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             soc_ceiling_reached=per_target_reached,
                         )
                         decision = decide_v2(view)
+                        _note_thin_sun(self, cid, decision)      # (#1411)
                         from .vpp_dispatch import vpp_pause_override
                         decision = vpp_pause_override(
                             decision, getattr(self, "_vpp_ev_override", None) == "pause")
@@ -6035,6 +6078,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ),
                 )
                 decision = decide_v2(view)
+                _note_thin_sun(self, cid, decision)              # (#1411)
                 # Hysteresis stability layer (#461 flapping) — the
                 # single-charger legacy branch needs the same protection,
                 # and the same #1391 yield.
@@ -10074,20 +10118,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     def _export_price_known(self) -> bool:
         """(#1411) Did the user give SEM an export price?
 
-        ``_configured_export_rate`` always answers with a number (0.075
-        when the key is absent), which is right for pricing a sun slot and
-        wrong for STARTING a grid charge on it: the thin-sun rule buys grid
-        power because the sun would earn less leaving than the grid costs
-        later, and a default nobody typed cannot say that. Known = the
-        price is stored in the config, or the tariff has a live feed-in
-        price of its own.
+        Known = ``electricity_export_rate`` is stored and is a number. That
+        is the price SEM uses for every money figure, so it is the price
+        this rule compares with — the settings pre-fill 0.075, and the
+        guide says it must be right for this mode. The rule's own margin
+        (``thin_sun.START_MARGIN``) is what keeps a rough number from
+        buying grid power for a 3 % saving.
+
+        Unknown = the key is absent or not a number. A live feed-in entity
+        does not make it known: when that entity is unavailable the reader
+        falls back to the stored rate, and with none stored there is no
+        price to compare with.
         """
         try:
-            if self.config.get("electricity_export_rate") is not None:
-                return True
-            return bool(getattr(getattr(self, "_tariff_provider", None),
-                                "_feedin_entity", None))
-        except Exception:  # noqa: BLE001 — unreadable is unknown
+            raw = self.config.get("electricity_export_rate")
+            if raw is None or isinstance(raw, bool):
+                return False
+            value = float(raw)
+            return value == value and value not in (float("inf"), float("-inf"))
+        except Exception:  # noqa: BLE001 — not a number is unknown
             return False
 
     def _thin_sun_for(self, cid: str, charger_cfg: Any):
@@ -10114,6 +10163,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             export = (tariff_export_rate_at(
                 prov, now, self._configured_export_rate())
                 if self._export_price_known() else None)
+            started = (getattr(self, "_thin_sun_sessions", None) or {}).get(
+                str(cid))
+            try:
+                block_s = float(self.config.get("ev_min_block_minutes", 15)) * 60.0
+            except (TypeError, ValueError):
+                block_s = 900.0
             return ThinSun(
                 export_price=export,
                 import_now=tariff_price_at(prov, now),
@@ -10122,6 +10177,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # unknown, and the rule does not fire on an unknown
                 strong_sun_kwh=(refs.strong_kwh_after(now)
                                 if refs.forecast_known else None),
+                # the charger acts only inside a thin-sun block of the
+                # stamped plan — read off the plan itself
+                in_block=_in_thin_sun_block(
+                    getattr(self, "_energy_plan_shadow", None), cid, now),
+                session_s=(max(0.0, (now - started).total_seconds())
+                           if isinstance(started, datetime) else None),
+                min_block_s=max(0.0, block_s),
             )
         except Exception:  # noqa: BLE001 — a rule input must never cost a cycle
             return None

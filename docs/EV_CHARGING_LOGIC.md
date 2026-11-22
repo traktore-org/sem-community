@@ -152,21 +152,41 @@ grid, for the floor only. One sum decides, in `coordinator/thin_sun.py`:
 blended = (sun × export + (min − sun) × import now) / min
 ```
 
-It fires when `blended` is lower than the cheapest hour without spare sun
-that the car may still use before its deadline. So:
+The invariant: it fires only when `blended` is at least 10 % below the
+cheapest hour without spare sun that the car may still use before its
+deadline (5 % to keep a running session). On a one-price tariff that
+reduces to "export below import":
 
 - export = import: never.
-- one price, export below import: on any thin sun.
-- a cheaper night: only from enough sun.
+- one price, export below import: from enough sun to save 10 %
+  (0.30 and 0.075, a 4.14 kW minimum: about 550 W).
+- a cheaper night: only from more sun.
 
-It does not fire when the export price is not set, when no forecast is
-known, when strong sun later today covers the floor, when the battery
-charges from that sun or may feed the car, in an expensive hour, or when
-the peak limit has no room.
+On a dynamic tariff it can fire with an export price above this hour's
+import price: when this hour is the cheapest of the window, buying now is
+cheaper than later.
 
-The planner asks the same functions (`energy_planner._sun_grid`), so the
-plan shows a **Spare sun plus grid** block where the charger will act. A
-running session keeps going through a short thinner moment.
+The export price is the stored `electricity_export_rate`. It is unknown
+only when the key is absent or not a number; then the rule is off.
+
+It does not fire when no forecast is known, when strong sun later today
+covers the floor, when the battery charges from that sun or may feed the
+car, in an expensive hour, or when the peak limit has no room.
+
+Plan and charger: the planner asks the same functions
+(`energy_planner._sun_grid`) and books a **Spare sun plus grid** block.
+The charger acts only inside such a block of the stamped plan. With a home
+battery the plan books one only where its walk has the battery full, so
+where the plan shows none the charger does not act.
+
+Steady: a started session holds for the charger's minimum block
+(`ev_min_block_minutes`) unless the floor is met, the car is unplugged, the
+hour turns expensive or the peak limit steps in. After that every condition
+has a start value and an easier "keep running" value.
+
+After a restart the rule is off until the next plan is stamped (a new day,
+a plug-in, a changed need). That is safe: off means the mode's old
+behaviour, spare sun by day and the floor at night.
 
 ## Daily energy counters
 

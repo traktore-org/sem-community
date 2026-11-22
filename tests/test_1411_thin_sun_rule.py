@@ -62,26 +62,31 @@ class TestTheSum:
         for sun in (300.0, 2500.0, 4000.0):
             assert not _pays(sun, export=0.35, day=0.30, night=0.30)
 
-    def test_one_price_and_a_low_export_price_fires_on_any_thin_sun(self):
-        for sun in (MIN_SUN_W, 500.0, 1000.0, 2500.0, 4000.0):
+    def test_one_price_and_a_low_export_price_fires_from_enough_sun(self):
+        """The blend must be 10 % below the alternative: on 0.30 with a
+        0.06 export price that takes 4140 × 0.03 / 0.24 = 518 W of sun."""
+        for sun in (MIN_SUN_W, 400.0, 500.0):
+            assert not _pays(sun, export=0.06, day=0.30, night=0.30)
+        for sun in (530.0, 1000.0, 2500.0, 4000.0):
             assert _pays(sun, export=0.06, day=0.30, night=0.30)
 
     def test_a_cheaper_night_needs_enough_sun(self):
         """day 0.30, night 0.20, export 0.06, 4.14 kW minimum: the blend
-        beats the night from 4140 × 0.10 / 0.24 = 1725 W of sun."""
-        edge = MIN_W * (0.30 - 0.20) / (0.30 - 0.06)
-        assert edge == pytest.approx(1725.0)
+        is 10 % below the night (0.18) from 4140 × 0.12 / 0.24 = 2070 W."""
+        edge = MIN_W * (0.30 - 0.18) / (0.30 - 0.06)
+        assert edge == pytest.approx(2070.0)
         assert not _pays(1000.0, export=0.06, day=0.30, night=0.20)
         assert not _pays(edge - 25.0, export=0.06, day=0.30, night=0.20)
         assert _pays(edge + 25.0, export=0.06, day=0.30, night=0.20)
         assert _pays(3000.0, export=0.06, day=0.30, night=0.20)
 
     def test_a_dynamic_hour_compares_against_the_cheapest_hour_to_come(self):
-        # now 0.18, a 0.12 hour tonight, export 0.05, 2 kW of sun
-        blend = blended_price(2000.0, MIN_W, 0.05, 0.18)
-        assert blend == pytest.approx(0.1172, abs=1e-4)
-        assert _pays(2000.0, export=0.05, day=0.18, night=0.12)
-        assert not _pays(2000.0, export=0.05, day=0.18, night=0.10)
+        # now 0.18, a 0.12 hour tonight, export 0.05, 3 kW of sun
+        blend = blended_price(3000.0, MIN_W, 0.05, 0.18)
+        assert blend == pytest.approx(0.0858, abs=1e-4)
+        assert _pays(3000.0, export=0.05, day=0.18, night=0.12)   # <= 0.108
+        assert not _pays(3000.0, export=0.05, day=0.18, night=0.09)
+        assert not _pays(2000.0, export=0.05, day=0.18, night=0.12)
 
     def test_a_negative_export_price_makes_the_sun_better_than_free(self):
         assert _pays(1000.0, export=-0.05, day=0.25, night=0.20)
@@ -101,17 +106,16 @@ class TestTheSum:
         assert thin_sun_pays(**kw) is False
 
     def test_a_running_session_rides_through_a_thinner_moment(self):
-        # starting needs 200 W; running holds down to 50 W
-        assert not _pays(120.0, export=0.06, day=0.30, night=0.30)
-        assert _pays(120.0, export=0.06, day=0.30, night=0.30, running=True)
-        assert not _pays(40.0, export=0.06, day=0.30, night=0.30, running=True)
-        # …and the price as if the sun were a quarter stronger, not more:
-        # the 1725 W edge of a cheaper night holds down to 1380 W
-        assert not _pays(1600.0, export=0.06, day=0.30, night=0.20)
-        assert _pays(1600.0, export=0.06, day=0.30, night=0.20, running=True)
-        assert _pays(1400.0, export=0.06, day=0.30, night=0.20, running=True)
-        assert not _pays(1350.0, export=0.06, day=0.30, night=0.20, running=True)
-        assert not _pays(1000.0, export=0.06, day=0.30, night=0.20, running=True)
+        """Start: 10 % below and 200 W of sun. Keep running: 5 % and 50 W.
+        (The pairs for the other conditions: test_1411_review_fixes.py.)"""
+        # flat 0.30 / 0.06: starts from 518 W, keeps running from 259 W
+        assert not _pays(400.0, export=0.06, day=0.30, night=0.30)
+        assert _pays(400.0, export=0.06, day=0.30, night=0.30, running=True)
+        assert not _pays(240.0, export=0.06, day=0.30, night=0.30, running=True)
+        # the sun floor alone: free sun (export 0) at a quarter of 200 W
+        assert not _pays(40.0, export=-5.0, day=0.30, night=0.30, running=True)
+        assert _pays(60.0, export=-5.0, day=0.30, night=0.30, running=True)
+        assert not _pays(60.0, export=-5.0, day=0.30, night=0.30)
 
     def test_a_running_session_gets_no_pass_where_sun_never_pays(self):
         """export >= import on one price: no amount of sun makes the blend
@@ -153,7 +157,7 @@ def test_sweep_it_never_fires_when_a_later_hour_is_cheaper_than_any_blend():
 # ── the live verdict ──────────────────────────────────────────────────
 
 FLAT = ThinSun(export_price=0.06, import_now=0.30, cheapest_later=0.30,
-               strong_sun_kwh=0.0)
+               strong_sun_kwh=0.0, in_block=True)
 
 
 def _verdict(t=FLAT, **kw):
@@ -207,7 +211,7 @@ class TestTheLiveVerdict:
 
     def test_net_metering_says_not_cheaper(self):
         net = ThinSun(export_price=0.30, import_now=0.30, cheapest_later=0.30,
-                      strong_sun_kwh=0.0)
+                      strong_sun_kwh=0.0, in_block=True)
         assert _verdict(net) == (False, "not_cheaper")
 
     def test_strong_sun_is_left_alone(self):
@@ -368,12 +372,15 @@ class TestTheReferences:
         live verdict fires on the same sun and prices — and nowhere else."""
         cases = [
             dict(sun=1000, price=0.30, night=None, export=0.06),   # one price
+            dict(sun=400, price=0.30, night=None, export=0.06),    # under 10 %
             dict(sun=1000, price=0.30, night=None, export=0.30),   # net metering
             dict(sun=1000, price=0.30, night=0.20, export=0.06),   # too little
             dict(sun=2500, price=0.30, night=0.20, export=0.06),   # enough
-            dict(sun=2000, price=0.18, night=0.12, export=0.05),   # dynamic
-            dict(sun=2000, price=0.18, night=0.10, export=0.05),
+            dict(sun=3000, price=0.18, night=0.12, export=0.05),   # dynamic
+            dict(sun=2000, price=0.18, night=0.12, export=0.05),
+            dict(sun=3000, price=0.18, night=0.09, export=0.05),
         ]
+        booked_any = []
         for c in cases:
             slots = _day([c["sun"], 0, 0, 0], price=c["price"],
                          night=c["night"], export=c["export"])
@@ -381,12 +388,22 @@ class TestTheReferences:
             booked = "sun_plus_grid" in {a.code for a in plan.allocations}
             refs = refs_from_ledger(ledger, deadline=_t(23, 59), min_w=MIN_W,
                                     max_w=11000.0)
+            booked_any.append(booked)
+            # the rule's own answer on the same sun and prices…
             live = ThinSun(export_price=c["export"], import_now=c["price"],
                            cheapest_later=refs.cheapest_after(_t(12)),
-                           strong_sun_kwh=refs.strong_kwh_after(_t(12)))
+                           strong_sun_kwh=refs.strong_kwh_after(_t(12)),
+                           in_block=True)
             fires, _ = thin_sun_verdict(live, sun_w=float(c["sun"]),
                                         min_w=MIN_W, need_kwh=4.14)
             assert fires is booked, c
+            # …and the charger itself, which is told whether a block is open
+            from dataclasses import replace as _r
+            acts, _ = thin_sun_verdict(_r(live, in_block=booked),
+                                       sun_w=float(c["sun"]), min_w=MIN_W,
+                                       need_kwh=4.14)
+            assert acts is booked, c
+        assert True in booked_any and False in booked_any
 
 
 # ── the live gate, through decide ─────────────────────────────────────
@@ -419,16 +436,20 @@ class TestTheLiveGate:
         assert d.commanded_amps == 6
 
     def test_a_running_session_holds_through_a_thinner_moment(self):
-        """300 W spare → start; 100 W spare while drawing → hold; 100 W
-        spare from standstill → no start."""
+        """100 W spare from standstill → no start. The same sun while a
+        session this rule started is drawing → it holds (minimum block),
+        and says so. A car drawing for another reason gets no pass."""
         from dataclasses import replace
         idle = _view(solar_w=600.0, home_w=500.0)          # 100 W spare
         assert decide(idle).intent is ChargerIntent.IDLE
-        drawing = replace(idle, power=replace(
+        other = replace(idle, power=replace(
             idle.power, charging=True, power_w=4100.0))
+        assert decide(other).intent is ChargerIntent.IDLE
+        drawing = replace(other, thin_sun=replace(FLAT, session_s=120.0))
         d = decide(drawing)
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
         assert d.reason_code == RC.CHARGER_SUN_PLUS_GRID
+        assert "minimum block" in d.reason
 
     def test_a_battery_charging_from_that_sun_keeps_it(self):
         d = decide(_view(battery_soc=50, battery_charge_w=900.0))
@@ -454,12 +475,12 @@ class TestTheLiveGate:
 
     def test_net_metering_waits(self):
         net = ThinSun(export_price=0.30, import_now=0.30, cheapest_later=0.30,
-                      strong_sun_kwh=0.0)
+                      strong_sun_kwh=0.0, in_block=True)
         assert decide(_view(thin_sun=net)).intent is ChargerIntent.IDLE
 
     def test_a_cheaper_night_waits_on_too_little_sun_and_charges_on_enough(self):
         two = ThinSun(export_price=0.06, import_now=0.30, cheapest_later=0.20,
-                      strong_sun_kwh=0.0)
+                      strong_sun_kwh=0.0, in_block=True)
         low = decide(_view(thin_sun=two, tariff_level="normal",
                            solar_w=1500.0))            # 1000 W spare
         assert low.intent is ChargerIntent.IDLE
@@ -570,12 +591,6 @@ class TestTheCoordinatorPlumbing:
         fake.config["electricity_export_rate"] = 0.0     # a stored zero IS known
         assert coord._export_price_known(fake) is True
 
-    def test_a_live_feed_in_price_is_known(self, monkeypatch):
-        fake, coord = self._stamp(monkeypatch)
-        fake.config.pop("electricity_export_rate", None)
-        fake._tariff_provider._feedin_entity = "sensor.feed_in_price"
-        assert coord._export_price_known(fake) is True
-
     def test_a_plan_without_a_forecast_leaves_the_forecast_unknown(self, monkeypatch):
         fake, coord = self._stamp(monkeypatch)
         fake.config["electricity_export_rate"] = 0.06
@@ -584,7 +599,9 @@ class TestTheCoordinatorPlumbing:
             max_w=11000.0)}
         t = coord._thin_sun_for(fake, "ev_charger", fake.config["ev_chargers"][0])
         assert t.strong_sun_kwh is None
-        assert thin_sun_verdict(t, sun_w=1000.0, min_w=MIN_W,
+        from dataclasses import replace
+        assert thin_sun_verdict(replace(t, in_block=True), sun_w=1000.0,
+                                min_w=MIN_W,
                                 need_kwh=5.0) == (False, "forecast_unknown")
 
     def test_no_stamped_plan_no_inputs(self, monkeypatch):

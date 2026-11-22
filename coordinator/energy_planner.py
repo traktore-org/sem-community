@@ -26,7 +26,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from .price_view import day_has_cheaper, price_no_dearer
-from .thin_sun import blended_price, thin_sun_pays
+from .thin_sun import blended_price, pack_out_of_the_way, thin_sun_pays
 
 FIT_EPS = 0.999          # "fits" = this share of the need; the plan wait accepts the same (#1289)
 _W_EPS = 1.0              # grants below 1 W are noise
@@ -484,14 +484,14 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         # the blended price has to beat the cheapest dark hour still open to
         # this demand, and only with an export price the user gave. The live
         # gate asks ``thin_sun`` the same question (``decide``).
-        # A home battery in the ledger: the plan books no such block. That
-        # sun mostly goes into the pack, and whether the pack may feed the
-        # car is the battery's own decision, cycle by cycle — the live gate
-        # checks both; the plan cannot know either hours ahead, and a block
-        # the charger then declines would leave the night without one.
+        # A home battery in the ledger: a block only where the walk has the
+        # pack FULL. A pack with room takes that sun first — nothing leaves
+        # through the meter, so there is no export price to beat. The live
+        # gate acts only inside a block of this plan (``ThinSun.in_block``),
+        # so where none is booked the charger does not act either.
         if not s.import_cheap and not (
                 s.export_known and not s.import_peak
-                and float(getattr(s, "cap_kwh", 0.0) or 0.0) <= 0.0
+                and pack_out_of_the_way(s.soc_kwh, getattr(s, "cap_kwh", 0.0))
                 and thin_sun_pays(
                     sun_w=sun_w, min_w=min_w, export_price=s.price,
                     import_price=s.import_price,

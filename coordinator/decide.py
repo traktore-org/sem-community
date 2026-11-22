@@ -49,7 +49,7 @@ from .charger_types import (
     rewrite,
 )
 from .energy_reclaim import ev_reclaims_battery_charge
-from .thin_sun import blended_price, thin_sun_verdict
+from .thin_sun import PACK_GATE_RUN_EXTRA_W, blended_price, thin_sun_verdict
 from .price_view import (  # (#1372) one place judges a price level
     NOT_CHEAP_LEVELS as _NOT_CHEAP_LEVELS,  # noqa: F401 (#994 test)
     answer_for_level,
@@ -1277,36 +1277,50 @@ def _thin_sun_top_up(view: "ChargerView",
     if _allowed is not None:
         room_w = max(0.0, float(_allowed) - float(f.grid_import_w or 0.0)
                      - float(getattr(f, "peak_committed_w", 0.0) or 0.0))
+    t = getattr(view, "thin_sun", None)
+    # Drawing now, in a session THIS rule started (the coordinator times
+    # it): the "keep running" thresholds and the minimum block apply.
+    drawing = bool(view.power.charging and view.power.power_w > 100.0)
+    in_session = drawing and getattr(t, "session_s", None) is not None
+    # The pack's own gate: above its buffer AND spare sun past
+    # ``battery_assist_min_surplus_w`` it may feed the car — below either,
+    # ``decide_battery`` holds it to the house load. No start there; a
+    # running session keeps going a little past the gate, so the car does
+    # not stop while the sun grows.
+    _gate_w = float(getattr(f, "battery_assist_min_surplus_w", 0.0) or 0.0) + (
+        PACK_GATE_RUN_EXTRA_W if in_session else 0.0)
     fires, why = thin_sun_verdict(
-        getattr(view, "thin_sun", None), sun_w=sun_w, min_w=min_w,
+        t, sun_w=sun_w, min_w=min_w,
         need_kwh=view.target_kwh,
         battery_charge_w=float(f.battery_charge_w or 0.0),
         grid_room_w=room_w,
-        # the pack's own gate: above its buffer AND spare sun past
-        # ``battery_assist_min_surplus_w`` it may feed the car — below
-        # either, ``decide_battery`` holds it to the house load
-        pack_could_pay=(not _assist_blocked_why(f)
-                        and sun_w >= float(
-                            getattr(f, "battery_assist_min_surplus_w", 0.0) or 0.0)),
-        # already drawing in this mode on a sun too thin to carry it: the
-        # session this rule (or a cheap hour) started — keep it steady
-        running=bool(view.power.charging and view.power.power_w > 100.0))
+        pack_could_pay=(not _assist_blocked_why(f) and sun_w >= _gate_w),
+        running=drawing)
     if not fires:
         return None
     grid = night_top_up_decision(view, "solar_plus_cheap", phase="day (thin sun)")
     if grid.intent is not ChargerIntent.CHARGE_AT_AMPS:
         return None        # the plan holds, or the floor is met: its word
-    t = view.thin_sun
-    blend = blended_price(sun_w, min_w, t.export_price, t.import_now)
+    if t.export_price is not None and t.import_now is not None \
+            and t.cheapest_later is not None:
+        blend = blended_price(sun_w, min_w, t.export_price, t.import_now)
+        priced = (f"{blend:.3f}/kWh against {float(t.cheapest_later):.3f}/kWh "
+                  f"for the cheapest later hour")
+    else:
+        priced = "prices not read this cycle"
+    held = " (minimum block: holding)" if why == "held" else ""
     return replace(
         grid,
         # The rule priced the MINIMUM (every watt above it is pure grid at
-        # a price that is not cheap) — whatever rate a night plan left on
-        # the view, a thin-sun session runs at the minimum.
-        commanded_amps=min_amps,
+        # a price that is not cheap), so a thin-sun session runs at the
+        # minimum whatever rate a night plan left on the view. One
+        # exception: a real deadline by day (*Finish by departure*) keeps
+        # the floor it computed — a late car is not under-served to save.
+        commanded_amps=(grid.commanded_amps
+                        if getattr(view, "departure_floor", False)
+                        else min_amps),
         reason=(f"{grid.reason} — thin sun {_cw(sun_w)}W + grid: "
-                f"{blend:.3f}/kWh beats the cheapest later hour "
-                f"({float(t.cheapest_later):.3f}/kWh)"),
+                f"{priced}{held}"),
         reason_code=RC.CHARGER_SUN_PLUS_GRID,
         reason_params={},
     )
