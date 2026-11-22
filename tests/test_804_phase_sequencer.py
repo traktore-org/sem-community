@@ -399,8 +399,10 @@ class TestCoordinatorWiring:
         h.hass.services.async_call.assert_not_awaited()
 
         # the sun holds: one switch, to one phase, with the car idle
-        t = AUTO_START_DELAY_S + 1
-        run(decide(view()), self._cp(0.0, False), t)
+        t = 0.0
+        while t <= AUTO_START_DELAY_S + 20:
+            t += 10.0
+            run(decide(view()), self._cp(0.0, False), t)
         h.hass.services.async_call.assert_awaited_once()
         call = h.hass.services.async_call.await_args
         assert call.args[2] == {"entity_id": "number.box_phases", "value": 1.0}

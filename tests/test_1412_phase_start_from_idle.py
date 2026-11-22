@@ -41,6 +41,16 @@ from custom_components.solar_energy_management.coordinator.ev_phases import (
     switch_values_problem,
 )
 
+
+def _hold(planner, start, seconds, surplus_w, believed=None, idle=True):
+    """Ask the planner every 10 s for ``seconds`` — as the cycle does.
+    Returns the last answer and the time of it."""
+    t, answer = start, None
+    while t <= start + seconds:
+        answer = planner.desired(t, believed, surplus_w, idle=idle)
+        t += 10.0
+    return answer, t - 10.0
+
 ONE_P_MIN_W = 6 * 230.0          # 1380 W
 THREE_P_MIN_W = 3 * 6 * 230.0    # 4140 W
 THIN_SUN_W = 2000.0              # covers one phase, not three
@@ -57,52 +67,52 @@ class TestPlannerStartsOnOnePhase:
         p = self._p()
         assert p.desired(0.0, None, THIN_SUN_W, idle=True) is None, (
             "not on the first cycle: the sun must hold")
-        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
-                         idle=True) == 1
+        answer, _t = _hold(p, 10.0, AUTO_START_DELAY_S, THIN_SUN_W)
+        assert answer == 1
 
     def test_a_cloud_starts_the_wait_again(self):
         p = self._p()
-        p.desired(0.0, None, THIN_SUN_W, idle=True)
-        p.desired(200.0, None, 500.0, idle=True)          # below one phase
-        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
-                         idle=True) is None
-        assert p.desired(200.0 + 2 * AUTO_START_DELAY_S + 2, None,
-                         THIN_SUN_W, idle=True) == 1
+        _answer, t = _hold(p, 0.0, 200.0, THIN_SUN_W)
+        p.desired(t + 10, None, 500.0, idle=True)          # below one phase
+        answer, t = _hold(p, t + 20, AUTO_START_DELAY_S - 30, THIN_SUN_W)
+        assert answer is None, "the 200 s before the cloud do not count"
+        answer, _t = _hold(p, t + 10, 60.0, THIN_SUN_W)
+        assert answer == 1
 
     def test_sun_for_three_phases_asks_for_nothing(self):
         """The car starts as it is set up; the draw then gives the belief."""
         p = self._p()
-        p.desired(0.0, None, THREE_P_MIN_W + 500, idle=True)
-        assert p.desired(AUTO_START_DELAY_S + 1, None, THREE_P_MIN_W + 500,
-                         idle=True) is None
+        answer, _t = _hold(p, 0.0, AUTO_START_DELAY_S + 60, THREE_P_MIN_W + 500)
+        assert answer is None
 
     def test_too_little_sun_for_one_phase_asks_for_nothing(self):
         p = self._p()
-        p.desired(0.0, None, ONE_P_MIN_W - 100, idle=True)
-        assert p.desired(AUTO_START_DELAY_S + 1, None, ONE_P_MIN_W - 100,
-                         idle=True) is None
+        answer, _t = _hold(p, 0.0, AUTO_START_DELAY_S + 60, ONE_P_MIN_W - 100)
+        assert answer is None
 
     def test_a_charger_that_draws_is_never_started_cold(self):
         """Unknown phases under load: only a measurement may answer."""
         p = self._p()
-        p.desired(0.0, None, THIN_SUN_W, idle=False)
-        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
-                         idle=False) is None
+        answer, _t = _hold(p, 0.0, AUTO_START_DELAY_S + 60, THIN_SUN_W,
+                           idle=False)
+        assert answer is None
 
     def test_idle_defaults_to_false(self):
         """A caller that says nothing about the charger gets today's answer."""
         p = self._p()
-        p.desired(0.0, None, THIN_SUN_W)
-        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W) is None
+        t, answer = 0.0, None
+        while t <= AUTO_START_DELAY_S + 60:
+            answer = p.desired(t, None, THIN_SUN_W)
+            t += 10.0
+        assert answer is None
 
     def test_the_interval_between_switches_holds(self):
         p = self._p()
         p.note_switched(0.0)
-        p.desired(10.0, None, THIN_SUN_W, idle=True)
-        assert p.desired(10.0 + AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
-                         idle=True) is None
-        assert p.desired(AUTO_MIN_INTERVAL_S + 1, None, THIN_SUN_W,
-                         idle=True) == 1
+        answer, t = _hold(p, 10.0, AUTO_START_DELAY_S + 60, THIN_SUN_W)
+        assert answer is None
+        answer, _t = _hold(p, t + 10, AUTO_MIN_INTERVAL_S, THIN_SUN_W)
+        assert answer == 1
 
     def test_the_session_cap_holds(self):
         p = self._p()
@@ -110,22 +120,33 @@ class TestPlannerStartsOnOnePhase:
         for _ in range(AUTO_MAX_PER_SESSION):
             p.note_switched(t)
             t += AUTO_MIN_INTERVAL_S + 1
-        p.desired(t, None, THIN_SUN_W, idle=True)
-        assert p.desired(t + AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
-                         idle=True) is None
+        answer, _t = _hold(p, t, AUTO_START_DELAY_S + 60, THIN_SUN_W)
+        assert answer is None
 
     def test_a_new_car_waits_its_own_time(self):
         p = self._p()
-        p.desired(0.0, None, THIN_SUN_W, idle=True)
+        _answer, t = _hold(p, 0.0, AUTO_START_DELAY_S - 20, THIN_SUN_W)
         p.new_session()
-        assert p.desired(AUTO_START_DELAY_S + 1, None, THIN_SUN_W,
-                         idle=True) is None
+        answer, t = _hold(p, t + 10, 60.0, THIN_SUN_W)
+        assert answer is None, "the last car's minutes are not this car's"
+        answer, _t = _hold(p, t + 10, AUTO_START_DELAY_S, THIN_SUN_W)
+        assert answer == 1
+
+    def test_a_window_from_before_a_pause_does_not_count(self):
+        """Manual mode or an unplugged car skips the planner. Back in auto,
+        the sun must hold again."""
+        p = self._p()
+        p.desired(0.0, None, THIN_SUN_W, idle=True)
+        back = 2 * 3600.0
+        assert p.desired(back, None, THIN_SUN_W, idle=True) is None
+        answer, _t = _hold(p, back + 10, AUTO_START_DELAY_S, THIN_SUN_W)
+        assert answer == 1
 
     def test_a_known_belief_is_decided_as_before(self):
         p = self._p()
-        p.desired(0.0, 1, THIN_SUN_W, idle=True)
-        assert p.desired(AUTO_START_DELAY_S + 1, 1, THIN_SUN_W,
-                         idle=True) is None, "one phase and thin sun: stay"
+        answer, _t = _hold(p, 0.0, AUTO_START_DELAY_S + 60, THIN_SUN_W,
+                           believed=1)
+        assert answer is None, "one phase and thin sun: stay"
 
 
 # ── 1. the per-charger tick ─────────────────────────────────────────────
@@ -175,19 +196,30 @@ def _run(h, decision, cp, t):
     return asyncio.run(h._phase_switch_tick("c1", h.cfg, decision, cp, t))
 
 
+def _cycles(h, decision, cp, start=0.0, seconds=None):
+    """Run the tick every 10 s, as the cycle does. Returns what each cycle
+    gave back and the time of the last one."""
+    seconds = AUTO_START_DELAY_S + 60 if seconds is None else seconds
+    t, out = start, []
+    while t <= start + seconds:
+        out.append(_run(h, decision, cp, t))
+        t += 10.0
+    return out, t - 10.0
+
+
 class TestTickStartsOnOnePhase:
 
     def test_thin_sun_writes_the_one_phase_value_once(self):
         h = _host()
         _run(h, _idle(), _cp(), 0.0)
         h.hass.services.async_call.assert_not_awaited()
-        _run(h, _idle(), _cp(), AUTO_START_DELAY_S + 1)
+        _out, t = _cycles(h, _idle(), _cp(), start=10.0)
         h.hass.services.async_call.assert_awaited_once()
         call = h.hass.services.async_call.await_args
         assert call.args[:2] == ("number", "set_value")
         assert call.args[2] == {"entity_id": SWITCH, "value": 32.0}
         # settle over: SEM believes one phase from here
-        _run(h, _idle(), _cp(), AUTO_START_DELAY_S + 100)
+        _cycles(h, _idle(), _cp(), start=t + 10, seconds=120.0)
         assert h._phase_believed["c1"] == 1
         h.hass.services.async_call.assert_awaited_once()
 
@@ -197,15 +229,13 @@ class TestTickStartsOnOnePhase:
         d = ChargerDecision(
             charger_id="c1", mode="always_max",
             intent=ChargerIntent.CHARGE_MAX, budget_w=0.0, reason="max")
-        for t in (0.0, AUTO_START_DELAY_S + 1, 2 * AUTO_START_DELAY_S):
-            out = _run(h, d, _cp(power_w=300.0, charging=True), t)
-            assert out is d
+        out, _t = _cycles(h, d, _cp(power_w=300.0, charging=True))
+        assert all(o is d for o in out)
         h.hass.services.async_call.assert_not_awaited()
 
     def test_a_draw_the_charging_flag_misses_is_still_a_draw(self):
         h = _host()
-        for t in (0.0, AUTO_START_DELAY_S + 1, 2 * AUTO_START_DELAY_S + 2):
-            _run(h, _idle(), _cp(power_w=300.0, charging=False), t)
+        _cycles(h, _idle(), _cp(power_w=300.0, charging=False))
         h.hass.services.async_call.assert_not_awaited()
 
     def test_a_charge_sem_asked_for_is_not_started_cold(self):
@@ -216,27 +246,25 @@ class TestTickStartsOnOnePhase:
             charger_id="c1", mode="min_plus_solar",
             intent=ChargerIntent.CHARGE_AT_AMPS, commanded_amps=6,
             budget_w=THIN_SUN_W, reason="Min floor engaged")
-        for t in (0.0, AUTO_START_DELAY_S + 1, 2 * AUTO_START_DELAY_S + 2):
-            assert _run(h, d, _cp(), t) is d
+        out, _t = _cycles(h, d, _cp())
+        assert all(o is d for o in out)
         h.hass.services.async_call.assert_not_awaited()
 
     def test_no_car_no_switch(self):
         h = _host()
-        for t in (0.0, AUTO_START_DELAY_S + 1):
-            _run(h, _idle(), _cp(connected=False), t)
+        _cycles(h, _idle(), _cp(connected=False))
         h.hass.services.async_call.assert_not_awaited()
 
     def test_observer_mode_writes_nothing(self):
         h = _host(observer=True)
-        _run(h, _idle(), _cp(), 0.0)
-        _run(h, _idle(), _cp(), AUTO_START_DELAY_S + 1)
+        _cycles(h, _idle(), _cp())
         h.hass.services.async_call.assert_not_awaited()
 
     def test_a_charger_with_phase_switching_off_is_untouched(self):
         h = _host({"ev_phase_switching_enabled": False})
         d = _idle()
-        for t in (0.0, AUTO_START_DELAY_S + 1):
-            assert _run(h, d, _cp(), t) is d
+        out, _t = _cycles(h, d, _cp())
+        assert all(o is d for o in out)
         h.hass.services.async_call.assert_not_awaited()
         assert getattr(h, "_phase_planners", None) is None, (
             "no per-charger phase state is even made")
@@ -245,15 +273,15 @@ class TestTickStartsOnOnePhase:
         h = _host({"ev_phase_switch_entity": None,
                    "ev_phase_switching_enabled": False})
         d = _idle()
-        for t in (0.0, AUTO_START_DELAY_S + 1):
-            assert _run(h, d, _cp(), t) is d
+        out, _t = _cycles(h, d, _cp())
+        assert all(o is d for o in out)
         h.hass.services.async_call.assert_not_awaited()
 
     def test_manual_three_phases_is_not_overruled(self):
         h = _host({"phase_mode": "3"})
-        _run(h, _idle(), _cp(), 0.0)
+        _cycles(h, _idle(), _cp())
         calls = h.hass.services.async_call.await_args_list
-        assert all(c.args[2]["value"] == 0.0 for c in calls), (
+        assert calls and all(c.args[2]["value"] == 0.0 for c in calls), (
             "the owner's choice of three phases is the only thing written")
 
 
@@ -389,8 +417,8 @@ class TestSwitchValuesMustFitTheEntity:
         h = _host({"ev_phase_switch_value_1p": "1000",
                    "ev_phase_switch_value_3p": "4000"})
         d = _idle()
-        for t in (0.0, AUTO_START_DELAY_S + 1, 2 * AUTO_START_DELAY_S + 2):
-            assert _run(h, d, _cp(), t) is d
+        out, _t = _cycles(h, d, _cp())
+        assert all(o is d for o in out)
         h.hass.services.async_call.assert_not_awaited()
         assert h._phase_switch_states["c1"] == "bad_values"
 

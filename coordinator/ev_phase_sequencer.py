@@ -66,6 +66,11 @@ AUTO_MAX_PER_SESSION = 4
 # yield, and no charge is stopped for it.
 AUTO_START_DELAY_S = AUTO_UP_DELAY_S
 
+# (#1412) The start window counts only while the planner is asked every
+# cycle. A manual phase mode or an unplugged car skips it; a window left
+# standing from before must not switch on the first cycle back (#1008).
+AUTO_START_GAP_S = 120.0
+
 # Headroom margin required above the 3-phase minimum before scaling up —
 # switching up onto a knife edge just schedules the down-switch.
 AUTO_UP_MARGIN = 1.10
@@ -185,6 +190,7 @@ class PhaseAutoPlanner:
         self._up_since: Optional[float] = None
         self._down_since: Optional[float] = None
         self._start_since: Optional[float] = None
+        self._start_seen = float("-inf")
         self._last_switch_at = float("-inf")
         self._session_switches = 0
 
@@ -227,8 +233,10 @@ class PhaseAutoPlanner:
                     self._one_p_min_w <= surplus_w < self._three_p_min_w):
                 self._start_since = None
                 return None
-            if self._start_since is None:
+            if (self._start_since is None
+                    or now - self._start_seen > AUTO_START_GAP_S):
                 self._start_since = now
+            self._start_seen = now
             if self._session_switches >= AUTO_MAX_PER_SESSION:
                 return None
             if now - self._last_switch_at < AUTO_MIN_INTERVAL_S:
