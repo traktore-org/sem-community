@@ -759,9 +759,48 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 "the charge, no more writes for it")
         return await self._write_charge_option(entity, wanted, state, command)
 
+    # ── (#1377) the reserve that starts the charge ───────────────────
+    def _unreadable_part(self) -> "ChargeStatus | None":
+        """Before any record or write: each entity a select charge sets up
+        must give a value, or nothing starts. The select and the permit
+        already followed this rule; the charge target joins them. On a
+        Powerwall the reserve is what starts the charge (the mode alone is
+        a mode), and the hold writes no value it cannot read — so a target
+        that reads nothing would leave the mode and the permit set and the
+        battery idle. One rule for every select setup with a target: SEM
+        cannot tell a reserve from an upper limit. Not given up: the next
+        cycle asks again, and nothing is saved meanwhile."""
+        target = str(self.config.get("battery_target_soc_entity", "") or "")
+        if target and not self.target_hold.readable(target):
+            return self._select_failed(f"{target} is unavailable — SEM cannot "
+                                       "ask it, so no charge is started")
+        permit = permit_switch(self.config)
+        if permit and self._permit_state(permit) is None:
+            return self._select_failed(f"{permit} is unavailable — SEM cannot "
+                                       "ask it, so no charge is started")
+        return None
+
+    async def _target_not_set(self, entity: str) -> ChargeStatus:
+        """The hold wrote no reserve (its record could not be read or saved,
+        or the old value is lost): without it no charge runs. Nothing was
+        sent yet — the reserve goes first — so only the records go, and
+        the attempt is given up until the block ends."""
+        target = self.config.get("battery_target_soc_entity", "")
+        await self._put_permit_back()       # off and SEM's: only the record
+        await self.charge_record.left(entity, self._battery())
+        self._active, self._target_soc = False, 0.0
+        why = (f"{target} was not set — SEM could not keep its old value "
+               "to put back, so no charge is started")
+        self._sel_spent = why
+        return self._select_failed(why)
+
     async def _write_charge_option(self, entity: str, wanted: str, state: str,
                                    command: ChargeCommand) -> ChargeStatus:
         retry = self._sel_writes > 0
+        if not retry:
+            unreadable = self._unreadable_part()            # (#1377)
+            if unreadable is not None:
+                return unreadable
         if not retry:
             # a name left from a charge that has ended (the select no longer
             # shows the option) must not hand its old prior to this one
@@ -775,9 +814,11 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 return unsaved
         try:
             if not retry and self.config.get("battery_target_soc_entity", ""):
-                await self.target_hold.write(
+                wrote = await self.target_hold.write(
                     self.config["battery_target_soc_entity"],
                     int(command.target_soc))
+                if not wrote:                          # (#1377) its "no"
+                    return await self._target_not_set(entity)
             if not retry:
                 await self._permit_on()                # (#1377)
             await self.hass.services.async_call(
@@ -839,6 +880,9 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         branch above, so this runs once per charge."""
         if self._sel_spent:              # given up in this attempt: no rewrite
             return self._select_failed(self._sel_spent)
+        unreadable = self._unreadable_part()                # (#1377)
+        if unreadable is not None:
+            return unreadable
         state, _options = read_select(self.hass, entity)
         unsaved = await self._note_started(prior=state, option=state)
         if unsaved is not None:                        # before any write
@@ -851,7 +895,11 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         try:
             target = self.config.get("battery_target_soc_entity", "")
             if target:
-                await self.target_hold.write(target, int(command.target_soc))
+                # (#1377) its answer is read: the option alone is a mode, so
+                # with no reserve raised no charge runs (class 192)
+                if not await self.target_hold.write(
+                        target, int(command.target_soc)):
+                    return await self._target_not_set(entity)
                 wrote.append("reserve")
             if permit_switch(self.config):
                 before = self._permit_writes
