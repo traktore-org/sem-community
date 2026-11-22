@@ -147,7 +147,7 @@ Set the mode per charger, on **Devices**.
 
 | Mode | Charges from | Use it when |
 |---|---|---|
-| **Min + Solar** (default) | Grid, plus spare sun on top. Always starts. | You need the car ready by a time. |
+| **Min + Solar** (default) | Spare sun by day. The grid tops up to **At least** at night, or by day if the night is too short. | You need the car ready by a time. |
 | **Solar only** | Spare sun only. A grid top-up runs only if you set **At least**. | You want solar only. |
 | **Solar + battery** | Spare sun and the home battery above its buffer. | The battery may help the car. |
 | **Solar + cheapest hours** | Spare sun. On cheap hours, it tops up from the grid. | Your tariff has cheaper hours: dynamic, or a schedule or two rates. Greyed out with one price. |
@@ -156,7 +156,8 @@ Set the mode per charger, on **Devices**.
 
 Notes:
 
-- **Min + Solar** charges at night even without sun.
+- **Min + Solar** charges at night even without sun. By day it waits for sun,
+  unless tonight is too short to reach **At least**.
 - **Solar only** never uses grid power unless you set **At least**.
   With **At least** at 0 kWh, the car never takes grid power.
 - **Off** does not hold the charger stopped. A wallbox that starts by itself is left alone.

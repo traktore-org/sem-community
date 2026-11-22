@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📝 **Min + Solar texts match what it does** (#1411). By day it waits for sun; the grid helps only if the night is too short.
+
 - 🐛 **Forecast accuracy shows its number** (#1321). Insights showed "{pct} % trusted 55 %". Now it reads "55 % trusted".
 - 🐛 **Year forecast adds up the days** (#1321). A month showed one day's average forecast, about 77 kWh. Now it shows the month's total.
 

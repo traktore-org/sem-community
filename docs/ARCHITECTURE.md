@@ -842,8 +842,10 @@ The coordinator owns all EV control (`ev.managed_externally = True`). The EV is 
 - Budget from `FlowCalculator.calculate_ev_budget()` + optional battery assist
 
 ### Min+PV Mode
-- Budget floored to `ev.min_power_threshold`
-- Enable delay = 0 (guaranteed minimum from grid)
+- By day: solar only, unless the remaining Min exceeds what tonight's
+  window can deliver (#501); only then is the budget floored to
+  `ev.min_power_threshold` and the grid backfills
+- At night: the grid tops up to Min
 
 ### Pause States
 - Zero current, keep session alive (no stop/start cycling)
