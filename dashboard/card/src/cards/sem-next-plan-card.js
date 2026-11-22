@@ -746,6 +746,10 @@ class SEMNextPlanCard extends SEMNextBase {
             if (off) {
                 out.push(this._pill(t('energy_plan_off'), 'warn'));
                 out.push(this._btn(t('energy_plan_turn_on'), () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { small: true, primary: true }));
+            } else if (this._obs()) {
+                // (#1377) ``actuation`` follows the plan switch alone: watch-only
+                // holds every write, so the pill says that, never "Live"
+                out.push(this._pill(t('next_pill_observing')));
             } else {
                 out.push(this._pill(plan.actuation ? t('next_pill_live') : t('next_pill_shadow'), plan.actuation ? 'ok' : ''));
             }
@@ -1004,7 +1008,8 @@ class SEMNextPlanCard extends SEMNextBase {
             rows.push(this._row('mdi:toggle-switch-outline', t('next_plan_acts'),
                 this._switch(on, () => this._askFirst(t('next_plan_acts'), () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { body: t('next_confirm_plan_acts') }), { label: t('next_plan_acts') }),
                 // (#1321) watch-only holds every device write: say the plan is paused, not that it controls
-                t(this._obs() ? 'next_actuation_watch' : 'next_actuation_sub')));
+                // (#1377) …and with its own switch off the plan does not act either
+                t(this._obs() ? 'next_actuation_watch' : (on ? 'next_actuation_sub' : 'next_actuation_off'))));
         }
         rows.push(this._row('mdi:sync', t('next_replan'),
             this._btn(t('next_now_btn'), () => this._askFirst(t('next_replan'), () => this._callService(DOMAIN, 'replan', {}), { body: t('next_confirm_replan') }), { small: true }),
