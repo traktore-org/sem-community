@@ -273,6 +273,31 @@ def _note_forced_op(adapter, attr: str, ret, landed_intent, value: bool) -> None
         _set(adapter, "_sem_stop_misses", 0)
 
 
+def _record_forced_start(log, decision, adapter, ret, value_w: float,
+                         not_started_code: str) -> None:
+    """(#1413) The decision log's row for a forced charge or sale, written
+    AFTER the command, from its answer (class 192: a write's "no" is read
+    before anything claims the result). Before, the row went out first, so
+    a start that failed still said "the plan charges the battery now".
+
+    * The start went out or still stands: the adapter answered True, or it
+      holds this intent with no error. The row the decision asked for, with
+      the watts sent.
+    * The start is not on: no True, the adapter does not hold this intent
+      and it names an error. The row says the start did not happen, with
+      no watts; its text is the adapter's own words.
+    * Anything else writes no row: a mode still on its way (no error yet),
+      or a re-send that failed while an earlier start still stands.
+    """
+    error = getattr(adapter, "last_error", None)
+    holds = getattr(adapter, "last_intent", None) is decision.intent
+    if ret is True or (error is None and holds):
+        record_battery(log, decision, value_w=value_w)
+    elif not holds and isinstance(error, str) and error:
+        record_battery(log, rewrite(decision, reason_code=not_started_code,
+                                    reason=error))
+
+
 async def _settle_charge_target(adapter) -> None:
     """(#1180) A charge-target value SEM has to put back and has not seen
     land is checked — and sent again when due — on a cycle that sends no
@@ -387,7 +412,8 @@ async def _dispatch_battery(
     """
     # (#1084) The decision log's battery seam. Each branch below notes the
     # command at the point it really leaves (after the holds that send
-    # nothing), with the watts it sends. Recording only.
+    # nothing), with the watts it sends. Recording only. (#1413) A forced
+    # charge or sale is noted after its command, from the answer.
     _log = log_of(controller)
     # (#1164) What this battery was asked to charge at, as SENT: the FORCE_CHARGE
     # branch below sets it once its command goes out. Every other path — a
@@ -544,7 +570,6 @@ async def _dispatch_battery(
                 decision.battery_id, decision.reason,
             )
             return
-        record_battery(_log, decision, value_w=decision.charge_power_w)
         ret = await adapter.command_force_charge(
             decision.target_soc,
             decision.charge_power_w,
@@ -552,6 +577,10 @@ async def _dispatch_battery(
         )
         _note_forced_op(adapter, "_sem_forced_charge", ret,
                         BatteryIntent.FORCE_CHARGE, True)
+        # (#1413) the row from the answer, not before the command
+        _record_forced_start(_log, decision, adapter, ret,
+                             decision.charge_power_w,
+                             RC.BATTERY_CHARGE_NOT_STARTED)
         # (#1164 review) Asked only if it went out: a withheld setpoint
         # (#978) or a failed start leaves ``last_error`` set.
         if (getattr(adapter, "last_error", None) is None
@@ -596,12 +625,15 @@ async def _dispatch_battery(
                 decision.battery_id, decision.reason,
             )
             return
-        record_battery(_log, decision, value_w=decision.discharge_power_w)
         ret = await adapter.command_force_discharge(
             decision.discharge_power_w, decision.floor_soc,
         )
         _note_forced_op(adapter, "_sem_forced_discharge", ret,
                         BatteryIntent.FORCE_DISCHARGE, True)
+        # (#1413) the same rule as the charge: the row from the answer
+        _record_forced_start(_log, decision, adapter, ret,
+                             decision.discharge_power_w,
+                             RC.BATTERY_SELL_NOT_STARTED)
         # (#1165) Asked only if it went out or stands. One adapter answers
         # True and records no intent; the rest record the intent and clear
         # ``last_error``, on a repeat too; a failed write or a withheld

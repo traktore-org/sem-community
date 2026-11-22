@@ -691,6 +691,19 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         """(#1346) The inverter did not take the charge option lately."""
         at = self._sel_refused_at
         return at is not None and (time.monotonic() - at) < self.REFUSAL_MEMORY_S
+
+    #: (#1413) when SEM last gave up a charge because the hold would not
+    #: write the charge target (``_target_not_set``)
+    _sel_unset_at: "float | None" = None
+
+    @property
+    def charge_target_unset(self) -> bool:
+        """(#1413) SEM gave up a charge lately because it could not set the
+        charge target (the reserve on a Powerwall). The plan leaves this
+        pack's charge out for as long as it remembers a refusal, and says
+        why. A target the hold writes again clears it."""
+        at = self._sel_unset_at
+        return at is not None and (time.monotonic() - at) < self.REFUSAL_MEMORY_S
     #: this attempt's writes, whether the option was ever read back, why it
     #: ended (a message), and the stop's (failed cycles, options listed)
     _sel_writes: int = 0
@@ -792,6 +805,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         why = (f"{target} was not set — SEM could not keep its old value "
                "to put back, so no charge is started")
         self._sel_spent = why
+        self._sel_unset_at = time.monotonic()     # (#1413) for the plan
         return self._select_failed(why)
 
     async def _write_charge_option(self, entity: str, wanted: str, state: str,
@@ -819,6 +833,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                     int(command.target_soc))
                 if not wrote:                          # (#1377) its "no"
                     return await self._target_not_set(entity)
+                self._sel_unset_at = None              # (#1413) it wrote
             if not retry:
                 await self._permit_on()                # (#1377)
             await self.hass.services.async_call(
@@ -900,6 +915,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 if not await self.target_hold.write(
                         target, int(command.target_soc)):
                     return await self._target_not_set(entity)
+                self._sel_unset_at = None              # (#1413) it wrote
                 wrote.append("reserve")
             if permit_switch(self.config):
                 before = self._permit_writes

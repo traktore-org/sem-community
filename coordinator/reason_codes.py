@@ -93,6 +93,10 @@ BATTERY_END_CHARGE = "battery_end_charge"
 BATTERY_END_SELL = "battery_end_sell"
 BATTERY_CHARGE_NO_ROOM = "battery_charge_no_room"
 BATTERY_CHARGE_SLOWED = "battery_charge_slowed"
+# (#1413) the start was asked and the adapter says it is not on: the row
+# says so, never the reason the charge or sale was asked for
+BATTERY_CHARGE_NOT_STARTED = "battery_charge_not_started"
+BATTERY_SELL_NOT_STARTED = "battery_sell_not_started"
 
 # ── loads ────────────────────────────────────────────────────────────
 # The first values predate the catalogue (#1084) and keep their spelling:
