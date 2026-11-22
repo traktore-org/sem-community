@@ -34,14 +34,19 @@ PRICE_EPS = 1e-6
 #: ``DEFAULT_SURPLUS_MARGIN_W`` — the plan has no sun slot below it either).
 MIN_SUN_W = 200.0
 
-#: (#1411) Anti-flap. A session the rule started keeps running through a
-#: thinner moment: a quarter of the starting sun is enough, and the blend
-#: may sit up to 5 % above the reference. Starting stays strict. Without
-#: this a cloud at the threshold opens the contactor, and the sun a minute
-#: later closes it again — the churn class the stability layer exists for,
-#: which cannot bridge this stop because holding it buys grid power.
+#: (#1411) Anti-flap. A session that is already charging keeps running
+#: through a thinner moment: a quarter of the starting sun is enough, and
+#: the price test is made as if the sun were a quarter stronger than it is
+#: right now. Starting stays strict. Without this a cloud at the threshold
+#: opens the contactor, and the sun a minute later closes it again — the
+#: churn class the stability layer exists for, which cannot bridge this
+#: stop because holding it buys grid power.
+#:
+#: The relaxation is on the SUN, never on the price itself: where no
+#: amount of sun makes the blend cheaper (export = import), a running
+#: session gets no pass either.
 RUN_SUN_FACTOR = 0.25
-RUN_PRICE_SLACK = 0.05
+RUN_SUN_BOOST = 1.25
 
 #: The battery "takes the sun" above this charge power: that sun is not
 #: leaving the property, so it has no export price to beat.
@@ -79,16 +84,15 @@ def thin_sun_pays(*, sun_w: Optional[float], min_w: Optional[float],
         return False
     try:
         sun, need = float(sun_w), float(min_w)
-        blend = blended_price(sun, need, float(export_price), float(import_price))
         ref = float(cheapest_other)
+        export, imp = float(export_price), float(import_price)
     except (TypeError, ValueError):
         return False
     floor_w = MIN_SUN_W * (RUN_SUN_FACTOR if running else 1.0)
     if need <= 0 or sun < floor_w or sun >= need:
         return False
-    if running:
-        return blend <= ref * (1.0 + RUN_PRICE_SLACK) + PRICE_EPS
-    return blend < ref - PRICE_EPS
+    priced_sun = min(sun * RUN_SUN_BOOST, need) if running else sun
+    return blended_price(priced_sun, need, export, imp) < ref - PRICE_EPS
 
 
 @dataclass(frozen=True)

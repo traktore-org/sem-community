@@ -105,10 +105,49 @@ class TestTheSum:
         assert not _pays(120.0, export=0.06, day=0.30, night=0.30)
         assert _pays(120.0, export=0.06, day=0.30, night=0.30, running=True)
         assert not _pays(40.0, export=0.06, day=0.30, night=0.30, running=True)
-        # …and a blend up to 5 % above the reference, not more
+        # …and the price as if the sun were a quarter stronger, not more:
+        # the 1725 W edge of a cheaper night holds down to 1380 W
         assert not _pays(1600.0, export=0.06, day=0.30, night=0.20)
         assert _pays(1600.0, export=0.06, day=0.30, night=0.20, running=True)
+        assert _pays(1400.0, export=0.06, day=0.30, night=0.20, running=True)
+        assert not _pays(1350.0, export=0.06, day=0.30, night=0.20, running=True)
         assert not _pays(1000.0, export=0.06, day=0.30, night=0.20, running=True)
+
+    def test_a_running_session_gets_no_pass_where_sun_never_pays(self):
+        """export >= import on one price: no amount of sun makes the blend
+        cheaper, so "already running" must not keep a grid charge alive."""
+        for export in (0.30, 0.35):
+            for sun in (60.0, 300.0, 1000.0, 2500.0, 4000.0):
+                assert not _pays(sun, export=export, day=0.30, night=0.30,
+                                 running=True), (export, sun)
+
+
+@pytest.mark.unit
+def test_sweep_one_price_never_fires_at_or_above_the_import_price():
+    """Every sun, every minimum, started or running: with one price all day
+    and an export price at or above it, the rule buys nothing."""
+    for p in (0.05, 0.20, 0.30, 0.45):
+        for export in (p, p + 0.01, p * 2):
+            for min_w in (1380.0, 4140.0, 11000.0):
+                for sun in range(0, int(min_w) + 500, 137):
+                    for running in (False, True):
+                        assert not thin_sun_pays(
+                            sun_w=float(sun), min_w=min_w, export_price=export,
+                            import_price=p, cheapest_other=p, running=running)
+
+
+@pytest.mark.unit
+def test_sweep_it_never_fires_when_a_later_hour_is_cheaper_than_any_blend():
+    """The blend is never below min(export, import now): a later hour at or
+    below that price always wins."""
+    for imp in (0.10, 0.30):
+        for export in (-0.05, 0.0, 0.06, 0.30):
+            ref = min(imp, export)
+            for sun in range(200, 4140, 197):
+                for running in (False, True):
+                    assert not thin_sun_pays(
+                        sun_w=float(sun), min_w=4140.0, export_price=export,
+                        import_price=imp, cheapest_other=ref, running=running)
 
 
 # ── the live verdict ──────────────────────────────────────────────────
