@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Forecast accuracy shows its number** (#1321). Insights showed "{pct} % trusted 55 %". Now it reads "55 % trusted".
+- 🐛 **Year forecast adds up the days** (#1321). A month showed one day's average forecast, about 77 kWh. Now it shows the month's total.
+
 # [2.3.0-beta.24] — 21.11.2026
 
 - 🐛 **Plan headline counts only hours to come** (#1408). On a large plan it also counted the house's past grid kWh.
