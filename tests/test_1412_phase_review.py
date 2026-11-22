@@ -37,7 +37,14 @@ from custom_components.solar_energy_management.coordinator.ev_phases import (
     entity_bounds,
 )
 
-from .ast_contracts import calls
+from custom_components.solar_energy_management.coordinator import (
+    reason_codes as RC,
+)
+from custom_components.solar_energy_management.coordinator.charger_types import (
+    rewrite,
+)
+
+from .ast_contracts import calls, reads_attribute
 
 SWITCH = "number.wallbox_phase_threshold"
 THIN_SUN_W = 2000.0
@@ -52,11 +59,18 @@ def _host(cfg_over=None, number_range=(0.0, 32.0), entity_state=True):
     h.config = {}
     h.range = number_range
 
+    h.switch_reads = "0"            # the number's own state: the 3-phase value
+    h.plug_reads = "on"
+
     def _get(eid):
         if not entity_state:
             return None
         st = MagicMock()
-        st.state = "0"
+        if eid == "binary_sensor.wallbox_plug":
+            st.state = h.plug_reads
+            st.attributes = {}
+            return st
+        st.state = h.switch_reads
         st.attributes = ({"min": h.range[0], "max": h.range[1]}
                          if h.range else {})
         return st
@@ -92,20 +106,24 @@ def _amps(amps, budget=0.0):
         budget_w=budget, reason="charge")
 
 
-def _cp(power_w=0.0, charging=False, connected=True):
+def _cp(power_w=0.0, charging=False, connected=True, plug_known=True):
     return ChargerPower(charger_id="c1", power_w=power_w,
-                        connected=connected, charging=charging)
+                        connected=connected, charging=charging,
+                        plug_known=plug_known)
 
 
-def _run(h, decision, cp, t, night=False):
+def _run(h, decision, cp, t, night=False, source=None, legs=None):
     return asyncio.run(h._phase_switch_tick(
-        "c1", h.cfg, decision, cp, t, is_night=night))
+        "c1", h.cfg, decision, cp, t, is_night=night,
+        source_code=source, leg_phases=legs))
 
 
-def _cycles(h, decision, cp, start, seconds, night=False):
+def _cycles(h, decision, cp, start, seconds, night=False, source=None,
+            legs=None):
     t, out = start, []
     while t <= start + seconds:
-        out.append(_run(h, decision, cp, t, night=night))
+        out.append(_run(h, decision, cp, t, night=night, source=source,
+                        legs=legs))
         t += 10.0
     return out, t - 10.0
 
@@ -153,7 +171,7 @@ class TestTheNightGoesBackToTheConfiguredPhases:
         has not started. Back to three before it draws."""
         h, t = _on_one_phase_by_sems_choice()
         d = _amps(6)
-        out = _run(h, d, _cp(), t, night=False)
+        out = _run(h, d, _cp(), t, night=False, source=RC.CHARGER_TOP_UP)
         assert _values(h) == [ONE_PHASE_VALUE, THREE_PHASE_VALUE]
         assert out.intent is ChargerIntent.DISABLE, "held while it settles"
 
@@ -520,6 +538,242 @@ class TestOneCheckForFormsAndCard:
         root = Path(ev_control.__file__).resolve().parent.parent
         strings = json.loads((root / "strings.json").read_text(encoding="utf-8"))
         assert "phase_switch_value_out_of_range" in strings["exceptions"]
+
+
+# ═══ second review pass (22.11) ══════════════════════════════════════════
+
+class TestOnlyAKnownUnplugForgets:
+    """The belief was wiped whenever ``connected`` read False for 30 s. A
+    charger without a plug sensor reads that whenever it is not drawing —
+    also during the stop SEM itself sends for a switch — and a plug sensor
+    that drops out reads it too. A one-phase charge at 1.5 kW was then sized
+    at 4140 W, went idle, and nothing measured it again."""
+
+    def test_a_charger_without_a_plug_sensor_keeps_its_belief(self):
+        h, t = _on_one_phase_by_sems_choice()
+        _cycles(h, _idle(), _cp(connected=False, plug_known=False), t, 300.0)
+        assert h._phase_believed["c1"] == 1
+
+    def test_a_plug_sensor_that_dropped_out_keeps_it(self):
+        h, t = _on_one_phase_by_sems_choice(
+            _host({"ev_connected_sensor": "binary_sensor.wallbox_plug"}))
+        h.plug_reads = "unavailable"
+        _cycles(h, _idle(), _cp(connected=False), t, 300.0)
+        assert h._phase_believed["c1"] == 1
+        h.plug_reads = "unknown"
+        _cycles(h, _idle(), _cp(connected=False), t + 310, 300.0)
+        assert h._phase_believed["c1"] == 1
+
+    def test_a_car_that_draws_is_there_whatever_the_plug_says(self):
+        h, t = _on_one_phase_by_sems_choice()
+        d = _amps(8, budget=THIN_SUN_W)
+        outs, _t = _cycles(h, d, _cp(8 * 230.0, True, connected=False), t, 120.0)
+        assert h._phase_believed["c1"] == 1 and all(o is d for o in outs)
+
+    def test_sems_own_stop_for_a_switch_does_not_wipe(self):
+        """Manual 1 on a charger that shows no car while it does not draw:
+        the stop, the switch and the settle take over a minute."""
+        h, t = _on_three_phases_measured(_host({"phase_mode": "1"}))
+        d = _amps(8, budget=6000.0)
+        gone = _cp(connected=False, plug_known=False)
+        _run(h, d, _cp(8 * 3 * 230.0, True), t)             # stopping
+        _cycles(h, d, gone, t + 10, SETTLE_S + 60)          # switch, settle
+        assert _values(h) == [ONE_PHASE_VALUE]
+        assert h._phase_believed["c1"] == 1, "what SEM set is still known"
+
+    def test_a_known_unplug_in_the_middle_of_a_switch_waits_for_it(self):
+        h, t = _on_three_phases_measured(_host({"phase_mode": "1"}))
+        _run(h, _idle(), _cp(), t)                           # the switch goes out
+        _cycles(h, _idle(), _cp(connected=False), t + 10, 40.0)   # settling
+        assert h._phase_sequencers["c1"].in_flight
+        assert h._phase_believed.get("c1") == 3, "not wiped while it settles"
+
+    def test_a_plug_sensor_that_says_unplugged_forgets(self):
+        h, t = _on_one_phase_by_sems_choice(
+            _host({"ev_connected_sensor": "binary_sensor.wallbox_plug"}))
+        h.plug_reads = "off"
+        _cycles(h, _idle(), _cp(connected=False), t, 120.0)
+        assert h._phase_believed.get("c1") is None
+
+
+class TestGridPaysIsReadFromTheSourceNotTheBudget:
+
+    def _bridge(self, budget):
+        """The decision the stability layer returns while it bridges a dip:
+        the idle decision, rewritten to hold the lowest current
+        (``charge_stability``, ``CHARGER_DIP_HOLD``). It keeps the idle
+        decision's ``budget_w``."""
+        idle = ChargerDecision(
+            charger_id="c1", mode="solar_only", intent=ChargerIntent.IDLE,
+            budget_w=budget, reason="solar_only: surplus below min — idle",
+            reason_code=RC.CHARGER_LOW_SUN)
+        return rewrite(
+            idle, intent=ChargerIntent.CHARGE_AT_AMPS, commanded_amps=6,
+            reason="stability: deficit 20s/180s — holding 6A before stop",
+            reason_code=RC.CHARGER_DIP_HOLD, reason_params={})
+
+    def test_a_bridged_dip_of_a_thin_sun_charge_stays_on_one_phase(self):
+        """A cloud: 500 W of sun, the stability layer holds 6 A, the car is
+        at rest for a moment. That is the sun's charge. Read as "the grid
+        pays" it went to three phases: 4.1 kW, nearly all from the grid."""
+        h, t = _on_one_phase_by_sems_choice()
+        d = self._bridge(500.0)
+        outs, _t = _cycles(h, d, _cp(), t, 120.0, source=RC.CHARGER_LOW_SUN)
+        assert _values(h) == [ONE_PHASE_VALUE]
+        assert all(o is d for o in outs)
+
+    def test_the_same_without_a_source_code(self):
+        h, t = _on_one_phase_by_sems_choice()
+        d = self._bridge(500.0)
+        _cycles(h, d, _cp(), t, 120.0)
+        assert _values(h) == [ONE_PHASE_VALUE]
+
+    def test_a_day_min_floor_is_the_suns_charge_too(self):
+        h, t = _on_one_phase_by_sems_choice()
+        d = ChargerDecision(
+            charger_id="c1", mode="min_plus_solar",
+            intent=ChargerIntent.CHARGE_AT_AMPS, commanded_amps=6,
+            budget_w=300.0, reason="Min floor engaged",
+            reason_code=RC.CHARGER_MIN_TODAY)
+        _cycles(h, d, _cp(), t, 120.0, source=RC.CHARGER_MIN_TODAY)
+        assert _values(h) == [ONE_PHASE_VALUE]
+
+    def test_top_up_and_deadline_are_the_grids(self):
+        for code in (RC.CHARGER_TOP_UP, RC.CHARGER_DEADLINE):
+            h, t = _on_one_phase_by_sems_choice()
+            _run(h, _amps(6), _cp(), t, source=code)
+            assert _values(h) == [ONE_PHASE_VALUE, THREE_PHASE_VALUE], code
+
+    def test_no_budget_number_decides_it(self):
+        assert not reads_attribute(ev_control._grid_pays, "decision", "budget_w")
+        assert not reads_attribute(
+            ev_control.EVControlMixin._phase_switch_tick, "decision", "budget_w")
+
+
+class TestAGridChargeWithoutADeadlineRunsOnTheConfiguredPhases:
+
+    def test_no_plan_switches_up_through_the_stop(self):
+        h, t = _on_one_phase_by_sems_choice()
+        d = _amps(8)
+        out = _run(h, d, _cp(8 * 230.0, True), t, night=True)
+        assert out.intent is ChargerIntent.DISABLE, "stop first"
+        assert _values(h) == [ONE_PHASE_VALUE]
+        _run(h, d, _cp(), t + 10, night=True)
+        assert _values(h) == [ONE_PHASE_VALUE, THREE_PHASE_VALUE]
+
+    def test_a_deadline_that_has_passed_switches_up(self):
+        h, t = _on_one_phase_by_sems_choice()
+        h._night_plan_per_charger = {"c1": SimpleNamespace(
+            remaining_kwh=5.0, hours_to_deadline=0.0)}
+        d = _amps(8)
+        out = _run(h, d, _cp(8 * 230.0, True), t, night=True)
+        assert out.intent is ChargerIntent.DISABLE, "stop first"
+        _run(h, d, _cp(), t + 10, night=True)
+        assert _values(h) == [ONE_PHASE_VALUE, THREE_PHASE_VALUE]
+
+    def test_once(self):
+        h, t = _on_one_phase_by_sems_choice()
+        d = _amps(8)
+        _run(h, d, _cp(8 * 230.0, True), t, night=True)
+        _out, t = _cycles(h, d, _cp(), t + 10, SETTLE_S + 30, night=True)
+        _cycles(h, d, _cp(8 * 3 * 230.0, True), t + 10, 1200.0, night=True)
+        assert _values(h) == [ONE_PHASE_VALUE, THREE_PHASE_VALUE]
+
+    def test_nothing_owed_is_no_reason(self):
+        h, t = _on_one_phase_by_sems_choice()
+        h._night_plan_per_charger = {"c1": SimpleNamespace(
+            remaining_kwh=0.0, hours_to_deadline=None)}
+        d = _amps(8)
+        outs, _t = _cycles(h, d, _cp(8 * 230.0, True), t, 120.0, night=True)
+        assert all(o is d for o in outs)
+
+
+class TestAOnePhaseCarIsRemembered:
+    """A car that only charges on one phase: SEM switched up, the draw said
+    one, and it tried once more — two writes for nothing, each plug-in.
+    The charger's own current on each phase says it at once."""
+
+    def test_one_leg_at_the_three_phase_setting_is_the_car(self):
+        h = _host()                           # the switch reads its 3p value
+        d = _amps(8, budget=6000.0)
+        _run(h, d, _cp(8 * 230.0, True), 0.0, legs=1)
+        assert h._phase_car_one_phase.get("c1") is True
+        outs, _t = _cycles(h, d, _cp(8 * 230.0, True), 10.0, 900.0, legs=1)
+        assert _values(h) == [], "plenty of sun, and still no switch up"
+        assert all(o is d for o in outs)
+
+    def test_without_the_leg_reading_sem_still_tries(self):
+        h = _host()
+        d = _amps(8, budget=6000.0)
+        _cycles(h, d, _cp(8 * 230.0, True), 0.0, 400.0)
+        _cycles(h, d, _cp(), 410.0, 30.0)
+        assert _values(h) == [THREE_PHASE_VALUE]
+
+    def test_one_leg_at_the_one_phase_setting_says_nothing_about_the_car(self):
+        h = _host()
+        h.switch_reads = "32"
+        _run(h, _amps(8, budget=6000.0), _cp(8 * 230.0, True), 0.0, legs=1)
+        assert not (getattr(h, "_phase_car_one_phase", None) or {}).get("c1")
+
+    def test_after_sem_set_three_one_leg_is_the_car(self):
+        """The night's return to three, then the car draws on one leg."""
+        h, t = _on_one_phase_by_sems_choice()
+        h.switch_reads = "32"                 # the entity is not read back
+        _out, t = _cycles(h, _idle(), _cp(), t, SETTLE_S + 120, night=True)
+        assert h._phase_believed["c1"] == 3
+        d = _amps(8)
+        _cycles(h, d, _cp(8 * 230.0, True), t + 10, 2400.0, night=True, legs=1)
+        assert h._phase_car_one_phase.get("c1") is True
+        assert _values(h) == [ONE_PHASE_VALUE, THREE_PHASE_VALUE], "no third write"
+
+    def test_the_next_car_is_asked_again(self):
+        h = _host()
+        _run(h, _amps(8, budget=6000.0), _cp(8 * 230.0, True), 0.0, legs=1)
+        _cycles(h, _idle(), _cp(connected=False), 10.0, 120.0)
+        assert not h._phase_car_one_phase.get("c1")
+
+    def test_it_is_not_set_back_at_night(self):
+        h = _host()
+        _run(h, _amps(8, budget=6000.0), _cp(8 * 230.0, True), 0.0, legs=1)
+        _cycles(h, _idle(), _cp(), 10.0, 600.0, night=True)
+        assert _values(h) == []
+
+
+class TestTheLoopHandsTheTickItsFacts:
+
+    def test_the_tick_gets_the_source_the_night_and_the_legs(self):
+        from .ast_contracts import call_kwargs
+        loop = coordinator_mod.SEMCoordinator._async_update_data
+        kwargs = [k for k in call_kwargs(loop, "_phase_switch_tick")]
+        assert kwargs, "the per-charger loop calls the phase tick"
+        for names in kwargs:
+            assert {"is_night", "source_code", "leg_phases"} <= set(names)
+
+    def _coord(self, legs, shared=False):
+        mine = SimpleNamespace(
+            phase_leg_currents=lambda others=(): (None if shared and others
+                                                  else legs))
+        c = SimpleNamespace(_ev_devices={"c1": mine, "c2": SimpleNamespace()})
+        cls = coordinator_mod.SEMCoordinator
+        c._charger_leg_phases = cls._charger_leg_phases.__get__(c)
+        return c, mine
+
+    def test_one_leg_reads_one_phase(self):
+        c, dev = self._coord([7.3, 0.02, 0.04])
+        assert c._charger_leg_phases("c1", dev, 1680.0) == 1
+
+    def test_three_legs_read_three(self):
+        c, dev = self._coord([7.3, 7.2, 7.4])
+        assert c._charger_leg_phases("c1", dev, 5000.0) == 3
+
+    def test_no_leg_sensors_no_answer(self):
+        c, _dev = self._coord([7.3, 0.0, 0.0])
+        assert c._charger_leg_phases("c1", SimpleNamespace(), 1680.0) is None
+        assert c._charger_leg_phases("c1", None, 1680.0) is None
+
+    def test_a_reading_the_power_contradicts_is_no_answer(self):
+        c, dev = self._coord([7.3, 0.0, 0.0])
+        assert c._charger_leg_phases("c1", dev, 0.0) is None
 
 
 def test_pytest_is_used():

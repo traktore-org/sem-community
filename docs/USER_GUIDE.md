@@ -223,10 +223,13 @@ Notes:
   at 6 A). The sun must hold for 5 minutes first.
 - When the night starts, SEM sets a charger it had put on 1 phase back to its
   configured phases, so a grid charge runs at full power. A grid charge that is
-  already running on 1 phase is switched up only if 1 phase cannot reach the
-  target in time.
-- SEM forgets the phase count when the car is unplugged. The next car starts on
-  the configured phases.
+  already running on 1 phase is switched up if 1 phase cannot reach the target
+  in time, or if there is no time to judge by.
+- SEM forgets the phase count when the plug sensor says the car is unplugged.
+  The next car starts on the configured phases. A charger without a plug sensor
+  keeps it.
+- A car that charges on 1 phase only is left alone for that plug-in, when the
+  charger reports its current on each phase.
 - The values for 1 phase and 3 phases must be inside the range of the number
   entity they are written to. The forms and the dashboard refuse a value that
   is not. For a stored one, SEM sends no phase switch and raises a Repair.

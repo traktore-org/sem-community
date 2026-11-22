@@ -123,48 +123,99 @@ def _phases_now(host, charger_cfg: dict, default: int) -> int:
     return int(active_phases(cfg, believed, capable) or default)
 
 
-def _grid_pays(decision, one_phase_min_w: float) -> bool:
+def _grid_pays(decision, source_code=None) -> bool:
     """(#1412) True for a charge the grid pays for: SEM commands amps, and
-    the sun in the decision's budget carries less than half of one phase at
-    the lowest current. Half, not all: a car's measured draw at the lowest
-    current can sit well under nameplate (the W/A learner accepts down to
-    0.5), so a thin-sun charge whose budget dips just below nameplate is
-    still the sun's. The intent is asked first, as every reader of a
-    decision's watts does (#1008): ``budget_w`` is 0.0 under ``CHARGE_MAX``
-    by construction and says nothing there."""
+    the decision came from the night top-up or the deadline floor.
+
+    Read from the decision's own SOURCE — the reason code ``decide`` gave
+    it, before the stability layer, the peak clamp or the phase guard
+    re-stamped it (``source_code``; the decision's own code when the caller
+    has none). Never from a watt number: the stability layer bridges a
+    cloud by holding the lowest current on the IDLE decision it was given,
+    and that decision's budget is the thin sun — read as "the grid pays",
+    a one-phase sun charge went up to three phases, 4.1 kW mostly bought.
+    ``Always (max)`` is not here: it keeps the planner, whose offer is
+    priced at three phases (#1008). The day's Min floor is the sun's charge
+    with the grid's help, and stays on the phases the sun chose.
+    """
     from .charger_types import ChargerIntent
     if decision.intent is not ChargerIntent.CHARGE_AT_AMPS:
         return False
-    return float(decision.budget_w or 0.0) < 0.5 * float(one_phase_min_w)
+    code = source_code if source_code is not None else decision.reason_code
+    return code in (RC.CHARGER_TOP_UP, RC.CHARGER_DEADLINE)
+
+
+def _plug_reading_known(host, charger_cfg: dict) -> bool:
+    """(#1412) True when this charger's plug sensor gives an answer right
+    now. A sensor that is unavailable or unknown says nothing about the
+    car, and a charger without one is asked through ``plug_known``."""
+    cfg = charger_cfg if isinstance(charger_cfg, dict) else {}
+    sensor = cfg.get("ev_connected_sensor")
+    if not sensor:
+        return True
+    try:
+        state = host.hass.states.get(sensor)
+    except Exception:  # noqa: BLE001 — no state machine, no answer
+        return False
+    if state is None:
+        return False
+    return str(getattr(state, "state", "")).strip().lower() not in (
+        "", "unavailable", "unknown", "none")
+
+
+def _switch_reads_three(host, entity, value_3p) -> bool:
+    """(#1412) True when the phase switch entity's own state is its 3-phase
+    value: the charger is SET to three phases, whoever set it."""
+    if not entity or value_3p in (None, ""):
+        return False
+    try:
+        state = host.hass.states.get(entity)
+    except Exception:  # noqa: BLE001
+        return False
+    raw = getattr(state, "state", None)
+    if raw is None:
+        return False
+    try:
+        return float(raw) == float(value_3p)
+    except (TypeError, ValueError):
+        return str(raw).strip().lower() == str(value_3p).strip().lower()
 
 
 def _forget_phases(host, cid: str) -> None:
     """(#1412) Drop what SEM believes about this charger's phases: the
     count, whether SEM set it, and the night's count. The configured count
     is the answer again, as before any measurement."""
-    for name in ("_phase_believed", "_phase_set_by_sem", "_phase_grid_phases"):
+    for name in ("_phase_believed", "_phase_set_by_sem", "_phase_grid_phases",
+                 "_phase_car_one_phase"):
         (getattr(host, name, None) or {}).pop(cid, None)
 
 
 def _one_phase_falls_short(host, cid: str, charger_cfg: dict,
                            voltage: float) -> bool:
-    """(#1412) True when this charger's grid charge cannot reach its need by
-    the deadline on one phase, even at its highest current. From the night
-    plan of this cycle (``remaining_kwh``, ``hours_to_deadline``); no plan,
-    or no deadline in it, is "cannot tell" and answers False — a stop and a
-    switch need a reason."""
+    """(#1412) True when a running grid charge must leave SEM's own one
+    phase: it cannot reach its need by the deadline there, even at the
+    highest current — or there is no deadline to judge by.
+
+    From this cycle's night plan (``remaining_kwh``, ``hours_to_deadline``).
+    No plan, no deadline hours, or a deadline that has passed: a grid charge
+    has no reason to run at a third of the power, so it runs on the
+    configured phases (True). Only a plan that says nothing is owed answers
+    False — then nothing should be charging for it.
+    """
     from ..devices.base import resolve_max_current
     plan = (getattr(host, "_night_plan_per_charger", None) or {}).get(cid)
     if plan is None:
-        return False
+        return True
     try:
         need_kwh = float(getattr(plan, "remaining_kwh", 0.0) or 0.0)
         hours = getattr(plan, "hours_to_deadline", None)
         hours = None if hours is None else float(hours)
     except (TypeError, ValueError):
+        return True
+    if need_kwh <= 0.1:
         return False
-    if need_kwh <= 0.1 or hours is None or hours <= 0:
-        return False
+    if hours is None or hours <= 0:
+        return True
     config = getattr(host, "config", None) or {}
 
     def _get(key, default=None):
@@ -1144,7 +1195,9 @@ class EVControlMixin:
                                  setpoint_a: int = 0,
                                  peak_allowed_w=None,
                                  device=None,
-                                 is_night: bool = False):
+                                 is_night: bool = False,
+                                 source_code=None,
+                                 leg_phases=None):
         """(#804 Phase B/C) One cycle of the phase model for this charger.
 
         Returns the decision, replaced with IDLE while the sequencer holds
@@ -1249,11 +1302,6 @@ class EVControlMixin:
         _seen[cid] = now
         if _last_seen is not None and now - _last_seen > PHASE_BELIEF_ABSENCE_S:
             _forget_phases(self, cid)
-        _unplugged = _phase_state(self, "_phase_unplugged_at")
-        if cp.connected:
-            _unplugged.pop(cid, None)
-        elif now - _unplugged.setdefault(cid, now) >= PHASE_BELIEF_UNPLUG_S:
-            _forget_phases(self, cid)
         # (#1412) A draw the charging flag misses is still a draw: a cloud
         # charger's flag can lag its meter. EVERY switch waits for both.
         drawing = bool(cp.charging) or (
@@ -1269,10 +1317,29 @@ class EVControlMixin:
                 voltage=voltage,
             ))
 
+        # (#1412) Forgotten only on a KNOWN unplug: the charger has a plug
+        # sensor, that sensor answers now, and it says no car — for half a
+        # minute, with nothing drawing. ``connected`` False alone is no
+        # answer: a charger without a plug sensor reads it whenever it is not
+        # drawing (also during the stop SEM sends for a switch), and a plug
+        # sensor that dropped out reads it too. A one-phase charge at 1.5 kW
+        # lost its belief that way, was sized at 4140 W, went idle, and
+        # nothing measured it again. Never while SEM's own switch is in
+        # flight: the stop is SEM's, and the settle sets the belief.
+        _unplugged = _phase_state(self, "_phase_unplugged_at")
+        if (not cp.connected and getattr(cp, "plug_known", True)
+                and not drawing and not seq.in_flight
+                and _plug_reading_known(self, charger_cfg)):
+            if now - _unplugged.setdefault(cid, now) >= PHASE_BELIEF_UNPLUG_S:
+                _forget_phases(self, cid)
+        else:
+            _unplugged.pop(cid, None)
+
         # A replug is a new car (or a new mood) — fresh auto-switch budget,
         # and a fresh chance for a target the box did not take.
         if cp.connected and not self._phase_conn_memo.get(cid, False):
             planner.new_session()
+            _phase_state(self, "_phase_car_one_phase").pop(cid, None)
             if getattr(self, "_phase_contradictions", None):
                 self._phase_contradictions.pop(cid, None)
         self._phase_conn_memo[cid] = cp.connected
@@ -1312,6 +1379,8 @@ class EVControlMixin:
         priced_on = (active_phases(charger_cfg, self._phase_believed.get(cid),
                                    capable_before)
                      or _cfg_phases)
+        # …and what SEM itself had set, before this cycle's draw is read
+        set_at_start = set_by_sem.get(cid)
 
         # Belief: the #716 W/A estimate. Under an amps command the decision
         # carries the offer; under CHARGE_MAX the adapter's actual setpoint
@@ -1393,11 +1462,31 @@ class EVControlMixin:
         mode_val = str(charger_cfg.get("phase_mode") or "auto")
         # (#1412) One phase by SEM's own choice: set by SEM in auto on a
         # charger configured for three, and not contradicted by the draw.
-        _one_p_min_w = float(int(charger_cfg.get("ev_min_current") or 6)) * voltage
         own_one_phase = (
             mode_val not in ("1", "3") and _cfg_phases == 3
             and believed == 1 and set_by_sem.get(cid) == 1)
-        grid_pays = _grid_pays(decision, _one_p_min_w)
+        grid_pays = _grid_pays(decision, source_code)
+        # (#1412) A car that charges on one phase only. SEM switched up, the
+        # draw said one, and it tried once more — two writes for nothing,
+        # every plug-in. The charger's own current on each phase (#1407)
+        # says it at once: one phase carries the charge while the charger is
+        # SET to three (its switch reads the 3-phase value, or SEM set three
+        # this plug-in). Remembered until the unplug; auto then leaves the
+        # phases alone. One phase at the 1-phase setting says nothing about
+        # the car.
+        car_one_phase = _phase_state(self, "_phase_car_one_phase")
+        if (leg_phases == 1 and drawing and seq_idle and _cfg_phases == 3
+                and (set_at_start == 3
+                     or (not by_current
+                         and _switch_reads_three(self, entity, v3)))):
+            if not car_one_phase.get(cid):
+                _LOGGER.info(
+                    "#1412 %s: the car draws on one phase while the charger "
+                    "is set to three — no phase switching for this plug-in",
+                    cid)
+            car_one_phase[cid] = True
+            set_by_sem.pop(cid, None)
+            own_one_phase = False
         if mode_val in ("1", "3"):
             desired = int(mode_val)
             if contra["target"] != desired:
@@ -1411,10 +1500,15 @@ class EVControlMixin:
             # ten minutes after every unplug, and the next session started
             # on one phase and had to earn its way back up.
             desired = None
+        elif car_one_phase.get(cid):
+            # (#1412) the car's own one phase: nothing to switch for
+            planner.rest()
+            desired = None
         elif ((is_night and decision.intent is not ChargerIntent.CHARGE_MAX)
               or grid_pays):
             # (#1412) No sun to judge by: the night, or a charge the grid
-            # pays for (its budget does not carry even one phase). The
+            # pays for (the night top-up, the deadline floor — by the
+            # decision's source, never by a watt number). The
             # planner steers on spare sun, and its clocks read "none" as
             # starvation: a three-phase night charge was set to one phase
             # ten minutes in, and a charger SEM had set to one phase for
@@ -1425,7 +1519,8 @@ class EVControlMixin:
             #    charger is at rest — back to the configured count, before
             #    the block draws;
             #  * a grid charge runs on one phase and cannot reach its need
-            #    by the deadline there — up, through stop → switch → settle.
+            #    by the deadline there, or has no deadline to judge by — up,
+            #    through stop → switch → settle, once.
             # A one-phase CAR is not SEM's choice (the draw said so) and is
             # left alone. ``CHARGE_MAX`` keeps the planner: its offer is
             # priced at three phases (#1008).
@@ -1434,8 +1529,10 @@ class EVControlMixin:
             if own_one_phase:
                 if not drawing and seq_idle:
                     desired = _cfg_phases
-                elif (drawing and grid_pays and _one_phase_falls_short(
-                        self, cid, charger_cfg, voltage)):
+                elif (drawing
+                      and decision.intent is ChargerIntent.CHARGE_AT_AMPS
+                      and _one_phase_falls_short(
+                          self, cid, charger_cfg, voltage)):
                     desired = _cfg_phases
                 elif seq.pending == _cfg_phases:
                     # the car is stopping for this very switch: keep asking,
@@ -1550,10 +1647,15 @@ class EVControlMixin:
         _b = self._phase_believed.get(cid)
         _own_now = (mode_val not in ("1", "3") and _cfg_phases == 3
                     and _b == 1 and set_by_sem.get(cid) == 1)
-        if _own_now and not (drawing and grid_pays):
+        _grid_charge_now = (
+            drawing and decision.intent is ChargerIntent.CHARGE_AT_AMPS
+            and (is_night or grid_pays))
+        if _own_now and not _grid_charge_now:
             grid_phases[cid] = _cfg_phases
         else:
             grid_phases.pop(cid, None)
+        if car_one_phase.get(cid) and mode_val not in ("1", "3"):
+            self._phase_switch_states[cid] = "one_phase_car"
         if (contra["count"] >= PHASE_NOT_TAKING_AFTER
                 and contra["target"] is not None):
             self._phase_switch_states[cid] = "not_taking"

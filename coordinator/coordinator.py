@@ -5636,6 +5636,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             soc_ceiling_reached=per_target_reached,
                         )
                         decision = decide_v2(view)
+                        # (#1412) the decision's own source, before any layer
+                        # below re-stamps the reason: the phase tick asks it
+                        # whether the grid pays for this charge
+                        _decide_code = decision.reason_code
                         from .vpp_dispatch import vpp_pause_override
                         decision = vpp_pause_override(
                             decision, getattr(self, "_vpp_ev_override", None) == "pause")
@@ -5695,6 +5699,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # goes back to its configured phases
                                 is_night=bool(getattr(
                                     view.fleet, "is_night", False)),
+                                source_code=_decide_code,
+                                # (#1407) the phases that carry the charge,
+                                # by the charger's own current on each
+                                leg_phases=self._charger_leg_phases(
+                                    cid, getattr(adapter, "_device", None),
+                                    view.power.power_w),
                             )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
@@ -10434,6 +10444,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if believed in (1, 3) and not contra.get("count"):
             return int(believed), True
         return None, False
+
+    def _charger_leg_phases(self, cid: str, ev_dev, power_w):
+        """(#1412) How many phases carry this charger's charge, by its own
+        current on each phase (#1407) — 1 to 3, or None when it has no such
+        sensors, shares them with another charger (class 52), draws
+        nothing, or its power says otherwise. The phase tick reads it to
+        tell a one-phase CAR from a charger set to one phase."""
+        from .ev_phases import phases_from_leg_currents
+        reader = getattr(ev_dev, "phase_leg_currents", None)
+        if not callable(reader):
+            return None
+        # FLEET-READ: the other chargers' leg sensors, only to refuse a
+        # reading two chargers share — never their draw
+        others = [d for c, d in (getattr(self, "_ev_devices", None) or {}).items()
+                  if c != cid]
+        try:
+            _amps, phases = phases_from_leg_currents(
+                reader(others=others), power_w=power_w)
+        except Exception:  # noqa: BLE001 — a reading, never fatal
+            return None
+        return phases
 
     def _active_phases_for(self, cid: str, cfg: Optional[dict] = None):
         """(#1412) The phase count this charger runs on NOW, for a charger
