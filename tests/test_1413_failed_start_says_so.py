@@ -396,9 +396,65 @@ class TestAPlannedWaitIsNotAFailure:
         hass.put(T.MODE, T.UTILITY)
         await actuate_battery(charge, a, controller=sc)
         rows = [r for r in sc.decision_log.records() if r["new"].startswith("force")]
+        assert left, "the limit left an error behind"
         assert [(r["new"], r["reason_code"]) for r in rows] == [
             ("force_charge 3000 W", RC.BATTERY_PLAN_CHARGE)]
-        assert left is None or all(left not in r["text"] for r in rows)
+
+    def test_the_window_covers_the_hold_modes_own_wait(self):
+        """The hold re-sends once after ``SHOW_WITHIN_S`` and refuses after
+        another; each step may end a cycle late, and a cycle is up to 60 s."""
+        from custom_components.solar_energy_management.coordinator.battery_adapters import (
+            hold_select,
+        )
+        assert WAIT >= 2 * (hold_select.SHOW_WITHIN_S + 60.0)
+
+    async def test_an_old_refusal_does_not_mark_a_new_starts_wait(
+            self, monkeypatch):
+        """Review: ``charge_refused`` is kept for 24 h. A new start whose
+        first cycle only waits (no error of its own) is not "not started"."""
+        _Clock(monkeypatch)
+        sc = _sc()
+        a = _Stub()
+        a.charge_refused = True
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        assert _rows(sc) == []
+        a._then = (None, "the select did not take it", None)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        assert _rows(sc) == [NOT_STARTED], "its own 'no' with the give-up: at once"
+
+    async def test_a_start_that_went_out_starts_the_window_again(
+            self, monkeypatch):
+        clock, sc = _Clock(monkeypatch), _sc()
+        a = _Stub(error="waiting for select.mode to read charge")
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        clock.wait(WAIT - 10)
+        a._then = (BatteryIntent.FORCE_CHARGE, None, None)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        a._then = (None, "start_forced_charge failed", None)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        clock.wait(WAIT - 10)
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        assert _rows(sc) == [CHARGING]
+
+    async def test_a_switch_from_charge_to_sale_starts_the_window_again(
+            self, monkeypatch):
+        clock, sc = _Clock(monkeypatch), _sc()
+        a = _Stub(error="waiting")
+        await actuate_battery(_plan_charge(), a, controller=sc)
+        clock.wait(WAIT - 10)
+        await actuate_battery(_sale(), a, controller=sc)
+        clock.wait(WAIT - 10)
+        await actuate_battery(_sale(), a, controller=sc)
+        assert _rows(sc) == []
+
+    async def test_a_charge_refusal_does_not_end_a_sale_at_once(
+            self, monkeypatch):
+        _Clock(monkeypatch)
+        sc = _sc()
+        a = _Stub(error="Deye write failed", ret=False)
+        a.charge_refused = True
+        await actuate_battery(_sale(), a, controller=sc)
+        assert _rows(sc) == []
 
 
 # ── the plan: a charge target SEM could not set counts like a refusal ─

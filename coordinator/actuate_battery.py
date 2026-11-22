@@ -276,9 +276,10 @@ def _note_forced_op(adapter, attr: str, ret, landed_intent, value: bool) -> None
 
 #: (#1413) how long a forced start may stay off before its row says so. A
 #: select that shows the new value a cycle later (a Modbus direction select,
-#: a power strategy) is a wait, not a failure; a cloud hold mode may take a
-#: minute and one re-send (``hold_select.SHOW_WITHIN_S``).
-NOT_STARTED_AFTER_S = 120.0
+#: a power strategy) is a wait, not a failure. The slowest is a cloud hold
+#: mode: ``hold_select.SHOW_WITHIN_S`` (60 s), one re-send, 60 s again, and
+#: each step may end one cycle late (a cycle is up to 60 s): 2 × (60 + 60).
+NOT_STARTED_AFTER_S = 240.0
 _now = time.monotonic
 
 
@@ -303,8 +304,8 @@ def _record_forced_start(log, decision, adapter, ret, value_w: float,
       while an earlier start still stands. No row.
     * The start is off: no True, and the adapter does not hold this intent.
       The row says the start did not happen, with no watts — at once when
-      the adapter gave the charge up, else once it stayed off for
-      ``NOT_STARTED_AFTER_S``. Its text is the last error a command of this
+      this command's error comes with the adapter giving the charge up,
+      else once it stayed off for ``NOT_STARTED_AFTER_S``. Its text is the last error a command of this
       run set; an error left from another command (``error_before``, read
       before the command) is not this start's.
     """
@@ -321,11 +322,15 @@ def _record_forced_start(log, decision, adapter, ret, value_w: float,
     kept = getattr(adapter, "_start_off", None)
     since, text = ((kept[1], kept[2]) if isinstance(kept, tuple)
                    and len(kept) == 3 and kept[0] is intent else (now, ""))
-    if isinstance(error, str) and error and error != error_before:
+    fresh = isinstance(error, str) and bool(error) and error != error_before
+    if fresh:
         text = error
     _set(adapter, "_start_off", (intent, since, text))
+    # a give-up counts at once only with this command's own "no": a refusal
+    # is kept for 24 h, and a new start's first wait must not read as one
     if (now - since >= NOT_STARTED_AFTER_S
-            or (intent is BatteryIntent.FORCE_CHARGE and _given_up(adapter))):
+            or (fresh and intent is BatteryIntent.FORCE_CHARGE
+                and _given_up(adapter))):
         record_battery(log, rewrite(
             decision, reason_code=not_started_code,
             reason=text or "the start has not happened"))
