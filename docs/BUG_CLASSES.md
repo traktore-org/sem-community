@@ -5778,6 +5778,8 @@ minutes. Feeding it the commanded watts instead would also let a one-phase 32 A 
 and the night rate, the deadline current and the peak slot guard are all computed from the
 `ev_phases` CONFIG — changing the phase count under them changes arithmetic they own. That is a
 contract call across three layers, not a mechanical sweep. Refs #1008 #804 #105.
+(#1412: the sizing now follows the active phase count — class 193. Switching up for a grid charge
+is still open.)
 
 ### 110. A feed we append to, read through a fixed window — the one item the reader needs scrolls out — GUARDED
 **Symptom:** nobody could install SEM. HACS answered `404` on
@@ -7110,3 +7112,14 @@ Refs #1407 #898 #804.
 **Sweep question:** when a method calls a write, does it read the answer before it claims the result?
 **Left open:** the hot-water climate path writes the target before it sets mode "heat", so a tank whose entity refuses a target while off never gets the mode; it reports the refusal and claims nothing (not a wrong reading). The guard reads only `activate`/`deactivate` and a bare statement: an answer stored and not read, or a helper such as `_activate_climate`, is not checked. A pump that always refuses shows idle; the reason is in the activation path and a log line, with no Repair.
 Refs #1409 #1396 #1335 #508.
+
+### 193. A fact learned only by doing the thing it gates — nothing ever starts it — GUARDED
+
+**What happens.** A charger that changes phases, phase mode Auto, a small PV system in winter. The spare sun never reaches what three phases need at the lowest current (4.1 kW at 6 A), so the car never starts. Auto never sets one phase, on which 1.4 kW would do (#1412).
+**Root shape.** The planner answers only from a phase belief, and the belief comes from a measured draw. No draw, no belief; no belief, no switch; no switch, no draw. The same report held two more of the kind "one count, read from two places": after a switch to one phase the decision still sized the lowest current on the configured count (4140 W to start a 1380 W charge), and the night plan sized its amps there too. And one silent refusal: switch values outside the number entity's range (1000 and 4000 on 0 to 32) were never written, and nothing said so.
+**Where it lives:** `PhaseAutoPlanner.desired` (**fixed**: an idle charger offered enough for one phase and too little for three, for five minutes, is set to one phase; idle means SEM asks for no charge and the charger's power is at rest); `build_charger_view(active_phases=…)`, `_ev_watts_per_amp`, the two `nominal_wpa` sites, `_compute_night_plan` and `_night_deliverable_kwh` (**fixed**: one reader, `ev_phases.active_phases`); `_phase_switch_tick` (**fixed**: amps sized for fewer phases than the charger runs on are stopped for one cycle; a one-phase charge within 20 % of one phase's draw stays one phase); `switch_values_problem` (**fixed**: not ready, Repair, the forms refuse).
+**Closure:** a value that gates an action has a way to be known before the action; a count that can change under SEM's hand is read from the one place that follows it.
+**Guard:** `tests/test_1412_phase_start_from_idle.py` and the whole-path test in `tests/test_804_phase_sequencer.py`. 30 of the first 41 fail on the code before the fix.
+**Sweep question:** can this value be known without the action it permits? Who else reads the configured count of something SEM changes?
+**Left open:** by night the planner sees no spare sun, so a charger the day left on one phase charges the grid top-up on one phase; the plan now sizes for it (more amps) and says so when the night is too short, but it does not switch up for a grid charge (the #1008 residual, a design call). A switch to one phase the charger did not take costs one start on three phases at one-phase amps before the draw corrects it; two tries per plug-in. The device's own `phases` (cascade credit of a second charger) and the curtailment floor still read the configured count. The dashboard card saves the two values through `set_option` without the range check; the Repair covers it.
+Refs #1412 #1407 #1008 #804.

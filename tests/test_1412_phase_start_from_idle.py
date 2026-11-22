@@ -22,6 +22,8 @@ import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from custom_components.solar_energy_management.coordinator import (
     coordinator as coordinator_mod,
     ev_control,
@@ -710,3 +712,58 @@ class TestTheNightPlanSizesOnTheActivePhases:
         c = self._coord(1, ema={"wb": 600.0})
         c.config = {"ev_chargers": [cfg]}
         assert c._ev_watts_per_amp("wb", cfg) == 600.0
+
+
+class TestTheNightCountsOnTheActivePhases:
+    """A charger the day left on one phase delivers a third at night. What
+    the night can deliver, and the plan's watts per amp, follow it."""
+
+    def _host(self, believed):
+        from homeassistant.util import dt as dt_util
+        from custom_components.solar_energy_management.utils.time_manager import (
+            TimeManager,
+        )
+        now = dt_util.now()
+        local = lambda h, m: now.replace(hour=h, minute=m, second=0, microsecond=0)
+        sun = MagicMock()
+        sun.attributes = {"next_setting": local(17, 0).isoformat(),
+                          "next_rising": local(7, 15).isoformat()}
+        sun.state = "below_horizon"
+        hass = MagicMock()
+        hass.states.get = MagicMock(return_value=sun)
+        host = SimpleNamespace(
+            time_manager=TimeManager(hass=hass, config={}), config={})
+        if believed:
+            host._phase_believed = {"wb": believed}
+        return host, local(12, 0)
+
+    def _deliverable(self, believed, cfg=None):
+        from unittest.mock import patch
+        host, noon = self._host(believed)
+        cfg = cfg or {**SWITCHING_CFG, "ev_target_time": "07:00"}
+        with patch("homeassistant.util.dt.now", return_value=noon):
+            return ev_control.EVControlMixin._night_deliverable_kwh(host, cfg)
+
+    def test_one_phase_delivers_a_third(self):
+        three = self._deliverable(None)
+        one = self._deliverable(1)
+        assert three > 0 and one == pytest.approx(three / 3)
+
+    def test_three_phases_as_configured(self):
+        assert self._deliverable(3) == pytest.approx(self._deliverable(None))
+
+    def test_a_charger_that_cannot_switch_is_unchanged(self):
+        cfg = {**SWITCHING_CFG, "ev_phase_switching_enabled": False,
+               "ev_target_time": "07:00"}
+        assert self._deliverable(1, cfg) == pytest.approx(
+            self._deliverable(None, cfg))
+
+    def test_the_helper_reads_one_function(self):
+        """``_phases_now`` and the view answer from ``active_phases``."""
+        host = SimpleNamespace(_phase_believed={"wb": 1})
+        assert ev_control._phases_now(host, SWITCHING_CFG, 3) == 1
+        assert ev_control._phases_now(SimpleNamespace(), SWITCHING_CFG, 3) == 3
+        assert ev_control._phases_now(
+            host, {**SWITCHING_CFG, "ev_phase_switching_enabled": False}, 3) == 3
+        src = inspect.getsource(ev_control.EVControlMixin._compute_night_plan)
+        assert "_phases_now(" in src, "the night plan sizes on the active phases"

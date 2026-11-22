@@ -86,6 +86,24 @@ def amps_from_headroom(
 PHASE_NOT_TAKING_AFTER = 2
 
 
+def _phases_now(host, charger_cfg: dict, default: int) -> int:
+    """(#1412) The phases a charger's amps run on now, for the night's
+    arithmetic: what SEM set or measured on a charger that changes phases,
+    else ``default`` (the configured count, as the caller read it).
+
+    The night plan sized the deadline current, and the day floor judged what
+    the night can deliver, at the configured count. A charger left on one
+    phase by the day delivers a third of that: the plan asked for too few
+    amps and the target was missed without a word. One reader with the view
+    (``ev_phases.active_phases``); the belief is read off the host so a test
+    double without the phase model answers ``default``.
+    """
+    from .ev_phases import active_phases
+    cfg = charger_cfg if isinstance(charger_cfg, dict) else {}
+    believed = (getattr(host, "_phase_believed", None) or {}).get(cfg.get("id"))
+    return int(active_phases(cfg, believed) or default)
+
+
 def _power_on_offer_w(decision, charger_cfg: dict, config: dict,
                       voltage: float, peak_allowed_w=None) -> float:
     """(#1008) Watts this charger may draw — what the phase planner asks.
@@ -399,7 +417,7 @@ class EVControlMixin:
         ev = getattr(self, "_ev_device", None)
         if ev is not None:
             max_amps = int(getattr(ev, "max_current", max_amps))
-        phases = int(_pc("ev_phases", 3))
+        phases = _phases_now(self, cfg, int(_pc("ev_phases", 3)))   # (#1412)
         # ``ev_voltage`` is read by every other watts-per-amp conversion in
         # the codebase — decide.py, the energy calculator, and
         # ``_night_deliverable_kwh`` in this very file. This one alone
@@ -558,9 +576,9 @@ class EVControlMixin:
                 cfg.get("ev_max_current")
                 or self.config.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT)
             )
-            phases = int(
+            phases = _phases_now(self, cfg, int(      # (#1412)
                 cfg.get("ev_phases") or self.config.get("ev_phases", DEFAULT_PHASES)
-            )
+            ))
             voltage = float(
                 cfg.get("ev_voltage")
                 or self.config.get("ev_voltage", DEFAULT_VOLTAGE_PER_PHASE)
