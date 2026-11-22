@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Off no longer says "No charge" while another system charges** (#1407). Off stops the charge once. Then SEM sends nothing.
 - 📝 **Min + Solar texts match what it does** (#1411). By day it waits for sun; the grid helps only if the night is too short.
 
 - 🐛 **Forecast accuracy shows its number** (#1321). Insights showed "{pct} % trusted 55 %". Now it reads "55 % trusted".
