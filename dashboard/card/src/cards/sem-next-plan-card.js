@@ -728,6 +728,19 @@ class SEMNextPlanCard extends SEMNextBase {
         }).join(', ');
     }
 
+    /**
+     * (#1377) Does SEM act on this plan? Two switches decide it: 'watch' (watch-only
+     * on), 'acts' (watch-only off, plan switch on), 'off' (both off), or '' while
+     * either reads neither on nor off — then no line says a state.
+     */
+    _actsState() {
+        const watch = this._str('switch.sem_observer_mode');
+        if (watch === 'on') return 'watch';
+        if (watch !== 'off') return '';
+        const plan = this._str('switch.sem_energy_plan_actuation');
+        return plan === 'on' ? 'acts' : plan === 'off' ? 'off' : '';
+    }
+
     _stripPills(plan) {
         const t = (k) => this._t(k);
         const out = [];
@@ -751,7 +764,9 @@ class SEMNextPlanCard extends SEMNextBase {
                 // holds every write, so the pill says that, never "Live"
                 out.push(this._pill(t('next_pill_observing')));
             } else {
-                out.push(this._pill(plan.actuation ? t('next_pill_live') : t('next_pill_shadow'), plan.actuation ? 'ok' : ''));
+                // (#1377) "Live" only while watch-only reads off, not while it is out
+                const live = !!plan.actuation && this._str('switch.sem_observer_mode') === 'off';
+                out.push(this._pill(live ? t('next_pill_live') : t('next_pill_shadow'), live ? 'ok' : ''));
             }
         }
         return out;
@@ -1005,11 +1020,14 @@ class SEMNextPlanCard extends SEMNextBase {
         }
         if (this._has('switch.sem_energy_plan_actuation')) {
             const on = this._str('switch.sem_energy_plan_actuation') === 'on';
+            const acts = this._actsState();
+            const line = acts === 'watch' ? 'next_actuation_watch' : acts === 'acts' ? 'next_actuation_sub'
+                : acts === 'off' ? 'next_actuation_off' : '';
             rows.push(this._row('mdi:toggle-switch-outline', t('next_plan_acts'),
                 this._switch(on, () => this._askFirst(t('next_plan_acts'), () => this._toggleSwitch('switch.sem_energy_plan_actuation'), { body: t('next_confirm_plan_acts') }), { label: t('next_plan_acts') }),
                 // (#1321) watch-only holds every device write: say the plan is paused, not that it controls
                 // (#1377) …and with its own switch off the plan does not act either
-                t(this._obs() ? 'next_actuation_watch' : (on ? 'next_actuation_sub' : 'next_actuation_off'))));
+                line ? t(line) : ''));
         }
         rows.push(this._row('mdi:sync', t('next_replan'),
             this._btn(t('next_now_btn'), () => this._askFirst(t('next_replan'), () => this._callService(DOMAIN, 'replan', {}), { body: t('next_confirm_replan') }), { small: true }),

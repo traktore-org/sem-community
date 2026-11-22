@@ -64,3 +64,15 @@ test('the header chip and the plan pill agree on watch-only', () => {
         if (watch === 'on') assert.match(chip, /next_pill_observing/);
     }
 });
+
+test('(review) a switch that reads neither on nor off gets no state line, and no "Live"', () => {
+    for (const [watch, plan] of [['unavailable', 'on'], ['off', 'unavailable'], ['unknown', 'off']]) {
+        const el = mount('sem-next-plan-card', states(watch, plan));
+        const row = text(el._expectedSec(el._plan(), el._model()));
+        assert.doesNotMatch(row, /next_actuation_(sub|off|watch)/, `watch ${watch}, plan ${plan}`);
+        const pill = text(el._stripPills({ ...PLAN, actuation: true }));
+        if (watch !== 'off') assert.doesNotMatch(pill, /next_pill_live/, `watch ${watch}`);
+    }
+    const sys = text(mount('sem-next-system-card', states('unavailable', 'on'))._observerRow());
+    assert.doesNotMatch(sys, /next_observer_(on|off)_sub/);
+});
