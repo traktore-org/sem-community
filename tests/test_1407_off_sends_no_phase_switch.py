@@ -16,7 +16,7 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
     ChargerDecision, ChargerIntent, ChargerPower,
 )
 from custom_components.solar_energy_management.coordinator.ev_phase_sequencer import (
-    AUTO_DOWN_DELAY_S, AUTO_MIN_INTERVAL_S, STOP_WAIT_S,
+    AUTO_DOWN_DELAY_S, AUTO_MIN_INTERVAL_S, SETTLE_S, STOP_WAIT_S,
 )
 
 
@@ -112,8 +112,52 @@ def test_a_switch_in_flight_is_dropped_by_off():
     _tick(h, _off(), _cp(11000.0), 20.0)
     assert h._phase_switch_states["c1"] == "idle"
     for i in range(int(STOP_WAIT_S // 10) + 5):
-        _tick(h, _off(), _cp(0.0, charging=False), 30.0 + 10 * i)
+        _tick(h, _off(), _cp(11000.0), 30.0 + 10 * i)
+    for i in range(5):
+        _tick(h, _off(), _cp(0.0, charging=False), 400.0 + 10 * i)
     assert _calls(h) == 0
+    assert h._phase_contradictions["c1"]["count"] == 0, "blamed the box"
+
+
+def test_a_switch_already_sent_settles_under_off():
+    """The switch went out, then Off: it settles and keeps its belief, so
+    leaving Off sends no second switch."""
+    h = _host(phase_mode="1")
+    _tick(h, _max(), _cp(11000.0), 0.0)
+    assert h._phase_believed["c1"] == 3
+    _tick(h, _max(), _cp(0.0, charging=False), 10.0)
+    assert _calls(h) == 1
+    assert h._phase_switch_states["c1"] == "settling"
+    t = 20.0
+    while t < 10.0 + SETTLE_S + 30:
+        _tick(h, _off(), _cp(0.0, charging=False), t)
+        t += 10.0
+    assert h._phase_believed["c1"] == 1
+    assert h._phase_switch_states["c1"] == "idle"
+    for i in range(10):    # back to a mode SEM drives
+        _tick(h, _max(), _cp(0.0, charging=False), t + 10 * i)
+    assert _calls(h) == 1, "a second switch after Off"
+
+
+def test_leaving_off_starts_the_down_clock_again():
+    """A window from before Off is not carried across it."""
+    h = _host()
+    _tick(h, _max(), _cp(11000.0), 0.0)
+    idle = ChargerDecision(charger_id="c1", mode="solar_only",
+                           intent=ChargerIntent.IDLE, commanded_amps=0,
+                           budget_w=0.0, reason="no sun")
+    _tick(h, idle, _cp(0.0, charging=False), 10.0)       # the clock starts
+    t = 20.0
+    while t < AUTO_DOWN_DELAY_S + 100:
+        _tick(h, _off(), _cp(0.0, charging=False), t)
+        t += 10.0
+    back = t
+    _tick(h, idle, _cp(0.0, charging=False), back)
+    assert _calls(h) == 0, "switched at once on a window from before Off"
+    while _calls(h) == 0 and t < back + 3 * AUTO_DOWN_DELAY_S:
+        t += 10.0
+        _tick(h, idle, _cp(0.0, charging=False), t)
+    assert t - back > AUTO_DOWN_DELAY_S
 
 
 def test_by_current_writes_nothing_in_off(monkeypatch):

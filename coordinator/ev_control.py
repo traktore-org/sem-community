@@ -1131,14 +1131,25 @@ class EVControlMixin:
 
         # (#1407) Off sends nothing (#898), and a phase switch is a command
         # too: in Auto the 0 W an Off charger is offered asked for one phase,
-        # and the switch went out while another system ran the box. A switch
-        # in flight is dropped, and the planner's clocks start again when
-        # SEM drives the charger again — a window from before Off says
-        # nothing about the time after it.
+        # and the switch went out while another system ran the box. With no
+        # target the sequencer cannot fire: a switch still waiting for the
+        # car to stop is dropped, and one already sent settles and keeps its
+        # belief (dropped, the old count stayed and a second switch followed
+        # Off). The planner's clocks start again when SEM drives the charger
+        # again — a window from before Off says nothing about the time after.
         if decision.intent is ChargerIntent.RELEASE:
-            r = seq.tick(now=now, desired_phases=None, believed_phases=None,
-                         charging=bool(cp.charging), capability_ready=False)
+            r = seq.tick(now=now, desired_phases=None,
+                         believed_phases=self._phase_believed.get(cid),
+                         charging=bool(cp.charging), capability_ready=ready)
             self._phase_switch_states[cid] = r.state
+            if r.believed_phases is not None:
+                self._phase_believed[cid] = r.believed_phases
+                if getattr(self, "_phase_contradictions", None) is None:
+                    self._phase_contradictions = {}
+                held = self._phase_contradictions.setdefault(
+                    cid, {"target": None, "count": 0, "last_asserted": None})
+                held["last_asserted"] = r.believed_phases
+                held["asserted_at"] = now
             planner.desired(now, None, 0.0)
             return decision
 
