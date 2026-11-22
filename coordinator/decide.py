@@ -49,6 +49,7 @@ from .charger_types import (
     rewrite,
 )
 from .energy_reclaim import ev_reclaims_battery_charge
+from .thin_sun import blended_price, thin_sun_verdict
 from .price_view import (  # (#1372) one place judges a price level
     NOT_CHEAP_LEVELS as _NOT_CHEAP_LEVELS,  # noqa: F401 (#994 test)
     answer_for_level,
@@ -1243,6 +1244,70 @@ class SolarPlusBatteryMode(ModeStrategy):
         )
 
 
+def _thin_sun_top_up(view: "ChargerView",
+                     solar: "ChargerDecision") -> "Optional[ChargerDecision]":
+    """(#1411) The thin-sun rule, live: charge at the minimum on the spare
+    sun plus the grid, for the "At least" only — or None, and the caller's
+    sun-only answer stands.
+
+    The same question the planner asks of a thin sun slot
+    (``energy_planner._sun_grid``), through the same functions in
+    ``thin_sun``: an export price the user gave, a blended price below the
+    cheapest hour still open to the car, no strong sun coming that would do
+    it for free, the battery not taking that sun, room under the peak limit.
+
+    Only ever lifts an IDLE: sun that reaches the minimum charges by itself
+    and is never traded for a grid top-up. The top-up is the shared seam
+    (``night_top_up_decision``) — plan hold, deadline floor and the
+    peak-managed rate apply here exactly as at night.
+    """
+    if solar.intent is not ChargerIntent.IDLE:
+        return None
+    f = view.fleet
+    cfg = view.config if isinstance(view.config, dict) else {}
+    min_amps = effective_min_amps(cfg, SolarOnlyMode.MIN_AMPS_FALLBACK)
+    phases = int(cfg.get("ev_phases", SolarOnlyMode.PHASES_FALLBACK))
+    voltage = int(cfg.get("ev_voltage", SolarOnlyMode.VOLTAGE_FALLBACK))
+    min_w = float(predict_watts(view.wpa_table, min_amps, phases * voltage))
+    # The sun that would otherwise leave through the meter: what the house
+    # and a charging battery take is not spare.
+    sun_w = max(0.0, float(self_consumption_surplus_w(view)))
+    room_w = None
+    _allowed = getattr(f, "peak_slot_allowed_w", None)
+    if _allowed is not None:
+        room_w = max(0.0, float(_allowed) - float(f.grid_import_w or 0.0)
+                     - float(getattr(f, "peak_committed_w", 0.0) or 0.0))
+    fires, why = thin_sun_verdict(
+        getattr(view, "thin_sun", None), sun_w=sun_w, min_w=min_w,
+        need_kwh=view.target_kwh,
+        battery_charge_w=float(f.battery_charge_w or 0.0),
+        grid_room_w=room_w,
+        # the pack's own gate: above its buffer AND spare sun past
+        # ``battery_assist_min_surplus_w`` it may feed the car — below
+        # either, ``decide_battery`` holds it to the house load
+        pack_could_pay=(not _assist_blocked_why(f)
+                        and sun_w >= float(
+                            getattr(f, "battery_assist_min_surplus_w", 0.0) or 0.0)),
+        # already drawing in this mode on a sun too thin to carry it: the
+        # session this rule (or a cheap hour) started — keep it steady
+        running=bool(view.power.charging and view.power.power_w > 100.0))
+    if not fires:
+        return None
+    grid = night_top_up_decision(view, "solar_plus_cheap", phase="day (thin sun)")
+    if grid.intent is not ChargerIntent.CHARGE_AT_AMPS:
+        return None        # the plan holds, or the floor is met: its word
+    t = view.thin_sun
+    blend = blended_price(sun_w, min_w, t.export_price, t.import_now)
+    return replace(
+        grid,
+        reason=(f"{grid.reason} — thin sun {_cw(sun_w)}W + grid: "
+                f"{blend:.3f}/kWh beats the cheapest later hour "
+                f"({float(t.cheapest_later):.3f}/kWh)"),
+        reason_code=RC.CHARGER_SUN_PLUS_GRID,
+        reason_params={},
+    )
+
+
 class SolarPlusCheapMode(ModeStrategy):
     """During day: solar_only behaviour, but pauses during
     expensive tariff windows. At night: charge during the
@@ -1314,13 +1379,15 @@ class SolarPlusCheapMode(ModeStrategy):
                     solar, reason=f"{solar.reason} (cheap hour: solar offer wins)")
             return grid
 
-        # Day, normal tariff: solar surplus only (same as min_plus_solar
-        # day path).
+        # Day, normal tariff: solar surplus — and (#1411) a thin sun hour
+        # may take the rest from the grid when that is cheaper than every
+        # hour still to come (``_thin_sun_top_up``).
         if not f.is_night:
-            return _relabel(
+            solar = _relabel(
                 _SOLAR_ONLY.decide(view), "solar_plus_cheap",
                 f"solar_plus_cheap day: tariff={f.tariff_level}",
             )
+            return _thin_sun_top_up(view, solar) or solar
 
         # Night → the shared night decision, which consults the planning
         # layer's verdict for EVERY mode (#638). This mode used to carry

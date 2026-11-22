@@ -31,7 +31,10 @@ EV_CHARGE_MODES: dict[str, str] = {
     # meant committing to a Min floor and grid backfill. Loads kept the
     # distinction (#620); this gives chargers the same choice back.
     "solar_plus_battery": "Solar + battery",
-    "solar_plus_cheap": "Solar + cheapest hours",
+    # (#1411) Shown as "Solar + tariff": it follows the prices on ANY tariff
+    # — the cheap hours of a dynamic or two-rate one, and on every tariff
+    # the thin-sun rule (``coordinator/thin_sun.py``). The key stays.
+    "solar_plus_cheap": "Solar + tariff",
     "min_plus_solar": "Min + Solar",
     "always_max": "Always (max)",
     "off": "Off",

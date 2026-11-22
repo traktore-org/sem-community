@@ -1794,7 +1794,7 @@
         "state": {
           "solar_only": "Solo solare",
           "solar_plus_battery": "Solare + batteria",
-          "solar_plus_cheap": "Solare + ore più economiche",
+          "solar_plus_cheap": "Solare + tariffa",
           "min_plus_solar": "Min + Solare",
           "always_max": "Sempre (max)",
           "off": "Spento"

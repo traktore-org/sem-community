@@ -14,7 +14,7 @@ Default: **Min + Solar**.
 |---|---|---|---|
 | **Solar only** | Never by day. At night only with an *At least* floor you set on this charger | Never for the car. Exception: forecast-led spending | Spare sun only. Idles at night unless you set a floor. |
 | **Solar + battery** | Never by day. At night only with an *At least* floor | Helps down to the higher of the Buffer SOC and tonight's floor | Spare sun plus the pack. Above the spare-sun threshold it always helps. Below it, only when tonight's forecast budget is positive. |
-| **Solar + cheapest hours** | Only in cheap hours, up to the floor | Never | Spare sun by day. Grid only at cheap, very cheap or negative prices. Needs a tariff with cheaper hours: dynamic, or a schedule or two-rate tariff. |
+| **Solar + tariff** | Up to the floor, when it costs least | Never | Spare sun by day. Grid by day at cheap, very cheap or negative prices, and with thin sun when the blended price beats the cheapest hour to come. Works on every tariff. |
 | **Min + Solar** | Up to the floor (*At least*) | Helps above the Buffer SOC | Tops up to *At least* by the *Charge by* time. Spare sun adds up to *Up to*. Nothing owed means no grid. |
 | **Always (max)** | Whatever it takes | Held to the house, unless the pack is above the Buffer SOC and spare sun passes the threshold | Full speed whenever a car is plugged in, day or night, at any price. Stops at *Up to*. A floor of 0 does not stop it. |
 | **Off** | None | None | Hands-off. Switching to Off stops a running charge once, whoever started it. Then SEM sends nothing: no start, no stop, no current. SEM still reads the power and counts the energy. |
@@ -132,13 +132,41 @@ redirect in the budget turn the redirect off for the rest of the plug-in.
 
 | Mode | Time | What happens |
 |---|---|---|
-| Solar + cheapest hours | Day | Tops up the floor from grid at cheap, very cheap or negative prices. Solar surplus wins when it offers more. A static tariff (no live price level) never triggers it |
+| Solar + tariff | Day | Tops up the floor from grid at cheap, very cheap or negative prices. Solar surplus wins when it offers more. A static tariff (no live price level) never triggers it |
+| Solar + tariff | Day, thin sun | Charges at the minimum on spare sun plus grid when that blend costs less than the cheapest hour to come. Needs an export price and a forecast. See below |
 | Min + Solar | Day | Drops the Min grid guarantee at expensive prices. Resumes at a lower price or with enough sun |
 | Any tariff mode | Night | Waits for the energy plan's charge block |
 | Solar only, Always (max), Off | Any | No effect on price |
 
 The thresholds *Cheap below* and *Expensive above* set the price levels when no
 dynamic tariff gives them. See [ENERGY_PLANNER.md](ENERGY_PLANNER.md) for the plan.
+
+
+### Thin sun plus grid
+
+Spare sun below the charger's minimum power cannot charge the car alone.
+In **Solar + tariff** the car may charge at its minimum on that sun plus the
+grid, for the floor only. One sum decides, in `coordinator/thin_sun.py`:
+
+```
+blended = (sun × export + (min − sun) × import now) / min
+```
+
+It fires when `blended` is lower than the cheapest hour without spare sun
+that the car may still use before its deadline. So:
+
+- export = import: never.
+- one price, export below import: on any thin sun.
+- a cheaper night: only from enough sun.
+
+It does not fire when the export price is not set, when no forecast is
+known, when strong sun later today covers the floor, when the battery
+charges from that sun or may feed the car, in an expensive hour, or when
+the peak limit has no room.
+
+The planner asks the same functions (`energy_planner._sun_grid`), so the
+plan shows a **Spare sun plus grid** block where the charger will act. A
+running session keeps going through a short thinner moment.
 
 ## Daily energy counters
 

@@ -84,6 +84,7 @@ def build_charger_view(
     hardware_max_a: Optional[float] = None,
     wpa_table: Optional[Mapping[int, float]] = None,
     redirect_allowed: bool = True,
+    thin_sun: Any = None,
 ) -> ChargerView:
     """Construct a ChargerView from a per-cycle FleetCycleState +
     per-charger overrides.
@@ -378,4 +379,6 @@ def build_charger_view(
         ev_priority=ev_priority,
         wpa_table=dict(wpa_table or {}),
         redirect_allowed=bool(redirect_allowed),
+        # (#1411) None = not evaluated: the view's own default says no
+        **({} if thin_sun is None else {"thin_sun": thin_sun}),
     )

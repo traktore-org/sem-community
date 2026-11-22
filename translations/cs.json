@@ -1794,7 +1794,7 @@
         "state": {
           "solar_only": "Pouze solární",
           "solar_plus_battery": "Slunce + baterie",
-          "solar_plus_cheap": "Solární + nejlevnější hodiny",
+          "solar_plus_cheap": "Solární + tarif",
           "min_plus_solar": "Min + Solární",
           "always_max": "Vždy (max)",
           "off": "Vypnuto"

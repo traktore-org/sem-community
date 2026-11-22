@@ -207,7 +207,10 @@ class TestChargeModeOptions:
             a = sel.extra_state_attributes
             assert a is not None, tariff_mode
             assert a.get("tariff_available") is avail, (tariff_mode, a)
-            assert "solar_plus_cheap" in a.get("modes_needing_tariff", []), a
+            # (#1411) "Solar + tariff" works on one price too: the grid's
+            # "At least" at night and the thin-sun rule by day. No mode
+            # needs cheap hours any more, so the card disables none.
+            assert a.get("modes_needing_tariff") == [], a
 
     def test_valid_value_set_always_full(self):
         """Universe of valid values is always the 5 — only the UI list

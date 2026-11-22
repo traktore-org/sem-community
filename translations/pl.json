@@ -1794,7 +1794,7 @@
         "state": {
           "solar_only": "Tylko słońce",
           "solar_plus_battery": "Słońce + akumulator",
-          "solar_plus_cheap": "Słońce + najtańsze godziny",
+          "solar_plus_cheap": "Słońce + taryfa",
           "min_plus_solar": "Min + Słońce",
           "always_max": "Zawsze (max)",
           "off": "Wył"

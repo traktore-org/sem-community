@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from .price_view import day_has_cheaper, price_no_dearer
+from .thin_sun import blended_price, thin_sun_pays
 
 FIT_EPS = 0.999          # "fits" = this share of the need; the plan wait accepts the same (#1289)
 _W_EPS = 1.0              # grants below 1 W are noise
@@ -177,9 +178,18 @@ class LedgerSlot:
     # export rate there). None = unknown: the slot offers the surplus only.
     import_price: Optional[float] = None
     # (#1383) Is the TARIFF at a cheap level this hour (execution's word)?
-    # The live gate tops the car up from the grid by day only then, so the
-    # plan assists a thin sun slot only then.
+    # The live gate tops the car up from the grid by day then, so the plan
+    # assists a thin sun slot then.
     import_cheap: bool = False
+    # (#1411) Did the user give SEM an export price? ``price`` on a sun slot
+    # always holds a number (an absent rate reads 0); only a KNOWN one may
+    # start a grid charge in a thin sun hour outside the cheap level
+    # (``thin_sun.thin_sun_pays``). False = exactly as before.
+    export_known: bool = False
+    # (#1411) Is the tariff at a PEAK level this hour? The live gate pauses
+    # every grid top-up of the car then, so no thin sun slot takes grid
+    # power there.
+    import_peak: bool = False
 
     @property
     def hours(self) -> float:
@@ -464,12 +474,21 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         surplus never lands here: it keeps the surplus at the export price."""
         s = ledger[i]
         if (not d.grid_in_sun or d.source == "battery" or d.tariff is not None
-                or s.cap_override_w is None or s.import_price is None
-                or not s.import_cheap):
+                or s.cap_override_w is None or s.import_price is None):
             return None
         sun_w = max(0.0, float(s.cap_override_w) - s.grid_committed_w)
         min_w = max(_W_EPS, float(d.min_power_w))
         if min(float(d.max_power_w), sun_w) >= min_w:
+            return None
+        # (#1411) Outside the tariff's cheap level the grid's share must PAY:
+        # the blended price has to beat the cheapest dark hour still open to
+        # this demand, and only with an export price the user gave. The live
+        # gate asks ``thin_sun`` the same question (``decide``).
+        if not s.import_cheap and not (
+                s.export_known and not s.import_peak and thin_sun_pays(
+                    sun_w=sun_w, min_w=min_w, export_price=s.price,
+                    import_price=s.import_price,
+                    cheapest_other=_cheapest_dark(d))):
             return None
         if peak_limit_w and peak_limit_w > 0:
             drawn = max(0.0, s.grid_committed_w - float(s.cap_override_w))
@@ -477,17 +496,32 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         else:
             room = float("inf")
         grant = min(float(d.max_power_w), sun_w + room)
+        if not s.import_cheap:
+            # (#1411) The rule priced the MINIMUM: every watt above it is
+            # pure grid at a price that is not cheap, and the live gate
+            # charges at the minimum here. More power in fewer hours would
+            # also leave the next thin hour's sun to the meter.
+            grant = min(grant, min_w)
         return (grant, sun_w) if grant >= min_w else None
+
+    def _cheapest_dark(d):
+        """(#1411) The cheapest priced hour WITHOUT spare sun that this
+        demand may still use — what the grid would cost it otherwise. None
+        when no such hour is priced: nothing to beat, so no thin-sun buy."""
+        if d.id not in _dark_ref_memo:
+            ps = [ledger[j].price for j in idx
+                  if ledger[j].cap_override_w is None
+                  and ledger[j].price is not None and _in_time(d, j)]
+            _dark_ref_memo[d.id] = min(ps) if ps else None
+        return _dark_ref_memo[d.id]
 
     def _blend(s, sun_w, power_w):
         """(#1383) The price of ``power_w`` in a sun slot: the part the sun
         covers at the export rate, the rest at the import price."""
         if power_w <= 0:
             return s.price
-        from_sun = min(power_w, sun_w)
         export = 0.0 if s.price is None else float(s.price)
-        return (from_sun * export
-                + (power_w - from_sun) * float(s.import_price)) / power_w
+        return blended_price(sun_w, power_w, export, s.import_price)
 
     def _grant(d, i):
         """What grid demand ``d`` may draw in slot ``i``: the headroom, or
@@ -509,6 +543,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
 
     _one_price_memo: dict = {}
     _cheap_ref_memo: dict = {}
+    _dark_ref_memo: dict = {}
 
     def _cheap(d, i):
         """(#812) Is the slot cheap for THIS demand — the live gate's rule."""

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Solar + tariff replaces Solar + cheapest hours** (#1411). Same mode, new name. You can now pick it on every tariff, also with one price.
+- ✨ **Thin sun plus grid in Solar + tariff** (#1411). With spare sun below its minimum, the car charges at the minimum when that costs less than tonight.
 - 🐛 **Off and Pause show what the charger does** (#1407). The card said "No charge" or "paused" while another system charged.
 - 🐛 **Off sends no phase switch** (#1407). With phase switching on, SEM could still switch the phases of a charger set to Off.
 - 📝 **Min + Solar texts match what it does** (#1411). By day it waits for sun; the grid helps only if the night is too short.

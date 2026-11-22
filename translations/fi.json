@@ -1794,7 +1794,7 @@
         "state": {
           "solar_only": "Vain aurinko",
           "solar_plus_battery": "Aurinko + akku",
-          "solar_plus_cheap": "Aurinko + halvimmat tunnit",
+          "solar_plus_cheap": "Aurinko + tariffi",
           "min_plus_solar": "Min + Aurinko",
           "always_max": "Aina (max)",
           "off": "Pois"

@@ -37,6 +37,8 @@ CHARGER_PLAN_WAIT = "charger_plan_wait"
 CHARGER_PLAN_WAIT_UNTIL = "charger_plan_wait_until"
 CHARGER_DEADLINE = "charger_deadline"
 CHARGER_TOP_UP = "charger_top_up"
+#: (#1411) a thin sun hour: the spare sun plus the grid for the rest
+CHARGER_SUN_PLUS_GRID = "charger_sun_plus_grid"
 CHARGER_NO_NIGHT = "charger_no_night"
 CHARGER_PEAK_PAUSE = "charger_peak_pause"
 CHARGER_PEAK_SLOW = "charger_peak_slow"

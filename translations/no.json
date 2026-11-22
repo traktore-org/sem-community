@@ -1794,7 +1794,7 @@
         "state": {
           "solar_only": "Kun sol",
           "solar_plus_battery": "Sol + batteri",
-          "solar_plus_cheap": "Sol + billigste timer",
+          "solar_plus_cheap": "Sol + tariff",
           "min_plus_solar": "Min + Sol",
           "always_max": "Alltid (maks)",
           "off": "Av"

@@ -217,7 +217,7 @@ Each charger has a **Charge mode**. The default is **Min + Solar**.
 |---|---|
 | **Solar only** | Charges from solar surplus. Never from the grid, unless **At least** is set. |
 | **Solar + battery** | Solar surplus first. Then the house battery, down to what the house needs for the night. |
-| **Solar + cheapest hours** | Solar surplus, plus the grid in cheap hours. Needs cheaper hours: a dynamic, schedule or two-rate tariff. |
+| **Solar + tariff** | Solar surplus. The grid fills up to **At least** when it costs least: at night, in a cheap hour, or with thin sun. Set your import and export price. |
 | **Min + Solar** | The grid fills up to **At least** by the **Charge by** time. Solar adds up to **Up to**. |
 | **Always (max)** | Charges at the maximum, from the grid and the battery. |
 | **Off** | SEM sends no commands to the charger. |
