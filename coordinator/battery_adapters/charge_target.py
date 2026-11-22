@@ -248,6 +248,11 @@ class ChargeTargetHold:
             if changed:
                 await self._save()
 
+    def readable(self, entity_id: str) -> bool:
+        """(#1377) Does the number give a value now? ``write`` writes none
+        that does not: the old value could not be put back."""
+        return self._read(str(entity_id or "")) is not None
+
     def snapshot(self) -> dict:
         """For diagnostics: each number SEM holds or still has to put back."""
         out: dict = {e: {"saved": t.prior, "sent": list(t.sent),

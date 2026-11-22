@@ -114,11 +114,25 @@ class TestAsleep:
         # (#1377) it used to win; now the select starts and the switch permits
         hass = _Hass()
         hass._states[SWITCH] = SimpleNamespace(state="off", attributes={})
+        # (#1377 beta.21) the target must read: beside a permit it starts
+        # the charge, and the hold writes none it cannot read
+        hass._states["number.t"] = SimpleNamespace(state="20", attributes={})
         a = _adapter(hass, _Store(), battery_force_charge_switch=SWITCH,
                      battery_target_soc_entity="number.t")
         await actuate_battery(_charge(), a)
         assert ("switch", "turn_on", {"entity_id": SWITCH}) in hass.calls
         assert len(hass.writes()) == 1
+
+    async def test_beside_a_permit_an_unreadable_target_starts_nothing(self):
+        # (#1377 beta.21) the twin of the one above: the old run turned the
+        # permit on and wrote the select with no target raised
+        hass = _Hass()
+        hass._states[SWITCH] = SimpleNamespace(state="off", attributes={})
+        a = _adapter(hass, _Store(), battery_force_charge_switch=SWITCH,
+                     battery_target_soc_entity="number.t")
+        await actuate_battery(_charge(), a)
+        assert hass.calls == []
+        assert a.last_error and "number.t" in a.last_error
 
     async def test_no_target_entity_is_needed_for_the_select_path(self):
         assert _adapter(_Hass(), _Store()).supports_forced_charge is True
