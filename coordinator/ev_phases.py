@@ -75,6 +75,14 @@ def estimate_active_phases(
     return max(1, min(3, max(round(ratio), floor)))
 
 
+#: (#1412) A charge SEM believes runs on one phase stays "one phase" while
+#: its draw is within this factor of what one phase carries at the offer.
+#: The estimate reads 2 from 5 % over nameplate, and a 1-phase car on a
+#: 245 V grid draws 6.5 % over 230 V nameplate. 1.2 covers 253 V plus 5 %
+#: metering, and a draw inside it exceeds the sized amps by 20 % at most —
+#: three phases at the same offer read 3.0.
+ONE_PHASE_DRAW_TOLERANCE = 1.2
+
 #: (#1407) A phase carries the charge from this current up — the same 1 A
 #: evcc counts a phase as active from. An idle phase reads a few hundredths
 #: of an amp (#1407: 0.02–0.04 A beside a 7.26 A phase).

@@ -1095,9 +1095,11 @@ class EVControlMixin:
             SETTLE_S, STOP_WAIT_S, PhaseAutoPlanner, PhaseSwitchSequencer,
         )
         from .ev_phases import (
-            PHASE_LEG_FLOW_W, entity_bounds, estimate_active_phases,
-            phase_switch_command, resolve_switch_values,
-            switch_values_problem, validate_phase_switch_entity,
+            ONE_PHASE_DRAW_TOLERANCE, PHASE_LEG_FLOW_W, active_phases,
+            entity_bounds,
+            estimate_active_phases, phase_switch_command,
+            resolve_switch_values, switch_values_problem,
+            validate_phase_switch_entity,
         )
 
         _, valid = validate_phase_switch_entity(
@@ -1161,6 +1163,15 @@ class EVControlMixin:
             planner.desired(now, None, 0.0)
             return decision
 
+        # (#1412) The phases this cycle's decision was priced on — the belief
+        # as the cycle began (``_active_phases_for``), read before the draw
+        # or a settled switch changes it below.
+        _cfg_phases = int(charger_cfg.get("ev_phases")
+                          or (getattr(self, "config", {}) or {}).get("ev_phases")
+                          or 3)
+        priced_on = (active_phases(charger_cfg, self._phase_believed.get(cid))
+                     or _cfg_phases)
+
         # Belief: the #716 W/A estimate. Under an amps command the decision
         # carries the offer; under CHARGE_MAX the adapter's actual setpoint
         # is the offer (found live on PROD: always_max charged 9.9 kW at a
@@ -1180,6 +1191,15 @@ class EVControlMixin:
         if amps_for_estimate and seq_idle:
             est = estimate_active_phases(
                 cp.power_w, int(amps_for_estimate), voltage)
+            # (#1412) The belief now sizes the amps, so an ambiguous 2 costs
+            # a charge: it reads from 5 % over nameplate, and one phase on a
+            # 245 V grid draws more than that. A charge SEM believes on one
+            # phase stays there while its draw fits one phase with tolerance.
+            if (est == 2 and self._phase_believed.get(cid) == 1
+                    and float(cp.power_w or 0.0) <= (
+                        ONE_PHASE_DRAW_TOLERANCE
+                        * int(amps_for_estimate) * voltage)):
+                est = 1
             if est is not None:
                 self._phase_believed[cid] = est
         believed = self._phase_believed.get(cid)
@@ -1349,6 +1369,23 @@ class EVControlMixin:
             return rewrite(
                 decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
                 reason=f"phase switch: {r.state} (#804)", bridgeable=False,
+                reason_code=RC.CHARGER_PHASE_SWITCH, reason_params={})
+        # (#1412) The decision's amps follow the phases SEM believes. When
+        # the belief rose during this tick — a switch up settled, or the
+        # draw shows more phases than SEM set — these amps were priced for
+        # fewer phases than carry them: 8 A for one phase is 5.5 kW on
+        # three. Stop this one cycle; the next decision is priced on what
+        # is known now. A belief that fell needs no stop: those amps draw
+        # less than they were sized for. ``CHARGE_MAX`` is not priced.
+        runs_on = (active_phases(charger_cfg, self._phase_believed.get(cid))
+                   or _cfg_phases)
+        if (decision.intent is ChargerIntent.CHARGE_AT_AMPS
+                and runs_on > priced_on):
+            return rewrite(
+                decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
+                reason=(f"phase switch: amps sized for {priced_on} phase(s), "
+                        f"the charger runs on {runs_on} (#1412)"),
+                bridgeable=False,
                 reason_code=RC.CHARGER_PHASE_SWITCH, reason_params={})
         return decision
 

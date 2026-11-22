@@ -285,6 +285,98 @@ class TestTickStartsOnOnePhase:
             "the owner's choice of three phases is the only thing written")
 
 
+def _amps(amps, budget=THIN_SUN_W):
+    return ChargerDecision(
+        charger_id="c1", mode="solar_only",
+        intent=ChargerIntent.CHARGE_AT_AMPS, commanded_amps=amps,
+        budget_w=budget, reason="solar")
+
+
+class TestAmpsSizedForFewerPhasesAreStopped:
+    """The decision's amps follow the phases SEM believes. When the charger
+    turns out to run on more, those amps are too many: one cycle is stopped
+    and the next decision is sized again."""
+
+    def _on_one_phase(self):
+        h = _host()
+        _out, t = _cycles(h, _idle(), _cp(), start=0.0)       # idle start
+        _out, t = _cycles(h, _idle(), _cp(), start=t + 10, seconds=120.0)
+        assert h._phase_believed["c1"] == 1
+        return h, t + 10
+
+    def test_one_phase_as_set_passes(self):
+        h, t = self._on_one_phase()
+        d = _amps(8)
+        assert _run(h, d, _cp(power_w=8 * 230.0, charging=True), t) is d
+        assert h._phase_believed["c1"] == 1
+
+    def test_one_phase_on_a_high_grid_voltage_is_still_one_phase(self):
+        """245 V: 6.5 % over nameplate. No stop, and the belief stays."""
+        h, t = self._on_one_phase()
+        d = _amps(8)
+        for i in range(3):
+            assert _run(h, d, _cp(power_w=8 * 245.0, charging=True),
+                        t + 10 * i) is d
+        assert h._phase_believed["c1"] == 1
+
+    def test_a_switch_the_charger_did_not_take_stops_the_charge(self):
+        """SEM set one phase, the draw is three: 8 A is 5.5 kW, not 1.8 kW."""
+        h, t = self._on_one_phase()
+        d = _amps(8)
+        out = _run(h, d, _cp(power_w=8 * 3 * 230.0, charging=True), t)
+        assert out.intent is ChargerIntent.DISABLE
+        assert h._phase_believed["c1"] == 3
+        # sized again on three phases: nothing more to stop
+        d3 = _amps(8, budget=6000.0)
+        assert _run(h, d3, _cp(power_w=8 * 3 * 230.0, charging=True),
+                    t + 10) is d3
+
+    def test_a_part_draw_on_three_phases_stops_the_charge_too(self):
+        """A car that takes less than the offer on three phases reads 2:
+        more than one phase carries, so the amps are too many."""
+        h, t = self._on_one_phase()
+        out = _run(h, _amps(8), _cp(power_w=3300.0, charging=True), t)
+        assert out.intent is ChargerIntent.DISABLE
+
+    def test_a_switch_up_holds_one_more_cycle(self):
+        """Settled on three phases: this cycle's amps were sized for one."""
+        h, t = self._on_one_phase()
+        up = _amps(16, budget=5000.0)
+        outs, t2 = _cycles(h, up, _cp(power_w=16 * 230.0, charging=True),
+                           start=t + AUTO_MIN_INTERVAL_S,   # the switch interval
+                           seconds=400.0)                   # 5 min of headroom
+        assert any(o.intent is ChargerIntent.DISABLE for o in outs), "stopping"
+        outs, t3 = _cycles(h, up, _cp(), start=t2 + 10, seconds=120.0)
+        assert h._phase_believed["c1"] == 3
+        assert all(o.intent is ChargerIntent.DISABLE for o in outs
+                   if o is not up), "held while settling"
+        settled = [o for o in outs if "amps sized for 1" in o.reason]
+        assert len(settled) == 1, "exactly the cycle the switch settled"
+        d3 = _amps(7, budget=5000.0)
+        assert _run(h, d3, _cp(), t3 + 10) is d3
+
+    def test_a_first_measurement_of_the_configured_count_passes(self):
+        h = _host({"ev_phases": 3})
+        d = _amps(8, budget=6000.0)
+        assert _run(h, d, _cp(power_w=8 * 3 * 230.0, charging=True), 0.0) is d
+        assert h._phase_believed["c1"] == 3
+
+    def test_fewer_phases_than_sized_for_passes(self):
+        """A one-phase car on a three-phase setup draws less. No stop."""
+        h = _host({"ev_phases": 3})
+        d = _amps(8, budget=6000.0)
+        assert _run(h, d, _cp(power_w=8 * 230.0, charging=True), 0.0) is d
+        assert h._phase_believed["c1"] == 1
+
+    def test_full_power_is_not_sized_by_phases(self):
+        h, t = self._on_one_phase()
+        d = ChargerDecision(
+            charger_id="c1", mode="always_max",
+            intent=ChargerIntent.CHARGE_MAX, budget_w=0.0, reason="max")
+        out = _run(h, d, _cp(power_w=16 * 3 * 230.0, charging=True), t)
+        assert out is d
+
+
 # ── 2. the decision's minimum power ─────────────────────────────────────
 
 def _view(charger_cfg, surplus_w, active_phases=None, mode="solar_only"):
