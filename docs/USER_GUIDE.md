@@ -159,7 +159,7 @@ Notes:
 - **Min + Solar** charges at night even without sun. By day it waits for sun,
   unless tonight is too short to reach **At least**.
 - **Solar + tariff** needs your prices: the import price and the export
-  price, in **System > Tariff**. See
+  price, in **System > How I pay**. See
   [When Solar + tariff buys by day](#when-solar--tariff-buys-by-day).
 - **Solar only** never uses grid power unless you set **At least**.
   With **At least** at 0 kWh, the car never takes grid power.
