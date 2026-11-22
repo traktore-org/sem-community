@@ -1300,6 +1300,10 @@ def _thin_sun_top_up(view: "ChargerView",
     blend = blended_price(sun_w, min_w, t.export_price, t.import_now)
     return replace(
         grid,
+        # The rule priced the MINIMUM (every watt above it is pure grid at
+        # a price that is not cheap) — whatever rate a night plan left on
+        # the view, a thin-sun session runs at the minimum.
+        commanded_amps=min_amps,
         reason=(f"{grid.reason} — thin sun {_cw(sun_w)}W + grid: "
                 f"{blend:.3f}/kWh beats the cheapest later hour "
                 f"({float(t.cheapest_later):.3f}/kWh)"),

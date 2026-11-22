@@ -255,6 +255,17 @@ class TestThePlan:
         plan, _ = _pack(_day([1000, 1000, 0, 0]), peak=3000.0)
         assert "sun_plus_grid" not in {a.code for a in plan.allocations}
 
+    def test_with_a_home_battery_the_plan_books_no_thin_sun_block(self):
+        """The pack takes that sun or decides itself whether it feeds the
+        car; the plan cannot know hours ahead, so it keeps the night."""
+        ledger = build_night_ledger(
+            _day([1000, 1000, 0, 0]), soc_kwh=5.0, floor_kwh=1.0,
+            max_discharge_w=5000.0, peak_limit_w=0.0, capacity_kwh=10.0)
+        car = Demand(id="ev:1", kind="ev", energy_kwh=4.14, max_power_w=11000.0,
+                     min_power_w=MIN_W, deadline=_t(23, 59), grid_in_sun=True)
+        plan = pack_night([car], ledger)
+        assert "sun_plus_grid" not in {a.code for a in plan.allocations}
+
     def test_never_above_the_need(self):
         plan, _ = _pack(_day([1000, 1000, 1000, 1000]), need=2.0)
         assert sum(a.energy_kwh for a in plan.allocations) == pytest.approx(
@@ -360,6 +371,37 @@ class TestTheLiveGate:
         assert d.commanded_amps == 6
         assert d.reason_code == RC.CHARGER_SUN_PLUS_GRID
         assert "thin sun" in d.reason and d.mode == "solar_plus_cheap"
+
+    def test_it_stays_at_the_minimum_whatever_rate_the_night_left(self):
+        from dataclasses import replace
+        v = replace(_view(), deadline_amps=14, top_up_amps=16)
+        d = decide(v)
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 6
+
+    def test_a_running_session_holds_through_a_thinner_moment(self):
+        """300 W spare → start; 100 W spare while drawing → hold; 100 W
+        spare from standstill → no start."""
+        from dataclasses import replace
+        idle = _view(solar_w=600.0, home_w=500.0)          # 100 W spare
+        assert decide(idle).intent is ChargerIntent.IDLE
+        drawing = replace(idle, power=replace(
+            idle.power, charging=True, power_w=4100.0))
+        d = decide(drawing)
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.reason_code == RC.CHARGER_SUN_PLUS_GRID
+
+    def test_a_battery_charging_from_that_sun_keeps_it(self):
+        d = decide(_view(battery_soc=50, battery_charge_w=900.0))
+        assert d.intent is ChargerIntent.IDLE
+
+    def test_a_battery_that_may_feed_the_car_decides_itself(self):
+        # full pack above its buffer, spare sun past the assist gate
+        d = decide(_view(battery_soc=95, solar_w=2500.0, home_w=500.0))
+        assert d.intent is ChargerIntent.IDLE
+        # below the gate the pack is held to the house: the rule may act
+        d = decide(_view(battery_soc=95, solar_w=1300.0, home_w=500.0))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
 
     def test_without_the_rule_inputs_the_mode_behaves_as_before(self):
         before = decide(_view(thin_sun=None))

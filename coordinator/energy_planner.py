@@ -484,8 +484,15 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         # the blended price has to beat the cheapest dark hour still open to
         # this demand, and only with an export price the user gave. The live
         # gate asks ``thin_sun`` the same question (``decide``).
+        # A home battery in the ledger: the plan books no such block. That
+        # sun mostly goes into the pack, and whether the pack may feed the
+        # car is the battery's own decision, cycle by cycle — the live gate
+        # checks both; the plan cannot know either hours ahead, and a block
+        # the charger then declines would leave the night without one.
         if not s.import_cheap and not (
-                s.export_known and not s.import_peak and thin_sun_pays(
+                s.export_known and not s.import_peak
+                and float(getattr(s, "cap_kwh", 0.0) or 0.0) <= 0.0
+                and thin_sun_pays(
                     sun_w=sun_w, min_w=min_w, export_price=s.price,
                     import_price=s.import_price,
                     cheapest_other=_cheapest_dark(d))):
