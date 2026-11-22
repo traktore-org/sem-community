@@ -765,5 +765,6 @@ class TestTheNightCountsOnTheActivePhases:
         assert ev_control._phases_now(SimpleNamespace(), SWITCHING_CFG, 3) == 3
         assert ev_control._phases_now(
             host, {**SWITCHING_CFG, "ev_phase_switching_enabled": False}, 3) == 3
-        src = inspect.getsource(ev_control.EVControlMixin._compute_night_plan)
-        assert "_phases_now(" in src, "the night plan sizes on the active phases"
+        from .ast_contracts import calls
+        assert calls(ev_control.EVControlMixin._compute_night_plan,
+                     "_phases_now"), "the night plan sizes on the active phases"
