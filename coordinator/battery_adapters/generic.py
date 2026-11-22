@@ -455,6 +455,12 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         return bool(getattr(self._charge_adapter, "charge_refused", False))
 
     @property
+    def charge_target_unset(self) -> bool:
+        """(#1413) SEM gave up a charge lately because it could not set the
+        charge target: the plan leaves this pack's charge out and says why."""
+        return getattr(self._charge_adapter, "charge_target_unset", False) is True
+
+    @property
     def supports_forced_charge(self) -> bool:
         # A bidirectional setpoint can charge via a negative value on the
         # same entity — no charge switch needed (#523, Sessy).
