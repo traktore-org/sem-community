@@ -184,6 +184,22 @@ def _switch_reads_three(host, entity, value_3p) -> bool:
         return str(raw).strip().lower() == str(value_3p).strip().lower()
 
 
+def _grid_energy_owed(host, cid: str) -> bool:
+    """(#1412) True when tonight owes this charger grid energy: the night
+    plan the loop made this cycle has more than 0.1 kWh to deliver. The loop
+    makes a plan only for a charger whose mode charges at night and whose
+    target is not met, so no plan is "nothing to buy". The night return to
+    the configured phases waits for a reason: a car plugged in for days was
+    written twice a day on its installation with nothing to charge."""
+    plan = (getattr(host, "_night_plan_per_charger", None) or {}).get(cid)
+    if plan is None:
+        return False
+    try:
+        return float(getattr(plan, "remaining_kwh", 0.0) or 0.0) > 0.1
+    except (TypeError, ValueError):
+        return False
+
+
 def _forget_phases(host, cid: str) -> None:
     """(#1412) Drop what SEM believes about this charger's phases: the
     count, whether SEM set it, and the night's count. The configured count
@@ -1245,7 +1261,7 @@ class EVControlMixin:
         )
         from .ev_phases import (
             ONE_PHASE_CAR_CYCLES, ONE_PHASE_DRAW_TOLERANCE,
-            PHASE_BELIEF_ABSENCE_S,
+            PHASE_BELIEF_ABSENCE_S, PHASE_REST_SWITCHES_PER_DAY,
             PHASE_BELIEF_UNPLUG_S, PHASE_LEG_FLOW_W, PHASE_VALUES_STRIKES,
             active_phases, entity_bounds, estimate_active_phases,
             phase_switch_command, resolve_switch_values,
@@ -1549,7 +1565,12 @@ class EVControlMixin:
             planner.rest()
             desired = None
             if own_one_phase:
-                if not drawing and seq_idle:
+                if not drawing and seq_idle and (
+                        grid_pays or _grid_energy_owed(self, cid)):
+                    # back before the block draws — but only when there IS
+                    # a block: a charge commanded for the grid, or energy
+                    # owed tonight. Otherwise stay: the return was written
+                    # every evening, nothing to buy
                     desired = _cfg_phases
                 elif (drawing
                       and decision.intent is ChargerIntent.CHARGE_AT_AMPS
@@ -1593,6 +1614,17 @@ class EVControlMixin:
                 if contra["count"] >= PHASE_NOT_TAKING_AFTER:
                     desired = None
 
+        # (#1412) The daily bound on writes at rest. Those do not count
+        # toward the session cap (they open no contactor under load), so a
+        # charger that takes the write and does not switch, or a plan that
+        # flips, is stopped here. Auto only: a manual phase is the owner's.
+        _rest_times = _phase_state(self, "_phase_rest_switch_times")
+        _recent = [x for x in _rest_times.get(cid, []) if now - x < 86400.0]
+        _rest_times[cid] = _recent
+        if (desired is not None and mode_val not in ("1", "3")
+                and not drawing and seq_idle
+                and len(_recent) >= PHASE_REST_SWITCHES_PER_DAY):
+            desired = None
         # (#1412) No switch is ASKED FOR with a value the entity's range
         # refuses this cycle — the steady verdict above only decides what is
         # said, and whether a switch already sent may finish settling.
@@ -1619,10 +1651,12 @@ class EVControlMixin:
             contra["target"] = desired
             contra["count"] = PHASE_NOT_TAKING_AFTER
 
+        if r.issue_switch is not None and r.at_rest:
+            _rest_times[cid] = _recent + [now]
         if r.issue_switch is not None and by_current:
             # (#1015) The device's own write: its one seam withholds and
             # records in observer mode, so nothing is called from here.
-            planner.note_switched(now)
+            planner.note_switched(now, at_rest=r.at_rest)
             sent = await device.switch_phases(r.issue_switch)
             _LOGGER.info(
                 "#1015 %s: %s to %sp by one current per phase via %s",
@@ -1633,7 +1667,7 @@ class EVControlMixin:
             cmd = phase_switch_command(entity, value, self.hass)
             if cmd is not None:
                 domain, service, data = cmd
-                planner.note_switched(now)
+                planner.note_switched(now, at_rest=r.at_rest)
                 if self._observer_mode:
                     _LOGGER.info(
                         "OBSERVER · WOULD switch %s to %sp via %s.%s %s "
@@ -1672,7 +1706,7 @@ class EVControlMixin:
         _grid_charge_now = (
             drawing and decision.intent is ChargerIntent.CHARGE_AT_AMPS
             and (is_night or grid_pays))
-        if _own_now and not _grid_charge_now:
+        if _own_now and not _grid_charge_now and _grid_energy_owed(self, cid):
             grid_phases[cid] = _cfg_phases
         else:
             grid_phases.pop(cid, None)

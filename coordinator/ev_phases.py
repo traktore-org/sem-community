@@ -162,6 +162,13 @@ def resolve_switch_values(entity_id: str, cfg: dict):
 #: its first poll) is not a wrong setting.
 PHASE_VALUES_STRIKES = 6
 
+#: (#1412) Phase switches written to one charger per day while it is at rest.
+#: They cost the contactor nothing and do not count toward the per-session
+#: cap, so something else must keep a broken charger — one that takes the
+#: write and does not switch, or a plan that flips — from being written all
+#: day. A normal day is two (the thin-sun start, the night return).
+PHASE_REST_SWITCHES_PER_DAY = 6
+
 #: (#1412) Drawing cycles in a row that must show ONE phase carrying the
 #: charge, on a charger set to three, before the car is called a one-phase
 #: car for the plug-in. One cycle is one stale leg sensor: a three-phase

@@ -230,9 +230,15 @@ Notes:
   keeps it.
 - A car that charges on 1 phase only is left alone for that plug-in, when the
   charger reports its current on each phase for about a minute.
+- SEM goes back to the configured phases at night only when it has grid energy
+  to buy that night. With nothing to charge, the charger stays on 1 phase.
 - A car that stays plugged in for days gets up to two switches a day: up to the
-  configured phases at night, down to 1 phase in the next day's thin sun. After
-  4 automatic switches in one plug-in, the down-switches stop.
+  configured phases at night, down to 1 phase in the next day's thin sun. Switches
+  made while nothing is charging do not count toward the 4 automatic switches
+  allowed under load. Per charger, SEM makes at most 6 such switches a day.
+- On some wallboxes the phase switch is shared by every charger on the same
+  installation, and a switch moves them all. SEM does not know which chargers share
+  one. Turn phase switching on for only one of them.
 - The values for 1 phase and 3 phases must be inside the range of the number
   entity they are written to. The forms and the dashboard refuse a value that
   is not. For a stored one, SEM sends no phase switch and raises a Repair.

@@ -154,6 +154,7 @@ class TestTheNightGoesBackToTheConfiguredPhases:
 
     def test_an_idle_charger_is_set_back_when_the_night_starts(self):
         h, t = _on_one_phase_by_sems_choice()
+        self._plan(h, 8.0, 9.0)             # energy is owed tonight
         _out, t = _cycles(h, _idle(), _cp(), t, 60.0, night=True)
         assert _values(h) == [ONE_PHASE_VALUE, THREE_PHASE_VALUE], (
             "no half hour of waiting: the night's grid charge needs it")
@@ -240,6 +241,8 @@ class TestTheNightGoesBackToTheConfiguredPhases:
         """By day, on SEM's own one phase: tonight runs on three. While a
         grid charge runs on one phase: on one."""
         h, t = _on_one_phase_by_sems_choice()
+        self._plan(h, 10.0, 6.0)            # a block is planned tonight
+        _cycles(h, _idle(), _cp(), t, 20.0, night=False)
         assert ev_control._phases_now(h, h.cfg, 3) == 3, "tonight: three"
         assert active_phases(h.cfg, h._phase_believed["c1"]) == 1, "now: one"
         self._plan(h, 10.0, 6.0)
@@ -252,6 +255,7 @@ class TestTheNightGoesBackToTheConfiguredPhases:
         4.1 kW, and 20 kWh in 8 h (2.5 kW) is met. On one phase 6 A gives
         1.4 kW: 11 kWh by the morning."""
         h, t = _on_one_phase_by_sems_choice()
+        self._plan(h, 20.0, 8.0)            # 20 kWh owed by the morning
         # evening: the sun is gone, still day
         _out, t = _cycles(h, _idle(), _cp(), t, 600.0, night=False)
         # night starts, the car idle (waiting for its block)
@@ -792,6 +796,8 @@ class TestAOnePhaseCarIsRemembered:
         """The night's return to three, then the car draws on one leg."""
         h, t = _on_one_phase_by_sems_choice()
         h.switch_reads = "32"                 # the entity is not read back
+        h._night_plan_per_charger = {"c1": SimpleNamespace(
+            remaining_kwh=8.0, hours_to_deadline=9.0)}
         _out, t = _cycles(h, _idle(), _cp(), t, SETTLE_S + 120, night=True)
         assert h._phase_believed["c1"] == 3
         d = _amps(8)
