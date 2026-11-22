@@ -190,22 +190,28 @@ def _thin_sun_of(host: Any, cid: str, charger_cfg: Any):
 
 
 def _thin_sun_block_state(plan: Any, cid: str, now: datetime) -> tuple:
-    """(#1411) ``(in_block, near)`` — is a "spare sun plus grid" block of
-    this charger open in the stamped plan right now, and is one open or
-    opening within the next slot (``thin_sun.NEXT_SLOT_S``)?
+    """(#1411) ``(in_block, near, end)`` — is a "spare sun plus grid" block
+    of this charger open in the stamped plan right now (and when does it
+    end), and is one open or opening within the next slot
+    (``thin_sun.NEXT_SLOT_S``)?
 
     Read off the plan's own ``blocks`` rows (the shape ``plan_blocks``
     writes), so the card and the charger look at one list. A plan older
     than the planner's own staleness bound (``_MAX_PLAN_AGE``, the one
     ``plan_gate`` refuses on), or one that does not say when it was
-    stamped, books nothing. Anything unreadable is a no."""
+    stamped, books nothing. That bound is redundant for the blocks
+    themselves — they carry full dates, so yesterday's block cannot match
+    today — and harmless: it is kept so this reader refuses exactly the
+    plans ``plan_gate`` refuses, and a plan nobody can date is not trusted.
+    Anything unreadable is a no."""
     try:
         from .energy_plan_actuation import _MAX_PLAN_AGE, _parse_dt
         from .thin_sun import NEXT_SLOT_S
         computed = _parse_dt((plan or {}).get("computed_at"))
         if computed is None or now - computed > _MAX_PLAN_AGE:
-            return (False, False)
+            return (False, False, None)
         in_block = near = False
+        block_end = None
         for b in plan.get("blocks") or ():
             if b.get("id") != f"ev:{cid}" or b.get("reason") != "sun_plus_grid":
                 continue
@@ -213,11 +219,12 @@ def _thin_sun_block_state(plan: Any, cid: str, now: datetime) -> tuple:
             end = datetime.fromisoformat(str(b.get("end")))
             if start <= now < end:
                 in_block = near = True
+                block_end = end if block_end is None else max(block_end, end)
             elif now < start and (start - now).total_seconds() <= NEXT_SLOT_S:
                 near = True
-        return (in_block, near)
+        return (in_block, near, block_end)
     except Exception:  # noqa: BLE001 — a plan nobody can read holds no block
-        return (False, False)
+        return (False, False, None)
 
 
 def _thin_sun_sessions_of(host: Any) -> dict:
@@ -231,26 +238,39 @@ def _thin_sun_sessions_of(host: Any) -> dict:
     return sessions
 
 
+def _thin_sun_rec(host: Any, cid: str) -> Optional[dict]:
+    rec = _thin_sun_sessions_of(host).get(str(cid))
+    return rec if isinstance(rec, dict) else None
+
+
 def _thin_sun_started(host: Any, cid: str) -> Optional[datetime]:
     """(#1411) When this charger's running thin-sun session started."""
-    rec = _thin_sun_sessions_of(host).get(str(cid))
-    started = rec.get("started") if isinstance(rec, dict) else None
+    rec = _thin_sun_rec(host, cid)
+    started = rec.get("started") if rec else None
     return started if isinstance(started, datetime) else None
 
 
-def _thin_sun_no_sun_cycles(host: Any, cid: str) -> int:
-    """(#1411) Cycles in a row the session's spare sun was below the run
-    floor."""
-    rec = _thin_sun_sessions_of(host).get(str(cid))
+def _thin_sun_no_sun_s(host: Any, cid: str, now: datetime) -> Optional[float]:
+    """(#1411) Seconds the session's spare sun has been below the run floor
+    without a break; None while it is not."""
+    rec = _thin_sun_rec(host, cid)
+    since = rec.get("no_sun_since") if rec else None
+    if not isinstance(since, datetime):
+        return None
+    return max(0.0, (now - since).total_seconds())
+
+
+def _thin_sun_min_block_s(host: Any) -> float:
     try:
-        return int(rec.get("no_sun", 0)) if isinstance(rec, dict) else 0
-    except (TypeError, ValueError):
-        return 0
+        cfg = getattr(host, "config", None) or {}
+        return max(0.0, float(cfg.get("ev_min_block_minutes", 15)) * 60.0)
+    except (TypeError, ValueError, AttributeError):
+        return 900.0
 
 
 def _spare_sun_of(view: Any) -> Optional[float]:
     """(#1411) The spare sun the decision saw, for the session's no-sun
-    count; None when it cannot be read (then the count is left alone)."""
+    clock; None when it cannot be read (then the clock is left alone)."""
     try:
         from .decide import self_consumption_surplus_w
         return max(0.0, float(self_consumption_surplus_w(view)))
@@ -258,40 +278,75 @@ def _spare_sun_of(view: Any) -> Optional[float]:
         return None
 
 
+#: (#1411) The mode whose day decisions may carry a thin-sun session.
+_THIN_SUN_MODE = "solar_plus_cheap"
+
+
 def _note_thin_sun(host: Any, cid: str, decision: Any,
-                   sun_w: Optional[float] = None) -> None:
+                   sun_w: Optional[float] = None, *,
+                   is_night: bool = False) -> None:
     """(#1411) Keep the thin-sun session of one charger.
 
     It STARTS the moment a decision first carries the rule's reason code.
-    It SURVIVES a strong-sun stretch: while the car keeps charging on the
-    sun alone the session stays, start time and all, so a cloud back under
-    the minimum is the same session on its "keep running" thresholds — not
-    a new start with strict ones, which stopped a car that ran a minute
-    before. It ENDS the cycle the decision does not charge.
 
-    Beside the start time it counts the cycles in a row whose spare sun
-    was below the run floor (``sun_gone``, a hard limit). ``_thin_sun_for``
-    hands both to the next cycle's view. Never raises."""
+    It SURVIVES a strong-sun stretch: while the car charges on the sun
+    alone the session stays, start time and all, so a cloud back under the
+    minimum is the same session on its "keep running" thresholds — not a
+    new start with strict ones, which stopped a car that ran a minute
+    before.
+
+    It ENDS — a session is not a licence —
+    * with the charge mode (the decision's mode is no longer the tariff
+      mode: a switch to Always (max), a schedule, a pause);
+    * at night;
+    * with the car (any decision that does not charge: unplugged, idle);
+    * with any charge the sun does not fund and the rule did not make (a
+      night block, a deadline floor, a cheap-hour top-up, Start now);
+    * a minimum block after the end of its plan block — the block it
+      started in, or a following one it kept charging thin sun in. A
+      session that strong sun carries for hours must not come back as a
+      running one in the evening.
+
+    Beside the start it times how long the spare sun has been below the
+    run floor (``sun_gone``, a hard limit). ``_thin_sun_for`` hands the
+    session to the next cycle's view. Never raises."""
     try:
         from . import reason_codes as _rc
         from .charger_types import ChargerIntent
         from .thin_sun import MIN_SUN_W, RUN_SUN_FACTOR
         sessions = _thin_sun_sessions_of(host)
         key = str(cid)
-        if getattr(decision, "reason_code", None) == _rc.CHARGER_SUN_PLUS_GRID:
-            rec = sessions.get(key)
-            if not isinstance(rec, dict):
-                rec = sessions[key] = {"started": dt_util.now(), "no_sun": 0}
+        code = getattr(decision, "reason_code", None)
+        thin = code == _rc.CHARGER_SUN_PLUS_GRID
+        sun_funded = (code == _rc.CHARGER_SUN
+                      and getattr(decision, "intent", None)
+                      is ChargerIntent.CHARGE_AT_AMPS)
+        rec = sessions.get(key)
+        if not isinstance(rec, dict):
+            rec = None
+        if (is_night or getattr(decision, "mode", None) != _THIN_SUN_MODE
+                or not (thin or (sun_funded and rec is not None))):
+            sessions.pop(key, None)
+            return
+        now = dt_util.now()
+        block_s = _thin_sun_min_block_s(host)
+        if thin:
+            if rec is None:
+                rec = sessions[key] = {"started": now}
+            _in, _near, end = _thin_sun_block_state(
+                getattr(host, "_energy_plan_shadow", None), cid, now)
+            until = (end or now) + timedelta(seconds=block_s)
+            prev = rec.get("until")
+            rec["until"] = max(prev, until) if isinstance(prev, datetime) else until
             if sun_w is not None:
-                rec["no_sun"] = (int(rec.get("no_sun", 0)) + 1
-                                 if float(sun_w) < MIN_SUN_W * RUN_SUN_FACTOR
-                                 else 0)
-        elif key in sessions and getattr(decision, "intent", None) in (
-                ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
-            rec = sessions.get(key)
-            if isinstance(rec, dict):
-                rec["no_sun"] = 0        # charging on the sun alone
+                if float(sun_w) < MIN_SUN_W * RUN_SUN_FACTOR:
+                    rec.setdefault("no_sun_since", now)
+                else:
+                    rec.pop("no_sun_since", None)
         else:
+            rec.pop("no_sun_since", None)        # charging on the sun alone
+        until = rec.get("until")
+        if isinstance(until, datetime) and now > until:
             sessions.pop(key, None)
     except Exception:  # noqa: BLE001 — bookkeeping must never cost a cycle
         return
@@ -5766,7 +5821,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         )
                         decision = decide_v2(view)
                         _note_thin_sun(                          # (#1411)
-                            self, cid, decision, sun_w=_spare_sun_of(view))
+                            self, cid, decision, sun_w=_spare_sun_of(view),
+                            is_night=bool(view.fleet.is_night))
                         from .vpp_dispatch import vpp_pause_override
                         decision = vpp_pause_override(
                             decision, getattr(self, "_vpp_ev_override", None) == "pause")
@@ -6150,7 +6206,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
                 decision = decide_v2(view)
                 _note_thin_sun(                                  # (#1411)
-                    self, cid, decision, sun_w=_spare_sun_of(view))
+                    self, cid, decision, sun_w=_spare_sun_of(view),
+                    is_night=bool(view.fleet.is_night))
                 # Hysteresis stability layer (#461 flapping) — the
                 # single-charger legacy branch needs the same protection,
                 # and the same #1391 yield.
@@ -10236,16 +10293,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 prov, now, self._configured_export_rate())
                 if self._export_price_known() else None)
             started = _thin_sun_started(self, cid)
-            in_block, block_near = _thin_sun_block_state(
+            in_block, block_near, _end = _thin_sun_block_state(
                 getattr(self, "_energy_plan_shadow", None), cid, now)
-            try:
-                block_s = float(self.config.get("ev_min_block_minutes", 15)) * 60.0
-            except (TypeError, ValueError):
-                block_s = 900.0
+            block_s = _thin_sun_min_block_s(self)
+            import_now = tariff_price_at(prov, now)
+            cheapest = refs.cheapest_after(now)
+            # how long a price has been unreadable in this session: a
+            # short gap is bridged, a long one ends it (``price_unknown``)
+            no_price_s = None
+            rec = _thin_sun_rec(self, cid)
+            if rec is not None:
+                if export is None or import_now is None or cheapest is None:
+                    since = rec.setdefault("no_price_since", now)
+                    if isinstance(since, datetime):
+                        no_price_s = max(0.0, (now - since).total_seconds())
+                else:
+                    rec.pop("no_price_since", None)
             return ThinSun(
                 export_price=export,
-                import_now=tariff_price_at(prov, now),
-                cheapest_later=refs.cheapest_after(now),
+                import_now=import_now,
+                cheapest_later=cheapest,
                 # no sun slot in the stamped plan = no forecast to ask:
                 # unknown, and the rule does not fire on an unknown
                 strong_sun_kwh=(refs.strong_kwh_after(now)
@@ -10256,8 +10323,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 block_near=block_near,
                 session_s=(max(0.0, (now - started).total_seconds())
                            if started is not None else None),
-                no_sun_cycles=_thin_sun_no_sun_cycles(self, cid),
-                min_block_s=max(0.0, block_s),
+                no_sun_s=_thin_sun_no_sun_s(self, cid, now),
+                no_price_s=no_price_s,
+                min_block_s=block_s,
             )
         except Exception:  # noqa: BLE001 — a rule input must never cost a cycle
             return None
