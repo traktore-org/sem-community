@@ -1129,6 +1129,19 @@ class EVControlMixin:
                 self._phase_contradictions.pop(cid, None)
         self._phase_conn_memo[cid] = cp.connected
 
+        # (#1407) Off sends nothing (#898), and a phase switch is a command
+        # too: in Auto the 0 W an Off charger is offered asked for one phase,
+        # and the switch went out while another system ran the box. A switch
+        # in flight is dropped, and the planner's clocks start again when
+        # SEM drives the charger again — a window from before Off says
+        # nothing about the time after it.
+        if decision.intent is ChargerIntent.RELEASE:
+            r = seq.tick(now=now, desired_phases=None, believed_phases=None,
+                         charging=bool(cp.charging), capability_ready=False)
+            self._phase_switch_states[cid] = r.state
+            planner.desired(now, None, 0.0)
+            return decision
+
         # Belief: the #716 W/A estimate. Under an amps command the decision
         # carries the offer; under CHARGE_MAX the adapter's actual setpoint
         # is the offer (found live on PROD: always_max charged 9.9 kW at a

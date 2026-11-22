@@ -84,7 +84,8 @@ class TestTheOffHint:
 
     def test_english_says_what_off_does(self):
         en = _tables()["en"]
-        assert en[KEYS[0]] == "Off stops the charge once. Then SEM sends nothing."
+        assert en[KEYS[0]] == ("Choosing Off stops a running charge once. "
+                               "Then SEM sends nothing.")
         assert en[KEYS[1]] == "Another system can still start a charge."
 
     @pytest.mark.parametrize("lang", sorted(OLD_OFF_HINTS))
