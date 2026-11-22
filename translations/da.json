@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Et tillæg, elafgift eller moms gælder kun ved en spotpris. Vælg spotgrundlaget, eller sæt dem til 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Værdien for faseskift blev ikke gemt: {reason}. Indtast en værdi, som enheden accepterer."
     }
   },
   "issues": {

@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "A markup, energy tax or VAT only applies when your price is a spot price. Pick the spot basis, or set them to 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "The phase switch value was not saved: {reason}. Enter a value the entity accepts."
     }
   },
   "issues": {

@@ -1785,10 +1785,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         we return the memo or nameplate rather than commit the fleet-read
         class bug (docs/MULTI_CHARGER.md).
         """
-        # (#1412) on the phases the charger runs on now: one phase after a
-        # switch is 230 W per amp, and the night plan sizes the car by this
-        nameplate = (float(self._active_phases_for(cid, cfg)
-                           or cfg.get("ev_phases") or 3)
+        # (#1412) on the phases the grid charge will run on: the night plan
+        # sizes the car by this, and a charger that changes phases has no
+        # one nameplate
+        plan_phases = self._plan_phases_for(cid, cfg)
+        nameplate = (float(plan_phases or cfg.get("ev_phases") or 3)
                      * float(cfg.get("ev_voltage") or 230))
         chargers = self.config.get("ev_chargers") or []
         if power is not None and len(chargers) == 1:
@@ -1814,6 +1815,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # #716 EMA this accessor used to be, then nameplate.
         learner = getattr(self, "_wpa_learner", None)
         phases, _ok = self._wpa_phases_for(cid, cfg)
+        if plan_phases:
+            phases = plan_phases
         if learner is not None and phases:
             max_a = int(cfg.get("ev_max_current") or DEFAULT_MAX_CHARGING_CURRENT)
             if learner.watts_per_amp(cid, phases, max_a) is not None:
@@ -1825,7 +1828,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1412) on a charger that changed phases, never more than the
         # nameplate of the phases it runs on: an average learned on three
         # phases is no draw on one. Other chargers read as before.
-        if self._active_phases_for(cid, cfg):
+        if plan_phases:
             return min(float(learned), nameplate)
         return float(learned)
 
@@ -5688,6 +5691,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # (#1015) the device that can set its phases
                                 # by one current per phase, when it can
                                 device=getattr(adapter, "_device", None),
+                                # (#1412) no sun to judge by: the charger
+                                # goes back to its configured phases
+                                is_night=bool(getattr(
+                                    view.fleet, "is_night", False)),
                             )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
@@ -7847,16 +7854,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         An install had 1000 and 4000 saved for a number that runs from 0 to
         32. Home Assistant refuses such a write, so no switch ever happened
-        and nothing said why. The tick no longer sends it
-        (``switch_values_problem`` makes the capability not ready); this is
-        the telling: the charger's ``phase_switch_valid`` goes False and the
-        control-entity Repair (#824) names the entity and the value. Only
-        while phase switching is on — off, SEM writes nothing there. A
-        range that cannot be read (entity not loaded yet) is not judged.
+        and nothing said why. The tick judges it (``_phase_switch_tick``:
+        a real range, and a misfit that stands for several cycles) and no
+        longer sends the write; this is the telling. The charger's
+        ``phase_switch_valid`` goes False and the control-entity Repair
+        (#824) names the entity and the value.
+
+        Three answers from the tick, and only two act: a steady misfit
+        raises; values that fit a real range clear; "could not ask" (the
+        entity is not loaded, the tick has not run, the charger sets its
+        phases by current) does neither — a Repair must not flash at every
+        start, and one raised before a restart goes on the first cycle the
+        values are seen to fit.
         """
         from . import repair_issues as _ri
-        from .ev_phases import (
-            entity_bounds, resolve_switch_values, switch_values_problem)
 
         entity = charger_cfg.get("ev_phase_switch_entity")
         if not entity or not charger_cfg.get("ev_phase_switching_enabled", False):
@@ -7866,10 +7877,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             raised = self._phase_values_repair_raised = set()
             self._phase_values_repair_reconciled = set()
         key = (str(cid), str(entity))
-        state = self.hass.states.get(entity)
-        bounds = entity_bounds(state)
-        v1, v3, _ready = resolve_switch_values(entity, charger_cfg)
-        problem = switch_values_problem(entity, v1, v3, bounds)
+        problem = (getattr(self, "_phase_values_problem", None) or {}).get(cid)
+        fits = (getattr(self, "_phase_values_ok", None) or {}).get(cid)
         if problem:
             result[f"charger_{cid}_phase_switch_valid"] = False
             if key not in raised:
@@ -7885,12 +7894,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     reason=problem,
                 )
             return
-        if bounds is None:
+        if fits is not True:
             return          # could not ask: neither raise nor clear
-        # Values fit. Clear what this check raised — once after a restart
-        # too, because the Repair outlives the coordinator. Never for an
-        # entity that is also a control entity: that Repair has its own
-        # owner (``_check_charger_control_entities``).
+        # Never for an entity that is also a control entity: that Repair has
+        # its own owner (``_check_charger_control_entities``).
         if any(str(charger_cfg.get(k) or "") == str(entity)
                for k, _cap in self._CONTROL_CAPABILITIES):
             return
@@ -10442,7 +10449,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         from .ev_phases import active_phases
         cfg = cfg if cfg is not None else self._ev_charger_cfg(cid)
         return active_phases(
-            cfg, (getattr(self, "_phase_believed", None) or {}).get(cid))
+            cfg, (getattr(self, "_phase_believed", None) or {}).get(cid),
+            # the tick's word that the switch is there and can be written;
+            # until it has looked (first cycle), the configured count
+            bool((getattr(self, "_phase_capable", None) or {}).get(cid, False)))
+
+    def _plan_phases_for(self, cid: str, cfg: Optional[dict] = None):
+        """(#1412) The phases tonight's grid charge will run on, for the
+        plan's sizing — or None for a charger that cannot switch and while
+        nothing is known. Not always ``_active_phases_for``: SEM's own one
+        phase for thin sun goes back to the configured count at night
+        (``ev_control._phases_now``)."""
+        from .ev_control import _phases_now
+        cfg = cfg if cfg is not None else self._ev_charger_cfg(cid)
+        return _phases_now(self, cfg, 0) or None
 
     def _feed_wpa_learner(self, cid, ev_dev, observed_w, connected) -> None:
         """(#846) Offer this cycle's (setpoint, draw) pair for ONE charger.
@@ -10711,6 +10731,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         Never more than nameplate."""
         learner = getattr(self, "_wpa_learner", None)
         phases, _ok = self._wpa_phases_for(cid, cfg)
+        phases = self._plan_phases_for(cid, cfg) or phases   # (#1412)
         if learner is not None and phases and learner.measured(cid, phases):
             nominal = phases * float(cfg.get("ev_voltage") or self.config.get("ev_voltage") or 230)
             return learner.watts_for_amps(cid, phases, amps, nominal)

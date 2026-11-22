@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Un ricarico, un'accisa o l'IVA valgono solo con un prezzo spot. Scegli la base spot o impostali a 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Il valore di commutazione delle fasi non è stato salvato: {reason}. Inserisci un valore che l'entità accetta."
     }
   },
   "issues": {

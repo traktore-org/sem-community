@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Une marge, une taxe sur l'énergie ou la TVA ne s'appliquent qu'à un prix spot. Choisissez la base spot ou mettez-les à 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "La valeur de commutation de phases n'a pas été enregistrée : {reason}. Saisissez une valeur que l'entité accepte."
     }
   },
   "issues": {

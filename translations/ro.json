@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Un adaos, o taxă pe energie sau TVA se aplică doar la un preț spot. Alege baza spot sau setează-le la 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Valoarea de comutare a fazelor nu a fost salvată: {reason}. Introduceți o valoare pe care entitatea o acceptă."
     }
   },
   "issues": {

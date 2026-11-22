@@ -103,6 +103,13 @@ class PhaseSwitchSequencer:
         ``_state``: one name, one truth."""
         return self._state in ("stopping", "settling")
 
+    @property
+    def pending(self) -> Optional[int]:
+        """(#1412) The phase count a switch in flight is going to, or None.
+        A caller whose reason for the switch is "the car draws" must keep
+        asking while the car stops for it."""
+        return self._pending if self._state != "idle" else None
+
     def _result(self, hold: bool, issue: Optional[int] = None,
                 gave_up: bool = False) -> SeqResult:
         return SeqResult(state=self._state, hold_charging=hold,
@@ -197,6 +204,15 @@ class PhaseAutoPlanner:
     def note_switched(self, now: float) -> None:
         self._last_switch_at = now
         self._session_switches += 1
+        self._up_since = None
+        self._down_since = None
+        self._start_since = None
+
+    def rest(self) -> None:
+        """(#1412) No sun to judge by: the night, or a charge the grid pays
+        for. The sustain clocks stand still. Left running they read "no
+        spare sun" as starvation and set a three-phase charger to one phase
+        ten minutes into its night charge."""
         self._up_since = None
         self._down_since = None
         self._start_since = None

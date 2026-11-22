@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Uma margem, imposto sobre energia ou IVA só se aplicam a um preço spot. Escolha a base spot ou defina-os como 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "O valor de comutação de fases não foi guardado: {reason}. Introduza um valor que a entidade aceite."
     }
   },
   "issues": {

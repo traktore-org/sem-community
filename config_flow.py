@@ -319,24 +319,23 @@ def _mark_owner_values(before: dict, user_input: dict, charger: dict) -> None:
             charger[flag] = before[flag]
 
 
-def _phase_switch_values_misfit(hass: Any, values: dict) -> bool:
-    """(#1412) True when the 1-phase or 3-phase value does not fit the
-    number entity it is written to.
+def _phase_switch_values_misfit(hass: Any, before: dict, after: dict) -> bool:
+    """(#1412) True when a 1-phase or 3-phase value this form CHANGES does
+    not fit the number entity it is written to.
 
     An install had 1000 and 4000 saved for a number that runs from 0 to 32,
-    so no phase switch could ever be written. Asked where the values are
-    typed; the running check is ``_check_phase_switch_values``. An entity
-    whose range cannot be read is not judged.
+    so no phase switch could ever be written. The check is the one the
+    dashboard's save uses too (``changed_switch_values_problem``): only a
+    value that differs from the stored one is judged, so an old misfit does
+    not hold up the edit of another field, and an entity without a real
+    range is not judged. The running check is ``_phase_switch_tick``.
     """
-    from .coordinator.ev_phases import (
-        entity_bounds, resolve_switch_values, switch_values_problem)
+    from .coordinator.ev_phases import changed_switch_values_problem
 
-    entity = (values or {}).get("ev_phase_switch_entity")
-    if not entity or hass is None:
+    states = getattr(hass, "states", None)
+    if states is None:
         return False
-    v1, v3, _ready = resolve_switch_values(entity, values)
-    return bool(switch_values_problem(
-        entity, v1, v3, entity_bounds(hass.states.get(entity))))
+    return bool(changed_switch_values_problem(states.get, before, after))
 
 
 def _merge_form_input(flow: Any, target: dict, user_input: dict) -> None:
@@ -2319,7 +2318,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # with what was typed still in the form
         if user_input is not None:
             if _phase_switch_values_misfit(
-                    getattr(self, "hass", None), user_input):
+                    getattr(self, "hass", None), {}, user_input):
                 errors["base"] = "phase_switch_value_out_of_range"
                 _typed = dict(user_input)
                 _typed["name"] = _typed.pop("charger_name", None)
@@ -2615,7 +2614,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             _merged = dict(charger)
             _merge_form_input(self, _merged, dict(user_input))
             if _phase_switch_values_misfit(
-                    getattr(self, "hass", None), _merged):
+                    getattr(self, "hass", None), charger, _merged):
                 errors["base"] = "phase_switch_value_out_of_range"
                 _merged["name"] = user_input.get(
                     "charger_name", charger.get("name"))

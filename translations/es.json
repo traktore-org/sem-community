@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Un recargo, impuesto eléctrico o IVA solo se aplica con un precio spot. Elige la base spot o ponlos a 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "El valor de cambio de fases no se guardó: {reason}. Introduce un valor que la entidad acepte."
     }
   },
   "issues": {

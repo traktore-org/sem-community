@@ -461,6 +461,7 @@ class TestEveryViewIsBuiltWithTheActivePhases:
         c = SimpleNamespace()
         c.config = {}
         c._phase_believed = {"wb": believed} if believed else {}
+        c._phase_capable = {"wb": True}       # the tick saw a working switch
         c._phase_contradictions = {"wb": {"count": contradictions}}
         cfg = {**SWITCHING_CFG, "ev_phase_switching_enabled": enabled}
         c._ev_charger_cfg = lambda cid: cfg
@@ -519,90 +520,13 @@ class TestSwitchValuesMustFitTheEntity:
     def test_manual_mode_does_not_write_it_either(self):
         h = _host({"phase_mode": "1", "ev_phase_switch_value_1p": "1000",
                    "ev_phase_switch_value_3p": "4000"})
-        _run(h, _idle(), _cp(), 0.0)
+        _cycles(h, _idle(), _cp())
         h.hass.services.async_call.assert_not_awaited()
         assert h._phase_switch_states["c1"] == "bad_values"
 
 
-class TestTheRepairNamesTheValue:
-    """The owner is told: the charger's phase switch is marked not valid and
-    the control-entity Repair names the entity and the value."""
-
-    def _coord(self, monkeypatch, v1="1000", v3="4000", number_range=(0.0, 32.0),
-               enabled=True, extra=None):
-        from custom_components.solar_energy_management.coordinator import (
-            repair_issues,
-        )
-        calls = {"raised": [], "cleared": []}
-        monkeypatch.setattr(
-            repair_issues, "raise_charger_control_entity_broken",
-            lambda hass, cid, **kw: calls["raised"].append((cid, kw)))
-        monkeypatch.setattr(
-            repair_issues, "clear_charger_control_entity_broken",
-            lambda hass, cid, eid: calls["cleared"].append((cid, eid)))
-        monkeypatch.setattr(
-            coordinator_mod, "charger_display_name", lambda hass, cfg: "Wallbox")
-        state = MagicMock()
-        state.attributes = ({"min": number_range[0], "max": number_range[1]}
-                            if number_range else {})
-        c = SimpleNamespace()
-        c.hass = SimpleNamespace(states=SimpleNamespace(get=lambda eid: state))
-        cls = coordinator_mod.SEMCoordinator
-        c._CONTROL_CAPABILITIES = cls._CONTROL_CAPABILITIES
-        c._PHASE_SWITCH_CAPABILITY = cls._PHASE_SWITCH_CAPABILITY
-        c._check_phase_switch_values = cls._check_phase_switch_values.__get__(c)
-        cfg = {"id": "wb", "ev_phase_switch_entity": SWITCH,
-               "ev_phase_switching_enabled": enabled,
-               "ev_phase_switch_value_1p": v1, "ev_phase_switch_value_3p": v3}
-        cfg.update(extra or {})
-        return c, cfg, calls
-
-    def test_values_outside_the_range_raise_one_repair(self, monkeypatch):
-        c, cfg, calls = self._coord(monkeypatch)
-        result = {"charger_wb_phase_switch_valid": True}
-        c._check_phase_switch_values("wb", cfg, result)
-        c._check_phase_switch_values("wb", cfg, result)
-        assert result["charger_wb_phase_switch_valid"] is False
-        assert len(calls["raised"]) == 1
-        cid, kw = calls["raised"][0]
-        assert cid == "wb" and kw["entity_id"] == SWITCH
-        assert "1000" in kw["reason"] and "32" in kw["reason"]
-
-    def test_fitting_values_clear_it(self, monkeypatch):
-        c, cfg, calls = self._coord(monkeypatch)
-        result = {}
-        c._check_phase_switch_values("wb", cfg, result)
-        cfg["ev_phase_switch_value_1p"], cfg["ev_phase_switch_value_3p"] = "32", "0"
-        result = {"charger_wb_phase_switch_valid": True}
-        c._check_phase_switch_values("wb", cfg, result)
-        assert result["charger_wb_phase_switch_valid"] is True
-        assert calls["cleared"] == [("wb", SWITCH)]
-
-    def test_a_repair_from_before_a_restart_is_cleared_once(self, monkeypatch):
-        c, cfg, calls = self._coord(monkeypatch, v1="32", v3="0")
-        c._check_phase_switch_values("wb", cfg, {})
-        c._check_phase_switch_values("wb", cfg, {})
-        assert calls["cleared"] == [("wb", SWITCH)] and not calls["raised"]
-
-    def test_a_range_that_cannot_be_read_says_nothing(self, monkeypatch):
-        c, cfg, calls = self._coord(monkeypatch, number_range=None)
-        result = {"charger_wb_phase_switch_valid": True}
-        c._check_phase_switch_values("wb", cfg, result)
-        assert result["charger_wb_phase_switch_valid"] is True
-        assert not calls["raised"] and not calls["cleared"]
-
-    def test_phase_switching_off_is_not_checked(self, monkeypatch):
-        c, cfg, calls = self._coord(monkeypatch, enabled=False)
-        c._check_phase_switch_values("wb", cfg, {})
-        assert not calls["raised"] and not calls["cleared"]
-
-    def test_another_checks_repair_is_not_cleared(self, monkeypatch):
-        """The same entity as the current control: that Repair has its owner."""
-        c, cfg, calls = self._coord(
-            monkeypatch, v1="32", v3="0",
-            extra={"ev_current_control_entity": SWITCH})
-        c._check_phase_switch_values("wb", cfg, {})
-        assert not calls["cleared"]
+# The Repair for values that do not fit: tests/test_1412_phase_review.py
+# (``TestTheValueCheckIsSteady``) — it follows the tick's steady verdict.
 
 
 class TestTheFormsRefuseValuesThatDoNotFit:
@@ -693,6 +617,7 @@ class TestTheNightPlanSizesOnTheActivePhases:
         c._ev_wpa_ema = dict(ema or {})
         c._last_commanded_amps_fleet = 0
         c._phase_believed = {"wb": believed} if believed else {}
+        c._phase_capable = {"wb": True}
         return c
 
     def test_one_phase_is_one_phase_of_nameplate(self):
@@ -735,6 +660,7 @@ class TestTheNightCountsOnTheActivePhases:
             time_manager=TimeManager(hass=hass, config={}), config={})
         if believed:
             host._phase_believed = {"wb": believed}
+            host._phase_capable = {"wb": True}
         return host, local(12, 0)
 
     def _deliverable(self, believed, cfg=None):
@@ -760,8 +686,12 @@ class TestTheNightCountsOnTheActivePhases:
 
     def test_the_helper_reads_one_function(self):
         """``_phases_now`` and the view answer from ``active_phases``."""
-        host = SimpleNamespace(_phase_believed={"wb": 1})
+        host = SimpleNamespace(_phase_believed={"wb": 1},
+                               _phase_capable={"wb": True})
         assert ev_control._phases_now(host, SWITCHING_CFG, 3) == 1
+        assert ev_control._phases_now(
+            SimpleNamespace(_phase_believed={"wb": 1}), SWITCHING_CFG, 3) == 3, (
+            "no word that the switch works: the configured count")
         assert ev_control._phases_now(SimpleNamespace(), SWITCHING_CFG, 3) == 3
         assert ev_control._phases_now(
             host, {**SWITCHING_CFG, "ev_phase_switching_enabled": False}, 3) == 3

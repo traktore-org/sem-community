@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Felár, energiaadó vagy áfa csak spot árnál érvényes. Válaszd a spot alapot, vagy állítsd őket 0-ra."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "A fázisváltás értéke nem lett elmentve: {reason}. Olyan értéket adjon meg, amelyet az entitás elfogad."
     }
   },
   "issues": {

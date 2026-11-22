@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Et påslag, elavgift eller mva gjelder bare ved en spotpris. Velg spotgrunnlaget, eller sett dem til 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Verdien for faseskift ble ikke lagret: {reason}. Skriv inn en verdi som entiteten godtar."
     }
   },
   "issues": {

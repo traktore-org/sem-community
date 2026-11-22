@@ -237,7 +237,9 @@ class TestNoCarNoQuestion:
         for t in (100.0, AUTO_DOWN_DELAY_S + 1, AUTO_DOWN_DELAY_S + 1200):
             _tick(h, _idle_decision(), gone, t)
         h.hass.services.async_call.assert_not_awaited()
-        assert h._phase_believed["c1"] == 3, "the parked belief is not changed"
+        # (#1412) Not scaled down — and not kept either: the belief belongs
+        # to the plug-in. The next car starts on the configured count.
+        assert h._phase_believed.get("c1") is None
 
     def test_a_replug_starts_the_sustain_window_over(self):
         """A window that filled while the last car was here is not this

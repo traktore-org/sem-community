@@ -221,8 +221,15 @@ Notes:
   With phase mode **Auto**, SEM starts an idle car on 1 phase when the spare sun
   covers 1 phase at the lowest current but not 3 (for example 1.4 kW to 4.1 kW
   at 6 A). The sun must hold for 5 minutes first.
+- When the night starts, SEM sets a charger it had put on 1 phase back to its
+  configured phases, so a grid charge runs at full power. A grid charge that is
+  already running on 1 phase is switched up only if 1 phase cannot reach the
+  target in time.
+- SEM forgets the phase count when the car is unplugged. The next car starts on
+  the configured phases.
 - The values for 1 phase and 3 phases must be inside the range of the number
-  entity they are written to. If not, SEM sends no phase switch and raises a Repair.
+  entity they are written to. The forms and the dashboard refuse a value that
+  is not. For a stored one, SEM sends no phase switch and raises a Repair.
 
 ### KEBA
 

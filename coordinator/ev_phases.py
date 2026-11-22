@@ -157,7 +157,22 @@ def resolve_switch_values(entity_id: str, cfg: dict):
     return v1, v3, bool(v1 and v3)
 
 
-def active_phases(charger_cfg, believed) -> Optional[int]:
+#: (#1412) Cycles in a row a switch value must sit outside a real range
+#: before SEM says so. One odd reading (an entity that answers 0 to 1 until
+#: its first poll) is not a wrong setting.
+PHASE_VALUES_STRIKES = 6
+
+#: (#1412) The phase belief belongs to one plug-in. Unplugged this long, it
+#: is forgotten: the next car, or a change made on the charger itself, must
+#: not start sized for the car before. A blink of the plug sensor is shorter.
+PHASE_BELIEF_UNPLUG_S = 30.0
+
+#: (#1412) …and so is a belief the tick has not looked at for an hour (the
+#: charger was away, or another system drove it).
+PHASE_BELIEF_ABSENCE_S = 3600.0
+
+
+def active_phases(charger_cfg, believed, capable: bool = True) -> Optional[int]:
     """(#1412) The phase count a charger runs on NOW, or None.
 
     A charger that changes phases has no fixed count: what SEM set, or
@@ -165,11 +180,48 @@ def active_phases(charger_cfg, believed) -> Optional[int]:
     tick's belief for this charger. None for a charger that cannot switch
     (its configured count is the truth) and while nothing is known — the
     caller then keeps the configured count. 2 is no phase count SEM sets.
+
+    ``capable``: the switch is there and can be written (the tick's
+    ``ready``). Phase switching turned on over a missing entity, or one
+    without its two values, switches nothing — such a charger reads its
+    configured count, exactly as one with switching off.
     """
-    if not isinstance(charger_cfg, dict) \
+    if not capable or not isinstance(charger_cfg, dict) \
             or not charger_cfg.get("ev_phase_switching_enabled", False):
         return None
     return int(believed) if believed in (1, 3) else None
+
+
+def changed_switch_values_problem(states_get, before, after):
+    """(#1412) Why a 1-phase or 3-phase value that is being SAVED does not
+    fit its number entity, or None. The one check for every place the two
+    values are written: the add and edit forms and ``set_option`` (the
+    dashboard).
+
+    Only a value this save changes is judged. The dashboard saves one field
+    at a time, so a stored misfit must not block the fix of the other value,
+    and an edit of something else must not be held up by an old one. No real
+    range (entity missing, not loaded, no ``min``/``max``): no verdict.
+    """
+    before = before if isinstance(before, dict) else {}
+    after = after if isinstance(after, dict) else {}
+    entity = after.get("ev_phase_switch_entity")
+    if not entity:
+        return None
+    typed = {}
+    for key in ("ev_phase_switch_value_1p", "ev_phase_switch_value_3p"):
+        val = after.get(key)
+        typed[key] = (val if val not in (None, "") and val != before.get(key)
+                      else None)
+    if not any(v is not None for v in typed.values()):
+        return None
+    try:
+        state = states_get(entity)
+    except Exception:  # noqa: BLE001 — no state machine, no verdict
+        return None
+    return switch_values_problem(
+        entity, typed["ev_phase_switch_value_1p"],
+        typed["ev_phase_switch_value_3p"], entity_bounds(state))
 
 
 def switch_values_problem(entity_id: str, value_1p, value_3p, bounds):
@@ -205,7 +257,12 @@ def switch_values_problem(entity_id: str, value_1p, value_3p, bounds):
 
 
 def entity_bounds(state):
-    """(#1412) ``(min, max)`` of a number entity's state, or None."""
+    """(#1412) ``(min, max)`` of a number entity's state, or None.
+
+    None unless the entity reports a REAL range: two finite numbers with
+    ``min`` below ``max``. 0 to 0 is what an entity answers before it knows
+    its range, and judging a value against it would call every value wrong.
+    """
     attrs = getattr(state, "attributes", None)
     if not isinstance(attrs, dict):
         return None
@@ -213,9 +270,12 @@ def entity_bounds(state):
     if low is None or high is None:
         return None
     try:
-        return float(low), float(high)
+        low, high = float(low), float(high)
     except (TypeError, ValueError):
         return None
+    if not (_math.isfinite(low) and _math.isfinite(high)) or low >= high:
+        return None
+    return low, high
 
 
 def phase_switch_command(entity_id: str, value: str, hass):

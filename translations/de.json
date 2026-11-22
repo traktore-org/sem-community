@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Aufschlag, Energiesteuer oder MwSt. gelten nur bei einem Spotpreis. Wähle die Spot-Basis oder setze sie auf 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Der Wert für die Phasenumschaltung wurde nicht gespeichert: {reason}. Geben Sie einen Wert ein, den die Entität annimmt."
     }
   },
   "issues": {

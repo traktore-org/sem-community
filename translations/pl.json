@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Marża, podatek energetyczny lub VAT dotyczą tylko ceny spot. Wybierz podstawę spot albo ustaw je na 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Wartość przełączania faz nie została zapisana: {reason}. Wpisz wartość, którą encja przyjmuje."
     }
   },
   "issues": {

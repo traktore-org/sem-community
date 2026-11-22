@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "加价、能源税或增值税仅适用于现货价格。请选择现货价格基础，或将其设为 0。"
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "相位切换的值未保存：{reason}。请输入该实体接受的值。"
     }
   },
   "issues": {

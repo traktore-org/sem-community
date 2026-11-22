@@ -1903,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Ett påslag, energiskatt eller moms gäller bara vid ett spotpris. Välj spotgrunden eller sätt dem till 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Värdet för fasväxling sparades inte: {reason}. Ange ett värde som entiteten accepterar."
     }
   },
   "issues": {
