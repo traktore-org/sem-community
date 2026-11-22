@@ -180,9 +180,27 @@ battery the plan books one only where its walk has the battery full, so
 where the plan shows none the charger does not act.
 
 Steady: a started session holds for the charger's minimum block
-(`ev_min_block_minutes`) unless the floor is met, the car is unplugged, the
-hour turns expensive or the peak limit steps in. After that every condition
-has a start value and an easier "keep running" value.
+(`ev_min_block_minutes`) over soft conditions: a sun dip, a price between
+the two margins, a battery hovering at its veto, a block that moved. After
+the block every soft condition has a start value and an easier "keep
+running" value. Strong sun in between keeps the session: the car charges
+on the sun alone, and back under the minimum it is the same session.
+
+Hard limits end a session at once, inside the minimum block too
+(`thin_sun.HARD_LIMITS`): the floor is met, the car is unplugged, the hour
+turns expensive, the peak limit sheds, the home battery feeds the car or
+plainly charges from that sun, the export price is no longer below the
+alternative, or the sun stays gone for more than two cycles.
+
+A re-stamped plan may move the block: a running session keeps going when
+the plan still books thin sun now or in the next slot. A plan older than
+the planner's own limit (24 hours), or without a stamp time, books nothing.
+
+Two things are accepted as they are. The plan's slot price and the live
+price can differ for up to one 15-minute slot; the 10 % margin covers it.
+The export price is pre-filled with 0.075 at setup; the guide says it must
+be right for this mode, and the margin keeps a rough number from buying
+grid power for a small saving.
 
 After a restart the rule is off until the next plan is stamped (a new day,
 a plug-in, a changed need). That is safe: off means the mode's old

@@ -233,7 +233,7 @@ class TestPlanAndLiveAgree:
         fake._thin_sun_refs = {"ev_charger": refs_from_ledger(
             _day([1500, 1500, 0, 0]), deadline=_t(23, 59), min_w=MIN_W,
             max_w=11000.0)}
-        fake._energy_plan_shadow = {"blocks": [
+        fake._energy_plan_shadow = {"computed_at": _t(8).isoformat(), "blocks": [
             {"id": "ev:ev_charger", "start": _t(13).isoformat(),
              "end": _t(14).isoformat(), "reason": "sun_plus_grid"},
             {"id": "ev:ev_charger", "start": _t(21).isoformat(),
@@ -256,8 +256,9 @@ class TestNoFlapping:
 
     def test_a_started_session_holds_for_the_minimum_block(self):
         young = replace(GOOD, session_s=120.0, min_block_s=900.0)
-        # every soft condition turns against it: it holds
-        for kw in (dict(sun_w=10.0), dict(battery_charge_w=2000.0),
+        # every SOFT condition turns against it: it holds (the hard
+        # limits that break a hold: TestTheHoldBreaksOnHardLimits)
+        for kw in (dict(sun_w=10.0), dict(battery_charge_w=450.0),
                    dict(pack_could_pay=True)):
             assert thin_sun_verdict(young, min_w=MIN_W, need_kwh=5.0,
                                     running=True, **{"sun_w": 1500.0, **kw}) == (
@@ -350,11 +351,11 @@ class TestNoFlapping:
         note(host, "a", on)
         monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12, 5))
         note(host, "a", on)                       # the start time stays
-        assert host._thin_sun_sessions["a"] == _t(12)
+        assert coord_mod._thin_sun_started(host, "a") == _t(12)
         note(host, "b", off)
-        assert "b" not in host._thin_sun_sessions
+        assert coord_mod._thin_sun_started(host, "b") is None
         note(host, "a", off)
-        assert "a" not in host._thin_sun_sessions
+        assert coord_mod._thin_sun_started(host, "a") is None
 
     def test_the_minimum_block_is_the_chargers_own_setting(self, monkeypatch):
         from custom_components.solar_energy_management.coordinator import (
@@ -374,7 +375,7 @@ class TestNoFlapping:
         fake._thin_sun_refs = {"ev_charger": refs_from_ledger(
             _day([1500, 0, 0, 0]), deadline=_t(23, 59), min_w=MIN_W,
             max_w=11000.0)}
-        fake._thin_sun_sessions = {"ev_charger": _t(12)}
+        fake._thin_sun_sessions = {"ev_charger": {"started": _t(12), "no_sun": 0}}
         monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12, 4))
         t = SEMCoordinator._thin_sun_for(
             fake, "ev_charger", fake.config["ev_chargers"][0])
@@ -412,3 +413,237 @@ class TestExportPriceKnown:
                                       float("inf")])
     def test_not_a_number_is_unknown(self, junk):
         assert self._known(electricity_export_rate=junk) is False
+
+
+# ── second review pass ────────────────────────────────────────────────
+
+YOUNG = replace(GOOD, session_s=60.0, min_block_s=900.0)       # inside the hold
+OLD = replace(GOOD, session_s=1200.0, min_block_s=900.0)       # past it
+
+
+@pytest.mark.unit
+class TestTheHoldBreaksOnHardLimits:
+    """A hold bridges SOFT conditions only. Each hard limit ends a session
+    at once, inside the minimum block too."""
+
+    def test_the_reviews_case_no_sun_and_a_battery_charging_3_kw(self):
+        fires, why = _verdict(YOUNG, running=True, sun_w=0.0,
+                              battery_charge_w=3000.0, pack_could_pay=True)
+        assert fires is False and why == "battery_takes_sun"
+
+    def test_the_hard_limits_are_listed_in_one_place_with_their_reason(self):
+        assert set(ts.HARD_LIMITS) == {
+            "no_need", "car_absent", "peak_hour", "peak_limit",
+            "battery_pays", "battery_takes_sun", "never_pays", "sun_gone"}
+        assert all(len(why) > 20 for why in ts.HARD_LIMITS.values())
+
+    def test_at_least_reached(self):
+        assert _verdict(YOUNG, running=True, need_kwh=0.05) == (False, "no_need")
+
+    def test_the_peak_limit(self):
+        assert _verdict(YOUNG, running=True, hard="peak_limit") == (
+            False, "peak_limit")
+
+    def test_the_home_battery_feeding_the_car(self):
+        assert _verdict(YOUNG, running=True, hard="battery_pays") == (
+            False, "battery_pays")
+
+    def test_export_at_or_above_import_on_one_price(self):
+        """Whatever the sun does, the blend can never get 5 % below the
+        alternative: the price changed under the session."""
+        for export in (0.30, 0.31, 0.29):
+            net = replace(YOUNG, export_price=export)
+            assert _verdict(net, running=True) == (False, "never_pays"), export
+
+    def test_sun_gone_for_longer_than_the_grace(self):
+        gone = dict(running=True, sun_w=10.0)
+        assert _verdict(replace(YOUNG, no_sun_cycles=0), **gone) == (True, "held")
+        assert _verdict(replace(YOUNG, no_sun_cycles=1), **gone) == (True, "held")
+        assert _verdict(replace(YOUNG, no_sun_cycles=2), **gone) == (
+            False, "sun_gone")
+        assert ts.NO_SUN_GRACE_CYCLES == 2
+
+    def test_a_battery_plainly_taking_the_sun(self):
+        assert _verdict(YOUNG, running=True, battery_charge_w=450.0) == (
+            True, "held")                                  # hovering: soft
+        assert _verdict(YOUNG, running=True, battery_charge_w=1200.0) == (
+            False, "battery_takes_sun")
+
+    def test_soft_conditions_are_still_bridged(self):
+        # a sun dip above the run floor, a price between the two margins,
+        # a pack hovering at its veto, the block moved away
+        assert _verdict(YOUNG, running=True, sun_w=80.0) == (True, "held")
+        assert _verdict(replace(YOUNG, cheapest_later=0.23), running=True,
+                        sun_w=300.0) == (True, "held")
+        assert _verdict(YOUNG, running=True, battery_charge_w=300.0,
+                        pack_could_pay=True) == (True, "held")
+        assert _verdict(replace(YOUNG, in_block=False), running=True) == (
+            True, "held")
+
+    def test_decide_sees_the_pack_feeding_the_car(self):
+        """The pack discharges 2 kW more than the house draws while the car
+        charges: that is the pack paying, inside the hold or not."""
+        from .test_1411_thin_sun_rule import _view
+        v = _view(thin_sun=YOUNG, solar_w=1500.0, home_w=500.0, battery_soc=95,
+                  battery_discharge_w=2500.0)
+        v = replace(v, power=replace(v.power, charging=True, power_w=4100.0))
+        d = decide(v)
+        assert d.reason_code != RC.CHARGER_SUN_PLUS_GRID
+        calm = _view(thin_sun=YOUNG, solar_w=1500.0, home_w=500.0,
+                     battery_soc=95, battery_discharge_w=300.0)
+        calm = replace(calm, power=replace(calm.power, charging=True,
+                                           power_w=4100.0))
+        assert decide(calm).reason_code == RC.CHARGER_SUN_PLUS_GRID
+
+    def test_decide_sees_the_peak_limit(self):
+        from .test_1411_thin_sun_rule import _view
+        v = _view(thin_sun=YOUNG)
+        v = replace(v, power=replace(v.power, charging=True, power_w=4100.0),
+                    fleet=replace(v.fleet, peak_state="shedding"))
+        assert decide(v).reason_code != RC.CHARGER_SUN_PLUS_GRID
+
+    def test_the_coordinator_counts_the_cycles_without_sun(self, monkeypatch):
+        from types import SimpleNamespace
+        from custom_components.solar_energy_management.coordinator import (
+            coordinator as coord_mod,
+        )
+        note = coord_mod._note_thin_sun
+        host = SimpleNamespace()
+        on = SimpleNamespace(reason_code=RC.CHARGER_SUN_PLUS_GRID,
+                             intent=ChargerIntent.CHARGE_AT_AMPS)
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12))
+        note(host, "a", on, sun_w=800.0)
+        assert coord_mod._thin_sun_no_sun_cycles(host, "a") == 0
+        note(host, "a", on, sun_w=10.0)
+        note(host, "a", on, sun_w=20.0)
+        assert coord_mod._thin_sun_no_sun_cycles(host, "a") == 2
+        note(host, "a", on, sun_w=400.0)                   # the sun is back
+        assert coord_mod._thin_sun_no_sun_cycles(host, "a") == 0
+
+
+@pytest.mark.unit
+class TestTheSessionSurvivesStrongSun:
+    def test_strong_sun_keeps_the_session_and_its_start_time(self, monkeypatch):
+        from types import SimpleNamespace
+        from custom_components.solar_energy_management.coordinator import (
+            coordinator as coord_mod,
+        )
+        note = coord_mod._note_thin_sun
+        host = SimpleNamespace()
+        thin = SimpleNamespace(reason_code=RC.CHARGER_SUN_PLUS_GRID,
+                               intent=ChargerIntent.CHARGE_AT_AMPS)
+        strong = SimpleNamespace(reason_code=RC.CHARGER_SUN,
+                                 intent=ChargerIntent.CHARGE_AT_AMPS)
+        idle = SimpleNamespace(reason_code=RC.CHARGER_LOW_SUN,
+                               intent=ChargerIntent.IDLE)
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12))
+        note(host, "a", thin)
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12, 3))
+        note(host, "a", strong)                    # a strong-sun stretch
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12, 5))
+        note(host, "a", thin)                      # back to thin sun
+        assert coord_mod._thin_sun_started(host, "a") == _t(12)
+        note(host, "a", idle)                      # the car stopped: over
+        assert coord_mod._thin_sun_started(host, "a") is None
+
+    def test_strong_sun_alone_starts_no_session(self):
+        from types import SimpleNamespace
+        from custom_components.solar_energy_management.coordinator import (
+            coordinator as coord_mod,
+        )
+        host = SimpleNamespace()
+        coord_mod._note_thin_sun(host, "a", SimpleNamespace(
+            reason_code=RC.CHARGER_SUN, intent=ChargerIntent.CHARGE_AT_AMPS))
+        assert coord_mod._thin_sun_started(host, "a") is None
+
+    def test_a_cloud_at_the_minimum_power_does_not_stop_the_car(self):
+        """Sun around the charger's minimum (4140 W ± 300 W), a price
+        between the two margins. Strong → solar charges; thin → the same
+        session on run thresholds. No stop."""
+        from .test_1411_thin_sun_rule import _view
+        mid = replace(OLD, cheapest_later=0.065)   # blend 0.060–0.0617: 5–10 %
+        seen = []
+        for spare in (4300.0, 3900.0, 4400.0, 3850.0, 4200.0, 3950.0):
+            v = _view(thin_sun=replace(mid, export_price=0.06, import_now=0.08),
+                      solar_w=spare + 500.0, home_w=500.0, tariff_level="normal")
+            v = replace(v, power=replace(v.power, charging=True, power_w=4100.0))
+            d = decide(v)
+            seen.append(d.intent)
+            assert d.intent is ChargerIntent.CHARGE_AT_AMPS, (spare, d.reason)
+        # the same thin moments from standstill would not start
+        cold = _view(thin_sun=replace(GOOD, cheapest_later=0.065,
+                                      export_price=0.06, import_now=0.08),
+                     solar_w=3900.0 + 500.0, home_w=500.0, tariff_level="normal")
+        assert decide(cold).intent is ChargerIntent.IDLE
+
+
+@pytest.mark.unit
+class TestThePlanBlockHasARunPair:
+    def test_a_running_session_survives_a_block_that_moved_to_the_next_slot(self):
+        moved = replace(OLD, in_block=False, block_near=True)
+        assert _verdict(moved, running=True) == (True, "ok")
+        gone = replace(OLD, in_block=False, block_near=False)
+        assert _verdict(gone, running=True) == (False, "no_plan_block")
+
+    def test_a_block_that_is_only_near_starts_nothing(self):
+        near = replace(GOOD, in_block=False, block_near=True)
+        assert _verdict(near) == (False, "no_plan_block")
+        assert _verdict(near, running=True) == (False, "no_plan_block")
+
+    def _fake(self, blocks, computed):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        from custom_components.solar_energy_management.coordinator.thin_sun import (
+            refs_from_ledger,
+        )
+        from .test_638_shadow_mode import _fake_self
+        fake = _fake_self()
+        fake._tariff_optimized_for = lambda cfg: True
+        fake._export_price_known = lambda: True
+        fake._thin_sun_refs = {"ev_charger": refs_from_ledger(
+            _day([1500, 1500, 0, 0]), deadline=_t(23, 59), min_w=MIN_W,
+            max_w=11000.0)}
+        plan = {"blocks": blocks}
+        if computed is not None:
+            plan["computed_at"] = computed.isoformat()
+        fake._energy_plan_shadow = plan
+        return fake, SEMCoordinator
+
+    def _at(self, monkeypatch, fake, coord, now):
+        from custom_components.solar_energy_management.coordinator import (
+            coordinator as coord_mod,
+        )
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: now)
+        return coord._thin_sun_for(fake, "ev_charger",
+                                   fake.config["ev_chargers"][0])
+
+    BLOCK = [{"id": "ev:ev_charger", "start": _t(13).isoformat(),
+              "end": _t(14).isoformat(), "reason": "sun_plus_grid"}]
+
+    def test_near_is_a_block_that_opens_within_the_next_slot(self, monkeypatch):
+        fake, coord = self._fake(self.BLOCK, _t(8))
+        t = self._at(monkeypatch, fake, coord, _t(12, 20))     # 40 min ahead
+        assert (t.in_block, t.block_near) == (False, True)
+        t = self._at(monkeypatch, fake, coord, _t(13, 20))
+        assert (t.in_block, t.block_near) == (True, True)
+        t = self._at(monkeypatch, fake, coord, _t(10, 30))     # 2.5 h ahead
+        assert (t.in_block, t.block_near) == (False, False)
+        t = self._at(monkeypatch, fake, coord, _t(14, 10))     # it is over
+        assert (t.in_block, t.block_near) == (False, False)
+
+    def test_a_stale_plan_books_nothing(self, monkeypatch):
+        from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
+            _MAX_PLAN_AGE,
+        )
+        now = _t(13, 20)
+        fresh, coord = self._fake(self.BLOCK, now - _MAX_PLAN_AGE + timedelta(minutes=5))
+        assert self._at(monkeypatch, fresh, coord, now).in_block is True
+        stale, coord = self._fake(self.BLOCK, now - _MAX_PLAN_AGE - timedelta(minutes=5))
+        t = self._at(monkeypatch, stale, coord, now)
+        assert (t.in_block, t.block_near) == (False, False)
+
+    def test_a_plan_without_a_stamp_time_books_nothing(self, monkeypatch):
+        fake, coord = self._fake(self.BLOCK, None)
+        t = self._at(monkeypatch, fake, coord, _t(13, 20))
+        assert (t.in_block, t.block_near) == (False, False)

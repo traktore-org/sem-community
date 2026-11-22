@@ -77,6 +77,45 @@ FORECAST_RUN_EXTRA_KWH = 1.0
 #: is full: only then does that sun really leave through the meter.
 PACK_FULL_SHARE = 0.98
 
+#: A pack charging above this is not hovering at its veto, it is plainly
+#: taking the sun: hard, the minimum block does not bridge it.
+BATTERY_TAKES_HARD_W = 2 * BATTERY_TAKES_RUN_W
+
+#: Cycles in a row the spare sun may sit below the run floor before a
+#: running session ends ("the sun is gone", not "a cloud").
+NO_SUN_GRACE_CYCLES = 2
+
+#: The pack discharging this much more than the house draws is feeding the
+#: car (W) — less when it is below its buffer, where it may not at all.
+PACK_FEEDS_CAR_W = 200.0
+PACK_FEEDS_CAR_BELOW_BUFFER_W = 50.0
+
+#: A block of the plan that opens within this many seconds is "near": a
+#: running session whose block a re-stamp moved one slot on keeps going.
+NEXT_SLOT_S = 3600.0
+
+#: THE HARD LIMITS — the one list. Each ends a thin-sun session AT ONCE,
+#: inside the minimum block too; the block bridges soft conditions only (a
+#: sun dip, a price between the two margins, a battery hovering at its
+#: veto, a block that moved). Word → why it is hard.
+HARD_LIMITS = {
+    "no_need": "the 'At least' is met: there is nothing left to buy",
+    "car_absent": "no car to charge (the mode answers before the rule is asked)",
+    "peak_hour": "the tariff turned to a peak level: the mode pauses every "
+                 "grid top-up there (answered before the rule is asked)",
+    "peak_limit": "the peak limit is shedding: holding the car would breach "
+                  "the limit the house is billed on",
+    "battery_pays": "the home battery is discharging into the car: the rule "
+                    "priced grid power, not the pack's stored energy",
+    "battery_takes_sun": "the battery is plainly charging from that sun: it "
+                         "is not leaving the property, so nothing is saved",
+    "never_pays": "no amount of thin sun gets the blend below the bar any "
+                  "more (export at or above import on one price): the price "
+                  "moved under the session",
+    "sun_gone": "the spare sun stayed below the run floor past the grace: "
+                "this is a grid charge at the full price now",
+}
+
 
 def blended_price(sun_w: float, power_w: float,
                   export_price: float, import_price: float) -> float:
@@ -163,9 +202,16 @@ class ThinSun:
     #: shows none — a pack with room, a sunnier thin hour picked instead —
     #: it does not act either.
     in_block: bool = False
+    #: (run pair of ``in_block``) Such a block is open now or opens within
+    #: the next slot. A running session survives a re-stamp that moved its
+    #: block one slot on; it starts nothing.
+    block_near: bool = False
     #: Seconds since this rule started the running session; None = it
     #: started none. Kept by the coordinator, read for the minimum block.
     session_s: Optional[float] = None
+    #: Cycles in a row the spare sun was below the run floor in this
+    #: session (the coordinator counts them).
+    no_sun_cycles: int = 0
     #: The charger's minimum block (``ev_min_block_minutes``), in seconds.
     min_block_s: float = 900.0
 
@@ -178,33 +224,52 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
                      battery_charge_w: float = 0.0,
                      grid_room_w: Optional[float] = None,
                      running: bool = False,
-                     pack_could_pay: bool = False) -> tuple:
+                     pack_could_pay: bool = False,
+                     hard: Optional[str] = None) -> tuple:
     """The live gate's answer → ``(fires, why)``.
 
     ``why`` is a short machine word for the reason text and the tests:
     ``ok``, ``held``, or the first condition that said no.
 
-    HARD limits end a session at once: the "At least" is met, the car is
-    gone (the mode answers that before it asks here), the tariff's peak
-    pause (likewise), and the peak limit (the senior clamps in ``decide``
-    act on every decision; ``grid_room_w`` only refuses a START).
+    HARD limits (``HARD_LIMITS``, the one list) end a session at once.
+    ``hard`` carries the two only ``decide`` can see — the peak limit
+    shedding and the pack feeding the car; the rest are asked here, before
+    the hold. A missing car and a peak-level hour never get this far: the
+    mode answers them first.
 
     Every other condition is SOFT. A session this rule started is HELD for
-    the charger's minimum block whatever the soft conditions say, and after
-    that each one is asked with its "keep running" threshold, which is
-    easier than the one that starts. So none of them can open and close the
+    the charger's minimum block over the soft conditions, and after that
+    each one is asked with its "keep running" threshold, which is easier
+    than the one that starts. So none of them can open and close the
     contactor by hovering at its edge.
     """
     if t is None:
         return (False, "not_evaluated")
     if need_kwh is None or need_kwh <= 0.1:
         return (False, "no_need")
+    if hard:
+        return (False, hard)
     # only a session THIS rule started runs on the easier thresholds: a car
     # that is charging for another reason gets the strict start
     run = bool(running and t.session_s is not None)
-    if run and float(t.session_s) < float(t.min_block_s):
-        return (True, "held")
-    if not t.in_block:
+    run_floor_w = MIN_SUN_W * RUN_SUN_FACTOR
+    if run:
+        if battery_charge_w > BATTERY_TAKES_HARD_W:
+            return (False, "battery_takes_sun")
+        if (t.export_price is not None and t.import_now is not None
+                and t.cheapest_later is not None
+                and not thin_sun_pays(
+                    sun_w=max(run_floor_w, float(min_w) - 1.0), min_w=min_w,
+                    export_price=t.export_price, import_price=t.import_now,
+                    cheapest_other=t.cheapest_later, running=True)):
+            # the best a thin-sun session can do — sun just under the
+            # minimum — no longer clears the bar
+            return (False, "never_pays")
+        if sun_w < run_floor_w and int(t.no_sun_cycles or 0) >= NO_SUN_GRACE_CYCLES:
+            return (False, "sun_gone")
+        if float(t.session_s) < float(t.min_block_s):
+            return (True, "held")
+    if not (t.in_block or (run and t.block_near)):
         return (False, "no_plan_block")
     if battery_charge_w > (BATTERY_TAKES_RUN_W if run else BATTERY_TAKES_W):
         return (False, "battery_takes_sun")
@@ -214,7 +279,7 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
         # "grid's share" would come out of the pack, at a price this rule
         # never compared. The battery's rules decide then, not this one.
         return (False, "battery_would_pay")
-    if sun_w < MIN_SUN_W * (RUN_SUN_FACTOR if run else 1.0):
+    if sun_w < (run_floor_w if run else MIN_SUN_W):
         return (False, "no_sun")
     if sun_w >= min_w:
         return (False, "strong_sun")

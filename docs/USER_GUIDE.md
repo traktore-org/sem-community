@@ -196,7 +196,10 @@ plan shows them only when the battery is full: a battery with room takes
 that sun first.
 
 A session that started runs for at least the charger's minimum block
-(15 minutes), so a cloud does not switch the car off and on.
+(15 minutes), so a cloud does not switch the car off and on. It still stops
+at once when **At least** is reached, the car is unplugged, the hour turns
+expensive, the peak limit is near, the home battery starts to feed the car,
+or the sun is gone.
 
 After a restart of Home Assistant the car waits for the next plan before
 it charges this way again. Until then the mode works as before: spare sun

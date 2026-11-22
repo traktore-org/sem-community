@@ -49,7 +49,10 @@ from .charger_types import (
     rewrite,
 )
 from .energy_reclaim import ev_reclaims_battery_charge
-from .thin_sun import PACK_GATE_RUN_EXTRA_W, blended_price, thin_sun_verdict
+from .thin_sun import (
+    PACK_FEEDS_CAR_BELOW_BUFFER_W, PACK_FEEDS_CAR_W, PACK_GATE_RUN_EXTRA_W,
+    blended_price, thin_sun_verdict,
+)
 from .price_view import (  # (#1372) one place judges a price level
     NOT_CHEAP_LEVELS as _NOT_CHEAP_LEVELS,  # noqa: F401 (#994 test)
     answer_for_level,
@@ -1289,13 +1292,24 @@ def _thin_sun_top_up(view: "ChargerView",
     # not stop while the sun grows.
     _gate_w = float(getattr(f, "battery_assist_min_surplus_w", 0.0) or 0.0) + (
         PACK_GATE_RUN_EXTRA_W if in_session else 0.0)
+    # The two hard limits only this layer can see (``thin_sun.HARD_LIMITS``).
+    hard = None
+    if (getattr(f, "peak_state", "normal") or "normal") in ("shedding", "emergency"):
+        hard = "peak_limit"
+    elif drawing:
+        # The pack discharging more than the house draws is feeding the car.
+        _fed_w = float(f.battery_discharge_w or 0.0) - float(f.home_w or 0.0)
+        _below = (getattr(f, "battery_soc_known", True)
+                  and float(f.battery_soc) < float(f.buffer_soc))
+        if _fed_w > (PACK_FEEDS_CAR_BELOW_BUFFER_W if _below else PACK_FEEDS_CAR_W):
+            hard = "battery_pays"
     fires, why = thin_sun_verdict(
         t, sun_w=sun_w, min_w=min_w,
         need_kwh=view.target_kwh,
         battery_charge_w=float(f.battery_charge_w or 0.0),
         grid_room_w=room_w,
         pack_could_pay=(not _assist_blocked_why(f) and sun_w >= _gate_w),
-        running=drawing)
+        running=drawing, hard=hard)
     if not fires:
         return None
     grid = night_top_up_decision(view, "solar_plus_cheap", phase="day (thin sun)")
