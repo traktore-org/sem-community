@@ -71,27 +71,38 @@ def plan_connectivity(cid, charger_cfg, full_config, power):
     return None
 
 
+def plug_sensor_entity(charger_cfg, full_config):
+    """The entity that says whether a car is plugged in at THIS charger, or
+    None (#1153, #1412).
+
+    This charger's nested ``ev_connected_sensor``, or the legacy flat keys.
+    (#1150) The flat keys count only with one charger: with more they
+    answer for the fleet, not for this charger (class 147). The ONE reader
+    of where the plug sensor is: ``has_plug_sensor`` asks whether there is
+    one, the phase tick asks whether it answers right now — an older
+    single-charger install names it in the main settings only, and a
+    reader of the nested key alone took its dropout for an unplug.
+    """
+    own = (charger_cfg or {}).get("ev_connected_sensor")
+    if own:
+        return own
+    if not fleet_flag_is_own(full_config):
+        return None
+    return ((full_config or {}).get("ev_connected_sensor")
+            or (full_config or {}).get("ev_plug_sensor") or None)
+
+
 def has_plug_sensor(charger_cfg, full_config) -> bool:
     """Can SEM ask this charger whether a car is plugged in? (#1153)
 
-    This charger's nested ``ev_connected_sensor``, or the legacy flat
-    keys. Without one the car shows only through the charger's draw
-    (the physics defence, #285+1), so "not connected" is no answer:
-    ``plan_connectivity`` reads it as ``None`` and ``build_charger_view``
-    as ``plug_known=False``. One test for both, so the plan and the
-    control loop cannot disagree about which chargers can say.
-
-    (#1150) The flat keys count only with one charger: with more they
-    answer for the fleet, not for this charger (class 147).
+    Without a plug sensor (``plug_sensor_entity``) the car shows only
+    through the charger's draw (the physics defence, #285+1), so "not
+    connected" is no answer: ``plan_connectivity`` reads it as ``None`` and
+    ``build_charger_view`` as ``plug_known=False``. One test for both, so
+    the plan and the control loop cannot disagree about which chargers can
+    say.
     """
-    if (charger_cfg or {}).get("ev_connected_sensor"):
-        return True
-    if not fleet_flag_is_own(full_config):
-        return False
-    return bool(
-        (full_config or {}).get("ev_connected_sensor")
-        or (full_config or {}).get("ev_plug_sensor")
-    )
+    return bool(plug_sensor_entity(charger_cfg, full_config))
 
 
 def fleet_flag_is_own(full_config) -> bool:

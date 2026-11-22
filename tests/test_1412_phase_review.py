@@ -33,8 +33,8 @@ from custom_components.solar_energy_management.coordinator.ev_phase_sequencer im
     AUTO_DOWN_DELAY_S, AUTO_START_DELAY_S, SETTLE_S,
 )
 from custom_components.solar_energy_management.coordinator.ev_phases import (
-    PHASE_VALUES_STRIKES, active_phases, changed_switch_values_problem,
-    entity_bounds,
+    ONE_PHASE_CAR_CYCLES, PHASE_VALUES_STRIKES, active_phases,
+    changed_switch_values_problem, entity_bounds,
 )
 
 from custom_components.solar_energy_management.coordinator import (
@@ -588,6 +588,40 @@ class TestOnlyAKnownUnplugForgets:
         assert h._phase_sequencers["c1"].in_flight
         assert h._phase_believed.get("c1") == 3, "not wiped while it settles"
 
+    def test_the_flat_plug_key_of_a_single_charger_install_counts_too(self):
+        """An older install names its plug sensor in the main settings, not
+        on the charger. Unavailable there is no answer either."""
+        h = _host()
+        h.config = {"ev_connected_sensor": "binary_sensor.wallbox_plug",
+                    "ev_chargers": [h.cfg]}
+        h, t = _on_one_phase_by_sems_choice(h)
+        h.plug_reads = "unavailable"
+        _cycles(h, _idle(), _cp(connected=False), t, 300.0)
+        assert h._phase_believed["c1"] == 1
+        h.plug_reads = "off"
+        _cycles(h, _idle(), _cp(connected=False), t + 310, 120.0)
+        assert h._phase_believed.get("c1") is None, "a real unplug forgets"
+
+    def test_one_reader_for_both_layouts(self):
+        from custom_components.solar_energy_management.coordinator import (
+            ev_availability,
+        )
+        own = {"ev_connected_sensor": "binary_sensor.own"}
+        flat = {"ev_connected_sensor": "binary_sensor.flat", "ev_chargers": [{}]}
+        two = {"ev_connected_sensor": "binary_sensor.flat",
+               "ev_chargers": [{}, {}]}
+        assert ev_availability.plug_sensor_entity(own, flat) == "binary_sensor.own"
+        assert ev_availability.plug_sensor_entity({}, flat) == "binary_sensor.flat"
+        assert ev_availability.plug_sensor_entity(
+            {}, {"ev_plug_sensor": "binary_sensor.old"}) == "binary_sensor.old"
+        assert ev_availability.plug_sensor_entity({}, two) is None, (
+            "with two chargers the flat key is the fleet's")
+        assert ev_availability.plug_sensor_entity({}, {}) is None
+        for cfg, full in ((own, flat), ({}, flat), ({}, two), ({}, {})):
+            assert ev_availability.has_plug_sensor(cfg, full) == bool(
+                ev_availability.plug_sensor_entity(cfg, full))
+        assert calls(ev_control._plug_reading_known, "plug_sensor_entity")
+
     def test_a_plug_sensor_that_says_unplugged_forgets(self):
         h, t = _on_one_phase_by_sems_choice(
             _host({"ev_connected_sensor": "binary_sensor.wallbox_plug"}))
@@ -691,16 +725,55 @@ class TestAGridChargeWithoutADeadlineRunsOnTheConfiguredPhases:
 class TestAOnePhaseCarIsRemembered:
     """A car that only charges on one phase: SEM switched up, the draw said
     one, and it tried once more — two writes for nothing, each plug-in.
-    The charger's own current on each phase says it at once."""
+    The charger's own current on each phase says it — when it says so for
+    a minute, not for one cycle."""
 
-    def test_one_leg_at_the_three_phase_setting_is_the_car(self):
+    D = None
+
+    def _steady(self, h, start=0.0, cycles=ONE_PHASE_CAR_CYCLES, night=False,
+                decision=None):
+        d = decision or _amps(8, budget=6000.0)
+        t = start
+        for _ in range(cycles):
+            _run(h, d, _cp(8 * 230.0, True), t, night=night, legs=1)
+            t += 10.0
+        return d, t
+
+    def test_one_leg_at_the_three_phase_setting_for_a_minute_is_the_car(self):
         h = _host()                           # the switch reads its 3p value
-        d = _amps(8, budget=6000.0)
-        _run(h, d, _cp(8 * 230.0, True), 0.0, legs=1)
+        d, t = self._steady(h)
         assert h._phase_car_one_phase.get("c1") is True
-        outs, _t = _cycles(h, d, _cp(8 * 230.0, True), 10.0, 900.0, legs=1)
+        outs, _t = _cycles(h, d, _cp(8 * 230.0, True), t, 900.0, legs=1)
         assert _values(h) == [], "plenty of sun, and still no switch up"
         assert all(o is d for o in outs)
+
+    def test_one_cycle_with_one_stale_leg_is_not_the_car(self):
+        """A three-phase car, one leg sensor a cycle behind."""
+        h = _host()
+        d = _amps(8, budget=6000.0)
+        _run(h, d, _cp(8 * 3 * 230.0, True), 0.0, legs=3)
+        _run(h, d, _cp(8 * 3 * 230.0, True), 10.0, legs=1)
+        _run(h, d, _cp(8 * 3 * 230.0, True), 20.0, legs=3)
+        assert not h._phase_car_one_phase.get("c1")
+
+    def test_a_gap_in_the_reading_starts_the_count_again(self):
+        h = _host()
+        d = _amps(8, budget=6000.0)
+        t = 0.0
+        for legs in [1] * (ONE_PHASE_CAR_CYCLES - 1) + [None] + [1] * (
+                ONE_PHASE_CAR_CYCLES - 1):
+            _run(h, d, _cp(8 * 230.0, True), t, legs=legs)
+            t += 10.0
+        assert not h._phase_car_one_phase.get("c1")
+        _run(h, d, _cp(8 * 230.0, True), t, legs=1)
+        assert h._phase_car_one_phase.get("c1") is True
+
+    def test_three_live_legs_later_drop_the_flag(self):
+        h = _host()
+        d, t = self._steady(h)
+        assert h._phase_car_one_phase.get("c1") is True
+        _run(h, d, _cp(8 * 3 * 230.0, True), t, legs=3)
+        assert not h._phase_car_one_phase.get("c1")
 
     def test_without_the_leg_reading_sem_still_tries(self):
         h = _host()
@@ -712,7 +785,7 @@ class TestAOnePhaseCarIsRemembered:
     def test_one_leg_at_the_one_phase_setting_says_nothing_about_the_car(self):
         h = _host()
         h.switch_reads = "32"
-        _run(h, _amps(8, budget=6000.0), _cp(8 * 230.0, True), 0.0, legs=1)
+        self._steady(h, cycles=ONE_PHASE_CAR_CYCLES + 2)
         assert not (getattr(h, "_phase_car_one_phase", None) or {}).get("c1")
 
     def test_after_sem_set_three_one_leg_is_the_car(self):
@@ -728,14 +801,15 @@ class TestAOnePhaseCarIsRemembered:
 
     def test_the_next_car_is_asked_again(self):
         h = _host()
-        _run(h, _amps(8, budget=6000.0), _cp(8 * 230.0, True), 0.0, legs=1)
-        _cycles(h, _idle(), _cp(connected=False), 10.0, 120.0)
+        _d, t = self._steady(h)
+        assert h._phase_car_one_phase.get("c1") is True
+        _cycles(h, _idle(), _cp(connected=False), t, 120.0)
         assert not h._phase_car_one_phase.get("c1")
 
     def test_it_is_not_set_back_at_night(self):
         h = _host()
-        _run(h, _amps(8, budget=6000.0), _cp(8 * 230.0, True), 0.0, legs=1)
-        _cycles(h, _idle(), _cp(), 10.0, 600.0, night=True)
+        _d, t = self._steady(h)
+        _cycles(h, _idle(), _cp(), t, 600.0, night=True)
         assert _values(h) == []
 
 

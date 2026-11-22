@@ -148,9 +148,12 @@ def _grid_pays(decision, source_code=None) -> bool:
 def _plug_reading_known(host, charger_cfg: dict) -> bool:
     """(#1412) True when this charger's plug sensor gives an answer right
     now. A sensor that is unavailable or unknown says nothing about the
-    car, and a charger without one is asked through ``plug_known``."""
+    car, and a charger without one is asked through ``plug_known``. Where
+    the sensor is comes from the one reader (``plug_sensor_entity``): the
+    charger's own key, or the flat key of a single-charger install."""
+    from .ev_availability import plug_sensor_entity
     cfg = charger_cfg if isinstance(charger_cfg, dict) else {}
-    sensor = cfg.get("ev_connected_sensor")
+    sensor = plug_sensor_entity(cfg, getattr(host, "config", None) or {})
     if not sensor:
         return True
     try:
@@ -186,7 +189,7 @@ def _forget_phases(host, cid: str) -> None:
     count, whether SEM set it, and the night's count. The configured count
     is the answer again, as before any measurement."""
     for name in ("_phase_believed", "_phase_set_by_sem", "_phase_grid_phases",
-                 "_phase_car_one_phase"):
+                 "_phase_car_one_phase", "_phase_one_leg_cycles"):
         (getattr(host, name, None) or {}).pop(cid, None)
 
 
@@ -1241,7 +1244,8 @@ class EVControlMixin:
             SETTLE_S, STOP_WAIT_S, PhaseAutoPlanner, PhaseSwitchSequencer,
         )
         from .ev_phases import (
-            ONE_PHASE_DRAW_TOLERANCE, PHASE_BELIEF_ABSENCE_S,
+            ONE_PHASE_CAR_CYCLES, ONE_PHASE_DRAW_TOLERANCE,
+            PHASE_BELIEF_ABSENCE_S,
             PHASE_BELIEF_UNPLUG_S, PHASE_LEG_FLOW_W, PHASE_VALUES_STRIKES,
             active_phases, entity_bounds, estimate_active_phases,
             phase_switch_command, resolve_switch_values,
@@ -1340,6 +1344,7 @@ class EVControlMixin:
         if cp.connected and not self._phase_conn_memo.get(cid, False):
             planner.new_session()
             _phase_state(self, "_phase_car_one_phase").pop(cid, None)
+            _phase_state(self, "_phase_one_leg_cycles").pop(cid, None)
             if getattr(self, "_phase_contradictions", None):
                 self._phase_contradictions.pop(cid, None)
         self._phase_conn_memo[cid] = cp.connected
@@ -1469,22 +1474,39 @@ class EVControlMixin:
         # (#1412) A car that charges on one phase only. SEM switched up, the
         # draw said one, and it tried once more — two writes for nothing,
         # every plug-in. The charger's own current on each phase (#1407)
-        # says it at once: one phase carries the charge while the charger is
-        # SET to three (its switch reads the 3-phase value, or SEM set three
-        # this plug-in). Remembered until the unplug; auto then leaves the
-        # phases alone. One phase at the 1-phase setting says nothing about
-        # the car.
+        # says it: one phase carries the charge while the charger is SET to
+        # three (its switch reads the 3-phase value, or SEM set three this
+        # plug-in) — for ``ONE_PHASE_CAR_CYCLES`` drawing cycles in a row,
+        # each with a reading. One cycle is one stale leg sensor, and a
+        # three-phase car so flagged lost its scale-down and its idle start
+        # until the unplug. Remembered until the unplug; auto then leaves
+        # the phases alone. Three live legs later take the word back. One
+        # phase at the 1-phase setting says nothing about the car.
         car_one_phase = _phase_state(self, "_phase_car_one_phase")
-        if (leg_phases == 1 and drawing and seq_idle and _cfg_phases == 3
-                and (set_at_start == 3
-                     or (not by_current
-                         and _switch_reads_three(self, entity, v3)))):
-            if not car_one_phase.get(cid):
+        one_leg_cycles = _phase_state(self, "_phase_one_leg_cycles")
+        _set_to_three = set_at_start == 3 or (
+            not by_current and _switch_reads_three(self, entity, v3))
+        if drawing and seq_idle and leg_phases == 3:
+            one_leg_cycles[cid] = 0
+            if car_one_phase.pop(cid, None):
                 _LOGGER.info(
-                    "#1412 %s: the car draws on one phase while the charger "
-                    "is set to three — no phase switching for this plug-in",
-                    cid)
+                    "#1412 %s: three phases carry the charge after all — "
+                    "phase switching is back for this plug-in", cid)
+        elif (leg_phases == 1 and drawing and seq_idle and _cfg_phases == 3
+              and (_set_to_three or one_leg_cycles.get(cid))):
+            # the count started at the three-phase setting; the draw itself
+            # then moves SEM's belief to one, which is no new setting
+            one_leg_cycles[cid] = one_leg_cycles.get(cid, 0) + 1
+        elif not car_one_phase.get(cid):
+            one_leg_cycles[cid] = 0
+        if (one_leg_cycles.get(cid, 0) >= ONE_PHASE_CAR_CYCLES
+                and not car_one_phase.get(cid)):
+            _LOGGER.info(
+                "#1412 %s: the car draws on one phase while the charger "
+                "is set to three — no phase switching for this plug-in",
+                cid)
             car_one_phase[cid] = True
+        if car_one_phase.get(cid):
             set_by_sem.pop(cid, None)
             own_one_phase = False
         if mode_val in ("1", "3"):

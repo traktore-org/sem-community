@@ -229,7 +229,10 @@ Notes:
   The next car starts on the configured phases. A charger without a plug sensor
   keeps it.
 - A car that charges on 1 phase only is left alone for that plug-in, when the
-  charger reports its current on each phase.
+  charger reports its current on each phase for about a minute.
+- A car that stays plugged in for days gets up to two switches a day: up to the
+  configured phases at night, down to 1 phase in the next day's thin sun. After
+  4 automatic switches in one plug-in, the down-switches stop.
 - The values for 1 phase and 3 phases must be inside the range of the number
   entity they are written to. The forms and the dashboard refuse a value that
   is not. For a stored one, SEM sends no phase switch and raises a Repair.

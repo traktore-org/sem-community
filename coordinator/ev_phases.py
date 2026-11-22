@@ -162,6 +162,12 @@ def resolve_switch_values(entity_id: str, cfg: dict):
 #: its first poll) is not a wrong setting.
 PHASE_VALUES_STRIKES = 6
 
+#: (#1412) Drawing cycles in a row that must show ONE phase carrying the
+#: charge, on a charger set to three, before the car is called a one-phase
+#: car for the plug-in. One cycle is one stale leg sensor: a three-phase
+#: car then lost its scale-down and its idle start until the unplug.
+ONE_PHASE_CAR_CYCLES = 6
+
 #: (#1412) The phase belief belongs to one plug-in. Unplugged this long, it
 #: is forgotten: the next car, or a change made on the charger itself, must
 #: not start sized for the car before. A blink of the plug sensor is shorter.
