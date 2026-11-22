@@ -125,14 +125,17 @@ def _phases_now(host, charger_cfg: dict, default: int) -> int:
 
 def _grid_pays(decision, one_phase_min_w: float) -> bool:
     """(#1412) True for a charge the grid pays for: SEM commands amps, and
-    the sun in the decision's budget does not carry even one phase at the
-    lowest current. The intent is asked first, as every reader of a
+    the sun in the decision's budget carries less than half of one phase at
+    the lowest current. Half, not all: a car's measured draw at the lowest
+    current can sit well under nameplate (the W/A learner accepts down to
+    0.5), so a thin-sun charge whose budget dips just below nameplate is
+    still the sun's. The intent is asked first, as every reader of a
     decision's watts does (#1008): ``budget_w`` is 0.0 under ``CHARGE_MAX``
     by construction and says nothing there."""
     from .charger_types import ChargerIntent
     if decision.intent is not ChargerIntent.CHARGE_AT_AMPS:
         return False
-    return float(decision.budget_w or 0.0) < float(one_phase_min_w)
+    return float(decision.budget_w or 0.0) < 0.5 * float(one_phase_min_w)
 
 
 def _forget_phases(host, cid: str) -> None:
@@ -1418,8 +1421,9 @@ class EVControlMixin:
             # thin sun stayed there all night at a third of the power. So
             # the clocks rest, and the one question here is whether SEM's
             # OWN one phase must go:
-            #  * the night has begun and the charger is at rest — back to
-            #    the configured count, before the grid block starts;
+            #  * the night has begun, or a grid charge is commanded, and the
+            #    charger is at rest — back to the configured count, before
+            #    the block draws;
             #  * a grid charge runs on one phase and cannot reach its need
             #    by the deadline there — up, through stop → switch → settle.
             # A one-phase CAR is not SEM's choice (the draw said so) and is
@@ -1428,7 +1432,7 @@ class EVControlMixin:
             planner.rest()
             desired = None
             if own_one_phase:
-                if is_night and not drawing and seq_idle:
+                if not drawing and seq_idle:
                     desired = _cfg_phases
                 elif (drawing and grid_pays and _one_phase_falls_short(
                         self, cid, charger_cfg, voltage)):

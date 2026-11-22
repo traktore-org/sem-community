@@ -148,6 +148,23 @@ class TestTheNightGoesBackToTheConfiguredPhases:
         _cycles(h, _idle(500.0), _cp(), t, 900.0, night=False)
         assert _values(h) == [ONE_PHASE_VALUE]
 
+    def test_a_grid_block_by_day_starts_on_the_configured_phases(self):
+        """A cheap hour by day: SEM commands amps the grid pays for, the car
+        has not started. Back to three before it draws."""
+        h, t = _on_one_phase_by_sems_choice()
+        d = _amps(6)
+        out = _run(h, d, _cp(), t, night=False)
+        assert _values(h) == [ONE_PHASE_VALUE, THREE_PHASE_VALUE]
+        assert out.intent is ChargerIntent.DISABLE, "held while it settles"
+
+    def test_a_thin_sun_charge_is_not_a_grid_charge(self):
+        """The sun's budget dips under nameplate while the car starts: still
+        the sun's charge. One phase stays."""
+        h, t = _on_one_phase_by_sems_choice()
+        d = _amps(6, budget=1300.0)
+        outs, _t = _cycles(h, d, _cp(), t, 120.0, night=False)
+        assert all(o is d for o in outs) and _values(h) == [ONE_PHASE_VALUE]
+
     def test_the_night_never_scales_down(self):
         """No sun at night is no starvation. On develop a three-phase
         charger was set to one phase ten minutes into the night."""
