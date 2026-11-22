@@ -225,12 +225,14 @@ export function statePill(row, live = {}) {
     if (row.isShed) return p(shedReasonKey(row.shedReason), { phase: row.shedPhase || '—' }, 'bad');
     const w = Number.isFinite(live.powerW) ? live.powerW : null;
     if (row.type === 'charger') {
-        if (live.paused) return p('next_st_paused', { time: live.pausedUntil || '' }, 'warn');
+        // (#1407) what the box draws comes first: a Pause is Off, which stops a
+        // charge once, and a charge another system runs then goes on
         if (w !== null && w > 50) {
             return live.amps != null
                 ? p('next_st_charging_a', { amps: Math.round(live.amps) }, 'ok')
                 : p('next_st_charging', {}, 'ok');
         }
+        if (live.paused) return p('next_st_paused', { time: live.pausedUntil || '' }, 'warn');
         if (live.plannedUntil) return p(live.observer ? 'next_st_would_charge_until' : 'next_st_charges_until', { time: live.plannedUntil });
         if (live.plannedAt) return p('next_st_waits_for', { time: live.plannedAt });
         if (live.connected === false) return p('next_st_unplugged');

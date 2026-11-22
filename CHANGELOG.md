@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Off and Pause show what the charger does** (#1407). The card said "No charge" or "paused" while another system charged.
+- 🐛 **Off sends no phase switch** (#1407). With phase switching on, SEM could still switch the phases of a charger set to Off.
 - 📝 **Min + Solar texts match what it does** (#1411). By day it waits for sun; the grid helps only if the night is too short.
 
 - 🐛 **Forecast accuracy shows its number** (#1321). Insights showed "{pct} % trusted 55 %". Now it reads "55 % trusted".
