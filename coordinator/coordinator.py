@@ -250,14 +250,52 @@ def _thin_sun_started(host: Any, cid: str) -> Optional[datetime]:
     return started if isinstance(started, datetime) else None
 
 
-def _thin_sun_no_sun_s(host: Any, cid: str, now: datetime) -> Optional[float]:
-    """(#1411) Seconds the session's spare sun has been below the run floor
-    without a break; None while it is not."""
-    rec = _thin_sun_rec(host, cid)
-    since = rec.get("no_sun_since") if rec else None
-    if not isinstance(since, datetime):
+#: (#1411) Most samples one window keeps per charger. Readings closer
+#: together than window ÷ this are merged into one bucket, so a fast cycle
+#: (or three views in one cycle) cannot grow the list.
+_THIN_SUN_MAX_SAMPLES = 64
+
+
+def _window_add(buckets: list, now: datetime, value: float,
+                window_s: float) -> None:
+    """Add one reading to a session window, in place. A bucket is
+    ``[time, sum, count]``; readings within one bucket width of the last
+    bucket join it; buckets older than the window are dropped."""
+    width = float(window_s) / max(1, _THIN_SUN_MAX_SAMPLES - 2)
+    if buckets and (now - buckets[-1][0]).total_seconds() < width:
+        buckets[-1][1] += float(value)
+        buckets[-1][2] += 1
+    else:
+        buckets.append([now, float(value), 1])
+    edge = now - timedelta(seconds=float(window_s))
+    while buckets and buckets[0][0] < edge:
+        buckets.pop(0)
+    del buckets[:-_THIN_SUN_MAX_SAMPLES]
+
+
+def _window_mean(buckets: Any, now: datetime, window_s: float) -> Optional[float]:
+    """The mean of the readings in the window; None until the window is
+    full (``thin_sun.WINDOW_FULL_SHARE`` of its length is covered)."""
+    from .thin_sun import WINDOW_FULL_SHARE
+    try:
+        edge = now - timedelta(seconds=float(window_s))
+        live = [b for b in (buckets or ()) if b[0] >= edge]
+        if not live:
+            return None
+        if (now - live[0][0]).total_seconds() < WINDOW_FULL_SHARE * float(window_s):
+            return None
+        count = sum(int(b[2]) for b in live)
+        return sum(float(b[1]) for b in live) / count if count else None
+    except Exception:  # noqa: BLE001 — a window nobody can read says nothing
         return None
-    return max(0.0, (now - since).total_seconds())
+
+
+def _thin_sun_sun_mean(host: Any, cid: str, now: datetime) -> Optional[float]:
+    """(#1411) The session's mean spare sun over the last three minutes;
+    None until that window is full."""
+    from .thin_sun import NO_SUN_GRACE_S
+    rec = _thin_sun_rec(host, cid)
+    return _window_mean(rec.get("sun") if rec else None, now, NO_SUN_GRACE_S)
 
 
 def _thin_sun_min_block_s(host: Any) -> float:
@@ -307,13 +345,14 @@ def _note_thin_sun(host: Any, cid: str, decision: Any,
       session that strong sun carries for hours must not come back as a
       running one in the evening.
 
-    Beside the start it times how long the spare sun has been below the
-    run floor (``sun_gone``, a hard limit). ``_thin_sun_for`` hands the
-    session to the next cycle's view. Never raises."""
+    Beside the start it keeps the session's spare-sun readings of the last
+    three minutes (``sun_gone``, a hard limit, is their mean).
+    ``_thin_sun_for`` hands the session to the next cycle's view. Never
+    raises."""
     try:
         from . import reason_codes as _rc
         from .charger_types import ChargerIntent
-        from .thin_sun import MIN_SUN_W, RUN_SUN_FACTOR
+        from .thin_sun import NO_SUN_GRACE_S
         sessions = _thin_sun_sessions_of(host)
         key = str(cid)
         code = getattr(decision, "reason_code", None)
@@ -338,13 +377,11 @@ def _note_thin_sun(host: Any, cid: str, decision: Any,
             until = (end or now) + timedelta(seconds=block_s)
             prev = rec.get("until")
             rec["until"] = max(prev, until) if isinstance(prev, datetime) else until
-            if sun_w is not None:
-                if float(sun_w) < MIN_SUN_W * RUN_SUN_FACTOR:
-                    rec.setdefault("no_sun_since", now)
-                else:
-                    rec.pop("no_sun_since", None)
-        else:
-            rec.pop("no_sun_since", None)        # charging on the sun alone
+        # every cycle of the session, thin or strong: the window's mean is
+        # what says "the sun is gone", not this cycle's reading
+        if sun_w is not None:
+            _window_add(rec.setdefault("sun", []), now, float(sun_w),
+                        NO_SUN_GRACE_S)
         until = rec.get("until")
         if isinstance(until, datetime) and now > until:
             sessions.pop(key, None)
@@ -10298,17 +10335,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             block_s = _thin_sun_min_block_s(self)
             import_now = tariff_price_at(prov, now)
             cheapest = refs.cheapest_after(now)
-            # how long a price has been unreadable in this session: a
-            # short gap is bridged, a long one ends it (``price_unknown``)
-            no_price_s = None
+            # the share of the last five minutes in which a price was
+            # unreadable in this session: a short gap is bridged, mostly
+            # unreadable ends it (``price_unknown``)
+            price_blind_share = None
             rec = _thin_sun_rec(self, cid)
             if rec is not None:
-                if export is None or import_now is None or cheapest is None:
-                    since = rec.setdefault("no_price_since", now)
-                    if isinstance(since, datetime):
-                        no_price_s = max(0.0, (now - since).total_seconds())
-                else:
-                    rec.pop("no_price_since", None)
+                from .thin_sun import PRICE_BRIDGE_S
+                blind = (export is None or import_now is None
+                         or cheapest is None)
+                _window_add(rec.setdefault("price", []), now,
+                            1.0 if blind else 0.0, PRICE_BRIDGE_S)
+                price_blind_share = _window_mean(
+                    rec.get("price"), now, PRICE_BRIDGE_S)
             return ThinSun(
                 export_price=export,
                 import_now=import_now,
@@ -10323,8 +10362,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 block_near=block_near,
                 session_s=(max(0.0, (now - started).total_seconds())
                            if started is not None else None),
-                no_sun_s=_thin_sun_no_sun_s(self, cid, now),
-                no_price_s=no_price_s,
+                sun_mean_w=_thin_sun_sun_mean(self, cid, now),
+                price_blind_share=price_blind_share,
                 min_block_s=block_s,
             )
         except Exception:  # noqa: BLE001 — a rule input must never cost a cycle

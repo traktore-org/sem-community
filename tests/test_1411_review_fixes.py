@@ -461,9 +461,9 @@ class TestTheHoldBreaksOnHardLimits:
 
     def test_sun_gone_for_longer_than_the_grace(self):
         gone = dict(running=True, sun_w=10.0)
-        assert _verdict(replace(YOUNG, no_sun_s=None), **gone) == (True, "held")
-        assert _verdict(replace(YOUNG, no_sun_s=60.0), **gone) == (True, "held")
-        assert _verdict(replace(YOUNG, no_sun_s=200.0), **gone) == (
+        assert _verdict(replace(YOUNG, sun_mean_w=None), **gone) == (True, "held")
+        assert _verdict(replace(YOUNG, sun_mean_w=120.0), **gone) == (True, "held")
+        assert _verdict(replace(YOUNG, sun_mean_w=20.0), **gone) == (
             False, "sun_gone")
 
     def test_a_battery_plainly_taking_the_sun(self):
@@ -739,72 +739,128 @@ class TestTheSessionEnds:
         assert not self._alive(host)
 
 
+def _on():
+    return _dec(RC.CHARGER_SUN_PLUS_GRID)
+
+
+def _run_sun(monkeypatch, suns, *, step_s=10, start=None):
+    """Feed ``_note_thin_sun`` one spare-sun reading per cycle; return the
+    host, the module and the time of the last cycle."""
+    from types import SimpleNamespace
+    from custom_components.solar_energy_management.coordinator import (
+        coordinator as coord_mod,
+    )
+    host = SimpleNamespace(config={"ev_min_block_minutes": 60})
+    now = start or _t(12)
+    for sun in suns:
+        monkeypatch.setattr(coord_mod.dt_util, "now", lambda n=now: n)
+        coord_mod._note_thin_sun(host, "a", _on(), sun_w=sun)
+        last = now
+        now = now + timedelta(seconds=step_s)
+    return host, coord_mod, last
+
+
 @pytest.mark.unit
-class TestTheSunGoneGraceIsThreeMinutes:
-    def test_the_constant_and_its_reason(self):
+class TestSunGoneIsJudgedOverAWindow:
+    """The fourth review pass: a consecutive timer reset on one good cycle,
+    so spare sun alternating 0 W / 60 W never reached three minutes and a
+    held session bought grid for the whole block."""
+
+    def test_the_window_and_its_reason(self):
         assert ts.NO_SUN_GRACE_S == pytest.approx(180.0)
         assert "sun_gone" in ts.HARD_LIMITS
 
-    def test_twenty_seconds_under_the_floor_no_longer_ends_a_session(self):
-        for s_ in (0.0, 20.0, 60.0, 179.0):
-            assert _verdict(replace(YOUNG, no_sun_s=s_), running=True,
-                            sun_w=10.0) == (True, "held"), s_
+    def test_sun_alternating_0_and_60_w_is_gone(self, monkeypatch):
+        host, mod, last = _run_sun(monkeypatch, [0.0, 60.0] * 12)   # 4 min
+        mean = mod._thin_sun_sun_mean(host, "a", last)
+        assert mean == pytest.approx(30.0, abs=4.0)
+        assert _verdict(replace(YOUNG, sun_mean_w=mean), running=True,
+                        sun_w=60.0) == (False, "sun_gone")
 
-    def test_three_minutes_do_also_inside_the_minimum_block(self):
-        assert _verdict(replace(YOUNG, no_sun_s=181.0), running=True,
-                        sun_w=10.0) == (False, "sun_gone")
+    def test_a_one_minute_cloud_is_not(self, monkeypatch):
+        host, mod, last = _run_sun(
+            monkeypatch, [800.0] * 8 + [0.0] * 6 + [800.0] * 6)
+        mean = mod._thin_sun_sun_mean(host, "a", last)
+        assert mean > 400.0
+        assert _verdict(replace(YOUNG, sun_mean_w=mean), running=True,
+                        sun_w=0.0) == (True, "held")
 
-    def test_the_clock_runs_only_while_the_sun_is_under_the_floor(self):
-        # sun is back: an old clock value is not asked
-        assert _verdict(replace(YOUNG, no_sun_s=500.0), running=True,
-                        sun_w=300.0) == (True, "held")
+    def test_a_kettle_for_two_minutes_is_not(self, monkeypatch):
+        # 2 of the last 3 minutes at 0 W, one at 300 W: mean 100 W
+        host, mod, last = _run_sun(monkeypatch, [300.0] * 6 + [0.0] * 12)
+        assert mod._thin_sun_sun_mean(host, "a", last) > 50.0
 
-    def test_the_coordinator_times_it(self, monkeypatch):
-        from types import SimpleNamespace
-        from custom_components.solar_energy_management.coordinator import (
-            coordinator as coord_mod,
+    def test_three_minutes_without_sun_are(self, monkeypatch):
+        host, mod, last = _run_sun(monkeypatch, [600.0] * 6 + [5.0] * 19)
+        assert mod._thin_sun_sun_mean(host, "a", last) < 50.0
+
+    def test_a_window_that_is_not_full_yet_says_nothing(self, monkeypatch):
+        host, mod, last = _run_sun(monkeypatch, [0.0] * 9)          # 80 s
+        assert mod._thin_sun_sun_mean(host, "a", last) is None
+        assert _verdict(replace(YOUNG, sun_mean_w=None), running=True,
+                        sun_w=0.0) == (True, "held")
+
+    def test_only_the_last_three_minutes_count(self, monkeypatch):
+        host, mod, last = _run_sun(monkeypatch, [0.0] * 30 + [700.0] * 19)
+        assert mod._thin_sun_sun_mean(host, "a", last) == pytest.approx(700.0)
+
+    def test_the_mean_decides_not_the_cycle(self):
+        # the sun happens to read 60 W this cycle: the window still says gone
+        assert _verdict(replace(YOUNG, sun_mean_w=30.0), running=True,
+                        sun_w=60.0) == (False, "sun_gone")
+        # …and one dark cycle in a sunny window is nothing
+        assert _verdict(replace(YOUNG, sun_mean_w=400.0), running=True,
+                        sun_w=0.0) == (True, "held")
+
+    def test_the_samples_are_bounded(self, monkeypatch):
+        host, mod, _ = _run_sun(monkeypatch, [100.0] * 600, step_s=1)
+        rec = mod._thin_sun_rec(host, "a")
+        assert len(rec["sun"]) <= mod._THIN_SUN_MAX_SAMPLES
+
+    def test_the_view_gets_the_mean(self, monkeypatch):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
         )
-        host = SimpleNamespace(config={})
-        on = _dec(RC.CHARGER_SUN_PLUS_GRID)
-        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12))
-        coord_mod._note_thin_sun(host, "a", on, sun_w=800.0)
-        assert coord_mod._thin_sun_no_sun_s(host, "a", _t(12)) is None
-        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12, 1))
-        coord_mod._note_thin_sun(host, "a", on, sun_w=10.0)
-        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12, 3))
-        coord_mod._note_thin_sun(host, "a", on, sun_w=20.0)
-        assert coord_mod._thin_sun_no_sun_s(host, "a", _t(12, 3)) == pytest.approx(120.0)
-        coord_mod._note_thin_sun(host, "a", on, sun_w=400.0)      # back
-        assert coord_mod._thin_sun_no_sun_s(host, "a", _t(12, 3)) is None
+        from custom_components.solar_energy_management.coordinator.thin_sun import (
+            refs_from_ledger,
+        )
+        from .test_638_shadow_mode import _fake_self
+        host, mod, last = _run_sun(monkeypatch, [0.0, 60.0] * 12)
+        fake = _fake_self()
+        fake._tariff_optimized_for = lambda cfg: True
+        fake._export_price_known = lambda: True
+        fake._thin_sun_refs = {"ev_charger": refs_from_ledger(
+            _day([1500, 0, 0, 0]), deadline=_t(23, 59), min_w=MIN_W,
+            max_w=11000.0)}
+        fake._thin_sun_sessions = {"ev_charger": host._thin_sun_sessions["a"]}
+        monkeypatch.setattr(mod.dt_util, "now", lambda: last)
+        t = SEMCoordinator._thin_sun_for(
+            fake, "ev_charger", fake.config["ev_chargers"][0])
+        assert t.sun_mean_w == pytest.approx(30.0, abs=4.0)
 
 
 @pytest.mark.unit
-class TestAnUnreadablePriceIsBridgedFiveMinutes:
+class TestAnUnreadablePriceIsJudgedOverAWindow:
     BLIND = replace(YOUNG, import_now=None, min_block_s=1800.0)
 
-    def test_the_constant(self):
+    def test_the_window(self):
         assert ts.PRICE_BRIDGE_S == pytest.approx(300.0)
         assert "price_unknown" in ts.HARD_LIMITS
 
-    def test_a_short_gap_is_bridged(self):
-        for s_ in (None, 0.0, 120.0, 299.0):
-            assert _verdict(replace(self.BLIND, no_price_s=s_),
-                            running=True) == (True, "held"), s_
-
-    def test_five_minutes_end_the_session_inside_the_minimum_block(self):
-        assert _verdict(replace(self.BLIND, no_price_s=301.0),
+    def test_unreadable_for_more_than_half_of_it_ends_the_session(self):
+        assert _verdict(replace(self.BLIND, price_blind_share=0.6),
                         running=True) == (False, "price_unknown")
-        # each of the three prices counts
-        for field in ("export_price", "import_now", "cheapest_later"):
-            blind = replace(YOUNG, min_block_s=1800.0, no_price_s=400.0,
-                            **{field: None})
-            assert _verdict(blind, running=True) == (False, "price_unknown"), field
+        # also when the price happens to be readable this very cycle
+        assert _verdict(replace(YOUNG, min_block_s=1800.0,
+                                price_blind_share=0.6),
+                        running=True) == (False, "price_unknown")
 
-    def test_readable_prices_ignore_an_old_clock(self):
-        assert _verdict(replace(YOUNG, no_price_s=999.0), running=True) == (
-            True, "held")
+    def test_less_than_half_is_bridged(self):
+        for share in (None, 0.0, 0.2, 0.5):
+            assert _verdict(replace(self.BLIND, price_blind_share=share),
+                            running=True) == (True, "held"), share
 
-    def test_the_coordinator_times_the_gap(self, monkeypatch):
+    def _feed(self, monkeypatch, readable_seq, step_s=10):
         from custom_components.solar_energy_management.coordinator import (
             coordinator as coord_mod,
         )
@@ -817,18 +873,39 @@ class TestAnUnreadablePriceIsBridgedFiveMinutes:
         from .test_638_shadow_mode import _fake_self
         fake = _fake_self()
         fake._tariff_optimized_for = lambda cfg: True
-        known = {"v": False}
+        known = {"v": True}
         fake._export_price_known = lambda: known["v"]
+        fake.config["electricity_export_rate"] = 0.06
         fake._thin_sun_refs = {"ev_charger": refs_from_ledger(
             _day([1500, 0, 0, 0]), deadline=_t(23, 59), min_w=MIN_W,
             max_w=11000.0)}
         fake._thin_sun_sessions = {"ev_charger": {"started": _t(12)}}
         cfg = fake.config["ev_chargers"][0]
-        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12, 1))
-        assert SEMCoordinator._thin_sun_for(fake, "ev_charger", cfg).no_price_s == 0.0
-        monkeypatch.setattr(coord_mod.dt_util, "now", lambda: _t(12, 4))
-        assert SEMCoordinator._thin_sun_for(
-            fake, "ev_charger", cfg).no_price_s == pytest.approx(180.0)
-        known["v"] = True
-        fake.config["electricity_export_rate"] = 0.06
-        assert SEMCoordinator._thin_sun_for(fake, "ev_charger", cfg).no_price_s is None
+        now, t = _t(12), None
+        for ok in readable_seq:
+            known["v"] = ok
+            monkeypatch.setattr(coord_mod.dt_util, "now", lambda n=now: n)
+            t = SEMCoordinator._thin_sun_for(fake, "ev_charger", cfg)
+            SEMCoordinator._thin_sun_for(fake, "ev_charger", cfg)   # 2nd view
+            now = now + timedelta(seconds=step_s)
+        return t, fake, coord_mod
+
+    def test_a_price_blinking_mostly_unreadable_is_caught(self, monkeypatch):
+        """Readable one cycle in three: the consecutive timer never ran
+        past 20 s; the window sees two thirds."""
+        t, _, _ = self._feed(monkeypatch, [True, False, False] * 12)   # 6 min
+        assert t.price_blind_share == pytest.approx(2 / 3, abs=0.06)
+
+    def test_a_price_blinking_mostly_readable_is_bridged(self, monkeypatch):
+        t, _, _ = self._feed(monkeypatch, [False, True, True] * 12)
+        assert t.price_blind_share == pytest.approx(1 / 3, abs=0.06)
+
+    def test_a_window_that_is_not_full_yet_says_nothing(self, monkeypatch):
+        t, _, _ = self._feed(monkeypatch, [False] * 12)                # 2 min
+        assert t.price_blind_share is None
+
+    def test_two_views_in_one_cycle_are_one_sample_and_the_list_is_bounded(self, monkeypatch):
+        t, fake, mod = self._feed(monkeypatch, [True] * 500, step_s=1)
+        rec = mod._thin_sun_rec(fake, "ev_charger")
+        assert len(rec["price"]) <= mod._THIN_SUN_MAX_SAMPLES
+        assert t.price_blind_share == 0.0

@@ -81,19 +81,29 @@ PACK_FULL_SHARE = 0.98
 #: taking the sun: hard, the minimum block does not bridge it.
 BATTERY_TAKES_HARD_W = 2 * BATTERY_TAKES_RUN_W
 
-#: How long the spare sun may sit below the run floor before a running
-#: session ends. Three minutes: a kettle or a passing cloud takes the
-#: surplus away for a minute or two, and a restart costs far more than
-#: bridging it — 200 W of sun again, an open plan block and the stability
-#: layer's 60 s start delay. Past it the car is on plain grid power at the
-#: full price, and that is a hard stop, inside the minimum block too.
+#: "The sun is gone" is judged over a WINDOW, three minutes: the session
+#: ends when the MEAN spare sun over it is under the run floor. Three
+#: minutes because a kettle or a passing cloud takes the surplus away for a
+#: minute or two, and a restart costs far more than bridging it — 200 W of
+#: sun again, an open plan block and the stability layer's 60 s start
+#: delay. A mean and not a timer because a timer restarts on one good
+#: cycle: spare sun flickering 0 W / 60 W never ran it out, and a held
+#: session bought grid power for the whole minimum block. Past it the car
+#: is on plain grid power at the full price — a hard stop, inside the
+#: minimum block too.
 NO_SUN_GRACE_S = 180.0
 
-#: How long a running session is bridged while a price cannot be read (the
-#: provider hiccups, an entity is unavailable). Five minutes, not the whole
-#: minimum block: a rule that buys on a price comparison must not buy for
-#: long on no comparison at all.
+#: An unreadable price (the provider hiccups, an entity is unavailable) is
+#: judged over a window too, five minutes: the session ends when a price
+#: was unreadable for more than this share of it. A rule that buys on a
+#: price comparison must not buy for long on no comparison at all — and a
+#: price that blinks readable now and then is still no comparison.
 PRICE_BRIDGE_S = 300.0
+PRICE_BLIND_MAX_SHARE = 0.5
+
+#: A window says nothing until it spans this share of its length: the first
+#: minute of a session cannot prove three minutes without sun.
+WINDOW_FULL_SHARE = 0.75
 
 #: The pack discharging this much more than the house draws is feeding the
 #: car (W) — less when it is below its buffer, where it may not at all.
@@ -122,10 +132,10 @@ HARD_LIMITS = {
     "never_pays": "no amount of thin sun gets the blend below the bar any "
                   "more (export at or above import on one price): the price "
                   "moved under the session",
-    "sun_gone": "the spare sun stayed below the run floor past the grace: "
-                "this is a grid charge at the full price now",
-    "price_unknown": "a price could not be read for longer than the bridge: "
-                     "the rule buys on a comparison, not on none",
+    "sun_gone": "the mean spare sun of the last three minutes is below the "
+                "run floor: this is a grid charge at the full price now",
+    "price_unknown": "a price was unreadable for more than half of the last "
+                     "five minutes: the rule buys on a comparison, not on none",
 }
 
 
@@ -221,12 +231,12 @@ class ThinSun:
     #: Seconds since this rule started the running session; None = it
     #: started none. Kept by the coordinator, read for the minimum block.
     session_s: Optional[float] = None
-    #: Seconds the spare sun has been below the run floor without a break
-    #: in this session; None = it is not below it. The coordinator times it.
-    no_sun_s: Optional[float] = None
-    #: Seconds one of the prices has been unreadable without a break in
-    #: this session; None = all three are read. The coordinator times it.
-    no_price_s: Optional[float] = None
+    #: The session's mean spare sun over the last ``NO_SUN_GRACE_S`` (W);
+    #: None until the window is full. The coordinator keeps the samples.
+    sun_mean_w: Optional[float] = None
+    #: The share of the last ``PRICE_BRIDGE_S`` in which a price was
+    #: unreadable, 0..1; None until the window is full.
+    price_blind_share: Optional[float] = None
     #: The charger's minimum block (``ev_min_block_minutes``), in seconds.
     min_block_s: float = 900.0
 
@@ -271,11 +281,14 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
     if run:
         if battery_charge_w > BATTERY_TAKES_HARD_W:
             return (False, "battery_takes_sun")
+        if (t.price_blind_share is not None
+                and float(t.price_blind_share) > PRICE_BLIND_MAX_SHARE):
+            # mostly unreadable over the window — whether or not it happens
+            # to read this cycle. A short gap is bridged below.
+            return (False, "price_unknown")
         if (t.export_price is None or t.import_now is None
                 or t.cheapest_later is None):
-            # a short gap is bridged below; a long one is no comparison
-            if t.no_price_s is not None and float(t.no_price_s) >= PRICE_BRIDGE_S:
-                return (False, "price_unknown")
+            pass                      # this cycle's gap: soft, bridged below
         elif not thin_sun_pays(
                 sun_w=max(run_floor_w, float(min_w) - 1.0), min_w=min_w,
                 export_price=t.export_price, import_price=t.import_now,
@@ -283,8 +296,9 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
             # the best a thin-sun session can do — sun just under the
             # minimum — no longer clears the bar
             return (False, "never_pays")
-        if (sun_w < run_floor_w and t.no_sun_s is not None
-                and float(t.no_sun_s) >= NO_SUN_GRACE_S):
+        if t.sun_mean_w is not None and float(t.sun_mean_w) < run_floor_w:
+            # the window's word, not this cycle's: one dark cycle in a sunny
+            # window is nothing, one bright cycle in a dark one is nothing
             return (False, "sun_gone")
         if float(t.session_s) < float(t.min_block_s):
             return (True, "held")

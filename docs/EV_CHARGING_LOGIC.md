@@ -190,8 +190,10 @@ Hard limits end a session at once, inside the minimum block too
 (`thin_sun.HARD_LIMITS`): the floor is met, the car is unplugged, the hour
 turns expensive, the peak limit sheds, the home battery feeds the car or
 plainly charges from that sun, the export price is no longer below the
-alternative, the spare sun stays under the run floor for three minutes, or
-a price cannot be read for five minutes.
+alternative, the mean spare sun of the last three minutes is under the run
+floor, or a price was unreadable for more than half of the last five
+minutes. Both are judged over a window, not a timer: a reading that
+flickers cannot keep a session alive.
 
 A session also ends with the charge mode, at night, with any charge the sun
 does not fund (a night block, a deadline, Start now), and one minimum block
