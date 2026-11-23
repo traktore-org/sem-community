@@ -6965,28 +6965,35 @@ Refs #1308 #1309 #246 #967 #1023 #501 #1330 #953 #1311.
 Plan card showed the charge at 12:15–13:15, the cheapest hours; SEM charged at once, about 7.5 kW,
 spread evenly to 15:00. **Root shape:** after the night end `plan_night_charge` marks the departure
 floor (`to_departure`) as a forcing deadline, so the floor engages by day. `ev_overlay` stands
-down for every forcing deadline ("never hold back a charger that must run now"), so the covered
-plan's blocks reached neither signal: no wait before them, no floor inside them. One flag, two
-jobs: "engage the day floor" and "outranks the plan".
+down for every forcing deadline, so the covered plan's blocks reached neither signal: no wait
+before them, no floor inside them. One flag, two jobs: "engage the day floor" and "outranks the
+plan".
 **Where it lives:** `energy_plan_actuation.ev_overlay` (**fixed**: `departure_floor` — the
-departure floor does not outrank a covered plan; the blocks lead while `blocks_hold`, and the even
-floor returns when they cannot hold the need or the floor is unreachable). Both coordinator sites
-(primary and per-charger) pass it from the same plan's `to_departure` (**fixed**). `decide.py`
-`_departure_floor` (**fixed**: a plan hold keeps a sun offer below the floor) and the Solar +
-cheapest hours cheap-hour day branch (**fixed**: a hold no longer returns the wait over a sun
-offer). Help text in 16 languages and the guides say the plan's hours are used.
-**Guard:** `tests/test_1415_departure_follows_plan.py` — the reporter's prices through the real
-packer (blocks 12:15–13:15 at 37.26 kW, as in the diagnostics), `plan_gate`, `plan_night_charge`,
-`ev_overlay` and `decide`: the car waits before the block and names its start, charges at the
-block's power inside it, in every grid mode; the sun charges while it waits in every price level;
-blocks that cannot hold the need, an unreachable departure and an uncovered plan give back the
-even floor; a night forcing deadline still outranks the plan; AST: every `ev_overlay` call passes
-`departure_floor`, read from the plan whose `deadline_active` it passes. 20 of 21 fail on the old
-code; with only the overlay line put back, 13 fail; with only `decide.py` put back, 3 fail.
+departure floor does not outrank a covered plan; inside a block the floor is the block's power).
+The wait has one more rule, `departure_wait_is_safe` (review BLOCKER): before a departure nothing
+charges after a failed plan, and above the measured range the plan's power is the nameplate (the
+reporter's 54 A read 37 kW). So the car waits only while the even floor could still land from the
+next block's start at 80 % of the most it was seen to draw (`DEPARTURE_WAIT_MARGIN`); no measured
+table, no wait. `apply_ev_overlay` (**new**): both coordinator sites call it, and it reads
+`reachable`, `deadline_active`, `to_departure` and `charge_end_dt` off the plan it writes, so no
+site can forget a flag. `plan_night_charge` (**fixed**): after the night end the floor's amps come
+from the measured table (12 A bought 7.5 kW, not 8.3; the current rose in the last half hour); the
+night is unchanged. `decide.py` `_departure_floor` and the Solar + cheapest hours cheap-hour day
+branch (**fixed**: a hold keeps a sun offer). Help text in 16 languages and the guides.
+**Guard:** `tests/test_1415_departure_follows_plan.py` — the reporter's prices and measured table
+through the real packer, `plan_gate`, `plan_night_charge`, `apply_ev_overlay` and `decide`, both
+as reported (54 A: blocks 12:15–13:15 at 37.26 kW, no wait) and with Max Amps right (waits for
+12:15, charges at 20 A in the block, every grid mode, sun charges while it waits); minute-by-minute
+runs to 15:00 for needs of 4–28 kWh and for cars at 80–100 % of their measured draw: never further
+from full than develop; no table, blocks that cannot hold the need, an unreachable departure and an
+uncovered plan give the even floor; a night forcing deadline still outranks the plan; AST: only
+the helper calls `ev_overlay`, and each site hands it the plan its own function computed. With the
+bypass removed 14 tests fail, the wait rule 6, `decide.py` 3, the measured floor 1.
 **Left open:** a forcing *Charge by* at night (before the night end) still outranks a covered
 plan, as #638 G4 chose (pinned in `test_638_actuation.py` and `test_1282_exact_plan_watts.py`).
-Whether the plan should lead there too is a choice, not filed.
-Refs #1415 #1308 #638.
+Whether the plan should lead there too is a choice, not filed. The night floor still counts
+nameplate W/A; the hours after the night end make up for it.
+Refs #1415 #1308 #638 #904 #846.
 
 ### 182. One word, several meanings, each decided where it is used — "cheap" — GUARDED
 

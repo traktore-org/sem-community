@@ -490,7 +490,7 @@
           "ev_phase_switch_value_1p": "Co zapsat do přepínací entity pro 1fázové nabíjení — název volby selectu, hodnota number nebo on/off. Povinné pro entity select; výchozí number 1, switch off.",
           "ev_phase_switch_value_3p": "Co zapsat do přepínací entity pro 3fázové nabíjení — název volby selectu, hodnota number nebo on/off. Povinné pro entity select; výchozí number 3, switch on.",
           "ev_phase_switching_enabled": "Ve výchozím stavu vypnuto, dokud se přepracovává model 1/3 fází (u některých značek to pozastavilo nabíječky, které se už nerozběhly). Zapněte pro otestování na své nabíječce.",
-          "finish_by_departure": "Ve výchozím stavu vypnuto. Zapnuto: SEM nabíjí po konci noci dál až do času „Nabít do“, ze sítě za denní cenu. Nabíjí v nejlevnějších hodinách plánu; bez plánu proudem, který právě stačí."
+          "finish_by_departure": "Ve výchozím stavu vypnuto. Zapnuto: SEM nabíjí po konci noci dál až do času „Nabít do“, ze sítě za denní cenu. Když zbývá čas, čeká na nejlevnější hodiny plánu; jinak nabíjí proudem, který právě stačí."
         }
       },
       "ev_charger_add": {
@@ -557,7 +557,7 @@
           "ev_phase_switch_value_1p": "Co zapsat do přepínací entity pro 1fázové nabíjení — název volby selectu, hodnota number nebo on/off. Povinné pro entity select; výchozí number 1, switch off.",
           "ev_phase_switch_value_3p": "Co zapsat do přepínací entity pro 3fázové nabíjení — název volby selectu, hodnota number nebo on/off. Povinné pro entity select; výchozí number 3, switch on.",
           "ev_phase_switching_enabled": "Ve výchozím stavu vypnuto, dokud se přepracovává model 1/3 fází (u některých značek to pozastavilo nabíječky, které se už nerozběhly). Zapněte pro otestování na své nabíječce.",
-          "finish_by_departure": "Ve výchozím stavu vypnuto. Zapnuto: SEM nabíjí po konci noci dál až do času „Nabít do“, ze sítě za denní cenu. Nabíjí v nejlevnějších hodinách plánu; bez plánu proudem, který právě stačí."
+          "finish_by_departure": "Ve výchozím stavu vypnuto. Zapnuto: SEM nabíjí po konci noci dál až do času „Nabít do“, ze sítě za denní cenu. Když zbývá čas, čeká na nejlevnější hodiny plánu; jinak nabíjí proudem, který právě stačí."
         }
       },
       "pv_naming": {
