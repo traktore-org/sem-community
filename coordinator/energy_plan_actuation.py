@@ -320,7 +320,7 @@ def ev_overlay(
 
 
 #: (#1415) Share of the car's known draw the even floor may count on after a
-#: wait. A start takes minutes (Zaptec answers through its cloud), and a car
+#: wait. A start takes minutes (a cloud charger answers late), and a car
 #: can draw less than its best, cold or near full. Replayed minute by minute
 #: on the reporter's day, a car at 80 % of its measured draw still lands
 #: as well as with the floor that never waited.
@@ -390,6 +390,8 @@ def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
     if wait:
         plan.should_wait_for_cheap = True
         plan.next_cheap_start = gate.next_block_start
+        # CAUSE: ``wait`` is ev_overlay's answer for this gate: not in a
+        # block, and blocks_hold says the remaining blocks hold the need.
         plan.reason = (
             "joint energy plan: outside the planned window — waiting "
             f"({gate.remaining_kwh:.1f} kWh still deliverable)")
