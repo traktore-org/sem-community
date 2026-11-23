@@ -937,7 +937,10 @@ def night_top_up_decision(view: "ChargerView", mode_name: str,
     # Safe to obey unconditionally: ``energy_plan_actuation.ev_overlay``
     # only raises ``hold`` after PROVING the remaining blocks can still
     # deliver what is owed, and stands down entirely for a forcing
-    # deadline or an unreachable floor. A hold is never a mere preference.
+    # deadline or an unreachable floor. (#1415) The one forcing deadline it
+    # may hold is the departure floor after the night end, and only while
+    # the even floor could still land from the next block's start at the
+    # car's measured draw. A hold is never a mere preference.
     if view.plan.hold:
         detail = f" — {view.plan.reason}" if view.plan.reason else ""
         if view.plan.until is not None:

@@ -53,6 +53,22 @@ def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
     return result if isinstance(result, datetime) else None
 
 
+def _wpa_table_or_none(host: Any, cfg: dict) -> Optional[dict]:
+    """(#1415) ``host._wpa_table_for(cid)``, the charger's measured
+    ``{amps: W/A}`` table, or ``None`` for a test double without it. Same
+    defensive shape as :func:`_calendar_next_for`: only a real dict
+    counts. The primary charger without an id is ``ev_charger``, as at
+    the overlay site."""
+    fn = getattr(host, "_wpa_table_for", None)
+    if not callable(fn):
+        return None
+    try:
+        table = fn(str((cfg or {}).get("id") or "ev_charger"))
+    except (AttributeError, TypeError, ValueError, KeyError):
+        return None
+    return table if isinstance(table, dict) and table else None
+
+
 def amps_from_headroom(
     headroom_w: float,
     watts_per_amp: float,
@@ -500,6 +516,9 @@ class EVControlMixin:
             # caller is in the gap after the night end.
             finish_by_departure=bool(cfg.get("finish_by_departure", False)),
             night_over=bool(night_over),
+            # (#1415) the departure floor's amps by this charger's measured
+            # draw, not the nameplate.
+            wpa_table=_wpa_table_or_none(self, cfg),
         )
         return plan
 

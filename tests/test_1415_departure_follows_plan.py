@@ -10,16 +10,18 @@ Cause: after the night end the departure floor is a forcing deadline
 for every forcing deadline. So the plan's blocks never reached the charger:
 no wait before them, no floor inside them.
 
-Now the departure floor yields to a plan that covers the car: the car
-waits for its block while the blocks still hold the need, and charges at
-the block's power inside it. The sun still charges while it waits. The
-even floor comes back the moment the blocks cannot hold the need, and for
-an unreachable floor. A forcing deadline at night is unchanged.
+Now the departure floor yields to a plan that covers the car: inside a
+block the car charges at the block's power; before it the car waits, but
+only while the even floor could still land from the block's start at the
+most this car has been seen to draw (review: before a departure nothing
+charges after the plan fails, and above the measured range the plan's
+power is the nameplate — the reporter's 54 A read 37 kW). The sun still
+charges while it waits. A forcing deadline at night is unchanged.
 
-The chain is the real one: the reporter's prices → ``pack_night`` →
-``plan_blocks`` → the stamped dict → ``plan_gate`` → ``plan_night_charge``
-→ ``ev_overlay`` → the coordinator's write onto the plan →
-``verdict_from_night_plan`` → ``decide``.
+The chain is the real one: the reporter's prices and measured W/A table →
+``pack_night`` → ``plan_blocks`` → the stamped dict → ``plan_gate`` →
+``plan_night_charge`` → ``apply_ev_overlay`` (the coordinator's one helper)
+→ ``verdict_from_night_plan`` → ``decide``.
 """
 from __future__ import annotations
 
@@ -41,6 +43,10 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
 )
 from custom_components.solar_energy_management.coordinator.decide import decide
 from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
+    DEPARTURE_WAIT_MARGIN,
+    PlanGate,
+    apply_ev_overlay,
+    departure_wait_is_safe,
     ev_overlay,
     plan_blocks,
     plan_gate,
@@ -57,6 +63,9 @@ from custom_components.solar_energy_management.coordinator.ev_tariff_planner imp
 from custom_components.solar_energy_management.coordinator.plan_verdict import (
     verdict_from_night_plan,
 )
+from custom_components.solar_energy_management.coordinator.watts_per_amp import (
+    predict_watts,
+)
 
 from .ast_contracts import call_sites
 
@@ -64,10 +73,13 @@ AMS = ZoneInfo("Europe/Amsterdam")
 DAY = datetime(2026, 11, 23, tzinfo=AMS)
 STAMP = DAY.replace(hour=11, minute=15, second=3)    # the diagnostics' computed_at
 DEPARTURE = DAY.replace(hour=15, minute=0)
+WAITING = DAY.replace(hour=11, minute=20)
 EV = "ev:zaptec_9330108264"
-WPA = 3 * 230.0          # the nameplate W/A the floor counts with
-MIN_A, MAX_A = 6, 54      # "Zaptec Charger Max Amps" 54 A in the diagnostics
-NEED_KWH = 30.22         # the plan row's needed_kwh at 11:15
+WPA = 3 * 230.0          # the nameplate W/A the even floor counts with
+MIN_A = 6
+#: the reporter's measured W/A table (3 phases) from the diagnostics
+TABLE = {12: 625.0, 20: 529.6}
+TOP_W = 20 * 529.6       # the most this car was seen to draw: 10.6 kW
 
 #: the reporter's quarter-hour prices from the diagnostics (EUR/kWh)
 PRICES = {
@@ -78,270 +90,403 @@ PRICES = {
 }
 
 
-def _ledger():
-    slots = []
-    for (h, m), price in sorted(PRICES.items()):
-        start = DAY.replace(hour=h, minute=m)
-        slots.append(LedgerSlot(start=max(start, STAMP),
-                                end=start + timedelta(minutes=15),
-                                price=price, home_w=700.0))
-    return build_night_ledger(slots, soc_kwh=0.0, floor_kwh=0.0,
-                              max_discharge_w=0.0, peak_limit_w=40_000.0)
+class Setup:
+    """One charger setting and one need, packed by the real packer."""
+
+    def __init__(self, max_a, need):
+        self.max_a, self.need = max_a, need
+        ledger = []
+        for (h, m), price in sorted(PRICES.items()):
+            start = DAY.replace(hour=h, minute=m)
+            ledger.append(LedgerSlot(start=max(start, STAMP),
+                                     end=start + timedelta(minutes=15),
+                                     price=price, home_w=700.0))
+        ledger = build_night_ledger(ledger, soc_kwh=0.0, floor_kwh=0.0,
+                                    max_discharge_w=0.0, peak_limit_w=40_000.0)
+        demand = Demand(
+            id=EV, kind="ev", energy_kwh=need,
+            # (#846) the coordinator sizes the demand from the table
+            max_power_w=predict_watts(TABLE, max_a, WPA),
+            min_power_w=predict_watts(TABLE, MIN_A, WPA),
+            deadline=DEPARTURE, priority=1, source="grid",
+            min_run_s=900, min_gap_s=900)
+        packed = pack_night([demand], ledger, peak_limit_w=40_000.0)
+        self.stamped = {
+            "computed_at": STAMP.isoformat(),
+            "demands": [{"id": r.demand_id, "status": r.status}
+                        for r in packed.results],
+            "slots": [{"start": s.start.isoformat(), "end": s.end.isoformat()}
+                      for s in ledger],
+            "blocks": plan_blocks(packed.allocations),
+        }
+
+    def blocks(self):
+        return [(datetime.fromisoformat(b["start"]),
+                 datetime.fromisoformat(b["end"]), float(b["power_w"]))
+                for b in self.stamped["blocks"] if b["id"] == EV]
+
+    def gap_plan(self, now, need, *, table=TABLE):
+        """The coordinator's plan after the night end (``night_over``)."""
+        return plan_night_charge(
+            now=now, remaining_to_min_kwh=need, min_amps=MIN_A,
+            max_amps=self.max_a, watts_per_amp=WPA, target_time="15:00",
+            night_end="07:00", night_start="17:06", tariff_optimized=True,
+            peak_managed_amps=self.max_a, deadline_at=DEPARTURE,
+            finish_by_departure=True, night_over=True, wpa_table=table)
+
+    def overlaid(self, now, need, *, table=TABLE):
+        plan = self.gap_plan(now, need, table=table)
+        gate = plan_gate(self.stamped, EV, now)
+        apply_ev_overlay(plan, gate, remaining_kwh=need, watts_per_amp=WPA,
+                         min_amps=MIN_A, max_amps=self.max_a,
+                         wpa_table=table, nominal_wpa=WPA)
+        return plan, gate
+
+    def view(self, plan, need, *, mode="solar_plus_cheap", solar_w=0.0,
+             tariff_level="normal"):
+        return ChargerView(
+            power=ChargerPower(charger_id="zaptec_9330108264", power_w=0.0,
+                               connected=True, charging=False),
+            energy=ChargerEnergy(charger_id="zaptec_9330108264"),
+            mode=mode,
+            config={"ev_min_current": MIN_A, "ev_phases": 3,
+                    "ev_voltage": 230, "ev_max_current": self.max_a},
+            fleet=FleetContext(
+                solar_w=solar_w, home_w=700.0, battery_charge_w=0.0,
+                battery_discharge_w=0.0, battery_soc=0.0,
+                is_night=False, tariff_level=tariff_level,
+                battery_assist_max_power_w=0.0,
+                battery_assist_min_surplus_w=1200.0,
+            ),
+            target_kwh=need,
+            deadline_amps=plan.deadline_amps,
+            departure_floor=bool(plan.to_departure),
+            top_up_amps=plan.top_up_amps,
+            plan=verdict_from_night_plan(plan),
+        )
+
+    def decide_at(self, now, need, *, table=TABLE, **view_kw):
+        plan, gate = self.overlaid(now, need, table=table)
+        return decide(self.view(plan, need, **view_kw)), plan, gate
+
+    def run_to_departure(self, *, car_w, start=WAITING, old=False):
+        """Minute by minute to 15:00: the car draws what the table says the
+        commanded amps buy, at most ``car_w``. ``old`` = develop: the
+        overlay stood down for the departure floor, and the floor counted
+        690 W/A. kWh left."""
+        now, need = start, self.need
+        while now < DEPARTURE and need > 0.05:
+            plan = self.gap_plan(now, need, table=None if old else TABLE)
+            if not old:
+                plan, _ = self.overlaid(now, need)
+            d = decide(self.view(plan, need))
+            if d.intent is ChargerIntent.CHARGE_AT_AMPS:
+                need -= min(predict_watts(TABLE, d.commanded_amps, WPA),
+                            car_w) / 1000.0 / 60.0
+            now += timedelta(minutes=1)
+        return max(0.0, need)
 
 
-def _stamped():
-    """The dict ``_shadow_energy_plan`` stores, packed by the real packer."""
-    ledger = _ledger()
-    demand = Demand(id=EV, kind="ev", energy_kwh=NEED_KWH,
-                    max_power_w=MAX_A * WPA, min_power_w=MIN_A * WPA,
-                    deadline=DEPARTURE, priority=1, source="grid",
-                    min_run_s=900, min_gap_s=900)
-    plan = pack_night([demand], ledger, peak_limit_w=40_000.0)
-    return {
-        "computed_at": STAMP.isoformat(),
-        "demands": [{"id": r.demand_id, "status": r.status} for r in plan.results],
-        "slots": [{"start": s.start.isoformat(), "end": s.end.isoformat()}
-                  for s in ledger],
-        "blocks": plan_blocks(plan.allocations),
-    }
+#: Max Amps set to the car's real 20 A; the car owes 12 kWh — the plan
+#: books it in the cheapest hours, from 12:15.
+FIXED = Setup(20, 12.0)
+#: the diagnostics as reported: Max Amps 54 A, 30.22 kWh owed.
+REPORTED = Setup(54, 30.22)
+#: 20 kWh owed: the even floor (8 A) is above a 5 kW sun's 6 A.
+SUN = Setup(20, 20.0)
 
 
-@pytest.fixture(scope="module")
-def stamped():
-    p = _stamped()
-    assert p["demands"] == [{"id": EV, "status": "fits"}]
-    return p
+def test_the_setups_are_what_the_diagnostics_say():
+    assert FIXED.stamped["demands"] == [{"id": EV, "status": "fits"}]
+    assert FIXED.blocks()[0][0] == DAY.replace(hour=12, minute=15)
+    # the reporter's card: 12:15–13:15 at 37.26 kW (54 A × 690 W/A)
+    assert REPORTED.blocks()[0][:2] == (DAY.replace(hour=12, minute=15),
+                                        DAY.replace(hour=12, minute=30))
+    assert REPORTED.blocks()[0][2] == pytest.approx(54 * WPA)
+    assert REPORTED.blocks()[-1][1] == DAY.replace(hour=13, minute=15)
 
 
-def _blocks(p):
-    return [(datetime.fromisoformat(b["start"]), datetime.fromisoformat(b["end"]),
-             float(b["power_w"])) for b in p["blocks"] if b["id"] == EV]
+# ── the fix: the plan leads ────────────────────────────────────────
 
 
-def _gap_plan(now, need):
-    """The coordinator's plan after the night end (``night_over``)."""
-    return plan_night_charge(
-        now=now, remaining_to_min_kwh=need, min_amps=MIN_A, max_amps=MAX_A,
-        watts_per_amp=WPA, target_time="15:00", night_end="07:00",
-        night_start="17:06", tariff_optimized=True, peak_managed_amps=MAX_A,
-        deadline_at=DEPARTURE, finish_by_departure=True, night_over=True)
-
-
-def _overlay(gate, plan, need, *, departure_floor=None):
-    """``ev_overlay`` exactly as both coordinator sites call it."""
-    return ev_overlay(
-        gate, remaining_kwh=need, reachable=plan.reachable,
-        deadline_active=plan.deadline_active,
-        departure_floor=(bool(getattr(plan, "to_departure", False))
-                         if departure_floor is None else departure_floor),
-        watts_per_amp=WPA, min_amps=MIN_A, max_amps=MAX_A,
-        nominal_wpa=WPA)
-
-
-def _apply(plan, gate, wait, floor):
-    """The coordinator's write of the overlay onto the plan (both sites)."""
-    if wait:
-        plan.should_wait_for_cheap = True
-        plan.next_cheap_start = gate.next_block_start
-        plan.reason = "joint energy plan: outside the planned window — waiting"
-    elif floor > 0:
-        plan.should_wait_for_cheap = False
-        plan.deadline_amps = max(plan.deadline_amps, floor)
-        plan.reason = f"joint energy plan: in planned window — floor {floor}A"
-    return plan
-
-
-def _view(plan, need, *, mode="solar_plus_cheap", solar_w=0.0,
-          tariff_level="normal"):
-    return ChargerView(
-        power=ChargerPower(charger_id="zaptec_9330108264", power_w=0.0,
-                           connected=True, charging=False),
-        energy=ChargerEnergy(charger_id="zaptec_9330108264"),
-        mode=mode,
-        config={"ev_min_current": MIN_A, "ev_phases": 3, "ev_voltage": 230,
-                "ev_max_current": MAX_A},
-        fleet=FleetContext(
-            solar_w=solar_w, home_w=700.0, battery_charge_w=0.0,
-            battery_discharge_w=0.0, battery_soc=0.0,
-            is_night=False, tariff_level=tariff_level,
-            battery_assist_max_power_w=0.0,
-            battery_assist_min_surplus_w=1200.0,
-        ),
-        target_kwh=need,
-        deadline_amps=plan.deadline_amps,
-        departure_floor=bool(plan.to_departure),
-        top_up_amps=plan.top_up_amps,
-        plan=verdict_from_night_plan(plan),
-    )
-
-
-def _decide_at(stamped, now, need, **view_kw):
-    plan = _gap_plan(now, need)
-    gate = plan_gate(stamped, EV, now)
-    _apply(plan, gate, *_overlay(gate, plan, need))
-    return decide(_view(plan, need, **view_kw)), plan, gate
-
-
-# ── the reporter's morning ─────────────────────────────────────────
-
-
-def test_the_plan_books_the_cheap_hours_not_now(stamped):
-    first = _blocks(stamped)[0][0]
-    assert first > STAMP + timedelta(minutes=30), (
-        "the packer must leave the dear first hour free for this test")
-
-
-def test_before_the_block_the_car_waits_for_it(stamped):
-    """11:20: before the plan's first block. The old floor charged at
-    once; now the car waits, and the reason names the block's start."""
-    now = DAY.replace(hour=11, minute=20)
-    first = _blocks(stamped)[0][0]
-    d, plan, gate = _decide_at(stamped, now, NEED_KWH)
+def test_before_the_block_the_car_waits_for_it():
+    """11:20: the old floor charged at once; now the car waits, and the
+    reason names the block's start."""
+    d, plan, gate = FIXED.decide_at(WAITING, FIXED.need)
     assert plan.to_departure and plan.deadline_active
     assert gate.covered and not gate.in_block
     assert d.intent is ChargerIntent.IDLE
     assert d.reason_code == RC.CHARGER_PLAN_WAIT_UNTIL
-    assert d.reason_params == {"time": f"{first:%H:%M}"}
+    assert d.reason_params == {"time": "12:15"}
 
 
-def test_the_old_wiring_charged_at_once(stamped):
-    """Twin: without the flag the overlay stands down for the departure's
-    forcing deadline, and the even floor charges from 11:20."""
-    now = DAY.replace(hour=11, minute=20)
-    plan = _gap_plan(now, NEED_KWH)
-    gate = plan_gate(stamped, EV, now)
-    assert _overlay(gate, plan, NEED_KWH, departure_floor=False) == (False, 0)
-    d = decide(_view(plan, NEED_KWH))
+def test_the_old_wiring_charged_at_once():
+    """Twin: with the overlay standing down for the departure's forcing
+    deadline, the even floor charges from 11:20."""
+    plan = FIXED.gap_plan(WAITING, FIXED.need)
+    gate = plan_gate(FIXED.stamped, EV, WAITING)
+    assert ev_overlay(gate, remaining_kwh=FIXED.need, reachable=True,
+                      deadline_active=True, departure_floor=False,
+                      watts_per_amp=WPA, min_amps=MIN_A,
+                      max_amps=20) == (False, 0)
+    d = decide(FIXED.view(plan, FIXED.need))
     assert d.intent is ChargerIntent.CHARGE_AT_AMPS
     assert d.reason_code == RC.CHARGER_DEADLINE
-    hours = (DEPARTURE - now).total_seconds() / 3600.0
-    assert d.commanded_amps == math.ceil(NEED_KWH * 1000 / hours / WPA)
 
 
-def test_inside_the_block_the_car_charges_at_the_blocks_power(stamped):
-    """15 minutes into the first block: the floor is the block's power,
-    not the even spread to 15:00."""
-    start, end, power_w = _blocks(stamped)[0]
+def test_inside_the_block_the_car_charges_at_the_blocks_power():
+    """15 minutes into the block: the block's power, not the even spread."""
+    start, _, power_w = FIXED.blocks()[0]
     now = start + timedelta(minutes=15)
-    need = NEED_KWH - power_w / 1000.0 * 0.25
-    d, plan, gate = _decide_at(stamped, now, need)
+    need = FIXED.need - power_w / 1000.0 * 0.25
+    d, plan, gate = FIXED.decide_at(now, need)
     assert gate.in_block
     hours = (DEPARTURE - now).total_seconds() / 3600.0
-    even = math.ceil(need * 1000 / hours / WPA)
-    block = min(MAX_A, math.ceil(gate.block_power_w / WPA))
-    assert block > even
     assert d.intent is ChargerIntent.CHARGE_AT_AMPS
-    assert d.commanded_amps == block
-
-
-# ── the sun while it waits ─────────────────────────────────────────
+    assert d.commanded_amps == 20 > math.ceil(need * 1000 / hours / WPA)
 
 
 @pytest.mark.parametrize("tariff_level", ["normal", "cheap", "expensive"])
-def test_the_sun_still_charges_while_the_plan_waits(stamped, tariff_level):
-    """A hold holds the GRID charge only. 5 kW of sun (6 A, below the 12 A
-    even floor) keeps its offer in every price level."""
-    now = DAY.replace(hour=11, minute=20)
-    d, plan, _ = _decide_at(stamped, now, NEED_KWH, solar_w=5000.0,
-                            tariff_level=tariff_level)
+def test_the_sun_still_charges_while_the_plan_waits(tariff_level):
+    """A hold holds the GRID charge only. 5 kW of sun (6 A) keeps its
+    offer in every price level; in a cheap hour it used to lose to the
+    wait, and below the floor it used to lose to it."""
+    assert SUN.blocks()[0][0] > WAITING
+    d, plan, _ = SUN.decide_at(WAITING, SUN.need, solar_w=5000.0,
+                               tariff_level=tariff_level)
     assert plan.should_wait_for_cheap
     assert 0 < d.commanded_amps < plan.deadline_amps
     assert d.intent is ChargerIntent.CHARGE_AT_AMPS
     assert d.reason_code != RC.CHARGER_DEADLINE
 
 
-@pytest.mark.parametrize("mode", ["solar_only", "min_plus_solar",
-                                  "solar_plus_battery", "solar_plus_cheap"])
-def test_every_grid_mode_waits_without_sun(stamped, mode):
-    now = DAY.replace(hour=11, minute=20)
-    d, _, _ = _decide_at(stamped, now, NEED_KWH, mode=mode)
+MODES = ["solar_only", "min_plus_solar", "solar_plus_battery", "solar_plus_cheap"]
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_every_grid_mode_waits_without_sun(mode):
+    d, _, _ = FIXED.decide_at(WAITING, FIXED.need, mode=mode)
     assert d.intent is ChargerIntent.IDLE
     assert d.reason_code == RC.CHARGER_PLAN_WAIT_UNTIL
 
 
-@pytest.mark.parametrize("mode", ["solar_only", "min_plus_solar",
-                                  "solar_plus_battery", "solar_plus_cheap"])
-def test_every_grid_mode_charges_at_the_block(stamped, mode):
-    start, _, power_w = _blocks(stamped)[0]
+@pytest.mark.parametrize("mode", MODES)
+def test_every_grid_mode_charges_at_the_block(mode):
+    start, _, power_w = FIXED.blocks()[0]
     now = start + timedelta(minutes=5)
-    need = NEED_KWH - power_w / 1000.0 / 12.0
-    d, _, gate = _decide_at(stamped, now, need, mode=mode)
+    d, _, _ = FIXED.decide_at(now, FIXED.need - power_w / 1000.0 / 12.0,
+                              mode=mode)
     assert d.intent is ChargerIntent.CHARGE_AT_AMPS
-    assert d.commanded_amps == min(MAX_A, math.ceil(gate.block_power_w / WPA))
+    assert d.commanded_amps == 20
 
 
-# ── what still ends the wait ───────────────────────────────────────
+# ── review: a wait must never cost the departure ───────────────────
 
 
-def test_blocks_that_cannot_hold_the_need_give_back_the_even_floor(stamped):
-    """The car drew less than planned: the blocks left cannot deliver what
-    is owed. The even floor to 15:00 charges at once."""
-    now = DAY.replace(hour=11, minute=20)
-    gate = plan_gate(stamped, EV, now)
-    need = gate.remaining_kwh + 1.0
-    d, plan, _ = _decide_at(stamped, now, need)
+def test_the_reported_plan_is_not_waited_for():
+    """54 A read as 37 kW; the car was seen at 10.6 kW at most. From 12:15
+    that cannot land 30.22 kWh by 15:00, so the even floor charges at once,
+    as before."""
+    d, plan, gate = REPORTED.decide_at(WAITING, REPORTED.need)
+    assert gate.covered and not gate.in_block
     assert not plan.should_wait_for_cheap
     assert d.intent is ChargerIntent.CHARGE_AT_AMPS
     assert d.reason_code == RC.CHARGER_DEADLINE
 
 
+def test_the_even_floor_counts_the_cars_measured_draw():
+    """The log: "deadline floor 12A, remaining 28.4 kWh" at 11:30, and 12 A
+    drew 7463 W. 8.1 kW over 3.5 h needs 14 A on this car (8.3 kW by its
+    table), not 12. At night the floor is unchanged."""
+    now = DAY.replace(hour=11, minute=30)
+    need = 28.4
+    assert REPORTED.gap_plan(now, need, table=None).deadline_amps == 12
+    assert REPORTED.gap_plan(now, need).deadline_amps == 14
+    assert predict_watts(TABLE, 14, WPA) * 3.5 >= need * 1000
+    night = plan_night_charge(
+        now=DAY.replace(hour=2, minute=0), remaining_to_min_kwh=need,
+        min_amps=MIN_A, max_amps=54, watts_per_amp=WPA, night_end="07:00",
+        night_start="17:06", deadline_at=DEPARTURE, finish_by_departure=True)
+    assert not night.to_departure
+    assert night.deadline_amps == plan_night_charge(
+        now=DAY.replace(hour=2, minute=0), remaining_to_min_kwh=need,
+        min_amps=MIN_A, max_amps=54, watts_per_amp=WPA, night_end="07:00",
+        night_start="17:06", deadline_at=DEPARTURE, finish_by_departure=True,
+        wpa_table=TABLE).deadline_amps
+
+
+def test_the_coordinator_hands_the_planner_the_table():
+    from custom_components.solar_energy_management.coordinator.ev_control import (
+        EVControlMixin,
+    )
+
+    from .ast_contracts import call_kwargs
+    kwargs = call_kwargs(EVControlMixin._compute_night_plan, "plan_night_charge")
+    assert kwargs and all("wpa_table" in kw for kw in kwargs)
+
+
+@pytest.mark.parametrize("car_w", [TOP_W, 10_000.0, 9_000.0, 0.8 * TOP_W])
+def test_the_reported_plan_lands_as_well_as_the_old_floor(car_w):
+    """The review's minute-by-minute run, down to a car at 80 % of its
+    measured draw: never further from full than develop. (SEM counts
+    0.1 kWh or less as done.)"""
+    new = REPORTED.run_to_departure(car_w=car_w)
+    old = REPORTED.run_to_departure(car_w=car_w, old=True)
+    assert new <= max(old, 0.1)
+
+
+@pytest.mark.parametrize("need", [8.0, 16.0, 24.0])
+@pytest.mark.parametrize("share", [0.9, 0.8])
+def test_a_slower_car_lands_as_well_as_the_old_floor(need, share):
+    s = Setup(20, need)
+    new = s.run_to_departure(car_w=share * TOP_W)
+    old = s.run_to_departure(car_w=share * TOP_W, old=True)
+    assert new <= max(old, 0.1)
+
+
+@pytest.mark.parametrize("need", [4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.4])
+def test_any_need_lands_by_the_departure(need):
+    """Max Amps right, the car at its seen 10.6 kW: whatever the plan
+    books, the car is full at 15:00."""
+    s = Setup(20, need)
+    assert s.run_to_departure(car_w=TOP_W) <= 0.1
+
+
+def test_a_car_slower_than_planned_still_lands():
+    """The plan counts 10.6 kW; the car takes 8.5 kW (80 %): the even floor
+    after a failed block still makes 15:00."""
+    s = Setup(20, 12.0)
+    assert s.run_to_departure(car_w=0.8 * TOP_W) <= 0.1
+
+
+def test_the_wait_needs_room_for_the_even_floor_after_it():
+    gate = PlanGate(covered=True, remaining_kwh=30.0,
+                    next_block_start=DAY.replace(hour=12, minute=15))
+    hours = 2.75
+    room = TOP_W / 1000.0 * hours * DEPARTURE_WAIT_MARGIN
+    kw = dict(wpa_table=TABLE, nominal_wpa=WPA, max_amps=20)
+    assert departure_wait_is_safe(gate, room - 0.01, DEPARTURE, **kw)
+    assert not departure_wait_is_safe(gate, room + 0.01, DEPARTURE, **kw)
+
+
+def test_no_measured_draw_is_no_proof():
+    """A car SEM never measured (or a disputed phase belief: an empty
+    table) gets the even floor, the #1308 behaviour."""
+    gate = PlanGate(covered=True, remaining_kwh=30.0,
+                    next_block_start=DAY.replace(hour=12, minute=15))
+    assert not departure_wait_is_safe(gate, 1.0, DEPARTURE, wpa_table={},
+                                      nominal_wpa=WPA, max_amps=20)
+    d, plan, _ = FIXED.decide_at(WAITING, FIXED.need, table={})
+    assert not plan.should_wait_for_cheap
+    assert d.reason_code == RC.CHARGER_DEADLINE
+
+
+def test_only_setpoints_the_charger_may_use_count():
+    """A 20 A reading does not prove a 16 A charger's draw."""
+    gate = PlanGate(covered=True, remaining_kwh=10.0,
+                    next_block_start=DAY.replace(hour=12, minute=15))
+    kw = dict(nominal_wpa=WPA, max_amps=16)
+    assert not departure_wait_is_safe(gate, 20.0, DEPARTURE,
+                                      wpa_table={20: 529.6}, **kw)
+    assert departure_wait_is_safe(gate, 10.0, DEPARTURE,
+                                  wpa_table={12: 625.0, 20: 529.6}, **kw)
+
+
+def test_no_next_block_or_no_end_is_no_proof():
+    kw = dict(wpa_table=TABLE, nominal_wpa=WPA, max_amps=20)
+    gate = PlanGate(covered=True, remaining_kwh=10.0)
+    assert not departure_wait_is_safe(gate, 1.0, DEPARTURE, **kw)
+    gate = PlanGate(covered=True, remaining_kwh=10.0,
+                    next_block_start=DEPARTURE)
+    assert not departure_wait_is_safe(gate, 1.0, DEPARTURE, **kw)
+    assert not departure_wait_is_safe(gate, 1.0, None, **kw)
+
+
+# ── what still ends the wait ───────────────────────────────────────
+
+
+def test_blocks_that_cannot_hold_the_need_give_back_the_even_floor():
+    gate = plan_gate(FIXED.stamped, EV, WAITING)
+    need = gate.remaining_kwh + 1.0
+    d, plan, _ = FIXED.decide_at(WAITING, need)
+    assert not plan.should_wait_for_cheap
+    assert d.reason_code == RC.CHARGER_DEADLINE
+
+
 def test_an_unreachable_departure_is_never_held():
     now = DAY.replace(hour=14, minute=0)
-    plan = _gap_plan(now, 40.0)
-    assert plan.reachable is False
-    gate = plan_gate(_stamped(), EV, now)
-    assert gate.covered
-    assert _overlay(gate, plan, 40.0) == (False, 0)
+    plan, gate = FIXED.overlaid(now, 40.0)
+    assert plan.reachable is False and gate.covered
+    assert not plan.should_wait_for_cheap
 
 
 def test_an_uncovered_gap_keeps_the_even_floor():
     """No plan (actuation off, a stale stamp): the #1308 floor, as before."""
-    now = DAY.replace(hour=11, minute=20)
-    plan = _gap_plan(now, NEED_KWH)
-    assert _overlay(plan_gate(None, EV, now), plan, NEED_KWH) == (False, 0)
-    d = decide(_view(plan, NEED_KWH))
-    assert d.reason_code == RC.CHARGER_DEADLINE
+    plan = FIXED.gap_plan(WAITING, FIXED.need)
+    assert apply_ev_overlay(
+        plan, plan_gate(None, EV, WAITING), remaining_kwh=FIXED.need,
+        watts_per_amp=WPA, min_amps=MIN_A, max_amps=20,
+        wpa_table=TABLE, nominal_wpa=WPA) == (False, 0)
+    assert decide(FIXED.view(plan, FIXED.need)).reason_code == RC.CHARGER_DEADLINE
 
 
-def test_a_forcing_deadline_at_night_still_outranks_the_plan(stamped):
+def test_a_forcing_deadline_at_night_still_outranks_the_plan():
     """Only the departure floor yields. A Charge by before the night end
     keeps its seniority (#638 G4)."""
-    now = DAY.replace(hour=11, minute=20)
-    gate = plan_gate(stamped, EV, now)
-    assert ev_overlay(gate, remaining_kwh=NEED_KWH, reachable=True,
-                      deadline_active=True, departure_floor=False,
-                      watts_per_amp=WPA, min_amps=MIN_A,
-                      max_amps=MAX_A) == (False, 0)
-    assert ev_overlay(gate, remaining_kwh=NEED_KWH, reachable=True,
-                      deadline_active=True, watts_per_amp=WPA,
-                      min_amps=MIN_A, max_amps=MAX_A) == (False, 0)
+    gate = plan_gate(FIXED.stamped, EV, WAITING)
+    for kw in ({"departure_floor": False}, {}):
+        assert ev_overlay(gate, remaining_kwh=FIXED.need, reachable=True,
+                          deadline_active=True, watts_per_amp=WPA,
+                          min_amps=MIN_A, max_amps=20, wpa_table=TABLE,
+                          nominal_wpa=WPA, charge_end=DEPARTURE,
+                          **kw) == (False, 0)
+
+
+def test_the_helper_writes_what_the_night_path_reads():
+    plan, gate = FIXED.overlaid(WAITING, FIXED.need)
+    assert plan.should_wait_for_cheap is True
+    assert plan.next_cheap_start == gate.next_block_start
+    assert "outside the planned window" in plan.reason
+    start, _, power_w = FIXED.blocks()[0]
+    plan, _ = FIXED.overlaid(start + timedelta(minutes=5), FIXED.need - 1.0)
+    assert plan.should_wait_for_cheap is False
+    assert plan.deadline_amps == 20
+    assert "floor 20A" in plan.reason
 
 
 # ── the wiring ─────────────────────────────────────────────────────
 
 
-def test_every_overlay_call_passes_the_departure_flag():
-    sites = call_sites("ev_overlay")
-    assert len(sites) >= 2, sites
-    missing = [(f, n) for f, n, kws in sites if "departure_floor" not in kws]
-    assert not missing, f"ev_overlay without departure_floor at {missing}"
+def test_only_the_helper_calls_the_overlay():
+    """One place reads the plan's flags: every coordinator site goes
+    through ``apply_ev_overlay``."""
+    direct = [(f, n) for f, n, _ in call_sites("ev_overlay")]
+    assert direct and all(f.endswith("energy_plan_actuation.py")
+                          for f, _ in direct), direct
+    helper = [(f, n) for f, n, _ in call_sites("apply_ev_overlay")]
+    assert len([f for f, _ in helper if f.endswith("coordinator.py")]) >= 2
 
 
-def test_the_flag_comes_from_the_same_plan_as_the_deadline():
-    """Each coordinator site reads ``to_departure`` off the plan whose
-    ``deadline_active`` it passes — never a fleet or a context copy."""
+def test_each_site_overlays_the_plan_it_just_computed():
+    """The plan handed to the helper is the one the same function got from
+    ``_compute_night_plan`` — never another charger's or a context copy."""
     root = Path(__file__).resolve().parent.parent
     tree = ast.parse((root / "coordinator" / "coordinator.py").read_text(
         encoding="utf-8"))
     seen = 0
-    for n in ast.walk(tree):
-        if not (isinstance(n, ast.Call)
-                and getattr(n.func, "id", getattr(n.func, "attr", "")) == "ev_overlay"):
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        kw = {k.arg: k.value for k in n.keywords}
-        dl = kw["deadline_active"]
-        assert isinstance(dl, ast.Attribute) and isinstance(dl.value, ast.Name)
-        flag = ast.unparse(kw["departure_floor"])
-        assert "to_departure" in flag and dl.value.id in flag, flag
-        seen += 1
+        computed = {
+            t.id for n in ast.walk(fn) if isinstance(n, ast.Assign)
+            and isinstance(n.value, ast.Call)
+            and getattr(n.value.func, "attr", "") == "_compute_night_plan"
+            for t in n.targets if isinstance(t, ast.Name)}
+        for n in ast.walk(fn):
+            if (isinstance(n, ast.Call)
+                    and getattr(n.func, "id", "") == "apply_ev_overlay"):
+                arg = n.args[0]
+                assert isinstance(arg, ast.Name) and arg.id in computed, (
+                    fn.name, ast.unparse(arg), computed)
+                seen += 1
     assert seen >= 2
