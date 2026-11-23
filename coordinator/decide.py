@@ -1312,6 +1312,12 @@ class SolarPlusCheapMode(ModeStrategy):
                     and solar.commanded_amps >= grid.commanded_amps):
                 return replace(
                     solar, reason=f"{solar.reason} (cheap hour: solar offer wins)")
+            # (#1415) A plan hold by day (only after the night end, with
+            # *Finish by departure*) holds the GRID charge for a later
+            # block. It never stops the sun.
+            if (view.plan.hold
+                    and solar.intent is ChargerIntent.CHARGE_AT_AMPS):
+                return solar
             return grid
 
         # Day, normal tariff: solar surplus only (same as min_plus_solar
@@ -1455,14 +1461,21 @@ def _departure_floor(result: ChargerDecision, view: ChargerView) -> ChargerDecis
     gap (``departure_floor``), sized to just make the departure; the shared
     top-up decision charges at it from the grid. The sun keeps the offer
     when it gives at least the floor. Off, the flag is never set and the
-    day is what it was. ``off`` and ``always_max`` have nothing to add."""
+    day is what it was. ``off`` and ``always_max`` have nothing to add.
+
+    (#1415) When the joint plan covers the car, its blocks set the floor
+    (``ev_overlay``): inside a block the floor is the block's power, and
+    outside one the plan holds the grid charge for a later block. A hold
+    leaves the sun its whole offer; with no sun the car waits, and the
+    reason names the block's start."""
     if (not view.departure_floor or view.fleet.is_night
             or view.deadline_amps <= 0 or view.power.car_absent
             or view.mode in ("off", "always_max")
             or view.target_kwh is None or view.target_kwh <= 0.1):
         return result
     if (result.intent is ChargerIntent.CHARGE_AT_AMPS
-            and result.commanded_amps >= view.deadline_amps):
+            and (view.plan.hold
+                 or result.commanded_amps >= view.deadline_amps)):
         return result
     return night_top_up_decision(view, view.mode, phase="day (to departure)")
 

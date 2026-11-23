@@ -6960,6 +6960,34 @@ tomorrow preview packs load asks into any cheap hour (a curve, no blocks on the 
 banking flap of #1330 (class 47, above) needs a choice.
 Refs #1308 #1309 #246 #967 #1023 #501 #1330 #953 #1311.
 
+**Third catch (#1415, 23.11.2026):** blocks the plan books where the charger does not follow them.
+@RVallen78 (Zaptec, Solar + cheapest hours, *Finish by departure*, departure 15:00): the Energy
+Plan card showed the charge at 12:15–13:15, the cheapest hours; SEM charged at once, about 7.5 kW,
+spread evenly to 15:00. **Root shape:** after the night end `plan_night_charge` marks the departure
+floor (`to_departure`) as a forcing deadline, so the floor engages by day. `ev_overlay` stands
+down for every forcing deadline ("never hold back a charger that must run now"), so the covered
+plan's blocks reached neither signal: no wait before them, no floor inside them. One flag, two
+jobs: "engage the day floor" and "outranks the plan".
+**Where it lives:** `energy_plan_actuation.ev_overlay` (**fixed**: `departure_floor` — the
+departure floor does not outrank a covered plan; the blocks lead while `blocks_hold`, and the even
+floor returns when they cannot hold the need or the floor is unreachable). Both coordinator sites
+(primary and per-charger) pass it from the same plan's `to_departure` (**fixed**). `decide.py`
+`_departure_floor` (**fixed**: a plan hold keeps a sun offer below the floor) and the Solar +
+cheapest hours cheap-hour day branch (**fixed**: a hold no longer returns the wait over a sun
+offer). Help text in 16 languages and the guides say the plan's hours are used.
+**Guard:** `tests/test_1415_departure_follows_plan.py` — the reporter's prices through the real
+packer (blocks 12:15–13:15 at 37.26 kW, as in the diagnostics), `plan_gate`, `plan_night_charge`,
+`ev_overlay` and `decide`: the car waits before the block and names its start, charges at the
+block's power inside it, in every grid mode; the sun charges while it waits in every price level;
+blocks that cannot hold the need, an unreachable departure and an uncovered plan give back the
+even floor; a night forcing deadline still outranks the plan; AST: every `ev_overlay` call passes
+`departure_floor`, read from the plan whose `deadline_active` it passes. 20 of 21 fail on the old
+code; with only the overlay line put back, 13 fail; with only `decide.py` put back, 3 fail.
+**Left open:** a forcing *Charge by* at night (before the night end) still outranks a covered
+plan, as #638 G4 chose (pinned in `test_638_actuation.py` and `test_1282_exact_plan_watts.py`).
+Whether the plan should lead there too is a choice, not filed.
+Refs #1415 #1308 #638.
+
 ### 182. One word, several meanings, each decided where it is used — "cheap" — GUARDED
 
 **What happens.** Many places asked a tariff "is this hour cheap?" and each read a different part of

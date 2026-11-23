@@ -5408,6 +5408,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         remaining_kwh=pc_target,
                                         reachable=plan.reachable,
                                         deadline_active=plan.deadline_active,
+                                        # (#1415) after the night end the
+                                        # departure floor follows the plan.
+                                        departure_floor=bool(getattr(
+                                            plan, "to_departure", False)),
                                         watts_per_amp=_wpa,
                                         min_amps=int(charger_cfg.get("ev_min_current") or 6),
                                         max_amps=int(charger_cfg.get("ev_max_current")
@@ -16619,6 +16623,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     remaining_kwh=night_target,
                     reachable=night_plan.reachable,
                     deadline_active=night_plan.deadline_active,
+                    # (#1415) after the night end the departure floor
+                    # follows the plan.
+                    departure_floor=bool(getattr(
+                        night_plan, "to_departure", False)),
                     watts_per_amp=_wpa,
                     wpa_table=self._wpa_table_for(_pcid),   # (#904)
                     nominal_wpa=(float(_primary_cfg.get("ev_phases") or 3)

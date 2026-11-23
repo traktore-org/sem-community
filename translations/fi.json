@@ -490,7 +490,7 @@
           "ev_phase_switch_value_1p": "Mitä vaihtoentiteettiin kirjoitetaan 1-vaiheista latausta varten — selectin vaihtoehdon nimi, numberin arvo tai on/off. Pakollinen select-entiteeteille; numberin oletus 1, switchin off.",
           "ev_phase_switch_value_3p": "Mitä vaihtoentiteettiin kirjoitetaan 3-vaiheista latausta varten — selectin vaihtoehdon nimi, numberin arvo tai on/off. Pakollinen select-entiteeteille; numberin oletus 3, switchin on.",
           "ev_phase_switching_enabled": "Oletuksena pois, kun 1/3-vaihemallia uudistetaan (se pysäytti joillakin merkeillä laturit, jotka eivät enää jatkaneet). Kytke päälle testataksesi laturillasi.",
-          "finish_by_departure": "Oletuksena pois. Päällä: SEM jatkaa latausta yön päätyttyä 'Lataa mennessä' -aikaan asti, verkosta päivähintaan, juuri riittävällä virralla."
+          "finish_by_departure": "Oletuksena pois. Päällä: SEM jatkaa latausta yön päätyttyä 'Lataa mennessä' -aikaan asti, verkosta päivähintaan. Se lataa suunnitelman halvimpina tunteina; ilman suunnitelmaa juuri riittävällä virralla."
         }
       },
       "ev_charger_add": {
@@ -557,7 +557,7 @@
           "ev_phase_switch_value_1p": "Mitä vaihtoentiteettiin kirjoitetaan 1-vaiheista latausta varten — selectin vaihtoehdon nimi, numberin arvo tai on/off. Pakollinen select-entiteeteille; numberin oletus 1, switchin off.",
           "ev_phase_switch_value_3p": "Mitä vaihtoentiteettiin kirjoitetaan 3-vaiheista latausta varten — selectin vaihtoehdon nimi, numberin arvo tai on/off. Pakollinen select-entiteeteille; numberin oletus 3, switchin on.",
           "ev_phase_switching_enabled": "Oletuksena pois, kun 1/3-vaihemallia uudistetaan (se pysäytti joillakin merkeillä laturit, jotka eivät enää jatkaneet). Kytke päälle testataksesi laturillasi.",
-          "finish_by_departure": "Oletuksena pois. Päällä: SEM jatkaa latausta yön päätyttyä 'Lataa mennessä' -aikaan asti, verkosta päivähintaan, juuri riittävällä virralla."
+          "finish_by_departure": "Oletuksena pois. Päällä: SEM jatkaa latausta yön päätyttyä 'Lataa mennessä' -aikaan asti, verkosta päivähintaan. Se lataa suunnitelman halvimpina tunteina; ilman suunnitelmaa juuri riittävällä virralla."
         }
       },
       "pv_naming": {

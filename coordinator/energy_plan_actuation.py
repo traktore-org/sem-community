@@ -252,6 +252,7 @@ def ev_overlay(
     max_amps: int,
     wpa_table=None,
     nominal_wpa=None,
+    departure_floor: bool = False,
 ) -> Tuple[bool, int]:
     """The EV's joint-plan overlay → ``(wait, floor_amps)``.
 
@@ -272,6 +273,13 @@ def ev_overlay(
     - a forcing deadline (``deadline_active``) or an unreachable floor
       (``not reachable``) → ``(False, 0)`` — never hold back a charger
       the reactive planner says must run NOW;
+    - (#1415) except the *Finish by departure* floor after the night end
+      (``departure_floor``, the plan's ``to_departure``). That floor only
+      spreads the need evenly up to the departure, and the joint plan
+      packed the same departure into its cheapest hours. So the blocks
+      lead, under the same two rules below; the even floor comes back
+      the moment the blocks cannot hold the need. An unreachable floor
+      still releases.
     - inside a planned block → charge at least the planned power
       (ceil to amps, clamped to the charger's [min, max]);
     - outside a block → wait ONLY while the remaining blocks can still
@@ -282,7 +290,7 @@ def ev_overlay(
     """
     if not gate.covered:
         return (False, 0)
-    if deadline_active or not reachable:
+    if (deadline_active and not departure_floor) or not reachable:
         return (False, 0)
     if gate.in_block:
         wpa = max(1.0, float(watts_per_amp))

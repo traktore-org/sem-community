@@ -67,6 +67,8 @@ class NightChargePlan:
     charge_end_dt: Optional[datetime] = None
     # (#1308) *Finish by departure*, after the night end: the floor keeps
     # charging to the departure, at day price, and nothing faster.
+    # (#1415) It is the fallback: when the joint plan covers the car, its
+    # cheapest blocks before the departure lead (``ev_overlay``).
     to_departure: bool = False
     hours_to_deadline: Optional[float] = None
     remaining_kwh: float = 0.0
