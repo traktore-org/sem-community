@@ -467,6 +467,28 @@ def demand_signature_changed(old, new) -> bool:
         return True
 
 
+def signature_for_log(sig):
+    """(#1418) A demand signature as a log line. The price term is shown as
+    its size, its first and last time and a checksum, not as every (time,
+    price) pair: on a 15-minute market it holds up to ~190 pairs, and the
+    re-plan line printed two signatures in full."""
+    try:
+        import zlib
+        out = []
+        for term in sig:
+            if isinstance(term, tuple) and term and term[0] == "price":
+                pairs = tuple(term[1]) if len(term) > 1 else ()
+                keys = [p[0] for p in pairs if isinstance(p, tuple) and p]
+                span = f" {keys[0]}..{keys[-1]}" if keys else ""
+                out.append(("price", f"{len(pairs)} points{span} "
+                            f"#{zlib.crc32(repr(pairs).encode()):08x}"))
+            else:
+                out.append(term)
+        return tuple(out)
+    except Exception:  # noqa: BLE001 — a log line never breaks the cycle
+        return sig
+
+
 def _lifetime_ev_shares(lifetime: dict) -> dict:
     """The lifetime EV energy split, all three ways (#793).
 
@@ -1785,7 +1807,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         we return the memo or nameplate rather than commit the fleet-read
         class bug (docs/MULTI_CHARGER.md).
         """
-        nameplate = (float(cfg.get("ev_phases") or 3)
+        # (#1412) on the phases the grid charge will run on: the night plan
+        # sizes the car by this, and a charger that changes phases has no
+        # one nameplate
+        plan_phases = self._plan_phases_for(cid, cfg)
+        nameplate = (float(plan_phases or cfg.get("ev_phases") or 3)
                      * float(cfg.get("ev_voltage") or 230))
         chargers = self.config.get("ev_chargers") or []
         if power is not None and len(chargers) == 1:
@@ -1811,13 +1837,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # #716 EMA this accessor used to be, then nameplate.
         learner = getattr(self, "_wpa_learner", None)
         phases, _ok = self._wpa_phases_for(cid, cfg)
+        if plan_phases:
+            phases = plan_phases
         if learner is not None and phases:
             max_a = int(cfg.get("ev_max_current") or DEFAULT_MAX_CHARGING_CURRENT)
             if learner.watts_per_amp(cid, phases, max_a) is not None:
                 return learner.watts_for_amps(
                     cid, phases, max_a, phases * float(cfg.get("ev_voltage") or 230)) / max_a
         learned = self._ev_wpa_ema.get(cid)
-        return float(learned) if learned else nameplate
+        if not learned:
+            return nameplate
+        # (#1412) on a charger that changed phases, never more than the
+        # nameplate of the phases it runs on: an average learned on three
+        # phases is no draw on one. Other chargers read as before.
+        if plan_phases:
+            return min(float(learned), nameplate)
+        return float(learned)
 
     def request_replan(self) -> None:
         """(#638) The explicit re-plan action: the next cycle discards
@@ -5416,7 +5451,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         # learned ladder, not one bucket.
                                         wpa_table=self._wpa_table_for(cid),
                                         nominal_wpa=(
-                                            float(charger_cfg.get("ev_phases") or 3)
+                                            float(self._active_phases_for(cid, charger_cfg)
+                                                  or charger_cfg.get("ev_phases") or 3)
                                             * float(charger_cfg.get("ev_voltage") or 230)),
                                     )
                                 except Exception:  # noqa: BLE001 — overlay must
@@ -5537,6 +5573,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # override wins immediately via the priority store).
                             ev_priority=self._ev_priority_for(cid),
                             wpa_table=self._wpa_table_for(cid),
+                            # (#1412) the phases SEM set or measured
+                            active_phases=self._active_phases_for(cid),
                             # (#899) a redirect the meter contradicted stays
                             # off for the rest of this plug-in.
                             redirect_allowed=not bool(getattr(
@@ -5605,6 +5643,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             soc_ceiling_reached=per_target_reached,
                         )
                         decision = decide_v2(view)
+                        # (#1412) the decision's own source, before any layer
+                        # below re-stamps the reason: the phase tick asks it
+                        # whether the grid pays for this charge
+                        _decide_code = decision.reason_code
                         from .vpp_dispatch import vpp_pause_override
                         decision = vpp_pause_override(
                             decision, getattr(self, "_vpp_ev_override", None) == "pause")
@@ -5660,6 +5702,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # (#1015) the device that can set its phases
                                 # by one current per phase, when it can
                                 device=getattr(adapter, "_device", None),
+                                # (#1412) no sun to judge by: the charger
+                                # goes back to its configured phases
+                                is_night=bool(getattr(
+                                    view.fleet, "is_night", False)),
+                                source_code=_decide_code,
+                                # (#1407) the phases that carry the charge,
+                                # by the charger's own current on each
+                                leg_phases=self._charger_leg_phases(
+                                    cid, getattr(adapter, "_device", None),
+                                    view.power.power_w),
                             )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
@@ -5768,6 +5820,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         effective_state = _ov
                             else:
                                 _no_draw.pop(cid, None)
+                        # (#1381) off after the guard's stop: never "night
+                        # charging active" at 0 W
+                        from . import guard_notice as _gn_state
+                        effective_state = _gn_state.effective_state(
+                            self, cid, effective_state)
                         pcc.effective_state = effective_state
                         # (#1404) The notice names THIS charger's amps and
                         # watts, from the decision its state was just read
@@ -5819,6 +5876,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     grid_import_known=bool(getattr(
                                         view.fleet, "grid_import_known", True)),
                                 )
+                        # (#1381) the guard's stop of a yielded charger is told
+                        from . import guard_notice as _gn
+                        _gn.clear_when_back(self, cid, view.power, now=time.time())
+                        _pg_reason = yield_override_reason(self, decision)
                         try:
                             await actuate(
                                 decision, adapter, view.power,
@@ -5826,8 +5887,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 observer=self._observer_mode,
                                 controller=self._surplus_controller,
                                 yielded=self.external_yielding(f"charger:{cid}"),
-                                phase_override=yield_override_reason(self, decision),
+                                phase_override=_pg_reason,
                             )
+                            if _pg_reason and not self._observer_mode:
+                                _gn.note_stop(self, cid, _pg_reason, now=time.time())
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
                             # remaining headroom (#274/H1). Estimate from the setpoint
@@ -5960,6 +6023,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # #576 — this charger's slot in the one priority list.
                     ev_priority=self._ev_priority_for(cid),
                     wpa_table=self._wpa_table_for(cid),
+                    active_phases=self._active_phases_for(cid),   # (#1412)
                     charger_cfg={},
                     mode=per_mode,
                     daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
@@ -6000,14 +6064,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     believed_phases=getattr(
                         self, "_phase_believed", {}).get("ev_charger"),
                 )
+                from . import guard_notice as _gn
+                _gn.clear_when_back(self, cid, view.power, now=time.time())
+                _pg_reason = yield_override_reason(self, decision)
                 try:
                     await actuate(
                         decision, adapter, view.power, reconciler=reconciler,
                         observer=self._observer_mode,
                         controller=self._surplus_controller,
                         yielded=self.external_yielding(f"charger:{cid}"),
-                        phase_override=yield_override_reason(self, decision),
+                        phase_override=_pg_reason,
                     )
+                    if _pg_reason and not self._observer_mode:
+                        _gn.note_stop(self, cid, _pg_reason, now=time.time())
                     self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("EV control service failed: %s", e)
@@ -6212,6 +6281,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 charging_state,
                 getattr(self, "_effective_states_per_charger", None) or {},
             )
+            # (#1381) FLEET-READ: a charger off after the guard's stop and
+            # no car drawing — the fleet text says so
+            from . import guard_notice as _gn_fleet
+            charging_state = _gn_fleet.fleet_state(
+                self, charging_state,
+                any_drawing=float(getattr(power, "ev_power", 0.0) or 0.0) > 500.0)
 
             # Step 11: Build complete data structure
             sem_data = SEMData(
@@ -6641,6 +6716,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # write neither lands nor raises.
                 self._check_charger_control_entities(
                     cid, _per_charger_cfg, result)
+                # (#1412) …and the values SEM would write to the phase
+                # switch: one the entity cannot take is refused every time.
+                self._check_phase_switch_values(cid, _per_charger_cfg, result)
                 # (#804 Phase B/C) The sequencer's live state and the held
                 # belief — the belief outlives the instantaneous estimate
                 # (which is None whenever the car isn't drawing).
@@ -7001,8 +7079,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 except Exception as e:  # noqa: BLE001
                     _LOGGER.debug("Tariff diag-counts failed: %s", e)
 
-            # Dynamic price visibility (#257): surface the upcoming hourly price
+            # Dynamic price visibility (#257): surface the upcoming price
             # curve + today's summary so the price card can render a live chart.
+            # (#1418) The provider's whole list, which it bounds by time: a
+            # cap of 48 points here was 12 h of a 15-minute market.
             try:
                 _td = self._tariff_provider.get_tariff_data()
                 result["tariff_upcoming"] = [
@@ -7012,7 +7092,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                      "level": (p.level.value if p.level is not None
                                else (getattr(p, "level_absence", None)
                                      or _td.level_absence))}
-                    for p in (_td.upcoming_prices or [])[:48]
+                    for p in (_td.upcoming_prices or [])
                 ]
                 # (#1390) A schedule or a two-rate tariff has no curve in
                 # ``upcoming``, and ``schedule_today`` ends at midnight: the
@@ -7812,6 +7892,68 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 wanted=getattr(adapter, "last_unverified_wanted", ""),
                 seen=getattr(adapter, "last_unverified_seen", ""),
                 strikes=strikes)
+
+    #: (#1412) what the phase switch entity is for, in the Repair's words
+    _PHASE_SWITCH_CAPABILITY = "switch between 1 and 3 phases"
+
+    def _check_phase_switch_values(self, cid, charger_cfg, result) -> None:
+        """(#1412) The 1-phase and 3-phase values must fit the number they
+        are written to.
+
+        An install had 1000 and 4000 saved for a number that runs from 0 to
+        32. Home Assistant refuses such a write, so no switch ever happened
+        and nothing said why. The tick judges it (``_phase_switch_tick``:
+        a real range, and a misfit that stands for several cycles) and no
+        longer sends the write; this is the telling. The charger's
+        ``phase_switch_valid`` goes False and the control-entity Repair
+        (#824) names the entity and the value.
+
+        Three answers from the tick, and only two act: a steady misfit
+        raises; values that fit a real range clear; "could not ask" (the
+        entity is not loaded, the tick has not run, the charger sets its
+        phases by current) does neither — a Repair must not flash at every
+        start, and one raised before a restart goes on the first cycle the
+        values are seen to fit.
+        """
+        from . import repair_issues as _ri
+
+        entity = charger_cfg.get("ev_phase_switch_entity")
+        if not entity or not charger_cfg.get("ev_phase_switching_enabled", False):
+            return
+        raised = getattr(self, "_phase_values_repair_raised", None)
+        if raised is None:
+            raised = self._phase_values_repair_raised = set()
+            self._phase_values_repair_reconciled = set()
+        key = (str(cid), str(entity))
+        problem = (getattr(self, "_phase_values_problem", None) or {}).get(cid)
+        fits = (getattr(self, "_phase_values_ok", None) or {}).get(cid)
+        if problem:
+            result[f"charger_{cid}_phase_switch_valid"] = False
+            if key not in raised:
+                raised.add(key)
+                _LOGGER.warning(
+                    "#1412 %s: phase switch %s is %s — no phase switch is "
+                    "sent until the values fit", cid, entity, problem)
+                _ri.raise_charger_control_entity_broken(
+                    self.hass, str(cid),
+                    name=charger_display_name(self.hass, charger_cfg),
+                    entity_id=str(entity),
+                    capability=self._PHASE_SWITCH_CAPABILITY,
+                    reason=problem,
+                )
+            return
+        if fits is not True:
+            return          # could not ask: neither raise nor clear
+        # Never for an entity that is also a control entity: that Repair has
+        # its own owner (``_check_charger_control_entities``).
+        if any(str(charger_cfg.get(k) or "") == str(entity)
+               for k, _cap in self._CONTROL_CAPABILITIES):
+            return
+        if key in raised or key not in self._phase_values_repair_reconciled:
+            raised.discard(key)
+            _ri.clear_charger_control_entity_broken(
+                self.hass, str(cid), str(entity))
+        self._phase_values_repair_reconciled.add(key)
 
     def _check_charger_control_entities(self, cid, charger_cfg, result) -> None:
         """Pre-flight the entities SEM COMMANDS on this charger (#824).
@@ -10341,6 +10483,56 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return int(believed), True
         return None, False
 
+    def _charger_leg_phases(self, cid: str, ev_dev, power_w):
+        """(#1412) How many phases carry this charger's charge, by its own
+        current on each phase (#1407) — 1 to 3, or None when it has no such
+        sensors, shares them with another charger (class 52), draws
+        nothing, or its power says otherwise. The phase tick reads it to
+        tell a one-phase CAR from a charger set to one phase."""
+        from .ev_phases import phases_from_leg_currents
+        reader = getattr(ev_dev, "phase_leg_currents", None)
+        if not callable(reader):
+            return None
+        # FLEET-READ: the other chargers' leg sensors, only to refuse a
+        # reading two chargers share — never their draw
+        others = [d for c, d in (getattr(self, "_ev_devices", None) or {}).items()
+                  if c != cid]
+        try:
+            _amps, phases = phases_from_leg_currents(
+                reader(others=others), power_w=power_w)
+        except Exception:  # noqa: BLE001 — a reading, never fatal
+            return None
+        return phases
+
+    def _active_phases_for(self, cid: str, cfg: Optional[dict] = None):
+        """(#1412) The phase count this charger runs on NOW, for a charger
+        that changes phases: what SEM set or measured. None for a charger
+        that cannot switch, and while nothing is known — the caller then
+        keeps the configured count.
+
+        The belief is used even while a switch is disputed
+        (``_phase_contradictions``): by then the measured draw has replaced
+        what SEM asserted, so it is the latest reading, not a claim. The
+        W/A learner is stricter (``_wpa_phases_for``) because it files
+        samples, and a sample under the wrong count stays."""
+        from .ev_phases import active_phases
+        cfg = cfg if cfg is not None else self._ev_charger_cfg(cid)
+        return active_phases(
+            cfg, (getattr(self, "_phase_believed", None) or {}).get(cid),
+            # the tick's word that the switch is there and can be written;
+            # until it has looked (first cycle), the configured count
+            bool((getattr(self, "_phase_capable", None) or {}).get(cid, False)))
+
+    def _plan_phases_for(self, cid: str, cfg: Optional[dict] = None):
+        """(#1412) The phases tonight's grid charge will run on, for the
+        plan's sizing — or None for a charger that cannot switch and while
+        nothing is known. Not always ``_active_phases_for``: SEM's own one
+        phase for thin sun goes back to the configured count at night
+        (``ev_control._phases_now``)."""
+        from .ev_control import _phases_now
+        cfg = cfg if cfg is not None else self._ev_charger_cfg(cid)
+        return _phases_now(self, cfg, 0) or None
+
     def _feed_wpa_learner(self, cid, ev_dev, observed_w, connected) -> None:
         """(#846) Offer this cycle's (setpoint, draw) pair for ONE charger.
 
@@ -10608,6 +10800,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         Never more than nameplate."""
         learner = getattr(self, "_wpa_learner", None)
         phases, _ok = self._wpa_phases_for(cid, cfg)
+        phases = self._plan_phases_for(cid, cfg) or phases   # (#1412)
         if learner is not None and phases and learner.measured(cid, phases):
             nominal = phases * float(cfg.get("ev_voltage") or self.config.get("ev_voltage") or 230)
             return learner.watts_for_amps(cid, phases, amps, nominal)
@@ -12799,8 +12992,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             ups = getattr(
                 self._tariff_provider.get_tariff_data(), "upcoming_prices", None
             ) or []
-            # 96 entries: a full day even on a 15-min market (48 was
-            # only 12 h there — tomorrow's curve landing late missed it).
+            # (#1418) The whole list, which the provider bounds by time.
+            # A cap of 96 points never took effect (the provider sent 48);
+            # on the longer list it would cut a window that slides, and a
+            # new point at its end every 15 minutes reads as news below.
             # (#765) ABSOLUTE keys, not window order: the upcoming window
             # slides every hour, and fingerprinting its contents by
             # position made a past slot dropping off read as "the night
@@ -12813,7 +13008,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ((p.timestamp.isoformat()
                   if getattr(p, "timestamp", None) is not None else i),
                  round(float(p.price), 2))
-                for i, p in enumerate(ups[:96])
+                for i, p in enumerate(ups)
                 if getattr(p, "price", None) is not None
             )))
         except Exception:  # noqa: BLE001 — no tariff is a valid shape
@@ -13656,12 +13851,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         _LOGGER.debug(
                             "ENERGY-PLAN (#775): the ask moved (%s → %s) "
                             "but the packed answer is identical — "
-                            "stamp kept", _prev_sig_775, _demand_sig)
+                            "stamp kept", signature_for_log(_prev_sig_775),
+                            signature_for_log(_demand_sig))
                     elif cause == "ask changed":
                         _LOGGER.info(
                             "ENERGY-PLAN (#638): the night's demands "
                             "changed (%s → %s) — replanning",
-                            _prev_sig_775, _demand_sig)
+                            signature_for_log(_prev_sig_775),
+                            signature_for_log(_demand_sig))
                     self._shadow_plan_date = _night_of
                     self._plan_ev_conn_sig = _demand_sig
                     # (#638) the stamp is state — persist it so a reboot
@@ -16606,7 +16803,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     remaining_kwh=night_target,
                     watts_per_amp=_wpa,
                     wpa_table=self._wpa_table_for(_pcid),   # (#904)
-                    nominal_wpa=(float(_primary_cfg.get("ev_phases") or 3)
+                    nominal_wpa=(float(self._active_phases_for(_pcid, _primary_cfg)
+                                       or _primary_cfg.get("ev_phases") or 3)
                                  * float(_primary_cfg.get("ev_voltage") or 230)),
                     min_amps=int(_primary_cfg.get("ev_min_current") or 6),
                     max_amps=int(_primary_cfg.get("ev_max_current")
@@ -16642,6 +16840,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # #576 — the primary charger's slot in the one priority list.
             ev_priority=self._ev_priority_for(_primary_cfg.get("id") or "ev_charger"),
             wpa_table=self._wpa_table_for(_primary_cfg.get("id") or "ev_charger"),
+            # (#1412) the phases SEM set or measured
+            active_phases=self._active_phases_for(
+                _primary_cfg.get("id") or "ev_charger", _primary_cfg),
             charger_cfg=_primary_cfg,
             mode=self._effective_charge_mode_for(_primary_cfg),
             daily_ev_kwh=self._charger_daily_kwh(

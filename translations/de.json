@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Die SG-Ready-Dienstdaten müssen ein JSON-Objekt sein.",
       "heat_pump_contact_values_missing": "Dieser SG-Ready-Kontakt ist eine Text-/Zahlen-/Auswahl-Entität, daher benötigt SEM sowohl den EIN- als auch den AUS-Wert zum Schreiben. Füllen Sie beide aus, oder wählen Sie eine Schalter-Entität.",
       "calendar_needs_schedule": "Der Kalender-Modus braucht einen Hochtarif-Zeitplan. Wähle einen Zeitplan-Helfer oder einen anderen Tarifmodus.",
-      "value_needs_spot_basis": "Aufschlag, Energiesteuer oder MwSt. gelten nur bei einem Spotpreis. Wähle die Spot-Basis oder setze sie auf 0."
+      "value_needs_spot_basis": "Aufschlag, Energiesteuer oder MwSt. gelten nur bei einem Spotpreis. Wähle die Spot-Basis oder setze sie auf 0.",
+      "phase_switch_value_out_of_range": "Der Wert für 1 Phase oder 3 Phasen liegt ausserhalb des Bereichs der Phasenumschalt-Entität. Geben Sie Werte ein, die die Entität annimmt."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Aufschlag, Energiesteuer oder MwSt. gelten nur bei einem Spotpreis. Wähle die Spot-Basis oder setze sie auf 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Der Wert für die Phasenumschaltung wurde nicht gespeichert: {reason}. Geben Sie einen Wert ein, den die Entität annimmt."
     }
   },
   "issues": {
@@ -2133,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Speicher erreicht das Legionellen-Ziel nicht",
       "description": "{name}: Der Speicher nimmt höchstens {max} °C an, weniger als das Legionellen-Ziel {target} °C. SEM heizt auf {max} °C; das desinfiziert den Speicher womöglich nicht. Senke das Ziel oder prüfe das Maximum des Speichers. Die Meldung verschwindet von selbst."
+    },
+    "guard_stopped": {
+      "title": "Phasenwächter hat {charger} ausgeschaltet",
+      "description": "Eine Phase war über ihrem Limit, darum hat SEM {charger} ausgeschaltet. Diese Ladestation steuert eine andere Partei, darum schaltet SEM sie nicht wieder ein. Schalte sie von Hand ein oder lass ihre App sie wieder starten. Die Meldung verschwindet, wenn die Ladestation wieder lädt oder das Auto abgesteckt wird."
     }
   },
   "selector": {

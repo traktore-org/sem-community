@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "The SG-Ready service data must be a JSON object.",
       "heat_pump_contact_values_missing": "This SG-Ready contact is a text/number/select entity, so SEM needs both the ON and the OFF value to write. Fill both, or pick a switch entity.",
       "calendar_needs_schedule": "Calendar mode needs a peak-time schedule. Pick a Schedule helper or choose another tariff mode.",
-      "value_needs_spot_basis": "A markup, energy tax or VAT only applies when your price is a spot price. Pick the spot basis, or set them to 0."
+      "value_needs_spot_basis": "A markup, energy tax or VAT only applies when your price is a spot price. Pick the spot basis, or set them to 0.",
+      "phase_switch_value_out_of_range": "The 1-phase or 3-phase value is outside the range of the phase switch entity. Enter values the entity accepts."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "A markup, energy tax or VAT only applies when your price is a spot price. Pick the spot basis, or set them to 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "The phase switch value was not saved: {reason}. Enter a value the entity accepts."
     }
   },
   "issues": {
@@ -2133,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Tank cannot reach the Legionella target",
       "description": "{name}: the tank accepts at most {max} °C, below the Legionella target {target} °C. SEM heats to {max} °C, which may not disinfect the tank. Lower the target, or check the tank's own maximum. This clears by itself."
+    },
+    "guard_stopped": {
+      "title": "Phase guard switched off {charger}",
+      "description": "A phase was over its limit, so SEM switched off {charger}. Another party steers this charger, so SEM does not switch it back on. Switch it on by hand, or let its app start it again. This message goes away when the charger charges again or the car is unplugged."
     }
   },
   "selector": {

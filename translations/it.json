@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "I dati del servizio SG-Ready devono essere un oggetto JSON.",
       "heat_pump_contact_values_missing": "Questo contatto SG-Ready è un'entità testo/numero/selettore, quindi SEM ha bisogno sia del valore ON sia del valore OFF da scrivere. Compila entrambi, oppure scegli un'entità interruttore.",
       "calendar_needs_schedule": "La modalità Calendario richiede un orario di punta. Scegli un aiutante Pianificazione o un'altra modalità tariffaria.",
-      "value_needs_spot_basis": "Un ricarico, un'accisa o l'IVA valgono solo con un prezzo spot. Scegli la base spot o impostali a 0."
+      "value_needs_spot_basis": "Un ricarico, un'accisa o l'IVA valgono solo con un prezzo spot. Scegli la base spot o impostali a 0.",
+      "phase_switch_value_out_of_range": "Il valore per 1 fase o 3 fasi è fuori dall'intervallo dell'entità di commutazione delle fasi. Inserisci valori che l'entità accetta."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Un ricarico, un'accisa o l'IVA valgono solo con un prezzo spot. Scegli la base spot o impostali a 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Il valore di commutazione delle fasi non è stato salvato: {reason}. Inserisci un valore che l'entità accetta."
     }
   },
   "issues": {
@@ -2133,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Il serbatoio non raggiunge l'obiettivo legionella",
       "description": "{name}: il serbatoio accetta al massimo {max} °C, sotto l'obiettivo legionella di {target} °C. SEM scalda a {max} °C, che potrebbe non disinfettare il serbatoio. Abbassa l'obiettivo o controlla il massimo del serbatoio. Il messaggio scompare da solo."
+    },
+    "guard_stopped": {
+      "title": "La protezione di fase ha spento {charger}",
+      "description": "Una fase superava il limite, quindi SEM ha spento {charger}. Un altro sistema controlla questa wallbox, quindi SEM non la riaccende. Riaccendila a mano o lascia che la sua app la riavvii. Il messaggio sparisce quando la wallbox ricarica o l'auto viene scollegata."
     }
   },
   "selector": {

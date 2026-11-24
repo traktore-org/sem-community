@@ -628,6 +628,34 @@ def chargers_without(
     return _drop(data_chargers), _drop(opts_chargers)
 
 
+def _phase_values_refusal(hass, existing: list, merged: list):
+    """(#1412) Why this save of ``ev_chargers`` must be refused, or None: a
+    charger's 1-phase or 3-phase value, changed by this save, does not fit
+    the number entity it is written to.
+
+    ``set_option`` is the dashboard's write path, and the dashboard saved
+    the two values unchecked (1000 and 4000 for a number that runs from 0
+    to 32). The check is the forms' own (``changed_switch_values_problem``),
+    asked per charger against its stored row, so one field at a time can be
+    put right while the other is still wrong.
+    """
+    from .coordinator.ev_phases import changed_switch_values_problem
+
+    states = getattr(hass, "states", None)
+    if states is None:
+        return None
+    before = {str(c.get("id")): c for c in (existing or [])
+              if isinstance(c, dict)}
+    for row in merged or []:
+        if not isinstance(row, dict):
+            continue
+        problem = changed_switch_values_problem(
+            states.get, before.get(str(row.get("id")), {}), row)
+        if problem:
+            return problem
+    return None
+
+
 def _merge_ev_chargers_by_id(existing: list, incoming: list) -> list:
     """Merge an ``ev_chargers`` list by ``id`` rather than full-replace.
 
@@ -6534,6 +6562,15 @@ async def _async_register_phase_services(
                 "ev_chargers": _merge_ev_chargers_by_id(
                     existing_list, options["ev_chargers"]),
             }
+            # (#1412) a phase switch value its number cannot take
+            _refused = _phase_values_refusal(
+                hass, existing_list, options["ev_chargers"])
+            if _refused:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="phase_switch_value_out_of_range",
+                    translation_placeholders={"reason": _refused},
+                )
 
         # (#1204) The Config card sends one battery's edit of a per-battery
         # list, by its place in the battery order the card read. It goes to

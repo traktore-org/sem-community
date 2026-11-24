@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Los datos del servicio SG-Ready deben ser un objeto JSON.",
       "heat_pump_contact_values_missing": "Este contacto SG-Ready es una entidad text/number/select, así que SEM necesita tanto el valor ON como el OFF para escribir. Rellene ambos, o elija una entidad switch.",
       "calendar_needs_schedule": "El modo Calendario necesita un horario de punta. Elige un ayudante Programación u otro modo de tarifa.",
-      "value_needs_spot_basis": "Un recargo, impuesto eléctrico o IVA solo se aplica con un precio spot. Elige la base spot o ponlos a 0."
+      "value_needs_spot_basis": "Un recargo, impuesto eléctrico o IVA solo se aplica con un precio spot. Elige la base spot o ponlos a 0.",
+      "phase_switch_value_out_of_range": "El valor para 1 fase o 3 fases está fuera del rango de la entidad de cambio de fases. Introduce valores que la entidad acepte."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Un recargo, impuesto eléctrico o IVA solo se aplica con un precio spot. Elige la base spot o ponlos a 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "El valor de cambio de fases no se guardó: {reason}. Introduce un valor que la entidad acepte."
     }
   },
   "issues": {
@@ -2133,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "El depósito no alcanza el objetivo de legionela",
       "description": "{name}: el depósito admite como máximo {max} °C, por debajo del objetivo de legionela de {target} °C. SEM calienta a {max} °C, lo que puede no desinfectar el depósito. Baja el objetivo o revisa el máximo del depósito. Este aviso desaparece solo."
+    },
+    "guard_stopped": {
+      "title": "La protección de fase apagó {charger}",
+      "description": "Una fase superaba su límite, así que SEM apagó {charger}. Otro sistema controla este cargador, así que SEM no lo vuelve a encender. Enciéndelo a mano o deja que su app lo reinicie. Este aviso desaparece cuando el cargador vuelve a cargar o se desenchufa el coche."
     }
   },
   "selector": {

@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "SG-Ready 服务数据必须是一个 JSON 对象。",
       "heat_pump_contact_values_missing": "此 SG-Ready 触点是文本/数字/选择器实体，因此 SEM 需要同时写入开启值和关闭值。请两者都填写，或改选一个开关实体。",
       "calendar_needs_schedule": "日历模式需要峰时时间表。请选择一个“时间表”辅助元素，或选择其他电价模式。",
-      "value_needs_spot_basis": "加价、能源税或增值税仅适用于现货价格。请选择现货价格基础，或将其设为 0。"
+      "value_needs_spot_basis": "加价、能源税或增值税仅适用于现货价格。请选择现货价格基础，或将其设为 0。",
+      "phase_switch_value_out_of_range": "1 相或 3 相的值超出了相位切换实体的范围。请输入该实体接受的值。"
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "加价、能源税或增值税仅适用于现货价格。请选择现货价格基础，或将其设为 0。"
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "相位切换的值未保存：{reason}。请输入该实体接受的值。"
     }
   },
   "issues": {
@@ -2133,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "水箱达不到防军团菌目标",
       "description": "{name}：水箱最高只接受 {max} °C，低于防军团菌目标 {target} °C。SEM 加热到 {max} °C，可能无法为水箱消毒。请降低目标，或检查水箱自身的最高温度。此提示会自行消失。"
+    },
+    "guard_stopped": {
+      "title": "相位保护关闭了 {charger}",
+      "description": "某一相超过限制，因此 SEM 关闭了 {charger}。此充电桩由其他系统控制，因此 SEM 不会重新开启它。请手动开启，或让其应用重新启动。当充电桩再次充电或车辆拔出时，此消息会消失。"
     }
   },
   "selector": {

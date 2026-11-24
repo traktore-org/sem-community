@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Les données du service SG-Ready doivent être un objet JSON.",
       "heat_pump_contact_values_missing": "Ce contact SG-Ready est une entité texte/nombre/sélecteur, donc SEM a besoin à la fois de la valeur ON et de la valeur OFF à écrire. Renseignez les deux, ou choisissez une entité interrupteur.",
       "calendar_needs_schedule": "Le mode Calendrier a besoin d'un horaire des heures pleines. Choisissez un assistant Planification ou un autre mode tarifaire.",
-      "value_needs_spot_basis": "Une marge, une taxe sur l'énergie ou la TVA ne s'appliquent qu'à un prix spot. Choisissez la base spot ou mettez-les à 0."
+      "value_needs_spot_basis": "Une marge, une taxe sur l'énergie ou la TVA ne s'appliquent qu'à un prix spot. Choisissez la base spot ou mettez-les à 0.",
+      "phase_switch_value_out_of_range": "La valeur pour 1 phase ou 3 phases est hors de la plage de l'entité de commutation de phases. Saisissez des valeurs que l'entité accepte."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Une marge, une taxe sur l'énergie ou la TVA ne s'appliquent qu'à un prix spot. Choisissez la base spot ou mettez-les à 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "La valeur de commutation de phases n'a pas été enregistrée : {reason}. Saisissez une valeur que l'entité accepte."
     }
   },
   "issues": {
@@ -2133,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Le ballon n'atteint pas la cible légionellose",
       "description": "{name} : le ballon accepte au plus {max} °C, sous la cible légionellose de {target} °C. SEM chauffe à {max} °C, ce qui peut ne pas désinfecter le ballon. Baissez la cible ou vérifiez le maximum du ballon. Ce message disparaît tout seul."
+    },
+    "guard_stopped": {
+      "title": "La protection de phase a éteint {charger}",
+      "description": "Une phase dépassait sa limite, donc SEM a éteint {charger}. Un autre système pilote cette borne, donc SEM ne la rallume pas. Rallumez-la à la main, ou laissez son appli la relancer. Ce message disparaît quand la borne charge à nouveau ou que la voiture est débranchée."
     }
   },
   "selector": {

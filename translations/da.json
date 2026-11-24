@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "SG-Ready servicedata skal være et JSON-objekt.",
       "heat_pump_contact_values_missing": "Dette SG-Ready-relæ er en text-/number-/select-entitet, så SEM har brug for både ON- og OFF-værdien at skrive. Udfyld begge, eller vælg en kontakt-entitet.",
       "calendar_needs_schedule": "Kalendertilstand kræver et spidslast-skema. Vælg en Tidsplan-hjælper eller en anden tarif-tilstand.",
-      "value_needs_spot_basis": "Et tillæg, elafgift eller moms gælder kun ved en spotpris. Vælg spotgrundlaget, eller sæt dem til 0."
+      "value_needs_spot_basis": "Et tillæg, elafgift eller moms gælder kun ved en spotpris. Vælg spotgrundlaget, eller sæt dem til 0.",
+      "phase_switch_value_out_of_range": "Værdien for 1 fase eller 3 faser ligger uden for området for faseskift-enheden. Indtast værdier, som enheden accepterer."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Et tillæg, elafgift eller moms gælder kun ved en spotpris. Vælg spotgrundlaget, eller sæt dem til 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Værdien for faseskift blev ikke gemt: {reason}. Indtast en værdi, som enheden accepterer."
     }
   },
   "issues": {
@@ -2133,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Beholderen når ikke legionellamålet",
       "description": "{name}: beholderen tager højst {max} °C, under legionellamålet {target} °C. SEM varmer til {max} °C, hvilket måske ikke desinficerer beholderen. Sænk målet, eller tjek beholderens maksimum. Meddelelsen forsvinder af sig selv."
+    },
+    "guard_stopped": {
+      "title": "Fasevagten slukkede {charger}",
+      "description": "En fase var over grænsen, så SEM slukkede {charger}. Et andet system styrer denne lader, så SEM tænder den ikke igen. Tænd den manuelt, eller lad dens app starte den igen. Beskeden forsvinder, når laderen lader igen, eller bilen tages ud."
     }
   },
   "selector": {

@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "SG-Ready-palvelun datan on oltava JSON-objekti.",
       "heat_pump_contact_values_missing": "Tämä SG-Ready-kosketin on teksti-/number-/select-entiteetti, joten SEM tarvitsee sekä PÄÄLLÄ- että POIS-arvon kirjoittaakseen. Täytä molemmat, tai valitse kytkinentiteetti.",
       "calendar_needs_schedule": "Kalenteri-tila tarvitsee huippuajan aikataulun. Valitse Aikataulu-apuri tai toinen tariffitila.",
-      "value_needs_spot_basis": "Marginaali, energiavero tai ALV koskee vain pörssihintaa. Valitse pörssihinta perusteeksi tai aseta ne nollaan."
+      "value_needs_spot_basis": "Marginaali, energiavero tai ALV koskee vain pörssihintaa. Valitse pörssihinta perusteeksi tai aseta ne nollaan.",
+      "phase_switch_value_out_of_range": "Arvo 1 vaiheelle tai 3 vaiheelle on vaiheenvaihtoentiteetin alueen ulkopuolella. Anna arvot, jotka entiteetti hyväksyy."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Marginaali, energiavero tai ALV koskee vain pörssihintaa. Valitse pörssihinta perusteeksi tai aseta ne nollaan."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Vaiheenvaihdon arvoa ei tallennettu: {reason}. Anna arvo, jonka entiteetti hyväksyy."
     }
   },
   "issues": {
@@ -2133,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Varaaja ei saavuta legionellatavoitetta",
       "description": "{name}: varaaja ottaa enintään {max} °C, alle legionellatavoitteen {target} °C. SEM lämmittää {max} °C:een, mikä ei ehkä desinfioi varaajaa. Laske tavoitetta tai tarkista varaajan maksimi. Ilmoitus poistuu itsestään."
+    },
+    "guard_stopped": {
+      "title": "Vaihesuoja sammutti latausaseman {charger}",
+      "description": "Vaihe ylitti rajansa, joten SEM sammutti latausaseman {charger}. Toinen järjestelmä ohjaa tätä latausasemaa, joten SEM ei käynnistä sitä uudelleen. Käynnistä se käsin tai anna sen sovelluksen käynnistää se. Viesti poistuu, kun latausasema lataa taas tai auto irrotetaan."
     }
   },
   "selector": {
