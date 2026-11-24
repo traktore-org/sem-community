@@ -1926,6 +1926,28 @@ from .utils.device_names import (  # noqa: E402  (#1053)
 )
 
 
+def _note_unit_ids(coordinator, chargers, heat_pump_rows) -> None:
+    """(#1421) Note the charger and heat pump ids of this setup in SEM's
+    store (``SEMStorage.note_unit_ids``). The charger ids are the ones
+    setup built (``_ev_devices``, the flat-key charger too) and the saved
+    list's."""
+    from .unit_ids import CHARGERS, HEAT_PUMPS
+
+    storage = getattr(coordinator, "_storage", None)
+    if storage is None:
+        return
+    try:
+        charger_ids = set(getattr(coordinator, "_ev_devices", None) or {})
+        charger_ids |= {str(c.get("id")) for c in chargers or []
+                        if isinstance(c, dict) and c.get("id")}
+        storage.note_unit_ids(CHARGERS, charger_ids)
+        storage.note_unit_ids(HEAT_PUMPS, {
+            str(r.get("id")) for r in heat_pump_rows or []
+            if isinstance(r, dict) and str(r.get("id") or "").startswith("heat_pump_")})
+    except Exception:  # noqa: BLE001 — a note never costs a setup
+        _LOGGER.debug("unit id note failed", exc_info=True)
+
+
 def _sweep_orphan_charger_repairs(hass, coordinator, chargers,
                                   keep_ids=()) -> int:
     """(#1139) Clear the per-charger Repairs no registered charger owns.
@@ -3407,6 +3429,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             )
         if hp_registered > 1:
             _LOGGER.info("#685: %d heat pumps active", hp_registered)
+
+        # (#1421) Note every charger and heat pump id this setup has: SEM's
+        # stores keep their data under it, so a new unit must never get it.
+        _note_unit_ids(coordinator, ev_chargers_config, hp_rows)
 
         # Primary-row visibility (kept from the single-unit era, #432/#437)
         hp_relay1 = full_config.get("heat_pump_relay1_entity")
@@ -6993,7 +7019,11 @@ async def _async_register_phase_services(
                     target = e
                     break
         merged = {**(target.data or {}), **(target.options or {})}
-        return {"config": merged, "entry_id": target.entry_id}
+        # (#1421) beside the config, never in it: the card picks a new
+        # charger's id outside these, and a save does not write them back
+        from .unit_ids import CHARGERS, used_unit_ids
+        return {"config": merged, "entry_id": target.entry_id,
+                "charger_ids_used": sorted(used_unit_ids(target, CHARGERS))}
 
     hass.services.async_register(
         DOMAIN,

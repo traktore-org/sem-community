@@ -120,6 +120,23 @@ test('add charger sends one skeleton through set_option; remove needs a confirm'
     assert.deepEqual(calls.find((c) => c[1] === 'remove_charger')[2], { charger_id: 'keba' });
 });
 
+test('(#1421) add charger never takes an id a removed charger had', async () => {
+    const calls = [];
+    const el = makeCard(calls);
+    // ev_charger and ev_charger_1 were removed; SEM keeps their sessions
+    el.hass.callService = async (d, s, data) => {
+        calls.push([d, s, data]);
+        if (s !== 'get_config') return {};
+        return { response: { entry_id: 'E1', config: { tariff_mode: 'static', ev_chargers: [{ id: 'keba', name: 'Keba' }] },
+            charger_ids_used: ['ev_charger', 'ev_charger_1', 'keba'] } };
+    };
+    await el._loadOptions();
+    await el._addCharger();
+    const add = calls.find((c) => c[1] === 'set_option');
+    assert.deepEqual(add[2].options.ev_chargers.map((c) => c.id), ['ev_charger_2']);
+    assert.equal(el._options.charger_ids_used, undefined, 'the list is not saved back as an option');
+});
+
 test('the setup and hardware rows open their panel in place', () => {
     const el = makeCard([]);
     el._togglePanel('setup');

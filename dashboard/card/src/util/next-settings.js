@@ -572,7 +572,10 @@ export function isValueContact(entityId) {
     return VALUE_CONTACT_DOMAINS.has(d);
 }
 
-/** Classic _addCharger: the first free `ev_charger[_n]` id and its skeleton. */
+/** Classic _addCharger: the first free `ev_charger[_n]` id and its skeleton.
+ *  (#1421) `runtimeIds` holds every id a charger ever had (`get_config`'s
+ *  `charger_ids_used`): SEM keeps a removed charger's sessions under its id,
+ *  so a new charger never takes it. The rule is `unit_ids.next_unit_id`'s. */
 export function chargerSkeleton(existing, runtimeIds, name) {
     const list = Array.isArray(existing) ? existing : [];
     const ids = new Set([...list.map((c) => c && c.id).filter(Boolean), ...(runtimeIds || [])]);

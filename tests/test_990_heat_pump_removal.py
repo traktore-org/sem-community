@@ -79,7 +79,8 @@ async def test_adding_after_the_removal_starts_from_empty():
     pumps = f._data["heat_pumps"]
     assert len(pumps) == 1
     assert pumps[0]["heat_pump_climate_entity"] == "climate.attic"
-    assert pumps[0]["id"] == "heat_pump_2"
+    # (#1421) not the removed pump's heat_pump_2: SEM keeps its data under it
+    assert pumps[0]["id"] == "heat_pump_3"
 
 
 @pytest.mark.asyncio
@@ -259,7 +260,9 @@ async def test_add_after_a_remove_does_not_reuse_a_live_id():
     await f.async_step_heat_pump_menu({"action": "remove_heat_pump:0"})
     await f.async_step_heat_pump_unit({"heat_pump_climate_entity": "climate.shed"})
     ids = [p["id"] for p in f._data["heat_pumps"]]
-    assert ids == ["heat_pump_3", "heat_pump_2"]   # the free number, not 3
+    # not 3 (live), and (#1421) not 2: SEM keeps the removed Cellar's day
+    # runtime and meter reading under its id
+    assert ids == ["heat_pump_3", "heat_pump_4"]
     assert len(set(ids)) == len(ids)
 
 

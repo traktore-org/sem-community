@@ -13,6 +13,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult, section
 
+from .unit_ids import CHARGERS, HEAT_PUMPS, next_unit_id, used_unit_ids  # (#1421)
 from .utils.own_entity import is_sem_entity  # (#1103)
 from .utils.device_names import (  # (#1053)
     HEAT_PUMP_DEFAULT, charger_display_name, device_display_name,
@@ -212,6 +213,26 @@ def _draft_list(flow: Any, key: str) -> list:
     """
     raw = flow._data[key] if key in flow._data else flow.config_entry.options.get(key)
     return [dict(row) if isinstance(row, dict) else row for row in (raw or [])]
+
+
+def _new_unit_id(flow: Any, kind: str, draft: list,
+                 start: int | None = None) -> str:
+    """(#1421) A new charger's or heat pump's id: not in this dialog's
+    draft, and no id the kind ever had (``unit_ids.used_unit_ids``)."""
+    used = {str(r.get("id")) for r in draft or [] if isinstance(r, dict) and r.get("id")}
+    used |= used_unit_ids(getattr(flow, "config_entry", None), kind)
+    return next_unit_id(kind, used, start)
+
+
+def _first_charger_id(flow: Any) -> str:
+    """(#1421) The id the first charger page saves when no list exists. The
+    charger setup built from the flat keys runs as ``ev_charger`` and is
+    this one; with no such charger running, it is a new charger."""
+    coordinator = getattr(getattr(flow, "config_entry", None), "runtime_data", None)
+    running = getattr(coordinator, "_ev_devices", None)
+    if isinstance(running, dict) and "ev_charger" in running:
+        return "ev_charger"
+    return _new_unit_id(flow, CHARGERS, [])
 
 
 def _suggest_discovered(saved: dict, discovered: dict, key: str):
@@ -2089,7 +2110,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 _mark_owner_values(_was, user_input, ev_chargers[0])
                 _drop_stale_service_wiring(_before, user_input, ev_chargers[0])
             else:
-                ev_chargers = [{"id": "ev_charger", "name": "EV Charger", **user_input}]
+                # (#1421) the flat-key charger setup runs as ``ev_charger``
+                # keeps it; after the last charger was removed it is a new one
+                ev_chargers = [{"id": _first_charger_id(self),
+                                "name": "EV Charger", **user_input}]
             # the flat keys are the fallback of the charger's own copy: None
             # (not a delete) so a copy in entry.data does not show through
             for k in _stale_service_wiring(_before, user_input):
@@ -2330,22 +2354,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             charger_name = user_input.pop("charger_name", f"EV Charger {idx + 1}")
             # (#990) The position is unique only while the list grows:
             # remove charger 2 of 3 and ``ev_charger_{len}`` is the id the
-            # last one already has — two chargers, one device id. Take the
-            # next number nobody uses — counting the saved lists too, so a
-            # box removed in this dialog does not hand its id (and its
-            # entities and stored state) to the new one.
-            used = {
-                str(c.get("id"))
-                for c in (ev_chargers
-                          + list((self.config_entry.options or {}).get("ev_chargers") or [])
-                          + list((self.config_entry.data or {}).get("ev_chargers") or []))
-                if isinstance(c, dict)
-            }
-            n = idx
-            while f"ev_charger_{n}" in used:
-                n += 1
+            # last one already has — two chargers, one device id. (#1421)
+            # Nor any id a charger ever had: one removed in this dialog, or
+            # before (SEM's store keeps its sessions, its car estimate and
+            # its counters under that id).
             new_charger = {
-                "id": f"ev_charger_{n}",
+                "id": _new_unit_id(self, CHARGERS, ev_chargers, start=idx),
                 "name": charger_name,
                 **user_input,
             }
@@ -4203,13 +4217,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     # ends that. Remove "Heat Pump 2" from [2, 3] and the
                     # next Add mints heat_pump_3 a second time, which
                     # ``register_device`` resolves by keeping one of the two.
-                    # Take the lowest number nobody is using instead.
-                    used = {str(p.get("id")) for p in pumps if isinstance(p, dict)}
-                    n = 2
-                    while f"heat_pump_{n}" in used:
-                        n += 1
-                    new_row.setdefault("id", f"heat_pump_{n}")
-                    new_row.setdefault("name", f"{HEAT_PUMP_DEFAULT} {n}")
+                    # (#1421) Nor a number a heat pump ever had: SEM's store
+                    # keeps its day runtime and meter reading under the id.
+                    _hp_id = _new_unit_id(self, HEAT_PUMPS, pumps)
+                    new_row.setdefault("id", _hp_id)
+                    new_row.setdefault(
+                        "name", f"{HEAT_PUMP_DEFAULT} {_hp_id.rsplit('_', 1)[-1]}")
                     pumps.append(new_row)
                 self._data["heat_pumps"] = pumps
                 self._edit_hp_index = None

@@ -870,6 +870,46 @@ class SEMStorage:
         state = self.get_ev_intelligence_state()
         return state.get("session_history", [])
 
+    def unit_ids_used(self, kind: str) -> set:
+        """(#1421) Every id ``kind`` (``ev_chargers``, ``heat_pumps``) had:
+        the ids noted at setup, and the ids this store keeps data under —
+        so a unit removed before the note existed counts too. A new unit
+        must not get one of them (``unit_ids.next_unit_id``)."""
+        record = self._energy_data.get("unit_ids_used")
+        noted = record.get(kind) if isinstance(record, dict) else None
+        out = {str(i) for i in (noted if isinstance(noted, list) else []) if i}
+        if kind == "ev_chargers":
+            out |= {str(s.get("charger_id")) for s in self.get_session_history()
+                    if isinstance(s, dict) and s.get("charger_id")}
+            chargers = (self._energy_data.get("ev_intelligence") or {}).get("chargers")
+            if isinstance(chargers, dict):
+                out |= {str(c) for c in chargers if c}
+            daily = (self._daily_data.get("per_charger_daily") or {})
+            for part in ("date", "values", "calendar"):
+                slots = daily.get(part) if isinstance(daily, dict) else None
+                if isinstance(slots, dict):
+                    out |= {str(c) for c in slots if c}
+        elif kind == "heat_pumps":
+            runtimes = self._daily_data.get("device_runtimes")
+            if isinstance(runtimes, dict):
+                out |= {str(d) for d in runtimes
+                        if str(d).startswith("heat_pump_")}
+        return out
+
+    def note_unit_ids(self, kind: str, ids) -> bool:
+        """(#1421) Add ``ids`` to the ids ``kind`` had. True when new; the
+        next energy save writes it."""
+        record = self._energy_data.get("unit_ids_used")
+        if not isinstance(record, dict):
+            record = {}
+        before = record.get(kind) if isinstance(record.get(kind), list) else []
+        merged = sorted({str(i) for i in before if i} | {str(i) for i in ids or () if i})
+        if merged == before:
+            return False
+        record[kind] = merged
+        self._energy_data["unit_ids_used"] = record
+        return True
+
     def get_day_tags(self) -> list:
         """(#1083) The stored day tags, oldest first."""
         tags = self._daily_data.get("day_tags")
