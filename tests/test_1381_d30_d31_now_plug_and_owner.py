@@ -91,8 +91,16 @@ def test_d31_a_stored_minus_one_value_is_not_a_users_now():
 
 
 def test_d31_the_service_schema_names_user_now():
-    import inspect
-    import custom_components.solar_energy_management as sem
-    src = inspect.getsource(sem)
-    assert 'vol.Optional("user_now")' in src
-    assert 'call.data.get("user_now", False)' in src
+    """The plan_override service takes ``user_now`` and hands it on: read as
+    code (the schema's key and the call's keyword), not as spelling."""
+    import ast
+    from pathlib import Path
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "__init__.py").read_text())
+    schema_keys = {n.args[0].value for n in ast.walk(tree)
+                   if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "Optional"
+                   and n.args and isinstance(n.args[0], ast.Constant)}
+    assert {"user_now", "fixed_end"} <= schema_keys
+    passed = {k.arg for n in ast.walk(tree)
+              if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "set_plan_override"
+              for k in n.keywords}
+    assert {"user_now", "fixed_end"} <= passed

@@ -1838,9 +1838,14 @@ class EVControlMixin:
 
         if r.issue_switch is not None:
             if _sent:
-                if cid in _tries:
+                # the first switch that goes out in each lifetime clears
+                # once too: a Repair an older lifetime raised (an options
+                # reload keeps it) is not left behind (#933)
+                _once = _phase_state(self, "_phase_refused_cleared_once")
+                if cid in _tries or not _once.get(cid):
                     _tries.pop(cid, None)
                     _clear_phase_switch_repair(self, cid)
+                    _once[cid] = True
             elif _refused is not None:
                 prev = _tries.get(cid) or {}
                 fails = int(prev.get("fails") or 0) + 1
