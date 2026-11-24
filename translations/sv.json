@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Tanken når inte legionellamålet",
       "description": "{name}: tanken tar högst {max} °C, under legionellamålet {target} °C. SEM värmer till {max} °C, vilket kanske inte desinficerar tanken. Sänk målet eller kontrollera tankens maximum. Meddelandet försvinner av sig självt."
+    },
+    "guard_stopped": {
+      "title": "Fasvakten stängde av {charger}",
+      "description": "En fas var över sin gräns, så SEM stängde av {charger}. Ett annat system styr den här laddaren, så SEM slår inte på den igen. Slå på den för hand eller låt dess app starta den igen. Meddelandet försvinner när laddaren laddar igen eller bilen kopplas ur."
     }
   },
   "selector": {

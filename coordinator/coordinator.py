@@ -5813,6 +5813,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         effective_state = _ov
                             else:
                                 _no_draw.pop(cid, None)
+                        # (#1381) off after the guard's stop: never "night
+                        # charging active" at 0 W
+                        from . import guard_notice as _gn_state
+                        effective_state = _gn_state.effective_state(
+                            self, cid, effective_state)
                         pcc.effective_state = effective_state
                         # (#1404) The notice names THIS charger's amps and
                         # watts, from the decision its state was just read
@@ -5864,6 +5869,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     grid_import_known=bool(getattr(
                                         view.fleet, "grid_import_known", True)),
                                 )
+                        # (#1381) the guard's stop of a yielded charger is told
+                        from . import guard_notice as _gn
+                        _gn.clear_when_back(self, cid, view.power, now=time.time())
+                        _pg_reason = yield_override_reason(self, decision)
                         try:
                             await actuate(
                                 decision, adapter, view.power,
@@ -5871,8 +5880,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 observer=self._observer_mode,
                                 controller=self._surplus_controller,
                                 yielded=self.external_yielding(f"charger:{cid}"),
-                                phase_override=yield_override_reason(self, decision),
+                                phase_override=_pg_reason,
                             )
+                            if _pg_reason and not self._observer_mode:
+                                _gn.note_stop(self, cid, _pg_reason, now=time.time())
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
                             # remaining headroom (#274/H1). Estimate from the setpoint
@@ -6046,14 +6057,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     believed_phases=getattr(
                         self, "_phase_believed", {}).get("ev_charger"),
                 )
+                from . import guard_notice as _gn
+                _gn.clear_when_back(self, cid, view.power, now=time.time())
+                _pg_reason = yield_override_reason(self, decision)
                 try:
                     await actuate(
                         decision, adapter, view.power, reconciler=reconciler,
                         observer=self._observer_mode,
                         controller=self._surplus_controller,
                         yielded=self.external_yielding(f"charger:{cid}"),
-                        phase_override=yield_override_reason(self, decision),
+                        phase_override=_pg_reason,
                     )
+                    if _pg_reason and not self._observer_mode:
+                        _gn.note_stop(self, cid, _pg_reason, now=time.time())
                     self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("EV control service failed: %s", e)
@@ -6258,6 +6274,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 charging_state,
                 getattr(self, "_effective_states_per_charger", None) or {},
             )
+            # (#1381) FLEET-READ: a charger off after the guard's stop and
+            # no car drawing — the fleet text says so
+            from . import guard_notice as _gn_fleet
+            charging_state = _gn_fleet.fleet_state(
+                self, charging_state,
+                any_drawing=float(getattr(power, "ev_power", 0.0) or 0.0) > 500.0)
 
             # Step 11: Build complete data structure
             sem_data = SEMData(

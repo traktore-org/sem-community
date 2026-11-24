@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Zasobnik nie osiąga celu antylegionella",
       "description": "{name}: zasobnik przyjmuje najwyżej {max} °C, poniżej celu antylegionella {target} °C. SEM grzeje do {max} °C, co może nie zdezynfekować zasobnika. Obniż cel lub sprawdź maksimum zasobnika. Komunikat zniknie sam."
+    },
+    "guard_stopped": {
+      "title": "Ochrona faz wyłączyła {charger}",
+      "description": "Faza przekroczyła limit, więc SEM wyłączył {charger}. Tą ładowarką steruje inny system, więc SEM jej nie włączy. Włącz ją ręcznie lub pozwól aplikacji uruchomić ją ponownie. Komunikat zniknie, gdy ładowarka znów zacznie ładować lub samochód zostanie odłączony."
     }
   },
   "selector": {

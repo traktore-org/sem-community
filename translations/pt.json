@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "O depósito não atinge o alvo de legionela",
       "description": "{name}: o depósito aceita no máximo {max} °C, abaixo do alvo de legionela de {target} °C. O SEM aquece até {max} °C, o que pode não desinfetar o depósito. Baixe o alvo ou verifique o máximo do depósito. Este aviso desaparece sozinho."
+    },
+    "guard_stopped": {
+      "title": "A proteção de fase desligou {charger}",
+      "description": "Uma fase passou o limite, por isso o SEM desligou {charger}. Outro sistema controla este carregador, por isso o SEM não o volta a ligar. Ligue-o à mão ou deixe a sua app reiniciá-lo. Esta mensagem desaparece quando o carregador volta a carregar ou o carro é desligado."
     }
   },
   "selector": {
