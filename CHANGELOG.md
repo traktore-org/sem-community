@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Peak shed only switches loads you can see** (#1419). Switches SEM once found by name, off the Devices list, are no longer switched off.
+- 🐛 **A shed load you turn back on no longer blocks the others** (#1419). It is no longer shown as shed.
+
 # [2.3.0-beta.26] — 23.11.2026
 
 - 🐛 **Plan no longer says the battery charges after a failed start** (#1413). The log says the charge has not started.

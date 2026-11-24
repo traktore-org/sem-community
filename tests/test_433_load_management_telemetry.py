@@ -57,7 +57,6 @@ def lm(mock_hass, config_entry_lm):
     ) as MockStore:
         mock_discovery = MagicMock()
         mock_discovery.discover_from_energy_dashboard = AsyncMock(return_value={})
-        mock_discovery.discover_controllable_devices = MagicMock(return_value={})
         mock_discovery.get_device_current_state = MagicMock(
             return_value={"is_on": False, "current_power": 0}
         )

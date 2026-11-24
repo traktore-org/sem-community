@@ -170,7 +170,6 @@ def lm780(mock_hass):
     ) as MockStore:
         discovery = MagicMock()
         discovery.discover_from_energy_dashboard = AsyncMock(return_value={})
-        discovery.discover_controllable_devices = MagicMock(return_value={})
         discovery.get_device_current_state = MagicMock(
             return_value={"is_on": True, "current_power": 1000})
         discovery.turn_off_device = AsyncMock(return_value=True)

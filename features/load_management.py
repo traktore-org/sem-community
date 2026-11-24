@@ -49,6 +49,28 @@ STORAGE_VERSION = 1
 STORAGE_KEY = "load_management_devices"
 LEDGER_KEY = SL.LEDGER_KEY
 
+#: (#1419) The id prefix of the rows ``register_ev_charger`` writes.
+CHARGER_ROW_PREFIX = "load_device_"
+
+
+def is_charger_load_row(device_id: Any, info: Any) -> bool:
+    """(#1419) Is this a per-charger row from ``register_ev_charger``?
+
+    Two writers used the ``load_device_`` prefix: ``register_ev_charger``
+    and the old pattern discovery, which took any ``switch.*`` it could pair
+    with a power sensor by name. The second is gone. Its saved rows never
+    reached the Devices card, so nobody could see them, mark them critical
+    or set their Mode — and the peak shed switched them off (a camera's
+    "enabled" switch, a bedroom plug). So the prefix alone says nothing:
+    only a ``load_device_`` row whose type is ``ev_charger`` is a row SEM
+    still makes. Every other one is a left-over and is not kept.
+    """
+    return (
+        str(device_id).startswith(CHARGER_ROW_PREFIX)
+        and isinstance(info, Mapping)
+        and info.get("device_type") == "ev_charger"
+    )
+
 
 def resolved_control_type(control: Optional[Mapping]) -> str:
     """What the control's ENTITY can actually honour (#880).
@@ -196,6 +218,8 @@ class LoadManagementCoordinator:
         self._ledger = SL.ShedLedger(Store(hass, STORAGE_VERSION, f"{DOMAIN}_{LEDGER_KEY}"))
         self._shedding_now: set = set()   # ids with a shed write in flight
         self._recover_noted: set = set()  # observer: a held restore, said once
+        # (#1419) shed rows that left the roster: put back from the ledger
+        self._recover_due: set = set()
         self._init_task = None
         self._unsub_stop = None
 
@@ -322,7 +346,25 @@ class LoadManagementCoordinator:
             data = await self._store.async_load()
             if data:
                 if "devices" in data:
-                    self._devices = data["devices"]
+                    # (#1419) A row pattern discovery saved is not loaded —
+                    # see is_charger_load_row. If SEM had shed one, its
+                    # ledger record still names the switch, and the
+                    # start-up recovery puts it back.
+                    saved = data["devices"] or {}
+                    left = sorted(
+                        did for did, info in saved.items()
+                        if str(did).startswith(CHARGER_ROW_PREFIX)
+                        and not is_charger_load_row(did, info)
+                    )
+                    self._devices = {
+                        did: info for did, info in saved.items() if did not in left
+                    }
+                    if left:
+                        _LOGGER.info(
+                            "Not loading %d old switch row(s) that SEM found by "
+                            "name and nobody could set: %s",
+                            len(left), ", ".join(left),
+                        )
                     _LOGGER.debug("Loaded %s devices from storage", len(self._devices))
 
                 # Restore monthly peak (only if same month)
@@ -359,11 +401,20 @@ class LoadManagementCoordinator:
             _LOGGER.error("Failed to save device configuration: %s", e)
 
     async def _discover_devices(self):
-        """Discover new controllable devices.
+        """Discover the Energy Dashboard's individual devices.
 
-        Discovery priority:
-        1. Energy Dashboard individual devices (primary source)
-        2. Pattern-based discovery (fallback for devices not in Energy Dashboard)
+        Only used while the unified device registry is not active (it owns
+        the device list once it is).
+
+        (#1419) There was a second source: pattern discovery, which took any
+        ``switch.*`` it could pair with a power sensor by name. Its rows never
+        reached the Devices card, so the peak shed switched off loads nobody
+        could see or set — and it still ran on 2.x, because this pass starts
+        30 s after this manager does (#1106 moved that before the first
+        refresh) while the flag that stops it is set only after the
+        registry's own start. A load SEM may switch is one the user can see
+        and set: the Energy Dashboard's, a charger's, or one registered by
+        service.
         """
         if self._unified_registry_active:
             _LOGGER.debug("Skipping device discovery — UnifiedDeviceRegistry is active")
@@ -372,27 +423,8 @@ class LoadManagementCoordinator:
         try:
             _LOGGER.info("Starting device discovery process...")
 
-            # First, discover from Energy Dashboard individual devices
-            energy_dashboard_devices = await self._device_discovery.discover_from_energy_dashboard()
-            _LOGGER.info("Energy Dashboard discovery: found %s devices", len(energy_dashboard_devices))
-
-            # Then, pattern-based discovery for additional devices.
-            # (#748) Exclude every entity a configured charger already owns (its
-            # stop switch, current number, power / status sensors) so the
-            # ``switch.*`` smart-switch glob doesn't rediscover the charger's
-            # own start/stop switch as a smart plug — the third duplicate row.
-            excluded_entities = self._charger_claimed_entities()
-            pattern_discovered = self._device_discovery.discover_controllable_devices(
-                excluded_entities=excluded_entities
-            )
-            _LOGGER.info("Pattern-based discovery: found %s devices", len(pattern_discovered))
-
-            # Merge discoveries - Energy Dashboard takes priority
-            all_discovered = {}
-            all_discovered.update(pattern_discovered)
-            all_discovered.update(energy_dashboard_devices)  # Override with Energy Dashboard
-
-            _LOGGER.info("Total discovered: %s unique devices", len(all_discovered))
+            all_discovered = await self._device_discovery.discover_from_energy_dashboard()
+            _LOGGER.info("Energy Dashboard discovery: found %s devices", len(all_discovered))
 
             # Add new devices while preserving existing configuration
             for device_id, device_info in all_discovered.items():
@@ -400,7 +432,7 @@ class LoadManagementCoordinator:
                     self._devices[device_id] = device_info
                     switch_info = device_info.get('switch_entity', 'no switch')
                     power_info = device_info.get('power_entity', 'no power sensor')
-                    source = device_info.get('source', 'pattern')
+                    source = device_info.get('source', 'energy_dashboard')
                     _LOGGER.info("Added new device: %s (%s + %s) [source: %s]", device_id, switch_info, power_info, source)
                 else:
                     # Update availability and power rating, preserve user settings
@@ -415,7 +447,7 @@ class LoadManagementCoordinator:
                         "power_entity": device_info.get("power_entity"),
                         "energy_entity": device_info.get("energy_entity"),
                         "switch_entity": device_info.get("switch_entity") or existing.get("switch_entity"),
-                        "source": device_info.get("source", "pattern"),
+                        "source": device_info.get("source", "energy_dashboard"),
                     }
                     # Only set priority from discovery if the user hasn't customized it
                     if not existing.get("user_set_priority", False):
@@ -435,32 +467,6 @@ class LoadManagementCoordinator:
 
         except Exception as e:
             _LOGGER.error("Device discovery failed: %s", e, exc_info=True)
-
-    def _charger_claimed_entities(self) -> set:
-        """(#748) Every entity owned by a registered EV charger — its current
-        control / power sensor, its start/stop switch and its status sensor.
-        Pattern discovery excludes these so a charger's own stop switch is not
-        rediscovered as a smart plug. Reads the charger rows registered by
-        ``register_ev_charger`` (device_type ``ev_charger``); an install with
-        no charger yields an empty set (no exclusion). Never raises."""
-        claimed: set = set()
-        try:
-            for info in self._devices.values():
-                if not isinstance(info, dict) or info.get("device_type") != "ev_charger":
-                    continue
-                for key in (
-                    "switch_entity", "power_entity", "charger_service",
-                    "start_stop_entity", "status_entity",
-                ):
-                    ent = info.get(key)
-                    # charger_service is a "domain.service" string, not an
-                    # entity — but it can never match a switch/power entity_id,
-                    # so including it is harmless and keeps the set simple.
-                    if ent:
-                        claimed.add(ent)
-        except Exception:  # pragma: no cover - defensive
-            return claimed
-        return claimed
 
     async def register_ev_charger(
         self,
@@ -1016,6 +1022,7 @@ class LoadManagementCoordinator:
         try:
             # Clean up shed list: remove devices that powered off naturally
             self._cleanup_shed_list()
+            await self._recover_left_rows()
 
             # Determine current state based on peak levels
             old_state = self._state
@@ -1079,8 +1086,15 @@ class LoadManagementCoordinator:
         for device_id in self._devices_shed:
             device_info = self._devices.get(device_id)
             if device_info is None:
-                # Device was removed from the device list entirely
+                # Device was removed from the device list entirely.
+                # (#1419) Its record is NOT forgotten: SEM switched it off,
+                # and with the row gone nothing else would turn it back on
+                # (the registry drops a row it no longer derives, and since
+                # #1419 every old pattern row). The ledger names the entity;
+                # the next recovery puts it back if it still shows the shed
+                # value — a load changed by hand since is left alone.
                 stale.append(device_id)
+                self._recover_due.add(device_id)
                 continue
 
             # (#649) Not ours to hold — evict regardless of on/off. A stale
@@ -1105,7 +1119,8 @@ class LoadManagementCoordinator:
 
         for device_id in stale:
             self._devices_shed.remove(device_id)
-            self._ledger.drop_soon(device_id)
+            if device_id not in self._recover_due:
+                self._ledger.drop_soon(device_id)
             self._phase_shed_ids.pop(device_id, None)   # (#1048)
             if device_id in self._devices:
                 self._devices[device_id].pop("_ran_since_shed", None)
@@ -1476,7 +1491,7 @@ class LoadManagementCoordinator:
         the bus event the mobile/notification layer listens on."""
         names = [
             self._devices.get(did, {}).get("friendly_name", did)
-            for did in self._devices_shed
+            for did in self._held_shed_ids()
         ]
         grid_kw = plan["grid_import_w"] / 1000.0
         target_kw = plan["target_w"] / 1000.0
@@ -1499,7 +1514,7 @@ class LoadManagementCoordinator:
             self.hass.bus.async_fire(f"{DOMAIN}_notification", {
                 "category": "alerts",
                 "event": "load_shed",
-                "devices": list(self._devices_shed),
+                "devices": self._held_shed_ids(),
                 "grid_import_kw": round(grid_kw, 2),
                 "target_kw": round(target_kw, 2),
             })
@@ -1834,6 +1849,23 @@ class LoadManagementCoordinator:
                 _LOGGER.warning("Shed recovery failed for %s", device_id, exc_info=True)
         return len(self._ledger.records)
 
+    async def _recover_left_rows(self) -> None:
+        """(#1419) Put back what SEM shed on a row that left the roster.
+
+        ``_cleanup_shed_list`` queues them. One record each, the same rule
+        as after a start: only while the entity still shows the shed value.
+        A record that cannot be read or written yet (dark entity, observer
+        mode) stays queued; a failing one goes to the start-up recovery.
+        """
+        for device_id in list(self._recover_due):
+            try:
+                verdict = await self._recover_one(device_id, needs_device=False)
+            except Exception:  # noqa: BLE001 — one load must not stop the rest
+                _LOGGER.warning("Shed recovery failed for %s", device_id, exc_info=True)
+                verdict = "dropped"
+            if verdict in ("restored", "dropped"):
+                self._recover_due.discard(device_id)
+
     async def _recovery_loop(self) -> None:
         for _ in range(self._RECOVERY_PASSES):
             if not self._ledger.records or not await self.async_recover_pass():
@@ -1871,8 +1903,52 @@ class LoadManagementCoordinator:
             task.cancel()
         return await self.async_restore_all_shed()
 
+    def _handed_back(self, device_id: str) -> bool:
+        """(#1419) Has somebody switched this shed load back on since?
+
+        ``_cleanup_shed_list`` marks it (``_ran_since_shed``) and drops its
+        ledger record: it is theirs now. It stays on the shed list until the
+        peak is over, so SEM does not shed it again meanwhile — but SEM no
+        longer holds it off, so it is not shown as shed.
+        """
+        return bool((self._devices.get(device_id) or {}).get("_ran_since_shed"))
+
+    def _held_shed_ids(self) -> List[str]:
+        """(#1419) The shed loads SEM still holds off — the ones to show."""
+        return [d for d in self._devices_shed if not self._handed_back(d)]
+
+    def _release_handed_back(self) -> None:
+        """(#1419) The peak is over: a load handed back leaves the list
+        without a write — on, it needs nothing; off again, that was their
+        choice too. Before this it stayed listed, and as ``_restore_loads``
+        tries one load per pass and a load that is on can never be
+        "restored", every other shed load stayed off behind it."""
+        released = [
+            d for d in self._devices_shed
+            if self._handed_back(d)
+            and (self._phase_may_restore or not self._is_phase_shed(d))
+        ]
+        for device_id in released:
+            self._devices_shed.remove(device_id)
+            self._ledger.drop_soon(device_id)
+            self._phase_shed_ids.pop(device_id, None)
+            info = self._devices.get(device_id) or {}
+            for key in ("_ran_since_shed", "shed_reason", "shed_phase"):
+                info.pop(key, None)
+            _LOGGER.info(
+                "%s was switched back on by hand while shed — no longer held",
+                info.get("friendly_name", device_id),
+            )
+        if released and not self._devices_shed:
+            self._end_shed_episode()
+        if released and not self._phase_episode_open():
+            self._end_phase_episode()
+
     async def _restore_loads(self):
         """Restore loads that were shed."""
+        if not self._devices_shed:
+            return
+        self._release_handed_back()
         if not self._devices_shed:
             return
 
@@ -1887,7 +1963,7 @@ class LoadManagementCoordinator:
         devices_to_restore = sorted(
             (d for d in self._devices_shed
              if self._phase_may_restore or not self._is_phase_shed(d)),
-            key=lambda device_id: self._devices[device_id].get("priority", 5),
+            key=lambda device_id: (self._devices.get(device_id) or {}).get("priority", 5),
             reverse=True
         )
 
@@ -2394,6 +2470,7 @@ class LoadManagementCoordinator:
     def get_load_management_data(self) -> Dict[str, Any]:
         """Get current load management data for sensors."""
         total_devices = len(self._devices)
+        held = self._held_shed_ids()
         # "Switchable" = controllable AND currently on (i.e. could be shed now).
         # Previously counted all available+controllable devices, which kept the
         # number at "10" even when the user had turned them all off (#193).
@@ -2445,12 +2522,13 @@ class LoadManagementCoordinator:
             "peak_limit_unlimited": self._peak_unlimited,
             "total_devices": total_devices,
             "controllable_devices": controllable_devices,
-            "devices_shed": len(self._devices_shed),
-            "devices_shed_list": self._devices_shed.copy(),
+            # (#1419) what SEM holds off — not a load handed back by hand
+            "devices_shed": len(held),
+            "devices_shed_list": held,
             "available_load_reduction": round(available_reduction, 2),
             "enabled": self._enabled,
             "devices": {
-                did: {**dinfo, "is_shed": did in self._devices_shed
+                did: {**dinfo, "is_shed": did in held
                       or did in self._phase_held, **self._phase_overlay(did)}
                 for did, dinfo in self._devices.items()
             },

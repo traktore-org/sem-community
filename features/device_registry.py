@@ -34,6 +34,7 @@ from ..ha_energy_reader import (
     _find_load_power_sensor,
 )
 from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
+from .load_management import is_charger_load_row
 # (#780/#888) the two axes, asked of the module that owns them. Imported
 # unaliased so a structural test can see the call.
 from .device_axes import user_hands_off
@@ -993,8 +994,9 @@ class UnifiedDeviceRegistry:
         """Read Energy Dashboard, discover controls, build device list, sync."""
         # (#748) Reconcile persisted charger-duplicate rows FIRST, before the
         # early-returns below. A persisted ``load_device_<slug>`` smart-switch
-        # dup is immortal regardless of ED shape (the sync's prune spares every
-        # ``load_device_*`` key), so an install with a charger but NO Energy
+        # dup is immortal regardless of ED shape (the sync's prune spared every
+        # ``load_device_*`` key; since #1419 only a charger's, and LoadManagement
+        # no longer loads the rest), so an install with a charger but NO Energy
         # Dashboard individual devices — where the two returns below skip the
         # sync entirely — would otherwise keep its duplicate forever. This pass
         # depends only on the charger rows + LoadManagement._devices, not on the
@@ -1146,7 +1148,7 @@ class UnifiedDeviceRegistry:
         # including any ED row it just re-added that names a charger entity. If
         # it removed any, de-persist immediately — the row lives in
         # LoadManagement's OWN store and is otherwise reloaded on every restart
-        # (its prune spares all load_device_* keys). Without this, the fix only
+        # (its prune spared all load_device_* keys before #1419). Without this, the fix only
         # helps installs that never had the duplicate.
         if self._sync_to_load_manager():
             try:
@@ -1655,11 +1657,20 @@ class UnifiedDeviceRegistry:
         # registrations) and the per-charger EV rows. Everything else in
         # LoadManagement's dict is stale — including a row this registry
         # derived on an EARLIER pass and folded on this one.
+        #
+        # (#1419) "Per-charger EV row" was tested by its ``load_device_``
+        # prefix (#436). The old pattern discovery used the same prefix, so
+        # every row it saved was kept too: a camera's "enabled" switch, a
+        # bedroom plug — not on the Devices card, no Mode, no critical flag,
+        # and shed at night. #779 and #781 removed two kinds of them; the
+        # rest stayed. The charger row is the one with the charger's type.
+        # A row removed here while SEM holds it off is put back from the
+        # shed ledger by LoadManagement's next clean-up, not left off.
         old_ids = [
-            did for did in list(self._load_manager._devices.keys())
+            did for did, info in list(self._load_manager._devices.items())
             if did not in written
             # (#436) per-charger EV rows are registered by __init__.py, not here
-            and not did.startswith("load_device_")
+            and not is_charger_load_row(did, info)
         ]
         for did in old_ids:
             del self._load_manager._devices[did]
@@ -1669,8 +1680,8 @@ class UnifiedDeviceRegistry:
         # display fold. #700 suppressed the duplicate only in
         # get_devices_for_sensor (the card payload); it never removed the row
         # from LoadManagement._devices, and _sync_to_load_manager's prune above
-        # deliberately SPARES every ``load_device_*`` key (#436) — so a
-        # persisted smart-switch row (``load_device_<slug>``) that shares the
+        # spared every ``load_device_*`` key (#436; since #1419 only a
+        # charger's) — so a persisted smart-switch row (``load_device_<slug>``) that shares the
         # charger's stop switch, and any ED row re-added just above that names a
         # charger entity, survived here: controllable, sheddable, acting on the
         # charger behind the EV controller's back. Drop them now, at the
@@ -1678,42 +1689,21 @@ class UnifiedDeviceRegistry:
         # (``load_device_<charger_id>``) are kept.
         charger_pruned = self._prune_charger_duplicate_lm_rows()
 
-        # (#779) The NON-charger twin of the #748 fold, one roster short. The
-        # #436 spare keeps EVERY ``load_device_*`` key so a legacy pattern-
-        # discovered smart-switch row (``load_device_<slug>``, minted by
-        # LoadManagement's own ``discover_controllable_devices`` before the
-        # registry took over) is immortal — but #748 only dropped the ones that
-        # share a CHARGER's entity. A plain smart plug (dishwasher, heat pump,
-        # network gear) shares none, so it survived as a second, separately
-        # actuatable representation of a device the registry now owns as
-        # ``energy_dashboard_<slug>``. The ED row carries the user's Mode
-        # setting (``control_mode``); the ghost carries none, so Mode=Off never
-        # reached it and SEM shed the appliance behind the user's back. Fold it
-        # on the shared CONTROL surface (class 12's closure), not id — and never
-        # on a shareable power/energy sensor (#744 derived/multi-channel), so a
-        # neighbouring load is never folded.
-        ed_pruned = self._prune_ed_duplicate_lm_rows()
-
-        # (#781) The rows that were never loads at all. Same immortality as
-        # above (the #436 spare keeps every ``load_device_*`` key), different
-        # reason: these are a device's own CONFIGURATION knobs, admitted by
-        # pattern discovery because a ``switch.*`` that pairs with a power
-        # sensor was the whole test. Filtering discovery does nothing for an
-        # install that already persisted them — pattern discovery is guarded
-        # off once the registry is active, so nothing re-derives these keys and
-        # nothing else would ever remove them.
-        config_pruned = self._prune_config_surface_lm_rows()
+        # (#779, #781) Two prunes stood here: a pattern row that shared an
+        # Energy Dashboard device's switch, and one whose switch was a device
+        # setting. (#1419) The keep rule above now drops every pattern row,
+        # so both are gone.
 
         _LOGGER.info(
             "Synced %d devices to LoadManagement", len(self._devices)
         )
         # (#744) A stale row removed above is also a change the caller must
         # persist — otherwise LoadManagement's own store reloads it at the next
-        # restart and the row is back. Three independent reasons to persist,
-        # and they compose: a charger twin folded, an ED twin folded, or a row
-        # the registry no longer derives. Any one of them means the store is
-        # now behind the roster.
-        return charger_pruned or ed_pruned or config_pruned or bool(old_ids)
+        # restart and the row is back. Two independent reasons to persist,
+        # and they compose: a charger twin folded, or a row the registry no
+        # longer derives (#1419: a pattern row among them). Either one means
+        # the store is now behind the roster.
+        return charger_pruned or bool(old_ids)
 
     async def _reconcile_charger_dups_and_persist(self) -> None:
         """(#748) Drop charger-duplicate LoadManagement rows and de-persist if
@@ -1793,157 +1783,6 @@ class UnifiedDeviceRegistry:
             _LOGGER.info(
                 "#748 dropped charger-duplicate load row %s "
                 "(shares a configured charger's entity)", did,
-            )
-        return bool(removed)
-
-    def _registry_owned_control_entities(self) -> set:
-        """(#779) The on/off CONTROL entity of each registry-owned non-EV
-        Energy-Dashboard device — its actuation surface. A ``load_device_<slug>``
-        row whose switch names this exact entity drives the SAME relay, so it is
-        the same physical device, with the ED row authoritative.
-
-        Deliberately NARROW — only the control entity, NOT the power / energy
-        sensors. A load's power sensor can be *derived* (#744) and a
-        multi-channel device (a Shelly 2PM) can present two distinct ED loads
-        that resolve to the SAME whole-device power sensor, so matching on
-        power / energy could fold a legitimate neighbour. The shared control
-        surface is the one signal that cannot false-positive: two rows that
-        actuate the same switch ARE one device. EV rows are excluded — charger
-        duplicates are ``_prune_charger_duplicate_lm_rows``'s job. Never raises.
-        """
-        owned: set = set()
-        try:
-            for dev in self._devices:
-                if getattr(dev, "is_ev", False):
-                    continue
-                ent = getattr(dev, "control_entity", None)
-                if ent:
-                    owned.add(ent)
-        except Exception:  # pragma: no cover - defensive
-            return owned
-        return owned
-
-    def _prune_ed_duplicate_lm_rows(self) -> bool:
-        """(#779) Drop legacy ``load_device_<slug>`` smart-switch rows that
-        DUPLICATE a registry-owned Energy-Dashboard device — dedup on the shared
-        ENTITY, not the id (BUG_CLASSES class 12).
-
-        With the registry active, LoadManagement's own pattern discovery is
-        guarded off (``_unified_registry_active``), so a ``load_device_<slug>``
-        smart-switch row can only be one a pre-2.0 version persisted. When the
-        same physical device is also in the Energy Dashboard, the registry
-        re-adds it as ``energy_dashboard_<slug>`` — the authoritative
-        representation the 2.0 UI shows and the one that carries the user's Mode
-        setting (``control_mode``). The stale ``load_device_*`` twin has no
-        ``control_mode`` (so Mode=Off on the ED row never reaches it) and stays
-        ``is_controllable``/sheddable — SEM switches the appliance off behind
-        the user's back (#779: dishwasher, heat pump, network gear). Drop it, at
-        the data layer, when its switch/control entity is the SAME actuation
-        surface the ED device controls (dedup on the shared CONTROL entity — the
-        one signal that cannot false-positive; see
-        ``_registry_owned_control_entities`` for why power/energy are excluded).
-        A ``load_device_*`` row with NO matching ED twin is the device's ONLY
-        representation and is left untouched (#748's ``load_device_dishwasher``
-        survives because that install had no ED device for it). Authoritative
-        per-charger rows (``device_type == "ev_charger"``) and service
-        registrations are never matched. Returns True if it removed anything.
-        Never raises."""
-        lm = self._load_manager
-        if not lm:
-            return False
-        owned = self._registry_owned_control_entities()
-        if not owned:
-            return False
-        removed: List[str] = []
-        for did, info in list(getattr(lm, "_devices", {}).items()):
-            if not did.startswith("load_device_") or not isinstance(info, dict):
-                continue
-            if info.get("device_type") == "ev_charger":
-                continue  # authoritative charger row
-            if did in self._service_registrations:
-                continue  # explicit service registration
-            control = info.get("control") or {}
-            candidates = [
-                info.get("switch_entity"),
-                control.get("entity"),
-            ]
-            if any(e and e in owned for e in candidates):
-                removed.append(did)
-        for did in removed:
-            try:
-                del lm._devices[did]
-            except KeyError:  # pragma: no cover - defensive
-                pass
-            # A pruned ghost must not linger in the shed list — _restore_loads
-            # indexes _devices[did] and would KeyError on a removed row.
-            shed = getattr(lm, "_devices_shed", None)
-            if isinstance(shed, list) and did in shed:
-                shed.remove(did)
-            _LOGGER.info(
-                "#779 dropped legacy smart-switch ghost load row %s — it "
-                "duplicates a registry-owned Energy-Dashboard device (shared "
-                "entity); the ED row is authoritative", did,
-            )
-        return bool(removed)
-
-    def _prune_config_surface_lm_rows(self) -> bool:
-        """(#781) Drop legacy ``load_device_<slug>`` rows whose control entity
-        is a device's CONFIGURATION knob, not a load.
-
-        onkelfu's diagnostics: 24 of 50 Load-Management rows are
-        ``load_device_wled_*`` — reverse, freeze, nightlight, sync send/receive.
-        Pattern discovery admitted them because it asked only "is this a
-        ``switch.*`` I can pair with a power sensor", and one
-        ``sensor.wled_treppe_power`` pairs with every sibling. Each row landed
-        ``is_controllable`` at ``peak_only``, so a peak event could flip an LED
-        strip's settings looking for watts it never drew (``W = 0``).
-
-        Discovery now refuses them (``LoadDeviceDiscovery.is_config_surface`` —
-        one rule, read from HA's own ``entity_category``), but a filter alone
-        leaves an upgraded install exactly as it was: with the registry active,
-        LoadManagement's pattern discovery is guarded off, so no pass
-        re-derives these keys, and ``_sync_to_load_manager``'s prune spares
-        every ``load_device_*`` key by design (#436). They have to be retired
-        explicitly. The same three spares as the sibling prunes: authoritative
-        per-charger rows, explicit service registrations, and anything the
-        registry itself owns (``energy_dashboard_*`` re-derives every refresh).
-        Returns True if it removed anything. Never raises."""
-        lm = self._load_manager
-        if not lm or not self._discovery:
-            return False
-        authoritative = {
-            f"load_device_{c.get('id')}"
-            for c in self._ev_charger_rows if c.get("id")
-        }
-        removed: List[str] = []
-        try:
-            for did, info in list(getattr(lm, "_devices", {}).items()):
-                if not did.startswith("load_device_") or not isinstance(info, dict):
-                    continue
-                if did in authoritative or info.get("device_type") == "ev_charger":
-                    continue  # authoritative charger row
-                if did in self._service_registrations:
-                    continue  # explicit user registration, not a discovery guess
-                control = info.get("control") or {}
-                candidates = [info.get("switch_entity"), control.get("entity")]
-                if any(self._discovery.is_config_surface(e) for e in candidates):
-                    removed.append(did)
-        except Exception as e:  # pragma: no cover - defensive
-            _LOGGER.debug("#781 config-surface prune skipped: %s", e)
-            return False
-        for did in removed:
-            try:
-                del lm._devices[did]
-            except KeyError:  # pragma: no cover - defensive
-                pass
-            # A pruned row must not linger in the shed list — _restore_loads
-            # indexes _devices[did] and would KeyError on a removed row.
-            shed = getattr(lm, "_devices_shed", None)
-            if isinstance(shed, list) and did in shed:
-                shed.remove(did)
-            _LOGGER.info(
-                "#781 dropped load row %s — its control entity is a "
-                "configuration/diagnostic knob, not a load", did,
             )
         return bool(removed)
 
