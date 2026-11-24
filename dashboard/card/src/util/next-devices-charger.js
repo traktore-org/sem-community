@@ -87,7 +87,7 @@ export function chargerBody(card, row) {
         if (key === 'block') card._selectOption(modeId, 'now');
         else if (key === 'full') card._selectOption(modeId, 'always_max');
         else card._editDialog({ title: t('next_now_end_time'), ...card._timeEdit('nowend:' + cid, { value: nowUntil,
-            onCommit: (v) => { const mins = minutesUntil(v); if (mins) card._callService('solar_energy_management', 'plan_override', { device_id: cid, action: 'force', minutes: mins }); } }) });
+            onCommit: (v) => { const mins = minutesUntil(v); if (mins) card._callService('solar_energy_management', 'plan_override', { device_id: cid, action: 'force', minutes: mins, user_now: true, fixed_end: true }); } }) });
     };
     const nowEndKey = mode !== 'now' ? '' : (nowUntil ? 'time' : 'full');
     // (#1321) ONE control for the mode, as the battery has: Off first, then the modes in the shared order

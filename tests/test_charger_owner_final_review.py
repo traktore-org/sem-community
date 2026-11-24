@@ -74,7 +74,7 @@ def _now_override(minutes=60, user_now=True):
     now = dt_util.utcnow()
     return po.set_override(
         {}, "c", "force", now + timedelta(minutes=minutes), now,
-        value=po.USER_NOW if user_now else None), now
+        user_now=user_now), now
 
 
 def test_d20_users_now_lifts_off_for_its_duration():

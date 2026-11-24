@@ -656,10 +656,9 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             if stored != "always_max" and self._now_override() is None:
                 # (#1381 D20) marked as the user's own Now: it lifts a
                 # standing Off or a pause until it ends, then Off is Off again
-                from .coordinator.plan_override import USER_NOW
                 coord.set_plan_override(
                     self._charger_id, "force",
-                    coord.now_minutes_for(self._charger_id), USER_NOW)
+                    coord.now_minutes_for(self._charger_id), user_now=True)
             self._value = "now"
             self.async_write_ha_state()
             await coord.async_request_refresh()

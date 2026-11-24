@@ -29,11 +29,11 @@ def _select(stored="min_plus_solar", overrides=None):
     sel.coordinator.now_minutes_for = MagicMock(return_value=95)
     sel.coordinator.async_request_refresh = AsyncMock()
 
-    def _set(cid, action, minutes, value=None):
+    def _set(cid, action, minutes, value=None, *, user_now=False, fixed_end=False):
         now = dt_util.utcnow()
         sel.coordinator._plan_overrides = po.set_override(
             sel.coordinator._plan_overrides, cid, action,
-            now + timedelta(minutes=minutes), now)
+            now + timedelta(minutes=minutes), now, user_now=user_now)
     sel.coordinator.set_plan_override = MagicMock(side_effect=_set)
 
     def _clear(cid):
@@ -55,7 +55,7 @@ async def test_picking_now_starts_a_timed_now_until_the_next_block():
     with patch.object(sel, "async_write_ha_state"):
         await sel.async_select_option("now")
     sel.coordinator.set_plan_override.assert_called_once_with(
-        "ev_charger", "force", 95, po.USER_NOW)
+        "ev_charger", "force", 95, user_now=True)
     assert sel.current_option == "now"
     assert sel.extra_state_attributes["now_until"] is not None
     # the stored strategy is untouched: the plan resumes it at the end

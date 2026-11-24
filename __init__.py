@@ -4657,7 +4657,9 @@ async def _async_register_services(
         try:
             coordinator.set_plan_override(
                 call.data["device_id"], call.data["action"],
-                call.data["minutes"], call.data.get("value"))
+                call.data["minutes"], call.data.get("value"),
+                user_now=bool(call.data.get("user_now", False)),
+                fixed_end=bool(call.data.get("fixed_end", False)))
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         await coordinator.async_request_refresh()
@@ -4677,6 +4679,11 @@ async def _async_register_services(
                 vol.Required("minutes"): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=24 * 60)),
                 vol.Optional("value"): vol.Coerce(float),
+                # (#1381 D31) the user's own Now: only this lifts Off
+                vol.Optional("user_now"): cv.boolean,
+                # (#1381 D30) the end is a clock time, not minutes from
+                # the plug-in
+                vol.Optional("fixed_end"): cv.boolean,
             }),
         )
         hass.services.async_register(

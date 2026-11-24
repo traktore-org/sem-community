@@ -5856,11 +5856,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         try:
                             # (#1381 D22) a Now ends when its car leaves: the
                             # next car plugged in never inherits full power
-                            if _po.end_now_on_unplug(
-                                    self._plan_overrides, cid,
-                                    _now_car_gone(self, power, charger_cfg),
-                            ) is not self._plan_overrides:
-                                self.clear_plan_override(cid)
+                            self._now_follow_car(
+                                cid, _now_car_gone(self, power, charger_cfg))
                             _view_mode = _po.charger_mode_for(
                                 self._plan_overrides, cid, per_mode, _now_override)
                         except Exception:  # noqa: BLE001 — a bad override is no override
@@ -6361,11 +6358,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # user's timed full power, ended on a known unplug
                 try:
                     from . import plan_override as _po1
-                    if _po1.end_now_on_unplug(
-                            self._plan_overrides, cid,
-                            _now_car_gone(self, power, self._primary_charger_cfg()),
-                    ) is not self._plan_overrides:
-                        self.clear_plan_override(cid)
+                    self._now_follow_car(
+                        cid, _now_car_gone(self, power, self._primary_charger_cfg()))
                     per_mode = _po1.charger_mode_for(
                         self._plan_overrides, cid, per_mode, dt_util.now())
                 except Exception:  # noqa: BLE001 — a bad override is no override
@@ -12626,7 +12620,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # ── (#1085 Part B) one-off plan overrides ──────────────────────────
     def set_plan_override(
         self, device_id: str, action: str, minutes: int,
-        value: Optional[float] = None,
+        value: Optional[float] = None, *, user_now: bool = False,
+        fixed_end: bool = False,
     ) -> None:
         """Set ``device_id``'s one-off override — tonight only, survives
         a restart, auto-expires. Replaces any override already on this
@@ -12661,9 +12656,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 f"not a charger, a battery or a load: {device_id!r} "
                 f"(one of {sorted(known | _override_load_ids(self))})")
         now = dt_util.utcnow()
+        # (#1381 D30) A charger's force waits for its car: it starts on the
+        # first cycle the car is known to be in (a relative Now counts its
+        # minutes from then; a chosen clock time keeps that time). Until
+        # then it holds at most a day, the override's own bound.
+        is_charger = device_id in known and device_id not in batteries \
+            and device_id != "primary"
+        waits = action == "force" and is_charger
+        if waits and not fixed_end:
+            expires = now + timedelta(minutes=_po.MAX_OVERRIDE_MINUTES)
+        else:
+            expires = now + timedelta(minutes=minutes)
         self._plan_overrides = _po.set_override(
-            self._plan_overrides, device_id, action,
-            now + timedelta(minutes=minutes), now, value=value)
+            self._plan_overrides, device_id, action, expires, now,
+            value=value, user_now=bool(user_now and is_charger),
+            started=not waits, minutes=int(minutes) if waits else None,
+            fixed_end=bool(fixed_end))
         if self._storage is not None:
             self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
         _LOGGER.info("Plan override: %s %s for %d min", device_id, action, minutes)
@@ -12724,6 +12732,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return 120
         minutes = int((target - now).total_seconds() // 60)
         return max(1, min(24 * 60, minutes))
+
+    def _now_follow_car(self, cid: str, car_absent: Optional[bool]) -> None:
+        """(#1381 D22/D30) A charger force waits for its car, then ends when
+        the car leaves (``plan_override.end_now_on_unplug``)."""
+        from . import plan_override as _po
+        new = _po.end_now_on_unplug(
+            self._plan_overrides, cid, car_absent, dt_util.utcnow())
+        if new is self._plan_overrides:
+            return
+        self._plan_overrides = new
+        if self._storage is not None:
+            self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        _LOGGER.info("Plan override %s: %s", cid,
+                     "started — the car is in" if cid in new else "ended — the car left")
 
     def clear_plan_override(self, device_id: str) -> None:
         """End ``device_id``'s override now, if one is set."""
