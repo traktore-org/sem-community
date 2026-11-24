@@ -201,9 +201,8 @@ async def test_pipeline_replay(freezer):
 
     # the synthetic #1381 day
     cfg = dict(WIRED)
-    # two chargers, each with its own power sensor; the install's EV sensor
-    # is the first one's (as the setup wizard stores it)
-    cfg["ev_power_sensor"] = "sensor.links_power"
+    # the install's EV sensor is the sum of both chargers
+    cfg["ev_power_sensor"] = "sensor.ev"
     cfg.update({
         "phase_guard_enabled": True, "phase_guard_enforcement_enabled": True,
         "phase_guard_topology": "grid_only", "phase_guard_phase_count": 3,
@@ -212,11 +211,14 @@ async def test_pipeline_replay(freezer):
         "phase_guard_grid_l2_current_entity": "sensor.l2",
         "phase_guard_grid_l3_current_entity": "sensor.l3",
     })
+    # each charger reads its OWN power (the per-charger key the card writes)
     chargers = [
         _charger("links", power="sensor.links_power", mode="always_max",
-                 external_control_mode="yield", priority=1),
+                 external_control_mode="yield", priority=1,
+                 ev_charging_power_sensor="sensor.links_power"),
         _charger("rechts", power="sensor.rechts_power", mode="always_max",
-                 external_control_mode="yield", priority=2),
+                 external_control_mode="yield", priority=2,
+                 ev_charging_power_sensor="sensor.rechts_power"),
     ]
     rig = CycleRig(config=cfg, chargers=chargers)
     for cid in ("links", "rechts"):
