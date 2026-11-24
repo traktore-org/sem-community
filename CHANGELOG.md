@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.27] — 24.11.2026
+
 - 🐛 **The session Excel file names each charger as you named it** (#1410). Its id moves to a new last column, `charger_id`.
 - 🐛 **Finish by departure waits for the plan's cheapest hours** (#1415). With time to spare and no peak limit, the car no longer charges at once.
 - 🐛 **SEM controls a load only after you turn it on** (#1419). Old devices found by name are no longer used; a Repair names them.
