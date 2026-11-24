@@ -53,6 +53,10 @@ BACKOFF_S = (10 * 60, 20 * 60, 40 * 60)
 #: Failed hand-backs before SEM gives up and tells the user: every wait in
 #: BACKOFF_S is used, the next failure leaves the charger off with a Repair.
 MAX_FAILURES = len(BACKOFF_S) + 1
+#: After the stop, the entity may still read its old state for a while (the
+#: write is not shown yet, or the integration polls). Within this time that
+#: is not "somebody changed it" (found by the pipeline replay, #1381).
+STOP_SETTLE_S = 120
 #: After a hand-back the charger must draw, or read back what SEM restored,
 #: within this time; otherwise the hand-back counts as failed.
 READBACK_S = 5 * 60
@@ -359,12 +363,19 @@ def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
             continue
         changed = False
         unknown = False
+        settling = now - float(rec.get("stopped_at") or now) < STOP_SETTLE_S
         for res in rec.get("restores") or ():
-            m = _state_matches(states.get(res.get("entity_id")), res.get("left"))
+            cur = states.get(res.get("entity_id"))
+            m = _state_matches(cur, res.get("left"))
             if m is None:
                 unknown = True
             elif m is False:
-                changed = True
+                # still the state from before SEM's stop, just after it: the
+                # write has not shown yet — wait, never "changed by other"
+                if settling and _state_matches(cur, res.get("target")) is True:
+                    unknown = True
+                else:
+                    changed = True
         # (review F1) what SEM itself already restored is SEM's state, not a
         # change by somebody else
         for res in rec.get("done") or ():
@@ -507,8 +518,12 @@ def note_guard_stop(coord: Any, cid: str, adapter: Any, power: Any,
 def _drawing_phases(coord: Any, cid: str, adapter: Any, dev: Any,
                     draw_w: float) -> int:
     """How many phases carried the charge at the stop: the charger's own
-    current per phase (#1407) when it has it, else SEM's phase belief
-    (#1412), else the charger's configured phases."""
+    current per phase (#1407) when it has it, else the charger's configured
+    phases. Not SEM's phase belief: this charger is steered by another
+    party, so the belief rests on a current SEM did not set (the pipeline
+    replay showed a three-phase car read as one phase that way). Without
+    per-phase readings a one-phase car on a three-phase box is judged on its
+    three-phase share — the readings are the fix, not a guess."""
     reader = getattr(coord, "_charger_leg_phases", None)
     if callable(reader):
         try:
@@ -517,9 +532,6 @@ def _drawing_phases(coord: Any, cid: str, adapter: Any, dev: Any,
             legs = None
         if isinstance(legs, int) and 1 <= legs <= 3:
             return legs
-    belief = (getattr(coord, "_phase_believed", None) or {}).get(cid)
-    if isinstance(belief, int) and 1 <= belief <= 3:
-        return belief
     try:
         return max(1, int(getattr(adapter, "phases", 3) or 3))
     except (TypeError, ValueError):

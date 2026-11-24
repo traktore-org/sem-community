@@ -151,9 +151,9 @@ def _overload_values(rig, values, t, sim):
     plugged draws its current on all three phases."""
     hh = values.pop("_hour")
     links_on = (sim["states"].get("switch.links_enable", "on") == "on"
-                and float(sim["states"].get("number.links_current", 16)) >= 6)
+                and float(sim["states"].get("number.links_current", 12)) >= 6)
     rechts_on = (sim["states"].get("switch.rechts_enable", "on") == "on"
-                 and float(sim["states"].get("number.rechts_current", 16)) >= 6)
+                 and float(sim["states"].get("number.rechts_current", 6)) >= 6)
     links_a = 12.0 if links_on else 0.0       # Audi ~8.3 kW
     rechts_a = 6.0 if (rechts_on and 16.5 <= hh < 21.0) else 0.0
     heat_l3 = 8.0 if 16.71 <= hh < 16.76 else 0.0    # 16:43–16:45 peak
@@ -174,8 +174,9 @@ def _overload_values(rig, values, t, sim):
         "sensor.l3": (round(l["l3"], 1), {"unit_of_measurement": "A"}),
         "switch.links_enable": sim["states"].get("switch.links_enable", "on"),
         "switch.rechts_enable": sim["states"].get("switch.rechts_enable", "on"),
-        "number.links_current": sim["states"].get("number.links_current", 16),
-        "number.rechts_current": sim["states"].get("number.rechts_current", 16),
+        # the other party set these currents (12 A and 6 A)
+        "number.links_current": sim["states"].get("number.links_current", 12),
+        "number.rechts_current": sim["states"].get("number.rechts_current", 6),
     }
     _set_states(rig, vals, t)
 
@@ -200,6 +201,9 @@ async def test_pipeline_replay(freezer):
 
     # the synthetic #1381 day
     cfg = dict(WIRED)
+    # two chargers, each with its own power sensor; the install's EV sensor
+    # is the first one's (as the setup wizard stores it)
+    cfg["ev_power_sensor"] = "sensor.links_power"
     cfg.update({
         "phase_guard_enabled": True, "phase_guard_enforcement_enabled": True,
         "phase_guard_topology": "grid_only", "phase_guard_phase_count": 3,
@@ -240,6 +244,14 @@ async def test_pipeline_replay(freezer):
 
     report["synthetic-1381-overload"] = await _run(
         rig, _overload_steps(), _set, _move)
+    if os.environ.get("PIPELINE_REPLAY_DEBUG"):
+        report["_debug"] = {
+            "stops": json.loads(json.dumps(getattr(rig.coord, "_guard_stops", None), default=str)),
+            "why": getattr(rig.coord, "_guard_hand_back_why", None),
+            "facts": getattr(rig.coord, "_hand_back_facts", None),
+            "snapshot_mode": (getattr(rig.coord, "_phase_guard_snapshot", None) or {}).get("mode"),
+            "ledger": [e for e in getattr(rig.coord._ev_devices["links"], "command_ledger", [])][-6:],
+        }
 
     with gzip.open(OUT, "wt", encoding="utf-8") as fh:
         json.dump(report, fh)

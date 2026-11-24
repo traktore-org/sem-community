@@ -132,13 +132,15 @@ def test_f4_a_one_phase_car_needs_its_whole_current_on_one_phase():
     assert three["draw_a"] == pytest.approx(6.0)
 
 
-def test_f4_the_drawing_phases_come_from_the_legs_then_the_belief():
+def test_f4_the_drawing_phases_come_from_the_legs_never_the_belief():
+    """The belief rests on SEM's own setpoint; a yielded charger's current
+    is the other party's, so the belief is not used here."""
     adapter = SimpleNamespace(phases=3)
     legs = SimpleNamespace(_charger_leg_phases=lambda cid, dev, w: 1)
     belief = SimpleNamespace(_phase_believed={"c": 1})
     plain = SimpleNamespace()
     assert ghb._drawing_phases(legs, "c", adapter, None, 3680) == 1
-    assert ghb._drawing_phases(belief, "c", adapter, None, 3680) == 1
+    assert ghb._drawing_phases(belief, "c", adapter, None, 3680) == 3
     assert ghb._drawing_phases(plain, "c", adapter, None, 3680) == 3
 
 
@@ -173,3 +175,23 @@ async def test_a_damaged_record_never_breaks_the_cycle():
     with patch("homeassistant.helpers.issue_registry.async_create_issue"):
         await _tick(coord, T0 + 3600, ARMED_ROOMY)   # must not raise
     assert coord._guard_stops[LINKS]["left_off"] is True
+
+
+@pytest.mark.asyncio
+async def test_the_stop_not_yet_shown_is_not_a_change_by_others():
+    """Found by the pipeline replay: on the stop's own cycle the switch still
+    reads "on" (the write is not shown yet). That must not drop the record."""
+    coord, states, hass = _two_chargers()
+    await _guard_stop(coord, LINKS, 10300, T0)
+    states.values[SW[LINKS]] = "on"          # the stop has not shown yet
+    await _tick(coord, T0 + 10, ARMED_ROOMY)
+    assert LINKS in coord._guard_stops
+    states.values[SW[LINKS]] = "off"         # now it shows
+    await _tick(coord, T0 + 3600, ARMED_ROOMY)
+    assert states.values[SW[LINKS]] == "on"  # handed back
+    # long after the stop, "on" again means somebody else switched it on
+    coord2, states2, _h = _two_chargers()
+    await _guard_stop(coord2, LINKS, 10300, T0)
+    states2.values[SW[LINKS]] = "on"
+    await _tick(coord2, T0 + ghb.STOP_SETTLE_S + 10, ARMED_ROOMY)
+    assert LINKS not in coord2._guard_stops
