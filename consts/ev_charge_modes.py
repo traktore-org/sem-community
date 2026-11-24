@@ -143,14 +143,18 @@ def apply_user_mode_write(charger: dict, key: str, value: Any) -> None:
         return
     if key == "charge_mode":
         v = str(value or "") if value is not None else value
+        prev = str(charger.get("charge_mode") or "")
         help_now = battery_help_of(charger)    # read BEFORE the write
         if isinstance(v, str) and v in USER_MODES and v not in EV_CHARGE_MODES:
-            charger["charge_mode"] = strategy_for(v, help_now)
+            v = strategy_for(v, help_now)
+        charger["charge_mode"] = v if isinstance(v, str) else value
+        # The strategy carries the switch for the four sun strategies, so
+        # nothing is stored for them (a write of the same mode changes no
+        # key: the startup heal and set_option stay no-ops). Leaving a sun
+        # strategy for Now or Off is the one moment the switch must be
+        # remembered, because the new strategy cannot carry it.
+        if v not in _HELP_OF_STRATEGY and prev in _HELP_OF_STRATEGY:
             charger[BATTERY_HELP_KEY] = help_now
-            return
-        charger["charge_mode"] = value
-        # an old name carries its own help; Now and Off keep the switch
-        charger[BATTERY_HELP_KEY] = _HELP_OF_STRATEGY.get(v, help_now)
         return
     if key == BATTERY_HELP_KEY:
         on = bool(value)
