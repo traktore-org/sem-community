@@ -97,3 +97,121 @@ def test_the_lint_sees_a_seeded_bare_string_source():
         "    await _owner.resolve(d, [('stability', _owner.CommandClass.SUN, g)])\n")
     step = next(_resolve_calls(bad)).args[1].elts[0]
     assert not _attr_chain(step.elts[0]).split(".")[-1].startswith("SRC_")
+
+
+# ── (#1381 D26) the relabel guard cannot be fooled by aliasing ────────────
+
+_OWNER_VERBS = {"stamp", "resolve"}
+#: Every place outside the owner that stamps a decision's source today, by
+#: (file, source). Each is a step ``resolve()`` lists; a new one fails here
+#: until someone decides it belongs in the owner's step list.
+_ALLOWED_RELABELS = {
+    ("coordinator/active_phase_guard.py", "phase_guard"),
+    ("coordinator/actuate.py", "phase_guard"),
+    ("coordinator/plan_override.py", "plan_skip"),
+    ("coordinator/decide.py", "peak_emergency"),
+    ("coordinator/vpp_dispatch.py", "vpp_pause"),
+}
+
+
+def _owner_offences(tree) -> list:
+    """Every way ``tree`` reaches the owner's stamp/resolve: an import of
+    them (any alias), the owner module under any name with the verb called or
+    fetched by ``getattr``, and a call through any of those names."""
+    out = []
+    mod_aliases, fn_aliases = set(), set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            mod = node.module or ""
+            for a in node.names:
+                if mod.endswith("charger_owner") and a.name in _OWNER_VERBS:
+                    fn_aliases.add(a.asname or a.name)
+                    out.append(node.lineno)
+                if a.name == "charger_owner":
+                    mod_aliases.add(a.asname or a.name)
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.endswith("charger_owner"):
+                    mod_aliases.add(a.asname or a.name.split(".")[-1])
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        f = node.func
+        if isinstance(f, ast.Name) and f.id in fn_aliases:
+            out.append(node.lineno)
+        elif isinstance(f, ast.Attribute) and f.attr in _OWNER_VERBS:
+            chain = _attr_chain(f.value)
+            if chain.split(".")[-1] in mod_aliases or "_owner" in chain:
+                out.append(node.lineno)
+        elif (isinstance(f, ast.Name) and f.id == "getattr" and len(node.args) >= 2
+              and isinstance(node.args[1], ast.Constant)
+              and node.args[1].value in _OWNER_VERBS
+              and _attr_chain(node.args[0]).split(".")[-1] in mod_aliases):
+            out.append(node.lineno)
+    return sorted(set(out))
+
+
+def _relabels(tree) -> set:
+    """``(source)`` of every ``rewrite``/``replace`` call that sets a
+    decision's ``source`` or ``klass`` (a bare string, any alias)."""
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = _attr_chain(node.func).split(".")[-1]
+        if name not in ("rewrite", "replace", "_replace"):
+            continue
+        kws = {k.arg: k.value for k in node.keywords if k.arg}
+        if "source" in kws or "klass" in kws:
+            v = kws.get("source")
+            out.add(v.value if isinstance(v, ast.Constant) else ast.unparse(v) if v else "?")
+    return out
+
+
+def _package_files():
+    for path in PKG.rglob("*.py"):
+        rel = path.relative_to(PKG)
+        if rel.parts and rel.parts[0] in EXCLUDE:
+            continue
+        yield path, rel
+
+
+def test_no_module_reaches_the_owners_verbs_under_any_name():
+    offenders = []
+    for path, rel in _package_files():
+        if path in (OWNER, COORD):
+            continue
+        for line in _owner_offences(ast.parse(path.read_text())):
+            offenders.append(f"{rel}:{line}")
+    assert offenders == [], offenders
+
+
+def test_every_relabel_outside_the_owner_is_a_known_step():
+    found = set()
+    for path, rel in _package_files():
+        if path in (OWNER, COORD):
+            continue
+        for src in _relabels(ast.parse(path.read_text())):
+            found.add((str(rel), src))
+    assert found <= _ALLOWED_RELABELS, sorted(found - _ALLOWED_RELABELS)
+
+
+def test_the_lint_sees_every_fooling_form():
+    """The guards work: each way a reviewer used to slip past is caught."""
+    fooling = {
+        "from_import_alias": "from .charger_owner import resolve as r\nr(d, [])\n",
+        "module_alias": "from . import charger_owner as co\nco.stamp(d, 'x', 1)\n",
+        "plain_import": "import custom.coordinator.charger_owner as cx\ncx.resolve(d, [])\n",
+        "getattr_string": "from . import charger_owner as m\ngetattr(m, 'stamp')(d)\n",
+    }
+    for name, code in fooling.items():
+        assert _owner_offences(ast.parse(code)), name
+    relabel = {
+        "rewrite_kw": "rewrite(d, source='sneaky', klass=2)\n",
+        "dataclass_replace": "dataclasses.replace(d, source='sneaky')\n",
+        "replace_alias": "replace(d, klass=1)\n",
+    }
+    for name, code in relabel.items():
+        assert _relabels(ast.parse(code)), name
+    # and an honest file is clean
+    assert _owner_offences(ast.parse("from .charger_owner import is_guard_stop\n")) == []
