@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM låter säkerhetsenheter vara",
-      "description": "Dessa enheter är säkerhetsenheter (kamera, larm, siren eller dörrlås): **{names}**. SEM visar och styr dem inte längre. Deras energi räknas fortfarande i husets förbrukning."
+      "description": "Dessa enheter är säkerhetsenheter (kamera, larm, siren eller dörrlås): **{names}**. SEM visar och styr dem inte längre. Deras energi räknas fortfarande i husets förbrukning. Är någon av dem en apparat med lås och inte ett dörrlås, lägg till den med **Lägg till en enhet**."
     }
   },
   "selector": {

@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM lar sikkerhetsenheter være",
-      "description": "Disse enhetene er sikkerhetsenheter (kamera, alarm, sirene eller dørlås): **{names}**. SEM viser og styrer dem ikke lenger. Energien deres teller fortsatt med i husets forbruk."
+      "description": "Disse enhetene er sikkerhetsenheter (kamera, alarm, sirene eller dørlås): **{names}**. SEM viser og styrer dem ikke lenger. Energien deres teller fortsatt med i husets forbruk. Er en av dem et apparat med lås og ikke en dørlås, legg den til med **Legg til en enhet**."
     }
   },
   "selector": {

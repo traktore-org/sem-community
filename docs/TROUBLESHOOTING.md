@@ -299,9 +299,9 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 ### SEM leaves security devices alone
 
-**Cause:** A device has a camera, an alarm panel, a siren or its own door lock in Home Assistant. SEM never lists or switches such a device. An appliance with only a child lock is not one.
+**Cause:** A device has a camera, an alarm panel, a siren or a lock in Home Assistant. SEM never lists or switches such a device. A lock that Home Assistant marks as a setting (a child lock) does not count.
 
-**Fix:** Nothing. Its energy still counts in the home total. If it is a load and SEM should control it, report it with diagnostics.
+**Fix:** Nothing for a camera, alarm or door lock. Its energy still counts in the home total. If the device is an appliance with a lock, add it with **Add a device**.
 
 ### SEM no longer uses old automatically found devices
 

@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM jättää turvalaitteet rauhaan",
-      "description": "Nämä laitteet ovat turvalaitteita (kamera, hälytin, sireeni tai ovilukko): **{names}**. SEM ei enää näytä eikä ohjaa niitä. Niiden energia lasketaan yhä kodin kulutukseen."
+      "description": "Nämä laitteet ovat turvalaitteita (kamera, hälytin, sireeni tai ovilukko): **{names}**. SEM ei enää näytä eikä ohjaa niitä. Niiden energia lasketaan yhä kodin kulutukseen. Jos jokin on laite, jossa on lukitus, eikä ovilukko, lisää se kohdasta **Lisää laite**."
     }
   },
   "selector": {

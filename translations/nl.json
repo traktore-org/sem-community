@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM laat beveiligingsapparaten met rust",
-      "description": "Deze apparaten zijn beveiligingsapparaten (camera, alarm, sirene of deurslot): **{names}**. SEM toont en schakelt ze niet meer. Hun verbruik telt nog mee in het huisverbruik."
+      "description": "Deze apparaten zijn beveiligingsapparaten (camera, alarm, sirene of deurslot): **{names}**. SEM toont en schakelt ze niet meer. Hun verbruik telt nog mee in het huisverbruik. Is er een een apparaat met een slot en geen deurslot, voeg het dan toe met **Apparaat toevoegen**."
     }
   },
   "selector": {

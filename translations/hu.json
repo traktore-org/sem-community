@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "A SEM békén hagyja a biztonsági eszközöket",
-      "description": "Ezek biztonsági eszközök (kamera, riasztó, sziréna vagy ajtózár): **{names}**. A SEM már nem mutatja és nem kapcsolja őket. Az energiájuk továbbra is beleszámít a ház fogyasztásába."
+      "description": "Ezek biztonsági eszközök (kamera, riasztó, sziréna vagy ajtózár): **{names}**. A SEM már nem mutatja és nem kapcsolja őket. Az energiájuk továbbra is beleszámít a ház fogyasztásába. Ha valamelyik zárral ellátott készülék, nem ajtózár, add hozzá az **Eszköz hozzáadása** gombbal."
     }
   },
   "selector": {

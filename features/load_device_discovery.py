@@ -108,18 +108,19 @@ def resolve_load_is_on(
 
 
 #: (#1419) Entity domains whose presence makes a device a security device:
-#: a camera, an alarm panel, a siren. A ``lock`` counts only when it is the
-#: device's own lock (see ``_is_primary_lock``) — a washer, heat pump or TRV
-#: often carries a ``lock.*_child_lock`` and is still a load.
+#: a camera, an alarm panel, a siren. A ``lock`` counts too, unless Home
+#: Assistant's own metadata marks it as an appliance setting (see
+#: ``_is_setting_lock``) — a washer, heat pump or TRV often carries a child
+#: lock and is still a load.
 SECURITY_DOMAINS: Final = frozenset({"camera", "alarm_control_panel", "siren"})
 LOCK_DOMAIN: Final = "lock"
-#: Words that mark a lock entity as a setting of an appliance, not a lock
-#: (read from translation_key and entity_id — HA's own key first).
-_SETTING_LOCK_WORDS: Final = ("child", "key_lock", "keylock", "button_lock",
-                              "panel_lock", "control_lock", "kindersicherung")
-#: Domains that are a load's main control: with a measured power sensor they
-#: make a device a load, whatever lock it also carries.
-_LOAD_CONTROL_DOMAINS: Final = frozenset({"switch", "climate", "water_heater"})
+#: Words that mark a lock as an appliance setting — read ONLY from what the
+#: integration declares (``translation_key``, ``original_name``), never from
+#: the entity_id or the user's name: ``lock.child_room_door`` is a door.
+_SETTING_LOCK_WORDS: Final = ("child_lock", "childlock", "child lock",
+                              "key_lock", "keylock", "key lock",
+                              "button_lock", "panel_lock", "control_lock",
+                              "kindersicherung", "tastensperre")
 
 
 def _category(entry) -> str:
@@ -127,68 +128,78 @@ def _category(entry) -> str:
     return str(getattr(cat, "value", cat) or "").lower()
 
 
-def _is_primary_lock(entry) -> bool:
-    """A lock entity that is a real lock, not an appliance setting."""
+def _is_setting_lock(entry) -> bool:
+    """A lock entity that HA's own metadata marks as an appliance setting."""
     if _category(entry) in ("config", "diagnostic"):
-        return False
-    words = " ".join(str(getattr(entry, k, "") or "").lower()
-                     for k in ("translation_key", "entity_id", "original_name"))
-    return not any(w in words for w in _SETTING_LOCK_WORDS)
+        return True
+    declared = " ".join(str(getattr(entry, k, "") or "").lower()
+                        for k in ("translation_key", "original_name"))
+    return any(w in declared for w in _SETTING_LOCK_WORDS)
 
 
-def _is_load_device(entries) -> bool:
-    """A device whose main function is a load: a primary switch/climate AND a
-    measured power sensor."""
-    control = any(e.entity_id.split(".", 1)[0] in _LOAD_CONTROL_DOMAINS
-                  and _category(e) not in ("config", "diagnostic") for e in entries)
-    power = any(e.entity_id.startswith("sensor.") and str(
-        getattr(e, "original_device_class", None) or getattr(e, "device_class", None)
-        or "").lower() == "power" for e in entries)
-    return control and power
+def security_role(entries) -> str:
+    """(#1419) ``"security"``, ``"lock"`` or ``""`` for a device's entries.
 
-
-def is_security_device_entries(entries) -> bool:
-    """(#1419) Is a device with these registry entries a security device?
-
-    Its role decides, not any one entity: a camera, alarm panel or siren
-    makes it one; a lock only when it is the device's own lock and the device
-    is not a load (a primary switch or climate with a measured power sensor).
+    ``security``: a camera, alarm panel or siren — never a load, whoever asks.
+    ``lock``: a lock that HA's metadata does not mark as a setting. Treated
+    as a door lock (the safe side): never listed or auto-paired; a user who
+    knows it is an appliance can still add it with Add a device, and a
+    Repair names it so nothing is lost silently.
     """
     entries = list(entries)
     if any(e.entity_id.split(".", 1)[0] in SECURITY_DOMAINS for e in entries):
-        return True
-    locks = [e for e in entries if e.entity_id.split(".", 1)[0] == LOCK_DOMAIN
-             and _is_primary_lock(e)]
-    return bool(locks) and not _is_load_device(entries)
+        return "security"
+    if any(e.entity_id.split(".", 1)[0] == LOCK_DOMAIN and not _is_setting_lock(e)
+           for e in entries):
+        return "lock"
+    return ""
 
 
-def is_security_entity(hass: HomeAssistant, entity_id: Optional[str]) -> bool:
-    """(#1419) Does this entity belong to a security device?
+def is_security_device_entries(entries) -> bool:
+    """(#1419) Is a device with these registry entries left alone by SEM?"""
+    return security_role(entries) != ""
 
-    The device's role decides (``is_security_device_entries``). Such a device
-    never appears in SEM's device list, is never offered when a device is
-    added, and its switches are never paired with a power sensor as a
-    control. Its energy still counts: home consumption comes from the meters.
 
-    Registry-driven and conservative like the #781 check: an entity the
-    registry does not know, or a device that cannot be read, is judged on its
-    own domain only, never on a guess.
+def security_role_of(hass: HomeAssistant, entity_id: Optional[str]) -> str:
+    """(#1419) The security role of the device this entity belongs to.
+
+    Registry-driven and conservative: an entity the registry does not know
+    is judged on its own domain only.
     """
     if not entity_id:
-        return False
+        return ""
     domain = entity_id.split(".", 1)[0]
+    own = "security" if domain in SECURITY_DOMAINS else (
+        "lock" if domain == LOCK_DOMAIN else "")
     try:
         reg = entity_registry.async_get(hass)
         entry = reg.async_get(entity_id)
         if entry is None or not entry.device_id:
-            if domain in SECURITY_DOMAINS:
-                return True
-            return domain == LOCK_DOMAIN and (entry is None or _is_primary_lock(entry))
+            if own == "lock" and entry is not None and _is_setting_lock(entry):
+                return ""
+            return own
         siblings = entity_registry.async_entries_for_device(
             reg, entry.device_id, include_disabled_entities=True)
     except Exception:  # noqa: BLE001 — an unreadable registry decides nothing
-        return domain in SECURITY_DOMAINS
-    return is_security_device_entries(siblings)
+        return "security" if own == "security" else ""
+    return security_role(siblings)
+
+
+def is_security_entity(hass: HomeAssistant, entity_id: Optional[str], *,
+                       chosen: bool = False) -> bool:
+    """(#1419) Does SEM leave this entity's device alone?
+
+    A security device (camera, alarm panel, siren, a door lock) never appears
+    in SEM's device list and its switches are never auto-paired as a load's
+    control. Its energy still counts: home consumption comes from the meters.
+
+    ``chosen``: the user named this entity themselves (Add a device, a
+    control mapping, a schedule). A camera, alarm or siren is refused even
+    then; a device whose only evidence is an unmarked lock is allowed, since
+    the user knows it is an appliance.
+    """
+    role = security_role_of(hass, entity_id)
+    return role == "security" or (role == "lock" and not chosen)
 
 
 class LoadDeviceDiscovery:

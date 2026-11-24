@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM lascia stare i dispositivi di sicurezza",
-      "description": "Questi dispositivi sono di sicurezza (telecamera, allarme, sirena o serratura): **{names}**. SEM non li mostra e non li comanda più. Il loro consumo conta ancora nel totale della casa."
+      "description": "Questi dispositivi sono di sicurezza (telecamera, allarme, sirena o serratura): **{names}**. SEM non li mostra e non li comanda più. Il loro consumo conta ancora nel totale della casa. Se uno è un elettrodomestico con blocco e non una serratura, aggiungilo con **Aggiungi dispositivo**."
     }
   },
   "selector": {

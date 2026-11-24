@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM lasă în pace dispozitivele de securitate",
-      "description": "Aceste dispozitive sunt de securitate (cameră, alarmă, sirenă sau încuietoare): **{names}**. SEM nu le mai afișează și nu le mai comută. Energia lor contează în continuare în totalul casei."
+      "description": "Aceste dispozitive sunt de securitate (cameră, alarmă, sirenă sau încuietoare): **{names}**. SEM nu le mai afișează și nu le mai comută. Energia lor contează în continuare în totalul casei. Dacă unul este un aparat cu blocare, nu o încuietoare de ușă, adaugă-l cu **Adaugă un dispozitiv**."
     }
   },
   "selector": {

@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM leaves security devices alone",
-      "description": "These devices are security devices (a camera, alarm, siren or a door lock): **{names}**. SEM no longer lists or switches them. Their energy still counts in the home total."
+      "description": "These devices are security devices (a camera, alarm, siren or a door lock): **{names}**. SEM no longer lists or switches them. Their energy still counts in the home total. If one is an appliance with a lock, not a door lock, add it with **Add a device**."
     }
   },
   "selector": {

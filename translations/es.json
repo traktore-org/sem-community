@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM deja en paz los dispositivos de seguridad",
-      "description": "Estos dispositivos son de seguridad (cámara, alarma, sirena o cerradura): **{names}**. SEM ya no los muestra ni los controla. Su energía sigue contando en el total de la casa."
+      "description": "Estos dispositivos son de seguridad (cámara, alarma, sirena o cerradura): **{names}**. SEM ya no los muestra ni los controla. Su energía sigue contando en el total de la casa. Si alguno es un electrodoméstico con bloqueo y no una cerradura, añádelo con **Añadir dispositivo**."
     }
   },
   "selector": {

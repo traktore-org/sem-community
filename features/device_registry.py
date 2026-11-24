@@ -34,7 +34,7 @@ from ..ha_energy_reader import (
     _find_load_power_sensor,
 )
 from .load_device_discovery import (
-    LoadDeviceDiscovery, is_security_entity, resolve_load_is_on,
+    LoadDeviceDiscovery, is_security_entity, resolve_load_is_on, security_role_of,
 )
 from .load_management import is_charger_load_row
 # (#780/#888) the two axes, asked of the module that owns them. Imported
@@ -845,7 +845,7 @@ class UnifiedDeviceRegistry:
         from ..devices.base import DeviceControlMode
         for device_id, spec in self._service_registrations.items():
             # (#1419) a registration saved before the security rule
-            if is_security_entity(self.hass, spec.get("entity_id")):
+            if is_security_entity(self.hass, spec.get("entity_id"), chosen=True):
                 self._note_security_exclusion(device_id, spec.get("name") or device_id)
                 continue
             device = surplus_device_from_spec(self.hass, device_id, spec)
@@ -1066,10 +1066,16 @@ class UnifiedDeviceRegistry:
                 _LOGGER.info(
                     "Skipping Energy Dashboard device '%s' (%s): security "
                     "device — SEM never lists or controls it", name, energy_sensor)
+                # a door-lock verdict from an unmarked lock is the safe side,
+                # not a certainty: name it, known before or not
+                _weak = "security" not in (
+                    security_role_of(self.hass, energy_sensor),
+                    security_role_of(self.hass, power_sensor))
                 self._note_security_exclusion(
                     UnifiedDevice(energy_sensor=energy_sensor,
                                   power_sensor=power_sensor, name=name,
-                                  priority=position, is_ev=False).device_id, name)
+                                  priority=position, is_ev=False).device_id, name,
+                    always=_weak)
                 continue
 
             # Build a temporary device to get device_id
@@ -1089,7 +1095,8 @@ class UnifiedDeviceRegistry:
             # (#1419) a mapping saved before the security rule is re-checked:
             # a camera's switch is never a load's control, whoever chose it
             if has_manual and is_security_entity(
-                    self.hass, (self._manual_mappings[energy_sensor] or {}).get("entity")):
+                    self.hass, (self._manual_mappings[energy_sensor] or {}).get("entity"),
+                    chosen=True):
                 self._note_security_exclusion(device_id, name)
                 has_manual = False
             if has_manual:
@@ -1524,14 +1531,15 @@ class UnifiedDeviceRegistry:
         if deps:
             live.depends_on = list(deps)
 
-    def _note_security_exclusion(self, device_id: str, name: str) -> None:
+    def _note_security_exclusion(self, device_id: str, name: str, *,
+                                 always: bool = False) -> None:
         """(#1419) A device SEM knew before and now leaves alone because it
         is a security device is named in a Repair — never a silent drop. A
         device SEM never knew is skipped quietly."""
         known = (set(self._control_mode_overrides) | set(self._priority_overrides)
                  | set(self._critical_overrides) | set(self._service_registrations)
                  | set(getattr(self, "_device_goals", {}) or {}))
-        if device_id not in known:
+        if device_id not in known and not always:
             return
         names = self.__dict__.setdefault("_security_excluded", {})
         if names.get(device_id) == name:
@@ -1696,7 +1704,7 @@ class UnifiedDeviceRegistry:
             written.add(device_id)
 
         for did, spec in self._service_registrations.items():
-            if is_security_entity(self.hass, spec.get("entity_id")):
+            if is_security_entity(self.hass, spec.get("entity_id"), chosen=True):
                 continue   # (#1419) never a load; named in a Repair at boot
             self._load_manager._devices[did] = self._service_lm_row(did, spec)
             written.add(did)
@@ -1980,7 +1988,7 @@ class UnifiedDeviceRegistry:
         # (#559) service-registered devices — pre-fix they never appeared
         # on the Control tab at all.
         for did, spec in self._service_registrations.items():
-            if is_security_entity(self.hass, spec.get("entity_id")):
+            if is_security_entity(self.hass, spec.get("entity_id"), chosen=True):
                 continue   # (#1419) a security device is never listed
             if did in result:
                 continue

@@ -5296,7 +5296,7 @@ async def _async_register_services(
         control_type = call.data.get("control_type", "switch")
         # (#1419) A security device is never a load SEM may switch.
         from .features.load_device_discovery import is_security_entity
-        if is_security_entity(hass, control_entity):
+        if is_security_entity(hass, control_entity, chosen=True):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="security_device_not_a_load",
@@ -6197,7 +6197,7 @@ async def _async_register_phase_services(
         """
         # (#1419) A security device is never a load SEM may switch.
         from .features.load_device_discovery import is_security_entity
-        if is_security_entity(hass, call.data.get("entity_id")):
+        if is_security_entity(hass, call.data.get("entity_id"), chosen=True):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="security_device_not_a_load",
@@ -6383,7 +6383,7 @@ async def _async_register_phase_services(
         # (#1419) A security device is never a load SEM may switch — the same
         # refusal as register_surplus_device and set_device_control_mapping.
         from .features.load_device_discovery import is_security_entity
-        if is_security_entity(hass, entity_id):
+        if is_security_entity(hass, entity_id, chosen=True):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="security_device_not_a_load",

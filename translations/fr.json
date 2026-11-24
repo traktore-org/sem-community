@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM laisse les appareils de sécurité tranquilles",
-      "description": "Ces appareils sont des appareils de sécurité (caméra, alarme, sirène ou serrure de porte) : **{names}**. SEM ne les affiche et ne les commande plus. Leur énergie compte toujours dans le total de la maison."
+      "description": "Ces appareils sont des appareils de sécurité (caméra, alarme, sirène ou serrure de porte) : **{names}**. SEM ne les affiche et ne les commande plus. Leur énergie compte toujours dans le total de la maison. Si l'un d'eux est un appareil avec verrou et non une serrure de porte, ajoutez-le avec **Ajouter un appareil**."
     }
   },
   "selector": {

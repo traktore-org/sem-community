@@ -104,6 +104,12 @@ def _patch_registry(monkeypatch, entries):
     return reg
 
 
+def _e2(eid, dev, *, cat=None, key=None, name=None, dc=None):
+    e = _e(eid, dev, cat=cat, key=key, dc=dc)
+    e.original_name = name
+    return e
+
+
 DEVICES = [
     # security devices
     _e("camera.voortuin", "cam"), _e("switch.voortuin_camera_enabled", "cam"),
@@ -111,13 +117,21 @@ DEVICES = [
     _e("alarm_control_panel.house", "alarm"), _e("switch.alarm_chime", "alarm"),
     _e("siren.hall", "siren"), _e("switch.hall_siren_volume", "siren"),
     _e("lock.front_door", "door"), _e("switch.front_door_auto_lock", "door"),
-    # loads with an appliance lock — the reviewer's false positives
+    # the reviewer's cases: names say "child"/"key", metadata says door lock
+    _e("lock.child_room_door", "kids"), _e("switch.child_room_light", "kids"),
+    _e("lock.front_door_key_lock", "front2"), _e("switch.front2_relay", "front2"),
+    # a smart lock with an unmarked switch and a power sensor is still a lock
+    _e("lock.smart", "smart"), _e("switch.smart_auto_lock", "smart"),
+    _e("sensor.smart_power", "smart", dc="power"),
+    # a washer whose only lock is unmarked: safe side (security, with a Repair)
+    _e("lock.washer_lock", "washer2"), _e("switch.washer2", "washer2"),
+    # loads whose lock HA marks as a setting
     _e("switch.washer_power", "washer"), _e("sensor.washer_power", "washer", dc="power"),
-    _e("lock.washer_child_lock", "washer", cat="config", key="child_lock"),
+    _e("lock.washer_child_lock", "washer", cat="config"),
     _e("climate.heat_pump", "hp"), _e("sensor.heat_pump_power", "hp", dc="power"),
     _e("lock.heat_pump_key_lock", "hp", key="key_lock"),
     _e("climate.trv_kitchen", "trv"), _e("sensor.trv_kitchen_power", "trv", dc="power"),
-    _e("lock.trv_kitchen_child_lock", "trv"),   # no category, named by its id
+    _e2("lock.trv_kitchen_x", "trv", name="Child lock"),   # integration's own name
     _e("switch.dishwasher", "plug"), _e("sensor.dishwasher_power", "plug", dc="power"),
     _e("switch.template_helper", None),
 ]
@@ -130,9 +144,13 @@ DEVICES = [
     ("switch.alarm_chime", True),
     ("switch.hall_siren_volume", True),
     ("switch.front_door_auto_lock", True),
-    ("switch.washer_power", False),          # child lock: still a load
-    ("sensor.heat_pump_power", False),       # key lock: still a load
-    ("climate.trv_kitchen", False),          # child lock without a category
+    ("switch.child_room_light", True),       # "child" in a door's id is a door
+    ("switch.front2_relay", True),           # "key_lock" in an id is a door
+    ("switch.smart_auto_lock", True),        # a lock with a power sensor
+    ("switch.washer2", True),                # unmarked lock: safe side
+    ("switch.washer_power", False),          # config child lock: a load
+    ("sensor.heat_pump_power", False),       # integration's key_lock: a load
+    ("climate.trv_kitchen", False),          # integration's "Child lock" name
     ("switch.dishwasher", False),
     ("switch.template_helper", False),
     ("switch.unknown_to_registry", False),
@@ -143,6 +161,33 @@ def test_security_is_the_device_role(monkeypatch, eid, expected):
     assert LDD.is_security_entity(MagicMock(), eid) is expected
 
 
+def test_a_user_may_choose_a_lock_only_device_but_never_a_camera(monkeypatch):
+    _patch_registry(monkeypatch, DEVICES)
+    h = MagicMock()
+    assert LDD.is_security_entity(h, "switch.washer2", chosen=True) is False
+    assert LDD.is_security_entity(h, "switch.voortuin_camera_enabled", chosen=True) is True
+
+
+def test_a_lock_only_exclusion_is_always_named(monkeypatch):
+    """lock.washer_lock hides the washer (safe side) — a Repair names it even
+    when SEM never knew the device, with how to keep it."""
+    from custom_components.solar_energy_management.features.device_registry import (
+        UnifiedDeviceRegistry,
+    )
+    reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+    reg.hass = MagicMock()
+    for k in ("_control_mode_overrides", "_priority_overrides", "_critical_overrides",
+              "_service_registrations", "_device_goals"):
+        setattr(reg, k, {})
+    with patch(f"{IR}.async_create_issue") as create:
+        reg._note_security_exclusion("energy_dashboard_washer", "Washer", always=True)
+        reg._note_security_exclusion("energy_dashboard_cam", "Cam")   # unknown, strong
+    calls = [c for c in create.call_args_list
+             if c.kwargs.get("issue_id") == "security_devices_not_used"]
+    assert len(calls) == 1
+    assert calls[0].kwargs["translation_placeholders"]["names"] == "Washer"
+
+
 def test_a_security_switch_is_never_paired_as_a_control(monkeypatch):
     _patch_registry(monkeypatch, DEVICES)
     disc = LDD.LoadDeviceDiscovery.__new__(LDD.LoadDeviceDiscovery)
@@ -151,6 +196,7 @@ def test_a_security_switch_is_never_paired_as_a_control(monkeypatch):
     disc._entity_registry.async_get = MagicMock(return_value=None)  # no category
     assert disc.is_not_a_control("switch.voortuin_camera_enabled") is True
     assert disc.is_not_a_control("switch.washer_power") is False
+    assert disc.is_not_a_control("switch.smart_auto_lock") is True
 
 
 def test_the_rule_lives_in_one_place():
@@ -358,8 +404,13 @@ def test_no_actuation_path_reads_the_off_mode_itself():
     import pathlib
     root = pathlib.Path(LDD.__file__).resolve().parents[1]
     offenders = []
+    # The seam (``ControllableDevice.send``) is NOT the place for a mode guard:
+    # switching a load to Off while SEM drives it must still send ONE stop to
+    # release it (surplus_controller, class 17), and a charger's mode is its
+    # charge mode. So the guard lives in the deciders, and this test makes
+    # sure every decider asks the one function.
     for path in list(root.glob("coordinator/*.py")) + list(root.glob("devices/*.py")) \
-            + list(root.glob("features/*.py")):
+            + list(root.glob("features/*.py")) + [root / "__init__.py"]:
         if path.name == "device_axes.py":
             continue
         tree = ast.parse(path.read_text())

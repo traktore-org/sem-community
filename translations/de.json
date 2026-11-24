@@ -2143,7 +2143,7 @@
     },
     "security_devices_not_used": {
       "title": "SEM lässt Sicherheitsgeräte in Ruhe",
-      "description": "Diese Geräte sind Sicherheitsgeräte (Kamera, Alarm, Sirene oder Türschloss): **{names}**. SEM listet und schaltet sie nicht mehr. Ihr Verbrauch zählt weiter zum Hausverbrauch."
+      "description": "Diese Geräte sind Sicherheitsgeräte (Kamera, Alarm, Sirene oder Türschloss): **{names}**. SEM listet und schaltet sie nicht mehr. Ihr Verbrauch zählt weiter zum Hausverbrauch. Ist eines davon ein Gerät mit Sperre und kein Türschloss, füge es mit **Gerät hinzufügen** hinzu."
     }
   },
   "selector": {
