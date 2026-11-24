@@ -1180,6 +1180,11 @@ class MinPlusSolarMode(ModeStrategy):
         return ChargerDecision(
             charger_id=cid, mode=mode_name,
             intent=ChargerIntent.IDLE,
+            # (#1412) what was on offer, for a charger that changes phases:
+            # the phase planner reads it to start an idle charger on one
+            # phase. Every other charger keeps the 0.0 it always carried.
+            budget_w=(budget_w if cfg.get("ev_phase_switching_enabled", False)
+                      else 0.0),
             reason=(
                 f"{mode_name} day Zone {zone}: budget={_cw(budget_w)}W "
                 f"below {min_amps}A min {tail}"

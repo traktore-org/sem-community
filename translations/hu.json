@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Az SG-Ready szolgáltatás adatainak JSON objektumnak kell lenniük.",
       "heat_pump_contact_values_missing": "Ez az SG-Ready érintkező egy text/number/select entitás, ezért a SEM-nek mind a BE, mind a KI értékre szüksége van az íráshoz. Töltse ki mindkettőt, vagy válasszon egy switch entitást.",
       "calendar_needs_schedule": "A Naptár mód csúcsidő ütemezést igényel. Válasszon egy Ütemezés segédet vagy másik tarifamódot.",
-      "value_needs_spot_basis": "Felár, energiaadó vagy áfa csak spot árnál érvényes. Válaszd a spot alapot, vagy állítsd őket 0-ra."
+      "value_needs_spot_basis": "Felár, energiaadó vagy áfa csak spot árnál érvényes. Válaszd a spot alapot, vagy állítsd őket 0-ra.",
+      "phase_switch_value_out_of_range": "Az 1 fázis vagy a 3 fázis értéke kívül esik a fázisváltó entitás tartományán. Olyan értékeket adjon meg, amelyeket az entitás elfogad."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Felár, energiaadó vagy áfa csak spot árnál érvényes. Válaszd a spot alapot, vagy állítsd őket 0-ra."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "A fázisváltás értéke nem lett elmentve: {reason}. Olyan értéket adjon meg, amelyet az entitás elfogad."
     }
   },
   "issues": {

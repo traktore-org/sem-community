@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "SG-Ready-tjänstdatan måste vara ett JSON-objekt.",
       "heat_pump_contact_values_missing": "Den här SG-Ready-kontakten är en text-/number-/select-entitet, så SEM behöver både PÅ- och AV-värdet för att skriva. Fyll i båda, eller välj en switch-entitet.",
       "calendar_needs_schedule": "Kalenderläget behöver ett schema för högtid. Välj en Schema-hjälpare eller ett annat tariffläge.",
-      "value_needs_spot_basis": "Ett påslag, energiskatt eller moms gäller bara vid ett spotpris. Välj spotgrunden eller sätt dem till 0."
+      "value_needs_spot_basis": "Ett påslag, energiskatt eller moms gäller bara vid ett spotpris. Välj spotgrunden eller sätt dem till 0.",
+      "phase_switch_value_out_of_range": "Värdet för 1 fas eller 3 faser ligger utanför området för fasväxlingsentiteten. Ange värden som entiteten accepterar."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Ett påslag, energiskatt eller moms gäller bara vid ett spotpris. Välj spotgrunden eller sätt dem till 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Värdet för fasväxling sparades inte: {reason}. Ange ett värde som entiteten accepterar."
     }
   },
   "issues": {

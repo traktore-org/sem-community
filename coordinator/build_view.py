@@ -84,6 +84,7 @@ def build_charger_view(
     hardware_max_a: Optional[float] = None,
     wpa_table: Optional[Mapping[int, float]] = None,
     redirect_allowed: bool = True,
+    active_phases: Optional[int] = None,
 ) -> ChargerView:
     """Construct a ChargerView from a per-cycle FleetCycleState +
     per-charger overrides.
@@ -329,6 +330,15 @@ def build_charger_view(
             _fleet_val = config.get(_key)
             if _fleet_val is not None:
                 cfg_resolved[_key] = _fleet_val
+
+    # (#1412) A charger that changes phases has no fixed phase count: the
+    # count SEM set, or measured, is the one this cycle's amps run on.
+    # ``decide()`` priced the minimum current at the configured count, so
+    # after a switch to one phase it still asked the sun for 4140 W to
+    # start a 1380 W charge. Unknown (None) keeps the configured count.
+    if (active_phases in (1, 3)
+            and cfg_resolved.get("ev_phase_switching_enabled", False)):
+        cfg_resolved["ev_phases"] = int(active_phases)
 
     # ``hardware_max_a`` is the adapter's ``max_current_a`` — the SAME
     # value the adapter clamps every command to, and the only ceiling
