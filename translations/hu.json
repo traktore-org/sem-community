@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "A SEM békén hagyja a biztonsági eszközöket",
       "description": "Ezek biztonsági eszközök (kamera, riasztó, sziréna vagy ajtózár): **{names}**. A SEM már nem mutatja és nem kapcsolja őket. Az energiájuk továbbra is beleszámít a ház fogyasztásába. Ha valamelyik zárral ellátott készülék, nem ajtózár, add hozzá az **Eszköz hozzáadása** gombbal."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatizálások régi töltési mód neveket használnak",
+      "description": "A SEM töltési módjai most: Nap, Nap + tarifa, Most és Ki. A Home Assistant elutasítja a régi neveket a select.select_option hívásban, és a régi névre szóló eseményindító már nem indul. Módosítsd ezeket: {uses}"
     }
   },
   "selector": {

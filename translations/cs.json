@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "SEM nechává bezpečnostní zařízení být",
       "description": "Tato zařízení jsou bezpečnostní (kamera, alarm, siréna nebo zámek dveří): **{names}**. SEM je už nezobrazuje ani nespíná. Jejich energie se dál počítá do spotřeby domu. Pokud je některé spotřebič se zámkem, a ne zámek dveří, přidejte ho přes **Přidat zařízení**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatizace používají staré názvy režimu nabíjení",
+      "description": "Režimy nabíjení SEM jsou nyní Slunce, Slunce + tarif, Teď a Vypnuto. Home Assistant odmítá staré názvy v select.select_option a spouštěč se starým názvem se už nespustí. Změňte tyto: {uses}"
     }
   },
   "selector": {

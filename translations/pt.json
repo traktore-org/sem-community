@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "O SEM deixa os dispositivos de segurança em paz",
       "description": "Estes dispositivos são de segurança (câmara, alarme, sirene ou fechadura): **{names}**. O SEM já não os mostra nem os comanda. A sua energia continua a contar no total da casa. Se algum for um aparelho com bloqueio e não uma fechadura, adicione-o com **Adicionar dispositivo**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automações usam nomes antigos do modo de carga",
+      "description": "Os modos de carga do SEM agora são Sol, Sol + tarifa, Agora e Desligado. O Home Assistant recusa os nomes antigos em select.select_option, e um gatilho com um nome antigo já não dispara. Altere estes: {uses}"
     }
   },
   "selector": {

@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "SEM låter säkerhetsenheter vara",
       "description": "Dessa enheter är säkerhetsenheter (kamera, larm, siren eller dörrlås): **{names}**. SEM visar och styr dem inte längre. Deras energi räknas fortfarande i husets förbrukning. Är någon av dem en apparat med lås och inte ett dörrlås, lägg till den med **Lägg till en enhet**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automationer använder gamla namn på laddläge",
+      "description": "SEM:s laddlägen heter nu Sol, Sol + tariff, Nu och Av. Home Assistant avvisar de gamla namnen i select.select_option, och en utlösare på ett gammalt namn löser inte längre ut. Ändra dessa: {uses}"
     }
   },
   "selector": {

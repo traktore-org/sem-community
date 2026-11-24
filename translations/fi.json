@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "SEM jättää turvalaitteet rauhaan",
       "description": "Nämä laitteet ovat turvalaitteita (kamera, hälytin, sireeni tai ovilukko): **{names}**. SEM ei enää näytä eikä ohjaa niitä. Niiden energia lasketaan yhä kodin kulutukseen. Jos jokin on laite, jossa on lukitus, eikä ovilukko, lisää se kohdasta **Lisää laite**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automaatiot käyttävät vanhoja lataustilan nimiä",
+      "description": "SEM:n lataustilat ovat nyt Aurinko, Aurinko + tariffi, Nyt ja Pois. Home Assistant hylkää vanhat nimet select.select_option-kutsussa, eikä vanhaan nimeen sidottu laukaisin enää laukea. Muuta nämä: {uses}"
     }
   },
   "selector": {

@@ -3653,6 +3653,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
         entry.async_on_unload(async_at_started(hass, _schedule_retirement))
 
+    # (#1381 D19) One Repair names every automation or script that still
+    # sets or tests a charge mode by an old name (HA refuses those on
+    # select.select_option). Checked once HA has started, and again after
+    # automations or scripts are reloaded.
+    from homeassistant.helpers.event import async_call_later as _later_d19
+    from homeassistant.helpers.start import async_at_started as _at_started_d19
+    from .coordinator.old_mode_names import check_old_mode_uses
+
+    @callback
+    def _check_old_mode_names(_arg=None) -> None:
+        try:
+            check_old_mode_uses(hass)
+        except Exception as err:  # noqa: BLE001 — a Repair never breaks setup
+            _LOGGER.debug("old charge mode names check failed: %s", err)
+
+    @callback
+    def _schedule_old_mode_check(_h=None) -> None:
+        entry.async_on_unload(_later_d19(hass, 30, _check_old_mode_names))
+
+    entry.async_on_unload(_at_started_d19(hass, _schedule_old_mode_check))
+    for _evt in ("automation_reloaded", "script_reloaded"):
+        entry.async_on_unload(hass.bus.async_listen(_evt, _check_old_mode_names))
+
     # Schedule post-startup tasks (non-blocking)
     _schedule_post_startup_tasks(hass, entry, full_config, coordinator)
 

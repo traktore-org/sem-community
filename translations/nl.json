@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "SEM laat beveiligingsapparaten met rust",
       "description": "Deze apparaten zijn beveiligingsapparaten (camera, alarm, sirene of deurslot): **{names}**. SEM toont en schakelt ze niet meer. Hun verbruik telt nog mee in het huisverbruik. Is er een een apparaat met een slot en geen deurslot, voeg het dan toe met **Apparaat toevoegen**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatiseringen gebruiken oude laadmodusnamen",
+      "description": "De laadmodi van SEM heten nu Zon, Zon + tarief, Nu en Uit. Home Assistant weigert de oude namen in select.select_option, en een trigger op een oude naam gaat niet meer af. Pas deze aan: {uses}"
     }
   },
   "selector": {

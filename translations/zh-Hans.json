@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "SEM 不再控制安防设备",
       "description": "以下设备是安防设备（摄像头、警报、警笛或门锁）：**{names}**。SEM 不再显示或控制它们。它们的能耗仍计入家庭总用电。如果其中某个是带锁的电器而不是门锁，请用**添加设备**添加。"
+    },
+    "old_charge_mode_names": {
+      "title": "自动化使用了旧的充电模式名称",
+      "description": "SEM 的充电模式现在是 太阳、太阳 + 电价、立即 和 关闭。Home Assistant 在 select.select_option 中拒绝旧名称，基于旧名称的触发器也不再触发。请修改：{uses}"
     }
   },
   "selector": {

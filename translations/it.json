@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "SEM lascia stare i dispositivi di sicurezza",
       "description": "Questi dispositivi sono di sicurezza (telecamera, allarme, sirena o serratura): **{names}**. SEM non li mostra e non li comanda più. Il loro consumo conta ancora nel totale della casa. Se uno è un elettrodomestico con blocco e non una serratura, aggiungilo con **Aggiungi dispositivo**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automazioni usano vecchi nomi della modalità di carica",
+      "description": "Le modalità di carica di SEM ora sono Sole, Sole + tariffa, Ora e Spento. Home Assistant rifiuta i vecchi nomi in select.select_option, e un trigger su un vecchio nome non scatta più. Modifica questi: {uses}"
     }
   },
   "selector": {

@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "SEM deja en paz los dispositivos de seguridad",
       "description": "Estos dispositivos son de seguridad (cámara, alarma, sirena o cerradura): **{names}**. SEM ya no los muestra ni los controla. Su energía sigue contando en el total de la casa. Si alguno es un electrodoméstico con bloqueo y no una cerradura, añádelo con **Añadir dispositivo**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatizaciones usan nombres antiguos del modo de carga",
+      "description": "Los modos de carga de SEM ahora son Sol, Sol + tarifa, Ahora y Apagado. Home Assistant rechaza los nombres antiguos en select.select_option, y un disparador con un nombre antiguo ya no se activa. Cambia estos: {uses}"
     }
   },
   "selector": {

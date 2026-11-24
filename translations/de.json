@@ -2155,6 +2155,10 @@
     "security_devices_not_used": {
       "title": "SEM lässt Sicherheitsgeräte in Ruhe",
       "description": "Diese Geräte sind Sicherheitsgeräte (Kamera, Alarm, Sirene oder Türschloss): **{names}**. SEM listet und schaltet sie nicht mehr. Ihr Verbrauch zählt weiter zum Hausverbrauch. Ist eines davon ein Gerät mit Sperre und kein Türschloss, füge es mit **Gerät hinzufügen** hinzu."
+    },
+    "old_charge_mode_names": {
+      "title": "Automationen nutzen alte Lademodus-Namen",
+      "description": "Die Lademodi von SEM heissen jetzt Sonne, Sonne + Tarif, Jetzt und Aus. Home Assistant lehnt die alten Namen in select.select_option ab, und ein Auslöser auf einen alten Namen löst nicht mehr aus. Ändere diese: {uses}"
     }
   },
   "selector": {
