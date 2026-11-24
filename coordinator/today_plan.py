@@ -3,8 +3,8 @@
 Composes a single forward-looking plan list from the four data sources we
 already have per cycle:
 
-* **Tariff curve** — ``upcoming_prices`` (24-48 hourly points with cheap/normal/
-  expensive level classification)
+* **Tariff curve** — ``upcoming_prices`` (up to 48 h of hourly or 15-minute
+  points with cheap/normal/expensive level classification)
 * **Solar forecast** — Solcast peak time + remaining today + tomorrow total
 * **EV state** — Min, Max, deadline, tariff opt-in, remaining-to-Min
 * **Night window** — start (sunset+10 / 20:30 floor) and end (07:00 default)

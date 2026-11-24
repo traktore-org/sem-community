@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "SG-Ready-tjänstdatan måste vara ett JSON-objekt.",
       "heat_pump_contact_values_missing": "Den här SG-Ready-kontakten är en text-/number-/select-entitet, så SEM behöver både PÅ- och AV-värdet för att skriva. Fyll i båda, eller välj en switch-entitet.",
       "calendar_needs_schedule": "Kalenderläget behöver ett schema för högtid. Välj en Schema-hjälpare eller ett annat tariffläge.",
-      "value_needs_spot_basis": "Ett påslag, energiskatt eller moms gäller bara vid ett spotpris. Välj spotgrunden eller sätt dem till 0."
+      "value_needs_spot_basis": "Ett påslag, energiskatt eller moms gäller bara vid ett spotpris. Välj spotgrunden eller sätt dem till 0.",
+      "phase_switch_value_out_of_range": "Värdet för 1 fas eller 3 faser ligger utanför området för fasväxlingsentiteten. Ange värden som entiteten accepterar."
     }
   },
   "entity": {
@@ -1903,6 +1904,9 @@
     "value_needs_spot_basis": {
       "message": "Ett påslag, energiskatt eller moms gäller bara vid ett spotpris. Välj spotgrunden eller sätt dem till 0."
     },
+    "phase_switch_value_out_of_range": {
+      "message": "Värdet för fasväxling sparades inte: {reason}. Ange ett värde som entiteten accepterar."
+    },
     "security_device_not_a_load": {
       "message": "{entity} hör till en säkerhetsenhet (kamera, larm, lås eller siren). SEM styr aldrig säkerhetsenheter."
     }
@@ -2136,6 +2140,10 @@
     "legionella_above_unit_max": {
       "title": "Tanken når inte legionellamålet",
       "description": "{name}: tanken tar högst {max} °C, under legionellamålet {target} °C. SEM värmer till {max} °C, vilket kanske inte desinficerar tanken. Sänk målet eller kontrollera tankens maximum. Meddelandet försvinner av sig självt."
+    },
+    "guard_stopped": {
+      "title": "Fasvakten stängde av {charger}",
+      "description": "En fas var över sin gräns, så SEM stängde av {charger}. Ett annat system styr den här laddaren, så SEM slår inte på den igen. Slå på den för hand eller låt dess app starta den igen. Meddelandet försvinner när laddaren laddar igen eller bilen kopplas ur."
     },
     "old_found_loads_removed": {
       "title": "SEM använder inte längre gamla automatiskt hittade enheter",

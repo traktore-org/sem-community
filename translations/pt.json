@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Os dados do serviço SG-Ready têm de ser um objeto JSON.",
       "heat_pump_contact_values_missing": "Este contacto SG-Ready é uma entidade text/number/select, por isso o SEM precisa tanto do valor ON como do OFF para escrever. Preencha ambos, ou escolha uma entidade switch.",
       "calendar_needs_schedule": "O modo Calendário precisa de um horário de ponta. Escolha um auxiliar Agendamento ou outro modo de tarifa.",
-      "value_needs_spot_basis": "Uma margem, imposto sobre energia ou IVA só se aplicam a um preço spot. Escolha a base spot ou defina-os como 0."
+      "value_needs_spot_basis": "Uma margem, imposto sobre energia ou IVA só se aplicam a um preço spot. Escolha a base spot ou defina-os como 0.",
+      "phase_switch_value_out_of_range": "O valor para 1 fase ou 3 fases está fora do intervalo da entidade de comutação de fases. Introduza valores que a entidade aceite."
     }
   },
   "entity": {
@@ -1903,6 +1904,9 @@
     "value_needs_spot_basis": {
       "message": "Uma margem, imposto sobre energia ou IVA só se aplicam a um preço spot. Escolha a base spot ou defina-os como 0."
     },
+    "phase_switch_value_out_of_range": {
+      "message": "O valor de comutação de fases não foi guardado: {reason}. Introduza um valor que a entidade aceite."
+    },
     "security_device_not_a_load": {
       "message": "{entity} pertence a um dispositivo de segurança (câmara, alarme, fechadura ou sirene). O SEM nunca comanda dispositivos de segurança."
     }
@@ -2136,6 +2140,10 @@
     "legionella_above_unit_max": {
       "title": "O depósito não atinge o alvo de legionela",
       "description": "{name}: o depósito aceita no máximo {max} °C, abaixo do alvo de legionela de {target} °C. O SEM aquece até {max} °C, o que pode não desinfetar o depósito. Baixe o alvo ou verifique o máximo do depósito. Este aviso desaparece sozinho."
+    },
+    "guard_stopped": {
+      "title": "A proteção de fase desligou {charger}",
+      "description": "Uma fase passou o limite, por isso o SEM desligou {charger}. Outro sistema controla este carregador, por isso o SEM não o volta a ligar. Ligue-o à mão ou deixe a sua app reiniciá-lo. Esta mensagem desaparece quando o carregador volta a carregar ou o carro é desligado."
     },
     "old_found_loads_removed": {
       "title": "O SEM já não usa dispositivos antigos encontrados automaticamente",

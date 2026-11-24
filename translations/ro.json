@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Datele serviciului SG-Ready trebuie să fie un obiect JSON.",
       "heat_pump_contact_values_missing": "Acest contact SG-Ready este o entitate text/number/select, așa că SEM are nevoie să scrie atât valoarea ON cât și OFF. Completați-le pe amândouă, sau alegeți o entitate switch.",
       "calendar_needs_schedule": "Modul Calendar are nevoie de un program pentru orele de vârf. Alegeți un ajutor Program sau alt mod de tarif.",
-      "value_needs_spot_basis": "Un adaos, o taxă pe energie sau TVA se aplică doar la un preț spot. Alege baza spot sau setează-le la 0."
+      "value_needs_spot_basis": "Un adaos, o taxă pe energie sau TVA se aplică doar la un preț spot. Alege baza spot sau setează-le la 0.",
+      "phase_switch_value_out_of_range": "Valoarea pentru 1 fază sau 3 faze este în afara intervalului entității de comutare a fazelor. Introduceți valori pe care entitatea le acceptă."
     }
   },
   "entity": {
@@ -1903,6 +1904,9 @@
     "value_needs_spot_basis": {
       "message": "Un adaos, o taxă pe energie sau TVA se aplică doar la un preț spot. Alege baza spot sau setează-le la 0."
     },
+    "phase_switch_value_out_of_range": {
+      "message": "Valoarea de comutare a fazelor nu a fost salvată: {reason}. Introduceți o valoare pe care entitatea o acceptă."
+    },
     "security_device_not_a_load": {
       "message": "{entity} aparține unui dispozitiv de securitate (cameră, alarmă, încuietoare sau sirenă). SEM nu comută niciodată dispozitive de securitate."
     }
@@ -2136,6 +2140,10 @@
     "legionella_above_unit_max": {
       "title": "Rezervorul nu atinge ținta antilegionella",
       "description": "{name}: rezervorul acceptă cel mult {max} °C, sub ținta antilegionella de {target} °C. SEM încălzește la {max} °C, ceea ce poate să nu dezinfecteze rezervorul. Coboară ținta sau verifică maximul rezervorului. Mesajul dispare singur."
+    },
+    "guard_stopped": {
+      "title": "Protecția de fază a oprit {charger}",
+      "description": "O fază a depășit limita, așa că SEM a oprit {charger}. Alt sistem controlează acest încărcător, așa că SEM nu îl repornește. Pornește-l manual sau lasă aplicația lui să-l repornească. Mesajul dispare când încărcătorul încarcă din nou sau mașina este deconectată."
     },
     "old_found_loads_removed": {
       "title": "SEM nu mai folosește dispozitivele vechi găsite automat",

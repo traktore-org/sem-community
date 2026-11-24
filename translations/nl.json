@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "De SG-Ready-servicegegevens moeten een JSON-object zijn.",
       "heat_pump_contact_values_missing": "Dit SG-Ready-contact is een tekst-/getal-/select-entiteit, dus SEM heeft zowel de AAN- als de UIT-waarde nodig om te schrijven. Vul beide in, of kies een schakelaar-entiteit.",
       "calendar_needs_schedule": "Kalendermodus heeft een piekuren-schema nodig. Kies een Schema-helper of een andere tariefmodus.",
-      "value_needs_spot_basis": "Een opslag, energiebelasting of btw geldt alleen bij een spotprijs. Kies de spotbasis of zet ze op 0."
+      "value_needs_spot_basis": "Een opslag, energiebelasting of btw geldt alleen bij een spotprijs. Kies de spotbasis of zet ze op 0.",
+      "phase_switch_value_out_of_range": "De waarde voor 1 fase of 3 fasen valt buiten het bereik van de fase-omschakelentiteit. Voer waarden in die de entiteit accepteert."
     }
   },
   "entity": {
@@ -1903,6 +1904,9 @@
     "value_needs_spot_basis": {
       "message": "Een opslag, energiebelasting of btw geldt alleen bij een spotprijs. Kies de spotbasis of zet ze op 0."
     },
+    "phase_switch_value_out_of_range": {
+      "message": "De waarde voor fase-omschakeling is niet opgeslagen: {reason}. Voer een waarde in die de entiteit accepteert."
+    },
     "security_device_not_a_load": {
       "message": "{entity} hoort bij een beveiligingsapparaat (camera, alarm, slot of sirene). SEM schakelt beveiligingsapparaten nooit."
     }
@@ -2136,6 +2140,10 @@
     "legionella_above_unit_max": {
       "title": "Boiler haalt het legionelladoel niet",
       "description": "{name}: de boiler neemt hoogstens {max} °C aan, onder het legionelladoel {target} °C. SEM verwarmt tot {max} °C; dat desinfecteert de boiler mogelijk niet. Verlaag het doel of controleer het maximum van de boiler. Deze melding verdwijnt vanzelf."
+    },
+    "guard_stopped": {
+      "title": "Fasebewaking heeft {charger} uitgezet",
+      "description": "Een fase zat boven de limiet, daarom heeft SEM {charger} uitgezet. Een andere partij stuurt dit laadpunt, daarom zet SEM het niet weer aan. Zet het met de hand aan, of laat de app het opnieuw starten. Deze melding verdwijnt als het laadpunt weer laadt of de auto wordt losgekoppeld."
     },
     "old_found_loads_removed": {
       "title": "SEM gebruikt oude automatisch gevonden apparaten niet meer",

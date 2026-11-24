@@ -229,15 +229,36 @@ class TestNoCarNoQuestion:
     """(#1008 review) A parked charger is not starving — it is parked."""
 
     def test_an_unplugged_three_phase_charger_is_left_alone(self):
+        """No car, no power question. The charger here cannot say whether a
+        car is plugged in (no plug sensor), so SEM keeps what it knows — and
+        without the "not connected" guard the planner reads the 0 W as
+        starvation and sets it to one phase ten minutes later."""
         h = _host()
         _tick(h, _max_decision(), _cp(11040.0), 0.0)
         assert h._phase_believed["c1"] == 3
         gone = ChargerPower(charger_id="c1", power_w=0.0,
-                            connected=False, charging=False)
-        for t in (100.0, AUTO_DOWN_DELAY_S + 1, AUTO_DOWN_DELAY_S + 1200):
+                            connected=False, charging=False, plug_known=False)
+        t = 10.0
+        while t <= AUTO_DOWN_DELAY_S + 1200:
             _tick(h, _idle_decision(), gone, t)
+            t += 10.0
         h.hass.services.async_call.assert_not_awaited()
         assert h._phase_believed["c1"] == 3, "the parked belief is not changed"
+
+    def test_a_known_unplug_forgets_and_sends_nothing(self):
+        """(#1412) The plug sensor says the car is gone: the belief belonged
+        to that plug-in. Nothing is switched; the next car starts on the
+        configured count."""
+        h = _host()
+        _tick(h, _max_decision(), _cp(11040.0), 0.0)
+        gone = ChargerPower(charger_id="c1", power_w=0.0,
+                            connected=False, charging=False)
+        t = 10.0
+        while t <= AUTO_DOWN_DELAY_S + 1200:
+            _tick(h, _idle_decision(), gone, t)
+            t += 10.0
+        h.hass.services.async_call.assert_not_awaited()
+        assert h._phase_believed.get("c1") is None
 
     def test_a_replug_starts_the_sustain_window_over(self):
         """A window that filled while the last car was here is not this
