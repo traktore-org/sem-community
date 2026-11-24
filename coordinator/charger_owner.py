@@ -180,3 +180,68 @@ def to_store(coord: Any) -> dict:
 def from_store(coord: Any, blob: Any) -> None:
     from . import guard_hand_back as ghb
     ghb.from_store(coord, blob)
+
+
+# ---------------------------------------------------------------------------
+# S8 — every timed claim on a charger, in one place
+# ---------------------------------------------------------------------------
+
+def timed_claims(coord: Any, cid: str, now: Any) -> List[dict]:
+    """Every claim on this charger that holds for a time: the user's pause,
+    the plan override (Start now / Skip tonight / Now), a battery boost, and
+    SEM's own hand-back after a guard stop. ``now`` is a tz-aware datetime.
+
+    One read for the owner, the diagnostics and the card. The records stay
+    in the stores they already live in (decision: moving four persisted
+    records into one store risks a user's pause or override on upgrade, and
+    buys no behaviour — the owner needs one VIEW, not one file)."""
+    out: List[dict] = []
+    try:
+        from . import charge_pause
+        cfg = {}
+        for c in (getattr(coord, "config", None) or {}).get("ev_chargers") or []:
+            if isinstance(c, dict) and c.get("id") == cid:
+                cfg = c
+                break
+        until = charge_pause.parse_deadline(cfg.get(charge_pause.PAUSE_UNTIL_KEY))
+        if until is not None and until > now:
+            out.append({"kind": "pause", "klass": int(CommandClass.USER),
+                        "until": until.isoformat(),
+                        "then": cfg.get(charge_pause.PAUSE_RESUME_MODE_KEY)})
+    except Exception:  # noqa: BLE001 — a view never breaks the cycle
+        pass
+    try:
+        from . import plan_override
+        rec = plan_override.active_override(
+            getattr(coord, "_plan_overrides", None) or {}, cid, now)
+        if rec is not None:
+            out.append({"kind": f"override:{rec.action}",
+                        "klass": int(CommandClass.USER),
+                        "until": rec.expires_at.isoformat()})
+    except Exception:  # noqa: BLE001
+        pass
+    boost = getattr(coord, "_battery_boost", None)
+    if boost is not None and getattr(boost, "charger_id", None) == cid:
+        out.append({"kind": "battery_boost", "klass": int(CommandClass.USER),
+                    "until": None,
+                    "floor_soc": getattr(boost, "floor_soc", None)})
+    rec = (getattr(coord, "_guard_stops", None) or {}).get(cid)
+    if isinstance(rec, dict):
+        out.append({"kind": "hand_back", "klass": int(CommandClass.SAFETY),
+                    "until": None, "left_off": bool(rec.get("left_off")),
+                    "failures": int(rec.get("failures") or 0)})
+    return out
+
+
+def diagnostics(coord: Any) -> dict:
+    """The owner's view for the diagnostics download: per charger, the last
+    chain trail and every timed claim."""
+    from homeassistant.util import dt as dt_util
+    now = dt_util.now()
+    ids = list((getattr(coord, "_ev_devices", None) or {}).keys())
+    if not ids and getattr(coord, "_ev_device", None) is not None:
+        ids = ["ev_charger"]
+    trails = getattr(coord, "_owner_trail", None) or {}
+    return {cid: {"trail": [list(t) for t in trails.get(cid, [])],
+                  "timed_claims": timed_claims(coord, cid, now)}
+            for cid in ids}
