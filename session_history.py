@@ -22,6 +22,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
+from .charger_refs import REFS_KEY
 from .const import DOMAIN
 from .utils.device_names import charger_display_name
 from .utils.xlsx import write_workbook
@@ -104,7 +105,7 @@ def _cell(value):
     quote; numbers pass as they are."""
     if value is None:
         return ""
-    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + value
     return value
 
@@ -164,9 +165,18 @@ def charger_names(hass: HomeAssistant, entry_id: Optional[str] = None) -> dict:
         return {}
     data = entry.data if isinstance(entry.data, Mapping) else {}
     options = entry.options if isinstance(entry.options, Mapping) else {}
-    chargers = {**data, **options}.get("ev_chargers")
+    config = {**data, **options}
+    chargers = config.get("ev_chargers")
     if not isinstance(chargers, list) or not chargers:
-        return {"ev_charger": charger_display_name(hass, None)}
+        # (review) setup builds the legacy charger only on an install that
+        # never had a charger list, and only from its flat keys; once refs
+        # exist an empty list means the last charger was removed
+        if (REFS_KEY not in options
+                and config.get("ev_charging_power_sensor")
+                and (config.get("ev_charger_service")
+                     or config.get("ev_current_control_entity"))):
+            return {"ev_charger": charger_display_name(hass, None)}
+        return {}
     names: dict = {}
     for idx, cfg in enumerate(chargers):
         if not isinstance(cfg, dict):
@@ -238,10 +248,15 @@ def ws_session_history_xlsx(hass: HomeAssistant, connection, msg: dict[str, Any]
 
 
 def _name_slug(name) -> str:
-    """A name as a file-name part; "" when it has no letter or digit (HA's
-    slugify would give "unknown")."""
-    text = str(name or "")
-    return slugify(text) if any(ch.isalnum() for ch in text) else ""
+    """A name as a file-name part, at most 60 characters; "" when slugify
+    finds nothing it can write (it then gives "unknown")."""
+    text = str(name or "").strip()
+    if not text:
+        return ""
+    slug = slugify(text)
+    if slug == "unknown" and text.casefold() != "unknown":
+        return ""
+    return slug[:60].strip("_")
 
 
 def _xlsx_filename(charger_id: Optional[str], names: Mapping) -> str:

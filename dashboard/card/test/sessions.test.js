@@ -86,6 +86,12 @@ test('(#1410) CSV: the charger column is its name now, the id last', () => {
     assert.equal(cells(lines[1]).at(-1), 'goe1');
     assert.equal(cells(lines[2])[2], 'gone');       // no longer set up: its id
     assert.equal(cells(lines[2]).at(-1), 'gone');
+    const odd = sessionsCsv([R('2026-09-01T10:00:00+02:00', '', 1, 10, 0.1, 5, { charger_id: 'constructor' })],
+        { a: '=Shed' }).trim().split('\n');
+    assert.equal(cells(odd[1])[2], 'constructor');  // never an Object member
+    const formula = sessionsCsv([R('2026-09-01T10:00:00+02:00', '', 1, 10, 0.1, 5, { charger_id: 'a' })],
+        { a: '=Shed' }).trim().split('\n');
+    assert.equal(cells(formula[1])[2], "'=Shed");
 });
 
 test('(#1088) CO2 per session: shown with one decimal, summed only where known', () => {

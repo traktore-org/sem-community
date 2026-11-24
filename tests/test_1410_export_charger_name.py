@@ -98,10 +98,27 @@ class TestXlsx:
         payload, _ = _download(_hass(options=same), charger_id="b")
         assert payload["filename"].startswith("sem-sessions-b-")
 
-    def test_a_name_with_no_letter_keeps_the_id(self):
-        odd = {"ev_chargers": [{"id": "a", "name": "!!!"}]}
+    @pytest.mark.parametrize("name", ["!!!", "\U00010330"])
+    def test_a_name_slugify_cannot_write_keeps_the_id(self, name):
+        odd = {"ev_chargers": [{"id": "a", "name": name}]}
         payload, _ = _download(_hass(options=odd), charger_id="a")
         assert payload["filename"].startswith("sem-sessions-a-")
+
+    def test_a_long_name_is_cut(self):
+        long = {"ev_chargers": [{"id": "a", "name": "Box " * 40}]}
+        payload, _ = _download(_hass(options=long), charger_id="a")
+        part = payload["filename"][len("sem-sessions-"):-len("-YYYY-MM-DD.xlsx")]
+        assert 0 < len(part) <= 60 and not part.endswith("_")
+
+    def test_the_entry_asked_for_names_the_rows(self):
+        hass = _hass(options=OPTIONS)
+        other = SimpleNamespace(
+            entry_id="entry-2", data={},
+            options={"ev_chargers": [{"id": "ev_charger", "name": "Other"}]},
+            runtime_data=hass.config_entries.async_entries.return_value[0].runtime_data)
+        hass.config_entries.async_entries.return_value.append(other)
+        _, rows = _download(hass, entry_id="entry-2", charger_id="ev_charger")
+        assert [_text(r[CHARGER]) for r in rows[1:]] == ["Other", None]
 
     def test_no_charger_asked_no_charger_in_the_file_name(self):
         payload, _ = _download(_hass(DATA, OPTIONS))
@@ -132,8 +149,23 @@ class TestNames:
         cfg = {"ev_chargers": [{"id": "a", "name": "First"}, {"id": "a", "name": "Second"}]}
         assert charger_names(_hass(options=cfg)) == {"a": "First"}
 
-    def test_no_list_is_the_legacy_charger(self):
-        assert charger_names(_hass()) == {"ev_charger": "EV Charger"}
+    def test_no_list_is_the_legacy_charger_from_its_flat_keys(self):
+        flat = {"ev_charging_power_sensor": "sensor.p", "ev_current_control_entity": "number.c"}
+        assert charger_names(_hass(data=flat)) == {"ev_charger": "EV Charger"}
+
+    def test_no_list_and_no_flat_keys_is_no_charger(self):
+        assert charger_names(_hass()) == {}
+
+    def test_the_last_charger_removed_is_no_charger(self):
+        # once refs exist, setup builds no legacy charger: the removed box
+        # keeps its id in the file, not the generic default name
+        flat = {"ev_charging_power_sensor": "sensor.p", "ev_current_control_entity": "number.c"}
+        removed = {"ev_chargers": [], "ev_charger_refs": {}}
+        assert charger_names(_hass(data=flat, options=removed)) == {}
+
+    def test_an_empty_list_in_the_options_wins_over_the_data_list(self):
+        # setup reads the same merge, so it builds no charger either
+        assert charger_names(_hass(DATA, {"ev_chargers": [], "ev_charger_refs": {}})) == {}
 
     def test_no_entry_no_names(self):
         hass = MagicMock()
@@ -165,6 +197,9 @@ class TestCsv:
         names = {"goecharger_api2_d97c7a8d4f": "Go-e Charger BMW", "ev_charger": "=Cupra"}
         rows = list(csv.reader(io.StringIO(sessions_csv(HISTORY, names))))
         assert [r[CHARGER] for r in rows[1:]] == ["Go-e Charger BMW", "'=Cupra", "old_box", ""]
+        tab = list(csv.reader(io.StringIO(sessions_csv(HISTORY[:1], {
+            "goecharger_api2_d97c7a8d4f": "\t=1+1"}))))
+        assert tab[1][CHARGER] == "'\t=1+1"
         assert [r[CHARGER_ID] for r in rows[1:]] == [
             "goecharger_api2_d97c7a8d4f", "ev_charger", "old_box", ""]
 
