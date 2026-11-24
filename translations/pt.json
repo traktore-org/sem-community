@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "O SEM já não usa dispositivos antigos encontrados automaticamente",
       "description": "Versões antigas encontravam estes interruptores pelo nome e usavam-nos como cargas: **{names}**. Não os podia ver nem configurar, e o limite de pico podia desligá-los. O SEM já não os usa. Para o SEM controlar um, adicione-o com **Adicionar dispositivo** em Dispositivos."
+    },
+    "security_devices_not_used": {
+      "title": "O SEM deixa os dispositivos de segurança em paz",
+      "description": "Estes dispositivos são de segurança (câmara, alarme, sirene ou fechadura): **{names}**. O SEM já não os mostra nem os comanda. A sua energia continua a contar no total da casa."
     }
   },
   "selector": {

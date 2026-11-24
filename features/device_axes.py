@@ -102,3 +102,14 @@ def may_actuate(device_info: Mapping[str, Any]) -> bool:
     if not mode_permits(device_info):
         return False
     return has_control_handle(device_info) and not user_hands_off(device_info)
+
+
+def device_mode_permits(device: Any) -> bool:
+    """(#1419) The same permission, for a live device object of the surplus
+    engine (``control_mode`` is a ``DeviceControlMode``): may SEM act on it
+    at all? Every Off check on a device object reads this — the shedder reads
+    ``mode_permits`` on its rows — so "off means off" has one home per shape.
+    """
+    mode = getattr(device, "control_mode", None)
+    value = getattr(mode, "value", mode)
+    return value in ACTING_MODES

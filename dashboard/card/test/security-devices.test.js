@@ -30,3 +30,18 @@ test('the picker filter drops security devices and keeps the caller filter', () 
     assert.equal(f({ entity_id: 'switch.other' }), true);
     assert.equal(withoutSecurity(hass)({ entity_id: 'switch.dishwasher' }), true);
 });
+
+test('an appliance with a child lock is still a load; a door lock is not', () => {
+    const h = {
+        entities: {
+            'switch.washer': { entity_id: 'switch.washer', device_id: 'w' },
+            'sensor.washer_power': { entity_id: 'sensor.washer_power', device_id: 'w' },
+            'lock.washer_child_lock': { entity_id: 'lock.washer_child_lock', device_id: 'w', entity_category: 'config' },
+            'switch.door_relay': { entity_id: 'switch.door_relay', device_id: 'd' },
+            'lock.front': { entity_id: 'lock.front', device_id: 'd' },
+        },
+        states: { 'sensor.washer_power': { attributes: { device_class: 'power' } } },
+    };
+    assert.equal(isSecurityEntity(h, 'switch.washer'), false);
+    assert.equal(isSecurityEntity(h, 'switch.door_relay'), true);
+});

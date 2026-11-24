@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "SEM nu mai folosește dispozitivele vechi găsite automat",
       "description": "Versiunile mai vechi găseau aceste comutatoare după nume și le foloseau ca sarcini: **{names}**. Nu le puteai vedea sau seta, iar limita de vârf le putea opri. SEM nu le mai folosește. Ca SEM să controleze unul, adaugă-l cu **Adaugă un dispozitiv** la Dispozitive."
+    },
+    "security_devices_not_used": {
+      "title": "SEM lasă în pace dispozitivele de securitate",
+      "description": "Aceste dispozitive sunt de securitate (cameră, alarmă, sirenă sau încuietoare): **{names}**. SEM nu le mai afișează și nu le mai comută. Energia lor contează în continuare în totalul casei."
     }
   },
   "selector": {

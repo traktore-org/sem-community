@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "SEM bruker ikke lenger gamle automatisk funnede enheter",
       "description": "Eldre versjoner fant disse bryterne på navnet og brukte dem som laster: **{names}**. Du kunne ikke se eller stille dem, og toppgrensen kunne slå dem av. SEM bruker dem ikke lenger. Skal SEM styre en av dem, legg den til med **Legg til en enhet** under Enheter."
+    },
+    "security_devices_not_used": {
+      "title": "SEM lar sikkerhetsenheter være",
+      "description": "Disse enhetene er sikkerhetsenheter (kamera, alarm, sirene eller dørlås): **{names}**. SEM viser og styrer dem ikke lenger. Energien deres teller fortsatt med i husets forbruk."
     }
   },
   "selector": {

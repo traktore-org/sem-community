@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "SEM nutzt alte automatisch gefundene Geräte nicht mehr",
       "description": "Ältere Versionen haben diese Schalter am Namen erkannt und als Lasten genutzt: **{names}**. Du konntest sie weder sehen noch einstellen, und die Spitzenlast-Grenze konnte sie ausschalten. SEM nutzt sie nicht mehr. Soll SEM eines davon steuern, füge es unter Geräte mit **Gerät hinzufügen** hinzu."
+    },
+    "security_devices_not_used": {
+      "title": "SEM lässt Sicherheitsgeräte in Ruhe",
+      "description": "Diese Geräte sind Sicherheitsgeräte (Kamera, Alarm, Sirene oder Türschloss): **{names}**. SEM listet und schaltet sie nicht mehr. Ihr Verbrauch zählt weiter zum Hausverbrauch."
     }
   },
   "selector": {

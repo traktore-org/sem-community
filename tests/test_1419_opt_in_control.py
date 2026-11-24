@@ -77,11 +77,10 @@ def test_new_devices_start_off():
 # -- 3. security devices ------------------------------------------------------
 
 class _Reg:
-    """A fake entity registry: entity_id → device_id."""
+    """A fake entity registry."""
 
-    def __init__(self, entities):
-        self._e = {eid: SimpleNamespace(entity_id=eid, device_id=dev)
-                   for eid, dev in entities.items()}
+    def __init__(self, entries):
+        self._e = {e.entity_id: e for e in entries}
 
     def async_get(self, eid):
         return self._e.get(eid)
@@ -90,8 +89,14 @@ class _Reg:
         return [e for e in self._e.values() if e.device_id == dev]
 
 
-def _patch_registry(monkeypatch, entities):
-    reg = _Reg(entities)
+def _e(eid, dev, *, cat=None, key=None, dc=None):
+    return SimpleNamespace(entity_id=eid, device_id=dev, entity_category=cat,
+                           translation_key=key, original_device_class=dc,
+                           device_class=None, original_name=None)
+
+
+def _patch_registry(monkeypatch, entries):
+    reg = _Reg(entries)
     monkeypatch.setattr(LDD.entity_registry, "async_get", lambda _hass: reg)
     monkeypatch.setattr(
         LDD.entity_registry, "async_entries_for_device",
@@ -99,41 +104,53 @@ def _patch_registry(monkeypatch, entities):
     return reg
 
 
-CAM_DEVICE = {
-    "camera.voortuin": "cam1",
-    "switch.voortuin_camera_enabled": "cam1",
-    "sensor.voortuin_power": "cam1",
-    "switch.dishwasher": "plug1",
-    "sensor.dishwasher_power": "plug1",
-    "lock.front_door": "lock1",
-    "switch.front_door_auto_lock": "lock1",
-    "switch.template_helper": None,
-}
+DEVICES = [
+    # security devices
+    _e("camera.voortuin", "cam"), _e("switch.voortuin_camera_enabled", "cam"),
+    _e("sensor.voortuin_power", "cam", dc="power"),
+    _e("alarm_control_panel.house", "alarm"), _e("switch.alarm_chime", "alarm"),
+    _e("siren.hall", "siren"), _e("switch.hall_siren_volume", "siren"),
+    _e("lock.front_door", "door"), _e("switch.front_door_auto_lock", "door"),
+    # loads with an appliance lock — the reviewer's false positives
+    _e("switch.washer_power", "washer"), _e("sensor.washer_power", "washer", dc="power"),
+    _e("lock.washer_child_lock", "washer", cat="config", key="child_lock"),
+    _e("climate.heat_pump", "hp"), _e("sensor.heat_pump_power", "hp", dc="power"),
+    _e("lock.heat_pump_key_lock", "hp", key="key_lock"),
+    _e("climate.trv_kitchen", "trv"), _e("sensor.trv_kitchen_power", "trv", dc="power"),
+    _e("lock.trv_kitchen_child_lock", "trv"),   # no category, named by its id
+    _e("switch.dishwasher", "plug"), _e("sensor.dishwasher_power", "plug", dc="power"),
+    _e("switch.template_helper", None),
+]
 
 
 @pytest.mark.parametrize("eid, expected", [
-    ("camera.voortuin", True),                     # the domain itself
-    ("switch.voortuin_camera_enabled", True),      # a camera device's switch
-    ("sensor.voortuin_power", True),               # …and its power sensor
-    ("switch.front_door_auto_lock", True),         # a lock device's switch
-    ("switch.dishwasher", False),                  # a plain plug
-    ("switch.template_helper", False),             # no device: no guess
-    ("switch.unknown_to_registry", False),         # unknown: no guess
+    ("camera.voortuin", True),
+    ("switch.voortuin_camera_enabled", True),
+    ("sensor.voortuin_power", True),
+    ("switch.alarm_chime", True),
+    ("switch.hall_siren_volume", True),
+    ("switch.front_door_auto_lock", True),
+    ("switch.washer_power", False),          # child lock: still a load
+    ("sensor.heat_pump_power", False),       # key lock: still a load
+    ("climate.trv_kitchen", False),          # child lock without a category
+    ("switch.dishwasher", False),
+    ("switch.template_helper", False),
+    ("switch.unknown_to_registry", False),
     (None, False),
 ])
-def test_security_entity_is_read_from_the_device(monkeypatch, eid, expected):
-    _patch_registry(monkeypatch, CAM_DEVICE)
+def test_security_is_the_device_role(monkeypatch, eid, expected):
+    _patch_registry(monkeypatch, DEVICES)
     assert LDD.is_security_entity(MagicMock(), eid) is expected
 
 
 def test_a_security_switch_is_never_paired_as_a_control(monkeypatch):
-    _patch_registry(monkeypatch, CAM_DEVICE)
+    _patch_registry(monkeypatch, DEVICES)
     disc = LDD.LoadDeviceDiscovery.__new__(LDD.LoadDeviceDiscovery)
     disc.hass = MagicMock()
     disc._entity_registry = MagicMock()
     disc._entity_registry.async_get = MagicMock(return_value=None)  # no category
     assert disc.is_not_a_control("switch.voortuin_camera_enabled") is True
-    assert disc.is_not_a_control("switch.dishwasher") is False
+    assert disc.is_not_a_control("switch.washer_power") is False
 
 
 def test_the_rule_lives_in_one_place():
@@ -143,9 +160,9 @@ def test_the_rule_lives_in_one_place():
     import custom_components.solar_energy_management as pkg
     assert "is_security_entity" in inspect.getsource(device_registry)
     src = inspect.getsource(pkg)
-    assert src.count("is_security_entity(hass") == 2
-    assert LDD.SECURITY_DOMAINS == frozenset(
-        {"camera", "alarm_control_panel", "lock", "siren"})
+    # register_surplus_device, set_device_control_mapping, schedule_appliance
+    assert src.count("is_security_entity(hass") == 3
+    assert LDD.SECURITY_DOMAINS == frozenset({"camera", "alarm_control_panel", "siren"})
 
 
 # -- 2. old pattern rows: not loaded, one Repair names them ------------------
@@ -239,6 +256,17 @@ async def test_upgrade_pipeline(lm):
     assert "energy_dashboard_new" not in can       # Off until turned on
 
 
+def test_an_old_row_is_decided_by_its_source_not_its_id():
+    from custom_components.solar_energy_management.features.load_management import (
+        is_old_found_row,
+    )
+    assert is_old_found_row("load_device_cam", {"source": "pattern"})
+    assert is_old_found_row("load_device_cam", {"device_type": "smart_switch"})
+    assert not is_old_found_row("load_device_pool", {"source": "service_registration"})
+    assert not is_old_found_row("load_device_ev_charger_1", {"device_type": "ev_charger"})
+    assert not is_old_found_row("energy_dashboard_x", {"source": "pattern"})
+
+
 @pytest.mark.asyncio
 async def test_no_repair_without_old_rows(lm):
     lm._store = _Store({"devices": {"heizband": UPGRADE_STORE["devices"]["heizband"]}})
@@ -299,5 +327,59 @@ async def test_small_loads_shed_earlier_come_back_while_the_big_load_runs(lm):
     assert lm._devices_shed == []        # back on, one per pass
 
 
+@pytest.mark.asyncio
+async def test_a_shed_that_does_not_move_the_meter_does_not_end_shedding(lm):
+    """Reviewer: the meter did not answer the first shed (a load drew less
+    than its rating), so the REMAINING sheddable looked too small and the
+    rest stayed on while the first stayed off. The episode counts both.
+
+    Import 5.1 kW, aim 4.7 → need 400 W; a quarter is 100 W. Loads 100 + 60.
+    After the first shed with no change at the meter, 60 W remain (under a
+    quarter) but the episode holds 160 W (over) — shedding goes on."""
+    _load(lm, "a", 100, priority=9)
+    _load(lm, "b", 60, priority=8)
+    await _pass(lm, LoadManagementState.SHEDDING, avg_kw=5.2, import_w=5100)
+    assert lm._devices_shed == ["a"]
+    lm._live["switch.a"] = {"is_on": False, "current_power": 0}
+    plan = lm._shed_plan()
+    assert plan["too_small"] is False
+
+
 def test_the_share_is_a_quarter():
     assert SHED_MIN_COVER_SHARE == 0.25
+
+
+# -- one permission check, structurally ------------------------------------
+
+def test_no_actuation_path_reads_the_off_mode_itself():
+    """Every "is it Off?" question on a device object goes through
+    device_axes.device_mode_permits, and on a load row through mode_permits."""
+    import ast
+    import pathlib
+    root = pathlib.Path(LDD.__file__).resolve().parents[1]
+    offenders = []
+    for path in list(root.glob("coordinator/*.py")) + list(root.glob("devices/*.py")) \
+            + list(root.glob("features/*.py")):
+        if path.name == "device_axes.py":
+            continue
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Compare):
+                continue
+            parts = [node.left, *node.comparators]
+            text = " ".join(ast.unparse(p) for p in parts)
+            if ("DeviceControlMode.OFF" in text
+                    or ("control_mode" in text and "'off'" in text)):
+                offenders.append(f"{path.name}:{node.lineno} {ast.unparse(node)}")
+    assert offenders == []
+
+
+def test_device_objects_ask_the_same_modes():
+    from custom_components.solar_energy_management.devices.base import DeviceControlMode
+    from custom_components.solar_energy_management.features.device_axes import (
+        device_mode_permits,
+    )
+    assert device_mode_permits(SimpleNamespace(control_mode=DeviceControlMode.OFF)) is False
+    assert device_mode_permits(SimpleNamespace(control_mode=DeviceControlMode.PEAK_ONLY))
+    assert device_mode_permits(SimpleNamespace(control_mode=DeviceControlMode.SURPLUS))
+    assert device_mode_permits(SimpleNamespace()) is False

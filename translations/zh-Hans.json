@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "SEM 不再使用旧的自动发现设备",
       "description": "旧版本按名称找到这些开关并将其用作负载：**{names}**。您无法查看或设置它们，峰值限制可能会将其关闭。SEM 不再使用它们。如需让 SEM 控制其中一个，请在设备页面用**添加设备**添加。"
+    },
+    "security_devices_not_used": {
+      "title": "SEM 不再控制安防设备",
+      "description": "以下设备是安防设备（摄像头、警报、警笛或门锁）：**{names}**。SEM 不再显示或控制它们。它们的能耗仍计入家庭总用电。"
     }
   },
   "selector": {

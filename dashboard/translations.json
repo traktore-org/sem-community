@@ -2553,7 +2553,8 @@
     "next_status_missed": "zmeškáno",
     "config_setpoint_model_signed": "Plus vybíjí, minus nabíjí",
     "config_setpoint_model_inverted": "Plus nabíjí, minus vybíjí",
-    "config_setpoint_model_direction_select": "Směr nastaví výběr"
+    "config_setpoint_model_direction_select": "Směr nastaví výběr",
+    "next_st_not_controlled": "Neřízeno — zapněte"
   },
   "da": {
     "/year": "/år",
@@ -5109,7 +5110,8 @@
     "next_status_missed": "misset",
     "config_setpoint_model_signed": "Plus aflader, minus oplader",
     "config_setpoint_model_inverted": "Plus oplader, minus aflader",
-    "config_setpoint_model_direction_select": "En vælger sætter retningen"
+    "config_setpoint_model_direction_select": "En vælger sætter retningen",
+    "next_st_not_controlled": "Ikke styret — slå til"
   },
   "de": {
     "/year": "/Jahr",
@@ -7665,7 +7667,8 @@
     "next_status_missed": "verpasst",
     "config_setpoint_model_signed": "Plus entlädt, Minus lädt",
     "config_setpoint_model_inverted": "Plus lädt, Minus entlädt",
-    "config_setpoint_model_direction_select": "Eine Auswahl setzt die Richtung"
+    "config_setpoint_model_direction_select": "Eine Auswahl setzt die Richtung",
+    "next_st_not_controlled": "Nicht gesteuert — einschalten"
   },
   "en": {
     "/year": "/year",
@@ -10221,7 +10224,8 @@
     "next_status_missed": "missed",
     "config_setpoint_model_signed": "Plus discharges, minus charges",
     "config_setpoint_model_inverted": "Plus charges, minus discharges",
-    "config_setpoint_model_direction_select": "A selector sets the direction"
+    "config_setpoint_model_direction_select": "A selector sets the direction",
+    "next_st_not_controlled": "Not controlled — turn on"
   },
   "es": {
     "/year": "/año",
@@ -12777,7 +12781,8 @@
     "next_status_missed": "perdido",
     "config_setpoint_model_signed": "Positivo descarga, negativo carga",
     "config_setpoint_model_inverted": "Positivo carga, negativo descarga",
-    "config_setpoint_model_direction_select": "Un selector fija el sentido"
+    "config_setpoint_model_direction_select": "Un selector fija el sentido",
+    "next_st_not_controlled": "Sin control — actívalo"
   },
   "fi": {
     "/year": "/vuosi",
@@ -15333,7 +15338,8 @@
     "next_status_missed": "jäi väliin",
     "config_setpoint_model_signed": "Plus purkaa, miinus lataa",
     "config_setpoint_model_inverted": "Plus lataa, miinus purkaa",
-    "config_setpoint_model_direction_select": "Valinta asettaa suunnan"
+    "config_setpoint_model_direction_select": "Valinta asettaa suunnan",
+    "next_st_not_controlled": "Ei ohjattu — ota käyttöön"
   },
   "fr": {
     "/year": "/an",
@@ -17889,7 +17895,8 @@
     "next_status_missed": "manqué",
     "config_setpoint_model_signed": "Plus décharge, moins charge",
     "config_setpoint_model_inverted": "Plus charge, moins décharge",
-    "config_setpoint_model_direction_select": "Un sélecteur fixe le sens"
+    "config_setpoint_model_direction_select": "Un sélecteur fixe le sens",
+    "next_st_not_controlled": "Non piloté — à activer"
   },
   "hu": {
     "/year": "/év",
@@ -20445,7 +20452,8 @@
     "next_status_missed": "elmaradt",
     "config_setpoint_model_signed": "Plusz kisüt, mínusz tölt",
     "config_setpoint_model_inverted": "Plusz tölt, mínusz kisüt",
-    "config_setpoint_model_direction_select": "Egy választó adja meg az irányt"
+    "config_setpoint_model_direction_select": "Egy választó adja meg az irányt",
+    "next_st_not_controlled": "Nincs vezérelve — kapcsold be"
   },
   "it": {
     "/year": "/anno",
@@ -23001,7 +23009,8 @@
     "next_status_missed": "mancato",
     "config_setpoint_model_signed": "Positivo scarica, negativo carica",
     "config_setpoint_model_inverted": "Positivo carica, negativo scarica",
-    "config_setpoint_model_direction_select": "Un selettore imposta la direzione"
+    "config_setpoint_model_direction_select": "Un selettore imposta la direzione",
+    "next_st_not_controlled": "Non controllato — attiva"
   },
   "nl": {
     "/year": "/jaar",
@@ -25557,7 +25566,8 @@
     "next_status_missed": "gemist",
     "config_setpoint_model_signed": "Plus ontlaadt, min laadt",
     "config_setpoint_model_inverted": "Plus laadt, min ontlaadt",
-    "config_setpoint_model_direction_select": "Een keuzelijst zet de richting"
+    "config_setpoint_model_direction_select": "Een keuzelijst zet de richting",
+    "next_st_not_controlled": "Niet gestuurd — inschakelen"
   },
   "no": {
     "/year": "/år",
@@ -28113,7 +28123,8 @@
     "next_status_missed": "gikk tapt",
     "config_setpoint_model_signed": "Pluss lader ut, minus lader",
     "config_setpoint_model_inverted": "Pluss lader, minus lader ut",
-    "config_setpoint_model_direction_select": "En velger setter retningen"
+    "config_setpoint_model_direction_select": "En velger setter retningen",
+    "next_st_not_controlled": "Ikke styrt — slå på"
   },
   "pl": {
     "/year": "/rok",
@@ -30669,7 +30680,8 @@
     "next_status_missed": "pominięte",
     "config_setpoint_model_signed": "Plus rozładowuje, minus ładuje",
     "config_setpoint_model_inverted": "Plus ładuje, minus rozładowuje",
-    "config_setpoint_model_direction_select": "Kierunek ustawia wybór"
+    "config_setpoint_model_direction_select": "Kierunek ustawia wybór",
+    "next_st_not_controlled": "Nie sterowane — włącz"
   },
   "pt": {
     "/year": "/ano",
@@ -33225,7 +33237,8 @@
     "next_status_missed": "perdido",
     "config_setpoint_model_signed": "Positivo descarrega, negativo carrega",
     "config_setpoint_model_inverted": "Positivo carrega, negativo descarrega",
-    "config_setpoint_model_direction_select": "Um seletor define a direção"
+    "config_setpoint_model_direction_select": "Um seletor define a direção",
+    "next_st_not_controlled": "Não controlado — ative"
   },
   "ro": {
     "/year": "/an",
@@ -35781,7 +35794,8 @@
     "next_status_missed": "ratat",
     "config_setpoint_model_signed": "Plus descarcă, minus încarcă",
     "config_setpoint_model_inverted": "Plus încarcă, minus descarcă",
-    "config_setpoint_model_direction_select": "Un selector stabilește direcția"
+    "config_setpoint_model_direction_select": "Un selector stabilește direcția",
+    "next_st_not_controlled": "Necontrolat — activează"
   },
   "sv": {
     "/year": "/år",
@@ -38337,7 +38351,8 @@
     "next_status_missed": "missat",
     "config_setpoint_model_signed": "Plus laddar ur, minus laddar",
     "config_setpoint_model_inverted": "Plus laddar, minus laddar ur",
-    "config_setpoint_model_direction_select": "En väljare sätter riktningen"
+    "config_setpoint_model_direction_select": "En väljare sätter riktningen",
+    "next_st_not_controlled": "Inte styrd — slå på"
   },
   "zh": {
     "/year": "/年",
@@ -40893,6 +40908,7 @@
     "next_status_missed": "已错过",
     "config_setpoint_model_signed": "正值放电，负值充电",
     "config_setpoint_model_inverted": "正值充电，负值放电",
-    "config_setpoint_model_direction_select": "由选择器设定方向"
+    "config_setpoint_model_direction_select": "由选择器设定方向",
+    "next_st_not_controlled": "未控制 — 请开启"
   }
 }

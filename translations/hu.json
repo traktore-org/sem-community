@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "A SEM már nem használja a régi, automatikusan talált eszközöket",
       "description": "A régebbi verziók név alapján találták meg ezeket a kapcsolókat, és terhelésként használták őket: **{names}**. Nem láthattad és nem állíthattad őket, és a csúcskorlát kikapcsolhatta őket. A SEM már nem használja őket. Ha azt szeretnéd, hogy a SEM vezéreljen egyet, add hozzá az **Eszköz hozzáadása** gombbal az Eszközök oldalon."
+    },
+    "security_devices_not_used": {
+      "title": "A SEM békén hagyja a biztonsági eszközöket",
+      "description": "Ezek biztonsági eszközök (kamera, riasztó, sziréna vagy ajtózár): **{names}**. A SEM már nem mutatja és nem kapcsolja őket. Az energiájuk továbbra is beleszámít a ház fogyasztásába."
     }
   },
   "selector": {

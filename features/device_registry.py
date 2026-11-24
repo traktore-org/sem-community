@@ -844,6 +844,10 @@ class UnifiedDeviceRegistry:
         surplus controller."""
         from ..devices.base import DeviceControlMode
         for device_id, spec in self._service_registrations.items():
+            # (#1419) a registration saved before the security rule
+            if is_security_entity(self.hass, spec.get("entity_id")):
+                self._note_security_exclusion(device_id, spec.get("name") or device_id)
+                continue
             device = surplus_device_from_spec(self.hass, device_id, spec)
             # (#890) the spec is the SEED; a persisted drag outranks it.
             device.priority = self._service_device_priority(device_id, spec)
@@ -1062,6 +1066,10 @@ class UnifiedDeviceRegistry:
                 _LOGGER.info(
                     "Skipping Energy Dashboard device '%s' (%s): security "
                     "device — SEM never lists or controls it", name, energy_sensor)
+                self._note_security_exclusion(
+                    UnifiedDevice(energy_sensor=energy_sensor,
+                                  power_sensor=power_sensor, name=name,
+                                  priority=position, is_ev=False).device_id, name)
                 continue
 
             # Build a temporary device to get device_id
@@ -1078,6 +1086,12 @@ class UnifiedDeviceRegistry:
 
             # Manual mapping takes precedence over auto-discovery
             has_manual = energy_sensor in self._manual_mappings
+            # (#1419) a mapping saved before the security rule is re-checked:
+            # a camera's switch is never a load's control, whoever chose it
+            if has_manual and is_security_entity(
+                    self.hass, (self._manual_mappings[energy_sensor] or {}).get("entity")):
+                self._note_security_exclusion(device_id, name)
+                has_manual = False
             if has_manual:
                 control = self._manual_mappings[energy_sensor]
             else:
@@ -1510,6 +1524,22 @@ class UnifiedDeviceRegistry:
         if deps:
             live.depends_on = list(deps)
 
+    def _note_security_exclusion(self, device_id: str, name: str) -> None:
+        """(#1419) A device SEM knew before and now leaves alone because it
+        is a security device is named in a Repair — never a silent drop. A
+        device SEM never knew is skipped quietly."""
+        known = (set(self._control_mode_overrides) | set(self._priority_overrides)
+                 | set(self._critical_overrides) | set(self._service_registrations)
+                 | set(getattr(self, "_device_goals", {}) or {}))
+        if device_id not in known:
+            return
+        names = self.__dict__.setdefault("_security_excluded", {})
+        if names.get(device_id) == name:
+            return
+        names[device_id] = name
+        from ..coordinator.repair_issues import raise_security_devices_not_used
+        raise_security_devices_not_used(self.hass, sorted(names.values()))
+
     def control_mode_for(self, device_id: str) -> str:
         """What a device may do: the user's choice, else the discovery default.
 
@@ -1642,6 +1672,9 @@ class UnifiedDeviceRegistry:
                 # (#895) the same default the surplus side applies — the
                 # shedder used to carry its own "peak_only" literal here.
                 "control_mode": self.control_mode_for(device.device_id),
+                # (#1419) did the user pick this mode? Off by default reads
+                # "Not controlled — turn on" on the card.
+                "mode_chosen": device.device_id in getattr(self, "_user_control_modes", ()),
                 # (#649) Is this device driven by the surplus controller? Only
                 # then may load_management stand down from shedding it — a
                 # surplus-mode device with no live controller object (e.g. a
@@ -1663,6 +1696,8 @@ class UnifiedDeviceRegistry:
             written.add(device_id)
 
         for did, spec in self._service_registrations.items():
+            if is_security_entity(self.hass, spec.get("entity_id")):
+                continue   # (#1419) never a load; named in a Repair at boot
             self._load_manager._devices[did] = self._service_lm_row(did, spec)
             written.add(did)
 
@@ -1929,6 +1964,9 @@ class UnifiedDeviceRegistry:
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
                 "control_mode": self.control_mode_for(did),
+                # (#1419) did the user pick this mode? Off by default reads
+                # "Not controlled — turn on" on the card.
+                "mode_chosen": did in getattr(self, "_user_control_modes", ()),
                 # (#122/#576) the "Requires" link — read from the persistent
                 # store so it both survives rebuilds AND shows on the card
                 # (pre-fix it was never emitted, so the card couldn't display it).
@@ -1942,6 +1980,8 @@ class UnifiedDeviceRegistry:
         # (#559) service-registered devices — pre-fix they never appeared
         # on the Control tab at all.
         for did, spec in self._service_registrations.items():
+            if is_security_entity(self.hass, spec.get("entity_id")):
+                continue   # (#1419) a security device is never listed
             if did in result:
                 continue
             live = self._surplus_controller.get_device(did)
@@ -2211,6 +2251,9 @@ class UnifiedDeviceRegistry:
             "is_controllable": entity is not None,
             "is_ev": False,
             "control_mode": self.control_mode_for(device_id),
+            # (#1419) did the user pick this mode? Off by default reads
+            # "Not controlled — turn on" on the card.
+            "mode_chosen": device_id in getattr(self, "_user_control_modes", ()),
             # (#649) as the ED rows: a live controller object exists. Whether
             # it sheds the load is the mode's question (surplus → the surplus
             # controller's; peak_only → this row is the shedder's).

@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "SEM ei enää käytä vanhoja automaattisesti löydettyjä laitteita",
       "description": "Vanhemmat versiot löysivät nämä kytkimet nimen perusteella ja käyttivät niitä kuormina: **{names}**. Et voinut nähdä tai asettaa niitä, ja huippuraja saattoi sammuttaa ne. SEM ei enää käytä niitä. Jos haluat SEMin ohjaavan jotakin niistä, lisää se kohdasta **Lisää laite** Laitteet-näkymässä."
+    },
+    "security_devices_not_used": {
+      "title": "SEM jättää turvalaitteet rauhaan",
+      "description": "Nämä laitteet ovat turvalaitteita (kamera, hälytin, sireeni tai ovilukko): **{names}**. SEM ei enää näytä eikä ohjaa niitä. Niiden energia lasketaan yhä kodin kulutukseen."
     }
   },
   "selector": {

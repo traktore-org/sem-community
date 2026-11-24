@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "SEM už nepoužívá stará automaticky nalezená zařízení",
       "description": "Starší verze našly tyto spínače podle názvu a používaly je jako zátěže: **{names}**. Nemohli jste je vidět ani nastavit a limit špičky je mohl vypnout. SEM je už nepoužívá. Chcete-li, aby SEM některé řídil, přidejte ho přes **Přidat zařízení** v Zařízeních."
+    },
+    "security_devices_not_used": {
+      "title": "SEM nechává bezpečnostní zařízení být",
+      "description": "Tato zařízení jsou bezpečnostní (kamera, alarm, siréna nebo zámek dveří): **{names}**. SEM je už nezobrazuje ani nespíná. Jejich energie se dál počítá do spotřeby domu."
     }
   },
   "selector": {

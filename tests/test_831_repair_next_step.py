@@ -97,6 +97,7 @@ DOCS_SIDE = {
     # SEM that load or raising the target, both settings, not a SEM bug.
     "load_shed_futile",
     "old_found_loads_removed",   # (#1419) a decision for the user, not a bug
+    "security_devices_not_used",  # (#1419) a rule, explained in the docs
 }
 REPORT_SIDE = {
     "charger_actuation_failed", "charger_stop_unenforceable",

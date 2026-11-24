@@ -2140,6 +2140,10 @@
     "old_found_loads_removed": {
       "title": "SEM nie używa już starych automatycznie znalezionych urządzeń",
       "description": "Starsze wersje znajdowały te przełączniki po nazwie i używały ich jako obciążeń: **{names}**. Nie można było ich zobaczyć ani ustawić, a limit szczytowy mógł je wyłączać. SEM już ich nie używa. Aby SEM sterował jednym z nich, dodaj go przez **Dodaj urządzenie** w Urządzeniach."
+    },
+    "security_devices_not_used": {
+      "title": "SEM nie rusza urządzeń zabezpieczających",
+      "description": "Te urządzenia są urządzeniami zabezpieczającymi (kamera, alarm, syrena lub zamek drzwi): **{names}**. SEM już ich nie pokazuje ani nie przełącza. Ich energia nadal liczy się do zużycia domu."
     }
   },
   "selector": {

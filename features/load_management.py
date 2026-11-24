@@ -76,6 +76,24 @@ def is_charger_load_row(device_id: Any, info: Any) -> bool:
     )
 
 
+#: (#1419) Sources a row SEM still builds carries. A ``load_device_*`` row
+#: with none of them (or with the old discovery's "pattern") is a left-over.
+_CURRENT_ROW_SOURCES = frozenset({
+    "unified_registry", "service_registration", "energy_dashboard"})
+
+
+def is_old_found_row(device_id: Any, info: Any) -> bool:
+    """(#1419) A row the old pattern discovery saved — decided by what the
+    row says it is, not by its id alone: a service registration the user
+    named ``load_device_pool`` is not one."""
+    if not str(device_id).startswith(CHARGER_ROW_PREFIX):
+        return False
+    if is_charger_load_row(device_id, info):
+        return False
+    source = (info or {}).get("source") if isinstance(info, Mapping) else None
+    return source not in _CURRENT_ROW_SOURCES
+
+
 def resolved_control_type(control: Optional[Mapping]) -> str:
     """What the control's ENTITY can actually honour (#880).
 
@@ -357,8 +375,7 @@ class LoadManagementCoordinator:
                     saved = data["devices"] or {}
                     left = sorted(
                         did for did, info in saved.items()
-                        if str(did).startswith(CHARGER_ROW_PREFIX)
-                        and not is_charger_load_row(did, info)
+                        if is_old_found_row(did, info)
                     )
                     self._devices = {
                         did: info for did, info in saved.items() if did not in left
@@ -1391,7 +1408,13 @@ class LoadManagementCoordinator:
         # plug and a TV display (0.03 kW together) against a 10 kW car. The
         # ``futile`` test above misses it when the meter sits between the aim
         # and the target. Hold, without a Repair: nothing is wrong with setup.
-        too_small = (need_w > 0 and sheddable_w < SHED_MIN_COVER_SHARE * need_w)
+        # Judged on the whole episode, not on what is left after each shed:
+        # what SEM may still shed PLUS what it already holds off for this
+        # excess. A shed that did not move the meter must not end shedding
+        # (the next load still counts), and a shed/restore never changes the
+        # sum, so the verdict cannot flap.
+        too_small = (need_w > 0 and sheddable_w + self._shed_draw_w()
+                     < SHED_MIN_COVER_SHARE * need_w)
         return {
             "grid_import_w": grid_import_w,
             "target_w": target_w,
@@ -1979,8 +2002,7 @@ class LoadManagementCoordinator:
         restored load is never shed again by the next pass."""
         if not self._devices_shed or plan["need_w"] <= 0:
             return
-        if (plan["sheddable_w"] + self._shed_draw_w()
-                < SHED_MIN_COVER_SHARE * plan["need_w"]):
+        if plan.get("too_small"):
             self._shed_path = "restore:too_small"
             await self._restore_loads()
 

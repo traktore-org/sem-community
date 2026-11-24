@@ -2908,7 +2908,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 coordinator._load_manager._unified_registry_active = True
             _LOGGER.info("Unified device registry initialized with %d devices", len(registry.devices))
         except Exception as err:
-            _LOGGER.warning("Unified device registry init failed (non-critical): %s", err)
+            # (#1419) Load management keeps the rows it saved last, each
+            # with its Mode; a row it has to add now has none and stays off.
+            _LOGGER.warning(
+                "Unified device registry init failed (non-critical): %s — "
+                "loads keep their last saved Mode; a new one stays Off", err)
             coordinator._device_registry = None
 
         # Register EV charger(s) as CurrentControlDevice for unified control
@@ -5457,7 +5461,10 @@ async def _async_register_services(
             # (#1419) Refuse an unknown id BEFORE any write. The check used to
             # follow the manager write, so "not found" came back after the
             # flag had already been stored on a row nobody could see.
-            if reg is not None and not reg.knows_device(device_id):
+            _lm_rows = getattr(lm, "_devices", None) if lm is not None else None
+            if ((reg is not None and not reg.knows_device(device_id))
+                    or (reg is None and isinstance(_lm_rows, dict)
+                        and device_id not in _lm_rows)):
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key="device_not_found",
@@ -6372,6 +6379,16 @@ async def _async_register_phase_services(
         energy_kwh = call.data.get("estimated_energy_kwh", 1.0)
         rated_power = call.data.get("rated_power", 1000)
         priority = call.data.get("priority", 7)
+
+        # (#1419) A security device is never a load SEM may switch — the same
+        # refusal as register_surplus_device and set_device_control_mapping.
+        from .features.load_device_discovery import is_security_entity
+        if is_security_entity(hass, entity_id):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="security_device_not_a_load",
+                translation_placeholders={"entity": str(entity_id)},
+            )
 
         try:
             deadline = datetime.fromisoformat(deadline_str)
