@@ -12,6 +12,7 @@ LIMIT_DISCHARGE calls become one HA service call).
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from . import reason_codes as RC
@@ -273,6 +274,68 @@ def _note_forced_op(adapter, attr: str, ret, landed_intent, value: bool) -> None
         _set(adapter, "_sem_stop_misses", 0)
 
 
+#: (#1413) how long a forced start may stay off before its row says so. A
+#: select that shows the new value a cycle later (a Modbus direction select,
+#: a power strategy) is a wait, not a failure. The slowest is a cloud hold
+#: mode: ``hold_select.SHOW_WITHIN_S`` (60 s), one re-send, 60 s again, and
+#: each step may end one cycle late (a cycle is up to 60 s): 2 × (60 + 60).
+NOT_STARTED_AFTER_S = 240.0
+_now = time.monotonic
+
+
+def _given_up(adapter) -> bool:
+    """(#1413) The adapter says no charge will come of this block: the
+    inverter refused it, or SEM could not set the charge target."""
+    return (getattr(adapter, "charge_refused", False) is True
+            or getattr(adapter, "charge_target_unset", False) is True)
+
+
+def _record_forced_start(log, decision, adapter, ret, value_w: float,
+                         not_started_code: str, error_before=None) -> None:
+    """(#1413) The decision log's row for a forced charge or sale, written
+    AFTER the command, from its answer (class 192: a write's "no" is read
+    before anything claims the result). Before, the row went out first, so
+    a start that failed still said "the plan charges the battery now".
+
+    * The start went out: the adapter answered True, or it holds this
+      intent with no error. The row the decision asked for, with the watts
+      sent.
+    * The adapter holds this intent but names an error: a re-send failed
+      while an earlier start still stands. No row.
+    * The start is off: no True, and the adapter does not hold this intent.
+      The row says the start did not happen, with no watts — at once when
+      this command's error comes with the adapter giving the charge up,
+      else once it stayed off for ``NOT_STARTED_AFTER_S``. Its text is the last error a command of this
+      run set; an error left from another command (``error_before``, read
+      before the command) is not this start's.
+    """
+    intent = decision.intent
+    error = getattr(adapter, "last_error", None)
+    holds = getattr(adapter, "last_intent", None) is intent
+    if ret is True or (error is None and holds):
+        _set(adapter, "_start_off", None)
+        record_battery(log, decision, value_w=value_w)
+        return
+    if holds:
+        return
+    now = _now()
+    kept = getattr(adapter, "_start_off", None)
+    since, text = ((kept[1], kept[2]) if isinstance(kept, tuple)
+                   and len(kept) == 3 and kept[0] is intent else (now, ""))
+    fresh = isinstance(error, str) and bool(error) and error != error_before
+    if fresh:
+        text = error
+    _set(adapter, "_start_off", (intent, since, text))
+    # a give-up counts at once only with this command's own "no": a refusal
+    # is kept for 24 h, and a new start's first wait must not read as one
+    if (now - since >= NOT_STARTED_AFTER_S
+            or (fresh and intent is BatteryIntent.FORCE_CHARGE
+                and _given_up(adapter))):
+        record_battery(log, rewrite(
+            decision, reason_code=not_started_code,
+            reason=text or "the start has not happened"))
+
+
 async def _settle_charge_target(adapter) -> None:
     """(#1180) A charge-target value SEM has to put back and has not seen
     land is checked — and sent again when due — on a cycle that sends no
@@ -387,7 +450,8 @@ async def _dispatch_battery(
     """
     # (#1084) The decision log's battery seam. Each branch below notes the
     # command at the point it really leaves (after the holds that send
-    # nothing), with the watts it sends. Recording only.
+    # nothing), with the watts it sends. Recording only. (#1413) A forced
+    # charge or sale is noted after its command, from the answer.
     _log = log_of(controller)
     # (#1164) What this battery was asked to charge at, as SENT: the FORCE_CHARGE
     # branch below sets it once its command goes out. Every other path — a
@@ -398,6 +462,12 @@ async def _dispatch_battery(
     _set(adapter, "_pack_w", getattr(decision, "pack_w", None))
     # (#1165) …and the same for a sale, set by the FORCE_DISCHARGE branch.
     _set(adapter, "_sem_discharge_asked_w", 0.0)
+    if (decision.intent not in (BatteryIntent.FORCE_CHARGE,
+                                BatteryIntent.FORCE_DISCHARGE)
+            or observer or yielded):
+        # (#1413) the time a start stays off counts over one run of
+        # forced cycles that each send it
+        _set(adapter, "_start_off", None)
     if (decision.intent is not BatteryIntent.LIMIT_DISCHARGE
             or observer or yielded):
         # (#1179) a pack's floor is learnt again under the next limit
@@ -544,7 +614,7 @@ async def _dispatch_battery(
                 decision.battery_id, decision.reason,
             )
             return
-        record_battery(_log, decision, value_w=decision.charge_power_w)
+        error_before = getattr(adapter, "last_error", None)
         ret = await adapter.command_force_charge(
             decision.target_soc,
             decision.charge_power_w,
@@ -552,6 +622,10 @@ async def _dispatch_battery(
         )
         _note_forced_op(adapter, "_sem_forced_charge", ret,
                         BatteryIntent.FORCE_CHARGE, True)
+        # (#1413) the row from the answer, not before the command
+        _record_forced_start(_log, decision, adapter, ret,
+                             decision.charge_power_w,
+                             RC.BATTERY_CHARGE_NOT_STARTED, error_before)
         # (#1164 review) Asked only if it went out: a withheld setpoint
         # (#978) or a failed start leaves ``last_error`` set.
         if (getattr(adapter, "last_error", None) is None
@@ -596,12 +670,16 @@ async def _dispatch_battery(
                 decision.battery_id, decision.reason,
             )
             return
-        record_battery(_log, decision, value_w=decision.discharge_power_w)
+        error_before = getattr(adapter, "last_error", None)
         ret = await adapter.command_force_discharge(
             decision.discharge_power_w, decision.floor_soc,
         )
         _note_forced_op(adapter, "_sem_forced_discharge", ret,
                         BatteryIntent.FORCE_DISCHARGE, True)
+        # (#1413) the same rule as the charge: the row from the answer
+        _record_forced_start(_log, decision, adapter, ret,
+                             decision.discharge_power_w,
+                             RC.BATTERY_SELL_NOT_STARTED, error_before)
         # (#1165) Asked only if it went out or stands. One adapter answers
         # True and records no intent; the rest record the intent and clear
         # ``last_error``, on a repeat too; a failed write or a withheld

@@ -7572,7 +7572,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """(#1367) ``(share, unable_ids)``: the part of the fleet's kWh whose
         adapter has a charge command set up, and the packs that take none. None
         when SEM could not ask (no adapter built yet, or one failed to
-        answer) — the caller then plans as before."""
+        answer) — the caller then plans as before. A pack whose inverter
+        refused the charge lately (#1346), or whose charge SEM gave up for a
+        charge target it could not set (#1413), takes none either."""
         adapters = self._live_battery_adapters()
         if not adapters:
             return None
@@ -7584,6 +7586,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         able, unable = [], []
         # (#1346) packs whose inverter refused the charge command lately
         self._charge_refused_ids = set()
+        # (#1413) packs whose charge SEM gave up lately: no charge target set
+        self._charge_unset_ids = set()
         for bid, ad in adapters:
             try:
                 # a configuration fact, never a live gate (the plan is
@@ -7596,6 +7600,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if ok and getattr(ad, "charge_refused", False) is True:
                 ok = False
                 self._charge_refused_ids.add(bid)
+            elif ok and getattr(ad, "charge_target_unset", False) is True:
+                ok = False
+                self._charge_unset_ids.add(bid)
             (able if ok else unable).append(bid)
         if not unable:
             return 1.0, []
@@ -14235,7 +14242,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 battery_left_out = [
                     {"id": "battery" if _share <= 0 else f"battery:{_bid}",
                      "why": ("charge_refused" if _bid in getattr(
-                         self, "_charge_refused_ids", ()) else "no_charge_control"),
+                         self, "_charge_refused_ids", ())
+                         else "charge_target_unset" if _bid in getattr(
+                             self, "_charge_unset_ids", ())
+                         else "no_charge_control"),
                      "label": None}
                     for _bid in (_unable if _share > 0 else _unable[:1])]
                 plan_deficit = deficit * _share

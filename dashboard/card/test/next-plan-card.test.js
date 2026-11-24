@@ -389,10 +389,14 @@ test('Plan screen: control on, plan execution off says not applied and offers th
     assert.deepEqual(calls[0], ['switch', 'turn_on', { entity_id: 'switch.sem_energy_plan_actuation' }]);
 });
 
-test('Plan screen: watch-only still reads as shadow, live still reads live', () => {
-    const watch = text(makeCard(planStates('on', 'off'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: false }));
-    assert.match(watch, /next_pill_shadow/);
-    assert.doesNotMatch(watch, /energy_plan_off/);
+test('Plan screen: watch-only reads as watch-only, live still reads live', () => {
+    // (#1377) watch-only is named, whichever way the plan switch stands
+    for (const act of [false, true]) {
+        const watch = text(makeCard(planStates('on', act ? 'on' : 'off'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: act }));
+        assert.match(watch, /next_pill_observing/);
+        assert.doesNotMatch(watch, /next_pill_live/);
+        assert.doesNotMatch(watch, /energy_plan_off/);
+    }
     const live = text(makeCard(planStates('off', 'on'))._stripPills({ computed_at: '2026-11-08T19:40:00+01:00', actuation: true }));
     assert.match(live, /next_pill_live/);
 });

@@ -330,12 +330,18 @@ class SEMNextSystemCard extends SEMNextBase {
 
     _observerRow() {
         const obs = this._obs();
+        const st = this._str('switch.sem_observer_mode');
+        const line = st === 'on' ? 'next_observer_on_sub' : st === 'off' ? 'next_observer_off_sub' : '';
         const confirm = this._confirmObs
             ? html`<div class="confirm">${this._alert('warning', '', this._t(obs ? 'next_obs_confirm_off' : 'next_obs_confirm_on'), html`
                 ${this._btn(this._t('next_yes'), () => { this._confirmObs = false; this._toggleSwitch('switch.sem_observer_mode'); }, { small: true, primary: true })}
                 ${this._btn(this._t('next_cancel'), () => { this._confirmObs = false; }, { small: true, ghost: true })}`)}</div>` : nothing;
+        // (#1377) the line says the state the switch shows: a help text worded
+        // as a fact ("Activé, …") read as "watch-only is on" while it was off
         return html`${this._row('mdi:eye-outline', this._t('next_observer'),
-            this._switch(obs, () => { this._confirmObs = true; }, { label: this._t('next_observer') }), this._t('next_observer_sub'))}${confirm}`;
+            this._switch(obs, () => { this._confirmObs = true; }, { label: this._t('next_observer') }),
+            // …and none while the switch reads neither on nor off (SEM reloading)
+            line ? this._t(line) : '')}${confirm}`;
     }
 
     _health(rows) {

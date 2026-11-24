@@ -125,7 +125,7 @@ test('10: Observer mode is a switch row apart from the tool buttons', () => {
     const sys = mk('sem-next-system-card', BASE);
     const row = text(sys._observerRow());
     assert.match(row, /role="switch"/);
-    assert.match(row, /next_observer_sub/);
+    assert.match(row, /next_observer_off_sub/);   // (#1377) the line says the state
     const health = text(sys._health([]));
     assert.match(health, /copy_diagnostics/);
     // the three tools are text buttons; the observer is not among the tool buttons
