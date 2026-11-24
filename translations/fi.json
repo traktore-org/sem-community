@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Marginaali, energiavero tai ALV koskee vain pörssihintaa. Valitse pörssihinta perusteeksi tai aseta ne nollaan."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} kuuluu turvalaitteeseen (kamera, hälytin, lukko tai sireeni). SEM ei koskaan ohjaa turvalaitteita."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Varaaja ei saavuta legionellatavoitetta",
       "description": "{name}: varaaja ottaa enintään {max} °C, alle legionellatavoitteen {target} °C. SEM lämmittää {max} °C:een, mikä ei ehkä desinfioi varaajaa. Laske tavoitetta tai tarkista varaajan maksimi. Ilmoitus poistuu itsestään."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM ei enää käytä vanhoja automaattisesti löydettyjä laitteita",
+      "description": "Vanhemmat versiot löysivät nämä kytkimet nimen perusteella ja käyttivät niitä kuormina: **{names}**. Et voinut nähdä tai asettaa niitä, ja huippuraja saattoi sammuttaa ne. SEM ei enää käytä niitä. Jos haluat SEMin ohjaavan jotakin niistä, lisää se kohdasta **Lisää laite** Laitteet-näkymässä."
     }
   },
   "selector": {

@@ -186,7 +186,9 @@ A new device starts in **Off**. Drag rows to change the priority. Priority decid
 4. Optional: add a **Power sensor** and the **Power when on, W**.
 5. Press **Add**.
 
-Devices that Home Assistant's Energy settings measure under **Individual devices** appear here by themselves.
+Devices that Home Assistant's Energy settings measure under **Individual devices** appear here by themselves. Every device starts at Mode **Off**: SEM controls it only after you turn it on.
+
+Security devices (with a camera, alarm, lock or siren) are never listed and never offered.
 
 A device with its own meter and price has a **Device tariff** row.
 

@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Un recargo, impuesto eléctrico o IVA solo se aplica con un precio spot. Elige la base spot o ponlos a 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} pertenece a un dispositivo de seguridad (cámara, alarma, cerradura o sirena). SEM nunca controla dispositivos de seguridad."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "El depósito no alcanza el objetivo de legionela",
       "description": "{name}: el depósito admite como máximo {max} °C, por debajo del objetivo de legionela de {target} °C. SEM calienta a {max} °C, lo que puede no desinfectar el depósito. Baja el objetivo o revisa el máximo del depósito. Este aviso desaparece solo."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM ya no usa los antiguos dispositivos encontrados automáticamente",
+      "description": "Las versiones anteriores encontraban estos interruptores por su nombre y los usaban como cargas: **{names}**. No podías verlos ni ajustarlos, y el límite de pico podía apagarlos. SEM ya no los usa. Para que SEM controle uno, añádelo con **Añadir dispositivo** en Dispositivos."
     }
   },
   "selector": {

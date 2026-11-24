@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Un adaos, o taxă pe energie sau TVA se aplică doar la un preț spot. Alege baza spot sau setează-le la 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} aparține unui dispozitiv de securitate (cameră, alarmă, încuietoare sau sirenă). SEM nu comută niciodată dispozitive de securitate."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Rezervorul nu atinge ținta antilegionella",
       "description": "{name}: rezervorul acceptă cel mult {max} °C, sub ținta antilegionella de {target} °C. SEM încălzește la {max} °C, ceea ce poate să nu dezinfecteze rezervorul. Coboară ținta sau verifică maximul rezervorului. Mesajul dispare singur."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM nu mai folosește dispozitivele vechi găsite automat",
+      "description": "Versiunile mai vechi găseau aceste comutatoare după nume și le foloseau ca sarcini: **{names}**. Nu le puteai vedea sau seta, iar limita de vârf le putea opri. SEM nu le mai folosește. Ca SEM să controleze unul, adaugă-l cu **Adaugă un dispozitiv** la Dispozitive."
     }
   },
   "selector": {

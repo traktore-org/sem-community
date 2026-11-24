@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "加价、能源税或增值税仅适用于现货价格。请选择现货价格基础，或将其设为 0。"
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} 属于安防设备（摄像头、警报、门锁或警笛）。SEM 从不控制安防设备。"
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "水箱达不到防军团菌目标",
       "description": "{name}：水箱最高只接受 {max} °C，低于防军团菌目标 {target} °C。SEM 加热到 {max} °C，可能无法为水箱消毒。请降低目标，或检查水箱自身的最高温度。此提示会自行消失。"
+    },
+    "old_found_loads_removed": {
+      "title": "SEM 不再使用旧的自动发现设备",
+      "description": "旧版本按名称找到这些开关并将其用作负载：**{names}**。您无法查看或设置它们，峰值限制可能会将其关闭。SEM 不再使用它们。如需让 SEM 控制其中一个，请在设备页面用**添加设备**添加。"
     }
   },
   "selector": {

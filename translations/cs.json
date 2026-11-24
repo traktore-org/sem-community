@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Přirážka, daň z energie nebo DPH platí jen u spotové ceny. Zvolte spotový základ, nebo je nastavte na 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} patří k bezpečnostnímu zařízení (kamera, alarm, zámek nebo siréna). SEM bezpečnostní zařízení nikdy nespíná."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Zásobník nedosáhne cíle proti legionele",
       "description": "{name}: zásobník přijme nejvýše {max} °C, méně než cíl proti legionele {target} °C. SEM ohřeje na {max} °C, což zásobník nemusí vydezinfikovat. Snižte cíl nebo zkontrolujte maximum zásobníku. Hlášení zmizí samo."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM už nepoužívá stará automaticky nalezená zařízení",
+      "description": "Starší verze našly tyto spínače podle názvu a používaly je jako zátěže: **{names}**. Nemohli jste je vidět ani nastavit a limit špičky je mohl vypnout. SEM je už nepoužívá. Chcete-li, aby SEM některé řídil, přidejte ho přes **Přidat zařízení** v Zařízeních."
     }
   },
   "selector": {

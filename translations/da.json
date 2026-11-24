@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Et tillæg, elafgift eller moms gælder kun ved en spotpris. Vælg spotgrundlaget, eller sæt dem til 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} hører til en sikkerhedsenhed (kamera, alarm, lås eller sirene). SEM styrer aldrig sikkerhedsenheder."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Beholderen når ikke legionellamålet",
       "description": "{name}: beholderen tager højst {max} °C, under legionellamålet {target} °C. SEM varmer til {max} °C, hvilket måske ikke desinficerer beholderen. Sænk målet, eller tjek beholderens maksimum. Meddelelsen forsvinder af sig selv."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM bruger ikke længere gamle automatisk fundne enheder",
+      "description": "Ældre versioner fandt disse kontakter på navnet og brugte dem som belastninger: **{names}**. Du kunne ikke se eller indstille dem, og spidsgrænsen kunne slukke dem. SEM bruger dem ikke længere. Skal SEM styre en af dem, så tilføj den med **Tilføj en enhed** under Enheder."
     }
   },
   "selector": {

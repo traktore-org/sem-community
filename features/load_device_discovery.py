@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, Final, List, Optional, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
@@ -107,6 +107,44 @@ def resolve_load_is_on(
     return (current_power or 0) > 0
 
 
+#: (#1419) Home Assistant entity domains that make a whole DEVICE a security
+#: device. A camera's "enabled" switch, an alarm panel's siren or arm switch,
+#: a lock's auto-lock switch: none of them is a load, and switching one off
+#: to save watts turns off recording, the alarm or the lock. HA's own domain
+#: answers it, so no brand list is needed.
+SECURITY_DOMAINS: Final = frozenset({"camera", "alarm_control_panel", "lock", "siren"})
+
+
+def is_security_entity(hass: HomeAssistant, entity_id: Optional[str]) -> bool:
+    """(#1419) Is this entity, or the device it belongs to, a security device?
+
+    True when the entity's own domain is a security domain, or when its HA
+    device carries any entity in one. Such a device never appears in SEM's
+    device list, is never offered when a device is added, and its switches
+    are never paired with a power sensor as a control. Its energy still
+    counts: home consumption comes from the meters, not from this list.
+
+    Registry-driven and conservative like the #781 check: an entity the
+    registry does not know, or a device that cannot be read, is not called a
+    security device on a guess.
+    """
+    if not entity_id:
+        return False
+    if entity_id.split(".", 1)[0] in SECURITY_DOMAINS:
+        return True
+    try:
+        reg = entity_registry.async_get(hass)
+        entry = reg.async_get(entity_id)
+        if entry is None or not entry.device_id:
+            return False
+        siblings = entity_registry.async_entries_for_device(
+            reg, entry.device_id, include_disabled_entities=True)
+    except Exception:  # noqa: BLE001 — an unreadable registry decides nothing
+        return False
+    return any(
+        e.entity_id.split(".", 1)[0] in SECURITY_DOMAINS for e in siblings)
+
+
 class LoadDeviceDiscovery:
     """Auto-discover controllable devices for load management."""
 
@@ -114,6 +152,12 @@ class LoadDeviceDiscovery:
         """Initialize device discovery."""
         self.hass = hass
         self._entity_registry = entity_registry.async_get(hass)
+
+    def is_not_a_control(self, entity_id: Optional[str]) -> bool:
+        """(#1419) Never pair this entity as a load's control: a device's own
+        setting (#781) or any entity of a security device."""
+        return self.is_config_surface(entity_id) or is_security_entity(
+            self.hass, entity_id)
 
     def is_config_surface(self, entity_id: Optional[str]) -> bool:
         """(#781) Is this entity a device's own configuration / diagnostic
@@ -427,7 +471,7 @@ class LoadDeviceDiscovery:
         # no primary control is exactly the harm — "monitoring only" is the
         # honest answer there.
         device_entities = [
-            e for e in device_entities if not self.is_config_surface(e.entity_id)
+            e for e in device_entities if not self.is_not_a_control(e.entity_id)
         ]
 
         # Priority 1: Switch entities
@@ -506,7 +550,7 @@ class LoadDeviceDiscovery:
         ]
 
         for switch in switch_patterns:
-            if switch in all_entities and not self.is_config_surface(switch):
+            if switch in all_entities and not self.is_not_a_control(switch):
                 state = self.hass.states.get(switch)
                 if state and state.state not in ("unknown", "unavailable"):
                     return {
@@ -520,7 +564,7 @@ class LoadDeviceDiscovery:
         # outright rather than accepted as second best.
         boundary: Optional[str] = None
         for entity in all_entities:
-            if not entity.startswith("switch.") or self.is_config_surface(entity):
+            if not entity.startswith("switch.") or self.is_not_a_control(entity):
                 continue
             candidate = self._extract_base_name(entity)
             if not self._control_name_matches(base_name, candidate):
@@ -667,7 +711,7 @@ class LoadDeviceDiscovery:
                 if (
                     not entity.startswith("switch.")
                     or "shelly" not in entity.lower()
-                    or self.is_config_surface(entity)
+                    or self.is_not_a_control(entity)
                 ):
                     continue
                 candidate = self._extract_base_name(entity)
@@ -693,7 +737,7 @@ class LoadDeviceDiscovery:
             # ``pump_10`` a match for ``pump_1`` — see _control_name_matches.
             boundary: Optional[str] = None
             for entity in all_entities:
-                if not entity.startswith("switch.") or self.is_config_surface(entity):
+                if not entity.startswith("switch.") or self.is_not_a_control(entity):
                     continue
                 candidate = self._extract_base_name(entity)
                 if not self._control_name_matches(base_name, candidate):

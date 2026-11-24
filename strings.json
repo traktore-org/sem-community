@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "A markup, energy tax or VAT only applies when your price is a spot price. Pick the spot basis, or set them to 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} belongs to a security device (camera, alarm, lock or siren). SEM never switches security devices."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Tank cannot reach the Legionella target",
       "description": "{name}: the tank accepts at most {max} °C, below the Legionella target {target} °C. SEM heats to {max} °C, which may not disinfect the tank. Lower the target, or check the tank's own maximum. This clears by itself."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM no longer uses old automatically found devices",
+      "description": "Older versions found these switches by name and used them as loads: **{names}**. You could not see or set them, and the peak limit could switch them off. SEM no longer uses them. To let SEM control one, add it with **Add a device** on Devices."
     }
   },
   "selector": {

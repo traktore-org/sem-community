@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Marża, podatek energetyczny lub VAT dotyczą tylko ceny spot. Wybierz podstawę spot albo ustaw je na 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} należy do urządzenia zabezpieczającego (kamera, alarm, zamek lub syrena). SEM nigdy nie przełącza urządzeń zabezpieczających."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Zasobnik nie osiąga celu antylegionella",
       "description": "{name}: zasobnik przyjmuje najwyżej {max} °C, poniżej celu antylegionella {target} °C. SEM grzeje do {max} °C, co może nie zdezynfekować zasobnika. Obniż cel lub sprawdź maksimum zasobnika. Komunikat zniknie sam."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM nie używa już starych automatycznie znalezionych urządzeń",
+      "description": "Starsze wersje znajdowały te przełączniki po nazwie i używały ich jako obciążeń: **{names}**. Nie można było ich zobaczyć ani ustawić, a limit szczytowy mógł je wyłączać. SEM już ich nie używa. Aby SEM sterował jednym z nich, dodaj go przez **Dodaj urządzenie** w Urządzeniach."
     }
   },
   "selector": {

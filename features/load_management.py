@@ -30,7 +30,7 @@ from ..const import (
     LoadManagementState,
 )
 from ..devices.power_setpoint import SETPOINT_DOMAINS, setpoint_domain
-from .device_axes import may_actuate
+from .device_axes import has_control_handle, may_actuate, user_hands_off
 from . import shed_ledger as SL
 from .load_device_discovery import LoadDeviceDiscovery
 from ..consts.devices import load_phase
@@ -48,6 +48,10 @@ _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 STORAGE_KEY = "load_management_devices"
 LEDGER_KEY = SL.LEDGER_KEY
+
+#: (#1381) Shed only when everything SEM may shed covers at least this share
+#: of the need. Below it, switching loads off changes nothing that matters.
+SHED_MIN_COVER_SHARE = 0.25
 
 #: (#1419) The id prefix of the rows ``register_ev_charger`` writes.
 CHARGER_ROW_PREFIX = "load_device_"
@@ -360,6 +364,13 @@ class LoadManagementCoordinator:
                         did: info for did, info in saved.items() if did not in left
                     }
                     if left:
+                        from ..coordinator.repair_issues import (
+                            raise_old_found_loads_removed,
+                        )
+                        raise_old_found_loads_removed(self.hass, [
+                            (saved.get(did) or {}).get("friendly_name") or did
+                            for did in left
+                        ])
                         _LOGGER.info(
                             "Not loading %d old switch row(s) that SEM found by "
                             "name and nobody could set: %s",
@@ -905,7 +916,7 @@ class LoadManagementCoordinator:
             row = self._devices[device_id]
             row["user_hands_off"] = bool(hands_off)
             row["is_controllable"] = (  # LEGACY-WRITE (#780) — derived
-                may_actuate({**row, "control_mode": None}))
+                has_control_handle(row) and not user_hands_off(row))
             await self._save_device_configuration()
             _LOGGER.debug("Updated %s hands-off to %s", device_id, hands_off)
 
@@ -1374,6 +1385,13 @@ class LoadManagementCoordinator:
         candidates.sort(key=lambda c: c[1].get("priority", 5), reverse=True)
 
         uncontrolled_w = grid_import_w - sheddable_w
+        # (#1381) Too small to matter: everything SEM may shed would cover
+        # less than SHED_MIN_COVER_SHARE of the need. Shedding then switches
+        # loads off for no effect — the reporter's night: a camera, a bedroom
+        # plug and a TV display (0.03 kW together) against a 10 kW car. The
+        # ``futile`` test above misses it when the meter sits between the aim
+        # and the target. Hold, without a Repair: nothing is wrong with setup.
+        too_small = (need_w > 0 and sheddable_w < SHED_MIN_COVER_SHARE * need_w)
         return {
             "grid_import_w": grid_import_w,
             "target_w": target_w,
@@ -1383,6 +1401,7 @@ class LoadManagementCoordinator:
             "uncontrolled_w": uncontrolled_w,
             "managed_charger_w": managed_charger_w,
             "futile": need_w > 0 and uncontrolled_w > target_w,
+            "too_small": too_small,
             "candidates": candidates,
         }
 
@@ -1420,6 +1439,7 @@ class LoadManagementCoordinator:
                     plan["grid_import_w"] / 1000.0, plan["sheddable_w"] / 1000.0,
                     plan["uncontrolled_w"] / 1000.0, plan["target_w"] / 1000.0,
                 )
+            await self._restore_if_too_small(plan)
             return
 
         # (#933) …and on the first reachable plan of this shedder's life: the
@@ -1434,6 +1454,11 @@ class LoadManagementCoordinator:
 
         if plan["need_w"] <= 0:
             self._shed_path = "held:under_aim"
+            return
+
+        if plan.get("too_small"):
+            self._shed_path = "held:too_small"
+            await self._restore_if_too_small(plan)
             return
 
         if self._observer_mode and plan["candidates"]:
@@ -1944,6 +1969,40 @@ class LoadManagementCoordinator:
         if released and not self._phase_episode_open():
             self._end_phase_episode()
 
+    async def _restore_if_too_small(self, plan: Dict[str, Any]) -> None:
+        """(#1381) What SEM already shed for this excess comes back when it
+        cannot matter: the state stays SHEDDING as long as a large load runs
+        (a 10 kW car), so the NORMAL-only restore never came and the cameras
+        stayed off for three hours. Back one at a time, with the usual
+        restore delay and anti-flicker checks, and only while the shed loads
+        plus everything still sheddable cover less than the share — so a
+        restored load is never shed again by the next pass."""
+        if not self._devices_shed or plan["need_w"] <= 0:
+            return
+        if (plan["sheddable_w"] + self._shed_draw_w()
+                < SHED_MIN_COVER_SHARE * plan["need_w"]):
+            self._shed_path = "restore:too_small"
+            await self._restore_loads()
+
+    def _shed_draw_w(self) -> float:
+        """(#1381) What the loads SEM holds off for the peak drew before:
+        their last reading, else their rating. Loads shed for a phase are the
+        guard's and not counted."""
+        total = 0.0
+        for did in self._devices_shed:
+            if self._is_phase_shed(did):
+                continue
+            info = self._devices.get(did) or {}
+            for key in ("shed_draw_w", "power_rating"):
+                try:
+                    v = float(info.get(key) or 0.0)
+                except (TypeError, ValueError):
+                    v = 0.0
+                if v > 0:
+                    total += v
+                    break
+        return total
+
     async def _restore_loads(self):
         """Restore loads that were shed."""
         if not self._devices_shed:
@@ -2268,6 +2327,13 @@ class LoadManagementCoordinator:
                 self._devices[device_id]["last_turned_off"] = dt_util.now()
                 self._devices[device_id]["shed_reason"] = reason
                 self._devices[device_id].pop("_ran_since_shed", None)
+                # (#1381) what switching it off freed, for _shed_draw_w
+                try:
+                    _st = self._device_discovery.get_device_current_state(device_info)
+                    self._devices[device_id]["shed_draw_w"] = float(
+                        _st.get("current_power") or 0.0)
+                except Exception:  # noqa: BLE001 — a reading is a nicety here
+                    pass
                 _LOGGER.info(
                     "Shed device %s (%s load shedding)",
                     device_info.get('friendly_name', device_id), reason,

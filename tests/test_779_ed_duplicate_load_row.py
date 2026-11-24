@@ -227,9 +227,10 @@ class TestShedBehaviour:
                 # the ED twin) never protected it.
             },
         }
-        # The harm: with no control_mode, the ghost is a live shed candidate.
+        # (#1419) No mode the user chose → SEM leaves it alone, even before
+        # the fold. This was the harm: it used to be a live shed candidate.
         candidates = dict(lm._get_devices_for_shedding())
-        assert "load_device_spuelmaschine" in candidates
+        assert "load_device_spuelmaschine" not in candidates
 
         # The fix: the registry's sync drops the ghost (#1419: every pattern
         # row, since only a charger's load_device_* row is kept).

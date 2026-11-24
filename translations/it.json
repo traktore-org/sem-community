@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Un ricarico, un'accisa o l'IVA valgono solo con un prezzo spot. Scegli la base spot o impostali a 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} appartiene a un dispositivo di sicurezza (telecamera, allarme, serratura o sirena). SEM non comanda mai i dispositivi di sicurezza."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Il serbatoio non raggiunge l'obiettivo legionella",
       "description": "{name}: il serbatoio accetta al massimo {max} °C, sotto l'obiettivo legionella di {target} °C. SEM scalda a {max} °C, che potrebbe non disinfettare il serbatoio. Abbassa l'obiettivo o controlla il massimo del serbatoio. Il messaggio scompare da solo."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM non usa più i vecchi dispositivi trovati automaticamente",
+      "description": "Le versioni precedenti trovavano questi interruttori dal nome e li usavano come carichi: **{names}**. Non potevi vederli né impostarli, e il limite di picco poteva spegnerli. SEM non li usa più. Per far controllare uno di essi a SEM, aggiungilo con **Aggiungi dispositivo** in Dispositivi."
     }
   },
   "selector": {

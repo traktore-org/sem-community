@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Aufschlag, Energiesteuer oder MwSt. gelten nur bei einem Spotpreis. Wähle die Spot-Basis oder setze sie auf 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} gehört zu einem Sicherheitsgerät (Kamera, Alarm, Schloss oder Sirene). SEM schaltet Sicherheitsgeräte nie."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Speicher erreicht das Legionellen-Ziel nicht",
       "description": "{name}: Der Speicher nimmt höchstens {max} °C an, weniger als das Legionellen-Ziel {target} °C. SEM heizt auf {max} °C; das desinfiziert den Speicher womöglich nicht. Senke das Ziel oder prüfe das Maximum des Speichers. Die Meldung verschwindet von selbst."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM nutzt alte automatisch gefundene Geräte nicht mehr",
+      "description": "Ältere Versionen haben diese Schalter am Namen erkannt und als Lasten genutzt: **{names}**. Du konntest sie weder sehen noch einstellen, und die Spitzenlast-Grenze konnte sie ausschalten. SEM nutzt sie nicht mehr. Soll SEM eines davon steuern, füge es unter Geräte mit **Gerät hinzufügen** hinzu."
     }
   },
   "selector": {

@@ -93,6 +93,7 @@ def _load(lm, did, *, priority, power_w, on=True, on_for_s=None, critical=False,
         "priority": priority,
         "is_critical": critical,
         "is_controllable": True,
+        "control_mode": "peak_only",  # (#1419) the user turned SEM control on
     }
     if on_for_s is not None:
         lm._devices[did]["last_turned_on"] = dt_util.now() - timedelta(seconds=on_for_s)

@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Une marge, une taxe sur l'énergie ou la TVA ne s'appliquent qu'à un prix spot. Choisissez la base spot ou mettez-les à 0."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} appartient à un appareil de sécurité (caméra, alarme, serrure ou sirène). SEM ne commande jamais les appareils de sécurité."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "Le ballon n'atteint pas la cible légionellose",
       "description": "{name} : le ballon accepte au plus {max} °C, sous la cible légionellose de {target} °C. SEM chauffe à {max} °C, ce qui peut ne pas désinfecter le ballon. Baissez la cible ou vérifiez le maximum du ballon. Ce message disparaît tout seul."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM n'utilise plus les anciens appareils trouvés automatiquement",
+      "description": "D'anciennes versions trouvaient ces interrupteurs par leur nom et les utilisaient comme charges : **{names}**. Vous ne pouviez ni les voir ni les régler, et la limite de pointe pouvait les couper. SEM ne les utilise plus. Pour que SEM en pilote un, ajoutez-le avec **Ajouter un appareil** dans Appareils."
     }
   },
   "selector": {

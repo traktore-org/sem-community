@@ -1902,6 +1902,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Felár, energiaadó vagy áfa csak spot árnál érvényes. Válaszd a spot alapot, vagy állítsd őket 0-ra."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} egy biztonsági eszközhöz tartozik (kamera, riasztó, zár vagy sziréna). A SEM soha nem kapcsol biztonsági eszközöket."
     }
   },
   "issues": {
@@ -2133,6 +2136,10 @@
     "legionella_above_unit_max": {
       "title": "A tartály nem éri el a legionella-célt",
       "description": "{name}: a tartály legfeljebb {max} °C-ot fogad el, a {target} °C-os legionella-cél alatt. Az SEM {max} °C-ra fűt, ami talán nem fertőtleníti a tartályt. Csökkentsd a célt, vagy ellenőrizd a tartály maximumát. Az üzenet magától eltűnik."
+    },
+    "old_found_loads_removed": {
+      "title": "A SEM már nem használja a régi, automatikusan talált eszközöket",
+      "description": "A régebbi verziók név alapján találták meg ezeket a kapcsolókat, és terhelésként használták őket: **{names}**. Nem láthattad és nem állíthattad őket, és a csúcskorlát kikapcsolhatta őket. A SEM már nem használja őket. Ha azt szeretnéd, hogy a SEM vezéreljen egyet, add hozzá az **Eszköz hozzáadása** gombbal az Eszközök oldalon."
     }
   },
   "selector": {

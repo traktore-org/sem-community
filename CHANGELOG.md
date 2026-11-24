@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **Peak shed only switches loads you can see** (#1419). Switches SEM once found by name, off the Devices list, are no longer switched off.
+- 🐛 **SEM controls a load only after you turn it on** (#1419). Old devices found by name are no longer used; a Repair names them.
+- 🐛 **Cameras, alarms, locks and sirens are never loads** (#1419). SEM does not list, offer or switch them.
+- 🐛 **No shedding of loads too small to help** (#1381). Under a quarter of the excess, SEM sheds nothing and brings shed loads back.
 - 🐛 **A shed load you turn back on no longer blocks the others** (#1419). It is no longer shown as shed.
 
 # [2.3.0-beta.26] — 23.11.2026

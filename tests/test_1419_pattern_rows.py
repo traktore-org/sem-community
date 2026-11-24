@@ -158,6 +158,7 @@ def _seat(lm, did, switch, priority):
         "switch_entity": switch, "friendly_name": did, "power_rating": 100,
         "is_available": True, "priority": priority, "is_critical": False,
         "is_controllable": True, "has_control_handle": True,
+        "control_mode": "peak_only",
         "last_turned_on": dt_util.now() - timedelta(hours=2),
     }
 
@@ -222,8 +223,9 @@ async def test_shed_candidates_hold_no_pattern_row(lm):
                 "switch.dw", "number.wallbox_max_current"):
         lm.states[ent] = _state("on")
     lm._devices = copy.deepcopy(SAVED["devices"])
-    assert "load_device_achtertuin_camera_enabled" in dict(
-        lm._get_devices_for_shedding())          # what the saved rows allowed
+    # (#1419) even loaded, a row with no mode the user chose is never shed
+    assert "load_device_achtertuin_camera_enabled" not in dict(
+        lm._get_devices_for_shedding())
     lm._store = FakeStore(SAVED)
     await lm._load_device_configuration()
     assert "load_device_achtertuin_camera_enabled" not in dict(

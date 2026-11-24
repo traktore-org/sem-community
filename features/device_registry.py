@@ -33,7 +33,9 @@ from ..ha_energy_reader import (
     get_all_individual_devices,
     _find_load_power_sensor,
 )
-from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
+from .load_device_discovery import (
+    LoadDeviceDiscovery, is_security_entity, resolve_load_is_on,
+)
 from .load_management import is_charger_load_row
 # (#780/#888) the two axes, asked of the module that owns them. Imported
 # unaliased so a structural test can see the call.
@@ -1049,6 +1051,17 @@ class UnifiedDeviceRegistry:
                     "imported into SEM (no energy-management use case)",
                     name, energy_sensor,
                 )
+                continue
+
+            # (#1419) A security device (camera, alarm, lock, siren) is never
+            # a load: switching it off to save watts stops recording, the
+            # alarm or the lock. It is not listed and never controlled; its
+            # energy still counts in the home total, which the meters give.
+            if not is_ev and (is_security_entity(self.hass, energy_sensor)
+                              or is_security_entity(self.hass, power_sensor)):
+                _LOGGER.info(
+                    "Skipping Energy Dashboard device '%s' (%s): security "
+                    "device — SEM never lists or controls it", name, energy_sensor)
                 continue
 
             # Build a temporary device to get device_id

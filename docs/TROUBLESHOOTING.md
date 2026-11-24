@@ -297,6 +297,12 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:** Lower that load's limit, give SEM the load, or raise **Peak limit level** in `System › What SEM may do`.
 
+### SEM no longer uses old automatically found devices
+
+**Cause:** Older versions found switches by their name and used them as loads. You could not see or set these devices, and the peak limit could switch them off. SEM no longer uses them.
+
+**Fix:** Nothing, if you did not want SEM to control them. To let SEM control one, add it with **Add a device** on **Devices**. It starts at Mode **Off**; turn it on there.
+
 ## Hot water and heat pump
 
 ### Hot water does not heat
@@ -433,6 +439,7 @@ Each Repair is a notice in `Settings › System › Repairs`. The key names the 
 |---|---|
 | `load_current_control_wrong_unit` | A load uses current control on a watt entity. See [A load is set to current control](#a-load-is-set-to-current-control-but-its-entity-is-in-watts). |
 | `load_shed_futile` | A load SEM does not control drives the peak. See [The grid peak is driven by a load](#the-grid-peak-is-driven-by-a-load-sem-does-not-control). |
+| `old_found_loads_removed` | Old automatically found devices are no longer used. See [SEM no longer uses old automatically found devices](#sem-no-longer-uses-old-automatically-found-devices). |
 
 **Heat pump and hot water**
 

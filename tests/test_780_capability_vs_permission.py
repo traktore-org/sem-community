@@ -137,10 +137,13 @@ class TestDeviceAxisAccessors780:
         assert may_actuate(row) is legacy
 
     def test_both_axes_must_say_yes(self):
-        assert may_actuate({"has_control_handle": True}) is True
-        assert may_actuate({"has_control_handle": False}) is False
+        # (#1419) a row whose mode nobody chose does nothing
+        assert may_actuate({"has_control_handle": True}) is False
+        assert may_actuate({"has_control_handle": True, "control_mode": "peak_only"}) is True
+        assert may_actuate({"has_control_handle": False, "control_mode": "peak_only"}) is False
         assert may_actuate(
-            {"has_control_handle": True, "user_hands_off": True}) is False
+            {"has_control_handle": True, "user_hands_off": True,
+             "control_mode": "peak_only"}) is False
         # (#49) the mode is the other half of permission
         assert may_actuate(
             {"has_control_handle": True, "control_mode": "off"}) is False

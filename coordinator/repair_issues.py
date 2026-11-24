@@ -321,6 +321,8 @@ _DOCS_ANCHORS = {
         "a-load-is-set-to-current-control-but-its-entity-is-in-watts",
     # (#896) The peak is driven by a load SEM does not control.
     "load_shed_futile": "the-grid-peak-is-driven-by-a-load-sem-does-not-control",
+    # (#1419) Old automatically found loads, dropped at upgrade.
+    "old_found_loads_removed": "sem-no-longer-uses-old-automatically-found-devices",
 }
 
 
@@ -1244,6 +1246,28 @@ def clear_load_shed_futile(hass: HomeAssistant) -> None:
         ir.async_delete_issue(hass, DOMAIN, "load_shed_futile")
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete load_shed_futile failed: %s", e)
+
+
+def raise_old_found_loads_removed(hass: HomeAssistant, names: list) -> None:
+    """(#1419) Old builds found loads by name (any ``switch.*`` next to a
+    power sensor) and stored them. Nobody could see or set them, and the peak
+    shed switched them off — a camera's "enabled" switch among them. They
+    are not loaded any more; this names them once so a wanted one can be
+    added back with Add a device."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="old_found_loads_removed",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="old_found_loads_removed",
+            learn_more_url=next_step_url("docs", "old_found_loads_removed", **_versions(hass)),
+            translation_placeholders={"names": ", ".join(str(n) for n in names)},
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create old_found_loads_removed failed: %s", e)
 
 
 def raise_no_forecast_integration(hass: HomeAssistant) -> None:
