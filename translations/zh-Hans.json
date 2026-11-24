@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "自动化使用了旧的充电模式名称",
-      "description": "SEM 的充电模式现在是 太阳、太阳 + 电价、立即 和 关闭。Home Assistant 在 select.select_option 中拒绝旧名称，基于旧名称的触发器也不再触发。请修改：{uses} SEM 能找到大部分用法。请同时检查蓝图，以及在界面之外创建的自动化（outside the UI）。"
+      "description": "SEM 的充电模式现在是 太阳、太阳 + 电价、立即 和 关闭。Home Assistant 在 select.select_option 中拒绝旧名称，基于旧名称的触发器也不再触发。请修改：{uses} SEM 能找到大部分用法。请同时检查蓝图，以及在界面之外创建的自动化。"
     }
   },
   "selector": {

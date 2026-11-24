@@ -2567,7 +2567,11 @@
     "next_now_until_full": "Plný výkon, dokud není auto plné nebo nezvolíte jiný režim.",
     "next_now_end_block": "Do plánu",
     "next_now_end_time": "Do času",
-    "next_now_end_full": "Do plna"
+    "next_now_end_full": "Do plna",
+    "mode_hint_sun_tariff": "Ve dne přebytek slunce. Minimum nakupuje v nejlevnějších hodinách: v noci, v levné hodině nebo při slabém slunci, když je to levnější. Ve špičce pauza.",
+    "mode_hint_sun": "Jen přebytek slunce. Minimum přichází ze sítě v noci.",
+    "mode_hint_now": "Plný výkon do {end}.",
+    "mode_hint_now_full": "nabití auta"
   },
   "da": {
     "/year": "/år",
@@ -5137,7 +5141,11 @@
     "next_now_until_full": "Fuld effekt til bilen er fuld, eller du vælger en anden tilstand.",
     "next_now_end_block": "Til planen",
     "next_now_end_time": "Til et tidspunkt",
-    "next_now_end_full": "Til fuld"
+    "next_now_end_full": "Til fuld",
+    "mode_hint_sun_tariff": "Om dagen overskydende sol. Køber minimum i de billigste timer: om natten, i en billig time eller med lidt sol, når det er billigere. Pause i spidstimer.",
+    "mode_hint_sun": "Kun overskydende sol. Minimum kommer fra nettet om natten.",
+    "mode_hint_now": "Fuld effekt indtil {end}.",
+    "mode_hint_now_full": "bilen er fuld"
   },
   "de": {
     "/year": "/Jahr",
@@ -7707,7 +7715,11 @@
     "next_now_until_full": "Volle Leistung, bis das Auto voll ist oder du einen anderen Modus wählst.",
     "next_now_end_block": "Bis zum Plan",
     "next_now_end_time": "Bis zu einer Uhrzeit",
-    "next_now_end_full": "Bis voll"
+    "next_now_end_full": "Bis voll",
+    "mode_hint_sun_tariff": "Tagsüber überschüssige Sonne. Kauft das Minimum in den günstigsten Stunden: nachts, in einer günstigen Stunde oder bei wenig Sonne, wenn das günstiger ist. Pausiert in Spitzenstunden.",
+    "mode_hint_sun": "Nur überschüssige Sonne. Das Minimum kommt nachts aus dem Netz.",
+    "mode_hint_now": "Volle Leistung bis {end}.",
+    "mode_hint_now_full": "das Auto voll ist"
   },
   "en": {
     "/year": "/year",
@@ -10277,7 +10289,11 @@
     "next_now_until_full": "Full power until the car is full or you pick another mode.",
     "next_now_end_block": "Until the plan",
     "next_now_end_time": "Until a time",
-    "next_now_end_full": "Until full"
+    "next_now_end_full": "Until full",
+    "mode_hint_sun_tariff": "Spare sun by day. Buys At least in the cheapest hours: at night, in a cheap hour, or with thin sun when that is cheaper. Pauses in peak hours.",
+    "mode_hint_sun": "Spare sun only. At least comes from the grid at night.",
+    "mode_hint_now": "Full power until {end}.",
+    "mode_hint_now_full": "the car is full"
   },
   "es": {
     "/year": "/año",
@@ -12847,7 +12863,11 @@
     "next_now_until_full": "Potencia máxima hasta que el coche esté lleno o elijas otro modo.",
     "next_now_end_block": "Hasta el plan",
     "next_now_end_time": "Hasta una hora",
-    "next_now_end_full": "Hasta lleno"
+    "next_now_end_full": "Hasta lleno",
+    "mode_hint_sun_tariff": "De día, el sol sobrante. Compra el mínimo en las horas más baratas: de noche, en una hora barata o con poco sol cuando sale más barato. Pausa en horas punta.",
+    "mode_hint_sun": "Solo el sol sobrante. El mínimo viene de la red por la noche.",
+    "mode_hint_now": "Potencia máxima hasta {end}.",
+    "mode_hint_now_full": "que el coche esté lleno"
   },
   "fi": {
     "/year": "/vuosi",
@@ -15417,7 +15437,11 @@
     "next_now_until_full": "Täysi teho, kunnes auto on täynnä tai valitset toisen tilan.",
     "next_now_end_block": "Suunnitelmaan asti",
     "next_now_end_time": "Tiettyyn aikaan",
-    "next_now_end_full": "Täyteen"
+    "next_now_end_full": "Täyteen",
+    "mode_hint_sun_tariff": "Päivällä ylimääräinen aurinko. Ostaa vähimmäismäärän halvimpina tunteina: yöllä, halvalla tunnilla tai heikolla auringolla, kun se on halvempaa. Tauko huipputunteina.",
+    "mode_hint_sun": "Vain ylimääräinen aurinko. Vähimmäismäärä tulee verkosta yöllä.",
+    "mode_hint_now": "Täysi teho kunnes {end}.",
+    "mode_hint_now_full": "auto on täynnä"
   },
   "fr": {
     "/year": "/an",
@@ -17987,7 +18011,11 @@
     "next_now_until_full": "Pleine puissance jusqu'à ce que la voiture soit pleine ou que vous choisissiez un autre mode.",
     "next_now_end_block": "Jusqu'au plan",
     "next_now_end_time": "Jusqu'à une heure",
-    "next_now_end_full": "Jusqu'au plein"
+    "next_now_end_full": "Jusqu'au plein",
+    "mode_hint_sun_tariff": "Le jour, le soleil en trop. Achète le minimum aux heures les moins chères : la nuit, à une heure bon marché, ou avec peu de soleil quand c'est moins cher. Pause aux heures de pointe.",
+    "mode_hint_sun": "Seulement le soleil en trop. Le minimum vient du réseau la nuit.",
+    "mode_hint_now": "Pleine puissance jusqu'à {end}.",
+    "mode_hint_now_full": "ce que la voiture soit pleine"
   },
   "hu": {
     "/year": "/év",
@@ -20557,7 +20585,11 @@
     "next_now_until_full": "Teljes teljesítmény, amíg az autó tele nem lesz vagy más módot nem választasz.",
     "next_now_end_block": "A tervig",
     "next_now_end_time": "Egy időpontig",
-    "next_now_end_full": "Teljesen"
+    "next_now_end_full": "Teljesen",
+    "mode_hint_sun_tariff": "Nappal a felesleges nap. A minimumot a legolcsóbb órákban veszi: éjjel, olcsó órában, vagy gyenge napnál, ha az olcsóbb. Csúcsórákban szünetel.",
+    "mode_hint_sun": "Csak a felesleges nap. A minimum éjjel a hálózatból jön.",
+    "mode_hint_now": "Teljes teljesítmény eddig: {end}.",
+    "mode_hint_now_full": "az autó tele lesz"
   },
   "it": {
     "/year": "/anno",
@@ -23127,7 +23159,11 @@
     "next_now_until_full": "Piena potenza finché l'auto è piena o scegli un'altra modalità.",
     "next_now_end_block": "Fino al piano",
     "next_now_end_time": "Fino a un'ora",
-    "next_now_end_full": "Fino al pieno"
+    "next_now_end_full": "Fino al pieno",
+    "mode_hint_sun_tariff": "Di giorno il sole in più. Compra il minimo nelle ore più economiche: di notte, in un'ora economica o con poco sole quando costa meno. In pausa nelle ore di punta.",
+    "mode_hint_sun": "Solo il sole in più. Il minimo arriva dalla rete di notte.",
+    "mode_hint_now": "Piena potenza fino a {end}.",
+    "mode_hint_now_full": "quando l'auto è carica"
   },
   "nl": {
     "/year": "/jaar",
@@ -25697,7 +25733,11 @@
     "next_now_until_full": "Vol vermogen tot de auto vol is of je een andere modus kiest.",
     "next_now_end_block": "Tot het plan",
     "next_now_end_time": "Tot een tijd",
-    "next_now_end_full": "Tot vol"
+    "next_now_end_full": "Tot vol",
+    "mode_hint_sun_tariff": "Overdag overtollige zon. Koopt het minimum in de goedkoopste uren: 's nachts, in een goedkoop uur, of bij weinig zon als dat goedkoper is. Pauzeert in piekuren.",
+    "mode_hint_sun": "Alleen overtollige zon. Het minimum komt 's nachts van het net.",
+    "mode_hint_now": "Vol vermogen tot {end}.",
+    "mode_hint_now_full": "de auto vol is"
   },
   "no": {
     "/year": "/år",
@@ -28267,7 +28307,11 @@
     "next_now_until_full": "Full effekt til bilen er full eller du velger en annen modus.",
     "next_now_end_block": "Til planen",
     "next_now_end_time": "Til et tidspunkt",
-    "next_now_end_full": "Til full"
+    "next_now_end_full": "Til full",
+    "mode_hint_sun_tariff": "Om dagen overskytende sol. Kjøper minimum i de billigste timene: om natten, i en billig time eller med lite sol når det er billigere. Pause i topptimer.",
+    "mode_hint_sun": "Bare overskytende sol. Minimum kommer fra nettet om natten.",
+    "mode_hint_now": "Full effekt til {end}.",
+    "mode_hint_now_full": "bilen er full"
   },
   "pl": {
     "/year": "/rok",
@@ -30837,7 +30881,11 @@
     "next_now_until_full": "Pełna moc, aż auto będzie pełne lub wybierzesz inny tryb.",
     "next_now_end_block": "Do planu",
     "next_now_end_time": "Do godziny",
-    "next_now_end_full": "Do pełna"
+    "next_now_end_full": "Do pełna",
+    "mode_hint_sun_tariff": "W dzień nadwyżka słońca. Kupuje minimum w najtańszych godzinach: w nocy, w tanią godzinę lub przy słabym słońcu, gdy to taniej. Pauza w godzinach szczytu.",
+    "mode_hint_sun": "Tylko nadwyżka słońca. Minimum pochodzi z sieci w nocy.",
+    "mode_hint_now": "Pełna moc do {end}.",
+    "mode_hint_now_full": "naładowania auta"
   },
   "pt": {
     "/year": "/ano",
@@ -33407,7 +33455,11 @@
     "next_now_until_full": "Potência máxima até o carro estar cheio ou escolher outro modo.",
     "next_now_end_block": "Até ao plano",
     "next_now_end_time": "Até uma hora",
-    "next_now_end_full": "Até cheio"
+    "next_now_end_full": "Até cheio",
+    "mode_hint_sun_tariff": "De dia, o sol que sobra. Compra o mínimo nas horas mais baratas: à noite, numa hora barata ou com pouco sol quando sai mais barato. Pausa nas horas de ponta.",
+    "mode_hint_sun": "Só o sol que sobra. O mínimo vem da rede à noite.",
+    "mode_hint_now": "Potência máxima até {end}.",
+    "mode_hint_now_full": "o carro estar cheio"
   },
   "ro": {
     "/year": "/an",
@@ -35977,7 +36029,11 @@
     "next_now_until_full": "Putere maximă până mașina e plină sau alegi alt mod.",
     "next_now_end_block": "Până la plan",
     "next_now_end_time": "Până la o oră",
-    "next_now_end_full": "Până la plin"
+    "next_now_end_full": "Până la plin",
+    "mode_hint_sun_tariff": "Ziua, soarele în plus. Cumpără minimul în orele cele mai ieftine: noaptea, într-o oră ieftină sau la soare slab când e mai ieftin. Pauză în orele de vârf.",
+    "mode_hint_sun": "Doar soarele în plus. Minimul vine din rețea noaptea.",
+    "mode_hint_now": "Putere maximă până la {end}.",
+    "mode_hint_now_full": "mașina e plină"
   },
   "sv": {
     "/year": "/år",
@@ -38547,7 +38603,11 @@
     "next_now_until_full": "Full effekt tills bilen är full eller du väljer ett annat läge.",
     "next_now_end_block": "Till planen",
     "next_now_end_time": "Till en tid",
-    "next_now_end_full": "Till full"
+    "next_now_end_full": "Till full",
+    "mode_hint_sun_tariff": "På dagen överskottssol. Köper minimum under de billigaste timmarna: på natten, en billig timme eller vid svag sol när det är billigare. Paus under topptimmar.",
+    "mode_hint_sun": "Bara överskottssol. Minimum kommer från nätet på natten.",
+    "mode_hint_now": "Full effekt till {end}.",
+    "mode_hint_now_full": "bilen är full"
   },
   "zh": {
     "/year": "/年",
@@ -41117,6 +41177,10 @@
     "next_now_until_full": "全功率充电，直到车充满或您选择其他模式。",
     "next_now_end_block": "直到计划",
     "next_now_end_time": "直到某个时间",
-    "next_now_end_full": "直到充满"
+    "next_now_end_full": "直到充满",
+    "mode_hint_sun_tariff": "白天使用多余的阳光。在最便宜的时段购买最低电量：夜间、便宜时段，或阳光较弱但更便宜时。高峰时段暂停。",
+    "mode_hint_sun": "只用多余的阳光。最低电量在夜间来自电网。",
+    "mode_hint_now": "全功率直到 {end}。",
+    "mode_hint_now_full": "车充满"
   }
 }

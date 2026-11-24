@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "Automazioni usano vecchi nomi della modalità di carica",
-      "description": "Le modalità di carica di SEM ora sono Sole, Sole + tariffa, Ora e Spento. Home Assistant rifiuta i vecchi nomi in select.select_option, e un trigger su un vecchio nome non scatta più. Modifica questi: {uses} SEM trova la maggior parte degli usi. Controlla anche i blueprint e le automazioni create fuori dall'interfaccia (outside the UI)."
+      "description": "Le modalità di carica di SEM ora sono Sole, Sole + tariffa, Ora e Spento. Home Assistant rifiuta i vecchi nomi in select.select_option, e un trigger su un vecchio nome non scatta più. Modifica questi: {uses} SEM trova la maggior parte degli usi. Controlla anche i blueprint e le automazioni create fuori dall'interfaccia."
     }
   },
   "selector": {

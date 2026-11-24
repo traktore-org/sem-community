@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "Automatizálások régi töltési mód neveket használnak",
-      "description": "A SEM töltési módjai most: Nap, Nap + tarifa, Most és Ki. A Home Assistant elutasítja a régi neveket a select.select_option hívásban, és a régi névre szóló eseményindító már nem indul. Módosítsd ezeket: {uses} A SEM a legtöbb helyet megtalálja. Ellenőrizd a blueprinteket és a felületen kívül készült automatizálásokat is (outside the UI)."
+      "description": "A SEM töltési módjai most: Nap, Nap + tarifa, Most és Ki. A Home Assistant elutasítja a régi neveket a select.select_option hívásban, és a régi névre szóló eseményindító már nem indul. Módosítsd ezeket: {uses} A SEM a legtöbb helyet megtalálja. Ellenőrizd a blueprinteket és a felületen kívül készült automatizálásokat is."
     }
   },
   "selector": {

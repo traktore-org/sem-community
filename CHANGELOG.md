@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **Charge now ends by itself** (#1381). It runs until the car's next plan block, a time you pick, or until full. One button replaces two.
 - ✨ **Thin sun plus grid in Sun + tariff** (#1411). Spare sun below the minimum charges the car when cheaper than tonight.
 - ✨ **Sun + tariff has one day rule** (#1381). The battery switch changes only the battery; grid buying by day is the same either way.
+- 🐛 **A refused phase switch is not resent every 10 s** (#1381). SEM retries after 10, 20 and 40 minutes, then a Repair.
+- 🐛 **Now waits for the car** (#1381). Picked before plug-in, it starts when the car is in. Unplugging after that ends it.
+- 🐛 **Only your own Now runs an Off charger** (#1381). A plan_override force from an automation leaves Off alone.
 - 🔧 **Every charger command goes through one place** (#1381). SEM records what it changed, so a safety stop is handed back.
 
 # [2.3.0-beta.26] — 23.11.2026

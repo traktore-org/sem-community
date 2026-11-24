@@ -218,13 +218,15 @@ the car?** The default is **Sun + tariff** with battery help on.
 
 | Charge mode | What it does |
 |---|---|
-| **Sun** | Charges from solar surplus. Never from the grid, unless **At least** is set. With battery help, the house battery adds above its buffer. |
-| **Sun + tariff** | Solar surplus. The grid fills up to **At least** when it costs least, usually in the cheapest night hours. Set your import and export price. |
-| **Now** | Full power, until the plan's next block, a time you pick, or until full. |
+| **Sun** | Spare sun only. **At least** comes from the grid at night. With battery help, the house battery adds above its buffer. |
+| **Sun + tariff** | Spare sun by day. Buys **At least** in the cheapest hours: at night, in a cheap hour, or with thin sun when that is cheaper. Pauses in peak hours. Set your import and export price. |
+| **Now** | Full power until its end: the plan's next block, a time you pick, or when the car is full. |
 | **Off** | SEM sends no commands to the charger. |
 
-The six older mode names still work in automations; the
-[User guide](USER_GUIDE.md#pick-a-charge-mode) has the table.
+`select.select_option` takes only the four names. SEM's own `set_option`
+service still takes the six older ones, and a Repair names any automation
+that uses them. The [User guide](USER_GUIDE.md#pick-a-charge-mode) has the
+table.
 
 ### Charge target
 

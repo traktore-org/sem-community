@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "Automatyzacje używają starych nazw trybu ładowania",
-      "description": "Tryby ładowania SEM to teraz Słońce, Słońce + taryfa, Teraz i Wył. Home Assistant odrzuca stare nazwy w select.select_option, a wyzwalacz na starej nazwie już nie działa. Zmień te: {uses} SEM znajduje większość miejsc. Sprawdź też blueprinty i automatyzacje utworzone poza interfejsem (outside the UI)."
+      "description": "Tryby ładowania SEM to teraz Słońce, Słońce + taryfa, Teraz i Wył. Home Assistant odrzuca stare nazwy w select.select_option, a wyzwalacz na starej nazwie już nie działa. Zmień te: {uses} SEM znajduje większość miejsc. Sprawdź też blueprinty i automatyzacje utworzone poza interfejsem."
     }
   },
   "selector": {

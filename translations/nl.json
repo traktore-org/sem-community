@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "Automatiseringen gebruiken oude laadmodusnamen",
-      "description": "De laadmodi van SEM heten nu Zon, Zon + tarief, Nu en Uit. Home Assistant weigert de oude namen in select.select_option, en een trigger op een oude naam gaat niet meer af. Pas deze aan: {uses} SEM vindt de meeste plekken. Controleer ook blueprints en automatiseringen die buiten de interface zijn gemaakt (outside the UI)."
+      "description": "De laadmodi van SEM heten nu Zon, Zon + tarief, Nu en Uit. Home Assistant weigert de oude namen in select.select_option, en een trigger op een oude naam gaat niet meer af. Pas deze aan: {uses} SEM vindt de meeste plekken. Controleer ook blueprints en automatiseringen die buiten de interface zijn gemaakt."
     }
   },
   "selector": {

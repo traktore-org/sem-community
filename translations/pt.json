@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "Automações usam nomes antigos do modo de carga",
-      "description": "Os modos de carga do SEM agora são Sol, Sol + tarifa, Agora e Desligado. O Home Assistant recusa os nomes antigos em select.select_option, e um gatilho com um nome antigo já não dispara. Altere estes: {uses} O SEM encontra a maioria dos usos. Verifique também os blueprints e as automações criadas fora da interface (outside the UI)."
+      "description": "Os modos de carga do SEM agora são Sol, Sol + tarifa, Agora e Desligado. O Home Assistant recusa os nomes antigos em select.select_option, e um gatilho com um nome antigo já não dispara. Altere estes: {uses} O SEM encontra a maioria dos usos. Verifique também os blueprints e as automações criadas fora da interface."
     }
   },
   "selector": {

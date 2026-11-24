@@ -103,8 +103,17 @@ export function chargerBody(card, row) {
     const floorVal = floorId ? card._num(floorId) : null;
     const floorGrid = strat === 'solar_plus_battery' && floorVal !== null && floorVal > 0
         ? tf('next_floor_uses_grid', { value: floorType === 'soc' ? Math.round(floorVal) + ' %' : card._kwh(floorVal) }) : '';
-    const hint = strat ? [tf('charge_mode_hint_' + strat + '_surplus', hintP),
-        floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? hintNight : '')].filter(Boolean).join(' ') : '';
+    // (#1381 D35) One sentence per mode the user sees, the same for every
+    // stored strategy behind it: Sun + tariff is one rule, the battery switch
+    // only says whether the house battery helps.
+    const userHint = {
+        sun: t('mode_hint_sun'),
+        sun_tariff: t('mode_hint_sun_tariff'),
+        now: tf('mode_hint_now', { end: nowUntil || t('mode_hint_now_full') }),
+        off: t('charge_mode_hint_off_surplus'),
+    }[mode];
+    const hint = userHint || (strat ? [tf('charge_mode_hint_' + strat + '_surplus', hintP),
+        floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? hintNight : '')].filter(Boolean).join(' ') : '');
     const nextCheap = strat === 'solar_plus_cheap' && cs.ev_next_cheap_window ? card._hhmm(cs.ev_next_cheap_window) : '';
     const pausedUntil = mode === 'off' && modeAttrs.paused_until ? card._hhmm(modeAttrs.paused_until) : '';
     const resumeMode = modeAttrs.pause_resume_mode ? codeText(t, 'charge_mode_', modeAttrs.pause_resume_mode) : '';

@@ -147,9 +147,9 @@ Set the mode per charger, on **Devices**. There are four.
 
 | Mode | What it does | Use it when |
 |---|---|---|
-| **Sun** | Charges from spare sun. At night it uses the grid only if you set **At least** for this charger. | You want solar only. |
-| **Sun + tariff** (default) | Spare sun by day. The grid tops up to **At least** when it costs least, usually in the cheapest night hours. | You need the car ready by a time. |
-| **Now** | Full power at once. It ends at the plan's next block, at a time you pick, or when the car is full. | You need the car now. |
+| **Sun** | Spare sun only. **At least** comes from the grid at night. | You want solar only. |
+| **Sun + tariff** (default) | Spare sun by day. Buys **At least** in the cheapest hours: at night, in a cheap hour, or with thin sun when that is cheaper. Pauses in peak hours. | You need the car ready by a time. |
+| **Now** | Full power until its end: the plan's next block, a time you pick, or when the car is full. | You need the car now. |
 | **Off** | Nothing. SEM sends one stop, then leaves the charger alone. | You control the car yourself. |
 
 Each charger also has one switch: **May the battery help the car?**
@@ -176,6 +176,8 @@ Notes:
 - **Now** also works on a charger set to **Off** or paused. When Now ends,
   the charger is **Off** again.
 - **Now** ends when the car is unplugged. The next car does not inherit it.
+- **Now** picked before the car is plugged in waits for it. Its time counts
+  from the plug-in; a time you picked stays that time.
 - **Off** does not hold the charger stopped. A wallbox that starts by itself is left alone.
 - **Old mode names.** The mode select now has four options. Home
   Assistant refuses the old names in `select.select_option`, and a trigger
