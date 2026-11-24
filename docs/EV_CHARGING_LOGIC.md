@@ -198,6 +198,8 @@ Some wallboxes switch between 1 and 3 phases. SEM supports three levels.
   - For a select, fill in *1-phase value* and *3-phase value* with the option
     names the device uses. For a number the defaults are 1 and 3. For a switch
     they are off and on.
+  - For a number, both values must be inside its range. The form refuses other
+    values. For a stored one, SEM sends no switch and a Repair names it.
 - **Current per phase.** Some chargers (for example an Easee) take one current
   per phase through a service. SEM finds that service itself. A phase at 0 A is
   off.
@@ -211,6 +213,9 @@ is always at least 2 minutes between two switches.
 
 - Down to 1 phase after 10 minutes below the 3-phase minimum (about 4.1 kW at
   6 A).
+- An idle car starts on 1 phase when the sun covers 1 phase at 6 A but not 3
+  (about 1.4 kW to 4.1 kW) for 5 minutes.
+- The minimum power follows the active phases: about 1.4 kW on 1 phase.
 - Up to 3 phases after 5 minutes of headroom above it, with a 10 % margin.
 - At most one automatic switch per 30 minutes, and 4 per charging session.
 
