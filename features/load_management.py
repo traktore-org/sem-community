@@ -496,6 +496,29 @@ class LoadManagementCoordinator:
         except Exception as e:
             _LOGGER.error("Device discovery failed: %s", e, exc_info=True)
 
+    def _charger_claimed_entities(self) -> set:
+        """(#748, #1381 S7) Every entity owned by a registered EV charger — its
+        current control / power sensor, its start/stop switch and its status
+        sensor, and its service. ``_send`` refuses a write to any of them: a
+        charger is written by the charger owner only. Reads the charger rows
+        registered by ``register_ev_charger`` (device_type ``ev_charger``); an
+        install with no charger yields an empty set. Never raises."""
+        claimed: set = set()
+        try:
+            for info in self._devices.values():
+                if not isinstance(info, dict) or info.get("device_type") != "ev_charger":
+                    continue
+                for key in (
+                    "switch_entity", "power_entity", "charger_service",
+                    "start_stop_entity", "status_entity",
+                ):
+                    ent = info.get(key)
+                    if ent:
+                        claimed.add(ent)
+        except Exception:  # pragma: no cover - defensive
+            return claimed
+        return claimed
+
     async def register_ev_charger(
         self,
         current_control_entity: str = None,
