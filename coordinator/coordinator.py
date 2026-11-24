@@ -467,6 +467,28 @@ def demand_signature_changed(old, new) -> bool:
         return True
 
 
+def signature_for_log(sig):
+    """(#1418) A demand signature as a log line. The price term is shown as
+    its size, its first and last time and a checksum, not as every (time,
+    price) pair: on a 15-minute market it holds up to ~190 pairs, and the
+    re-plan line printed two signatures in full."""
+    try:
+        import zlib
+        out = []
+        for term in sig:
+            if isinstance(term, tuple) and term and term[0] == "price":
+                pairs = tuple(term[1]) if len(term) > 1 else ()
+                keys = [p[0] for p in pairs if isinstance(p, tuple) and p]
+                span = f" {keys[0]}..{keys[-1]}" if keys else ""
+                out.append(("price", f"{len(pairs)} points{span} "
+                            f"#{zlib.crc32(repr(pairs).encode()):08x}"))
+            else:
+                out.append(term)
+        return tuple(out)
+    except Exception:  # noqa: BLE001 — a log line never breaks the cycle
+        return sig
+
+
 def _lifetime_ev_shares(lifetime: dict) -> dict:
     """The lifetime EV energy split, all three ways (#793).
 
@@ -7072,8 +7094,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 except Exception as e:  # noqa: BLE001
                     _LOGGER.debug("Tariff diag-counts failed: %s", e)
 
-            # Dynamic price visibility (#257): surface the upcoming hourly price
+            # Dynamic price visibility (#257): surface the upcoming price
             # curve + today's summary so the price card can render a live chart.
+            # (#1418) The provider's whole list, which it bounds by time: a
+            # cap of 48 points here was 12 h of a 15-minute market.
             try:
                 _td = self._tariff_provider.get_tariff_data()
                 result["tariff_upcoming"] = [
@@ -7083,7 +7107,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                      "level": (p.level.value if p.level is not None
                                else (getattr(p, "level_absence", None)
                                      or _td.level_absence))}
-                    for p in (_td.upcoming_prices or [])[:48]
+                    for p in (_td.upcoming_prices or [])
                 ]
                 # (#1390) A schedule or a two-rate tariff has no curve in
                 # ``upcoming``, and ``schedule_today`` ends at midnight: the
@@ -12983,8 +13007,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             ups = getattr(
                 self._tariff_provider.get_tariff_data(), "upcoming_prices", None
             ) or []
-            # 96 entries: a full day even on a 15-min market (48 was
-            # only 12 h there — tomorrow's curve landing late missed it).
+            # (#1418) The whole list, which the provider bounds by time.
+            # A cap of 96 points never took effect (the provider sent 48);
+            # on the longer list it would cut a window that slides, and a
+            # new point at its end every 15 minutes reads as news below.
             # (#765) ABSOLUTE keys, not window order: the upcoming window
             # slides every hour, and fingerprinting its contents by
             # position made a past slot dropping off read as "the night
@@ -12997,7 +13023,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ((p.timestamp.isoformat()
                   if getattr(p, "timestamp", None) is not None else i),
                  round(float(p.price), 2))
-                for i, p in enumerate(ups[:96])
+                for i, p in enumerate(ups)
                 if getattr(p, "price", None) is not None
             )))
         except Exception:  # noqa: BLE001 — no tariff is a valid shape
@@ -13840,12 +13866,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         _LOGGER.debug(
                             "ENERGY-PLAN (#775): the ask moved (%s → %s) "
                             "but the packed answer is identical — "
-                            "stamp kept", _prev_sig_775, _demand_sig)
+                            "stamp kept", signature_for_log(_prev_sig_775),
+                            signature_for_log(_demand_sig))
                     elif cause == "ask changed":
                         _LOGGER.info(
                             "ENERGY-PLAN (#638): the night's demands "
                             "changed (%s → %s) — replanning",
-                            _prev_sig_775, _demand_sig)
+                            signature_for_log(_prev_sig_775),
+                            signature_for_log(_demand_sig))
                     self._shadow_plan_date = _night_of
                     self._plan_ev_conn_sig = _demand_sig
                     # (#638) the stamp is state — persist it so a reboot

@@ -6,6 +6,7 @@
 
 import { kwhOf } from './next-lead.js';
 import { planRuns, isBatteryIn } from './plan-facts.js';
+import { planEndMs } from './next-strip.js';
 
 export { isBatteryIn };
 
@@ -47,8 +48,11 @@ export function gotCheapest(plan, runs, price, nowMs, upcoming = []) {
     const p = Number(price);
     const hours = (runs || []).reduce((a, r) => a + (r.e - r.s) / 3.6e6, 0);
     if (!Number.isFinite(p) || price === null || price === '' || !(hours > 0)) return null;
+    // (#1418) only the plan's window: the tariff's list runs into tomorrow
+    // afternoon, hours no demand of this plan can take
+    const end = planEndMs(plan);
     const slots = priceCells(plan, upcoming)
-        .filter((x) => x.e > nowMs)
+        .filter((x) => x.e > nowMs && (!Number.isFinite(end) || x.s < end))
         .sort((a, b) => a.price - b.price);
     if (!slots.length) return null;
     let need = hours, cost = 0;
