@@ -15,6 +15,16 @@ cannot slip in unnoticed:
 The verb inventory (S0, ``test_charger_writer_inventory.py``) and the load
 manager's charger fence (S7) cover the other two bypasses: a new command site
 anywhere in the package, and the load manager writing a charger's entity.
+
+(#1381 D34) What these readings do NOT catch, on purpose: a function held in
+a plain name (``f = co.resolve; f(...)``), ``functools.partial(co.stamp, …)``,
+``importlib.import_module``, a star import, a keyword splat
+(``rewrite(d, **{"source": …})``) and ``object.__setattr__`` on a decision.
+Following those would mean data-flow analysis, which an AST lint cannot do
+without false alarms. Each of them is a deliberate trick, not an accident,
+and the review of every change to the charger path is where it is caught.
+The hardware-facing bypass — a new place that commands a charger — stays
+fully covered by the S0 inventory, whatever name it hides behind.
 """
 from __future__ import annotations
 
