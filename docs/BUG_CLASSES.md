@@ -6980,9 +6980,18 @@ table, no wait. Review round 2 (HIGH): that rate ignored the peak limit, and a p
 waited and landed short where develop landed. Now the rate is what the highest block still ahead
 buys at its own setpoint (`PlanGate.top_block_w`, the packer books no block above the headroom),
 and only setpoints up to the charger max the night plan used count (`NightChargePlan.max_amps`).
-Not the lowest block: the last block often holds only the rest. `apply_ev_overlay` (**new**): both coordinator sites call it, and it reads
-`reachable`, `deadline_active`, `to_departure` and `charge_end_dt` off the plan it writes, so no
-site can forget a flag. `plan_night_charge` (**fixed**): after the night end the floor's amps come
+Not the lowest block: the last block often holds only the rest. Review round 3 (BLOCKER): under a
+peak limit the block's setpoint (6 A) sat below the lowest measured one (12 A), where the rate was
+the nameplate again; a car at 0.6 of nameplate there waited and landed short. Now only a MEASURED
+setpoint at or under the block's counts; none, no wait. Round 3 (MEDIUM): the floor read the table
+under the learner's phase belief, the plan counts the phases the grid charge runs on; with phase
+switching a one-phase table sized a three-phase floor almost three times too high. Now
+`_wpa_table_or_none` reads only a table on the plan's own phase count, and the plan keeps the model
+it was sized by (`NightChargePlan.wpa_table`, `watts_per_amp`); the wait proves itself with that
+same model, because the floor is what charges when a wait fails. `apply_ev_overlay` (**new**): both
+coordinator sites call it, and it reads `reachable`, `deadline_active`, `to_departure`,
+`charge_end_dt`, `max_amps` and the floor's model off the plan it writes, so no site can forget a
+flag. `plan_night_charge` (**fixed**): after the night end the floor's amps come
 from the measured table (12 A bought 7.5 kW, not 8.3; the current rose in the last half hour); the
 night is unchanged. `decide.py` `_departure_floor` and the Solar + cheapest hours cheap-hour day
 branch (**fixed**: a hold keeps a sun offer). Help text in 16 languages and the guides.
@@ -6996,13 +7005,19 @@ uncovered plan give the even floor; a night forcing deadline still outranks the 
 the helper calls `ev_overlay`, and each site hands it the plan its own function computed. With the
 bypass removed 14 tests fail, the wait rule 6, `decide.py` 3, the measured floor 1. Peak limit: the
 packer at 4.5–40 kW limits, needs 3–20 kWh, cars at 80–100 % of their table, minute by minute
-(228 runs, none further from full than develop; the block cap removed, 4 tests fail).
+(228 runs, none further from full than develop; the block cap removed, 4 tests fail). Round 3: a
+real car at 0.6 of nameplate below the measured range, with and without a measured 6 A, needs
+4–11 kWh, never further from full than develop (nameplate below the range: 5 tests fail); the wait
+with the site's table instead of the plan's fails 1; the table without the phase check fails 1
+(the real `_compute_night_plan`, a one-phase belief, a three-phase grid charge: 12 A, not 32).
 **Left open:** a forcing *Charge by* at night (before the night end) still outranks a covered
 plan, as #638 G4 chose (pinned in `test_638_actuation.py` and `test_1282_exact_plan_watts.py`).
 Whether the plan should lead there too is a choice, not filed. The night floor still counts
 nameplate W/A; the hours after the night end make up for it. The margin covers 20 % of the time
 after the block's start: a house load the forecast missed that pauses the car longer than that can
-end short where the floor that never waited landed. The measured table is the charger's, not the
+end short where the floor that never waited landed. Below the measured range the floor still
+counts the nameplate (no measured fact there; it rises each minute it falls behind, as before).
+The measured table is the charger's, not the
 car's: a much slower car on a table from another car is counted at the old car's draw. While the car waits, a cloud stops its sun charge (more stops on
 a Zaptec). All three are choices, not filed.
 Refs #1415 #1308 #638 #904 #846.

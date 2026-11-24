@@ -53,17 +53,29 @@ def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
     return result if isinstance(result, datetime) else None
 
 
-def _wpa_table_or_none(host: Any, cfg: dict) -> Optional[dict]:
+def _wpa_table_or_none(host: Any, cfg: dict, phases: int) -> Optional[dict]:
     """(#1415) ``host._wpa_table_for(cid)``, the charger's measured
     ``{amps: W/A}`` table, or ``None`` for a test double without it. Same
     defensive shape as :func:`_calendar_next_for`: only a real dict
     counts. The primary charger without an id is ``ev_charger``, as at
-    the overlay site."""
+    the overlay site.
+
+    (review 3) Only a table measured on ``phases``, the count the plan
+    runs on: the learner files it under its own phase belief, and with
+    phase switching that can differ (SEM set one phase for thin sun; the
+    grid charge runs on three). A one-phase table read against a
+    three-phase nameplate sizes the floor about three times too high.
+    Another count, or a belief in dispute: ``None``, the nameplate."""
+    cid = str((cfg or {}).get("id") or "ev_charger")
     fn = getattr(host, "_wpa_table_for", None)
-    if not callable(fn):
+    belief = getattr(host, "_wpa_phases_for", None)
+    if not callable(fn) or not callable(belief):
         return None
     try:
-        table = fn(str((cfg or {}).get("id") or "ev_charger"))
+        learned, ok = belief(cid, cfg)
+        if not ok or learned is None or int(learned) != int(phases):
+            return None
+        table = fn(cid)
     except (AttributeError, TypeError, ValueError, KeyError):
         return None
     return table if isinstance(table, dict) and table else None
@@ -680,7 +692,7 @@ class EVControlMixin:
             night_over=bool(night_over),
             # (#1415) the departure floor's amps by this charger's measured
             # draw, not the nameplate.
-            wpa_table=_wpa_table_or_none(self, cfg),
+            wpa_table=_wpa_table_or_none(self, cfg, phases),
         )
         return plan
 

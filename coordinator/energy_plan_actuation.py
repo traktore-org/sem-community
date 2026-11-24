@@ -265,6 +265,8 @@ def ev_overlay(
     departure_floor: bool = False,
     charge_end: Optional[datetime] = None,
     departure_max_amps: Optional[int] = None,
+    departure_wpa_table=None,
+    departure_wpa: Optional[float] = None,
 ) -> Tuple[bool, int]:
     """The EV's joint-plan overlay → ``(wait, floor_amps)``.
 
@@ -294,8 +296,11 @@ def ev_overlay(
       the joint plan packed the same departure into its cheapest hours.
       So the blocks lead, under the two rules below, and one more for the
       wait: see :func:`departure_wait_is_safe` (``departure_max_amps``:
-      the charger max the night plan used, when lower). An unreachable
-      floor still releases.
+      the charger max the night plan used, when lower). The wait counts
+      with the floor's own power model, ``departure_wpa_table`` and
+      ``departure_wpa`` (the plan's ``wpa_table`` and ``watts_per_amp``):
+      the floor is what charges when a wait fails. An unreachable floor
+      still releases.
     - inside a planned block → charge at least the planned power
       (ceil to amps, clamped to the charger's [min, max]);
     - outside a block → wait ONLY while the remaining blocks can still
@@ -323,8 +328,9 @@ def ev_overlay(
         return (False, max(int(min_amps), min(int(max_amps), amps)))
     if blocks_hold(gate.remaining_kwh, remaining_kwh):
         if departure_floor and not departure_wait_is_safe(
-                gate, remaining_kwh, charge_end, wpa_table=wpa_table,
-                nominal_wpa=nominal_wpa or watts_per_amp,
+                gate, remaining_kwh, charge_end,
+                wpa_table=departure_wpa_table,
+                nominal_wpa=departure_wpa or watts_per_amp,
                 max_amps=min(int(max_amps),
                              int(departure_max_amps or max_amps))):
             return (False, 0)
@@ -365,6 +371,12 @@ def departure_wait_is_safe(gate: PlanGate, need_kwh: float,
     ahead (``top_block_w``) buys at its setpoint. A 5 kW limit with 700 W
     of house load gives 4.3 kW blocks; the 10.6 kW the car was seen at is
     not there to use.
+
+    Review 3: the rate is a MEASURED setpoint, the highest at or under the
+    one the block runs at. Below the measured range ``predict_watts`` is
+    the nameplate, and a car can draw far less there: 415 W/A at 8 A on
+    PROD, 0.6 of nameplate. The reporter's table starts at 12 A, so a
+    4.3 kW block (6 A) has no measured rate under it: no proof, no wait.
     """
     if gate.next_block_start is None or charge_end is None:
         return False
@@ -379,13 +391,17 @@ def departure_wait_is_safe(gate: PlanGate, need_kwh: float,
         return False
     from .watts_per_amp import amps_that_fit, predict_watts
     nominal = max(1.0, float(nominal_wpa))
-    amps = max(seen)
+    block_amps = int(max_amps)
     if gate.top_block_w > 0.0:
         # The setpoint the block runs at: the in-block floor's own walk.
-        # 4.3 kW of room is 6 A on the reporter's car, and 6 A buys 4.14 kW.
-        amps = min(amps, amps_that_fit(wpa_table, gate.top_block_w,
-                                       nominal, int(max_amps)))
-    top_w = predict_watts(wpa_table, amps, nominal)
+        block_amps = amps_that_fit(wpa_table, gate.top_block_w, nominal,
+                                   int(max_amps))
+    under = [a for a in seen if a <= block_amps]
+    if not under:
+        return False
+    # a measured bucket: ``predict_watts`` returns its own draw, never
+    # above the nameplate
+    top_w = predict_watts(wpa_table, max(under), nominal)
     return (max(0.0, float(need_kwh))
             <= top_w / 1000.0 * hours * DEPARTURE_WAIT_MARGIN)
 
@@ -397,9 +413,11 @@ def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
 
     The ONE copy both coordinator sites call (primary and per charger,
     the #683/#684 parity class). It reads ``reachable``,
-    ``deadline_active``, ``to_departure``, ``charge_end_dt`` and
-    ``max_amps`` off the same plan it writes, so no site can pass one flag
-    and forget another (#1415). Returns ``(wait, floor_amps)``.
+    ``deadline_active``, ``to_departure``, ``charge_end_dt``, ``max_amps``,
+    ``wpa_table`` and ``watts_per_amp`` off the same plan it writes, so no
+    site can pass one flag and forget another (#1415). ``wpa_table`` and
+    ``nominal_wpa`` here are the charger's phases NOW, for the in-block
+    floor. Returns ``(wait, floor_amps)``.
     """
     wait, floor = ev_overlay(
         gate,
@@ -410,6 +428,10 @@ def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
         charge_end=getattr(plan, "charge_end_dt", None),
         # the plan's max is the charger's own when it is below the config's
         departure_max_amps=int(getattr(plan, "max_amps", 0) or 0) or None,
+        # (review 3) the floor's own power model: the table measured on
+        # the phases the plan runs on, and its nameplate W/A
+        departure_wpa_table=getattr(plan, "wpa_table", None),
+        departure_wpa=float(getattr(plan, "watts_per_amp", 0.0) or 0.0) or None,
         watts_per_amp=watts_per_amp,
         min_amps=min_amps,
         max_amps=max_amps,

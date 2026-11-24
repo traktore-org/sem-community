@@ -73,6 +73,13 @@ class NightChargePlan:
     # (#1415) The charger max this plan used: the config's, or the device's
     # own when lower. The departure wait counts only setpoints up to it.
     max_amps: int = 0
+    # (#1415 review 3) The power model the floor was sized by: the measured
+    # ``{amps: W/A}`` table on the phases this plan runs on (None: none
+    # measured, or measured on another phase count) and the nameplate W/A.
+    # The departure wait proves itself with this same model, because the
+    # floor is what charges when a wait fails.
+    wpa_table: Optional[dict] = None
+    watts_per_amp: float = 0.0
     hours_to_deadline: Optional[float] = None
     remaining_kwh: float = 0.0
     reason: str = ""
@@ -315,7 +322,9 @@ def plan_night_charge(
             After the night end (``to_departure``) the floor's current is
             the smallest setpoint whose MEASURED draw gives the watts
             needed: at 690 W/A a 12 A floor bought 7.5 kW, and the current
-            had to rise in the last half hour. The night is unchanged.
+            had to rise in the last half hour. The night is unchanged. The
+            caller passes it only when it was measured on the phases
+            ``watts_per_amp`` counts; the plan keeps both (review 3).
         peak_managed_amps: Realistic current (A) the charger can sustain under
             the peak limit given expected (average) home consumption, clamped to
             [min, max]. This is the rate non-forcing night charging actually runs
@@ -330,6 +339,8 @@ def plan_night_charge(
     plan = NightChargePlan(max_amps=int(max_amps))
     plan.remaining_kwh = max(0.0, remaining_to_min_kwh)
     watts_per_amp = max(1.0, watts_per_amp)
+    plan.watts_per_amp = watts_per_amp
+    plan.wpa_table = dict(wpa_table) if wpa_table else None
 
     explicit_deadline = deadline_at or resolve_deadline(now, target_time)
     night_end_dt = resolve_deadline(now, night_end)
