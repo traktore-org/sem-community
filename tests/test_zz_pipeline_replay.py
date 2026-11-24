@@ -156,7 +156,7 @@ def _overload_values(rig, values, t, sim):
                  and float(sim["states"].get("number.rechts_current", 6)) >= 6)
     links_a = 12.0 if links_on else 0.0       # Audi ~8.3 kW
     rechts_a = 6.0 if (rechts_on and 16.5 <= hh < 21.0) else 0.0
-    heat_l3 = 8.0 if 16.71 <= hh < 16.76 else 0.0    # 16:43–16:45 peak
+    heat_l3 = 8.0 if 16.71 <= hh < 16.73 else 0.0    # 16:43 peak, ~1 min
     base = {"l1": 2.0, "l2": 3.0, "l3": 2.0}
     l = {p: base[p] + links_a + rechts_a for p in base}
     l["l3"] += heat_l3
@@ -246,6 +246,55 @@ async def test_pipeline_replay(freezer):
 
     report["synthetic-1381-overload"] = await _run(
         rig, _overload_steps(), _set, _move)
+    if os.environ.get("PIPELINE_REPLAY_DEBUG"):
+        report["_drawing_at_hand_back"] = getattr(rig.coord, "_hand_back_facts", None)
+
+    # the same day on the legacy single-charger path (no fleet list)
+    cfg1 = dict(cfg)
+    cfg1["ev_chargers"] = [_charger(
+        "ev_charger", power="sensor.links_power", mode="always_max",
+        external_control_mode="yield",
+        ev_charging_power_sensor="sensor.links_power")]
+    cfg1["ev_power_sensor"] = "sensor.links_power"
+    rig1 = CycleRig(config=cfg1, chargers=[])
+    from custom_components.solar_energy_management.devices.base import (
+        CurrentControlDevice,
+    )
+    dev1 = CurrentControlDevice(
+        rig1.hass, device_id="ev_charger", name="ev_charger", priority=1,
+        min_current=6.0, max_current=16.0, phases=3, voltage=230.0,
+        entity_id=None, power_entity_id="sensor.links_power",
+        current_entity_id="number.links_current", charger_service=None,
+        charger_service_entity_id=None)
+    dev1.start_stop_entity = "switch.links_enable"
+    rig1.coord._ev_devices = {}
+    rig1.coord._ev_device = dev1
+    sim1 = {"states": {}}   # the second box is plain house load here
+
+    async def _call1(domain, service, data, *a, **k):
+        ent = (data or {}).get("entity_id")
+        if domain == "switch" and ent:
+            sim1["states"][ent] = "on" if service == "turn_on" else "off"
+        elif domain == "number" and ent and "value" in (data or {}):
+            sim1["states"][ent] = data["value"]
+        return None
+
+    rig1.hass.services.async_call.side_effect = _call1
+
+    def _set1(rig_, values, t):
+        _overload_values(rig_, dict(values), t, sim1)
+
+    report["synthetic-1381-single-charger"] = await _run(
+        rig1, _overload_steps(), _set1, _move)
+    if os.environ.get("PIPELINE_REPLAY_DEBUG"):
+        report["_single_debug"] = {
+            "trail": json.loads(json.dumps(getattr(rig1.coord, "_owner_trail", None), default=str)),
+            "yield": rig1.coord.external_yielding("charger:ev_charger"),
+            "ev_device": bool(rig1.coord._ev_device),
+            "ev_devices": list((rig1.coord._ev_devices or {}).keys()),
+            "guard": (getattr(rig1.coord, "_phase_guard_snapshot", None) or {}).get("mode"),
+            "stops": json.loads(json.dumps(getattr(rig1.coord, "_guard_stops", None), default=str)),
+        }
     if os.environ.get("PIPELINE_REPLAY_DEBUG"):
         report["_debug"] = {
             "stops": json.loads(json.dumps(getattr(rig.coord, "_guard_stops", None), default=str)),

@@ -101,8 +101,10 @@ async def test_f3_no_read_back_counts_as_a_failure():
     await _guard_stop(coord, LINKS, 10300, T0)
     await _tick(coord, T0 + 3600, ARMED_ROOMY)
     assert states.values[SW[LINKS]] == "on"
-    states.values[SW[LINKS]] = "off"         # the box switched itself off again
+    states.values[SW[LINKS]] = "off"         # the write never landed
     await _tick(coord, T0 + 3600 + 60, ARMED_ROOMY)
+    assert coord._guard_stops[LINKS]["failures"] == 0   # not by a timer yet
+    await _tick(coord, T0 + 3600 + ghb.READBACK_S + 1, ARMED_ROOMY)
     rec = coord._guard_stops[LINKS]
     assert rec["failures"] == 1 and rec["handed_back_at"] == 0.0
     assert [r["entity_id"] for r in rec["restores"]] == [SW[LINKS]]
@@ -179,19 +181,76 @@ async def test_a_damaged_record_never_breaks_the_cycle():
 
 @pytest.mark.asyncio
 async def test_the_stop_not_yet_shown_is_not_a_change_by_others():
-    """Found by the pipeline replay: on the stop's own cycle the switch still
-    reads "on" (the write is not shown yet). That must not drop the record."""
+    """Found by the pipeline replay, then by review with a cloud-polled box:
+    the switch still reads "on" after the stop for minutes. That is never
+    "changed by somebody else" by a timer — only a move away from what SEM
+    wrote, after SEM saw it land, is."""
     coord, states, hass = _two_chargers()
     await _guard_stop(coord, LINKS, 10300, T0)
+    coord._guard_stops[LINKS]["restores"][0].pop("seen_left", None)
     states.values[SW[LINKS]] = "on"          # the stop has not shown yet
-    await _tick(coord, T0 + 10, ARMED_ROOMY)
-    assert LINKS in coord._guard_stops
+    await _tick(coord, T0 + 125, ARMED_ROOMY)
+    await _tick(coord, T0 + 600, ARMED_ROOMY)
+    assert LINKS in coord._guard_stops        # kept: not a timer decision
     states.values[SW[LINKS]] = "off"         # now it shows
+    await _tick(coord, T0 + 700, ARMED_ROOMY)
+    assert states.values[SW[LINKS]] == "on"  # seen, then handed back
+
+
+@pytest.mark.asyncio
+async def test_a_stop_that_never_shows_is_a_repair_not_a_silent_drop():
+    coord, states, hass = _two_chargers()
+    await _guard_stop(coord, LINKS, 10300, T0)
+    coord._guard_stops[LINKS]["restores"][0].pop("seen_left", None)
+    states.values[SW[LINKS]] = "on"
+    with patch("homeassistant.helpers.issue_registry.async_create_issue") as mk:
+        await _tick(coord, T0 + ghb.STOP_NEVER_SHOWN_S + 60, ARMED_ROOMY)
+    assert coord._guard_stops[LINKS]["left_off"] is True
+    assert mk.called
+
+
+@pytest.mark.asyncio
+async def test_after_the_stop_showed_a_move_back_is_the_other_party():
+    coord, states, hass = _two_chargers()
+    await _guard_stop(coord, LINKS, 10300, T0)   # seen at once: fake shows it
+    states.values[SW[LINKS]] = "on"              # somebody switched it on
+    await _tick(coord, T0 + 30, ARMED_ROOMY)
+    assert LINKS not in coord._guard_stops
+
+
+@pytest.mark.asyncio
+async def test_a_stop_by_the_other_party_after_the_hand_back_is_theirs():
+    """2nd review 2: SEM handed back, its write landed (seen), then the other
+    party stopped the charger: no failure, no retry."""
+    coord, states, hass = _two_chargers()
+    await _guard_stop(coord, LINKS, 10300, T0)
     await _tick(coord, T0 + 3600, ARMED_ROOMY)
-    assert states.values[SW[LINKS]] == "on"  # handed back
-    # long after the stop, "on" again means somebody else switched it on
-    coord2, states2, _h = _two_chargers()
-    await _guard_stop(coord2, LINKS, 10300, T0)
-    states2.values[SW[LINKS]] = "on"
-    await _tick(coord2, T0 + ghb.STOP_SETTLE_S + 10, ARMED_ROOMY)
-    assert LINKS not in coord2._guard_stops
+    await _tick(coord, T0 + 3610, ARMED_ROOMY)   # SEM sees "on" land
+    states.values[SW[LINKS]] = "off"             # the other party stops it
+    hass.calls.clear()
+    await _tick(coord, T0 + 3700, ARMED_ROOMY)
+    assert LINKS not in coord._guard_stops
+    await _tick(coord, T0 + 3600 + 3 * 3600, ARMED_ROOMY)
+    assert hass.calls == []
+
+
+@pytest.mark.asyncio
+async def test_the_retrip_count_survives_a_drop_in_the_plug_session():
+    """2nd review 3: other party restarts it, guard stops it again soon
+    after — that counts; repeat and SEM ends with a Repair."""
+    coord, states, hass = _two_chargers()
+    now = T0
+    with patch("homeassistant.helpers.issue_registry.async_create_issue"):
+        for n in range(ghb.MAX_FAILURES + 1):
+            await _guard_stop(coord, LINKS, 10300, now)
+            states.values[SW[LINKS]] = "on"      # other party restarts it
+            await _tick(coord, now + 30, ARMED_ROOMY)
+            now += 300
+        await _guard_stop(coord, LINKS, 10300, now)
+    rec = coord._guard_stops[LINKS]
+    assert rec["failures"] >= ghb.MAX_FAILURES
+    assert rec["left_off"] is True
+    # an unplug starts over
+    coord._hand_back_facts[LINKS]["car_absent"] = True
+    await _tick(coord, now + 60, ARMED_ROOMY)
+    assert coord._guard_failures.get(LINKS) is None

@@ -54,9 +54,11 @@ BACKOFF_S = (10 * 60, 20 * 60, 40 * 60)
 #: BACKOFF_S is used, the next failure leaves the charger off with a Repair.
 MAX_FAILURES = len(BACKOFF_S) + 1
 #: After the stop, the entity may still read its old state for a while (the
-#: write is not shown yet, or the integration polls). Within this time that
-#: is not "somebody changed it" (found by the pipeline replay, #1381).
-STOP_SETTLE_S = 120
+#: write is not shown yet, or a cloud integration polls every few minutes).
+#: "Changed by somebody else" is never decided by a timer: only a state that
+#: moves AWAY from what SEM wrote, after SEM saw its write land, counts. A
+#: stop that never shows within this bound becomes a Repair, never a drop.
+STOP_NEVER_SHOWN_S = 15 * 60
 #: After a hand-back the charger must draw, or read back what SEM restored,
 #: within this time; otherwise the hand-back counts as failed.
 READBACK_S = 5 * 60
@@ -328,20 +330,35 @@ def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
         if float(r.get("handed_back_at") or 0.0)
         and now - float(r.get("handed_back_at") or 0.0) <= RETRIP_WINDOW_S
         and not (facts.get(c) or {}).get("drawing"))
+    seen: List[Tuple[str, str, str]] = []
     candidates = []
     for cid, rec in records.items():
         fact = facts.get(cid) or {}
         handed = float(rec.get("handed_back_at") or 0.0)
         if handed:
-            # (review F3) a hand-back counts once the charger draws or reads
-            # back what SEM restored; otherwise it failed
+            # (review F3 / 2nd review 2) a hand-back counts once the charger
+            # draws or every entity SEM restored reads what SEM wrote. If an
+            # entity moves AWAY from it after SEM saw it land, that is the
+            # other party's decision: drop, no retry. Never reading it within
+            # the read-back time is SEM's failure.
+            moved_away = False
+            all_seen = bool(rec.get("done"))
+            for res in rec.get("done") or ():
+                ent = res.get("entity_id")
+                m = _state_matches(states.get(ent), res.get("target"))
+                if m is True:
+                    if not res.get("seen_target"):
+                        seen.append((cid, ent, "target"))
+                elif m is False and res.get("seen_target"):
+                    moved_away = True
+                else:
+                    all_seen = False
+            if moved_away:
+                drop[cid] = "changed_by_other"
+                continue
             if not rec.get("confirmed"):
-                met = _targets_met(rec, states)
-                if fact.get("drawing") or met is True:
+                if fact.get("drawing") or all_seen:
                     confirm.append(cid)
-                elif met is False and now - handed >= 30.0:
-                    failed.append(cid)
-                    continue
                 elif now - handed >= READBACK_S:
                     failed.append(cid)
                     continue
@@ -363,28 +380,39 @@ def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
             continue
         changed = False
         unknown = False
-        settling = now - float(rec.get("stopped_at") or now) < STOP_SETTLE_S
+        not_shown = False
         for res in rec.get("restores") or ():
-            cur = states.get(res.get("entity_id"))
-            m = _state_matches(cur, res.get("left"))
-            if m is None:
-                unknown = True
-            elif m is False:
-                # still the state from before SEM's stop, just after it: the
-                # write has not shown yet — wait, never "changed by other"
-                if settling and _state_matches(cur, res.get("target")) is True:
+            ent = res.get("entity_id")
+            m = _state_matches(states.get(ent), res.get("left"))
+            if res.get("seen_left"):
+                # SEM saw its stop land: a state away from it now is
+                # somebody else's change
+                if m is None:
                     unknown = True
-                else:
+                elif m is False:
                     changed = True
-        # (review F1) what SEM itself already restored is SEM's state, not a
-        # change by somebody else
+            elif m is True:
+                seen.append((cid, ent, "left"))
+            else:
+                # the stop has not shown yet (or cannot be read): wait
+                unknown = True
+                not_shown = True
+        # (review F1) what SEM already restored is SEM's state; only a move
+        # away from it after SEM saw it land is somebody else's
         for res in rec.get("done") or ():
-            m = _state_matches(states.get(res.get("entity_id")), res.get("target"))
-            if m is False and _state_matches(
-                    states.get(res.get("entity_id")), res.get("left")) is False:
+            ent = res.get("entity_id")
+            m = _state_matches(states.get(ent), res.get("target"))
+            if m is True and not res.get("seen_target"):
+                seen.append((cid, ent, "target"))
+            elif m is False and res.get("seen_target"):
                 changed = True
         if changed:
             drop[cid] = "changed_by_other"
+            continue
+        if not_shown and now - float(rec.get("stopped_at") or now) > STOP_NEVER_SHOWN_S:
+            if not rec.get("left_off"):
+                give_up.append(cid)
+            why[cid] = "stop_never_shown"
             continue
         if rec.get("left_off"):
             why[cid] = "left_off"
@@ -413,7 +441,7 @@ def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
             why[cid] = "waiting_for_previous"
     return {"drop": drop, "give_up": give_up, "failed": failed,
             "confirm": confirm, "hand_back": hand_back, "why": why,
-            "observer": bool(observer)}
+            "seen": seen, "observer": bool(observer)}
 
 
 async def send_hand_back(device: Any, record: Dict[str, Any], *,
@@ -506,7 +534,25 @@ def note_guard_stop(coord: Any, cid: str, adapter: Any, power: Any,
     )
     if rec is None:
         return False
+    hass = getattr(coord, "hass", None)
+    for res in rec.get("restores") or ():
+        try:
+            st = hass.states.get(res.get("entity_id")) if hass is not None else None
+        except Exception:  # noqa: BLE001
+            st = None
+        if _state_matches(getattr(st, "state", None), res.get("left")) is True:
+            res["seen_left"] = True
     book = _stops(coord)
+    if cid not in book:
+        carried = int(_failures(coord).get(cid) or 0)
+        if carried:
+            rec["failures"] = carried
+        # (2nd review 3) the charger came back by somebody else's hand and
+        # the guard stopped it again soon after: that is a re-trip too
+        dropped = float(_last_drop(coord).get(cid) or 0.0)
+        if dropped and now - dropped <= RETRIP_WINDOW_S:
+            note_failure(rec, now=now)
+            _failures(coord)[cid] = int(rec.get("failures") or 0)
     book[cid] = merge_stop(book.get(cid), rec, now=now)
     _LOGGER.warning(
         "phase guard stopped %s (%s); SEM switches it back on when the phase "
@@ -602,8 +648,22 @@ async def run_step(coord: Any, *, now: float) -> bool:
             verdict["give_up"] = [c for c in verdict["give_up"] if c != cid]
             if verdict["hand_back"] == cid:
                 verdict["hand_back"] = None
+    for cid, ent, kind in verdict.get("seen") or ():
+        rec = book.get(cid)
+        for res in [*(rec or {}).get("restores", []), *(rec or {}).get("done", [])]:
+            if res.get("entity_id") == ent:
+                res["seen_left" if kind == "left" else "seen_target"] = True
+                changed = True
+    tally = _failures(coord)
     for cid, why in verdict["drop"].items():
-        book.pop(cid, None)
+        rec = book.pop(cid, None)
+        # (2nd review 3) a re-trip count survives a drop within the plug
+        # session; only an unplug (or a removed charger) starts over
+        if why in ("car_gone", "charger_removed"):
+            tally.pop(cid, None)
+        elif rec is not None:
+            tally[cid] = max(int(tally.get(cid) or 0), int(rec.get("failures") or 0))
+            _last_drop(coord)[cid] = now
         _clear_repair(coord, cid)
         _LOGGER.info("phase guard hand-back for %s ends: %s", cid, why)
         changed = True
@@ -657,6 +717,29 @@ async def run_step(coord: Any, *, now: float) -> bool:
         # kept as SEM's, the rest waits under the same back-off as a re-trip
         note_failure(rec, now=now, retry_all=False)
     return True
+
+
+def _failures(coord: Any) -> Dict[str, int]:
+    """Failed hand-backs per charger in the current plug session."""
+    tally = getattr(coord, "_guard_failures", None)
+    if not isinstance(tally, dict):
+        tally = {}
+        try:
+            coord._guard_failures = tally
+        except AttributeError:
+            pass
+    return tally
+
+
+def _last_drop(coord: Any) -> Dict[str, float]:
+    book = getattr(coord, "_guard_last_drop", None)
+    if not isinstance(book, dict):
+        book = {}
+        try:
+            coord._guard_last_drop = book
+        except AttributeError:
+            pass
+    return book
 
 
 def _device_for(coord: Any, cid: str) -> Any:
@@ -718,7 +801,11 @@ def _clear_repair(coord: Any, cid: str) -> None:
 
 
 def to_store(coord: Any) -> Dict[str, Any]:
-    return {cid: dict(rec) for cid, rec in _stops(coord).items()}
+    out: Dict[str, Any] = {cid: dict(rec) for cid, rec in _stops(coord).items()}
+    tally = {c: int(n) for c, n in _failures(coord).items() if n}
+    if tally:
+        out["_failures"] = tally
+    return out
 
 
 def from_store(coord: Any, blob: Any) -> None:
@@ -726,5 +813,10 @@ def from_store(coord: Any, blob: Any) -> None:
         return
     book = _stops(coord)
     for cid, rec in blob.items():
+        if cid == "_failures":
+            if isinstance(rec, dict):
+                _failures(coord).update(
+                    {c: int(n) for c, n in rec.items() if isinstance(n, (int, float))})
+            continue
         if isinstance(cid, str) and isinstance(rec, dict):
             book[cid] = dict(rec)
