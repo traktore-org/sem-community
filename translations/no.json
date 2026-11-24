@@ -490,7 +490,7 @@
           "ev_phase_switch_value_1p": "Hva som skrives til skifte-entiteten for 1-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 1, switch-standard off.",
           "ev_phase_switch_value_3p": "Hva som skrives til skifte-entiteten for 3-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 3, switch-standard on.",
           "ev_phase_switching_enabled": "Av som standard mens 1/3-fasemodellen omarbeides (den satte ladere på pause som aldri gjenopptok, på enkelte merker). Slå på for å teste det på laderen din.",
-          "finish_by_departure": "Av som standard. På: SEM lader videre etter nattens slutt fram til tiden «Lad innen», fra nettet til dagpris, med akkurat nok strøm."
+          "finish_by_departure": "Av som standard. På: SEM lader videre etter nattens slutt fram til tiden «Lad innen», fra nettet til dagpris. Er det tid til overs og ingen topplastgrense, venter den på planens billigste timer; ellers lader den med akkurat nok strøm."
         }
       },
       "ev_charger_add": {
@@ -557,7 +557,7 @@
           "ev_phase_switch_value_1p": "Hva som skrives til skifte-entiteten for 1-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 1, switch-standard off.",
           "ev_phase_switch_value_3p": "Hva som skrives til skifte-entiteten for 3-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 3, switch-standard on.",
           "ev_phase_switching_enabled": "Av som standard mens 1/3-fasemodellen omarbeides (den satte ladere på pause som aldri gjenopptok, på enkelte merker). Slå på for å teste det på laderen din.",
-          "finish_by_departure": "Av som standard. På: SEM lader videre etter nattens slutt fram til tiden «Lad innen», fra nettet til dagpris, med akkurat nok strøm."
+          "finish_by_departure": "Av som standard. På: SEM lader videre etter nattens slutt fram til tiden «Lad innen», fra nettet til dagpris. Er det tid til overs og ingen topplastgrense, venter den på planens billigste timer; ellers lader den med akkurat nok strøm."
         }
       },
       "pv_naming": {

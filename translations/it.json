@@ -490,7 +490,7 @@
           "ev_phase_switch_value_1p": "Cosa scrivere nell'entità di commutazione per la carica monofase — nome opzione di un select, valore di un number, o on/off. Obbligatorio per entità select; number predefinito 1, switch predefinito off.",
           "ev_phase_switch_value_3p": "Cosa scrivere nell'entità di commutazione per la carica trifase — nome opzione di un select, valore di un number, o on/off. Obbligatorio per entità select; number predefinito 3, switch predefinito on.",
           "ev_phase_switching_enabled": "Disattivato per impostazione predefinita durante la revisione del modello 1/3 fasi (metteva in pausa caricatori che non riprendevano mai su alcune marche). Attivalo per testarlo sul tuo caricatore.",
-          "finish_by_departure": "Disattivato per impostazione predefinita. Attivo: SEM continua a caricare dopo la fine della notte fino all'ora «Carica entro», dalla rete a prezzo diurno, con la corrente appena sufficiente."
+          "finish_by_departure": "Disattivato per impostazione predefinita. Attivo: SEM continua a caricare dopo la fine della notte fino all'ora «Carica entro», dalla rete a prezzo diurno. Se c'è tempo e nessun limite di picco, attende le ore più economiche del piano; altrimenti carica con la corrente appena sufficiente."
         }
       },
       "ev_charger_add": {
@@ -557,7 +557,7 @@
           "ev_phase_switch_value_1p": "Cosa scrivere nell'entità di commutazione per la carica monofase — nome opzione di un select, valore di un number, o on/off. Obbligatorio per entità select; number predefinito 1, switch predefinito off.",
           "ev_phase_switch_value_3p": "Cosa scrivere nell'entità di commutazione per la carica trifase — nome opzione di un select, valore di un number, o on/off. Obbligatorio per entità select; number predefinito 3, switch predefinito on.",
           "ev_phase_switching_enabled": "Disattivato per impostazione predefinita durante la revisione del modello 1/3 fasi (metteva in pausa caricatori che non riprendevano mai su alcune marche). Attivalo per testarlo sul tuo caricatore.",
-          "finish_by_departure": "Disattivato per impostazione predefinita. Attivo: SEM continua a caricare dopo la fine della notte fino all'ora «Carica entro», dalla rete a prezzo diurno, con la corrente appena sufficiente."
+          "finish_by_departure": "Disattivato per impostazione predefinita. Attivo: SEM continua a caricare dopo la fine della notte fino all'ora «Carica entro», dalla rete a prezzo diurno. Se c'è tempo e nessun limite di picco, attende le ore più economiche del piano; altrimenti carica con la corrente appena sufficiente."
         }
       },
       "pv_naming": {

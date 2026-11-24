@@ -5431,18 +5431,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # deadline or an unreachable floor is never
                                 # gated (see ev_overlay).
                                 try:
-                                    from .energy_plan_actuation import ev_overlay
+                                    from .energy_plan_actuation import apply_ev_overlay
                                     _gate = self._energy_plan_gate(f"ev:{cid}")
                                     # Same measured W/A the demand was packed
                                     # with — floor amps derived from the same
                                     # power model the plan promised.
                                     _wpa = self._ev_watts_per_amp(
                                         cid, charger_cfg, power)
-                                    _wait, _floor = ev_overlay(
-                                        _gate,
+                                    # (#1415) one helper reads every flag
+                                    # off THIS charger's plan and writes it.
+                                    apply_ev_overlay(
+                                        plan, _gate,
                                         remaining_kwh=pc_target,
-                                        reachable=plan.reachable,
-                                        deadline_active=plan.deadline_active,
                                         watts_per_amp=_wpa,
                                         min_amps=int(charger_cfg.get("ev_min_current") or 6),
                                         max_amps=int(charger_cfg.get("ev_max_current")
@@ -5454,22 +5454,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                             float(self._active_phases_for(cid, charger_cfg)
                                                   or charger_cfg.get("ev_phases") or 3)
                                             * float(charger_cfg.get("ev_voltage") or 230)),
+                                        # (#1415) a peak limit or a phase
+                                        # guard: no departure wait
+                                        rate_capped=self._ev_rate_capped(),
                                     )
-                                    if _wait:
-                                        plan.should_wait_for_cheap = True
-                                        plan.next_cheap_start = _gate.next_block_start
-                                        plan.reason = (
-                                            "joint energy plan: outside the "
-                                            "planned window — waiting "
-                                            f"({_gate.remaining_kwh:.1f} kWh "
-                                            f"still deliverable)")
-                                    elif _floor > 0:
-                                        plan.should_wait_for_cheap = False
-                                        plan.deadline_amps = max(
-                                            plan.deadline_amps, _floor)
-                                        plan.reason = (
-                                            "joint energy plan: in planned "
-                                            f"window — floor {_floor}A")
                                 except Exception:  # noqa: BLE001 — overlay must
                                     # never break the night path; UNCOVERED-by-
                                     # crash equals "no plan", the safe direction.
@@ -16805,17 +16793,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # except the one a single-charger install actually has (the
             # per-charger-vs-primary parity class, #683/#684).
             try:
-                from .energy_plan_actuation import ev_overlay
+                from .energy_plan_actuation import apply_ev_overlay
                 _pcid = _primary_cfg.get("id") or "ev_charger"
                 _gate = self._energy_plan_gate(f"ev:{_pcid}")
                 # Same measured W/A the demand was packed with (see the
                 # multi-charger site) — plan and floor share one power model.
                 _wpa = self._ev_watts_per_amp(_pcid, _primary_cfg, power)
-                _wait, _floor = ev_overlay(
-                    _gate,
+                # (#1415) the same helper as the per-charger site: it reads
+                # every flag off this plan and writes the result back.
+                apply_ev_overlay(
+                    night_plan, _gate,
                     remaining_kwh=night_target,
-                    reachable=night_plan.reachable,
-                    deadline_active=night_plan.deadline_active,
                     watts_per_amp=_wpa,
                     wpa_table=self._wpa_table_for(_pcid),   # (#904)
                     nominal_wpa=(float(self._active_phases_for(_pcid, _primary_cfg)
@@ -16824,21 +16812,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     min_amps=int(_primary_cfg.get("ev_min_current") or 6),
                     max_amps=int(_primary_cfg.get("ev_max_current")
                                    or DEFAULT_MAX_CHARGING_CURRENT),
+                    # (#1415) a peak limit or a phase guard: no departure wait
+                    rate_capped=self._ev_rate_capped(),
                 )
-                if _wait:
-                    night_plan.should_wait_for_cheap = True
-                    night_plan.next_cheap_start = _gate.next_block_start
-                    night_plan.reason = (
-                        "joint energy plan: outside the planned window "
-                        f"— waiting ({_gate.remaining_kwh:.1f} kWh "
-                        f"still deliverable)")
-                elif _floor > 0:
-                    night_plan.should_wait_for_cheap = False
-                    night_plan.deadline_amps = max(
-                        night_plan.deadline_amps, _floor)
-                    night_plan.reason = (
-                        f"joint energy plan: in planned window — "
-                        f"floor {_floor}A")
             except Exception:  # noqa: BLE001 — overlay must never break the
                 # night path; a crash equals "no plan", the safe direction.
                 _LOGGER.debug("#638 G4 primary EV overlay skipped",

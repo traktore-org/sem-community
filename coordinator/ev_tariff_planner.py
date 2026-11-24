@@ -67,7 +67,19 @@ class NightChargePlan:
     charge_end_dt: Optional[datetime] = None
     # (#1308) *Finish by departure*, after the night end: the floor keeps
     # charging to the departure, at day price, and nothing faster.
+    # (#1415) It is the fallback: when the joint plan covers the car, its
+    # cheapest blocks before the departure lead (``ev_overlay``).
     to_departure: bool = False
+    # (#1415) The charger max this plan used: the config's, or the device's
+    # own when lower. The departure wait counts only setpoints up to it.
+    max_amps: int = 0
+    # (#1415 review 3) The power model the floor was sized by: the measured
+    # ``{amps: W/A}`` table on the phases this plan runs on (None: none
+    # measured, or measured on another phase count) and the nameplate W/A.
+    # The departure wait proves itself with this same model, because the
+    # floor is what charges when a wait fails.
+    wpa_table: Optional[dict] = None
+    watts_per_amp: float = 0.0
     hours_to_deadline: Optional[float] = None
     remaining_kwh: float = 0.0
     reason: str = ""
@@ -149,6 +161,18 @@ def window_charge_end(departure: Optional[datetime],
         window_end = window_end + timedelta(days=1)
     return night_charge_end(departure, window_end,
                             window_start + timedelta(days=1), finish_by_departure)
+
+
+def _measured_amps(wpa_table, watts: float, watts_per_amp: float,
+                   max_amps: int) -> int:
+    """(#1415) The smallest setpoint whose measured draw reaches ``watts``;
+    ``max_amps`` when none does. Above the measured range the nameplate
+    stands, as everywhere (``predict_watts``)."""
+    from .watts_per_amp import predict_watts
+    for amps in range(1, int(max_amps) + 1):
+        if predict_watts(wpa_table, amps, watts_per_amp) >= watts:
+            return amps
+    return int(max_amps)
 
 
 def _hours_between(start: datetime, end: datetime) -> float:
@@ -265,6 +289,7 @@ def plan_night_charge(
     night_start: Optional[str] = None,
     finish_by_departure: bool = False,
     night_over: bool = False,
+    wpa_table=None,
 ) -> NightChargePlan:
     """Decide this cycle's night-charging action for one charger.
 
@@ -293,6 +318,13 @@ def plan_night_charge(
             charging. Post-retirement (#638 one-gate C3) it gates ONLY the
             unreachable warning: the WHEN comes from the joint plan's
             blocks via the overlay, never from this pure function.
+        wpa_table: (#1415) the charger's measured ``{amps: W/A}`` table.
+            After the night end (``to_departure``) the floor's current is
+            the smallest setpoint whose MEASURED draw gives the watts
+            needed: at 690 W/A a 12 A floor bought 7.5 kW, and the current
+            had to rise in the last half hour. The night is unchanged. The
+            caller passes it only when it was measured on the phases
+            ``watts_per_amp`` counts; the plan keeps both (review 3).
         peak_managed_amps: Realistic current (A) the charger can sustain under
             the peak limit given expected (average) home consumption, clamped to
             [min, max]. This is the rate non-forcing night charging actually runs
@@ -304,9 +336,11 @@ def plan_night_charge(
     Returns:
         A populated :class:`NightChargePlan`.
     """
-    plan = NightChargePlan()
+    plan = NightChargePlan(max_amps=int(max_amps))
     plan.remaining_kwh = max(0.0, remaining_to_min_kwh)
     watts_per_amp = max(1.0, watts_per_amp)
+    plan.watts_per_amp = watts_per_amp
+    plan.wpa_table = dict(wpa_table) if wpa_table else None
 
     explicit_deadline = deadline_at or resolve_deadline(now, target_time)
     night_end_dt = resolve_deadline(now, night_end)
@@ -365,6 +399,9 @@ def plan_night_charge(
     if hours_left is not None and hours_left > 0:
         required_w = remaining_to_min_kwh * 1000.0 / hours_left
         required_amps = math.ceil(required_w / watts_per_amp)
+        if plan.to_departure and wpa_table:
+            required_amps = max(required_amps, _measured_amps(
+                wpa_table, required_w, watts_per_amp, max_amps))
         plan.deadline_amps = max(min_amps, min(max_amps, required_amps))
         plan.deadline_active = (
             (is_forcing and required_amps > min_amps) or plan.to_departure)
@@ -407,7 +444,9 @@ def plan_night_charge(
     # hours before the deadline can still deliver the floor at the rate the
     # charge will actually run. Seniority mirrors ``ev_overlay``: a forcing
     # deadline or an unreachable floor is never held back, and the overlay
-    # still wins whenever the gate covers the car.
+    # still wins whenever the gate covers the car. (#1415) Only the overlay
+    # may hold the departure floor after the night end: it has the plan's
+    # blocks and checks the even floor can still land after the wait.
     if (tariff_optimized and level_at is not None and charge_end is not None
             and plan.reachable and not plan.deadline_active):
         start = affordable_start(
