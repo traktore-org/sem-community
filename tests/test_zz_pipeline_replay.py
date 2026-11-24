@@ -304,5 +304,118 @@ async def test_pipeline_replay(freezer):
             "ledger": [e for e in getattr(rig.coord._ev_devices["links"], "command_ledger", [])][-6:],
         }
 
+    # ── (#1381 D28) the mode layer, Now and the thin-sun rule ────────────
+    # Kept to the API both trees share: stored strategy keys and the plain
+    # ``set_plan_override`` (the base tree has neither the four modes nor the
+    # user's Now marker). Expected differences are stated in the report.
+    report.update(await _mode_and_now_days(freezer))
+
     with gzip.open(OUT, "wt", encoding="utf-8") as fh:
         json.dump(report, fh)
+
+
+def _sun_day_steps(day, start_h=6.0, end_h=20.0, step=60):
+    t0 = datetime(2026, 6, day, 0, 0, tzinfo=timezone.utc).timestamp()
+    return [(t0 + h * 3600, {"_hour": h})
+            for h in [start_h + i * step / 3600
+                      for i in range(int((end_h - start_h) * 3600 / step))]]
+
+
+def _sun_values(hh, *, thin=False, plugged=True):
+    """A June day: a clear bell (peak 6 kW at 13:00), or thin sun (1.5 kW
+    flat from 9 to 17 h). 400 W house, no battery power."""
+    import math
+    if thin:
+        solar = 1500.0 if 9.0 <= hh < 17.0 else 0.0
+    else:
+        solar = max(0.0, 6000.0 * math.sin(math.pi * (hh - 6.0) / 14.0)) if 6 <= hh <= 20 else 0.0
+    return {"sensor.solar": solar, "sensor.batt": 0.0, "sensor.soc": 100.0,
+            "sensor.grid": solar - 400.0, "sensor.ev": 0.0,   # SEM sign: + export
+            "binary_sensor.car_connected": "on" if plugged else "off",
+            "number.car_current": 16}
+
+
+async def _mode_and_now_days(freezer):
+    from .cycle_rig import CycleRig
+    out = {}
+
+    def _move(t):
+        freezer.move_to(datetime.fromtimestamp(t, tz=timezone.utc))
+
+    # 1. A mode change mid-day: Sun + tariff with help (min_plus_solar) until
+    #    noon, then Sun without help (solar_only). Expected: identical — the
+    #    stored strategies are the same in both trees.
+    rig = CycleRig(config=dict(WIRED), chargers=[_charger(
+        "car", power="sensor.ev", mode="min_plus_solar",
+        ev_connected_sensor="binary_sensor.car_connected",
+        ev_current_control_entity="number.car_current")])
+
+    def _set_mode_day(rig_, values, t):
+        hh = values["_hour"]
+        if hh >= 12.0:
+            for c in rig_.coord.config.get("ev_chargers") or []:
+                c["charge_mode"] = "solar_only"
+        _set_states(rig_, _sun_values(hh), t)
+
+    _dbg = []
+    if os.environ.get("PIPELINE_REPLAY_DEBUG"):
+        from custom_components.solar_energy_management.coordinator import decide as _cm
+        _orig = _cm.decide
+
+        def _wrap(view, _o=_orig):
+            d = _o(view)
+            _dbg.append([view.fleet.is_night, view.power.connected, view.mode,
+                         d.intent.value, d.commanded_amps, d.reason[:80]])
+            return d
+        _cm.decide = _wrap
+    out["synthetic-mode-change"] = await _run(
+        rig, _sun_day_steps(10), _set_mode_day, _move)
+    if _dbg:
+        from custom_components.solar_energy_management.coordinator import decide as _cm
+        _cm.decide = _orig
+        out["_mode_decisions"] = _dbg[::60]
+    if os.environ.get("PIPELINE_REPLAY_DEBUG"):
+        out["_mode_debug"] = json.loads(json.dumps({
+            "state": getattr(rig.coord, "_owner_trail", None),
+            "data": {k: v for k, v in (getattr(rig.coord, "data", None) or {}).items()
+                     if "charg" in str(k) or "strategy" in str(k)},
+        }, default=str))
+
+    # 2. Now: a 2-hour force at 08:00 (the plan card's Charge now), the car
+    #    unplugged at 09:00 and plugged again at 09:30. Expected difference:
+    #    the branch ends Now on the unplug (D22), so after 09:30 it charges
+    #    from the sun only; the base keeps full power until 10:00.
+    rig = CycleRig(config=dict(WIRED), chargers=[_charger(
+        "car", power="sensor.ev", mode="solar_plus_battery",
+        ev_connected_sensor="binary_sensor.car_connected",
+        ev_current_control_entity="number.car_current")])
+    armed = {"done": False}
+
+    def _set_now_day(rig_, values, t):
+        hh = values["_hour"]
+        if hh >= 8.0 and not armed["done"]:
+            armed["done"] = True
+            rig_.coord.set_plan_override("car", "force", 120)
+        _set_states(rig_, _sun_values(hh, plugged=not (9.0 <= hh < 9.5)), t)
+
+    out["synthetic-now-unplug"] = await _run(
+        rig, _sun_day_steps(11, 7.5, 11.0), _set_now_day, _move)
+
+    # 3. Thin sun on one price (import 0.30, export 0.075), no battery,
+    #    Sun + tariff without help (solar_plus_cheap). Expected difference:
+    #    the base tree has no thin-sun rule (#1411 lives on this branch), so
+    #    only the branch may charge at the minimum in thin sun, and only
+    #    inside a thin-sun block of the plan.
+    cfg = dict(WIRED)
+    cfg.update({"electricity_import_rate": 0.30, "electricity_export_rate": 0.075})
+    rig = CycleRig(config=cfg, chargers=[_charger(
+        "car", power="sensor.ev", mode="solar_plus_cheap",
+        ev_connected_sensor="binary_sensor.car_connected",
+        ev_current_control_entity="number.car_current")])
+
+    def _set_thin_day(rig_, values, t):
+        _set_states(rig_, _sun_values(values["_hour"], thin=True), t)
+
+    out["synthetic-thin-sun"] = await _run(
+        rig, _sun_day_steps(12), _set_thin_day, _move)
+    return out
