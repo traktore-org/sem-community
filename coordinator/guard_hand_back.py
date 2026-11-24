@@ -96,7 +96,7 @@ def inverse_of(sent: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
     entity = data.get("entity_id")
     prior = sent.get("prior")
     # Not handed back, on purpose (#1381 review F6): a stop sent as a brand
-    # SERVICE without an entity (e.g. a wallbox "disable") or a BUTTON press
+    # SERVICE without an entity (e.g. a charger's "disable" service) or a BUTTON press
     # has no state to read back and no safe inverse — a brand "enable" on a
     # box another party steers can start a stop war (#1163), and SEM never
     # sends an authorize. Such a stop leaves the charger off with a Repair.
