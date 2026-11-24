@@ -89,7 +89,7 @@ def test_the_draw_right_after_the_stop_does_not_clear_it():
     coord, reg = _coord(), _Registry()
     with _patched(reg):
         gn.note_stop(coord, CID, "r", now=T0)
-        gn.update(coord, CID, _power(10300), now=T0 + 20)   # meter still lags
+        gn.clear_when_back(coord, CID, _power(10300), now=T0 + 20)   # meter still lags
         assert gn.held(coord, CID) is True
         assert reg.deleted == []
 
@@ -98,9 +98,9 @@ def test_a_charge_again_clears_it():
     coord, reg = _coord(), _Registry()
     with _patched(reg):
         gn.note_stop(coord, CID, "r", now=T0)
-        gn.update(coord, CID, _power(0), now=T0 + 3600)
+        gn.clear_when_back(coord, CID, _power(0), now=T0 + 3600)
         assert gn.held(coord, CID) is True
-        gn.update(coord, CID, _power(10400), now=T0 + 9 * 3600)   # 02:01 by hand
+        gn.clear_when_back(coord, CID, _power(10400), now=T0 + 9 * 3600)   # 02:01 by hand
         assert gn.held(coord, CID) is False
         assert gn.effective_state(coord, CID, "x") == "x"
     assert reg.deleted == [f"guard_stopped_{CID}"]
@@ -110,7 +110,7 @@ def test_an_unplugged_car_clears_it():
     coord, reg = _coord(), _Registry()
     with _patched(reg):
         gn.note_stop(coord, CID, "r", now=T0)
-        gn.update(coord, CID, _power(0, absent=True), now=T0 + 120)
+        gn.clear_when_back(coord, CID, _power(0, absent=True), now=T0 + 120)
         assert gn.held(coord, CID) is False
 
 
@@ -118,14 +118,14 @@ def test_a_restart_keeps_it_through_the_repair():
     coord, reg = _coord(), _Registry()
     with _patched(reg, existing={f"guard_stopped_{CID}"}):
         assert gn.held(coord, CID) is True                       # after restart
-        gn.update(coord, CID, _power(10400), now=T0)            # no grace now
+        gn.clear_when_back(coord, CID, _power(10400), now=T0)            # no grace now
         assert gn.held(coord, CID) is False
 
 
 def test_nothing_held_means_nothing_changes():
     coord, reg = _coord(), _Registry()
     with _patched(reg):
-        gn.update(coord, CID, _power(0), now=T0)
+        gn.clear_when_back(coord, CID, _power(0), now=T0)
         assert gn.effective_state(coord, CID, "night_charging_active") \
             == "night_charging_active"
     assert reg.created == [] and reg.deleted == []
@@ -136,9 +136,13 @@ def test_the_state_has_a_text():
 
 
 def test_the_coordinator_wires_both_charger_paths():
-    import inspect
-    from custom_components.solar_energy_management.coordinator import coordinator
-    src = inspect.getsource(coordinator)
-    assert src.count("guard_notice") >= 4
-    assert src.count(".note_stop(") == 2 and src.count("_gn.update(") == 2
-    assert ".fleet_state(" in src and ".effective_state(" in src
+    """Both charger paths tell the stop and clear it; the state and the
+    fleet text go through the module."""
+    from .ast_contracts import call_sites
+    def in_coordinator(callee):
+        return [h for h in call_sites(callee)
+                if h[0].endswith("coordinator/coordinator.py")]
+    assert len(in_coordinator("note_stop")) == 2
+    assert len(in_coordinator("clear_when_back")) == 2
+    assert len(in_coordinator("effective_state")) >= 1
+    assert len(in_coordinator("fleet_state")) == 1

@@ -5841,7 +5841,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 )
                         # (#1381) the guard's stop of a yielded charger is told
                         from . import guard_notice as _gn
-                        _gn.update(self, cid, view.power, now=time.time())
+                        _gn.clear_when_back(self, cid, view.power, now=time.time())
                         _pg_reason = yield_override_reason(self, decision)
                         try:
                             await actuate(
@@ -6027,7 +6027,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self, "_phase_believed", {}).get("ev_charger"),
                 )
                 from . import guard_notice as _gn
-                _gn.update(self, cid, view.power, now=time.time())
+                _gn.clear_when_back(self, cid, view.power, now=time.time())
                 _pg_reason = yield_override_reason(self, decision)
                 try:
                     await actuate(

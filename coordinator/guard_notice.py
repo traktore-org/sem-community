@@ -83,7 +83,7 @@ def held(coord: Any, cid: str) -> bool:
     return False
 
 
-def update(coord: Any, cid: str, power: Any, *, now: float) -> None:
+def clear_when_back(coord: Any, cid: str, power: Any, *, now: float) -> None:
     """Every cycle, per charger: clear once it charges again or the car left."""
     if not held(coord, cid):
         return
