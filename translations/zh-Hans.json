@@ -2144,6 +2144,10 @@
       "title": "水箱达不到防军团菌目标",
       "description": "{name}：水箱最高只接受 {max} °C，低于防军团菌目标 {target} °C。SEM 加热到 {max} °C，可能无法为水箱消毒。请降低目标，或检查水箱自身的最高温度。此提示会自行消失。"
     },
+    "phase_switch_refused": {
+      "title": "相位切换被拒绝",
+      "description": "SEM 尝试了 {tries} 次将 {charger} 切换到 {phases} 相。Home Assistant 每次都拒绝了该命令。SEM 不再尝试。请检查相位切换实体是否可用，并接受所设置的值。"
+    },
     "guard_left_off": {
       "title": "相位保护后充电桩保持关闭",
       "description": "由于某一相超过限制，SEM 停止了 {charger}。它尝试了 {tries} 次重新开启，每次该相都再次超限。SEM 不再尝试。请在家中用电减少时自行开启充电桩，或在控制它的应用中开启。"

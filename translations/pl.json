@@ -2144,6 +2144,10 @@
       "title": "Zasobnik nie osiąga celu antylegionella",
       "description": "{name}: zasobnik przyjmuje najwyżej {max} °C, poniżej celu antylegionella {target} °C. SEM grzeje do {max} °C, co może nie zdezynfekować zasobnika. Obniż cel lub sprawdź maksimum zasobnika. Komunikat zniknie sam."
     },
+    "phase_switch_refused": {
+      "title": "Przełączenie faz odrzucone",
+      "description": "SEM próbował {tries} razy przełączyć {charger} na {phases} fazy. Home Assistant za każdym razem odrzucił polecenie. SEM już nie próbuje. Sprawdź, czy encja przełączania faz jest dostępna i przyjmuje ustawioną wartość."
+    },
     "guard_left_off": {
       "title": "Ładowarka wyłączona po ochronie faz",
       "description": "SEM zatrzymał {charger}, bo faza przekroczyła limit. Próbował {tries} razy ją włączyć i za każdym razem faza znów przekraczała limit. SEM już nie próbuje. Włącz ładowarkę sam lub w aplikacji, która nią steruje, gdy dom zużywa mniej prądu."

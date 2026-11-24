@@ -2144,6 +2144,10 @@
       "title": "Tank cannot reach the Legionella target",
       "description": "{name}: the tank accepts at most {max} °C, below the Legionella target {target} °C. SEM heats to {max} °C, which may not disinfect the tank. Lower the target, or check the tank's own maximum. This clears by itself."
     },
+    "phase_switch_refused": {
+      "title": "Phase switch refused",
+      "description": "SEM tried {tries} times to switch {charger} to {phases} phases. Each time Home Assistant refused the command. SEM no longer tries. Check that the phase switch entity is available and accepts the value set for it."
+    },
     "guard_left_off": {
       "title": "Charger left off after the phase guard",
       "description": "SEM stopped {charger} because a phase was over its limit. It tried {tries} times to switch it back on, and each time the phase went over again. SEM no longer tries. Switch the charger on yourself, or in the app that controls it, when the house uses less power."

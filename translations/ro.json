@@ -2144,6 +2144,10 @@
       "title": "Rezervorul nu atinge ținta antilegionella",
       "description": "{name}: rezervorul acceptă cel mult {max} °C, sub ținta antilegionella de {target} °C. SEM încălzește la {max} °C, ceea ce poate să nu dezinfecteze rezervorul. Coboară ținta sau verifică maximul rezervorului. Mesajul dispare singur."
     },
+    "phase_switch_refused": {
+      "title": "Schimbare de faze refuzată",
+      "description": "SEM a încercat de {tries} ori să treacă {charger} pe {phases} faze. Home Assistant a refuzat comanda de fiecare dată. SEM nu mai încearcă. Verifică dacă entitatea pentru schimbarea fazelor este disponibilă și acceptă valoarea setată."
+    },
     "guard_left_off": {
       "title": "Încărcătorul a rămas oprit după protecția de fază",
       "description": "SEM a oprit {charger} pentru că o fază a depășit limita. A încercat de {tries} ori să-l pornească, și de fiecare dată faza a depășit din nou. SEM nu mai încearcă. Pornește încărcătorul tu, sau în aplicația care îl controlează, când casa consumă mai puțin."

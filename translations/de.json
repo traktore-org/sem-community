@@ -2144,6 +2144,10 @@
       "title": "Speicher erreicht das Legionellen-Ziel nicht",
       "description": "{name}: Der Speicher nimmt höchstens {max} °C an, weniger als das Legionellen-Ziel {target} °C. SEM heizt auf {max} °C; das desinfiziert den Speicher womöglich nicht. Senke das Ziel oder prüfe das Maximum des Speichers. Die Meldung verschwindet von selbst."
     },
+    "phase_switch_refused": {
+      "title": "Phasenumschaltung abgelehnt",
+      "description": "SEM hat {tries} Mal versucht, {charger} auf {phases} Phasen umzuschalten. Home Assistant hat den Befehl jedes Mal abgelehnt. SEM versucht es nicht mehr. Prüfe, ob die Entität für die Phasenumschaltung verfügbar ist und den eingestellten Wert annimmt."
+    },
     "guard_left_off": {
       "title": "Ladestation nach Phasenwächter aus",
       "description": "SEM hat {charger} gestoppt, weil eine Phase über ihrem Limit war. Es hat {tries}-mal versucht, sie wieder einzuschalten, und jedes Mal war die Phase wieder zu hoch. SEM versucht es nicht mehr. Schalte die Ladestation selbst oder in der steuernden App ein, wenn das Haus weniger Strom braucht."

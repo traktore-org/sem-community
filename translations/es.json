@@ -2144,6 +2144,10 @@
       "title": "El depósito no alcanza el objetivo de legionela",
       "description": "{name}: el depósito admite como máximo {max} °C, por debajo del objetivo de legionela de {target} °C. SEM calienta a {max} °C, lo que puede no desinfectar el depósito. Baja el objetivo o revisa el máximo del depósito. Este aviso desaparece solo."
     },
+    "phase_switch_refused": {
+      "title": "Cambio de fases rechazado",
+      "description": "SEM intentó {tries} veces pasar {charger} a {phases} fases. Home Assistant rechazó la orden cada vez. SEM ya no lo intenta. Comprueba que la entidad del cambio de fases esté disponible y acepte el valor configurado."
+    },
     "guard_left_off": {
       "title": "Cargador apagado tras la protección de fase",
       "description": "SEM detuvo {charger} porque una fase superaba su límite. Intentó {tries} veces encenderlo de nuevo, y cada vez la fase volvió a superarlo. SEM ya no lo intenta. Enciende el cargador tú mismo, o en la app que lo controla, cuando la casa consuma menos."

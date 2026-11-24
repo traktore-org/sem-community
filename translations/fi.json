@@ -2144,6 +2144,10 @@
       "title": "Varaaja ei saavuta legionellatavoitetta",
       "description": "{name}: varaaja ottaa enintään {max} °C, alle legionellatavoitteen {target} °C. SEM lämmittää {max} °C:een, mikä ei ehkä desinfioi varaajaa. Laske tavoitetta tai tarkista varaajan maksimi. Ilmoitus poistuu itsestään."
     },
+    "phase_switch_refused": {
+      "title": "Vaiheiden vaihto hylätty",
+      "description": "SEM yritti {tries} kertaa vaihtaa laitteen {charger} {phases} vaiheelle. Home Assistant hylkäsi komennon joka kerta. SEM ei enää yritä. Tarkista, että vaiheiden vaihdon entiteetti on käytettävissä ja hyväksyy asetetun arvon."
+    },
     "guard_left_off": {
       "title": "Latausasema jäi pois vaihesuojan jälkeen",
       "description": "SEM pysäytti {charger}, koska vaihe ylitti rajansa. Se yritti {tries} kertaa käynnistää sen, ja joka kerta vaihe ylittyi taas. SEM ei enää yritä. Käynnistä latausasema itse tai sitä ohjaavassa sovelluksessa, kun talo käyttää vähemmän sähköä."
