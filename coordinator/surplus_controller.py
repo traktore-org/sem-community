@@ -2404,7 +2404,6 @@ class SurplusController:
         Crediting them put their draw — and, once the pool saw the import,
         the import they cause — back on the table for every Solar-only load.
         """
-        from ..devices.base import DeviceControlMode
         return sum(
             d.get_current_consumption()
             for d in self.get_devices_sorted()
