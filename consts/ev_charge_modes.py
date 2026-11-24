@@ -145,7 +145,15 @@ def apply_user_mode_write(charger: dict, key: str, value: Any) -> None:
         v = str(value or "") if value is not None else value
         prev = str(charger.get("charge_mode") or "")
         help_now = battery_help_of(charger)    # read BEFORE the write
-        if isinstance(v, str) and v in USER_MODES and v not in EV_CHARGE_MODES:
+        if (isinstance(v, str) and v in USER_MODES and v not in EV_CHARGE_MODES
+                and prev in EV_CHARGE_MODES and user_mode_of(prev) == v):
+            # (#1381 D21) Re-picking the mode the select already shows is a
+            # no-op: the strategy behind it stays. Mapping it again through
+            # the switch rewrote min_plus_solar to solar_plus_cheap for a
+            # charger with a per-charger "never" (the switch reads off there)
+            # and so dropped its Min floor.
+            v = prev
+        elif isinstance(v, str) and v in USER_MODES and v not in EV_CHARGE_MODES:
             v = strategy_for(v, help_now)
         charger["charge_mode"] = v if isinstance(v, str) else value
         # The strategy carries the switch for the four sun strategies, so
@@ -179,6 +187,12 @@ DEFAULT_EV_CHARGE_MODE: str = "min_plus_solar"
 
 MODE_NIGHT_ALLOWED: frozenset[str] = frozenset({
     "solar_plus_cheap", "min_plus_solar", "always_max",
+})
+#: (#1381 D23) The two stored strategies behind "Sun + tariff": both run
+#: the one tariff day rule (deadline floor, peak pause, cheap-hour top-up,
+#: thin sun) — battery help is the only difference between them.
+MODE_SUN_TARIFF_DAY: frozenset[str] = frozenset({
+    "solar_plus_cheap", "min_plus_solar",
 })
 MODE_USES_TARIFF: frozenset[str] = frozenset({
     "solar_plus_cheap",
