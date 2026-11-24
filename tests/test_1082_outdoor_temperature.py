@@ -315,7 +315,10 @@ class TestCo2PerSession:
         _unplug(h)
         rec = h._storage.add_session_to_history.call_args.args[0]
         assert rec["co2_kg"] == pytest.approx(0.06, abs=0.01)
-        assert sessions_csv([rec]).splitlines()[0].endswith(",co2_kg")
+        # (#1410) charger_id is the last column now; co2_kg sits before it
+        header, row = sessions_csv([rec]).splitlines()[:2]
+        col = header.split(",").index("co2_kg")
+        assert float(row.split(",")[col]) == pytest.approx(0.06, abs=0.01)
 
     def test_one_rule_for_every_co2_number(self):
         from custom_components.solar_energy_management.coordinator.energy_calculator import (
