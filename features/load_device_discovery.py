@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Any
-import fnmatch
+from typing import Dict, Final, List, Optional, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
 
-from ..const import LOAD_MANAGEMENT_DEVICE_PATTERNS
 from ..ha_energy_reader import (
     read_energy_dashboard_config,
     get_all_individual_devices,
@@ -109,6 +107,92 @@ def resolve_load_is_on(
     return (current_power or 0) > 0
 
 
+#: (#1419) Entity domains whose presence makes a device a security device:
+#: a camera, an alarm panel, a siren. A ``lock`` counts too, unless Home
+#: Assistant's own metadata marks it as an appliance setting (see
+#: ``_is_setting_lock``) — a washer, heat pump or TRV often carries a child
+#: lock and is still a load.
+SECURITY_DOMAINS: Final = frozenset({"camera", "alarm_control_panel", "siren"})
+LOCK_DOMAIN: Final = "lock"
+#: Markers of a CHILD lock — an appliance setting, not a lock — read ONLY
+#: from the integration's own ``translation_key``, never from an entity_id or
+#: a name. "Key lock" is no marker: ``front_door_key_lock`` is a door.
+_SETTING_LOCK_WORDS: Final = ("child_lock", "childlock")
+
+
+def _category(entry) -> str:
+    cat = getattr(entry, "entity_category", None)
+    return str(getattr(cat, "value", cat) or "").lower()
+
+
+def _is_setting_lock(entry) -> bool:
+    """A lock entity that HA's own metadata marks as an appliance setting."""
+    if _category(entry) in ("config", "diagnostic"):
+        return True
+    declared = str(getattr(entry, "translation_key", "") or "").lower()
+    return any(w in declared for w in _SETTING_LOCK_WORDS)
+
+
+def security_role(entries) -> str:
+    """(#1419) ``"security"``, ``"lock"`` or ``""`` for a device's entries.
+
+    ``security``: a camera, alarm panel or siren — never a load, whoever asks.
+    ``lock``: a lock that HA's metadata does not mark as a child lock. Treated
+    as a door lock (the safe side): never listed or auto-paired; a user who
+    knows it is an appliance can still add it with Add a device, and a
+    Repair names it so nothing is lost silently.
+    """
+    entries = list(entries)
+    if any(e.entity_id.split(".", 1)[0] in SECURITY_DOMAINS for e in entries):
+        return "security"
+    if any(e.entity_id.split(".", 1)[0] == LOCK_DOMAIN and not _is_setting_lock(e)
+           for e in entries):
+        return "lock"
+    return ""
+
+
+def security_role_of(hass: HomeAssistant, entity_id: Optional[str]) -> str:
+    """(#1419) The security role of the device this entity belongs to.
+
+    Registry-driven and conservative: an entity the registry does not know
+    is judged on its own domain only.
+    """
+    if not entity_id:
+        return ""
+    domain = entity_id.split(".", 1)[0]
+    own = "security" if domain in SECURITY_DOMAINS else (
+        "lock" if domain == LOCK_DOMAIN else "")
+    try:
+        reg = entity_registry.async_get(hass)
+        entry = reg.async_get(entity_id)
+        if entry is None or not entry.device_id:
+            if own == "lock" and entry is not None and _is_setting_lock(entry):
+                return ""
+            return own
+        siblings = entity_registry.async_entries_for_device(
+            reg, entry.device_id, include_disabled_entities=True)
+    except Exception:  # noqa: BLE001 — an unreadable registry decides nothing
+        return "security" if own == "security" else ""
+    return security_role(siblings)
+
+
+def is_security_entity(hass: HomeAssistant, entity_id: Optional[str], *,
+                       chosen: bool = False) -> bool:
+    """(#1419) Does SEM leave this entity's device alone?
+
+    A security device (camera, alarm panel, siren, a door lock) never appears
+    in SEM's device list and its switches are never auto-paired as a load's
+    control. Its energy still counts: home consumption comes from the meters.
+
+    ``chosen``: the user named this entity themselves (Add a device, a
+    control mapping, a schedule). A camera, alarm or siren is refused even
+    then; a device whose only evidence is an unmarked lock is allowed, since
+    the user knows it is an appliance.
+    """
+    role = security_role_of(hass, entity_id)
+    return role == "security" or (role == "lock" and not chosen)
+
+
 class LoadDeviceDiscovery:
     """Auto-discover controllable devices for load management."""
 
@@ -116,6 +200,12 @@ class LoadDeviceDiscovery:
         """Initialize device discovery."""
         self.hass = hass
         self._entity_registry = entity_registry.async_get(hass)
+
+    def is_not_a_control(self, entity_id: Optional[str]) -> bool:
+        """(#1419) Never pair this entity as a load's control: a device's own
+        setting (#781) or any entity of a security device."""
+        return self.is_config_surface(entity_id) or is_security_entity(
+            self.hass, entity_id)
 
     def is_config_surface(self, entity_id: Optional[str]) -> bool:
         """(#781) Is this entity a device's own configuration / diagnostic
@@ -154,8 +244,9 @@ class LoadDeviceDiscovery:
     def _control_name_matches(self, base_name: str, candidate: str) -> bool:
         """(#781) Does this candidate control THIS load's channel?
 
-        The control side may not use ``_names_match``. That helper's last
-        resort strips every digit — and on a multi-channel device the digit
+        The control side may not use a loose name match. The old
+        ``_names_match`` (gone with pattern discovery, #1419) stripped every
+        digit as its last resort — and on a multi-channel device the digit
         IS the channel, so ``shelly_kanal_1`` and ``shelly_kanal_2`` clean to
         the same string. A bare substring test is wrong the same way, one
         character later: ``shelly_kanal_1`` is inside ``shelly_kanal_10``.
@@ -185,98 +276,6 @@ class LoadDeviceDiscovery:
     def get_all_entities(self) -> List[str]:
         """Get all available entity IDs."""
         return list(self.hass.states.async_entity_ids())
-
-    def discover_controllable_devices(
-        self, excluded_entities: Optional[set] = None
-    ) -> Dict[str, Dict]:
-        """Discover devices that have both power monitoring and switch control.
-
-        Args:
-            excluded_entities: entity_ids already claimed by a configured
-                charger (its stop switch, current number, power/status
-                sensors). (#748) The ``smart_switch`` pattern is ``switch.*``
-                with no charger exclusion, so a switch already wired as a
-                charger's start/stop control was rediscovered as a smart plug —
-                the third duplicate row. Any switch OR power sensor in this set
-                is skipped: the charger owns it.
-
-        Returns:
-            Dict with device_id as key, device info as value
-        """
-        excluded = excluded_entities or set()
-        discovered_devices = {}
-        all_entities = self.get_all_entities()
-        _LOGGER.info(f"Starting discovery with {len(all_entities)} total entities")
-
-        for device_type, patterns in LOAD_MANAGEMENT_DEVICE_PATTERNS.items():
-            switch_pattern = patterns["switch_pattern"]
-            power_pattern = patterns["power_pattern"]
-            description = patterns["description"]
-
-            # Find all switches matching the pattern
-            switches = self._find_pattern_matches(switch_pattern, all_entities)
-            _LOGGER.info(f"Device type '{device_type}': found {len(switches)} switches matching pattern '{switch_pattern}'")
-
-            for switch_entity in switches:
-                # (#748) a switch already claimed as a charger's start/stop
-                # control is not a smart plug — the charger owns it.
-                if switch_entity in excluded:
-                    _LOGGER.debug(
-                        "Skipping %s: claimed by a configured charger", switch_entity
-                    )
-                    continue
-                # (#781) a device's configuration knob is not a load — see
-                # is_config_surface.
-                if self.is_config_surface(switch_entity):
-                    _LOGGER.debug(
-                        "Skipping %s: a configuration/diagnostic entity, not a "
-                        "control surface", switch_entity,
-                    )
-                    continue
-                # Try to find corresponding power sensor
-                power_entity = self._find_corresponding_power_sensor(
-                    switch_entity, power_pattern, all_entities
-                )
-
-                if power_entity and power_entity in excluded:
-                    _LOGGER.debug(
-                        "Skipping %s: power sensor %s claimed by a configured charger",
-                        switch_entity, power_entity,
-                    )
-                    continue
-
-                if power_entity:
-                    _LOGGER.debug(f"Found power sensor for {switch_entity}: {power_entity}")
-                    if self._validate_device_pair(switch_entity, power_entity):
-                        device_id = self._generate_device_id(switch_entity)
-
-                        discovered_devices[device_id] = {
-                            "switch_entity": switch_entity,
-                            "power_entity": power_entity,
-                            "device_type": device_type,
-                            "description": description,
-                            "friendly_name": self._get_friendly_name(switch_entity),
-                            "power_rating": self._get_device_power_rating(power_entity),
-                            "is_available": self._is_device_available(switch_entity, power_entity),
-                            "priority": 5,  # Default medium priority
-                            "is_critical": looks_like_host(switch_entity, power_entity),  # (#896) host guard
-                            # (#780) we found the switch — that IS the handle.
-                            "has_control_handle": True,
-                            "user_hands_off": False,
-                            "is_controllable": True,  # LEGACY — derived
-                        }
-
-                        _LOGGER.info(
-                            f"Discovered controllable device: {device_id} "
-                            f"({switch_entity} + {power_entity})"
-                        )
-                    else:
-                        _LOGGER.debug(f"Device pair validation failed for {switch_entity} + {power_entity}")
-                else:
-                    _LOGGER.debug(f"No matching power sensor found for {switch_entity}")
-
-        _LOGGER.info(f"Discovery complete: found {len(discovered_devices)} controllable devices")
-        return discovered_devices
 
     def _is_light_fixture(self, energy_sensor: str) -> bool:
         """(#744) Is this ED consumer a light fixture — a device whose only
@@ -520,7 +519,7 @@ class LoadDeviceDiscovery:
         # no primary control is exactly the harm — "monitoring only" is the
         # honest answer there.
         device_entities = [
-            e for e in device_entities if not self.is_config_surface(e.entity_id)
+            e for e in device_entities if not self.is_not_a_control(e.entity_id)
         ]
 
         # Priority 1: Switch entities
@@ -599,7 +598,7 @@ class LoadDeviceDiscovery:
         ]
 
         for switch in switch_patterns:
-            if switch in all_entities and not self.is_config_surface(switch):
+            if switch in all_entities and not self.is_not_a_control(switch):
                 state = self.hass.states.get(switch)
                 if state and state.state not in ("unknown", "unavailable"):
                     return {
@@ -613,7 +612,7 @@ class LoadDeviceDiscovery:
         # outright rather than accepted as second best.
         boundary: Optional[str] = None
         for entity in all_entities:
-            if not entity.startswith("switch.") or self.is_config_surface(entity):
+            if not entity.startswith("switch.") or self.is_not_a_control(entity):
                 continue
             candidate = self._extract_base_name(entity)
             if not self._control_name_matches(base_name, candidate):
@@ -760,7 +759,7 @@ class LoadDeviceDiscovery:
                 if (
                     not entity.startswith("switch.")
                     or "shelly" not in entity.lower()
-                    or self.is_config_surface(entity)
+                    or self.is_not_a_control(entity)
                 ):
                     continue
                 candidate = self._extract_base_name(entity)
@@ -786,7 +785,7 @@ class LoadDeviceDiscovery:
             # ``pump_10`` a match for ``pump_1`` — see _control_name_matches.
             boundary: Optional[str] = None
             for entity in all_entities:
-                if not entity.startswith("switch.") or self.is_config_surface(entity):
+                if not entity.startswith("switch.") or self.is_not_a_control(entity):
                     continue
                 candidate = self._extract_base_name(entity)
                 if not self._control_name_matches(base_name, candidate):
@@ -802,43 +801,6 @@ class LoadDeviceDiscovery:
                 return {"type": "switch", "entity": boundary}
 
         return None
-
-    def _find_pattern_matches(self, pattern: str, entities: List[str]) -> List[str]:
-        """Find entities matching a pattern."""
-        if "*" in pattern:
-            return fnmatch.filter(entities, pattern)
-        else:
-            return [pattern] if pattern in entities else []
-
-    def _find_corresponding_power_sensor(
-        self, switch_entity: str, power_pattern: str, all_entities: List[str]
-    ) -> Optional[str]:
-        """Find the power sensor corresponding to a switch entity.
-
-        (#781) The device's OWN sensor wins. ``_names_match``'s last resort
-        strips every digit, so ``shelly_kanal_1`` and ``shelly_kanal_2`` clean
-        to the same string and channel 1 adopted whichever channel's sensor the
-        entity list happened to yield first — a load bound to a neighbour's
-        watts. An exact base-name match is unambiguous; the fuzzy match stays,
-        but only as the fallback it was meant to be.
-        """
-        # Extract the base name from switch entity
-        base_name = self._extract_base_name(switch_entity)
-
-        # Look for power sensors that match the base name
-        potential_power_sensors = self._find_pattern_matches(power_pattern, all_entities)
-
-        fuzzy_match: Optional[str] = None
-        for power_entity in potential_power_sensors:
-            power_base_name = self._extract_base_name(power_entity)
-
-            if power_base_name == base_name:
-                return power_entity
-            # Check if they belong to the same device
-            if fuzzy_match is None and self._names_match(base_name, power_base_name):
-                fuzzy_match = power_entity
-
-        return fuzzy_match
 
     def _extract_base_name(self, entity_id: str) -> str:
         """Extract base name from entity ID for matching."""
@@ -860,60 +822,6 @@ class LoadDeviceDiscovery:
                 break
 
         return name
-
-    def _names_match(self, name1: str, name2: str) -> bool:
-        """Check if two base names match (same device)."""
-        # Exact match
-        if name1 == name2:
-            return True
-
-        # Check if one is a substring of the other
-        if name1 in name2 or name2 in name1:
-            return True
-
-        # Check similarity for common patterns
-        # Remove numbers and underscores for fuzzy matching
-        clean_name1 = "".join(c for c in name1 if c.isalpha()).lower()
-        clean_name2 = "".join(c for c in name2 if c.isalpha()).lower()
-
-        return clean_name1 == clean_name2
-
-    def _validate_device_pair(self, switch_entity: str, power_entity: str) -> bool:
-        """Validate that switch and power sensor are both functional."""
-        # Check switch
-        switch_state = self.hass.states.get(switch_entity)
-        if not switch_state or switch_state.state in ("unknown", "unavailable"):
-            return False
-
-        if switch_state.state.lower() not in ("on", "off", "true", "false", "1", "0"):
-            return False
-
-        # Check power sensor
-        power_state = self.hass.states.get(power_entity)
-        if not power_state or power_state.state in ("unknown", "unavailable"):
-            return False
-
-        try:
-            power_value = finite_float(power_state.state)
-            # Power should be reasonable (0-10kW for most household devices)
-            return 0 <= power_value <= 10000
-        except (ValueError, TypeError):
-            return False
-
-    def _generate_device_id(self, switch_entity: str) -> str:
-        """Generate a unique device ID."""
-        base_name = self._extract_base_name(switch_entity)
-        return f"load_device_{base_name}"
-
-    def _get_friendly_name(self, entity_id: str) -> str:
-        """Get friendly name for device."""
-        state = self.hass.states.get(entity_id)
-        if state and state.attributes.get("friendly_name"):
-            return state.attributes["friendly_name"]
-
-        # Generate from entity ID
-        base_name = self._extract_base_name(entity_id)
-        return base_name.replace("_", " ").title()
 
     def _get_device_power_rating(self, power_entity: Optional[str]) -> float:
         """Get current power consumption of device."""

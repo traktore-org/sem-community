@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "A fázisváltás értéke nem lett elmentve: {reason}. Olyan értéket adjon meg, amelyet az entitás elfogad."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} egy biztonsági eszközhöz tartozik (kamera, riasztó, zár vagy sziréna). A SEM soha nem kapcsol biztonsági eszközöket."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_stopped": {
       "title": "A fázisvédelem kikapcsolta: {charger}",
       "description": "Egy fázis túllépte a határt, ezért a SEM kikapcsolta ezt: {charger}. Ezt a töltőt más rendszer vezérli, ezért a SEM nem kapcsolja vissza. Kapcsold be kézzel, vagy hagyd, hogy az alkalmazása újraindítsa. Az üzenet eltűnik, ha a töltő újra tölt, vagy az autót lecsatlakoztatják."
+    },
+    "old_found_loads_removed": {
+      "title": "A SEM már nem használja a régi, automatikusan talált eszközöket",
+      "description": "A régebbi verziók név alapján találták meg ezeket a kapcsolókat, és terhelésként használták őket: **{names}**. Nem láthattad és nem állíthattad őket, és a csúcskorlát kikapcsolhatta őket. A SEM már nem használja őket. Ha azt szeretnéd, hogy a SEM vezéreljen egyet, add hozzá az **Eszköz hozzáadása** gombbal az Eszközök oldalon."
+    },
+    "security_devices_not_used": {
+      "title": "A SEM békén hagyja a biztonsági eszközöket",
+      "description": "Ezek biztonsági eszközök (kamera, riasztó, sziréna vagy ajtózár): **{names}**. A SEM már nem mutatja és nem kapcsolja őket. Az energiájuk továbbra is beleszámít a ház fogyasztásába. Ha valamelyik zárral ellátott készülék, nem ajtózár, add hozzá az **Eszköz hozzáadása** gombbal."
     }
   },
   "selector": {

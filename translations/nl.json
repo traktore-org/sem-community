@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "De waarde voor fase-omschakeling is niet opgeslagen: {reason}. Voer een waarde in die de entiteit accepteert."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} hoort bij een beveiligingsapparaat (camera, alarm, slot of sirene). SEM schakelt beveiligingsapparaten nooit."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_stopped": {
       "title": "Fasebewaking heeft {charger} uitgezet",
       "description": "Een fase zat boven de limiet, daarom heeft SEM {charger} uitgezet. Een andere partij stuurt dit laadpunt, daarom zet SEM het niet weer aan. Zet het met de hand aan, of laat de app het opnieuw starten. Deze melding verdwijnt als het laadpunt weer laadt of de auto wordt losgekoppeld."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM gebruikt oude automatisch gevonden apparaten niet meer",
+      "description": "Oudere versies vonden deze schakelaars op naam en gebruikten ze als lasten: **{names}**. Je kon ze niet zien of instellen, en de piekgrens kon ze uitschakelen. SEM gebruikt ze niet meer. Wil je dat SEM er een stuurt, voeg het dan toe met **Apparaat toevoegen** bij Apparaten."
+    },
+    "security_devices_not_used": {
+      "title": "SEM laat beveiligingsapparaten met rust",
+      "description": "Deze apparaten zijn beveiligingsapparaten (camera, alarm, sirene of deurslot): **{names}**. SEM toont en schakelt ze niet meer. Hun verbruik telt nog mee in het huisverbruik. Is er een een apparaat met een slot en geen deurslot, voeg het dan toe met **Apparaat toevoegen**."
     }
   },
   "selector": {

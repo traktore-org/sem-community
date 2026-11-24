@@ -28,6 +28,10 @@ ED device controls (dedup on the shared CONTROL entity, not the id — never on 
 power/energy sensor, which #744 can derive or share across a multi-channel
 device's two loads), then de-persist. A ``load_device_*`` row with no matching
 ED twin is the device's only representation and is left untouched.
+
+(#1419) That last rule is gone: such a row was never on the Devices card, so
+nobody could set it, and the peak shed switched it off. The sync now keeps a
+``load_device_*`` row only when it is a charger's.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -128,59 +132,29 @@ def _seed_lm():
 
 @pytest.mark.unit
 class TestDataLayerFold:
+    """(#1419) The fold is now the sync's keep rule: a ``load_device_*`` row
+    stays only when it is a charger's. ``_prune_ed_duplicate_lm_rows`` is
+    gone. Its neighbour cases (a shared power sensor, an ED row with no
+    control) no longer apply: every pattern row leaves, because none was
+    ever on the Devices card. A row that leaves while shed is put back by
+    LoadManagement (tests/test_1419_pattern_rows.py)."""
+
     def test_ed_duplicate_ghost_is_dropped(self):
         lm = _seed_lm()
-        reg = _reg(lm, ed_devices=[_ed_dishwasher()])
-        pruned = reg._prune_ed_duplicate_lm_rows()
-        assert pruned is True
+        assert _reg(lm, ed_devices=[_ed_dishwasher()])._sync_to_load_manager() is True
         assert "load_device_spuelmaschine" not in lm._devices   # ghost dropped
-        assert "load_device_freezer" in lm._devices             # no ED twin: kept
         assert "load_device_ev_charger" in lm._devices          # charger kept
+        assert "energy_dashboard_spuelmaschine" in lm._devices  # the one to set
 
-    def test_shared_power_sensor_alone_does_not_fold_a_neighbour(self):
-        """The match is on the CONTROL surface only — NOT power/energy. A
-        multi-channel device (a Shelly 2PM) can present two distinct ED loads
-        that resolve to the same whole-device power sensor (#744 derived /
-        shortest-name fallback); a ghost that shares only that power sensor but
-        has its OWN distinct switch is a different device and MUST survive."""
-        ed = UnifiedDevice(
-            energy_sensor="sensor.shelly2pm_energy",
-            power_sensor="sensor.shelly2pm_power",           # shared whole-device power
-            name="Channel A",
-            priority=10,
-            control={"type": "switch", "entity": "switch.shelly2pm_channel_a"},
-        )
-        lm = _FakeLoadManager({
-            "load_device_channel_b": {
-                "device_type": "smart_switch",
-                "switch_entity": "switch.shelly2pm_channel_b",   # DIFFERENT relay
-                "power_entity": "sensor.shelly2pm_power",         # same power sensor
-                "is_controllable": True,
-            },
-        })
-        assert _reg(lm, ed_devices=[ed])._prune_ed_duplicate_lm_rows() is False
-        assert "load_device_channel_b" in lm._devices            # neighbour kept
-
-    def test_no_control_ed_row_does_not_fold_the_only_controllable_row(self):
-        """An ED row that discovered NO control (is_controllable False) is not
-        an authoritative actuation surface — it must NOT fold the ghost that
-        holds the device's only switch, or the device becomes uncontrollable."""
-        ed = UnifiedDevice(
-            energy_sensor="sensor.spuelmaschine_energy",
-            power_sensor="sensor.spuelmaschine_power",
-            name="Spuelmaschine",
-            priority=10,
-            control=None,                                    # no control surface
-        )
+    def test_a_pattern_row_with_no_twin_leaves_too(self):
+        """#779 kept it as "the device's only representation". (#1419) It was
+        not on the Devices card, so nobody could set its Mode or mark it
+        critical — and the peak shed switched it off."""
         lm = _seed_lm()
-        assert _reg(lm, ed_devices=[ed])._prune_ed_duplicate_lm_rows() is False
-        assert "load_device_spuelmaschine" in lm._devices
-
-    def test_no_ed_devices_prunes_nothing(self):
-        lm = _seed_lm()
-        pruned = _reg(lm, ed_devices=[])._prune_ed_duplicate_lm_rows()
-        assert pruned is False
-        assert "load_device_spuelmaschine" in lm._devices       # untouched
+        _reg(lm, ed_devices=[])._sync_to_load_manager()
+        assert "load_device_freezer" not in lm._devices
+        assert "load_device_spuelmaschine" not in lm._devices
+        assert "load_device_ev_charger" in lm._devices
 
     def test_service_registration_never_folded(self):
         """A load_device_* id that is an explicit service registration is spared
@@ -193,17 +167,12 @@ class TestDataLayerFold:
             },
         })
         reg = _reg(lm, ed_devices=[_ed_dishwasher()],
-                   service_regs={"load_device_spuelmaschine": {}})
-        assert reg._prune_ed_duplicate_lm_rows() is False
+                   service_regs={"load_device_spuelmaschine": {
+                       "entity_id": "switch.other"}})
+        reg._service_lm_row = MagicMock(
+            return_value={"switch_entity": "switch.spuelmaschine"})
+        reg._sync_to_load_manager()
         assert "load_device_spuelmaschine" in lm._devices
-
-    def test_pruned_ghost_removed_from_shed_list(self):
-        """A ghost currently shed must also leave _devices_shed — else
-        _restore_loads would KeyError indexing the removed row."""
-        lm = _seed_lm()
-        lm._devices_shed = ["load_device_spuelmaschine"]
-        _reg(lm, ed_devices=[_ed_dishwasher()])._prune_ed_duplicate_lm_rows()
-        assert "load_device_spuelmaschine" not in lm._devices_shed
 
     def test_sync_returns_true_and_depersists(self):
         """Full sync path: the fold makes _sync_to_load_manager report a change,
@@ -258,13 +227,15 @@ class TestShedBehaviour:
                 # the ED twin) never protected it.
             },
         }
-        # The harm: with no control_mode, the ghost is a live shed candidate.
+        # (#1419) No mode the user chose → SEM leaves it alone, even before
+        # the fold. This was the harm: it used to be a live shed candidate.
         candidates = dict(lm._get_devices_for_shedding())
-        assert "load_device_spuelmaschine" in candidates
+        assert "load_device_spuelmaschine" not in candidates
 
-        # The fix: the registry folds the ED-duplicate ghost.
+        # The fix: the registry's sync drops the ghost (#1419: every pattern
+        # row, since only a charger's load_device_* row is kept).
         reg = _reg(lm, ed_devices=[_ed_dishwasher()])
-        assert reg._prune_ed_duplicate_lm_rows() is True
+        assert reg._sync_to_load_manager() is True
 
         # Now it cannot be shed — it is no longer a device at all.
         candidates_after = dict(lm._get_devices_for_shedding())

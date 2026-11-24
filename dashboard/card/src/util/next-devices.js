@@ -144,6 +144,8 @@ function rowFromMap(id, info, nameFor, states = null) {
         control: i.control || null,
         controlEntity: (i.control && i.control.entity) || i.switch_entity || '',
         controlMode: i.control_mode || 'peak_only',
+        // (#1419) Off because nobody picked a mode yet (the default)
+        modeChosen: i.mode_chosen !== false,
         mergedMode: mergedMode(i),
         dependsOn: Array.isArray(i.depends_on) ? i.depends_on : [],
         goals: i.goals || null,
@@ -255,7 +257,8 @@ export function statePill(row, live = {}) {
     _heaterPrev.set(row.id, heater ? heater.key : '');
     if (heater) return heater;
     if (running) return p('next_st_on', {}, 'ok');
-    if (row.mergedMode === 'off') return p('next_st_off_mode');
+    // (#1419) a load nobody turned on yet says so, with what to do
+    if (row.mergedMode === 'off') return row.modeChosen ? p('next_st_off_mode') : p('next_st_not_controlled', {}, 'warn');
     // (#1321) peak-only: SEM never starts it, it only pauses it at a peak
     if (row.mergedMode === 'peak_only' || row.mergedMode === 'peak') return p('next_st_off_peak_only');
     if (live.plannedUntil) return p(live.observer ? 'next_st_would_run_until' : 'next_st_runs_until', { time: live.plannedUntil });

@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "Verdien for faseskift ble ikke lagret: {reason}. Skriv inn en verdi som entiteten godtar."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} hører til en sikkerhetsenhet (kamera, alarm, lås eller sirene). SEM styrer aldri sikkerhetsenheter."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_stopped": {
       "title": "Fasevakten slo av {charger}",
       "description": "En fase var over grensen, så SEM slo av {charger}. Et annet system styrer denne laderen, så SEM slår den ikke på igjen. Slå den på for hånd, eller la appen starte den igjen. Meldingen forsvinner når laderen lader igjen eller bilen kobles fra."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM bruker ikke lenger gamle automatisk funnede enheter",
+      "description": "Eldre versjoner fant disse bryterne på navnet og brukte dem som laster: **{names}**. Du kunne ikke se eller stille dem, og toppgrensen kunne slå dem av. SEM bruker dem ikke lenger. Skal SEM styre en av dem, legg den til med **Legg til en enhet** under Enheter."
+    },
+    "security_devices_not_used": {
+      "title": "SEM lar sikkerhetsenheter være",
+      "description": "Disse enhetene er sikkerhetsenheter (kamera, alarm, sirene eller dørlås): **{names}**. SEM viser og styrer dem ikke lenger. Energien deres teller fortsatt med i husets forbruk. Er en av dem et apparat med lås og ikke en dørlås, legg den til med **Legg til en enhet**."
     }
   },
   "selector": {

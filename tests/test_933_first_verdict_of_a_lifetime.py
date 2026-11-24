@@ -386,7 +386,7 @@ def shedder(mock_hass):
             lm._devices[did] = {
                 "switch_entity": f"switch.{did}", "friendly_name": did,
                 "power_rating": watts, "is_available": True, "priority": prio,
-                "is_critical": False, "is_controllable": True}
+                "is_critical": False, "is_controllable": True, "control_mode": "peak_only"}
             live[f"switch.{did}"] = {"is_on": True, "current_power": watts,
                                      "power_known": True}
         on = MagicMock()

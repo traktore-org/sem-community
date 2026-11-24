@@ -596,7 +596,8 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # Don't accumulate the daily solar budget when SEM isn't managing the
         # device (Off): a device switched to Off while running would otherwise
         # keep counting minutes it no longer owns (#559 alex "Issue 6").
-        _managed = self.control_mode != DeviceControlMode.OFF
+        from ..features.device_axes import device_mode_permits
+        _managed = device_mode_permits(self)
         # (arc Phase 4) Credit runtime on OBSERVED reality, not just belief: a
         # load whose entity reads OFF isn't running, even while the reconciler's
         # 45s drift grace hasn't corrected the belief yet. Unobservable (None —
@@ -1424,7 +1425,8 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         Formalizes the OFF / IDLE / ON trichotomy the EV reconciler uses, for
         the card and diagnostics — so "why is this load on?" is answerable.
         """
-        if self.control_mode == DeviceControlMode.OFF:
+        from ..features.device_axes import device_mode_permits
+        if not device_mode_permits(self):
             return "off"
         return "on" if (self.is_active and self._sem_owned) else "idle"
 

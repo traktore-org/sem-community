@@ -52,7 +52,6 @@ def lm(mock_hass, config_entry_lm):
     ) as MockStore:
         mock_discovery = MagicMock()
         mock_discovery.discover_from_energy_dashboard = AsyncMock(return_value={})
-        mock_discovery.discover_controllable_devices = MagicMock(return_value={})
         mock_discovery.get_device_current_state = MagicMock(
             return_value={"is_on": False, "current_power": 0}
         )
@@ -101,6 +100,7 @@ def _add_device(lm_coord, device_id, priority=5, is_critical=False, is_on=True, 
         "priority": priority,
         "is_critical": is_critical,
         "is_controllable": True,
+        "control_mode": "peak_only",  # (#1419) the user turned SEM control on
     }
     # Make the discovery mock report the device as on/off
     original_get_state = lm_coord._device_discovery.get_device_current_state
@@ -391,6 +391,7 @@ class TestEmergencyShedding:
             "priority": 8,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
         lm._devices["dev_critical"] = {
             "switch_entity": "switch.dev_critical",
@@ -401,6 +402,7 @@ class TestEmergencyShedding:
             "priority": 1,
             "is_critical": True,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
 
         # Make devices appear as "on"
@@ -427,6 +429,7 @@ class TestEmergencyShedding:
             "priority": 8,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
         lm._devices_shed = ["dev_a"]
 
@@ -450,6 +453,7 @@ class TestEmergencyShedding:
             "priority": 8,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
         lm._devices["dev_disabled"] = {
             "switch_entity": "switch.dev_disabled",
@@ -482,6 +486,7 @@ class TestEmergencyShedding:
             "priority": 8,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
         lm._devices["dev_unavail"] = {
             "switch_entity": "switch.dev_unavail",
@@ -491,6 +496,7 @@ class TestEmergencyShedding:
             "priority": 8,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
 
         lm._device_discovery.get_device_current_state = MagicMock(
@@ -519,6 +525,7 @@ class TestProgressiveShedding:
             "priority": 3,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
         lm._devices["dev_high_pri"] = {
             "switch_entity": "switch.dev_high_pri",
@@ -529,6 +536,7 @@ class TestProgressiveShedding:
             "priority": 8,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
 
         lm._device_discovery.get_device_current_state = MagicMock(
@@ -557,6 +565,7 @@ class TestRestoreLoads:
             "priority": 5,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
         lm._devices_shed = ["dev_a"]
         # Ensure restore delay has passed
@@ -587,6 +596,7 @@ class TestRestoreLoads:
             "priority": 5,
             "is_critical": False,
             "is_controllable": True,
+            "control_mode": "peak_only",  # (#1419) the user turned SEM control on
         }
         lm._devices_shed = ["dev_a"]
 
@@ -616,12 +626,12 @@ class TestEvNotShedByLoadManager:
         return {
             "load_device_wb": {
                 "device_type": "ev_charger", "control_type": "current",
-                "switch_entity": "number.wb_current", "is_controllable": True,
+                "switch_entity": "number.wb_current", "is_controllable": True, "control_mode": "peak_only",
                 "is_critical": False, "is_available": True, "priority": 9,
             },
             "load_device_heater": {
                 "device_type": "switch", "switch_entity": "switch.heater",
-                "is_controllable": True, "is_critical": False,
+                "is_controllable": True, "control_mode": "peak_only", "is_critical": False,
                 "is_available": True, "priority": 5,
             },
         }
