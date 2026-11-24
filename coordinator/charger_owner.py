@@ -127,3 +127,15 @@ def stamp(decision: Any, source: str, klass: CommandClass) -> Any:
 
 def trail_text(trail: Iterable[Tuple[str, bool]]) -> str:
     return " → ".join(f"{s}{'*' if c else ''}" for s, c in trail)
+
+
+def note_trail(coord: Any, cid: str, trail: List[Tuple[str, bool]]) -> None:
+    """Keep this cycle's trail per charger (diagnostics, the decision log)."""
+    book = getattr(coord, "_owner_trail", None)
+    if not isinstance(book, dict):
+        book = {}
+        try:
+            coord._owner_trail = book
+        except AttributeError:
+            return
+    book[cid] = list(trail)

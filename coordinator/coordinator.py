@@ -5641,48 +5641,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # whether the grid pays for this charge
                         _decide_code = decision.reason_code
                         from .vpp_dispatch import vpp_pause_override
-                        decision = vpp_pause_override(
-                            decision, getattr(self, "_vpp_ev_override", None) == "pause")
-                        try:
-                            from . import plan_override as _po
-                            decision = _po.apply_to_charger_decision(
-                                self._plan_overrides, cid, decision, _now_override)
-                        except Exception:  # noqa: BLE001 — a bad override is no override
-                            _LOGGER.debug("plan override read skipped for %s", cid,
-                                          exc_info=True)
-                        # Hysteresis stability layer (#461 flapping):
-                        # median smoothing + ramp limit + delta/debounce
-                        # guards + enable/disable delays. Applied BEFORE
-                        # state display + actuation so the sensor state,
-                        # strategy string and contactor all agree on the
-                        # held decision.
+                        from .active_phase_guard import filter_charger_decision
+                        from . import charger_owner as _owner
                         # (#1391) A charger SEM yields to another party
                         # gets no start ladder and shows no act of SEM's.
                         _yielded = self._yields_charger(cid)
-                        decision = self._yield_or_stabilise(
-                            cid, decision, view, adapter, _now_mono_cycle)
-                        # Safety write gate is deliberately LAST: stability
-                        # logic must never bridge or ramp around an emergency
-                        # phase-guard stop.
-                        from .active_phase_guard import filter_charger_decision
-                        decision = filter_charger_decision(
-                            self, decision, adapter=adapter, power=view.power,
-                            # (#804 B4d) the live phase belief — a 3→1
-                            # switch tightens the per-phase clamp at once.
-                            believed_phases=getattr(
-                                self, "_phase_believed", {}).get(cid),
-                        )
-                        # (#804 Phase B/C) The phase sequencer may hold the
-                        # decision at IDLE while a switch walks its
-                        # stop→switch→settle sequence. AFTER the safety gate
-                        # on purpose: the tick only ever weakens a CHARGE
-                        # into IDLE and passes emergency stops untouched.
-                        # (#1391) Not for a charger another party steers:
-                        # SEM plans no phases for a box it does not drive,
-                        # and the entity switch in the tick is gated on
-                        # observer mode only.
-                        if not _yielded:
-                            decision = await self._phase_switch_tick(
+
+                        def _plan_override_step(d, cid=cid):
+                            try:
+                                from . import plan_override as _po
+                                return _po.apply_to_charger_decision(
+                                    self._plan_overrides, cid, d, _now_override)
+                            except Exception:  # noqa: BLE001 — a bad override is no override
+                                _LOGGER.debug("plan override read skipped for %s",
+                                              cid, exc_info=True)
+                                return d
+
+                        async def _phase_step(decision, cid=cid,
+                                              charger_cfg=charger_cfg,
+                                              adapter=adapter, view=view,
+                                              _decide_code=_decide_code):
+                            # (#804 Phase B/C) The phase sequencer may hold
+                            # the decision at IDLE while a switch walks its
+                            # stop→switch→settle sequence. AFTER the safety
+                            # gate on purpose: the tick only ever weakens a
+                            # CHARGE into IDLE and passes emergency stops
+                            # untouched. (#1391) Not for a charger another
+                            # party steers: SEM plans no phases for a box it
+                            # does not drive.
+                            if _yielded:
+                                return decision
+                            return await self._phase_switch_tick(
                                 cid, charger_cfg, decision, view.power,
                                 _now_mono_cycle,
                                 setpoint_a=int(float(getattr(
@@ -5706,6 +5695,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     cid, getattr(adapter, "_device", None),
                                     view.power.power_w),
                             )
+
+                        # (#1381, charger owner S3) The chain, in the order
+                        # it has always run — lowest precedence first, the
+                        # safety gate last so nothing bridges or ramps
+                        # around its stop, the sequencer after it because it
+                        # only weakens a charge. ``resolve`` keeps the trail
+                        # of who changed the decision.
+                        decision, _trail = await _owner.resolve(decision, [
+                            (_owner.SRC_VPP_PAUSE, _owner.CommandClass.SAFETY,
+                             lambda d: vpp_pause_override(
+                                 d, getattr(self, "_vpp_ev_override", None) == "pause")),
+                            (_owner.SRC_PLAN_SKIP, _owner.CommandClass.USER,
+                             _plan_override_step),
+                            # Hysteresis stability layer (#461 flapping) or
+                            # the yield: BEFORE state display + actuation so
+                            # the sensor, strategy and contactor agree.
+                            (_owner.SRC_STABILITY, _owner.CommandClass.SUN,
+                             lambda d, cid=cid, view=view, adapter=adapter:
+                             self._yield_or_stabilise(
+                                 cid, d, view, adapter, _now_mono_cycle)),
+                            (_owner.SRC_PHASE_GUARD, _owner.CommandClass.SAFETY,
+                             lambda d, adapter=adapter, view=view, cid=cid:
+                             filter_charger_decision(
+                                 self, d, adapter=adapter, power=view.power,
+                                 # (#804 B4d) the live phase belief — a 3→1
+                                 # switch tightens the per-phase clamp at once.
+                                 believed_phases=getattr(
+                                     self, "_phase_believed", {}).get(cid))),
+                            (_owner.SRC_PHASE_SEQUENCER,
+                             _owner.CommandClass.HARD_LIMIT, _phase_step),
+                        ])
+                        _owner.note_trail(self, cid, _trail)
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
                         # can distinguish "SEM idle, EV at 0W is correct"
@@ -6031,21 +6052,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ),
                 )
                 decision = decide_v2(view)
-                # Hysteresis stability layer (#461 flapping) — the
-                # single-charger legacy branch needs the same protection,
-                # and the same #1391 yield.
-                decision = self._yield_or_stabilise(
-                    cid, decision, view, adapter, _now_mono_cycle)
                 from .active_phase_guard import filter_charger_decision
-                decision = filter_charger_decision(
-                    self, decision, adapter=adapter, power=view.power,
-                    # (#804 B4d) the legacy single-charger path never runs
-                    # phase switching, so the belief is always absent here —
-                    # passed for one uniform call shape, resolves to the
-                    # nameplate fallback.
-                    believed_phases=getattr(
-                        self, "_phase_believed", {}).get("ev_charger"),
-                )
+                from . import charger_owner as _owner
+                # (#1381, charger owner S3) the same chain as the fleet path,
+                # minus the steps this legacy branch never had.
+                decision, _trail = await _owner.resolve(decision, [
+                    # Hysteresis stability layer (#461 flapping) — the
+                    # single-charger legacy branch needs the same protection,
+                    # and the same #1391 yield.
+                    (_owner.SRC_STABILITY, _owner.CommandClass.SUN,
+                     lambda d: self._yield_or_stabilise(
+                         cid, d, view, adapter, _now_mono_cycle)),
+                    (_owner.SRC_PHASE_GUARD, _owner.CommandClass.SAFETY,
+                     lambda d: filter_charger_decision(
+                         self, d, adapter=adapter, power=view.power,
+                         # (#804 B4d) the legacy single-charger path never
+                         # runs phase switching, so the belief is always
+                         # absent here — passed for one uniform call shape,
+                         # resolves to the nameplate fallback.
+                         believed_phases=getattr(
+                             self, "_phase_believed", {}).get("ev_charger"))),
+                ])
+                _owner.note_trail(self, cid, _trail)
                 try:
                     await actuate(
                         decision, adapter, view.power, reconciler=reconciler,
