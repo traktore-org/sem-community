@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Solare + tariffa",
           "min_plus_solar": "Min + Solare",
           "always_max": "Sempre (max)",
-          "off": "Spento"
+          "off": "Spento",
+          "sun": "Sole",
+          "sun_tariff": "Sole + tariffa",
+          "now": "Ora"
         }
       },
       "phase_mode": {

@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Zon + tarief",
           "min_plus_solar": "Mininmaal + Zon",
           "always_max": "Altijd (max)",
-          "off": "Uit"
+          "off": "Uit",
+          "sun": "Zon",
+          "sun_tariff": "Zon + tarief",
+          "now": "Nu"
         }
       },
       "phase_mode": {

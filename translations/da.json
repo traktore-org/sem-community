@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Sol + tarif",
           "min_plus_solar": "Min + Sol",
           "always_max": "Altid (max)",
-          "off": "Fra"
+          "off": "Fra",
+          "sun": "Sol",
+          "sun_tariff": "Sol + tarif",
+          "now": "Nu"
         }
       },
       "phase_mode": {

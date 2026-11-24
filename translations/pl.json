@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Słońce + taryfa",
           "min_plus_solar": "Min + Słońce",
           "always_max": "Zawsze (max)",
-          "off": "Wył"
+          "off": "Wył",
+          "sun": "Słońce",
+          "sun_tariff": "Słońce + taryfa",
+          "now": "Teraz"
         }
       },
       "phase_mode": {

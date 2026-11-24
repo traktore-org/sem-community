@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Solar + tarif",
           "min_plus_solar": "Min + solar",
           "always_max": "Întotdeauna (max)",
-          "off": "Oprit"
+          "off": "Oprit",
+          "sun": "Soare",
+          "sun_tariff": "Soare + tarif",
+          "now": "Acum"
         }
       },
       "phase_mode": {

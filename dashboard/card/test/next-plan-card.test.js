@@ -115,24 +115,26 @@ test('a full car shows its status only, no Skip or Start now', () => {
     const el = makeCard();
     const out = text(el._chargerRow('keba', {}, [], [], [{ id: 'ev:keba', why: 'car_full' }]));
     assert.match(out, /energy_plan_why_car_full/);
-    for (const k of ['next_skip_tonight', 'next_start_now', 'next_full_power']) assert.doesNotMatch(out, new RegExp(k), k);
+    for (const k of ['next_skip_tonight', 'next_charge_now']) assert.doesNotMatch(out, new RegExp(k), k);
     const other = text(el._chargerRow('keba', {}, [], [], []));
-    assert.match(other, /next_start_now/);
+    assert.match(other, /next_charge_now/);
 });
 
-test('Charge now is the backend force override: no mode flip, Back to plan clears it', async () => {
+test('(#1381) Charge now is the one Now: it picks Now on the charger; Back to plan clears a running one', async () => {
     const el = makeCard();
     const calls = [];
     el.hass.callService = async (d, s, data) => { calls.push([d, s, data]); };
-    el._confirm = 'keba';
-    await el._chargeNow('keba', {});
-    assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0].slice(0, 2), ['solar_energy_management', 'plan_override']);
-    assert.deepEqual(calls[0][2], { device_id: 'keba', action: 'force', minutes: 120 });
-    assert.equal(el._confirm, null);
-    assert.ok(!calls.some((c) => c[0] === 'select'), 'the charge mode is not touched');
-    // the override shows, so Back to plan shows; after a reload it comes from the backend
-    el.hass.states['sensor.sem_energy_plan'] = S('x', { plan_overrides: { keba: { action: 'force', until: '23:00' } } });
+    const btns = [];
+    el._btn = (l, fn) => { btns.push({ l: text(l), fn }); return ''; };
+    el._chargerRow('keba', {}, [], [], []);
+    const now = btns.find((x) => x.l.includes('next_charge_now'));
+    assert.ok(now, 'one Charge now');
+    assert.ok(!btns.some((x) => /next_start_now|next_full_power/.test(x.l)), 'no second full-power button');
+    await now.fn();
+    assert.deepEqual(calls[0], ['select', 'select_option', { entity_id: 'select.sem_charger_keba_charge_mode', option: 'now' }]);
+    // a running Now shows as an override, so Back to plan shows
+    el._btn = (l, fn, o) => `<button>${text(l)}</button>`;
+    el.hass.states['sensor.sem_charging_state'] = S('idle', { per_charger_plan_override: { keba: { action: 'force', until: '23:00' } } });
     const out = text(el._chargerRow('keba', {}, [], [], []));
     assert.match(out, /next_back_to_plan/);
     calls.length = 0;
@@ -150,7 +152,7 @@ function pressed(el, label) {
     return b.fn;
 }
 
-for (const [label, action] of [['next_skip_tonight', 'skip'], ['next_start_now', 'force']]) {
+for (const [label, action] of [['next_skip_tonight', 'skip']]) {
     test(`(#1406) ${action}: a plan with its slots dropped lasts until its end, not 12 hours`, async () => {
         const el = makeCard();
         const calls = [];

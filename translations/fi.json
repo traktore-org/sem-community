@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Aurinko + tariffi",
           "min_plus_solar": "Min + Aurinko",
           "always_max": "Aina (max)",
-          "off": "Pois"
+          "off": "Pois",
+          "sun": "Aurinko",
+          "sun_tariff": "Aurinko + tariffi",
+          "now": "Nyt"
         }
       },
       "phase_mode": {

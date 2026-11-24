@@ -346,32 +346,33 @@ test('6: Plan screen — the actuation row says paused while watch-only', () => 
 // ── 11: two chargers, one mode control each ──
 const { chargerBody } = await import('../src/util/next-devices-charger.js');
 
-test('11: each of the six car modes writes that charger\'s own select, on a home with two chargers', () => {
-    const MODES = ['off', 'solar_only', 'min_plus_solar', 'solar_plus_battery', 'solar_plus_cheap', 'always_max'];
+test('11: each of the four car modes writes that charger\'s own select, on a home with two chargers', () => {
+    // (#1381) four modes; the stored strategy is the select's own business
+    const MODES = ['off', 'sun', 'sun_tariff', 'now'];
     const st = { 'switch.sem_observer_mode': S('off'), 'sensor.sem_charging_state': S('idle') };
     for (const cid of ['keba', 'ev_charger_1']) {
-        st[`select.sem_charger_${cid}_charge_mode`] = S('min_plus_solar', { options: MODES });
+        st[`select.sem_charger_${cid}_charge_mode`] = S('sun_tariff', { options: MODES, strategy: 'min_plus_solar' });
         st[`sensor.sem_charger_${cid}_power`] = S(0, { charger_name: cid });
     }
     const el = mount('sem-next-devices-card', st);
     el._chargers = ['keba', 'ev_charger_1'];
     el._freezeEntity = () => {};
     let modeSeg = null;
-    el._seg = (items, key, onChange) => { if (items.some((i) => i.key === 'off') && items.some((i) => i.key === 'always_max')) modeSeg = { items, onChange }; return null; };
+    el._seg = (items, key, onChange) => { if (items.some((i) => i.key === 'off') && items.some((i) => i.key === 'now')) modeSeg = { items, onChange }; return null; };
     for (const cid of ['keba', 'ev_charger_1']) {
         modeSeg = null;
         chargerBody(el, { cid, type: 'charger' });
         assert.ok(modeSeg, `${cid}: one mode control`);
         assert.deepEqual(modeSeg.items.map((i) => i.key).sort(), [...MODES].sort());
         el.__calls = [];
-        for (const m of modeSeg.items.map((i) => i.key).filter((k) => k !== 'min_plus_solar')) modeSeg.onChange(m);
+        for (const m of modeSeg.items.map((i) => i.key).filter((k) => k !== 'sun_tariff')) modeSeg.onChange(m);
         const writes = writes_(el);
-        assert.equal(writes.length, 5);
+        assert.equal(writes.length, 3);
         for (const w of writes) {
             assert.deepEqual([w[0], w[1]], ['select', 'select_option']);
             assert.equal(w[2].entity_id, `select.sem_charger_${cid}_charge_mode`, 'its own charger, never the other');
         }
-        assert.deepEqual(writes.map((w) => w[2].option).sort(), MODES.filter((k) => k !== 'min_plus_solar').sort());
+        assert.deepEqual(writes.map((w) => w[2].option).sort(), MODES.filter((k) => k !== 'sun_tariff').sort());
     }
 });
 

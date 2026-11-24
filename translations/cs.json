@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Solární + tarif",
           "min_plus_solar": "Min + Solární",
           "always_max": "Vždy (max)",
-          "off": "Vypnuto"
+          "off": "Vypnuto",
+          "sun": "Slunce",
+          "sun_tariff": "Slunce + tarif",
+          "now": "Teď"
         }
       },
       "phase_mode": {

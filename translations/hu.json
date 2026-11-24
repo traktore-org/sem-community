@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Nap + tarifa",
           "min_plus_solar": "Min + Nap",
           "always_max": "Mindig (max)",
-          "off": "Ki"
+          "off": "Ki",
+          "sun": "Nap",
+          "sun_tariff": "Nap + tarifa",
+          "now": "Most"
         }
       },
       "phase_mode": {

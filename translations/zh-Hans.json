@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "太阳能 + 电价",
           "min_plus_solar": "最低基础电流 + 太阳能",
           "always_max": "始终保持最大功率",
-          "off": "关闭"
+          "off": "关闭",
+          "sun": "太阳",
+          "sun_tariff": "太阳 + 电价",
+          "now": "立即"
         }
       },
       "phase_mode": {

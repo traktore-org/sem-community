@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Solar + Tarif",
           "min_plus_solar": "Min. + Solar",
           "always_max": "Immer (max)",
-          "off": "Aus"
+          "off": "Aus",
+          "sun": "Sonne",
+          "sun_tariff": "Sonne + Tarif",
+          "now": "Jetzt"
         }
       },
       "phase_mode": {

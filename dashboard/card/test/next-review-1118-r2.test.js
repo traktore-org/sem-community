@@ -145,7 +145,7 @@ test('10: Plan buttons use plain labels and one filled action per charger', () =
     const plan = mk('sem-next-plan-card', { ...BASE, 'sensor.sem_charging_state': S('idle'),
         'select.sem_charger_keba_charge_mode': S('solar_only', { options: ['solar_only', 'off'] }) });
     const out = text(plan._chargerRow('keba', {}, [], [], []));
-    for (const k of ['next_skip_tonight', 'next_start_now', 'next_full_power']) assert.match(out, new RegExp(k));
+    for (const k of ['next_skip_tonight', 'next_charge_now']) assert.match(out, new RegExp(k));   // (#1381) one Now
     assert.equal((out.match(/btn primary/g) || []).length, 1);
 });
 

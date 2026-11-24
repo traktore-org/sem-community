@@ -1798,7 +1798,10 @@
           "solar_plus_cheap": "Solar + tariff",
           "min_plus_solar": "Min + Solar",
           "always_max": "Always (max)",
-          "off": "Off"
+          "off": "Off",
+          "sun": "Sun",
+          "sun_tariff": "Sun + tariff",
+          "now": "Now"
         }
       },
       "phase_mode": {
