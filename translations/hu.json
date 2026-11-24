@@ -490,7 +490,7 @@
           "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
           "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on.",
           "ev_phase_switching_enabled": "Alapértelmezetten kikapcsolva, amíg az 1/3 fázisú modellt átdolgozzák (egyes márkáknál olyan töltőket szüneteltetett, amelyek sosem indultak újra). Kapcsolja be a töltőjén való teszteléshez.",
-          "finish_by_departure": "Alapértelmezés szerint ki. Be: a SEM az éjszaka vége után is tölt a „Töltés eddig” időpontig, a hálózatról nappali áron. Ha van idő, megvárja a terv legolcsóbb óráit; különben az éppen elegendő árammal tölt."
+          "finish_by_departure": "Alapértelmezés szerint ki. Be: a SEM az éjszaka vége után is tölt a „Töltés eddig” időpontig, a hálózatról nappali áron. Ha van idő és nincs csúcskorlát, megvárja a terv legolcsóbb óráit; különben az éppen elegendő árammal tölt."
         }
       },
       "ev_charger_add": {
@@ -557,7 +557,7 @@
           "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
           "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on.",
           "ev_phase_switching_enabled": "Alapértelmezetten kikapcsolva, amíg az 1/3 fázisú modellt átdolgozzák (egyes márkáknál olyan töltőket szüneteltetett, amelyek sosem indultak újra). Kapcsolja be a töltőjén való teszteléshez.",
-          "finish_by_departure": "Alapértelmezés szerint ki. Be: a SEM az éjszaka vége után is tölt a „Töltés eddig” időpontig, a hálózatról nappali áron. Ha van idő, megvárja a terv legolcsóbb óráit; különben az éppen elegendő árammal tölt."
+          "finish_by_departure": "Alapértelmezés szerint ki. Be: a SEM az éjszaka vége után is tölt a „Töltés eddig” időpontig, a hálózatról nappali áron. Ha van idő és nincs csúcskorlát, megvárja a terv legolcsóbb óráit; különben az éppen elegendő árammal tölt."
         }
       },
       "pv_naming": {

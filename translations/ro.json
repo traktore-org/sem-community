@@ -490,7 +490,7 @@
           "ev_phase_switch_value_1p": "Ce se scrie în entitatea de comutare pentru încărcare monofazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 1, switch off.",
           "ev_phase_switch_value_3p": "Ce se scrie în entitatea de comutare pentru încărcare trifazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 3, switch on.",
           "ev_phase_switching_enabled": "Oprit implicit cât timp modelul 1/3 faze este refăcut (a pus pauză unor încărcătoare care nu și-au mai revenit la unele mărci). Activați pentru a testa pe încărcătorul dvs.",
-          "finish_by_departure": "Dezactivat implicit. Activat: SEM continuă încărcarea după sfârșitul nopții până la ora „Încarcă până la”, din rețea la preț de zi. Dacă e timp, așteaptă orele cele mai ieftine ale planului; altfel încarcă cu curentul strict necesar."
+          "finish_by_departure": "Dezactivat implicit. Activat: SEM continuă încărcarea după sfârșitul nopții până la ora „Încarcă până la”, din rețea la preț de zi. Dacă e timp și nu există limită de vârf, așteaptă orele cele mai ieftine ale planului; altfel încarcă cu curentul strict necesar."
         }
       },
       "ev_charger_add": {
@@ -557,7 +557,7 @@
           "ev_phase_switch_value_1p": "Ce se scrie în entitatea de comutare pentru încărcare monofazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 1, switch off.",
           "ev_phase_switch_value_3p": "Ce se scrie în entitatea de comutare pentru încărcare trifazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 3, switch on.",
           "ev_phase_switching_enabled": "Oprit implicit cât timp modelul 1/3 faze este refăcut (a pus pauză unor încărcătoare care nu și-au mai revenit la unele mărci). Activați pentru a testa pe încărcătorul dvs.",
-          "finish_by_departure": "Dezactivat implicit. Activat: SEM continuă încărcarea după sfârșitul nopții până la ora „Încarcă până la”, din rețea la preț de zi. Dacă e timp, așteaptă orele cele mai ieftine ale planului; altfel încarcă cu curentul strict necesar."
+          "finish_by_departure": "Dezactivat implicit. Activat: SEM continuă încărcarea după sfârșitul nopții până la ora „Încarcă până la”, din rețea la preț de zi. Dacă e timp și nu există limită de vârf, așteaptă orele cele mai ieftine ale planului; altfel încarcă cu curentul strict necesar."
         }
       },
       "pv_naming": {

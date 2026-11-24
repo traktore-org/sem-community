@@ -961,6 +961,25 @@ class EVControlMixin:
             self.config.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
         )
 
+    def _ev_rate_capped(self) -> bool:
+        """(#1415 review 4) Can something besides the car cap a charger's
+        rate, hour by hour? A peak limit (the user's or the grid
+        operator's) or a phase guard that enforces. Both leave the car
+        what the house leaves free, and that changes by the hour.
+
+        The *Finish by departure* wait counts the hours from the next
+        block to the departure at the car's measured draw. With a cap, a
+        busy hour gives less, so the wait is not proven: the floor
+        charges at once, as before. Unknown counts as capped."""
+        try:
+            if math.isfinite(float(self._get_peak_limit_w())):
+                return True
+        except Exception:  # noqa: BLE001 — an unreadable limit still caps
+            return True
+        cfg = getattr(self, "config", None) or {}
+        return bool(cfg.get("phase_guard_enabled", False)
+                    and cfg.get("phase_guard_enforcement_enabled", False))
+
     def _get_peak_15min_w(self) -> Optional[float]:
         """Read the rolling 15-min consecutive peak (#288), in watts.
 

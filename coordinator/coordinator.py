@@ -5454,6 +5454,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                             float(self._active_phases_for(cid, charger_cfg)
                                                   or charger_cfg.get("ev_phases") or 3)
                                             * float(charger_cfg.get("ev_voltage") or 230)),
+                                        # (#1415) a peak limit or a phase
+                                        # guard: no departure wait
+                                        rate_capped=self._ev_rate_capped(),
                                     )
                                 except Exception:  # noqa: BLE001 — overlay must
                                     # never break the night path; UNCOVERED-by-
@@ -16809,6 +16812,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     min_amps=int(_primary_cfg.get("ev_min_current") or 6),
                     max_amps=int(_primary_cfg.get("ev_max_current")
                                    or DEFAULT_MAX_CHARGING_CURRENT),
+                    # (#1415) a peak limit or a phase guard: no departure wait
+                    rate_capped=self._ev_rate_capped(),
                 )
             except Exception:  # noqa: BLE001 — overlay must never break the
                 # night path; a crash equals "no plan", the safe direction.

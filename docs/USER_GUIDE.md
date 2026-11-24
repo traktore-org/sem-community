@@ -177,7 +177,8 @@ Notes:
 - **Finish by departure** keeps charging after night ends until the
   **Charge by** time, from the grid. With time to spare, it waits for the
   cheapest hours the plan shows. Otherwise it charges at the lowest current
-  that makes it. Off by default.
+  that makes it. With a peak limit, or a phase guard that acts, it does not
+  wait. Off by default.
 - **Departure calendar** takes the departure from a calendar event.
 - **Set once** copies this charger's values into the defaults for new chargers.
 

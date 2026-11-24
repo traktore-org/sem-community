@@ -267,6 +267,7 @@ def ev_overlay(
     departure_max_amps: Optional[int] = None,
     departure_wpa_table=None,
     departure_wpa: Optional[float] = None,
+    departure_capped: bool = True,
 ) -> Tuple[bool, int]:
     """The EV's joint-plan overlay → ``(wait, floor_amps)``.
 
@@ -299,7 +300,10 @@ def ev_overlay(
       the charger max the night plan used, when lower). The wait counts
       with the floor's own power model, ``departure_wpa_table`` and
       ``departure_wpa`` (the plan's ``wpa_table`` and ``watts_per_amp``):
-      the floor is what charges when a wait fails. An unreachable floor
+      the floor is what charges when a wait fails. And (review 4) only
+      while nothing but the car caps its rate (``departure_capped``
+      False): under a peak limit or an enforcing phase guard a busy hour
+      gives the car less, and no rate is proven. An unreachable floor
       still releases.
     - inside a planned block → charge at least the planned power
       (ceil to amps, clamped to the charger's [min, max]);
@@ -327,12 +331,12 @@ def ev_overlay(
             amps = int(math.ceil(gate.block_power_w / wpa))
         return (False, max(int(min_amps), min(int(max_amps), amps)))
     if blocks_hold(gate.remaining_kwh, remaining_kwh):
-        if departure_floor and not departure_wait_is_safe(
+        if departure_floor and (departure_capped or not departure_wait_is_safe(
                 gate, remaining_kwh, charge_end,
                 wpa_table=departure_wpa_table,
                 nominal_wpa=departure_wpa or watts_per_amp,
                 max_amps=min(int(max_amps),
-                             int(departure_max_amps or max_amps))):
+                             int(departure_max_amps or max_amps)))):
             return (False, 0)
         return (True, 0)
     return (False, 0)
@@ -364,6 +368,10 @@ def departure_wait_is_safe(gate: PlanGate, need_kwh: float,
     need from the next block's start, at the most this car has been SEEN
     to draw at or under ``max_amps`` (the measured table), less a margin
     for the start. No measured table: no proof, no wait.
+
+    The caller asks this only while nothing but the car caps its rate
+    (review 4: no peak limit, no enforcing phase guard). The rest is a
+    second line.
 
     The peak limit caps that rate too (review): the packer put each block
     within the headroom the limit leaves, and the slot guard holds the
@@ -408,7 +416,8 @@ def departure_wait_is_safe(gate: PlanGate, need_kwh: float,
 
 def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
                      watts_per_amp: float, min_amps: int, max_amps: int,
-                     wpa_table=None, nominal_wpa=None) -> Tuple[bool, int]:
+                     wpa_table=None, nominal_wpa=None,
+                     rate_capped: bool = True) -> Tuple[bool, int]:
     """(#638 G4) The overlay, written onto this charger's night plan.
 
     The ONE copy both coordinator sites call (primary and per charger,
@@ -417,7 +426,9 @@ def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
     ``wpa_table`` and ``watts_per_amp`` off the same plan it writes, so no
     site can pass one flag and forget another (#1415). ``wpa_table`` and
     ``nominal_wpa`` here are the charger's phases NOW, for the in-block
-    floor. Returns ``(wait, floor_amps)``.
+    floor. ``rate_capped`` (review 4): the coordinator's word that a peak
+    limit or an enforcing phase guard can cap the car; unknown is capped.
+    Returns ``(wait, floor_amps)``.
     """
     wait, floor = ev_overlay(
         gate,
@@ -432,6 +443,7 @@ def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
         # the phases the plan runs on, and its nameplate W/A
         departure_wpa_table=getattr(plan, "wpa_table", None),
         departure_wpa=float(getattr(plan, "watts_per_amp", 0.0) or 0.0) or None,
+        departure_capped=bool(rate_capped),
         watts_per_amp=watts_per_amp,
         min_amps=min_amps,
         max_amps=max_amps,

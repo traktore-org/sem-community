@@ -15,8 +15,10 @@ block the car charges at the block's power; before it the car waits, but
 only while the even floor could still land from the block's start at the
 most this car has been seen to draw (review: before a departure nothing
 charges after the plan fails, and above the measured range the plan's
-power is the nameplate — the reporter's 54 A read 37 kW). The sun still
-charges while it waits. A forcing deadline at night is unchanged.
+power is the nameplate — the reporter's 54 A read 37 kW), and only while
+nothing but the car caps its rate (review 4: no peak limit, no phase guard
+that acts; the reporter has neither). The sun still charges while it
+waits. A forcing deadline at night is unchanged.
 
 The chain is the real one: the reporter's prices and measured W/A table →
 ``pack_night`` → ``plan_blocks`` → the stamped dict → ``plan_gate`` →
@@ -102,11 +104,16 @@ _OWN = object()
 class Setup:
     """One charger setting and one need, packed by the real packer."""
 
-    def __init__(self, max_a, need, *, peak_w=40_000.0, prices=None,
-                 table=None):
+    def __init__(self, max_a, need, *, peak_w=math.inf, prices=None,
+                 table=None, home=None):
         self.max_a, self.need = max_a, need
         #: what SEM has measured on this car (the reporter's by default)
         self.table = TABLE if table is None else table
+        #: the reporter's peak limit is "unlimited"; a finite one caps the
+        #: car (``_ev_rate_capped``)
+        self.peak_w, self.capped = peak_w, math.isfinite(peak_w)
+        #: the house load by the hour, as forecast and as it comes
+        self.home = home or (lambda t: 700.0)
         #: what the peak limit leaves the car beside 700 W of house load
         self.room_w = peak_w - 700.0
         ledger = []
@@ -114,7 +121,7 @@ class Setup:
             start = DAY.replace(hour=h, minute=m)
             ledger.append(LedgerSlot(start=max(start, STAMP),
                                      end=start + timedelta(minutes=15),
-                                     price=price, home_w=700.0))
+                                     price=price, home_w=self.home(start)))
         ledger = build_night_ledger(ledger, soc_kwh=0.0, floor_kwh=0.0,
                                     max_discharge_w=0.0, peak_limit_w=peak_w)
         demand = Demand(
@@ -155,7 +162,8 @@ class Setup:
         gate = plan_gate(self.stamped, EV, now)
         apply_ev_overlay(plan, gate, remaining_kwh=need, watts_per_amp=WPA,
                          min_amps=MIN_A, max_amps=self.max_a,
-                         wpa_table=table, nominal_wpa=WPA)
+                         wpa_table=table, nominal_wpa=WPA,
+                         rate_capped=self.capped)
         return plan, gate
 
     def view(self, plan, need, *, mode="solar_plus_cheap", solar_w=0.0,
@@ -192,11 +200,13 @@ class Setup:
         (amps → W) replaces the table: what a real car takes. ``old`` =
         develop: the overlay stood down for the departure floor, and the
         floor counted 690 W/A. The peak limit caps the amps as the slot
-        guard does: the largest setpoint that fits ``room_w``, none below
-        the minimum. kWh left."""
+        guard does: the largest setpoint that fits what the limit leaves
+        beside this minute's house load, none below the minimum. kWh
+        left."""
         now, need = start, self.need
-        cap_a = amps_that_fit(self.table, self.room_w, WPA, self.max_a)
         while now < DEPARTURE and need > 0.05:
+            cap_a = amps_that_fit(self.table, self.peak_w - self.home(now),
+                                  WPA, self.max_a)
             plan = self.gap_plan(now, need, table=None if old else _OWN)
             if not old:
                 plan, _ = self.overlaid(now, need)
@@ -470,18 +480,20 @@ def test_a_past_block_and_a_sub_watt_rest_are_no_rate():
     assert gate.top_block_w == 0.0
 
 
-def test_under_a_peak_limit_the_wait_counts_the_blocks_power():
-    """The review's day: 11 kWh, 4.3 kW of room, cheap from 12:00. At
-    10.6 kW the wait looked safe; at the 4.3 kW the limit leaves it is not,
-    so the even floor charges at once."""
+def test_the_wait_check_counts_the_blocks_power():
+    """The second line, on its own: 11 kWh, 4.3 kW blocks, cheap from
+    12:00. At 10.6 kW the wait looked safe; at what the blocks run at it
+    is not."""
     s = Setup(20, 11.0, peak_w=5_000.0, prices=NOON_PRICES)
     gate = plan_gate(s.stamped, EV, WAITING)
     hours = (DEPARTURE - gate.next_block_start).total_seconds() / 3600.0
     assert s.need <= TOP_W / 1000.0 * hours * DEPARTURE_WAIT_MARGIN
-    assert s.need > gate.top_block_w / 1000.0 * hours * DEPARTURE_WAIT_MARGIN
-    d, plan, _ = s.decide_at(WAITING, s.need)
-    assert not plan.should_wait_for_cheap
-    assert d.reason_code == RC.CHARGER_DEADLINE
+    kw = dict(wpa_table=TABLE, nominal_wpa=WPA, max_amps=20)
+    assert not departure_wait_is_safe(gate, s.need, DEPARTURE, **kw)
+    assert departure_wait_is_safe(
+        PlanGate(covered=True, remaining_kwh=gate.remaining_kwh,
+                 next_block_start=gate.next_block_start),
+        s.need, DEPARTURE, **kw)
 
 
 # ── review 3: a rate SEM measured, on the phases the floor runs on ──
@@ -497,31 +509,26 @@ def _real_draw(amps):
     return predict_watts(REAL, amps, WPA)
 
 
-def test_under_a_peak_limit_an_unmeasured_setpoint_is_no_proof():
-    """A 4.3 kW block runs at 6 A, and SEM has measured nothing below
-    12 A. The nameplate's 4.14 kW there is no proof: this car takes
-    2.5 kW. So the even floor charges at once, as before."""
-    s = Setup(20, 8.0, peak_w=5_000.0, prices=NOON_PRICES)
-    d, plan, gate = s.decide_at(WAITING, s.need)
+def test_the_wait_check_wants_a_measured_setpoint_under_the_block():
+    """The second line: a 4.3 kW block runs at 6 A, and SEM has measured
+    nothing below 12 A. The nameplate's 4.14 kW there is no proof (this
+    car takes 2.5 kW)."""
+    s = Setup(20, 1.0, peak_w=5_000.0, prices=NOON_PRICES)
+    gate = plan_gate(s.stamped, EV, WAITING)
     assert gate.next_block_start == DAY.replace(hour=12, minute=0)
     assert amps_that_fit(TABLE, gate.top_block_w, WPA, 20) < min(TABLE)
-    assert not plan.should_wait_for_cheap
-    assert d.intent is ChargerIntent.CHARGE_AT_AMPS
-    assert d.reason_code == RC.CHARGER_DEADLINE
+    assert not departure_wait_is_safe(gate, 1.0, DEPARTURE, wpa_table=TABLE,
+                                      nominal_wpa=WPA, max_amps=20)
 
 
-def test_under_a_peak_limit_a_measured_low_setpoint_counts():
+def test_the_wait_check_counts_a_measured_low_setpoint():
     """Once 6 A is measured (2.5 kW), 3 h from 12:00 hold 5.98 kWh at
-    80 %: 5 kWh waits for the cheap hours, 8 kWh does not."""
-    small = Setup(20, 5.0, peak_w=5_000.0, prices=NOON_PRICES, table=LOW)
-    d, plan, gate = small.decide_at(WAITING, small.need)
-    assert gate.next_block_start == DAY.replace(hour=12, minute=0)
-    assert plan.should_wait_for_cheap
-    assert d.reason_code == RC.CHARGER_PLAN_WAIT_UNTIL
-    big = Setup(20, 8.0, peak_w=5_000.0, prices=NOON_PRICES, table=LOW)
-    d, plan, _ = big.decide_at(WAITING, big.need)
-    assert not plan.should_wait_for_cheap
-    assert d.reason_code == RC.CHARGER_DEADLINE
+    80 %: 5 kWh passes the second line, 8 kWh does not."""
+    s = Setup(20, 5.0, peak_w=5_000.0, prices=NOON_PRICES, table=LOW)
+    gate = plan_gate(s.stamped, EV, WAITING)
+    kw = dict(wpa_table=LOW, nominal_wpa=WPA, max_amps=20)
+    assert departure_wait_is_safe(gate, 5.0, DEPARTURE, **kw)
+    assert not departure_wait_is_safe(gate, 8.0, DEPARTURE, **kw)
 
 
 @pytest.mark.parametrize("table", [TABLE, LOW], ids=["from-12A", "from-6A"])
@@ -536,12 +543,107 @@ def test_under_a_peak_limit_a_real_car_lands_as_well_as_the_old_floor(
     assert new <= max(old, 0.1)
 
 
-def test_some_peak_limited_need_still_waits():
-    """The rule is not "never wait under a limit": the real-car run above
-    does wait for a small need."""
-    s = Setup(20, 5.0, peak_w=5_000.0, prices=NOON_PRICES, table=LOW)
-    assert s.overlaid(WAITING, s.need)[0].should_wait_for_cheap
-    assert s.run_to_departure(car_w=TOP_W, draw=_real_draw) <= 0.1
+# ── review 4: a cap that changes by the hour ───────────────────────
+
+
+@pytest.mark.parametrize("table", [TABLE, LOW], ids=["from-12A", "from-6A"])
+@pytest.mark.parametrize("need", [4.0, 5.0, 8.0, 11.0])
+def test_under_a_peak_limit_the_car_never_waits(table, need):
+    """The limit leaves the car what the house leaves free, hour by hour,
+    so no rate is proven: the even floor charges at once, as before.
+    5 kWh on the measured 6 A passes the second line; the cap still
+    holds it to the floor."""
+    s = Setup(20, need, peak_w=5_000.0, prices=NOON_PRICES, table=table)
+    d, plan, gate = s.decide_at(WAITING, s.need)
+    assert gate.covered and not gate.in_block
+    assert not plan.should_wait_for_cheap
+    assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+    assert d.reason_code == RC.CHARGER_DEADLINE
+
+
+def _busy_noon(t):
+    """2.5 kW of house load from 12:00 to 14:00, 0.7 kW else."""
+    return 2500.0 if 12 <= t.hour < 14 else 700.0
+
+
+@pytest.mark.parametrize("need", [12.0, 16.0, 18.0])
+def test_a_busy_hour_under_the_limit_does_not_cost_the_departure(need):
+    """The review's day: a 9 kW limit, 6.5 kW free from 12:00 to 14:00
+    and 8.3 kW after. The best block ahead (8.3 kW) would prove 18 kWh,
+    but 12:00 to 14:00 run at 9 A, which this car takes as 4.2 kW. With
+    the cap the car does not wait, and lands as well as develop."""
+    s = Setup(20, need, peak_w=9_000.0, prices=NOON_PRICES, home=_busy_noon)
+    gate = plan_gate(s.stamped, EV, WAITING)
+    assert gate.covered
+    if need == 18.0:
+        # the second line alone would let it wait: it counts the 8.3 kW
+        assert gate.top_block_w > 6_500.0
+        assert departure_wait_is_safe(gate, need, DEPARTURE, wpa_table=TABLE,
+                                      nominal_wpa=WPA, max_amps=20)
+    plan, _ = s.overlaid(WAITING, need)
+    assert not plan.should_wait_for_cheap
+    new = s.run_to_departure(car_w=TOP_W, draw=_real_draw)
+    old = s.run_to_departure(car_w=TOP_W, draw=_real_draw, old=True)
+    assert new <= max(old, 0.1)
+
+
+def test_unknown_is_capped():
+    """``apply_ev_overlay`` without the coordinator's word: no wait."""
+    plan = FIXED.gap_plan(WAITING, FIXED.need)
+    gate = plan_gate(FIXED.stamped, EV, WAITING)
+    apply_ev_overlay(plan, gate, remaining_kwh=FIXED.need, watts_per_amp=WPA,
+                     min_amps=MIN_A, max_amps=20, wpa_table=TABLE,
+                     nominal_wpa=WPA)
+    assert not plan.should_wait_for_cheap
+    assert ev_overlay(gate, remaining_kwh=FIXED.need, reachable=True,
+                      deadline_active=True, departure_floor=True,
+                      watts_per_amp=WPA, min_amps=MIN_A, max_amps=20,
+                      charge_end=DEPARTURE, departure_wpa_table=TABLE) == (
+        False, 0)
+
+
+class _CapHost(EVControlMixin):
+    def __init__(self, peak_w, **config):
+        self.config = config
+        self._peak_w = peak_w
+
+    def _get_peak_limit_w(self):
+        if isinstance(self._peak_w, Exception):
+            raise self._peak_w
+        return self._peak_w
+
+
+@pytest.mark.parametrize("peak_w, config, capped", [
+    (math.inf, {}, False),
+    # the reporter: unlimited, the guard watches but does not act
+    (math.inf, {"phase_guard_enabled": True,
+                "phase_guard_enforcement_enabled": False}, False),
+    (math.inf, {"phase_guard_enabled": True,
+                "phase_guard_enforcement_enabled": True}, True),
+    (17_000.0, {}, True),
+    # the grid operator's relay under an unlimited user setting
+    (4_000.0, {"peak_limit_unlimited": True}, True),
+    (RuntimeError("no load manager"), {}, True),
+])
+def test_what_caps_the_car(peak_w, config, capped):
+    assert EVControlMixin._ev_rate_capped(_CapHost(peak_w, **config)) is capped
+
+
+def test_each_site_says_whether_the_car_is_capped():
+    """Both coordinator sites hand the helper the coordinator's own word;
+    the default (capped) would switch the wait off for everyone."""
+    root = Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "coordinator" / "coordinator.py").read_text(
+        encoding="utf-8"))
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and getattr(n.func, "id", "") == "apply_ev_overlay"]
+    assert len(calls) >= 2
+    for call in calls:
+        kw = {k.arg: k.value for k in call.keywords}
+        value = kw.get("rate_capped")
+        assert (isinstance(value, ast.Call)
+                and getattr(value.func, "attr", "") == "_ev_rate_capped"), (
+            ast.unparse(call))
 
 
 def test_the_plan_keeps_the_model_its_floor_used():
@@ -558,12 +660,12 @@ def test_the_wait_counts_with_the_floors_own_model():
     plan = FIXED.gap_plan(WAITING, FIXED.need, table=None)
     apply_ev_overlay(plan, gate, remaining_kwh=FIXED.need, watts_per_amp=WPA,
                      min_amps=MIN_A, max_amps=20, wpa_table=TABLE,
-                     nominal_wpa=WPA)
+                     nominal_wpa=WPA, rate_capped=False)
     assert not plan.should_wait_for_cheap
     plan = FIXED.gap_plan(WAITING, FIXED.need)
     apply_ev_overlay(plan, gate, remaining_kwh=FIXED.need, watts_per_amp=WPA,
                      min_amps=MIN_A, max_amps=20, wpa_table=None,
-                     nominal_wpa=WPA)
+                     nominal_wpa=WPA, rate_capped=False)
     assert plan.should_wait_for_cheap
 
 
@@ -610,8 +712,9 @@ class _PhaseHost(EVControlMixin):
         return self._belief
 
     def _wpa_table_for(self, cid):
-        phases, ok = self._belief
-        return dict(self.tables[phases]) if ok else {}
+        # no check of its own here: the helper's ``ok`` clause must refuse
+        phases, _ok = self._belief
+        return dict(self.tables.get(phases) or {})
 
 
 PHASE_CFG = {"id": "zap", "ev_target_time": "15:00",
@@ -659,6 +762,32 @@ def test_a_disputed_belief_is_no_table():
     assert _phase_plan(None, ok=False).wpa_table is None
 
 
+def test_the_wait_counts_the_plans_nameplate_not_the_sites():
+    """The site's nominal W/A is the phases NOW (one phase in thin sun:
+    230). The wait counts the plan's (three phases, 690): at 230 the
+    20 A bucket would be capped to 4.6 kW and the car would not wait."""
+    gate = plan_gate(FIXED.stamped, EV, WAITING)
+    plan = FIXED.gap_plan(WAITING, FIXED.need)
+    apply_ev_overlay(plan, gate, remaining_kwh=FIXED.need, watts_per_amp=WPA,
+                     min_amps=MIN_A, max_amps=20, wpa_table=TABLE,
+                     nominal_wpa=230.0, rate_capped=False)
+    assert plan.should_wait_for_cheap
+
+
+def test_the_night_floor_ignores_the_table():
+    """At night the floor counts the nameplate, as before: 11.1 kW over
+    the 4.5 h to a 06:30 Charge by is 17 A; by the table it would be
+    21 A."""
+    kw = dict(now=DAY.replace(hour=2, minute=0), remaining_to_min_kwh=50.0,
+              min_amps=MIN_A, max_amps=54, watts_per_amp=WPA,
+              night_end="07:00", night_start="17:06",
+              deadline_at=DAY.replace(hour=6, minute=30))
+    night = plan_night_charge(wpa_table=TABLE, **kw)
+    assert not night.to_departure and night.deadline_active
+    assert night.deadline_amps == plan_night_charge(**kw).deadline_amps == 17
+    assert predict_watts(TABLE, 17, WPA) < 50_000.0 / 4.5
+
+
 @pytest.mark.parametrize("need", [6.0, 8.0, 9.0, 10.5, 11.0])
 @pytest.mark.parametrize("share", [1.0, 0.85, 0.8])
 def test_under_a_peak_limit_the_car_lands_as_well_as_the_old_floor(
@@ -687,7 +816,7 @@ def test_the_wait_counts_the_chargers_own_max():
             finish_by_departure=True, night_over=True, wpa_table=TABLE)
         apply_ev_overlay(plan, gate, remaining_kwh=need, watts_per_amp=WPA,
                          min_amps=MIN_A, max_amps=20, wpa_table=TABLE,
-                         nominal_wpa=WPA)
+                         nominal_wpa=WPA, rate_capped=False)
         return plan
     # 2.75 h from 12:15 at 80 %: 20 A (10.6 kW) gives 23.3 kWh, 12 A
     # (7.5 kW) gives 16.5 kWh — under the 18 kWh owed
