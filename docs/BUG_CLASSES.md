@@ -7007,7 +7007,7 @@ and fills to the zero line. **Guard:** `tests/test_1390_rate_steps_tomorrow.py` 
 the real provider, both clock changes, the real sensor) and the #1390 case in
 `dashboard/card/test/next-plan-chart.test.js`. **Left open:** a past hour is the recorder's mean,
 so a rate change at :30 is drawn as one blended hour (what was paid); a dynamic tariff on a 15-min market
-still sends 48 points (12 h) in `upcoming`; tomorrow past that is drawn as a gap, not as a price.
+still sends 48 points (12 h) in `upcoming`; tomorrow past that is drawn as a gap, not as a price: **fixed** (#1418, class 194).
 A calendar's holiday sensor speaks for today but is read for tomorrow's hours too.
 Refs #1372 #994 #1310 #1362 #1368 #1369 #1385 #1390.
 
@@ -7127,3 +7127,14 @@ Refs #1413 #1377 #1346 #1084.
 **Sweep question:** when the switch beside this line changes, does the line change — and does any other switch also decide what it says?
 **Left open:** `plan.actuation` itself still follows the plan switch alone (other readers take it as "the plan switch"); the cards now add watch-only where they show it.
 Refs #1377 #1321 #75.
+
+### 194. A price list cut by a number of points that meant hours — a 15-minute market keeps a quarter of the time — GUARDED
+
+**What happens.** At 21:52 the plan card's "Next 24 h" drew prices until 09:45 and then "prices for tomorrow ~13:00", though tomorrow's prices were out since the afternoon (#1418, Dutch 15-minute day-ahead market). The window moved with the clock.
+**Root shape.** A list of prices cut to N points, where N was written as hours: 48 points are two days of an hourly market but 12 h of a 15-minute one. The same shape the other way: a card drew each point as 15 minutes long, so an hourly tariff showed three quarters of each hour as unknown. Kin of class 55 (a window that moves with the reader).
+**Where it lives:** `tariff/tariff_provider.py` `get_tariff_data` (**fixed**: `upcoming_prices` ends by time, the slot in progress plus `UPCOMING_PRICES_HORIZON`, 48 h; an hourly list is the same as before). `coordinator/coordinator.py` the `tariff_upcoming` surface (**fixed**: its own cut at 48 removed) and the plan's price term in `_energy_plan_demand_signature` (**fixed**: its cut at 96 never took effect behind the provider's 48; on the longer list it would let a new point in every 15 minutes, which reads as news). `dashboard/card/src/util/next-plan-chart.js` `priceModel` (**fixed**: `curveSpans`, a point lasts until the next one, at most the median gap, never over an hour; one point alone lasts an hour). Swept and right: `day_ledger.market_step_s` reads the first 8 points for their spacing only; `today_plan._slot_duration`, `sink_verdicts.next_closed_window` and `plan-why.js` `priceCells` measure the step from the points; `_next_steps` and `find_cheapest_hours` count hours. Decision readers of the longer list on a sub-hourly market (the sell break-even minimum, `price_signal` spread, the export closing window) now see what an hourly market already saw.
+**Closure:** a price list is bounded in time, and a point lasts the step the points show.
+**Guard:** `tests/test_1418_upcoming_by_time.py` — the reporter's 21:52 on a 15-minute today/tomorrow curve reaches tomorrow 23:45 with every quarter; an hourly list keeps the rest of today and all of tomorrow; 60, 30 and 15-minute curves of four days end 48 h after the slot in progress (48 hourly points); the real sensor's `upcoming` holds tomorrow; a list over 96 points that slides one quarter is no news, a moved price at its end is. `dashboard/card/test/next-plan-chart.test.js` — hourly and half-hourly prices leave no gaps; a missing hour stays a gap; the reporter's night has no gap, and the old 48 points leave one from 09:45. Each of the three old cuts and the old 15-minute span fails a test.
+**Sweep question:** when this list holds 15-minute points, how much time does it cover — and does any reader take a count as hours?
+**Left open:** `today_plan._consecutive_blocks(min_block_len=2)` asks for two points: two hours of an hourly curve, 30 minutes of a 15-minute one. A #729 test keeps a 45-minute cheap row on purpose, so a time rule is a choice.
+Refs #1418 #1390 #638 #765 #729.

@@ -239,3 +239,47 @@ test('(#1390) one price stays one price; an hour the rates cannot price is a gap
     const t2 = priceModel({ win: chartWindow(early, 'next', TZ), tz: TZ, nowMs: early, rates: whole, isDynamic: false, level: 'flat' });
     assert.deepEqual([t2.flat, t2.price], [true, 0.3661347]);
 });
+
+const HOUR_MS = 3600e3;
+
+test('(#1418) a price lasts one market step: hourly and half-hourly tariffs leave no gaps', async () => {
+    const { curveSpans } = await import('../src/util/next-plan-chart.js');
+    const tz = 'Europe/Amsterdam';
+    const now = Date.parse('2026-11-23T21:52:00+01:00');
+    const win = chartWindow(now, 'next', tz);
+    const past = [19, 20, 21].map((h) => ({ t: Date.parse(`2026-11-23T${h}:00:00+01:00`), p: 0.43 }));
+    for (const stepMin of [60, 30]) {
+        const upcoming = [];
+        for (let t = Date.parse('2026-11-23T21:30:00+01:00'); t < win.end; t += stepMin * 60e3) upcoming.push({ t: new Date(t).toISOString(), price: 0.3 + (t % 7) / 100 });
+        const pm = priceModel({ win, tz, nowMs: now, upcoming, past, isDynamic: true, level: 'normal' });
+        assert.deepEqual(pm.gaps, [], `${stepMin}-min prices drawn with gaps`);
+        assert.equal(priceAt(pm, Date.parse('2026-11-24T03:40:00+01:00')), upcoming.find((u) => Date.parse(u.t) <= Date.parse('2026-11-24T03:40:00+01:00') && Date.parse('2026-11-24T03:40:00+01:00') < Date.parse(u.t) + stepMin * 60e3).price);
+    }
+    // a missing hour stays unknown; one point alone lasts an hour
+    const h = (x) => new Date(Date.parse('2026-11-24T00:00:00+01:00') + x * HOUR_MS).toISOString();
+    assert.deepEqual(curveSpans([{ t: h(0), price: 1 }, { t: h(1), price: 2 }, { t: h(3), price: 3 }]).map(([s, e]) => (e - s) / HOUR_MS), [1, 1, 1]);
+    assert.deepEqual(curveSpans([{ t: h(0), price: 1 }]).map(([s, e]) => (e - s) / HOUR_MS), [1]);
+    // 15-minute points stay 15 minutes
+    const q = [0, 0.25, 0.5, 0.75].map((x) => ({ t: h(x), price: x }));
+    assert.deepEqual(curveSpans(q).map(([s, e]) => (e - s) / 60e3), [15, 15, 15, 15]);
+    // junk is skipped, not drawn
+    assert.deepEqual(curveSpans([{ t: 'x', price: 1 }, { t: h(0), price: null }, null]), []);
+});
+
+test('(#1418) the reporter at 21:52: 15-minute prices to the end of tomorrow fill the next 24 h', () => {
+    const tz = 'Europe/Amsterdam';
+    const now = Date.parse('2026-11-23T21:52:00+01:00');
+    const win = chartWindow(now, 'next', tz);
+    const past = [19, 20, 21].map((h) => ({ t: Date.parse(`2026-11-23T${h}:00:00+01:00`), p: 0.43 }));
+    const quarters = (until) => {
+        const out = [];
+        for (let t = Date.parse('2026-11-23T21:45:00+01:00'); t < until; t += 900e3) out.push({ t: new Date(t).toISOString(), price: 0.38 + (t / 900e3 % 13) / 100 });
+        return out;
+    };
+    const all = quarters(Date.parse('2026-11-25T00:00:00+01:00'));
+    const pm = priceModel({ win, tz, nowMs: now, upcoming: all, past, isDynamic: true, level: 'normal' });
+    assert.deepEqual(pm.gaps, []);
+    // the old 48 points: tomorrow from 09:45 on was drawn as "prices later"
+    const cut = priceModel({ win, tz, nowMs: now, upcoming: all.slice(0, 48), past, isDynamic: true, level: 'normal' });
+    assert.deepEqual(cut.gaps.map((g) => g.s), [Date.parse('2026-11-24T09:45:00+01:00')]);
+});

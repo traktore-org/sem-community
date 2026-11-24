@@ -7016,8 +7016,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 except Exception as e:  # noqa: BLE001
                     _LOGGER.debug("Tariff diag-counts failed: %s", e)
 
-            # Dynamic price visibility (#257): surface the upcoming hourly price
+            # Dynamic price visibility (#257): surface the upcoming price
             # curve + today's summary so the price card can render a live chart.
+            # (#1418) The provider's whole list, which it bounds by time: a
+            # cap of 48 points here was 12 h of a 15-minute market.
             try:
                 _td = self._tariff_provider.get_tariff_data()
                 result["tariff_upcoming"] = [
@@ -7027,7 +7029,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                      "level": (p.level.value if p.level is not None
                                else (getattr(p, "level_absence", None)
                                      or _td.level_absence))}
-                    for p in (_td.upcoming_prices or [])[:48]
+                    for p in (_td.upcoming_prices or [])
                 ]
                 # (#1390) A schedule or a two-rate tariff has no curve in
                 # ``upcoming``, and ``schedule_today`` ends at midnight: the
@@ -12814,8 +12816,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             ups = getattr(
                 self._tariff_provider.get_tariff_data(), "upcoming_prices", None
             ) or []
-            # 96 entries: a full day even on a 15-min market (48 was
-            # only 12 h there — tomorrow's curve landing late missed it).
+            # (#1418) The whole list, which the provider bounds by time.
+            # A cap of 96 points never took effect (the provider sent 48);
+            # on the longer list it would cut a window that slides, and a
+            # new point at its end every 15 minutes reads as news below.
             # (#765) ABSOLUTE keys, not window order: the upcoming window
             # slides every hour, and fingerprinting its contents by
             # position made a past slot dropping off read as "the night
@@ -12828,7 +12832,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ((p.timestamp.isoformat()
                   if getattr(p, "timestamp", None) is not None else i),
                  round(float(p.price), 2))
-                for i, p in enumerate(ups[:96])
+                for i, p in enumerate(ups)
                 if getattr(p, "price", None) is not None
             )))
         except Exception:  # noqa: BLE001 — no tariff is a valid shape

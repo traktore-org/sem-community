@@ -274,6 +274,12 @@ LEVEL_NO_PRICES = "no_prices"
 #: stops being measured with a European ruler.
 FLAT_DAY_SPREAD_FRACTION: float = 0.03
 
+#: (#1418) How far ``upcoming_prices`` reaches: the slot in progress plus
+#: this much TIME. It was 48 points, which is two days of hourly prices
+#: but only 12 h of 15-minute prices: every reader of the curve, the price
+#: chart first, lost tomorrow there. 48 h keeps the hourly list as it was.
+UPCOMING_PRICES_HORIZON: timedelta = timedelta(hours=48)
+
 
 #: A classification path that means the level rests on nothing. The
 #: percentile fallbacks, the two clock providers' refusals, a price nobody
@@ -2423,13 +2429,16 @@ class DynamicTariffProvider(TariffProvider):
         # consumer correctly saw "unknown" — caught live on the .175 rig.
         price_level, classifier_path = self._current_level_and_path()
         now = dt_util.now()
-        # Genuinely upcoming slots: the one in progress plus the future,
-        # capped at 48 points (covers two hourly days / half a 15-min
-        # day). ``prices[:24]`` used to return the first 24 slots from
-        # midnight — mostly the past by the afternoon, and never
-        # tomorrow's curve.
+        # Genuinely upcoming slots: the one in progress plus the future.
+        # ``prices[:24]`` used to return the first 24 slots from midnight —
+        # mostly the past by the afternoon, and never tomorrow's curve.
+        # (#1418) Bounded by time, not by a count of points: 48 points were
+        # 12 h on a 15-minute market, and tomorrow was drawn as unknown.
         interval = self._detect_interval(prices)
-        upcoming = [p for p in prices if p.timestamp + interval > now][:48]
+        upcoming = [p for p in prices if p.timestamp + interval > now]
+        if upcoming:
+            _until = upcoming[0].timestamp + UPCOMING_PRICES_HORIZON
+            upcoming = [p for p in upcoming if p.timestamp < _until]
         data = TariffData(
             # For SpotMarketProvider the effective rate adds grid fees +
             # taxes on top of the raw spot price — report the effective
