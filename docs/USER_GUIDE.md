@@ -515,9 +515,13 @@ The **preset** **Netherlands from 2027** fills tax and VAT.
   armed again and every phase has room for the charger's earlier draw. With two
   chargers, one at a time, highest priority first. The charger shows **Stopped by
   the phase guard** meanwhile. If the other party switched it on itself, or the
-  car leaves, SEM does nothing more. If the phase goes over again soon after, SEM
-  waits 10, then 20, then 40 minutes. After three tries SEM stops and a Repair
-  says the charger was left off.
+  car leaves, SEM does nothing more. If the phase goes over again soon after, or
+  the charger is not on again within 5 minutes, SEM waits 10, then 20, then 40
+  minutes. If it fails once more, SEM stops and a Repair says the charger was
+  left off. A second charger waits until the first car draws. A stop SEM sent
+  as a wallbox service or a button, not a switch, number or select, is not
+  switched back: the Repair says so at once. After 12 hours SEM no longer
+  switches a charger back on.
 
 ---
 

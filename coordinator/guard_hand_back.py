@@ -50,8 +50,15 @@ _LOGGER = logging.getLogger(__name__)
 RETRIP_WINDOW_S = 15 * 60
 #: Wait before the 1st, 2nd and 3rd retry after a failed hand-back.
 BACKOFF_S = (10 * 60, 20 * 60, 40 * 60)
-#: Failed hand-backs before SEM gives up and tells the user.
-MAX_FAILURES = 3
+#: Failed hand-backs before SEM gives up and tells the user: every wait in
+#: BACKOFF_S is used, the next failure leaves the charger off with a Repair.
+MAX_FAILURES = len(BACKOFF_S) + 1
+#: After a hand-back the charger must draw, or read back what SEM restored,
+#: within this time; otherwise the hand-back counts as failed.
+READBACK_S = 5 * 60
+#: A record older than this is not handed back any more: after half a day
+#: SEM cannot tell its own stop from somebody's later wish (a Repair says so).
+MAX_AGE_S = 12 * 60 * 60
 #: Between two hand-backs (any chargers): the meter must show the first.
 BETWEEN_HAND_BACKS_S = 120
 #: In observer mode the would-be hand-back is shown at most this often.
@@ -84,6 +91,11 @@ def inverse_of(sent: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
     data = dict(sent.get("data") or {})
     entity = data.get("entity_id")
     prior = sent.get("prior")
+    # Not handed back, on purpose (#1381 review F6): a stop sent as a brand
+    # SERVICE without an entity (e.g. a wallbox "disable") or a BUTTON press
+    # has no state to read back and no safe inverse — a brand "enable" on a
+    # box another party steers can start a stop war (#1163), and SEM never
+    # sends an authorize. Such a stop leaves the charger off with a Repair.
     if not isinstance(entity, str) or not entity or prior in _DEAD:
         return None
     if domain in _SWITCH_DOMAINS and service == "turn_off":
@@ -91,7 +103,7 @@ def inverse_of(sent: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
             return {"noop": True}     # it was already off: SEM changed nothing
         return {"domain": domain, "service": "turn_on",
                 "data": {"entity_id": entity}, "entity_id": entity,
-                "left": "off"}
+                "left": "off", "target": "on"}
     if domain in _NUMBER_DOMAINS and service == "set_value":
         before, after = _f(prior), _f(data.get("value"))
         if before is None or after is None:
@@ -100,7 +112,7 @@ def inverse_of(sent: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
             return {"noop": True}
         return {"domain": domain, "service": "set_value",
                 "data": {"entity_id": entity, "value": before},
-                "entity_id": entity, "left": after}
+                "entity_id": entity, "left": after, "target": before}
     if domain in _SELECT_DOMAINS and service == "select_option":
         after = data.get("option")
         if not isinstance(after, str):
@@ -109,7 +121,7 @@ def inverse_of(sent: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
             return {"noop": True}
         return {"domain": domain, "service": "select_option",
                 "data": {"entity_id": entity, "option": prior},
-                "entity_id": entity, "left": after}
+                "entity_id": entity, "left": after, "target": prior}
     return None
 
 
@@ -150,7 +162,36 @@ def build_record(sent: Iterable[Mapping[str, Any]], *, now: float,
         "next_try_at": 0.0,
         "handed_back_at": 0.0,
         "left_off": False,
+        # restores already sent (SEM's own state, never "changed by other")
+        "done": [],
+        "confirmed": False,
     }
+
+
+def note_failure(rec: Dict[str, Any], *, now: float,
+                 retry_all: bool = True) -> None:
+    """One failed hand-back (re-trip, a write that raised, no read-back):
+    wait 10, then 20, then 40 minutes; the next failure leaves it off.
+
+    ``retry_all``: the charger is off again (re-trip, no read-back), so the
+    whole stop is undone again next time. False for a partial hand-back:
+    what went out stays SEM's (``done``) and only the rest is retried."""
+    failures = int(rec.get("failures") or 0) + 1
+    rec["failures"] = failures
+    rec["handed_back_at"] = 0.0
+    rec["confirmed"] = False
+    if retry_all:
+        pending = list(rec.get("restores") or [])
+        for res in rec.get("done") or ():
+            if res not in pending:
+                pending.append(res)
+        rec["restores"] = pending
+        rec["done"] = []
+    if failures > len(BACKOFF_S):
+        rec["left_off"] = True
+        rec["next_try_at"] = 0.0
+    else:
+        rec["next_try_at"] = now + BACKOFF_S[failures - 1]
 
 
 def merge_stop(existing: Optional[Mapping[str, Any]],
@@ -166,14 +207,7 @@ def merge_stop(existing: Optional[Mapping[str, Any]],
     out = dict(existing)
     handed = float(existing.get("handed_back_at") or 0.0)
     if handed and now - handed <= RETRIP_WINDOW_S:
-        failures = int(existing.get("failures") or 0) + 1
-        out["failures"] = failures
-        out["handed_back_at"] = 0.0
-        if failures >= MAX_FAILURES:
-            out["left_off"] = True
-            out["next_try_at"] = 0.0
-        else:
-            out["next_try_at"] = now + BACKOFF_S[min(failures, len(BACKOFF_S)) - 1]
+        note_failure(out, now=now)
     elif handed:
         # an old hand-back that held: this is a new event, start over
         out = dict(new)
@@ -210,7 +244,8 @@ def _phase_margins(snapshot: Mapping[str, Any]) -> Optional[Dict[str, float]]:
 
 
 def guard_allows(snapshot: Mapping[str, Any], need_a: float, *,
-                 margin_a: float = DEFAULT_RECOVERY_MARGIN_A) -> Tuple[bool, str]:
+                 margin_a: float = DEFAULT_RECOVERY_MARGIN_A,
+                 reserve_a: float = 0.0) -> Tuple[bool, str]:
     """May a charger drawing ``need_a`` per phase come back now?
 
     Armed, and every monitored phase has ``need_a`` plus the guard's own
@@ -225,7 +260,10 @@ def guard_allows(snapshot: Mapping[str, Any], need_a: float, *,
         if mode.startswith("enforcing"):
             return False, "guard_reading_incomplete"
         return True, "guard_not_enforcing"
-    want = float(need_a) + float(margin_a)
+    # ``reserve_a``: a charger just handed back whose car has not started
+    # yet — the meter does not show its draw, so it is held for it here
+    # (review F5), on every phase since SEM does not know which it takes.
+    want = float(need_a) + float(margin_a) + max(0.0, float(reserve_a))
     short = {p: m for p, m in margins.items() if m < want}
     if short:
         worst = min(short, key=short.get)
@@ -243,28 +281,66 @@ def _state_matches(current: Any, left: Any) -> Optional[bool]:
     return str(current) == str(left)
 
 
+def _targets_met(rec: Mapping[str, Any], states: Mapping[str, Any]) -> Optional[bool]:
+    """Do the entities SEM restored read what it wrote? None = cannot tell."""
+    unknown = False
+    done = list(rec.get("done") or ())
+    if not done:
+        return None
+    for res in done:
+        m = _state_matches(states.get(res.get("entity_id")), res.get("target"))
+        if m is None:
+            unknown = True
+        elif m is False:
+            return False
+    return None if unknown else True
+
+
 def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
          snapshot: Mapping[str, Any], facts: Mapping[str, Mapping[str, Any]],
          states: Mapping[str, Any], observer: bool = False,
          ) -> Dict[str, Any]:
     """This cycle's verdict: records to drop (with why), records to mark
-    ``left_off``, and at most ONE charger to hand back.
+    ``left_off``, hand-backs that failed their read-back, hand-backs that
+    are confirmed, and at most ONE charger to hand back.
 
     ``facts[cid]``: ``car_absent`` (bool, "no car" as an answer), ``yielded``
-    (SEM still yields this charger), ``priority`` (1 = highest).
+    (SEM still yields this charger), ``priority`` (1 = highest), ``drawing``.
     ``states[entity_id]``: the entity's state now.
     """
     drop: Dict[str, str] = {}
     give_up: List[str] = []
+    failed: List[str] = []
+    confirm: List[str] = []
     hand_back: Optional[str] = None
     why: Dict[str, str] = {}
     last_hand = max((float(r.get("handed_back_at") or 0.0)
                      for r in records.values()), default=0.0)
+    # (review F5) a charger handed back whose car has not started yet
+    # (held until its car draws, at most the watch window: a switch that
+    # reads "on" is not yet a car that pulls current)
+    reserve_a = sum(
+        float(r.get("draw_a") or 0.0) for c, r in records.items()
+        if float(r.get("handed_back_at") or 0.0)
+        and now - float(r.get("handed_back_at") or 0.0) <= RETRIP_WINDOW_S
+        and not (facts.get(c) or {}).get("drawing"))
     candidates = []
     for cid, rec in records.items():
         fact = facts.get(cid) or {}
         handed = float(rec.get("handed_back_at") or 0.0)
         if handed:
+            # (review F3) a hand-back counts once the charger draws or reads
+            # back what SEM restored; otherwise it failed
+            if not rec.get("confirmed"):
+                met = _targets_met(rec, states)
+                if fact.get("drawing") or met is True:
+                    confirm.append(cid)
+                elif met is False and now - handed >= 30.0:
+                    failed.append(cid)
+                    continue
+                elif now - handed >= READBACK_S:
+                    failed.append(cid)
+                    continue
             if now - handed > RETRIP_WINDOW_S:
                 drop[cid] = "handed_back"
             else:
@@ -276,6 +352,11 @@ def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
         if fact and not fact.get("yielded", True):
             drop[cid] = "sem_steers"
             continue
+        if now - float(rec.get("stopped_at") or now) > MAX_AGE_S:
+            if not rec.get("left_off"):
+                give_up.append(cid)
+            why[cid] = "too_old"
+            continue
         changed = False
         unknown = False
         for res in rec.get("restores") or ():
@@ -283,6 +364,13 @@ def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
             if m is None:
                 unknown = True
             elif m is False:
+                changed = True
+        # (review F1) what SEM itself already restored is SEM's state, not a
+        # change by somebody else
+        for res in rec.get("done") or ():
+            m = _state_matches(states.get(res.get("entity_id")), res.get("target"))
+            if m is False and _state_matches(
+                    states.get(res.get("entity_id")), res.get("left")) is False:
                 changed = True
         if changed:
             drop[cid] = "changed_by_other"
@@ -300,7 +388,8 @@ def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
         if now < float(rec.get("next_try_at") or 0.0):
             why[cid] = "backing_off"
             continue
-        ok, reason = guard_allows(snapshot, float(rec.get("draw_a") or 0.0))
+        ok, reason = guard_allows(snapshot, float(rec.get("draw_a") or 0.0),
+                                  reserve_a=reserve_a)
         if not ok:
             why[cid] = reason
             continue
@@ -311,36 +400,43 @@ def plan(records: Mapping[str, Mapping[str, Any]], *, now: float,
     elif candidates:
         for _p, _t, cid in candidates:
             why[cid] = "waiting_for_previous"
-    return {"drop": drop, "give_up": give_up, "hand_back": hand_back,
-            "why": why, "observer": bool(observer)}
+    return {"drop": drop, "give_up": give_up, "failed": failed,
+            "confirm": confirm, "hand_back": hand_back, "why": why,
+            "observer": bool(observer)}
 
 
-async def send_hand_back(device: Any, record: Mapping[str, Any], *,
+async def send_hand_back(device: Any, record: Dict[str, Any], *,
                          why: str) -> bool:
-    """Send the record's restores through the device's one seam.
+    """Send the record's pending restores through the device's one seam,
+    one at a time. Each one that went to hardware moves to ``done``; a
+    write that raised or was withheld stays pending. True when nothing is
+    pending any more.
 
-    ``owner_undo`` lets these writes past the yield gate, as
-    ``phase_guard_override`` lets the stop past it; the ledger records them as
-    not owed. Observer mode still withholds them (and lists them in
-    ``withheld_commands``). True when every restore went to hardware."""
-    sent_all = True
-    try:
-        device.owner_undo = True
-        device.command_source = "hand_back"
-        device.command_klass = 1
-    except AttributeError:
-        pass
-    try:
-        for res in record.get("restores") or ():
-            ok = await device.send(res["domain"], res["service"],
-                                   dict(res["data"]), why=why)
-            sent_all = sent_all and bool(ok)
-    finally:
+    ``undo=True`` lets these writes past the yield gate (per call, never a
+    shared flag), as ``phase_guard_override`` lets the stop past it; the
+    ledger records them as not owed. Observer mode still withholds them
+    (and lists them in ``withheld_commands``)."""
+    pending: List[Dict[str, Any]] = []
+    done = list(record.get("done") or [])
+    for res in list(record.get("restores") or ()):
+        if not (isinstance(res, dict) and res.get("domain") and res.get("service")
+                and isinstance(res.get("data"), dict)):
+            # a damaged stored entry: never guess a write from it
+            raise ValueError(f"damaged hand-back entry: {res!r}")
         try:
-            device.owner_undo = False
-        except AttributeError:
-            pass
-    return sent_all
+            ok = await device.send(res["domain"], res["service"],
+                                   dict(res["data"]), why=why, undo=True)
+        except Exception as e:  # noqa: BLE001 — a refused write is a failure, not a crash
+            _LOGGER.warning("phase guard hand-back write %s.%s failed: %s",
+                            res.get("domain"), res.get("service"), e)
+            ok = False
+        if ok:
+            done.append(res)
+        else:
+            pending.append(res)
+    record["restores"] = pending
+    record["done"] = done
+    return not pending
 
 
 # ---------------------------------------------------------------------------
@@ -387,10 +483,13 @@ def note_guard_stop(coord: Any, cid: str, adapter: Any, power: Any,
     sent = list(take() if callable(take) else [])
     if not sent:
         return False
+    draw_w = float(getattr(power, "power_w", 0.0) or 0.0)
     rec = build_record(
         sent, now=now, reason=reason,
-        draw_w=float(getattr(power, "power_w", 0.0) or 0.0),
-        phases=int(getattr(adapter, "phases", 3) or 3),
+        draw_w=draw_w,
+        # (review F4) the phases that CARRY the charge: a one-phase car on a
+        # three-phase box needs its whole current on one phase
+        phases=_drawing_phases(coord, cid, adapter, dev, draw_w),
         voltage=float(getattr(adapter, "voltage", 230) or 230),
         min_current_a=float(getattr(adapter, "min_current_a", 6) or 6),
     )
@@ -403,6 +502,28 @@ def note_guard_stop(coord: Any, cid: str, adapter: Any, power: Any,
         "has room (failures so far: %d)", cid, reason,
         int(book[cid].get("failures") or 0))
     return True
+
+
+def _drawing_phases(coord: Any, cid: str, adapter: Any, dev: Any,
+                    draw_w: float) -> int:
+    """How many phases carried the charge at the stop: the charger's own
+    current per phase (#1407) when it has it, else SEM's phase belief
+    (#1412), else the charger's configured phases."""
+    reader = getattr(coord, "_charger_leg_phases", None)
+    if callable(reader):
+        try:
+            legs = reader(cid, dev, draw_w)
+        except Exception:  # noqa: BLE001 — a reading, never fatal
+            legs = None
+        if isinstance(legs, int) and 1 <= legs <= 3:
+            return legs
+    belief = (getattr(coord, "_phase_believed", None) or {}).get(cid)
+    if isinstance(belief, int) and 1 <= belief <= 3:
+        return belief
+    try:
+        return max(1, int(getattr(adapter, "phases", 3) or 3))
+    except (TypeError, ValueError):
+        return 3
 
 
 def holds(coord: Any, cid: str) -> bool:
@@ -431,25 +552,36 @@ def fleet_state(coord: Any, state: str) -> str:
 
 async def run_step(coord: Any, *, now: float) -> bool:
     """Once per cycle, after the per-charger loop. True when the stored
-    records changed (persist them)."""
+    records changed (persist them). Never raises: a damaged record is left
+    off with a Repair, a refused write is a failure with back-off."""
     book = _stops(coord)
     if not book:
         return False
     hass = getattr(coord, "hass", None)
     states: Dict[str, Any] = {}
-    for rec in book.values():
-        for res in rec.get("restores") or ():
-            ent = res.get("entity_id")
+    for cid, rec in list(book.items()):
+        if not isinstance(rec, dict):
+            book.pop(cid, None)
+            continue
+        for res in [*(rec.get("restores") or ()), *(rec.get("done") or ())]:
+            ent = res.get("entity_id") if isinstance(res, dict) else None
             try:
-                st = hass.states.get(ent) if hass is not None else None
+                st = hass.states.get(ent) if (hass is not None and ent) else None
             except Exception:  # noqa: BLE001
                 st = None
             states[ent] = getattr(st, "state", None)
     observer = bool(getattr(coord, "_observer_mode", False))
-    verdict = plan(book, now=now,
-                   snapshot=getattr(coord, "_phase_guard_snapshot", None) or {},
-                   facts=getattr(coord, "_hand_back_facts", None) or {},
-                   states=states, observer=observer)
+    try:
+        verdict = plan(book, now=now,
+                       snapshot=getattr(coord, "_phase_guard_snapshot", None) or {},
+                       facts=getattr(coord, "_hand_back_facts", None) or {},
+                       states=states, observer=observer)
+    except Exception:  # noqa: BLE001 — a damaged record must not stop the cycle
+        _LOGGER.warning("phase guard hand-back: a stored record is damaged; "
+                        "leaving the chargers off", exc_info=True)
+        for rec in book.values():
+            rec["left_off"] = True
+        return True
     changed = False
     # a charger that is no longer configured has nothing to hand back
     for cid in list(book):
@@ -463,6 +595,18 @@ async def run_step(coord: Any, *, now: float) -> bool:
         _clear_repair(coord, cid)
         _LOGGER.info("phase guard hand-back for %s ends: %s", cid, why)
         changed = True
+    for cid in verdict["confirm"]:
+        if cid in book:
+            book[cid]["confirmed"] = True
+            changed = True
+    for cid in verdict["failed"]:
+        rec = book.get(cid)
+        if rec is not None:
+            note_failure(rec, now=now)
+            _LOGGER.warning("phase guard: %s did not come back after the "
+                            "hand-back (failures: %d)", cid,
+                            int(rec.get("failures") or 0))
+            changed = True
     for cid in verdict["give_up"]:
         rec = book.get(cid)
         if rec is not None and not rec.get("left_off"):
@@ -481,18 +625,25 @@ async def run_step(coord: Any, *, now: float) -> bool:
     dev = _device_for(coord, cid)
     if dev is None:
         return changed
-    sent = await send_hand_back(
-        dev, rec, why=f"phase guard hand-back after its stop ({rec.get('reason')})")
+    try:
+        all_sent = await send_hand_back(
+            dev, rec,
+            why=f"phase guard hand-back after its stop ({rec.get('reason')})")
+    except Exception:  # noqa: BLE001 — a damaged restore entry
+        _LOGGER.warning("phase guard hand-back for %s failed", cid, exc_info=True)
+        rec["left_off"] = True
+        return True
     if observer:
         rec["observed_at"] = now
         return True
-    if sent:
+    if all_sent:
         rec["handed_back_at"] = now
         _LOGGER.warning("phase guard: %s switched back on (its stop: %s)",
                         cid, rec.get("reason"))
     else:
-        # nothing went out (a refused or failed write): wait and try again
-        rec["next_try_at"] = now + BACKOFF_S[0]
+        # (review F1/F2) some or all writes did not go out: what went out is
+        # kept as SEM's, the rest waits under the same back-off as a re-trip
+        note_failure(rec, now=now, retry_all=False)
     return True
 
 

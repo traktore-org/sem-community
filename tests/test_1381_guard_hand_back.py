@@ -289,13 +289,18 @@ async def test_the_night_of_23_to_24_november():
     assert states.values[SW[LINKS]] == "on"
     assert ghb.effective_state(coord, LINKS, "x") == "x"
 
-    # 60 s later: Rechts waits for the meter to show Links' draw.
+    # 60 s later: Rechts waits — the meter does not show Links' draw yet,
+    # so Links' expected current is held for it on every phase (review F5).
     await _tick(coord, T0 + 5 * 3600 + 60, ARMED_ROOMY)
     assert hass.calls == [("switch", "turn_on", SW[LINKS])]
-    assert coord._guard_hand_back_why[RECHTS] == "waiting_for_previous"
-
-    # 2 minutes on, still room: Rechts comes back too.
+    assert "free <" in coord._guard_hand_back_why[RECHTS]
+    # 2.5 minutes on: still no draw from Links — Rechts still waits.
     await _tick(coord, T0 + 5 * 3600 + 150, ARMED_ROOMY)
+    assert hass.calls == [("switch", "turn_on", SW[LINKS])]
+
+    # The Audi draws; the meter still has room for the Mini: Rechts comes back.
+    coord._hand_back_facts[LINKS]["drawing"] = True
+    await _tick(coord, T0 + 5 * 3600 + 180, ARMED_ROOMY)
     assert hass.calls[-1] == ("switch", "turn_on", SW[RECHTS])
 
     # After the watch window both records are gone; no repeat sends.
@@ -327,7 +332,7 @@ async def test_an_overload_that_comes_back_backs_off_and_then_gives_up():
                 hass.calls.clear()
                 await _tick(coord, now + waits[-1] - 1, ARMED_ROOMY)
                 assert hass.calls == []          # still backing off
-        assert waits == [600, 1200]
+        assert waits == [600, 1200, 2400]     # 10, 20, 40 min, then a Repair
         assert coord._guard_stops[LINKS]["left_off"] is True
         hass.calls.clear()
         await _tick(coord, now + 86400, ARMED_ROOMY)

@@ -6,8 +6,9 @@ bypassed the decision chain and the reconciler, and each time one more path
 was added, a fix on one side opened a gap on the other (#1381, #1402,
 #1403, #1407, #1412).
 
-This test lists every call of a charger-commanding verb in the files on the
-charger path, by ``file::function::verb``. The list is a shrink-only
+This test lists every reference to a charger-commanding verb anywhere in
+the integration package (calls, bound methods kept in a name, ``getattr``
+by string), by ``file::function::verb``. The list is a shrink-only
 baseline: a NEW site fails here until it is either moved behind the owner or
 declared on purpose (``tests/charger_writer_inventory_baseline.json.loosen``,
 the repo's ratchet rule, #1304). Moving a site behind the owner removes it
@@ -33,18 +34,32 @@ VERBS = frozenset({
 })
 
 
+#: Folders that are not the integration: tests, tooling, generated cards.
+EXCLUDE_DIRS = frozenset({"tests", "tools", "scripts", "dashboard", "docs",
+                          "node_modules", "graphify-out", "__pycache__",
+                          ".git", ".github", "tmp"})
+
+
 def charger_path_files() -> list[pathlib.Path]:
-    return [
-        *sorted((ROOT / "coordinator").glob("*.py")),
-        *sorted((ROOT / "coordinator" / "charger_adapters").glob("*.py")),
-        ROOT / "devices" / "base.py",
-        ROOT / "features" / "load_management.py",
-        ROOT / "__init__.py",
-    ]
+    """Every Python file of the integration package. The exclusions are the
+    folders above, named — not a list of the files that happened to write
+    to a charger when this test was written (review: switch.py, button.py,
+    shed_ledger.py and load_device_discovery.py were missed that way)."""
+    out = []
+    for path in sorted(ROOT.rglob("*.py")):
+        rel = path.relative_to(ROOT)
+        if rel.parts and rel.parts[0] in EXCLUDE_DIRS:
+            continue
+        if any(part in EXCLUDE_DIRS for part in rel.parts[:-1]):
+            continue
+        out.append(path)
+    return out
 
 
 def sites() -> Counter:
-    """``{"file::function::verb": count}`` for every verb call."""
+    """``{"file::function::verb": count}`` for every REFERENCE to a verb —
+    a call, a bound method kept in a name (``fn = dev.send``), or a
+    ``getattr(x, "send")`` — not only a direct call."""
     out: Counter = Counter()
     for path in charger_path_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -55,11 +70,18 @@ def sites() -> Counter:
                     owner.setdefault(id(node), scope.name)
         rel = path.relative_to(ROOT).as_posix()
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                    and node.func.attr in VERBS):
+            verb = None
+            if isinstance(node, ast.Attribute) and node.attr in VERBS \
+                    and isinstance(node.ctx, ast.Load):
+                verb = node.attr
+            elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                  and node.func.id == "getattr" and len(node.args) >= 2
+                  and isinstance(node.args[1], ast.Constant)
+                  and node.args[1].value in VERBS):
+                verb = node.args[1].value
+            if verb:
                 fn = owner.get(id(node), "<module>")
-                out[f"{rel}::{fn}::{node.func.attr}"] += 1
+                out[f"{rel}::{fn}::{verb}"] += 1
     return out
 
 
@@ -106,3 +128,25 @@ if __name__ == "__main__":  # regenerate: python tests/test_charger_writer_inven
         {"total": sum(s.values()), "sites": dict(sorted(s.items()))},
         indent=1) + "\n", encoding="utf-8")
     print(f"{sum(s.values())} sites written")
+
+
+def test_the_scan_covers_the_files_the_first_list_missed():
+    scanned = {p.relative_to(ROOT).as_posix() for p in charger_path_files()}
+    for rel in ("switch.py", "button.py", "features/shed_ledger.py",
+                "features/load_device_discovery.py", "devices/base.py",
+                "coordinator/guard_hand_back.py"):
+        assert rel in scanned, rel
+    assert not any(p.startswith("tests/") for p in scanned)
+
+
+def test_an_aliased_or_named_write_is_seen(tmp_path, monkeypatch):
+    src = tmp_path / "mod.py"
+    src.write_text(
+        "async def f(dev):\n"
+        "    fn = dev.send\n"
+        "    await fn('switch', 'turn_on', {})\n"
+        "    g = getattr(dev, 'send')\n"
+        "    await g('switch', 'turn_off', {})\n")
+    monkeypatch.setitem(globals(), "ROOT", tmp_path)
+    monkeypatch.setitem(globals(), "charger_path_files", lambda: [src])
+    assert sites() == {"mod.py::f::send": 2}

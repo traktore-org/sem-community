@@ -5923,13 +5923,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 yielded=self.external_yielding(f"charger:{cid}"),
                                 phase_override=_pg_reason,
                             )
-                            # (#1381, charger owner S5) the guard's stop of a
-                            # yielded charger leaves an owed undo in the
-                            # ledger: keep it as this charger's record
-                            if _owner.after_charger_cycle(
-                                    self, cid, adapter, view.power, _pg_reason,
-                                    yielded=_yielded, now=time.time()):
-                                self._save_ev_session_state()
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
                             # remaining headroom (#274/H1). Estimate from the setpoint
@@ -6014,11 +6007,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
                             _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
+                        # (#1381, charger owner S5) the guard's stop of a
+                        # yielded charger leaves an owed undo in the ledger:
+                        # keep it as this charger's record. Outside the
+                        # actuate try, so a failed write elsewhere in the
+                        # cycle still hands its facts and owed writes over.
+                        try:
+                            if _owner.after_charger_cycle(
+                                    self, cid, adapter, view.power, _pg_reason,
+                                    yielded=_yielded, now=time.time()):
+                                self._save_ev_session_state()
+                        except Exception as e:  # noqa: BLE001
+                            _LOGGER.error("phase guard hand-back record failed "
+                                          "for %s: %s", cid, e)
                 # (#1381) one charger per cycle gets its guard stop undone
                 from . import charger_owner as _owner_step
                 try:
                     await _owner_step.fleet_step(self, now=time.time())
-                except (HomeAssistantError, ServiceValidationError) as e:
+                except Exception as e:  # noqa: BLE001 — never breaks the cycle
                     _LOGGER.error("phase guard hand-back failed: %s", e)
                 self._save_ev_session_state()
             elif self._ev_device:
@@ -6125,16 +6131,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         yielded=self.external_yielding(f"charger:{cid}"),
                         phase_override=_pg_reason,
                     )
-                    # (#1381, charger owner S5) as in the fleet path
-                    _owner.after_charger_cycle(
-                        self, cid, adapter, view.power, _pg_reason,
-                        yielded=self._yields_charger(cid), now=time.time())
-                    await _owner.fleet_step(self, now=time.time())
-                    self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("EV control service failed: %s", e)
                 except ValueError as e:
                     _LOGGER.warning("EV control invalid value: %s", e)
+                # (#1381, charger owner S5) as in the fleet path, on its own:
+                # a hand-back failure is not an EV control error and never
+                # skips the save
+                try:
+                    _owner.after_charger_cycle(
+                        self, cid, adapter, view.power, _pg_reason,
+                        yielded=self._yields_charger(cid), now=time.time())
+                    await _owner.fleet_step(self, now=time.time())
+                except Exception as e:  # noqa: BLE001 — never breaks the cycle
+                    _LOGGER.error("phase guard hand-back failed: %s", e)
+                self._save_ev_session_state()
 
             # Step 7.5c+d (unified): Battery control via decide_battery + actuate_battery
             #

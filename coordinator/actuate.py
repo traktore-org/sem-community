@@ -83,6 +83,34 @@ async def actuate(
     yielded: bool = False,
     phase_override: str = "",
 ) -> None:
+    """See ``_actuate``. (#1381, charger owner) The device's "who asked"
+    label holds for this call only: a write sent outside it (a failsafe
+    read-back, a release) is never booked under this cycle's decision."""
+    try:
+        await _actuate(decision, adapter, power, reconciler,
+                       observer=observer, controller=controller,
+                       yielded=yielded, phase_override=phase_override)
+    finally:
+        _dev = getattr(adapter, "_device", None)
+        if _dev is not None:
+            try:
+                _dev.command_source = ""
+                _dev.command_klass = 0
+            except AttributeError:  # a frozen test double
+                pass
+
+
+async def _actuate(
+    decision: ChargerDecision,
+    adapter: ChargerAdapter,
+    power: ChargerPower,
+    reconciler,
+    *,
+    observer: bool = False,
+    controller=None,
+    yielded: bool = False,
+    phase_override: str = "",
+) -> None:
     """Apply a per-charger decision through the reconciler.
 
     The reconciler owns convergence; brand quirks live in the adapter.

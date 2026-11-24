@@ -1,1 +1,1 @@
-# RATCHET-LOOSENED: #1381 to=89 — the charger owner's undo of its own phase-guard stop (guard_hand_back.send_hand_back); the one write that restores what SEM changed on a charger it yields
+# RATCHET-LOOSENED: #1381 to=133 — the inventory now scans the whole package and counts references (fn = dev.send, getattr by name), not only direct calls in five files (owner review S0); includes the owner's undo of its own phase-guard stop
