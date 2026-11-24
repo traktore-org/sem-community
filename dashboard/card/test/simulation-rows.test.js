@@ -278,7 +278,7 @@ test('scenarios fill the form; the person can still edit it', () => {
     const factor = applyPreset(initialForm(DEF), DEF, 'plus_pv', 1.4);
     assert.deepEqual([factor.pv_mode, factor.pv_factor], ['factor', 1.4]);
     assert.equal(applyPreset(f, d, 'plus_pv', null).pv_extra_kwp, '');
-    assert.equal(applyPreset(f, d, 'cheap_chargers').ev_mode, 'solar_plus_cheap');
+    assert.equal(applyPreset(f, d, 'cheap_chargers').ev_mode, 'sun_tariff');
     assert.equal(applyPreset(f, d, 'no_battery_ev').battery_to_ev, false);
     assert.equal(applyPreset(f, d, 'nope').capacity_kwh, 15);
 });
@@ -325,8 +325,13 @@ test('the two mode selects: SEM\'s modes, changed when not the install\'s', () =
     const f = initialForm({ ...DEF, battery_mode: 'self_consumption' });
     assert.equal(isChanged('battery_mode', f, { battery_mode: 'self_consumption' }), false);
     assert.equal(isChanged('battery_mode', { ...f, battery_mode: 'off' }, { battery_mode: 'self_consumption' }), true);
-    assert.equal(isChanged('ev_mode', { ...f, ev_mode: 'solar_only' }, DEF), true);
-    assert.equal(buildParams({ ...f, ev_mode: 'solar_only' }).ev_mode, 'solar_only');
+    assert.equal(isChanged('ev_mode', { ...f, ev_mode: 'sun' }, DEF), true);
+    assert.equal(buildParams({ ...f, ev_mode: 'sun', battery_to_ev: false }).ev_mode, 'solar_only');
+    // (#1381 D27) the battery row picks the strategy behind the mode
+    assert.equal(buildParams({ ...f, ev_mode: 'sun' }).ev_mode, 'solar_plus_battery');
+    assert.equal(buildParams({ ...f, ev_mode: 'sun_tariff' }).ev_mode, 'min_plus_solar');
+    assert.equal(buildParams({ ...f, ev_mode: 'sun_tariff', battery_to_ev: false }).ev_mode, 'solar_plus_cheap');
+    assert.equal(buildParams({ ...f, ev_mode: 'now' }).ev_mode, 'always_max');
 });
 
 test('calibration: a run the own settings could not reproduce shows no what-if', () => {
