@@ -352,7 +352,9 @@ Set the mode per load, on **Devices**.
 
 - A new load starts at **Off**. SEM controls a device only after you turn it on.
 - SEM never lists or switches a security device: one with a camera, alarm,
-  lock or siren in Home Assistant. Its energy still counts in the home total.
+  door lock or siren in Home Assistant. Its energy still counts in the home total.
+  An appliance with a child lock is still a load. A Repair names any device SEM
+  no longer uses.
 - SEM sheds loads at a peak only when they can cover at least a quarter of
   the excess. Smaller loads stay on, and loads it shed come back.
 - Whether SEM buys grid power for a load is set by **May SEM buy power for it?**
@@ -386,6 +388,8 @@ passed, SEM turns back only the loads it switched off.
 - After a restart, SEM turns back on a load it switched off.
 - Shedding only acts on loads that SEM may control. A load you switch on
   yourself is never stopped by SEM.
+- A shed load you turn back on yourself is no longer shown as shed. The other
+  shed loads still come back.
 
 <a id="no-grid-limit"></a>
 <a id="load-management-settings"></a>
