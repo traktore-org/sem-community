@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "Automatizace používají staré názvy režimu nabíjení",
-      "description": "Režimy nabíjení SEM jsou nyní Slunce, Slunce + tarif, Teď a Vypnuto. Home Assistant odmítá staré názvy v select.select_option a spouštěč se starým názvem se už nespustí. Změňte tyto: {uses}"
+      "description": "Režimy nabíjení SEM jsou nyní Slunce, Slunce + tarif, Teď a Vypnuto. Home Assistant odmítá staré názvy v select.select_option a spouštěč se starým názvem se už nespustí. Změňte tyto: {uses} SEM najde většinu míst. Zkontrolujte také blueprinty a automatizace vytvořené mimo rozhraní (outside the UI)."
     }
   },
   "selector": {

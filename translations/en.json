@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "Automations use old charge mode names",
-      "description": "SEM's charge modes are now Sun, Sun + tariff, Now and Off. Home Assistant refuses the old names in select.select_option, and a trigger on an old name no longer fires. Change these: {uses}"
+      "description": "SEM's charge modes are now Sun, Sun + tariff, Now and Off. Home Assistant refuses the old names in select.select_option, and a trigger on an old name no longer fires. Change these: {uses} SEM finds most uses. Check also blueprints, and automations made outside the UI."
     }
   },
   "selector": {

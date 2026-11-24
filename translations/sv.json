@@ -2162,7 +2162,7 @@
     },
     "old_charge_mode_names": {
       "title": "Automationer använder gamla namn på laddläge",
-      "description": "SEM:s laddlägen heter nu Sol, Sol + tariff, Nu och Av. Home Assistant avvisar de gamla namnen i select.select_option, och en utlösare på ett gammalt namn löser inte längre ut. Ändra dessa: {uses}"
+      "description": "SEM:s laddlägen heter nu Sol, Sol + tariff, Nu och Av. Home Assistant avvisar de gamla namnen i select.select_option, och en utlösare på ett gammalt namn löser inte längre ut. Ändra dessa: {uses} SEM hittar de flesta ställen. Kontrollera även blueprints och automationer som skapats utanför gränssnittet (outside the UI)."
     }
   },
   "selector": {

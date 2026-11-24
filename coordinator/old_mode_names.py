@@ -14,6 +14,7 @@ name.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any, Iterable, List, Mapping, Tuple
@@ -27,6 +28,18 @@ _SELECT_RE = re.compile(r"^select\.sem_charger_.*charge_mode$")
 #: The six stored names that are not also one of the four new ones.
 OLD_NAMES = frozenset(n for n in EV_CHARGE_MODES if n not in USER_MODES)
 _VALUE_KEYS = ("option", "state", "to", "from")
+#: (#1381 D32) A SEM charge-mode select named anywhere in a config's text:
+#: whole, or built from pieces in a template ("select.sem_charger_" … "charge_mode")
+_SELECT_TEXT_RE = re.compile(r"select\.sem_charger_[A-Za-z0-9_{} .~|'\"]*charge_mode")
+_OLD_WORD_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(" + "|".join(sorted(OLD_NAMES, key=len, reverse=True))
+    + r")(?![A-Za-z0-9_])")
+
+
+def _mentions_select(text: str) -> bool:
+    if _SELECT_TEXT_RE.search(text):
+        return True
+    return "select.sem_charger_" in text and "charge_mode" in text
 
 
 def _entities(node: Mapping[str, Any]) -> List[str]:
@@ -84,7 +97,49 @@ def find_old_mode_uses(kind: str, configs: Iterable[Any]) -> List[Tuple[str, str
                 if v in OLD_NAMES and v not in seen:
                     seen.add(v)
                     found.append((name, v, user_mode_of(v)))
+        # (#1381 D32) …and the whole config as text: a template condition,
+        # an option or entity held in a variable, data_template, a comma
+        # string of entities, blueprint inputs. A config that names a SEM
+        # charge-mode select AND an old mode name anywhere is reported.
+        # Judged per step (an action, condition or trigger), so another
+        # select's old-looking option in the same automation is not blamed.
+        held = _text({k: cfg.get(k) for k in
+                      ("variables", "__blueprint_inputs", "use_blueprint")})
+        held_names_select = _mentions_select(held)
+        words = []
+        if held_names_select and not any(
+                isinstance(n, Mapping) and any(k in n for k in _STEP_KEYS)
+                for n in _walk(cfg)):
+            words.append(held)          # a blueprint: its inputs are all there is
+        for node in _walk(cfg):
+            if not any(k in node for k in _STEP_KEYS):
+                continue
+            t = _text(node)
+            here = _mentions_select(t)
+            templated = "{{" in t
+            if here or (templated and held_names_select):
+                words.append(t)
+            if here and templated:
+                words.append(held)
+        for t in words:
+            for m in _OLD_WORD_RE.finditer(t):
+                v = m.group(1)
+                if v not in seen:
+                    seen.add(v)
+                    found.append((name, v, user_mode_of(v)))
     return found
+
+
+#: keys that make a mapping one step of an automation or script
+_STEP_KEYS = ("action", "service", "condition", "trigger", "platform",
+              "value_template")
+
+
+def _text(obj: Any) -> str:
+    try:
+        return json.dumps(obj, default=str, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(obj)
 
 
 def _loaded_configs(hass: Any, domain: str) -> List[Any]:
@@ -93,7 +148,15 @@ def _loaded_configs(hass: Any, domain: str) -> List[Any]:
     try:
         comp = hass.data.get(domain)
         entities = getattr(comp, "entities", None) or ()
-        return [getattr(e, "raw_config", None) for e in entities]
+        out = []
+        for e in entities:
+            raw = getattr(e, "raw_config", None)
+            # (#1381 D32) a blueprint automation keeps its inputs apart
+            bp = getattr(e, "raw_blueprint_inputs", None)
+            if isinstance(raw, Mapping) and isinstance(bp, Mapping):
+                raw = {**raw, "__blueprint_inputs": bp}
+            out.append(raw)
+        return out
     except Exception:  # noqa: BLE001 — unreadable is "nothing found"
         return []
 
