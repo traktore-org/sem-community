@@ -518,7 +518,10 @@ class TestTheLiveGate:
         assert d.intent is ChargerIntent.IDLE
 
     def test_the_other_modes_never_ask_the_rule(self):
-        for mode in ("solar_only", "solar_plus_battery", "min_plus_solar"):
+        # (#1381 D23) min_plus_solar is "Sun + tariff" with battery help and
+        # runs the same day rule, so it asks too (test_charger_owner_final_
+        # review); only the Sun strategies never do.
+        for mode in ("solar_only", "solar_plus_battery"):
             d = decide(_view(mode=mode))
             assert d.reason_code != RC.CHARGER_SUN_PLUS_GRID, mode
 

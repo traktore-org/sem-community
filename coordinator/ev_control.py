@@ -1651,13 +1651,18 @@ class EVControlMixin:
             contra["target"] = desired
             contra["count"] = PHASE_NOT_TAKING_AFTER
 
+        _sent = False
         if r.issue_switch is not None and r.at_rest:
             _rest_times[cid] = _recent + [now]
         if r.issue_switch is not None and by_current:
             # (#1015) The device's own write: its one seam withholds and
             # records in observer mode, so nothing is called from here.
-            planner.note_switched(now, at_rest=r.at_rest)
             sent = await device.switch_phases(r.issue_switch)
+            # (#1381 D25) booked only when it really went out: a withheld
+            # (observer) or refused switch is no switch
+            if sent:
+                planner.note_switched(now, at_rest=r.at_rest)
+            _sent = bool(sent)
             _LOGGER.info(
                 "#1015 %s: %s to %sp by one current per phase via %s",
                 cid, "switching" if sent else "WOULD switch (withheld)",
@@ -1667,7 +1672,6 @@ class EVControlMixin:
             cmd = phase_switch_command(entity, value, self.hass)
             if cmd is not None:
                 domain, service, data = cmd
-                planner.note_switched(now, at_rest=r.at_rest)
                 _seam = getattr(device, "send", None)
                 if callable(_seam):
                     # (#1381, charger owner S6) the one hardware seam: it
@@ -1678,8 +1682,12 @@ class EVControlMixin:
                         "#804 %s: switching to %sp via %s.%s %s",
                         cid, r.issue_switch, domain, service, data)
                     try:
-                        await _seam(domain, service, data,
-                                    why=f"#804 phase switch to {r.issue_switch}p")
+                        sent = await _seam(domain, service, data,
+                                           why=f"#804 phase switch to {r.issue_switch}p")
+                        # (#1381 D25) booked only when it really went out
+                        if sent:
+                            planner.note_switched(now, at_rest=r.at_rest)
+                        _sent = bool(sent)
                     except Exception:  # noqa: BLE001 — surfaced, never fatal
                         _LOGGER.warning(
                             "#804 %s: phase switch call failed",
@@ -1701,12 +1709,20 @@ class EVControlMixin:
                         # un-gated hardware call beside it.
                         await self.hass.services.async_call(
                             domain, service, data, blocking=False)
+                        sent = True
+                        # (#1381 D25) booked only when it really went out
+                        if sent:
+                            planner.note_switched(now, at_rest=r.at_rest)
+                        _sent = True
                     except Exception:  # noqa: BLE001 — surfaced, never fatal
                         _LOGGER.warning(
                             "#804 %s: phase switch call failed",
                             cid, exc_info=True)
 
-        if r.believed_phases is not None:
+        if (r.believed_phases is not None and r.issue_switch is not None
+                and r.believed_phases == r.issue_switch and not _sent):
+            pass    # (#1381 D25) a withheld switch changes no belief
+        elif r.believed_phases is not None:
             self._phase_believed[cid] = r.believed_phases
             set_by_sem[cid] = r.believed_phases
             contra["last_asserted"] = r.believed_phases

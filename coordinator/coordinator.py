@@ -172,6 +172,48 @@ def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
     return result if isinstance(result, datetime) else None
 
 
+def _sun_tariff_day_of(host: Any, charger_cfg: Any) -> bool:
+    """(#1381 D23) Does this charger run the Sun + tariff day rule (either
+    stored strategy behind "Sun + tariff")? The planner's thin-sun booking
+    and the live thin-sun inputs ask THIS, so plan and gate agree for both.
+
+    A function, not a method: it asks the host's existing
+    ``_tariff_optimized_for`` (the help-off strategy) first, so a host that
+    lacks the new name behaves exactly as before, then adds the help-on
+    strategy (``min_plus_solar``) by its stored mode."""
+    fn = getattr(host, "_tariff_optimized_for", None)
+    try:
+        if callable(fn) and fn(charger_cfg) is True:
+            return True
+    except Exception:  # noqa: BLE001 — an unreadable mode is not this rule
+        pass
+    if getattr(host, "hass", None) is None or not isinstance(charger_cfg, dict):
+        return False
+    try:
+        from ..consts.ev_charge_modes import (
+            MODE_SUN_TARIFF_DAY,
+            effective_charge_mode_for,
+        )
+        return effective_charge_mode_for(
+            host.hass, getattr(host, "config", {}) or {}, charger_cfg,
+        ) in MODE_SUN_TARIFF_DAY
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _now_car_gone(host: Any, power: Any, charger_cfg: Any) -> Optional[bool]:
+    """(#1381 D22) True only for a KNOWN unplug: no car on a charger that
+    has a plug sensor. A sensor-less charger's "no car" is no unplug (#1153),
+    so it ends nothing — None."""
+    try:
+        from .ev_availability import has_plug_sensor
+        if bool(getattr(power, "ev_connected", True)):
+            return False
+        return True if has_plug_sensor(charger_cfg, getattr(host, "config", {}) or {}) else None
+    except Exception:  # noqa: BLE001 — an unreadable plug state ends nothing
+        return None
+
+
 def _thin_sun_of(host: Any, cid: str, charger_cfg: Any):
     """(#1411) ``host._thin_sun_for(cid, charger_cfg)``, or None when the
     host has no such method — a test fake built on a bare namespace — or
@@ -5812,6 +5854,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             else per_remaining_floor
                         )
                         try:
+                            # (#1381 D22) a Now ends when its car leaves: the
+                            # next car plugged in never inherits full power
+                            if _po.end_now_on_unplug(
+                                    self._plan_overrides, cid,
+                                    _now_car_gone(self, power, charger_cfg),
+                            ) is not self._plan_overrides:
+                                self.clear_plan_override(cid)
                             _view_mode = _po.charger_mode_for(
                                 self._plan_overrides, cid, per_mode, _now_override)
                         except Exception:  # noqa: BLE001 — a bad override is no override
@@ -6308,6 +6357,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 per_mode = self._effective_charge_mode_for(
                     self._primary_charger_cfg()
                 )
+                # (#1381 D20/D22) the same Now as the fleet path: the
+                # user's timed full power, ended on a known unplug
+                try:
+                    from . import plan_override as _po1
+                    if _po1.end_now_on_unplug(
+                            self._plan_overrides, cid,
+                            _now_car_gone(self, power, self._primary_charger_cfg()),
+                    ) is not self._plan_overrides:
+                        self.clear_plan_override(cid)
+                    per_mode = _po1.charger_mode_for(
+                        self._plan_overrides, cid, per_mode, dt_util.now())
+                except Exception:  # noqa: BLE001 — a bad override is no override
+                    pass
                 view = build_charger_view(
                     self._cycle_fleet_state,
                     charger_id=cid,
@@ -10513,7 +10575,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         surface reads them.
         """
         try:
-            if not self._tariff_optimized_for(charger_cfg):
+            if not _sun_tariff_day_of(self, charger_cfg):
                 return None
             refs = (getattr(self, "_thin_sun_refs", None) or {}).get(str(cid))
             if refs is None:
@@ -12635,8 +12697,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         else two hours. 1–1440 minutes (the override's own bounds).
 
         Owner's rule: Now ends at the next plan block (or a time the user
-        chooses). A block already running is not "next": Now then runs to
-        its end, so the plan picks up where it left off."""
+        chooses). (#1381 D22) "Next block" is THIS charger's car's next
+        block only; a block already running is not "next", and without one
+        Now runs 120 minutes — never to the end of another device's block
+        (a battery block ending at 06:00 kept a car at full power ~13 h)."""
         now = now or dt_util.utcnow()
         plan = getattr(self, "_energy_plan_shadow", None)
         starts, ends = [], []
@@ -12655,7 +12719,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ends.append(be)
                 if b.get("id") == f"ev:{cid}" and bs > now:
                     starts.append(bs)
-        target = min(starts) if starts else (max(ends) if ends else None)
+        target = min(starts) if starts else None
         if target is None:
             return 120
         minutes = int((target - now).total_seconds() // 60)
@@ -14470,7 +14534,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # up from the grid at its import price — but only for the
                     # Min floor, the one need the live gate buys grid for
                     # (``kwh`` is that floor: bound="min", > 0.1 as in decide)
-                    grid_in_sun=bool(self._tariff_optimized_for(cfg)
+                    grid_in_sun=bool(_sun_tariff_day_of(self, cfg)
                                      and float(kwh) > 0.1),
                 ))
             # Load min-runtime deficits eligible for a night source.

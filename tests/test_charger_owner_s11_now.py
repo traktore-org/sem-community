@@ -54,7 +54,8 @@ async def test_picking_now_starts_a_timed_now_until_the_next_block():
     sel = _select()
     with patch.object(sel, "async_write_ha_state"):
         await sel.async_select_option("now")
-    sel.coordinator.set_plan_override.assert_called_once_with("ev_charger", "force", 95)
+    sel.coordinator.set_plan_override.assert_called_once_with(
+        "ev_charger", "force", 95, po.USER_NOW)
     assert sel.current_option == "now"
     assert sel.extra_state_attributes["now_until"] is not None
     # the stored strategy is untouched: the plan resumes it at the end
@@ -120,12 +121,13 @@ def test_now_ends_at_the_next_block_for_this_charger():
     assert c.now_minutes_for("ev_charger", now) == 180
 
 
-def test_without_a_block_ahead_now_ends_with_the_plan():
+def test_without_a_block_ahead_now_runs_two_hours():
+    """(#1381 D22) Another device's block never sets Now's end."""
     now = dt_util.utcnow().replace(microsecond=0)
     c = _coord_with_plan([
         {"id": "battery", "start": _iso(now - timedelta(hours=1)), "end": _iso(now + timedelta(hours=4))},
     ])
-    assert c.now_minutes_for("ev_charger", now) == 240
+    assert c.now_minutes_for("ev_charger", now) == 120
 
 
 def test_without_a_plan_now_runs_two_hours():

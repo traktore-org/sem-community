@@ -40,6 +40,12 @@ ACTIONS = ("skip", "cap", "move", "force")
 #: is dropped on load.
 MAX_OVERRIDE_MINUTES = 24 * 60
 
+#: (#1381 D20) The ``value`` a ``force`` carries when the USER picked "Now"
+#: on the charger. That explicit Now lifts a standing Off or a pause for its
+#: duration; a ``force`` from anywhere else (the plan card's service, an
+#: automation, a VPP) keeps leaving an Off charger alone.
+USER_NOW = -1.0
+
 
 @dataclass(frozen=True)
 class PlanOverride:
@@ -190,9 +196,32 @@ def charger_mode_for(
     peak clamp and peak EMERGENCY. A charger in ``off`` stays hands-off —
     a standing opt-out outranks a one-off, the same as for batteries."""
     rec = active_override(overrides, charger_id, now)
-    if rec is None or rec.action != "force" or str(mode).lower() == "off":
+    if rec is None or rec.action != "force":
+        return mode
+    if str(mode).lower() == "off" and not is_user_now(rec):
         return mode
     return "always_max"
+
+
+def is_user_now(rec: Optional[PlanOverride]) -> bool:
+    """(#1381 D20) Is this the user's own "Now" (the mode select), not a
+    plan or service ``force``?"""
+    return (rec is not None and rec.action == "force"
+            and rec.value is not None and float(rec.value) == USER_NOW)
+
+
+def end_now_on_unplug(
+    overrides: Mapping[str, PlanOverride], charger_id: str,
+    car_absent: Optional[bool],
+) -> Dict[str, PlanOverride]:
+    """(#1381 D22) A running ``force`` ends when its car leaves: the next
+    car plugged in never inherits full power. Only a KNOWN unplug
+    (``car_absent is True``) ends it; an unknown plug state ends nothing.
+    Returns ``overrides`` itself when nothing changes."""
+    rec = overrides.get(charger_id) if isinstance(overrides, Mapping) else None
+    if car_absent is not True or rec is None or rec.action != "force":
+        return overrides
+    return clear_override(overrides, charger_id)
 
 
 def skips_charger(
