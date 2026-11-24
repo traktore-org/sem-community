@@ -471,6 +471,13 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # external-control mode; True = another party steers, SEM yields.
         self.external_yield: bool = False
         self.phase_guard_override: bool = False  # (#1381)
+        # (#1381, charger owner S4/S5) the hand-back of SEM's own guard stop
+        # may pass the yield gate too; who asked for this cycle's writes; and
+        # the ledger of what SEM wrote with the state just before.
+        self.owner_undo: bool = False
+        self.command_source: str = ""
+        self.command_klass: int = 0
+        self.command_ledger: list = []
         self.yielded_commands: list = []
         self._commanded_claim: bool = False  # backing field, see _sem_commanded
         # Monotonic anchor for the "belief says on but the entity reads off"
@@ -1103,6 +1110,7 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # out anyway: the fuse comes first. Stamped per cycle by actuate.
         if (getattr(self, "external_yield", False) is True
                 and getattr(self, "phase_guard_override", False) is not True
+                and getattr(self, "owner_undo", False) is not True
                 and service != "set_failsafe"):
             if not hasattr(self, "yielded_commands"):
                 self.yielded_commands = []
@@ -1138,10 +1146,28 @@ class ControllableDevice(SetpointMemoMixin, ABC):
                 f" — {why}" if why else "",
             )
             return False
+        # (#1381, charger owner S4) The ledger: what SEM wrote, who asked,
+        # and the entity's state just before — so a write SEM must hand back
+        # (its guard stop of a charger another party steers) can be undone
+        # exactly, and nothing else is ever guessed.
+        record_command(self, domain, service, payload)
         # The one place in the charger path that really talks to HA.
         await self.hass.services.async_call(
             domain, service, payload, blocking=True)
         return True
+
+    #: (#1381) entries kept in the in-memory ledger per device
+    LEDGER_KEEP = 40
+
+    def take_owed(self) -> list:
+        """(#1381) The ledger entries SEM owes back, removed from the owed
+        set (they stay in the ledger as history)."""
+        out = []
+        for entry in getattr(self, "command_ledger", None) or []:
+            if isinstance(entry, dict) and entry.get("owed"):
+                out.append(dict(entry))
+                entry["owed"] = False
+        return out
 
     @abstractmethod
     async def activate(self, available_watts: float) -> float:
@@ -5302,3 +5328,44 @@ from .power_setpoint import (  # noqa: E402,F401
     PowerSetpointDevice, device_class_for_control,
 )
 from ..coordinator.units import finite_float
+
+
+#: (#1381, charger owner S4) entries kept in a device's command ledger
+LEDGER_KEEP = 40
+
+
+def record_command(self: Any, domain: str, service: str, payload: dict) -> None:
+    """Append one hardware write to the device's ledger. Never raises."""
+    try:
+        prior = None
+        entity = payload.get("entity_id")
+        if isinstance(entity, str):
+            try:
+                st = self.hass.states.get(entity)
+                prior = getattr(st, "state", None)
+            except Exception:  # noqa: BLE001 — a missing state is no prior
+                prior = None
+            if not isinstance(prior, (str, int, float)) or isinstance(prior, bool):
+                prior = None
+        yielded = getattr(self, "external_yield", False) is True
+        entry = {
+            "domain": domain, "service": service, "data": dict(payload),
+            "prior": prior, "at": time.time(),
+            "source": str(getattr(self, "command_source", "") or ""),
+            "klass": int(getattr(self, "command_klass", 0) or 0),
+            # SEM wrote to a charger it does not steer: the write is owed
+            # back. Only the guard's stop reaches hardware that way
+            # (the hand-back itself and the failsafe are not owed).
+            "owed": bool(yielded
+                         and getattr(self, "phase_guard_override", False) is True
+                         and getattr(self, "owner_undo", False) is not True
+                         and service != "set_failsafe"),
+        }
+        book = getattr(self, "command_ledger", None)
+        if not isinstance(book, list):
+            book = []
+            self.command_ledger = book
+        book.append(entry)
+        del book[:-LEDGER_KEEP]
+    except Exception:  # noqa: BLE001 — recording never blocks a write
+        _LOGGER.debug("command ledger record failed", exc_info=True)

@@ -149,6 +149,11 @@ async def actuate(
             try:
                 _ydev.external_yield = bool(yielded) and not observer
                 _ydev.phase_guard_override = _override
+                # (#1381, owner S4) who asked for this cycle's writes, for
+                # the device's command ledger
+                _ydev.command_source = str(
+                    getattr(decision, "source", "") or "decide")
+                _ydev.command_klass = int(getattr(decision, "klass", 0) or 0)
             except AttributeError:  # a frozen test double
                 pass
         if _override:
