@@ -72,6 +72,7 @@ RATCHETS = [
     ("causal_claim_baseline.json", "unproven causal claims", lambda d: d["total"], _live_causal, True),
     ("source_string_guard_baseline.json", "source-string guards", lambda d: d["total"], _live_source_strings, True),
     ("roster_coverage_baseline.json", "unnamed brands over the floor", lambda d: d["unnamed_over_floor"], _live_gap, True),
+    ("charger_writer_inventory_baseline.json", "charger-commanding call sites (#1381)", lambda d: d["total"], None, True),
     ("roster_roles_baseline.json", "roster roles (grows with coverage)", lambda d: len(d["roles"]), None, False),
 ]
 

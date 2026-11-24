@@ -67,7 +67,6 @@ const IDS = ['sensor.sem_energy_plan', 'sensor.sem_forecast_tomorrow_kwh', 'sens
              'sensor.sem_battery_dynamic_floor_pct', 'sensor.sem_battery_spendable_kwh', 'switch.sem_battery_may_export', 'sensor.sem_forecast_trust_d1',
              'sensor.sem_battery_power', 'sensor.sem_solar_power'];
 const SHOWN_ROWS = 6;
-const CHARGE_NOW_MINUTES = 120;   // how long "Charge now" holds before the plan takes over
 const KIND_COLOR = { ev: C.ev, battery_in: C.battery_in, battery_out: C.battery_out, grid: C.grid, load: C.home };
 const KIND_ICON = { ev: 'mdi:car-electric', battery_in: 'mdi:battery-charging', battery_out: 'mdi:home-battery', grid: 'mdi:transmission-tower', load: 'mdi:power-plug' };
 export const WS_SOLAR_FORECAST = 'solar_energy_management/solar_forecast';
@@ -96,7 +95,7 @@ function smoothPath(pts) {
 class SEMNextPlanCard extends SEMNextBase {
     static get properties() {
         return {
-            _picked: { state: true }, _confirm: { state: true }, _range: { state: true }, _hover: { state: true }, _fc: { state: true }, _stats: { state: true },
+            _picked: { state: true }, _range: { state: true }, _hover: { state: true }, _fc: { state: true }, _stats: { state: true },
             _w: { state: true }, _records: { state: true }, _chip: { state: true }, _fold: { state: true },
             _logError: { state: true },
         };
@@ -133,7 +132,6 @@ class SEMNextPlanCard extends SEMNextBase {
         this._priceStats = null;   // what the tariff read, [{ t, p }] per hour
         this._sunTimer = null;
         this._statTimer = null;
-        this._confirm = null;      // charger id awaiting "Charge now" confirmation
         this._range = readRange();
         this._w = 720;
         this._hostW = 0;
@@ -838,15 +836,12 @@ class SEMNextPlanCard extends SEMNextBase {
         const noCar = this._str('binary_sensor.sem_charger_' + cid + '_connected') === 'off';
         if ((full || noCar) && !ov) {
             // a full car or an empty plug has nothing to skip or start
-        } else if (this._confirm === cid) {
-            btns.push(this._btn(t('next_full_power_yes'), () => this._chargeNow(cid, plan), { small: true, primary: true, disabled: obs }));
-            btns.push(this._btn(t('next_cancel'), () => { this._confirm = null; }, { small: true }));
         } else if (ov) {
             btns.push(this._btn(t('next_back_to_plan'), () => this._overrideClear(cid), { small: true, disabled: obs }));
         } else {
             btns.push(this._btn(t('next_skip_tonight'), () => this._override(cid, 'skip', minutesToPlanEnd(plan, new Date(), 720, this._nightEnd()), plan), { small: true, disabled: obs }));
-            btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force', minutesToPlanEnd(plan, new Date(), 720, this._nightEnd()), plan), { small: true, primary: true, disabled: obs }));
-            if (mode) btns.push(this._btn(t('next_full_power'), () => { this._confirm = cid; }, { small: true, ghost: true, disabled: obs || mode === 'always_max' }));
+            // (#1381) one control: Now, until the plan's next block (the charger card sets another end)
+            if (mode) btns.push(this._btn(t('next_charge_now'), () => this._selectOption(sel, 'now'), { small: true, primary: true, disabled: obs || mode === 'now' }));
         }
         // (#1321) the charge plan lives on the charger's Devices card: one tap there
         btns.push(this._btn(t('next_charge_plan'), () => this._openChargePlan(cid), { small: true, ghost: true, icon: 'mdi:pencil' }));
@@ -972,14 +967,6 @@ class SEMNextPlanCard extends SEMNextBase {
         this._local = rest;
         this.requestUpdate();
         return true;
-    }
-
-    // "Charge now" is the backend's own one-off force: it runs the charger
-    // at full power for a set time, then lets go by itself. Nothing is stored
-    // in the browser and the charge mode select is left alone.
-    async _chargeNow(cid, plan) {
-        this._confirm = null;
-        await this._override(cid, 'force', CHARGE_NOW_MINUTES, plan);
     }
 
     // ── expected ──

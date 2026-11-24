@@ -496,6 +496,29 @@ class LoadManagementCoordinator:
         except Exception as e:
             _LOGGER.error("Device discovery failed: %s", e, exc_info=True)
 
+    def _charger_claimed_entities(self) -> set:
+        """(#748, #1381 S7) Every entity owned by a registered EV charger — its
+        current control / power sensor, its start/stop switch and its status
+        sensor, and its service. ``_send`` refuses a write to any of them: a
+        charger is written by the charger owner only. Reads the charger rows
+        registered by ``register_ev_charger`` (device_type ``ev_charger``); an
+        install with no charger yields an empty set. Never raises."""
+        claimed: set = set()
+        try:
+            for info in self._devices.values():
+                if not isinstance(info, dict) or info.get("device_type") != "ev_charger":
+                    continue
+                for key in (
+                    "switch_entity", "power_entity", "charger_service",
+                    "start_stop_entity", "status_entity",
+                ):
+                    ent = info.get(key)
+                    if ent:
+                        claimed.add(ent)
+        except Exception:  # pragma: no cover - defensive
+            return claimed
+        return claimed
+
     async def register_ev_charger(
         self,
         current_control_entity: str = None,
@@ -2151,6 +2174,19 @@ class LoadManagementCoordinator:
         Observer mode withholds the write here, for every caller —
         the peak shed, the phase guard, a restore. True = it went out."""
         if self._withheld(device_id, f"{domain}.{service}", None, data):
+            return False
+        # (#1381, charger owner S7) A charger is written by the charger
+        # owner only. A row that names a charger's own entity (an old
+        # discovered plug on the charger's stop switch, #748) or a charger's
+        # service is refused here, whichever caller got this far.
+        claimed = self._charger_claimed_entities()
+        if (str((data or {}).get("entity_id") or "") in claimed
+                or f"{domain}.{service}" in claimed):
+            log_on_change(
+                _LOGGER, f"lm:charger-write:{device_id}", logging.WARNING,
+                "Load management will not write %s.%s to %s: a charger owns "
+                "it (#1381)", domain, service,
+                (data or {}).get("entity_id") or f"{domain}.{service}")
             return False
         # OBSERVER-GATED: ``_withheld`` above returned for observer mode —
         # this is the seam, the same shape as ``send()``.

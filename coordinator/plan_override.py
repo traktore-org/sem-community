@@ -24,7 +24,7 @@ but no decider reads them yet; they stay inert until a part that needs them
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Mapping, Optional
 
@@ -41,6 +41,7 @@ ACTIONS = ("skip", "cap", "move", "force")
 MAX_OVERRIDE_MINUTES = 24 * 60
 
 
+
 @dataclass(frozen=True)
 class PlanOverride:
     device_id: str
@@ -50,11 +51,26 @@ class PlanOverride:
     ``_cooldown_until``/``_giveup_backoff_until`` timers elsewhere)."""
     value: Optional[float] = None
     set_at: Optional[datetime] = None
+    #: (#1381 D31) The user's own "Now" (the charger's mode select, the
+    #: card's Now, or the service with ``user_now``). Only this lifts a
+    #: standing Off or a pause; a ``force`` from anywhere else does not, and
+    #: no ``value`` can stand in for it.
+    user_now: bool = False
+    #: (#1381 D30) A charger ``force`` set while its car is away waits for
+    #: the plug-in: ``started`` turns True on the first cycle the car is
+    #: known to be there. Only a STARTED force ends on a known unplug.
+    started: bool = True
+    #: minutes a waiting force runs once the car is in (relative end)
+    minutes: Optional[int] = None
+    #: the user chose a clock time: the end stays that time
+    fixed_end: bool = False
 
 
 def set_override(
     overrides: Mapping[str, PlanOverride], device_id: str, action: str,
     expires_at: datetime, now: datetime, value: Optional[float] = None,
+    *, user_now: bool = False, started: bool = True,
+    minutes: Optional[int] = None, fixed_end: bool = False,
 ) -> Dict[str, PlanOverride]:
     """A new dict with ``device_id``'s override set, replacing any prior
     one. Raises ``ValueError`` on a bad action or an expiry not in the
@@ -73,7 +89,8 @@ def set_override(
     out = dict(overrides)
     out[device_id] = PlanOverride(
         device_id=device_id, action=action, expires_at=expires_at,
-        value=value, set_at=now)
+        value=value, set_at=now, user_now=bool(user_now and action == "force"),
+        started=bool(started), minutes=minutes, fixed_end=bool(fixed_end))
     return out
 
 
@@ -118,6 +135,10 @@ def serialize(overrides: Mapping[str, PlanOverride]) -> Dict[str, Dict[str, Any]
             "expires_at": rec.expires_at.isoformat(),
             "value": rec.value,
             "set_at": rec.set_at.isoformat() if rec.set_at else None,
+            "user_now": bool(rec.user_now),
+            "started": bool(rec.started),
+            "minutes": rec.minutes,
+            "fixed_end": bool(rec.fixed_end),
         }
     return out
 
@@ -149,9 +170,14 @@ def deserialize(raw: Any) -> Dict[str, PlanOverride]:
                     minutes=MAX_OVERRIDE_MINUTES):
                 continue
             value = entry.get("value")
+            mins = entry.get("minutes")
             out[str(device_id)] = PlanOverride(
                 device_id=str(device_id), action=action, expires_at=expires_at,
-                value=float(value) if value is not None else None, set_at=set_at)
+                value=float(value) if value is not None else None, set_at=set_at,
+                user_now=bool(entry.get("user_now", False)) and action == "force",
+                started=bool(entry.get("started", True)),
+                minutes=int(mins) if mins is not None else None,
+                fixed_end=bool(entry.get("fixed_end", False)))
         except (KeyError, TypeError, ValueError):
             continue
     return out
@@ -190,9 +216,51 @@ def charger_mode_for(
     peak clamp and peak EMERGENCY. A charger in ``off`` stays hands-off —
     a standing opt-out outranks a one-off, the same as for batteries."""
     rec = active_override(overrides, charger_id, now)
-    if rec is None or rec.action != "force" or str(mode).lower() == "off":
+    if rec is None or rec.action != "force":
+        return mode
+    if str(mode).lower() == "off" and not is_user_now(rec):
         return mode
     return "always_max"
+
+
+def is_user_now(rec: Optional[PlanOverride]) -> bool:
+    """(#1381 D20) Is this the user's own "Now" (the mode select), not a
+    plan or service ``force``?"""
+    return (rec is not None and rec.action == "force"
+            and bool(getattr(rec, "user_now", False)))
+
+
+def end_now_on_unplug(
+    overrides: Mapping[str, PlanOverride], charger_id: str,
+    car_absent: Optional[bool], now: Optional[datetime] = None,
+) -> Dict[str, PlanOverride]:
+    """(#1381 D22/D30) A charger ``force`` follows its car.
+
+    * Set while the car is away, it WAITS (``started`` False): a known
+      unplug does not end it. The first cycle the car is known to be in
+      starts it — a relative Now counts its minutes from then, a chosen
+      clock time keeps that time.
+    * Once started, a KNOWN unplug (``car_absent is True``) ends it: the
+      next car plugged in never inherits full power. An unknown plug state
+      ends and starts nothing.
+
+    Returns ``overrides`` itself when nothing changes."""
+    rec = overrides.get(charger_id) if isinstance(overrides, Mapping) else None
+    if rec is None or rec.action != "force":
+        return overrides
+    if not getattr(rec, "started", True):
+        if car_absent is False:
+            expires = rec.expires_at
+            if not rec.fixed_end and rec.minutes and now is not None:
+                expires = (now.astimezone(timezone.utc)
+                           + timedelta(minutes=int(rec.minutes)))
+            out = dict(overrides)
+            out[charger_id] = replace(rec, started=True, expires_at=expires)
+            return out
+        return overrides
+    if car_absent is not True:
+        return overrides
+    return clear_override(overrides, charger_id)
 
 
 def skips_charger(
@@ -225,6 +293,7 @@ def apply_to_charger_decision(
         return rewrite(
             decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
             budget_w=0.0, bridgeable=False, safety_stop=True,
+            source="plan_skip", klass=3,   # (#1381) CommandClass.USER
             reason=f"plan override — stopped until {until} — {decision.reason}",
             reason_code=RC.CHARGER_PLAN_OVERRIDE_STOP,
             reason_params={"time": until},

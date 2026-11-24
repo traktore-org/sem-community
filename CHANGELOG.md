@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A charger stopped by the phase guard comes back** (#1381). SEM switches it on again when the phase has room, one charger at a time.
+- 🐛 **No "night charging" at 0 W after a guard stop** (#1381). The charger reads "Stopped by the phase guard" until it is back on.
+- ✨ **Four charge modes: Sun, Sun + tariff, Now, Off** (#1381). One switch says if the battery may help.
+- ⚠️ **Breaking: the mode select has new option names** (#1381). Automations using `solar_only` and the like must change; a Repair lists them.
+- ✨ **Now works on an Off or paused charger** (#1381). When Now ends, the charger is Off again. Unplugging ends Now.
+- ✨ **Charge now ends by itself** (#1381). It runs until the car's next plan block, a time you pick, or until full. One button replaces two.
+- ✨ **Thin sun plus grid in Sun + tariff** (#1411). Spare sun below the minimum charges the car when cheaper than tonight.
+- ✨ **Sun + tariff has one day rule** (#1381). The battery switch changes only the battery; grid buying by day is the same either way.
+- 🐛 **A refused phase switch is not resent every 10 s** (#1381). SEM retries after 10, 20 and 40 minutes, then a Repair.
+- 🐛 **Now waits for the car** (#1381). Picked before plug-in, it starts when the car is in. Unplugging after that ends it.
+- 🐛 **Only your own Now runs an Off charger** (#1381). A plan_override force from an automation leaves Off alone.
+- 🔧 **Every charger command goes through one place** (#1381). SEM records what it changed, so a safety stop is handed back.
+
 # [2.3.0-beta.27] — 24.11.2026
 
 - 🐛 **The session Excel file names each charger as you named it** (#1410). Its id moves to a new last column, `charger_id`.
@@ -22,10 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A load nobody turned on says so** (#1419). Its card reads "Not controlled — turn on".
 - 🐛 **No shedding of loads too small to help** (#1381). Under a quarter of the excess, SEM sheds nothing and brings shed loads back.
 - 🐛 **A shed load you turn back on no longer blocks the others** (#1419). It is no longer shown as shed.
-- 🐛 **SEM says when the phase guard stops another party's charger** (#1381). A Repair names it; the state no longer reads night charging at 0 W.
 - 🐛 **Auto phase mode starts on 1 phase in thin sun** (#1412). An idle car never got 1 phase, so it never started in thin sun.
 - 🐛 **Minimum power follows the active phases** (#1412). After a switch to 1 phase, SEM still asked for 4140 W to start. Now 1380 W.
 - 🐛 **Phase switch values must fit the entity** (#1412). Values outside the number's range sent nothing, silently. The form now refuses them; a Repair names them.
+- 🐛 **SEM says when the phase guard stops another party's charger** (#1381). A Repair names it; the state no longer reads night charging at 0 W.
 - 🐛 **Tomorrow's prices show on 15-minute tariffs** (#1418). The price chart stopped 12 hours ahead. Hourly prices no longer show gaps.
 
 # [2.3.0-beta.26] — 23.11.2026

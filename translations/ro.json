@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Doar solar",
           "solar_plus_battery": "Solar + baterie",
-          "solar_plus_cheap": "Solar + cele mai ieftine ore",
+          "solar_plus_cheap": "Solar + tarif",
           "min_plus_solar": "Min + solar",
           "always_max": "Întotdeauna (max)",
-          "off": "Oprit"
+          "off": "Oprit",
+          "sun": "Soare",
+          "sun_tariff": "Soare + tarif",
+          "now": "Acum"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Rezervorul nu atinge ținta antilegionella",
       "description": "{name}: rezervorul acceptă cel mult {max} °C, sub ținta antilegionella de {target} °C. SEM încălzește la {max} °C, ceea ce poate să nu dezinfecteze rezervorul. Coboară ținta sau verifică maximul rezervorului. Mesajul dispare singur."
     },
-    "guard_stopped": {
-      "title": "Protecția de fază a oprit {charger}",
-      "description": "O fază a depășit limita, așa că SEM a oprit {charger}. Alt sistem controlează acest încărcător, așa că SEM nu îl repornește. Pornește-l manual sau lasă aplicația lui să-l repornească. Mesajul dispare când încărcătorul încarcă din nou sau mașina este deconectată."
+    "phase_switch_refused": {
+      "title": "Schimbare de faze refuzată",
+      "description": "SEM a încercat de {tries} ori să treacă {charger} pe {phases} faze. Home Assistant a refuzat comanda de fiecare dată. SEM nu mai încearcă. Verifică dacă entitatea pentru schimbarea fazelor este disponibilă și acceptă valoarea setată."
+    },
+    "guard_left_off": {
+      "title": "Încărcătorul a rămas oprit după protecția de fază",
+      "description": "SEM a oprit {charger} pentru că o fază a depășit limita. A încercat de {tries} ori să-l pornească, și de fiecare dată faza a depășit din nou. SEM nu mai încearcă. Pornește încărcătorul tu, sau în aplicația care îl controlează, când casa consumă mai puțin."
     },
     "old_found_loads_removed": {
       "title": "SEM nu mai folosește dispozitivele vechi găsite automat",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM lasă în pace dispozitivele de securitate",
       "description": "Aceste dispozitive sunt de securitate (cameră, alarmă, sirenă sau încuietoare): **{names}**. SEM nu le mai afișează și nu le mai comută. Energia lor contează în continuare în totalul casei. Dacă unul este un aparat cu blocare, nu o încuietoare de ușă, adaugă-l cu **Adaugă un dispozitiv**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatizări folosesc nume vechi ale modului de încărcare",
+      "description": "Modurile de încărcare SEM sunt acum Soare, Soare + tarif, Acum și Oprit. Home Assistant refuză numele vechi în select.select_option, iar un declanșator pe un nume vechi nu mai pornește. Modifică acestea: {uses} SEM găsește majoritatea locurilor. Verifică și blueprinturile și automatizările făcute în afara interfeței."
     }
   },
   "selector": {

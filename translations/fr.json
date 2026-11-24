@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Solaire seulement",
           "solar_plus_battery": "Solaire + batterie",
-          "solar_plus_cheap": "Solaire + heures les moins chères",
+          "solar_plus_cheap": "Solaire + tarif",
           "min_plus_solar": "Min + Solaire",
           "always_max": "Toujours (max)",
-          "off": "Arrêt"
+          "off": "Arrêt",
+          "sun": "Soleil",
+          "sun_tariff": "Soleil + tarif",
+          "now": "Maintenant"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Le ballon n'atteint pas la cible légionellose",
       "description": "{name} : le ballon accepte au plus {max} °C, sous la cible légionellose de {target} °C. SEM chauffe à {max} °C, ce qui peut ne pas désinfecter le ballon. Baissez la cible ou vérifiez le maximum du ballon. Ce message disparaît tout seul."
     },
-    "guard_stopped": {
-      "title": "La protection de phase a éteint {charger}",
-      "description": "Une phase dépassait sa limite, donc SEM a éteint {charger}. Un autre système pilote cette borne, donc SEM ne la rallume pas. Rallumez-la à la main, ou laissez son appli la relancer. Ce message disparaît quand la borne charge à nouveau ou que la voiture est débranchée."
+    "phase_switch_refused": {
+      "title": "Changement de phases refusé",
+      "description": "SEM a essayé {tries} fois de passer {charger} sur {phases} phases. Home Assistant a refusé la commande à chaque fois. SEM n'essaie plus. Vérifiez que l'entité de changement de phases est disponible et accepte la valeur réglée."
+    },
+    "guard_left_off": {
+      "title": "Borne laissée éteinte après la protection de phase",
+      "description": "SEM a arrêté {charger} car une phase dépassait sa limite. Il a essayé {tries} fois de la rallumer, et chaque fois la phase a de nouveau dépassé. SEM n'essaie plus. Rallumez la borne vous-même, ou dans l'appli qui la pilote, quand la maison consomme moins."
     },
     "old_found_loads_removed": {
       "title": "SEM n'utilise plus les anciens appareils trouvés automatiquement",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM laisse les appareils de sécurité tranquilles",
       "description": "Ces appareils sont des appareils de sécurité (caméra, alarme, sirène ou serrure de porte) : **{names}**. SEM ne les affiche et ne les commande plus. Leur énergie compte toujours dans le total de la maison. Si l'un d'eux est un appareil avec verrou et non une serrure de porte, ajoutez-le avec **Ajouter un appareil**."
+    },
+    "old_charge_mode_names": {
+      "title": "Des automatisations utilisent d'anciens noms de mode de charge",
+      "description": "Les modes de charge de SEM sont maintenant Soleil, Soleil + tarif, Maintenant et Arrêt. Home Assistant refuse les anciens noms dans select.select_option, et un déclencheur sur un ancien nom ne se déclenche plus. Modifiez ceci : {uses} SEM trouve la plupart des usages. Vérifiez aussi les blueprints et les automatisations créées hors de l'interface."
     }
   },
   "selector": {

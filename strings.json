@@ -1798,7 +1798,10 @@
           "off": "Off",
           "solar_only": "Solar only",
           "solar_plus_battery": "Solar + battery",
-          "solar_plus_cheap": "Solar + cheapest hours"
+          "solar_plus_cheap": "Solar + tariff",
+          "sun": "Sun",
+          "sun_tariff": "Sun + tariff",
+          "now": "Now"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Tank cannot reach the Legionella target",
       "description": "{name}: the tank accepts at most {max} °C, below the Legionella target {target} °C. SEM heats to {max} °C, which may not disinfect the tank. Lower the target, or check the tank's own maximum. This clears by itself."
     },
-    "guard_stopped": {
-      "title": "Phase guard switched off {charger}",
-      "description": "A phase was over its limit, so SEM switched off {charger}. Another party steers this charger, so SEM does not switch it back on. Switch it on by hand, or let its app start it again. This message goes away when the charger charges again or the car is unplugged."
+    "phase_switch_refused": {
+      "title": "Phase switch refused",
+      "description": "SEM tried {tries} times to switch {charger} to {phases} phases. Each time Home Assistant refused the command. SEM no longer tries. Check that the phase switch entity is available and accepts the value set for it."
+    },
+    "guard_left_off": {
+      "title": "Charger left off after the phase guard",
+      "description": "SEM stopped {charger} because a phase was over its limit. It tried {tries} times to switch it back on, and each time the phase went over again. SEM no longer tries. Switch the charger on yourself, or in the app that controls it, when the house uses less power."
     },
     "old_found_loads_removed": {
       "title": "SEM no longer uses old automatically found devices",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM leaves security devices alone",
       "description": "These devices are security devices (a camera, alarm, siren or a door lock): **{names}**. SEM no longer lists or switches them. Their energy still counts in the home total. If one is an appliance with a lock, not a door lock, add it with **Add a device**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automations use old charge mode names",
+      "description": "SEM's charge modes are now Sun, Sun + tariff, Now and Off. Home Assistant refuses the old names in select.select_option, and a trigger on an old name no longer fires. Change these: {uses} SEM finds most uses. Check also blueprints, and automations made outside the UI."
     }
   },
   "selector": {

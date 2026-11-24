@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Alleen zon",
           "solar_plus_battery": "Zon + accu",
-          "solar_plus_cheap": "Zon + goedkoopste uren",
+          "solar_plus_cheap": "Zon + tarief",
           "min_plus_solar": "Mininmaal + Zon",
           "always_max": "Altijd (max)",
-          "off": "Uit"
+          "off": "Uit",
+          "sun": "Zon",
+          "sun_tariff": "Zon + tarief",
+          "now": "Nu"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Boiler haalt het legionelladoel niet",
       "description": "{name}: de boiler neemt hoogstens {max} °C aan, onder het legionelladoel {target} °C. SEM verwarmt tot {max} °C; dat desinfecteert de boiler mogelijk niet. Verlaag het doel of controleer het maximum van de boiler. Deze melding verdwijnt vanzelf."
     },
-    "guard_stopped": {
-      "title": "Fasebewaking heeft {charger} uitgezet",
-      "description": "Een fase zat boven de limiet, daarom heeft SEM {charger} uitgezet. Een andere partij stuurt dit laadpunt, daarom zet SEM het niet weer aan. Zet het met de hand aan, of laat de app het opnieuw starten. Deze melding verdwijnt als het laadpunt weer laadt of de auto wordt losgekoppeld."
+    "phase_switch_refused": {
+      "title": "Fasewissel geweigerd",
+      "description": "SEM heeft {tries} keer geprobeerd {charger} naar {phases} fasen te schakelen. Home Assistant weigerde de opdracht elke keer. SEM probeert het niet meer. Controleer of de entiteit voor de fasewissel beschikbaar is en de ingestelde waarde accepteert."
+    },
+    "guard_left_off": {
+      "title": "Laadpunt uit na de fasebewaking",
+      "description": "SEM heeft {charger} gestopt omdat een fase boven de limiet zat. Het heeft {tries} keer geprobeerd het weer aan te zetten, en elke keer ging de fase weer te hoog. SEM probeert het niet meer. Zet het laadpunt zelf aan, of in de app die het stuurt, als het huis minder stroom gebruikt."
     },
     "old_found_loads_removed": {
       "title": "SEM gebruikt oude automatisch gevonden apparaten niet meer",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM laat beveiligingsapparaten met rust",
       "description": "Deze apparaten zijn beveiligingsapparaten (camera, alarm, sirene of deurslot): **{names}**. SEM toont en schakelt ze niet meer. Hun verbruik telt nog mee in het huisverbruik. Is er een een apparaat met een slot en geen deurslot, voeg het dan toe met **Apparaat toevoegen**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatiseringen gebruiken oude laadmodusnamen",
+      "description": "De laadmodi van SEM heten nu Zon, Zon + tarief, Nu en Uit. Home Assistant weigert de oude namen in select.select_option, en een trigger op een oude naam gaat niet meer af. Pas deze aan: {uses} SEM vindt de meeste plekken. Controleer ook blueprints en automatiseringen die buiten de interface zijn gemaakt."
     }
   },
   "selector": {

@@ -346,6 +346,25 @@ each; the status classifier is independent of these):
 
 ---
 
+## The charger owner and the ledger (#1381)
+
+Every command to a charger goes through one chain and one seam
+(`charger_owner.resolve` → `device.send`); see ARCHITECTURE.md,
+"Charger command owner". Per charger:
+
+- `send` records each write with the entity's state just before, and who
+  asked (`ChargerDecision.source`, `klass`). The record is per charger and
+  never shared.
+- A safety stop of a charger another party steers is *owed*: the owner hands
+  it back when the phase has room, one charger per cycle, the higher
+  priority first, and only after the first car draws does a second one get
+  its turn (the first car's draw is reserved).
+- The hand-back record, its back-off and its failure count live with the
+  charger's EV session state and survive a restart; an unplug ends them.
+- The user's mode reaches the loop as one stored strategy per charger
+  (four modes + battery help → six strategies), read through
+  `effective_charge_mode_for` like before.
+
 ## See also
 
 - [`MULTI_DEVICE_GUIDE.md`](MULTI_DEVICE_GUIDE.md) — end-user setup for

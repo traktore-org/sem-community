@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Kun sol",
           "solar_plus_battery": "Sol + batteri",
-          "solar_plus_cheap": "Sol + billigste timer",
+          "solar_plus_cheap": "Sol + tariff",
           "min_plus_solar": "Min + Sol",
           "always_max": "Alltid (maks)",
-          "off": "Av"
+          "off": "Av",
+          "sun": "Sol",
+          "sun_tariff": "Sol + tariff",
+          "now": "Nå"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Tanken når ikke legionellamålet",
       "description": "{name}: tanken tar høyst {max} °C, under legionellamålet {target} °C. SEM varmer til {max} °C, som kanskje ikke desinfiserer tanken. Senk målet, eller sjekk tankens maksimum. Meldingen forsvinner av seg selv."
     },
-    "guard_stopped": {
-      "title": "Fasevakten slo av {charger}",
-      "description": "En fase var over grensen, så SEM slo av {charger}. Et annet system styrer denne laderen, så SEM slår den ikke på igjen. Slå den på for hånd, eller la appen starte den igjen. Meldingen forsvinner når laderen lader igjen eller bilen kobles fra."
+    "phase_switch_refused": {
+      "title": "Faseskifte avvist",
+      "description": "SEM prøvde {tries} ganger å skifte {charger} til {phases} faser. Home Assistant avviste kommandoen hver gang. SEM prøver ikke mer. Sjekk at entiteten for faseskifte er tilgjengelig og godtar verdien som er satt."
+    },
+    "guard_left_off": {
+      "title": "Lader slått av etter fasevakten",
+      "description": "SEM stoppet {charger} fordi en fase var over grensen. Den prøvde {tries} ganger å slå den på igjen, og hver gang gikk fasen over igjen. SEM prøver ikke mer. Slå på laderen selv, eller i appen som styrer den, når huset bruker mindre strøm."
     },
     "old_found_loads_removed": {
       "title": "SEM bruker ikke lenger gamle automatisk funnede enheter",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM lar sikkerhetsenheter være",
       "description": "Disse enhetene er sikkerhetsenheter (kamera, alarm, sirene eller dørlås): **{names}**. SEM viser og styrer dem ikke lenger. Energien deres teller fortsatt med i husets forbruk. Er en av dem et apparat med lås og ikke en dørlås, legg den til med **Legg til en enhet**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatiseringer bruker gamle navn på lademodus",
+      "description": "SEMs lademoduser heter nå Sol, Sol + tariff, Nå og Av. Home Assistant avviser de gamle navnene i select.select_option, og en utløser på et gammelt navn slår ikke lenger til. Endre disse: {uses} SEM finner de fleste stedene. Sjekk også blueprints og automasjoner laget utenfor grensesnittet."
     }
   },
   "selector": {

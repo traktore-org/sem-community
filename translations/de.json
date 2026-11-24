@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Nur Solar",
           "solar_plus_battery": "Solar + Batterie",
-          "solar_plus_cheap": "Solar + günstigste Stunden",
+          "solar_plus_cheap": "Solar + Tarif",
           "min_plus_solar": "Min. + Solar",
           "always_max": "Immer (max)",
-          "off": "Aus"
+          "off": "Aus",
+          "sun": "Sonne",
+          "sun_tariff": "Sonne + Tarif",
+          "now": "Jetzt"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Speicher erreicht das Legionellen-Ziel nicht",
       "description": "{name}: Der Speicher nimmt höchstens {max} °C an, weniger als das Legionellen-Ziel {target} °C. SEM heizt auf {max} °C; das desinfiziert den Speicher womöglich nicht. Senke das Ziel oder prüfe das Maximum des Speichers. Die Meldung verschwindet von selbst."
     },
-    "guard_stopped": {
-      "title": "Phasenwächter hat {charger} ausgeschaltet",
-      "description": "Eine Phase war über ihrem Limit, darum hat SEM {charger} ausgeschaltet. Diese Ladestation steuert eine andere Partei, darum schaltet SEM sie nicht wieder ein. Schalte sie von Hand ein oder lass ihre App sie wieder starten. Die Meldung verschwindet, wenn die Ladestation wieder lädt oder das Auto abgesteckt wird."
+    "phase_switch_refused": {
+      "title": "Phasenumschaltung abgelehnt",
+      "description": "SEM hat {tries} Mal versucht, {charger} auf {phases} Phasen umzuschalten. Home Assistant hat den Befehl jedes Mal abgelehnt. SEM versucht es nicht mehr. Prüfe, ob die Entität für die Phasenumschaltung verfügbar ist und den eingestellten Wert annimmt."
+    },
+    "guard_left_off": {
+      "title": "Ladestation nach Phasenwächter aus",
+      "description": "SEM hat {charger} gestoppt, weil eine Phase über ihrem Limit war. Es hat {tries}-mal versucht, sie wieder einzuschalten, und jedes Mal war die Phase wieder zu hoch. SEM versucht es nicht mehr. Schalte die Ladestation selbst oder in der steuernden App ein, wenn das Haus weniger Strom braucht."
     },
     "old_found_loads_removed": {
       "title": "SEM nutzt alte automatisch gefundene Geräte nicht mehr",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM lässt Sicherheitsgeräte in Ruhe",
       "description": "Diese Geräte sind Sicherheitsgeräte (Kamera, Alarm, Sirene oder Türschloss): **{names}**. SEM listet und schaltet sie nicht mehr. Ihr Verbrauch zählt weiter zum Hausverbrauch. Ist eines davon ein Gerät mit Sperre und kein Türschloss, füge es mit **Gerät hinzufügen** hinzu."
+    },
+    "old_charge_mode_names": {
+      "title": "Automationen nutzen alte Lademodus-Namen",
+      "description": "Die Lademodi von SEM heissen jetzt Sonne, Sonne + Tarif, Jetzt und Aus. Home Assistant lehnt die alten Namen in select.select_option ab, und ein Auslöser auf einen alten Namen löst nicht mehr aus. Ändere diese: {uses} SEM findet die meisten Stellen. Prüfe auch Blueprints und Automationen, die nicht in der Oberfläche erstellt wurden."
     }
   },
   "selector": {

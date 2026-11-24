@@ -17,7 +17,8 @@ SEM manages your solar, battery, EV charger and household loads inside Home Assi
 
 ## What it does
 
-- **Charges your car from surplus solar**, from 6 to 32 A. In the evening the home battery can help, down to the level your house needs overnight.
+- **Charges your car from surplus solar**, from 6 to 32 A. Four modes: **Sun**, **Sun + tariff**, **Now** and **Off**, and one switch for whether the home battery may help.
+- **One owner per charger.** Every command to a charger goes through one place that knows who asked. A charger SEM stopped for safety is switched back on when there is room.
 - **Plans with the forecast and prices.** Charges in the cheapest hours, and plans the battery around tomorrow's sun.
 - **Shares surplus by priority** between the car, heat pumps, hot water and any switch you add.
 - **Guards the grid peak** on demand tariffs, and pauses loads when the peak limit nears.

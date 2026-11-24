@@ -172,6 +172,278 @@ def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
     return result if isinstance(result, datetime) else None
 
 
+def _sun_tariff_day_of(host: Any, charger_cfg: Any) -> bool:
+    """(#1381 D23) Does this charger run the Sun + tariff day rule (either
+    stored strategy behind "Sun + tariff")? The planner's thin-sun booking
+    and the live thin-sun inputs ask THIS, so plan and gate agree for both.
+
+    A function, not a method: it asks the host's existing
+    ``_tariff_optimized_for`` (the help-off strategy) first, so a host that
+    lacks the new name behaves exactly as before, then adds the help-on
+    strategy (``min_plus_solar``) by its stored mode."""
+    fn = getattr(host, "_tariff_optimized_for", None)
+    try:
+        if callable(fn) and fn(charger_cfg) is True:
+            return True
+    except Exception:  # noqa: BLE001 — an unreadable mode is not this rule
+        pass
+    if getattr(host, "hass", None) is None or not isinstance(charger_cfg, dict):
+        return False
+    try:
+        from ..consts.ev_charge_modes import (
+            MODE_SUN_TARIFF_DAY,
+            effective_charge_mode_for,
+        )
+        return effective_charge_mode_for(
+            host.hass, getattr(host, "config", {}) or {}, charger_cfg,
+        ) in MODE_SUN_TARIFF_DAY
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _now_car_gone(host: Any, power: Any, charger_cfg: Any) -> Optional[bool]:
+    """(#1381 D22) True only for a KNOWN unplug: no car on a charger that
+    has a plug sensor. A sensor-less charger's "no car" is no unplug (#1153),
+    so it ends nothing — None."""
+    try:
+        from .ev_availability import has_plug_sensor
+        if bool(getattr(power, "ev_connected", True)):
+            return False
+        return True if has_plug_sensor(charger_cfg, getattr(host, "config", {}) or {}) else None
+    except Exception:  # noqa: BLE001 — an unreadable plug state ends nothing
+        return None
+
+
+def _thin_sun_of(host: Any, cid: str, charger_cfg: Any):
+    """(#1411) ``host._thin_sun_for(cid, charger_cfg)``, or None when the
+    host has no such method — a test fake built on a bare namespace — or
+    answers with anything but a ``ThinSun`` (a ``MagicMock`` host answers
+    every attribute with another mock). None = not evaluated: the rule
+    stays off, exactly as before it existed."""
+    from .thin_sun import ThinSun
+    fn = getattr(host, "_thin_sun_for", None)
+    try:
+        result = fn(cid, charger_cfg) if callable(fn) else None
+    except Exception:  # noqa: BLE001 — a rule input must never cost a cycle
+        # …but a rule that is silently off is a rule nobody can debug
+        _LOGGER.debug("#1411 thin-sun inputs skipped for %s", cid, exc_info=True)
+        result = None
+    return result if isinstance(result, ThinSun) else None
+
+
+def _thin_sun_block_state(plan: Any, cid: str, now: datetime) -> tuple:
+    """(#1411) ``(in_block, near, end)`` — is a "spare sun plus grid" block
+    of this charger open in the stamped plan right now (and when does it
+    end), and is one open or opening within the next slot
+    (``thin_sun.NEXT_SLOT_S``)?
+
+    Read off the plan's own ``blocks`` rows (the shape ``plan_blocks``
+    writes), so the card and the charger look at one list. A plan older
+    than the planner's own staleness bound (``_MAX_PLAN_AGE``, the one
+    ``plan_gate`` refuses on), or one that does not say when it was
+    stamped, books nothing. That bound is redundant for the blocks
+    themselves — they carry full dates, so yesterday's block cannot match
+    today — and harmless: it is kept so this reader refuses exactly the
+    plans ``plan_gate`` refuses, and a plan nobody can date is not trusted.
+    Anything unreadable is a no."""
+    try:
+        from .energy_plan_actuation import _MAX_PLAN_AGE, _parse_dt
+        from .thin_sun import NEXT_SLOT_S
+        computed = _parse_dt((plan or {}).get("computed_at"))
+        if computed is None or now - computed > _MAX_PLAN_AGE:
+            return (False, False, None)
+        in_block = near = False
+        block_end = None
+        for b in plan.get("blocks") or ():
+            if b.get("id") != f"ev:{cid}" or b.get("reason") != "sun_plus_grid":
+                continue
+            start = datetime.fromisoformat(str(b.get("start")))
+            end = datetime.fromisoformat(str(b.get("end")))
+            if start <= now < end:
+                in_block = near = True
+                block_end = end if block_end is None else max(block_end, end)
+            elif now < start and (start - now).total_seconds() <= NEXT_SLOT_S:
+                near = True
+        return (in_block, near, block_end)
+    except Exception:  # noqa: BLE001 — a plan nobody can read holds no block
+        return (False, False, None)
+
+
+def _thin_sun_sessions_of(host: Any) -> dict:
+    sessions = getattr(host, "_thin_sun_sessions", None)
+    if not isinstance(sessions, dict):
+        sessions = {}
+        try:
+            host._thin_sun_sessions = sessions
+        except Exception:  # noqa: BLE001 — a host that cannot hold it
+            pass
+    return sessions
+
+
+def _thin_sun_rec(host: Any, cid: str) -> Optional[dict]:
+    rec = _thin_sun_sessions_of(host).get(str(cid))
+    return rec if isinstance(rec, dict) else None
+
+
+def _thin_sun_started(host: Any, cid: str) -> Optional[datetime]:
+    """(#1411) When this charger's running thin-sun session started."""
+    rec = _thin_sun_rec(host, cid)
+    started = rec.get("started") if rec else None
+    return started if isinstance(started, datetime) else None
+
+
+#: (#1411) Most samples one window keeps per charger. Readings closer
+#: together than window ÷ this are merged into one bucket, so a fast cycle
+#: (or three views in one cycle) cannot grow the list.
+_THIN_SUN_MAX_SAMPLES = 64
+
+
+def _window_add(buckets: list, now: datetime, value: float,
+                window_s: float) -> None:
+    """Add one reading to a session window, in place. A bucket is
+    ``[time, sum, count]``; readings within one bucket width of the last
+    bucket join it; buckets older than the window are dropped."""
+    width = float(window_s) / max(1, _THIN_SUN_MAX_SAMPLES - 2)
+    if buckets and (now - buckets[-1][0]).total_seconds() < width:
+        buckets[-1][1] += float(value)
+        buckets[-1][2] += 1
+    else:
+        buckets.append([now, float(value), 1])
+    edge = now - timedelta(seconds=float(window_s))
+    while buckets and buckets[0][0] < edge:
+        buckets.pop(0)
+    del buckets[:-_THIN_SUN_MAX_SAMPLES]
+
+
+def _window_mean(buckets: Any, now: datetime, window_s: float) -> Optional[float]:
+    """The mean of the readings in the window; None until the window is
+    full (``thin_sun.WINDOW_FULL_SHARE`` of its length is covered)."""
+    from .thin_sun import WINDOW_FULL_SHARE
+    try:
+        edge = now - timedelta(seconds=float(window_s))
+        live = [b for b in (buckets or ()) if b[0] >= edge]
+        if not live:
+            return None
+        if (now - live[0][0]).total_seconds() < WINDOW_FULL_SHARE * float(window_s):
+            return None
+        count = sum(int(b[2]) for b in live)
+        return sum(float(b[1]) for b in live) / count if count else None
+    except Exception:  # noqa: BLE001 — a window nobody can read says nothing
+        return None
+
+
+def _thin_sun_sun_mean(host: Any, cid: str, now: datetime) -> Optional[float]:
+    """(#1411) The session's mean spare sun over the last three minutes;
+    None until that window is full."""
+    from .thin_sun import NO_SUN_GRACE_S
+    rec = _thin_sun_rec(host, cid)
+    return _window_mean(rec.get("sun") if rec else None, now, NO_SUN_GRACE_S)
+
+
+def _thin_sun_min_block_s(host: Any) -> float:
+    try:
+        cfg = getattr(host, "config", None) or {}
+        return max(0.0, float(cfg.get("ev_min_block_minutes", 15)) * 60.0)
+    except (TypeError, ValueError, AttributeError):
+        return 900.0
+
+
+def _spare_sun_of(view: Any) -> Optional[float]:
+    """(#1411) The spare sun the decision saw, for the session's no-sun
+    clock; None when it cannot be read (then the clock is left alone)."""
+    try:
+        from .decide import self_consumption_surplus_w
+        return max(0.0, float(self_consumption_surplus_w(view)))
+    except Exception:  # noqa: BLE001 — unknown is not "no sun"
+        return None
+
+
+#: (#1411) The mode whose day decisions may carry a thin-sun session.
+_THIN_SUN_MODE = "solar_plus_cheap"
+
+
+def _note_thin_sun(host: Any, cid: str, decision: Any,
+                   sun_w: Optional[float] = None, *,
+                   is_night: bool = False) -> None:
+    """(#1411) Keep the thin-sun session of one charger.
+
+    It STARTS the moment a decision first carries the rule's reason code.
+
+    It SURVIVES a strong-sun stretch: while the car charges on the sun
+    alone the session stays, start time and all, so a cloud back under the
+    minimum is the same session on its "keep running" thresholds — not a
+    new start with strict ones, which stopped a car that ran a minute
+    before.
+
+    It ENDS — a session is not a licence —
+    * with the charge mode (the decision's mode is no longer the tariff
+      mode: a switch to Always (max), a schedule, a pause);
+    * at night;
+    * with the car (any decision that does not charge: unplugged, idle);
+    * with any charge the sun does not fund and the rule did not make (a
+      night block, a deadline floor, a cheap-hour top-up, Start now);
+    * a minimum block after the end of its plan block — the block it
+      started in, or a following one it kept charging thin sun in. A
+      session that strong sun carries for hours must not come back as a
+      running one in the evening.
+
+    Beside the start it keeps the session's spare-sun readings of the last
+    three minutes (``sun_gone``, a hard limit, is their mean).
+    ``_thin_sun_for`` hands the session to the next cycle's view. Never
+    raises."""
+    try:
+        from . import reason_codes as _rc
+        from .charger_types import ChargerIntent
+        from .thin_sun import NO_SUN_GRACE_S
+        sessions = _thin_sun_sessions_of(host)
+        key = str(cid)
+        code = getattr(decision, "reason_code", None)
+        thin = code == _rc.CHARGER_SUN_PLUS_GRID
+        sun_funded = (code == _rc.CHARGER_SUN
+                      and getattr(decision, "intent", None)
+                      is ChargerIntent.CHARGE_AT_AMPS)
+        rec = sessions.get(key)
+        if not isinstance(rec, dict):
+            rec = None
+        if (is_night or getattr(decision, "mode", None) != _THIN_SUN_MODE
+                or not (thin or (sun_funded and rec is not None))):
+            sessions.pop(key, None)
+            return
+        now = dt_util.now()
+        block_s = _thin_sun_min_block_s(host)
+        if thin:
+            if rec is None:
+                rec = sessions[key] = {"started": now}
+            _in, _near, end = _thin_sun_block_state(
+                getattr(host, "_energy_plan_shadow", None), cid, now)
+            until = (end or now) + timedelta(seconds=block_s)
+            prev = rec.get("until")
+            rec["until"] = max(prev, until) if isinstance(prev, datetime) else until
+        # every cycle of the session, thin or strong: the window's mean is
+        # what says "the sun is gone", not this cycle's reading
+        if sun_w is not None:
+            _window_add(rec.setdefault("sun", []), now, float(sun_w),
+                        NO_SUN_GRACE_S)
+        until = rec.get("until")
+        if isinstance(until, datetime) and now > until:
+            sessions.pop(key, None)
+    except Exception:  # noqa: BLE001 — bookkeeping must never cost a cycle
+        return
+
+
+def _export_known_of(host: Any) -> bool:
+    """(#1411) ``host._export_price_known()`` as a plain bool; False when
+    the host has no such method (a test fake on a bare namespace) or the
+    answer is not a bool (a ``MagicMock`` host). Unknown = the thin-sun
+    rule stays off."""
+    fn = getattr(host, "_export_price_known", None)
+    try:
+        result = fn() if callable(fn) else False
+    except Exception:  # noqa: BLE001 — unreadable is unknown
+        result = False
+    return result is True
+
+
 def _capability_clock() -> float:
     """(#996) The clock the capability miss streak is measured on — its own
     name so a test can move it without moving the event loop's."""
@@ -1563,6 +1835,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # short (see _SHADOW_PARTIAL_GRACE_S).
         self._shadow_plan_date = None
         self._energy_plan_shadow: Optional[Dict[str, Any]] = None
+        # (#1411) per charger: the stamped plan's own dark and strong-sun
+        # hours, the live thin-sun rule's reference (``thin_sun.ThinSunRefs``)
+        self._thin_sun_refs: Dict[str, Any] = {}
+        # (#1411) per charger: when its running thin-sun session started
+        self._thin_sun_sessions: Dict[str, Any] = {}
         self._shadow_partial_since = None
         # (#638 G4) actuation opt-in — the plan's blocks feed the existing
         # night signals only while this is True. Seeded from the persisted
@@ -5565,6 +5842,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             else per_remaining_floor
                         )
                         try:
+                            # (#1381 D22) a Now ends when its car leaves: the
+                            # next car plugged in never inherits full power
+                            self._now_follow_car(
+                                cid, _now_car_gone(self, power, charger_cfg))
                             _view_mode = _po.charger_mode_for(
                                 self._plan_overrides, cid, per_mode, _now_override)
                         except Exception:  # noqa: BLE001 — a bad override is no override
@@ -5582,6 +5863,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # off for the rest of this plug-in.
                             redirect_allowed=not bool(getattr(
                                 getattr(pcc, "state", None), "redirect_vetoed", False)),
+                            # (#1411) the thin-sun rule's prices and forecast
+                            thin_sun=_thin_sun_of(self, cid, charger_cfg),
                             charger_cfg=charger_cfg,
                             mode=_view_mode,
                             daily_ev_kwh=self._charger_daily_kwh(cid, energy),
@@ -5650,49 +5933,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # below re-stamps the reason: the phase tick asks it
                         # whether the grid pays for this charge
                         _decide_code = decision.reason_code
+                        _note_thin_sun(                          # (#1411)
+                            self, cid, decision, sun_w=_spare_sun_of(view),
+                            is_night=bool(view.fleet.is_night))
                         from .vpp_dispatch import vpp_pause_override
-                        decision = vpp_pause_override(
-                            decision, getattr(self, "_vpp_ev_override", None) == "pause")
-                        try:
-                            from . import plan_override as _po
-                            decision = _po.apply_to_charger_decision(
-                                self._plan_overrides, cid, decision, _now_override)
-                        except Exception:  # noqa: BLE001 — a bad override is no override
-                            _LOGGER.debug("plan override read skipped for %s", cid,
-                                          exc_info=True)
-                        # Hysteresis stability layer (#461 flapping):
-                        # median smoothing + ramp limit + delta/debounce
-                        # guards + enable/disable delays. Applied BEFORE
-                        # state display + actuation so the sensor state,
-                        # strategy string and contactor all agree on the
-                        # held decision.
+                        from .active_phase_guard import filter_charger_decision
+                        from . import charger_owner as _owner
                         # (#1391) A charger SEM yields to another party
                         # gets no start ladder and shows no act of SEM's.
                         _yielded = self._yields_charger(cid)
-                        decision = self._yield_or_stabilise(
-                            cid, decision, view, adapter, _now_mono_cycle)
-                        # Safety write gate is deliberately LAST: stability
-                        # logic must never bridge or ramp around an emergency
-                        # phase-guard stop.
-                        from .active_phase_guard import filter_charger_decision
-                        decision = filter_charger_decision(
-                            self, decision, adapter=adapter, power=view.power,
-                            # (#804 B4d) the live phase belief — a 3→1
-                            # switch tightens the per-phase clamp at once.
-                            believed_phases=getattr(
-                                self, "_phase_believed", {}).get(cid),
-                        )
-                        # (#804 Phase B/C) The phase sequencer may hold the
-                        # decision at IDLE while a switch walks its
-                        # stop→switch→settle sequence. AFTER the safety gate
-                        # on purpose: the tick only ever weakens a CHARGE
-                        # into IDLE and passes emergency stops untouched.
-                        # (#1391) Not for a charger another party steers:
-                        # SEM plans no phases for a box it does not drive,
-                        # and the entity switch in the tick is gated on
-                        # observer mode only.
-                        if not _yielded:
-                            decision = await self._phase_switch_tick(
+
+                        def _plan_override_step(d, cid=cid):
+                            try:
+                                from . import plan_override as _po
+                                return _po.apply_to_charger_decision(
+                                    self._plan_overrides, cid, d, _now_override)
+                            except Exception:  # noqa: BLE001 — a bad override is no override
+                                _LOGGER.debug("plan override read skipped for %s",
+                                              cid, exc_info=True)
+                                return d
+
+                        async def _phase_step(decision, cid=cid,
+                                              charger_cfg=charger_cfg,
+                                              adapter=adapter, view=view,
+                                              _decide_code=_decide_code,
+                                              _yielded=_yielded):
+                            # (#804 Phase B/C) The phase sequencer may hold
+                            # the decision at IDLE while a switch walks its
+                            # stop→switch→settle sequence. AFTER the safety
+                            # gate on purpose: the tick only ever weakens a
+                            # CHARGE into IDLE and passes emergency stops
+                            # untouched. (#1391) Not for a charger another
+                            # party steers: SEM plans no phases for a box it
+                            # does not drive.
+                            if _yielded:
+                                return decision
+                            return await self._phase_switch_tick(
                                 cid, charger_cfg, decision, view.power,
                                 _now_mono_cycle,
                                 setpoint_a=int(float(getattr(
@@ -5716,6 +5992,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     cid, getattr(adapter, "_device", None),
                                     view.power.power_w),
                             )
+
+                        # (#1381, charger owner S3) The chain, in the order
+                        # it has always run — lowest precedence first, the
+                        # safety gate last so nothing bridges or ramps
+                        # around its stop, the sequencer after it because it
+                        # only weakens a charge. ``resolve`` keeps the trail
+                        # of who changed the decision.
+                        decision, _trail = await _owner.resolve(decision, [
+                            (_owner.SRC_VPP_PAUSE, _owner.CommandClass.SAFETY,
+                             lambda d: vpp_pause_override(
+                                 d, getattr(self, "_vpp_ev_override", None) == "pause")),
+                            (_owner.SRC_PLAN_SKIP, _owner.CommandClass.USER,
+                             _plan_override_step),
+                            # Hysteresis stability layer (#461 flapping) or
+                            # the yield: BEFORE state display + actuation so
+                            # the sensor, strategy and contactor agree.
+                            (_owner.SRC_STABILITY, _owner.CommandClass.SUN,
+                             lambda d, cid=cid, view=view, adapter=adapter:
+                             self._yield_or_stabilise(
+                                 cid, d, view, adapter, _now_mono_cycle)),
+                            (_owner.SRC_PHASE_GUARD, _owner.CommandClass.SAFETY,
+                             lambda decision, adapter=adapter, view=view, cid=cid:
+                             filter_charger_decision(
+                                 self, decision, adapter=adapter, power=view.power,
+                                 # (#804 B4d) the live phase belief — a 3→1
+                                 # switch tightens the per-phase clamp at once.
+                                 believed_phases=getattr(
+                                     self, "_phase_believed", {}).get(cid))),
+                            (_owner.SRC_PHASE_SEQUENCER,
+                             _owner.CommandClass.HARD_LIMIT, _phase_step),
+                        ])
+                        _owner.note_trail(self, cid, _trail)
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
                         # can distinguish "SEM idle, EV at 0W is correct"
@@ -5823,10 +6131,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         effective_state = _ov
                             else:
                                 _no_draw.pop(cid, None)
-                        # (#1381) off after the guard's stop: never "night
-                        # charging active" at 0 W
-                        from . import guard_notice as _gn_state
-                        effective_state = _gn_state.effective_state(
+                        # (#1381) held off after the guard's stop: say so,
+                        # never "night charging active" at 0 W
+                        from . import charger_owner as _owner_state
+                        effective_state = _owner_state.effective_state(
                             self, cid, effective_state)
                         pcc.effective_state = effective_state
                         # (#1404) The notice names THIS charger's amps and
@@ -5879,9 +6187,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     grid_import_known=bool(getattr(
                                         view.fleet, "grid_import_known", True)),
                                 )
-                        # (#1381) the guard's stop of a yielded charger is told
-                        from . import guard_notice as _gn
-                        _gn.clear_when_back(self, cid, view.power, now=time.time())
                         _pg_reason = yield_override_reason(self, decision)
                         try:
                             await actuate(
@@ -5892,8 +6197,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 yielded=self.external_yielding(f"charger:{cid}"),
                                 phase_override=_pg_reason,
                             )
-                            if _pg_reason and not self._observer_mode:
-                                _gn.note_stop(self, cid, _pg_reason, now=time.time())
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
                             # remaining headroom (#274/H1). Estimate from the setpoint
@@ -5978,6 +6281,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
                             _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
+                        # (#1381, charger owner S5) the guard's stop of a
+                        # yielded charger leaves an owed undo in the ledger:
+                        # keep it as this charger's record. Outside the
+                        # actuate try, so a failed write elsewhere in the
+                        # cycle still hands its facts and owed writes over.
+                        try:
+                            if _owner.after_charger_cycle(
+                                    self, cid, adapter, view.power, _pg_reason,
+                                    yielded=_yielded, now=time.time()):
+                                self._save_ev_session_state()
+                        except Exception as e:  # noqa: BLE001
+                            _LOGGER.error("phase guard hand-back record failed "
+                                          "for %s: %s", cid, e)
+                # (#1381) one charger per cycle gets its guard stop undone
+                from . import charger_owner as _owner_step
+                try:
+                    await _owner_step.fleet_step(self, now=time.time())
+                except Exception as e:  # noqa: BLE001 — never breaks the cycle
+                    _LOGGER.error("phase guard hand-back failed: %s", e)
                 self._save_ev_session_state()
             elif self._ev_device:
                 # Single-charger legacy path — also flipped to the new pipeline.
@@ -6020,6 +6342,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 per_mode = self._effective_charge_mode_for(
                     self._primary_charger_cfg()
                 )
+                # (#1381 D20/D22) the same Now as the fleet path: the
+                # user's timed full power, ended on a known unplug
+                try:
+                    from . import plan_override as _po1
+                    self._now_follow_car(
+                        cid, _now_car_gone(self, power, self._primary_charger_cfg()))
+                    per_mode = _po1.charger_mode_for(
+                        self._plan_overrides, cid, per_mode, dt_util.now())
+                except Exception:  # noqa: BLE001 — a bad override is no override
+                    pass
                 view = build_charger_view(
                     self._cycle_fleet_state,
                     charger_id=cid,
@@ -6027,6 +6359,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ev_priority=self._ev_priority_for(cid),
                     wpa_table=self._wpa_table_for(cid),
                     active_phases=self._active_phases_for(cid),   # (#1412)
+                    thin_sun=_thin_sun_of(           # (#1411)
+                        self, cid, self._primary_charger_cfg()),
                     charger_cfg={},
                     mode=per_mode,
                     daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
@@ -6052,23 +6386,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ),
                 )
                 decision = decide_v2(view)
-                # Hysteresis stability layer (#461 flapping) — the
-                # single-charger legacy branch needs the same protection,
-                # and the same #1391 yield.
-                decision = self._yield_or_stabilise(
-                    cid, decision, view, adapter, _now_mono_cycle)
+                _note_thin_sun(                                  # (#1411)
+                    self, cid, decision, sun_w=_spare_sun_of(view),
+                    is_night=bool(view.fleet.is_night))
                 from .active_phase_guard import filter_charger_decision
-                decision = filter_charger_decision(
-                    self, decision, adapter=adapter, power=view.power,
-                    # (#804 B4d) the legacy single-charger path never runs
-                    # phase switching, so the belief is always absent here —
-                    # passed for one uniform call shape, resolves to the
-                    # nameplate fallback.
-                    believed_phases=getattr(
-                        self, "_phase_believed", {}).get("ev_charger"),
-                )
-                from . import guard_notice as _gn
-                _gn.clear_when_back(self, cid, view.power, now=time.time())
+                from . import charger_owner as _owner
+                # (#1381, charger owner S3) the same chain as the fleet path,
+                # minus the steps this legacy branch never had.
+                decision, _trail = await _owner.resolve(decision, [
+                    # Hysteresis stability layer (#461 flapping) — the
+                    # single-charger legacy branch needs the same protection,
+                    # and the same #1391 yield.
+                    (_owner.SRC_STABILITY, _owner.CommandClass.SUN,
+                     lambda d: self._yield_or_stabilise(
+                         cid, d, view, adapter, _now_mono_cycle)),
+                    (_owner.SRC_PHASE_GUARD, _owner.CommandClass.SAFETY,
+                     lambda decision: filter_charger_decision(
+                         self, decision, adapter=adapter, power=view.power,
+                         # (#804 B4d) the legacy single-charger path never
+                         # runs phase switching, so the belief is always
+                         # absent here — passed for one uniform call shape,
+                         # resolves to the nameplate fallback.
+                         believed_phases=getattr(
+                             self, "_phase_believed", {}).get("ev_charger"))),
+                ])
+                _owner.note_trail(self, cid, _trail)
                 _pg_reason = yield_override_reason(self, decision)
                 try:
                     await actuate(
@@ -6078,13 +6420,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         yielded=self.external_yielding(f"charger:{cid}"),
                         phase_override=_pg_reason,
                     )
-                    if _pg_reason and not self._observer_mode:
-                        _gn.note_stop(self, cid, _pg_reason, now=time.time())
-                    self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("EV control service failed: %s", e)
                 except ValueError as e:
                     _LOGGER.warning("EV control invalid value: %s", e)
+                # (#1381, charger owner S5) as in the fleet path, on its own:
+                # a hand-back failure is not an EV control error and never
+                # skips the save
+                try:
+                    _owner.after_charger_cycle(
+                        self, cid, adapter, view.power, _pg_reason,
+                        yielded=self._yields_charger(cid), now=time.time())
+                    await _owner.fleet_step(self, now=time.time())
+                except Exception as e:  # noqa: BLE001 — never breaks the cycle
+                    _LOGGER.error("phase guard hand-back failed: %s", e)
+                self._save_ev_session_state()
 
             # Step 7.5c+d (unified): Battery control via decide_battery + actuate_battery
             #
@@ -6284,12 +6634,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 charging_state,
                 getattr(self, "_effective_states_per_charger", None) or {},
             )
-            # (#1381) FLEET-READ: a charger off after the guard's stop and
-            # no car drawing — the fleet text says so
-            from . import guard_notice as _gn_fleet
-            charging_state = _gn_fleet.fleet_state(
-                self, charging_state,
-                any_drawing=float(getattr(power, "ev_power", 0.0) or 0.0) > 500.0)
+            # (#1381) a charger held off after the guard's stop, none drawing:
+            # the fleet text says so instead of the plan's "charging"
+            from . import charger_owner as _owner_fleet
+            charging_state = _owner_fleet.fleet_state(self, charging_state)
 
             # Step 11: Build complete data structure
             sem_data = SEMData(
@@ -10173,6 +10521,94 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         fallback = self._configured_export_rate()
         return lambda ts: tariff_export_rate_at(prov, ts, fallback)
 
+    def _export_price_known(self) -> bool:
+        """(#1411) Did the user give SEM an export price?
+
+        Known = ``electricity_export_rate`` is stored and is a number. That
+        is the price SEM uses for every money figure, so it is the price
+        this rule compares with — the settings pre-fill 0.075, and the
+        guide says it must be right for this mode. The rule's own margin
+        (``thin_sun.START_MARGIN``) is what keeps a rough number from
+        buying grid power for a 3 % saving.
+
+        Unknown = the key is absent or not a number. A live feed-in entity
+        does not make it known: when that entity is unavailable the reader
+        falls back to the stored rate, and with none stored there is no
+        price to compare with.
+        """
+        try:
+            raw = self.config.get("electricity_export_rate")
+            if raw is None or isinstance(raw, bool):
+                return False
+            value = float(raw)
+            return value == value and value not in (float("inf"), float("-inf"))
+        except Exception:  # noqa: BLE001 — not a number is unknown
+            return False
+
+    def _thin_sun_for(self, cid: str, charger_cfg: Any):
+        """(#1411) The live inputs of the thin-sun rule for one charger, or
+        None (= not evaluated, the rule stays off).
+
+        Only for the tariff mode, and only against a stamped plan: the
+        cheapest later hour and the strong sun still to come are read off
+        the plan's own ledger (``_thin_sun_refs``), so the charger compares
+        against the same hours the plan on the card compared against. The
+        two prices of NOW come from the tariff provider, as every planner
+        surface reads them.
+        """
+        try:
+            if not _sun_tariff_day_of(self, charger_cfg):
+                return None
+            refs = (getattr(self, "_thin_sun_refs", None) or {}).get(str(cid))
+            if refs is None:
+                return None
+            from .day_ledger import tariff_export_rate_at, tariff_price_at
+            from .thin_sun import ThinSun
+            now = dt_util.now()
+            prov = getattr(self, "_tariff_provider", None)
+            export = (tariff_export_rate_at(
+                prov, now, self._configured_export_rate())
+                if self._export_price_known() else None)
+            started = _thin_sun_started(self, cid)
+            in_block, block_near, _end = _thin_sun_block_state(
+                getattr(self, "_energy_plan_shadow", None), cid, now)
+            block_s = _thin_sun_min_block_s(self)
+            import_now = tariff_price_at(prov, now)
+            cheapest = refs.cheapest_after(now)
+            # the share of the last five minutes in which a price was
+            # unreadable in this session: a short gap is bridged, mostly
+            # unreadable ends it (``price_unknown``)
+            price_blind_share = None
+            rec = _thin_sun_rec(self, cid)
+            if rec is not None:
+                from .thin_sun import PRICE_BRIDGE_S
+                blind = (export is None or import_now is None
+                         or cheapest is None)
+                _window_add(rec.setdefault("price", []), now,
+                            1.0 if blind else 0.0, PRICE_BRIDGE_S)
+                price_blind_share = _window_mean(
+                    rec.get("price"), now, PRICE_BRIDGE_S)
+            return ThinSun(
+                export_price=export,
+                import_now=import_now,
+                cheapest_later=cheapest,
+                # no sun slot in the stamped plan = no forecast to ask:
+                # unknown, and the rule does not fire on an unknown
+                strong_sun_kwh=(refs.strong_kwh_after(now)
+                                if refs.forecast_known else None),
+                # the charger acts only inside a thin-sun block of the
+                # stamped plan — read off the plan itself, if it is fresh
+                in_block=in_block,
+                block_near=block_near,
+                session_s=(max(0.0, (now - started).total_seconds())
+                           if started is not None else None),
+                sun_mean_w=_thin_sun_sun_mean(self, cid, now),
+                price_blind_share=price_blind_share,
+                min_block_s=block_s,
+            )
+        except Exception:  # noqa: BLE001 — a rule input must never cost a cycle
+            return None
+
     def _export_value_threshold(self) -> float:
         """(#1090) Below this export value a kWh is not worth sending out.
         Read from the config every cycle, so a change applies live."""
@@ -12172,7 +12608,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # ── (#1085 Part B) one-off plan overrides ──────────────────────────
     def set_plan_override(
         self, device_id: str, action: str, minutes: int,
-        value: Optional[float] = None,
+        value: Optional[float] = None, *, user_now: bool = False,
+        fixed_end: bool = False,
     ) -> None:
         """Set ``device_id``'s one-off override — tonight only, survives
         a restart, auto-expires. Replaces any override already on this
@@ -12207,9 +12644,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 f"not a charger, a battery or a load: {device_id!r} "
                 f"(one of {sorted(known | _override_load_ids(self))})")
         now = dt_util.utcnow()
+        # (#1381 D30) A charger's force waits for its car: it starts on the
+        # first cycle the car is known to be in (a relative Now counts its
+        # minutes from then; a chosen clock time keeps that time). Until
+        # then it holds at most a day, the override's own bound.
+        is_charger = device_id in known and device_id not in batteries \
+            and device_id != "primary"
+        waits = action == "force" and is_charger
+        if waits and not fixed_end:
+            expires = now + timedelta(minutes=_po.MAX_OVERRIDE_MINUTES)
+        else:
+            expires = now + timedelta(minutes=minutes)
         self._plan_overrides = _po.set_override(
-            self._plan_overrides, device_id, action,
-            now + timedelta(minutes=minutes), now, value=value)
+            self._plan_overrides, device_id, action, expires, now,
+            value=value, user_now=bool(user_now and is_charger),
+            started=not waits, minutes=int(minutes) if waits else None,
+            fixed_end=bool(fixed_end))
         if self._storage is not None:
             self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
         _LOGGER.info("Plan override: %s %s for %d min", device_id, action, minutes)
@@ -12236,6 +12686,54 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _LOGGER.debug("Load overrides unreadable", exc_info=True)
             return {}
         return out
+
+    def now_minutes_for(self, cid: str, now=None) -> int:
+        """(#1381 S11) How long "Now" runs when the user picks it: until the
+        plan's next block for this charger starts, else until the plan ends,
+        else two hours. 1–1440 minutes (the override's own bounds).
+
+        Owner's rule: Now ends at the next plan block (or a time the user
+        chooses). (#1381 D22) "Next block" is THIS charger's car's next
+        block only; a block already running is not "next", and without one
+        Now runs 120 minutes — never to the end of another device's block
+        (a battery block ending at 06:00 kept a car at full power ~13 h)."""
+        now = now or dt_util.utcnow()
+        plan = getattr(self, "_energy_plan_shadow", None)
+        starts, ends = [], []
+        if isinstance(plan, dict):
+            for b in plan.get("blocks") or ():
+                if not isinstance(b, dict):
+                    continue
+                try:
+                    bs = dt_util.parse_datetime(str(b.get("start")))
+                    be = dt_util.parse_datetime(str(b.get("end")))
+                except (TypeError, ValueError):
+                    continue
+                if bs is None or be is None:
+                    continue
+                if be > now:
+                    ends.append(be)
+                if b.get("id") == f"ev:{cid}" and bs > now:
+                    starts.append(bs)
+        target = min(starts) if starts else None
+        if target is None:
+            return 120
+        minutes = int((target - now).total_seconds() // 60)
+        return max(1, min(24 * 60, minutes))
+
+    def _now_follow_car(self, cid: str, car_absent: Optional[bool]) -> None:
+        """(#1381 D22/D30) A charger force waits for its car, then ends when
+        the car leaves (``plan_override.end_now_on_unplug``)."""
+        from . import plan_override as _po
+        new = _po.end_now_on_unplug(
+            self._plan_overrides, cid, car_absent, dt_util.utcnow())
+        if new is self._plan_overrides:
+            return
+        self._plan_overrides = new
+        if self._storage is not None:
+            self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        _LOGGER.info("Plan override %s: %s", cid,
+                     "started — the car is in" if cid in new else "ended — the car left")
 
     def clear_plan_override(self, device_id: str) -> None:
         """End ``device_id``'s override now, if one is set."""
@@ -14046,7 +14544,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # up from the grid at its import price — but only for the
                     # Min floor, the one need the live gate buys grid for
                     # (``kwh`` is that floor: bound="min", > 0.1 as in decide)
-                    grid_in_sun=bool(self._tariff_optimized_for(cfg)
+                    grid_in_sun=bool(_sun_tariff_day_of(self, cfg)
                                      and float(kwh) > 0.1),
                 ))
             # Load min-runtime deficits eligible for a night source.
@@ -14645,6 +15143,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     export_rate=self._export_rate_at(),
                     co2_at=_co2_at,
                     step_s=_step_s,
+                    # (#1411) the thin-sun rule's two words about a sun
+                    # hour: is the export price one the user gave, and
+                    # is the tariff at a peak level
+                    export_known=_export_known_of(self),
+                    level_peak_at=lambda ts: PriceView(prov).at(ts).peak,
                 ))
                 t = day_end
             while t < night_end:
@@ -14805,6 +15308,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             _blocks[0]["end"].strftime("%H:%M"))
             except Exception:  # noqa: BLE001 — a spend block never costs a plan
                 fsell = None
+            # (#1411) The live thin-sun rule compares against THIS ledger's
+            # hours, per charger that may take grid power in a sun hour.
+            try:
+                from .thin_sun import refs_from_ledger
+                self._thin_sun_refs = {
+                    str(d.id)[3:]: refs_from_ledger(
+                        ledger, deadline=d.deadline,
+                        min_w=d.min_power_w, max_w=d.max_power_w)
+                    for d in demands
+                    if d.kind == "ev" and d.grid_in_sun
+                    and str(d.id).startswith("ev:")}
+            except Exception:  # noqa: BLE001 — no refs = the rule stays off
+                self._thin_sun_refs = {}
             from .self_consumption import predict_self_consumption
             if quiet_night and not demands:
                 # Nothing to pack — but the books are open now, so the quiet
@@ -16848,6 +17364,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1412) the phases SEM set or measured
             active_phases=self._active_phases_for(
                 _primary_cfg.get("id") or "ev_charger", _primary_cfg),
+            thin_sun=_thin_sun_of(                   # (#1411)
+                self, _primary_cfg.get("id") or "ev_charger", _primary_cfg),
             charger_cfg=_primary_cfg,
             mode=self._effective_charge_mode_for(_primary_cfg),
             daily_ev_kwh=self._charger_daily_kwh(
@@ -17237,6 +17755,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # and allow the battery to drain for the full 45 s again).
         # The stability timers are at the top level of the blob (fleet-wide).
         # Be fully defensive: any error → skip, never raise.
+        # (#1381) a guard stop SEM still owes a hand-back survives a restart
+        try:
+            from . import charger_owner as _owner_restore
+            _owner_restore.from_store(self, state.get("guard_stops"))
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("guard_stops restore failed, skipping", exc_info=True)
         try:
             stability_blob = state.get("stability_timers")
             if stability_blob is not None:
@@ -17256,6 +17780,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Stability timers are fleet-wide (one ChargeStability instance),
         # so they are stored at the top level of the blob, not per-charger.
         stability_snapshot = self._charge_stability.snapshot_timers(time.monotonic())
+        from . import charger_owner as _owner_store
 
         # Multi-charger (#112): save all chargers
         if self._ev_devices:
@@ -17277,6 +17802,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ),
                 "chargers": per_charger,
                 "stability_timers": stability_snapshot,
+                "guard_stops": _owner_store.to_store(self),   # (#1381)
             })
         elif self._ev_device:
             ev = self._ev_device
@@ -17285,6 +17811,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ev._session_active, ev._current_setpoint, self._session_data,
                 ),
                 "stability_timers": stability_snapshot,
+                "guard_stops": _owner_store.to_store(self),   # (#1381)
             })
 
     def _serialize_session_state(

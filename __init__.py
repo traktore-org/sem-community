@@ -35,6 +35,7 @@ import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
 from .coordinator.charge_pause import forget_on_mode_write
+from .consts.ev_charge_modes import BATTERY_HELP_KEY, apply_user_mode_write   # (#1381 S9)
 from .coordinator.install_modules import MODULE_EVIDENCE_KEYS
 from .const import (
     BATTERY_FLIP_SENSORS_KEY,
@@ -731,14 +732,23 @@ def _merge_ev_chargers_by_id(existing: list, incoming: list) -> list:
             continue
         base = dict(c)
         if cid in incoming_by_id:
-            inc = incoming_by_id[cid]
+            inc = dict(incoming_by_id[cid])
+            # (#1381 S9) the mode pair is written through the one helper,
+            # which reads the charger's state BEFORE the write
+            mode_keys = [k for k in ("charge_mode", BATTERY_HELP_KEY) if k in inc]
+            pending = {k: inc.pop(k) for k in mode_keys}
             base.update(inc)
-            if "charge_mode" in inc:
-                forget_on_mode_write(base, "charge_mode", inc["charge_mode"])
+            for k in mode_keys:
+                apply_user_mode_write(base, k, pending[k])
+            if "charge_mode" in pending:
+                forget_on_mode_write(base, "charge_mode", base.get("charge_mode"))
         merged.append(base)
         merged_ids.add(cid)
     for cid in new_ids:
         fresh = dict(incoming_by_id[cid])
+        for k in ("charge_mode", BATTERY_HELP_KEY):     # (#1381 S9)
+            if k in fresh:
+                apply_user_mode_write(fresh, k, fresh[k])
         forget_on_mode_write(fresh, "charge_mode", fresh.get("charge_mode"))
         merged.append(fresh)
     return merged
@@ -778,10 +788,12 @@ def persist_per_charger_option(
     ev_chargers = [dict(c) for c in source_chargers if isinstance(c, dict)]
     for charger in ev_chargers:
         if charger.get("id") == charger_id:
-            charger[key] = value
+            # (#1381 S9) a user mode / the battery-help switch become the
+            # stored strategy pair here, the one write path entities share
+            apply_user_mode_write(charger, key, value)
             if by_owner:
                 charger[f"{key}_by_owner"] = True
-            forget_on_mode_write(charger, key, value)    # (#980)
+            forget_on_mode_write(charger, key, charger.get(key))    # (#980)
             break
     else:
         recovered = next(
@@ -789,10 +801,10 @@ def persist_per_charger_option(
              if isinstance(c, dict) and c.get("id") == charger_id),
             {"id": charger_id},
         )
-        recovered[key] = value
+        apply_user_mode_write(recovered, key, value)     # (#1381 S9)
         if by_owner:
             recovered[f"{key}_by_owner"] = True
-        forget_on_mode_write(recovered, key, value)      # (#980)
+        forget_on_mode_write(recovered, key, recovered.get(key))      # (#980)
         ev_chargers.append(recovered)
         _LOGGER.warning(
             "Charger '%s' was missing from the stored ev_chargers list "
@@ -3641,6 +3653,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
         entry.async_on_unload(async_at_started(hass, _schedule_retirement))
 
+    # (#1381 D19) One Repair names every automation or script that still
+    # sets or tests a charge mode by an old name (HA refuses those on
+    # select.select_option). Checked once HA has started, and again after
+    # automations or scripts are reloaded.
+    from homeassistant.helpers.event import async_call_later as _later_d19
+    from homeassistant.helpers.start import async_at_started as _at_started_d19
+    from .coordinator.old_mode_names import check_old_mode_uses
+
+    @callback
+    def _check_old_mode_names(_arg=None) -> None:
+        try:
+            check_old_mode_uses(hass)
+        except Exception as err:  # noqa: BLE001 — a Repair never breaks setup
+            _LOGGER.debug("old charge mode names check failed: %s", err)
+
+    @callback
+    def _schedule_old_mode_check(_h=None) -> None:
+        entry.async_on_unload(_later_d19(hass, 30, _check_old_mode_names))
+
+    entry.async_on_unload(_at_started_d19(hass, _schedule_old_mode_check))
+    for _evt in ("automation_reloaded", "script_reloaded"):
+        entry.async_on_unload(hass.bus.async_listen(_evt, _check_old_mode_names))
+
     # Schedule post-startup tasks (non-blocking)
     _schedule_post_startup_tasks(hass, entry, full_config, coordinator)
 
@@ -4622,7 +4657,9 @@ async def _async_register_services(
         try:
             coordinator.set_plan_override(
                 call.data["device_id"], call.data["action"],
-                call.data["minutes"], call.data.get("value"))
+                call.data["minutes"], call.data.get("value"),
+                user_now=bool(call.data.get("user_now", False)),
+                fixed_end=bool(call.data.get("fixed_end", False)))
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         await coordinator.async_request_refresh()
@@ -4642,6 +4679,11 @@ async def _async_register_services(
                 vol.Required("minutes"): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=24 * 60)),
                 vol.Optional("value"): vol.Coerce(float),
+                # (#1381 D31) the user's own Now: only this lifts Off
+                vol.Optional("user_now"): cv.boolean,
+                # (#1381 D30) the end is a clock time, not minutes from
+                # the plug-in
+                vol.Optional("fixed_end"): cv.boolean,
             }),
         )
         hass.services.async_register(

@@ -113,6 +113,46 @@ def amps_from_headroom(
 # is replugged). Bounds a stop/start cycle a non-switching box would cause.
 PHASE_NOT_TAKING_AFTER = 2
 
+# (#1381 D29) A phase switch that did not go out is not re-sent every cycle.
+# Withheld (observer mode, or a charger SEM yields to): listed once, then
+# left until the target changes or the hold ends. Refused (the write raised):
+# tried again after these waits, each try counted toward the daily bound of
+# writes; after the last wait SEM gives up and raises a Repair.
+PHASE_SWITCH_RETRY_S = (600.0, 1200.0, 2400.0)
+
+
+def _raise_phase_switch_repair(host, cid: str, target: int, tries: int) -> None:
+    """(#1381 D29) One Repair when a phase switch was refused every time."""
+    hass = getattr(host, "hass", None)
+    if hass is None:
+        return
+    try:
+        from homeassistant.helpers import issue_registry as ir
+        from ..const import DOMAIN
+        ir.async_create_issue(
+            hass, domain=DOMAIN, issue_id=f"phase_switch_refused_{cid}",
+            is_fixable=False, is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="phase_switch_refused",
+            translation_placeholders={
+                "charger": str(cid), "phases": str(target),
+                "tries": str(tries)},
+        )
+    except Exception as e:  # noqa: BLE001 — a Repair is never fatal
+        _LOGGER.debug("issue_registry.create (phase_switch_refused): %s", e)
+
+
+def _clear_phase_switch_repair(host, cid: str) -> None:
+    hass = getattr(host, "hass", None)
+    if hass is None:
+        return
+    try:
+        from homeassistant.helpers import issue_registry as ir
+        from ..const import DOMAIN
+        ir.async_delete_issue(hass, DOMAIN, f"phase_switch_refused_{cid}")
+    except Exception:  # noqa: BLE001
+        pass
+
 
 def _phase_state(host, name: str) -> dict:
     """One of the tick's per-charger dicts on ``host``, made on first use."""
@@ -1690,6 +1730,31 @@ class EVControlMixin:
         # said, and whether a switch already sent may finish settling.
         if _misfit:
             desired = None
+        # (#1381 D29) a switch that did not go out waits: withheld until the
+        # hold ends or the target changes, refused until its back-off is over
+        _tries = _phase_state(self, "_phase_switch_tries")
+        _try = _tries.get(cid)
+        if _try is not None:
+            _held = bool(self._observer_mode) or bool(
+                getattr(device, "external_yield", False))
+            if _try.get("withheld") and not _held:
+                _tries.pop(cid, None)
+                _try = None
+            elif desired is not None and _try.get("target") != desired:
+                _tries.pop(cid, None)
+                _try = None
+        if desired is not None and _try is not None:
+            if (_try.get("withheld") or _try.get("gave_up")
+                    or now < float(_try.get("next_try") or 0.0)):
+                desired = None
+        # (#1381 D36) ``withheld_commands`` is a roster swept every cycle:
+        # a switch still held is put back on it every cycle, silently (the
+        # seam logged it once when it was first withheld)
+        if (_try is not None and _try.get("withheld")
+                and isinstance(_try.get("entry"), dict) and device is not None):
+            _roster = getattr(device, "withheld_commands", None)
+            if isinstance(_roster, list) and _try["entry"] not in _roster:
+                _roster.append(dict(_try["entry"]))
         r = seq.tick(now=now, desired_phases=desired,
                      believed_phases=believed, charging=drawing,
                      capability_ready=ready)
@@ -1711,13 +1776,22 @@ class EVControlMixin:
             contra["target"] = desired
             contra["count"] = PHASE_NOT_TAKING_AFTER
 
+        _sent = False
+        _refused = None
         if r.issue_switch is not None and r.at_rest:
             _rest_times[cid] = _recent + [now]
         if r.issue_switch is not None and by_current:
             # (#1015) The device's own write: its one seam withholds and
             # records in observer mode, so nothing is called from here.
-            planner.note_switched(now, at_rest=r.at_rest)
-            sent = await device.switch_phases(r.issue_switch)
+            try:
+                sent = await device.switch_phases(r.issue_switch)
+            except Exception as e:  # noqa: BLE001 — surfaced, never fatal
+                sent, _refused = False, str(e) or type(e).__name__
+            # (#1381 D25) booked only when it really went out: a withheld
+            # (observer) or refused switch is no switch
+            if sent:
+                planner.note_switched(now, at_rest=r.at_rest)
+            _sent = bool(sent)
             _LOGGER.info(
                 "#1015 %s: %s to %sp by one current per phase via %s",
                 cid, "switching" if sent else "WOULD switch (withheld)",
@@ -1727,8 +1801,25 @@ class EVControlMixin:
             cmd = phase_switch_command(entity, value, self.hass)
             if cmd is not None:
                 domain, service, data = cmd
-                planner.note_switched(now, at_rest=r.at_rest)
-                if self._observer_mode:
+                _seam = getattr(device, "send", None)
+                if callable(_seam):
+                    # (#1381, charger owner S6) the one hardware seam: it
+                    # withholds under observer mode (and lists it), holds
+                    # back a yielded charger's write, and books it in the
+                    # command ledger
+                    _LOGGER.info(
+                        "#804 %s: switching to %sp via %s.%s %s",
+                        cid, r.issue_switch, domain, service, data)
+                    try:
+                        sent = await _seam(domain, service, data,
+                                           why=f"#804 phase switch to {r.issue_switch}p")
+                        # (#1381 D25) booked only when it really went out
+                        if sent:
+                            planner.note_switched(now, at_rest=r.at_rest)
+                        _sent = bool(sent)
+                    except Exception as e:  # noqa: BLE001 — surfaced, never fatal
+                        _refused = str(e) or type(e).__name__
+                elif self._observer_mode:
                     _LOGGER.info(
                         "OBSERVER · WOULD switch %s to %sp via %s.%s %s "
                         "(#804)", cid, r.issue_switch, domain, service, data)
@@ -1745,12 +1836,72 @@ class EVControlMixin:
                         # un-gated hardware call beside it.
                         await self.hass.services.async_call(
                             domain, service, data, blocking=False)
-                    except Exception:  # noqa: BLE001 — surfaced, never fatal
-                        _LOGGER.warning(
-                            "#804 %s: phase switch call failed",
-                            cid, exc_info=True)
+                        sent = True
+                        # (#1381 D25) booked only when it really went out
+                        if sent:
+                            planner.note_switched(now, at_rest=r.at_rest)
+                        _sent = True
+                    except Exception as e:  # noqa: BLE001 — surfaced, never fatal
+                        _refused = str(e) or type(e).__name__
 
-        if r.believed_phases is not None:
+        if (r.issue_switch is not None and not _sent and _refused is None
+                and not (bool(self._observer_mode)
+                         or bool(getattr(device, "external_yield", False)))):
+            # (#1381 D36) the seam said "not sent" with neither observer
+            # mode nor a yield behind it: a refusal like any other
+            _refused = "not sent"
+        if r.issue_switch is not None:
+            if _sent:
+                # the first switch that goes out in each lifetime clears
+                # once too: a Repair an older lifetime raised (an options
+                # reload keeps it) is not left behind (#933)
+                _once = _phase_state(self, "_phase_refused_cleared_once")
+                if cid in _tries or not _once.get(cid):
+                    _tries.pop(cid, None)
+                    _clear_phase_switch_repair(self, cid)
+                    _once[cid] = True
+            elif _refused is not None:
+                prev = _tries.get(cid) or {}
+                fails = int(prev.get("fails") or 0) + 1
+                if not r.at_rest:
+                    # a refused try is a write attempt: it counts
+                    _rest_times[cid] = _rest_times.get(cid, []) + [now]
+                rec = {"target": r.issue_switch, "fails": fails}
+                if fails > len(PHASE_SWITCH_RETRY_S):
+                    rec["gave_up"] = True
+                    _LOGGER.warning(
+                        "#804 %s: gave up switching to %sp — the write was "
+                        "refused %d times (%s). SEM leaves the phases as "
+                        "they are; see Repairs.", cid, r.issue_switch,
+                        fails, _refused)
+                    _raise_phase_switch_repair(
+                        self, cid, r.issue_switch, fails)
+                else:
+                    rec["next_try"] = now + PHASE_SWITCH_RETRY_S[fails - 1]
+                    _LOGGER.info(
+                        "#804 %s: switch to %sp refused (%s) — next try in "
+                        "%d min", cid, r.issue_switch, _refused,
+                        int(PHASE_SWITCH_RETRY_S[fails - 1] // 60))
+                _tries[cid] = rec
+            else:
+                # withheld: observer mode or a charger SEM yields to —
+                # listed by the seam; kept on the roster every cycle while
+                # it holds (D36), never re-issued
+                _roster = (getattr(device, "withheld_commands", None)
+                           if self._observer_mode
+                           else getattr(device, "yielded_commands", None))
+                _entry = (dict(_roster[-1]) if isinstance(_roster, list)
+                          and _roster else None)
+                _tries[cid] = {"target": r.issue_switch, "withheld": True,
+                               "entry": _entry if self._observer_mode else None}
+            if not _sent:
+                # nothing changed on the charger: no settle, no belief
+                seq.cancel()
+                self._phase_switch_states[cid] = "idle"
+        if (r.believed_phases is not None and r.issue_switch is not None
+                and r.believed_phases == r.issue_switch and not _sent):
+            pass    # (#1381 D25) a withheld switch changes no belief
+        elif r.believed_phases is not None:
             self._phase_believed[cid] = r.believed_phases
             set_by_sem[cid] = r.believed_phases
             contra["last_asserted"] = r.believed_phases

@@ -760,6 +760,18 @@ plan_override:
       required: false
       selector:
         number:
+    user_now:
+      name: The user's Now
+      description: "A charger force that is the user's own Now. Only this runs a charger set to Off or paused."
+      required: false
+      selector:
+        boolean:
+    fixed_end:
+      name: Ends at a set time
+      description: "The minutes give a clock time. Without it, a charger force set while the car is away counts its minutes from the plug-in."
+      required: false
+      selector:
+        boolean:
 
 plan_override_clear:
   name: End a device's override

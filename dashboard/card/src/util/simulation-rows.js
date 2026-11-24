@@ -333,8 +333,22 @@ export function initialForm(defaults) {
 
 /** SEM's battery modes and the car's charge modes a what-if offers. */
 export const BATTERY_MODES = ['auto', 'self_consumption', 'force_charge', 'force_discharge', 'off'];
-export const EV_MODES = ['recorded', 'solar_only', 'solar_plus_battery', 'solar_plus_cheap',
-    'min_plus_solar', 'always_max', 'off'];
+// (#1381 D27) The four modes the user knows; the battery row below the mode
+// ("May the battery help the car?", ``battery_to_ev``) picks the stored
+// strategy behind Sun and Sun + tariff, as on the charger card.
+export const EV_MODES = ['recorded', 'sun', 'sun_tariff', 'now', 'off'];
+/** The stored strategy the simulation replays for (mode, battery help). */
+export const STRATEGY_OF = {
+    sun: ['solar_only', 'solar_plus_battery'],
+    sun_tariff: ['solar_plus_cheap', 'min_plus_solar'],
+    now: ['always_max', 'always_max'],
+    off: ['off', 'off'],
+};
+export function evStrategy(mode, batteryHelps) {
+    const pair = STRATEGY_OF[mode];
+    if (!pair) return mode || 'recorded';
+    return pair[batteryHelps === false ? 0 : 1];
+}
 
 const numOrNull = (v) => {
     if (v === '' || v === null || v === undefined) return null;
@@ -374,7 +388,7 @@ export function buildParams(form) {
         out[`${key}_rate`] = f[`${key}_mode`] === 'flat' && rate !== null ? rate : 'recorded';
     }
     if (f.battery_mode) out.battery_mode = f.battery_mode;
-    out.ev_mode = f.ev_mode || 'recorded';
+    out.ev_mode = evStrategy(f.ev_mode || 'recorded', f.battery_to_ev);
     for (const key of ['max_charge_w', 'max_discharge_w']) {
         const w = numOrNull(f[key]);
         if (w !== null) out[key] = w;
@@ -425,7 +439,7 @@ export function applyPreset(form, defaults, preset, extra = null) {
         break;
     }
     case 'cheap_chargers':
-        f.ev_mode = 'solar_plus_cheap';
+        f.ev_mode = 'sun_tariff';
         break;
     case 'no_battery_ev':
         f.battery_to_ev = false;

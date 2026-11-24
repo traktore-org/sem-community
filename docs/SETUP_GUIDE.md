@@ -213,16 +213,20 @@ Some fields are set only in **Settings › Devices & services › SEM › Config
 
 ### Charge modes
 
-Each charger has a **Charge mode**. The default is **Min + Solar**.
+Each charger has a **Charge mode**, and one switch: **May the battery help
+the car?** The default is **Sun + tariff** with battery help on.
 
 | Charge mode | What it does |
 |---|---|
-| **Solar only** | Charges from solar surplus. Never from the grid, unless **At least** is set. |
-| **Solar + battery** | Solar surplus first. Then the house battery, down to what the house needs for the night. |
-| **Solar + cheapest hours** | Solar surplus, plus the grid in cheap hours. Needs cheaper hours: a dynamic, schedule or two-rate tariff. |
-| **Min + Solar** | The grid fills up to **At least** by the **Charge by** time. Solar adds up to **Up to**. |
-| **Always (max)** | Charges at the maximum, from the grid and the battery. |
+| **Sun** | Spare sun only. **At least** comes from the grid at night. With battery help, the house battery adds above its buffer. |
+| **Sun + tariff** | Spare sun by day. Buys **At least** in the cheapest hours: at night, in a cheap hour, or with thin sun when that is cheaper. Pauses in peak hours. Set your import and export price. |
+| **Now** | Full power until its end: the plan's next block, a time you pick, or when the car is full. |
 | **Off** | SEM sends no commands to the charger. |
+
+`select.select_option` takes only the four names. SEM's own `set_option`
+service still takes the six older ones, and a Repair names any automation
+that uses them. The [User guide](USER_GUIDE.md#pick-a-charge-mode) has the
+table.
 
 ### Charge target
 

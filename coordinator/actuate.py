@@ -83,6 +83,34 @@ async def actuate(
     yielded: bool = False,
     phase_override: str = "",
 ) -> None:
+    """See ``_actuate``. (#1381, charger owner) The device's "who asked"
+    label holds for this call only: a write sent outside it (a failsafe
+    read-back, a release) is never booked under this cycle's decision."""
+    try:
+        await _actuate(decision, adapter, power, reconciler,
+                       observer=observer, controller=controller,
+                       yielded=yielded, phase_override=phase_override)
+    finally:
+        _dev = getattr(adapter, "_device", None)
+        if _dev is not None:
+            try:
+                _dev.command_source = ""
+                _dev.command_klass = 0
+            except AttributeError:  # a frozen test double
+                pass
+
+
+async def _actuate(
+    decision: ChargerDecision,
+    adapter: ChargerAdapter,
+    power: ChargerPower,
+    reconciler,
+    *,
+    observer: bool = False,
+    controller=None,
+    yielded: bool = False,
+    phase_override: str = "",
+) -> None:
     """Apply a per-charger decision through the reconciler.
 
     The reconciler owns convergence; brand quirks live in the adapter.
@@ -136,7 +164,7 @@ async def actuate(
         # not hold it. The send seam lets only this cycle's stop through; the
         # failsafe stays unarmed, so the other party's session is not ended.
         decision = rewrite(decision, reason_code=RC.CHARGER_PHASE_STOP,
-                           safety_stop=True)
+                           safety_stop=True, source="phase_guard", klass=1)
         log_on_change(
             _LOGGER, f"yield-override:ev:{decision.charger_id}",
             logging.WARNING,
@@ -149,6 +177,11 @@ async def actuate(
             try:
                 _ydev.external_yield = bool(yielded) and not observer
                 _ydev.phase_guard_override = _override
+                # (#1381, owner S4) who asked for this cycle's writes, for
+                # the device's command ledger
+                _ydev.command_source = str(
+                    getattr(decision, "source", "") or "decide")
+                _ydev.command_klass = int(getattr(decision, "klass", 0) or 0)
             except AttributeError:  # a frozen test double
                 pass
         if _override:

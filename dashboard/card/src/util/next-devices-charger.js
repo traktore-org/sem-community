@@ -14,7 +14,7 @@ import { effectivePlan, kwhAhead } from './plan-facts.js';
 import { targetModel, weekdaySummary } from './next-devices.js';
 import { monthTotals, rowsForMonth } from './sessions.js';
 import { rowText } from './next-settings.js';
-import { CHARGER_TEXT, CHARGE_MODES, chargeModeKey, targetEntities, upToShown, knownCapacity, capacityUnset } from './charger-questions.js';
+import { CHARGER_TEXT, CHARGE_MODES, NOW_ENDS, minutesUntil, chargeModeKey, targetEntities, upToShown, knownCapacity, capacityUnset } from './charger-questions.js';
 
 const LATE = [0, 15, 30, 45, 60, 90, 120];
 const FLOORS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
@@ -75,9 +75,21 @@ export function chargerBody(card, row) {
     const modeAttrs = modeId ? card._attrs(modeId) : {};
     const options = Array.isArray(modeAttrs.options) ? modeAttrs.options : [];
     const segKey = mode;
+    // (#1381) the engine's own strategy speaks the hints; the user sees four modes
+    const strat = modeAttrs.strategy || mode;
+    const helpOn = modeAttrs.battery_help !== false;
+    const nowUntil = mode === 'now' && modeAttrs.now_until ? card._hhmm(modeAttrs.now_until) : '';
     const tariffOk = modeAttrs.tariff_available !== false;
     const needTariff = Array.isArray(modeAttrs.modes_needing_tariff) ? modeAttrs.modes_needing_tariff : [];
     const pickMode = (key) => { if (modeId && key !== mode) card._selectOption(modeId, key); };
+    // (#1381) Now's end: the plan's next block (what picking Now does), a time, or full
+    const nowEnd = (key) => {
+        if (key === 'block') card._selectOption(modeId, 'now');
+        else if (key === 'full') card._selectOption(modeId, 'always_max');
+        else card._editDialog({ title: t('next_now_end_time'), ...card._timeEdit('nowend:' + cid, { value: nowUntil,
+            onCommit: (v) => { const mins = minutesUntil(v); if (mins) card._callService('solar_energy_management', 'plan_override', { device_id: cid, action: 'force', minutes: mins, user_now: true, fixed_end: true }); } }) });
+    };
+    const nowEndKey = mode !== 'now' ? '' : (nowUntil ? 'time' : 'full');
     // (#1321) ONE control for the mode, as the battery has: Off first, then the modes in the shared order
     const segItems = ['off', ...CHARGE_MODES.filter((m) => m !== 'off')].filter((m) => options.includes(m))
         .map((m) => ({ key: m, label: t(chargeModeKey(m)) || m, disabled: !tariffOk && needTariff.includes(m) }));
@@ -85,15 +97,24 @@ export function chargerBody(card, row) {
     const priority = card._num('number.sem_battery_priority_soc');
     const hintP = { buffer: buffer === null ? '—' : Math.round(buffer), priority: priority === null ? '—' : Math.round(priority) };
     // Day and night: a mode that "never imports grid" by day may still charge from the grid at night.
-    const hintNight = mode ? tf('charge_mode_hint_' + mode + '_overnight', hintP) : '';
+    const hintNight = strat ? tf('charge_mode_hint_' + strat + '_overnight', hintP) : '';
     const floorType = (ent('select', 'ev_target_type') && card._str(ent('select', 'ev_target_type'))) || 'kwh';
     const floorId = floorType === 'soc' ? ent('number', 'target_soc') : ent('number', 'daily_ev_target');
     const floorVal = floorId ? card._num(floorId) : null;
-    const floorGrid = mode === 'solar_plus_battery' && floorVal !== null && floorVal > 0
+    const floorGrid = strat === 'solar_plus_battery' && floorVal !== null && floorVal > 0
         ? tf('next_floor_uses_grid', { value: floorType === 'soc' ? Math.round(floorVal) + ' %' : card._kwh(floorVal) }) : '';
-    const hint = mode ? [tf('charge_mode_hint_' + mode + '_surplus', hintP),
-        floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? hintNight : '')].filter(Boolean).join(' ') : '';
-    const nextCheap = mode === 'solar_plus_cheap' && cs.ev_next_cheap_window ? card._hhmm(cs.ev_next_cheap_window) : '';
+    // (#1381 D35) One sentence per mode the user sees, the same for every
+    // stored strategy behind it: Sun + tariff is one rule, the battery switch
+    // only says whether the house battery helps.
+    const userHint = {
+        sun: t('mode_hint_sun'),
+        sun_tariff: t('mode_hint_sun_tariff'),
+        now: tf('mode_hint_now', { end: nowUntil || t('mode_hint_now_full') }),
+        off: t('charge_mode_hint_off_surplus'),
+    }[mode];
+    const hint = userHint || (strat ? [tf('charge_mode_hint_' + strat + '_surplus', hintP),
+        floorGrid || (hintNight && !hintNight.startsWith('charge_mode_hint_') ? hintNight : '')].filter(Boolean).join(' ') : '');
+    const nextCheap = strat === 'solar_plus_cheap' && cs.ev_next_cheap_window ? card._hhmm(cs.ev_next_cheap_window) : '';
     const pausedUntil = mode === 'off' && modeAttrs.paused_until ? card._hhmm(modeAttrs.paused_until) : '';
     const resumeMode = modeAttrs.pause_resume_mode ? codeText(t, 'charge_mode_', modeAttrs.pause_resume_mode) : '';
 
@@ -225,6 +246,11 @@ export function chargerBody(card, row) {
             const w = chargerRenameWrite(cid, v);
             if (w && w.ev_chargers[0].name !== row.name) card._svc('set_option', { options: w });
         } }) }) }));
+    // (#1381) one switch: may the battery help this car? (Now and Off remember it)
+    if (modeId && (mode === 'sun' || mode === 'sun_tariff')) {
+        setRows.push(card._setRow({ label: t('next_battery_help'), help: t(helpOn ? 'next_battery_help_on' : 'next_battery_help_off'), disabled: dis,
+            toggle: { on: helpOn, onChange: (v) => card._svc('set_option', { options: { ev_chargers: [{ id: cid, ev_battery_help: !!v }] } }) } }));
+    }
     const srow = (label, value, spec, o = {}) => card._setRow({ label, value, disabled: dis || !!o.disabled, help: o.help || '', more: !!o.more,
         onTap: () => card._editDialog({ title: label, ...spec }) });
     if (timeId) {
@@ -316,7 +342,9 @@ export function chargerBody(card, row) {
     rows.unshift(...setRows);
     return html`
         ${segItems.length ? card._seg(segItems, segKey, pickMode, { disabled: dis }) : nothing}
-        ${hint || pausedUntil ? html`<div class="modehelp">${pausedUntil ? tf('next_paused_until', { time: pausedUntil, mode: resumeMode }) + ' ' : ''}${hint}${nextCheap ? ' · ' + tf('next_next_cheap', { time: nextCheap }) : ''}</div>` : nothing}
+        ${mode === 'now' ? html`<div class="modehelp">${nowUntil ? tf('next_now_until', { time: nowUntil }) : t('next_now_until_full')}</div>
+            ${card._seg(NOW_ENDS.map((k) => ({ key: k, label: t('next_now_end_' + k) })), nowEndKey, nowEnd, { small: true, disabled: dis })}` : nothing}
+        ${mode !== 'now' && (hint || pausedUntil) ? html`<div class="modehelp">${pausedUntil ? tf('next_paused_until', { time: pausedUntil, mode: resumeMode }) + ' ' : ''}${hint}${nextCheap ? ' · ' + tf('next_next_cheap', { time: nextCheap }) : ''}</div>` : nothing}
         ${card._stats(stats1)}
         ${target}
         ${stats2}

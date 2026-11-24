@@ -156,7 +156,7 @@ class TestStabilityAndSurfaces:
         import inspect
         from custom_components.solar_energy_management import select as S
         src = inspect.getsource(S.SEMPerChargerSelect)
-        assert "return list(EV_CHARGE_MODES.keys())" in src
+        assert "return list(USER_MODES.keys())" in src   # (#1381 S9)
         assert "tariff_available" in src, (
             "the card needs the prerequisite flag to disable the cheap mode"
         )

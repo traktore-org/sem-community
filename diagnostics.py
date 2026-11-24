@@ -404,6 +404,13 @@ async def async_get_config_entry_diagnostics(
     except Exception:  # noqa: BLE001 — diagnostics must never fail the download
         ev_stability["error"] = "collection failed"
 
+    # (#1381) the charger owner: who changed each decision, what holds for a time
+    try:
+        from .coordinator.charger_owner import diagnostics as _owner_diag
+        ev_stability["charger_owner"] = _owner_diag(coordinator)
+    except Exception:  # noqa: BLE001 — diagnostics must never fail the download
+        ev_stability["charger_owner"] = "collection failed"
+
     # Load manager info
     load_info = _load_manager_diagnostics(coordinator)
 

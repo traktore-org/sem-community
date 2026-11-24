@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Solo solare",
           "solar_plus_battery": "Solare + batteria",
-          "solar_plus_cheap": "Solare + ore più economiche",
+          "solar_plus_cheap": "Solare + tariffa",
           "min_plus_solar": "Min + Solare",
           "always_max": "Sempre (max)",
-          "off": "Spento"
+          "off": "Spento",
+          "sun": "Sole",
+          "sun_tariff": "Sole + tariffa",
+          "now": "Ora"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Il serbatoio non raggiunge l'obiettivo legionella",
       "description": "{name}: il serbatoio accetta al massimo {max} °C, sotto l'obiettivo legionella di {target} °C. SEM scalda a {max} °C, che potrebbe non disinfettare il serbatoio. Abbassa l'obiettivo o controlla il massimo del serbatoio. Il messaggio scompare da solo."
     },
-    "guard_stopped": {
-      "title": "La protezione di fase ha spento {charger}",
-      "description": "Una fase superava il limite, quindi SEM ha spento {charger}. Un altro sistema controlla questa wallbox, quindi SEM non la riaccende. Riaccendila a mano o lascia che la sua app la riavvii. Il messaggio sparisce quando la wallbox ricarica o l'auto viene scollegata."
+    "phase_switch_refused": {
+      "title": "Cambio fasi rifiutato",
+      "description": "SEM ha provato {tries} volte a passare {charger} a {phases} fasi. Home Assistant ha rifiutato il comando ogni volta. SEM non ci prova più. Controlla che l'entità del cambio fasi sia disponibile e accetti il valore impostato."
+    },
+    "guard_left_off": {
+      "title": "Wallbox lasciata spenta dopo la protezione di fase",
+      "description": "SEM ha fermato {charger} perché una fase superava il limite. Ha provato {tries} volte a riaccenderla, e ogni volta la fase ha superato di nuovo. SEM non riprova più. Riaccendi la wallbox tu, o nell'app che la controlla, quando la casa consuma meno."
     },
     "old_found_loads_removed": {
       "title": "SEM non usa più i vecchi dispositivi trovati automaticamente",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM lascia stare i dispositivi di sicurezza",
       "description": "Questi dispositivi sono di sicurezza (telecamera, allarme, sirena o serratura): **{names}**. SEM non li mostra e non li comanda più. Il loro consumo conta ancora nel totale della casa. Se uno è un elettrodomestico con blocco e non una serratura, aggiungilo con **Aggiungi dispositivo**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automazioni usano vecchi nomi della modalità di carica",
+      "description": "Le modalità di carica di SEM ora sono Sole, Sole + tariffa, Ora e Spento. Home Assistant rifiuta i vecchi nomi in select.select_option, e un trigger su un vecchio nome non scatta più. Modifica questi: {uses} SEM trova la maggior parte degli usi. Controlla anche i blueprint e le automazioni create fuori dall'interfaccia."
     }
   },
   "selector": {

@@ -124,6 +124,12 @@ class PhaseSwitchSequencer:
         self._stopping_since = None
         return self._result(hold=False, gave_up=gave_up)
 
+    def cancel(self) -> None:
+        """(#1381 D29) The switch just issued did not go out (withheld or
+        refused): no settle, and no belief asserted at its end — the
+        charger is still on the phases it had."""
+        self._abort()
+
     def _fire(self, now: float, target: int,
               at_rest: bool = False) -> SeqResult:
         self._state = "settling"

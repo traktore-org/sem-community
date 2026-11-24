@@ -143,24 +143,101 @@ Tax, VAT and grid-fee rows appear only when they change the price.
 
 ### Pick a charge mode
 
-Set the mode per charger, on **Devices**.
+Set the mode per charger, on **Devices**. There are four.
 
-| Mode | Charges from | Use it when |
+| Mode | What it does | Use it when |
 |---|---|---|
-| **Min + Solar** (default) | Spare sun by day. The grid tops up to **At least** at night, or by day if the night is too short. | You need the car ready by a time. |
-| **Solar only** | Spare sun only. A grid top-up runs only if you set **At least**. | You want solar only. |
-| **Solar + battery** | Spare sun and the home battery above its buffer. | The battery may help the car. |
-| **Solar + cheapest hours** | Spare sun. On cheap hours, it tops up from the grid. | Your tariff has cheaper hours: dynamic, or a schedule or two rates. Greyed out with one price. |
-| **Always (max)** | Full power, day and night. | You need the car now. |
-| **Off** | Nothing. SEM sends one stop, then leaves the charger alone. | You want to control the car by hand. |
+| **Sun** | Spare sun only. **At least** comes from the grid at night. | You want solar only. |
+| **Sun + tariff** (default) | Spare sun by day. Buys **At least** in the cheapest hours: at night, in a cheap hour, or with thin sun when that is cheaper. Pauses in peak hours. | You need the car ready by a time. |
+| **Now** | Full power until its end: the plan's next block, a time you pick, or when the car is full. | You need the car now. |
+| **Off** | Nothing. SEM sends one stop, then leaves the charger alone. | You control the car yourself. |
+
+Each charger also has one switch: **May the battery help the car?**
+
+| | Battery help on | Battery help off |
+|---|---|---|
+| **Sun** | The home battery adds to spare sun, above its buffer. | The home battery stays for the house. |
+| **Sun + tariff** | The home battery adds to spare sun. | The home battery stays for the house. |
+
+The switch changes only what the home battery does. **Sun + tariff** buys
+from the grid by day the same way with the switch on or off: when tonight is
+too short to reach **At least**, in a cheap hour, or when thin sun plus the
+grid is cheaper than the night. See
+[When Sun + tariff buys by day](#when-sun--tariff-buys-by-day).
 
 Notes:
 
-- **Min + Solar** charges at night even without sun. By day it waits for sun,
-  unless tonight is too short to reach **At least**.
-- **Solar only** never uses grid power unless you set **At least**.
-  With **At least** at 0 kWh, the car never takes grid power.
+- The switch starts where your charger already was, so nothing changes on
+  update. Now and Off remember it.
+- **Sun** with **At least** at 0 never takes grid power.
+- **Now** from the **Plan** screen (**Charge now**) runs until this car's
+  next block in the plan, or 2 hours when the plan has none. On the charger
+  you can pick a time or **until full** instead. Pick another mode to stop it.
+- **Now** also works on a charger set to **Off** or paused. When Now ends,
+  the charger is **Off** again.
+- **Now** ends when the car is unplugged. The next car does not inherit it.
+- **Now** picked before the car is plugged in waits for it. Its time counts
+  from the plug-in; a time you picked stays that time.
 - **Off** does not hold the charger stopped. A wallbox that starts by itself is left alone.
+- **Old mode names.** The mode select now has four options. Home
+  Assistant refuses the old names in `select.select_option`, and a trigger
+  or condition on an old name no longer matches. A Repair names every
+  automation or script that still uses one. SEM's own `set_option` service
+  still takes the old names. Use the new names:
+
+  | Old name | Now |
+  |---|---|
+  | Solar only (`solar_only`) | Sun, battery help off |
+  | Solar + battery (`solar_plus_battery`) | Sun, battery help on |
+  | Solar + cheapest hours / Solar + tariff (`solar_plus_cheap`) | Sun + tariff, battery help off |
+  | Min + Solar (`min_plus_solar`) | Sun + tariff, battery help on |
+  | Always (max) (`always_max`) | Now, until full |
+
+- **Sun + tariff** needs your prices: the import price and the export
+  price, in **System > How I pay**. The export price must be the one you
+  are really paid: SEM pre-fills 0.075, and this mode decides with it.
+
+### When Sun + tariff buys by day
+
+Thin sun is spare sun below the charger's minimum power (4.1 kW on three
+phases at 6 A). Alone it cannot charge the car, so it goes to the grid at
+the export price. **Sun + tariff** can use it: the car charges at its
+minimum, on the spare sun plus the grid for the rest.
+
+This works with battery help on or off. With help on, the home battery
+must be full or not taking that sun.
+
+SEM does this only for **At least**, and only when it is at least 10 %
+cheaper than the cheapest hour still to come before **Charge by**:
+
+| Your tariff | What happens with thin sun |
+|---|---|
+| One price all day, export pays less than import | The car charges at its minimum, from enough sun to save 10 %. Example: import 0.30, export 0.075: from about 0.55 kW of spare sun. |
+| Export pays the same as import (net metering) | The car waits. Exporting now and buying at night costs the same. |
+| Two rates, night cheaper | The car charges only with more sun. Example: day 0.30, night 0.20, export 0.06: from about 2.1 kW of spare sun. |
+| Dynamic | SEM compares this hour with the cheapest hour to come. A cheap hour tops up as before. |
+
+It does not buy by day when:
+
+- strong sun is forecast later today and covers **At least**,
+- the home battery is charging from that sun, or may feed the car itself,
+- the hour is an expensive one, or the peak limit has no room,
+- no export price is stored, or SEM has no forecast.
+
+The plan on **Plan** shows these hours as **Spare sun plus grid**. The car
+charges this way only in the hours the plan shows. With a home battery the
+plan shows them only when the battery is full: a battery with room takes
+that sun first.
+
+A session that started runs for at least the charger's minimum block
+(15 minutes), so a cloud does not switch the car off and on. It still stops
+at once when **At least** is reached, the car is unplugged, the hour turns
+expensive, the peak limit is near, the home battery starts to feed the car,
+or the sun is gone.
+
+After a restart of Home Assistant the car waits for the next plan before
+it charges this way again. Until then the mode works as before: spare sun
+by day, **At least** at night.
 
 ### Set the target
 
@@ -521,9 +598,17 @@ The **preset** **Netherlands from 2027** fills tax and VAT.
   to keep control and get a Repair when SEM sees writes it did not make.
   If you yield and pick no indicator, SEM always yields.
   The one exception to yielding: if a phase is over its limit and the phase guard
-  enforces, SEM stops that charger. It never starts it again. A Repair names the
-  charger, and its state reads **Stopped by the phase guard**. Switch it on by hand
-  or in its app. Both clear when it charges again or the car is unplugged.
+  enforces, SEM stops that charger. SEM switches it back on when the guard is
+  armed again and every phase has room for the charger's earlier draw. With two
+  chargers, one at a time, highest priority first. The charger shows **Stopped by
+  the phase guard** meanwhile. If the other party switched it on itself, or the
+  car leaves, SEM does nothing more. If the phase goes over again soon after, or
+  the charger is not on again within 5 minutes, SEM waits 10, then 20, then 40
+  minutes. If it fails once more, SEM stops and a Repair says the charger was
+  left off. A second charger waits until the first car draws. A stop SEM sent
+  as a wallbox service or a button, not a switch, number or select, is not
+  switched back: the Repair says so at once. After 12 hours SEM no longer
+  switches a charger back on.
 
 ---
 

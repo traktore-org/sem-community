@@ -31,11 +31,150 @@ EV_CHARGE_MODES: dict[str, str] = {
     # meant committing to a Min floor and grid backfill. Loads kept the
     # distinction (#620); this gives chargers the same choice back.
     "solar_plus_battery": "Solar + battery",
-    "solar_plus_cheap": "Solar + cheapest hours",
+    # (#1411) Shown as "Solar + tariff": it follows the prices on ANY tariff
+    # — the cheap hours of a dynamic or two-rate one, and on every tariff
+    # the thin-sun rule (``coordinator/thin_sun.py``). The key stays.
+    "solar_plus_cheap": "Solar + tariff",
     "min_plus_solar": "Min + Solar",
     "always_max": "Always (max)",
     "off": "Off",
 }
+
+# ─────────────────────────────────────────────────────────────────
+# (#1381 charger owner S9) The four modes the user sees
+# ─────────────────────────────────────────────────────────────────
+#
+# Six stored strategies stay the engine's vocabulary — 285 production reads
+# and every replayed day speak them, so storing anything else would make the
+# change a data migration with no behaviour to gain. The user picks one of
+# FOUR modes plus one switch, "May the battery help the car?". The pair maps
+# onto exactly one stored strategy, so an existing install reads the same
+# strategy before and after the update (neutral by construction):
+#
+#   Sun          + help off → solar_only        + help on → solar_plus_battery
+#   Sun + tariff + help off → solar_plus_cheap  + help on → min_plus_solar
+#   Now                     → always_max (no end: "until full"; a timed Now is
+#                             the plan override "force", which ends by itself)
+#   Off                     → off
+USER_MODES: dict[str, str] = {
+    "sun": "Sun",
+    "sun_tariff": "Sun + tariff",
+    "now": "Now",
+    "off": "Off",
+}
+#: The per-charger memory of the battery-help switch. The strategy carries it
+#: for the four sun strategies; Now and Off cannot, so it is kept here too and
+#: a return from Now/Off picks the same help as before.
+BATTERY_HELP_KEY = "ev_battery_help"
+
+_STRATEGY_USER_MODE: dict[str, str] = {
+    "solar_only": "sun",
+    "solar_plus_battery": "sun",
+    "solar_plus_cheap": "sun_tariff",
+    "min_plus_solar": "sun_tariff",
+    "always_max": "now",
+    "off": "off",
+}
+_HELP_OF_STRATEGY: dict[str, bool] = {
+    "solar_only": False,
+    "solar_plus_battery": True,
+    "solar_plus_cheap": False,
+    "min_plus_solar": True,
+}
+_STRATEGY_FOR: dict[tuple, str] = {
+    ("sun", False): "solar_only",
+    ("sun", True): "solar_plus_battery",
+    ("sun_tariff", False): "solar_plus_cheap",
+    ("sun_tariff", True): "min_plus_solar",
+}
+
+
+def user_mode_of(strategy: Any) -> str:
+    """The mode the user sees for a stored strategy (or a user mode)."""
+    s = str(strategy or "")
+    if s in USER_MODES:
+        return s
+    return _STRATEGY_USER_MODE.get(s, _STRATEGY_USER_MODE[DEFAULT_EV_CHARGE_MODE])
+
+
+def battery_help_of(charger_cfg: Any) -> bool:
+    """Does this charger's battery-help switch read ON?
+
+    The stored strategy answers for the four sun strategies; Now and Off
+    keep the remembered switch (``BATTERY_HELP_KEY``), else ON — the
+    new-install default (Sun + tariff with help) carries it. A per-charger
+    "never" (``ev_battery_may_assist: False``, #885) always reads OFF: the
+    switch shows what the battery may really do.
+    """
+    if not isinstance(charger_cfg, Mapping):
+        return True
+    if charger_cfg.get("ev_battery_may_assist") is False:
+        return False
+    stored = str(charger_cfg.get("charge_mode") or "")
+    if stored in _HELP_OF_STRATEGY:
+        return _HELP_OF_STRATEGY[stored]
+    remembered = charger_cfg.get(BATTERY_HELP_KEY)
+    return True if remembered is None else bool(remembered)
+
+
+def strategy_for(user_mode: str, battery_help: bool) -> str:
+    """The one stored strategy for a (mode, battery help) pair."""
+    if user_mode == "now":
+        return "always_max"
+    if user_mode == "off":
+        return "off"
+    return _STRATEGY_FOR[(user_mode, bool(battery_help))]
+
+
+def apply_user_mode_write(charger: dict, key: str, value: Any) -> None:
+    """Write one per-charger key, in place; ``charge_mode`` and the
+    battery-help switch become the stored pair. THE one place both config writers (the per-charger
+    entity path and ``set_option``'s merge) go through.
+
+    * ``charge_mode`` = a user mode (sun, sun_tariff, now, off) → the stored
+      strategy for it with this charger's current help.
+    * ``charge_mode`` = an old strategy name → stored as it is (an alias:
+      automations and the six old names keep working), help remembered.
+    * ``ev_battery_help`` = bool → remembered; in Sun / Sun + tariff the
+      strategy follows. Turning help ON also lifts a per-charger "never"
+      (#885 ``ev_battery_may_assist``): the switch is the user's word.
+    """
+    if not isinstance(charger, dict):
+        return
+    if key == "charge_mode":
+        v = str(value or "") if value is not None else value
+        prev = str(charger.get("charge_mode") or "")
+        help_now = battery_help_of(charger)    # read BEFORE the write
+        if (isinstance(v, str) and v in USER_MODES and v not in EV_CHARGE_MODES
+                and prev in EV_CHARGE_MODES and user_mode_of(prev) == v):
+            # (#1381 D21) Re-picking the mode the select already shows is a
+            # no-op: the strategy behind it stays. Mapping it again through
+            # the switch rewrote min_plus_solar to solar_plus_cheap for a
+            # charger with a per-charger "never" (the switch reads off there)
+            # and so dropped its Min floor.
+            v = prev
+        elif isinstance(v, str) and v in USER_MODES and v not in EV_CHARGE_MODES:
+            v = strategy_for(v, help_now)
+        charger["charge_mode"] = v if isinstance(v, str) else value
+        # The strategy carries the switch for the four sun strategies, so
+        # nothing is stored for them (a write of the same mode changes no
+        # key: the startup heal and set_option stay no-ops). Leaving a sun
+        # strategy for Now or Off is the one moment the switch must be
+        # remembered, because the new strategy cannot carry it.
+        if v not in _HELP_OF_STRATEGY and prev in _HELP_OF_STRATEGY:
+            charger[BATTERY_HELP_KEY] = help_now
+        return
+    if key == BATTERY_HELP_KEY:
+        on = bool(value)
+        charger[BATTERY_HELP_KEY] = on
+        if on and charger.get("ev_battery_may_assist") is False:
+            charger["ev_battery_may_assist"] = True
+        mode = user_mode_of(charger.get("charge_mode") or DEFAULT_EV_CHARGE_MODE)
+        if mode in ("sun", "sun_tariff"):
+            charger["charge_mode"] = strategy_for(mode, on)
+        return
+    charger[key] = value
+
 
 # The new-install default. Q4 resolved 2026-05-30 — matches today's
 # factory defaults (mode=pv + night=on + smart=on + tariff=off).
@@ -48,6 +187,12 @@ DEFAULT_EV_CHARGE_MODE: str = "min_plus_solar"
 
 MODE_NIGHT_ALLOWED: frozenset[str] = frozenset({
     "solar_plus_cheap", "min_plus_solar", "always_max",
+})
+#: (#1381 D23) The two stored strategies behind "Sun + tariff": both run
+#: the one tariff day rule (deadline floor, peak pause, cheap-hour top-up,
+#: thin sun) — battery help is the only difference between them.
+MODE_SUN_TARIFF_DAY: frozenset[str] = frozenset({
+    "solar_plus_cheap", "min_plus_solar",
 })
 MODE_USES_TARIFF: frozenset[str] = frozenset({
     "solar_plus_cheap",
@@ -103,6 +248,9 @@ def effective_charge_mode_for(
     stored = charger_cfg.get("charge_mode")
     if stored in EV_CHARGE_MODES:
         return stored
+    if stored in USER_MODES:   # (#1381 S9) a user mode written by hand
+        return strategy_for(stored, battery_help_of(
+            {**charger_cfg, "charge_mode": None}))
     return DEFAULT_EV_CHARGE_MODE
 
 
@@ -114,6 +262,9 @@ def scheduled_charge_mode(hass: Any, charger_cfg: Any) -> "str | None":
         return None
     entity = charger_cfg.get("schedule_entity") or ""
     mode = charger_cfg.get("schedule_mode") or ""
+    if mode in USER_MODES and mode not in EV_CHARGE_MODES:   # (#1381 S9)
+        mode = strategy_for(mode, battery_help_of(
+            {**charger_cfg, "charge_mode": None}))
     if not entity or mode not in EV_CHARGE_MODES:
         return None
     try:

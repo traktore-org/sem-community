@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Pouze solární",
           "solar_plus_battery": "Slunce + baterie",
-          "solar_plus_cheap": "Solární + nejlevnější hodiny",
+          "solar_plus_cheap": "Solární + tarif",
           "min_plus_solar": "Min + Solární",
           "always_max": "Vždy (max)",
-          "off": "Vypnuto"
+          "off": "Vypnuto",
+          "sun": "Slunce",
+          "sun_tariff": "Slunce + tarif",
+          "now": "Teď"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Zásobník nedosáhne cíle proti legionele",
       "description": "{name}: zásobník přijme nejvýše {max} °C, méně než cíl proti legionele {target} °C. SEM ohřeje na {max} °C, což zásobník nemusí vydezinfikovat. Snižte cíl nebo zkontrolujte maximum zásobníku. Hlášení zmizí samo."
     },
-    "guard_stopped": {
-      "title": "Hlídání fází vypnulo {charger}",
-      "description": "Fáze překročila limit, proto SEM vypnul {charger}. Tuto nabíječku řídí jiný systém, proto ji SEM znovu nezapne. Zapněte ji ručně, nebo ji nechte spustit její aplikací. Zpráva zmizí, až nabíječka znovu nabíjí nebo se auto odpojí."
+    "phase_switch_refused": {
+      "title": "Přepnutí fází odmítnuto",
+      "description": "SEM se {tries}krát pokusil přepnout {charger} na {phases} fáze. Home Assistant příkaz pokaždé odmítl. SEM už to nezkouší. Zkontrolujte, že entita pro přepínání fází je dostupná a přijímá nastavenou hodnotu."
+    },
+    "guard_left_off": {
+      "title": "Nabíječka po hlídání fází vypnutá",
+      "description": "SEM zastavil {charger}, protože fáze překročila limit. Zkusil ji {tries}krát znovu zapnout a pokaždé fáze limit znovu překročila. SEM už to nezkouší. Zapněte nabíječku sami, nebo v aplikaci, která ji řídí, až dům spotřebuje méně."
     },
     "old_found_loads_removed": {
       "title": "SEM už nepoužívá stará automaticky nalezená zařízení",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM nechává bezpečnostní zařízení být",
       "description": "Tato zařízení jsou bezpečnostní (kamera, alarm, siréna nebo zámek dveří): **{names}**. SEM je už nezobrazuje ani nespíná. Jejich energie se dál počítá do spotřeby domu. Pokud je některé spotřebič se zámkem, a ne zámek dveří, přidejte ho přes **Přidat zařízení**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatizace používají staré názvy režimu nabíjení",
+      "description": "Režimy nabíjení SEM jsou nyní Slunce, Slunce + tarif, Teď a Vypnuto. Home Assistant odmítá staré názvy v select.select_option a spouštěč se starým názvem se už nespustí. Změňte tyto: {uses} SEM najde většinu míst. Zkontrolujte také blueprinty a automatizace vytvořené mimo rozhraní."
     }
   },
   "selector": {

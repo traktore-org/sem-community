@@ -18,11 +18,22 @@ export const CHARGER_TEXT = {
     mode: 'charge_mode',
 };
 
-/** The charge modes in the order every card lists them. */
-export const CHARGE_MODES = [
-    'solar_only', 'solar_plus_battery', 'solar_plus_cheap',
-    'min_plus_solar', 'always_max', 'off',
-];
+/** (#1381) The four charge modes, in the order every card lists them.
+ * The engine still stores one of six strategies; the select maps them. */
+export const CHARGE_MODES = ['sun', 'sun_tariff', 'now', 'off'];
+
+/** (#1381) The ends a Now can have: the plan's next block, a time, full. */
+export const NOW_ENDS = ['block', 'time', 'full'];
+
+/** (#1381) Minutes from `now` to a "HH:MM" today or, if past, tomorrow. */
+export function minutesUntil(hhmm, now = new Date()) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || ''));
+    if (!m) return null;
+    const at = new Date(now);
+    at.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    if (at <= now) at.setDate(at.getDate() + 1);
+    return Math.max(1, Math.min(1440, Math.round((at - now) / 60000)));
+}
 
 /** The text key of a charge mode's name. */
 export function chargeModeKey(mode) {

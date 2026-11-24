@@ -390,6 +390,7 @@ def vpp_pause_override(decision, paused: bool):
             # (#940) a dispatched grid event is not a preference — the stop
             # bypasses the contactor's minimum-ON floor.
             safety_stop=True,
+            source="vpp_pause", klass=1,   # (#1381) CommandClass.SAFETY
             reason=f"VPP export pause — EV stopped for the event (#580) — {decision.reason}",
             reason_code=reason_codes.CHARGER_GRID_EVENT, reason_params={},
         )

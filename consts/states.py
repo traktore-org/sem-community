@@ -50,8 +50,8 @@ class ChargingState:
     # Min+PV Mode
     SOLAR_MIN_PV = "solar_min_pv"
 
-    # (#1381) The phase guard switched off a charger another party steers;
-    # SEM does not switch it back on.
+    # (#1381) SEM stopped a charger another party steers for the phase
+    # guard, and switches it back on when the phase has room again.
     PHASE_GUARD_STOPPED = "phase_guard_stopped"
 
 
@@ -104,7 +104,7 @@ STATUS_MESSAGES: Final = {
     ChargingState.NIGHT_WAITING_FOR_WINDOW: "Night mode - Waiting for charging window",
     ChargingState.NIGHT_TIME_EXPIRED: "Night charging window expired",
     ChargingState.TARIFF_WAITING_FOR_CHEAP: "Tariff mode - Waiting for cheap price window",
-    ChargingState.PHASE_GUARD_STOPPED: "Stopped by the phase guard - switch it on by hand or in its app",
+    ChargingState.PHASE_GUARD_STOPPED: "Stopped by the phase guard - back on when the phase has room",
 }
 
 # Map charging states to translation keys in dashboard/translations.json (#62)

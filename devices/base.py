@@ -471,6 +471,13 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # external-control mode; True = another party steers, SEM yields.
         self.external_yield: bool = False
         self.phase_guard_override: bool = False  # (#1381)
+        # (#1381, charger owner S4/S5) who asked for this cycle's writes, and
+        # the ledger of what SEM wrote with the state just before. (The
+        # hand-back of SEM's own guard stop passes the yield gate by the
+        # ``undo`` argument of ``send`` — per call, never a shared flag.)
+        self.command_source: str = ""
+        self.command_klass: int = 0
+        self.command_ledger: list = []
         self.yielded_commands: list = []
         self._commanded_claim: bool = False  # backing field, see _sem_commanded
         # Monotonic anchor for the "belief says on but the entity reads off"
@@ -1051,7 +1058,8 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         self._enabled = False
 
     async def send(self, domain: str, service: str,
-                   data: dict | None = None, *, why: str = "") -> bool:
+                   data: dict | None = None, *, why: str = "",
+                   undo: bool = False) -> bool:
         """(#855) THE SINGLE HARDWARE SEAM for a charger.
 
         Every command SEM sends to a charger goes through here — the stop,
@@ -1104,6 +1112,7 @@ class ControllableDevice(SetpointMemoMixin, ABC):
         # out anyway: the fuse comes first. Stamped per cycle by actuate.
         if (getattr(self, "external_yield", False) is True
                 and getattr(self, "phase_guard_override", False) is not True
+                and not undo
                 and service != "set_failsafe"):
             if not hasattr(self, "yielded_commands"):
                 self.yielded_commands = []
@@ -1139,10 +1148,32 @@ class ControllableDevice(SetpointMemoMixin, ABC):
                 f" — {why}" if why else "",
             )
             return False
+        # (#1381, charger owner S4) The ledger: what SEM wrote, who asked,
+        # and the entity's state just before — so a write SEM must hand back
+        # (its guard stop of a charger another party steers) can be undone
+        # exactly, and nothing else is ever guessed.
+        # Prepared before (the prior state is read before the write) and
+        # committed only after the write returned: a write that raised was
+        # not made, so it is never owed.
+        entry = prepare_command(self, domain, service, payload, undo=undo)
         # The one place in the charger path that really talks to HA.
         await self.hass.services.async_call(
             domain, service, payload, blocking=True)
+        commit_command(self, entry)
         return True
+
+    #: (#1381) entries kept in the in-memory ledger per device
+    LEDGER_KEEP = 40
+
+    def take_owed(self) -> list:
+        """(#1381) The ledger entries SEM owes back, removed from the owed
+        set (they stay in the ledger as history)."""
+        out = []
+        for entry in getattr(self, "command_ledger", None) or []:
+            if isinstance(entry, dict) and entry.get("owed"):
+                out.append(dict(entry))
+                entry["owed"] = False
+        return out
 
     @abstractmethod
     async def activate(self, available_watts: float) -> float:
@@ -5304,3 +5335,56 @@ from .power_setpoint import (  # noqa: E402,F401
     PowerSetpointDevice, device_class_for_control,
 )
 from ..coordinator.units import finite_float
+
+
+#: (#1381, charger owner S4) entries kept in a device's command ledger
+LEDGER_KEEP = 40
+
+
+def prepare_command(self: Any, domain: str, service: str, payload: dict,
+                    *, undo: bool = False) -> Optional[dict]:
+    """(#1381) The ledger entry for a write about to go out: the entity's
+    state now, who asked, and whether SEM owes it back. Never raises."""
+    try:
+        prior = None
+        entity = payload.get("entity_id")
+        if isinstance(entity, str):
+            try:
+                st = self.hass.states.get(entity)
+                prior = getattr(st, "state", None)
+            except Exception:  # noqa: BLE001 — a missing state is no prior
+                prior = None
+            if not isinstance(prior, (str, int, float)) or isinstance(prior, bool):
+                prior = None
+        yielded = getattr(self, "external_yield", False) is True
+        return {
+            "domain": domain, "service": service, "data": dict(payload),
+            "prior": prior, "at": time.time(),
+            "source": "hand_back" if undo else str(
+                getattr(self, "command_source", "") or ""),
+            "klass": 1 if undo else int(getattr(self, "command_klass", 0) or 0),
+            # SEM wrote to a charger it does not steer: the write is owed
+            # back. Only the guard's stop reaches hardware that way (the
+            # hand-back itself and the failsafe are not owed).
+            "owed": bool(yielded and not undo
+                         and getattr(self, "phase_guard_override", False) is True
+                         and service != "set_failsafe"),
+        }
+    except Exception:  # noqa: BLE001 — recording never blocks a write
+        _LOGGER.debug("command ledger prepare failed", exc_info=True)
+        return None
+
+
+def commit_command(self: Any, entry: Optional[dict]) -> None:
+    """Append a write that returned to the device's ledger. Never raises."""
+    if entry is None:
+        return
+    try:
+        book = getattr(self, "command_ledger", None)
+        if not isinstance(book, list):
+            book = []
+            self.command_ledger = book
+        book.append(entry)
+        del book[:-LEDGER_KEEP]
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("command ledger record failed", exc_info=True)

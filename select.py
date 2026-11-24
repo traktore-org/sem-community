@@ -50,15 +50,18 @@ EV_TARGET_TYPES = {
 # ``docs/plans/2026-05-30_ev_charge_mode_consolidation.md`` for the
 # full mapping, migration rules, and resolved design questions.
 #
-# ``solar_plus_cheap`` is greyed out in the card when the tariff has no
-# cheap hours (#885; #1385: any tariff with a cheap rate, not only a
-# dynamic one). Decision Q1, 2026-05-30. Constant lives in
+# ``solar_plus_cheap`` ("Solar + tariff") was greyed out in the card when
+# the tariff had no cheap hours (#885, #1385). Since #1411 it works on one
+# price too and no mode is greyed out. Constant lives in
 # ``consts/ev_charge_modes.py`` so the coordinator's read-side helper
 # imports the same source of truth (no duplicated tuple in
 # ``coordinator/coordinator.py``).
 from .consts.ev_charge_modes import (
     DEFAULT_EV_CHARGE_MODE,
     EV_CHARGE_MODES,
+    USER_MODES,
+    battery_help_of,
+    user_mode_of,
 )
 from .consts.battery_modes import BATTERY_MODES, DEFAULT_BATTERY_MODE
 
@@ -182,7 +185,8 @@ async def async_setup_entry(
                 coordinator,
                 SelectEntityDescription(
                     key=mode_key,
-                    options=list(EV_CHARGE_MODES.keys()),
+                    # (#1381 S9) the four modes the user sees
+                    options=list(USER_MODES.keys()),
                     entity_category=EntityCategory.CONFIG,
                 ),
                 entry, cid, "charge_mode",
@@ -434,6 +438,8 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         self._attr_suggested_object_id = f"sem_{description.key}"
         self.entity_id = f"select.sem_{description.key}"
         valid_set = self._valid_value_set()
+        if config_key == "charge_mode":   # (#1381 S9) shown as a user mode
+            initial_value = user_mode_of(initial_value or DEFAULT_EV_CHARGE_MODE)
         # Fall back to the description-declared default when initial_value is
         # garbage. options[0] is a safe choice (kwh for target_type, auto for
         # charging_mode) — better than the old hardcoded "kwh".
@@ -455,7 +461,8 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         if self._config_key == "ev_charging_mode":
             return set(EV_CHARGING_MODES.keys())
         if self._config_key == "charge_mode":
-            return set(EV_CHARGE_MODES.keys())
+            # (#1381 S9) the four modes, and the six stored names as aliases
+            return set(USER_MODES.keys()) | set(EV_CHARGE_MODES.keys())
         # Future selects: trust the description's declared options.
         return set(self.entity_description.options or [])
 
@@ -484,7 +491,8 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             # ``tariff_available`` below and renders the option disabled
             # with the reason, which keeps both properties (cannot be
             # mis-picked, can still be seen).
-            return list(EV_CHARGE_MODES.keys())
+            # (#1381 S9) Four modes: Sun, Sun + tariff, Now, Off.
+            return list(USER_MODES.keys())
         return list(self.entity_description.options or [])
 
     @property
@@ -492,9 +500,9 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         """(#885) Prerequisite state for the mode list, read by the card.
 
         One rule, two severities: a mode that CANNOT function without its
-        prerequisite is disabled in the UI (``solar_plus_cheap`` on a tariff
-        with no cheap rate has no cheap hours to use, #1385); a mode that functions
-        PARTIALLY shows an info instead (``solar_plus_battery`` assists on
+        prerequisite is disabled in the UI (none today: ``solar_plus_cheap``
+        was, on a tariff with no cheap rate, until #1411 gave it work on one
+        price too); a mode that functions PARTIALLY shows an info instead (``solar_plus_battery`` assists on
         live surplus from day one — the forecast-led bypass and the #878
         dynamic floor stay dormant until the #800 learner graduates, and
         the card reads that progress straight off
@@ -525,10 +533,41 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             "tariff_available": PriceView(
                 getattr(self.coordinator, "_tariff_provider", None),
             ).has_cheap_rate(),
-            "modes_needing_tariff": ["solar_plus_cheap"],
+            # (#1411) No mode needs cheap hours any more: "Solar + tariff"
+            # works on one price too (the grid's "At least" at night, and
+            # the thin-sun rule by day). The list stays for the card, empty.
+            "modes_needing_tariff": [],
             "paused_until": paused_until,
-            "pause_resume_mode": resume_mode,
+            "pause_resume_mode": user_mode_of(resume_mode) if resume_mode else None,
+            # (#1381 S9/S11) the stored strategy (the card's hints speak it),
+            # the battery-help switch, and a running timed Now
+            "strategy": str(cfg.get("charge_mode") or DEFAULT_EV_CHARGE_MODE),
+            "battery_help": battery_help_of(cfg),
+            "now_until": self._now_until(),
         }
+
+    def _now_override(self):
+        """(#1381 S11) The running timed Now: the charger's plan override
+        "force" — the one timed full-power claim the owner already holds."""
+        try:
+            from homeassistant.util import dt as _dt
+            from .coordinator import plan_override as _po
+            rec = _po.active_override(
+                getattr(self.coordinator, "_plan_overrides", None) or {},
+                self._charger_id, _dt.utcnow())
+        except Exception:  # noqa: BLE001 — no readable override is no Now
+            return None
+        return rec if rec is not None and rec.action == "force" else None
+
+    def _now_until(self):
+        rec = self._now_override()
+        return rec.expires_at.isoformat() if rec is not None else None
+
+    def _shown_mode(self, stored) -> str:
+        """The user mode for the stored strategy; Now while a timed Now runs."""
+        if self._now_override() is not None:
+            return "now"
+        return user_mode_of(stored or DEFAULT_EV_CHARGE_MODE)
 
     @property
     def current_option(self) -> str | None:
@@ -536,6 +575,8 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         opts = self.options
         if self._value in opts:
             return self._value
+        if self._config_key == "charge_mode" and self._value in EV_CHARGE_MODES:
+            return user_mode_of(self._value)     # (#1381 S9) an old name
         return opts[0] if opts else None
 
     def _handle_coordinator_update(self) -> None:
@@ -550,6 +591,8 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         the config's value when it is one this select may show.
         """
         value = self._charger_cfg().get(self._config_key)
+        if self._config_key == "charge_mode":     # (#1381 S9)
+            value = self._shown_mode(value)
         if isinstance(value, str) and value in self._valid_value_set() and value != self._value:
             self._value = value
         super()._handle_coordinator_update()
@@ -566,9 +609,15 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Persist the selected value into the charger config."""
-        if option not in self.options:
+        if self._config_key == "charge_mode":
+            if option not in self._valid_value_set():
+                return
+            if await self._select_charge_mode(option):
+                return
+        elif option not in self.options:
             return
-        self._value = option
+        self._value = (user_mode_of(option) if self._config_key == "charge_mode"
+                       else option)
         # Shared per-charger write path (#485 K2) — owns the data-side
         # fallback, missing-charger recovery (#462/#464), coordinator
         # mirror and reload-skip arming. Do NOT inline a copy here; the
@@ -590,6 +639,35 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             "Updated per-charger %s.%s to %s",
             self._charger_id, self._config_key, option,
         )
+
+
+    async def _select_charge_mode(self, option: str) -> bool:
+        """(#1381 S9/S11) The four modes. True when handled here.
+
+        * Now → a timed Now: the plan override "force" until the plan's next
+          block (``now_minutes_for``). A charger already on the untimed Now
+          (the stored ``always_max``, "until full") stays as it is.
+        * Any other mode ends a running timed Now and is written through the
+          one per-charger writer, which maps it to the stored strategy.
+        """
+        coord = self.coordinator
+        if option == "now":
+            stored = str(self._charger_cfg().get("charge_mode") or "")
+            if stored != "always_max" and self._now_override() is None:
+                # (#1381 D20) marked as the user's own Now: it lifts a
+                # standing Off or a pause until it ends, then Off is Off again
+                coord.set_plan_override(
+                    self._charger_id, "force",
+                    coord.now_minutes_for(self._charger_id), user_now=True)
+            self._value = "now"
+            self.async_write_ha_state()
+            await coord.async_request_refresh()
+            _LOGGER.info("Charger %s: Now, until %s", self._charger_id,
+                         self._now_until() or "full")
+            return True
+        if self._now_override() is not None:
+            coord.clear_plan_override(self._charger_id)
+        return False
 
 
 class SEMPerBatterySelect(CoordinatorEntity, SelectEntity):

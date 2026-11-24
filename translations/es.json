@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Solo solar",
           "solar_plus_battery": "Solar + batería",
-          "solar_plus_cheap": "Solar + horas más baratas",
+          "solar_plus_cheap": "Solar + tarifa",
           "min_plus_solar": "Mín + Solar",
           "always_max": "Siempre (máx)",
-          "off": "Apagado"
+          "off": "Apagado",
+          "sun": "Sol",
+          "sun_tariff": "Sol + tarifa",
+          "now": "Ahora"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "El depósito no alcanza el objetivo de legionela",
       "description": "{name}: el depósito admite como máximo {max} °C, por debajo del objetivo de legionela de {target} °C. SEM calienta a {max} °C, lo que puede no desinfectar el depósito. Baja el objetivo o revisa el máximo del depósito. Este aviso desaparece solo."
     },
-    "guard_stopped": {
-      "title": "La protección de fase apagó {charger}",
-      "description": "Una fase superaba su límite, así que SEM apagó {charger}. Otro sistema controla este cargador, así que SEM no lo vuelve a encender. Enciéndelo a mano o deja que su app lo reinicie. Este aviso desaparece cuando el cargador vuelve a cargar o se desenchufa el coche."
+    "phase_switch_refused": {
+      "title": "Cambio de fases rechazado",
+      "description": "SEM intentó {tries} veces pasar {charger} a {phases} fases. Home Assistant rechazó la orden cada vez. SEM ya no lo intenta. Comprueba que la entidad del cambio de fases esté disponible y acepte el valor configurado."
+    },
+    "guard_left_off": {
+      "title": "Cargador apagado tras la protección de fase",
+      "description": "SEM detuvo {charger} porque una fase superaba su límite. Intentó {tries} veces encenderlo de nuevo, y cada vez la fase volvió a superarlo. SEM ya no lo intenta. Enciende el cargador tú mismo, o en la app que lo controla, cuando la casa consuma menos."
     },
     "old_found_loads_removed": {
       "title": "SEM ya no usa los antiguos dispositivos encontrados automáticamente",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM deja en paz los dispositivos de seguridad",
       "description": "Estos dispositivos son de seguridad (cámara, alarma, sirena o cerradura): **{names}**. SEM ya no los muestra ni los controla. Su energía sigue contando en el total de la casa. Si alguno es un electrodoméstico con bloqueo y no una cerradura, añádelo con **Añadir dispositivo**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatizaciones usan nombres antiguos del modo de carga",
+      "description": "Los modos de carga de SEM ahora son Sol, Sol + tarifa, Ahora y Apagado. Home Assistant rechaza los nombres antiguos en select.select_option, y un disparador con un nombre antiguo ya no se activa. Cambia estos: {uses} SEM encuentra la mayoría de los usos. Revisa también los blueprints y las automatizaciones creadas fuera de la interfaz."
     }
   },
   "selector": {

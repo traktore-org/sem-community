@@ -181,8 +181,9 @@ class TestChargeModeOptions:
         """
         for tariff_mode in ("static", "calendar", "dynamic"):
             sel = _build_charge_mode_select(tariff_mode=tariff_mode)
-            assert "solar_plus_cheap" in sel.options, tariff_mode
-            assert set(sel.options) == set(EV_CHARGE_MODES.keys()), tariff_mode
+            # (#1381 S9) the four user modes, all listed on every tariff
+            assert "sun_tariff" in sel.options, tariff_mode
+            assert sel.options == ["sun", "sun_tariff", "now", "off"], tariff_mode
 
     def test_the_tariff_gate_now_lives_on_the_attribute(self):
         # (#1385) The tariff answers, not its mode name: a one-price static
@@ -207,7 +208,10 @@ class TestChargeModeOptions:
             a = sel.extra_state_attributes
             assert a is not None, tariff_mode
             assert a.get("tariff_available") is avail, (tariff_mode, a)
-            assert "solar_plus_cheap" in a.get("modes_needing_tariff", []), a
+            # (#1411) "Solar + tariff" works on one price too: the grid's
+            # "At least" at night and the thin-sun rule by day. No mode
+            # needs cheap hours any more, so the card disables none.
+            assert a.get("modes_needing_tariff") == [], a
 
     def test_valid_value_set_always_full(self):
         """Universe of valid values is always the 5 — only the UI list
@@ -215,7 +219,9 @@ class TestChargeModeOptions:
         install must stay readable so a re-enable of tariff restores
         the mode automatically rather than silently resetting."""
         sel = _build_charge_mode_select(tariff_mode="static")
-        assert sel._valid_value_set() == set(EV_CHARGE_MODES.keys())
+        # (#1381 S9) the four user modes plus the six stored names (aliases)
+        assert sel._valid_value_set() == set(EV_CHARGE_MODES.keys()) | {
+            "sun", "sun_tariff", "now"}
 
     def test_stored_solar_plus_cheap_survives_losing_the_tariff(self):
         """User had dynamic tariff + ``solar_plus_cheap`` mode, then
@@ -240,10 +246,11 @@ class TestChargeModeOptions:
         # degrades gracefully (its day path delegates to solar_only when
         # no cheap window is in effect). The original point of this test
         # survives below: stored intent is never silently rewritten.
-        assert "solar_plus_cheap" in sel.options
-        assert sel.current_option == "solar_plus_cheap"
-        # Stored intent preserved — Phase B must read this, not current_option
-        assert sel._value == "solar_plus_cheap"
+        # (#1381 S9) shown as its user mode; the stored strategy is never
+        # rewritten by a read (the select writes only on a user's pick)
+        assert "sun_tariff" in sel.options
+        assert sel.current_option == "sun_tariff"
+        assert sel.coordinator.config["ev_chargers"][0]["charge_mode"] == "solar_plus_cheap"
 
 
 # ──────────────────────────────────────────────────────────────────────

@@ -1795,10 +1795,13 @@
         "state": {
           "solar_only": "Tylko słońce",
           "solar_plus_battery": "Słońce + akumulator",
-          "solar_plus_cheap": "Słońce + najtańsze godziny",
+          "solar_plus_cheap": "Słońce + taryfa",
           "min_plus_solar": "Min + Słońce",
           "always_max": "Zawsze (max)",
-          "off": "Wył"
+          "off": "Wył",
+          "sun": "Słońce",
+          "sun_tariff": "Słońce + taryfa",
+          "now": "Teraz"
         }
       },
       "phase_mode": {
@@ -2141,9 +2144,13 @@
       "title": "Zasobnik nie osiąga celu antylegionella",
       "description": "{name}: zasobnik przyjmuje najwyżej {max} °C, poniżej celu antylegionella {target} °C. SEM grzeje do {max} °C, co może nie zdezynfekować zasobnika. Obniż cel lub sprawdź maksimum zasobnika. Komunikat zniknie sam."
     },
-    "guard_stopped": {
-      "title": "Ochrona faz wyłączyła {charger}",
-      "description": "Faza przekroczyła limit, więc SEM wyłączył {charger}. Tą ładowarką steruje inny system, więc SEM jej nie włączy. Włącz ją ręcznie lub pozwól aplikacji uruchomić ją ponownie. Komunikat zniknie, gdy ładowarka znów zacznie ładować lub samochód zostanie odłączony."
+    "phase_switch_refused": {
+      "title": "Przełączenie faz odrzucone",
+      "description": "SEM próbował {tries} razy przełączyć {charger} na {phases} fazy. Home Assistant za każdym razem odrzucił polecenie. SEM już nie próbuje. Sprawdź, czy encja przełączania faz jest dostępna i przyjmuje ustawioną wartość."
+    },
+    "guard_left_off": {
+      "title": "Ładowarka wyłączona po ochronie faz",
+      "description": "SEM zatrzymał {charger}, bo faza przekroczyła limit. Próbował {tries} razy ją włączyć i za każdym razem faza znów przekraczała limit. SEM już nie próbuje. Włącz ładowarkę sam lub w aplikacji, która nią steruje, gdy dom zużywa mniej prądu."
     },
     "old_found_loads_removed": {
       "title": "SEM nie używa już starych automatycznie znalezionych urządzeń",
@@ -2152,6 +2159,10 @@
     "security_devices_not_used": {
       "title": "SEM nie rusza urządzeń zabezpieczających",
       "description": "Te urządzenia są urządzeniami zabezpieczającymi (kamera, alarm, syrena lub zamek drzwi): **{names}**. SEM już ich nie pokazuje ani nie przełącza. Ich energia nadal liczy się do zużycia domu. Jeśli któreś to urządzenie z blokadą, a nie zamek drzwi, dodaj je przez **Dodaj urządzenie**."
+    },
+    "old_charge_mode_names": {
+      "title": "Automatyzacje używają starych nazw trybu ładowania",
+      "description": "Tryby ładowania SEM to teraz Słońce, Słońce + taryfa, Teraz i Wył. Home Assistant odrzuca stare nazwy w select.select_option, a wyzwalacz na starej nazwie już nie działa. Zmień te: {uses} SEM znajduje większość miejsc. Sprawdź też blueprinty i automatyzacje utworzone poza interfejsem."
     }
   },
   "selector": {

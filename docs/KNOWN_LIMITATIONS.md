@@ -24,6 +24,7 @@ are in [TROUBLESHOOTING.md](TROUBLESHOOTING.md). EV charge rules are in
 | Easee sensors not found. | See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#car-charging). |
 | One car per charger. Two cars on one charger make % targets and the virtual SOC wrong. | Use a kWh target. Taper detection still stops a full car. |
 | Without a car charge-level sensor, the % target uses an estimate. | Set the car charge-level sensor on the charger. |
+| Now from **Charge now** ends at the plan's next block. With no plan, it ends after 2 hours. | Pick a time or **until full** on the charger. |
 | Phase switching is off by default. | Turn on "Phase switching" for that charger on System › Chargers. |
 | A plug sensor that says off while the charger draws power. SEM treats the car as connected and logs it. | Fix the plug sensor in the charger's integration. |
 | KEBA restarts itself about 10 minutes after a stop, at its fallback current. | See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#car-charging). |

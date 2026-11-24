@@ -188,7 +188,7 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Check, in order:**
 1. **Devices › your charger.** The row says why. For example: "No car is plugged in."
-2. **Charge mode.** Off never charges. **Solar only** charges only from spare sun. Spare sun must reach the charger's minimum: about 1380 W for a 1-phase charger at 6 A, about 4140 W for a 3-phase charger at 6 A.
+2. **Charge mode.** Off never charges. **Sun** charges only from spare sun. Spare sun must reach the charger's minimum: about 1380 W for a 1-phase charger at 6 A, about 4140 W for a 3-phase charger at 6 A.
 3. **Repairs.** **EV charger not accepting commands** means the charger refuses SEM's commands. **EV charger cannot be stopped** means SEM has no way to stop it.
 4. **System › Chargers.** Check the charger's current control: **current control** (an entity) or **via action** (a service).
 
@@ -198,8 +198,18 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:**
 - Charge mode **Off**: the charger may restart on its own. Look for [the wallbox undoes SEM's stop](#your-wallbox-undoes-sems-stop-on-a-timer).
-- The car charged overnight: its charge mode is **Min + Solar** or **Solar + cheapest hours**, and a target is not reached. To charge from solar only, set **Solar only** and set **At least** to 0.
-- The battery charges the car: on **Devices**, open the battery card and turn off **May the battery help charge the car?**.
+- The car charged overnight: its charge mode is **Sun + tariff**, and a target is not reached. To charge from solar only, set **Sun** and set **At least** to 0.
+- The battery charges the car: on **Devices**, open the charger and turn off **May the battery help the car?**.
+
+### An automation can no longer set the charge mode
+
+- The charge mode select has four options now: `sun`, `sun_tariff`, `now`,
+  `off`. Home Assistant refuses an old name such as `solar_only` in
+  `select.select_option`, and a trigger on an old name no longer fires.
+- The Repair "Automations use old charge mode names" lists each automation
+  or script and the new name. Change them, then reload automations; the
+  Repair clears itself.
+- `solar_energy_management.set_option` still takes the old names.
 
 ### Your wallbox undoes SEM's stop on a timer
 
@@ -223,11 +233,11 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:** If the other party should win, set **Steered by another party** to **Yes, SEM yields** in `All settings` for that device. Then pick the entity that shows when the other party is in control. Leave it empty and SEM always yields. If the other party should not control it, stop its program.
 
-### The phase guard switched off a charger another party steers
+### A charger was left off after the phase guard
 
-**Symptom:** A Repair says the phase guard switched off a charger. Its state reads **Stopped by the phase guard**.
+**Symptom:** A Repair says SEM left a charger off after the phase guard. The charger is steered by another party.
 
-**Fix:** A phase was over its limit. SEM does not start a charger another party steers. Switch it on by hand or in its app when the house uses less power. The Repair clears when the charger charges again or the car is unplugged.
+**Fix:** The phase went over its limit each time SEM switched the charger back on. Switch it on yourself, or in the app that steers it, when the house uses less power. Check the phase limit and which big loads share that phase. The Repair goes away when the charger is on again or the car leaves.
 
 ### The Plan screen shows nothing
 
@@ -255,7 +265,7 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 ### A home without a battery makes no night plan
 
-**Symptom:** No battery, but **Solar + cheapest hours** charges at once.
+**Symptom:** No battery, but **Sun + tariff** charges at once.
 
 **Fix:** Update SEM. A battery platform of **Generic** alone no longer counts as a battery.
 
