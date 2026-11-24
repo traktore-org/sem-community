@@ -150,8 +150,10 @@ def _overload_values(rig, values, t, sim):
     """A little physics: a charger whose enable switch is on and whose car is
     plugged draws its current on all three phases."""
     hh = values.pop("_hour")
-    links_on = sim["states"].get("switch.links_enable", "on") == "on"
-    rechts_on = sim["states"].get("switch.rechts_enable", "on") == "on"
+    links_on = (sim["states"].get("switch.links_enable", "on") == "on"
+                and float(sim["states"].get("number.links_current", 16)) >= 6)
+    rechts_on = (sim["states"].get("switch.rechts_enable", "on") == "on"
+                 and float(sim["states"].get("number.rechts_current", 16)) >= 6)
     links_a = 12.0 if links_on else 0.0       # Audi ~8.3 kW
     rechts_a = 6.0 if (rechts_on and 16.5 <= hh < 21.0) else 0.0
     heat_l3 = 8.0 if 16.71 <= hh < 16.76 else 0.0    # 16:43–16:45 peak
@@ -172,7 +174,8 @@ def _overload_values(rig, values, t, sim):
         "sensor.l3": (round(l["l3"], 1), {"unit_of_measurement": "A"}),
         "switch.links_enable": sim["states"].get("switch.links_enable", "on"),
         "switch.rechts_enable": sim["states"].get("switch.rechts_enable", "on"),
-        "number.links_current": 16, "number.rechts_current": 16,
+        "number.links_current": sim["states"].get("number.links_current", 16),
+        "number.rechts_current": sim["states"].get("number.rechts_current", 16),
     }
     _set_states(rig, vals, t)
 
@@ -221,6 +224,8 @@ async def test_pipeline_replay(freezer):
         ent = (data or {}).get("entity_id")
         if domain == "switch" and ent:
             sim["states"][ent] = "on" if service == "turn_on" else "off"
+        elif domain == "number" and ent and "value" in (data or {}):
+            sim["states"][ent] = data["value"]
         if real_call:
             return await real_call(domain, service, data, *a, **k)
         return None
