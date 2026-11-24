@@ -5660,7 +5660,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         async def _phase_step(decision, cid=cid,
                                               charger_cfg=charger_cfg,
                                               adapter=adapter, view=view,
-                                              _decide_code=_decide_code):
+                                              _decide_code=_decide_code,
+                                              _yielded=_yielded):
                             # (#804 Phase B/C) The phase sequencer may hold
                             # the decision at IDLE while a switch walks its
                             # stop→switch→settle sequence. AFTER the safety
@@ -5716,9 +5717,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                              self._yield_or_stabilise(
                                  cid, d, view, adapter, _now_mono_cycle)),
                             (_owner.SRC_PHASE_GUARD, _owner.CommandClass.SAFETY,
-                             lambda d, adapter=adapter, view=view, cid=cid:
+                             lambda decision, adapter=adapter, view=view, cid=cid:
                              filter_charger_decision(
-                                 self, d, adapter=adapter, power=view.power,
+                                 self, decision, adapter=adapter, power=view.power,
                                  # (#804 B4d) the live phase belief — a 3→1
                                  # switch tightens the per-phase clamp at once.
                                  believed_phases=getattr(
@@ -6083,8 +6084,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                      lambda d: self._yield_or_stabilise(
                          cid, d, view, adapter, _now_mono_cycle)),
                     (_owner.SRC_PHASE_GUARD, _owner.CommandClass.SAFETY,
-                     lambda d: filter_charger_decision(
-                         self, d, adapter=adapter, power=view.power,
+                     lambda decision: filter_charger_decision(
+                         self, decision, adapter=adapter, power=view.power,
                          # (#804 B4d) the legacy single-charger path never
                          # runs phase switching, so the belief is always
                          # absent here — passed for one uniform call shape,

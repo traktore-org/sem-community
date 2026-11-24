@@ -24,7 +24,7 @@ import inspect
 import logging
 from dataclasses import replace
 from enum import IntEnum
-from typing import Any, Awaitable, Callable, Iterable, List, Sequence, Tuple, Union
+from typing import Any, Awaitable, Callable, List, Sequence, Tuple, Union
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,10 +123,6 @@ def stamp(decision: Any, source: str, klass: CommandClass) -> Any:
         return replace(decision, source=source, klass=int(klass))
     except (TypeError, ValueError):
         return decision
-
-
-def trail_text(trail: Iterable[Tuple[str, bool]]) -> str:
-    return " → ".join(f"{s}{'*' if c else ''}" for s, c in trail)
 
 
 def note_trail(coord: Any, cid: str, trail: List[Tuple[str, bool]]) -> None:

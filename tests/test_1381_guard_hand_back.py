@@ -18,9 +18,6 @@ import pytest
 
 from custom_components.solar_energy_management.coordinator import guard_hand_back as ghb
 from custom_components.solar_energy_management.coordinator.actuate import actuate
-from custom_components.solar_energy_management.coordinator.active_phase_guard import (
-    ActivePhaseGuard,
-)
 from custom_components.solar_energy_management.coordinator.charger_types import (
     ChargerDecision,
     ChargerIntent,
