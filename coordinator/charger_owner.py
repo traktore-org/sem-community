@@ -139,3 +139,48 @@ def note_trail(coord: Any, cid: str, trail: List[Tuple[str, bool]]) -> None:
         except AttributeError:
             return
     book[cid] = list(trail)
+
+
+# ---------------------------------------------------------------------------
+# The undo: hand back what SEM's safety stop changed on a charger it yields
+# (S5). The policy (when the phase has room, back-off, Repair) lives in
+# ``guard_hand_back``; its record comes from the device's command ledger.
+# ---------------------------------------------------------------------------
+
+def after_charger_cycle(coord: Any, cid: str, adapter: Any, power: Any,
+                        stop_reason: str, *, yielded: bool, now: float) -> bool:
+    """Per charger, after ``actuate``: note the facts the hand-back judges
+    by, and turn this cycle's owed writes into the charger's record. True
+    when the stored record changed (persist it)."""
+    from . import guard_hand_back as ghb
+    ghb.note_facts(coord, cid, power, yielded=yielded)
+    if not stop_reason:
+        return False
+    return ghb.note_guard_stop(coord, cid, adapter, power, stop_reason, now=now)
+
+
+async def fleet_step(coord: Any, *, now: float) -> bool:
+    """Once per cycle, after every charger: at most one hand-back. True when
+    the stored records changed."""
+    from . import guard_hand_back as ghb
+    return await ghb.run_step(coord, now=now)
+
+
+def effective_state(coord: Any, cid: str, state: str) -> str:
+    from . import guard_hand_back as ghb
+    return ghb.effective_state(coord, cid, state)
+
+
+def fleet_state(coord: Any, state: str) -> str:
+    from . import guard_hand_back as ghb
+    return ghb.fleet_state(coord, state)
+
+
+def to_store(coord: Any) -> dict:
+    from . import guard_hand_back as ghb
+    return ghb.to_store(coord)
+
+
+def from_store(coord: Any, blob: Any) -> None:
+    from . import guard_hand_back as ghb
+    ghb.from_store(coord, blob)

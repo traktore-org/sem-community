@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Tanken når ikke legionellamålet",
       "description": "{name}: tanken tar høyst {max} °C, under legionellamålet {target} °C. SEM varmer til {max} °C, som kanskje ikke desinfiserer tanken. Senk målet, eller sjekk tankens maksimum. Meldingen forsvinner av seg selv."
+    },
+    "guard_left_off": {
+      "title": "Lader slått av etter fasevakten",
+      "description": "SEM stoppet {charger} fordi en fase var over grensen. Den prøvde {tries} ganger å slå den på igjen, og hver gang gikk fasen over igjen. SEM prøver ikke mer. Slå på laderen selv, eller i appen som styrer den, når huset bruker mindre strøm."
     }
   },
   "selector": {

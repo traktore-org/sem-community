@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Rezervorul nu atinge ținta antilegionella",
       "description": "{name}: rezervorul acceptă cel mult {max} °C, sub ținta antilegionella de {target} °C. SEM încălzește la {max} °C, ceea ce poate să nu dezinfecteze rezervorul. Coboară ținta sau verifică maximul rezervorului. Mesajul dispare singur."
+    },
+    "guard_left_off": {
+      "title": "Încărcătorul a rămas oprit după protecția de fază",
+      "description": "SEM a oprit {charger} pentru că o fază a depășit limita. A încercat de {tries} ori să-l pornească, și de fiecare dată faza a depășit din nou. SEM nu mai încearcă. Pornește încărcătorul tu, sau în aplicația care îl controlează, când casa consumă mai puțin."
     }
   },
   "selector": {

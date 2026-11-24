@@ -5834,6 +5834,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         effective_state = _ov
                             else:
                                 _no_draw.pop(cid, None)
+                        # (#1381) held off after the guard's stop: say so,
+                        # never "night charging active" at 0 W
+                        from . import charger_owner as _owner_state
+                        effective_state = _owner_state.effective_state(
+                            self, cid, effective_state)
                         pcc.effective_state = effective_state
                         # (#1404) The notice names THIS charger's amps and
                         # watts, from the decision its state was just read
@@ -5885,6 +5890,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     grid_import_known=bool(getattr(
                                         view.fleet, "grid_import_known", True)),
                                 )
+                        _pg_reason = yield_override_reason(self, decision)
                         try:
                             await actuate(
                                 decision, adapter, view.power,
@@ -5892,8 +5898,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 observer=self._observer_mode,
                                 controller=self._surplus_controller,
                                 yielded=self.external_yielding(f"charger:{cid}"),
-                                phase_override=yield_override_reason(self, decision),
+                                phase_override=_pg_reason,
                             )
+                            # (#1381, charger owner S5) the guard's stop of a
+                            # yielded charger leaves an owed undo in the
+                            # ledger: keep it as this charger's record
+                            if _owner.after_charger_cycle(
+                                    self, cid, adapter, view.power, _pg_reason,
+                                    yielded=_yielded, now=time.time()):
+                                self._save_ev_session_state()
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
                             # remaining headroom (#274/H1). Estimate from the setpoint
@@ -5978,6 +5991,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
                             _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
+                # (#1381) one charger per cycle gets its guard stop undone
+                from . import charger_owner as _owner_step
+                try:
+                    await _owner_step.fleet_step(self, now=time.time())
+                except (HomeAssistantError, ServiceValidationError) as e:
+                    _LOGGER.error("phase guard hand-back failed: %s", e)
                 self._save_ev_session_state()
             elif self._ev_device:
                 # Single-charger legacy path — also flipped to the new pipeline.
@@ -6074,14 +6093,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                              self, "_phase_believed", {}).get("ev_charger"))),
                 ])
                 _owner.note_trail(self, cid, _trail)
+                _pg_reason = yield_override_reason(self, decision)
                 try:
                     await actuate(
                         decision, adapter, view.power, reconciler=reconciler,
                         observer=self._observer_mode,
                         controller=self._surplus_controller,
                         yielded=self.external_yielding(f"charger:{cid}"),
-                        phase_override=yield_override_reason(self, decision),
+                        phase_override=_pg_reason,
                     )
+                    # (#1381, charger owner S5) as in the fleet path
+                    _owner.after_charger_cycle(
+                        self, cid, adapter, view.power, _pg_reason,
+                        yielded=self._yields_charger(cid), now=time.time())
+                    await _owner.fleet_step(self, now=time.time())
                     self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("EV control service failed: %s", e)
@@ -6286,6 +6311,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 charging_state,
                 getattr(self, "_effective_states_per_charger", None) or {},
             )
+            # (#1381) a charger held off after the guard's stop, none drawing:
+            # the fleet text says so instead of the plan's "charging"
+            from . import charger_owner as _owner_fleet
+            charging_state = _owner_fleet.fleet_state(self, charging_state)
 
             # Step 11: Build complete data structure
             sem_data = SEMData(
@@ -17239,6 +17268,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # and allow the battery to drain for the full 45 s again).
         # The stability timers are at the top level of the blob (fleet-wide).
         # Be fully defensive: any error → skip, never raise.
+        # (#1381) a guard stop SEM still owes a hand-back survives a restart
+        try:
+            from . import charger_owner as _owner_restore
+            _owner_restore.from_store(self, state.get("guard_stops"))
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("guard_stops restore failed, skipping", exc_info=True)
         try:
             stability_blob = state.get("stability_timers")
             if stability_blob is not None:
@@ -17258,6 +17293,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Stability timers are fleet-wide (one ChargeStability instance),
         # so they are stored at the top level of the blob, not per-charger.
         stability_snapshot = self._charge_stability.snapshot_timers(time.monotonic())
+        from . import charger_owner as _owner_store
 
         # Multi-charger (#112): save all chargers
         if self._ev_devices:
@@ -17279,6 +17315,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ),
                 "chargers": per_charger,
                 "stability_timers": stability_snapshot,
+                "guard_stops": _owner_store.to_store(self),   # (#1381)
             })
         elif self._ev_device:
             ev = self._ev_device
@@ -17287,6 +17324,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ev._session_active, ev._current_setpoint, self._session_data,
                 ),
                 "stability_timers": stability_snapshot,
+                "guard_stops": _owner_store.to_store(self),   # (#1381)
             })
 
     def _serialize_session_state(

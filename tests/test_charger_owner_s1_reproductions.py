@@ -1,9 +1,9 @@
 """(#1381, charger owner S1) The two conflicts the owner map names, as tests.
 
 C1 — the phase guard stops a charger another party steers ("SEM yields"),
-the phase recovers, and nothing switches the charger back on. The reporter's
-car sat off for 9 hours (23→24.11). Strict xfail until the owner's ledger
-hands it back (step S5); it then passes and the marker goes.
+the phase recovers, and nothing switched the charger back on. The reporter's
+car sat off for 9 hours (23→24.11). It was a strict xfail from S1 until the
+owner's ledger handed it back (S5).
 
 C2 — the map suspected the load manager writes 0 A to a charger and the
 restore writes nothing. Reading the code refuted it: ``_shed_device`` and
@@ -85,7 +85,6 @@ ARMED_ROOMY = {"mode": "enforcing_armed", "topology": "grid_only",
                "inverter": {}}
 
 
-@pytest.mark.xfail(strict=True, reason="#1381 C1: fixed at charger owner S5")
 @pytest.mark.asyncio
 async def test_c1_a_yielded_charger_the_guard_stopped_is_handed_back():
     from custom_components.solar_energy_management.coordinator import (

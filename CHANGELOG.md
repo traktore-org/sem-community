@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Auto phase mode starts on 1 phase in thin sun** (#1412). An idle car never got 1 phase, so it never started in thin sun.
 - 🐛 **Minimum power follows the active phases** (#1412). After a switch to 1 phase, SEM still asked for 4140 W to start. Now 1380 W.
 - 🐛 **Phase switch values must fit the entity** (#1412). Values outside the number's range sent nothing, silently. The form now refuses them; a Repair names them.
+- 🐛 **A charger stopped by the phase guard comes back** (#1381). SEM switches it on again when the phase has room, one charger at a time.
+- 🐛 **No "night charging" at 0 W after a guard stop** (#1381). The charger reads "Stopped by the phase guard" until it is back on.
 
 # [2.3.0-beta.26] — 23.11.2026
 

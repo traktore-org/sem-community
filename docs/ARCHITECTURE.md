@@ -861,6 +861,41 @@ SEM abstracts charger-specific differences through per-integration service profi
 
 ---
 
+## Charger command owner (#1381)
+
+Every command to a charger goes out through ONE seam,
+`ControllableDevice.send` (#855). The owner adds what the seam did not
+have: one order of precedence and one record of what SEM changed.
+
+- **Provenance.** Each rewrite of a charger decision names its `source`
+  and its precedence `klass` (`coordinator/charger_owner.py`,
+  `CommandClass`). The phase guard's yield override keys on the source,
+  not on a reason text.
+- **One chain.** `charger_owner.resolve` runs decide → VPP pause → plan
+  override → stability/yield → phase guard → phase sequencer in that order
+  and keeps a trail of which step changed the decision.
+- **Ledger.** `send` records every write that reaches hardware with the
+  entity's state just before and who asked. The phase guard's stop of a
+  charger another party steers is marked *owed*.
+- **Undo.** `charger_owner.after_charger_cycle` turns owed writes into a
+  record per charger; `fleet_step` hands one charger back per cycle once
+  the guard is armed and the phase has room (`guard_hand_back`: back-off
+  10/20/40 min, a Repair after 3 failed tries). The record survives a
+  restart (EV session state, `guard_stops`).
+- **Guard.** `tests/test_charger_writer_inventory.py` counts every call
+  site that can command a charger; a new one fails until it goes behind
+  the owner or is declared.
+
+| Class | Name | Examples | Wins over |
+|---|---|---|---|
+| 1 | Safety | phase guard stop, peak emergency, VPP grid event | all; passes a yield, leaves an undo |
+| 2 | Hard limit | peak-slot clamp, max-SOC ceiling, phase-sequencer hold | 3–7 |
+| 3 | User | mode Off, pause, Skip tonight, Start / Charge now | 4–7 |
+| 4 | External | another party steers ("SEM yields") | 5–7 |
+| 5 | Plan | night At-least, deadline, departure, tariff block | 6, 7 |
+| 6 | Sun | surplus charging, battery help | 7 |
+| 7 | Maintenance | resume press, phase start / return, heartbeat | — |
+
 ## EV Budget Calculation
 
 ### One canonical value, six strategies

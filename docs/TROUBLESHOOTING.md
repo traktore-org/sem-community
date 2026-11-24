@@ -223,6 +223,12 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:** If the other party should win, set **Steered by another party** to **Yes, SEM yields** in `All settings` for that device. Then pick the entity that shows when the other party is in control. Leave it empty and SEM always yields. If the other party should not control it, stop its program.
 
+### A charger was left off after the phase guard
+
+**Symptom:** A Repair says SEM left a charger off after the phase guard. The charger is steered by another party.
+
+**Fix:** The phase went over its limit each time SEM switched the charger back on. Switch it on yourself, or in the app that steers it, when the house uses less power. Check the phase limit and which big loads share that phase. The Repair goes away when the charger is on again or the car leaves.
+
 ### The Plan screen shows nothing
 
 **Check:**

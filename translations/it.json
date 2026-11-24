@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Il serbatoio non raggiunge l'obiettivo legionella",
       "description": "{name}: il serbatoio accetta al massimo {max} °C, sotto l'obiettivo legionella di {target} °C. SEM scalda a {max} °C, che potrebbe non disinfettare il serbatoio. Abbassa l'obiettivo o controlla il massimo del serbatoio. Il messaggio scompare da solo."
+    },
+    "guard_left_off": {
+      "title": "Wallbox lasciata spenta dopo la protezione di fase",
+      "description": "SEM ha fermato {charger} perché una fase superava il limite. Ha provato {tries} volte a riaccenderla, e ogni volta la fase ha superato di nuovo. SEM non riprova più. Riaccendi la wallbox tu, o nell'app che la controlla, quando la casa consuma meno."
     }
   },
   "selector": {

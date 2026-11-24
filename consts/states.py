@@ -50,6 +50,10 @@ class ChargingState:
     # Min+PV Mode
     SOLAR_MIN_PV = "solar_min_pv"
 
+    # (#1381) SEM stopped a charger another party steers for the phase
+    # guard, and switches it back on when the phase has room again.
+    PHASE_GUARD_STOPPED = "phase_guard_stopped"
+
 
 #: Every night state. The per-charger loop keeps one of these over the
 #: state it would derive from the decision (PR A); #1402 then says it
@@ -100,6 +104,7 @@ STATUS_MESSAGES: Final = {
     ChargingState.NIGHT_WAITING_FOR_WINDOW: "Night mode - Waiting for charging window",
     ChargingState.NIGHT_TIME_EXPIRED: "Night charging window expired",
     ChargingState.TARIFF_WAITING_FOR_CHEAP: "Tariff mode - Waiting for cheap price window",
+    ChargingState.PHASE_GUARD_STOPPED: "Stopped by the phase guard - back on when the phase has room",
 }
 
 # Map charging states to translation keys in dashboard/translations.json (#62)
@@ -130,6 +135,7 @@ _STATE_TRANSLATION_KEYS: Final = {
     ChargingState.NIGHT_WAITING_FOR_WINDOW: "state_night_waiting",
     ChargingState.NIGHT_TIME_EXPIRED: "state_night_expired",
     ChargingState.TARIFF_WAITING_FOR_CHEAP: "state_tariff_waiting",
+    ChargingState.PHASE_GUARD_STOPPED: "state_phase_guard_stopped",
 }
 
 

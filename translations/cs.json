@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Zásobník nedosáhne cíle proti legionele",
       "description": "{name}: zásobník přijme nejvýše {max} °C, méně než cíl proti legionele {target} °C. SEM ohřeje na {max} °C, což zásobník nemusí vydezinfikovat. Snižte cíl nebo zkontrolujte maximum zásobníku. Hlášení zmizí samo."
+    },
+    "guard_left_off": {
+      "title": "Nabíječka po hlídání fází vypnutá",
+      "description": "SEM zastavil {charger}, protože fáze překročila limit. Zkusil ji {tries}krát znovu zapnout a pokaždé fáze limit znovu překročila. SEM už to nezkouší. Zapněte nabíječku sami, nebo v aplikaci, která ji řídí, až dům spotřebuje méně."
     }
   },
   "selector": {

@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Tank cannot reach the Legionella target",
       "description": "{name}: the tank accepts at most {max} °C, below the Legionella target {target} °C. SEM heats to {max} °C, which may not disinfect the tank. Lower the target, or check the tank's own maximum. This clears by itself."
+    },
+    "guard_left_off": {
+      "title": "Charger left off after the phase guard",
+      "description": "SEM stopped {charger} because a phase was over its limit. It tried {tries} times to switch it back on, and each time the phase went over again. SEM no longer tries. Switch the charger on yourself, or in the app that controls it, when the house uses less power."
     }
   },
   "selector": {

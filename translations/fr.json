@@ -2137,6 +2137,10 @@
     "legionella_above_unit_max": {
       "title": "Le ballon n'atteint pas la cible légionellose",
       "description": "{name} : le ballon accepte au plus {max} °C, sous la cible légionellose de {target} °C. SEM chauffe à {max} °C, ce qui peut ne pas désinfecter le ballon. Baissez la cible ou vérifiez le maximum du ballon. Ce message disparaît tout seul."
+    },
+    "guard_left_off": {
+      "title": "Borne laissée éteinte après la protection de phase",
+      "description": "SEM a arrêté {charger} car une phase dépassait sa limite. Il a essayé {tries} fois de la rallumer, et chaque fois la phase a de nouveau dépassé. SEM n'essaie plus. Rallumez la borne vous-même, ou dans l'appli qui la pilote, quand la maison consomme moins."
     }
   },
   "selector": {
