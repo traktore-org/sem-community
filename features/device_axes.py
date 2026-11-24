@@ -80,11 +80,14 @@ def mode_permits(device_info: Mapping[str, Any]) -> bool:
     and the peak shed switched them off. No mode reads as off.
 
     A charger row is the exception: its permission is the charge mode, which
-    the charger loop owns; its load row never carried a ``control_mode``.
+    the charger loop owns; its load row never carried a ``control_mode``. A
+    charger-typed row that DOES carry one (an Energy-Dashboard row the user
+    set to Off) keeps the user's word.
     """
-    if device_info.get("device_type") == "ev_charger":
+    mode = device_info.get("control_mode")
+    if mode is None and device_info.get("device_type") == "ev_charger":
         return True
-    return device_info.get("control_mode") in ACTING_MODES
+    return mode in ACTING_MODES
 
 
 def may_actuate(device_info: Mapping[str, Any]) -> bool:

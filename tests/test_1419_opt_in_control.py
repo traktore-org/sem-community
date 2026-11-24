@@ -62,6 +62,13 @@ def test_a_charger_row_is_governed_by_its_charge_mode_not_this():
     assert mode_permits(row) is True and may_actuate(row) is True
 
 
+def test_a_charger_typed_row_the_user_set_to_off_stays_off():
+    """Found on .175: an Energy-Dashboard row typed ev_charger at Mode Off."""
+    row = {"device_type": "ev_charger", "has_control_handle": True,
+           "control_mode": "off"}
+    assert may_actuate(row) is False
+
+
 def test_new_devices_start_off():
     """#805 already made a newly found device start at Off; #1419 keeps it."""
     assert DEFAULT_DISCOVERED_CONTROL_MODE == "off"
