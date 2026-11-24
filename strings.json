@@ -1798,7 +1798,7 @@
           "off": "Off",
           "solar_only": "Solar only",
           "solar_plus_battery": "Solar + battery",
-          "solar_plus_cheap": "Solar + cheapest hours"
+          "solar_plus_cheap": "Solar + tariff"
         }
       },
       "phase_mode": {

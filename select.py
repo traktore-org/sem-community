@@ -50,9 +50,9 @@ EV_TARGET_TYPES = {
 # ``docs/plans/2026-05-30_ev_charge_mode_consolidation.md`` for the
 # full mapping, migration rules, and resolved design questions.
 #
-# ``solar_plus_cheap`` is greyed out in the card when the tariff has no
-# cheap hours (#885; #1385: any tariff with a cheap rate, not only a
-# dynamic one). Decision Q1, 2026-05-30. Constant lives in
+# ``solar_plus_cheap`` ("Solar + tariff") was greyed out in the card when
+# the tariff had no cheap hours (#885, #1385). Since #1411 it works on one
+# price too and no mode is greyed out. Constant lives in
 # ``consts/ev_charge_modes.py`` so the coordinator's read-side helper
 # imports the same source of truth (no duplicated tuple in
 # ``coordinator/coordinator.py``).
@@ -492,9 +492,9 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         """(#885) Prerequisite state for the mode list, read by the card.
 
         One rule, two severities: a mode that CANNOT function without its
-        prerequisite is disabled in the UI (``solar_plus_cheap`` on a tariff
-        with no cheap rate has no cheap hours to use, #1385); a mode that functions
-        PARTIALLY shows an info instead (``solar_plus_battery`` assists on
+        prerequisite is disabled in the UI (none today: ``solar_plus_cheap``
+        was, on a tariff with no cheap rate, until #1411 gave it work on one
+        price too); a mode that functions PARTIALLY shows an info instead (``solar_plus_battery`` assists on
         live surplus from day one — the forecast-led bypass and the #878
         dynamic floor stay dormant until the #800 learner graduates, and
         the card reads that progress straight off
@@ -525,7 +525,10 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             "tariff_available": PriceView(
                 getattr(self.coordinator, "_tariff_provider", None),
             ).has_cheap_rate(),
-            "modes_needing_tariff": ["solar_plus_cheap"],
+            # (#1411) No mode needs cheap hours any more: "Solar + tariff"
+            # works on one price too (the grid's "At least" at night, and
+            # the thin-sun rule by day). The list stays for the card, empty.
+            "modes_needing_tariff": [],
             "paused_until": paused_until,
             "pause_resume_mode": resume_mode,
         }

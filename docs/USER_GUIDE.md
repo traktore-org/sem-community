@@ -150,7 +150,7 @@ Set the mode per charger, on **Devices**.
 | **Min + Solar** (default) | Spare sun by day. The grid tops up to **At least** at night, or by day if the night is too short. | You need the car ready by a time. |
 | **Solar only** | Spare sun only. A grid top-up runs only if you set **At least**. | You want solar only. |
 | **Solar + battery** | Spare sun and the home battery above its buffer. | The battery may help the car. |
-| **Solar + cheapest hours** | Spare sun. On cheap hours, it tops up from the grid. | Your tariff has cheaper hours: dynamic, or a schedule or two rates. Greyed out with one price. |
+| **Solar + tariff** | Spare sun. The grid tops up to **At least** when it costs least: at night, in a cheap hour, or with thin sun. | You want SEM to follow your prices. Works on every tariff. |
 | **Always (max)** | Full power, day and night. | You need the car now. |
 | **Off** | Nothing. SEM sends one stop, then leaves the charger alone. | You want to control the car by hand. |
 
@@ -158,9 +158,52 @@ Notes:
 
 - **Min + Solar** charges at night even without sun. By day it waits for sun,
   unless tonight is too short to reach **At least**.
+- **Solar + tariff** needs your prices: the import price and the export
+  price, in **System > How I pay**. The export price must be the one you
+  are really paid: SEM pre-fills 0.075, and this mode decides with it. See
+  [When Solar + tariff buys by day](#when-solar--tariff-buys-by-day).
 - **Solar only** never uses grid power unless you set **At least**.
   With **At least** at 0 kWh, the car never takes grid power.
 - **Off** does not hold the charger stopped. A wallbox that starts by itself is left alone.
+
+### When Solar + tariff buys by day
+
+Thin sun is spare sun below the charger's minimum power (4.1 kW on three
+phases at 6 A). Alone it cannot charge the car, so it goes to the grid at
+the export price. **Solar + tariff** can use it: the car charges at its
+minimum, on the spare sun plus the grid for the rest.
+
+SEM does this only for **At least**, and only when it is at least 10 %
+cheaper than the cheapest hour still to come before **Charge by**:
+
+| Your tariff | What happens with thin sun |
+|---|---|
+| One price all day, export pays less than import | The car charges at its minimum, from enough sun to save 10 %. Example: import 0.30, export 0.075: from about 0.55 kW of spare sun. |
+| Export pays the same as import (net metering) | The car waits. Exporting now and buying at night costs the same. |
+| Two rates, night cheaper | The car charges only with more sun. Example: day 0.30, night 0.20, export 0.06: from about 2.1 kW of spare sun. |
+| Dynamic | SEM compares this hour with the cheapest hour to come. A cheap hour tops up as before. |
+
+It does not buy by day when:
+
+- strong sun is forecast later today and covers **At least**,
+- the home battery is charging from that sun, or may feed the car itself,
+- the hour is an expensive one, or the peak limit has no room,
+- no export price is stored, or SEM has no forecast.
+
+The plan on **Plan** shows these hours as **Spare sun plus grid**. The car
+charges this way only in the hours the plan shows. With a home battery the
+plan shows them only when the battery is full: a battery with room takes
+that sun first.
+
+A session that started runs for at least the charger's minimum block
+(15 minutes), so a cloud does not switch the car off and on. It still stops
+at once when **At least** is reached, the car is unplugged, the hour turns
+expensive, the peak limit is near, the home battery starts to feed the car,
+or the sun is gone.
+
+After a restart of Home Assistant the car waits for the next plan before
+it charges this way again. Until then the mode works as before: spare sun
+by day, **At least** at night.
 
 ### Set the target
 

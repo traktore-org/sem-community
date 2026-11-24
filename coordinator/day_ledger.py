@@ -69,7 +69,9 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                     surplus_margin_w: float = DEFAULT_SURPLUS_MARGIN_W,
                     export_rate=0.0,
                     co2_at=None,
-                    step_s: int = 3600) -> list:
+                    step_s: int = 3600,
+                    export_known: bool = False,
+                    level_peak_at=None) -> list:
     """Tile ``[start, end)`` into day-shaped ``LedgerSlot``s.
 
     ``home_w_at(t)`` — expected home draw (the predictor's hourly profile
@@ -96,12 +98,29 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
     a single number priced every surplus slot at a rate the user is not
     paid. A plain number still means one rate all day.
 
+    ``export_known`` (#1411) — did the user give SEM an export price?
+    ``export_rate`` always yields a number (an absent rate reads 0), so the
+    slot carries this word beside it: a thin sun hour may take grid power
+    outside the cheap level only against a KNOWN export price.
+
+    ``level_peak_at(t)`` (#1411) — is the tariff at a peak level then?
+    Carried on a sun slot as ``import_peak``; ``None`` = never.
+
     ``co2_at`` (#1085 Part A) — grid CO2 intensity (kg/kWh) at the slot
     start, or ``None`` when no CO2 source is configured. Carried on every
     slot the same way ``price_at`` is; a raising accessor degrades to an
     honestly-unknown CO2 figure rather than costing the slot.
     """
     rate_at = export_rate_fn(export_rate)
+
+    def _peak(ts) -> bool:
+        if level_peak_at is None:
+            return False
+        try:
+            return bool(level_peak_at(ts))
+        except Exception:  # noqa: BLE001 — no level is not a peak
+            return False
+
     slots = []
     t = start
     while t < end:
@@ -163,6 +182,8 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 level_cheap=True, tariff_cheap=tariff_cheap, home_w=0.0,
                 cap_override_w=surplus_w, import_price=import_price,
                 import_cheap=level_cheap,
+                export_known=bool(export_known),
+                import_peak=_peak(t),
                 solar_w=solar_w, home_gross_w=home_w,
                 co2=co2,
             ))

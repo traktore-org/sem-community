@@ -40,6 +40,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Dict
 
 from .plan_verdict import PlanVerdict
+from .thin_sun import NOT_EVALUATED as THIN_SUN_NOT_EVALUATED, ThinSun
 
 if TYPE_CHECKING:
     # Annotation-only — importing it for real would be circular (#786).
@@ -1247,6 +1248,13 @@ class ChargerView:
     that ``_ev_reclaims`` gates — so the modes that delegate their day path
     to ``solar_only``, the Zone 3/4 budget, and the stability bridge's own
     surplus read all follow it."""
+
+    thin_sun: ThinSun = THIN_SUN_NOT_EVALUATED
+    """(#1411) The prices and the forecast the thin-sun rule asks about, for
+    this charger this cycle (``coordinator/thin_sun.py``). Per charger: the
+    cheapest later hour depends on its own deadline. The default answers
+    every question with "unknown", so the rule stays off — a view built
+    without it behaves exactly as before."""
 
     plan: PlanVerdict = field(default_factory=PlanVerdict)
     """(#638) What the PLANNING layer decided for this charger this cycle.

@@ -14,7 +14,7 @@ Default: **Min + Solar**.
 |---|---|---|---|
 | **Solar only** | Never by day. At night only with an *At least* floor you set on this charger | Never for the car. Exception: forecast-led spending | Spare sun only. Idles at night unless you set a floor. |
 | **Solar + battery** | Never by day. At night only with an *At least* floor | Helps down to the higher of the Buffer SOC and tonight's floor | Spare sun plus the pack. Above the spare-sun threshold it always helps. Below it, only when tonight's forecast budget is positive. |
-| **Solar + cheapest hours** | Only in cheap hours, up to the floor | Never | Spare sun by day. Grid only at cheap, very cheap or negative prices. Needs a tariff with cheaper hours: dynamic, or a schedule or two-rate tariff. |
+| **Solar + tariff** | Up to the floor, when it costs least | Never | Spare sun by day. Grid by day at cheap, very cheap or negative prices, and with thin sun when the blended price beats the cheapest hour to come. Works on every tariff. |
 | **Min + Solar** | Up to the floor (*At least*) | Helps above the Buffer SOC | Tops up to *At least* by the *Charge by* time. Spare sun adds up to *Up to*. Nothing owed means no grid. |
 | **Always (max)** | Whatever it takes | Held to the house, unless the pack is above the Buffer SOC and spare sun passes the threshold | Full speed whenever a car is plugged in, day or night, at any price. Stops at *Up to*. A floor of 0 does not stop it. |
 | **Off** | None | None | Hands-off. Switching to Off stops a running charge once, whoever started it. Then SEM sends nothing: no start, no stop, no current. SEM still reads the power and counts the energy. |
@@ -132,13 +132,86 @@ redirect in the budget turn the redirect off for the rest of the plug-in.
 
 | Mode | Time | What happens |
 |---|---|---|
-| Solar + cheapest hours | Day | Tops up the floor from grid at cheap, very cheap or negative prices. Solar surplus wins when it offers more. A static tariff (no live price level) never triggers it |
+| Solar + tariff | Day | Tops up the floor from grid at cheap, very cheap or negative prices. Solar surplus wins when it offers more. A static tariff (no live price level) never triggers it |
+| Solar + tariff | Day, thin sun | Charges at the minimum on spare sun plus grid when that blend costs less than the cheapest hour to come. Needs an export price and a forecast. See below |
 | Min + Solar | Day | Drops the Min grid guarantee at expensive prices. Resumes at a lower price or with enough sun |
 | Any tariff mode | Night | Waits for the energy plan's charge block |
 | Solar only, Always (max), Off | Any | No effect on price |
 
 The thresholds *Cheap below* and *Expensive above* set the price levels when no
 dynamic tariff gives them. See [ENERGY_PLANNER.md](ENERGY_PLANNER.md) for the plan.
+
+
+### Thin sun plus grid
+
+Spare sun below the charger's minimum power cannot charge the car alone.
+In **Solar + tariff** the car may charge at its minimum on that sun plus the
+grid, for the floor only. One sum decides, in `coordinator/thin_sun.py`:
+
+```
+blended = (sun × export + (min − sun) × import now) / min
+```
+
+The invariant: it fires only when `blended` is at least 10 % below the
+cheapest hour without spare sun that the car may still use before its
+deadline (5 % to keep a running session). On a one-price tariff that
+reduces to "export below import":
+
+- export = import: never.
+- one price, export below import: from enough sun to save 10 %
+  (0.30 and 0.075, a 4.14 kW minimum: about 550 W).
+- a cheaper night: only from more sun.
+
+On a dynamic tariff it can fire with an export price above this hour's
+import price: when this hour is the cheapest of the window, buying now is
+cheaper than later.
+
+The export price is the stored `electricity_export_rate`. It is unknown
+only when the key is absent or not a number; then the rule is off.
+
+It does not fire when no forecast is known, when strong sun later today
+covers the floor, when the battery charges from that sun or may feed the
+car, in an expensive hour, or when the peak limit has no room.
+
+Plan and charger: the planner asks the same functions
+(`energy_planner._sun_grid`) and books a **Spare sun plus grid** block.
+The charger acts only inside such a block of the stamped plan. With a home
+battery the plan books one only where its walk has the battery full, so
+where the plan shows none the charger does not act.
+
+Steady: a started session holds for the charger's minimum block
+(`ev_min_block_minutes`) over soft conditions: a sun dip, a price between
+the two margins, a battery hovering at its veto, a block that moved. After
+the block every soft condition has a start value and an easier "keep
+running" value. Strong sun in between keeps the session: the car charges
+on the sun alone, and back under the minimum it is the same session.
+
+Hard limits end a session at once, inside the minimum block too
+(`thin_sun.HARD_LIMITS`): the floor is met, the car is unplugged, the hour
+turns expensive, the peak limit sheds, the home battery feeds the car or
+plainly charges from that sun, the export price is no longer below the
+alternative, the mean spare sun of the last three minutes is under the run
+floor, or a price was unreadable for more than half of the last five
+minutes. Both are judged over a window, not a timer: a reading that
+flickers cannot keep a session alive.
+
+A session also ends with the charge mode, at night, with any charge the sun
+does not fund (a night block, a deadline, Start now), and one minimum block
+after the end of its plan block.
+
+A re-stamped plan may move the block: a running session keeps going when
+the plan still books thin sun now or in the next slot. A plan older than
+the planner's own limit (24 hours), or without a stamp time, books nothing.
+
+Two things are accepted as they are. The plan's slot price and the live
+price can differ for up to one 15-minute slot; the 10 % margin covers it.
+The export price is pre-filled with 0.075 at setup; the guide says it must
+be right for this mode, and the margin keeps a rough number from buying
+grid power for a small saving.
+
+After a restart the rule is off until the next plan is stamped (a new day,
+a plug-in, a changed need). That is safe: off means the mode's old
+behaviour, spare sun by day and the floor at night.
 
 ## Daily energy counters
 

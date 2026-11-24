@@ -198,7 +198,7 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:**
 - Charge mode **Off**: the charger may restart on its own. Look for [the wallbox undoes SEM's stop](#your-wallbox-undoes-sems-stop-on-a-timer).
-- The car charged overnight: its charge mode is **Min + Solar** or **Solar + cheapest hours**, and a target is not reached. To charge from solar only, set **Solar only** and set **At least** to 0.
+- The car charged overnight: its charge mode is **Min + Solar** or **Solar + tariff**, and a target is not reached. To charge from solar only, set **Solar only** and set **At least** to 0.
 - The battery charges the car: on **Devices**, open the battery card and turn off **May the battery help charge the car?**.
 
 ### Your wallbox undoes SEM's stop on a timer
@@ -255,7 +255,7 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 ### A home without a battery makes no night plan
 
-**Symptom:** No battery, but **Solar + cheapest hours** charges at once.
+**Symptom:** No battery, but **Solar + tariff** charges at once.
 
 **Fix:** Update SEM. A battery platform of **Generic** alone no longer counts as a battery.
 

@@ -372,7 +372,8 @@ class TestTheRunningPauseIsVisible:
     def test_the_old_attributes_are_still_there(self):
         attrs = _select({"id": "ev_charger", "charge_mode": "off"}).extra_state_attributes
         assert attrs["tariff_available"] is False
-        assert attrs["modes_needing_tariff"] == ["solar_plus_cheap"]
+        # (#1411) no mode needs cheap hours any more
+        assert attrs["modes_needing_tariff"] == []
 
 
 class TestTheSelectFollowsTheConfig:

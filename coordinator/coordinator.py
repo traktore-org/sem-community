@@ -172,6 +172,236 @@ def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
     return result if isinstance(result, datetime) else None
 
 
+def _thin_sun_of(host: Any, cid: str, charger_cfg: Any):
+    """(#1411) ``host._thin_sun_for(cid, charger_cfg)``, or None when the
+    host has no such method — a test fake built on a bare namespace — or
+    answers with anything but a ``ThinSun`` (a ``MagicMock`` host answers
+    every attribute with another mock). None = not evaluated: the rule
+    stays off, exactly as before it existed."""
+    from .thin_sun import ThinSun
+    fn = getattr(host, "_thin_sun_for", None)
+    try:
+        result = fn(cid, charger_cfg) if callable(fn) else None
+    except Exception:  # noqa: BLE001 — a rule input must never cost a cycle
+        # …but a rule that is silently off is a rule nobody can debug
+        _LOGGER.debug("#1411 thin-sun inputs skipped for %s", cid, exc_info=True)
+        result = None
+    return result if isinstance(result, ThinSun) else None
+
+
+def _thin_sun_block_state(plan: Any, cid: str, now: datetime) -> tuple:
+    """(#1411) ``(in_block, near, end)`` — is a "spare sun plus grid" block
+    of this charger open in the stamped plan right now (and when does it
+    end), and is one open or opening within the next slot
+    (``thin_sun.NEXT_SLOT_S``)?
+
+    Read off the plan's own ``blocks`` rows (the shape ``plan_blocks``
+    writes), so the card and the charger look at one list. A plan older
+    than the planner's own staleness bound (``_MAX_PLAN_AGE``, the one
+    ``plan_gate`` refuses on), or one that does not say when it was
+    stamped, books nothing. That bound is redundant for the blocks
+    themselves — they carry full dates, so yesterday's block cannot match
+    today — and harmless: it is kept so this reader refuses exactly the
+    plans ``plan_gate`` refuses, and a plan nobody can date is not trusted.
+    Anything unreadable is a no."""
+    try:
+        from .energy_plan_actuation import _MAX_PLAN_AGE, _parse_dt
+        from .thin_sun import NEXT_SLOT_S
+        computed = _parse_dt((plan or {}).get("computed_at"))
+        if computed is None or now - computed > _MAX_PLAN_AGE:
+            return (False, False, None)
+        in_block = near = False
+        block_end = None
+        for b in plan.get("blocks") or ():
+            if b.get("id") != f"ev:{cid}" or b.get("reason") != "sun_plus_grid":
+                continue
+            start = datetime.fromisoformat(str(b.get("start")))
+            end = datetime.fromisoformat(str(b.get("end")))
+            if start <= now < end:
+                in_block = near = True
+                block_end = end if block_end is None else max(block_end, end)
+            elif now < start and (start - now).total_seconds() <= NEXT_SLOT_S:
+                near = True
+        return (in_block, near, block_end)
+    except Exception:  # noqa: BLE001 — a plan nobody can read holds no block
+        return (False, False, None)
+
+
+def _thin_sun_sessions_of(host: Any) -> dict:
+    sessions = getattr(host, "_thin_sun_sessions", None)
+    if not isinstance(sessions, dict):
+        sessions = {}
+        try:
+            host._thin_sun_sessions = sessions
+        except Exception:  # noqa: BLE001 — a host that cannot hold it
+            pass
+    return sessions
+
+
+def _thin_sun_rec(host: Any, cid: str) -> Optional[dict]:
+    rec = _thin_sun_sessions_of(host).get(str(cid))
+    return rec if isinstance(rec, dict) else None
+
+
+def _thin_sun_started(host: Any, cid: str) -> Optional[datetime]:
+    """(#1411) When this charger's running thin-sun session started."""
+    rec = _thin_sun_rec(host, cid)
+    started = rec.get("started") if rec else None
+    return started if isinstance(started, datetime) else None
+
+
+#: (#1411) Most samples one window keeps per charger. Readings closer
+#: together than window ÷ this are merged into one bucket, so a fast cycle
+#: (or three views in one cycle) cannot grow the list.
+_THIN_SUN_MAX_SAMPLES = 64
+
+
+def _window_add(buckets: list, now: datetime, value: float,
+                window_s: float) -> None:
+    """Add one reading to a session window, in place. A bucket is
+    ``[time, sum, count]``; readings within one bucket width of the last
+    bucket join it; buckets older than the window are dropped."""
+    width = float(window_s) / max(1, _THIN_SUN_MAX_SAMPLES - 2)
+    if buckets and (now - buckets[-1][0]).total_seconds() < width:
+        buckets[-1][1] += float(value)
+        buckets[-1][2] += 1
+    else:
+        buckets.append([now, float(value), 1])
+    edge = now - timedelta(seconds=float(window_s))
+    while buckets and buckets[0][0] < edge:
+        buckets.pop(0)
+    del buckets[:-_THIN_SUN_MAX_SAMPLES]
+
+
+def _window_mean(buckets: Any, now: datetime, window_s: float) -> Optional[float]:
+    """The mean of the readings in the window; None until the window is
+    full (``thin_sun.WINDOW_FULL_SHARE`` of its length is covered)."""
+    from .thin_sun import WINDOW_FULL_SHARE
+    try:
+        edge = now - timedelta(seconds=float(window_s))
+        live = [b for b in (buckets or ()) if b[0] >= edge]
+        if not live:
+            return None
+        if (now - live[0][0]).total_seconds() < WINDOW_FULL_SHARE * float(window_s):
+            return None
+        count = sum(int(b[2]) for b in live)
+        return sum(float(b[1]) for b in live) / count if count else None
+    except Exception:  # noqa: BLE001 — a window nobody can read says nothing
+        return None
+
+
+def _thin_sun_sun_mean(host: Any, cid: str, now: datetime) -> Optional[float]:
+    """(#1411) The session's mean spare sun over the last three minutes;
+    None until that window is full."""
+    from .thin_sun import NO_SUN_GRACE_S
+    rec = _thin_sun_rec(host, cid)
+    return _window_mean(rec.get("sun") if rec else None, now, NO_SUN_GRACE_S)
+
+
+def _thin_sun_min_block_s(host: Any) -> float:
+    try:
+        cfg = getattr(host, "config", None) or {}
+        return max(0.0, float(cfg.get("ev_min_block_minutes", 15)) * 60.0)
+    except (TypeError, ValueError, AttributeError):
+        return 900.0
+
+
+def _spare_sun_of(view: Any) -> Optional[float]:
+    """(#1411) The spare sun the decision saw, for the session's no-sun
+    clock; None when it cannot be read (then the clock is left alone)."""
+    try:
+        from .decide import self_consumption_surplus_w
+        return max(0.0, float(self_consumption_surplus_w(view)))
+    except Exception:  # noqa: BLE001 — unknown is not "no sun"
+        return None
+
+
+#: (#1411) The mode whose day decisions may carry a thin-sun session.
+_THIN_SUN_MODE = "solar_plus_cheap"
+
+
+def _note_thin_sun(host: Any, cid: str, decision: Any,
+                   sun_w: Optional[float] = None, *,
+                   is_night: bool = False) -> None:
+    """(#1411) Keep the thin-sun session of one charger.
+
+    It STARTS the moment a decision first carries the rule's reason code.
+
+    It SURVIVES a strong-sun stretch: while the car charges on the sun
+    alone the session stays, start time and all, so a cloud back under the
+    minimum is the same session on its "keep running" thresholds — not a
+    new start with strict ones, which stopped a car that ran a minute
+    before.
+
+    It ENDS — a session is not a licence —
+    * with the charge mode (the decision's mode is no longer the tariff
+      mode: a switch to Always (max), a schedule, a pause);
+    * at night;
+    * with the car (any decision that does not charge: unplugged, idle);
+    * with any charge the sun does not fund and the rule did not make (a
+      night block, a deadline floor, a cheap-hour top-up, Start now);
+    * a minimum block after the end of its plan block — the block it
+      started in, or a following one it kept charging thin sun in. A
+      session that strong sun carries for hours must not come back as a
+      running one in the evening.
+
+    Beside the start it keeps the session's spare-sun readings of the last
+    three minutes (``sun_gone``, a hard limit, is their mean).
+    ``_thin_sun_for`` hands the session to the next cycle's view. Never
+    raises."""
+    try:
+        from . import reason_codes as _rc
+        from .charger_types import ChargerIntent
+        from .thin_sun import NO_SUN_GRACE_S
+        sessions = _thin_sun_sessions_of(host)
+        key = str(cid)
+        code = getattr(decision, "reason_code", None)
+        thin = code == _rc.CHARGER_SUN_PLUS_GRID
+        sun_funded = (code == _rc.CHARGER_SUN
+                      and getattr(decision, "intent", None)
+                      is ChargerIntent.CHARGE_AT_AMPS)
+        rec = sessions.get(key)
+        if not isinstance(rec, dict):
+            rec = None
+        if (is_night or getattr(decision, "mode", None) != _THIN_SUN_MODE
+                or not (thin or (sun_funded and rec is not None))):
+            sessions.pop(key, None)
+            return
+        now = dt_util.now()
+        block_s = _thin_sun_min_block_s(host)
+        if thin:
+            if rec is None:
+                rec = sessions[key] = {"started": now}
+            _in, _near, end = _thin_sun_block_state(
+                getattr(host, "_energy_plan_shadow", None), cid, now)
+            until = (end or now) + timedelta(seconds=block_s)
+            prev = rec.get("until")
+            rec["until"] = max(prev, until) if isinstance(prev, datetime) else until
+        # every cycle of the session, thin or strong: the window's mean is
+        # what says "the sun is gone", not this cycle's reading
+        if sun_w is not None:
+            _window_add(rec.setdefault("sun", []), now, float(sun_w),
+                        NO_SUN_GRACE_S)
+        until = rec.get("until")
+        if isinstance(until, datetime) and now > until:
+            sessions.pop(key, None)
+    except Exception:  # noqa: BLE001 — bookkeeping must never cost a cycle
+        return
+
+
+def _export_known_of(host: Any) -> bool:
+    """(#1411) ``host._export_price_known()`` as a plain bool; False when
+    the host has no such method (a test fake on a bare namespace) or the
+    answer is not a bool (a ``MagicMock`` host). Unknown = the thin-sun
+    rule stays off."""
+    fn = getattr(host, "_export_price_known", None)
+    try:
+        result = fn() if callable(fn) else False
+    except Exception:  # noqa: BLE001 — unreadable is unknown
+        result = False
+    return result is True
+
+
 def _capability_clock() -> float:
     """(#996) The clock the capability miss streak is measured on — its own
     name so a test can move it without moving the event loop's."""
@@ -1563,6 +1793,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # short (see _SHADOW_PARTIAL_GRACE_S).
         self._shadow_plan_date = None
         self._energy_plan_shadow: Optional[Dict[str, Any]] = None
+        # (#1411) per charger: the stamped plan's own dark and strong-sun
+        # hours, the live thin-sun rule's reference (``thin_sun.ThinSunRefs``)
+        self._thin_sun_refs: Dict[str, Any] = {}
+        # (#1411) per charger: when its running thin-sun session started
+        self._thin_sun_sessions: Dict[str, Any] = {}
         self._shadow_partial_since = None
         # (#638 G4) actuation opt-in — the plan's blocks feed the existing
         # night signals only while this is True. Seeded from the persisted
@@ -5594,6 +5829,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # off for the rest of this plug-in.
                             redirect_allowed=not bool(getattr(
                                 getattr(pcc, "state", None), "redirect_vetoed", False)),
+                            # (#1411) the thin-sun rule's prices and forecast
+                            thin_sun=_thin_sun_of(self, cid, charger_cfg),
                             charger_cfg=charger_cfg,
                             mode=_view_mode,
                             daily_ev_kwh=self._charger_daily_kwh(cid, energy),
@@ -5662,6 +5899,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # below re-stamps the reason: the phase tick asks it
                         # whether the grid pays for this charge
                         _decide_code = decision.reason_code
+                        _note_thin_sun(                          # (#1411)
+                            self, cid, decision, sun_w=_spare_sun_of(view),
+                            is_night=bool(view.fleet.is_night))
                         from .vpp_dispatch import vpp_pause_override
                         from .active_phase_guard import filter_charger_decision
                         from . import charger_owner as _owner
@@ -6075,6 +6315,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ev_priority=self._ev_priority_for(cid),
                     wpa_table=self._wpa_table_for(cid),
                     active_phases=self._active_phases_for(cid),   # (#1412)
+                    thin_sun=_thin_sun_of(           # (#1411)
+                        self, cid, self._primary_charger_cfg()),
                     charger_cfg={},
                     mode=per_mode,
                     daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
@@ -6100,6 +6342,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ),
                 )
                 decision = decide_v2(view)
+                _note_thin_sun(                                  # (#1411)
+                    self, cid, decision, sun_w=_spare_sun_of(view),
+                    is_night=bool(view.fleet.is_night))
                 from .active_phase_guard import filter_charger_decision
                 from . import charger_owner as _owner
                 # (#1381, charger owner S3) the same chain as the fleet path,
@@ -10231,6 +10476,94 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         prov = getattr(self, "_tariff_provider", None)
         fallback = self._configured_export_rate()
         return lambda ts: tariff_export_rate_at(prov, ts, fallback)
+
+    def _export_price_known(self) -> bool:
+        """(#1411) Did the user give SEM an export price?
+
+        Known = ``electricity_export_rate`` is stored and is a number. That
+        is the price SEM uses for every money figure, so it is the price
+        this rule compares with — the settings pre-fill 0.075, and the
+        guide says it must be right for this mode. The rule's own margin
+        (``thin_sun.START_MARGIN``) is what keeps a rough number from
+        buying grid power for a 3 % saving.
+
+        Unknown = the key is absent or not a number. A live feed-in entity
+        does not make it known: when that entity is unavailable the reader
+        falls back to the stored rate, and with none stored there is no
+        price to compare with.
+        """
+        try:
+            raw = self.config.get("electricity_export_rate")
+            if raw is None or isinstance(raw, bool):
+                return False
+            value = float(raw)
+            return value == value and value not in (float("inf"), float("-inf"))
+        except Exception:  # noqa: BLE001 — not a number is unknown
+            return False
+
+    def _thin_sun_for(self, cid: str, charger_cfg: Any):
+        """(#1411) The live inputs of the thin-sun rule for one charger, or
+        None (= not evaluated, the rule stays off).
+
+        Only for the tariff mode, and only against a stamped plan: the
+        cheapest later hour and the strong sun still to come are read off
+        the plan's own ledger (``_thin_sun_refs``), so the charger compares
+        against the same hours the plan on the card compared against. The
+        two prices of NOW come from the tariff provider, as every planner
+        surface reads them.
+        """
+        try:
+            if not self._tariff_optimized_for(charger_cfg):
+                return None
+            refs = (getattr(self, "_thin_sun_refs", None) or {}).get(str(cid))
+            if refs is None:
+                return None
+            from .day_ledger import tariff_export_rate_at, tariff_price_at
+            from .thin_sun import ThinSun
+            now = dt_util.now()
+            prov = getattr(self, "_tariff_provider", None)
+            export = (tariff_export_rate_at(
+                prov, now, self._configured_export_rate())
+                if self._export_price_known() else None)
+            started = _thin_sun_started(self, cid)
+            in_block, block_near, _end = _thin_sun_block_state(
+                getattr(self, "_energy_plan_shadow", None), cid, now)
+            block_s = _thin_sun_min_block_s(self)
+            import_now = tariff_price_at(prov, now)
+            cheapest = refs.cheapest_after(now)
+            # the share of the last five minutes in which a price was
+            # unreadable in this session: a short gap is bridged, mostly
+            # unreadable ends it (``price_unknown``)
+            price_blind_share = None
+            rec = _thin_sun_rec(self, cid)
+            if rec is not None:
+                from .thin_sun import PRICE_BRIDGE_S
+                blind = (export is None or import_now is None
+                         or cheapest is None)
+                _window_add(rec.setdefault("price", []), now,
+                            1.0 if blind else 0.0, PRICE_BRIDGE_S)
+                price_blind_share = _window_mean(
+                    rec.get("price"), now, PRICE_BRIDGE_S)
+            return ThinSun(
+                export_price=export,
+                import_now=import_now,
+                cheapest_later=cheapest,
+                # no sun slot in the stamped plan = no forecast to ask:
+                # unknown, and the rule does not fire on an unknown
+                strong_sun_kwh=(refs.strong_kwh_after(now)
+                                if refs.forecast_known else None),
+                # the charger acts only inside a thin-sun block of the
+                # stamped plan — read off the plan itself, if it is fresh
+                in_block=in_block,
+                block_near=block_near,
+                session_s=(max(0.0, (now - started).total_seconds())
+                           if started is not None else None),
+                sun_mean_w=_thin_sun_sun_mean(self, cid, now),
+                price_blind_share=price_blind_share,
+                min_block_s=block_s,
+            )
+        except Exception:  # noqa: BLE001 — a rule input must never cost a cycle
+            return None
 
     def _export_value_threshold(self) -> float:
         """(#1090) Below this export value a kWh is not worth sending out.
@@ -14704,6 +15037,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     export_rate=self._export_rate_at(),
                     co2_at=_co2_at,
                     step_s=_step_s,
+                    # (#1411) the thin-sun rule's two words about a sun
+                    # hour: is the export price one the user gave, and
+                    # is the tariff at a peak level
+                    export_known=_export_known_of(self),
+                    level_peak_at=lambda ts: PriceView(prov).at(ts).peak,
                 ))
                 t = day_end
             while t < night_end:
@@ -14864,6 +15202,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             _blocks[0]["end"].strftime("%H:%M"))
             except Exception:  # noqa: BLE001 — a spend block never costs a plan
                 fsell = None
+            # (#1411) The live thin-sun rule compares against THIS ledger's
+            # hours, per charger that may take grid power in a sun hour.
+            try:
+                from .thin_sun import refs_from_ledger
+                self._thin_sun_refs = {
+                    str(d.id)[3:]: refs_from_ledger(
+                        ledger, deadline=d.deadline,
+                        min_w=d.min_power_w, max_w=d.max_power_w)
+                    for d in demands
+                    if d.kind == "ev" and d.grid_in_sun
+                    and str(d.id).startswith("ev:")}
+            except Exception:  # noqa: BLE001 — no refs = the rule stays off
+                self._thin_sun_refs = {}
             from .self_consumption import predict_self_consumption
             if quiet_night and not demands:
                 # Nothing to pack — but the books are open now, so the quiet
@@ -16919,6 +17270,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1412) the phases SEM set or measured
             active_phases=self._active_phases_for(
                 _primary_cfg.get("id") or "ev_charger", _primary_cfg),
+            thin_sun=_thin_sun_of(                   # (#1411)
+                self, _primary_cfg.get("id") or "ev_charger", _primary_cfg),
             charger_cfg=_primary_cfg,
             mode=self._effective_charge_mode_for(_primary_cfg),
             daily_ev_kwh=self._charger_daily_kwh(
