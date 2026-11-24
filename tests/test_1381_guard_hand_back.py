@@ -418,14 +418,16 @@ async def test_a_drawing_charger_keeps_the_fleet_text():
 
 
 def test_the_coordinator_wires_every_step():
-    """Both charger paths record the stop and run the hand-back; the state,
-    the fleet text, the store and the restore all call in."""
-    import inspect
-    from custom_components.solar_energy_management.coordinator import coordinator
-    src = inspect.getsource(coordinator)
-    # (charger owner S5) through the owner: the ledger feeds the record
-    assert src.count("after_charger_cycle(") == 2
-    assert src.count("fleet_step(") == 2
-    for needle in ("effective_state(\n", "fleet_state(self", "to_store(self)",
-                   "from_store(self"):
-        assert needle in src, needle
+    """Both charger paths record the stop and run the hand-back through the
+    owner; the state, the fleet text, the store and the restore all call in.
+    Read from the syntax tree: calls, not spelling."""
+    import ast
+    import pathlib
+    tree = ast.parse((pathlib.Path(__file__).resolve().parent.parent
+                      / "coordinator" / "coordinator.py").read_text())
+    names = [n.func.attr for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
+    assert names.count("after_charger_cycle") == 2
+    assert names.count("fleet_step") == 2
+    for fn in ("effective_state", "fleet_state", "to_store", "from_store"):
+        assert fn in names, fn

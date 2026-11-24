@@ -444,6 +444,10 @@ ALLOWED = {
         "against the select's list first; the export paths do not, and their "
         "'nothing to do' checks compare the raw config value, so a mapped "
         "write would land again on every cycle",
+    ("coordinator/guard_hand_back.py", "inverse_of"):
+        "(#1381) the undo writes back the select's own prior STATE, which is "
+        "an option the select lists, and the write goes through "
+        "ControllableDevice.send, which maps it with listed_option again",
     ("consts/devices.py", "<module>"):
         "the service table only — every function that writes through it is "
         "held to the rule by test_every_contact_table_write_maps_its_option",
