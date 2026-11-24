@@ -109,6 +109,8 @@ How it went.
 - Tabs: **Energy**, **Power**, **Battery**, **Car**, **Money**, **Forecast** and **Replay**.
 - Tap or move across a chart to read one bar.
 - **Money** shows the average price paid, when the tariff gives it.
+- **Car** lists the charging sessions. **Download .xlsx** names each charger as you
+  named it. Its id is in the last column, `charger_id`.
 - **Replay** runs the simulation. See the [User Guide](USER_GUIDE.md#replay-simulation).
 
 ---
