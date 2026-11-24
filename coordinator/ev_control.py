@@ -1747,6 +1747,14 @@ class EVControlMixin:
             if (_try.get("withheld") or _try.get("gave_up")
                     or now < float(_try.get("next_try") or 0.0)):
                 desired = None
+        # (#1381 D36) ``withheld_commands`` is a roster swept every cycle:
+        # a switch still held is put back on it every cycle, silently (the
+        # seam logged it once when it was first withheld)
+        if (_try is not None and _try.get("withheld")
+                and isinstance(_try.get("entry"), dict) and device is not None):
+            _roster = getattr(device, "withheld_commands", None)
+            if isinstance(_roster, list) and _try["entry"] not in _roster:
+                _roster.append(dict(_try["entry"]))
         r = seq.tick(now=now, desired_phases=desired,
                      believed_phases=believed, charging=drawing,
                      capability_ready=ready)
@@ -1836,6 +1844,12 @@ class EVControlMixin:
                     except Exception as e:  # noqa: BLE001 — surfaced, never fatal
                         _refused = str(e) or type(e).__name__
 
+        if (r.issue_switch is not None and not _sent and _refused is None
+                and not (bool(self._observer_mode)
+                         or bool(getattr(device, "external_yield", False)))):
+            # (#1381 D36) the seam said "not sent" with neither observer
+            # mode nor a yield behind it: a refusal like any other
+            _refused = "not sent"
         if r.issue_switch is not None:
             if _sent:
                 # the first switch that goes out in each lifetime clears
@@ -1871,8 +1885,15 @@ class EVControlMixin:
                 _tries[cid] = rec
             else:
                 # withheld: observer mode or a charger SEM yields to —
-                # listed once by the seam, not re-issued while it holds
-                _tries[cid] = {"target": r.issue_switch, "withheld": True}
+                # listed by the seam; kept on the roster every cycle while
+                # it holds (D36), never re-issued
+                _roster = (getattr(device, "withheld_commands", None)
+                           if self._observer_mode
+                           else getattr(device, "yielded_commands", None))
+                _entry = (dict(_roster[-1]) if isinstance(_roster, list)
+                          and _roster else None)
+                _tries[cid] = {"target": r.issue_switch, "withheld": True,
+                               "entry": _entry if self._observer_mode else None}
             if not _sent:
                 # nothing changed on the charger: no settle, no belief
                 seq.cancel()

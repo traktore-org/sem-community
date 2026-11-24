@@ -143,3 +143,36 @@ def test_a_successful_switch_clears_the_record():
     _run(h, dev, until=30.0)
     assert h.hass.services.async_call.await_count == 1
     assert "c1" not in getattr(h, "_phase_switch_tries", {})
+
+
+# ── D36: a held switch stays on the roster; a plain False is a refusal ───
+
+def test_d36_a_withheld_switch_is_republished_every_cycle_while_held():
+    """``withheld_commands`` is a roster swept every cycle: listing the
+    switch once made it vanish after one cycle."""
+    h, dev = _host(observer=True)
+    _tick(h, dev, 0.0, drawing=True)
+    t = 30.0
+    seen = []
+    while t <= 600.0:
+        dev.withheld_commands = []            # the coordinator's sweep
+        state = getattr(h, "_phase_switch_states", {}).get("c1", "idle")
+        _tick(h, dev, t, drawing=state in ("idle", None, "not_taking"))
+        seen.append(len(dev.withheld_commands))
+        t += 10.0
+    assert all(n == 1 for n in seen), seen
+    assert dev.withheld_commands[0]["service"] == "number.set_value"
+    h.hass.services.async_call.assert_not_awaited()
+
+
+def test_d36_a_plain_false_from_the_seam_is_a_refusal_with_back_off():
+    h, dev = _host()
+
+    async def _false(*a, **k):
+        return False
+    dev.send = _false
+    _run(h, dev, until=600.0)
+    rec = h._phase_switch_tries["c1"]
+    assert rec.get("fails") == 1 and not rec.get("withheld"), rec
+    assert rec["next_try"] >= 600.0
+    assert len(h._phase_rest_switch_times["c1"]) == 1
