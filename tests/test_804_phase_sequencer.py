@@ -344,3 +344,79 @@ class TestCoordinatorWiring:
         assert switches == 2, f"expected 2 attempts then give-up, got {switches}"
         assert h._phase_switch_states["c1"] == "not_taking"
         assert h.hass.services.async_call.await_count == 2
+
+    def test_auto_starts_an_idle_charger_on_one_phase_and_the_decision_follows(self):
+        """(#1412) The whole way: thin sun, phases unknown, car idle. Auto
+        sets one phase; the decision then prices the minimum current on one
+        phase and charges; the measured draw confirms the belief."""
+        import asyncio
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.build_view import (
+            FleetCycleState, build_charger_view,
+        )
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerIntent,
+        )
+        from custom_components.solar_energy_management.coordinator.decide import decide
+        from custom_components.solar_energy_management.coordinator.ev_phase_sequencer import (
+            AUTO_START_DELAY_S, SETTLE_S,
+        )
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            active_phases,
+        )
+        cfg = {
+            "id": "c1", "ev_phase_switch_entity": "number.box_phases",
+            "ev_phase_switching_enabled": True, "phase_mode": "auto",
+            "ev_voltage": 230, "ev_min_current": 6, "ev_max_current": 16,
+            "ev_phases": 3,
+        }
+        h = self._host(cfg=cfg)
+        h.config = {}
+
+        def view():
+            power = MagicMock()
+            power.solar_power, power.home_consumption_power = 2300.0, 300.0
+            power.battery_soc, power.battery_power = None, 0.0
+            power.ev_power = 0.0
+            power.ev_power_per_charger = {}
+            power.ev_connected_per_charger = {"c1": True}
+            power.ev_charging_per_charger = {}
+            fleet = FleetCycleState(
+                power=power, config={}, is_night=False, tariff_level=None,
+                forecast_remaining_kwh=0.0)
+            believed = (getattr(h, "_phase_believed", None) or {}).get("c1")
+            return build_charger_view(
+                fleet, charger_id="c1", charger_cfg=cfg, mode="solar_only",
+                daily_ev_kwh=0.0, active_phases=active_phases(cfg, believed))
+
+        run = lambda d, cp, t: asyncio.run(
+            h._phase_switch_tick("c1", cfg, d, cp, t))
+
+        # 2 kW of sun, three phases need 4.14 kW: the decision idles
+        d = decide(view())
+        assert d.intent is ChargerIntent.IDLE and d.budget_w > 1380
+        assert run(d, self._cp(0.0, False), 0.0) is d
+        h.hass.services.async_call.assert_not_awaited()
+
+        # the sun holds: one switch, to one phase, with the car idle
+        t = 0.0
+        while t <= AUTO_START_DELAY_S + 20:
+            t += 10.0
+            run(decide(view()), self._cp(0.0, False), t)
+        h.hass.services.async_call.assert_awaited_once()
+        call = h.hass.services.async_call.await_args
+        assert call.args[2] == {"entity_id": "number.box_phases", "value": 1.0}
+
+        # settled: SEM believes one phase, and the decision charges on it
+        t += SETTLE_S + 1
+        run(decide(view()), self._cp(0.0, False), t)
+        assert h._phase_believed["c1"] == 1
+        d = decide(view())
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert 6 <= d.commanded_amps <= 8, "2 kW on one phase is 8 A at most"
+
+        # the car draws on one phase: the belief stays, nothing more is sent
+        t += 20
+        out = run(d, self._cp(d.commanded_amps * 230.0, True), t)
+        assert out is d and h._phase_believed["c1"] == 1
+        h.hass.services.async_call.assert_awaited_once()

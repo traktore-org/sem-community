@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Dane usługi SG-Ready muszą być obiektem JSON.",
       "heat_pump_contact_values_missing": "Ten styk SG-Ready to encja text/number/select, więc SEM potrzebuje zapisać zarówno wartość ZAŁ, jak i WYŁ. Wypełnij obie albo wybierz encję typu switch.",
       "calendar_needs_schedule": "Tryb Kalendarz wymaga harmonogramu szczytu. Wybierz pomocnika Harmonogram lub inny tryb taryfy.",
-      "value_needs_spot_basis": "Marża, podatek energetyczny lub VAT dotyczą tylko ceny spot. Wybierz podstawę spot albo ustaw je na 0."
+      "value_needs_spot_basis": "Marża, podatek energetyczny lub VAT dotyczą tylko ceny spot. Wybierz podstawę spot albo ustaw je na 0.",
+      "phase_switch_value_out_of_range": "Wartość dla 1 fazy lub 3 faz jest poza zakresem encji przełączania faz. Wpisz wartości, które encja przyjmuje."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Marża, podatek energetyczny lub VAT dotyczą tylko ceny spot. Wybierz podstawę spot albo ustaw je na 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Wartość przełączania faz nie została zapisana: {reason}. Wpisz wartość, którą encja przyjmuje."
     }
   },
   "issues": {

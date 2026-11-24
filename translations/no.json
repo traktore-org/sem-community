@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "SG-Ready tjenestedata må være et JSON-objekt.",
       "heat_pump_contact_values_missing": "Dette SG-Ready-reléet er en text-/number-/select-entitet, så SEM trenger både ON- og OFF-verdien å skrive. Fyll ut begge, eller velg en bryter-entitet.",
       "calendar_needs_schedule": "Kalendermodus trenger en tidsplan for høylast. Velg en Tidsplan-hjelper eller en annen tariffmodus.",
-      "value_needs_spot_basis": "Et påslag, elavgift eller mva gjelder bare ved en spotpris. Velg spotgrunnlaget, eller sett dem til 0."
+      "value_needs_spot_basis": "Et påslag, elavgift eller mva gjelder bare ved en spotpris. Velg spotgrunnlaget, eller sett dem til 0.",
+      "phase_switch_value_out_of_range": "Verdien for 1 fase eller 3 faser er utenfor området til faseskift-entiteten. Skriv inn verdier som entiteten godtar."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Et påslag, elavgift eller mva gjelder bare ved en spotpris. Velg spotgrunnlaget, eller sett dem til 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Verdien for faseskift ble ikke lagret: {reason}. Skriv inn en verdi som entiteten godtar."
     }
   },
   "issues": {
