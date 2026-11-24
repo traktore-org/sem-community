@@ -45,6 +45,9 @@ class PlanVerdict:
     # has already PROVEN the later windows can still deliver what is owed
     # (see energy_plan_actuation.ev_overlay). It is never a bare preference:
     # a verdict that cannot guarantee the need is met must not hold.
+    # (#1415) The proof uses the plan's power. Before a departure, where
+    # nothing charges after, it also needs the car's measured draw
+    # (``departure_wait_is_safe``).
 
     until: Optional[datetime] = None
     # When the hold is expected to lift, for the reason text. Advisory —

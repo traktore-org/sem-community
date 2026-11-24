@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Finish by departure waits for the plan's cheapest hours** (#1415). With time to spare and no peak limit, the car no longer charges at once.
 - 🐛 **SEM controls a load only after you turn it on** (#1419). Old devices found by name are no longer used; a Repair names them.
 - 🐛 **Cameras, alarms, sirens and door locks are never loads** (#1419). An appliance with a child lock still is. A Repair names any device SEM drops.
 - 🐛 **A load nobody turned on says so** (#1419). Its card reads "Not controlled — turn on".

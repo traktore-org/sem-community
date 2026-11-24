@@ -319,7 +319,7 @@
           "ev_phase_switch_value_1p": "What to write to the phase-switch entity for 1-phase charging — a select's option name, a number's value, or on/off. Required for select entities; number defaults to 1, switch to off.",
           "ev_phase_switch_value_3p": "What to write to the phase-switch entity for 3-phase charging — a select's option name, a number's value, or on/off. Required for select entities; number defaults to 3, switch to on.",
           "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger.",
-          "finish_by_departure": "Off by default. On, SEM keeps charging after the night ends until the Charge by time, from the grid at day price, at the current that just makes it."
+          "finish_by_departure": "Off by default. On, SEM keeps charging after the night ends until the Charge by time, from the grid at day price. With time to spare and no peak limit, it waits for the plan's cheapest hours; else it charges at the current that just makes it."
         }
       },
       "ev_charger_edit": {
@@ -388,7 +388,7 @@
           "ev_phase_switch_value_1p": "What to write to the phase-switch entity for 1-phase charging — a select's option name, a number's value, or on/off. Required for select entities; number defaults to 1, switch to off.",
           "ev_phase_switch_value_3p": "What to write to the phase-switch entity for 3-phase charging — a select's option name, a number's value, or on/off. Required for select entities; number defaults to 3, switch to on.",
           "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger.",
-          "finish_by_departure": "Off by default. On, SEM keeps charging after the night ends until the Charge by time, from the grid at day price, at the current that just makes it."
+          "finish_by_departure": "Off by default. On, SEM keeps charging after the night ends until the Charge by time, from the grid at day price. With time to spare and no peak limit, it waits for the plan's cheapest hours; else it charges at the current that just makes it."
         }
       },
       "ev_charger_remove": {

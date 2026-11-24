@@ -107,7 +107,8 @@ def test_after_the_night_end_the_floor_stops_at_the_charger_max():
 
 def test_a_small_rest_after_the_night_end_still_forces_the_minimum():
     """0.3 kWh owed needs under 6 A; the floor is the minimum and still
-    counts as forcing, so no plan gate holds the last minutes back."""
+    counts as forcing. (#1415) A plan that covers the car may still hold
+    it for a later block, but only while its blocks hold the need."""
     plan = _plan(now=AFTER_NIGHT, need=0.3, finish_by_departure=True,
                  night_over=True)
     assert plan.deadline_amps == 6

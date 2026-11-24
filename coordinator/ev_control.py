@@ -53,6 +53,34 @@ def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
     return result if isinstance(result, datetime) else None
 
 
+def _wpa_table_or_none(host: Any, cfg: dict, phases: int) -> Optional[dict]:
+    """(#1415) ``host._wpa_table_for(cid)``, the charger's measured
+    ``{amps: W/A}`` table, or ``None`` for a test double without it. Same
+    defensive shape as :func:`_calendar_next_for`: only a real dict
+    counts. The primary charger without an id is ``ev_charger``, as at
+    the overlay site.
+
+    (review 3) Only a table measured on ``phases``, the count the plan
+    runs on: the learner files it under its own phase belief, and with
+    phase switching that can differ (SEM set one phase for thin sun; the
+    grid charge runs on three). A one-phase table read against a
+    three-phase nameplate sizes the floor about three times too high.
+    Another count, or a belief in dispute: ``None``, the nameplate."""
+    cid = str((cfg or {}).get("id") or "ev_charger")
+    fn = getattr(host, "_wpa_table_for", None)
+    belief = getattr(host, "_wpa_phases_for", None)
+    if not callable(fn) or not callable(belief):
+        return None
+    try:
+        learned, ok = belief(cid, cfg)
+        if not ok or learned is None or int(learned) != int(phases):
+            return None
+        table = fn(cid)
+    except (AttributeError, TypeError, ValueError, KeyError):
+        return None
+    return table if isinstance(table, dict) and table else None
+
+
 def amps_from_headroom(
     headroom_w: float,
     watts_per_amp: float,
@@ -702,6 +730,9 @@ class EVControlMixin:
             # caller is in the gap after the night end.
             finish_by_departure=bool(cfg.get("finish_by_departure", False)),
             night_over=bool(night_over),
+            # (#1415) the departure floor's amps by this charger's measured
+            # draw, not the nameplate.
+            wpa_table=_wpa_table_or_none(self, cfg, phases),
         )
         return plan
 
@@ -969,6 +1000,35 @@ class EVControlMixin:
         return bool(
             self.config.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
         )
+
+    def _ev_rate_capped(self) -> bool:
+        """(#1415 review 4) Can something besides the car cap a charger's
+        rate, hour by hour? A peak limit (the user's or the grid
+        operator's) or a phase guard that enforces. Both leave the car
+        what the house leaves free, and that changes by the hour.
+
+        The *Finish by departure* wait counts the hours from the next
+        block to the departure at the car's measured draw. With a cap, a
+        busy hour gives less, so the wait is not proven: the floor
+        charges at once, as before. Unknown counts as capped.
+
+        (review 5) Two more: a grid operator's relay that is set up, even
+        while it is off (it can switch on during the blocks), and a
+        second charger (two cars may share a site limit SEM cannot see,
+        and the plan puts both in the same cheapest hours)."""
+        from ..consts.core import CONF_SHED_SIGNAL_ENTITY
+        try:
+            if math.isfinite(float(self._get_peak_limit_w())):
+                return True
+        except Exception:  # noqa: BLE001 — an unreadable limit still caps
+            return True
+        cfg = getattr(self, "config", None) or {}
+        if cfg.get(CONF_SHED_SIGNAL_ENTITY):
+            return True
+        if len(cfg.get("ev_chargers") or []) > 1:
+            return True
+        return bool(cfg.get("phase_guard_enabled", False)
+                    and cfg.get("phase_guard_enforcement_enabled", False))
 
     def _get_peak_15min_w(self) -> Optional[float]:
         """Read the rolling 15-min consecutive peak (#288), in watts.

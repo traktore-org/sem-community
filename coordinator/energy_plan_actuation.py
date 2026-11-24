@@ -75,6 +75,11 @@ class PlanGate:
     # needs no rating of its own.
     remaining_h: float = 0.0
     next_block_start: Optional[datetime] = None
+    # (#1415) The highest power among this demand's blocks still ahead
+    # (0.0 when none). The packer books no block above the headroom the
+    # peak limit leaves, so the car cannot count on more. Not the lowest:
+    # the last block often holds only the rest, at lower power.
+    top_block_w: float = 0.0
     # (#638 Stage 2) When the NEXT of this demand's blocks opens — None
     # inside a block or when none remain. The verdict's ``until``, the
     # published reason's "(until HH:MM)" and the card countdown all quote
@@ -178,6 +183,7 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         block_power = 0.0
         remaining = 0.0
         remaining_h = 0.0
+        top_block = 0.0
         next_start = None
         for b in plan.get("blocks") or []:
             if b.get("id") != demand_id:
@@ -212,11 +218,15 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
             if left_h > 0:
                 remaining += power / 1000.0 * left_h
                 remaining_h += left_h
+                # (#1415) a sub-watt rest asks for no power: not a rate
+                if setpoint > 0.0:
+                    top_block = max(top_block, power)
         return PlanGate(covered=True, in_block=in_block,
                         block_power_w=block_power,
                         remaining_kwh=round(remaining, 6),
                         remaining_h=round(remaining_h, 6),
-                        next_block_start=None if in_block else next_start)
+                        next_block_start=None if in_block else next_start,
+                        top_block_w=top_block)
     except (TypeError, ValueError, KeyError, IndexError):
         return PlanGate(reason="unreadable plan")
 
@@ -252,8 +262,17 @@ def ev_overlay(
     max_amps: int,
     wpa_table=None,
     nominal_wpa=None,
+    departure_floor: bool = False,
+    charge_end: Optional[datetime] = None,
+    departure_max_amps: Optional[int] = None,
+    departure_wpa_table=None,
+    departure_wpa: Optional[float] = None,
+    departure_capped: bool = True,
 ) -> Tuple[bool, int]:
     """The EV's joint-plan overlay → ``(wait, floor_amps)``.
+
+    Callers use :func:`apply_ev_overlay`, which reads every flag below off
+    the night plan in one place.
 
     ``wpa_table`` (#904): this charger's learned ``{amps: W/A}`` ladder.
     With it, block watts become the LARGEST setpoint whose predicted draw
@@ -272,6 +291,20 @@ def ev_overlay(
     - a forcing deadline (``deadline_active``) or an unreachable floor
       (``not reachable``) → ``(False, 0)`` — never hold back a charger
       the reactive planner says must run NOW;
+    - (#1415) except the *Finish by departure* floor after the night end
+      (``departure_floor``, the plan's ``to_departure``). That floor only
+      spreads the need evenly up to the departure (``charge_end``), and
+      the joint plan packed the same departure into its cheapest hours.
+      So the blocks lead, under the two rules below, and one more for the
+      wait: see :func:`departure_wait_is_safe` (``departure_max_amps``:
+      the charger max the night plan used, when lower). The wait counts
+      with the floor's own power model, ``departure_wpa_table`` and
+      ``departure_wpa`` (the plan's ``wpa_table`` and ``watts_per_amp``):
+      the floor is what charges when a wait fails. And (review 4) only
+      while nothing but the car caps its rate (``departure_capped``
+      False): under a peak limit or an enforcing phase guard a busy hour
+      gives the car less, and no rate is proven. An unreachable floor
+      still releases.
     - inside a planned block → charge at least the planned power
       (ceil to amps, clamped to the charger's [min, max]);
     - outside a block → wait ONLY while the remaining blocks can still
@@ -282,7 +315,7 @@ def ev_overlay(
     """
     if not gate.covered:
         return (False, 0)
-    if deadline_active or not reachable:
+    if (deadline_active and not departure_floor) or not reachable:
         return (False, 0)
     if gate.in_block:
         wpa = max(1.0, float(watts_per_amp))
@@ -298,8 +331,138 @@ def ev_overlay(
             amps = int(math.ceil(gate.block_power_w / wpa))
         return (False, max(int(min_amps), min(int(max_amps), amps)))
     if blocks_hold(gate.remaining_kwh, remaining_kwh):
+        if departure_floor and (departure_capped or not departure_wait_is_safe(
+                gate, remaining_kwh, charge_end,
+                wpa_table=departure_wpa_table,
+                nominal_wpa=departure_wpa or watts_per_amp,
+                max_amps=min(int(max_amps),
+                             int(departure_max_amps or max_amps)))):
+            return (False, 0)
         return (True, 0)
     return (False, 0)
+
+
+#: (#1415) Share of the car's known draw the even floor may count on after a
+#: wait. A start takes minutes (a cloud charger answers late), and a car
+#: can draw less than its best, cold or near full. Replayed minute by minute
+#: on the reporter's day, a car at 80 % of its measured draw still lands
+#: as well as with the floor that never waited.
+DEPARTURE_WAIT_MARGIN = 0.8
+
+
+def departure_wait_is_safe(gate: PlanGate, need_kwh: float,
+                           charge_end: Optional[datetime], *,
+                           wpa_table, nominal_wpa: float,
+                           max_amps: int) -> bool:
+    """(#1415) May the car wait for its next block before the departure?
+
+    At night a failed plan still has the hours after the night end; with
+    *Finish by departure* the departure is the hard end, and nothing
+    charges after it. ``blocks_hold`` trusts the plan's power, and above
+    the highest setpoint SEM has measured that is the nameplate: the
+    reporter's 54 A read as 37 kW for a car that drew 7.5 kW at 12 A. A
+    plan like that fails at its first block, and only the hours from there
+    to the departure are left.
+
+    So the wait is safe only while the even floor could still deliver the
+    need from the next block's start, at the most this car has been SEEN
+    to draw at or under ``max_amps`` (the measured table), less a margin
+    for the start. No measured table: no proof, no wait.
+
+    The caller asks this only while nothing but the car caps its rate
+    (review 4: no peak limit, no enforcing phase guard). The rest is a
+    second line.
+
+    The peak limit caps that rate too (review): the packer put each block
+    within the headroom the limit leaves, and the slot guard holds the
+    car there. So the rate is never above what the highest block still
+    ahead (``top_block_w``) buys at its setpoint. A 5 kW limit with 700 W
+    of house load gives 4.3 kW blocks; the 10.6 kW the car was seen at is
+    not there to use.
+
+    Review 3: the rate is a MEASURED setpoint, the highest at or under the
+    one the block runs at. Below the measured range ``predict_watts`` is
+    the nameplate, and a car can draw far less there: 415 W/A at 8 A on
+    PROD, 0.6 of nameplate. The reporter's table starts at 12 A, so a
+    4.3 kW block (6 A) has no measured rate under it: no proof, no wait.
+    """
+    if gate.next_block_start is None or charge_end is None:
+        return False
+    try:
+        hours = (charge_end - gate.next_block_start).total_seconds() / 3600.0
+    except TypeError:      # naive vs aware: no proof
+        return False
+    if hours <= 0.0:
+        return False
+    seen = [int(a) for a in (wpa_table or {}) if 0 < int(a) <= int(max_amps)]
+    if not seen:
+        return False
+    from .watts_per_amp import amps_that_fit, predict_watts
+    nominal = max(1.0, float(nominal_wpa))
+    block_amps = int(max_amps)
+    if gate.top_block_w > 0.0:
+        # The setpoint the block runs at: the in-block floor's own walk.
+        block_amps = amps_that_fit(wpa_table, gate.top_block_w, nominal,
+                                   int(max_amps))
+    under = [a for a in seen if a <= block_amps]
+    if not under:
+        return False
+    # a measured bucket: ``predict_watts`` returns its own draw, never
+    # above the nameplate
+    top_w = predict_watts(wpa_table, max(under), nominal)
+    return (max(0.0, float(need_kwh))
+            <= top_w / 1000.0 * hours * DEPARTURE_WAIT_MARGIN)
+
+
+def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
+                     watts_per_amp: float, min_amps: int, max_amps: int,
+                     wpa_table=None, nominal_wpa=None,
+                     rate_capped: bool = True) -> Tuple[bool, int]:
+    """(#638 G4) The overlay, written onto this charger's night plan.
+
+    The ONE copy both coordinator sites call (primary and per charger,
+    the #683/#684 parity class). It reads ``reachable``,
+    ``deadline_active``, ``to_departure``, ``charge_end_dt``, ``max_amps``,
+    ``wpa_table`` and ``watts_per_amp`` off the same plan it writes, so no
+    site can pass one flag and forget another (#1415). ``wpa_table`` and
+    ``nominal_wpa`` here are the charger's phases NOW, for the in-block
+    floor. ``rate_capped`` (review 4): the coordinator's word that a peak
+    limit or an enforcing phase guard can cap the car; unknown is capped.
+    Returns ``(wait, floor_amps)``.
+    """
+    wait, floor = ev_overlay(
+        gate,
+        remaining_kwh=remaining_kwh,
+        reachable=plan.reachable,
+        deadline_active=plan.deadline_active,
+        departure_floor=bool(getattr(plan, "to_departure", False)),
+        charge_end=getattr(plan, "charge_end_dt", None),
+        # the plan's max is the charger's own when it is below the config's
+        departure_max_amps=int(getattr(plan, "max_amps", 0) or 0) or None,
+        # (review 3) the floor's own power model: the table measured on
+        # the phases the plan runs on, and its nameplate W/A
+        departure_wpa_table=getattr(plan, "wpa_table", None),
+        departure_wpa=float(getattr(plan, "watts_per_amp", 0.0) or 0.0) or None,
+        departure_capped=bool(rate_capped),
+        watts_per_amp=watts_per_amp,
+        min_amps=min_amps,
+        max_amps=max_amps,
+        wpa_table=wpa_table,
+        nominal_wpa=nominal_wpa,
+    )
+    if wait:
+        plan.should_wait_for_cheap = True
+        plan.next_cheap_start = gate.next_block_start
+        # CAUSE: ``wait`` is ev_overlay's answer for this gate: not in a
+        # block, and blocks_hold says the remaining blocks hold the need.
+        plan.reason = (
+            "joint energy plan: outside the planned window — waiting "
+            f"({gate.remaining_kwh:.1f} kWh still deliverable)")
+    elif floor > 0:
+        plan.should_wait_for_cheap = False
+        plan.deadline_amps = max(plan.deadline_amps, floor)
+        plan.reason = f"joint energy plan: in planned window — floor {floor}A"
+    return (wait, floor)
 
 
 def load_verdict(gate: PlanGate, *, deficit_kwh: float,

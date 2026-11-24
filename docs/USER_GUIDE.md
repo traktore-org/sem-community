@@ -252,8 +252,10 @@ by day, **At least** at night.
 - **Charge by** is the time the car must be ready. A time before night
   ends makes the charge faster.
 - **Finish by departure** keeps charging after night ends until the
-  **Charge by** time, from the grid, at the lowest current that makes it.
-  Off by default.
+  **Charge by** time, from the grid. With time to spare, it waits for the
+  cheapest hours the plan shows. Otherwise it charges at the lowest current
+  that makes it. It does not wait with a peak limit, a grid operator relay,
+  a phase guard that acts, or a second charger. Off by default.
 - **Departure calendar** takes the departure from a calendar event.
 - **Set once** copies this charger's values into the defaults for new chargers.
 
