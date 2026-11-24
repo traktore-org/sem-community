@@ -1995,6 +1995,19 @@ class LoadManagementCoordinator:
         the peak shed, the phase guard, a restore. True = it went out."""
         if self._withheld(device_id, f"{domain}.{service}", None, data):
             return False
+        # (#1381, charger owner S7) A charger is written by the charger
+        # owner only. A row that names a charger's own entity (an old
+        # discovered plug on the charger's stop switch, #748) or a charger's
+        # service is refused here, whichever caller got this far.
+        claimed = self._charger_claimed_entities()
+        if (str((data or {}).get("entity_id") or "") in claimed
+                or f"{domain}.{service}" in claimed):
+            log_on_change(
+                _LOGGER, f"lm:charger-write:{device_id}", logging.WARNING,
+                "Load management will not write %s.%s to %s: a charger owns "
+                "it (#1381)", domain, service,
+                (data or {}).get("entity_id") or f"{domain}.{service}")
+            return False
         # OBSERVER-GATED: ``_withheld`` above returned for observer mode —
         # this is the seam, the same shape as ``send()``.
         await self.hass.services.async_call(domain, service, dict(data), blocking=True)
