@@ -845,6 +845,28 @@ The `battery_scheduler_state` sensor has a `schedule` attribute containing the f
 
 The coordinator owns all EV control (`ev.managed_externally = True`). The EV is never managed by the SurplusController due to unique requirements (session lifecycle, minimum 4140W cliff, charger-specific service calls).
 
+### Modes the user sees, strategies the engine runs (#1381 S9)
+
+The user picks one of four modes and one switch; the pair maps onto exactly
+one of six stored strategies (`consts/ev_charge_modes.py`), so the stored
+value never changed and every replayed day runs the same strategy:
+
+| Mode | Battery help | Stored strategy |
+|---|---|---|
+| Sun | off | `solar_only` |
+| Sun | on | `solar_plus_battery` |
+| Sun + tariff | off | `solar_plus_cheap` |
+| Sun + tariff | on | `min_plus_solar` |
+| Now (until full) | — | `always_max` |
+| Now (until a time or the plan's next block) | — | the plan override `force` (a timed claim, S8) over the stored strategy |
+| Off | — | `off` |
+
+Both config writers (the per-charger entity path and `set_option`'s merge)
+call `apply_user_mode_write`, which reads the charger's state before the
+write. The old names stay valid input. Now and Off remember the switch
+(`ev_battery_help`). The select shows the user mode, and its attributes carry
+`strategy` (the card's hints speak it), `battery_help` and `now_until`.
+
 ### Night Charging
 - Starts at 10A when night mode activates (sunset + the user's night start offset, default 30 min; #1318)
 - Dynamic peak-managed current each cycle (+-2A ramp, min 8A floor)
@@ -913,13 +935,24 @@ have: one order of precedence and one record of what SEM changed.
   restart (EV session state, `guard_stops`).
 - **Guard.** `tests/test_charger_writer_inventory.py` counts every call
   site that can command a charger; a new one fails until it goes behind
-  the owner or is declared.
+  the owner or is declared. `tests/test_charger_owner_s13_bypass_lint.py`
+  requires every `resolve` step to name an owner `SRC_*` source and a
+  `CommandClass`, lets nothing that can strengthen a charge run after the
+  safety gate, and keeps relabelling inside the owner. The load manager
+  refuses any write to an entity or service a charger owns (S7).
+- **Phase switch.** Goes through `device.send` (S6), so observer mode,
+  the yield gate and the ledger cover it like any other write.
+- **Timed claims.** Pause, plan override (Skip / Now), battery boost and
+  hand-back records are one read-only view (`charger_owner.timed_claims`,
+  in diagnostics); each keeps its own persisted store.
+- **Modes.** The user's four modes feed the decision as one stored
+  strategy; see *Modes the user sees, strategies the engine runs*.
 
 | Class | Name | Examples | Wins over |
 |---|---|---|---|
 | 1 | Safety | phase guard stop, peak emergency, VPP grid event | all; passes a yield, leaves an undo |
 | 2 | Hard limit | peak-slot clamp, max-SOC ceiling, phase-sequencer hold | 3–7 |
-| 3 | User | mode Off, pause, Skip tonight, Start / Charge now | 4–7 |
+| 3 | User | mode Off, pause, Skip tonight, Now (Charge now) | 4–7 |
 | 4 | External | another party steers ("SEM yields") | 5–7 |
 | 5 | Plan | night At-least, deadline, departure, tariff block | 6, 7 |
 | 6 | Sun | surplus charging, battery help | 7 |

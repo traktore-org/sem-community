@@ -188,7 +188,7 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Check, in order:**
 1. **Devices › your charger.** The row says why. For example: "No car is plugged in."
-2. **Charge mode.** Off never charges. **Solar only** charges only from spare sun. Spare sun must reach the charger's minimum: about 1380 W for a 1-phase charger at 6 A, about 4140 W for a 3-phase charger at 6 A.
+2. **Charge mode.** Off never charges. **Sun** charges only from spare sun. Spare sun must reach the charger's minimum: about 1380 W for a 1-phase charger at 6 A, about 4140 W for a 3-phase charger at 6 A.
 3. **Repairs.** **EV charger not accepting commands** means the charger refuses SEM's commands. **EV charger cannot be stopped** means SEM has no way to stop it.
 4. **System › Chargers.** Check the charger's current control: **current control** (an entity) or **via action** (a service).
 
@@ -198,8 +198,8 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:**
 - Charge mode **Off**: the charger may restart on its own. Look for [the wallbox undoes SEM's stop](#your-wallbox-undoes-sems-stop-on-a-timer).
-- The car charged overnight: its charge mode is **Min + Solar** or **Solar + tariff**, and a target is not reached. To charge from solar only, set **Solar only** and set **At least** to 0.
-- The battery charges the car: on **Devices**, open the battery card and turn off **May the battery help charge the car?**.
+- The car charged overnight: its charge mode is **Sun + tariff**, and a target is not reached. To charge from solar only, set **Sun** and set **At least** to 0.
+- The battery charges the car: on **Devices**, open the charger and turn off **May the battery help the car?**.
 
 ### Your wallbox undoes SEM's stop on a timer
 
@@ -255,7 +255,7 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 ### A home without a battery makes no night plan
 
-**Symptom:** No battery, but **Solar + tariff** charges at once.
+**Symptom:** No battery, but **Sun + tariff** charges at once.
 
 **Fix:** Update SEM. A battery platform of **Generic** alone no longer counts as a battery.
 

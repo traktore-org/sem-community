@@ -67,8 +67,8 @@ The next 24 hours as one timeline.
   Tap a block for its reason.
 - **Show timeline per device** opens one lane per charger and load.
 - **Why this plan**: one line per planned device.
-- **Per device**: **Skip**, **Start now** and **Back to plan** for a car, **Charge now**
-  (full power until you go back to the plan), and **Sell** for the battery.
+- **Per device**: **Skip** and **Charge now** for a car (full power until the
+  plan's next block), **Back to plan** while one runs, and **Sell** for the battery.
 - **Expected**: cost, savings, and the battery level at the end of the plan.
 - **Decisions today**: the log with a device filter. **Replan** runs the planner again.
 
@@ -87,7 +87,9 @@ Every charger, battery and load, in priority order.
 - Above the list: surplus, active devices, the 15-minute peak, the limit
   (**Limit grid draw to**), the month peak and what SEM can shed.
 
-**Charger**: mode, target bar (**At least**, **Up to**), **Charge by**, **Pause charging**,
+**Charger**: one mode control (Sun, Sun + tariff, Now, Off), the switch **May the
+battery help the car?**, and for **Now** its end (the plan, a time, or until full).
+Then the target bar (**At least**, **Up to**), **Charge by**, **Pause charging**,
 sessions and lifetime. **Battery**: mode, what it does now and next, the three levels.
 **Load**: one mode control and **Boost for**. A load does nothing until you set
 its mode; new loads start at **Off**. Security devices (camera, alarm, lock,

@@ -143,35 +143,51 @@ Tax, VAT and grid-fee rows appear only when they change the price.
 
 ### Pick a charge mode
 
-Set the mode per charger, on **Devices**.
+Set the mode per charger, on **Devices**. There are four.
 
-| Mode | Charges from | Use it when |
+| Mode | What it does | Use it when |
 |---|---|---|
-| **Min + Solar** (default) | Spare sun by day. The grid tops up to **At least** at night, or by day if the night is too short. | You need the car ready by a time. |
-| **Solar only** | Spare sun only. A grid top-up runs only if you set **At least**. | You want solar only. |
-| **Solar + battery** | Spare sun and the home battery above its buffer. | The battery may help the car. |
-| **Solar + tariff** | Spare sun. The grid tops up to **At least** when it costs least: at night, in a cheap hour, or with thin sun. | You want SEM to follow your prices. Works on every tariff. |
-| **Always (max)** | Full power, day and night. | You need the car now. |
-| **Off** | Nothing. SEM sends one stop, then leaves the charger alone. | You want to control the car by hand. |
+| **Sun** | Charges from spare sun. At night it uses the grid only if you set **At least** for this charger. | You want solar only. |
+| **Sun + tariff** (default) | Spare sun by day. The grid tops up to **At least** when it costs least, usually in the cheapest night hours. | You need the car ready by a time. |
+| **Now** | Full power at once. It ends at the plan's next block, at a time you pick, or when the car is full. | You need the car now. |
+| **Off** | Nothing. SEM sends one stop, then leaves the charger alone. | You control the car yourself. |
+
+Each charger also has one switch: **May the battery help the car?**
+
+| | Battery help on | Battery help off |
+|---|---|---|
+| **Sun** | The home battery adds to spare sun, above its buffer. | The home battery stays for the house. |
+| **Sun + tariff** | The home battery adds to spare sun. By day the grid tops up only if tonight is too short to reach **At least**. | The home battery stays for the house. By day, thin sun plus the grid charges the car when that is cheaper than the night. See [When Sun + tariff buys by day](#when-sun--tariff-buys-by-day). |
 
 Notes:
 
-- **Min + Solar** charges at night even without sun. By day it waits for sun,
-  unless tonight is too short to reach **At least**.
-- **Solar + tariff** needs your prices: the import price and the export
-  price, in **System > How I pay**. The export price must be the one you
-  are really paid: SEM pre-fills 0.075, and this mode decides with it. See
-  [When Solar + tariff buys by day](#when-solar--tariff-buys-by-day).
-- **Solar only** never uses grid power unless you set **At least**.
-  With **At least** at 0 kWh, the car never takes grid power.
+- The switch starts where your charger already was, so nothing changes on
+  update. Now and Off remember it.
+- **Sun** with **At least** at 0 never takes grid power.
+- **Now** from the **Plan** screen (**Charge now**) runs until the plan's
+  next block. On the charger you can pick a time or **until full** instead.
+  Pick another mode to stop it.
 - **Off** does not hold the charger stopped. A wallbox that starts by itself is left alone.
+- Old mode names still work in automations and services:
 
-### When Solar + tariff buys by day
+  | Old name | Now |
+  |---|---|
+  | Solar only (`solar_only`) | Sun, battery help off |
+  | Solar + battery (`solar_plus_battery`) | Sun, battery help on |
+  | Solar + cheapest hours / Solar + tariff (`solar_plus_cheap`) | Sun + tariff, battery help off |
+  | Min + Solar (`min_plus_solar`) | Sun + tariff, battery help on |
+  | Always (max) (`always_max`) | Now, until full |
+
+- **Sun + tariff** needs your prices: the import price and the export
+  price, in **System > How I pay**. The export price must be the one you
+  are really paid: SEM pre-fills 0.075, and this mode decides with it.
+
+### When Sun + tariff buys by day
 
 Thin sun is spare sun below the charger's minimum power (4.1 kW on three
 phases at 6 A). Alone it cannot charge the car, so it goes to the grid at
-the export price. **Solar + tariff** can use it: the car charges at its
-minimum, on the spare sun plus the grid for the rest.
+the export price. **Sun + tariff** with battery help off can use it: the
+car charges at its minimum, on the spare sun plus the grid for the rest.
 
 SEM does this only for **At least**, and only when it is at least 10 %
 cheaper than the cheapest hour still to come before **Charge by**:
