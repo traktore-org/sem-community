@@ -201,6 +201,16 @@ If the total matches the Energy Dashboard, nothing is wrong.
 - The car charged overnight: its charge mode is **Sun + tariff**, and a target is not reached. To charge from solar only, set **Sun** and set **At least** to 0.
 - The battery charges the car: on **Devices**, open the charger and turn off **May the battery help the car?**.
 
+### An automation can no longer set the charge mode
+
+- The charge mode select has four options now: `sun`, `sun_tariff`, `now`,
+  `off`. Home Assistant refuses an old name such as `solar_only` in
+  `select.select_option`, and a trigger on an old name no longer fires.
+- The Repair "Automations use old charge mode names" lists each automation
+  or script and the new name. Change them, then reload automations; the
+  Repair clears itself.
+- `solar_energy_management.set_option` still takes the old names.
+
 ### Your wallbox undoes SEM's stop on a timer
 
 **Cause:** The wallbox switches itself on again a fixed time after SEM stops it. It uses its own fallback current.

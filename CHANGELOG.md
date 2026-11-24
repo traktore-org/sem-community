@@ -24,9 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A charger stopped by the phase guard comes back** (#1381). SEM switches it on again when the phase has room, one charger at a time.
 - 🐛 **No "night charging" at 0 W after a guard stop** (#1381). The charger reads "Stopped by the phase guard" until it is back on.
 - 🐛 **Tomorrow's prices show on 15-minute tariffs** (#1418). The price chart stopped 12 hours ahead. Hourly prices no longer show gaps.
-- ✨ **Four charge modes: Sun, Sun + tariff, Now, Off** (#1381). One switch says if the battery may help. Old names still work.
-- ✨ **Charge now ends by itself** (#1381). It runs until the plan's next block, a time you pick, or until full. One button replaces two.
-- ✨ **Thin sun plus grid in Sun + tariff** (#1411). With battery help off, spare sun below the minimum charges the car when cheaper than tonight.
+- ✨ **Four charge modes: Sun, Sun + tariff, Now, Off** (#1381). One switch says if the battery may help.
+- ⚠️ **Breaking: the mode select has new option names** (#1381). Automations using `solar_only` and the like must change; a Repair lists them.
+- ✨ **Now works on an Off or paused charger** (#1381). When Now ends, the charger is Off again. Unplugging ends Now.
+- ✨ **Charge now ends by itself** (#1381). It runs until the car's next plan block, a time you pick, or until full. One button replaces two.
+- ✨ **Thin sun plus grid in Sun + tariff** (#1411). Spare sun below the minimum charges the car when cheaper than tonight.
+- ✨ **Sun + tariff has one day rule** (#1381). The battery switch changes only the battery; grid buying by day is the same either way.
 - 🔧 **Every charger command goes through one place** (#1381). SEM records what it changed, so a safety stop is handed back.
 
 # [2.3.0-beta.26] — 23.11.2026

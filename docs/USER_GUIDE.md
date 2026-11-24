@@ -157,18 +157,31 @@ Each charger also has one switch: **May the battery help the car?**
 | | Battery help on | Battery help off |
 |---|---|---|
 | **Sun** | The home battery adds to spare sun, above its buffer. | The home battery stays for the house. |
-| **Sun + tariff** | The home battery adds to spare sun. By day the grid tops up only if tonight is too short to reach **At least**. | The home battery stays for the house. By day, thin sun plus the grid charges the car when that is cheaper than the night. See [When Sun + tariff buys by day](#when-sun--tariff-buys-by-day). |
+| **Sun + tariff** | The home battery adds to spare sun. | The home battery stays for the house. |
+
+The switch changes only what the home battery does. **Sun + tariff** buys
+from the grid by day the same way with the switch on or off: when tonight is
+too short to reach **At least**, in a cheap hour, or when thin sun plus the
+grid is cheaper than the night. See
+[When Sun + tariff buys by day](#when-sun--tariff-buys-by-day).
 
 Notes:
 
 - The switch starts where your charger already was, so nothing changes on
   update. Now and Off remember it.
 - **Sun** with **At least** at 0 never takes grid power.
-- **Now** from the **Plan** screen (**Charge now**) runs until the plan's
-  next block. On the charger you can pick a time or **until full** instead.
-  Pick another mode to stop it.
+- **Now** from the **Plan** screen (**Charge now**) runs until this car's
+  next block in the plan, or 2 hours when the plan has none. On the charger
+  you can pick a time or **until full** instead. Pick another mode to stop it.
+- **Now** also works on a charger set to **Off** or paused. When Now ends,
+  the charger is **Off** again.
+- **Now** ends when the car is unplugged. The next car does not inherit it.
 - **Off** does not hold the charger stopped. A wallbox that starts by itself is left alone.
-- Old mode names still work in automations and services:
+- **Old mode names.** The mode select now has four options. Home
+  Assistant refuses the old names in `select.select_option`, and a trigger
+  or condition on an old name no longer matches. A Repair names every
+  automation or script that still uses one. SEM's own `set_option` service
+  still takes the old names. Use the new names:
 
   | Old name | Now |
   |---|---|
@@ -186,8 +199,11 @@ Notes:
 
 Thin sun is spare sun below the charger's minimum power (4.1 kW on three
 phases at 6 A). Alone it cannot charge the car, so it goes to the grid at
-the export price. **Sun + tariff** with battery help off can use it: the
-car charges at its minimum, on the spare sun plus the grid for the rest.
+the export price. **Sun + tariff** can use it: the car charges at its
+minimum, on the spare sun plus the grid for the rest.
+
+This works with battery help on or off. With help on, the home battery
+must be full or not taking that sun.
 
 SEM does this only for **At least**, and only when it is at least 10 %
 cheaper than the cheapest hour still to come before **Charge by**:
