@@ -155,11 +155,6 @@ def security_role(entries) -> str:
     return ""
 
 
-def is_security_device_entries(entries) -> bool:
-    """(#1419) Is a device with these registry entries left alone by SEM?"""
-    return security_role(entries) != ""
-
-
 def security_role_of(hass: HomeAssistant, entity_id: Optional[str]) -> str:
     """(#1419) The security role of the device this entity belongs to.
 
