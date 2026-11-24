@@ -69,6 +69,11 @@ DECLARED: dict[str, str] = {
         "per-charger state, and _maybe_warn_soc_cap clears on the current "
         "facts every cycle (a real SOC, no percent target, no car) and "
         "raises while the charger's own decision charges (#1404)",
+    "coordinator/coordinator.py::SEMCoordinator._check_phase_switch_values":
+        "the first verdict of each coordinator lifetime that the values fit "
+        "clears once (_phase_values_repair_reconciled), so a Repair raised "
+        "before a restart goes when the values were corrected (#1412); a "
+        "range that cannot be read neither raises nor clears",
     "coordinator/coordinator.py::SEMCoordinator._check_battery_platform_pin":
         "the verdict memo means 'decided yet?' (hasattr), never None; one "
         "install-wide verdict once every battery answered this cycle, and "

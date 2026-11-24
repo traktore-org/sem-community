@@ -528,3 +528,54 @@ async def test_diagnose_battery_carries_the_pacing_register(
     assert pacing["register"]["step"] == 100
     assert any(limit in line and "FOREIGN" in line
                for line in pacing["foreign_log"])
+
+
+# ---------------------------------------------------------------------------
+# (#1412) set_option refuses a phase switch value its number cannot take
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_set_option_refuses_a_phase_switch_value_outside_the_range(
+    sem_real_hass, sem_multi_wallbox_config_entry,
+) -> None:
+    """The dashboard saves a charger's phase switch values through
+    ``set_option``. 1000 for a number that runs from 0 to 32 could never be
+    written to the charger, and was saved without a word. It is refused now;
+    a value inside the range is saved."""
+    from homeassistant.exceptions import ServiceValidationError
+
+    _seed_sem_input_sensors(sem_real_hass)
+    for side in ("left", "right"):
+        sem_real_hass.states.async_set(
+            f"sensor.test_wb_{side}_charging_power", "0", {"unit_of_measurement": "W"})
+        sem_real_hass.states.async_set(
+            f"number.test_wb_{side}_max_current", "0", {"unit_of_measurement": "A"})
+        sem_real_hass.states.async_set(f"binary_sensor.test_wb_{side}_cable_connected", "off")
+        sem_real_hass.states.async_set(f"sensor.test_wb_{side}_status", "idle")
+    switch = "number.test_wb_left_phase_threshold"
+    sem_real_hass.states.async_set(switch, "0", {"min": 0, "max": 32, "step": 1})
+
+    await _setup_sem(sem_real_hass, sem_multi_wallbox_config_entry)
+
+    async def save(**fields):
+        await sem_real_hass.services.async_call(
+            DOMAIN, "set_option",
+            {"options": {"ev_chargers": [{"id": "ev_charger", **fields}]}},
+            blocking=True,
+        )
+        await sem_real_hass.async_block_till_done()
+
+    await save(ev_phase_switch_entity=switch)
+    with pytest.raises(ServiceValidationError):
+        await save(ev_phase_switch_value_1p="1000")
+
+    def stored():
+        rows = sem_multi_wallbox_config_entry.options.get("ev_chargers") or []
+        return next(c for c in rows if c["id"] == "ev_charger")
+
+    assert stored().get("ev_phase_switch_value_1p") != "1000"
+    await save(ev_phase_switch_value_1p="32")
+    assert stored()["ev_phase_switch_value_1p"] == "32"
+    assert any(c["id"] == "ev_charger_1"
+               for c in sem_multi_wallbox_config_entry.options["ev_chargers"])

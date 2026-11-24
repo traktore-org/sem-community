@@ -75,6 +75,14 @@ def estimate_active_phases(
     return max(1, min(3, max(round(ratio), floor)))
 
 
+#: (#1412) A charge SEM believes runs on one phase stays "one phase" while
+#: its draw is within this factor of what one phase carries at the offer.
+#: The estimate reads 2 from 5 % over nameplate, and a 1-phase car on a
+#: 245 V grid draws 6.5 % over 230 V nameplate. 1.2 covers 253 V plus 5 %
+#: metering, and a draw inside it exceeds the sized amps by 20 % at most —
+#: three phases at the same offer read 3.0.
+ONE_PHASE_DRAW_TOLERANCE = 1.2
+
 #: (#1407) A phase carries the charge from this current up — the same 1 A
 #: evcc counts a phase as active from. An idle phase reads a few hundredths
 #: of an amp (#1407: 0.02–0.04 A beside a 7.26 A phase).
@@ -147,6 +155,140 @@ def resolve_switch_values(entity_id: str, cfg: dict):
     v1 = cfg.get("ev_phase_switch_value_1p") or d1
     v3 = cfg.get("ev_phase_switch_value_3p") or d3
     return v1, v3, bool(v1 and v3)
+
+
+#: (#1412) Cycles in a row a switch value must sit outside a real range
+#: before SEM says so. One odd reading (an entity that answers 0 to 1 until
+#: its first poll) is not a wrong setting.
+PHASE_VALUES_STRIKES = 6
+
+#: (#1412) Phase switches written to one charger per day while it is at rest.
+#: They cost the contactor nothing and do not count toward the per-session
+#: cap, so something else must keep a broken charger — one that takes the
+#: write and does not switch, or a plan that flips — from being written all
+#: day. A normal day is two (the thin-sun start, the night return).
+PHASE_REST_SWITCHES_PER_DAY = 6
+
+#: (#1412) Drawing cycles in a row that must show ONE phase carrying the
+#: charge, on a charger set to three, before the car is called a one-phase
+#: car for the plug-in. One cycle is one stale leg sensor: a three-phase
+#: car then lost its scale-down and its idle start until the unplug.
+ONE_PHASE_CAR_CYCLES = 6
+
+#: (#1412) The phase belief belongs to one plug-in. Unplugged this long, it
+#: is forgotten: the next car, or a change made on the charger itself, must
+#: not start sized for the car before. A blink of the plug sensor is shorter.
+PHASE_BELIEF_UNPLUG_S = 30.0
+
+#: (#1412) …and so is a belief the tick has not looked at for an hour (the
+#: charger was away, or another system drove it).
+PHASE_BELIEF_ABSENCE_S = 3600.0
+
+
+def active_phases(charger_cfg, believed, capable: bool = True) -> Optional[int]:
+    """(#1412) The phase count a charger runs on NOW, or None.
+
+    A charger that changes phases has no fixed count: what SEM set, or
+    measured, is the one this cycle's amps run on. ``believed`` is the
+    tick's belief for this charger. None for a charger that cannot switch
+    (its configured count is the truth) and while nothing is known — the
+    caller then keeps the configured count. 2 is no phase count SEM sets.
+
+    ``capable``: the switch is there and can be written (the tick's
+    ``ready``). Phase switching turned on over a missing entity, or one
+    without its two values, switches nothing — such a charger reads its
+    configured count, exactly as one with switching off.
+    """
+    if not capable or not isinstance(charger_cfg, dict) \
+            or not charger_cfg.get("ev_phase_switching_enabled", False):
+        return None
+    return int(believed) if believed in (1, 3) else None
+
+
+def changed_switch_values_problem(states_get, before, after):
+    """(#1412) Why a 1-phase or 3-phase value that is being SAVED does not
+    fit its number entity, or None. The one check for every place the two
+    values are written: the add and edit forms and ``set_option`` (the
+    dashboard).
+
+    Only a value this save changes is judged. The dashboard saves one field
+    at a time, so a stored misfit must not block the fix of the other value,
+    and an edit of something else must not be held up by an old one. No real
+    range (entity missing, not loaded, no ``min``/``max``): no verdict.
+    """
+    before = before if isinstance(before, dict) else {}
+    after = after if isinstance(after, dict) else {}
+    entity = after.get("ev_phase_switch_entity")
+    if not entity:
+        return None
+    typed = {}
+    for key in ("ev_phase_switch_value_1p", "ev_phase_switch_value_3p"):
+        val = after.get(key)
+        typed[key] = (val if val not in (None, "") and val != before.get(key)
+                      else None)
+    if not any(v is not None for v in typed.values()):
+        return None
+    try:
+        state = states_get(entity)
+    except Exception:  # noqa: BLE001 — no state machine, no verdict
+        return None
+    return switch_values_problem(
+        entity, typed["ev_phase_switch_value_1p"],
+        typed["ev_phase_switch_value_3p"], entity_bounds(state))
+
+
+def switch_values_problem(entity_id: str, value_1p, value_3p, bounds):
+    """(#1412) Why the entity cannot take these values, or None.
+
+    A number takes values inside its own range only. An install had 1000
+    and 4000 saved for a number that runs from 0 to 32: every switch SEM
+    sent was refused, and nothing said so. ``bounds`` is the entity's
+    ``(min, max)``, or None when it cannot be read — then nothing is judged.
+    Only numbers have a range; a select's options are checked where the
+    option is looked up, a switch has two states.
+    """
+    domain = str(entity_id or "").split(".", 1)[0]
+    if domain not in ("number", "input_number") or not bounds:
+        return None
+    try:
+        low, high = float(bounds[0]), float(bounds[1])
+    except (TypeError, ValueError, IndexError):
+        return None
+    if not (_math.isfinite(low) and _math.isfinite(high)) or low > high:
+        return None
+    for label, raw in (("1 phase", value_1p), ("3 phases", value_3p)):
+        if raw is None or raw == "":
+            continue
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            return f"given {raw} for {label}, which is not a number"
+        if not _math.isfinite(val) or not low <= val <= high:
+            return (f"given {raw} for {label}, outside its range "
+                    f"{low:g} to {high:g}")
+    return None
+
+
+def entity_bounds(state):
+    """(#1412) ``(min, max)`` of a number entity's state, or None.
+
+    None unless the entity reports a REAL range: two finite numbers with
+    ``min`` below ``max``. 0 to 0 is what an entity answers before it knows
+    its range, and judging a value against it would call every value wrong.
+    """
+    attrs = getattr(state, "attributes", None)
+    if not isinstance(attrs, dict):
+        return None
+    low, high = attrs.get("min"), attrs.get("max")
+    if low is None or high is None:
+        return None
+    try:
+        low, high = float(low), float(high)
+    except (TypeError, ValueError):
+        return None
+    if not (_math.isfinite(low) and _math.isfinite(high)) or low >= high:
+        return None
+    return low, high
 
 
 def phase_switch_command(entity_id: str, value: str, hass):

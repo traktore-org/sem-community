@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "Data služby SG-Ready musí být objekt JSON.",
       "heat_pump_contact_values_missing": "Tento kontakt SG-Ready je entita text/number/select, takže SEM potřebuje zapsat jak hodnotu ZAP, tak hodnotu VYP. Vyplňte obě, nebo vyberte entitu typu switch.",
       "calendar_needs_schedule": "Režim Kalendář potřebuje rozvrh špičky. Vyberte pomocníka Plán nebo jiný tarifní režim.",
-      "value_needs_spot_basis": "Přirážka, daň z energie nebo DPH platí jen u spotové ceny. Zvolte spotový základ, nebo je nastavte na 0."
+      "value_needs_spot_basis": "Přirážka, daň z energie nebo DPH platí jen u spotové ceny. Zvolte spotový základ, nebo je nastavte na 0.",
+      "phase_switch_value_out_of_range": "Hodnota pro 1 fázi nebo 3 fáze je mimo rozsah entity přepínání fází. Zadejte hodnoty, které entita přijímá."
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "Přirážka, daň z energie nebo DPH platí jen u spotové ceny. Zvolte spotový základ, nebo je nastavte na 0."
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "Hodnota přepínání fází nebyla uložena: {reason}. Zadejte hodnotu, kterou entita přijímá."
     }
   },
   "issues": {

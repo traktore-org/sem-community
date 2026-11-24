@@ -797,7 +797,8 @@
       "heat_pump_service_data_invalid": "SG-Ready 服务数据必须是一个 JSON 对象。",
       "heat_pump_contact_values_missing": "此 SG-Ready 触点是文本/数字/选择器实体，因此 SEM 需要同时写入开启值和关闭值。请两者都填写，或改选一个开关实体。",
       "calendar_needs_schedule": "日历模式需要峰时时间表。请选择一个“时间表”辅助元素，或选择其他电价模式。",
-      "value_needs_spot_basis": "加价、能源税或增值税仅适用于现货价格。请选择现货价格基础，或将其设为 0。"
+      "value_needs_spot_basis": "加价、能源税或增值税仅适用于现货价格。请选择现货价格基础，或将其设为 0。",
+      "phase_switch_value_out_of_range": "1 相或 3 相的值超出了相位切换实体的范围。请输入该实体接受的值。"
     }
   },
   "entity": {
@@ -1902,6 +1903,9 @@
     },
     "value_needs_spot_basis": {
       "message": "加价、能源税或增值税仅适用于现货价格。请选择现货价格基础，或将其设为 0。"
+    },
+    "phase_switch_value_out_of_range": {
+      "message": "相位切换的值未保存：{reason}。请输入该实体接受的值。"
     }
   },
   "issues": {
