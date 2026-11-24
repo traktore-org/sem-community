@@ -241,7 +241,7 @@ async def test_the_retrip_count_survives_a_drop_in_the_plug_session():
     coord, states, hass = _two_chargers()
     now = T0
     with patch("homeassistant.helpers.issue_registry.async_create_issue"):
-        for n in range(ghb.MAX_FAILURES + 1):
+        for _n in range(ghb.MAX_FAILURES + 1):
             await _guard_stop(coord, LINKS, 10300, now)
             states.values[SW[LINKS]] = "on"      # other party restarts it
             await _tick(coord, now + 30, ARMED_ROOMY)
