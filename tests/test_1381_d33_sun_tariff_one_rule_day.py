@@ -85,7 +85,7 @@ def _window(day, a, b):
 def test_help_off_and_help_on_decide_alike_when_the_battery_stays_out():
     off = _decide_day("solar_plus_cheap", battery_soc=50)
     on = _decide_day("min_plus_solar", battery_soc=50)
-    diff = [(a, b) for a, b in zip(off, on) if a[1:] != b[1:]]
+    diff = [(a, b) for a, b in zip(off, on, strict=True) if a[1:] != b[1:]]
     assert diff == []
 
 
@@ -109,7 +109,7 @@ def test_the_day_follows_the_one_rule():
 def test_with_a_full_battery_they_differ_only_where_the_battery_helps():
     off = _decide_day("solar_plus_cheap", battery_soc=95)
     on = _decide_day("min_plus_solar", battery_soc=95)
-    for a, b in zip(off, on):
+    for a, b in zip(off, on, strict=True):
         if a[1:] == b[1:]:
             continue
         # the only allowed difference: help on charges, or charges more,
