@@ -2133,6 +2133,10 @@
     "legionella_above_unit_max": {
       "title": "El depósito no alcanza el objetivo de legionela",
       "description": "{name}: el depósito admite como máximo {max} °C, por debajo del objetivo de legionela de {target} °C. SEM calienta a {max} °C, lo que puede no desinfectar el depósito. Baja el objetivo o revisa el máximo del depósito. Este aviso desaparece solo."
+    },
+    "guard_stopped": {
+      "title": "La protección de fase apagó {charger}",
+      "description": "Una fase superaba su límite, así que SEM apagó {charger}. Otro sistema controla este cargador, así que SEM no lo vuelve a encender. Enciéndelo a mano o deja que su app lo reinicie. Este aviso desaparece cuando el cargador vuelve a cargar o se desenchufa el coche."
     }
   },
   "selector": {

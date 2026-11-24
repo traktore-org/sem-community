@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **SEM says when the phase guard stops another party's charger** (#1381). A Repair names it; the state no longer reads night charging at 0 W.
+
 # [2.3.0-beta.26] — 23.11.2026
 
 - 🐛 **Plan no longer says the battery charges after a failed start** (#1413). The log says the charge has not started.

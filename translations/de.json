@@ -2133,6 +2133,10 @@
     "legionella_above_unit_max": {
       "title": "Speicher erreicht das Legionellen-Ziel nicht",
       "description": "{name}: Der Speicher nimmt höchstens {max} °C an, weniger als das Legionellen-Ziel {target} °C. SEM heizt auf {max} °C; das desinfiziert den Speicher womöglich nicht. Senke das Ziel oder prüfe das Maximum des Speichers. Die Meldung verschwindet von selbst."
+    },
+    "guard_stopped": {
+      "title": "Phasenwächter hat {charger} ausgeschaltet",
+      "description": "Eine Phase war über ihrem Limit, darum hat SEM {charger} ausgeschaltet. Diese Ladestation steuert eine andere Partei, darum schaltet SEM sie nicht wieder ein. Schalte sie von Hand ein oder lass ihre App sie wieder starten. Die Meldung verschwindet, wenn die Ladestation wieder lädt oder das Auto abgesteckt wird."
     }
   },
   "selector": {

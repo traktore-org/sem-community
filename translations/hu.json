@@ -2133,6 +2133,10 @@
     "legionella_above_unit_max": {
       "title": "A tartály nem éri el a legionella-célt",
       "description": "{name}: a tartály legfeljebb {max} °C-ot fogad el, a {target} °C-os legionella-cél alatt. Az SEM {max} °C-ra fűt, ami talán nem fertőtleníti a tartályt. Csökkentsd a célt, vagy ellenőrizd a tartály maximumát. Az üzenet magától eltűnik."
+    },
+    "guard_stopped": {
+      "title": "A fázisvédelem kikapcsolta: {charger}",
+      "description": "Egy fázis túllépte a határt, ezért a SEM kikapcsolta ezt: {charger}. Ezt a töltőt más rendszer vezérli, ezért a SEM nem kapcsolja vissza. Kapcsold be kézzel, vagy hagyd, hogy az alkalmazása újraindítsa. Az üzenet eltűnik, ha a töltő újra tölt, vagy az autót lecsatlakoztatják."
     }
   },
   "selector": {

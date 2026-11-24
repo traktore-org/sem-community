@@ -2133,6 +2133,10 @@
     "legionella_above_unit_max": {
       "title": "Varaaja ei saavuta legionellatavoitetta",
       "description": "{name}: varaaja ottaa enintään {max} °C, alle legionellatavoitteen {target} °C. SEM lämmittää {max} °C:een, mikä ei ehkä desinfioi varaajaa. Laske tavoitetta tai tarkista varaajan maksimi. Ilmoitus poistuu itsestään."
+    },
+    "guard_stopped": {
+      "title": "Vaihesuoja sammutti latausaseman {charger}",
+      "description": "Vaihe ylitti rajansa, joten SEM sammutti latausaseman {charger}. Toinen järjestelmä ohjaa tätä latausasemaa, joten SEM ei käynnistä sitä uudelleen. Käynnistä se käsin tai anna sen sovelluksen käynnistää se. Viesti poistuu, kun latausasema lataa taas tai auto irrotetaan."
     }
   },
   "selector": {
