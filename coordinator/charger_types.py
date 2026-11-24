@@ -702,6 +702,13 @@ class ChargerDecision:
     reason_params: Mapping[str, Any] = field(
         default_factory=dict, compare=False)
 
+    # (#1381, charger owner) WHO made this decision and at which precedence
+    # (``charger_owner.CommandClass``; 0 = the plain mode decision, nobody
+    # stamped it). Provenance only — left out of equality, like the reason
+    # code, so no comparison moves.
+    source: str = field(default="", compare=False)
+    klass: int = field(default=0, compare=False)
+
 
 def solar_commitment_w(
     decision: ChargerDecision,

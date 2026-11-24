@@ -136,7 +136,7 @@ async def actuate(
         # not hold it. The send seam lets only this cycle's stop through; the
         # failsafe stays unarmed, so the other party's session is not ended.
         decision = rewrite(decision, reason_code=RC.CHARGER_PHASE_STOP,
-                           safety_stop=True)
+                           safety_stop=True, source="phase_guard", klass=1)
         log_on_change(
             _LOGGER, f"yield-override:ev:{decision.charger_id}",
             logging.WARNING,

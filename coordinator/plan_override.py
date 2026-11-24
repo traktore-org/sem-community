@@ -225,6 +225,7 @@ def apply_to_charger_decision(
         return rewrite(
             decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
             budget_w=0.0, bridgeable=False, safety_stop=True,
+            source="plan_skip", klass=3,   # (#1381) CommandClass.USER
             reason=f"plan override — stopped until {until} — {decision.reason}",
             reason_code=RC.CHARGER_PLAN_OVERRIDE_STOP,
             reason_params={"time": until},

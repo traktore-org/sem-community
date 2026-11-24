@@ -1565,6 +1565,7 @@ def decide(view: ChargerView) -> ChargerDecision:
                 # (#940) senior to the contactor's minimum ON: the peak
                 # defence is a guarantee, and it opens the relay this cycle.
                 safety_stop=True,
+                source="peak_emergency", klass=1,   # (#1381) CommandClass.SAFETY
                 reason=f"{result.reason} [peak EMERGENCY — EV sheds first]",
                 reason_code=RC.CHARGER_PEAK_STOP, reason_params={},
             )

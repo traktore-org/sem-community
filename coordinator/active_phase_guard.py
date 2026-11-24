@@ -90,7 +90,10 @@ class ActivePhaseGuard:
         data or a recovery hold is not a fuse case."""
         if not self._enforcing:
             return ""
-        if decision.reason_code != RC.CHARGER_PHASE_STOP:
+        # (#1381, owner S2) The decision says who stopped it; a reason code
+        # is a text for people, not a contract between two files.
+        from .charger_owner import is_guard_stop
+        if not is_guard_stop(decision):
             return ""
         worst = worst_over(self._guard_snapshot)
         if worst is None:
@@ -289,6 +292,7 @@ class ActivePhaseGuard:
                 f"(headroom {available_increase_a:.2f}A)"
             ),
             reason_code=RC.CHARGER_PHASE_SLOW, reason_params={},
+            source="phase_guard", klass=1,   # (#1381) CommandClass.SAFETY
         )
 
     def filter(self, decision: ChargerDecision, *, adapter: Any = None,
@@ -310,6 +314,7 @@ class ActivePhaseGuard:
             bridgeable=False,
             reason=f"phase guard: {reason} — immediate EV stop",
             reason_code=RC.CHARGER_PHASE_STOP, reason_params={},
+            source="phase_guard", klass=1,   # (#1381) CommandClass.SAFETY
         )
 
     @staticmethod
