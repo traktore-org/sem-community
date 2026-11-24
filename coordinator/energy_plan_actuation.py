@@ -75,6 +75,11 @@ class PlanGate:
     # needs no rating of its own.
     remaining_h: float = 0.0
     next_block_start: Optional[datetime] = None
+    # (#1415) The highest power among this demand's blocks still ahead
+    # (0.0 when none). The packer books no block above the headroom the
+    # peak limit leaves, so the car cannot count on more. Not the lowest:
+    # the last block often holds only the rest, at lower power.
+    top_block_w: float = 0.0
     # (#638 Stage 2) When the NEXT of this demand's blocks opens — None
     # inside a block or when none remain. The verdict's ``until``, the
     # published reason's "(until HH:MM)" and the card countdown all quote
@@ -178,6 +183,7 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         block_power = 0.0
         remaining = 0.0
         remaining_h = 0.0
+        top_block = 0.0
         next_start = None
         for b in plan.get("blocks") or []:
             if b.get("id") != demand_id:
@@ -212,11 +218,15 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
             if left_h > 0:
                 remaining += power / 1000.0 * left_h
                 remaining_h += left_h
+                # (#1415) a sub-watt rest asks for no power: not a rate
+                if setpoint > 0.0:
+                    top_block = max(top_block, power)
         return PlanGate(covered=True, in_block=in_block,
                         block_power_w=block_power,
                         remaining_kwh=round(remaining, 6),
                         remaining_h=round(remaining_h, 6),
-                        next_block_start=None if in_block else next_start)
+                        next_block_start=None if in_block else next_start,
+                        top_block_w=top_block)
     except (TypeError, ValueError, KeyError, IndexError):
         return PlanGate(reason="unreadable plan")
 
@@ -254,6 +264,7 @@ def ev_overlay(
     nominal_wpa=None,
     departure_floor: bool = False,
     charge_end: Optional[datetime] = None,
+    departure_max_amps: Optional[int] = None,
 ) -> Tuple[bool, int]:
     """The EV's joint-plan overlay → ``(wait, floor_amps)``.
 
@@ -282,8 +293,9 @@ def ev_overlay(
       spreads the need evenly up to the departure (``charge_end``), and
       the joint plan packed the same departure into its cheapest hours.
       So the blocks lead, under the two rules below, and one more for the
-      wait: see :func:`departure_wait_is_safe`. An unreachable floor still
-      releases.
+      wait: see :func:`departure_wait_is_safe` (``departure_max_amps``:
+      the charger max the night plan used, when lower). An unreachable
+      floor still releases.
     - inside a planned block → charge at least the planned power
       (ceil to amps, clamped to the charger's [min, max]);
     - outside a block → wait ONLY while the remaining blocks can still
@@ -313,7 +325,8 @@ def ev_overlay(
         if departure_floor and not departure_wait_is_safe(
                 gate, remaining_kwh, charge_end, wpa_table=wpa_table,
                 nominal_wpa=nominal_wpa or watts_per_amp,
-                max_amps=max_amps):
+                max_amps=min(int(max_amps),
+                             int(departure_max_amps or max_amps))):
             return (False, 0)
         return (True, 0)
     return (False, 0)
@@ -345,6 +358,13 @@ def departure_wait_is_safe(gate: PlanGate, need_kwh: float,
     need from the next block's start, at the most this car has been SEEN
     to draw at or under ``max_amps`` (the measured table), less a margin
     for the start. No measured table: no proof, no wait.
+
+    The peak limit caps that rate too (review): the packer put each block
+    within the headroom the limit leaves, and the slot guard holds the
+    car there. So the rate is never above what the highest block still
+    ahead (``top_block_w``) buys at its setpoint. A 5 kW limit with 700 W
+    of house load gives 4.3 kW blocks; the 10.6 kW the car was seen at is
+    not there to use.
     """
     if gate.next_block_start is None or charge_end is None:
         return False
@@ -357,8 +377,15 @@ def departure_wait_is_safe(gate: PlanGate, need_kwh: float,
     seen = [int(a) for a in (wpa_table or {}) if 0 < int(a) <= int(max_amps)]
     if not seen:
         return False
-    from .watts_per_amp import predict_watts
-    top_w = predict_watts(wpa_table, max(seen), max(1.0, float(nominal_wpa)))
+    from .watts_per_amp import amps_that_fit, predict_watts
+    nominal = max(1.0, float(nominal_wpa))
+    amps = max(seen)
+    if gate.top_block_w > 0.0:
+        # The setpoint the block runs at: the in-block floor's own walk.
+        # 4.3 kW of room is 6 A on the reporter's car, and 6 A buys 4.14 kW.
+        amps = min(amps, amps_that_fit(wpa_table, gate.top_block_w,
+                                       nominal, int(max_amps)))
+    top_w = predict_watts(wpa_table, amps, nominal)
     return (max(0.0, float(need_kwh))
             <= top_w / 1000.0 * hours * DEPARTURE_WAIT_MARGIN)
 
@@ -370,9 +397,9 @@ def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
 
     The ONE copy both coordinator sites call (primary and per charger,
     the #683/#684 parity class). It reads ``reachable``,
-    ``deadline_active``, ``to_departure`` and ``charge_end_dt`` off the
-    same plan it writes, so no site can pass one flag and forget another
-    (#1415). Returns ``(wait, floor_amps)``.
+    ``deadline_active``, ``to_departure``, ``charge_end_dt`` and
+    ``max_amps`` off the same plan it writes, so no site can pass one flag
+    and forget another (#1415). Returns ``(wait, floor_amps)``.
     """
     wait, floor = ev_overlay(
         gate,
@@ -381,6 +408,8 @@ def apply_ev_overlay(plan, gate: PlanGate, *, remaining_kwh: float,
         deadline_active=plan.deadline_active,
         departure_floor=bool(getattr(plan, "to_departure", False)),
         charge_end=getattr(plan, "charge_end_dt", None),
+        # the plan's max is the charger's own when it is below the config's
+        departure_max_amps=int(getattr(plan, "max_amps", 0) or 0) or None,
         watts_per_amp=watts_per_amp,
         min_amps=min_amps,
         max_amps=max_amps,

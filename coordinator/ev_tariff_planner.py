@@ -70,6 +70,9 @@ class NightChargePlan:
     # (#1415) It is the fallback: when the joint plan covers the car, its
     # cheapest blocks before the departure lead (``ev_overlay``).
     to_departure: bool = False
+    # (#1415) The charger max this plan used: the config's, or the device's
+    # own when lower. The departure wait counts only setpoints up to it.
+    max_amps: int = 0
     hours_to_deadline: Optional[float] = None
     remaining_kwh: float = 0.0
     reason: str = ""
@@ -324,7 +327,7 @@ def plan_night_charge(
     Returns:
         A populated :class:`NightChargePlan`.
     """
-    plan = NightChargePlan()
+    plan = NightChargePlan(max_amps=int(max_amps))
     plan.remaining_kwh = max(0.0, remaining_to_min_kwh)
     watts_per_amp = max(1.0, watts_per_amp)
 

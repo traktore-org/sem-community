@@ -6976,7 +6976,11 @@ The wait has one more rule, `departure_wait_is_safe` (review BLOCKER): before a 
 charges after a failed plan, and above the measured range the plan's power is the nameplate (the
 reporter's 54 A read 37 kW). So the car waits only while the even floor could still land from the
 next block's start at 80 % of the most it was seen to draw (`DEPARTURE_WAIT_MARGIN`); no measured
-table, no wait. `apply_ev_overlay` (**new**): both coordinator sites call it, and it reads
+table, no wait. Review round 2 (HIGH): that rate ignored the peak limit, and a peak-limited day
+waited and landed short where develop landed. Now the rate is what the highest block still ahead
+buys at its own setpoint (`PlanGate.top_block_w`, the packer books no block above the headroom),
+and only setpoints up to the charger max the night plan used count (`NightChargePlan.max_amps`).
+Not the lowest block: the last block often holds only the rest. `apply_ev_overlay` (**new**): both coordinator sites call it, and it reads
 `reachable`, `deadline_active`, `to_departure` and `charge_end_dt` off the plan it writes, so no
 site can forget a flag. `plan_night_charge` (**fixed**): after the night end the floor's amps come
 from the measured table (12 A bought 7.5 kW, not 8.3; the current rose in the last half hour); the
@@ -6990,11 +6994,17 @@ runs to 15:00 for needs of 4–28 kWh and for cars at 80–100 % of their measur
 from full than develop; no table, blocks that cannot hold the need, an unreachable departure and an
 uncovered plan give the even floor; a night forcing deadline still outranks the plan; AST: only
 the helper calls `ev_overlay`, and each site hands it the plan its own function computed. With the
-bypass removed 14 tests fail, the wait rule 6, `decide.py` 3, the measured floor 1.
+bypass removed 14 tests fail, the wait rule 6, `decide.py` 3, the measured floor 1. Peak limit: the
+packer at 4.5–40 kW limits, needs 3–20 kWh, cars at 80–100 % of their table, minute by minute
+(228 runs, none further from full than develop; the block cap removed, 4 tests fail).
 **Left open:** a forcing *Charge by* at night (before the night end) still outranks a covered
 plan, as #638 G4 chose (pinned in `test_638_actuation.py` and `test_1282_exact_plan_watts.py`).
 Whether the plan should lead there too is a choice, not filed. The night floor still counts
-nameplate W/A; the hours after the night end make up for it.
+nameplate W/A; the hours after the night end make up for it. The margin covers 20 % of the time
+after the block's start: a house load the forecast missed that pauses the car longer than that can
+end short where the floor that never waited landed. The measured table is the charger's, not the
+car's: a much slower car on a table from another car is counted at the old car's draw. While the car waits, a cloud stops its sun charge (more stops on
+a Zaptec). All three are choices, not filed.
 Refs #1415 #1308 #638 #904 #846.
 
 ### 182. One word, several meanings, each decided where it is used — "cheap" — GUARDED
