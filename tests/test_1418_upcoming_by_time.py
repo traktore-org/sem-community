@@ -172,3 +172,30 @@ async def test_the_price_sensor_carries_tomorrow_of_a_quarter_hour_market(
     assert len(up) > 48
     assert up[-1]["price"] == pytest.approx(0.40 + 0.001 * 95)
 
+
+
+@pytest.mark.unit
+def test_the_replan_log_line_shows_the_price_term_short():
+    """The re-plan line printed both signatures in full: ~190 pairs each on
+    a 15-minute market. It now shows the count, the span and a checksum."""
+    from types import SimpleNamespace as NS
+
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        signature_for_log,
+    )
+    t0 = datetime(2026, 11, 23, 21, 45, tzinfo=timezone.utc)
+    pts = [NS(price=0.3, timestamp=t0 + i * timedelta(minutes=15)) for i in range(105)]
+    sig = _sig(pts)
+    short = signature_for_log(sig)
+    price = dict(t for t in short if t[0] == "price")["price"]
+    assert price.startswith("105 points 2026-11-23T21:45:00+00:00..2026-11-24T23:45:00+00:00 #")
+    assert len(repr(short)) < len(repr(sig)) / 5
+    # every other term is kept as it is
+    assert [t for t in short if t[0] != "price"] == [t for t in sig if t[0] != "price"]
+    # a moved price changes the checksum
+    pts[50] = NS(price=0.9, timestamp=pts[50].timestamp)
+    moved = dict(t for t in signature_for_log(_sig(pts)) if t[0] == "price")["price"]
+    assert moved != price and moved.split(" #")[0] == price.split(" #")[0]
+    # no signature yet, or one of another shape, is logged as it is
+    assert signature_for_log(None) is None
+    assert signature_for_log((("price",),)) == (("price", "0 points #" + format(__import__("zlib").crc32(b"()"), "08x")),)
