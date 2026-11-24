@@ -70,9 +70,22 @@ test('weekday follows the language', () => {
 test('CSV: the service columns, comma-safe, empty for missing', () => {
     const text = sessionsCsv([ROWS[2], R('2026-09-01T10:00:00+02:00', '', 1, 10, 0.1, 5, { charger_id: 'Garage, left' })]);
     const lines = text.trim().split('\n');
-    assert.equal(lines[0], 'start,end,charger,energy_kwh,solar_share_pct,cost,currency,duration_min,energy_source,co2_kg');
-    assert.equal(lines[1], '2026-09-12T18:00:00+02:00,,,1,50,,,20,,');
+    assert.equal(lines[0], 'start,end,charger,energy_kwh,solar_share_pct,cost,currency,duration_min,energy_source,co2_kg,charger_id');
+    assert.equal(lines[1], '2026-09-12T18:00:00+02:00,,,1,50,,,20,,,');
     assert.match(lines[2], /,"Garage, left",/);
+});
+
+test('(#1410) CSV: the charger column is its name now, the id last', () => {
+    const rows = [
+        R('2026-09-02T10:00:00+02:00', '', 1, 10, 0.1, 5, { charger_id: 'goe1' }),
+        R('2026-09-01T10:00:00+02:00', '', 1, 10, 0.1, 5, { charger_id: 'gone' }),
+    ];
+    const lines = sessionsCsv(rows, { goe1: 'Go-e Charger BMW' }).trim().split('\n');
+    const cells = (line) => line.split(',');
+    assert.equal(cells(lines[1])[2], 'Go-e Charger BMW');
+    assert.equal(cells(lines[1]).at(-1), 'goe1');
+    assert.equal(cells(lines[2])[2], 'gone');       // no longer set up: its id
+    assert.equal(cells(lines[2]).at(-1), 'gone');
 });
 
 test('(#1088) CO2 per session: shown with one decimal, summed only where known', () => {

@@ -97,12 +97,16 @@ export function sessionRowView(row, lang = 'en') {
     };
 }
 
-/** Rows as CSV — the same columns the export service writes. */
+/** Rows as CSV — the same columns the export service writes. (#1410)
+ *  `charger` is the charger's name (from `names`, id -> name), its id when
+ *  it has none; the stored id is also in `charger_id`, last. */
+const NAME = 'charger_name';
 export const CSV_COLUMNS = [
-    ['start', 'timestamp'], ['end', 'end'], ['charger', 'charger_id'],
+    ['start', 'timestamp'], ['end', 'end'], ['charger', NAME],
     ['energy_kwh', 'energy_kwh'], ['solar_share_pct', 'solar_share_pct'],
     ['cost', 'cost'], ['currency', 'currency'], ['duration_min', 'duration_min'],
     ['energy_source', 'energy_source'], ['co2_kg', 'co2_kg'],
+    ['charger_id', 'charger_id'],
 ];
 
 function csvCell(v) {
@@ -111,10 +115,17 @@ function csvCell(v) {
     return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
-export function sessionsCsv(rows) {
+function csvValue(row, key, names) {
+    if (key !== NAME) return row[key];
+    const cid = row.charger_id;
+    if (cid === null || cid === undefined) return null;
+    return (names && names[cid]) || cid;
+}
+
+export function sessionsCsv(rows, names = {}) {
     const lines = [CSV_COLUMNS.map(c => c[0]).join(',')];
     for (const r of rows || []) {
-        lines.push(CSV_COLUMNS.map(([, key]) => csvCell(r[key])).join(','));
+        lines.push(CSV_COLUMNS.map(([, key]) => csvCell(csvValue(r, key, names))).join(','));
     }
     return lines.join('\n') + '\n';
 }

@@ -6970,12 +6970,16 @@ async def _async_register_phase_services(
         builds its own download from the same rows over the websocket
         command; this is the path with no browser in it.
         """
-        from .session_history import history_for, select_sessions, sessions_csv
+        from .session_history import (
+            charger_names, history_for, select_sessions, sessions_csv,
+        )
         data = call.data or {}
         history = history_for(hass, data.get("entry_id")) or []
         rows = select_sessions(history, charger_id=data.get("charger_id"),
                                since=data.get("since"))
-        return {"rows": rows, "csv": sessions_csv(rows)}
+        # (#1410) the charger column is the name the user gave it
+        names = charger_names(hass, data.get("entry_id"))
+        return {"rows": rows, "csv": sessions_csv(rows, names)}
 
     hass.services.async_register(
         DOMAIN,
