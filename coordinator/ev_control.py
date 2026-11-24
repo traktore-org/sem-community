@@ -1668,7 +1668,23 @@ class EVControlMixin:
             if cmd is not None:
                 domain, service, data = cmd
                 planner.note_switched(now, at_rest=r.at_rest)
-                if self._observer_mode:
+                _seam = getattr(device, "send", None)
+                if callable(_seam):
+                    # (#1381, charger owner S6) the one hardware seam: it
+                    # withholds under observer mode (and lists it), holds
+                    # back a yielded charger's write, and books it in the
+                    # command ledger
+                    _LOGGER.info(
+                        "#804 %s: switching to %sp via %s.%s %s",
+                        cid, r.issue_switch, domain, service, data)
+                    try:
+                        await _seam(domain, service, data,
+                                    why=f"#804 phase switch to {r.issue_switch}p")
+                    except Exception:  # noqa: BLE001 — surfaced, never fatal
+                        _LOGGER.warning(
+                            "#804 %s: phase switch call failed",
+                            cid, exc_info=True)
+                elif self._observer_mode:
                     _LOGGER.info(
                         "OBSERVER · WOULD switch %s to %sp via %s.%s %s "
                         "(#804)", cid, r.issue_switch, domain, service, data)

@@ -1,1 +1,1 @@
-# RATCHET-LOOSENED: #1381 to=133 — the inventory now scans the whole package and counts references (fn = dev.send, getattr by name), not only direct calls in five files (owner review S0); includes the owner's undo of its own phase-guard stop
+# RATCHET-LOOSENED: #1381 to=134 — the inventory scans the whole package and counts references (owner review S0); S6 adds the phase switch through the device seam (the direct call stays only for a caller with no device)
