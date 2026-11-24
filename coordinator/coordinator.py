@@ -12629,6 +12629,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return {}
         return out
 
+    def now_minutes_for(self, cid: str, now=None) -> int:
+        """(#1381 S11) How long "Now" runs when the user picks it: until the
+        plan's next block for this charger starts, else until the plan ends,
+        else two hours. 1–1440 minutes (the override's own bounds).
+
+        Owner's rule: Now ends at the next plan block (or a time the user
+        chooses). A block already running is not "next": Now then runs to
+        its end, so the plan picks up where it left off."""
+        now = now or dt_util.utcnow()
+        plan = getattr(self, "_energy_plan_shadow", None)
+        starts, ends = [], []
+        if isinstance(plan, dict):
+            for b in plan.get("blocks") or ():
+                if not isinstance(b, dict):
+                    continue
+                try:
+                    bs = dt_util.parse_datetime(str(b.get("start")))
+                    be = dt_util.parse_datetime(str(b.get("end")))
+                except (TypeError, ValueError):
+                    continue
+                if bs is None or be is None:
+                    continue
+                if be > now:
+                    ends.append(be)
+                if b.get("id") == f"ev:{cid}" and bs > now:
+                    starts.append(bs)
+        target = min(starts) if starts else (max(ends) if ends else None)
+        if target is None:
+            return 120
+        minutes = int((target - now).total_seconds() // 60)
+        return max(1, min(24 * 60, minutes))
+
     def clear_plan_override(self, device_id: str) -> None:
         """End ``device_id``'s override now, if one is set."""
         from . import plan_override as _po

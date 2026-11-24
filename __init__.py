@@ -35,6 +35,7 @@ import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
 from .coordinator.charge_pause import forget_on_mode_write
+from .consts.ev_charge_modes import BATTERY_HELP_KEY, apply_user_mode_write   # (#1381 S9)
 from .coordinator.install_modules import MODULE_EVIDENCE_KEYS
 from .const import (
     BATTERY_FLIP_SENSORS_KEY,
@@ -731,14 +732,23 @@ def _merge_ev_chargers_by_id(existing: list, incoming: list) -> list:
             continue
         base = dict(c)
         if cid in incoming_by_id:
-            inc = incoming_by_id[cid]
+            inc = dict(incoming_by_id[cid])
+            # (#1381 S9) the mode pair is written through the one helper,
+            # which reads the charger's state BEFORE the write
+            mode_keys = [k for k in ("charge_mode", BATTERY_HELP_KEY) if k in inc]
+            pending = {k: inc.pop(k) for k in mode_keys}
             base.update(inc)
-            if "charge_mode" in inc:
-                forget_on_mode_write(base, "charge_mode", inc["charge_mode"])
+            for k in mode_keys:
+                apply_user_mode_write(base, k, pending[k])
+            if "charge_mode" in pending:
+                forget_on_mode_write(base, "charge_mode", base.get("charge_mode"))
         merged.append(base)
         merged_ids.add(cid)
     for cid in new_ids:
         fresh = dict(incoming_by_id[cid])
+        for k in ("charge_mode", BATTERY_HELP_KEY):     # (#1381 S9)
+            if k in fresh:
+                apply_user_mode_write(fresh, k, fresh[k])
         forget_on_mode_write(fresh, "charge_mode", fresh.get("charge_mode"))
         merged.append(fresh)
     return merged
@@ -778,10 +788,12 @@ def persist_per_charger_option(
     ev_chargers = [dict(c) for c in source_chargers if isinstance(c, dict)]
     for charger in ev_chargers:
         if charger.get("id") == charger_id:
-            charger[key] = value
+            # (#1381 S9) a user mode / the battery-help switch become the
+            # stored strategy pair here, the one write path entities share
+            apply_user_mode_write(charger, key, value)
             if by_owner:
                 charger[f"{key}_by_owner"] = True
-            forget_on_mode_write(charger, key, value)    # (#980)
+            forget_on_mode_write(charger, key, charger.get(key))    # (#980)
             break
     else:
         recovered = next(
@@ -789,10 +801,10 @@ def persist_per_charger_option(
              if isinstance(c, dict) and c.get("id") == charger_id),
             {"id": charger_id},
         )
-        recovered[key] = value
+        apply_user_mode_write(recovered, key, value)     # (#1381 S9)
         if by_owner:
             recovered[f"{key}_by_owner"] = True
-        forget_on_mode_write(recovered, key, value)      # (#980)
+        forget_on_mode_write(recovered, key, recovered.get(key))      # (#980)
         ev_chargers.append(recovered)
         _LOGGER.warning(
             "Charger '%s' was missing from the stored ev_chargers list "

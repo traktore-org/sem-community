@@ -347,7 +347,7 @@ class TestTheRunningPauseIsVisible:
                PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
         attrs = _select(cfg).extra_state_attributes
         assert attrs["paused_until"] == parse_deadline(cfg[PAUSE_UNTIL_KEY]).isoformat()
-        assert attrs["pause_resume_mode"] == "solar_plus_battery"
+        assert attrs["pause_resume_mode"] == "sun"   # (#1381 S9) shown as the user mode
 
     def test_picking_a_mode_hides_the_timer_at_once(self):
         """The record may not be swept for one more cycle; the GUI must not
@@ -387,7 +387,7 @@ class TestTheSelectFollowsTheConfig:
     def test_a_pause_shows_as_off(self):
         cfg = {"id": "ev_charger", "charge_mode": "min_plus_solar"}
         sel = _select(cfg)
-        assert sel.current_option == "min_plus_solar"
+        assert sel.current_option == "sun_tariff"   # (#1381 S9) the user mode
         cfg.update(press(cfg, "1_hour", NOW))          # what the button writes
         self._cycle(sel)
         assert sel.current_option == "off"
@@ -399,14 +399,14 @@ class TestTheSelectFollowsTheConfig:
         sel = _select(cfg)
         cfg.update(tick(cfg, NOW + timedelta(minutes=61)))   # it ran out
         self._cycle(sel)
-        assert sel.current_option == "solar_plus_battery"
+        assert sel.current_option == "sun"
 
     def test_garbage_in_the_config_is_not_adopted(self):
         cfg = {"id": "ev_charger", "charge_mode": "min_plus_solar"}
         sel = _select(cfg)
         cfg["charge_mode"] = "not_a_mode"
         self._cycle(sel)
-        assert sel.current_option == "min_plus_solar"
+        assert sel.current_option == "sun_tariff"
 
 
 class TestAModeWriteEndsThePause:
