@@ -970,13 +970,23 @@ class EVControlMixin:
         The *Finish by departure* wait counts the hours from the next
         block to the departure at the car's measured draw. With a cap, a
         busy hour gives less, so the wait is not proven: the floor
-        charges at once, as before. Unknown counts as capped."""
+        charges at once, as before. Unknown counts as capped.
+
+        (review 5) Two more: a grid operator's relay that is set up, even
+        while it is off (it can switch on during the blocks), and a
+        second charger (two cars may share a site limit SEM cannot see,
+        and the plan puts both in the same cheapest hours)."""
+        from ..consts.core import CONF_SHED_SIGNAL_ENTITY
         try:
             if math.isfinite(float(self._get_peak_limit_w())):
                 return True
         except Exception:  # noqa: BLE001 — an unreadable limit still caps
             return True
         cfg = getattr(self, "config", None) or {}
+        if cfg.get(CONF_SHED_SIGNAL_ENTITY):
+            return True
+        if len(cfg.get("ev_chargers") or []) > 1:
+            return True
         return bool(cfg.get("phase_guard_enabled", False)
                     and cfg.get("phase_guard_enforcement_enabled", False))
 

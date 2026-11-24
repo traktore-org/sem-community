@@ -6993,7 +6993,10 @@ peak limit changes by the hour; the best block ahead proved 18 kWh while a busy 
 9 A (4.2 kW), and the car landed 0.9 kWh short where develop landed. No rate from the blocks is
 proof of the hours between them. Now the car waits only while nothing but the car caps its rate:
 no peak limit (the user's or the grid operator's) and no phase guard that enforces
-(`_ev_rate_capped`, unknown = capped). The block rules stay as a second line. `apply_ev_overlay` (**new**): both
+(`_ev_rate_capped`, unknown = capped). Round 5 (MEDIUM): also a grid operator relay that is set
+up, even while off (it can switch on in the blocks), and a second charger (two cars may share a
+site limit SEM cannot see, and the plan puts both in the same hours). The block rules stay as a
+second line. `apply_ev_overlay` (**new**): both
 coordinator sites call it, and it reads `reachable`, `deadline_active`, `to_departure`,
 `charge_end_dt`, `max_amps` and the floor's model off the plan it writes, so no site can forget a
 flag. `plan_night_charge` (**fixed**): after the night end the floor's amps come
@@ -7016,8 +7019,9 @@ real car at 0.6 of nameplate below the measured range, with and without a measur
 with the site's table instead of the plan's fails 1; the table without the phase check fails 1
 (the real `_compute_night_plan`, a one-phase belief, a three-phase grid charge: 12 A, not 32).
 Round 4: under a peak limit no need waits, at decide level; the busy-noon day lands as well as
-develop with a real car; what caps the car (unlimited, operator relay, phase guard watching or
-enforcing, unreadable limit); both coordinator sites pass the coordinator's word (AST). 12 mutations
+develop with a real car; what caps the car (unlimited, operator relay on or only set up, phase
+guard watching or enforcing, one or two chargers, unreadable limit); both coordinator sites pass
+the coordinator's word (AST). 12 mutations
 of the round-3/4 rules, each caught.
 **Left open:** under a peak limit or an enforcing phase guard the plan does not lead the departure
 floor; it would need each hour's room in the stamped plan (a choice, not filed). A forcing

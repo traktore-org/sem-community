@@ -623,6 +623,11 @@ class _CapHost(EVControlMixin):
     (17_000.0, {}, True),
     # the grid operator's relay under an unlimited user setting
     (4_000.0, {"peak_limit_unlimited": True}, True),
+    # (review 5) the relay is set up but off: it can switch on later
+    (math.inf, {"shed_signal_entity": "binary_sensor.relay"}, True),
+    # (review 5) two chargers may share a site limit SEM cannot see
+    (math.inf, {"ev_chargers": [{"id": "a"}, {"id": "b"}]}, True),
+    (math.inf, {"ev_chargers": [{"id": "a"}]}, False),
     (RuntimeError("no load manager"), {}, True),
 ])
 def test_what_caps_the_car(peak_w, config, capped):
