@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Phase switch values must fit the entity** (#1412). Values outside the number's range sent nothing, silently. The form now refuses them; a Repair names them.
 - 🐛 **A charger stopped by the phase guard comes back** (#1381). SEM switches it on again when the phase has room, one charger at a time.
 - 🐛 **No "night charging" at 0 W after a guard stop** (#1381). The charger reads "Stopped by the phase guard" until it is back on.
+- 🐛 **Tomorrow's prices show on 15-minute tariffs** (#1418). The price chart stopped 12 hours ahead. Hourly prices no longer show gaps.
 
 # [2.3.0-beta.26] — 23.11.2026
 

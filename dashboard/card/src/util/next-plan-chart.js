@@ -115,7 +115,8 @@ export function sunModel({ win, nowMs, actual = [], forecast = {}, liveW = null 
 }
 
 /**
- * The price lane. upcoming: [{ t, price }] 15-min slots; rates: a schedule
+ * The price lane. upcoming: the tariff's [{ t, price }], one point per market
+ * step (`curveSpans`); rates: a schedule
  * or two-rate tariff's own [{ start, end, price }] for today and tomorrow
  * (#1390), null on a dynamic tariff; slots: the plan's [{ start, end, price }]
  * (a sun slot sends its grid price); schedule: [{ start 'HH:MM', end,
@@ -129,10 +130,7 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = 
         const s = num(h?.t), p = num(h?.p);
         if (Number.isFinite(s) && Number.isFinite(p) && s < nowMs) sources.push([s, s + HOUR, p, 0.5]);
     }
-    for (const u of upcoming || []) {
-        const s = Date.parse(u?.t), p = num(u?.price);
-        if (Number.isFinite(s) && Number.isFinite(p)) sources.push([s, s + CELL, p, 0]);
-    }
+    for (const [s, e, p] of curveSpans(upcoming)) sources.push([s, e, p, 0]);
     // (#1390) The plan's slots end in the morning and the schedule at
     // midnight: tomorrow's peak hours came from no source, and the night
     // hours alone read as one price. The tariff's own rates come before the
@@ -191,6 +189,25 @@ export function priceModel({ win, tz, nowMs, upcoming = [], slots = [], rates = 
     }
     const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : null;
     return { flat: false, price: null, steps, gaps, min, max, avg };
+}
+
+/**
+ * (#1418) The tariff curve as [start, end, price]. A price lasts until the
+ * next point, at most one market step: the usual gap between two points
+ * (the median), never over an hour. An hourly tariff sends one point an
+ * hour; read as 15 minutes, three quarters of each hour were drawn as
+ * unknown. A missing point stays a gap. One point alone lasts an hour, the
+ * step the tariff reader takes when it cannot tell.
+ */
+export function curveSpans(upcoming) {
+    const pts = (Array.isArray(upcoming) ? upcoming : []).map((u) => [Date.parse(u?.t), num(u?.price)])
+        .filter(([s, p]) => Number.isFinite(s) && Number.isFinite(p)).sort((a, b) => a[0] - b[0]);
+    const gaps = pts.slice(1).map((x, i) => x[0] - pts[i][0]).filter((g) => g > 0).sort((a, b) => a - b);
+    const step = gaps.length ? Math.min(gaps[Math.floor(gaps.length / 2)], HOUR) : HOUR;
+    return pts.map(([s, p], i) => {
+        const next = i + 1 < pts.length ? pts[i + 1][0] : Infinity;
+        return [s, s + Math.min(step, next > s ? next - s : step), p];
+    });
 }
 
 /**
