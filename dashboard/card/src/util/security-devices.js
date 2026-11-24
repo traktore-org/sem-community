@@ -7,8 +7,8 @@
  * pick it here: they know whether it is an appliance.
  */
 export const SECURITY_DOMAINS = ['camera', 'alarm_control_panel', 'siren'];
-const SETTING_LOCK_WORDS = ['child_lock', 'childlock', 'child lock', 'key_lock', 'keylock', 'key lock',
-    'button_lock', 'panel_lock', 'control_lock', 'kindersicherung', 'tastensperre'];
+// child-lock markers only, from the integration's translation_key (#1419)
+const SETTING_LOCK_WORDS = ['child_lock', 'childlock'];
 
 const domainOf = (id) => String(id || '').split('.')[0];
 

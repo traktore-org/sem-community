@@ -129,9 +129,13 @@ DEVICES = [
     _e("switch.washer_power", "washer"), _e("sensor.washer_power", "washer", dc="power"),
     _e("lock.washer_child_lock", "washer", cat="config"),
     _e("climate.heat_pump", "hp"), _e("sensor.heat_pump_power", "hp", dc="power"),
-    _e("lock.heat_pump_key_lock", "hp", key="key_lock"),
+    _e("lock.heat_pump_key_lock", "hp", key="key_lock"),   # "key lock" is no marker
+    _e("lock.front_door_x", "front3", key="front_door_key_lock"),
+    _e("switch.front3_relay", "front3"),
     _e("climate.trv_kitchen", "trv"), _e("sensor.trv_kitchen_power", "trv", dc="power"),
-    _e2("lock.trv_kitchen_x", "trv", name="Child lock"),   # integration's own name
+    _e("lock.trv_kitchen_x", "trv", key="child_lock"),    # integration's own key
+    _e2("lock.boiler_x", "boiler", name="Child lock"),    # a name is no marker
+    _e("switch.boiler", "boiler"),
     _e("switch.dishwasher", "plug"), _e("sensor.dishwasher_power", "plug", dc="power"),
     _e("switch.template_helper", None),
 ]
@@ -149,8 +153,10 @@ DEVICES = [
     ("switch.smart_auto_lock", True),        # a lock with a power sensor
     ("switch.washer2", True),                # unmarked lock: safe side
     ("switch.washer_power", False),          # config child lock: a load
-    ("sensor.heat_pump_power", False),       # integration's key_lock: a load
-    ("climate.trv_kitchen", False),          # integration's "Child lock" name
+    ("sensor.heat_pump_power", True),        # "key lock" marks nothing: safe side
+    ("switch.front3_relay", True),           # a door lock keyed *_key_lock
+    ("climate.trv_kitchen", False),          # integration's child_lock key
+    ("switch.boiler", True),                 # only a name says "Child lock"
     ("switch.dishwasher", False),
     ("switch.template_helper", False),
     ("switch.unknown_to_registry", False),

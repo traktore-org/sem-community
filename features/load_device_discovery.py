@@ -114,13 +114,10 @@ def resolve_load_is_on(
 #: lock and is still a load.
 SECURITY_DOMAINS: Final = frozenset({"camera", "alarm_control_panel", "siren"})
 LOCK_DOMAIN: Final = "lock"
-#: Words that mark a lock as an appliance setting — read ONLY from what the
-#: integration declares (``translation_key``, ``original_name``), never from
-#: the entity_id or the user's name: ``lock.child_room_door`` is a door.
-_SETTING_LOCK_WORDS: Final = ("child_lock", "childlock", "child lock",
-                              "key_lock", "keylock", "key lock",
-                              "button_lock", "panel_lock", "control_lock",
-                              "kindersicherung", "tastensperre")
+#: Markers of a CHILD lock — an appliance setting, not a lock — read ONLY
+#: from the integration's own ``translation_key``, never from an entity_id or
+#: a name. "Key lock" is no marker: ``front_door_key_lock`` is a door.
+_SETTING_LOCK_WORDS: Final = ("child_lock", "childlock")
 
 
 def _category(entry) -> str:
@@ -132,8 +129,7 @@ def _is_setting_lock(entry) -> bool:
     """A lock entity that HA's own metadata marks as an appliance setting."""
     if _category(entry) in ("config", "diagnostic"):
         return True
-    declared = " ".join(str(getattr(entry, k, "") or "").lower()
-                        for k in ("translation_key", "original_name"))
+    declared = str(getattr(entry, "translation_key", "") or "").lower()
     return any(w in declared for w in _SETTING_LOCK_WORDS)
 
 
@@ -141,7 +137,7 @@ def security_role(entries) -> str:
     """(#1419) ``"security"``, ``"lock"`` or ``""`` for a device's entries.
 
     ``security``: a camera, alarm panel or siren — never a load, whoever asks.
-    ``lock``: a lock that HA's metadata does not mark as a setting. Treated
+    ``lock``: a lock that HA's metadata does not mark as a child lock. Treated
     as a door lock (the safe side): never listed or auto-paired; a user who
     knows it is an appliance can still add it with Add a device, and a
     Repair names it so nothing is lost silently.
