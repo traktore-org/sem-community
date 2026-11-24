@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "Värdet för fasväxling sparades inte: {reason}. Ange ett värde som entiteten accepterar."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} hör till en säkerhetsenhet (kamera, larm, lås eller siren). SEM styr aldrig säkerhetsenheter."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_stopped": {
       "title": "Fasvakten stängde av {charger}",
       "description": "En fas var över sin gräns, så SEM stängde av {charger}. Ett annat system styr den här laddaren, så SEM slår inte på den igen. Slå på den för hand eller låt dess app starta den igen. Meddelandet försvinner när laddaren laddar igen eller bilen kopplas ur."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM använder inte längre gamla automatiskt hittade enheter",
+      "description": "Äldre versioner hittade dessa brytare via namnet och använde dem som laster: **{names}**. Du kunde inte se eller ställa in dem, och toppgränsen kunde stänga av dem. SEM använder dem inte längre. Ska SEM styra någon av dem, lägg till den med **Lägg till en enhet** under Enheter."
+    },
+    "security_devices_not_used": {
+      "title": "SEM låter säkerhetsenheter vara",
+      "description": "Dessa enheter är säkerhetsenheter (kamera, larm, siren eller dörrlås): **{names}**. SEM visar och styr dem inte längre. Deras energi räknas fortfarande i husets förbrukning. Är någon av dem en apparat med lås och inte ett dörrlås, lägg till den med **Lägg till en enhet**."
     }
   },
   "selector": {

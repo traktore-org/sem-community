@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **SEM controls a load only after you turn it on** (#1419). Old devices found by name are no longer used; a Repair names them.
+- 🐛 **Cameras, alarms, sirens and door locks are never loads** (#1419). An appliance with a child lock still is. A Repair names any device SEM drops.
+- 🐛 **A load nobody turned on says so** (#1419). Its card reads "Not controlled — turn on".
+- 🐛 **No shedding of loads too small to help** (#1381). Under a quarter of the excess, SEM sheds nothing and brings shed loads back.
+- 🐛 **A shed load you turn back on no longer blocks the others** (#1419). It is no longer shown as shed.
 - 🐛 **SEM says when the phase guard stops another party's charger** (#1381). A Repair names it; the state no longer reads night charging at 0 W.
 - 🐛 **Auto phase mode starts on 1 phase in thin sun** (#1412). An idle car never got 1 phase, so it never started in thin sun.
 - 🐛 **Minimum power follows the active phases** (#1412). After a switch to 1 phase, SEM still asked for 4140 W to start. Now 1380 W.

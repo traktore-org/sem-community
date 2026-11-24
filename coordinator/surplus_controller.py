@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..features.device_axes import device_mode_permits
 from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
 from ..devices.tank_goal import RECOMPUTE
 from . import reason_codes as RC  # (#1174)
@@ -1074,7 +1075,7 @@ def compute_load_intent(
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
     #    still SHEDS it under peak risk.
-    if mode == DeviceControlMode.OFF:
+    if not device_mode_permits(device):
         # Switching the mode to Off while SEM is DRIVING the load must release
         # it (stop once, clear ownership), not strand it running forever —
         # class-17 sibling caught live (PROD 2026-07-23: mode→off, load stayed
@@ -2403,12 +2404,11 @@ class SurplusController:
         Crediting them put their draw — and, once the pool saw the import,
         the import they cause — back on the table for every Solar-only load.
         """
-        from ..devices.base import DeviceControlMode
         return sum(
             d.get_current_consumption()
             for d in self.get_devices_sorted()
             if d.is_active
-            and d.control_mode != DeviceControlMode.OFF
+            and device_mode_permits(d)
             and getattr(d, "locked_by_operator", False) is not True
         )
 
@@ -2674,7 +2674,7 @@ class SurplusController:
             return min(max(0.0, float(intent.power_w or 0.0)), left)
         if not active:
             return 0.0
-        if (device.control_mode == DeviceControlMode.OFF
+        if (not device_mode_permits(device)
                 or getattr(device, "locked_by_operator", False) is True):
             return 0.0
         if intent.on or device.can_deactivate() is False:
@@ -2739,7 +2739,7 @@ class SurplusController:
                 active_count += 1
             # Off is the user's, a relay-locked load the operator's: neither
             # is SEM's to allocate (the old passes left both out too)
-            if (device.control_mode == DeviceControlMode.OFF
+            if (not device_mode_permits(device)
                     or getattr(device, "is_enabled", True) is False
                     or getattr(device, "locked_by_operator", False) is True):
                 continue

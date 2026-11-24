@@ -21,6 +21,9 @@ Two halves, because a filter alone changes nothing for onkelfu: pattern
 discovery must not admit them, AND the rows a pre-2.0 version already
 persisted must retire — ``load_device_*`` keys are spared by the #436
 prune, so nothing else would ever remove them.
+
+(#1419) Both halves are now wider: pattern discovery is gone, and the sync
+keeps a ``load_device_*`` row only when it is a charger's.
 """
 from __future__ import annotations
 
@@ -93,45 +96,9 @@ WLED_ENTRIES = [
 ]
 
 
-@pytest.mark.unit
-class TestDiscoveryRefusesAConfigurationSurface:
-
-    def test_a_wled_setting_is_not_discovered_as_a_load(self, monkeypatch):
-        disc = _discovery(monkeypatch, WLED_STATES, WLED_ENTRIES)
-        assert disc.discover_controllable_devices() == {}
-
-    def test_a_diagnostic_switch_is_not_discovered_either(self, monkeypatch):
-        disc = _discovery(
-            monkeypatch,
-            {"switch.router_led": "on", "sensor.router_led_power": "3.0"},
-            [_Entry("switch.router_led", "rtr", entity_category="diagnostic"),
-             _Entry("sensor.router_led_power", "rtr")],
-        )
-        assert disc.discover_controllable_devices() == {}
-
-    def test_a_plain_smart_plug_is_still_discovered(self, monkeypatch):
-        """The keep case: a metering plug carries no entity_category — it IS
-        the device's primary control."""
-        disc = _discovery(
-            monkeypatch,
-            {"switch.dishwasher": "on", "sensor.dishwasher_power": "1800"},
-            [_Entry("switch.dishwasher", "dw"),
-             _Entry("sensor.dishwasher_power", "dw")],
-        )
-        found = disc.discover_controllable_devices()
-        assert list(found) == ["load_device_dishwasher"]
-
-    def test_a_switch_the_registry_does_not_know_is_kept_not_guessed(
-            self, monkeypatch):
-        """An unregistered entity (a template switch, a YAML helper) has no
-        category to read. Absence of evidence filters nothing — the #744
-        rule."""
-        disc = _discovery(
-            monkeypatch,
-            {"switch.pump": "on", "sensor.pump_power": "400"},
-            [],
-        )
-        assert list(disc.discover_controllable_devices()) == ["load_device_pump"]
+# (#1419) TestDiscoveryRefusesAConfigurationSurface stood here: pattern
+# discovery refusing a WLED setting. Pattern discovery is gone — no switch
+# becomes a load by its name any more — so there is nothing left to refuse.
 
 
 @pytest.mark.unit
@@ -193,42 +160,8 @@ class TestTheControlPickRefusesOneToo:
             is None
 
 
-@pytest.mark.unit
-class TestThePowerSensorBindsToItsOwnChannel:
-    """The second half of the fan-out. ``_names_match``'s last resort strips
-    every digit — so ``shelly_kanal_1`` and ``shelly_kanal_2`` clean to the
-    same string and channel 1 adopts whichever channel's power sensor the
-    entity list happens to yield first. An exact base-name match exists; it
-    must win."""
-
-    def test_channel_one_does_not_adopt_channel_twos_power_sensor(
-            self, monkeypatch):
-        disc = _discovery(
-            monkeypatch,
-            {
-                # deliberately listed before channel 1's own sensor
-                "sensor.shelly_kanal_2_power": "50",
-                "sensor.shelly_kanal_1_power": "900",
-                "switch.shelly_kanal_1": "on",
-            },
-            [],
-        )
-        found = disc.discover_controllable_devices()
-        assert found["load_device_shelly_kanal_1"]["power_entity"] == \
-            "sensor.shelly_kanal_1_power"
-
-    def test_a_fuzzy_pairing_still_works_when_there_is_no_exact_match(
-            self, monkeypatch):
-        """The fallback stays: a plug whose sensor is named a little
-        differently is still paired."""
-        disc = _discovery(
-            monkeypatch,
-            {"switch.pool_pump": "on", "sensor.pool_pump_switch_0_power": "800"},
-            [],
-        )
-        found = disc.discover_controllable_devices()
-        assert found["load_device_pool_pump"]["power_entity"] == \
-            "sensor.pool_pump_switch_0_power"
+# (#1419) TestThePowerSensorBindsToItsOwnChannel stood here: the power
+# sensor pattern discovery paired with a switch. Gone with that discovery.
 
 
 # ── retirement: the rows a pre-2.0 install already persisted ───────────────
@@ -269,16 +202,21 @@ PERSISTED_ENTRIES = [
 
 @pytest.mark.unit
 class TestPersistedConfigRowsRetire:
+    """(#1419) The sync's keep rule retires these now: it keeps a
+    ``load_device_*`` row only when it is a charger's. #781's own prune for
+    a setting switch, and #779's for an Energy Dashboard twin, are gone."""
 
     def test_a_persisted_wled_setting_row_is_dropped(self, monkeypatch):
         reg, lm = _registry_with_rows(monkeypatch, PERSISTED, PERSISTED_ENTRIES)
-        assert reg._prune_config_surface_lm_rows() is True
+        assert reg._sync_to_load_manager() is True
         assert "load_device_wled_treppe_umkehren" not in lm._devices
 
-    def test_the_real_appliance_row_survives(self, monkeypatch):
+    def test_the_plain_appliance_row_is_dropped_too(self, monkeypatch):
+        """#781 kept it as a real load. (#1419) It was never on the Devices
+        card either — nobody could set it — so it goes as well."""
         reg, lm = _registry_with_rows(monkeypatch, PERSISTED, PERSISTED_ENTRIES)
-        reg._prune_config_surface_lm_rows()
-        assert "load_device_dishwasher" in lm._devices
+        reg._sync_to_load_manager()
+        assert "load_device_dishwasher" not in lm._devices
 
     def test_an_authoritative_charger_row_is_never_retired(self, monkeypatch):
         """A charger's own row names charger entities by design — and a
@@ -291,7 +229,7 @@ class TestPersistedConfigRowsRetire:
                           entity_category="config")]
         reg, lm = _registry_with_rows(
             monkeypatch, rows, entries, chargers=[{"id": "keba"}])
-        assert reg._prune_config_surface_lm_rows() is False
+        assert reg._sync_to_load_manager() is False
         assert "load_device_keba" in lm._devices
 
     def test_an_explicit_service_registration_is_never_retired(self, monkeypatch):
@@ -305,18 +243,10 @@ class TestPersistedConfigRowsRetire:
             monkeypatch, rows, entries,
             service_regs={"load_device_stage_relay": {
                 "entity_id": "switch.stage_relay"}})
-        assert reg._prune_config_surface_lm_rows() is False
+        reg._service_lm_row = MagicMock(
+            return_value={"switch_entity": "switch.stage_relay"})
+        reg._sync_to_load_manager()
         assert "load_device_stage_relay" in lm._devices
-
-    def test_an_energy_dashboard_row_is_not_this_prunes_business(
-            self, monkeypatch):
-        """ED rows re-derive every refresh (#744) — this pass only reaches
-        the immortal ``load_device_*`` keys."""
-        rows = {"energy_dashboard_thing": {
-            "switch_entity": "switch.wled_treppe_umkehren"}}
-        reg, lm = _registry_with_rows(monkeypatch, rows, PERSISTED_ENTRIES)
-        assert reg._prune_config_surface_lm_rows() is False
-        assert "energy_dashboard_thing" in lm._devices
 
     def test_the_removal_is_persisted_by_the_sync(self, monkeypatch):
         """LoadManagement reloads its own store at init — a drop that isn't

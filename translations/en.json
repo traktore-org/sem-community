@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "The phase switch value was not saved: {reason}. Enter a value the entity accepts."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} belongs to a security device (camera, alarm, lock or siren). SEM never switches security devices."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_stopped": {
       "title": "Phase guard switched off {charger}",
       "description": "A phase was over its limit, so SEM switched off {charger}. Another party steers this charger, so SEM does not switch it back on. Switch it on by hand, or let its app start it again. This message goes away when the charger charges again or the car is unplugged."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM no longer uses old automatically found devices",
+      "description": "Older versions found these switches by name and used them as loads: **{names}**. You could not see or set them, and the peak limit could switch them off. SEM no longer uses them. To let SEM control one, add it with **Add a device** on Devices."
+    },
+    "security_devices_not_used": {
+      "title": "SEM leaves security devices alone",
+      "description": "These devices are security devices (a camera, alarm, siren or a door lock): **{names}**. SEM no longer lists or switches them. Their energy still counts in the home total. If one is an appliance with a lock, not a door lock, add it with **Add a device**."
     }
   },
   "selector": {

@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "Il valore di commutazione delle fasi non è stato salvato: {reason}. Inserisci un valore che l'entità accetta."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} appartiene a un dispositivo di sicurezza (telecamera, allarme, serratura o sirena). SEM non comanda mai i dispositivi di sicurezza."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_stopped": {
       "title": "La protezione di fase ha spento {charger}",
       "description": "Una fase superava il limite, quindi SEM ha spento {charger}. Un altro sistema controlla questa wallbox, quindi SEM non la riaccende. Riaccendila a mano o lascia che la sua app la riavvii. Il messaggio sparisce quando la wallbox ricarica o l'auto viene scollegata."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM non usa più i vecchi dispositivi trovati automaticamente",
+      "description": "Le versioni precedenti trovavano questi interruttori dal nome e li usavano come carichi: **{names}**. Non potevi vederli né impostarli, e il limite di picco poteva spegnerli. SEM non li usa più. Per far controllare uno di essi a SEM, aggiungilo con **Aggiungi dispositivo** in Dispositivi."
+    },
+    "security_devices_not_used": {
+      "title": "SEM lascia stare i dispositivi di sicurezza",
+      "description": "Questi dispositivi sono di sicurezza (telecamera, allarme, sirena o serratura): **{names}**. SEM non li mostra e non li comanda più. Il loro consumo conta ancora nel totale della casa. Se uno è un elettrodomestico con blocco e non una serratura, aggiungilo con **Aggiungi dispositivo**."
     }
   },
   "selector": {

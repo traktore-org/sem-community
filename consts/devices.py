@@ -2,27 +2,10 @@
 import re as _re
 from typing import Final
 
-# Device discovery patterns for load management
-LOAD_MANAGEMENT_DEVICE_PATTERNS: Final = {
-    # Shelly devices
-    "shelly": {
-        "switch_pattern": "switch.shelly_*",
-        "power_pattern": "sensor.shelly_*_power",
-        "description": "Shelly Smart Switch"
-    },
-    # ESPHome devices
-    "esphome": {
-        "switch_pattern": "switch.*_switch",
-        "power_pattern": "sensor.*_power",
-        "description": "ESPHome Device"
-    },
-    # Generic smart switches (Tasmota, custom, etc.)
-    "smart_switch": {
-        "switch_pattern": "switch.*",
-        "power_pattern": "sensor.*_power",
-        "description": "Smart Switch with Power Monitoring"
-    }
-}
+# (#1419) LOAD_MANAGEMENT_DEVICE_PATTERNS lived here: the entity-id globs of
+# the old pattern discovery, which took any ``switch.*`` it could pair with a
+# power sensor by name. Its rows never reached the Devices card, so the peak
+# shed switched off loads nobody could see or set. Gone with it.
 
 # EV Charger manufacturer groupings
 
