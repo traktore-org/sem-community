@@ -101,6 +101,27 @@ class TestStoreIds:
                                                 "heat_pump": {}}})
         assert s.unit_ids_used(HEAT_PUMPS) == {"heat_pump_2"}
 
+    def test_a_bad_part_hides_no_other(self):
+        """``ev_intelligence: None`` made the session read raise: the note
+        must still answer."""
+        s = _storage({"unit_ids_used": {CHARGERS: ["ev_charger_1", 7, None]},
+                      "ev_intelligence": None})
+        assert s.unit_ids_used(CHARGERS) == {"ev_charger_1"}
+
+    def test_a_heat_pumps_learned_rows_keep_its_number_past_midnight(self):
+        """device_runtimes is cleared at midnight; the COP curve, the drift
+        rows and the month, year and lifetime kWh are not."""
+        s = _storage({"cop_learn_state": {"heat_pump_2": {}},
+                      "drift_state": {"heat_pump_3": {}, "pool": {}}},
+                     {"monthly_accumulators": {"device:heat_pump_4_2026_11": 3.0,
+                                               "device:heat_pump_2026_11": 2.0,
+                                               "device:heat_pump#sg3_2026_11": 1.0,
+                                               "device:heat_pump_5#sg3_2026_11": 1.0},
+                      "yearly_accumulators": {"device:heat_pump_2026": 5.0},
+                      "lifetime_accumulators": {"device:heat_pump_6": 9.0, "solar": 1.0}})
+        assert s.unit_ids_used(HEAT_PUMPS) == {
+            "heat_pump_2", "heat_pump_3", "heat_pump_4", "heat_pump_5", "heat_pump_6"}
+
     def test_a_bad_record_is_no_answer_not_a_crash(self):
         s = _storage({"unit_ids_used": ["ev_charger"],
                       "ev_intelligence": {"chargers": ["x"], "session_history": [None]}},
@@ -147,7 +168,7 @@ class TestUsedUnitIds:
 
 # ── the Configure dialog ─────────────────────────────────────────────────
 
-def _flow(options, storage, devices=None):
+def _flow(monkeypatch, options, storage, devices=None):
     from custom_components.solar_energy_management.config_flow import (
         OptionsFlowHandler,
     )
@@ -157,57 +178,52 @@ def _flow(options, storage, devices=None):
     coordinator = SimpleNamespace(_storage=storage, _ev_devices=devices or {})
     entry = SimpleNamespace(data={}, options=dict(options), entry_id="e1",
                             runtime_data=coordinator)
-    type(flow).config_entry = property(lambda self: entry)
+    monkeypatch.setattr(OptionsFlowHandler, "config_entry",
+                        property(lambda self: entry), raising=False)
+    flow.async_step_ev_charger_menu = AsyncMock(return_value={"type": "menu"})
     return flow
 
 
 @pytest.mark.asyncio
-async def test_the_dialog_add_skips_a_charger_removed_before():
+async def test_the_dialog_add_skips_a_charger_removed_before(monkeypatch):
     """The removed ev_charger_1 left its sessions; the list holds one charger.
     The old dialog numbered from the length: ev_charger_1 again."""
-    flow = _flow({"ev_chargers": [{"id": "ev_charger", "name": "A"}]},
+    flow = _flow(monkeypatch, {"ev_chargers": [{"id": "ev_charger", "name": "A"}]},
                  _storage({"ev_intelligence": {"session_history": [SESSION]}}))
     flow._discovered_pv_strings = lambda: {}
-    flow.async_step_ev_charger_menu = AsyncMock(return_value={"type": "menu"})
     flow._data["ev_chargers"] = [{"id": "ev_charger", "name": "A"}]
-    try:
-        await flow.async_step_ev_charger_add({
-            "charger_name": "New",
-            "ev_connected_sensor": "binary_sensor.n_plug",
-            "ev_charging_sensor": "binary_sensor.n_charging",
-            "ev_charging_power_sensor": "sensor.n_power"})
-        assert [c["id"] for c in flow._data["ev_chargers"]] == ["ev_charger", "ev_charger_2"]
-    finally:
-        del type(flow).config_entry
+    await flow.async_step_ev_charger_add({
+        "charger_name": "New",
+        "ev_connected_sensor": "binary_sensor.n_plug",
+        "ev_charging_sensor": "binary_sensor.n_charging",
+        "ev_charging_power_sensor": "sensor.n_power"})
+    assert [c["id"] for c in flow._data["ev_chargers"]] == ["ev_charger", "ev_charger_2"]
 
 
 @pytest.mark.asyncio
-async def test_the_first_charger_page_after_the_last_was_removed():
-    """No list: a new charger, not the removed ev_charger."""
-    flow = _flow({"ev_chargers": []}, _storage())
-    flow._data["ev_chargers"] = []
-    flow.config_entry.runtime_data._storage.note_unit_ids(CHARGERS, {"ev_charger"})
-    flow.async_step_ev_charger_menu = AsyncMock(return_value={"type": "menu"})
-    try:
-        await flow.async_step_ev_charger({"ev_charging_power_sensor": "sensor.p"})
-        assert [c["id"] for c in flow._data["ev_chargers"]] == ["ev_charger_1"]
-    finally:
-        del type(flow).config_entry
-
-
-@pytest.mark.asyncio
-async def test_the_flat_key_charger_keeps_its_id_on_the_first_page():
-    """A save with no list runs its flat-key charger as ev_charger: the page
-    describes that same charger, so it keeps the id and its sessions."""
+async def test_the_first_charger_page_after_the_last_was_removed(monkeypatch):
+    """Refs exist and the list is empty: the last charger was removed, and
+    this is a new charger, not the removed ev_charger."""
     storage = _storage()
     storage.note_unit_ids(CHARGERS, {"ev_charger"})
-    flow = _flow({}, storage, devices={"ev_charger": object()})
-    flow.async_step_ev_charger_menu = AsyncMock(return_value={"type": "menu"})
-    try:
-        await flow.async_step_ev_charger({"ev_charging_power_sensor": "sensor.p"})
-        assert [c["id"] for c in flow._data["ev_chargers"]] == ["ev_charger"]
-    finally:
-        del type(flow).config_entry
+    flow = _flow(monkeypatch, {"ev_chargers": [], "ev_charger_refs": []}, storage)
+    flow._data["ev_chargers"] = []
+    await flow.async_step_ev_charger({"ev_charging_power_sensor": "sensor.p"})
+    assert [c["id"] for c in flow._data["ev_chargers"]] == ["ev_charger_1"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("devices", [{"ev_charger": object()}, {}])
+async def test_the_flat_key_charger_keeps_its_id_on_the_first_page(monkeypatch, devices):
+    """A save from before charger refs, with no list: setup builds its
+    flat-key charger as ev_charger, so the page describes that charger and
+    keeps the id and its sessions — also on a run that did not build it
+    (a skipped or failed build)."""
+    storage = _storage()
+    storage.note_unit_ids(CHARGERS, {"ev_charger"})
+    flow = _flow(monkeypatch, {}, storage, devices=devices)
+    await flow.async_step_ev_charger({"ev_charging_power_sensor": "sensor.p"})
+    assert [c["id"] for c in flow._data["ev_chargers"]] == ["ev_charger"]
 
 
 @pytest.mark.asyncio
@@ -276,15 +292,13 @@ async def test_remove_then_add_never_hands_over_the_removed_id(
             "ev_chargers") or entry.data.get("ev_chargers")]}
         flow._discovered_pv_strings = lambda: {}
         flow.async_step_ev_charger_menu = AsyncMock(return_value={"type": "menu"})
-        type(flow).config_entry = property(lambda self: entry)
-        try:
-            await flow.async_step_ev_charger_add({
-                "charger_name": "New",
-                "ev_connected_sensor": "binary_sensor.n_plug",
-                "ev_charging_sensor": "binary_sensor.n_charging",
-                "ev_charging_power_sensor": "sensor.n_power"})
-        finally:
-            del type(flow).config_entry
+        monkeypatch.setattr(OptionsFlowHandler, "config_entry",
+                            property(lambda self: entry), raising=False)
+        await flow.async_step_ev_charger_add({
+            "charger_name": "New",
+            "ev_connected_sensor": "binary_sensor.n_plug",
+            "ev_charging_sensor": "binary_sensor.n_charging",
+            "ev_charging_power_sensor": "sensor.n_power"})
         assert [c["id"] for c in flow._data["ev_chargers"]] == ["ev_charger", "ev_charger_2"]
     finally:
         await _unload(hass, entry)

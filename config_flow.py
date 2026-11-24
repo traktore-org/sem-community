@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any, Dict
 
 import voluptuous as vol
@@ -225,12 +226,16 @@ def _new_unit_id(flow: Any, kind: str, draft: list,
 
 
 def _first_charger_id(flow: Any) -> str:
-    """(#1421) The id the first charger page saves when no list exists. The
-    charger setup built from the flat keys runs as ``ev_charger`` and is
-    this one; with no such charger running, it is a new charger."""
-    coordinator = getattr(getattr(flow, "config_entry", None), "runtime_data", None)
-    running = getattr(coordinator, "_ev_devices", None)
-    if isinstance(running, dict) and "ev_charger" in running:
+    """(#1421) The id the first charger page saves when no list exists.
+    Before charger refs, an empty list is a save setup builds its flat-key
+    charger from, as ``ev_charger`` — this same charger, built or not this
+    run. Once refs exist, an empty list means the last charger was removed,
+    and this one is new."""
+    from .charger_refs import REFS_KEY
+
+    entry = getattr(flow, "config_entry", None)
+    options = getattr(entry, "options", None)
+    if not isinstance(options, Mapping) or REFS_KEY not in options:
         return "ev_charger"
     return _new_unit_id(flow, CHARGERS, [])
 
