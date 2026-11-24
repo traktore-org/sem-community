@@ -137,10 +137,13 @@ class TestDeviceAxisAccessors780:
         assert may_actuate(row) is legacy
 
     def test_both_axes_must_say_yes(self):
-        assert may_actuate({"has_control_handle": True}) is True
-        assert may_actuate({"has_control_handle": False}) is False
+        # (#1419) a row whose mode nobody chose does nothing
+        assert may_actuate({"has_control_handle": True}) is False
+        assert may_actuate({"has_control_handle": True, "control_mode": "peak_only"}) is True
+        assert may_actuate({"has_control_handle": False, "control_mode": "peak_only"}) is False
         assert may_actuate(
-            {"has_control_handle": True, "user_hands_off": True}) is False
+            {"has_control_handle": True, "user_hands_off": True,
+             "control_mode": "peak_only"}) is False
         # (#49) the mode is the other half of permission
         assert may_actuate(
             {"has_control_handle": True, "control_mode": "off"}) is False
@@ -170,7 +173,6 @@ def lm780(mock_hass):
     ) as MockStore:
         discovery = MagicMock()
         discovery.discover_from_energy_dashboard = AsyncMock(return_value={})
-        discovery.discover_controllable_devices = MagicMock(return_value={})
         discovery.get_device_current_state = MagicMock(
             return_value={"is_on": True, "current_power": 1000})
         discovery.turn_off_device = AsyncMock(return_value=True)

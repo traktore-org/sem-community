@@ -348,7 +348,11 @@ Set the mode per load, on **Devices**.
 | **SEM runs it** | Yes, on spare sun | Yes | Pool pump, boiler |
 | **SEM runs it, battery may help** | Yes, on spare sun and battery help above the buffer | Yes | Loads that ride through clouds |
 
-- A new load starts at **Off**.
+- A new load starts at **Off**. SEM controls a device only after you turn it on.
+- SEM never lists or switches a security device: one with a camera, alarm,
+  lock or siren in Home Assistant. Its energy still counts in the home total.
+- SEM sheds loads at a peak only when they can cover at least a quarter of
+  the excess. Smaller loads stay on, and loads it shed come back.
 - Whether SEM buys grid power for a load is set by **May SEM buy power for it?**
   See [A heater's four questions](#a-heaters-four-questions).
 - Loads without an on/off switch but with a watt number (for example a

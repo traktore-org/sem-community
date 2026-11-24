@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "Vaiheenvaihdon arvoa ei tallennettu: {reason}. Anna arvo, jonka entiteetti hyväksyy."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} kuuluu turvalaitteeseen (kamera, hälytin, lukko tai sireeni). SEM ei koskaan ohjaa turvalaitteita."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_left_off": {
       "title": "Latausasema jäi pois vaihesuojan jälkeen",
       "description": "SEM pysäytti {charger}, koska vaihe ylitti rajansa. Se yritti {tries} kertaa käynnistää sen, ja joka kerta vaihe ylittyi taas. SEM ei enää yritä. Käynnistä latausasema itse tai sitä ohjaavassa sovelluksessa, kun talo käyttää vähemmän sähköä."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM ei enää käytä vanhoja automaattisesti löydettyjä laitteita",
+      "description": "Vanhemmat versiot löysivät nämä kytkimet nimen perusteella ja käyttivät niitä kuormina: **{names}**. Et voinut nähdä tai asettaa niitä, ja huippuraja saattoi sammuttaa ne. SEM ei enää käytä niitä. Jos haluat SEMin ohjaavan jotakin niistä, lisää se kohdasta **Lisää laite** Laitteet-näkymässä."
+    },
+    "security_devices_not_used": {
+      "title": "SEM jättää turvalaitteet rauhaan",
+      "description": "Nämä laitteet ovat turvalaitteita (kamera, hälytin, sireeni tai ovilukko): **{names}**. SEM ei enää näytä eikä ohjaa niitä. Niiden energia lasketaan yhä kodin kulutukseen. Jos jokin on laite, jossa on lukitus, eikä ovilukko, lisää se kohdasta **Lisää laite**."
     }
   },
   "selector": {

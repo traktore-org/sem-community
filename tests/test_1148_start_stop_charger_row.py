@@ -98,12 +98,13 @@ async def test_a_start_stop_only_charger_registers_without_an_error(
 
 
 @pytest.mark.asyncio
-async def test_the_stop_switch_is_still_claimed_from_discovery():
-    """#748 reads the row: the switch must stay out of pattern discovery."""
+async def test_the_stop_switch_is_still_on_the_row():
+    """#748 reads the row: the charger's stop switch is named on it.
+    (#1419: pattern discovery, which used to read it, is gone.)"""
     lm = _lm()
     await lm.register_ev_charger(
         power_entity=GO_POWER, start_stop_entity=GO_SWITCH)
-    assert GO_SWITCH in lm._charger_claimed_entities()
+    assert lm._devices[ROW]["start_stop_entity"] == GO_SWITCH
 
 
 @pytest.mark.asyncio
@@ -147,7 +148,6 @@ async def test_a_stale_saved_site_limit_is_cleared(caplog):
     assert row["control_type"] == "start_stop"
     # …and the cleared row is what is saved
     lm._save_device_configuration.assert_awaited()
-    assert SITE_LIMIT not in lm._charger_claimed_entities()
 
 
 # ── nothing writes a current for it ──

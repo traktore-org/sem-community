@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "Der Wert für die Phasenumschaltung wurde nicht gespeichert: {reason}. Geben Sie einen Wert ein, den die Entität annimmt."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} gehört zu einem Sicherheitsgerät (Kamera, Alarm, Schloss oder Sirene). SEM schaltet Sicherheitsgeräte nie."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_left_off": {
       "title": "Ladestation nach Phasenwächter aus",
       "description": "SEM hat {charger} gestoppt, weil eine Phase über ihrem Limit war. Es hat {tries}-mal versucht, sie wieder einzuschalten, und jedes Mal war die Phase wieder zu hoch. SEM versucht es nicht mehr. Schalte die Ladestation selbst oder in der steuernden App ein, wenn das Haus weniger Strom braucht."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM nutzt alte automatisch gefundene Geräte nicht mehr",
+      "description": "Ältere Versionen haben diese Schalter am Namen erkannt und als Lasten genutzt: **{names}**. Du konntest sie weder sehen noch einstellen, und die Spitzenlast-Grenze konnte sie ausschalten. SEM nutzt sie nicht mehr. Soll SEM eines davon steuern, füge es unter Geräte mit **Gerät hinzufügen** hinzu."
+    },
+    "security_devices_not_used": {
+      "title": "SEM lässt Sicherheitsgeräte in Ruhe",
+      "description": "Diese Geräte sind Sicherheitsgeräte (Kamera, Alarm, Sirene oder Türschloss): **{names}**. SEM listet und schaltet sie nicht mehr. Ihr Verbrauch zählt weiter zum Hausverbrauch. Ist eines davon ein Gerät mit Sperre und kein Türschloss, füge es mit **Gerät hinzufügen** hinzu."
     }
   },
   "selector": {

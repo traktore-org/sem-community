@@ -89,7 +89,9 @@ Every charger, battery and load, in priority order.
 
 **Charger**: mode, target bar (**At least**, **Up to**), **Charge by**, **Pause charging**,
 sessions and lifetime. **Battery**: mode, what it does now and next, the three levels.
-**Load**: one mode control and **Boost for**. **Heater**: the four questions. See
+**Load**: one mode control and **Boost for**. A load does nothing until you set
+its mode; new loads start at **Off**. Security devices (camera, alarm, lock,
+siren) are never listed or offered. **Heater**: the four questions. See
 [A heater's four questions](USER_GUIDE.md#a-heaters-four-questions).
 
 Every card starts folded on a phone. The pill is the one-line summary.

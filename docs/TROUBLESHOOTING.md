@@ -303,6 +303,18 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:** Lower that load's limit, give SEM the load, or raise **Peak limit level** in `System › What SEM may do`.
 
+### SEM leaves security devices alone
+
+**Cause:** A device has a camera, an alarm panel, a siren or a lock in Home Assistant. SEM never lists or switches such a device. A lock that Home Assistant marks as a setting (a child lock) does not count.
+
+**Fix:** Nothing for a camera, alarm or door lock. Its energy still counts in the home total. If the device is an appliance with a lock, add it with **Add a device**.
+
+### SEM no longer uses old automatically found devices
+
+**Cause:** Older versions found switches by their name and used them as loads. You could not see or set these devices, and the peak limit could switch them off. SEM no longer uses them.
+
+**Fix:** Nothing, if you did not want SEM to control them. To let SEM control one, add it with **Add a device** on **Devices**. It starts at Mode **Off**; turn it on there.
+
 ## Hot water and heat pump
 
 ### Hot water does not heat
@@ -439,6 +451,8 @@ Each Repair is a notice in `Settings › System › Repairs`. The key names the 
 |---|---|
 | `load_current_control_wrong_unit` | A load uses current control on a watt entity. See [A load is set to current control](#a-load-is-set-to-current-control-but-its-entity-is-in-watts). |
 | `load_shed_futile` | A load SEM does not control drives the peak. See [The grid peak is driven by a load](#the-grid-peak-is-driven-by-a-load-sem-does-not-control). |
+| `security_devices_not_used` | A device SEM knew is a security device and left alone now. See [SEM leaves security devices alone](#sem-leaves-security-devices-alone). |
+| `old_found_loads_removed` | Old automatically found devices are no longer used. See [SEM no longer uses old automatically found devices](#sem-no-longer-uses-old-automatically-found-devices). |
 
 **Heat pump and hot water**
 

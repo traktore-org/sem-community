@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "相位切换的值未保存：{reason}。请输入该实体接受的值。"
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} 属于安防设备（摄像头、警报、门锁或警笛）。SEM 从不控制安防设备。"
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_left_off": {
       "title": "相位保护后充电桩保持关闭",
       "description": "由于某一相超过限制，SEM 停止了 {charger}。它尝试了 {tries} 次重新开启，每次该相都再次超限。SEM 不再尝试。请在家中用电减少时自行开启充电桩，或在控制它的应用中开启。"
+    },
+    "old_found_loads_removed": {
+      "title": "SEM 不再使用旧的自动发现设备",
+      "description": "旧版本按名称找到这些开关并将其用作负载：**{names}**。您无法查看或设置它们，峰值限制可能会将其关闭。SEM 不再使用它们。如需让 SEM 控制其中一个，请在设备页面用**添加设备**添加。"
+    },
+    "security_devices_not_used": {
+      "title": "SEM 不再控制安防设备",
+      "description": "以下设备是安防设备（摄像头、警报、警笛或门锁）：**{names}**。SEM 不再显示或控制它们。它们的能耗仍计入家庭总用电。如果其中某个是带锁的电器而不是门锁，请用**添加设备**添加。"
     }
   },
   "selector": {

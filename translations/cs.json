@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "Hodnota přepínání fází nebyla uložena: {reason}. Zadejte hodnotu, kterou entita přijímá."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} patří k bezpečnostnímu zařízení (kamera, alarm, zámek nebo siréna). SEM bezpečnostní zařízení nikdy nespíná."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_left_off": {
       "title": "Nabíječka po hlídání fází vypnutá",
       "description": "SEM zastavil {charger}, protože fáze překročila limit. Zkusil ji {tries}krát znovu zapnout a pokaždé fáze limit znovu překročila. SEM už to nezkouší. Zapněte nabíječku sami, nebo v aplikaci, která ji řídí, až dům spotřebuje méně."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM už nepoužívá stará automaticky nalezená zařízení",
+      "description": "Starší verze našly tyto spínače podle názvu a používaly je jako zátěže: **{names}**. Nemohli jste je vidět ani nastavit a limit špičky je mohl vypnout. SEM je už nepoužívá. Chcete-li, aby SEM některé řídil, přidejte ho přes **Přidat zařízení** v Zařízeních."
+    },
+    "security_devices_not_used": {
+      "title": "SEM nechává bezpečnostní zařízení být",
+      "description": "Tato zařízení jsou bezpečnostní (kamera, alarm, siréna nebo zámek dveří): **{names}**. SEM je už nezobrazuje ani nespíná. Jejich energie se dál počítá do spotřeby domu. Pokud je některé spotřebič se zámkem, a ne zámek dveří, přidejte ho přes **Přidat zařízení**."
     }
   },
   "selector": {

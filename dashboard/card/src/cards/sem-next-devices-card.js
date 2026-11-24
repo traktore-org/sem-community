@@ -32,6 +32,7 @@ import {
 } from './load-config-modal.js';
 import { deviceRows, statePill, surplusInUse, ratedKey, swap, priorityPayload, verdictKey, unmanagedLoads, registerPayload, entityOptions, SWITCH_DOMAINS, defaultOpen, PHONE_MAX_PX, OPEN_CHARGE_PLAN_KEY, CHARGER_PREFIX } from '../util/next-devices.js';
 import { chargerBody } from '../util/next-devices-charger.js';
+import { withoutSecurity } from '../util/security-devices.js';
 import { chargerAmps } from '../util/charger-amps.js';
 import { batteryBody } from '../util/next-devices-battery.js';
 import { loadBody } from '../util/next-devices-load.js';
@@ -422,11 +423,11 @@ class SEMNextDevicesCard extends SEMNextBase {
     _entityField(value, domains, onChange, o = {}) {
         if (customElements.get('ha-entity-picker')) {
             return html`<ha-entity-picker .hass=${this._hass} .value=${value || ''} .includeDomains=${domains}
-                .entityFilter=${o.filter || undefined} .label=${o.label || ''} allow-custom-entity
+                .entityFilter=${withoutSecurity(this._hass, o.filter)} .label=${o.label || ''} allow-custom-entity
                 @value-changed=${(e) => onChange(String(e.detail?.value || ''))}></ha-entity-picker>`;
         }
         const listId = 'ents-' + domains.join('-') + (o.filter ? '-f' : '');
-        const ids = entityOptions(this._hass?.states, domains, o.filter);
+        const ids = entityOptions(this._hass?.states, domains, withoutSecurity(this._hass, o.filter));
         // a native input: a datalist only attaches to one
         return html`<input class="txt" list=${listId} .value=${value || ''} placeholder=${o.label || ''}
             @change=${(e) => onChange(e.target.value.trim())}>
@@ -671,6 +672,7 @@ class SEMNextDevicesCard extends SEMNextBase {
             picker.allowCustomEntity = true;
             picker.value = entityInput.value;
             picker.includeDomains = ENTITY_DOMAINS[typeSel.value];
+            picker.entityFilter = withoutSecurity(this._hass);
             picker.style.cssText = 'display:block;margin:6px 0 12px';
             picker.addEventListener('value-changed', (e) => { entityInput.value = e.detail.value || ''; });
             entityInput.style.display = 'none';

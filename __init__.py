@@ -2936,7 +2936,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 coordinator._load_manager._unified_registry_active = True
             _LOGGER.info("Unified device registry initialized with %d devices", len(registry.devices))
         except Exception as err:
-            _LOGGER.warning("Unified device registry init failed (non-critical): %s", err)
+            # (#1419) Load management keeps the rows it saved last, each
+            # with its Mode; a row it has to add now has none and stays off.
+            _LOGGER.warning(
+                "Unified device registry init failed (non-critical): %s — "
+                "loads keep their last saved Mode; a new one stays Off", err)
             coordinator._device_registry = None
 
         # Register EV charger(s) as CurrentControlDevice for unified control
@@ -5318,6 +5322,15 @@ async def _async_register_services(
         energy_sensor = call.data.get("energy_sensor")
         control_entity = call.data.get("control_entity", "")
         control_type = call.data.get("control_type", "switch")
+        # (#1419) A security device is never a load SEM may switch.
+        from .features.load_device_discovery import is_security_entity
+        if is_security_entity(hass, control_entity, chosen=True):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="security_device_not_a_load",
+                translation_placeholders={"entity": str(control_entity)},
+            )
+
         service = call.data.get("service")
 
         # Validate per control type: entity types need an entity; service needs a service.
@@ -5472,19 +5485,25 @@ async def _async_register_services(
             # registry heals a later-enabled manager's row on its own sync
             # — so its absence is not a refusal. Only BOTH missing is.
             lm = getattr(coordinator, "_load_manager", None)
+            reg = getattr(coordinator, "_device_registry", None)
+            # (#1419) Refuse an unknown id BEFORE any write. The check used to
+            # follow the manager write, so "not found" came back after the
+            # flag had already been stored on a row nobody could see.
+            _lm_rows = getattr(lm, "_devices", None) if lm is not None else None
+            if ((reg is not None and not reg.knows_device(device_id))
+                    or (reg is None and isinstance(_lm_rows, dict)
+                        and device_id not in _lm_rows)):
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="device_not_found",
+                    translation_placeholders={"device_id": device_id},
+                )
             if lm is not None:
                 if prop == "critical":
                     await lm.update_device_critical_status(device_id, _flag)
                 else:
                     await lm.async_set_hands_off(device_id, not _flag)
-            reg = getattr(coordinator, "_device_registry", None)
             if reg is not None:
-                if not reg.knows_device(device_id):
-                    raise HomeAssistantError(
-                        translation_domain=DOMAIN,
-                        translation_key="device_not_found",
-                        translation_placeholders={"device_id": device_id},
-                    )
                 await reg.async_set_device_flag(device_id, prop, _flag)
             elif lm is None:
                 raise HomeAssistantError(
@@ -6204,6 +6223,14 @@ async def _async_register_phase_services(
         control_mode=surplus (that's what you register a device FOR;
         auto-discovered devices keep peak_only), and returns a summary.
         """
+        # (#1419) A security device is never a load SEM may switch.
+        from .features.load_device_discovery import is_security_entity
+        if is_security_entity(hass, call.data.get("entity_id"), chosen=True):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="security_device_not_a_load",
+                translation_placeholders={"entity": str(call.data.get("entity_id"))},
+            )
         spec = {
             "device_id": call.data.get("device_id"),
             "entity_id": call.data.get("entity_id"),
@@ -6380,6 +6407,16 @@ async def _async_register_phase_services(
         energy_kwh = call.data.get("estimated_energy_kwh", 1.0)
         rated_power = call.data.get("rated_power", 1000)
         priority = call.data.get("priority", 7)
+
+        # (#1419) A security device is never a load SEM may switch — the same
+        # refusal as register_surplus_device and set_device_control_mapping.
+        from .features.load_device_discovery import is_security_entity
+        if is_security_entity(hass, entity_id, chosen=True):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="security_device_not_a_load",
+                translation_placeholders={"entity": str(entity_id)},
+            )
 
         try:
             deadline = datetime.fromisoformat(deadline_str)

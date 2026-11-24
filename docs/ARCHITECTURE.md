@@ -396,6 +396,22 @@ Structurally pinned by `tests/test_921_one_track.py`,
 `tests/test_955_dispatch_reads_the_fleet.py` and `tests/test_955_export_dry_run.py`;
 the shapes they prevent are bug classes 92–96.
 
+### Load permission and security devices (#1419, #1381)
+
+- One permission check: `features/device_axes.py may_actuate`. A load row
+  acts only with a Mode the user turned on (`surplus`, `peak_only`); a row
+  with no Mode is off. Charger rows are governed by the charge mode.
+- The old pattern discovery is gone. Its stored `load_device_*` rows (not a
+  charger's) are not loaded; one Repair (`old_found_loads_removed`) names them.
+- `load_device_discovery.is_security_entity` is the one security rule: an
+  entity whose HA device carries a `camera`, `alarm_control_panel`, `lock` or
+  `siren` entity. The registry skips such devices, control auto-pairing never
+  picks their switches, and `register_surplus_device` /
+  `set_device_control_mapping` refuse them. The card's pickers mirror it.
+- `_shed_plan` holds (`held:too_small`) when everything sheddable covers less
+  than `SHED_MIN_COVER_SHARE` (25 %) of the need, and brings back loads shed
+  for that excess (`restore:too_small`), also while the state stays SHEDDING.
+
 ### Compute intent → reconcile (load side)
 
 Surplus loads (switches, climate, heat pump, hot water) follow the **same

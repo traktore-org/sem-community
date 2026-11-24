@@ -64,15 +64,52 @@ def user_hands_off(device_info: Mapping[str, Any]) -> bool:
     return bool(device_info.get(HANDS_OFF_KEY, False))
 
 
+#: (#1419) The modes that let SEM switch a load. Anything else — "off", an
+#: unknown word, or NO mode at all — means SEM leaves the load alone.
+ACTING_MODES = frozenset({"surplus", "peak_only", "manual"})
+
+
+def mode_permits(device_info: Mapping[str, Any]) -> bool:
+    """(#1419) PERMISSION, mode half: did the user turn SEM control on?
+
+    A device does nothing until the user turns SEM control on for it. Every
+    row SEM builds itself carries the mode the user chose, or the default
+    "off" for a new device (#805). A row with NO mode is one nobody could
+    ever set: the old pattern discovery saved such rows (a camera's
+    "enabled" switch, a bedroom plug), they never reached the Devices card,
+    and the peak shed switched them off. No mode reads as off.
+
+    A charger row is the exception: its permission is the charge mode, which
+    the charger loop owns; its load row never carried a ``control_mode``. A
+    charger-typed row that DOES carry one (an Energy-Dashboard row the user
+    set to Off) keeps the user's word.
+    """
+    mode = device_info.get("control_mode")
+    if mode is None and device_info.get("device_type") == "ev_charger":
+        return True
+    return mode in ACTING_MODES
+
+
 def may_actuate(device_info: Mapping[str, Any]) -> bool:
     """Both axes, in one question: is there a handle AND permission to use it?
 
-    Permission is ``control_mode != "off"`` (#49) and no hands-off opt-out
-    (#650). This is what the peak-shed loop actually wants to know, and now the
-    only expression of it — pre-#780 the mode half was checked at some call
-    sites and forgotten at others, which is how the "how much can we shed?"
-    counters came to include devices shedding would never touch.
+    Permission is a mode the user turned on (#49, #1419) and no hands-off
+    opt-out (#650). This is what the peak-shed loop actually wants to know,
+    and now the only expression of it — pre-#780 the mode half was checked at
+    some call sites and forgotten at others, which is how the "how much can we
+    shed?" counters came to include devices shedding would never touch.
     """
-    if device_info.get("control_mode") == "off":
+    if not mode_permits(device_info):
         return False
     return has_control_handle(device_info) and not user_hands_off(device_info)
+
+
+def device_mode_permits(device: Any) -> bool:
+    """(#1419) The same permission, for a live device object of the surplus
+    engine (``control_mode`` is a ``DeviceControlMode``): may SEM act on it
+    at all? Every Off check on a device object reads this — the shedder reads
+    ``mode_permits`` on its rows — so "off means off" has one home per shape.
+    """
+    mode = getattr(device, "control_mode", None)
+    value = getattr(mode, "value", mode)
+    return value in ACTING_MODES

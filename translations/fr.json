@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "La valeur de commutation de phases n'a pas été enregistrée : {reason}. Saisissez une valeur que l'entité accepte."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} appartient à un appareil de sécurité (caméra, alarme, serrure ou sirène). SEM ne commande jamais les appareils de sécurité."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_left_off": {
       "title": "Borne laissée éteinte après la protection de phase",
       "description": "SEM a arrêté {charger} car une phase dépassait sa limite. Il a essayé {tries} fois de la rallumer, et chaque fois la phase a de nouveau dépassé. SEM n'essaie plus. Rallumez la borne vous-même, ou dans l'appli qui la pilote, quand la maison consomme moins."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM n'utilise plus les anciens appareils trouvés automatiquement",
+      "description": "D'anciennes versions trouvaient ces interrupteurs par leur nom et les utilisaient comme charges : **{names}**. Vous ne pouviez ni les voir ni les régler, et la limite de pointe pouvait les couper. SEM ne les utilise plus. Pour que SEM en pilote un, ajoutez-le avec **Ajouter un appareil** dans Appareils."
+    },
+    "security_devices_not_used": {
+      "title": "SEM laisse les appareils de sécurité tranquilles",
+      "description": "Ces appareils sont des appareils de sécurité (caméra, alarme, sirène ou serrure de porte) : **{names}**. SEM ne les affiche et ne les commande plus. Leur énergie compte toujours dans le total de la maison. Si l'un d'eux est un appareil avec verrou et non une serrure de porte, ajoutez-le avec **Ajouter un appareil**."
     }
   },
   "selector": {

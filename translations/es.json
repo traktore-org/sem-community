@@ -1906,6 +1906,9 @@
     },
     "phase_switch_value_out_of_range": {
       "message": "El valor de cambio de fases no se guardó: {reason}. Introduce un valor que la entidad acepte."
+    },
+    "security_device_not_a_load": {
+      "message": "{entity} pertenece a un dispositivo de seguridad (cámara, alarma, cerradura o sirena). SEM nunca controla dispositivos de seguridad."
     }
   },
   "issues": {
@@ -2141,6 +2144,14 @@
     "guard_left_off": {
       "title": "Cargador apagado tras la protección de fase",
       "description": "SEM detuvo {charger} porque una fase superaba su límite. Intentó {tries} veces encenderlo de nuevo, y cada vez la fase volvió a superarlo. SEM ya no lo intenta. Enciende el cargador tú mismo, o en la app que lo controla, cuando la casa consuma menos."
+    },
+    "old_found_loads_removed": {
+      "title": "SEM ya no usa los antiguos dispositivos encontrados automáticamente",
+      "description": "Las versiones anteriores encontraban estos interruptores por su nombre y los usaban como cargas: **{names}**. No podías verlos ni ajustarlos, y el límite de pico podía apagarlos. SEM ya no los usa. Para que SEM controle uno, añádelo con **Añadir dispositivo** en Dispositivos."
+    },
+    "security_devices_not_used": {
+      "title": "SEM deja en paz los dispositivos de seguridad",
+      "description": "Estos dispositivos son de seguridad (cámara, alarma, sirena o cerradura): **{names}**. SEM ya no los muestra ni los controla. Su energía sigue contando en el total de la casa. Si alguno es un electrodoméstico con bloqueo y no una cerradura, añádelo con **Añadir dispositivo**."
     }
   },
   "selector": {

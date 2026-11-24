@@ -34,9 +34,6 @@ from custom_components.solar_energy_management.features.device_registry import (
 from custom_components.solar_energy_management.features.load_management import (
     LoadManagementCoordinator,
 )
-from custom_components.solar_energy_management.features.load_device_discovery import (
-    LoadDeviceDiscovery,
-)
 
 
 # The one physical charger, as configured by the reporter.
@@ -129,7 +126,8 @@ class TestDataLayerDepersist:
                 "switch_entity": "switch.garo_laddbox",
                 "power_entity": "sensor.garo_laddbox_power",
             },
-            # a genuinely unrelated load — MUST survive.
+            # a genuinely unrelated pattern row. (#1419) Not kept either: no
+            # charger row, and nobody could see or set it.
             "load_device_dishwasher": {
                 "device_type": "smart_switch",
                 "switch_entity": "switch.dishwasher",
@@ -143,7 +141,7 @@ class TestDataLayerDepersist:
         assert pruned is True
         assert "load_device_garo_laddbox" not in lm._devices     # dup dropped
         assert "load_device_ev_charger" in lm._devices           # charger kept
-        assert "load_device_dishwasher" in lm._devices           # unrelated kept
+        assert "load_device_dishwasher" not in lm._devices       # (#1419)
 
     def test_authoritative_charger_row_never_pruned_as_its_own_duplicate(self):
         """The charger row names the charger's own current number — the exact
@@ -188,8 +186,10 @@ class TestDataLayerDepersist:
         assert billaddare.device_id not in lm._devices
 
     def test_no_chargers_configured_prunes_nothing(self):
+        """The charger-duplicate prune itself. (#1419: the sync's keep rule
+        drops the pattern row anyway, so the prune is asked directly.)"""
         lm = self._seeded_lm()
-        pruned = _reg(lm, charger_rows=[])._sync_to_load_manager()
+        pruned = _reg(lm, charger_rows=[])._prune_charger_duplicate_lm_rows()
         assert pruned is False
         assert "load_device_garo_laddbox" in lm._devices          # untouched
 
@@ -201,7 +201,7 @@ class TestDataLayerDepersist:
         pruned = _reg(
             lm, charger_rows=[{"power_entity": "sensor.garo_laddbox_power",
                                "start_stop_entity": "switch.garo_laddbox"}],
-        )._sync_to_load_manager()
+        )._prune_charger_duplicate_lm_rows()
         assert pruned is False
         assert "load_device_garo_laddbox" in lm._devices          # untouched
         assert "load_device_ev_charger" in lm._devices
@@ -283,49 +283,10 @@ class TestDisplayLayerFold:
 
 
 @pytest.mark.unit
-class TestDiscoveryExclusion:
-    """Pattern discovery must skip a switch already claimed as a charger's
-    start/stop control — the third duplicate row's point of creation."""
-
-    def _discovery_with_entities(self, entities):
-        hass = MagicMock()
-        hass.states.async_entity_ids = MagicMock(return_value=list(entities))
-
-        def _get(eid):
-            return SimpleNamespace(
-                state="off" if eid.startswith("switch.") else "1500",
-                attributes={"friendly_name": eid},
-            )
-
-        hass.states.get = MagicMock(side_effect=_get)
-        d = LoadDeviceDiscovery(hass)
-        return d
-
-    def test_charger_switch_excluded_from_discovery(self):
-        d = self._discovery_with_entities([
-            "switch.garo_laddbox", "sensor.garo_laddbox_power",
-            "switch.dishwasher", "sensor.dishwasher_power",
-        ])
-        found = d.discover_controllable_devices(
-            excluded_entities={"switch.garo_laddbox", "sensor.garo_laddbox_power"}
-        )
-        assert "load_device_garo_laddbox" not in found
-        # the genuinely-unclaimed smart plug is still discovered
-        assert "load_device_dishwasher" in found
-
-    def test_no_exclusion_set_is_backwards_compatible(self):
-        d = self._discovery_with_entities([
-            "switch.dishwasher", "sensor.dishwasher_power",
-        ])
-        found = d.discover_controllable_devices()
-        assert "load_device_dishwasher" in found
-
-
-@pytest.mark.unit
 class TestRegisterChargerCarriesControlEntities:
-    """register_ev_charger must store the stop switch + status sensor so
-    _charger_claimed_entities can feed them to discovery (unified-inactive
-    path)."""
+    """register_ev_charger must store the stop switch + status sensor on the
+    charger's row. (#1419: pattern discovery, which read them to skip the
+    charger's own switch, is gone; the row keeps naming them.)"""
 
     async def test_register_and_claimed_entities(self):
         lm = LoadManagementCoordinator.__new__(LoadManagementCoordinator)
@@ -349,9 +310,5 @@ class TestRegisterChargerCarriesControlEntities:
         row = lm._devices["load_device_ev_charger"]
         assert row["start_stop_entity"] == "switch.garo_laddbox"
         assert row["status_entity"] == "sensor.garo_laddbox_status"
-
-        claimed = lm._charger_claimed_entities()
-        assert "switch.garo_laddbox" in claimed          # the stop switch
-        assert "number.garo_laddbox_current_limit" in claimed
-        assert "sensor.garo_laddbox_power" in claimed
-        assert "sensor.garo_laddbox_status" in claimed
+        assert row["switch_entity"] == "number.garo_laddbox_current_limit"
+        assert row["power_entity"] == "sensor.garo_laddbox_power"
