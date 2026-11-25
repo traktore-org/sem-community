@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A Powerwall grid charge no longer stops on one old cloud reading** (#1377). SEM waits 15 minutes for its settings to show again.
 - 🐛 **No phase switch while the charger power sensor is unavailable** (#1423). SEM took the box as stopped and could switch it while charging.
 - 🐛 **The phase guard stops a charger whose power sensor is unavailable** (#1422). With no status sensor, SEM took it for stopped and sent nothing.
 - 🐛 **A charger stop is not a full car** (#1381). Another system's stop no longer makes the estimate 100 %.

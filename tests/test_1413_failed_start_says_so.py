@@ -26,6 +26,8 @@ import textwrap
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from custom_components.solar_energy_management.coordinator import (
     actuate_battery as actuate_mod,
 )
@@ -56,6 +58,17 @@ from .test_1367_plan_only_sendable_charge import _plan
 from .test_1377_powerwall_charge import (
     MODE, PERMIT, RESERVE, _adapter, _Hass, _stop, _Store,
 )
+from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (  # noqa: E402
+    GenericChargeAdapter,
+)
+
+
+@pytest.fixture(autouse=True)
+def _no_cloud_wait(monkeypatch):
+    """(#1377) the waits for a cloud read are pinned in
+    test_1377_cloud_read_lag.py; here every read counts at once"""
+    monkeypatch.setattr(GenericChargeAdapter, "SHOW_WITHIN_S", 0.0)
+    monkeypatch.setattr(GenericChargeAdapter, "AWAY_FOR_S", 0.0)
 
 
 class _BadStore(_Store):

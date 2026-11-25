@@ -25,6 +25,20 @@ SELECT_KEY = "battery_charge_select_entity"
 OPTION_KEY = "battery_charge_select_option"
 _NO_STATE = ("", "unknown", "unavailable")
 
+#: (#1377) A select or permit that showed SEM's value and now reads the value
+#: it had BEFORE SEM's write is not taken as the end at once: a cloud
+#: integration can show the old values for minutes after a write that landed,
+#: then SEM's again (a Tesla Powerwall, 23.11.2026: all three entities read
+#: their old values at 20:05, mode and permit read SEM's again at 20:16, with
+#: no write in between). The end counts once the old value has read this long
+#: without a break; nothing is written meanwhile. Any OTHER value is a change
+#: made since, and ends the charge at once.
+AWAY_FOR_S = 15 * 60.0
+#: (#1377) a select SEM wrote must show the option within this long before
+#: the one re-send, and as long again before the start is given up: the hold
+#: select's rule (``hold_select.SHOW_WITHIN_S``), for the same cloud selects
+SHOW_WITHIN_S = 60.0
+
 
 def select_setup(config: dict) -> Optional[tuple]:
     """``(select entity, charge option)`` when the select path is set up:

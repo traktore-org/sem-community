@@ -24,6 +24,9 @@ from custom_components.solar_energy_management.coordinator.battery_adapters.base
 from custom_components.solar_energy_management.coordinator.battery_adapters.charge_record import (
     ForcedChargeRecord,
 )
+from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
+    GenericChargeAdapter,
+)
 from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
     GenericBatteryAdapter,
 )
@@ -86,6 +89,9 @@ class _Store:
 def _no_dwell(monkeypatch):
     monkeypatch.setattr(SelectHold, "MIN_HOLD_S", 0.0)
     monkeypatch.setattr(SelectHold, "SHOW_WITHIN_S", 0.0)
+    monkeypatch.setattr(SelectHold, "AWAY_FOR_S", 0.0)       # (#1377)
+    monkeypatch.setattr(GenericChargeAdapter, "SHOW_WITHIN_S", 0.0)
+    monkeypatch.setattr(GenericChargeAdapter, "AWAY_FOR_S", 0.0)
 
 
 def _adapter(hass, hold_store=None, charge_store=None, hold=True, bid="b1"):
@@ -167,7 +173,8 @@ class TestTheChargeSetsTheMode:
         a = _adapter(hass)
         for _ in range(6):
             await _charge(a)
-        assert len(hass.writes(MODE)) == 2           # the write and one re-send
+        # the write and one re-send, then (#1377) the old mode once
+        assert hass.writes(MODE) == [UTILITY, UTILITY, SBU]
         assert hass.writes(SOURCE) == [], "no charge source without the mode"
         assert a.last_intent is not BatteryIntent.FORCE_CHARGE
         assert a.last_error and "no grid charge" in a.last_error

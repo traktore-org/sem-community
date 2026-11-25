@@ -15,6 +15,8 @@ switch, whose state every write changes.
 """
 from __future__ import annotations
 
+import pytest
+
 import json
 from types import SimpleNamespace
 
@@ -30,6 +32,9 @@ from custom_components.solar_energy_management.coordinator.battery_adapters.char
 from custom_components.solar_energy_management.coordinator.battery_adapters.charge_target import (
     ChargeTargetHold,
 )
+from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
+    GenericChargeAdapter,
+)
 from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
     GenericBatteryAdapter,
 )
@@ -43,6 +48,14 @@ PERMIT = "switch.myhome_autoriser_la_recharge_depuis_le_reseau"
 RESERVE = "number.myhome_reserve_de_secours"
 SOC = "sensor.myhome_pourcentage_charge"
 OPTIONS = ["autonomous", "backup", "self_consumption"]
+
+
+@pytest.fixture(autouse=True)
+def _no_cloud_wait(monkeypatch):
+    """(#1377) the waits for a cloud read are pinned in
+    test_1377_cloud_read_lag.py; here every read counts at once"""
+    monkeypatch.setattr(GenericChargeAdapter, "SHOW_WITHIN_S", 0.0)
+    monkeypatch.setattr(GenericChargeAdapter, "AWAY_FOR_S", 0.0)
 
 
 class _Hass:
@@ -192,7 +205,10 @@ class TestStartAndStop:
         hass.put(PERMIT, "off")
         n = len(hass.writes("switch"))
         await actuate_battery(_stop(), a)
-        assert len(hass.writes("switch")) == n
+        # never turned on again; (#1377) "off" goes out once, in case SEM's
+        # own "on" is still on its way in the cloud
+        assert [c[1] for c in hass.writes("switch")[n:]] == ["turn_off"]
+        assert hass.read(PERMIT) == "off"
 
     async def test_a_mode_chosen_by_hand_is_left_alone(self):
         hass = _Hass()
@@ -218,7 +234,9 @@ class TestRefusals:
         a = _adapter(hass, _Store(), _Store())
         for _ in range(10):
             await actuate_battery(_charge(), a)
-        assert len(hass.writes("select")) == 2          # bounded, said
+        options = [c[2]["option"] for c in hass.writes("select")]
+        # bounded, said; (#1377) then the old mode once
+        assert options == ["autonomous", "autonomous", "self_consumption"]
         assert a.charge_refused is True
         assert hass.read(PERMIT) == "off"               # the permit is not left on
 
@@ -327,7 +345,8 @@ class TestReview:
         a = _adapter(hass, _Store(), _Store())
         for _ in range(10):
             await actuate_battery(_charge(), a)
-        assert len(hass.writes("switch")) == 2           # the start + one try
+        turn_ons = [c for c in hass.writes("switch") if c[1] == "turn_on"]
+        assert len(turn_ons) == 2                        # the start + one try
         assert hass.read(MODE) == "self_consumption"     # given up, put back
         assert float(hass.read(RESERVE)) == 20
         assert a.charge_refused is True

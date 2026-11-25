@@ -8,6 +8,8 @@ restart mid-charge all put it back, and a choice made by hand is left alone.
 """
 from __future__ import annotations
 
+import pytest
+
 import json
 from types import SimpleNamespace
 
@@ -19,6 +21,9 @@ from custom_components.solar_energy_management.coordinator.battery_adapters.base
 )
 from custom_components.solar_energy_management.coordinator.battery_adapters.charge_record import (
     ForcedChargeRecord,
+)
+from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
+    GenericChargeAdapter,
 )
 from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
     GenericBatteryAdapter,
@@ -35,6 +40,14 @@ CHARGE = "Solar and mains"
 SOLAR = "Solar only"
 OPTIONS = [SOLAR, CHARGE, "Utility first"]
 SWITCH = "switch.force_charge"
+
+
+@pytest.fixture(autouse=True)
+def _no_cloud_wait(monkeypatch):
+    """(#1377) the waits for a cloud read are pinned in
+    test_1377_cloud_read_lag.py; here every read counts at once"""
+    monkeypatch.setattr(GenericChargeAdapter, "SHOW_WITHIN_S", 0.0)
+    monkeypatch.setattr(GenericChargeAdapter, "AWAY_FOR_S", 0.0)
 
 
 class _Hass:
@@ -324,7 +337,9 @@ class TestRefusal:
         a = _adapter(hass, store)
         for _ in range(10):
             await actuate_battery(_charge(), a)
-        assert len(hass.writes()) == 2
+        # the option twice, then (#1377) the old option once: a cloud write
+        # still on its way must not land later with no one to put it back
+        assert [c[2]["option"] for c in hass.writes()] == [CHARGE, CHARGE, SOLAR]
         assert "did not take" in a.last_error
         assert a.last_intent is not BatteryIntent.FORCE_CHARGE
         assert a._charge_adapter.is_active is False
@@ -339,7 +354,9 @@ class TestRefusal:
         await actuate_battery(_stop(), a)
         for _ in range(5):
             await actuate_battery(_charge(), a)
-        assert len(hass.writes()) == 4          # 2 per attempt, never more
+        options = [c[2]["option"] for c in hass.writes()]
+        assert options.count(CHARGE) == 4       # 2 per attempt, never more
+        assert options.count(SOLAR) == 2        # (#1377) the old one, once each
 
     async def test_a_select_that_takes_it_late_is_a_charge(self):
         hass = _Hass()
@@ -360,7 +377,9 @@ class TestRefusal:
         hass.set(SOLAR)                         # the inverter's own logic
         for _ in range(5):
             await actuate_battery(_charge(), a)
-        assert len(hass.writes()) == 1          # no rewrite
+        # no rewrite of the option; (#1377) the old option it shows goes out
+        # once, in case SEM's own write is still on its way
+        assert [c[2]["option"] for c in hass.writes()] == [CHARGE, SOLAR]
         assert "by itself" in a.last_error
         assert a.last_intent is not BatteryIntent.FORCE_CHARGE
         assert json.loads(store.raw).get("running", {}) == {}
@@ -378,12 +397,12 @@ class TestRefusalRound2:
         a = _adapter(hass, _Store())
         for _ in range(50):
             await actuate_battery(_charge(), a)
-        assert len(hass.writes()) == 2
+        assert [c[2]["option"] for c in hass.writes()].count(CHARGE) == 2
         for _ in range(5):
             await actuate_battery(BatteryDecision(battery_id="b1", intent=BatteryIntent.NORMAL), a)
         for _ in range(50):
             await actuate_battery(_charge(), a)
-        assert len(hass.writes()) == 4
+        assert [c[2]["option"] for c in hass.writes()].count(CHARGE) == 4
 
     async def test_a_refusal_is_remembered_for_the_plan_and_cleared_by_a_start(self):
         hass = _Hass()
