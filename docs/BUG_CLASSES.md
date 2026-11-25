@@ -3140,7 +3140,36 @@ prices a dark charger at 0 A, which clamps it lower (the safe side); a charger w
 all reads as known (no sensor is not a dark one); a blind stop that is lost or ignored is not sent again
 until a draw is seen or the demand ends (the device swallows a failed send); the phase switch reads a
 dark charger as at rest and may switch it with no stop first (`ev_control._phase_switch_tick`
-`drawing`; #1423).
+`drawing`; #1423, **closed in round 6**).
+**Round 6 — the phase switch's "at rest" (#1423, 25.11.2026):** the tick took a charger as at rest
+from its charging flag and its power, so a dark power sensor with no status sensor read 0 W and the
+switch went out with no stop first, maybe under load (the real cycle wrote `number.set_value` to the
+dark box). **Closure:** the cycle gives the tick the charger's `adapter`; `charger_draws(adapter, power,
+plug_reading_known=)` answers from the reconciler's own `observe` — True (status, the brand's flag or
+the power), False (a reading says no, a car known gone, a switch reading off), None (no reading). A
+plug sensor that does not read now is no "car gone". While the power is dark, a status that says
+charging is a draw (the reader's 500 W floor had turned the flag off). `PhaseSwitchSequencer.tick(
+blind=)`: no switch starts while blind; a switch waiting for its stop holds the stop and never fires;
+still blind when `STOP_WAIT_S` ends, it is dropped (`blind_drop`) with no "gave up" and no not-taking
+mark. The next stop-first switch waits `BLIND_RETRY_S` (30 min); after `BLIND_DROPS_MAX` (2) drops in a
+row none is asked for until a new target, a switch that goes out, or a known unplug (`forgive_blind`),
+with one WARNING and the state `no_reading`. Observer mode sends no stop, so its drops do not count.
+The tick's other "at rest" reads (the planner's idle start, the daily bound, the night return) take
+`at_rest`. Review: the reader's median kept the 0.0 fills of dark reads, so the first live read after
+two dark ones gave 0 W as a reading (`[0, 0, 11040]`) and the switch fired under load; now
+`_ev_power_known` is False while the median stands on dark fills (with a fill in the window, two live
+reads must give the median's value), for the per-charger and the fleet flag. This also gives #1422's
+reconciler one more blind cycle after a dark spell (no extra stop: once per spell). **Guard:**
+`tests/test_1423_blind_phase_switch.py` — the real cycle (a dark box, the sensor back while drawing, a
+stop that goes dark, a 0 W blip after the dark, power and plug both dark: each fails on develop; a live
+0 W twin is switched at rest), the sequencer (blind at rest, a draw wins, the hold, the drop, a draw at
+the end is still "gave up", the wait, the cap and its resets), the tick (status, plug, cap, unplug in
+auto, observer mode, the night return, a charger set by current), `charger_draws`, the reader's flag,
+and an AST pin that the cycle passes the adapter. **Left open:** a charger with live per-phase
+current sensors but a dark power sensor is blind too (the legs are not read as a draw); a readable
+switch that reads off is taken as "cannot draw" (#1422's rule), so a box whose switch does not open
+its contactor can be switched with the power dark; the cap shows only as a WARNING and the
+`no_reading` attribute (the card shows neither).
 
 ### 59. A limit smoothed like a preference — GUARDED
 **Symptom:** the guard says 10 A, the wire carries 14 → 12 → 12 → 10 over two minutes. **Root

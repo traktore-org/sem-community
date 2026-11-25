@@ -47,6 +47,20 @@ MIN_SWITCH_GAP_S = 120.0
 # slow stop must not be read as a deaf one.
 STOP_WAIT_S = 180.0
 
+# (#1423) After a switch was dropped because SEM could not read the
+# charger's draw through the stop, the next switch that needs a stop waits
+# this long. A sensor that goes dark whenever the box stops would otherwise
+# get a stop, a three-minute hold and a resume every few minutes. A switch
+# at rest (a reading says nothing flows) needs no stop and does not wait.
+# The planner's own gap between automatic switches.
+BLIND_RETRY_S = 1800.0
+
+# (#1423) After this many such drops in a row, no switch that needs a stop
+# is asked for until the target changes or the car is known to be unplugged
+# (``forgive_blind``): that charger's power cannot be read through a stop,
+# and each try costs a stop and a three-minute hold for nothing.
+BLIND_DROPS_MAX = 2
+
 # Phase C hysteresis — up after 5 sustained minutes of headroom, down
 # after 10 sustained minutes of starvation. Asymmetric on purpose: a
 # missed up-switch costs yield, a flappy down-switch costs the contactor.
@@ -85,6 +99,8 @@ class SeqResult:
     gave_up: bool = False            # (#804) the box never stopped — drop it
     at_rest: bool = False            # (#1412) the switch needed no stop: the
     #                                  charger was not drawing when it fired
+    blind_drop: bool = False         # (#1423) dropped: no reading said the
+    #                                  stop took before the wait ran out
 
 
 class PhaseSwitchSequencer:
@@ -96,6 +112,9 @@ class PhaseSwitchSequencer:
         self._switched_at = 0.0
         self._stopping_since: Optional[float] = None
         self._last_switch_at = float("-inf")
+        self._blind_drop_at = float("-inf")
+        self._blind_drops = 0
+        self._blind_target: Optional[int] = None
 
     @property
     def in_flight(self) -> bool:
@@ -111,6 +130,21 @@ class PhaseSwitchSequencer:
         A caller whose reason for the switch is "the car draws" must keep
         asking while the car stops for it."""
         return self._pending if self._state != "idle" else None
+
+    @property
+    def blind_capped(self) -> bool:
+        """(#1423) True once ``BLIND_DROPS_MAX`` switches in a row were
+        dropped because the charger's draw could not be read through the
+        stop: no switch that needs a stop is asked for until
+        ``forgive_blind``."""
+        return self._blind_drops >= BLIND_DROPS_MAX
+
+    def forgive_blind(self) -> None:
+        """(#1423) A new car (a known unplug): the drops and their wait
+        start again."""
+        self._blind_drops = 0
+        self._blind_target = None
+        self._blind_drop_at = float("-inf")
 
     def _result(self, hold: bool, issue: Optional[int] = None,
                 gave_up: bool = False, at_rest: bool = False) -> SeqResult:
@@ -136,11 +170,17 @@ class PhaseSwitchSequencer:
         self._pending = target
         self._switched_at = now
         self._last_switch_at = now
+        self.forgive_blind()      # (#1423) a switch went out: count again
         return self._result(hold=True, issue=target, at_rest=at_rest)
 
     def tick(self, now: float, desired_phases: Optional[int],
              believed_phases: Optional[int], charging: bool,
-             capability_ready: bool) -> SeqResult:
+             capability_ready: bool, blind: bool = False) -> SeqResult:
+        # (#1423) ``blind``: no reading says whether the charger draws (its
+        # power sensor is dark and no status answers), so ``charging`` False
+        # is no answer. A blind charger is never at rest: no switch fires
+        # while it lasts. A draw seen wins over it.
+        blind = bool(blind) and not charging
         # The CALLER's belief is the truth (it carries the measurement);
         # the sequencer only ever asserts a belief ONCE, at settle-end, for
         # the switch it just performed. Live on PROD the sequencer's sticky
@@ -173,6 +213,22 @@ class PhaseSwitchSequencer:
                     # every charge command; the switch is the thing to drop.
                     return self._abort(gave_up=True)
                 return self._result(hold=True)   # never switch under load
+            if blind:
+                # (#1423) The stop holds, and nothing fires until a reading
+                # says it took. When the wait runs out still blind, the
+                # switch is dropped: no reading said the box drew, so it is
+                # not blamed ("gave up") and the target is not marked.
+                if (self._stopping_since is not None
+                        and now - self._stopping_since >= STOP_WAIT_S):
+                    self._blind_drop_at = now
+                    self._blind_drops += 1
+                    self._blind_target = desired_phases
+                    self._abort()
+                    return SeqResult(
+                        state=self._state, hold_charging=False,
+                        issue_switch=None, believed_phases=None,
+                        blind_drop=True)
+                return self._result(hold=True)
             return self._fire(now, desired_phases)   # after a stop: under load
 
         # idle — look for a trigger
@@ -180,6 +236,15 @@ class PhaseSwitchSequencer:
                 or desired_phases == believed):
             return self._result(hold=False)
         if now - self._last_switch_at < MIN_SWITCH_GAP_S:
+            return self._result(hold=False)
+        if blind:
+            # (#1423) It may be charging: a switch now could open the
+            # contactor under load. Asked again when a reading returns.
+            return self._result(hold=False)
+        if self._blind_drops and desired_phases != self._blind_target:
+            self.forgive_blind()            # a new target: count again
+        if charging and (self.blind_capped
+                         or now - self._blind_drop_at < BLIND_RETRY_S):
             return self._result(hold=False)
         if charging:
             self._state = "stopping"

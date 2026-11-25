@@ -1319,8 +1319,14 @@ class EVControlMixin:
                                  device=None,
                                  is_night: bool = False,
                                  source_code=None,
-                                 leg_phases=None):
+                                 leg_phases=None,
+                                 adapter=None):
         """(#804 Phase B/C) One cycle of the phase model for this charger.
+
+        ``adapter`` (#1423): this charger's adapter, asked whether it draws
+        by the reconciler's own reading (``charger_draws``). A dark power
+        sensor with no status answer is no reading: its 0 W is never taken
+        as at rest. Without an adapter, the power and the flag decide.
 
         Returns the decision, replaced with IDLE while the sequencer holds
         (stop→switch→settle — never switch under load). The capability is
@@ -1360,7 +1366,8 @@ class EVControlMixin:
 
         from .charger_types import ChargerIntent, rewrite
         from .ev_phase_sequencer import (
-            SETTLE_S, STOP_WAIT_S, PhaseAutoPlanner, PhaseSwitchSequencer,
+            BLIND_DROPS_MAX, BLIND_RETRY_S, SETTLE_S, STOP_WAIT_S,
+            PhaseAutoPlanner, PhaseSwitchSequencer,
         )
         from .ev_phases import (
             ONE_PHASE_CAR_CYCLES, ONE_PHASE_DRAW_TOLERANCE,
@@ -1429,6 +1436,24 @@ class EVControlMixin:
         # charger's flag can lag its meter. EVERY switch waits for both.
         drawing = bool(cp.charging) or (
             abs(float(cp.power_w or 0.0)) > PHASE_LEG_FLOW_W)
+        # (#1423) A dark power sensor reads 0 W, and a charger with no
+        # status sensor then looked at rest: the switch went out with no
+        # stop first, maybe under load. The reconciler's own reading says
+        # whether it draws, and no reading is ``blind``. While the power is
+        # dark, a status that says charging is a draw (the reader's 500 W
+        # floor turned the flag off on the dark 0 W); a live power reading
+        # keeps deciding as before. ``at_rest`` is a reading that says
+        # nothing flows; a draw seen wins over ``blind``.
+        draws = False
+        if adapter is not None:
+            from .charger_reconciler import charger_draws
+            draws = charger_draws(
+                adapter, cp,
+                plug_reading_known=_plug_reading_known(self, charger_cfg))
+        if draws is True and getattr(cp, "power_known", True) is False:
+            drawing = True
+        blind = draws is None and not drawing
+        at_rest = not drawing and not blind
 
         voltage = float(charger_cfg.get("ev_voltage")
                         or getattr(self, "config", {}).get("ev_voltage")
@@ -1455,6 +1480,7 @@ class EVControlMixin:
                 and _plug_reading_known(self, charger_cfg)):
             if now - _unplugged.setdefault(cid, now) >= PHASE_BELIEF_UNPLUG_S:
                 _forget_phases(self, cid)
+                seq.forgive_blind()         # (#1423) a new car: count again
         else:
             _unplugged.pop(cid, None)
 
@@ -1479,7 +1505,8 @@ class EVControlMixin:
         if decision.intent is ChargerIntent.RELEASE:
             r = seq.tick(now=now, desired_phases=None,
                          believed_phases=self._phase_believed.get(cid),
-                         charging=drawing, capability_ready=ready)
+                         charging=drawing, capability_ready=ready,
+                         blind=blind)
             self._phase_switch_states[cid] = r.state
             if r.believed_phases is not None:
                 self._phase_believed[cid] = r.believed_phases
@@ -1668,7 +1695,7 @@ class EVControlMixin:
             planner.rest()
             desired = None
             if own_one_phase:
-                if not drawing and seq_idle and (
+                if at_rest and seq_idle and (
                         grid_pays or _grid_energy_owed(self, cid)):
                     # back before the block draws — but only when there IS
                     # a block: a charge commanded for the grid, or energy
@@ -1705,7 +1732,7 @@ class EVControlMixin:
                     getattr(self, "config", {}) or {}, voltage,
                     peak_allowed_w=peak_allowed_w),
                 idle=(decision.intent is ChargerIntent.IDLE
-                      and not drawing and seq_idle),
+                      and at_rest and seq_idle),
             )
             # (#1008) …and the same give-up the manual target gets. Under
             # CHARGE_MAX the offer is a constant that always clears the
@@ -1725,7 +1752,7 @@ class EVControlMixin:
         _recent = [x for x in _rest_times.get(cid, []) if now - x < 86400.0]
         _rest_times[cid] = _recent
         if (desired is not None and mode_val not in ("1", "3")
-                and not drawing and seq_idle
+                and at_rest and seq_idle
                 and len(_recent) >= PHASE_REST_SWITCHES_PER_DAY):
             desired = None
         # (#1412) No switch is ASKED FOR with a value the entity's range
@@ -1760,8 +1787,32 @@ class EVControlMixin:
                 _roster.append(dict(_try["entry"]))
         r = seq.tick(now=now, desired_phases=desired,
                      believed_phases=believed, charging=drawing,
-                     capability_ready=ready)
+                     capability_ready=ready, blind=blind)
         self._phase_switch_states[cid] = r.state
+        if r.blind_drop and self._observer_mode:
+            # (#1423) Observer mode sends no stop: the wait proved nothing
+            # about the sensor, so the drop does not count toward the cap.
+            seq.forgive_blind()
+            _LOGGER.info(
+                "OBSERVER · #1423 %s: WOULD-switch to %sp dropped — the "
+                "charger's power could not be read", cid, desired)
+        elif r.blind_drop:
+            # (#1423) Not "gave up": no reading said the box drew, so the
+            # target is not marked as one the charger does not take.
+            if seq.blind_capped:
+                _LOGGER.warning(
+                    "#1423 %s: phase switching waits — the charger's power "
+                    "could not be read while it was to stop, %d times in a "
+                    "row. Check its power sensor. A switch that needs a stop "
+                    "is asked for again on a new target or a new car.",
+                    cid, BLIND_DROPS_MAX)
+            else:
+                _LOGGER.info(
+                    "#1423 %s: switch to %sp dropped — the charger's power "
+                    "could not be read for %.0f s while it was to stop, so "
+                    "SEM cannot tell whether it stopped. A switch that needs "
+                    "a stop waits %.0f min.", cid, desired, STOP_WAIT_S,
+                    BLIND_RETRY_S / 60.0)
 
         # (#804) The box kept drawing through the stop. That is not a slow
         # cycle, it is a charger SEM cannot open, and asking again every few
@@ -1772,10 +1823,14 @@ class EVControlMixin:
         if r.gave_up and desired is not None and not self._observer_mode:
             _LOGGER.warning(
                 "#804 %s: gave up switching to %sp — the charger still drew "
-                "%.0f W %.0f s after SEM stopped it. Phase switching needs a "
+                "(%s) %.0f s after SEM stopped it. Phase switching needs a "
                 "stop SEM can actually make (start/stop switch, charge-mode "
                 "stop option, or a current entity that accepts 0 A).",
-                cid, desired, cp.power_w, STOP_WAIT_S)
+                cid, desired,
+                (f"{float(cp.power_w or 0.0):.0f} W"
+                 if abs(float(cp.power_w or 0.0)) > PHASE_LEG_FLOW_W
+                 else "its status says charging"),
+                STOP_WAIT_S)
             contra["target"] = desired
             contra["count"] = PHASE_NOT_TAKING_AFTER
 
@@ -1926,6 +1981,10 @@ class EVControlMixin:
             grid_phases.pop(cid, None)
         if car_one_phase.get(cid) and mode_val not in ("1", "3"):
             self._phase_switch_states[cid] = "one_phase_car"
+        if (seq.blind_capped and desired is not None
+                and self._phase_switch_states.get(cid) == "idle"):
+            # (#1423) a switch is wanted, and waits for a power reading
+            self._phase_switch_states[cid] = "no_reading"
         if (contra["count"] >= PHASE_NOT_TAKING_AFTER
                 and contra["target"] is not None):
             self._phase_switch_states[cid] = "not_taking"

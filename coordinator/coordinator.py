@@ -5991,6 +5991,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 leg_phases=self._charger_leg_phases(
                                     cid, getattr(adapter, "_device", None),
                                     view.power.power_w),
+                                # (#1423) a dark 0 W is no "at rest": the
+                                # reconciler's own reading of this charger
+                                adapter=adapter,
                             )
 
                         # (#1381, charger owner S3) The chain, in the order
