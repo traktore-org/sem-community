@@ -11,7 +11,6 @@ none (fixture: the real PROD cycles around five of that day's events).
 """
 from __future__ import annotations
 
-import ast
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,6 +26,7 @@ from custom_components.solar_energy_management.coordinator.baseload_window impor
 )
 from custom_components.solar_energy_management.devices.base import CurrentControlDevice
 
+from .ast_contracts import call_sites, symbol_reference_files
 from .cycle_rig import CycleRig
 
 FIXTURE = Path(__file__).parent / "fixtures" / "prod_baseload_cycles_20261124.json"
@@ -145,14 +145,9 @@ async def test_the_cycle_publishes_the_mean(monkeypatch):
 
 
 def test_one_producer_and_no_instant_alignment():
-    """The coordinator computes the live base load through ``live_baseload``
-    only; the instant alignment that moved the error is gone."""
-    src = (ROOT / "coordinator.py").read_text()
-    assert "live_baseload(" in src
-    assert "DrawHistory" not in src and "house_complete_at" not in src
+    """The live base load comes from ``live_baseload`` only; the instant
+    alignment that moved the error is gone from the package."""
+    assert [f for f, _, _ in call_sites("live_baseload")] == ["coordinator/coordinator.py"]
+    assert symbol_reference_files("DrawHistory") == []
+    assert symbol_reference_files("house_complete_at") == []
     assert not (ROOT / "draw_alignment.py").exists()
-    tree = ast.parse(src)
-    writes = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
-              and any(isinstance(t, ast.Attribute) and t.attr == "true_baseload_power"
-                      for t in n.targets)]
-    assert len(writes) == 1

@@ -715,6 +715,9 @@ class EnergyCalculator:
         self._published_rows: Dict[str, float] = {}
         #: (#1382) the daily flows as last published, kept across a restart
         self.published_flows: Optional[Dict[str, Any]] = None
+        #: (#1382) the day whose home row was the balance last cycle too
+        self._home_balance_day: Optional[date] = None
+        self._home_was_balance: bool = False
         self._home_balance_logged: bool = False
         # Baselines for the midnight EV mirror — same delta model as
         # ``_ev_counter_baselines``, keyed on the calendar day instead.
@@ -4254,6 +4257,10 @@ class EnergyCalculator:
           midnight row out of a deadline row is the bug class closed in
           #703/#704.
         """
+        # (#1382) whether last cycle's home row was the balance; reset here,
+        # set again only where this cycle's row becomes the balance
+        self._home_was_balance = self._home_balance_day == today
+        self._home_balance_day = None
         if not self._meter_counter_enabled or not self._hass:
             return
 
@@ -4302,11 +4309,17 @@ class EnergyCalculator:
         self._counter_backed.add("home")
         daily_key = f"home_{today}"
         integrated = self._daily_accumulators.get(daily_key, 0.0)
+        # (#1382) Held only while the row has been the balance all along:
+        # the first adoption of a day, or after a stretch the integrator
+        # ran alone, may still bring an integrator's over-count down (#628).
+        was_balance = self._home_was_balance
+        self._home_balance_day = today
         delta = target - integrated
         if abs(delta) <= METER_RECONCILIATION_THRESHOLD:
             return  # Already there; small drift stays with the integrator.
-        target = self._not_below_published(daily_key, target)   # (#1382)
-        delta = target - integrated
+        if was_balance:
+            target = self._not_below_published(daily_key, target)
+            delta = target - integrated
 
         if not self._home_balance_logged:
             self._home_balance_logged = True

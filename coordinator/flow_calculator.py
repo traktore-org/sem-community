@@ -9,9 +9,11 @@ Destinations: Home, EV, Battery Charge, Grid Export
 """
 from __future__ import annotations
 
+import copy
+
 import logging
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, Optional
 
@@ -71,7 +73,9 @@ def hold_published_flows(flows: EnergyFlows, published: Optional[Dict[str, Any]]
         cells[attr] = value
     if lifted:
         # a copy: the integrator's own sums stay as measured
-        flows = replace(flows, **lifted)
+        flows = copy.copy(flows)
+        for attr, value in lifted.items():
+            setattr(flows, attr, value)
     return flows, {"day": day, "cells": cells}
 
 
