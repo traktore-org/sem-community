@@ -403,6 +403,19 @@ async def async_clear_statistics(hass, statistic_ids: Sequence[str]) -> int:
 #: explicit ``remove_leftovers`` call.
 _DASHBOARD_PATH = "sem-dashboard"
 _DASHBOARD_STORE = f"lovelace.{_DASHBOARD_PATH}"
+#: (#1428) Every dashboard SEM ever generated: the retired classic one and
+#: the current one (#1321). remove_leftovers takes all of them, plus the
+#: copy of the classic dashboard the #1321 migration kept.
+SEM_DASHBOARD_PATHS = ("sem-dashboard", "sem-next")
+CLASSIC_DASHBOARD_COPY = f"{DOMAIN}.classic_dashboard_copy"
+
+
+async def async_remove_dashboards(hass) -> list:
+    """(#1428) Remove every SEM dashboard and the classic copy. Explicit only."""
+    removed = [p for p in SEM_DASHBOARD_PATHS if await async_remove_dashboard(hass, p)]
+    if await async_delete_stores(hass, [CLASSIC_DASHBOARD_COPY]):
+        removed.append(CLASSIC_DASHBOARD_COPY)
+    return removed
 
 
 def running_dashboards_collection(hass):

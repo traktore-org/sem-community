@@ -933,16 +933,20 @@ Services > Solar Energy Management > Configure**:
 
 ## Removing SEM
 
-SEM removes its own storage, Repairs, dashboard resources and hardware
-commands on uninstall. It undoes only its own commands. It never changes your
-car's authorisation.
+SEM removes its own entities, its device, storage, Repairs, notifications,
+dashboard resources and hardware commands on uninstall. It undoes only its own
+commands. It never changes your car's authorisation.
 
-It keeps your history and the SEM dashboard you made. To remove them too, run
-the action **SEM: Remove leftovers** before you uninstall:
+It keeps your history, the SEM dashboard and the saved copy of the old
+classic dashboard. To remove them too, run the action
+**SEM: Remove leftovers** before you uninstall:
 
 | Option | Default | What it does |
 |---|---|---|
 | `statistics` | on | Clears the recorder's long-term statistics for SEM's sensors |
-| `dashboard` | off | Deletes the SEM dashboard, including your edits |
+| `dashboard` | off | Deletes every SEM dashboard and the classic copy, including your edits |
 
 Older storage files are removed on the next setup, and a Repair tells you how many.
+
+When you remove a charger, battery, PV string or a load's own tariff, its
+entities go at the next start. Removing a charger restarts SEM, so they go at once.

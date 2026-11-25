@@ -103,3 +103,15 @@ def test_uninstall_dismisses_every_notification_sem_can_raise():
         ids |= set(re.findall(r'notification_id["\']?\s*[=:]\s*f?["\'](sem_[a-z0-9_]+)', f.read_text()))
     assert ids, "no notification ids found"
     assert ids <= set(cleanup.SEM_NOTIFICATION_IDS), sorted(ids - set(cleanup.SEM_NOTIFICATION_IDS))
+
+
+def test_remove_leftovers_takes_every_sem_dashboard_and_the_classic_copy():
+    """The service removed only ``sem-dashboard``; the dashboard SEM makes is
+    ``sem-next`` since #1321, and the retired classic one's copy stayed."""
+    from custom_components.solar_energy_management import cleanup
+    assert set(cleanup.SEM_DASHBOARD_PATHS) >= {"sem-dashboard", "sem-next"}
+    init = (ROOT / "__init__.py").read_text()
+    body = init[init.index("async def async_remove_leftovers_service"):]
+    body = body[:body.index("hass.services.async_register(")]
+    assert "async_remove_dashboards(" in body
+    assert "classic_dashboard_copy" in (ROOT / "cleanup.py").read_text()

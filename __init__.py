@@ -4092,8 +4092,9 @@ async def _async_take_sems_own_files(hass: HomeAssistant,
             "SEM removed: took its own files — %d store(s), %d repair(s), "
             "%d frontend resource(s), its notifications%s. Kept on purpose: "
             "the long-term statistics of SEM's sensors and the generated "
-            "dashboard; run solar_energy_management.remove_leftovers before "
-            "removing SEM to delete those too.",
+            "dashboard (and the saved copy of the classic one); run "
+            "solar_energy_management.remove_leftovers before removing SEM to "
+            "delete those too.",
             len(stores), repairs, len(resources),
             "" if remaining else " (last entry: install-wide stores too)")
     except Exception as e:  # noqa: BLE001 — a removal must always complete
@@ -4874,7 +4875,9 @@ async def _async_register_services(
             ids = cleanup.sem_statistic_ids(hass, _entry_id or None)
             done["statistics"] = await cleanup.async_clear_statistics(hass, ids)
         if want_dashboard:
-            done["dashboard"] = await cleanup.async_remove_dashboard(hass)
+            # (#1428) every SEM dashboard (sem-dashboard, sem-next) and the
+            # classic dashboard's saved copy — not only the retired one
+            done["dashboard"] = bool(await cleanup.async_remove_dashboards(hass))
 
         clear_previous_install_leftovers(hass)
         _LOGGER.info(
