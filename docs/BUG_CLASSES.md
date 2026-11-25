@@ -3140,7 +3140,7 @@ prices a dark charger at 0 A, which clamps it lower (the safe side); a charger w
 all reads as known (no sensor is not a dark one); a blind stop that is lost or ignored is not sent again
 until a draw is seen or the demand ends (the device swallows a failed send); the phase switch reads a
 dark charger as at rest and may switch it with no stop first (`ev_control._phase_switch_tick`
-`drawing`; filed as a sub-issue of #1422).
+`drawing`; #1423).
 
 ### 59. A limit smoothed like a preference — GUARDED
 **Symptom:** the guard says 10 A, the wire carries 14 → 12 → 12 → 10 over two minutes. **Root
