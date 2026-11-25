@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **The phase guard leaves an idle charger alone** (#1420). With another app in charge, a charger at 0 W is not stopped, nor logged as stopped.
+- 🐛 **The phase guard stops a charger whose power sensor is unavailable** (#1422). With no status sensor, SEM took it for stopped and sent nothing.
+- 🐛 **The phase guard leaves an idle charger alone** (#1420). With another app in charge, a 0 W charger is not stopped, nor logged as stopped.
 - 🐛 **An old card asks for a reload** (#1381). After an update, a cached card showed only "Off". Every screen now says SEM was updated.
 - 🐛 **The mode control shows every mode** (#1381). An option the card does not know is still a button, by its raw name.
 - 🐛 **"Sun + tariff" fits on a phone** (#1381). On narrow screens the label is "Sun+tariff", on one line.
