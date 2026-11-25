@@ -48,6 +48,13 @@ Paths below read like `System › Battery rules`, or name the card on **Devices*
 2. If the card is blank with no error, check `System › Health`. It lists the sources that are unavailable.
 3. A card you placed by hand from the old dashboard shows a **retired** note with a link to the new screen. Replace it with the new screen.
 
+### "SEM was updated. Reload this page"
+
+The app still runs the card from before an update. An old card can show
+wrong buttons, for example only "Off" for the charge mode. Reload the page.
+In the phone app, close the app fully and open it again. If the banner
+stays: App settings → Companion app → Debugging → Reset frontend cache.
+
 ### The SEM dashboard is missing
 
 **Fix:**

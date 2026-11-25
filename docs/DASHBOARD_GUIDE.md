@@ -87,10 +87,15 @@ Every charger, battery and load, in priority order.
 - Above the list: surplus, active devices, the 15-minute peak, the limit
   (**Limit grid draw to**), the month peak and what SEM can shed.
 
+When the app still runs a card from before an update, every screen shows
+**SEM was updated. Reload this page to use the new version.** with a **Reload** button.
+
 **Charger**: one mode control (Sun, Sun + tariff, Now, Off), the switch **May the
 battery help the car?**, and for **Now** its end (the plan, a time, or until full).
-Then the target bar (**At least**, **Up to**), **Charge by**, **Pause charging**,
-sessions and lifetime. **Battery**: mode, what it does now and next, the three levels.
+Then the target bar (**At least**, **Up to**). It counts this charger's energy
+today, the same number SEM uses for what is left, and says it in words: "6.8 of
+at least 10 kWh · 3.2 kWh to go". The bar runs up to the **Up to** the card shows.
+Then **Charge by**, **Pause charging**, sessions and lifetime. **Battery**: mode, what it does now and next, the three levels.
 **Load**: one mode control and **Boost for**. A load does nothing until you set
 its mode; new loads start at **Off**. Until then its card reads **Not controlled —
 turn on**. Security devices (camera, alarm, door lock, siren) are never listed or

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **An old card asks for a reload** (#1381). After an update, a cached card showed only "Off". Every screen now says SEM was updated.
+- 🐛 **The mode control shows every mode** (#1381). An option the card does not know is still a button, by its raw name.
+- 🐛 **"Sun + tariff" fits on a phone** (#1381). On narrow screens the label is "Sun+tariff", on one line.
+- 🐛 **The charge bar matches the target** (#1381). It runs to the Up to you see, and says how much is left.
 - 🐛 **A new charger no longer shows a removed charger's sessions** (#1421). It gets an id no charger had before. New heat pumps too.
 - 🐛 **A charger stopped by the phase guard comes back** (#1381). SEM switches it on again when the phase has room, one charger at a time.
 - 🐛 **No "night charging" at 0 W after a guard stop** (#1381). The charger reads "Stopped by the phase guard" until it is back on.

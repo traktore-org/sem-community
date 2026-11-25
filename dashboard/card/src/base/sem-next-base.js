@@ -31,11 +31,22 @@ import { chargerNameOf } from '../util/charger-name.js';
 import { sibling } from '../util/setup-checklist.js';
 import { ensureHaElements, haDefined } from '../util/ha-elements.js';
 import { renderButton, renderAlert } from '../util/ha-ui.js';
+import { staleCard, ownCardVersion } from '../util/version-check.js';
 
 export { html, css, svg, nothing };
 
 // the HA elements these screens draw when they exist
 /** (#1321) a phone-width screen: a long row of mode buttons does not fit. */
+/**
+ * (#1381) A segment label on a phone: "Sun + tariff" broke onto two lines in
+ * a four-button row, so narrow screens drop the spaces around "+". The full
+ * name stays in the hint below and in the accessible name.
+ */
+export function segLabel(label, narrow) {
+    const s = String(label ?? '');
+    return narrow ? s.replace(/\s*\+\s*/g, '+') : s;
+}
+
 export function segNarrow() {
     try { return !!globalThis.matchMedia && globalThis.matchMedia('(max-width: 600px)').matches; } catch (_) { return false; }
 }
@@ -161,6 +172,9 @@ export const nextCss = css`
     .tile .lbl { display: block; margin-bottom: 4px; }
     .tile svg { display: block; margin-top: 6px; max-width: 100%; }
     .mark { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }
+    .stale { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--sem-card-radius, 12px); background: color-mix(in srgb, var(--warning-color, #ffa600) 18%, transparent); color: var(--n-fg); }
+    .stale span { flex: 1 1 200px; }
+    .barwords { margin-top: 4px; }
     .seg { display: inline-flex; background: color-mix(in srgb, var(--disabled-color, var(--n-fg2)) 20%, transparent); border-radius: 16px; padding: 2px; gap: 2px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
     .seg button { border: 0; background: transparent; color: var(--n-fg); font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); padding: 6px 14px; border-radius: 16px; cursor: pointer; min-height: 32px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
     .seg button.on { background: var(--n-accent); color: var(--n-accent-fg); }
@@ -429,7 +443,7 @@ export class SEMNextBase extends SEMLitBase {
 
     /** Entity ids whose state or attributes drive a re-render. Screens extend it. */
     _watchIds() {
-        return ['switch.sem_observer_mode', 'sensor.sem_night_start_time', 'sensor.sem_night_end_time',
+        return ['switch.sem_observer_mode', 'sensor.sem_diag_version', 'sensor.sem_night_start_time', 'sensor.sem_night_end_time',
                 'sensor.sem_battery_soc', 'sensor.sem_tariff_current_import_rate', 'sensor.sem_tariff_price_level'];
     }
 
@@ -639,10 +653,23 @@ export class SEMNextBase extends SEMLitBase {
         return html`<h1 class="lead">${main}</h1>${sub ? html`<p class="sub">${sub}</p>` : html`<p class="sub"></p>`}`;
     }
 
+    /**
+     * (#1381) This card is older than the SEM the server runs (a cached
+     * bundle after an update): one line and a reload, on every screen.
+     */
+    _staleBanner() {
+        const st = this._hass?.states?.['sensor.sem_diag_version'];
+        if (!staleCard(ownCardVersion(), st?.attributes?.card)) return nothing;
+        const reload = () => { try { window.location.reload(); } catch (e) { /* nothing to do */ } };
+        return html`<div class="stale" role="alert">${this._icon('mdi:update')}<span>${this._t('next_card_stale')}</span>
+            ${renderButton(this._t('next_card_reload'), reload)}</div>`;
+    }
+
     /** The outer frame every screen renders into: header, lead, then the body of ha-cards. */
     _frame(lead, body) {
         return html`<div class="app ${this._all ? 'all' : ''}">
             ${this._renderHead()}
+            ${this._staleBanner()}
             ${lead ? this._renderLead(lead.main, lead.sub) : nothing}
             ${body}
         </div>
@@ -723,20 +750,21 @@ export class SEMNextBase extends SEMLitBase {
                 cur, (v) => pick(v), { ariaLabel: o.label || '' });
         }
         // HA's disabled look fades the labels to nothing, so a disabled control is the native one in readable colours
+        const narrow = segNarrow();
         if (haDefined('ha-control-select') && !o.disabled) {
-            const options = items.map((it) => ({ value: String(it.key), label: it.label, disabled: !!it.disabled }));
+            const options = items.map((it) => ({ value: String(it.key), label: segLabel(it.label, narrow), disabled: !!it.disabled }));
             // each option gets room for one line of label (the control's own width is only its parent's)
             return html`<ha-control-select class="${o.small ? 'sm' : ''}" style="min-width:min(100%, ${items.length * (o.small ? 6.5 : 5.5)}em)" .options=${options} .value=${cur} ?disabled=${!!o.disabled}
                 @value-changed=${(e) => pick(e.detail?.value)}></ha-control-select>`;
         }
         if (haDefined('ha-button-toggle-group') && !o.disabled) {
-            const buttons = items.map((it) => ({ label: it.label, value: String(it.key) }));
+            const buttons = items.map((it) => ({ label: segLabel(it.label, narrow), value: String(it.key) }));
             return html`<ha-button-toggle-group size="${o.small ? 'small' : 'medium'}" .buttons=${buttons} .active=${cur} ?disabled=${!!o.disabled}
                 @value-changed=${(e) => pick(e.detail?.value)}></ha-button-toggle-group>`;
         }
         return html`<div class="seg ${o.small ? 'sm' : ''} ${o.disabled ? 'off' : ''}" role="group" title="${this._whyOff(o.disabled) || nothing}">
             ${items.map((it) => html`<button type="button" class="${String(it.key) === cur ? 'on' : ''}" ?disabled=${!!it.disabled || !!o.disabled}
-                aria-pressed="${String(it.key) === cur}" @click=${() => onPick(it.key)}>${it.icon ? this._icon(it.icon, 's') : nothing}${it.label}</button>`)}
+                aria-pressed="${String(it.key) === cur}" aria-label="${it.label}" @click=${() => onPick(it.key)}>${it.icon ? this._icon(it.icon, 's') : nothing}${segLabel(it.label, narrow)}</button>`)}
         </div>`;
     }
 

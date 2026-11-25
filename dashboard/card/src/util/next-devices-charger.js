@@ -11,10 +11,10 @@ import { html, nothing } from '../base/sem-next-base.js';
 import { chargerRenameWrite } from './charger-name.js';
 import { resolveChargerSoc } from './charger-soc.js';
 import { effectivePlan, kwhAhead } from './plan-facts.js';
-import { targetModel, weekdaySummary } from './next-devices.js';
+import { weekdaySummary } from './next-devices.js';
 import { monthTotals, rowsForMonth } from './sessions.js';
 import { rowText } from './next-settings.js';
-import { CHARGER_TEXT, CHARGE_MODES, NOW_ENDS, minutesUntil, chargeModeKey, targetEntities, upToShown, knownCapacity, capacityUnset } from './charger-questions.js';
+import { CHARGER_TEXT, CHARGE_MODES, NOW_ENDS, minutesUntil, chargeModeKey, targetEntities, upToShown, knownCapacity, capacityUnset, chargerTargetBar, chargerModeItems } from './charger-questions.js';
 
 const LATE = [0, 15, 30, 45, 60, 90, 120];
 const FLOORS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
@@ -91,8 +91,8 @@ export function chargerBody(card, row) {
     };
     const nowEndKey = mode !== 'now' ? '' : (nowUntil ? 'time' : 'full');
     // (#1321) ONE control for the mode, as the battery has: Off first, then the modes in the shared order
-    const segItems = ['off', ...CHARGE_MODES.filter((m) => m !== 'off')].filter((m) => options.includes(m))
-        .map((m) => ({ key: m, label: t(chargeModeKey(m)) || m, disabled: !tariffOk && needTariff.includes(m) }));
+    const segItems = chargerModeItems(options, t)
+        .map((it) => ({ ...it, disabled: !tariffOk && needTariff.includes(it.key) }));
     const buffer = card._num('number.sem_battery_buffer_soc');
     const priority = card._num('number.sem_battery_priority_soc');
     const hintP = { buffer: buffer === null ? '—' : Math.round(buffer), priority: priority === null ? '—' : Math.round(priority) };
@@ -158,17 +158,21 @@ export function chargerBody(card, row) {
     const capacity = knownCapacity(card._num(capKey), card._attrs(capKey));
     const per100 = card._num('number.sem_charger_' + cid + '_ev_kwh_per_100km');
     const have = isSoc ? soc : daily;
-    const tm = targetModel({ have, min, max, isSoc });
+    // (#1381) one model for the bar and its words, scaled to the Up to the card shows
+    const tm = chargerTargetBar({ have, min, max, capacity, isSoc,
+        bound: maxId ? Number(card._attrs(maxId).max) : null, unset: capacityUnset(card._attrs(capKey)) });
     const timeId = ent('time', 'target_time');
     const chargeBy = timeId ? card._hhmm(card._str(timeId)) : '';
     const fmtT = (v) => (v === null ? '—' : (isSoc ? Math.round(v) : card._fmt(v, 1)));
     // (#1321) near an edge the label grows inward, so it never leaves the card
     const edge = tm.flagLeft === null ? '' : (tm.flagLeft < 15 ? 'start' : (tm.flagLeft > 85 ? 'end' : ''));
     const flag = tm.flagLeft === null ? nothing : html`<div class="flag ${edge}" style="left:${tm.flagLeft}%">${tf('next_at_least_x', { x: fmtT(min) + ' ' + unit })}</div>`;
+    const barWords = tm.left === null ? '' : tf(tm.reached ? 'next_bar_done' : 'next_bar_left', {
+        have: fmtT(have) + ' ' + unit, min: fmtT(min) + ' ' + unit, left: fmtT(tm.left) + ' ' + unit });
     const target = html`<div class="target">
         <div class="soc" style="width:${tm.fill}%"></div>
         ${tm.bandLeft === null ? nothing : html`<div class="band" style="left:${tm.bandLeft}%;width:${tm.bandWidth}%"></div>`}
-        ${flag}</div>`;
+        ${flag}</div>${barWords ? html`<div class="sub2 barwords">${barWords}</div>` : nothing}`;
 
     // ── plan · target values ──
     const kmNow = soc !== null && capacity && per100 ? Math.round((soc / 100) * capacity / per100 * 100) : null;

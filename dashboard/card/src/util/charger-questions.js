@@ -8,6 +8,7 @@
  */
 
 import { strategyWords } from './next-strategy-reason.js';
+import { targetModel } from './next-devices.js';
 
 /** The text keys every card uses for the charger's settings. */
 export const CHARGER_TEXT = {
@@ -125,4 +126,36 @@ export function upToShown({ max, capacity, bound, isSoc, unset = false }) {
     if (unset) return { max: null, full: true };
     if (Number.isFinite(capacity) && capacity > 0) return { max: Math.min(max, capacity), full: false };
     return { max, full: Number.isFinite(bound) && max >= bound };
+}
+
+/**
+ * (#1381) The charger's target bar and its words, from one input: the
+ * energy the decision counts for "remaining" (kWh: this charger's energy
+ * today; SOC: the car's level). PROD 25.11 scaled the bar to the setting's
+ * raw ceiling (200 kWh) while the card said "Up to 40 kWh", so 16.3 of
+ * at least 10 kWh looked nearly empty. The scale is now the Up to the card
+ * shows; for "full" the larger of At least and today.
+ */
+export function chargerTargetBar({ have, min, max, capacity, bound, isSoc, unset = false }) {
+    const up = upToShown({ max, capacity, bound, isSoc, unset });
+    const top = isSoc ? max : (up.full ? null : up.max);
+    const tm = targetModel({ have, min, max: top, isSoc });
+    const h = Number.isFinite(have) ? have : null;
+    const lo = Number.isFinite(min) ? min : null;
+    const left = h === null || lo === null ? null : Math.max(0, lo - h);
+    return { ...tm, left, reached: left !== null && left <= 0.05 };
+}
+
+/**
+ * (#1381) The mode buttons, from what the select offers: Off first, then the
+ * known modes in their order, then anything this card does not know, by its
+ * raw name. A card that hid unknown options drew a single "Off" button after
+ * an update (25.11) — every option the select offers is a button.
+ */
+export function chargerModeItems(options, t) {
+    const opts = Array.isArray(options) ? options.map(String) : [];
+    const known = ['off', ...CHARGE_MODES.filter((m) => m !== 'off')].filter((m) => opts.includes(m));
+    const rest = opts.filter((m) => !known.includes(m));
+    const word = (m) => (CHARGE_MODES.includes(m) ? t(chargeModeKey(m)) : '') || m;
+    return [...known, ...rest].map((m) => ({ key: m, label: word(m) }));
 }

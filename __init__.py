@@ -6019,6 +6019,8 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             }
 
         asset_v = await hass.async_add_executor_job(_asset_versions)
+        # (#1381) the cards compare their own ?v= with this (sensor.sem_diag_version.card)
+        hass.data[f"{DOMAIN}_card_version"] = asset_v['bundle']
 
         localize_base = f"{static_path}/card/sem-localize.js"
         # Single Lit bundle replaces all individual card JS files
