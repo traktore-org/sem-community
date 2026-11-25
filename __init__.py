@@ -3618,17 +3618,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         _LOGGER.info("Platforms setup completed: %s", PLATFORMS)
         await _async_listen_energy_prefs(hass)
-        # (#1428) A removed charger leaves no entities behind. Runs after the
-        # platforms built this run's entities, so also right after
-        # remove_charger (which reloads the entry). Never fails setup.
+        # (#1428) Nothing SEM made outlives its item: every platform reported
+        # the keys it built; ONE sweep removes this entry's other rows. Runs
+        # after the platforms, so also right after remove_charger (which
+        # reloads the entry). Never fails setup.
         try:
-            from .charger_entity_sweep import sweep_removed_charger_entities
-            sweep_removed_charger_entities(
-                hass, entry,
-                (entry.options or {}).get("ev_chargers")
-                or (entry.data or {}).get("ev_chargers") or [])
+            from .entity_sweep import sweep_stale_entities
+            sweep_stale_entities(hass, entry)
         except Exception as exc:  # noqa: BLE001
-            _LOGGER.debug("Removed-charger entity sweep skipped: %s", exc)
+            _LOGGER.debug("Entity sweep skipped: %s", exc)
     except Exception as err:
         _LOGGER.error("Failed to setup platforms: %s", err, exc_info=True)
         # Cleanup coordinator data
@@ -4086,9 +4084,16 @@ async def _async_take_sems_own_files(hass: HomeAssistant,
                 hass, cleanup.install_wide_store_keys())
         repairs = cleanup.delete_repairs(hass)
         resources = await cleanup.async_deregister_resources(hass)
+        cleanup.dismiss_notifications(hass)   # (#1428)
+        # (#1428) Entities and SEM's device go with the config entry (Home
+        # Assistant removes the entry's registry rows). What stays is the
+        # user's by design — say so where a person looks.
         _LOGGER.info(
             "SEM removed: took its own files — %d store(s), %d repair(s), "
-            "%d frontend resource(s)%s",
+            "%d frontend resource(s), its notifications%s. Kept on purpose: "
+            "the long-term statistics of SEM's sensors and the generated "
+            "dashboard; run solar_energy_management.remove_leftovers before "
+            "removing SEM to delete those too.",
             len(stores), repairs, len(resources),
             "" if remaining else " (last entry: install-wide stores too)")
     except Exception as e:  # noqa: BLE001 — a removal must always complete

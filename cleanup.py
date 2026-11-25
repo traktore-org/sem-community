@@ -274,6 +274,30 @@ def delete_repairs(hass) -> int:
         return 0
 
 
+#: (#1428) Every persistent notification SEM can raise. A test reads the
+#: source for ``notification_id="sem_…"`` and fails if one is missing here.
+SEM_NOTIFICATION_IDS = (
+    "sem_backfill_battery_nights",
+    "sem_dashboard_success",
+    "sem_energy_plan_actuation_v18",
+    "sem_first_install_welcome",
+    "sem_load_shed",
+    "sem_phase_shed",
+)
+
+
+def dismiss_notifications(hass) -> int:
+    """(#1428) Dismiss SEM's persistent notifications. Returns how many ids."""
+    try:
+        from homeassistant.components import persistent_notification
+        for nid in SEM_NOTIFICATION_IDS:
+            persistent_notification.async_dismiss(hass, nid)
+        return len(SEM_NOTIFICATION_IDS)
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("SEM cleanup: could not dismiss notifications", exc_info=True)
+        return 0
+
+
 def _is_sem_resource(url: str) -> bool:
     """A Lovelace resource URL SEM registered.
 

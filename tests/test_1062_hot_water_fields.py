@@ -332,20 +332,16 @@ class TestTheDeadFieldsAreGone:
         the next load: the number platform's stale sweep removes every key
         no description provides."""
         from custom_components.solar_energy_management import number as num
-        entry = SimpleNamespace(entry_id="E1")
+        from custom_components.solar_energy_management.entity_sweep import stale_rows
         stale = SimpleNamespace(domain="number", unique_id="E1_hot_water_max_temperature",
-                                entity_id="number.sem_hot_water_max_temperature")
+                                entity_id="number.sem_hot_water_max_temperature",
+                                platform="solar_energy_management")
         kept = SimpleNamespace(domain="number", unique_id="E1_hot_water_solar_target",
-                               entity_id="number.sem_hot_water_solar_target")
-        registry = MagicMock()
-        orig_get, orig_entries = num.er.async_get, num.er.async_entries_for_config_entry
-        num.er.async_get = lambda _h: registry
-        num.er.async_entries_for_config_entry = lambda _r, _e: [stale, kept]
-        try:
-            num._cleanup_stale_entities(None, entry, num.NUMBER_TYPES, "number")
-        finally:
-            num.er.async_get, num.er.async_entries_for_config_entry = orig_get, orig_entries
-        removed = [c.args[0] for c in registry.async_remove.call_args_list]
+                               entity_id="number.sem_hot_water_solar_target",
+                               platform="solar_energy_management")
+        # (#1428) the number platform reports its keys; one sweep removes the rest
+        built = {"number": {d.key for d in num.NUMBER_TYPES}}
+        removed = [r.entity_id for r in stale_rows([stale, kept], "E1", built)]
         assert removed == ["number.sem_hot_water_max_temperature"]
 
 

@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .consts.core import SENSOR_DARK_READ_GRACE_S
 from .coordinator import SEMCoordinator
 from .coordinator.install_modules import kept_descriptions, presence_of
-from .sensor import _cleanup_stale_entities
+from .entity_sweep import report_built_keys
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -149,9 +149,8 @@ async def async_setup_entry(
     # (#923) binary_sensor had no stale sweep at all, so a removed or
     # module-gated key lingered in the registry forever. Same sweep the
     # sensor platform runs, same two unique_id formats.
-    _cleanup_stale_entities(
-        hass, entry, list(static_descriptions) + per_charger_descriptions,
-        "binary_sensor")
+    report_built_keys(hass, entry, "binary_sensor",
+                      (d.key for d in list(static_descriptions) + per_charger_descriptions))
 
 
 class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):

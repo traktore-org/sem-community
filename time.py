@@ -19,6 +19,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .entity_sweep import report_built_keys
 from .utils.device_names import charger_display_name  # (#1053)
 from .const import DEFAULT_EV_TARGET_TIME
 from .coordinator import SEMCoordinator
@@ -72,6 +73,10 @@ async def async_setup_entry(
     if entities:
         _LOGGER.info("Created %d per-charger target-time entities", len(entities))
     async_add_entities(entities)
+    # (#1428) time had no stale sweep: a removed charger's "Charge By" stayed.
+    # Report what was built; ONE sweep after setup removes the rest.
+    report_built_keys(hass, entry, "time",
+                      (e.entity_description.key for e in entities))
 
 
 class SEMPerChargerTime(CoordinatorEntity, TimeEntity):
