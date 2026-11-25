@@ -1649,15 +1649,32 @@ def observe(adapter, power) -> ObservedState:
     )
 
 
-def charger_blind(adapter, power) -> bool:
-    """(#1423) ``ObservedState.blind`` for a caller outside the reconciler:
-    no reading says whether THIS charger draws. The phase switch asks it,
-    so a dark 0 W is never taken as a charger at rest.
 
-    If the adapter cannot be read, a dark power read counts as blind: a
-    switch that waits is safe, one under load is not."""
+def charger_draws(adapter, power, *,
+                  plug_reading_known: bool = True) -> Optional[bool]:
+    """(#1423) Does THIS charger draw, by the reconciler's own reading?
+
+    True: it draws (a status that says charging, the brand's own flag, or
+    the power). False: a reading says it does not, or it cannot (a car
+    known gone, a readable switch that reads off). None: no reading either
+    way (``ObservedState.blind``). The phase switch asks it, so a dark 0 W
+    is never taken as a charger at rest.
+
+    ``plug_reading_known`` False: the plug sensor gives no answer right
+    now, so its "no car" is no answer either (a whole integration that
+    drops out darkens both sensors). If the adapter cannot be read, a dark
+    power read counts as no reading: a switch that waits is safe, one under
+    load is not."""
     try:
-        return observe(adapter, power).blind
+        o = observe(adapter, power)
     except Exception as exc:  # noqa: BLE001 — a reading, never fatal
-        _LOGGER.debug("charger_blind() could not observe: %s", exc)
-        return getattr(power, "power_known", True) is False
+        _LOGGER.debug("charger_draws() could not observe: %s", exc)
+        return None if getattr(power, "power_known", True) is False else False
+    if o.charging or o.self_charging:
+        return True
+    if o.blind:
+        return None
+    if (not o.draw_known and not o.connected and not plug_reading_known
+            and o.enabled is not False):
+        return None
+    return False

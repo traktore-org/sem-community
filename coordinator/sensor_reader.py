@@ -4002,16 +4002,13 @@ class SensorReader:
         if self._read_ev_fleet_power(readings, ev_chargers):
             pass  # nested per-charger sensors handled the read (#642 helper)
         elif ed.ev_power:
-            readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_fleet_ev_sensor(readings, ed.ev_power),
-                charging=self._fleet_charging_status(), readings=readings))
+            readings.ev_power = FleetEvPower(
+                self._smoothed_fleet_ev_sensor(readings, ed.ev_power))
             readings.ev_power_fleet_entity = ed.ev_power   # (#1044)
         elif self.config.ev_power_sensor:
-            readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_fleet_ev_sensor(
-                    readings, self.config.ev_power_sensor),
-                charging=self._fleet_charging_status(), readings=readings,
-            ))
+            readings.ev_power = FleetEvPower(
+                self._smoothed_fleet_ev_sensor(
+                    readings, self.config.ev_power_sensor))
             readings.ev_power_fleet_entity = self.config.ev_power_sensor
 
         # EV connection status — per-charger OR'd for global (#193), plus
@@ -6415,11 +6412,9 @@ class SensorReader:
         if self._read_ev_fleet_power(readings, ev_chargers):
             pass  # nested per-charger sensors handled the read (#642 helper)
         elif self.config.ev_power_sensor:
-            readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_fleet_ev_sensor(
-                    readings, self.config.ev_power_sensor),
-                charging=self._fleet_charging_status(), readings=readings,
-            ))
+            readings.ev_power = FleetEvPower(
+                self._smoothed_fleet_ev_sensor(
+                    readings, self.config.ev_power_sensor))
             readings.ev_power_fleet_entity = self.config.ev_power_sensor  # (#1044)
 
         # EV connection status — per-charger OR'd for global (#193), plus
@@ -6477,7 +6472,7 @@ class SensorReader:
                     0.0 if raw is None else raw, key=cid or cps,
                     charging=(self._read_binary_sensor(chrg, "ev_charging")
                               if chrg else None),
-                    readings=readings,
+                    readings=readings, live=raw is not None,
                 )
                 total_ev += cw
                 if cid:
@@ -6485,7 +6480,9 @@ class SensorReader:
                     # ``flow_calculator`` per-charger split and
                     # ``build_charger_view``'s this-charger read.
                     readings.ev_power_per_charger[cid] = cw
-                    readings.ev_power_per_charger_read[cid] = raw is not None
+                    # (#1423) …and not while the median stands on dark fills
+                    readings.ev_power_per_charger_read[cid] = (
+                        self._ev_power_known(cid or cps, raw))
         # total_ev is already the sum of smoothed per-charger values.
         readings.ev_power = FleetEvPower(total_ev)
         # (#1044) The sensors in that sum — a charger whose own sensor is
@@ -6494,12 +6491,17 @@ class SensorReader:
         readings.ev_power_entities = frozenset(summed)
         return True
 
-    def _read_fleet_ev_sensor(self, readings, entity_id: str) -> float:
-        """(#1422) The one fleet EV power sensor, in watts; a dark read is
-        0.0 for the sums, as before, and says so on the readings."""
+    def _smoothed_fleet_ev_sensor(self, readings, entity_id: str) -> float:
+        """(#1422) The one fleet EV power sensor, in watts, smoothed; a dark
+        read is 0.0 for the sums, as before, and says so on the readings.
+        (#1423) So does a median that stands on those dark 0.0 fills."""
         raw = self._read_sensor(entity_id, "ev", allow_none=True)
-        readings.ev_power_fleet_read = raw is not None
-        return 0.0 if raw is None else raw
+        value = self._smooth_ev_power(
+            0.0 if raw is None else raw,
+            charging=self._fleet_charging_status(), readings=readings,
+            live=raw is not None)
+        readings.ev_power_fleet_read = self._ev_power_known("_fleet", raw)
+        return value
 
     def _fleet_charging_status(self) -> Optional[bool]:
         """(#910) The fleet-level charging status for the blink hold, or
@@ -6514,6 +6516,7 @@ class SensorReader:
         self, raw: float, key: str = "_fleet", *,
         charging: Optional[bool] = None,
         readings: Optional[PowerReadings] = None,
+        live: bool = True,
     ) -> float:
         """Median-of-3 filter for EV power (2026-07-10 flap fix), plus the
         #910 blink hold on top of it.
@@ -6530,13 +6533,45 @@ class SensorReader:
         own median so the ``ev_power_per_charger`` dict stays consistent
         with the smoothed fleet sum; the default ``"_fleet"`` key smooths a
         single fleet-level sensor.
+
+        ``live`` (#1423): False when ``raw`` is the 0.0 put in for a dark
+        read. The median then may stand on those fills: after two dark
+        reads, ``[0, 0, 11040]`` gives 0 W on the first live read, and a
+        charger that draws 11 kW looked at rest. ``_ev_power_backed[key]``
+        says whether a live read in the window gave the median's value.
         """
         hist = self._ev_power_hist.get(key)
         if hist is None:
             hist = self._ev_power_hist[key] = deque(maxlen=3)
+        flags_by_key = getattr(self, "_ev_power_live", None)
+        if flags_by_key is None:
+            flags_by_key = self._ev_power_live = {}
+        flags = flags_by_key.get(key)
+        if flags is None or len(flags) != len(hist):
+            # a history made elsewhere: what it holds counts as read
+            flags = flags_by_key[key] = deque(
+                [True] * len(hist), maxlen=hist.maxlen)
         hist.append(float(raw))
-        med = float(raw) if len(hist) < 3 else sorted(hist)[1]
+        flags.append(bool(live))
+        if len(hist) < 3:
+            med, backed = float(raw), bool(live)
+        else:
+            med = sorted(hist)[1]
+            backed = any(f and v == med
+                         for v, f in zip(hist, flags, strict=True))
+        backed_by_key = getattr(self, "_ev_power_backed", None)
+        if backed_by_key is None:
+            backed_by_key = self._ev_power_backed = {}
+        backed_by_key[key] = backed
         return self._hold_ev_blink(med, key, charging, readings)
+
+    def _ev_power_known(self, key: str, raw) -> bool:
+        """(#1423) Is the smoothed EV power for ``key`` a reading? Not when
+        this cycle's read was dark (#1422), and not while the median stands
+        on the 0.0 put in for dark reads (``_smooth_ev_power``)."""
+        if raw is None:
+            return False
+        return (getattr(self, "_ev_power_backed", None) or {}).get(key, True)
 
     def _hold_ev_blink(
         self, value: float, key: str, charging: Optional[bool],

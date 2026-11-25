@@ -55,6 +55,12 @@ STOP_WAIT_S = 180.0
 # The planner's own gap between automatic switches.
 BLIND_RETRY_S = 1800.0
 
+# (#1423) After this many such drops in a row, no switch that needs a stop
+# is asked for until the target changes or the car is known to be unplugged
+# (``forgive_blind``): that charger's power cannot be read through a stop,
+# and each try costs a stop and a three-minute hold for nothing.
+BLIND_DROPS_MAX = 2
+
 # Phase C hysteresis — up after 5 sustained minutes of headroom, down
 # after 10 sustained minutes of starvation. Asymmetric on purpose: a
 # missed up-switch costs yield, a flappy down-switch costs the contactor.
@@ -107,6 +113,8 @@ class PhaseSwitchSequencer:
         self._stopping_since: Optional[float] = None
         self._last_switch_at = float("-inf")
         self._blind_drop_at = float("-inf")
+        self._blind_drops = 0
+        self._blind_target: Optional[int] = None
 
     @property
     def in_flight(self) -> bool:
@@ -122,6 +130,21 @@ class PhaseSwitchSequencer:
         A caller whose reason for the switch is "the car draws" must keep
         asking while the car stops for it."""
         return self._pending if self._state != "idle" else None
+
+    @property
+    def blind_capped(self) -> bool:
+        """(#1423) True once ``BLIND_DROPS_MAX`` switches in a row were
+        dropped because the charger's draw could not be read through the
+        stop: no switch that needs a stop is asked for until
+        ``forgive_blind``."""
+        return self._blind_drops >= BLIND_DROPS_MAX
+
+    def forgive_blind(self) -> None:
+        """(#1423) A new car (a known unplug): the drops and their wait
+        start again."""
+        self._blind_drops = 0
+        self._blind_target = None
+        self._blind_drop_at = float("-inf")
 
     def _result(self, hold: bool, issue: Optional[int] = None,
                 gave_up: bool = False, at_rest: bool = False) -> SeqResult:
@@ -147,6 +170,7 @@ class PhaseSwitchSequencer:
         self._pending = target
         self._switched_at = now
         self._last_switch_at = now
+        self.forgive_blind()      # (#1423) a switch went out: count again
         return self._result(hold=True, issue=target, at_rest=at_rest)
 
     def tick(self, now: float, desired_phases: Optional[int],
@@ -197,6 +221,8 @@ class PhaseSwitchSequencer:
                 if (self._stopping_since is not None
                         and now - self._stopping_since >= STOP_WAIT_S):
                     self._blind_drop_at = now
+                    self._blind_drops += 1
+                    self._blind_target = desired_phases
                     self._abort()
                     return SeqResult(
                         state=self._state, hold_charging=False,
@@ -215,7 +241,10 @@ class PhaseSwitchSequencer:
             # (#1423) It may be charging: a switch now could open the
             # contactor under load. Asked again when a reading returns.
             return self._result(hold=False)
-        if charging and now - self._blind_drop_at < BLIND_RETRY_S:
+        if self._blind_drops and desired_phases != self._blind_target:
+            self.forgive_blind()            # a new target: count again
+        if charging and (self.blind_capped
+                         or now - self._blind_drop_at < BLIND_RETRY_S):
             return self._result(hold=False)
         if charging:
             self._state = "stopping"

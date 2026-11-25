@@ -14,7 +14,16 @@ answer, a car not known gone, no switch reading off). While blind:
   warning, and the target is not marked as one the box does not take;
 * after such a drop, a switch that needs a stop waits ``BLIND_RETRY_S``
   (a sensor that goes dark whenever the box stops would otherwise get a
-  stop and a resume every few minutes). A switch at rest does not wait.
+  stop and a resume every few minutes), and after ``BLIND_DROPS_MAX`` drops
+  in a row none is asked for until the target changes or a new car comes.
+  A switch at rest does not wait.
+
+Review: the reader's median kept the dark 0.0 fills, so the first live read
+after a dark spell gave 0 W as a reading (``[0, 0, 11040]``): the switch
+fired under load one cycle after the sensor came back. ``power_known`` now
+stays False while the median stands on dark fills. A status that says
+"charging" is a draw (the reader's 500 W floor had turned the flag off), and
+a plug sensor that does not read now is no "car gone".
 """
 from __future__ import annotations
 
@@ -22,6 +31,7 @@ import ast
 import asyncio
 import inspect
 import logging
+from collections import deque
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -36,13 +46,13 @@ from custom_components.solar_energy_management.coordinator import (
     reason_codes as RC,
 )
 from custom_components.solar_energy_management.coordinator.charger_reconciler import (
-    charger_blind,
+    charger_draws,
 )
 from custom_components.solar_energy_management.coordinator.charger_types import (
     ChargerDecision, ChargerIntent, ChargerPower,
 )
 from custom_components.solar_energy_management.coordinator.ev_phase_sequencer import (
-    BLIND_RETRY_S, MIN_SWITCH_GAP_S, SETTLE_S, STOP_WAIT_S,
+    BLIND_DROPS_MAX, BLIND_RETRY_S, MIN_SWITCH_GAP_S, SETTLE_S, STOP_WAIT_S,
     PhaseSwitchSequencer,
 )
 
@@ -163,17 +173,89 @@ class TestSequencer:
         assert r.believed_phases == 1
 
 
+
+
+class TestTheCap:
+
+    def _drop(self, seq, t, desired=1):
+        """A stop, then dark until the wait runs out. Returns the end time."""
+        assert _seq_tick(seq, t, charging=True, desired=desired).state == "stopping"
+        t += 10.0
+        start = t - 10.0
+        while t - start <= STOP_WAIT_S:
+            r = _seq_tick(seq, t, blind=True, desired=desired)
+            t += 10.0
+        assert r.blind_drop is True
+        return t - 10.0
+
+    def test_after_the_last_drop_no_stop_is_asked_for(self):
+        seq = PhaseSwitchSequencer()
+        t = 0.0
+        for _ in range(BLIND_DROPS_MAX):
+            t = self._drop(seq, t) + BLIND_RETRY_S
+        assert seq.blind_capped
+        for k in range(10):
+            r = _seq_tick(seq, t + k * BLIND_RETRY_S, charging=True)
+            assert r.state == "idle" and r.hold_charging is False
+
+    def test_a_new_target_counts_again(self):
+        seq = PhaseSwitchSequencer()
+        t = 0.0
+        for _ in range(BLIND_DROPS_MAX):
+            t = self._drop(seq, t) + BLIND_RETRY_S
+        r = _seq_tick(seq, t, charging=True, desired=3, believed=1)
+        assert r.state == "stopping"
+        assert not seq.blind_capped
+
+    def test_a_new_car_counts_again(self):
+        seq = PhaseSwitchSequencer()
+        t = 0.0
+        for _ in range(BLIND_DROPS_MAX):
+            t = self._drop(seq, t) + BLIND_RETRY_S
+        seq.forgive_blind()
+        assert _seq_tick(seq, t, charging=True).state == "stopping"
+
+    def test_a_switch_that_goes_out_counts_again(self):
+        seq = PhaseSwitchSequencer()
+        t = self._drop(seq, 0.0)
+        assert seq._blind_drops == 1
+        r = _seq_tick(seq, t + MIN_SWITCH_GAP_S)        # at rest, live
+        assert r.issue_switch == 1
+        assert seq._blind_drops == 0
+
+
 # ── 2. the per-charger tick ─────────────────────────────────────────────
 
 
-def _host(**cfg_over):
+def _adapter(status=None, enabled=None):
+    """A charger adapter with no status sensor (``status`` None), or one
+    whose status answers."""
+    a = MagicMock()
+    a.actual_charging = MagicMock(return_value=bool(status))
+    a.is_self_charging = MagicMock(return_value=False)
+    a.status_answer = MagicMock(return_value=status)
+    a.enable_state = MagicMock(return_value=(enabled, True))
+    a.resume_pressable = MagicMock(return_value=False)
+    a._device = MagicMock(_current_setpoint=0, contactor_surface=False)
+    a._device.can_stop_charging = MagicMock(return_value=True)
+    return a
+
+
+def _host(states=None, **cfg_over):
     h = SimpleNamespace()
     h._phase_switch_tick = ev_control.EVControlMixin._phase_switch_tick.__get__(h)
     h._observer_mode = False
     h._surplus_controller = None
     h.config = {}
+    states = states or {}
+
+    def _get(eid):
+        if eid in states:
+            return SimpleNamespace(state=states[eid], attributes={})
+        return MagicMock()
+
     h.hass = SimpleNamespace(
-        states=SimpleNamespace(get=lambda eid: MagicMock()),
+        states=SimpleNamespace(get=_get),
         services=SimpleNamespace(async_call=AsyncMock()),
     )
     h.cfg = {
@@ -192,21 +274,34 @@ def _max():
                            budget_w=0.0, reason="max")
 
 
-def _cp(power_w, charging=True, known=True):
-    return ChargerPower(charger_id="c1", power_w=power_w, connected=True,
+def _cp(power_w, charging=True, known=True, connected=True):
+    return ChargerPower(charger_id="c1", power_w=power_w, connected=connected,
                         charging=charging, power_known=known)
 
 
 DARK = _cp(0.0, charging=False, known=False)
+NO_STATUS = _adapter()
 
 
-def _tick(h, decision, cp, t, blind=False, **kw):
+def _tick(h, decision, cp, t, adapter=NO_STATUS, **kw):
     return asyncio.run(h._phase_switch_tick("c1", h.cfg, decision, cp, t,
-                                            setpoint_a=16, blind=blind, **kw))
+                                            setpoint_a=16, adapter=adapter,
+                                            **kw))
 
 
 def _calls(h):
     return h.hass.services.async_call.await_count
+
+
+def _drop(h, t=0.0):
+    """A stop under load, then dark until the wait runs out."""
+    assert _tick(h, _max(), _cp(11000.0), t).intent is ChargerIntent.DISABLE
+    t += 10.0
+    end = t + STOP_WAIT_S
+    while t < end:
+        d = _tick(h, _max(), DARK, t)
+        t += 10.0
+    return d, t - 10.0
 
 
 class TestTick:
@@ -216,7 +311,7 @@ class TestTick:
         0 W read as at rest and the switch went out with no stop."""
         h = _host()
         for i in range(20):
-            d = _tick(h, _max(), DARK, 10.0 * i, blind=True)
+            d = _tick(h, _max(), DARK, 10.0 * i)
             assert d.intent is ChargerIntent.CHARGE_MAX, (
                 "a blind charger is neither switched nor held")
         assert _calls(h) == 0
@@ -227,22 +322,48 @@ class TestTick:
         _tick(h, _max(), _cp(0.0, charging=False), 0.0)
         assert _calls(h) == 1
 
-    def test_a_draw_wins_over_a_blind_word(self):
-        """The power still shows a draw: stop first, as before."""
+    def test_without_an_adapter_the_power_decides_as_before(self):
         h = _host()
-        d = _tick(h, _max(), _cp(11000.0), 0.0, blind=True)
-        assert d.intent is ChargerIntent.DISABLE
+        _tick(h, _max(), DARK, 0.0, adapter=None)
+        assert _calls(h) == 1
+
+    def test_a_status_that_says_charging_is_a_draw(self):
+        """Review: the power is dark and the status says charging. The
+        reader's 500 W floor turned the flag off, so the tick took the box
+        as at rest and switched it with no stop."""
+        h = _host()
+        d = _tick(h, _max(), DARK, 0.0, adapter=_adapter(status=True))
+        assert d.intent is ChargerIntent.DISABLE, "stop first"
         assert h._phase_switch_states["c1"] == "stopping"
         assert _calls(h) == 0
 
+    def test_a_status_that_says_not_charging_is_at_rest(self):
+        h = _host()
+        _tick(h, _max(), DARK, 0.0, adapter=_adapter(status=False))
+        assert _calls(h) == 1
+
+    def test_a_dark_plug_sensor_is_no_car_gone(self):
+        """Review: a whole integration drops out — power and plug both
+        "unavailable". The plug sensor is configured, so the reading said
+        "no car known", and the box was switched with no stop."""
+        h = _host(states={"binary_sensor.box_plug": "unavailable"},
+                  ev_connected_sensor="binary_sensor.box_plug")
+        cp = _cp(0.0, charging=False, known=False, connected=False)
+        for i in range(10):
+            _tick(h, _max(), cp, 10.0 * i)
+        assert _calls(h) == 0
+
+    def test_a_plug_sensor_that_says_no_car_is_at_rest(self):
+        h = _host(states={"binary_sensor.box_plug": "off"},
+                  ev_connected_sensor="binary_sensor.box_plug")
+        cp = _cp(0.0, charging=False, known=False, connected=False)
+        _tick(h, _max(), cp, 0.0)
+        assert _calls(h) == 1
+
     def test_a_stop_that_goes_dark_is_dropped_without_blame(self, caplog):
         h = _host()
-        assert _tick(h, _max(), _cp(11000.0), 0.0).intent is ChargerIntent.DISABLE
-        t = 10.0
         with caplog.at_level(logging.INFO):
-            while t <= STOP_WAIT_S:
-                d = _tick(h, _max(), DARK, t, blind=True)
-                t += 10.0
+            d, _t = _drop(h)
         assert _calls(h) == 0, "switched with no reading that the stop took"
         assert d.intent is ChargerIntent.CHARGE_MAX, "the hold ended"
         assert h._phase_switch_states["c1"] == "idle"
@@ -253,13 +374,7 @@ class TestTick:
 
     def test_a_drop_holds_the_next_stop_for_the_retry_time(self):
         h = _host()
-        _tick(h, _max(), _cp(11000.0), 0.0)
-        t = 10.0
-        while t <= STOP_WAIT_S:
-            _tick(h, _max(), DARK, t, blind=True)
-            t += 10.0
-        t_drop = t - 10.0
-        # the reading comes back with the car drawing: no new stop yet
+        _d, t_drop = _drop(h)
         t = t_drop + 10.0
         while t < t_drop + BLIND_RETRY_S:
             d = _tick(h, _max(), _cp(11000.0), t)
@@ -268,11 +383,40 @@ class TestTick:
         d = _tick(h, _max(), _cp(11000.0), t_drop + BLIND_RETRY_S)
         assert d.intent is ChargerIntent.DISABLE
 
+    def test_the_cap_is_said_once_and_shown(self, caplog):
+        h = _host()
+        t = 0.0
+        with caplog.at_level(logging.INFO):
+            for _ in range(BLIND_DROPS_MAX):
+                _d, t = _drop(h, t)
+                t += BLIND_RETRY_S
+        warn = [r for r in caplog.records if r.levelno == logging.WARNING
+                and "#1423" in r.getMessage()]
+        assert len(warn) == 1, [r.getMessage() for r in caplog.records]
+        for k in range(5):
+            d = _tick(h, _max(), _cp(11000.0), t + k * BLIND_RETRY_S)
+            assert d.intent is ChargerIntent.CHARGE_MAX
+        assert h._phase_switch_states["c1"] == "no_reading"
+        assert _calls(h) == 0
+
+    def test_a_known_unplug_counts_again(self):
+        h = _host(states={"binary_sensor.box_plug": "off"},
+                  ev_connected_sensor="binary_sensor.box_plug")
+        t = 0.0
+        for _ in range(BLIND_DROPS_MAX):
+            _d, t = _drop(h, t)
+            t += BLIND_RETRY_S
+        assert h._phase_sequencers["c1"].blind_capped
+        gone = _cp(0.0, charging=False, connected=False)
+        for k in range(5):
+            _tick(h, _max(), gone, t + 10.0 * k, adapter=None)
+        assert not h._phase_sequencers["c1"].blind_capped
+
     def test_a_stop_that_takes_after_a_dark_spell_switches(self):
         h = _host()
         _tick(h, _max(), _cp(11000.0), 0.0)
         for t in (10.0, 20.0, 30.0):
-            d = _tick(h, _max(), DARK, t, blind=True)
+            d = _tick(h, _max(), DARK, t)
             assert d.intent is ChargerIntent.DISABLE, "the stop holds"
         _tick(h, _max(), _cp(0.0, charging=False), 40.0)
         assert _calls(h) == 1
@@ -295,26 +439,35 @@ class TestTick:
             budget_w=0.0, reason="top up", reason_code=RC.CHARGER_TOP_UP)
         h = _own_one_phase()
         for i in range(10):
-            _tick(h, top_up, DARK, 10.0 * i, blind=True, is_night=True)
+            _tick(h, top_up, DARK, 10.0 * i, is_night=True)
         assert _calls(h) == 0
         h = _own_one_phase()
         _tick(h, top_up, _cp(0.0, charging=False), 0.0, is_night=True)
         assert _calls(h) == 1, "the twin: a live 0 W goes back to three"
 
+    def test_a_charger_set_by_current_is_not_switched_blind(self, monkeypatch):
+        """The same gate for a charger that sets its phases by one current
+        per phase (no switch entity): no ``switch_phases`` while blind."""
+        h = _host()
+        del h.cfg["ev_phase_switch_entity"]
+        dev = SimpleNamespace(
+            switch_phases=AsyncMock(return_value=True),
+            phase_service="x.set_circuit", external_yield=False,
+            phase_readback=lambda: None)
+        monkeypatch.setattr(ev_control, "_phase_by_current_ready",
+                            lambda *a, **k: True)
+        for i in range(10):
+            asyncio.run(h._phase_switch_tick(
+                "c1", h.cfg, _max(), DARK, 10.0 * i, setpoint_a=16,
+                device=dev, adapter=NO_STATUS))
+        assert dev.switch_phases.await_count == 0
+        asyncio.run(h._phase_switch_tick(
+            "c1", h.cfg, _max(), _cp(0.0, charging=False), 200.0,
+            setpoint_a=16, device=dev, adapter=NO_STATUS))
+        assert dev.switch_phases.await_count == 1, "the twin"
 
-# ── 3. the one blind: the reconciler's ─────────────────────────────────
 
-
-def _adapter(status=None, enabled=None):
-    a = MagicMock()
-    a.actual_charging = MagicMock(return_value=bool(status))
-    a.is_self_charging = MagicMock(return_value=False)
-    a.status_answer = MagicMock(return_value=status)
-    a.enable_state = MagicMock(return_value=(enabled, True))
-    a.resume_pressable = MagicMock(return_value=False)
-    a._device = MagicMock(_current_setpoint=0, contactor_surface=False)
-    a._device.can_stop_charging = MagicMock(return_value=True)
-    return a
+# ── 3. the one reading: the reconciler's ───────────────────────────────
 
 
 def _power(*, known=False, connected=True, plug_known=True, charging=False):
@@ -323,38 +476,44 @@ def _power(*, known=False, connected=True, plug_known=True, charging=False):
                         power_known=known)
 
 
-class TestChargerBlind:
+class TestChargerDraws:
 
-    def test_dark_with_no_status_is_blind(self):
-        assert charger_blind(_adapter(), _power()) is True
+    def test_dark_with_no_status_is_no_reading(self):
+        assert charger_draws(_adapter(), _power()) is None
 
-    def test_answers_that_are_not_blind(self):
-        assert charger_blind(_adapter(), _power(known=True)) is False
-        assert charger_blind(_adapter(status=False), _power()) is False
-        assert charger_blind(_adapter(status=True), _power()) is False
+    def test_answers(self):
+        assert charger_draws(_adapter(), _power(known=True)) is False
+        assert charger_draws(_adapter(status=False), _power()) is False
+        assert charger_draws(_adapter(status=True), _power()) is True
         # a readable switch that reads off: that box cannot draw
-        assert charger_blind(_adapter(enabled=False), _power()) is False
+        assert charger_draws(_adapter(enabled=False), _power()) is False
         # a car known gone
-        assert charger_blind(_adapter(), _power(connected=False)) is False
-        # the brand's own flag says it charges: a draw, not blindness
-        assert charger_blind(_adapter(), _power(charging=True)) is False
+        assert charger_draws(_adapter(), _power(connected=False)) is False
+        # the brand's own flag says it charges
+        assert charger_draws(_adapter(), _power(charging=True)) is True
 
-    def test_an_unknown_plug_is_still_blind(self):
+    def test_a_plug_that_does_not_read_is_no_answer(self):
+        p = _power(connected=False)
+        assert charger_draws(_adapter(), p, plug_reading_known=False) is None
+        # …but a status that answers still does
+        assert charger_draws(_adapter(status=False), p,
+                             plug_reading_known=False) is False
+
+    def test_an_unknown_plug_is_no_reading(self):
         """No plug sensor and no draw: the car is not known gone."""
         p = _power(connected=False, plug_known=False)
-        assert charger_blind(_adapter(), p) is True
+        assert charger_draws(_adapter(), p) is None
 
-    def test_an_adapter_that_cannot_be_read_counts_a_dark_read_as_blind(self):
+    def test_an_adapter_that_cannot_be_read(self):
         a = _adapter()
         a.actual_charging = MagicMock(side_effect=RuntimeError("boom"))
-        assert charger_blind(a, _power()) is True
-        assert charger_blind(a, _power(known=True)) is False
+        assert charger_draws(a, _power()) is None
+        assert charger_draws(a, _power(known=True)) is False
 
 
-def test_the_cycle_passes_the_reconcilers_blind_to_the_tick():
+def test_the_cycle_passes_the_adapter_to_the_tick():
     """AST pin: the one call of ``_phase_switch_tick`` in the cycle passes
-    ``blind=_charger_blind(adapter, view.power)`` — the same word the
-    reconciler acts on, for the same charger."""
+    this charger's adapter, so the tick asks the reconciler's reading."""
     tree = ast.parse(inspect.getsource(coordinator_mod))
     calls = [n for n in ast.walk(tree)
              if isinstance(n, ast.Call)
@@ -362,13 +521,96 @@ def test_the_cycle_passes_the_reconcilers_blind_to_the_tick():
              and n.func.attr == "_phase_switch_tick"]
     assert len(calls) == 1
     kw = {k.arg: k.value for k in calls[0].keywords}
-    assert "blind" in kw, "the cycle does not tell the tick it is blind"
-    v = kw["blind"]
-    assert isinstance(v, ast.Call) and getattr(v.func, "id", "") == "_charger_blind"
-    assert [ast.unparse(a) for a in v.args] == ["adapter", "view.power"]
+    assert "adapter" in kw, "the cycle does not give the tick its adapter"
+    assert ast.unparse(kw["adapter"]) == "adapter"
+    assert ast.unparse(calls[0].args[3]) == "view.power"
 
 
-# ── 4. the issue's case through the real cycle ──────────────────────────
+# ── 4. the reader: a median on dark fills is no reading ─────────────────
+
+
+def _reader():
+    from custom_components.solar_energy_management.coordinator.sensor_reader import (
+        SensorReader,
+    )
+    r = SensorReader.__new__(SensorReader)
+    r._ev_power_hist, r._ev_power_last, r._ev_power_hold = {}, {}, {}
+    return r
+
+
+class TestReaderKnown:
+
+    def _feed(self, r, seq, key="c1"):
+        out = []
+        for raw in seq:
+            w = r._smooth_ev_power(0.0 if raw is None else raw, key=key,
+                                   live=raw is not None)
+            out.append((w, r._ev_power_known(key, raw)))
+        return out
+
+    def test_the_first_live_read_after_two_dark_is_no_reading(self):
+        r = _reader()
+        out = self._feed(r, [11040.0, None, None, 11040.0, 11040.0])
+        assert out[3] == (0.0, False), "median of [0, 0, 11040] is no reading"
+        assert out[4] == (11040.0, True)
+
+    def test_one_dark_blip_keeps_the_live_median(self):
+        r = _reader()
+        out = self._feed(r, [11040.0, 11040.0, None, 11040.0])
+        assert out[2] == (11040.0, False), "this cycle's read was dark"
+        assert out[3] == (11040.0, True)
+
+    def test_a_real_stop_is_a_reading(self):
+        r = _reader()
+        out = self._feed(r, [11040.0, 11040.0, 0.0, 0.0])
+        assert out[3] == (0.0, True)
+
+    def test_a_live_0_beside_a_dark_fill_is_a_reading(self):
+        r = _reader()
+        out = self._feed(r, [0.0, None, 0.0, 11040.0])
+        assert out[3] == (0.0, True), "a live 0 W gave the median"
+
+    def test_a_history_made_elsewhere_counts_as_read(self):
+        r = _reader()
+        r._ev_power_hist["c1"] = deque([0.0, 0.0], maxlen=3)
+        out = self._feed(r, [0.0])
+        assert out[0] == (0.0, True)
+
+    def test_the_reader_flags_a_median_on_dark_fills(self):
+        """Through the per-charger read: the flag the view reads."""
+        from custom_components.solar_energy_management.coordinator.types import (
+            PowerReadings,
+        )
+        r = _reader()
+        seen = []
+        r._read_binary_sensor = lambda *a, **k: None
+        for cur in [11040.0, None, None, 11040.0, 11040.0]:
+            r._read_sensor = lambda *a, _c=cur, **k: _c
+            pr = PowerReadings()
+            r._read_ev_fleet_power(pr, [{
+                "id": "c1", "ev_charging_power_sensor": "sensor.c1"}])
+            seen.append((pr.ev_power_per_charger["c1"],
+                         pr.ev_power_per_charger_read["c1"]))
+        assert seen[3] == (0.0, False)
+        assert seen[4] == (11040.0, True)
+
+    def test_the_fleet_sensor_flags_a_median_on_dark_fills(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            PowerReadings,
+        )
+        r = _reader()
+        r.config = SimpleNamespace(ev_charging_sensor=None)
+        seen = []
+        for cur in [11040.0, None, None, 11040.0, 11040.0]:
+            r._read_sensor = lambda *a, _c=cur, **k: _c
+            pr = PowerReadings()
+            w = r._smoothed_fleet_ev_sensor(pr, "sensor.ev")
+            seen.append((w, pr.ev_power_fleet_read))
+        assert seen[3] == (0.0, False)
+        assert seen[4] == (11040.0, True)
+
+
+# ── 5. the issue's case through the real cycle ──────────────────────────
 
 WIRED = {
     "solar_production_sensor": "sensor.solar",
@@ -404,12 +646,12 @@ def _rig():
     return rig
 
 
-def _values(box_power):
+def _values(box_power, plug="on"):
     return {
         "sensor.solar": 0.0, "sensor.batt": 0.0, "sensor.soc": 40.0,
         "sensor.grid": -11000.0, "sensor.ev": 11000.0,
         "sensor.box_power": box_power,
-        "binary_sensor.box_connected": "on",
+        "binary_sensor.box_connected": plug,
         "switch.box_enable": "on",
         "number.box_current": 16,
         SWITCH: (3, {"min": 1, "max": 3, "step": 1}),
@@ -424,11 +666,12 @@ def _switches(rig):
 T0 = datetime(2026, 11, 25, 12, 0, tzinfo=timezone.utc).timestamp()
 
 
-async def _run(rig, freezer, box_power, cycles):
+async def _run(rig, freezer, powers, plug="on"):
+    """One cycle per entry of ``powers``, 10 s apart."""
     t = T0
-    for _ in range(cycles):
+    for p in powers:
         freezer.move_to(datetime.fromtimestamp(t, tz=timezone.utc))
-        for eid, val in _values(box_power).items():
+        for eid, val in _values(p, plug).items():
             rig.hass.states.set(eid, val)
         await rig.coord._async_update_data()
         t += 10
@@ -440,7 +683,7 @@ async def test_the_dark_box_gets_no_phase_switch_in_the_real_cycle(freezer):
     sensor. Before: the dark 0 W read as at rest and the one-phase write
     went out with no stop first."""
     rig = _rig()
-    await _run(rig, freezer, "unavailable", cycles=6)
+    await _run(rig, freezer, ["unavailable"] * 6)
     assert _switches(rig) == [], _switches(rig)
     assert rig.coord._phase_switch_states.get("box") == "idle"
 
@@ -448,5 +691,36 @@ async def test_the_dark_box_gets_no_phase_switch_in_the_real_cycle(freezer):
 @pytest.mark.asyncio
 async def test_the_twin_a_live_0_w_box_is_switched_at_rest(freezer):
     rig = _rig()
-    await _run(rig, freezer, 0.0, cycles=6)
+    await _run(rig, freezer, [0.0] * 6)
     assert len(_switches(rig)) == 1, rig.calls
+
+
+@pytest.mark.asyncio
+async def test_the_sensor_comes_back_drawing(freezer):
+    """Review: dark for six cycles while the box draws 11 kW, then the
+    sensor is back. The median of ``[0, 0, 11040]`` gave 0 W as a reading
+    and the switch went out under load. Now the box is stopped first, and
+    while it draws nothing is switched."""
+    rig = _rig()
+    await _run(rig, freezer, ["unavailable"] * 6 + [11040.0] * 6)
+    assert _switches(rig) == [], _switches(rig)
+    assert rig.coord._phase_switch_states.get("box") == "stopping"
+
+
+@pytest.mark.asyncio
+async def test_a_stop_that_goes_dark_and_comes_back_drawing(freezer):
+    """Review: the stop is held, the sensor goes dark, then comes back
+    with the box still drawing. Nothing is switched under load."""
+    rig = _rig()
+    await _run(rig, freezer,
+               [11040.0] * 3 + ["unavailable"] * 4 + [11040.0] * 4)
+    assert _switches(rig) == [], _switches(rig)
+
+
+@pytest.mark.asyncio
+async def test_power_and_plug_both_dark(freezer):
+    """Review: the whole integration drops out. A plug sensor that does not
+    read is no "car gone": no switch."""
+    rig = _rig()
+    await _run(rig, freezer, ["unavailable"] * 6, plug="unavailable")
+    assert _switches(rig) == [], _switches(rig)
