@@ -21,7 +21,7 @@ from homeassistant.components.llm import LLMTools
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, intent
 from homeassistant.helpers.llm import (
-    LLM_API_ASSIST, IntentTool, LLMContext, Tool, ToolInput,
+    LLM_API_ASSIST, IntentResponseDict, IntentTool, LLMContext, Tool, ToolInput,
 )
 from homeassistant.loader import async_get_integration
 
@@ -69,41 +69,41 @@ def _handlers_by_type(hass: HomeAssistant) -> dict[str, intent.IntentHandler]:
     return {h.intent_type: h for h in intent.async_get(hass)}
 
 
-class _SemIntentTool(IntentTool):
-    """(#1431) An intent tool whose NAME carries SEM's prefix (#1389) but
-    whose call reaches the intent by its own type.
+class SemIntentTool(IntentTool):
+    """(#1430) An IntentTool that calls the intent by its OWN type.
 
-    HA 2026.10+ keeps the two apart (``IntentTool.intent_type``). The
-    2026.8 floor's ``IntentTool`` calls ``intent.async_handle`` with
-    ``intent_type=self.name`` — the prefixed name — so every SEM tool an AI
-    agent called there answered "Unknown intent". Where the base class
-    already keeps ``intent_type`` it is used as is.
-    """
+    Since #1389 the tool's name carries the ``solar_energy_management__``
+    prefix HA asks for. Home Assistant 2026.11 calls a tool's intent by its
+    handler's type, but the 2026.8–2026.10 IntentTool calls it by the tool's
+    NAME — the prefixed one — so every SEM command an AI sent there failed
+    with "Unknown intent". One call path, the same on every version."""
 
     def __init__(self, name: str, handler: intent.IntentHandler) -> None:
         super().__init__(name, handler)
-        self._sem_intent_type = handler.intent_type
-        self._base_keeps_type = vars(self).get("intent_type") == handler.intent_type
+        self.intent_type = handler.intent_type
 
-    async def async_call(self, hass: HomeAssistant, tool_input: ToolInput,
-                         llm_context: LLMContext) -> Any:
-        if self._base_keeps_type:
-            return await super().async_call(hass, tool_input, llm_context)
-        slots = {key: {"value": val} for key, val in tool_input.tool_args.items()
-                 if val not in (None, "")}
+    async def async_call(
+        self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext,
+    ) -> Any:
+        slots = {key: {"value": val} for key, val in tool_input.tool_args.items()}
         response = await intent.async_handle(
-            hass=hass, platform=llm_context.platform,
-            intent_type=self._sem_intent_type, slots=slots, text_input=None,
-            context=llm_context.context, language=llm_context.language,
-            assistant=llm_context.assistant, device_id=llm_context.device_id)
-        from homeassistant.helpers.llm import IntentResponseDict
+            hass=hass,
+            platform=llm_context.platform,
+            intent_type=self.intent_type,
+            slots=slots,
+            text_input=None,
+            context=llm_context.context,
+            language=llm_context.language,
+            assistant=llm_context.assistant,
+            device_id=llm_context.device_id,
+        )
         return _result(IntentResponseDict(response))
 
 
 def _tools_for(hass: HomeAssistant, classes: tuple) -> list[Tool]:
     """IntentTools for the handlers SEM registered; a missing one is skipped."""
     registered = _handlers_by_type(hass)
-    tools = [_SemIntentTool(TOOL_PREFIX + c.intent_type, registered[c.intent_type])
+    tools = [SemIntentTool(TOOL_PREFIX + c.intent_type, registered[c.intent_type])
              for c in classes if c.intent_type in registered]
     for tool in tools:
         tool.integration = DOMAIN  # (#1389) the floor's IntentTool has no kwarg

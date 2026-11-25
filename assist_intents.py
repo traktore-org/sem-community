@@ -405,7 +405,11 @@ class ForceChargeNowIntent(intent.IntentHandler):
                 if name or len(coordinator.config.get("ev_chargers") or []) > 1
                 else _NO_ANSWER)
             return response
-        coordinator.set_plan_override(charger_id, "force", minutes)
+        # (#1430) A voice "charge now" is the user's own Now (#1381 D31):
+        # marked so, it runs an Off or paused charger for these minutes and
+        # the charger is Off or paused again after. An unmarked force left
+        # Off alone while the speech said "Charging now".
+        coordinator.set_plan_override(charger_id, "force", minutes, user_now=True)
         response.response_type = intent.IntentResponseType.ACTION_DONE
         response.async_set_speech(f"Charging now, for {minutes} minutes.")
         return response
