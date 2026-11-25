@@ -3140,7 +3140,27 @@ prices a dark charger at 0 A, which clamps it lower (the safe side); a charger w
 all reads as known (no sensor is not a dark one); a blind stop that is lost or ignored is not sent again
 until a draw is seen or the demand ends (the device swallows a failed send); the phase switch reads a
 dark charger as at rest and may switch it with no stop first (`ev_control._phase_switch_tick`
-`drawing`; #1423).
+`drawing`; #1423, **closed in round 6**).
+**Round 6 — the phase switch's "at rest" (#1423, 25.11.2026):** the tick took a charger as at rest
+from its charging flag and its power, so a dark power sensor with no status sensor read 0 W and the
+switch went out with no stop first, maybe under load (the real cycle wrote `number.set_value` to the
+dark box). **Closure:** the cycle passes `blind=charger_blind(adapter, view.power)` — the reconciler's
+own `ObservedState.blind` for this charger (a draw seen wins). `PhaseSwitchSequencer.tick(blind=)`:
+no switch starts while blind, at rest or with a stop first; a switch waiting for its stop holds the
+stop and never fires; still blind when `STOP_WAIT_S` ends, it is dropped (`blind_drop`, one INFO line)
+with no "gave up" warning and no not-taking mark, since no reading said the box drew. After a drop, a
+switch that needs a stop waits `BLIND_RETRY_S` (30 min): a sensor that goes dark whenever the box
+stops would get a stop and a resume every few minutes. A switch at rest (a live reading) does not
+wait. The tick's other "at rest" reads (the planner's idle start, the daily bound at rest, the night
+return to three phases) take `at_rest` = no draw and not blind. If the adapter cannot be read, a
+dark read counts as blind. **Guard:** `tests/test_1423_blind_phase_switch.py` — the real cycle (a dark
+box gets no switch, fails on the old code; a live 0 W twin is switched at rest), the sequencer's
+cases (blind at rest, a draw wins, a stop that goes dark, a reading after it, the drop, a draw at the
+end still "gave up", the retry wait, a switch at rest after a drop, a switch sent settles), the
+tick's (manual target, the drop with no warning and no mark, the retry, the night return), the
+helper's answers, and an AST pin that the cycle passes the reconciler's blind. **Left open:** a
+charger with live per-phase current sensors but a dark power sensor is blind too (the legs are not
+read as a draw), so it is not switched until the power reads again.
 
 ### 59. A limit smoothed like a preference — GUARDED
 **Symptom:** the guard says 10 A, the wire carries 14 → 12 → 12 → 10 over two minutes. **Root
