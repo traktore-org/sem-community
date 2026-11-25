@@ -18,7 +18,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .utils.device_names import charger_display_name  # (#1053)
 from .const import DOMAIN
 from .coordinator.install_modules import kept_descriptions, presence_of
-from .sensor import _cleanup_stale_entities, _fix_entity_ids
+from .entity_sweep import report_built_keys
+from .sensor import _fix_entity_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ async def async_setup_entry(
     # ``button.garden_sem_rebuild_battery_night_history`` on 01.09.2026).
     # Same registry repair switch/number/sensor run at setup.
     _fix_entity_ids(hass, entry, all_descriptions, "button")
-    _cleanup_stale_entities(hass, entry, all_descriptions, "button")
+    report_built_keys(hass, entry, "button", (d.key for d in all_descriptions))
 
 
 class SEMButton(CoordinatorEntity, ButtonEntity):

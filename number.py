@@ -11,6 +11,8 @@ from homeassistant.components.number import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import entity_registry as er
+
+from .entity_sweep import report_built_keys
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -128,7 +130,7 @@ NUMBER_TYPES = [
     # EV charge-target / consumption settings (daily_ev_target[_max], ev_target_soc[_max],
     # ev_kwh_per_100km) are PER-CHARGER only (#255) — global duplicates removed; see the
     # per-charger descriptions in async_setup_entry. Stale registry entities are
-    # auto-removed by _cleanup_stale_entities; values were seeded per-charger by the v3→v4
+    # auto-removed by the one entity sweep (#1428); values were seeded per-charger by the v3→v4
     # migration so nothing resets.
     NumberEntityDescription(
         key="battery_assist_max_power",
@@ -603,7 +605,11 @@ async def async_setup_entry(
     # immediately remove the reserve-SOC numbers it just created (#523).
     all_descriptions = list(static_descriptions) + per_charger_descriptions + per_battery_descriptions
     _fix_entity_ids(hass, entry, all_descriptions, "number")
-    _cleanup_stale_entities(hass, entry, all_descriptions, "number")
+    # (#1428) report what was built (the unique_id key: one legacy key maps
+    # battery_capacity to battery_capacity_kwh); ONE sweep after setup removes the rest
+    report_built_keys(hass, entry, "number",
+                      ({"battery_capacity": "battery_capacity_kwh"}.get(d.key, d.key)
+                       for d in all_descriptions))
 
 
 def _fix_entity_ids(hass, entry, descriptions, platform):
@@ -633,30 +639,6 @@ def _fix_entity_ids(hass, entry, descriptions, platform):
                         _LOGGER.info("Fixed entity_id: %s → %s", entity_entry.entity_id, correct_eid)
     except Exception as e:
         _LOGGER.debug("Entity ID fix skipped: %s", e)
-
-
-def _cleanup_stale_entities(hass, entry, descriptions, platform):
-    """Remove orphaned entities from previous SEM versions."""
-    try:
-        registry = er.async_get(hass)
-        # Valid keys: both description keys AND legacy UID mapped keys
-        valid_keys = {d.key for d in descriptions}
-        _LEGACY_UID_MAP = {"battery_capacity": "battery_capacity_kwh"}
-        # (#923) A legacy unique_id is valid only while its entity is — the
-        # unconditional add kept number.sem_battery_capacity alive on an
-        # install whose battery module is ABSENT.
-        valid_keys.update(v for k, v in _LEGACY_UID_MAP.items() if k in valid_keys)
-
-        for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-            if entity_entry.domain != platform:
-                continue
-            unique_id = entity_entry.unique_id or ""
-            key = unique_id.replace(f"{entry.entry_id}_", "", 1)
-            if key and key not in valid_keys:
-                _LOGGER.info("Removing stale entity %s (key '%s' removed)", entity_entry.entity_id, key)
-                registry.async_remove(entity_entry.entity_id)
-    except Exception as e:
-        _LOGGER.debug("Stale entity cleanup skipped: %s", e)
 
 
 class SEMNumberEntity(CoordinatorEntity, NumberEntity):

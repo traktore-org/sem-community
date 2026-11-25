@@ -10,6 +10,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers import entity_registry as er
+
+from .entity_sweep import report_built_keys
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -220,25 +222,9 @@ async def async_setup_entry(
     except Exception as e:
         _LOGGER.debug("Switch entity ID fix skipped: %s", e)
 
-    # Clean up stale switch entities from previous versions
-    try:
-        registry = er.async_get(hass)
-        valid_keys = {d.key for d in static_descriptions} | per_charger_keys
-        for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-            if entity_entry.domain != "switch":
-                continue
-            # SEM uses two unique_id formats: "sem_{key}" or "{entry_id}_{key}"
-            unique_id = entity_entry.unique_id or ""
-            key = None
-            if unique_id.startswith("sem_"):
-                key = unique_id[4:]
-            elif unique_id.startswith(f"{entry.entry_id}_"):
-                key = unique_id[len(entry.entry_id) + 1:]
-            if key and key not in valid_keys:
-                _LOGGER.info("Removing stale switch entity %s (key '%s' removed)", entity_entry.entity_id, key)
-                registry.async_remove(entity_entry.entity_id)
-    except Exception as e:
-        _LOGGER.debug("Stale switch cleanup skipped: %s", e)
+    # (#1428) report what was built; ONE sweep after setup removes the rest
+    report_built_keys(hass, entry, "switch",
+                      {d.key for d in static_descriptions} | per_charger_keys)
 
 
 class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):

@@ -8,7 +8,8 @@ from homeassistant.components.select import SelectEntity, SelectEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers import entity_registry as er
+
+from .entity_sweep import report_built_keys
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -273,26 +274,9 @@ async def async_setup_entry(
     # removed left its ``charger_<id>_ev_charging_mode`` (and any
     # other retired per-charger select) in the registry indefinitely.
     # Mirrors the pattern in ``switch.py`` (#277 Phase C cleanup).
-    try:
-        registry = er.async_get(hass)
-        valid_keys = {d.key for d in SELECT_TYPES} | per_charger_keys | per_battery_keys
-        for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-            if entity_entry.domain != "select":
-                continue
-            unique_id = entity_entry.unique_id or ""
-            key: str | None = None
-            if unique_id.startswith("sem_"):
-                key = unique_id[4:]
-            elif unique_id.startswith(f"{entry.entry_id}_"):
-                key = unique_id[len(entry.entry_id) + 1:]
-            if key and key not in valid_keys:
-                _LOGGER.info(
-                    "Removing stale select entity %s (key '%s' no longer registered)",
-                    entity_entry.entity_id, key,
-                )
-                registry.async_remove(entity_entry.entity_id)
-    except Exception as e:
-        _LOGGER.debug("Stale select cleanup skipped: %s", e)
+    # (#1428) report what was built; ONE sweep after setup removes the rest
+    report_built_keys(hass, entry, "select",
+                      {d.key for d in SELECT_TYPES} | per_charger_keys | per_battery_keys)
 
 
 class SEMSelectEntity(CoordinatorEntity, SelectEntity):

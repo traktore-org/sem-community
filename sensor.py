@@ -38,6 +38,8 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
+
+from .entity_sweep import report_built_keys
 from homeassistant.helpers import label_registry as lr
 
 from .utils.device_names import charger_display_name  # (#1053)
@@ -2313,47 +2315,6 @@ def _fix_entity_ids(
         _LOGGER.debug("Entity ID fix skipped: %s", e)
 
 
-def _cleanup_stale_entities(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    descriptions: list,
-    platform: str,
-) -> None:
-    """Remove orphaned entities from previous SEM versions.
-
-    Compares registered entities against current entity descriptions
-    and removes any that no longer exist in the code.
-    """
-    try:
-        registry = er.async_get(hass)
-        valid_keys = {d.key for d in descriptions}
-
-        stale = []
-        for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-            if entity_entry.domain != platform:
-                continue
-            # SEM uses two unique_id formats:
-            #   sensors: "sem_{key}"
-            #   numbers/switches: "{entry_id}_{key}"
-            unique_id = entity_entry.unique_id or ""
-            key = None
-            if unique_id.startswith("sem_"):
-                key = unique_id[4:]  # Strip "sem_" prefix
-            elif unique_id.startswith(f"{entry.entry_id}_"):
-                key = unique_id[len(entry.entry_id) + 1:]  # Strip entry_id prefix
-            if key and key not in valid_keys:
-                stale.append((entity_entry, key))
-
-        for entity_entry, key in stale:
-            _LOGGER.info(
-                "Removing stale entity %s (key '%s' no longer exists)",
-                entity_entry.entity_id, key,
-            )
-            registry.async_remove(entity_entry.entity_id)
-    except Exception as e:
-        _LOGGER.debug("Stale entity cleanup skipped: %s", e)
-
-
 def _device_tariff_descriptions(hass, coordinator) -> list:
     """(#812) One daily cost sensor per device that has its own tariff."""
     from .coordinator.device_tariff import tariff_of
@@ -2762,7 +2723,8 @@ async def async_setup_entry(
         + per_device_tariff_descriptions
     )
     _fix_entity_ids(hass, entry, all_descriptions, "sensor")
-    _cleanup_stale_entities(hass, entry, all_descriptions, "sensor")
+    # (#1428) report what was built; ONE sweep after setup removes the rest
+    report_built_keys(hass, entry, "sensor", (d.key for d in all_descriptions))
 
     # Apply labels to entities after they are created
     await _apply_labels_to_sensors(hass, sensors)

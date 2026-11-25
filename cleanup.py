@@ -274,6 +274,30 @@ def delete_repairs(hass) -> int:
         return 0
 
 
+#: (#1428) Every persistent notification SEM can raise. A test reads the
+#: source for ``notification_id="sem_…"`` and fails if one is missing here.
+SEM_NOTIFICATION_IDS = (
+    "sem_backfill_battery_nights",
+    "sem_dashboard_success",
+    "sem_energy_plan_actuation_v18",
+    "sem_first_install_welcome",
+    "sem_load_shed",
+    "sem_phase_shed",
+)
+
+
+def dismiss_notifications(hass) -> int:
+    """(#1428) Dismiss SEM's persistent notifications. Returns how many ids."""
+    try:
+        from homeassistant.components import persistent_notification
+        for nid in SEM_NOTIFICATION_IDS:
+            persistent_notification.async_dismiss(hass, nid)
+        return len(SEM_NOTIFICATION_IDS)
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("SEM cleanup: could not dismiss notifications", exc_info=True)
+        return 0
+
+
 def _is_sem_resource(url: str) -> bool:
     """A Lovelace resource URL SEM registered.
 
@@ -379,6 +403,19 @@ async def async_clear_statistics(hass, statistic_ids: Sequence[str]) -> int:
 #: explicit ``remove_leftovers`` call.
 _DASHBOARD_PATH = "sem-dashboard"
 _DASHBOARD_STORE = f"lovelace.{_DASHBOARD_PATH}"
+#: (#1428) Every dashboard SEM ever generated: the retired classic one and
+#: the current one (#1321). remove_leftovers takes all of them, plus the
+#: copy of the classic dashboard the #1321 migration kept.
+SEM_DASHBOARD_PATHS = ("sem-dashboard", "sem-next")
+CLASSIC_DASHBOARD_COPY = f"{DOMAIN}.classic_dashboard_copy"
+
+
+async def async_remove_dashboards(hass) -> list:
+    """(#1428) Remove every SEM dashboard and the classic copy. Explicit only."""
+    removed = [p for p in SEM_DASHBOARD_PATHS if await async_remove_dashboard(hass, p)]
+    if await async_delete_stores(hass, [CLASSIC_DASHBOARD_COPY]):
+        removed.append(CLASSIC_DASHBOARD_COPY)
+    return removed
 
 
 def running_dashboards_collection(hass):

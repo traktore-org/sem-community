@@ -265,7 +265,8 @@ class TestTheButtonsSurviveSetup:
         src = (Path(__file__).resolve().parent.parent
                / "button.py").read_text(encoding="utf-8")
         body = src[src.index("async def async_setup_entry"):]
-        swept = re.search(r"_cleanup_stale_entities\(\s*hass,\s*entry,\s*(\w+)",
+        # (#1428) the platform reports what it built; one sweep after setup
+        swept = re.search(r"report_built_keys\(\s*hass,\s*entry,\s*\"button\",\s*\(d\.key for d in (\w+)\)",
                           body)
         added = re.search(r"_fix_entity_ids\(\s*hass,\s*entry,\s*(\w+)", body)
         assert swept and added, "the sweep calls moved — re-read button.py"
@@ -301,7 +302,7 @@ class TestTheButtonsSurviveSetup:
              patch("custom_components.solar_energy_management.button"
                    "._fix_entity_ids"), \
              patch("custom_components.solar_energy_management.button"
-                   "._cleanup_stale_entities") as sweep:
+                   ".report_built_keys") as sweep:
             await async_setup_entry(hass, entry, lambda e: added.extend(e))
 
         pause = [e for e in added if isinstance(e, SEMChargerPauseButton)]
@@ -311,7 +312,7 @@ class TestTheButtonsSurviveSetup:
             "button.sem_charger_wb2_pause_charging",
         ]
         # …and the sweep was handed both of them, not an empty static list.
-        kept = {d.key for d in sweep.call_args.args[2]}
+        kept = set(sweep.call_args.args[3])
         assert kept == {"charger_keba_pause_charging",
                         "charger_wb2_pause_charging"}, kept
 

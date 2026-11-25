@@ -51,6 +51,9 @@ def _coordinator(hass, entry, presence):
 async def _run(platform_module, hass, entry):
     added: list = []
     await platform_module.async_setup_entry(hass, entry, lambda ents: added.extend(ents))
+    # (#1428) the platform reports what it built; setup's ONE sweep removes the rest
+    from custom_components.solar_energy_management.entity_sweep import sweep_stale_entities
+    sweep_stale_entities(hass, entry)
     return {e.entity_description.key for e in added}
 
 
