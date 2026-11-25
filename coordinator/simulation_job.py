@@ -46,7 +46,7 @@ from ..analytics.simulation.battery_sim import (
     SimParams,
     real_capacity_kwh,
 )
-from ..consts.battery_permissions import may_assist_ev
+from .build_view import _battery_may_assist_ev
 from ..analytics.simulation.hourly_day import (
     CORE_ROLES,
     GRID_EXPORT_BATTERY,
@@ -320,8 +320,9 @@ class SimulationJob:
             "max_discharge_w": p.max_discharge_w,
             "system_size_kwp": _kwp(cfg),
             "pv_factor": 1.0,
-            "battery_to_ev": may_assist_ev(cfg.get("battery_mode"),
-                                           cfg.get("battery_permissions")),
+            # (#1381) the chargers' own switch: any charger that lets the pack help
+            "battery_to_ev": any(_battery_may_assist_ev(cfg, c)
+                                 for c in (cfg.get("ev_chargers") or [{}])),
             "currency": self._currency(),
         }
 

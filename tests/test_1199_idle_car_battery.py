@@ -37,7 +37,7 @@ def _view(*, charging, connected=True, drew_recently=True, assist_ok=None):
         ev_connected=connected,
         ev_drew_recently=drew_recently,
         home_consumption_w=700.0,
-        battery_permissions=(None if assist_ok is None else {"may_assist_ev": assist_ok}),
+        ev_help_allowed=(assist_ok is not False),   # (#1381) the chargers' answer
     )
 
 

@@ -42,7 +42,6 @@ from .sink_verdicts import (
     peak_hold_target_w as _peak_hold_target_w,
 )
 from ..consts.battery_modes import arbitrage_allowed_for_mode, reserve_soc_of
-from ..consts.battery_permissions import effective_permissions, may_assist_ev
 
 if TYPE_CHECKING:  # pragma: no cover
     from .charger_types import BatteryView
@@ -1009,8 +1008,10 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
     # _battery_assist_split``); the battery side never asked, so a pack the
     # user had kept for the house still covered the car on the meter. One
     # permission, both readers.
-    _assist_ok = may_assist_ev(
-        mode, effective_permissions(mode, getattr(view, "battery_permissions", None)))
+    # (#1381) …and the answer is the chargers' own switch, not an
+    # install-wide one (gone): the coordinator hands it over per cycle.
+    _assist_ok = (str(mode or "auto").lower() != "off"
+                  and bool(getattr(view, "ev_help_allowed", True)))
     _window = bool(getattr(view, "morning_window_open", False))
     _boost = getattr(view, "battery_boost_floor_soc", None)
     if (_window or _boost is not None) and _assist_ok:
@@ -1264,7 +1265,7 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
             if not _assist_ok:
                 # (#1066) The permission alone decides here — name it, not
                 # a surplus or SOC comparison that did not choose (#983).
-                why = "ev plugged in + this battery may not feed the car (may_assist_ev off)"
+                why = "ev plugged in + no connected charger lets the battery help its car"
                 code = RC.BATTERY_CAR_NOT_ALLOWED
             elif not getattr(f, "battery_soc_known", True):
                 # (#983) ``below_buffer`` is a disjunction, and the unread

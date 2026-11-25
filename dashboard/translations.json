@@ -2561,7 +2561,7 @@
     "charge_mode_sun_tariff": "Slunce + tarif",
     "charge_mode_now": "Teď",
     "next_battery_help": "Smí baterie pomoct autu?",
-    "next_battery_help_on": "Ano: při přebytku slunce domácí baterie přidá autu.",
+    "next_battery_help_on": "Ano: jen s přebytkem slunce po domě a nad úrovní „může pomáhat“ baterie. Potřeba domu na dnešní noc zůstane pokryta; v noci jen když je „potřebný přebytek slunce“ 0.",
     "next_battery_help_off": "Ne: baterie zůstává pro dům.",
     "next_now_until": "Plný výkon do {time}, pak zase plán.",
     "next_now_until_full": "Plný výkon, dokud není auto plné nebo nezvolíte jiný režim.",
@@ -2571,7 +2571,12 @@
     "mode_hint_sun_tariff": "Ve dne přebytek slunce. Minimum nakupuje v nejlevnějších hodinách: v noci, v levné hodině nebo při slabém slunci, když je to levnější. Ve špičce pauza.",
     "mode_hint_sun": "Jen přebytek slunce. Minimum přichází ze sítě v noci.",
     "mode_hint_now": "Plný výkon do {end}.",
-    "mode_hint_now_full": "nabití auta"
+    "mode_hint_now_full": "nabití auta",
+    "next_card_stale": "SEM byl aktualizován. Načtěte tuto stránku znovu a použijte novou verzi.",
+    "next_card_reload": "Načíst znovu",
+    "next_bar_left": "{have} z alespoň {min} · zbývá {left}",
+    "next_bar_done": "{have} z alespoň {min} · dosaženo",
+    "next_batt_help_used_when": "Platí, když nabíječka povolí pomoc baterie."
   },
   "da": {
     "/year": "/år",
@@ -5135,7 +5140,7 @@
     "charge_mode_sun_tariff": "Sol + tarif",
     "charge_mode_now": "Nu",
     "next_battery_help": "Må batteriet hjælpe bilen?",
-    "next_battery_help_on": "Ja: med overskydende sol giver husets batteri til bilen.",
+    "next_battery_help_on": "Ja: kun med overskydende sol efter huset og over batteriets \"må hjælpe\"-niveau. Husets behov i nat forbliver dækket; om natten kun hvis \"nødvendig overskudssol\" er 0.",
     "next_battery_help_off": "Nej: batteriet bliver til huset.",
     "next_now_until": "Fuld effekt til {time}, så planen igen.",
     "next_now_until_full": "Fuld effekt til bilen er fuld, eller du vælger en anden tilstand.",
@@ -5145,7 +5150,12 @@
     "mode_hint_sun_tariff": "Om dagen overskydende sol. Køber minimum i de billigste timer: om natten, i en billig time eller med lidt sol, når det er billigere. Pause i spidstimer.",
     "mode_hint_sun": "Kun overskydende sol. Minimum kommer fra nettet om natten.",
     "mode_hint_now": "Fuld effekt indtil {end}.",
-    "mode_hint_now_full": "bilen er fuld"
+    "mode_hint_now_full": "bilen er fuld",
+    "next_card_stale": "SEM er opdateret. Genindlæs siden for at bruge den nye version.",
+    "next_card_reload": "Genindlæs",
+    "next_bar_left": "{have} af mindst {min} · {left} tilbage",
+    "next_bar_done": "{have} af mindst {min} · nået",
+    "next_batt_help_used_when": "Gælder, når en lader tillader batterihjælp."
   },
   "de": {
     "/year": "/Jahr",
@@ -7709,7 +7719,7 @@
     "charge_mode_sun_tariff": "Sonne + Tarif",
     "charge_mode_now": "Jetzt",
     "next_battery_help": "Darf die Batterie dem Auto helfen?",
-    "next_battery_help_on": "Ja: bei überschüssiger Sonne gibt die Hausbatterie dem Auto dazu.",
+    "next_battery_help_on": "Ja: nur mit Sonnenüberschuss nach dem Haus und über der „darf helfen“-Stufe der Batterie. Der Hausbedarf für heute Nacht bleibt gedeckt; nachts nur, wenn „nötiger Sonnenüberschuss“ 0 ist.",
     "next_battery_help_off": "Nein: die Hausbatterie bleibt für das Haus.",
     "next_now_until": "Volle Leistung bis {time}, dann wieder der Plan.",
     "next_now_until_full": "Volle Leistung, bis das Auto voll ist oder du einen anderen Modus wählst.",
@@ -7719,7 +7729,12 @@
     "mode_hint_sun_tariff": "Tagsüber überschüssige Sonne. Kauft das Minimum in den günstigsten Stunden: nachts, in einer günstigen Stunde oder bei wenig Sonne, wenn das günstiger ist. Pausiert in Spitzenstunden.",
     "mode_hint_sun": "Nur überschüssige Sonne. Das Minimum kommt nachts aus dem Netz.",
     "mode_hint_now": "Volle Leistung bis {end}.",
-    "mode_hint_now_full": "das Auto voll ist"
+    "mode_hint_now_full": "das Auto voll ist",
+    "next_card_stale": "SEM wurde aktualisiert. Lade diese Seite neu, um die neue Version zu nutzen.",
+    "next_card_reload": "Neu laden",
+    "next_bar_left": "{have} von mindestens {min} · noch {left}",
+    "next_bar_done": "{have} von mindestens {min} · erreicht",
+    "next_batt_help_used_when": "Gilt, wenn eine Ladestation Batteriehilfe erlaubt."
   },
   "en": {
     "/year": "/year",
@@ -10283,7 +10298,7 @@
     "charge_mode_sun_tariff": "Sun + tariff",
     "charge_mode_now": "Now",
     "next_battery_help": "May the battery help the car?",
-    "next_battery_help_on": "Yes: with spare sun, the house battery adds to the car.",
+    "next_battery_help_on": "Yes: only with spare sun after the house, and above the battery's \"may help\" level. Tonight's house need stays covered; at night only if \"spare sun needed\" is 0.",
     "next_battery_help_off": "No: the house battery stays for the house.",
     "next_now_until": "Full power until {time}, then the plan again.",
     "next_now_until_full": "Full power until the car is full or you pick another mode.",
@@ -10293,7 +10308,12 @@
     "mode_hint_sun_tariff": "Spare sun by day. Buys At least in the cheapest hours: at night, in a cheap hour, or with thin sun when that is cheaper. Pauses in peak hours.",
     "mode_hint_sun": "Spare sun only. At least comes from the grid at night.",
     "mode_hint_now": "Full power until {end}.",
-    "mode_hint_now_full": "the car is full"
+    "mode_hint_now_full": "the car is full",
+    "next_card_stale": "SEM was updated. Reload this page to use the new version.",
+    "next_card_reload": "Reload",
+    "next_bar_left": "{have} of at least {min} · {left} to go",
+    "next_bar_done": "{have} of at least {min} · reached",
+    "next_batt_help_used_when": "Used when a charger allows battery help."
   },
   "es": {
     "/year": "/año",
@@ -12857,7 +12877,7 @@
     "charge_mode_sun_tariff": "Sol + tarifa",
     "charge_mode_now": "Ahora",
     "next_battery_help": "¿Puede la batería ayudar al coche?",
-    "next_battery_help_on": "Sí: con sol sobrante, la batería de casa suma para el coche.",
+    "next_battery_help_on": "Sí: solo con sol sobrante tras la casa y por encima del nivel \"puede ayudar\" de la batería. La necesidad de la casa para esta noche queda cubierta; de noche solo si \"sol sobrante necesario\" es 0.",
     "next_battery_help_off": "No: la batería se queda para la casa.",
     "next_now_until": "Potencia máxima hasta las {time}, luego el plan otra vez.",
     "next_now_until_full": "Potencia máxima hasta que el coche esté lleno o elijas otro modo.",
@@ -12867,7 +12887,12 @@
     "mode_hint_sun_tariff": "De día, el sol sobrante. Compra el mínimo en las horas más baratas: de noche, en una hora barata o con poco sol cuando sale más barato. Pausa en horas punta.",
     "mode_hint_sun": "Solo el sol sobrante. El mínimo viene de la red por la noche.",
     "mode_hint_now": "Potencia máxima hasta {end}.",
-    "mode_hint_now_full": "que el coche esté lleno"
+    "mode_hint_now_full": "que el coche esté lleno",
+    "next_card_stale": "SEM se ha actualizado. Recarga esta página para usar la nueva versión.",
+    "next_card_reload": "Recargar",
+    "next_bar_left": "{have} de al menos {min} · faltan {left}",
+    "next_bar_done": "{have} de al menos {min} · alcanzado",
+    "next_batt_help_used_when": "Se aplica cuando un cargador permite la ayuda de la batería."
   },
   "fi": {
     "/year": "/vuosi",
@@ -15431,7 +15456,7 @@
     "charge_mode_sun_tariff": "Aurinko + tariffi",
     "charge_mode_now": "Nyt",
     "next_battery_help": "Saako akku auttaa autoa?",
-    "next_battery_help_on": "Kyllä: ylimääräisellä auringolla kodin akku lisää autolle.",
+    "next_battery_help_on": "Kyllä: vain kun aurinkoa jää yli talon jälkeen ja akku on \"saa auttaa\" -tason yläpuolella. Talon yön tarve pysyy katettuna; yöllä vain jos \"tarvittava ylijäämäaurinko\" on 0.",
     "next_battery_help_off": "Ei: akku jää kodille.",
     "next_now_until": "Täysi teho klo {time} asti, sitten taas suunnitelma.",
     "next_now_until_full": "Täysi teho, kunnes auto on täynnä tai valitset toisen tilan.",
@@ -15441,7 +15466,12 @@
     "mode_hint_sun_tariff": "Päivällä ylimääräinen aurinko. Ostaa vähimmäismäärän halvimpina tunteina: yöllä, halvalla tunnilla tai heikolla auringolla, kun se on halvempaa. Tauko huipputunteina.",
     "mode_hint_sun": "Vain ylimääräinen aurinko. Vähimmäismäärä tulee verkosta yöllä.",
     "mode_hint_now": "Täysi teho kunnes {end}.",
-    "mode_hint_now_full": "auto on täynnä"
+    "mode_hint_now_full": "auto on täynnä",
+    "next_card_stale": "SEM on päivitetty. Lataa sivu uudelleen käyttääksesi uutta versiota.",
+    "next_card_reload": "Lataa uudelleen",
+    "next_bar_left": "{have} / vähintään {min} · jäljellä {left}",
+    "next_bar_done": "{have} / vähintään {min} · saavutettu",
+    "next_batt_help_used_when": "Käytössä, kun laturi sallii akun avun."
   },
   "fr": {
     "/year": "/an",
@@ -18005,7 +18035,7 @@
     "charge_mode_sun_tariff": "Soleil + tarif",
     "charge_mode_now": "Maintenant",
     "next_battery_help": "La batterie peut-elle aider la voiture ?",
-    "next_battery_help_on": "Oui : avec du soleil en trop, la batterie de la maison complète pour la voiture.",
+    "next_battery_help_on": "Oui : seulement avec du soleil en trop après la maison, et au-dessus du niveau « peut aider » de la batterie. Le besoin de la maison pour cette nuit reste couvert ; la nuit seulement si « soleil en trop requis » vaut 0.",
     "next_battery_help_off": "Non : la batterie reste pour la maison.",
     "next_now_until": "Pleine puissance jusqu'à {time}, puis le plan reprend.",
     "next_now_until_full": "Pleine puissance jusqu'à ce que la voiture soit pleine ou que vous choisissiez un autre mode.",
@@ -18015,7 +18045,12 @@
     "mode_hint_sun_tariff": "Le jour, le soleil en trop. Achète le minimum aux heures les moins chères : la nuit, à une heure bon marché, ou avec peu de soleil quand c'est moins cher. Pause aux heures de pointe.",
     "mode_hint_sun": "Seulement le soleil en trop. Le minimum vient du réseau la nuit.",
     "mode_hint_now": "Pleine puissance jusqu'à {end}.",
-    "mode_hint_now_full": "ce que la voiture soit pleine"
+    "mode_hint_now_full": "ce que la voiture soit pleine",
+    "next_card_stale": "SEM a été mis à jour. Rechargez cette page pour utiliser la nouvelle version.",
+    "next_card_reload": "Recharger",
+    "next_bar_left": "{have} sur au moins {min} · encore {left}",
+    "next_bar_done": "{have} sur au moins {min} · atteint",
+    "next_batt_help_used_when": "S'applique quand une borne autorise l'aide de la batterie."
   },
   "hu": {
     "/year": "/év",
@@ -20579,7 +20614,7 @@
     "charge_mode_sun_tariff": "Nap + tarifa",
     "charge_mode_now": "Most",
     "next_battery_help": "Segíthet az akku az autónak?",
-    "next_battery_help_on": "Igen: felesleges napnál a házi akku is ad az autónak.",
+    "next_battery_help_on": "Igen: csak a ház utáni napfelesleggel és az akku „segíthet” szintje felett. A ház ma éjjeli igénye fedezve marad; éjjel csak ha a „szükséges napfelesleg” 0.",
     "next_battery_help_off": "Nem: az akku a házé marad.",
     "next_now_until": "Teljes teljesítmény {time}-ig, utána újra a terv.",
     "next_now_until_full": "Teljes teljesítmény, amíg az autó tele nem lesz vagy más módot nem választasz.",
@@ -20589,7 +20624,12 @@
     "mode_hint_sun_tariff": "Nappal a felesleges nap. A minimumot a legolcsóbb órákban veszi: éjjel, olcsó órában, vagy gyenge napnál, ha az olcsóbb. Csúcsórákban szünetel.",
     "mode_hint_sun": "Csak a felesleges nap. A minimum éjjel a hálózatból jön.",
     "mode_hint_now": "Teljes teljesítmény eddig: {end}.",
-    "mode_hint_now_full": "az autó tele lesz"
+    "mode_hint_now_full": "az autó tele lesz",
+    "next_card_stale": "A SEM frissült. Töltsd újra az oldalt az új verzió használatához.",
+    "next_card_reload": "Újratöltés",
+    "next_bar_left": "{have} a legalább {min}-ból · még {left}",
+    "next_bar_done": "{have} a legalább {min}-ból · elérve",
+    "next_batt_help_used_when": "Akkor érvényes, ha egy töltő engedi az akku segítségét."
   },
   "it": {
     "/year": "/anno",
@@ -23153,7 +23193,7 @@
     "charge_mode_sun_tariff": "Sole + tariffa",
     "charge_mode_now": "Ora",
     "next_battery_help": "La batteria può aiutare l'auto?",
-    "next_battery_help_on": "Sì: con sole in più, la batteria di casa aggiunge per l'auto.",
+    "next_battery_help_on": "Sì: solo con sole in più dopo la casa e sopra il livello \"può aiutare\" della batteria. Il fabbisogno della casa per stanotte resta coperto; di notte solo se \"sole in più necessario\" è 0.",
     "next_battery_help_off": "No: la batteria resta per la casa.",
     "next_now_until": "Piena potenza fino alle {time}, poi di nuovo il piano.",
     "next_now_until_full": "Piena potenza finché l'auto è piena o scegli un'altra modalità.",
@@ -23163,7 +23203,12 @@
     "mode_hint_sun_tariff": "Di giorno il sole in più. Compra il minimo nelle ore più economiche: di notte, in un'ora economica o con poco sole quando costa meno. In pausa nelle ore di punta.",
     "mode_hint_sun": "Solo il sole in più. Il minimo arriva dalla rete di notte.",
     "mode_hint_now": "Piena potenza fino a {end}.",
-    "mode_hint_now_full": "quando l'auto è carica"
+    "mode_hint_now_full": "quando l'auto è carica",
+    "next_card_stale": "SEM è stato aggiornato. Ricarica questa pagina per usare la nuova versione.",
+    "next_card_reload": "Ricarica",
+    "next_bar_left": "{have} di almeno {min} · mancano {left}",
+    "next_bar_done": "{have} di almeno {min} · raggiunto",
+    "next_batt_help_used_when": "Vale quando un caricatore consente l'aiuto della batteria."
   },
   "nl": {
     "/year": "/jaar",
@@ -25727,7 +25772,7 @@
     "charge_mode_sun_tariff": "Zon + tarief",
     "charge_mode_now": "Nu",
     "next_battery_help": "Mag de accu de auto helpen?",
-    "next_battery_help_on": "Ja: bij overtollige zon geeft de thuisaccu bij aan de auto.",
+    "next_battery_help_on": "Ja: alleen met zonoverschot na het huis, en boven het \"mag helpen\"-niveau van de accu. De huisbehoefte voor vannacht blijft gedekt; 's nachts alleen als \"nodig zonoverschot\" 0 is.",
     "next_battery_help_off": "Nee: de thuisaccu blijft voor het huis.",
     "next_now_until": "Vol vermogen tot {time}, daarna weer het plan.",
     "next_now_until_full": "Vol vermogen tot de auto vol is of je een andere modus kiest.",
@@ -25737,7 +25782,12 @@
     "mode_hint_sun_tariff": "Overdag overtollige zon. Koopt het minimum in de goedkoopste uren: 's nachts, in een goedkoop uur, of bij weinig zon als dat goedkoper is. Pauzeert in piekuren.",
     "mode_hint_sun": "Alleen overtollige zon. Het minimum komt 's nachts van het net.",
     "mode_hint_now": "Vol vermogen tot {end}.",
-    "mode_hint_now_full": "de auto vol is"
+    "mode_hint_now_full": "de auto vol is",
+    "next_card_stale": "SEM is bijgewerkt. Laad deze pagina opnieuw om de nieuwe versie te gebruiken.",
+    "next_card_reload": "Opnieuw laden",
+    "next_bar_left": "{have} van minstens {min} · nog {left}",
+    "next_bar_done": "{have} van minstens {min} · bereikt",
+    "next_batt_help_used_when": "Geldt als een laadpunt accuhulp toestaat."
   },
   "no": {
     "/year": "/år",
@@ -28301,7 +28351,7 @@
     "charge_mode_sun_tariff": "Sol + tariff",
     "charge_mode_now": "Nå",
     "next_battery_help": "Kan batteriet hjelpe bilen?",
-    "next_battery_help_on": "Ja: med overskytende sol gir husets batteri til bilen.",
+    "next_battery_help_on": "Ja: bare med overskuddssol etter huset, og over batteriets \"kan hjelpe\"-nivå. Husets behov i natt forblir dekket; om natten bare hvis \"nødvendig overskuddssol\" er 0.",
     "next_battery_help_off": "Nei: batteriet blir til huset.",
     "next_now_until": "Full effekt til {time}, så planen igjen.",
     "next_now_until_full": "Full effekt til bilen er full eller du velger en annen modus.",
@@ -28311,7 +28361,12 @@
     "mode_hint_sun_tariff": "Om dagen overskytende sol. Kjøper minimum i de billigste timene: om natten, i en billig time eller med lite sol når det er billigere. Pause i topptimer.",
     "mode_hint_sun": "Bare overskytende sol. Minimum kommer fra nettet om natten.",
     "mode_hint_now": "Full effekt til {end}.",
-    "mode_hint_now_full": "bilen er full"
+    "mode_hint_now_full": "bilen er full",
+    "next_card_stale": "SEM er oppdatert. Last inn siden på nytt for å bruke den nye versjonen.",
+    "next_card_reload": "Last inn på nytt",
+    "next_bar_left": "{have} av minst {min} · {left} igjen",
+    "next_bar_done": "{have} av minst {min} · nådd",
+    "next_batt_help_used_when": "Gjelder når en lader tillater batterihjelp."
   },
   "pl": {
     "/year": "/rok",
@@ -30875,7 +30930,7 @@
     "charge_mode_sun_tariff": "Słońce + taryfa",
     "charge_mode_now": "Teraz",
     "next_battery_help": "Czy bateria może pomóc autu?",
-    "next_battery_help_on": "Tak: przy nadwyżce słońca bateria domowa dodaje do auta.",
+    "next_battery_help_on": "Tak: tylko przy nadwyżce słońca po domu i powyżej poziomu „może pomagać” baterii. Potrzeby domu na tę noc pozostają pokryte; w nocy tylko gdy „potrzebna nadwyżka słońca” to 0.",
     "next_battery_help_off": "Nie: bateria zostaje dla domu.",
     "next_now_until": "Pełna moc do {time}, potem znowu plan.",
     "next_now_until_full": "Pełna moc, aż auto będzie pełne lub wybierzesz inny tryb.",
@@ -30885,7 +30940,12 @@
     "mode_hint_sun_tariff": "W dzień nadwyżka słońca. Kupuje minimum w najtańszych godzinach: w nocy, w tanią godzinę lub przy słabym słońcu, gdy to taniej. Pauza w godzinach szczytu.",
     "mode_hint_sun": "Tylko nadwyżka słońca. Minimum pochodzi z sieci w nocy.",
     "mode_hint_now": "Pełna moc do {end}.",
-    "mode_hint_now_full": "naładowania auta"
+    "mode_hint_now_full": "naładowania auta",
+    "next_card_stale": "SEM został zaktualizowany. Odśwież tę stronę, aby użyć nowej wersji.",
+    "next_card_reload": "Odśwież",
+    "next_bar_left": "{have} z co najmniej {min} · zostało {left}",
+    "next_bar_done": "{have} z co najmniej {min} · osiągnięto",
+    "next_batt_help_used_when": "Obowiązuje, gdy ładowarka pozwala na pomoc baterii."
   },
   "pt": {
     "/year": "/ano",
@@ -33449,7 +33509,7 @@
     "charge_mode_sun_tariff": "Sol + tarifa",
     "charge_mode_now": "Agora",
     "next_battery_help": "A bateria pode ajudar o carro?",
-    "next_battery_help_on": "Sim: com sol a mais, a bateria da casa junta ao carro.",
+    "next_battery_help_on": "Sim: só com sol a mais depois da casa e acima do nível \"pode ajudar\" da bateria. A necessidade da casa para esta noite fica coberta; à noite só se \"sol a mais necessário\" for 0.",
     "next_battery_help_off": "Não: a bateria fica para a casa.",
     "next_now_until": "Potência máxima até às {time}, depois o plano outra vez.",
     "next_now_until_full": "Potência máxima até o carro estar cheio ou escolher outro modo.",
@@ -33459,7 +33519,12 @@
     "mode_hint_sun_tariff": "De dia, o sol que sobra. Compra o mínimo nas horas mais baratas: à noite, numa hora barata ou com pouco sol quando sai mais barato. Pausa nas horas de ponta.",
     "mode_hint_sun": "Só o sol que sobra. O mínimo vem da rede à noite.",
     "mode_hint_now": "Potência máxima até {end}.",
-    "mode_hint_now_full": "o carro estar cheio"
+    "mode_hint_now_full": "o carro estar cheio",
+    "next_card_stale": "O SEM foi atualizado. Recarregue esta página para usar a nova versão.",
+    "next_card_reload": "Recarregar",
+    "next_bar_left": "{have} de pelo menos {min} · faltam {left}",
+    "next_bar_done": "{have} de pelo menos {min} · atingido",
+    "next_batt_help_used_when": "Aplica-se quando um carregador permite a ajuda da bateria."
   },
   "ro": {
     "/year": "/an",
@@ -36023,7 +36088,7 @@
     "charge_mode_sun_tariff": "Soare + tarif",
     "charge_mode_now": "Acum",
     "next_battery_help": "Poate bateria să ajute mașina?",
-    "next_battery_help_on": "Da: cu soare în plus, bateria casei adaugă pentru mașină.",
+    "next_battery_help_on": "Da: doar cu soare în plus după casă și peste nivelul „poate ajuta” al bateriei. Nevoia casei pentru noaptea aceasta rămâne acoperită; noaptea doar dacă „soare în plus necesar” este 0.",
     "next_battery_help_off": "Nu: bateria rămâne pentru casă.",
     "next_now_until": "Putere maximă până la {time}, apoi din nou planul.",
     "next_now_until_full": "Putere maximă până mașina e plină sau alegi alt mod.",
@@ -36033,7 +36098,12 @@
     "mode_hint_sun_tariff": "Ziua, soarele în plus. Cumpără minimul în orele cele mai ieftine: noaptea, într-o oră ieftină sau la soare slab când e mai ieftin. Pauză în orele de vârf.",
     "mode_hint_sun": "Doar soarele în plus. Minimul vine din rețea noaptea.",
     "mode_hint_now": "Putere maximă până la {end}.",
-    "mode_hint_now_full": "mașina e plină"
+    "mode_hint_now_full": "mașina e plină",
+    "next_card_stale": "SEM a fost actualizat. Reîncarcă această pagină pentru a folosi versiunea nouă.",
+    "next_card_reload": "Reîncarcă",
+    "next_bar_left": "{have} din cel puțin {min} · mai sunt {left}",
+    "next_bar_done": "{have} din cel puțin {min} · atins",
+    "next_batt_help_used_when": "Se aplică atunci când un încărcător permite ajutorul bateriei."
   },
   "sv": {
     "/year": "/år",
@@ -38597,7 +38667,7 @@
     "charge_mode_sun_tariff": "Sol + tariff",
     "charge_mode_now": "Nu",
     "next_battery_help": "Får batteriet hjälpa bilen?",
-    "next_battery_help_on": "Ja: med extra sol ger husets batteri till bilen.",
+    "next_battery_help_on": "Ja: bara med överskottssol efter huset och över batteriets \"får hjälpa\"-nivå. Husets behov i natt förblir täckt; på natten bara om \"nödvändig överskottssol\" är 0.",
     "next_battery_help_off": "Nej: batteriet stannar för huset.",
     "next_now_until": "Full effekt till {time}, sedan planen igen.",
     "next_now_until_full": "Full effekt tills bilen är full eller du väljer ett annat läge.",
@@ -38607,7 +38677,12 @@
     "mode_hint_sun_tariff": "På dagen överskottssol. Köper minimum under de billigaste timmarna: på natten, en billig timme eller vid svag sol när det är billigare. Paus under topptimmar.",
     "mode_hint_sun": "Bara överskottssol. Minimum kommer från nätet på natten.",
     "mode_hint_now": "Full effekt till {end}.",
-    "mode_hint_now_full": "bilen är full"
+    "mode_hint_now_full": "bilen är full",
+    "next_card_stale": "SEM har uppdaterats. Ladda om sidan för att använda den nya versionen.",
+    "next_card_reload": "Ladda om",
+    "next_bar_left": "{have} av minst {min} · {left} kvar",
+    "next_bar_done": "{have} av minst {min} · uppnått",
+    "next_batt_help_used_when": "Gäller när en laddare tillåter batterihjälp."
   },
   "zh": {
     "/year": "/年",
@@ -41171,7 +41246,7 @@
     "charge_mode_sun_tariff": "太阳 + 电价",
     "charge_mode_now": "立即",
     "next_battery_help": "电池可以帮助汽车吗？",
-    "next_battery_help_on": "是：有多余阳光时，家用电池也为汽车供电。",
+    "next_battery_help_on": "是：仅在满足家庭用电后仍有多余阳光、且电池高于“可帮助”水平时。今晚家庭用电始终有保障；夜间仅当“所需多余阳光”为 0 时。",
     "next_battery_help_off": "否：家用电池只供家里使用。",
     "next_now_until": "全功率充到 {time}，之后按计划。",
     "next_now_until_full": "全功率充电，直到车充满或您选择其他模式。",
@@ -41181,6 +41256,11 @@
     "mode_hint_sun_tariff": "白天使用多余的阳光。在最便宜的时段购买最低电量：夜间、便宜时段，或阳光较弱但更便宜时。高峰时段暂停。",
     "mode_hint_sun": "只用多余的阳光。最低电量在夜间来自电网。",
     "mode_hint_now": "全功率直到 {end}。",
-    "mode_hint_now_full": "车充满"
+    "mode_hint_now_full": "车充满",
+    "next_card_stale": "SEM 已更新。请重新加载此页面以使用新版本。",
+    "next_card_reload": "重新加载",
+    "next_bar_left": "已充 {have}，至少 {min} · 还差 {left}",
+    "next_bar_done": "已充 {have}，至少 {min} · 已达到",
+    "next_batt_help_used_when": "当充电桩允许电池协助时适用。"
   }
 }

@@ -2150,6 +2150,60 @@ def _migrate_legacy_arbitrage_mode(hass: HomeAssistant, entry: SEMConfigEntry) -
     )
 
 
+def _move_battery_help_to_chargers(opts: dict) -> tuple:
+    """(#1381) The install-wide "May the battery help charge the car?" is
+    gone; the charger's own switch is the one answer. Pure, on an options
+    dict: returns ``(opts, changed)``.
+
+    * install switch OFF → every charger's help goes OFF (and its per-charger
+      "never" is set), so nothing that was forbidden becomes allowed;
+    * install switch ON or unset → each charger keeps what it had;
+    * either way the old key leaves ``battery_permissions``.
+
+    Idempotent: once the key is gone there is nothing to move.
+    """
+    perms = opts.get("battery_permissions")
+    if not isinstance(perms, dict) or "may_assist_ev" not in perms:
+        return opts, False
+    install = perms.get("may_assist_ev")
+    new_perms = {k: v for k, v in perms.items() if k != "may_assist_ev"}
+    out = {**opts, "battery_permissions": new_perms}
+    if install is False:
+        chargers = []
+        for charger in (opts.get("ev_chargers") or []):
+            c = dict(charger) if isinstance(charger, dict) else charger
+            if isinstance(c, dict):
+                apply_user_mode_write(c, BATTERY_HELP_KEY, False)
+                c["ev_battery_may_assist"] = False
+            chargers.append(c)
+        out["ev_chargers"] = chargers
+    return out, True
+
+
+def _migrate_battery_help_to_chargers(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
+    """(#1381) Run ``_move_battery_help_to_chargers`` once on the entry."""
+    merged = {**entry.data, **entry.options}
+    if "may_assist_ev" not in (merged.get("battery_permissions") or {}):
+        return
+    opts = {**entry.options}
+    if "battery_permissions" not in opts:
+        opts["battery_permissions"] = dict(merged.get("battery_permissions") or {})
+    if "ev_chargers" not in opts and merged.get("ev_chargers") is not None:
+        opts["ev_chargers"] = merged.get("ev_chargers")
+    new, changed = _move_battery_help_to_chargers(opts)
+    if not changed:
+        return
+    hass.config_entries.async_update_entry(entry, options=new)
+    _LOGGER.warning(
+        "(#1381) battery help now lives on each charger; the install-wide "
+        "switch was %s, so %s",
+        "OFF" if (merged.get("battery_permissions") or {}).get("may_assist_ev") is False else "ON",
+        "every charger's battery help is now off"
+        if (merged.get("battery_permissions") or {}).get("may_assist_ev") is False
+        else "each charger keeps its own setting",
+    )
+
+
 def _migrate_limit_surplus_to_max(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
     """Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
 
@@ -2628,6 +2682,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Idempotent; only acts while the legacy key is present.
     _migrate_limit_surplus_to_max(hass, entry)
     _migrate_legacy_arbitrage_mode(hass, entry)   # (#930)
+    _migrate_battery_help_to_chargers(hass, entry)   # (#1381)
 
     # Heal a poisoned ``options.ev_chargers`` list (#462/#464 follow-up).
     # v1.7.2..v1.7.3-beta.3 builds could leave options with a partial or
@@ -6019,6 +6074,8 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             }
 
         asset_v = await hass.async_add_executor_job(_asset_versions)
+        # (#1381) the cards compare their own ?v= with this (sensor.sem_diag_version.card)
+        hass.data[f"{DOMAIN}_card_version"] = asset_v['bundle']
 
         localize_base = f"{static_path}/card/sem-localize.js"
         # Single Lit bundle replaces all individual card JS files

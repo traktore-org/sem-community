@@ -70,6 +70,7 @@ def _view(*, mode="auto", soc=80.0, reserve=None, sched=None, perms=None,
         forecast_spending_enabled=forecast_spending,
         battery_spendable_kwh=spendable_kwh,
         battery_permissions=perms,
+        ev_help_allowed=(perms or {}).get("may_assist_ev") is not False,  # (#1381)
     )
 
 

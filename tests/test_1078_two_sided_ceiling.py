@@ -34,7 +34,7 @@ def _view(*, solar_w, charging=False, two_sided=True, drew_recently=False):
         ev_connected=True,
         ev_drew_recently=drew_recently,
         home_consumption_w=700.0,
-        battery_permissions={"may_assist_ev": False},
+        ev_help_allowed=False,   # (#1381) no connected charger lets the pack help
     )
 
 

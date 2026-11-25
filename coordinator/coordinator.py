@@ -10379,6 +10379,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         self._vpp_publish = self._vpp_dispatcher.publish_state(decision)
 
+    def _ev_help_allowed(self, power) -> bool:
+        """(#1381) May the pack feed the connected cars? True with no car
+        connected, else when at least one connected charger's own switch
+        allows it (the per-charger loop still offers the pack only to those)."""
+        from .build_view import _battery_may_assist_ev
+        from .ev_availability import charger_state
+        seen = False
+        for cfg in (self.config.get("ev_chargers") or []):
+            cid = str((cfg or {}).get("id") or "")
+            if not cid or not bool(charger_state(cid, power, self.config, "connected")):
+                continue
+            seen = True
+            if _battery_may_assist_ev(self.config, cfg):
+                return True
+        return not seen
+
     def _ev_pack_modes(self, power) -> list:
         """(#1130) For each CONNECTED charger: does its mode take the pack?
 
@@ -10407,7 +10423,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 mode = self._effective_charge_mode_for(cfg)
             except Exception:  # noqa: BLE001 — an unresolvable mode is no consent
                 mode = None
-            out.append(mode in takers)
+            # (#1381) the charger's own battery-help switch is part of its consent
+            from .build_view import _battery_may_assist_ev
+            out.append(mode in takers and _battery_may_assist_ev(self.config, cfg))
         return out
 
     def _ev_drew_recently(self, power) -> bool:
@@ -12137,6 +12155,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#778) The permission axis, resolved from the per-battery
                 # config so a multi-battery install can grant export on one
                 # pack and withhold it on another.
+                # (#1381) the chargers' own battery-help switch, one answer
+                ev_help_allowed=self._ev_help_allowed(power),
                 battery_permissions=(
                     self._per_battery_config(batt_idx, _bat_count).get(
                         "battery_permissions")

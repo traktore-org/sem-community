@@ -45,17 +45,17 @@ def _switch(key, *, options=None, mode="auto"):
 
 
 class TestTheSwitchesExist:
-    def test_both_permissions_are_switch_entities(self):
+    def test_the_export_permission_is_a_switch_entity(self):
         keys = {d.key for d in SWITCH_TYPES}
         assert "battery_may_export" in keys
-        assert "battery_may_assist_ev" in keys
+        # (#1381) battery help for the car is each charger's own switch now
+        assert "battery_may_assist_ev" not in keys
 
     def test_the_map_covers_exactly_the_permission_switches(self):
         """The map is the wiring between a switch key and its permission slot.
         A switch added without a slot would silently persist a flat key."""
         assert PERMISSION_SWITCHES == {
             "battery_may_export": "may_export",
-            "battery_may_assist_ev": "may_assist_ev",
         }
 
 
@@ -70,10 +70,10 @@ class TestPersistence:
         """Explicit False must be distinguishable from UNSET — that is the
         entire point of the tri-state, and the reason turning a switch off
         cannot simply delete the key."""
-        sw, coord, entry = _switch("battery_may_assist_ev")
+        sw, coord, entry = _switch("battery_may_export")
         sw._persist_flag(False)
         opts = sw.hass.config_entries.async_update_entry.call_args.kwargs["options"]
-        assert opts["battery_permissions"]["may_assist_ev"] is False
+        assert opts["battery_permissions"]["may_export"] is False
 
     def test_writing_one_permission_preserves_the_other(self):
         """Live PROD lesson (21.08): an options merge that drops omitted keys
@@ -154,12 +154,6 @@ class TestSeeding:
         assert self._seeded(
             "battery_may_export",
             options={"battery_grid_arbitrage_enabled": True}) is True
-
-    def test_unset_ev_assist_seeds_on(self):
-        """The EV permission is NOT gated by the arbitrage switch — energy into
-        the car never leaves the house — so an untouched install shows it on,
-        which is what SEM already does today."""
-        assert self._seeded("battery_may_assist_ev") is True
 
     def test_an_explicit_false_seeds_off(self):
         assert self._seeded(
@@ -257,9 +251,12 @@ class TestTheRestoreStoreCannotOverrideAPermission:
             "a ghost in the restore store granted permission to sell the "
             "user's battery to the grid")
 
-    def test_a_stale_off_does_not_revoke_assist(self):
+    def test_a_stale_off_does_not_revoke_export(self):
         """Symmetrical: the ghost must not take a permission away either."""
-        sw, coord, entry = _switch("battery_may_assist_ev")
+        sw, coord, entry = _switch(
+            "battery_may_export",
+            options={"battery_permissions": {"may_export": True},
+                     "battery_grid_arbitrage_enabled": True})
         sw._is_on = True
         sw._apply_restored_state(self._Restored("off"))
         assert sw._is_on is True

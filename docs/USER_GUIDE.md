@@ -152,7 +152,10 @@ Set the mode per charger, on **Devices**. There are four.
 | **Now** | Full power until its end: the plan's next block, a time you pick, or when the car is full. | You need the car now. |
 | **Off** | Nothing. SEM sends one stop, then leaves the charger alone. | You control the car yourself. |
 
-Each charger also has one switch: **May the battery help the car?**
+Each charger also has one switch: **May the battery help the car?** It is
+the only battery-help switch. When it is on, the house battery helps only with
+spare sun after the house, and only above its **may help** level. Tonight's house
+need stays covered. At night it helps only if **Spare sun the battery needs** is 0.
 
 | | Battery help on | Battery help off |
 |---|---|---|
@@ -275,11 +278,13 @@ by day, **At least** at night.
 
 ### Battery help for the car
 
-- **Spare sun before the battery helps** is the spare sun the battery needs before it helps the car
-  (default 1200 W). It is on the battery card on **Devices**, shown only while
-  **May the battery help charge the car?** is on. Below it the battery helps
-  only when tonight's forecast budget is positive, or in a morning window you
-  opened. Set it to 0 W to allow help at any time.
+- Whether the battery helps a car is that charger's switch **May the battery
+  help the car?** (on the charger card). There is no second switch on the battery.
+- **Spare sun the battery needs** is the spare sun after the house before the
+  battery helps a car (default 1200 W). It is on the battery card on **Devices**,
+  with the other help levels, under "Used when a charger allows battery help."
+  Below it the battery helps only when tonight's forecast budget is positive, or
+  in a morning window you opened. At 0 W it may also help at night.
 - The battery help levels are set on the battery row. See [Battery](#battery).
 
 ### Car charge levels
@@ -407,7 +412,7 @@ will refill it.
 - Three states: **Learning** (SEM needs five nights and spends nothing),
   **Holding** (no spare energy), **Spending** (a budget for tonight).
 - The car stops above the higher of the buffer level and the computed floor.
-- Two switches on the battery card: **May the battery sell to the grid?** and **May the battery help charge the car?**
+- One switch on the battery card: **May the battery sell to the grid?** Battery help for a car is each charger's own switch.
 - Start faster from history: the action **Learn overnight battery use from past
   history** and the forecast action **Learn forecast accuracy from past history**
   read your recorder history.

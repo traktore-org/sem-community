@@ -64,6 +64,7 @@ def _view(p, *, perms=None, protection=True, ev=True):
         ev_charging=ev, ev_connected=ev,
         home_consumption_w=p.home_consumption_power,
         scheduler_decision=None, battery_permissions=perms,
+        ev_help_allowed=(perms or {}).get("may_assist_ev") is not False,  # (#1381)
         sink_verdicts={"house": SinkVerdict("house", HELD, "cheap hour")},
     )
 

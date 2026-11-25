@@ -75,11 +75,8 @@ SWITCH_TYPES = [
         entity_category=EntityCategory.CONFIG,
         icon="mdi:transmission-tower-export",
     ),
-    SwitchEntityDescription(
-        key="battery_may_assist_ev",
-        entity_category=EntityCategory.CONFIG,
-        icon="mdi:car-electric",
-    ),
+    # (#1381) the install-wide battery_may_assist_ev switch is gone: battery
+    # help is each charger's own switch (one answer, migrated at start).
     # (#1078) Default OFF. For a battery whose discharge limit also caps
     # charging: the car clamp lifts while the car is not drawing and the sun
     # covers the house.
@@ -170,7 +167,6 @@ def battery_may_export_display(mode, stored, arbitrage_on, spend_on) -> bool:
 
 PERMISSION_SWITCHES = {
     "battery_may_export": "may_export",
-    "battery_may_assist_ev": "may_assist_ev",
 }
 
 # (ev_limit_surplus (#235) was folded into the optional Max ceiling (#245); its
@@ -324,9 +320,6 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         """
         key = self.entity_description.key
         if key in PERMISSION_SWITCHES:
-            from .consts.battery_permissions import (
-                effective_permissions, may_assist_ev,
-            )
             cfg = getattr(self.coordinator, "config", None) or {}
             mode = cfg.get("battery_mode") or "auto"
             stored = cfg.get("battery_permissions") or {}
@@ -336,7 +329,6 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
                     or {}).get("battery_permissions") or {})}
             except (AttributeError, TypeError):
                 pass
-            perms = effective_permissions(mode, stored)
             if PERMISSION_SWITCHES[key] == "may_export":
                 # The kill switch is ``battery_grid_arbitrage_enabled`` and it
                 # defaults OFF. Seeding from a misspelled key meant the .get
@@ -366,7 +358,7 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
                     mode, stored,
                     self._flag("battery_grid_arbitrage_enabled", cfg),
                     self._flag("forecast_spending_enabled", cfg))
-            return bool(may_assist_ev(mode, perms))
+            return False   # (#1381) no other permission switch remains
 
         if key in self._PERSISTED_DEFAULTS:
             explicit = self._configured(key)

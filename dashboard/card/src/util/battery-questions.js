@@ -35,7 +35,6 @@ export const BATTERY_QUESTIONS = {
     assist_max: { entity: 'number.sem_battery_assist_max_power', kind: 'number', key: 'bq_assist_max', sub: 'bq_assist_max_sub' },
     discharge_max: { entity: 'number.sem_battery_max_discharge_power', kind: 'number', key: 'bq_discharge_max', sub: 'bq_discharge_max_sub' },
     may_export: { entity: 'switch.sem_battery_may_export', kind: 'switch', key: 'bq_may_export', sub: 'bq_may_export_sub' },
-    may_assist: { entity: 'switch.sem_battery_may_assist_ev', kind: 'switch', key: 'bq_may_assist', sub: 'bq_may_assist_sub' },
     pacing: { entity: 'switch.sem_battery_charge_pacing_enabled', kind: 'switch', key: 'bq_pacing', sub: 'bq_pacing_sub' },
     reserve: { kind: 'number', key: 'bq_reserve', sub: 'bq_reserve_sub' },
 };

@@ -39,7 +39,7 @@ test('the other questions write the entities the old controls wrote', () => {
     assert.equal(BATTERY_QUESTIONS.assist_max.entity, 'number.sem_battery_assist_max_power');
     assert.equal(BATTERY_QUESTIONS.discharge_max.entity, 'number.sem_battery_max_discharge_power');
     assert.equal(BATTERY_QUESTIONS.may_export.entity, 'switch.sem_battery_may_export');
-    assert.equal(BATTERY_QUESTIONS.may_assist.entity, 'switch.sem_battery_may_assist_ev');
+    assert.equal(BATTERY_QUESTIONS.may_assist, undefined, '(#1381) battery help is the charger\'s switch');
     assert.equal(BATTERY_QUESTIONS.pacing.entity, 'switch.sem_battery_charge_pacing_enabled');
 });
 

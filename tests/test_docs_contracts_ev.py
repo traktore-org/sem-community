@@ -546,7 +546,9 @@ class TestBatteryMayAssistThisCharger:
 
     def test_on_never_overrides_an_install_that_said_no(self):
         """"it never overrides a battery you have declared off-limits to
-        cars" — docs/EV_CHARGING_LOGIC.md — Battery-assist."""
-        cfg = _config(battery_permissions={"may_assist_ev": False})
+        cars" — docs/EV_CHARGING_LOGIC.md — Battery-assist. (#1381) The
+        install-level "no" left is SEM being hands-off the battery (mode Off);
+        the install-wide switch moved onto each charger."""
+        cfg = _config(battery_mode="off")
         assert self._assist(config=cfg,
                             charger_cfg={"ev_battery_may_assist": True}) == 0.0

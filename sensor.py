@@ -41,7 +41,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 
 from .utils.device_names import charger_display_name  # (#1053)
-from .const import SENSOR_LABEL_MAPPING
+from .const import DOMAIN, SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
 from .coordinator.energy_calculator import GRID_CO2_KG_PER_KWH
@@ -3338,6 +3338,15 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         attrs: Dict[str, Any] = {}
 
         # Add specific attributes based on sensor type
+        if self.entity_description.key == "diag_version":
+            # (#1381) The bundle token the server put on the card's URL. A
+            # card whose own token differs is a cached copy from before an
+            # update and asks the user to reload (25.11: an old card drew a
+            # single "Off" button after the mode names changed).
+            try:
+                attrs["card"] = (getattr(self.hass, "data", None) or {}).get(f"{DOMAIN}_card_version")
+            except Exception:  # noqa: BLE001 — an attribute never costs a cycle
+                attrs["card"] = None
         if self.entity_description.key == "charging_state":
             # #351 M4 — per-charger effective state map. Makes the
             # disagreement visible: fleet ``charging_state`` may be
