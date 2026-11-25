@@ -1,85 +1,89 @@
-"""(#1394) The live base load takes each device's draw as it stood when the
-house reading was complete.
+"""(#1394) The live base load is a short mean of the house and the devices.
 
-PROD, 19.11 05:18:29 UTC: house 647 W (grid meter read 05:18:21), coffee
-machine plug 1334 W (changed 05:18:28), base load -687 W. Six seconds later
-the grid read 2190 W and the base load was right again. A plug reports every
-second; this grid meter every 15-20 s.
+``home`` is built from meters that report at their own times (on HA-PROD the
+grid meter and the battery every 15-25 s, a smart plug every second), so one
+cycle's ``home - devices`` can meet a plug's new draw against the house's old
+one. PROD 24.11.2026 09:39:19: house 984 W, the coffee machine still counted
+at 1365 W, base -667 W. The first fix (each plug's value at the oldest meter
+report) moved the error instead of removing it: 17 negative readings that
+day where plain subtraction gave 12. Averaging both sides over 120 s gives
+none (fixture: the real PROD cycles around five of that day's events).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import ast
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.solar_energy_management.coordinator.draw_alignment import (
-    MAX_SHIFT,
-    DrawHistory,
-    house_complete_at,
+from custom_components.solar_energy_management.coordinator import coordinator as coord_mod
+from custom_components.solar_energy_management.coordinator.baseload_window import (
+    WINDOW_S,
+    BaseloadWindow,
+    live_baseload,
 )
 from custom_components.solar_energy_management.devices.base import CurrentControlDevice
 
 from .cycle_rig import CycleRig
 
-NOW = datetime(2026, 11, 19, 5, 18, 29, tzinfo=timezone.utc)
+FIXTURE = Path(__file__).parent / "fixtures" / "prod_baseload_cycles_20261124.json"
+ROOT = Path(coord_mod.__file__).resolve().parent
 
 
-def _t(seconds_before_now: float) -> datetime:
-    return NOW - timedelta(seconds=seconds_before_now)
+def _segments():
+    return json.loads(FIXTURE.read_text())["segments"]
 
 
-class TestDrawHistory:
-    def test_the_coffee_machine_counts_once_the_grid_has_seen_it(self):
-        h = DrawHistory()
-        grid_read = _t(8)                                   # 05:18:21
-        # 05:18:19 cycle: the plug idles at 15 W, changed 05:18:18
-        assert h.as_of("plug", 15.1, _t(11), _t(10)) == 15.1
-        # 05:18:29 cycle: the plug jumped at 05:18:28, after the grid read
-        assert h.as_of("plug", 1334.0, _t(1), grid_read) == 15.1
-        # 05:18:39 cycle: the grid read at 05:18:35 includes the machine
-        assert h.as_of("plug", 1334.0, _t(1), _t(-6)) == 1334.0
+# ── the window, on the real PROD cycles ────────────────────────────────
 
-    def test_no_house_time_keeps_the_live_value(self):
-        h = DrawHistory()
-        h.as_of("plug", 15.0, _t(20), _t(15))
-        assert h.as_of("plug", 1334.0, _t(1), None) == 1334.0
+class TestRealCycles:
+    def test_the_fixture_shows_the_false_negatives(self):
+        """Plain subtraction of the recorded cycles goes negative (the bug)."""
+        negatives = sum(1 for seg in _segments() for _, h, d in seg["cycles"] if h - d < 0)
+        assert negatives >= 5
 
-    def test_no_change_time_keeps_the_live_value(self):
-        assert DrawHistory().as_of("energy-only", 500.0, None, _t(8)) == 500.0
+    def test_the_mean_never_goes_negative(self):
+        for seg in _segments():
+            window = BaseloadWindow()
+            means = [window.add(t, h, d) for t, h, d in seg["cycles"]]
+            assert min(means) > 400, seg["window"]
 
-    def test_nothing_older_seen_keeps_the_live_value(self):
-        # first sight of the device: there is no earlier value to use
-        assert DrawHistory().as_of("plug", 1334.0, _t(1), _t(8)) == 1334.0
-
-    def test_a_shift_longer_than_the_limit_is_not_made(self):
-        h = DrawHistory()
-        h.as_of("plug", 10.0, _t(200), _t(199))
-        old = NOW - MAX_SHIFT - timedelta(seconds=30)
-        assert h.as_of("plug", 900.0, _t(1), old) == 900.0
-
-    def test_devices_keep_separate_histories(self):
-        h = DrawHistory()
-        h.as_of("a", 10.0, _t(30), _t(29))
-        h.as_of("b", 700.0, _t(30), _t(29))
-        assert h.as_of("a", 1200.0, _t(1), _t(8)) == 10.0
-        assert h.as_of("b", 700.0, _t(30), _t(8)) == 700.0
+    def test_a_lasting_double_count_still_shows(self):
+        """Negative is the diagnostic's sharpest finding: a device counted
+        twice stays negative in every sample, so in the mean too."""
+        window = BaseloadWindow()
+        out = [window.add(10.0 * i, 500.0, 900.0) for i in range(30)]
+        assert out[-1] == pytest.approx(-400.0)
 
 
-class TestHouseCompleteAt:
-    def test_the_oldest_recent_report_wins(self):
-        reports = {"grid": _t(8), "solar": _t(2), "battery": _t(3)}
-        assert house_complete_at(reports, NOW) == _t(8)
+class TestTheWindow:
+    def test_one_sample_is_the_plain_difference(self):
+        assert BaseloadWindow().add(0.0, 1000.0, 250.0) == pytest.approx(750.0)
 
-    def test_a_flat_sensor_not_resent_is_left_out(self):
-        # solar at night, an integration that skips identical writes
-        reports = {"grid": _t(8), "solar": _t(3 * 3600)}
-        assert house_complete_at(reports, NOW) == _t(8)
+    def test_old_samples_leave_the_window(self):
+        window = BaseloadWindow()
+        window.add(0.0, 5000.0, 0.0)
+        out = window.add(WINDOW_S + 10.0, 800.0, 100.0)
+        assert out == pytest.approx(700.0)
+        assert window.size == 1
 
-    def test_nothing_recent_means_no_alignment(self):
-        assert house_complete_at({"grid": _t(600)}, NOW) is None
-        assert house_complete_at({}, NOW) is None
+    def test_samples_weigh_by_how_long_they_stood(self):
+        window = BaseloadWindow()
+        window.add(0.0, 1000.0, 0.0)
+        window.add(10.0, 1000.0, 0.0)
+        out = window.add(40.0, 2000.0, 0.0)   # stood 30 s against 10 + 10
+        assert out == pytest.approx((10 * 1000 + 10 * 1000 + 30 * 2000) / 50)
+
+    def test_a_clock_that_runs_back_starts_again(self):
+        window = BaseloadWindow()
+        window.add(100.0, 9000.0, 0.0)
+        assert window.add(50.0, 800.0, 100.0) == pytest.approx(700.0)
+
+    def test_no_window_is_plain(self):
+        assert live_baseload(None, 0.0, 900.0, 300.0) == pytest.approx(600.0)
 
 
 # ── the real cycle ─────────────────────────────────────────────────────
@@ -94,30 +98,32 @@ WIRED = {
 }
 
 
-class _TimedStates:
-    """States with HA's two clocks: ``last_updated`` (value changed) and
-    ``last_reported`` (last write, even unchanged)."""
-
+class _States:
     def __init__(self):
         self._m = {}
 
-    def put(self, entity_id, value, changed, reported=None):
-        self._m[entity_id] = (value, changed, reported or changed)
+    def put(self, entity_id, value):
+        self._m[entity_id] = value
 
     def get(self, entity_id):
         if entity_id not in self._m:
             return None
-        value, changed, reported = self._m[entity_id]
-        return SimpleNamespace(entity_id=entity_id, state=str(value), attributes={},
-                               last_updated=changed, last_reported=reported)
+        return SimpleNamespace(entity_id=entity_id, state=str(self._m[entity_id]),
+                               attributes={}, last_updated=None, last_reported=None)
 
     def async_all(self, *args, **kwargs):
         return []
 
 
-def _rig(timed: bool):
+@pytest.mark.asyncio
+async def test_the_cycle_publishes_the_mean(monkeypatch):
+    """19.11 05:18 through the real cycle, 10 s apart: the plug switches on
+    a cycle before the grid read shows it. The published base load stays
+    positive; plain subtraction gave -687 W on the middle cycle."""
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(coord_mod.time, "monotonic", lambda: clock["t"])
     rig = CycleRig(config=dict(WIRED), states={})
-    states = _TimedStates()
+    states = _States()
     rig.hass.states = states
     rig.coord._sensor_reader.hass = rig.hass
     plug = CurrentControlDevice(MagicMock(), device_id="kaffeetoaster", name="Kaffeetoaster",
@@ -125,103 +131,28 @@ def _rig(timed: bool):
                                 current_entity_id="number.kaffeetoaster_amps")
     plug.hass = rig.hass
     rig.coord._surplus_controller.register_device(plug)
-    return rig, states, timed
+    states.put("sensor.solar", 0)
+    states.put("sensor.batt", 0)
+    states.put("sensor.soc", 20)
+    base = []
+    for grid_w, plug_w in ((655, 15.1), (655, 15.1), (647, 1334), (2190, 1334), (2190, 1334)):
+        states.put("sensor.grid", -grid_w)
+        states.put("sensor.kaffeetoaster_power", plug_w)
+        clock["t"] += 10.0
+        base.append((await rig.coord._async_update_data())["true_baseload_power"])
+    assert min(base) > 0, base
+    assert base[0] == pytest.approx(655 - 15.1, abs=1)
 
 
-async def _tick(rig, states, timed, *, grid_w, grid_at, plug_w, plug_at):
-    now = datetime.now(timezone.utc)
-    stamp = (lambda s: now - timedelta(seconds=s)) if timed else (lambda s: None)
-    states.put("sensor.solar", 0, stamp(3600), stamp(2))       # flat, polled
-    states.put("sensor.batt", 0, stamp(3600), stamp(3))
-    states.put("sensor.soc", 20, stamp(3600), stamp(3))
-    states.put("sensor.grid", -grid_w, stamp(grid_at))
-    states.put("sensor.kaffeetoaster_power", plug_w, stamp(plug_at))
-    return await rig.coord._async_update_data()
-
-
-async def _the_morning(timed: bool):
-    rig, states, timed = _rig(timed)
-    out = []
-    # 05:18:19 — the plug idles (since 11 s), grid read 2 s ago. The rig's
-    # cycles run back to back, so each stamp says how old it is at its tick.
-    out.append(await _tick(rig, states, timed, grid_w=655, grid_at=2, plug_w=15.1, plug_at=11))
-    # 05:18:29 — plug jumped 1 s ago, grid still from 8 s ago
-    out.append(await _tick(rig, states, timed, grid_w=647, grid_at=8, plug_w=1334, plug_at=1))
-    # 05:18:39 — grid read 4 s ago includes the machine; plug unchanged since
-    out.append(await _tick(rig, states, timed, grid_w=2190, grid_at=4, plug_w=1334, plug_at=11))
-    return [r["true_baseload_power"] for r in out], [r["home_consumption_power"] for r in out]
-
-
-@pytest.mark.asyncio
-class TestTheCycle:
-    async def test_the_base_load_stays_positive_through_the_switch_on(self):
-        base, home = await _the_morning(timed=True)
-        assert home == pytest.approx([655, 647, 2190], abs=1)
-        assert base[0] == pytest.approx(655 - 15.1, abs=1)
-        assert base[1] == pytest.approx(647 - 15.1, abs=1), \
-            "the plug's new load is not in the house reading yet"
-        assert base[2] == pytest.approx(2190 - 1334, abs=1)
-        assert min(base) > 0
-
-    async def test_twin_without_times_it_reads_the_false_negative(self):
-        # No report times (an old HA, a test stand-in): the live value as
-        # before — and the 19.11 number comes back.
-        base, _ = await _the_morning(timed=False)
-        assert base[1] == pytest.approx(647 - 1334, abs=1)
-
-
-# ── review findings (the reader's per-meter time) ──────────────────────
-
-def _reader_with(states_by_id):
-    rig = CycleRig(config=dict(WIRED), states={})
-    states = _TimedStates()
-    for eid, (value, changed, reported) in states_by_id.items():
-        states.put(eid, value, changed, reported)
-    rig.hass.states = states
-    reader = rig.coord._sensor_reader
-    reader.hass = rig.hass
-    reader._fast_reports = {}
-    return reader
-
-
-class TestTheReaderKeepsTheOldestReport:
-    def test_a_split_pair_keeps_the_older_half(self):
-        # import read 1 s ago, export read 20 s ago: the pair is only as
-        # recent as its older half — whichever is read first
-        now = datetime.now(timezone.utc)
-        for order in (("sensor.imp", "sensor.exp"), ("sensor.exp", "sensor.imp")):
-            reader = _reader_with({
-                "sensor.imp": (650, now - timedelta(seconds=1), now - timedelta(seconds=1)),
-                "sensor.exp": (5, now - timedelta(seconds=20), now - timedelta(seconds=20)),
-            })
-            for eid in order:
-                reader._read_sensor(eid, "grid")
-            assert reader._fast_reports["grid"] == now - timedelta(seconds=20), order
-
-    def test_a_meter_at_zero_says_nothing_about_lag(self):
-        # solar at night, polled every 55 s: it holds no part of the house
-        # load, so it must not pull the house time back
-        now = datetime.now(timezone.utc)
-        reader = _reader_with({
-            "sensor.grid": (-650, now - timedelta(seconds=4), now - timedelta(seconds=4)),
-            "sensor.solar": (0, now - timedelta(hours=3), now - timedelta(seconds=55)),
-        })
-        reader._read_sensor("sensor.grid", "grid")
-        reader._read_sensor("sensor.solar", "solar")
-        assert "solar" not in reader._fast_reports
-        assert reader.house_complete_at() == now - timedelta(seconds=4)
-
-    def test_only_house_meters_count(self):
-        now = datetime.now(timezone.utc)
-        reader = _reader_with({"sensor.soc": (55, now, now)})
-        reader._read_sensor("sensor.soc", "battery_soc")
-        assert reader._fast_reports == {}
-
-
-class TestMixedClocksNeverBreakTheCycle:
-    def test_a_naive_device_stamp_keeps_the_live_value(self):
-        naive = datetime(2026, 11, 19, 5, 18, 28)
-        assert DrawHistory().as_of("plug", 1334.0, naive, _t(8)) == 1334.0
-
-    def test_a_naive_report_means_no_alignment(self):
-        assert house_complete_at({"grid": datetime(2026, 11, 19, 5, 18, 21)}, NOW) is None
+def test_one_producer_and_no_instant_alignment():
+    """The coordinator computes the live base load through ``live_baseload``
+    only; the instant alignment that moved the error is gone."""
+    src = (ROOT / "coordinator.py").read_text()
+    assert "live_baseload(" in src
+    assert "DrawHistory" not in src and "house_complete_at" not in src
+    assert not (ROOT / "draw_alignment.py").exists()
+    tree = ast.parse(src)
+    writes = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+              and any(isinstance(t, ast.Attribute) and t.attr == "true_baseload_power"
+                      for t in n.targets)]
+    assert len(writes) == 1
