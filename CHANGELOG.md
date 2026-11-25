@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.28] — 25.11.2026
+
 - 🐛 **"Start now" no longer holds full power until the plan ends** (#1424). Now ends at the car's next plan block, else after 2 hours.
 - 🐛 **Unplugging a car ends its Now, also with two chargers** (#1424). The other charger's car kept Now running for the next car.
 - 🐛 **A charge right after a stop keeps your settings** (#1426). A cloud showing SEM's own values for minutes no longer counts as yours.
