@@ -134,6 +134,11 @@ class ChargerPower:
     with no plug sensor of its own that is not drawing: it shows a car
     only through its draw, so "not connected" there means "not known",
     not "no car". Defaults True: every reader keeps today's meaning."""
+    power_known: bool = True
+    """(#1422) Whether ``power_w`` is a reading: False when this charger's
+    own power sensor gave no number this cycle. Its ``power_w`` is then the
+    reader's 0.0, which is also what a stopped charger reads. Defaults True:
+    every reader keeps today's meaning."""
 
     @property
     def car_absent(self) -> bool:

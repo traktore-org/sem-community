@@ -4003,12 +4003,13 @@ class SensorReader:
             pass  # nested per-charger sensors handled the read (#642 helper)
         elif ed.ev_power:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_sensor(ed.ev_power, "ev"),
+                self._read_fleet_ev_sensor(readings, ed.ev_power),
                 charging=self._fleet_charging_status(), readings=readings))
             readings.ev_power_fleet_entity = ed.ev_power   # (#1044)
         elif self.config.ev_power_sensor:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_sensor(self.config.ev_power_sensor, "ev"),
+                self._read_fleet_ev_sensor(
+                    readings, self.config.ev_power_sensor),
                 charging=self._fleet_charging_status(), readings=readings,
             ))
             readings.ev_power_fleet_entity = self.config.ev_power_sensor
@@ -6415,7 +6416,8 @@ class SensorReader:
             pass  # nested per-charger sensors handled the read (#642 helper)
         elif self.config.ev_power_sensor:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_sensor(self.config.ev_power_sensor, "ev"),
+                self._read_fleet_ev_sensor(
+                    readings, self.config.ev_power_sensor),
                 charging=self._fleet_charging_status(), readings=readings,
             ))
             readings.ev_power_fleet_entity = self.config.ev_power_sensor  # (#1044)
@@ -6468,8 +6470,11 @@ class SensorReader:
                 # Smooth per charger so the per-charger dict stays
                 # consistent with the fleet sum (both blip-filtered).
                 chrg = charger_cfg.get("ev_charging_sensor")
+                # (#1422) A dark sensor still feeds the median its 0.0, as
+                # before; the answer "no number" is kept beside the watts.
+                raw = self._read_sensor(cps, "ev", allow_none=True)
                 cw = self._smooth_ev_power(
-                    self._read_sensor(cps, "ev"), key=cid or cps,
+                    0.0 if raw is None else raw, key=cid or cps,
                     charging=(self._read_binary_sensor(chrg, "ev_charging")
                               if chrg else None),
                     readings=readings,
@@ -6480,6 +6485,7 @@ class SensorReader:
                     # ``flow_calculator`` per-charger split and
                     # ``build_charger_view``'s this-charger read.
                     readings.ev_power_per_charger[cid] = cw
+                    readings.ev_power_per_charger_read[cid] = raw is not None
         # total_ev is already the sum of smoothed per-charger values.
         readings.ev_power = FleetEvPower(total_ev)
         # (#1044) The sensors in that sum — a charger whose own sensor is
@@ -6487,6 +6493,13 @@ class SensorReader:
         # still inside ``home``.
         readings.ev_power_entities = frozenset(summed)
         return True
+
+    def _read_fleet_ev_sensor(self, readings, entity_id: str) -> float:
+        """(#1422) The one fleet EV power sensor, in watts; a dark read is
+        0.0 for the sums, as before, and says so on the readings."""
+        raw = self._read_sensor(entity_id, "ev", allow_none=True)
+        readings.ev_power_fleet_read = raw is not None
+        return 0.0 if raw is None else raw
 
     def _fleet_charging_status(self) -> Optional[bool]:
         """(#910) The fleet-level charging status for the blink hold, or

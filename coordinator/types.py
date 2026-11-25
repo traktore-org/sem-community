@@ -131,6 +131,15 @@ class PowerReadings:
     # empty (see ``flow_calculator.calculate_power_flows``). Drives the
     # per-charger flow attribution that closes the #316 family.
     ev_power_per_charger: "Dict[str, float]" = field(default_factory=dict)
+    #: (#1422) True for a charger whose own power sensor gave a number this
+    #: cycle. A dark sensor's watts above are the reader's 0.0 (after the
+    #: median), which is also what a stopped charger reads. A charger
+    #: missing here was not read.
+    ev_power_per_charger_read: "Dict[str, bool]" = field(default_factory=dict)
+    #: (#1422) The same answer for the one fleet sensor (Energy Dashboard or
+    #: the top-level sensor) that a charger with no sensor of its own reads.
+    #: True when no fleet sensor was read: no sensor is not a dark one.
+    ev_power_fleet_read: bool = True
 
     # (#1044) WHAT ``ev_power`` was read from this cycle — the per-charger
     # sensors summed, or the one fleet sensor read instead (Energy

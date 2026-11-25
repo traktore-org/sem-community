@@ -17,7 +17,7 @@ import inspect
 import logging
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from ...utils.switch_sense import reads_running, switch_service
 
@@ -180,6 +180,14 @@ class ChargerAdapter(ABC):
         to the power heuristic only on unknown/unconfigured. See
         ``WallboxAdapter`` for the template + ``docs/MULTI_CHARGER.md``
         "prefer the STATUS enum" for which brands to migrate next."""
+
+    def status_answer(self) -> Optional[bool]:
+        """(#1422) Does the brand's status say the charger charges?
+
+        True / False when a status sensor answers; None when there is no
+        status or it gives no answer, so ``actual_charging`` falls back to
+        the power. Default None: a brand that reads no status (KEBA)."""
+        return None
 
     # ─── Helpers ───────────────────────────────────────────────
 
