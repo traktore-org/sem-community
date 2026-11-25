@@ -609,8 +609,9 @@ The **preset** **Netherlands from 2027** fills tax and VAT.
   to keep control and get a Repair when SEM sees writes it did not make.
   If you yield and pick no indicator, SEM always yields.
   The one exception to yielding: if a phase is over its limit and the phase guard
-  enforces, SEM stops that charger. SEM switches it back on when the guard is
-  armed again and every phase has room for the charger's earlier draw. With two
+  enforces, SEM stops that charger. A charger that draws nothing is left
+  alone. One whose power sensor is unavailable is stopped. SEM switches it
+  back on when the guard is armed again and every phase has room for the charger's earlier draw. With two
   chargers, one at a time, highest priority first. The charger shows **Stopped by
   the phase guard** meanwhile. If the other party switched it on itself, or the
   car leaves, SEM does nothing more. If the phase goes over again soon after, or
