@@ -2575,6 +2575,7 @@
     "next_card_stale": "SEM byl aktualizován. Načtěte tuto stránku znovu a použijte novou verzi.",
     "next_card_reload": "Načíst znovu",
     "next_bar_left": "{have} z alespoň {min} · zbývá {left}",
+    "next_bar_car_full": "Auto plné · {have} z alespoň {min}",
     "next_bar_done": "{have} z alespoň {min} · dosaženo",
     "next_batt_help_used_when": "Platí, když nabíječka povolí pomoc baterie."
   },
@@ -5154,6 +5155,7 @@
     "next_card_stale": "SEM er opdateret. Genindlæs siden for at bruge den nye version.",
     "next_card_reload": "Genindlæs",
     "next_bar_left": "{have} af mindst {min} · {left} tilbage",
+    "next_bar_car_full": "Bilen er fuld · {have} af mindst {min}",
     "next_bar_done": "{have} af mindst {min} · nået",
     "next_batt_help_used_when": "Gælder, når en lader tillader batterihjælp."
   },
@@ -7733,6 +7735,7 @@
     "next_card_stale": "SEM wurde aktualisiert. Lade diese Seite neu, um die neue Version zu nutzen.",
     "next_card_reload": "Neu laden",
     "next_bar_left": "{have} von mindestens {min} · noch {left}",
+    "next_bar_car_full": "Auto voll · {have} von mindestens {min}",
     "next_bar_done": "{have} von mindestens {min} · erreicht",
     "next_batt_help_used_when": "Gilt, wenn eine Ladestation Batteriehilfe erlaubt."
   },
@@ -10312,6 +10315,7 @@
     "next_card_stale": "SEM was updated. Reload this page to use the new version.",
     "next_card_reload": "Reload",
     "next_bar_left": "{have} of at least {min} · {left} to go",
+    "next_bar_car_full": "Car full · {have} of at least {min}",
     "next_bar_done": "{have} of at least {min} · reached",
     "next_batt_help_used_when": "Used when a charger allows battery help."
   },
@@ -12891,6 +12895,7 @@
     "next_card_stale": "SEM se ha actualizado. Recarga esta página para usar la nueva versión.",
     "next_card_reload": "Recargar",
     "next_bar_left": "{have} de al menos {min} · faltan {left}",
+    "next_bar_car_full": "Coche lleno · {have} de al menos {min}",
     "next_bar_done": "{have} de al menos {min} · alcanzado",
     "next_batt_help_used_when": "Se aplica cuando un cargador permite la ayuda de la batería."
   },
@@ -15470,6 +15475,7 @@
     "next_card_stale": "SEM on päivitetty. Lataa sivu uudelleen käyttääksesi uutta versiota.",
     "next_card_reload": "Lataa uudelleen",
     "next_bar_left": "{have} / vähintään {min} · jäljellä {left}",
+    "next_bar_car_full": "Auto täynnä · {have} / vähintään {min}",
     "next_bar_done": "{have} / vähintään {min} · saavutettu",
     "next_batt_help_used_when": "Käytössä, kun laturi sallii akun avun."
   },
@@ -18049,6 +18055,7 @@
     "next_card_stale": "SEM a été mis à jour. Rechargez cette page pour utiliser la nouvelle version.",
     "next_card_reload": "Recharger",
     "next_bar_left": "{have} sur au moins {min} · encore {left}",
+    "next_bar_car_full": "Voiture pleine · {have} sur au moins {min}",
     "next_bar_done": "{have} sur au moins {min} · atteint",
     "next_batt_help_used_when": "S'applique quand une borne autorise l'aide de la batterie."
   },
@@ -20628,6 +20635,7 @@
     "next_card_stale": "A SEM frissült. Töltsd újra az oldalt az új verzió használatához.",
     "next_card_reload": "Újratöltés",
     "next_bar_left": "{have} a legalább {min}-ból · még {left}",
+    "next_bar_car_full": "Az autó tele · {have} / legalább {min}",
     "next_bar_done": "{have} a legalább {min}-ból · elérve",
     "next_batt_help_used_when": "Akkor érvényes, ha egy töltő engedi az akku segítségét."
   },
@@ -23207,6 +23215,7 @@
     "next_card_stale": "SEM è stato aggiornato. Ricarica questa pagina per usare la nuova versione.",
     "next_card_reload": "Ricarica",
     "next_bar_left": "{have} di almeno {min} · mancano {left}",
+    "next_bar_car_full": "Auto piena · {have} di almeno {min}",
     "next_bar_done": "{have} di almeno {min} · raggiunto",
     "next_batt_help_used_when": "Vale quando un caricatore consente l'aiuto della batteria."
   },
@@ -25786,6 +25795,7 @@
     "next_card_stale": "SEM is bijgewerkt. Laad deze pagina opnieuw om de nieuwe versie te gebruiken.",
     "next_card_reload": "Opnieuw laden",
     "next_bar_left": "{have} van minstens {min} · nog {left}",
+    "next_bar_car_full": "Auto vol · {have} van minstens {min}",
     "next_bar_done": "{have} van minstens {min} · bereikt",
     "next_batt_help_used_when": "Geldt als een laadpunt accuhulp toestaat."
   },
@@ -28365,6 +28375,7 @@
     "next_card_stale": "SEM er oppdatert. Last inn siden på nytt for å bruke den nye versjonen.",
     "next_card_reload": "Last inn på nytt",
     "next_bar_left": "{have} av minst {min} · {left} igjen",
+    "next_bar_car_full": "Bilen er full · {have} av minst {min}",
     "next_bar_done": "{have} av minst {min} · nådd",
     "next_batt_help_used_when": "Gjelder når en lader tillater batterihjelp."
   },
@@ -30944,6 +30955,7 @@
     "next_card_stale": "SEM został zaktualizowany. Odśwież tę stronę, aby użyć nowej wersji.",
     "next_card_reload": "Odśwież",
     "next_bar_left": "{have} z co najmniej {min} · zostało {left}",
+    "next_bar_car_full": "Auto pełne · {have} z co najmniej {min}",
     "next_bar_done": "{have} z co najmniej {min} · osiągnięto",
     "next_batt_help_used_when": "Obowiązuje, gdy ładowarka pozwala na pomoc baterii."
   },
@@ -33523,6 +33535,7 @@
     "next_card_stale": "O SEM foi atualizado. Recarregue esta página para usar a nova versão.",
     "next_card_reload": "Recarregar",
     "next_bar_left": "{have} de pelo menos {min} · faltam {left}",
+    "next_bar_car_full": "Carro cheio · {have} de pelo menos {min}",
     "next_bar_done": "{have} de pelo menos {min} · atingido",
     "next_batt_help_used_when": "Aplica-se quando um carregador permite a ajuda da bateria."
   },
@@ -36102,6 +36115,7 @@
     "next_card_stale": "SEM a fost actualizat. Reîncarcă această pagină pentru a folosi versiunea nouă.",
     "next_card_reload": "Reîncarcă",
     "next_bar_left": "{have} din cel puțin {min} · mai sunt {left}",
+    "next_bar_car_full": "Mașina e plină · {have} din cel puțin {min}",
     "next_bar_done": "{have} din cel puțin {min} · atins",
     "next_batt_help_used_when": "Se aplică atunci când un încărcător permite ajutorul bateriei."
   },
@@ -38681,6 +38695,7 @@
     "next_card_stale": "SEM har uppdaterats. Ladda om sidan för att använda den nya versionen.",
     "next_card_reload": "Ladda om",
     "next_bar_left": "{have} av minst {min} · {left} kvar",
+    "next_bar_car_full": "Bilen är full · {have} av minst {min}",
     "next_bar_done": "{have} av minst {min} · uppnått",
     "next_batt_help_used_when": "Gäller när en laddare tillåter batterihjälp."
   },
@@ -41260,6 +41275,7 @@
     "next_card_stale": "SEM 已更新。请重新加载此页面以使用新版本。",
     "next_card_reload": "重新加载",
     "next_bar_left": "已充 {have}，至少 {min} · 还差 {left}",
+    "next_bar_car_full": "车已充满 · {have} / 至少 {min}",
     "next_bar_done": "已充 {have}，至少 {min} · 已达到",
     "next_batt_help_used_when": "当充电桩允许电池协助时适用。"
   }

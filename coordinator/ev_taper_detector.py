@@ -315,8 +315,16 @@ class EVTaperDetector:
         current_setpoint: float,
         ev_connected: bool,
         timestamp: datetime,
+        charger_offering: Optional[bool] = None,
     ) -> EVTaperData:
         """Record a power sample and analyze for taper.
+
+        ``charger_offering`` (#1381): the CHARGER's own word on whether it is
+        offering current — False when its enable switch reads off or its own
+        current limit reads 0, None when SEM cannot tell. A stop the charger
+        made (another controller, an app, a guard) is not the car ending its
+        charge, and #708's withdrawal term cannot see it when SEM never
+        offered (observer mode, an uncontrolled box).
 
         Args:
             ev_power: Current measured EV charging power (W).
@@ -370,6 +378,15 @@ class EVTaperDetector:
         if current_setpoint > 0:
             self._sem_has_offered = True
         sem_withdrew_offer = self._sem_has_offered and current_setpoint <= 0
+        # (#1381) ...and a stop the charger itself reports. The decline that
+        # led up to it belongs to whoever stepped the charger down, not to
+        # the battery, so it is dropped: a later pause must earn its own.
+        charger_stopped = charger_offering is False
+        if charger_stopped:
+            self._declining_phase = False
+            self._full_confirm_count = 0
+            # the samples of that decline would re-latch it in ``_analyze``
+            self._buffer.clear()
 
         # (#939) ...and a fresh offer is a fresh charge. Withdrawal only
         # PAUSES the full-confirm: the decline latched before it, and the
@@ -426,7 +443,8 @@ class EVTaperDetector:
         if (self._declining_phase
                 and ev_power < FULL_POWER_THRESHOLD
                 and self._session_peak_w > 3000
-                and not sem_withdrew_offer):
+                and not sem_withdrew_offer
+                and not charger_stopped):
             self._full_confirm_count = getattr(self, '_full_confirm_count', 0) + 1
         else:
             self._full_confirm_count = 0

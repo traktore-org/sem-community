@@ -817,3 +817,18 @@ test('an off load with a measured rating says "rated X", never a bare ~kW that r
     assert.match(out, /next_rated_x/);
     assert.doesNotMatch(out, /~2\.0/);
 });
+
+test('(#1381) a full car reads "car full", never "to go", in kWh mode', () => {
+    const st = states();
+    st['select.sem_charger_keba_ev_target_type'] = { state: 'kwh', attributes: { options: ['kwh', 'soc'] } };
+    st['number.sem_charger_keba_daily_ev_target'] = { state: '20', attributes: { min: 0, max: 200 } };
+    st['number.sem_charger_keba_daily_ev_target_max'] = { state: '40', attributes: { min: 0, max: 200 } };
+    st['sensor.sem_charger_keba_daily_energy'] = { state: '3.2', attributes: {} };
+    st['sensor.sem_charger_keba_vehicle_soc'] = { state: 'unavailable', attributes: {} };
+    st['sensor.sem_charger_keba_estimated_soc'] = { state: '100', attributes: { anchor: 'taper' } };
+    const el = makeCard(st);
+    el._setAllOpen(el._rowsNow(), true);
+    const out = text(el.render());
+    assert.match(out, /next_bar_car_full/);
+    assert.doesNotMatch(out, /next_bar_left/);
+});

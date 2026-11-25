@@ -12594,6 +12594,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return gate
 
     # ── (#1025) battery boost ─────────────────────────────────────────
+    def _charger_offering(self, cid: str) -> Optional[bool]:
+        """(#1381) The charger's own word on whether it offers current.
+
+        False when its enable switch reads ``off`` or its own current limit
+        reads under 1 A — a stop the CHARGER made, whoever asked for it; True
+        when either reads on / ≥ 1 A; None when neither entity is configured
+        or readable. The taper detector must not call that stop "full".
+        """
+        cfg = self._charger_cfg_by_id(cid) or {}
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return None
+        seen = None
+        for key in ("ev_start_stop_entity", "ev_current_control_entity"):
+            entity_id = cfg.get(key)
+            state = hass.states.get(entity_id) if entity_id else None
+            raw = getattr(state, "state", None)
+            if raw in (None, "unknown", "unavailable", ""):
+                continue
+            if key == "ev_start_stop_entity":
+                if entity_id.split(".", 1)[0] not in ("switch", "input_boolean"):
+                    continue
+                if raw == "off":
+                    return False
+                if raw == "on":
+                    seen = True
+            else:
+                try:
+                    amps = float(raw)
+                except (TypeError, ValueError):
+                    continue
+                if amps < 1.0:
+                    return False
+                seen = True
+        return seen
+
     def _charger_cfg_by_id(self, charger_id: str) -> Optional[Dict[str, Any]]:
         return next((c for c in (self.config.get("ev_chargers") or [])
                      if isinstance(c, dict) and c.get("id") == charger_id), None)
@@ -18069,6 +18105,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if charger_power > 0 or charger_connected:
                     _td = self._ev_taper_detectors[cid].update(
                         charger_power, charger_setpoint, charger_connected, now,
+                        charger_offering=self._charger_offering(cid),
                     )
                     # #589 (EV W2/W3): keep the primary's OWN taper result so we
                     # don't re-feed the fleet sum into the primary detector below

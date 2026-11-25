@@ -167,7 +167,9 @@ export function chargerBody(card, row) {
     // (#1321) near an edge the label grows inward, so it never leaves the card
     const edge = tm.flagLeft === null ? '' : (tm.flagLeft < 15 ? 'start' : (tm.flagLeft > 85 ? 'end' : ''));
     const flag = tm.flagLeft === null ? nothing : html`<div class="flag ${edge}" style="left:${tm.flagLeft}%">${tf('next_at_least_x', { x: fmtT(min) + ' ' + unit })}</div>`;
-    const barWords = tm.left === null ? '' : tf(tm.reached ? 'next_bar_done' : 'next_bar_left', {
+    // (#1381) a full car takes nothing more: "to go" would contradict the level shown
+    const carFull = !tm.reached && soc !== null && soc >= 99.5;
+    const barWords = tm.left === null ? '' : tf(tm.reached ? 'next_bar_done' : (carFull ? 'next_bar_car_full' : 'next_bar_left'), {
         have: fmtT(have) + ' ' + unit, min: fmtT(min) + ' ' + unit, left: fmtT(tm.left) + ' ' + unit });
     const target = html`<div class="target">
         <div class="soc" style="width:${tm.fill}%"></div>
