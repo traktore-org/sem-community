@@ -23,9 +23,13 @@ The rules are charge pacing's (#949, #820), for the same reasons:
   landed. Until then it is PENDING: tried again on a cycle with no forced
   charge, at most ``MAX_TRIES`` times ``RETRY_S`` apart, never by sending
   the whole stop again (class 108). A number that reads neither SEM's
-  values nor the saved one was set by the user: that ends it too. Only
-  then is the memory of SEM's values dropped — a user who later picks one
-  of them on purpose is not overruled.
+  values nor the saved one was set by the user: that ends it too, and the
+  memory of SEM's values is dropped at once;
+* (#1426) a put-back that reads back keeps the memory ``LANDED_KEEP_S``
+  more, with nothing sent: a cloud number (Tesla Fleet) shows a write at
+  once, and its next poll can show SEM's value again for minutes. A start
+  in that time takes such a read as SEM's, not as the user's. After it a
+  user who picks one of SEM's values on purpose is not overruled.
 
 ONE hold per config entry, keyed by the ENTITY and shared by every
 battery: there is no per-battery target list, so two packs behind one
@@ -65,6 +69,9 @@ class _Target:
     tried_at: Optional[float] = None
     #: held in the last lifetime: read again before SEM writes over it
     adopted: bool = False
+    #: (#1426) when (epoch s) the put-back read back; the memory of SEM's
+    #: values is kept ``LANDED_KEEP_S`` after it, nothing is sent
+    landed_at: Optional[float] = None
 
 
 def _as_number(raw) -> Optional[float]:
@@ -91,6 +98,10 @@ class ChargeTargetHold:
     MAX_TRIES: int = 3
     #: the longest a put-back may hold the cycle
     SEND_TIMEOUT_S: float = 10.0
+    #: (#1426) how long after a put-back read back a read of SEM's value is
+    #: still SEM's: the cloud wait of the mode and permit
+    #: (``charge_select.AWAY_FOR_S``, ``PUT_BACK_SETTLE_S``)
+    LANDED_KEEP_S: float = 15 * 60.0
 
     def __init__(self, hass, store: Any = None,
                  configured: Iterable[str] = ()) -> None:
@@ -106,6 +117,8 @@ class ChargeTargetHold:
         self._blind = False
         self._lock = asyncio.Lock()
         self._clock = time.monotonic
+        #: (#1426) wall time: ``landed_at`` is kept across a restart
+        self._wall = time.time
 
     # ─── the commands ────────────────────────────────────────────────
 
@@ -126,6 +139,8 @@ class ChargeTargetHold:
                           "(#1180)", entity_id)
                 return False
             t = self._targets.get(entity_id)
+            if t is not None and self._landed_out(t):
+                t = None        # (#1426) its time is up: a read is the user's
             new = t if t is not None and t.held and not t.adopted else None
             if new is None:
                 read = self._read(entity_id)
@@ -214,7 +229,11 @@ class ChargeTargetHold:
             await self._adopt()
             changed = False
             for entity_id, t in list(self._targets.items()):
-                if t.held or not t.pending:
+                if t.held or not (t.pending or t.landed_at is not None):
+                    continue
+                if self._landed_out(t):
+                    del self._targets[entity_id]    # (#1426) its time is up
+                    changed = True
                     continue
                 read = self._read(entity_id)
                 if read is None:
@@ -222,15 +241,29 @@ class ChargeTargetHold:
                 tol = self._tol(entity_id)
                 ours = any(abs(read - v) < tol for v in t.sent)
                 at_prior = t.prior is not None and abs(read - t.prior) < tol
-                if (not ours and not at_prior) or (t.tries and at_prior):
-                    # the user set a value of their own — or a put-back that
-                    # went out reads back. A put-back never sent is sent
-                    # once whatever the read says: it may predate SEM's write.
+                if not ours and not at_prior:
+                    # the user set a value of their own
                     del self._targets[entity_id]
                     changed = True
                     self._say(entity_id, logging.INFO,
                               "Battery: %s reads %s — SEM's charge target is "
                               "gone (#1180)", entity_id, read)
+                    continue
+                if t.landed_at is not None:
+                    # (#1426) it read back once: SEM's value read now is a
+                    # cloud poll that has not caught up — nothing is sent
+                    continue
+                if t.tries and at_prior:
+                    # a put-back that went out reads back. A put-back never
+                    # sent is sent once whatever the read says: it may
+                    # predate SEM's write. (#1426) The memory of SEM's
+                    # values stays ``LANDED_KEEP_S``: a cloud number shows
+                    # a write at once, and a poll can show SEM's value again
+                    t.pending, t.landed_at = False, self._wall()
+                    changed = True
+                    self._say(entity_id, logging.INFO,
+                              "Battery: %s reads %s — SEM's charge target is "
+                              "put back (#1180)", entity_id, read)
                     continue
                 if t.prior is None:
                     continue                    # nothing known to put back
@@ -247,6 +280,16 @@ class ChargeTargetHold:
                 changed = True
             if changed:
                 await self._save()
+
+    def _landed_out(self, t: _Target) -> bool:
+        """(#1426) A put-back that read back ``LANDED_KEEP_S`` ago or more:
+        SEM's values are no longer remembered. A time ahead of the clock
+        (the clock was set back since) is over too: it would keep the
+        memory as long as the clock was wrong."""
+        if t.landed_at is None or t.held:
+            return False
+        age = self._wall() - t.landed_at
+        return not 0.0 <= age < self.LANDED_KEEP_S
 
     def readable(self, entity_id: str) -> bool:
         """(#1377) Does the number give a value now? ``write`` writes none
@@ -349,8 +392,11 @@ class ChargeTargetHold:
                 sent=[v for v in (_as_number(x) for x in sent) if v is not None]
                 if isinstance(sent, list) else [],
                 held=raw.get("held") is True,
-                pending=raw.get("pending") is True)
-            if not (t.held or t.pending):
+                pending=raw.get("pending") is True,
+                landed_at=_as_number(raw.get("landed_at")))      # (#1426)
+            if t.held or t.pending:
+                t.landed_at = None
+            elif t.landed_at is None:
                 continue
             if t.held and str(entity_id) not in self._configured:
                 # no longer SEM's target setting: hand it back
@@ -360,6 +406,8 @@ class ChargeTargetHold:
             # value is refused, not saved)
             t.adopted = t.held
             self._targets[str(entity_id)] = t
+            if t.landed_at is not None:
+                continue                # (#1426) put back: a memory only
             _LOGGER.info(
                 "Battery: %s may still carry SEM's charge target %s — %s "
                 "goes back (#1180)", entity_id, t.sent, t.prior)
@@ -369,8 +417,11 @@ class ChargeTargetHold:
             return True
         data = {"entities": {
             e: {"prior": t.prior, "sent": list(t.sent), "held": t.held,
-                "pending": t.pending}
-            for e, t in self._targets.items() if t.held or t.pending}}
+                "pending": t.pending,
+                **({"landed_at": t.landed_at}
+                   if t.landed_at is not None else {})}       # (#1426)
+            for e, t in self._targets.items()
+            if t.held or t.pending or t.landed_at is not None}}
         try:
             await self._store.async_save(data)
         except Exception:  # noqa: BLE001

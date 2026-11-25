@@ -742,23 +742,29 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     _sel_joined: bool = False
     #: (#1426) how long a read of SEM's own charge value, after SEM put the
     #: user's value back, is taken as SEM's (a cloud shows a write minutes
-    #: late; the memory also ends when the entity shows the put-back value,
-    #: shows a value set since, or SEM writes it again)
-    PUT_BACK_SETTLE_S = 15 * 60.0
+    #: late). The memory also ends when the entity shows a value set since
+    #: or SEM writes it again — NOT when it shows the put-back: a cloud
+    #: entity shows SEM's write at once, and its next poll can still show
+    #: SEM's charge value (round 2, 25.11.2026)
+    PUT_BACK_SETTLE_S = AWAY_FOR_S
 
     async def _as_user_sees(self, entity: str, state: "str | None") -> "str | None":
-        """(#1426) The value the user has, as far as SEM can tell. A read
-        of SEM's own charge value inside ``PUT_BACK_SETTLE_S`` after SEM put
-        the user's value back is a cloud read that has not caught up: the
-        user's value is the one SEM put back. Any other read ends the
-        memory (the put-back has shown, or the value was set since)."""
+        """(#1426) The value the user has, as far as SEM can tell. Inside
+        ``PUT_BACK_SETTLE_S`` after SEM put the user's value back, a read of
+        SEM's own charge value is a cloud read that has not caught up: the
+        user's value is the one SEM put back. A read of the put-back keeps
+        the memory (round 2): Tesla Fleet shows a write at once, then a poll
+        can show SEM's value again for minutes. A value that is neither, or
+        the time up, ends the memory: that value is the user's."""
         if not entity or state is None:
             return state
         row = await self.charge_record.put_back_of(entity)
         if row is None:
             return state
         sem_value, back, at = row
-        if state == sem_value and time.time() - at < self.PUT_BACK_SETTLE_S:
+        # a time ahead of the clock (set back since) is over too
+        if (state in (sem_value, back)
+                and 0.0 <= time.time() - at < self.PUT_BACK_SETTLE_S):
             return back
         await self.charge_record.forget_put_back(entity)
         return state
@@ -771,8 +777,8 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             _LOGGER.debug("put-back not noted", exc_info=True)
 
     async def _refresh_put_backs(self) -> None:
-        """(#1426) Each stop looks once: an entity that shows the value SEM
-        put back (or one set since) ends the memory."""
+        """(#1426) Each stop, and each cycle, looks once: an entity that
+        shows a value set since, or whose time is up, ends the memory."""
         try:
             entity = (select_setup(self.config) or ("", ""))[0]
             if entity:

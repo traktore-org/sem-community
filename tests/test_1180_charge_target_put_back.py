@@ -123,6 +123,7 @@ def _hold(hass, store=None, configured=(TARGET,)):
     hold = ChargeTargetHold(hass, store, configured=configured)
     hold.now = [0.0]
     hold._clock = lambda: hold.now[0]
+    hold._wall = lambda: 1.7e9 + hold.now[0]        # (#1426) the same clock
     return hold
 
 
@@ -518,6 +519,7 @@ class TestOwnEcho:
         await _charge(adapter, 80.0)
         await adapter.stop_forced_charge()
         await hold.settle()                         # reads 100: landed
+        hold.now[0] += 24 * 3600                    # (#1426) days later
         hass.set(TARGET, "80")                      # the user's choice
         await _charge(adapter, 60.0)
         await adapter.stop_forced_charge()

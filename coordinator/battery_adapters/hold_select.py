@@ -246,6 +246,9 @@ class SelectHold:
         pack's) gains this pack as an owner; any other is the user's and is
         left alone. A hold of SEM's is watched against the pack's own power."""
         if await self.record.prior_of(entity) is None:
+            # (#1426) right after SEM's own release a cloud poll can still
+            # show the hold option: it reads as the user's hold for those
+            # minutes; nothing is saved or written (left open, low)
             self.active = False
             return None
         if not await self.record.started(entity, self._battery()):
