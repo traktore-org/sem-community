@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **A charge right after a stop keeps your settings** (#1426). A cloud showing SEM's own values for minutes no longer counts as yours.
+- 🐛 **No phase switch on a car's first cycle** (#1425). A car starting by itself read 0 W for one cycle; the raw reading counts now.
+- 🐛 **No phase switch with the power sensor out** (#1425). A switch that reads off is no proof the box is at rest; the switch waits.
 - 🐛 **A Powerwall grid charge no longer stops on one old cloud reading** (#1377). SEM waits 15 minutes for its settings to show again.
 - 🐛 **No phase switch while the charger power sensor is unavailable** (#1423). SEM took the box as stopped and could switch it while charging.
 - 🐛 **The phase guard stops a charger whose power sensor is unavailable** (#1422). With no status sensor, SEM took it for stopped and sent nothing.

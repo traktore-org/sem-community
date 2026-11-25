@@ -322,10 +322,12 @@ class TestTick:
         _tick(h, _max(), _cp(0.0, charging=False), 0.0)
         assert _calls(h) == 1
 
-    def test_without_an_adapter_the_power_decides_as_before(self):
+    def test_without_an_adapter_a_dark_box_waits(self):
+        """(#1425) No adapter to ask and the power dark: no answer, no
+        switch (was: the dark 0 W decided, and switched)."""
         h = _host()
         _tick(h, _max(), DARK, 0.0, adapter=None)
-        assert _calls(h) == 1
+        assert _calls(h) == 0
 
     def test_a_status_that_says_charging_is_a_draw(self):
         """Review: the power is dark and the status says charging. The
@@ -345,10 +347,12 @@ class TestTick:
               adapter=_adapter(status=True))
         assert _calls(h) == 1
 
-    def test_a_status_that_says_not_charging_is_at_rest(self):
+    def test_a_status_that_says_not_charging_waits_for_the_power(self):
+        """(#1425) The phase switch waits for a power reading: a dark
+        power sensor is no answer, whatever the status says."""
         h = _host()
         _tick(h, _max(), DARK, 0.0, adapter=_adapter(status=False))
-        assert _calls(h) == 1
+        assert _calls(h) == 0
 
     def test_a_dark_plug_sensor_is_no_car_gone(self):
         """Review: a whole integration drops out — power and plug both

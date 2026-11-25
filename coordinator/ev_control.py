@@ -1436,6 +1436,12 @@ class EVControlMixin:
         # charger's flag can lag its meter. EVERY switch waits for both.
         drawing = bool(cp.charging) or (
             abs(float(cp.power_w or 0.0)) > PHASE_LEG_FLOW_W)
+        # (#1425) The median needs two reads to follow a car that starts by
+        # itself: its first cycle reads 0 W while the raw read already shows
+        # the draw. At rest means BOTH say nothing flows.
+        _raw_w = getattr(cp, "power_raw_w", None)
+        if _raw_w is not None and abs(float(_raw_w)) > PHASE_LEG_FLOW_W:
+            drawing = True
         # (#1423) A dark power sensor reads 0 W, and a charger with no
         # status sensor then looked at rest: the switch went out with no
         # stop first, maybe under load. The reconciler's own reading says
@@ -1453,6 +1459,16 @@ class EVControlMixin:
         if draws is True and getattr(cp, "power_known", True) is False:
             drawing = True
         blind = draws is None and not drawing
+        # (#1425) For the PHASE SWITCH a dark power sensor is no answer, even
+        # when the start/stop switch reads off: a box whose switch does not
+        # open its contactor still draws. It waits until a reading returns
+        # (the sequencer's blind wait). Only a car KNOWN gone is at rest. The
+        # phase guard's stop keeps ``charger_draws`` as it is: stopping is
+        # safe without a reading, switching phases is not.
+        if (getattr(cp, "power_known", True) is False and not drawing
+                and not (not cp.connected and getattr(cp, "plug_known", True)
+                         and _plug_reading_known(self, charger_cfg))):
+            blind = True
         at_rest = not drawing and not blind
 
         voltage = float(charger_cfg.get("ev_voltage")

@@ -140,6 +140,14 @@ class PowerReadings:
     #: the top-level sensor) that a charger with no sensor of its own reads.
     #: True when no fleet sensor was read: no sensor is not a dark one.
     ev_power_fleet_read: bool = True
+    #: (#1425) This cycle's RAW read of each charger's own power sensor, in
+    #: watts, before the median; None when it was dark. The median needs
+    #: two reads to follow a car that starts by itself, so its first cycle
+    #: reads 0 W: the phase switch asks both before it calls a box at rest.
+    ev_power_per_charger_raw: "Dict[str, Optional[float]]" = field(default_factory=dict)
+    #: (#1425) The same raw read for the one fleet sensor; None when dark
+    #: or when no fleet sensor was read.
+    ev_power_fleet_raw: "Optional[float]" = None
 
     # (#1044) WHAT ``ev_power`` was read from this cycle — the per-charger
     # sensors summed, or the one fleet sensor read instead (Energy
