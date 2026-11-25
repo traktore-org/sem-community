@@ -789,10 +789,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             if await self.charge_record.others(entity, self._battery()):
                 return
             self._sel_prior_sent = True
-            await self.hass.services.async_call(
-                "select", "select_option",
-                {"entity_id": entity,
-                 "option": listed_option(self.hass, entity, prior)})
+            await self._put_select_back(entity, option, prior, options)
         except Exception:  # noqa: BLE001 — the end has happened regardless
             _LOGGER.debug("old option not sent again", exc_info=True)
 
@@ -1318,10 +1315,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 or prior == charge_option(self.hass, entity, option)):
             return True
         if not await self.charge_record.others(entity, self._battery()):
-            await self.hass.services.async_call(
-                "select", "select_option",
-                {"entity_id": entity,
-                 "option": listed_option(self.hass, entity, prior)})
+            await self._put_select_back(entity, option, prior, options)
             _LOGGER.info("Battery: %s reads '%s' after a restart — sent once "
                          "more, in case SEM's charge option still lands "
                          "(#1377)", entity, prior)
