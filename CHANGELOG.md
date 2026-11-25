@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **A charger can have its own tariff and meter** (#1417). Plan, cheap hours and cost follow it, as for a heat pump.
+- ✨ **One second meter for heat pump and cars** (#1417). A shared meter is split by what each draws (Messkonzept 12).
+
 - 🐛 **A charge soon after a stop keeps your Powerwall settings, the reserve too** (#1426). The first fix missed that Tesla shows each change at once.
 - 🐛 **Live base load no longer dips below zero** (#1394). House and devices are averaged over two minutes; meters reporting at different moments no longer clash.
 - 🐛 **Daily counters never step back** (#1382). A meter correction holds a day's total until the meter passes it; flows too, also across a restart.

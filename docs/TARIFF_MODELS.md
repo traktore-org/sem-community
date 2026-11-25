@@ -132,3 +132,30 @@ Set it on the device, under **Device tariff**.
   meter, SEM estimates the grid share.
 - If the own price entity cannot be read, SEM uses the own rate. With no own
   rate, it uses the house tariff until the price reads again.
+- A **car charger** has the same three fields, on its card under **More**.
+  Its plan, its cheap and peak hours and its cost then follow its own price.
+
+### Two meters: Messkonzept 8 and 12
+
+Some houses have a second meter with a cheaper price for the heat pump, and
+sometimes the car too.
+
+| Setup | Meters | What SEM does |
+|---|---|---|
+| **Messkonzept 8** | The main meter counts everything. A sub-meter counts the heat pump. | Give the heat pump the sub-meter as its own meter. |
+| **Messkonzept 12** (cascade) | One meter for the house, one for the heat pump and the chargers. | Give the heat pump AND each charger the same own meter and price. |
+
+```
+grid ── main meter ──┬── house            (house price)
+                     └── second meter ──┬── heat pump   (second price)
+                                        └── car charger (second price)
+```
+
+- **One meter, several devices:** SEM reads the meter once. It splits each step
+  between the devices by what each draws at that moment.
+- **What none of them drew** stays on that meter, at its price. Each device's
+  cost sensor shows it as `shared_meter_unassigned_kwh_today`.
+- **The house:** its grid kWh at the house price = the grid import minus
+  everything booked to own tariffs. Never below 0.
+- **Limit:** a step that covers a long gap (SEM down) is split by the draw of
+  the first cycle after the gap.

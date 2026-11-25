@@ -5088,7 +5088,14 @@ class EnergyCalculator:
                     dev[0] += interval_hours * 3600.0
                     dev[1] += grid_kwh
                     dev[2] += grid_kwh * own
-            if e.meter and e.baseline is not None:
+            if getattr(e, "shared", False):
+                # (#1417) its share of a meter it shares (split by draw);
+                # the meter's row carries the baseline, written here where
+                # the step is booked
+                used = max(0.0, float(e.meter_kwh or 0.0))
+                if e.baseline is not None:
+                    self.device_meter_last[e.device_id] = dict(e.baseline)
+            elif e.meter and e.baseline is not None:
                 last = self.device_meter_last.get(e.device_id)
                 step = max(0.0, float(e.meter_kwh or 0.0))
                 start = self._watched_start(last, e.baseline, dev)

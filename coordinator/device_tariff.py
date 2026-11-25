@@ -179,6 +179,10 @@ class DeviceCycle:
     meter_kwh: float = 0.0
     price: Optional[float] = None
     baseline: Optional[Dict[str, Any]] = None
+    #: (#1417) ``meter_kwh`` is this device's share of a meter it SHARES
+    #: with other devices (split by their draw); booked as its use this
+    #: cycle. The meter's own baseline rides on the ``meter:<entity>`` row.
+    shared: bool = False
 
 
 def device_price_level(device: Any, house_level: Optional[str]) -> Optional[str]:
@@ -325,11 +329,28 @@ class DeviceTariffs:
 
     def cycle(self, devices: Iterable[Any], store: Dict[str, Any],
               now: datetime) -> list:
-        """(#812) This cycle's own-tariff devices for the import booking."""
+        """(#812) This cycle's own-tariff devices for the import booking.
+
+        (#1417) A meter named by more than one device (the heat pump and the
+        car behind one cascade meter, Messkonzept 12) is read ONCE: its step
+        is split between those devices by what each draws now. What none of
+        them drew stays on the meter (the ``meter:<entity>`` row) — it is
+        that tariff's kWh, never the house's.
+        """
+        devices = list(devices)
+        configured = [d for d in devices if tariff_of(d).configured]
+        by_meter: Dict[str, list] = {}
+        for device in configured:
+            meter = tariff_of(device).meter
+            if meter:
+                by_meter.setdefault(meter, []).append(device)
+        shared = {m: ds for m, ds in by_meter.items() if len(ds) > 1}
         out = []
-        for device in devices:
+        for meter, group in sorted(shared.items()):
+            out.extend(self._shared_cycle(meter, group, store, now))
+        for device in configured:
             tariff = tariff_of(device)
-            if not tariff.configured:
+            if tariff.meter in shared:
                 continue
             did = str(getattr(device, "device_id", "") or "")
             step, baseline = (self.meter_step(device, store, now)
@@ -338,6 +359,36 @@ class DeviceTariffs:
                 device_id=did, power_w=power_now_w(device),
                 meter=bool(tariff.meter), meter_kwh=step or 0.0,
                 price=self.price_now(device), baseline=baseline))
+        return out
+
+    def _shared_cycle(self, meter: str, group: list, store: Dict[str, Any],
+                      now: datetime) -> list:
+        """(#1417) One shared meter's step, split by draw, plus its own row."""
+        from types import SimpleNamespace
+        key = f"meter:{meter}"
+        reader = SimpleNamespace(
+            device_id=key, name=key, tariff_rate=0.0, tariff_entity="",
+            tariff_meter=meter,
+            rated_power=sum(top_power_w(d) for d in group))
+        step, baseline = self.meter_step(reader, store, now)
+        step = max(0.0, float(step or 0.0))
+        draws = [(d, power_now_w(d)) for d in group]
+        total_w = sum(w for _d, w in draws)
+        price = next((p for p in (self.price_now(d) for d in group)
+                      if p is not None), None)
+        out = []
+        given = 0.0
+        for device, watts in draws:
+            part = step * watts / total_w if total_w > 0 else 0.0
+            given += part
+            out.append(DeviceCycle(
+                device_id=str(getattr(device, "device_id", "") or ""),
+                power_w=watts, meter=False, meter_kwh=part,
+                price=self.price_now(device), shared=True))
+        out.append(DeviceCycle(
+            device_id=key, power_w=0.0, meter=False,
+            meter_kwh=max(0.0, step - given), price=price,
+            baseline=baseline, shared=True))
         return out
 
     def stamp(self, devices: Iterable[Any]) -> None:

@@ -528,6 +528,11 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             "strategy": str(cfg.get("charge_mode") or DEFAULT_EV_CHARGE_MODE),
             "battery_help": battery_help_of(cfg),
             "now_until": self._now_until(),
+            # (#1417) the charger's own tariff, for the card's Device tariff
+            # rows: empty = the house tariff
+            "tariff_rate": cfg.get("tariff_rate") or 0,
+            "tariff_entity": cfg.get("tariff_entity") or "",
+            "tariff_meter": cfg.get("tariff_meter") or "",
         }
 
     def _now_override(self):

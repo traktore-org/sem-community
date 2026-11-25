@@ -546,6 +546,9 @@ Extra notes:
 - **Step down when power is short**: off, lower the setpoint, or send the blocked signal.
   SEM uses it in an expensive hour, or near the peak limit. A step-down lasts at least 15 minutes.
 - **Own tariff**: a fixed rate or price entity for a heat pump on its own meter.
+  A car charger can have one too (charger card, **More**). A heat pump and chargers
+  behind one second meter (Messkonzept 12) name the same meter: SEM splits it by
+  what each draws. See [TARIFF_MODELS](TARIFF_MODELS.md#two-meters-messkonzept-8-and-12).
 - **COP by outdoor temperature**: two or three points, for example "-7 °C: 2.5, 12 °C: 4.2".
   Leave empty for one fixed COP. The COP follows the outdoor temperature only
   once you set this curve.
