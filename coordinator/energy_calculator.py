@@ -711,6 +711,10 @@ class EnergyCalculator:
         # accumulated state, and a stale membership would let the home balance
         # run on an integrator nobody checked.
         self._counter_backed: Set[str] = set()
+        #: (#1382) today's rows as published before this cycle
+        self._published_rows: Dict[str, float] = {}
+        #: (#1382) the daily flows as last published, kept across a restart
+        self.published_flows: Optional[Dict[str, Any]] = None
         self._home_balance_logged: bool = False
         # Baselines for the midnight EV mirror — same delta model as
         # ``_ev_counter_baselines``, keyed on the calendar day instead.
@@ -1051,6 +1055,9 @@ class EnergyCalculator:
         # yesterday across midnight, the device cost books showed nothing,
         # or yesterday's cost under today's reset.
         self.booking_day = today
+        # (#1382) Each day's rows as they were published before this cycle
+        # moves them: a counter correction may hold a row, never step it back.
+        self._note_published_rows()
         # (#1177) a dark input books its last live read, not 0 W — read
         # first, so a skipped cycle's live read still counts as one
         held_w = self._integral_watts(power, dt_util.utcnow())
@@ -3263,6 +3270,7 @@ class EnergyCalculator:
         )
         if adopted is None:
             return
+        adopted = self._not_below_published(daily_key, adopted)   # (#1382)
         delta = adopted - integrated
         self._daily_accumulators[daily_key] = adopted
         baselines["row"] = adopted
@@ -3935,6 +3943,28 @@ class EnergyCalculator:
         counts, for the diagnostics download."""
         return {k: dict(v) for k, v in self._backing_tally.items()}
 
+    def _note_published_rows(self) -> None:
+        """(#1382) Remember the rows as published, before a cycle moves them."""
+        self._published_rows = {
+            k: v for k, v in self._daily_accumulators.items()
+            if isinstance(v, (int, float))
+        }
+
+    def _not_below_published(self, daily_key: str, target: float) -> float:
+        """(#1382) A correction never sets a day's row below what was published.
+
+        The integrator books power between two counter steps and can run a
+        little ahead of the meter; the meter then lags and a correction
+        pulled the row back (PROD 23.11 10:27:49, grid import 11.45 → 11.40
+        kWh, the flows with it). A row published as a running total must not
+        go back within its day: ahead of the meter it holds until the meter
+        passes it. The day still ends on the meter's value.
+        """
+        floor = self._published_rows.get(daily_key)
+        if floor is None:
+            return target
+        return max(float(target), float(floor))
+
     def _reconcile_metered_energy(
         self,
         category: str,
@@ -4078,6 +4108,10 @@ class EnergyCalculator:
         delta = target - integrated
         if abs(delta) <= METER_RECONCILIATION_THRESHOLD:
             return  # Small drift stays with the integrator.
+        # (#1382) a correction holds the row at what was published, never
+        # below — decided after the drift band, which judges the meter itself
+        target = self._not_below_published(daily_key, target)
+        delta = target - integrated
 
         # Corrections run every cycle once adopted, so only a material one is
         # worth an INFO line — the rest would be 10-second log spam.
@@ -4116,6 +4150,9 @@ class EnergyCalculator:
             share = (min(1.0, max(0.0, (part - before) / added))
                      if added > 0 else 0.0)
             moved = max(-part, min(target - part, delta * share))
+            # (#1382) a row booked beside holds too, never steps back
+            moved = self._not_below_published(
+                f"{beside}_{today}", part + moved) - part
             parts[beside] = part + moved
             if not moved:
                 continue
@@ -4269,6 +4306,8 @@ class EnergyCalculator:
         delta = target - integrated
         if abs(delta) <= METER_RECONCILIATION_THRESHOLD:
             return  # Already there; small drift stays with the integrator.
+        target = self._not_below_published(daily_key, target)   # (#1382)
+        delta = target - integrated
 
         if not self._home_balance_logged:
             self._home_balance_logged = True
@@ -6080,6 +6119,8 @@ class EnergyCalculator:
     def get_state(self) -> Dict[str, Any]:
         """Get calculator state for persistence."""
         return {
+            "published_flows": (dict(self.published_flows)
+                                if isinstance(self.published_flows, dict) else None),
             "daily_accumulators": self._daily_accumulators.copy(),
             "monthly_accumulators": self._monthly_accumulators.copy(),
             "yearly_accumulators": self._yearly_accumulators.copy(),
@@ -6247,6 +6288,8 @@ class EnergyCalculator:
     def restore_state(self, state: Dict[str, Any]) -> None:
         """Restore calculator state from persistence."""
         if state:
+            _flows = state.get("published_flows")
+            self.published_flows = _flows if isinstance(_flows, dict) else None
             self._daily_accumulators = self._migrate_ev_keys(
                 state.get("daily_accumulators", {}))
             self._monthly_accumulators = self._migrate_ev_keys(
