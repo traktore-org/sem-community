@@ -166,6 +166,9 @@ class SEMNextSystemCard extends SEMNextBase {
             const cfg = resp?.response?.config;
             if (cfg && typeof cfg === 'object') this._options = cfg;
             if (resp?.response?.entry_id) this._entryId = resp.response.entry_id;
+            // (#1421) every id a charger had, removed ones too
+            const used = resp?.response?.charger_ids_used;
+            if (Array.isArray(used)) this._chargerIdsUsed = used;
         } catch (err) {
             console.warn('[sem-next-system-card] get_config failed', err);
         }
@@ -542,7 +545,8 @@ class SEMNextSystemCard extends SEMNextBase {
 
     async _addCharger() {
         if (this._chargerBusy || !this._options) return;
-        const charger = chargerSkeleton(this._options.ev_chargers, this._chargers, this._t('config_ev_new_charger'));
+        const charger = chargerSkeleton(this._options.ev_chargers,
+            [...(this._chargers || []), ...(this._chargerIdsUsed || [])], this._t('config_ev_new_charger'));
         this._chargerBusy = true;
         try {
             // One skeleton: the backend merges ev_chargers by id, so the siblings stay.

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional, Callable
@@ -869,6 +870,60 @@ class SEMStorage:
         """Get EV session history (bounded to ``SESSION_HISTORY_MAX``)."""
         state = self.get_ev_intelligence_state()
         return state.get("session_history", [])
+
+    def unit_ids_used(self, kind: str) -> set:
+        """(#1421) Every id ``kind`` (``ev_chargers``, ``heat_pumps``) had:
+        the ids noted at setup, and the ids this store keeps data under —
+        so a unit removed before the note existed counts too. A new unit
+        must not get one of them (``unit_ids.next_unit_id``). Each part is
+        read on its own: a bad one adds nothing and hides no other."""
+        def _dict(store, key):
+            value = store.get(key) if isinstance(store, dict) else None
+            return value if isinstance(value, dict) else {}
+
+        out: set = set()
+        noted = _dict(self._energy_data, "unit_ids_used").get(kind)
+        if isinstance(noted, list):
+            out |= {str(i) for i in noted if isinstance(i, str) and i}
+        if kind == "ev_chargers":
+            intel = _dict(self._energy_data, "ev_intelligence")
+            history = intel.get("session_history")
+            if isinstance(history, list):
+                out |= {str(s.get("charger_id")) for s in history
+                        if isinstance(s, dict) and s.get("charger_id")}
+            out |= {str(c) for c in _dict(intel, "chargers") if c}
+            daily = _dict(self._daily_data, "per_charger_daily")
+            for part in ("date", "values", "calendar"):
+                out |= {str(c) for c in _dict(daily, part) if c}
+        elif kind == "heat_pumps":
+            # the day runtime and meter reading, the learned COP and drift
+            # rows, and the ledger's month, year and lifetime rows
+            keys = set(_dict(self._daily_data, "device_runtimes"))
+            keys |= set(_dict(self._energy_data, "cop_learn_state"))
+            keys |= set(_dict(self._energy_data, "drift_state"))
+            for name in CALCULATOR_STATE_KEYS:
+                for row in _dict(self._daily_data, name):
+                    # a unit's number, then its split, date or the end; the
+                    # primary's ``device:heat_pump_2026_11`` is no unit
+                    found = re.match(r"device:(heat_pump_\d{1,3})(?=[#_]|$)", str(row))
+                    if found:
+                        keys.add(found.group(1))
+            out |= {str(k) for k in keys if re.fullmatch(r"heat_pump_\d+", str(k))}
+        return out
+
+    def note_unit_ids(self, kind: str, ids) -> bool:
+        """(#1421) Add ``ids`` to the ids ``kind`` had. True when new; the
+        next energy save writes it."""
+        record = self._energy_data.get("unit_ids_used")
+        if not isinstance(record, dict):
+            record = {}
+        before = record.get(kind) if isinstance(record.get(kind), list) else []
+        merged = sorted({str(i) for i in before if i} | {str(i) for i in ids or () if i})
+        if merged == before:
+            return False
+        record[kind] = merged
+        self._energy_data["unit_ids_used"] = record
+        return True
 
     def get_day_tags(self) -> list:
         """(#1083) The stored day tags, oldest first."""
