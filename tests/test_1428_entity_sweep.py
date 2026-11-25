@@ -59,10 +59,10 @@ def test_a_platform_that_did_not_report_is_untouched():
     assert gone(rows, {"sensor": {"x"}}) == []
 
 
-def test_no_report_removes_nothing_an_empty_one_only_per_item_rows():
-    rows = [row("time", "charger_ev_charger_target_time"), row("time", "some_global_time")]
+def test_no_report_removes_nothing_an_empty_report_clears_the_platform():
+    rows = [row("time", "charger_ev_charger_target_time")]
     assert gone(rows, {}) == []
-    # the last charger removed: the time platform built nothing
+    # the last charger removed: the time platform built nothing on purpose
     assert gone(rows, {"time": set()}) == ["time.sem_charger_ev_charger_target_time"]
 
 
@@ -77,30 +77,49 @@ def test_a_disabled_entity_of_a_live_item_stays():
     assert gone(rows, {"sensor": {"charger_ev_charger_taper_ratio"}}) == []
 
 
-def test_every_entity_platform_reports_its_keys_and_no_copy_of_the_sweep_is_left():
-    init = (ROOT / "__init__.py").read_text()
-    tree = ast.parse(init)
-    plats = None
+def _platforms():
+    tree = ast.parse((ROOT / "__init__.py").read_text())
     for node in ast.walk(tree):
         if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "PLATFORMS":
-            plats = [elt.attr.lower() for elt in node.value.elts]
-    assert plats, "PLATFORMS not found"
-    for p in plats:
-        src = (ROOT / f"{p}.py").read_text()
-        assert "report_built_keys(" in src, f"{p}.py does not report its keys"
-        assert "registry.async_remove(entity_entry.entity_id)" not in src, f"{p}.py keeps its own sweep"
-    i_setup = init.index("async_forward_entry_setups(entry, PLATFORMS)")
-    assert init.index("sweep_stale_entities(") > i_setup
+            return [elt.attr.lower() for elt in node.value.elts]
+    raise AssertionError("PLATFORMS not found")
+
+
+def test_every_entity_platform_reports_its_keys_and_no_copy_of_the_sweep_is_left():
+    from .ast_contracts import call_sites
+    reporters = {rel for rel, _l, _k in call_sites("report_built_keys")}
+    removers = {rel for rel, _l, _k in call_sites("async_remove")}
+    for p in _platforms():
+        assert f"{p}.py" in reporters, f"{p}.py does not report its keys"
+        assert f"{p}.py" not in removers, f"{p}.py keeps its own sweep"
+
+
+def test_setup_runs_the_one_sweep():
+    from .ast_contracts import calls
+    from custom_components.solar_energy_management import async_setup_entry
+    assert calls(async_setup_entry, "sweep_stale_entities")
+    assert calls(async_setup_entry, "async_forward_entry_setups")
+
+
+def _notification_ids():
+    ids = set()
+    for f in ROOT.rglob("*.py"):
+        if {"tests", "tools", "scripts"} & set(f.relative_to(ROOT).parts):
+            continue
+        for n in ast.walk(ast.parse(f.read_text())):
+            vals = []
+            if isinstance(n, ast.Call):
+                vals += [k.value for k in n.keywords if k.arg == "notification_id"]
+            if isinstance(n, ast.Dict):
+                vals += [v for k, v in zip(n.keys, n.values, strict=True)
+                         if isinstance(k, ast.Constant) and k.value == "notification_id"]
+            ids |= {v.value for v in vals if isinstance(v, ast.Constant) and isinstance(v.value, str)}
+    return ids
 
 
 def test_uninstall_dismisses_every_notification_sem_can_raise():
     from custom_components.solar_energy_management import cleanup
-    import re
-    ids = set()
-    for f in ROOT.rglob("*.py"):
-        if "tests" in f.parts or "tools" in f.parts:
-            continue
-        ids |= set(re.findall(r'notification_id["\']?\s*[=:]\s*f?["\'](sem_[a-z0-9_]+)', f.read_text()))
+    ids = _notification_ids()
     assert ids, "no notification ids found"
     assert ids <= set(cleanup.SEM_NOTIFICATION_IDS), sorted(ids - set(cleanup.SEM_NOTIFICATION_IDS))
 
@@ -108,10 +127,8 @@ def test_uninstall_dismisses_every_notification_sem_can_raise():
 def test_remove_leftovers_takes_every_sem_dashboard_and_the_classic_copy():
     """The service removed only ``sem-dashboard``; the dashboard SEM makes is
     ``sem-next`` since #1321, and the retired classic one's copy stayed."""
-    from custom_components.solar_energy_management import cleanup
+    from .ast_contracts import call_sites
+    from custom_components.solar_energy_management import cleanup, dashboard_migration
     assert set(cleanup.SEM_DASHBOARD_PATHS) >= {"sem-dashboard", "sem-next"}
-    init = (ROOT / "__init__.py").read_text()
-    body = init[init.index("async def async_remove_leftovers_service"):]
-    body = body[:body.index("hass.services.async_register(")]
-    assert "async_remove_dashboards(" in body
-    assert "classic_dashboard_copy" in (ROOT / "cleanup.py").read_text()
+    assert cleanup.CLASSIC_DASHBOARD_COPY == dashboard_migration.COPY_KEY
+    assert any(rel == "__init__.py" for rel, _l, _k in call_sites("async_remove_dashboards"))

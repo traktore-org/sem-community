@@ -17,9 +17,10 @@ Safe by construction:
 
 * a row is judged only by an EXACT key match, so ``ev_charger`` is never
   confused with ``ev_charger_1``;
-* a platform that did not report this run is not swept at all (a platform
-  whose build failed never reaches its report); a platform that reported
-  nothing — its last charger removed — clears only per-item rows;
+* a platform that did not report this run is not swept at all: a platform
+  whose build failed never reaches its report line. One that reported an
+  empty set built nothing on purpose (its last charger removed, its module
+  absent — #923), so its rows go, as the per-platform sweeps always did;
 * only rows of this config entry and this integration.
 
 This replaces the five copies of the same sweep that sensor, number, select,
@@ -35,11 +36,6 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "solar_energy_management"
 _KEY = "entity_sweep_built"
-#: The per-item key families (one producer each: number/sensor/select/
-#: switch/button/binary_sensor/time build ``charger_<id>_…``; sensor/number/
-#: select ``battery_<id>_…``; sensor ``pv_string_<slot>_…`` and
-#: ``daily_tariff_cost_<device>``).
-PER_ITEM_PREFIXES = ("charger_", "battery_", "pv_string_", "daily_tariff_cost_")
 
 
 def key_of(unique_id: str, entry_id: str) -> Optional[str]:
@@ -61,13 +57,8 @@ def stale_rows(rows: Iterable[Any], entry_id: str,
         if keys is None:        # this platform did not report: leave it
             continue
         key = key_of(getattr(r, "unique_id", "") or "", entry_id)
-        if not key or key in keys:
-            continue
-        # A platform that built nothing (its last charger removed) clears
-        # only per-item rows, never a global one.
-        if not keys and not key.startswith(PER_ITEM_PREFIXES):
-            continue
-        out.append(r)
+        if key and key not in keys:
+            out.append(r)
     return out
 
 
