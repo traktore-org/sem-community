@@ -203,12 +203,18 @@ class SelectHold:
                          state: str) -> Optional[str]:
         if self._spent:
             return self._spent
+        went_back = (f"{entity} went back to '{state}' by itself — SEM "
+                     "does not hold it again")
+        if self._writes:
+            # (#1377) neither SEM's option nor the old one: set since, and a
+            # cloud read only lags to the old one — over at once, seen or not
+            prior = await self.record.prior_of(entity)
+            if prior is not None and state != prior:
+                return await self._give_up(entity, went_back)
         if self._writes and self._seen:
             if await self._away_waits(entity, state, wanted):
                 return SETTLING
-            return await self._give_up(
-                entity, f"{entity} went back to '{state}' by itself — SEM "
-                "does not hold it again")
+            return await self._give_up(entity, went_back)
         if self._writes:                        # a write waits to be shown
             if self._since_write() < self.SHOW_WITHIN_S:
                 return SETTLING

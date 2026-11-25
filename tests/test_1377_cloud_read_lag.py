@@ -444,12 +444,22 @@ class TestARestartDuringTheWait:
         n = len(hass.calls)
         await fresh.async_adopt_running_charge(observer=True)
         assert hass.calls[n:] == [], "watch-only sends nothing"
+        hass.put(RESERVE, "100")                        # SEM's 100 lands late
         await fresh.async_adopt_running_charge()
-        sent = [(c[1], c[2].get("option")) for c in hass.calls[n:]]
-        assert sent == [("select_option", "self_consumption"), ("turn_off", None)]
+        sent = [(c[1], c[2].get("option") or c[2].get("value"))
+                for c in hass.calls[n:]]
+        # (review) the reserve too: once the name goes, no stop comes for it
+        assert sent == [("set_value", 0), ("select_option", "self_consumption"),
+                        ("turn_off", None)]
         await fresh.async_adopt_running_charge()
-        assert len(hass.calls) == n + 2, "once"
+        for _ in range(5):
+            clock.t += CYCLE_S
+            await actuate_battery(BatteryDecision(
+                battery_id="b1", intent=BatteryIntent.NORMAL), fresh)
+        assert len(hass.calls) == n + 3, "once"
         assert json.loads(rec.raw).get("running", {}) == {}
+        assert float(hass.read(RESERVE)) == 0
+        assert not json.loads(hold.raw)["entities"].get(RESERVE, {}).get("held")
 
     async def test_a_charge_still_shown_after_the_restart_is_adopted_unwritten(self, clock):
         hass, rec, hold = _Hass(reserve="0"), _Store(), _Store()
@@ -484,3 +494,77 @@ class TestASelectOnlySetup:
         hass.put(MODE, "autonomous")
         await _cycles(a, clock, CYCLE_S)
         assert a.charge_refused is False
+
+
+class TestRoundTwo:
+    """(second review) the first minute, a joining pack, a failing "off"."""
+
+    async def test_a_value_set_in_the_first_minute_is_never_written_over(self, clock):
+        hass = _Hass(reserve="0")
+        a = _adapter(hass, _Store(), _Store())
+        await actuate_battery(_charge(), a)
+        await _cycles(a, clock, 20)                     # shown, not yet seen
+        hass.put(MODE, "backup")                        # the user's choice
+        await _cycles(a, clock, 120)
+        assert [c[2]["option"] for c in hass.writes("select")] == ["autonomous"]
+        assert hass.read(MODE) == "backup"
+        assert a.charge_refused is True
+
+    async def test_the_hold_value_set_in_the_first_minute_ends_it_too(self, clock):
+        hass = _HoldHass()
+        a = _hold_adapter(hass)
+        await actuate_battery(_limit(0.0), a)
+        await _cycles(a, clock, 20, _limit(0.0))
+        hass.put(HOLD_MODE, SOLAR)                      # set by hand
+        await _cycles(a, clock, 120, _limit(0.0))
+        assert hass.writes() == [UTILITY] and hass.read(HOLD_MODE) == SOLAR
+
+    async def test_a_pack_joining_a_write_not_taken_ends_its_part_in_minutes(self, clock):
+        from custom_components.solar_energy_management.coordinator.battery_adapters.charge_record import (
+            ForcedChargeRecord,
+        )
+        from custom_components.solar_energy_management.coordinator.battery_adapters.charge_target import (
+            ChargeTargetHold,
+        )
+        hass = _Hass(reserve="0")
+        shared = {"forced_charge_record": ForcedChargeRecord(_Store()),
+                  "charge_target_hold": ChargeTargetHold(
+                      hass, _Store(), configured=(RESERVE,))}
+        a = _adapter(hass, _Store(), _Store(), **shared)
+        b = _adapter(hass, _Store(), _Store(), battery_id="b2", **shared)
+        b_charge = BatteryDecision(battery_id="b2", intent=BatteryIntent.FORCE_CHARGE,
+                                   target_soc=100.0, charge_power_w=5000.0,
+                                   duration_min=240)
+        await actuate_battery(_charge(), a)
+        await actuate_battery(b_charge, b)              # joins at once
+        clock.t += 20
+        _poll(hass, "self_consumption", "off", "0")     # never taken
+        hass.refuse_mode = hass.refuse_permit = True    # nor the re-sends
+        for _ in range(15):                             # 2.5 min
+            clock.t += CYCLE_S
+            await actuate_battery(_charge(), a)
+            await actuate_battery(b_charge, b)
+        assert a.charge_refused is True and b.charge_refused is True
+        options = [c[2]["option"] for c in hass.writes("select")]
+        assert options.count("autonomous") == 2, "b2 never writes the option"
+        assert hass.read(MODE) == "self_consumption"
+        offs = [c for c in hass.writes("switch") if c[1] == "turn_off"]
+        assert len(offs) == 1, "the last pack out sends \"off\" once"
+
+    async def test_an_off_that_keeps_failing_is_not_sent_every_cycle(self, clock):
+        hass, rec, hold = _Hass(reserve="0"), _Store(), _Store()
+        await actuate_battery(_charge(), _adapter(hass, rec, hold))
+        _poll(hass, "self_consumption", "off", "0")
+        orig = hass._call
+
+        async def no_switch(domain, service, data, **kw):
+            if domain == "switch":
+                hass.calls.append((domain, service, dict(data)))
+                raise RuntimeError("cloud down")
+            await orig(domain, service, data, **kw)
+        hass.services.async_call = no_switch
+        fresh = _adapter(hass, rec, hold)
+        n = len(hass.writes("switch"))
+        for _ in range(10):
+            await fresh.async_adopt_running_charge()
+        assert len(hass.writes("switch")) == n + 1
