@@ -6187,14 +6187,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     grid_import_known=bool(getattr(
                                         view.fleet, "grid_import_known", True)),
                                 )
-                        _pg_reason = yield_override_reason(self, decision)
+                        # (#1420) the guard asks THIS charger: one that
+                        # draws nothing gets no stop
+                        _ylds = self.external_yielding(f"charger:{cid}")
+                        _pg_reason = yield_override_reason(
+                            self, decision, adapter=adapter, power=view.power,
+                            yielded=_ylds)
                         try:
                             await actuate(
                                 decision, adapter, view.power,
                                 reconciler=reconciler,
                                 observer=self._observer_mode,
                                 controller=self._surplus_controller,
-                                yielded=self.external_yielding(f"charger:{cid}"),
+                                yielded=_ylds,
                                 phase_override=_pg_reason,
                             )
                             # Add this charger's just-committed draw to the shared night
@@ -6411,13 +6416,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                              self, "_phase_believed", {}).get("ev_charger"))),
                 ])
                 _owner.note_trail(self, cid, _trail)
-                _pg_reason = yield_override_reason(self, decision)
+                _ylds = self.external_yielding(f"charger:{cid}")
+                _pg_reason = yield_override_reason(          # (#1420)
+                    self, decision, adapter=adapter, power=view.power,
+                    yielded=_ylds)
                 try:
                     await actuate(
                         decision, adapter, view.power, reconciler=reconciler,
                         observer=self._observer_mode,
                         controller=self._surplus_controller,
-                        yielded=self.external_yielding(f"charger:{cid}"),
+                        yielded=_ylds,
                         phase_override=_pg_reason,
                     )
                 except (HomeAssistantError, ServiceValidationError) as e:

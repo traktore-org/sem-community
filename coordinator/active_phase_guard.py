@@ -81,13 +81,20 @@ class ActivePhaseGuard:
             or self._over_cycles.get(phase, 0) >= CHARGERS_FIRST_CYCLES
         }
 
-    def yield_override_reason(self, decision: ChargerDecision) -> str:
+    def yield_override_reason(self, decision: ChargerDecision, *,
+                              adapter: Any = None, power: Any = None) -> str:
         """(#1381) Why a yielded charger's stop must go out anyway, or "".
 
         Only the guard's own stop of a phase measured over its limit counts:
         enforcing (watch-only never acts), the decision rewritten by this
         guard, and a fresh reading above the limit now. A stop for stale
-        data or a recovery hold is not a fuse case."""
+        data or a recovery hold is not a fuse case.
+
+        (#1420) …and only for a charger that may draw. Stopping a charger
+        that draws nothing takes no current off the phase, so a charger
+        every reading shows idle (``charger_draws_nothing``) gets no
+        override: SEM keeps yielding it and sends nothing. Without
+        ``adapter``/``power`` the charger is not asked (the stop holds)."""
         if not self._enforcing:
             return ""
         # (#1381, owner S2) The decision says who stopped it; a reason code
@@ -99,7 +106,17 @@ class ActivePhaseGuard:
         if worst is None:
             return ""
         phase, current, limit = worst
-        return f"phase {phase} at {current:.1f} A > {limit:.1f} A"
+        reason = f"phase {phase} at {current:.1f} A > {limit:.1f} A"
+        if (adapter is not None and power is not None
+                and charger_draws_nothing(adapter, power)):
+            from ..utils.log_gate import log_on_change
+            log_on_change(
+                _LOGGER, f"yield-idle:ev:{decision.charger_id}", logging.INFO,
+                "phase guard: %s, but %s draws nothing — SEM leaves it "
+                "alone", reason, decision.charger_id,
+            )
+            return ""
+        return reason
 
     @property
     def latched_phases(self) -> frozenset:
@@ -473,12 +490,62 @@ def update_active_phase_guard(coord: Any) -> Dict[str, Any]:
     return runtime
 
 
-def yield_override_reason(coord: Any, decision: ChargerDecision) -> str:
-    """(#1381) The guard's reason to stop a yielded charger anyway, or ""."""
+def charger_draws_nothing(adapter: Any, power: Any) -> bool:
+    """(#1420) Does every reading say this charger draws nothing now?
+
+    True only when all agree: the brand's charging flag is off; the
+    adapter's own answer (a cloud brand's status first, its power lags) is
+    no; this charger's smoothed power and the raw state of its own power
+    sensor are both at most the brand's handshake draw. The raw state
+    counts because the smoothing lags a start by a cycle. Any reading that
+    is missing, dark or not a number answers False — then the guard's stop
+    goes out as before. Reads this charger only, never the fleet."""
+    try:
+        threshold = float(adapter.handshake_power_w)
+        smoothed = float(power.power_w)
+    except (AttributeError, TypeError, ValueError):
+        return False
+    if not (math.isfinite(threshold) and math.isfinite(smoothed)):
+        return False
+    if threshold < 0 or abs(smoothed) > threshold:
+        return False
+    if getattr(power, "charging", True) is not False:
+        return False
+    actual = getattr(adapter, "actual_charging", None)
+    if not callable(actual):
+        return False
+    try:
+        if actual(power) is not False:
+            return False
+    except Exception:  # noqa: BLE001 — no answer is not "idle"
+        return False
+    dev = getattr(adapter, "_device", None)
+    entity = getattr(dev, "power_entity_id", None)
+    hass = getattr(dev, "hass", None)
+    if not isinstance(entity, str) or not entity or hass is None:
+        return False
+    try:
+        from .units import power_state_to_watts
+        raw = power_state_to_watts(hass.states.get(entity))
+    except Exception:  # noqa: BLE001 — no reading is not "idle"
+        return False
+    if not isinstance(raw, (int, float)) or isinstance(raw, bool):
+        return False
+    return math.isfinite(raw) and abs(raw) <= threshold
+
+
+def yield_override_reason(coord: Any, decision: ChargerDecision, *,
+                          adapter: Any, power: Any, yielded: bool) -> str:
+    """(#1381) The guard's reason to stop a yielded charger anyway, or "".
+    (#1420) ``adapter`` and ``power`` are THIS charger's: one that draws
+    nothing gets no stop. A charger SEM steers needs no override (its own
+    stop goes out as always), so it is not asked."""
+    if not yielded:
+        return ""
     enforcer = getattr(coord, "_active_phase_guard", None)
     if not isinstance(enforcer, ActivePhaseGuard):
         return ""
-    return enforcer.yield_override_reason(decision)
+    return enforcer.yield_override_reason(decision, adapter=adapter, power=power)
 
 
 def filter_charger_decision(
