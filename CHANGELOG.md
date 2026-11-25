@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **A charger stop is not a full car** (#1381). Another system's stop no longer sets the estimate to 100 %. A full car reads "Car full".
+- 🐛 **A charger stop is not a full car** (#1381). Another system's stop no longer makes the estimate 100 %.
 - 🐛 **The phase guard leaves an idle charger alone** (#1420). With another app in charge, a charger at 0 W is not stopped, nor logged as stopped.
 - 🐛 **An old card asks for a reload** (#1381). After an update, a cached card showed only "Off". Every screen now says SEM was updated.
 - 🐛 **The mode control shows every mode** (#1381). An option the card does not know is still a button, by its raw name.
