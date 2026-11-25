@@ -70,6 +70,10 @@ class ForcedChargeRecord:
         self._refused: dict[str, float] = {}
         #: (#1362) entity → [day, writes SEM made to it that day]
         self._wrote: dict[str, list] = {}
+        #: (#1426) entity → [SEM's charge value, the value SEM put back,
+        #: when (epoch s)]: a cloud read can show SEM's own charge value for
+        #: minutes after the put-back, and that read is SEM's, not the user's
+        self._put_back: dict[str, list] = {}
         self._loaded = store is None
         self._readable = store is not None
         self._lock = asyncio.Lock()
@@ -144,6 +148,30 @@ class ForcedChargeRecord:
             await self._load()
             row = self._wrote.get(str(entity_id or ""))
             return int(row[1]) if row and row[0] == day else 0
+
+    async def note_put_back(self, entity_id: str, sem_value: str,
+                            back: str, at: float) -> None:
+        """(#1426) SEM wrote ``back`` over its own ``sem_value``."""
+        entity_id = str(entity_id or "")
+        if not entity_id or str(sem_value) == str(back):
+            return
+        async with self._lock:
+            await self._load()
+            self._put_back[entity_id] = [str(sem_value), str(back), float(at)]
+            await self._save()
+
+    async def put_back_of(self, entity_id: str) -> "tuple | None":
+        """(#1426) ``(sem_value, back, at)`` of SEM's last put-back, or None."""
+        async with self._lock:
+            await self._load()
+            row = self._put_back.get(str(entity_id or ""))
+            return tuple(row) if row else None
+
+    async def forget_put_back(self, entity_id: str) -> None:
+        async with self._lock:
+            await self._load()
+            if self._put_back.pop(str(entity_id or ""), None) is not None:
+                await self._save()
 
     async def prior_of(self, entity_id: str) -> "str | None":
         """(#1346) The option a select showed before SEM's start, or None."""
@@ -288,6 +316,11 @@ class ForcedChargeRecord:
         self._wrote = {e: [str(r[0]), int(r[1])] for e, r in (
             wrote.items() if isinstance(wrote, dict) else ())
             if isinstance(r, list) and len(r) == 2 and isinstance(r[1], int)}
+        put_back = record.get("put_back", {})       # (#1426) a hint only
+        self._put_back = {e: [str(r[0]), str(r[1]), float(r[2])] for e, r in (
+            put_back.items() if isinstance(put_back, dict) else ())
+            if isinstance(r, list) and len(r) == 3
+            and isinstance(r[2], (int, float)) and not isinstance(r[2], bool)}
 
     async def _save(self) -> bool:
         if self._store is None:
@@ -304,6 +337,8 @@ class ForcedChargeRecord:
                 record["refused"] = dict(self._refused)
             if self._wrote:
                 record["wrote"] = {e: list(r) for e, r in self._wrote.items()}
+            if self._put_back:      # (#1426)
+                record["put_back"] = {e: list(r) for e, r in self._put_back.items()}
             await self._store.async_save(record)
         except Exception as exc:  # noqa: BLE001
             log_on_change(_LOGGER, "forced_charge_record:save", logging.WARNING,
