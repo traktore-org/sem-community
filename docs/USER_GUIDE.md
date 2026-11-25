@@ -845,8 +845,9 @@ Power sensors are in watts. Energy sensors are in kWh. Costs are in your currenc
 
 - `sensor.sem_true_baseload_power` and `sensor.sem_daily_true_baseload_energy`: the
   part of the house that SEM does not control. The power is a two-minute
-  average, because the house meters and the plugs report at different moments.
-  A value below zero that lasts means a device is counted twice.
+  average, because the house meters and the plugs report at different moments,
+  so it follows a real change about a minute late. A value below zero that
+  lasts means a device is counted twice.
 - `sensor.sem_house_meter_power` and `sensor.sem_house_meter_gap`: the house figure
   your inverter reports, and the difference from SEM's figure.
 - `sensor.sem_charger_{id}_estimated_soc` and `sensor.sem_charger_{id}_vehicle_soc`:

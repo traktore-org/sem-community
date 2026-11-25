@@ -21,6 +21,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
+    HOLD_MAX_KWH,
     EnergyCalculator,
 )
 from custom_components.solar_energy_management.coordinator.flow_calculator import (
@@ -91,6 +92,44 @@ class TestTheRowHolds:
         assert calc._daily_accumulators[KEY] == pytest.approx(11.43)
         assert calc._monthly_accumulators.get(f"grid_import_{MONTH}", 0.0) == pytest.approx(
             month_before + (11.43 - 11.50))
+
+    def test_the_hold_is_bounded(self):
+        """Held by the over-booking only, never by more than HOLD_MAX_KWH."""
+        states = {IMPORT_METER: _state(10000.0)}
+        calc = _calc(states)
+        _cycle(calc, 0.0)
+        states[IMPORT_METER] = _state(10005.00)
+        _cycle(calc, 5.00)
+        # a stretch of over-booking published 5.30 while the meter stayed
+        calc._daily_accumulators[KEY] = 5.30
+        out = _cycle(calc, 5.32)
+        assert out == pytest.approx(5.00 + HOLD_MAX_KWH)
+        assert calc.held_above_meter(TODAY)["grid_import"] == pytest.approx(HOLD_MAX_KWH)
+
+    def test_a_row_that_was_not_the_meters_is_not_held(self):
+        """Last cycle the meter did not back the row: no hold above it."""
+        states = {IMPORT_METER: _state(10000.0)}
+        calc = _calc(states)
+        _cycle(calc, 0.0)
+        states[IMPORT_METER] = _state(10011.43)
+        _cycle(calc, 11.45)
+        calc._counter_backed.discard("grid_import")   # a partial read last cycle
+        assert _cycle(calc, 11.50) == pytest.approx(11.43)
+
+    def test_a_day_that_ends_held_is_reported(self, caplog):
+        import logging
+        from datetime import timedelta
+        states = {IMPORT_METER: _state(10000.0)}
+        calc = _calc(states)
+        _cycle(calc, 0.0)
+        states[IMPORT_METER] = _state(10011.43)
+        _cycle(calc, 11.45)
+        _cycle(calc, 11.50)                           # held at 11.45
+        with caplog.at_level(logging.INFO):
+            calc._check_rollover(TODAY + timedelta(days=1), "2026_11", "2026")
+        assert calc.day_end_held == {"grid_import": pytest.approx(0.02)}
+        assert "held above their meter" in caplog.text
+        assert calc.held_above_meter(TODAY) == {}
 
     def test_without_a_published_value_the_meter_wins(self):
         """The first cycle of a day (or a direct call) has nothing to hold."""

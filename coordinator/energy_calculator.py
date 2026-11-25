@@ -91,6 +91,10 @@ _EV_CLOSING_KEYS = ("row", "anchor", "base", "last", "drawn_at", "owed",
 # band would leave half the error in place. Below this the integrator keeps the
 # row — the point is to stop drift, not to chase noise.
 METER_RECONCILIATION_THRESHOLD = 0.05
+#: (#1382) The most a correction may hold a daily row above its meter. A row
+#: is held only by the over-booking a correction would have taken back, and
+#: never by more than this; a larger gap comes down to this bound.
+HOLD_MAX_KWH = 0.1
 
 # (#1177) The power inputs the daily rows integrate: the input, the flag that
 # says every read of it was dark this cycle (``SensorReader``, #818), and the
@@ -718,6 +722,12 @@ class EnergyCalculator:
         #: (#1382) the day whose home row was the balance last cycle too
         self._home_balance_day: Optional[date] = None
         self._home_was_balance: bool = False
+        #: (#1382) categories whose row was the meter's last cycle
+        self._backed_prev: Set[str] = set()
+        #: (#1382) daily key -> kWh a row is held above its meter right now
+        self._held_above_meter: Dict[str, float] = {}
+        #: (#1382) category -> kWh a row ended its day above its meter
+        self.day_end_held: Dict[str, float] = {}
         self._home_balance_logged: bool = False
         # Baselines for the midnight EV mirror — same delta model as
         # ``_ev_counter_baselines``, keyed on the calendar day instead.
@@ -3946,26 +3956,43 @@ class EnergyCalculator:
         return {k: dict(v) for k, v in self._backing_tally.items()}
 
     def _note_published_rows(self) -> None:
-        """(#1382) Remember the rows as published, before a cycle moves them."""
+        """(#1382) Remember the rows as published, before a cycle moves them,
+        and which rows were the meter's in that cycle."""
         self._published_rows = {
             k: v for k, v in self._daily_accumulators.items()
             if isinstance(v, (int, float))
         }
+        self._backed_prev = set(self._counter_backed)
 
-    def _not_below_published(self, daily_key: str, target: float) -> float:
+    def _not_below_published(self, daily_key: str, target: float,
+                             held_ok: bool = True) -> float:
         """(#1382) A correction never sets a day's row below what was published.
 
         The integrator books power between two counter steps and can run a
         little ahead of the meter; the meter then lags and a correction
         pulled the row back (PROD 23.11 10:27:49, grid import 11.45 → 11.40
-        kWh, the flows with it). A row published as a running total must not
-        go back within its day: ahead of the meter it holds until the meter
-        passes it. The day still ends on the meter's value.
+        kWh, the flows with it). A daily total that steps back is read by
+        HA's statistics as a reset. So the row holds — but only by the
+        over-booking the correction would have taken back, at most
+        ``HOLD_MAX_KWH``, and only when ``held_ok`` says the row was the
+        meter's (or the balance) last cycle too: a row that is not, is
+        never held above its own meter. The meter passing it ends the hold;
+        a day that ends held is reported at the day boundary.
         """
         floor = self._published_rows.get(daily_key)
-        if floor is None:
+        excess = 0.0 if floor is None else float(floor) - float(target)
+        if not held_ok or excess <= 0.0:
+            self._held_above_meter.pop(daily_key, None)
             return target
-        return max(float(target), float(floor))
+        held = min(excess, HOLD_MAX_KWH)
+        self._held_above_meter[daily_key] = round(held, 3)
+        return float(target) + held
+
+    def held_above_meter(self, today: date) -> Dict[str, float]:
+        """(#1382) category -> kWh today's rows are held above their meter."""
+        suffix = f"_{today}"
+        return {k[: -len(suffix)]: v for k, v in self._held_above_meter.items()
+                if k.endswith(suffix) and v > 0}
 
     def _reconcile_metered_energy(
         self,
@@ -4112,7 +4139,8 @@ class EnergyCalculator:
             return  # Small drift stays with the integrator.
         # (#1382) a correction holds the row at what was published, never
         # below — decided after the drift band, which judges the meter itself
-        target = self._not_below_published(daily_key, target)
+        target = self._not_below_published(
+            daily_key, target, held_ok=category in self._backed_prev)
         delta = target - integrated
 
         # Corrections run every cycle once adopted, so only a material one is
@@ -4154,7 +4182,8 @@ class EnergyCalculator:
             moved = max(-part, min(target - part, delta * share))
             # (#1382) a row booked beside holds too, never steps back
             moved = self._not_below_published(
-                f"{beside}_{today}", part + moved) - part
+                f"{beside}_{today}", part + moved,
+                held_ok=category in self._backed_prev) - part
             parts[beside] = part + moved
             if not moved:
                 continue
@@ -4317,9 +4346,8 @@ class EnergyCalculator:
         delta = target - integrated
         if abs(delta) <= METER_RECONCILIATION_THRESHOLD:
             return  # Already there; small drift stays with the integrator.
-        if was_balance:
-            target = self._not_below_published(daily_key, target)
-            delta = target - integrated
+        target = self._not_below_published(daily_key, target, held_ok=was_balance)
+        delta = target - integrated
 
         if not self._home_balance_logged:
             self._home_balance_logged = True
@@ -6043,6 +6071,17 @@ class EnergyCalculator:
         """
         yesterday = today - timedelta(days=1)
         yesterday_str = str(yesterday)
+        # (#1382) a row that ended its day held above its meter, said once
+        _ended = self.held_above_meter(yesterday)
+        if _ended:
+            self.day_end_held = dict(_ended)
+            _LOGGER.info(
+                "Day %s ended with rows held above their meter (kWh): %s — "
+                "a daily counter does not step back, so a meter that reported "
+                "late is not followed down (#1382)",
+                yesterday_str, ", ".join(f"{k} {v:.3f}" for k, v in sorted(_ended.items())))
+        self._held_above_meter = {k: v for k, v in self._held_above_meter.items()
+                                  if not k.endswith(f"_{yesterday_str}")}
         prev_month_key = self._month_key(today.replace(day=1) - timedelta(days=1))
         prev_year_key = str(today.year - 1)
 

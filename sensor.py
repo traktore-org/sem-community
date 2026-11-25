@@ -3299,6 +3299,24 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         # sensors now stop churning the recorder.
         attrs: Dict[str, Any] = {}
 
+        # (#1382) a daily row held above its meter says by how much, and a
+        # row that ended yesterday held says that too
+        _key = self.entity_description.key
+        if _key.startswith("daily_"):
+            try:
+                from homeassistant.util import dt as dt_util
+                _calc = getattr(self.coordinator, "_energy_calculator", None)
+                _cat = _key[len("daily_"):]
+                _cat = _cat[: -len("_energy")] if _cat.endswith("_energy") else _cat
+                _now = _calc.held_above_meter(dt_util.now().date()) if _calc else {}
+                if isinstance(_now, dict) and _cat in _now:
+                    attrs["held_above_meter_kwh"] = _now[_cat]
+                _ended = getattr(_calc, "day_end_held", None)
+                if isinstance(_ended, dict) and _cat in _ended:
+                    attrs["yesterday_ended_above_meter_kwh"] = _ended[_cat]
+            except Exception:  # noqa: BLE001 — an attribute never costs a cycle
+                pass
+
         # Add specific attributes based on sensor type
         if self.entity_description.key == "diag_version":
             # (#1381) The bundle token the server put on the card's URL. A
