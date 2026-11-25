@@ -265,15 +265,15 @@ export function chargerBody(card, row) {
         const setTariff = (key, v) => card._svc('set_option', { options: { ev_chargers: [{ id: cid, [key]: v }] } });
         const rate = parseFloat(modeAttrs.tariff_rate) || 0;
         const tEnt = modeAttrs.tariff_entity || '', tMeter = modeAttrs.tariff_meter || '';
-        setRows.push(srow(t('next_device_tariff'), rate > 0 ? card._money(rate) : t('next_house_tariff'),
+        moreRows.push(srow(t('next_device_tariff'), rate > 0 ? card._money(rate) : t('next_house_tariff'),
             card._numEdit('ctariff:' + cid, { value: rate || null, min: 0, step: 0.001, onCommit: (v) => setTariff('tariff_rate', v > 0 ? Number(v) : 0) }),
-            { more: true }));
-        setRows.push(srow(t('device_tariff_entity'), tEnt ? card._name(tEnt) : t('action_none'),
+            {}));
+        moreRows.push(srow(t('device_tariff_entity'), tEnt ? card._name(tEnt) : t('action_none'),
             card._entEdit('ctariffent:' + cid, { value: tEnt, domains: ['sensor', 'input_number'], onCommit: (v) => setTariff('tariff_entity', v || '') }),
-            { more: true }));
-        setRows.push(srow(t('device_tariff_meter'), tMeter ? card._name(tMeter) : t('action_none'),
+            {}));
+        moreRows.push(srow(t('device_tariff_meter'), tMeter ? card._name(tMeter) : t('action_none'),
             card._entEdit('ctariffmeter:' + cid, { value: tMeter, domains: ['sensor'], onCommit: (v) => setTariff('tariff_meter', v || '') }),
-            { more: true, help: t('device_tariff_hint') }));
+            { help: t('device_tariff_hint') }));
     }
     if (timeId) {
         // (#1321) the schedule is shown once, here: the time, its weekdays, the next departure and the planned kWh
