@@ -150,12 +150,19 @@ class GenericAdapter(ChargerAdapter):
         locked / unknown (see ``status_enum``)."""
         return classify_charger_status(self._status_raw())
 
-    def actual_charging(self, power: ChargerPower) -> bool:
+    def status_answer(self) -> Optional[bool]:
+        """(#1422) The status sensor's answer, or None (see base)."""
         cls = self._status_class()
         if cls == "charging":
             return True
         if cls in ("not_charging", "locked"):
             return False
+        return None
+
+    def actual_charging(self, power: ChargerPower) -> bool:
+        answer = self.status_answer()
+        if answer is not None:
+            return answer
         # unknown / no status sensor → power-based fallback (unchanged).
         return power.power_w > self.handshake_power_w
 

@@ -19,7 +19,9 @@ from .charger_types import (
     FleetContext,
     FleetCycleState,
 )
-from .ev_availability import charger_state, has_plug_sensor
+from .ev_availability import (
+    charger_power_known, charger_state, has_plug_sensor,
+)
 from .plan_verdict import NO_OPINION, PlanVerdict
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
@@ -157,6 +159,9 @@ def build_charger_view(
         connected=connected,
         charging=charging,
         plug_known=plug_known,
+        # (#1422) a dark sensor's 0 W is no reading: the reconciler must
+        # not take it for a stopped charger
+        power_known=charger_power_known(charger_id, power_reading),
     )
 
     ce = ChargerEnergy(charger_id=charger_id, day_kwh=daily_ev_kwh)

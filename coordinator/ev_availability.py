@@ -139,6 +139,19 @@ def charger_state(cid, power, full_config, field: str) -> bool:
         return False
 
 
+def charger_power_known(cid, power) -> bool:
+    """(#1422) Did THIS charger's power read give a number this cycle?
+
+    The same choice as the watts it goes with (``build_charger_view``):
+    the charger's own sensor when the reader has an entry for it, else the
+    one fleet sensor. Unsaid is True — a charger nobody marked keeps
+    today's meaning."""
+    if cid in (getattr(power, "ev_power_per_charger", None) or {}):
+        read = getattr(power, "ev_power_per_charger_read", None) or {}
+        return read.get(cid, True) is not False
+    return getattr(power, "ev_power_fleet_read", True) is not False
+
+
 def plan_car_fullness(detector, drawing_w=None, handshake_w=500.0):
     """Tri-state fullness for the night demand collector (#756).
 

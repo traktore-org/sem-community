@@ -1293,7 +1293,9 @@ class EVControlMixin:
         # charger with no sensor of its own never takes the fleet OR.
         # (#1153) …and an unknown plug is not a departure the reconciler
         # parks on.
-        from .ev_availability import charger_state, has_plug_sensor
+        from .ev_availability import (
+            charger_power_known, charger_state, has_plug_sensor,
+        )
         _config = getattr(self, "config", {}) or {}
         _connected = charger_state(cid, power, _config, "connected")
         cp = ChargerPower(
@@ -1302,6 +1304,7 @@ class EVControlMixin:
             connected=_connected,
             charging=charger_state(cid, power, _config, "charging"),
             plug_known=_connected or has_plug_sensor(charger_cfg, _config),
+            power_known=charger_power_known(cid, power),     # (#1422)
         )
         await actuate(
             decision, adapter, cp, reconciler,
