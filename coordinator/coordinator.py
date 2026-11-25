@@ -5968,6 +5968,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # does not drive.
                             if _yielded:
                                 return decision
+                            from .charger_reconciler import (
+                                charger_blind as _charger_blind,
+                            )
                             return await self._phase_switch_tick(
                                 cid, charger_cfg, decision, view.power,
                                 _now_mono_cycle,
@@ -5991,6 +5994,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 leg_phases=self._charger_leg_phases(
                                     cid, getattr(adapter, "_device", None),
                                     view.power.power_w),
+                                # (#1423) a dark 0 W is no "at rest": the
+                                # reconciler's own blind, for this charger
+                                blind=_charger_blind(adapter, view.power),
                             )
 
                         # (#1381, charger owner S3) The chain, in the order

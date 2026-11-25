@@ -1647,3 +1647,17 @@ def observe(adapter, power) -> ObservedState:
         contactor_surface=surface,
         draw_known=draw_known,
     )
+
+
+def charger_blind(adapter, power) -> bool:
+    """(#1423) ``ObservedState.blind`` for a caller outside the reconciler:
+    no reading says whether THIS charger draws. The phase switch asks it,
+    so a dark 0 W is never taken as a charger at rest.
+
+    If the adapter cannot be read, a dark power read counts as blind: a
+    switch that waits is safe, one under load is not."""
+    try:
+        return observe(adapter, power).blind
+    except Exception as exc:  # noqa: BLE001 — a reading, never fatal
+        _LOGGER.debug("charger_blind() could not observe: %s", exc)
+        return getattr(power, "power_known", True) is False
