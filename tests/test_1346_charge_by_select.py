@@ -354,9 +354,9 @@ class TestRefusal:
         await actuate_battery(_stop(), a)
         for _ in range(5):
             await actuate_battery(_charge(), a)
-        options = [c[2]["option"] for c in hass.writes()]
-        assert options.count(CHARGE) == 4       # 2 per attempt, never more
-        assert options.count(SOLAR) == 2        # (#1377) the old one, once each
+        # 2 per attempt, never more; (#1377) then the old one, once each
+        assert [c[2]["option"] for c in hass.writes()] == [
+            CHARGE, CHARGE, SOLAR, CHARGE, CHARGE, SOLAR]
 
     async def test_a_select_that_takes_it_late_is_a_charge(self):
         hass = _Hass()
@@ -397,12 +397,13 @@ class TestRefusalRound2:
         a = _adapter(hass, _Store())
         for _ in range(50):
             await actuate_battery(_charge(), a)
-        assert [c[2]["option"] for c in hass.writes()].count(CHARGE) == 2
+        assert [c[2]["option"] for c in hass.writes()] == [CHARGE, CHARGE, SOLAR]
         for _ in range(5):
             await actuate_battery(BatteryDecision(battery_id="b1", intent=BatteryIntent.NORMAL), a)
         for _ in range(50):
             await actuate_battery(_charge(), a)
-        assert [c[2]["option"] for c in hass.writes()].count(CHARGE) == 4
+        assert [c[2]["option"] for c in hass.writes()] == [
+            CHARGE, CHARGE, SOLAR, CHARGE, CHARGE, SOLAR]
 
     async def test_a_refusal_is_remembered_for_the_plan_and_cleared_by_a_start(self):
         hass = _Hass()

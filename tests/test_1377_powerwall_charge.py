@@ -345,8 +345,9 @@ class TestReview:
         a = _adapter(hass, _Store(), _Store())
         for _ in range(10):
             await actuate_battery(_charge(), a)
-        turn_ons = [c for c in hass.writes("switch") if c[1] == "turn_on"]
-        assert len(turn_ons) == 2                        # the start + one try
+        # the start + one try, then (#1377) "off" once
+        assert [c[1] for c in hass.writes("switch")] == [
+            "turn_on", "turn_on", "turn_off"]
         assert hass.read(MODE) == "self_consumption"     # given up, put back
         assert float(hass.read(RESERVE)) == 20
         assert a.charge_refused is True

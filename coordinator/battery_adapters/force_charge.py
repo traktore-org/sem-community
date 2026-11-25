@@ -187,6 +187,8 @@ class BatteryChargeAdapter(ABC):
             charging = self.actuator_charging()
             if charging is None:
                 return False                    # not readable yet: next cycle
+            if not charging and not await self._may_drop_stopped(actuator):
+                return False                    # (#1377) the restore's first
             self._adoption_settled = True
             if not charging:
                 await self.charge_record.stopped(actuator)
@@ -198,6 +200,11 @@ class BatteryChargeAdapter(ABC):
         _LOGGER.info("Battery: %s is still on from a forced charge SEM "
                      "started — SEM stops it unless the plan still wants it "
                      "(#1181)", actuator)
+        return True
+
+    async def _may_drop_stopped(self, actuator: str) -> bool:
+        """(#1377) May adoption drop the name of an actuator that reads no
+        charge? A brand that sends something first says no."""
         return True
 
     async def _note_stopped(self, readable: bool = True) -> None:
@@ -728,6 +735,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     _sel_away_since: "float | None" = None
     _permit_away_since: "float | None" = None
     _permit_seen_on: bool = False
+    _permit_wrote_at: "float | None" = None
     _sel_prior_sent: bool = False
 
     def _select_failed(self, why: str) -> ChargeStatus:
@@ -743,7 +751,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         self._sel_spent = None
         self._sel_stop_miss = (0, ())
         self._sel_wrote_at = self._sel_away_since = None     # (#1377)
-        self._permit_away_since = None
+        self._permit_away_since = self._permit_wrote_at = None
         self._permit_seen_on = self._sel_prior_sent = False
 
     async def _select_over(self, entity: str, why: str) -> ChargeStatus:
@@ -802,11 +810,18 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if wanted not in options:
             return self._select_failed(f"{entity} does not list '{option}'")
         if state == wanted:
-            self._sel_seen = self._sel_seen or self._sel_writes > 0
-            if not self._sel_spent:
-                # it took the option. (#1377) Not after a give-up: a mode
-                # that was the user's before the charge still shows it, and
-                # the plan must still hear that this attempt ended
+            # (#1377) a cloud select shows a write at once, before any poll
+            # says the device took it: it counts as seen only once it still
+            # shows the option ``SHOW_WITHIN_S`` after the write. Until then
+            # an old option read back is a write not taken (the re-send and
+            # the give-up below), not a charge that went back.
+            if self._sel_writes and self._since_write() >= self.SHOW_WITHIN_S:
+                self._sel_seen = True
+            if not self._sel_spent or not self._join_needs_writes():
+                # it took the option. (#1377) Not after a give-up where the
+                # option alone is a mode (a permit or a target beside it):
+                # a mode that was the user's before the charge still shows
+                # it, and the plan must still hear that this attempt ended
                 self._sel_refused_at = None
             self._sel_away_since = None            # (#1377) back, or never away
             return await self._join_select_charge(entity, command)
@@ -953,6 +968,11 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if await self.charge_record.prior_of(entity) is not None:
             if not await self.charge_record.started(entity, self._battery()):
                 return self._select_failed("SEM could not save its record")
+            if not self._sel_writes:
+                # (#1377) a pack joining SEM's own charge (another pack's
+                # start, or the last lifetime's) has seen the option: an old
+                # option read later waits like the starter's, never writes
+                self._sel_writes, self._sel_seen = 1, True
             # (#1377) a pack joining a charge another pack started owns the
             # permit too: the first pack's stop must not turn it off
             permit = permit_switch(self.config)
@@ -1039,8 +1059,13 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if not permit or await self.charge_record.prior_of(permit) is None:
             return None
         state = self._permit_state(permit)
-        if state == "on":                   # SEM's "on" (its record): it took
-            self._permit_seen_on = True
+        if state == "on":                   # SEM's "on" (its record)
+            # it took, once a read ``SHOW_WITHIN_S`` after SEM's last write
+            # still says so (a cloud switch shows "on" at once); an "on"
+            # from the last lifetime has long been read back
+            at = self._permit_wrote_at
+            if at is None or time.monotonic() - at >= self.SHOW_WITHIN_S:
+                self._permit_seen_on = True
             self._permit_away_since = None
             return None
         if state != "off":
@@ -1156,14 +1181,19 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if (entity and self._permit_state(entity) == "off"
                 and await self.charge_record.prior_of(entity) is not None):
             self._permit_writes += 1
+            self._permit_wrote_at = time.monotonic()       # (#1377)
             await self.hass.services.async_call(
                 "switch", "turn_on", {"entity_id": entity})
 
-    async def _put_permit_back(self) -> "ChargeStatus | None":
-        """The permit goes back OFF, with the last pack's stop, and only
-        while it still reads ON: a hand change since is the user's. None:
-        done or nothing to do. A status: the switch cannot be read, the
-        record stays and the next stop asks again."""
+    async def _put_permit_back(self, resend_off: bool = False
+                               ) -> "ChargeStatus | None":
+        """The permit goes back OFF, with the last pack's stop: when it
+        reads ON, and (#1377) when it reads OFF but SEM turned it on — in
+        this lifetime, or ``resend_off`` (the record of the last one says
+        so): a cloud read can show "off" while SEM's "on" is on its way.
+        A hand change to ON is never made here. None: done or nothing to
+        do. A status: the switch cannot be read, the record stays and the
+        next stop asks again."""
         entity = permit_switch(self.config)
         prior = await self.charge_record.prior_of(entity) if entity else None
         if prior is None:
@@ -1178,7 +1208,8 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         # (#1377) one SEM turned on this lifetime goes off even when it
         # reads off: a cloud read can show the old value while SEM's "on"
         # is still on its way, and lands later. Off is never the user's on.
-        if prior == "off" and (state == "on" or self._permit_writes > 0):
+        if prior == "off" and (state == "on" or self._permit_writes > 0
+                               or resend_off):
             try:
                 await self.hass.services.async_call(
                     "switch", "turn_off", {"entity_id": entity})
@@ -1240,11 +1271,62 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 if entity not in live and not await self._restore_one(
                         entity, prior, option, observer):
                     return                      # asked again next cycle
+            if not await self._restore_stale_select(observer):
+                return
             if not await self._restore_stale_permit(observer):
                 return
             self._orphans_settled = True
         except Exception:  # noqa: BLE001 — a record never costs a cycle
             _LOGGER.debug("orphan select not restored", exc_info=True)
+
+    async def _may_drop_stopped(self, actuator: str) -> bool:
+        """(#1377) A select that reads its old option after a restart is
+        left to ``_restore_stale_select``, which sends it once (not in
+        watch-only mode) before the name goes."""
+        chosen = select_setup(self.config)
+        if not chosen or actuator != chosen[0]:
+            return True
+        prior = await self.charge_record.prior_of(actuator)
+        state, options = read_select(self.hass, actuator)
+        return not (prior is not None and state == prior and prior in options
+                    and prior != charge_option(self.hass, *chosen))
+
+    def _touched_this_lifetime(self) -> bool:
+        """(#1377) A charge of this lifetime: its own rules end it, never
+        the restart's."""
+        return bool(self._active or self._sel_writes or self._permit_writes)
+
+    async def _restore_stale_select(self, observer: bool) -> bool:
+        """(#1377) After a restart SEM's record names the live select with
+        an old option, and the select reads that old option: the charge
+        ended, or a cloud read still shows the old value while SEM's write
+        is on its way. The old option goes out once, so that write cannot
+        land later with no owner, and this pack's name goes. A select that
+        shows the option is adoption's; any other value was set since and
+        is left. True: settled; False: asked again (unreadable, observer)."""
+        chosen = select_setup(self.config)
+        if not chosen or self._touched_this_lifetime():
+            return True
+        entity, option = chosen
+        if not await self.charge_record.running(entity, self._battery()):
+            return True
+        prior = await self.charge_record.prior_of(entity)
+        state, options = read_select(self.hass, entity)
+        if state is None or observer:
+            return False
+        if (prior is None or state != prior or prior not in options
+                or prior == charge_option(self.hass, entity, option)):
+            return True
+        if not await self.charge_record.others(entity, self._battery()):
+            await self.hass.services.async_call(
+                "select", "select_option",
+                {"entity_id": entity,
+                 "option": listed_option(self.hass, entity, prior)})
+            _LOGGER.info("Battery: %s reads '%s' after a restart — sent once "
+                         "more, in case SEM's charge option still lands "
+                         "(#1377)", entity, prior)
+        await self.charge_record.left(entity, self._battery())
+        return True
 
     async def _restore_stale_permit(self, observer: bool) -> bool:
         """(#1377) A crash between the permit and the select write leaves
@@ -1252,7 +1334,8 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         the permit goes back. True: settled; False: asked again next cycle
         (unreadable, or observer mode, which sends nothing)."""
         permit = permit_switch(self.config)
-        if not permit or await self.charge_record.prior_of(permit) is None:
+        if (not permit or self._touched_this_lifetime()
+                or await self.charge_record.prior_of(permit) is None):
             return True
         entity, option = select_setup(self.config)
         state, _ = read_select(self.hass, entity)
@@ -1260,7 +1343,9 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             return False
         if state == charge_option(self.hass, entity, option):
             return True                         # a charge runs: its stop
-        return await self._put_permit_back() is None
+        # (#1377) the record says SEM turned it on: "off" goes out even
+        # when it reads off, in case that "on" still lands
+        return await self._put_permit_back(resend_off=True) is None
 
     async def _restore_one(self, entity: str, prior: str, option: str,
                            observer: bool) -> bool:

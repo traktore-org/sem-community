@@ -51,9 +51,9 @@ MIN_HOLD_S = 30 * 60.0
 #: stays in the current option; a put-back is never held back by it: it
 #: gives the battery back to the house (#1362).
 MAX_WRITES_PER_DAY = 12
-#: the select must show the hold option within ``SHOW_WITHIN_S`` (60 s,
-#: shared with the charge select) after a write (a cloud integration is
-#: slow); then ONE re-send, then the hold is refused
+# (#1377) ``SHOW_WITHIN_S`` (60 s, shared with the charge select, imported
+# above): the select must show the hold option that long after a write (a
+# cloud integration is slow); then ONE re-send, then the hold is refused.
 #: a battery that keeps discharging above this while the select shows the
 #: hold option, for this long, ignores the hold: it is refused
 DISCHARGE_REFUSE_W = 100.0
@@ -183,8 +183,11 @@ class SelectHold:
         if wanted not in options:
             return self._fail(f"{entity} does not list '{option}'")
         if state == wanted:
-            self._seen = self._seen or self._writes > 0
-            self._away_since = None                 # (#1377)
+            # (#1377) seen once a read SHOW_WITHIN_S after the write still
+            # shows it: a cloud select shows a write at once, before a poll
+            if self._writes and self._since_write() >= self.SHOW_WITHIN_S:
+                self._seen = True
+            self._away_since = None
             return await self._join(entity, pack_w)
         return await self._not_shown(entity, option, wanted, state)
 
