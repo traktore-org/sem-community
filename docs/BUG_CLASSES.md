@@ -3118,20 +3118,29 @@ reset the "stop is not taking" count and cleared the #627 Repair. **Closure:** t
 number" beside the watts (`PowerReadings.ev_power_per_charger_read`, `ev_power_fleet_read`);
 `ev_availability.charger_power_known` gives it to `ChargerPower.power_known` (both builders: the cycle's
 view and the night gate); `observe` sets `ObservedState.draw_known` (a status that answers, via
-`ChargerAdapter.status_answer`, is a reading). `ObservedState.blind` = no reading either way. Row 2b: a
-stop that must go out (`_stop_is_a_demand`: the phase guard, a phase switch, a VPP pause, a peak
-emergency) goes to a blind charger ONCE per blind spell (`_blind_stop_sent`), through the dwell and only
-if it left (not in observer mode or a yield; a send that raised is owed again); a reading, or a cycle that
-asks no such stop, ends the spell. A stop SEM only prefers is not sent blind. Entering Off sends its one
-stop to a blind charger too (the latch still starts set, so a restart in Off sends none, #898). A blind
-cycle learns nothing: no settle, no stop-war edge, no failsafe gap or recovery, no count or Repair reset.
-**Guard:** `tests/test_1422_blind_charger_stop.py` — the issue's case through the real cycle (one stop,
-then none while dark; fails on the old code with none), a live 0 W control, a new spell, the reader's
-flags, and the row's cases (prefers, emergency, spell end, dwell, not sent, failed send, no mechanism,
-locked switch, a held draw, Off entry and restart, the failsafe and the count). **Left open:** the
-guard's own headroom prices a dark charger at 0 A, which clamps it lower (the safe side); a charger with
-no power sensor at all reads as known (no sensor is not a dark one); one blind stop that the box ignores
-is not sent again until a reading returns.
+`ChargerAdapter.status_answer`, is a reading; so is the brand's own charging flag saying "on", which then
+counts as a draw). `ObservedState.blind` = no reading either way, and a car known gone or a readable
+switch reading off are answers (that box cannot draw). Row 2b: a stop that must go out
+(`_stop_is_a_demand`: the phase guard, its start-up hold included, a phase switch, a VPP pause, a peak
+emergency) goes to a blind charger ONCE per blind spell (`_blind_stop_sent`), through the dwell, not
+during a stop-war stand-down, and only when SEM sends (not in observer mode). The spell ends on a draw
+seen, a car known gone, or a cycle that asks for no such stop (`CHARGE`, `RELEASED`, a plain `IDLE`; for
+a yielded charger every cycle without the guard's override, `end_blind_spell` from `actuate`) — not on a
+reading that says "stopped", so a sensor that comes and goes gets one stop. A stop SEM only prefers is
+not sent blind. Entering Off sends its one stop to a blind charger too (the latch still starts set, so a
+restart in Off sends none, #898). A blind cycle learns nothing: no settle, no stop-war edge, no failsafe
+gap or recovery, no count or Repair reset. `snapshot_war` shows `blind_stop_sent`. **Guard:**
+`tests/test_1422_blind_charger_stop.py` — the issue's case through the real cycle (one stop, then none
+while dark; fails on the old code with none), the start-up hold's one stop, a live 0 W control, a second
+overload after the guard lets go (one more; a live 0 W between gives none), a dark box with no car (no
+stop; review), the reader's flags, and the row's cases (prefers, emergency, spell ends, car gone, switch
+off, stand-down, dwell, not sent, no mechanism, locked switch, a held draw, the brand's flag, Off entry
+and restart, a yielded cycle, the failsafe and the count). **Left open:** the guard's own headroom
+prices a dark charger at 0 A, which clamps it lower (the safe side); a charger with no power sensor at
+all reads as known (no sensor is not a dark one); a blind stop that is lost or ignored is not sent again
+until a draw is seen or the demand ends (the device swallows a failed send); the phase switch reads a
+dark charger as at rest and may switch it with no stop first (`ev_control._phase_switch_tick`
+`drawing`; filed as a sub-issue of #1422).
 
 ### 59. A limit smoothed like a preference — GUARDED
 **Symptom:** the guard says 10 A, the wire carries 14 → 12 → 12 → 10 over two minutes. **Root

@@ -212,6 +212,11 @@ async def _actuate(
             except AttributeError:
                 pass
     if yielded and not observer:
+        # (#1422) the other party may start it again: the guard's next
+        # stop to it while its power sensor is dark is owed again
+        _end = getattr(reconciler, "end_blind_spell", None)
+        if callable(_end):
+            _end()
         log_on_change(
             _LOGGER, f"yield:ev:{decision.charger_id}", logging.INFO,
             "YIELD · %s is steered by another party, SEM sends nothing "

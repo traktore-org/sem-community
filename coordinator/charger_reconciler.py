@@ -114,9 +114,13 @@ class ObservedState:
 
     @property
     def blind(self) -> bool:
-        """(#1422) No reading says it draws, and none says it does not."""
+        """(#1422) No reading says it draws, and none says it does not. A
+        car known to be gone and a readable switch that reads off are
+        answers: that box cannot draw."""
         return (not self.draw_known
-                and not (self.charging or self.self_charging))
+                and not (self.charging or self.self_charging)
+                and self.connected
+                and self.enabled is not False)
 
 
 def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]:
@@ -440,8 +444,8 @@ class ChargerReconciler:
         # (#1422) A stop that must go out (``_stop_is_a_demand``) to a
         # charger SEM cannot see goes out ONCE per blind spell: a repeat
         # cannot be checked, and every stop costs (a cloud's rate limit, a
-        # brand's stop count, class 112). A reading ends the spell; so does
-        # a cycle that asks for no such stop. Set only by a stop that left.
+        # brand's stop count, class 112). See the reset in ``reconcile``.
+        # Set only by a stop SEM sends (not in observer mode or a yield).
         self._blind_stop_sent: bool = False
 
     def snapshot_war(self, now: float) -> dict:
@@ -466,7 +470,15 @@ class ChargerReconciler:
             "last_actions": list(self._last_actions),
             "anticycle": self.anticycle_snapshot(now),
             "stand_down": self.stand_down_snapshot(now),
+            # (#1422) the one stop to a charger SEM cannot see went out
+            "blind_stop_sent": self._blind_stop_sent,
         }
+
+    def end_blind_spell(self) -> None:
+        """(#1422) The next stop that must go out to a blind charger is
+        owed again. For a cycle that does not run ``reconcile`` (a yielded
+        charger: the other party may start it again)."""
+        self._blind_stop_sent = False
 
     def stand_down_snapshot(self, now: float) -> dict:
         """(#944) SEM holding fire while the box draws, for the EV surface.
@@ -682,11 +694,15 @@ class ChargerReconciler:
         (observer mode, external yield): the table still decides, the
         belief and the dwell clocks learn nothing."""
         self._sending = bool(sending)
-        # (#1422) The blind spell's one stop: ended by a reading, or by a
-        # cycle that asks for no stop that must go out.
-        if not (observed.blind
-                and desired in (DesiredState.OFF, DesiredState.IDLE)
-                and (desired is DesiredState.OFF or safety_stop)):
+        # (#1422) The blind spell's one stop is owed again after a draw is
+        # seen, a car is known gone, or a cycle asks for no stop that must
+        # go out (the demand ended; the next one is a new instruction). A
+        # reading that says "stopped" does not end it: a sensor that comes
+        # and goes would get a stop each time it goes.
+        if (observed.charging or observed.self_charging
+                or not observed.connected
+                or not (desired is DesiredState.OFF
+                        or (desired is DesiredState.IDLE and safety_stop))):
             self._blind_stop_sent = False
         # (#1399) A pause from charging of RESUME_RESET_S ends a stretch of
         # resume presses; a decision that flaps between charge and idle does
@@ -846,9 +862,11 @@ class ChargerReconciler:
                 # a VPP pause) goes out once per blind spell; a stop SEM only
                 # prefers is not sent blind. The cycle learns nothing: no
                 # settle, no stop-war edge.
+                # The stop-war stand-down (#763) holds for a blind box too.
                 if (_stop_is_a_demand and not self._blind_stop_sent
                         and observed.stop_controllable
-                        and observed.enable_controllable):
+                        and observed.enable_controllable
+                        and now >= self._stop_war_backoff_until):
                     actions = self._gated_disable(now, bypass_anticycle=True)
                     if (self._sending and any(
                             a.kind is ActionKind.DISABLE for a in actions)):
@@ -1374,13 +1392,7 @@ class ChargerReconciler:
                     )
                 self._report_stop_unenforceable(adapter, power)
             elif action.kind is ActionKind.DISABLE:
-                try:
-                    await adapter.command_disable()
-                except Exception:
-                    # (#1422) a stop that did not leave is not the blind
-                    # spell's one stop: the next one goes at the dwell
-                    self._blind_stop_sent = False
-                    raise
+                await adapter.command_disable()
                 _LOGGER.info("reconcile(%s): DISABLE — %s",
                              self.charger_id, decision.reason)
             elif action.kind is ActionKind.PARK_OFF:
@@ -1604,7 +1616,9 @@ def observe(adapter, power) -> ObservedState:
             _LOGGER.debug("resume_pressable() failed: %s", exc)
     car_known = (getattr(power, "connected", False) is True
                  and getattr(power, "plug_known", True) is not False)
-    # (#1422) A dark power read is no answer; a status that answers is.
+    # (#1422) A dark power read is no answer; a status that answers is,
+    # and so is the brand's own charging flag when it says "charging".
+    charging = adapter.actual_charging(power)
     draw_known = getattr(power, "power_known", True) is not False
     if not draw_known:
         _status = getattr(adapter, "status_answer", None)
@@ -1613,8 +1627,10 @@ def observe(adapter, power) -> ObservedState:
                 draw_known = isinstance(_status(), bool)
             except Exception as exc:  # noqa: BLE001 — never let observe() throw
                 _LOGGER.debug("status_answer() failed: %s", exc)
+        if not draw_known and getattr(power, "charging", False) is True:
+            charging = draw_known = True
     return ObservedState(
-        charging=adapter.actual_charging(power),
+        charging=charging,
         setpoint_a=setpoint,
         self_charging=adapter.is_self_charging(power),
         power_w=float(getattr(power, "power_w", 0.0) or 0.0),

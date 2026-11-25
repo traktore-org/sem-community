@@ -10,9 +10,12 @@ charging one's power sensor "unavailable" — six cycles, no write.
 Now the reading says when it is no reading (``ChargerPower.power_known``,
 from the reader's per-charger flags), and the reconciler calls a charger
 "blind" when no power and no status answers. A stop that must go out goes
-out once per blind spell; a stop SEM only prefers is not sent blind. A blind
-cycle is no "stopped" evidence for the failsafe recogniser, the "stop is
-not taking" count or the #627 Repair either.
+out once per blind spell; a stop SEM only prefers is not sent blind. A car
+known to be gone or a switch that reads off is an answer (no stop). The spell
+ends on a draw seen, a car gone, or a cycle that asks for no such stop — not
+on a reading that says "stopped", so a sensor that comes and goes gets one
+stop. A blind cycle is no "stopped" evidence for the failsafe recogniser,
+the "stop is not taking" count or the #627 Repair either.
 """
 from __future__ import annotations
 
@@ -156,6 +159,10 @@ async def test_the_dark_charging_box_gets_the_guard_stop_once(freezer):
     over = _values(links_a=14.0, house_a=10.0, links_power="unavailable")
     before, _ = await _run(rig, freezer, quiet=quiet, over=over, cycles=6)
     assert rig.coord._charger_reconcilers["links"]._last_desired == "OFF"
+    # the guard's start-up hold stops every charger it cannot clear; a
+    # blind one gets that stop too, once, then SEM starts it again
+    assert len([c for c in rig.calls[:before]
+                if c in _stops(rig, "links")]) == 1
     stops = [c for c in rig.calls[before:] if c in _stops(rig, "links")]
     assert len(stops) == 1, rig.calls[before:]
     assert _stops(rig, "rechts") == []
@@ -177,9 +184,10 @@ async def test_a_live_0_w_box_gets_no_guard_stop(freezer):
 
 
 @pytest.mark.asyncio
-async def test_a_new_blind_spell_gets_one_more_stop(freezer):
-    """A reading ends the spell: dark, then live (still charging, the
-    usual re-assert), then dark again — the new spell gets its own one."""
+async def test_a_second_overload_gets_its_own_stop(freezer):
+    """A live 0 W in between does not end the spell (no second stop); the
+    guard letting the charger run again does: the next overload, still
+    dark, gets one more."""
     rig = _rig()
     quiet = _values(links_a=14.0, house_a=1.0, links_power="unavailable")
     over_dark = _values(links_a=14.0, house_a=10.0, links_power="unavailable")
@@ -187,19 +195,38 @@ async def test_a_new_blind_spell_gets_one_more_stop(freezer):
     assert len([c for c in rig.calls[before:]
                 if c in _stops(rig, "links")]) == 1
     rec = rig.coord._charger_reconcilers["links"]
-    # a live 0 W: the box stopped; the spell is over
     over_live = _values(links_a=0.0, house_a=24.0, links_power=0.0)
-    for _ in range(3):
-        await _cycle(rig, freezer, t, over_live)
+    for vals in (over_live, over_dark, over_live, over_dark):
+        await _cycle(rig, freezer, t, vals)
+        t += 10 + STOP_REASSERT_DWELL_S
+    assert len([c for c in rig.calls[before:]
+                if c in _stops(rig, "links")]) == 1, "one stop per spell"
+    assert rec._blind_stop_sent is True
+    for _ in range(5):                  # the guard recovers; SEM starts it
+        await _cycle(rig, freezer, t, quiet)
         t += 10
-    assert rec._blind_stop_sent is False
+    assert rec._last_desired == "CHARGE"
     mid = len(rig.calls)
-    t += STOP_REASSERT_DWELL_S
     for _ in range(3):
         await _cycle(rig, freezer, t, over_dark)
         t += 10
     assert len([c for c in rig.calls[mid:]
                 if c in _stops(rig, "links")]) == 1, rig.calls[mid:]
+
+
+@pytest.mark.asyncio
+async def test_a_dark_box_with_no_car_gets_no_stop(freezer):
+    """Review: a plug sensor that reads "off" is an answer — no car, no
+    draw. Rechts has no car and a dark power sensor: nothing is sent."""
+    rig = _rig()
+    quiet = _values(links_a=14.0, house_a=1.0, links_power=14.0 * 690)
+    over = _values(links_a=14.0, house_a=10.0, links_power=14.0 * 690)
+    for vals in (quiet, over):
+        vals["binary_sensor.rechts_connected"] = "off"
+        vals["sensor.rechts_power"] = "unavailable"
+    await _run(rig, freezer, quiet=quiet, over=over, cycles=4)
+    assert _stops(rig, "links"), "the drawing charger is still stopped"
+    assert [c for c in rig.calls if "rechts" in str(c)] == [], rig.calls
 
 
 # ── The reader carries "no number" ────────────────────────────────────
@@ -259,9 +286,16 @@ def test_a_demand_stop_goes_out_once_per_blind_spell():
     for i in range(1, 20):
         assert _kinds(r.reconcile(
             DesiredState.OFF, 0, _blind(), t + i * 70)) == [ActionKind.NONE]
-    # a reading ends the spell; the next spell gets one stop
+    # a reading that says "stopped" does not end it (a sensor that comes
+    # and goes would get a stop each time)
     t += 2000
-    assert _kinds(r.reconcile(DesiredState.OFF, 0, _seen(), t)) == [ActionKind.NONE]
+    for i in range(6):
+        o = _seen() if i % 2 else _blind()
+        assert _kinds(r.reconcile(DesiredState.OFF, 0, o, t + i * 70)) == [ActionKind.NONE]
+    # a draw seen ends it: the drawing row stops it, then dark again
+    t += 1000
+    drawing = _seen(charging=True, power_w=9000.0)
+    assert _kinds(r.reconcile(DesiredState.OFF, 0, drawing, t)) == [ActionKind.DISABLE]
     assert _kinds(r.reconcile(
         DesiredState.OFF, 0, _blind(), t + 70)) == [ActionKind.DISABLE]
 
@@ -281,13 +315,61 @@ def test_a_peak_emergency_idle_is_a_demand():
                               safety_stop=True)) == [ActionKind.NONE]
 
 
-def test_a_cycle_that_asks_no_stop_ends_the_spell():
-    """Guard releases (CHARGE), trips again, still dark: one more stop."""
+@pytest.mark.parametrize("between", [
+    (DesiredState.CHARGE, 16), (DesiredState.IDLE, 0), (DesiredState.RELEASED, 0)])
+def test_a_cycle_that_asks_no_stop_ends_the_spell(between):
+    """Guard releases, trips again, still dark: one more stop."""
     r = ChargerReconciler(charger_id="a", heartbeat_s=30.0)
     assert _kinds(r.reconcile(DesiredState.OFF, 0, _blind(), 1000.0)) == [ActionKind.DISABLE]
-    r.reconcile(DesiredState.CHARGE, 16, _blind(), 1100.0)
+    r.reconcile(between[0], between[1], _blind(), 1100.0)
     assert ActionKind.DISABLE in _kinds(
         r.reconcile(DesiredState.OFF, 0, _blind(), 1200.0))
+
+
+def test_a_car_known_gone_ends_the_spell_and_gets_no_stop():
+    r = ChargerReconciler(charger_id="a", heartbeat_s=30.0)
+    assert _kinds(r.reconcile(DesiredState.OFF, 0, _blind(), 1000.0)) == [ActionKind.DISABLE]
+    gone = _blind(connected=False)
+    assert gone.blind is False
+    assert ActionKind.DISABLE not in _kinds(
+        r.reconcile(DesiredState.OFF, 0, gone, 1100.0))
+    assert r._blind_stop_sent is False
+    # a car again, still dark: the new car may draw
+    assert ActionKind.DISABLE in _kinds(
+        r.reconcile(DesiredState.OFF, 0, _blind(), 1200.0))
+
+
+def test_a_switch_that_reads_off_is_an_answer():
+    o = _blind(enabled=False)
+    assert o.blind is False
+    r = ChargerReconciler(charger_id="a", heartbeat_s=30.0)
+    assert _kinds(r.reconcile(DesiredState.OFF, 0, o, 1000.0)) == [ActionKind.NONE]
+
+
+def test_the_stop_war_stand_down_holds_for_a_blind_box():
+    r = ChargerReconciler(charger_id="a", heartbeat_s=30.0)
+    r._stop_war_backoff_until = 5000.0
+    assert _kinds(r.reconcile(DesiredState.OFF, 0, _blind(), 1000.0)) == [ActionKind.NONE]
+    assert _kinds(r.reconcile(DesiredState.OFF, 0, _blind(), 5000.0)) == [ActionKind.DISABLE]
+
+
+@pytest.mark.asyncio
+async def test_a_yielded_cycle_ends_the_spell():
+    """A yielded charger's reconciler runs only during the guard's
+    override. Between two overloads the other party may start it again:
+    each yielded cycle without the override makes the next stop owed."""
+    from custom_components.solar_energy_management.coordinator.actuate import actuate
+    from custom_components.solar_energy_management.coordinator.charger_types import (
+        ChargerDecision, ChargerIntent,
+    )
+    r = ChargerReconciler(charger_id="a", heartbeat_s=30.0)
+    r._blind_stop_sent = True
+    adapter = _adapter(None)
+    d = ChargerDecision(charger_id="a", mode="always_max",
+                        intent=ChargerIntent.CHARGE_MAX, reason="x")
+    p = ChargerPower(charger_id="a", connected=True, power_known=False)
+    await actuate(d, adapter, p, r, yielded=True, phase_override="")
+    assert r._blind_stop_sent is False
 
 
 def test_the_spell_waits_out_the_dwell_of_a_stop_just_sent():
@@ -408,10 +490,25 @@ def test_observe_a_dark_read_with_no_status_is_blind():
     assert observe(_adapter(None), live).blind is False
 
 
+def test_the_brands_charging_flag_is_an_answer_on_a_dark_read():
+    """Review: a KEBA reads no status; its own charging flag saying "on"
+    while the power is dark is a draw, not blindness."""
+    p = ChargerPower(charger_id="a", power_w=0.0, connected=True,
+                     charging=True, power_known=False)
+    o = observe(_adapter(None), p)
+    assert o.charging is True and o.blind is False
+    r = ChargerReconciler(charger_id="a", heartbeat_s=30.0)
+    assert _kinds(r.reconcile(DesiredState.OFF, 0, o, 1000.0)) == [ActionKind.DISABLE]
+    # a live read keeps the brand's own answer (actual_charging) as before
+    live = ChargerPower(charger_id="a", power_w=0.0, connected=True, charging=True)
+    assert observe(_adapter(None), live).charging is False
+
+
 def test_observe_without_a_status_method_is_blind_on_a_dark_read():
     a = _adapter(None)
     del a.status_answer
-    p = ChargerPower(charger_id="a", power_w=0.0, power_known=False)
+    p = ChargerPower(charger_id="a", power_w=0.0, connected=True,
+                     power_known=False)
     assert observe(a, p).blind is True
 
 
@@ -430,33 +527,7 @@ def test_the_generic_adapter_answers_from_its_status():
     assert ka.status_answer() is None
 
 
-# ── apply: a failed send is no stop ───────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_a_stop_that_failed_to_leave_is_sent_again_at_the_dwell():
-    from custom_components.solar_energy_management.coordinator.charger_types import (
-        ChargerDecision, ChargerIntent,
-    )
-    r = ChargerReconciler(charger_id="a", heartbeat_s=30.0)
-    adapter = _adapter(None)
-    adapter.command_disable = AsyncMock(side_effect=RuntimeError("cloud down"))
-    adapter._device.observer_mode = False
-    adapter._device.external_yield = False
-    adapter._device.phase_guard_override = False
-    p = ChargerPower(charger_id="a", power_w=0.0, connected=True,
-                     power_known=False)
-    d = ChargerDecision(charger_id="a", mode="always_max",
-                        intent=ChargerIntent.DISABLE, reason="phase guard")
-    with pytest.raises(RuntimeError):
-        await r.reconcile_and_apply(d, adapter, p, 1000.0)
-    assert r._blind_stop_sent is False
-    adapter.command_disable = AsyncMock()
-    await r.reconcile_and_apply(d, adapter, p, 1010.0)      # inside the dwell
-    adapter.command_disable.assert_not_awaited()
-    await r.reconcile_and_apply(d, adapter, p, 1000.0 + STOP_REASSERT_DWELL_S)
-    adapter.command_disable.assert_awaited_once()
-    assert r._blind_stop_sent is True
+# ── apply ─────────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
