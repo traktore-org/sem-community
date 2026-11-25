@@ -15,7 +15,10 @@ description: |
   assist fired here too, the positive scenario would be proving nothing
   more than that battery_assist is reachable at all.
 
-  Changed: ``battery_permissions: {may_assist_ev: false}``.
+  Changed: the charger's own battery-help switch is off
+  (``ev_battery_may_assist: false``). (#1381) The install-wide
+  ``battery_permissions.may_assist_ev`` it used to set is gone; a migration
+  moves an OFF onto every charger.
 
   The permission axis (#778 phase 5). The user who does not want their
   house battery pushed into the car must be able to say so WITHOUT
@@ -36,8 +39,9 @@ config:
   battery_assist_enabled: true
   battery_assist_min_surplus_w: 1200
   forecast_spending_enabled: true
-  battery_permissions:
-    may_assist_ev: false
+  ev_chargers:
+    - id: "ev_charger"
+      ev_battery_may_assist: false
 
 planning_evidence:
   battery_spendable_kwh: 5.96

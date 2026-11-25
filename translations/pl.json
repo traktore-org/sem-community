@@ -1617,9 +1617,6 @@
       "battery_may_export": {
         "name": "Akumulator może sprzedawać do sieci"
       },
-      "battery_may_assist_ev": {
-        "name": "Akumulator może ładować samochód"
-      },
       "forecast_spending_enabled": {
         "name": "Wydatkowanie oparte na prognozie"
       },

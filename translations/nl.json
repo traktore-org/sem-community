@@ -1617,9 +1617,6 @@
       "battery_may_export": {
         "name": "Accu mag aan net verkopen"
       },
-      "battery_may_assist_ev": {
-        "name": "Accu mag de auto laden"
-      },
       "forecast_spending_enabled": {
         "name": "Voorspellinggestuurd besteden"
       },
