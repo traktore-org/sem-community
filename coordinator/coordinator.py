@@ -201,15 +201,22 @@ def _sun_tariff_day_of(host: Any, charger_cfg: Any) -> bool:
         return False
 
 
-def _now_car_gone(host: Any, power: Any, charger_cfg: Any) -> Optional[bool]:
+def _now_car_gone(host: Any, power: Any, charger_cfg: Any, cid: str) -> Optional[bool]:
     """(#1381 D22) True only for a KNOWN unplug: no car on a charger that
     has a plug sensor. A sensor-less charger's "no car" is no unplug (#1153),
-    so it ends nothing — None."""
+    so it ends nothing — None.
+
+    (#1424) THIS charger's car, by the rule ``build_charger_view`` uses
+    (``charger_state``). The fleet ``ev_connected`` is true when ANY charger
+    has a car: with two chargers, a Now on one survived its unplug while the
+    other had a car (the next car got full power), and a Now picked with
+    the car away started at once."""
     try:
-        from .ev_availability import has_plug_sensor
-        if bool(getattr(power, "ev_connected", True)):
+        from .ev_availability import charger_state, has_plug_sensor
+        config = getattr(host, "config", {}) or {}
+        if charger_state(cid, power, config, "connected"):
             return False
-        return True if has_plug_sensor(charger_cfg, getattr(host, "config", {}) or {}) else None
+        return True if has_plug_sensor(charger_cfg, config) else None
     except Exception:  # noqa: BLE001 — an unreadable plug state ends nothing
         return None
 
@@ -5845,7 +5852,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # (#1381 D22) a Now ends when its car leaves: the
                             # next car plugged in never inherits full power
                             self._now_follow_car(
-                                cid, _now_car_gone(self, power, charger_cfg))
+                                cid, _now_car_gone(self, power, charger_cfg, cid))
                             _view_mode = _po.charger_mode_for(
                                 self._plan_overrides, cid, per_mode, _now_override)
                         except Exception:  # noqa: BLE001 — a bad override is no override
@@ -6355,7 +6362,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 try:
                     from . import plan_override as _po1
                     self._now_follow_car(
-                        cid, _now_car_gone(self, power, self._primary_charger_cfg()))
+                        cid, _now_car_gone(self, power, self._primary_charger_cfg(), cid))
                     per_mode = _po1.charger_mode_for(
                         self._plan_overrides, cid, per_mode, dt_util.now())
                 except Exception:  # noqa: BLE001 — a bad override is no override
@@ -12756,8 +12763,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     def now_minutes_for(self, cid: str, now=None) -> int:
         """(#1381 S11) How long "Now" runs when the user picks it: until the
-        plan's next block for this charger starts, else until the plan ends,
-        else two hours. 1–1440 minutes (the override's own bounds).
+        plan's next block for this charger starts, else two hours — never
+        until the plan ends (#1424: pressed by day, that held a Sun charger
+        at full power until morning). 1–1440 minutes (the override's own
+        bounds).
 
         Owner's rule: Now ends at the next plan block (or a time the user
         chooses). (#1381 D22) "Next block" is THIS charger's car's next
