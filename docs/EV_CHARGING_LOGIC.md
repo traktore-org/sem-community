@@ -292,6 +292,11 @@ is always at least 2 minutes between two switches.
 - Up to 3 phases after 5 minutes of headroom above it, with a 10 % margin.
 - At most one automatic switch per 30 minutes, and 4 per charging session.
 
+**When SEM waits.** SEM does not switch phases while the charger's power sensor
+is unavailable. It waits for a reading. A car that is unplugged needs none. If
+the wallbox refuses a switch, SEM tries again after 10, 20 and 40 minutes. Then
+it stops, and a Repair says so.
+
 *Phase switching* is off by default.
 
 ## Curtailment probe

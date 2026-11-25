@@ -329,6 +329,10 @@ by day, **At least** at night.
 - On some wallboxes the phase switch is shared by every charger on the same
   installation, and a switch moves them all. SEM does not know which chargers share
   one. Turn phase switching on for only one of them.
+- SEM does not switch phases while the charger's power sensor is unavailable.
+  It waits for a reading. A car that is unplugged needs none.
+- If the wallbox refuses a phase switch, SEM tries again after 10, 20 and 40
+  minutes. Then it stops, and a Repair says so.
 - The values for 1 phase and 3 phases must be inside the range of the number
   entity they are written to. The forms and the dashboard refuse a value that
   is not. For a stored one, SEM sends no phase switch and raises a Repair.
