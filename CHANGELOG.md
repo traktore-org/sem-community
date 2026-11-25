@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A new charger no longer shows a removed charger's sessions** (#1421). It gets an id no charger had before. New heat pumps too.
 - 🐛 **A charger stopped by the phase guard comes back** (#1381). SEM switches it on again when the phase has room, one charger at a time.
 - 🐛 **No "night charging" at 0 W after a guard stop** (#1381). The charger reads "Stopped by the phase guard" until it is back on.
 - ✨ **Four charge modes: Sun, Sun + tariff, Now, Off** (#1381). One switch says if the battery may help.
