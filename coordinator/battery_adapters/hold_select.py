@@ -111,6 +111,12 @@ class SelectHold:
     def _battery(self) -> str:
         return str(self.config.get("battery_id", "") or "")
 
+    def refused_text(self, entity: str) -> str:
+        """(#1427) What a hold refused lately says — the hold's own error
+        and the adapter's "cannot cap" answer use the same words."""
+        return (f"{self._why or entity + ' did not hold the battery lately'}"
+                " — no new hold for 24 h")
+
     def _fail(self, why: str) -> str:
         log_on_change(_LOGGER, f"hold_select:{self._battery()}", logging.WARNING,
                       "Battery: hold by select: %s (#1362)", why)
@@ -172,9 +178,7 @@ class SelectHold:
         await self._read_refusal(entity)
         if self.refused:
             await self._release(entity, option, urgent=True)
-            return self._fail(
-                f"{self._why or entity + ' did not hold the battery lately'}"
-                " — no new hold for 24 h")
+            return self._fail(self.refused_text(entity))
         state, options = read_select(self.hass, entity)
         if state is None:
             return self._fail(f"{entity} is unavailable — SEM cannot ask it, "

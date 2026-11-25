@@ -443,6 +443,7 @@ class BatteryControlAdapter(ABC):
         if self._last_error in (self.NO_DISCHARGE_LIMIT_ERROR,
                                 self.NO_PARTIAL_HOLD_ERROR,
                                 self.NO_PERCENT_BASE_ERROR,
+                                self.NO_PERCENT_CONTROL_ERROR,
                                 self._limit_floor_said):
             self._last_error = None
         self._limit_floor_w = None
@@ -477,6 +478,15 @@ class BatteryControlAdapter(ABC):
         "discharge power is not set — SEM cannot convert its watts, so it "
         "writes no limit")
 
+    #: (#1427) what ``last_error`` says when the discharge limit takes
+    #: percent and this brand's writer sends watts only (Huawei, GoodWe).
+    NO_PERCENT_CONTROL_ERROR = (
+        "the discharge limit takes percent, and this battery's writer sends "
+        "watts only — SEM writes no limit")
+    #: (#1427) Does this brand's writer convert watts to percent? Generic
+    #: passes the base to ``power_control``; Huawei and GoodWe do not.
+    PERCENT_LIMIT_OK: bool = True
+
     #: (#1158) The watts 100 % stands for on a percent limit: the
     #: "Maximum battery discharge power" setting. ``None`` = the config
     #: carries none, and SEM does not guess a rating to convert with.
@@ -488,20 +498,41 @@ class BatteryControlAdapter(ABC):
         a watt control (False), a percent control with a base (False), a
         percent control without one (True, nothing written, no limit
         recorded)."""
-        from ..power_control import is_percent_control
-        entity = getattr(self, "_discharge_control_entity", "")
-        if (not entity or self._percent_base_w
-                or not is_percent_control(self._hass, entity)):
+        why = self._percent_limit_why()
+        if why is None:
             return False
+        entity = getattr(self, "_discharge_control_entity", "")
         self._last_discharge_limit_w = -1.0
-        self._last_error = self.NO_PERCENT_BASE_ERROR
+        self._last_error = why
         if not getattr(self, "_no_percent_base_said", False):
             self._no_percent_base_said = True
-            _LOGGER.warning(
-                "Battery: %s takes percent and 'Maximum battery discharge "
-                "power' is not set, so SEM writes no discharge limit (#1158)",
-                entity)
+            _LOGGER.warning("Battery: %s: %s (#1158)", entity, why)
         return True
+
+    def _percent_limit_why(self) -> "Optional[str]":
+        """(#1158) Why a percent discharge limit cannot be written, or None
+        (a watt control, or a percent one this writer can convert). Reads
+        only. (#1427) A writer that sends watts only cannot write it even
+        with a base: ``power_control`` refuses the watts."""
+        from ..power_control import is_percent_control
+        entity = getattr(self, "_discharge_control_entity", "")
+        if not entity or not is_percent_control(self._hass, entity):
+            return None
+        if not self.PERCENT_LIMIT_OK:
+            return self.NO_PERCENT_CONTROL_ERROR
+        if not self._percent_base_w:
+            return self.NO_PERCENT_BASE_ERROR
+        return None
+
+    def discharge_limit_gap(self, watts: float) -> "Optional[str]":
+        """(#1427) Why a discharge limit of ``watts`` would cap nothing on
+        this battery — the ``last_error`` its writer sets then — or None
+        when it can cap. Reads only: watch-only asks it before it lists a
+        cap, and the decision log before it notes one. A brand with another
+        way to cap (a hold select), or with none, answers for itself."""
+        if not getattr(self, "_discharge_control_entity", ""):
+            return self.NO_DISCHARGE_LIMIT_ERROR
+        return self._percent_limit_why()
 
     _max_discharge_w = _OwnCeiling()
 

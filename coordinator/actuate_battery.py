@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 from . import reason_codes as RC
 from .charger_types import BatteryIntent, rewrite
-from .decision_log import log_of, record_battery
+from .decision_log import NO_LIMIT_VERB, log_of, record_battery
 from .power_control import entity_max_watts, prepare_power_setpoint
 from ..utils.log_gate import log_on_change
 
@@ -28,37 +28,75 @@ if TYPE_CHECKING:  # pragma: no cover
 _LOGGER = logging.getLogger(__name__)
 
 
-def _observe(decision: "BatteryDecision", controller=None) -> None:
+def _observe(decision: "BatteryDecision", controller=None,
+             action: "str | None" = None) -> None:
     """OBSERVER mode = the layer-3 intercept for batteries, in one place.
 
     ``decide_battery`` already ran live; this seam records and logs the
     command it WOULD dispatch and calls no adapter method. The watts are
     read off the field the intent actually uses, so the shadow says what
-    the inverter would have been told.
+    the inverter would have been told. (#1427) ``action`` names what goes
+    out when that is not the intent: :data:`NO_LIMIT_VERB`, with no watts.
     """
-    watts = {
+    watts = 0.0 if action else {
         BatteryIntent.FORCE_CHARGE: decision.charge_power_w,
         BatteryIntent.FORCE_DISCHARGE: decision.discharge_power_w,
         BatteryIntent.LIMIT_DISCHARGE: decision.discharge_limit_w,
     }.get(decision.intent, 0.0)
+    action = action or decision.intent.value
     if controller is not None:
         try:
             controller.publish_observer_decision(
                 key=f"battery:{decision.battery_id}",
                 name=str(decision.battery_id),
-                action=decision.intent.value,
+                action=action,
                 power_w=float(watts or 0.0),
                 reason=decision.reason,
                 kind="battery",
+                # (#1427) the row's own reason; the card reads it first
+                reason_code=getattr(decision, "reason_code", "") or None,
             )
         except Exception:  # noqa: BLE001 — the surface must never break the seam
             pass
     log_on_change(   # (#762) transition-gated
         _LOGGER, f"observer:battery:{decision.battery_id}", logging.INFO,
         "OBSERVER · WOULD %s %s @ %.0fW — %s",
-        decision.intent.value.upper(), decision.battery_id,
+        action.upper(), decision.battery_id,
         float(watts or 0.0), decision.reason,
     )
+
+
+def unsent_why(decision: "BatteryDecision", adapter,
+               limit_w: float = 0.0) -> "str | None":
+    """(#1427) Why ``adapter`` sends nothing for this decision, or None.
+
+    One rule for the live branches and for watch-only, so no row says SEM
+    acts on a battery it cannot act on. A limit asks the adapter
+    (``discharge_limit_gap``: no limit entity, a select that cannot cap,
+    percent with no base, a brand with none) for ``limit_w``, the watts the
+    limit would be sent at. A forced charge or sale asks the adapter's
+    support; an adapter that does not say it has it has not. Reads only.
+    A limit gap that gives no text is no gap.
+    """
+    intent = decision.intent
+    if intent is BatteryIntent.LIMIT_DISCHARGE:
+        fn = getattr(adapter, "discharge_limit_gap", None)
+        gap = fn(float(limit_w)) if callable(fn) else None
+        return gap if isinstance(gap, str) and gap else None
+    if (intent is BatteryIntent.FORCE_CHARGE
+            and not getattr(adapter, "supports_forced_charge", False)):
+        return "adapter does not support forced charge"
+    if (intent is BatteryIntent.FORCE_DISCHARGE
+            and not getattr(adapter, "supports_forced_discharge", False)):
+        return "adapter does not support forced discharge"
+    return None
+
+
+def _no_limit(decision: "BatteryDecision", gap: str) -> "BatteryDecision":
+    """(#1427) The decision as the row that says SEM cannot cap: its own
+    reason code, the adapter's text, none of the limit's numbers."""
+    return rewrite(decision, reason_code=RC.BATTERY_NO_LIMIT,
+                   reason_params={}, reason=gap)
 
 
 # (#818) The two intents that are decided from POWER numbers — the EV
@@ -492,6 +530,22 @@ async def _dispatch_battery(
             BatteryIntent.LIMIT_DISCHARGE: quantise_discharge_limit_w(
                 decision.discharge_limit_w, -1.0),
         }.get(decision.intent)
+        # (#1427) Only what the adapter can send is listed. (A control with
+        # a floor, #1158, is listed at the watts asked, not at its floor.) A limit it
+        # cannot write says so; a forced op it cannot run is no row at all,
+        # as the live branch below drops it.
+        _gap = unsent_why(decision, adapter, _would_w or 0.0)
+        if _gap is not None:
+            if decision.intent is not BatteryIntent.LIMIT_DISCHARGE:
+                log_on_change(
+                    _LOGGER, f"observer:battery:{decision.battery_id}",
+                    logging.INFO, "OBSERVER · %s cannot %s — %s",
+                    decision.battery_id, decision.intent.value, _gap)
+                return
+            decision = _no_limit(decision, _gap)
+            record_battery(_log, decision, observer=True, verb=NO_LIMIT_VERB)
+            _observe(decision, controller=controller, action=NO_LIMIT_VERB)
+            return
         record_battery(_log, decision, value_w=_would_w, observer=True)
         _observe(decision, controller=controller)
         return
@@ -587,7 +641,14 @@ async def _dispatch_battery(
             adapter._limit_lower_streak = streak
         except Exception:  # noqa: BLE001 — a read-only stub is not a failure
             pass
-        record_battery(_log, decision, value_w=limit_w)
+        # (#1427) the row says what goes out: no cap when the adapter has
+        # none for these watts. The command still runs; its brand writer
+        # sets ``last_error`` and records no limit.
+        _gap = unsent_why(decision, adapter, limit_w)
+        if _gap is None:
+            record_battery(_log, decision, value_w=limit_w)
+        else:
+            record_battery(_log, _no_limit(decision, _gap), verb=NO_LIMIT_VERB)
         await adapter.command_limit_discharge(limit_w)
         # (#1173) what the limit in force is; a write that did not land
         # leaves the old one, which this cannot vouch for
@@ -606,7 +667,7 @@ async def _dispatch_battery(
         if decision is None:
             await _settle_charge_target(adapter)   # (#1180) nothing goes out
             return
-        if not adapter.supports_forced_charge:
+        if unsent_why(decision, adapter) is not None:   # (#1427) one rule
             log_on_change(   # (#762) once per episode, not per cycle
                 _LOGGER, f"actuate:{decision.battery_id}", logging.WARNING,
                 "actuate_battery(%s): adapter does not support forced "
@@ -663,7 +724,7 @@ async def _dispatch_battery(
         return
 
     if decision.intent is BatteryIntent.FORCE_DISCHARGE:
-        if not adapter.supports_forced_discharge:
+        if unsent_why(decision, adapter) is not None:   # (#1427) one rule
             _LOGGER.warning(
                 "actuate_battery(%s): adapter does not support forced "
                 "discharge — arbitrage decision dropped (%s)",

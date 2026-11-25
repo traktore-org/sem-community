@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **Removed items leave no entities behind** (#1428). A removed charger, battery, PV string or load tariff loses its entities at the next start.
 - 🐛 **Removing SEM clears its notifications** (#1428). Statistics and the dashboard stay unless you run Remove leftovers first.
+- 🐛 **Watch-only no longer says SEM caps a battery it cannot cap** (#1427). Your list and "Why?" now say it can still power the car.
+
 # [2.3.0-beta.28] — 25.11.2026
 
 - 🐛 **"Start now" no longer holds full power until the plan ends** (#1424). Now ends at the car's next plan block, else after 2 hours.

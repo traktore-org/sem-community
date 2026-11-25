@@ -16,6 +16,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class GoodWeBatteryAdapter(BatteryControlAdapter):
+    #: (#1427) the limit is written in watts only (no percent base)
+    PERCENT_LIMIT_OK = False
     def __init__(self, hass, config: dict) -> None:
         super().__init__(hass, config)
         self._discharge_control_entity = config.get(
@@ -106,6 +108,8 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
             return
         if not self._discharge_control_entity:
             self._last_discharge_limit_w = watts
+            return
+        if self._percent_limit_unwritable():            # (#1158, #1427)
             return
         if await async_write_power_setpoint(
             self._hass,
