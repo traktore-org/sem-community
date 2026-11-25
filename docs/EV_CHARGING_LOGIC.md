@@ -8,32 +8,41 @@ on the **System** screen, group **Chargers**.
 
 ## Charge modes
 
-Default: **Min + Solar**.
+There are four modes, and one switch per charger: **May the battery help the
+car?** Default: **Sun + tariff**, battery help on.
 
-| Mode | Grid | Home battery | What it does |
-|---|---|---|---|
-| **Solar only** | Never by day. At night only with an *At least* floor you set on this charger | Never for the car. Exception: forecast-led spending | Spare sun only. Idles at night unless you set a floor. |
-| **Solar + battery** | Never by day. At night only with an *At least* floor | Helps down to the higher of the Buffer SOC and tonight's floor | Spare sun plus the pack. Above the spare-sun threshold it always helps. Below it, only when tonight's forecast budget is positive. |
-| **Solar + tariff** | Up to the floor, when it costs least | Never | Spare sun by day. Grid by day at cheap, very cheap or negative prices, and with thin sun when the blended price beats the cheapest hour to come. Works on every tariff. |
-| **Min + Solar** | Up to the floor (*At least*) | Helps above the Buffer SOC | Tops up to *At least* by the *Charge by* time. Spare sun adds up to *Up to*. Nothing owed means no grid. |
-| **Always (max)** | Whatever it takes | Held to the house, unless the pack is above the Buffer SOC and spare sun passes the threshold | Full speed whenever a car is plugged in, day or night, at any price. Stops at *Up to*. A floor of 0 does not stop it. |
-| **Off** | None | None | Hands-off. Switching to Off stops a running charge once, whoever started it. Then SEM sends nothing: no start, no stop, no current. SEM still reads the power and counts the energy. |
+| Mode | Grid | What it does |
+|---|---|---|
+| **Sun** | Never by day. At night only with an *At least* floor you set on this charger | Spare sun only. Idles at night unless you set a floor. |
+| **Sun + tariff** | Up to the floor, when it costs least | Spare sun by day. Grid by day when tonight is too short to reach *At least*, in a cheap hour, or with thin sun when that costs less than the cheapest hour to come. No grid start in a peak hour. |
+| **Now** | Whatever it takes | Full speed until the car's next plan block, a time you pick, or until full. Stops at *Up to*. |
+| **Off** | None | Hands-off. Switching to Off stops a running charge once, whoever started it. Then SEM sends nothing: no start, no stop, no current. SEM still reads the power and counts the energy. |
+
+The battery switch changes only what the home battery does. It does not
+change when **Sun + tariff** buys from the grid.
+
+| | Battery help on | Battery help off |
+|---|---|---|
+| **Sun** | Helps down to the higher of the Buffer SOC and tonight's floor | Never for the car. Exception: forecast-led spending |
+| **Sun + tariff** | Helps above the Buffer SOC | Never for the car |
 
 - A charge that you start elsewhere in Home Assistant runs untouched, also
   after a restart, while the mode is Off.
-- Solar + battery: until the battery learner has gathered enough nights, the
-  charger assists from live surplus only. The card says so.
+- **Now** also runs a charger set to Off or paused, and it waits for a car
+  that is not plugged in yet. Unplugging the car ends it.
+- Sun with battery help: until the battery learner has gathered enough nights,
+  the charger gets help from live spare sun only. The card says so.
 
 ## Night charging: the At least floor
 
 *At least* is the only control for night charging. A floor of 0 means no
-overnight charge in every mode except **Always (max)**.
+overnight charge in every mode except **Now**.
 
 - **Units.** A kWh target goes from 0 to 200 kWh. A car charge % target goes
   from 0 to 100 %.
-- **Solar only.** The floor counts only when you set it on that charger. A
-  global default in the setup does not opt a Solar-only charger in. The other
-  night-capable modes follow the global default.
+- **Sun.** The floor counts only when you set it on that charger. A
+  global default in the setup does not opt a Sun charger in. Sun + tariff
+  follows the global default.
 - **Solar from sun only, never grid at night.** Set *At least* to 0 % and
   *Up to* to 100 %. Daytime surplus then charges up to the ceiling, and nothing
   tops up overnight.
@@ -92,7 +101,7 @@ Every 10 seconds in the night window, for each charger:
 5. If no fresh plan exists, SEM charges at the deadline current. It does not
    wait. The strategy sensor says *reactive, no plan yet*.
 
-Example: Min + Solar, 8.5 kWh owed, deadline 07:00, plugged in at 22:00. The
+Example: Sun + tariff, 8.5 kWh owed, deadline 07:00, plugged in at 22:00. The
 need is about 1.4 A, so SEM offers the 6 A minimum. The car finishes around
 02:00 and SEM idles until 07:00.
 
@@ -114,14 +123,15 @@ The home battery can feed the car when solar is not enough.
 - **Who spends it first.** The device list order decides. A load above the
   charger gets its share first. A load set to *Finish overnight from: Battery*
   reserves nothing against a car.
-- Battery help applies in Solar + battery and Min + Solar. Solar only does not
-  use the pack for the car, except with forecast-led spending. Always (max) gets
-  no assist amps.
+- Battery help applies when the charger's switch **May the battery help the
+  car?** is on. With it off, the pack does not help the car, except with
+  forecast-led spending in Sun. Now gets no assist amps.
 
-**Forecast-led spending.** It never lets the battery feed a Solar-only
-car. The battery stays with the house, and the grid pays for the car's floor
-charge. Only a *Solar + battery* charger lets the battery cover the car, down
-to the Buffer SOC or tonight's floor, whichever is higher.
+**Forecast-led spending.** It never lets the battery feed a Sun car
+with battery help off. The battery stays with the house, and the grid pays for
+the car's floor charge. Only a *Sun* charger with battery help on lets the
+battery cover the car, down to the Buffer SOC or tonight's floor, whichever is
+higher.
 
 **Battery redirect.** Part of a measured battery charge may be credited to the
 car, if the inverter will pass it on. A commanded battery charge (forced or
@@ -132,11 +142,12 @@ redirect in the budget turn the redirect off for the rest of the plug-in.
 
 | Mode | Time | What happens |
 |---|---|---|
-| Solar + tariff | Day | Tops up the floor from grid at cheap, very cheap or negative prices. Solar surplus wins when it offers more. A static tariff (no live price level) never triggers it |
-| Solar + tariff | Day, thin sun | Charges at the minimum on spare sun plus grid when that blend costs less than the cheapest hour to come. Needs an export price and a forecast. See below |
-| Min + Solar | Day | Drops the Min grid guarantee at expensive prices. Resumes at a lower price or with enough sun |
+| Sun + tariff | Day | Tops up the floor from grid at cheap, very cheap or negative prices. Solar surplus wins when it offers more. A static tariff (no live price level) never triggers it |
+| Sun + tariff | Day, thin sun | Charges at the minimum on spare sun plus grid when that blend costs less than the cheapest hour to come. Needs an export price and a forecast. See below |
+| Sun + tariff | Day, tonight too short | Charges at the minimum by day when tonight cannot reach *At least*. This wins over a peak hour |
+| Sun + tariff | Day, peak hour | Starts no grid charge. Spare sun still charges |
 | Any tariff mode | Night | Waits for the energy plan's charge block |
-| Solar only, Always (max), Off | Any | No effect on price |
+| Sun, Now, Off | Any | No effect on price |
 
 The thresholds *Cheap below* and *Expensive above* set the price levels when no
 dynamic tariff gives them. See [ENERGY_PLANNER.md](ENERGY_PLANNER.md) for the plan.
@@ -145,7 +156,7 @@ dynamic tariff gives them. See [ENERGY_PLANNER.md](ENERGY_PLANNER.md) for the pl
 ### Thin sun plus grid
 
 Spare sun below the charger's minimum power cannot charge the car alone.
-In **Solar + tariff** the car may charge at its minimum on that sun plus the
+In **Sun + tariff** the car may charge at its minimum on that sun plus the
 grid, for the floor only. One sum decides, in `coordinator/thin_sun.py`:
 
 ```
