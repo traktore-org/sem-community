@@ -3171,6 +3171,18 @@ switch that reads off is taken as "cannot draw" (#1422's rule), so a box whose s
 its contactor can be switched with the power dark; the cap shows only as a WARNING and the
 `no_reading` attribute (the card shows neither).
 
+**Round 7 — two more "at rest" holes (#1425, 25.11.2026):** (1) a car that starts by itself: the
+median needs two reads to follow it, so the first cycle read 0 W and a charger with no status sensor
+was switched under load; (2) the power sensor dark and the start/stop switch reading off:
+`charger_draws` answers "cannot draw", and a box whose switch does not open its contactor was switched
+under load. **Closure:** the reader keeps the raw read beside the median
+(`ev_power_per_charger_raw` / `ev_power_fleet_raw` → `charger_power_raw_w` → `ChargerPower.power_raw_w`,
+one producer); the tick counts a raw read above `PHASE_LEG_FLOW_W` as a draw. For the PHASE SWITCH a
+dark power sensor is `blind` whatever the switch or status reads, unless the car is known gone; the
+sequencer's blind wait applies. `charger_draws` is unchanged, so the phase guard's stop still treats a
+switch reading off as an answer (stopping without a reading is safe). Pinned by
+`tests/test_1425_switch_under_load.py` (two real-cycle tests).
+
 ### 59. A limit smoothed like a preference — GUARDED
 **Symptom:** the guard says 10 A, the wire carries 14 → 12 → 12 → 10 over two minutes. **Root
 shape:** offer-steadiness (median window, 2 A ramp, 30 s debounce, dropout hold) is applied to every

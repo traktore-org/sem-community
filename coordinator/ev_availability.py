@@ -152,6 +152,22 @@ def charger_power_known(cid, power) -> bool:
     return getattr(power, "ev_power_fleet_read", True) is not False
 
 
+def charger_power_raw_w(cid, power):
+    """(#1425) THIS charger's raw power read this cycle, in watts, before
+    the median — the same choice of sensor as :func:`charger_power_known`.
+    None when the read was dark or nothing raw was recorded: unsaid is no
+    reading, never 0 W."""
+    raw_map = getattr(power, "ev_power_per_charger_raw", None) or {}
+    if cid in (getattr(power, "ev_power_per_charger", None) or {}):
+        val = raw_map.get(cid)
+    else:
+        val = getattr(power, "ev_power_fleet_raw", None)
+    try:
+        return None if val is None else float(val)
+    except (TypeError, ValueError):
+        return None
+
+
 def plan_car_fullness(detector, drawing_w=None, handshake_w=500.0):
     """Tri-state fullness for the night demand collector (#756).
 

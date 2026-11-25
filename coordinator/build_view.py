@@ -20,7 +20,7 @@ from .charger_types import (
     FleetCycleState,
 )
 from .ev_availability import (
-    charger_power_known, charger_state, has_plug_sensor,
+    charger_power_known, charger_power_raw_w, charger_state, has_plug_sensor,
 )
 from .plan_verdict import NO_OPINION, PlanVerdict
 
@@ -162,6 +162,8 @@ def build_charger_view(
         # (#1422) a dark sensor's 0 W is no reading: the reconciler must
         # not take it for a stopped charger
         power_known=charger_power_known(charger_id, power_reading),
+        # (#1425) the read the median has not followed yet
+        power_raw_w=charger_power_raw_w(charger_id, power_reading),
     )
 
     ce = ChargerEnergy(charger_id=charger_id, day_kwh=daily_ev_kwh)

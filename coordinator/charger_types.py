@@ -139,6 +139,11 @@ class ChargerPower:
     own power sensor gave no number this cycle. Its ``power_w`` is then the
     reader's 0.0, which is also what a stopped charger reads. Defaults True:
     every reader keeps today's meaning."""
+    power_raw_w: Optional[float] = None
+    """(#1425) This cycle's raw read of the same sensor, before the median
+    (``power_w`` is the median). A car that starts by itself shows here one
+    cycle before it shows in ``power_w``. None: no raw read (dark, or a
+    caller that does not say) — then ``power_w`` decides, as before."""
 
     @property
     def car_absent(self) -> bool:

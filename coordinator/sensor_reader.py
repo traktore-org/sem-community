@@ -6483,6 +6483,8 @@ class SensorReader:
                     # (#1423) …and not while the median stands on dark fills
                     readings.ev_power_per_charger_read[cid] = (
                         self._ev_power_known(cid or cps, raw))
+                    # (#1425) …and the raw read the median has not caught up with
+                    readings.ev_power_per_charger_raw[cid] = raw
         # total_ev is already the sum of smoothed per-charger values.
         readings.ev_power = FleetEvPower(total_ev)
         # (#1044) The sensors in that sum — a charger whose own sensor is
@@ -6501,6 +6503,7 @@ class SensorReader:
             charging=self._fleet_charging_status(), readings=readings,
             live=raw is not None)
         readings.ev_power_fleet_read = self._ev_power_known("_fleet", raw)
+        readings.ev_power_fleet_raw = raw   # (#1425) before the median
         return value
 
     def _fleet_charging_status(self) -> Optional[bool]:
