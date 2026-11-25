@@ -37,14 +37,31 @@ test('the detector finds the beta.27 Start now line', () => {
     assert.ok(!forceToPlanEnd(skip), 'a skip to the plan end is allowed');
 });
 
+/** Statements of a source, split at `;`, so a call laid over several lines stays whole. */
+function statements(text) {
+    const out = [];
+    let line = 1;
+    for (const part of text.split(';')) {
+        out.push({ line, text: part });
+        line += (part.match(/\n/g) || []).length;
+    }
+    return out;
+}
+
+test('a call laid over several lines is still one statement', () => {
+    const old = "btns.push(this._btn(t('next_start_now'), () => this._override(cid, 'force',\n    minutesToPlanEnd(plan, new Date(), 720, this._nightEnd()), plan)));";
+    assert.ok(statements(old).some((st) => forceToPlanEnd(st.text)));
+});
+
+// Not caught: an action word held in a variable (`this._override(cid, a, minutesToPlanEnd(…))`).
 test('no card source sends a force until the plan end', () => {
     const all = files(src);
     assert.ok(all.length > 20, 'the card sources were found');
     const hits = [];
     for (const f of all) {
-        readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
-            if (forceToPlanEnd(line)) hits.push(`${f.slice(src.length + 1)}:${i + 1}`);
-        });
+        for (const st of statements(readFileSync(f, 'utf8'))) {
+            if (forceToPlanEnd(st.text)) hits.push(`${f.slice(src.length + 1)}:${st.line}`);
+        }
     }
     assert.deepEqual(hits, []);
 });

@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **"Start now" by day no longer charges at full power until morning** (#1424). Now ends at the car's next plan block, else after 2 hours.
+- 🐛 **"Start now" no longer holds full power until the plan ends** (#1424). Now ends at the car's next plan block, else after 2 hours.
+- 🐛 **Unplugging a car ends its Now, also with two chargers** (#1424). The other charger's car kept Now running for the next car.
 - 🐛 **A charge right after a stop keeps your settings** (#1426). A cloud showing SEM's own values for minutes no longer counts as yours.
 - 🐛 **No phase switch on a car's first cycle** (#1425). A car starting by itself read 0 W for one cycle; the raw reading counts now.
 - 🐛 **No phase switch with the power sensor out** (#1425). A switch that reads off is no proof the box is at rest; the switch waits.
