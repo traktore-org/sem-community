@@ -40,7 +40,7 @@ const IDS = [
     'sensor.sem_home_consumption_power', 'sensor.sem_ev_power', 'sensor.sem_charging_strategy',
     'sensor.sem_charging_state', 'sensor.sem_energy_plan', 'sensor.sem_controllable_devices_count',
     'sensor.sem_battery_dynamic_floor_pct', 'number.sem_battery_buffer_soc', 'number.sem_battery_priority_soc',
-    'switch.sem_battery_may_assist_ev', 'sensor.sem_consecutive_peak_15min', 'sensor.sem_target_peak_limit',
+    'sensor.sem_consecutive_peak_15min', 'sensor.sem_target_peak_limit',
     'sensor.sem_battery_spendable_kwh', 'sensor.sem_daily_battery_savings', 'sensor.sem_monthly_battery_savings',
     'sensor.sem_daily_solar_energy', 'sensor.sem_forecast_today_kwh', 'sensor.sem_forecast_remaining_today_kwh',
     'sensor.sem_daily_grid_import_energy', 'sensor.sem_daily_grid_export_energy', 'sensor.sem_daily_home_energy',
@@ -167,7 +167,8 @@ class SEMNextNowCard extends SEMNextBase {
                      `number.sem_charger_${cid}_daily_ev_target`, `time.sem_charger_${cid}_target_time`,
                      `sensor.sem_charger_${cid}_vehicle_soc`, `number.sem_charger_${cid}_target_soc`,
                      `select.sem_charger_${cid}_ev_target_type`, `number.sem_charger_${cid}_ev_battery_capacity_kwh`,
-                     `sensor.sem_charger_${cid}_estimated_soc`, `binary_sensor.sem_charger_${cid}_connected`);
+                     `sensor.sem_charger_${cid}_estimated_soc`, `binary_sensor.sem_charger_${cid}_connected`,
+                     `select.sem_charger_${cid}_charge_mode`);   // (#1381) its battery-help switch
         }
         const wid = this._weatherId();
         return [...super._watchIds(), ...IDS, ...per, ...(wid ? [wid] : [])];
@@ -704,7 +705,7 @@ class SEMNextNowCard extends SEMNextBase {
             else if (floor !== null && soc < floor) parts.push(this._tf('next_why_batt_floor', { soc: Math.round(soc), floor: Math.round(floor) }));
             else if (prio !== null) parts.push(this._tf(soc >= prio ? 'next_why_batt_above_prio' : 'next_why_batt_below_prio', { soc: Math.round(soc), prio: Math.round(prio) }));
             else parts.push(this._tf('next_sub_battery_at', { soc: Math.round(soc) }));
-            if (!holding && this._str('switch.sem_battery_may_assist_ev') === 'on' && !(floor !== null && soc < floor)) parts.push(this._t('next_why_batt_assist'));
+            if (!holding && this._chargers.some((cid) => this._attrs('select.sem_charger_' + cid + '_charge_mode').battery_help === true) && !(floor !== null && soc < floor)) parts.push(this._t('next_why_batt_assist'));
             rows.push(this._row('mdi:battery-charging', title, `${Math.round(soc)} %`, parts.join(' '), { color: batt !== null && batt > 50 ? C.battery_in : C.battery_out }));
         }
         const peak = this._num('sensor.sem_consecutive_peak_15min');

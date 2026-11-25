@@ -156,7 +156,6 @@ Option keys for the settings above, for automations and `set_option`:
 | From this the battery may help the car | `battery_buffer_soc` |
 | From this it may help fully | `battery_auto_start_soc` |
 | Spare sun the battery needs to help the car | `battery_assist_min_surplus` |
-| May the battery help charge the car? | `battery_may_assist_ev` |
 | May the battery sell to the grid? | `battery_may_export` |
 | Minimum solar power | `min_solar_power` |
 | Legionella temperature | `legionella_target_temp` |
@@ -246,9 +245,9 @@ On the battery card on **Devices**, set the levels. **System › Battery rules**
 | **Below this the battery fills first** | Priority level (default 30 %). All spare sun goes to the battery. The car waits. |
 | **From this the battery may help the car** | Below it the battery stays for the house. |
 | **From this it may help fully** | Auto-start level (default 90 %). Still only with enough spare sun. |
-| **Spare sun the battery needs to help the car** | Spare sun before the battery helps (default 1200 W). Shown only while **May the battery help charge the car?** is on. |
+| **Spare sun the battery needs to help the car** | Spare sun after the house before the battery helps (default 1200 W). 0 = it may also help at night. |
 
-Set **May the battery help charge the car?** and **May the battery sell to the grid?** on the same card.
+Set **May the battery sell to the grid?** on the same card. These levels are used when a charger allows battery help: that switch, **May the battery help the car?**, is on each charger.
 
 Each battery has a mode: **Auto**, **Self-consumption only**, **Force charge**, **Force discharge**, or **Off (hands-off)**. With **Off**, the inverter manages the battery on its own.
 

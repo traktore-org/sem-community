@@ -28,33 +28,16 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 
 
 def _battery_may_assist_ev(config, charger_cfg=None) -> bool:
-    """(#778/#885) Resolve the EV-assist permission for ONE charger.
+    """(#778/#885/#1381) May the house battery help THIS charger's car?
 
-    Two levels, ANDed, because they answer different questions:
-
-    * **install** (#778) — may the battery be spent on cars at all?
-      ``battery_mode: off`` means SEM is hands-off that battery entirely.
-      UNSET resolves to True: the battery already assists the car when the
-      #537 surplus gate passes, and defaulting it off would silently remove
-      a working feature.
-    * **per charger** (#885) — may it be spent on *this* one? Rule, 31.08:
-      *"on every individual device there is a setting whether it will charge
-      with battery or not, and the same on the charger — therefore not every
-      charger has to be activated."* Loads have had a per-device opt-in since
-      #620 (``battery_assist_enabled`` / ``battery_eligible_overnight``);
-      chargers had a single fleet-wide switch, so a two-charger install could
-      not say "the garage may, the guest charger may not".
-
-    The per-charger key can only RESTRICT — it never overrides an install
-    that said no. Fail-closed, and it keeps one rule ("both must agree")
-    instead of a precedence table nobody can predict. UNSET inherits the
-    install answer, so nothing changes for anyone who has not asked.
+    One answer, the charger's own switch (#1381): the install-wide switch
+    on the battery card is gone (a migration carried an OFF over to every
+    charger). ``battery_mode: off`` still means SEM is hands-off the battery
+    entirely, so no car gets it then. UNSET on the charger reads yes, as
+    before.
     """
-    from ..consts.battery_permissions import effective_permissions, may_assist_ev
-
-    mode = (config.get("battery_mode") or "auto")
-    stored = config.get("battery_permissions") or {}
-    if not may_assist_ev(mode, effective_permissions(mode, stored)):
+    mode = str(config.get("battery_mode") or "auto").lower()
+    if mode == "off":
         return False
     if isinstance(charger_cfg, Mapping):
         per_charger = charger_cfg.get("ev_battery_may_assist")

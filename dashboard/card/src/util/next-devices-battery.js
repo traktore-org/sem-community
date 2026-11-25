@@ -115,10 +115,8 @@ export function batteryBody(card, row) {
 
     // ── the zone settings as rows (#1321): the bar above stays the picture ──
     const Q = BATTERY_QUESTIONS;
-    const assistId = card._has(Q.may_assist.entity) ? Q.may_assist.entity : null;
     const maxId = card._has(Q.assist_max.entity) ? Q.assist_max.entity : null;
     const gateId = card._has(Q.solar_gate.entity) ? Q.solar_gate.entity : null;
-    const assistOn = assistId ? card._str(assistId) === 'on' : true;
     const numRow = (q, id, text) => {
         const a = card._attrs(id), label = card._lbl(q.key);
         return card._setRow({ label, help: t(q.sub), value: text, disabled: dis,
@@ -127,13 +125,12 @@ export function batteryBody(card, row) {
     };
     const levelRows = [];
     if (card._has(ids.priority)) levelRows.push(numRow({ key: 'bq_priority', sub: 'bq_priority_sub' }, ids.priority, Math.round(num(ids.priority)) + ' %'));
-    if (assistId) {
-        levelRows.push(card._setRow({ label: card._lbl(Q.may_assist.key), help: t(Q.may_assist.sub), disabled: dis,
-            toggle: { on: assistOn, onChange: () => card._toggleSwitch(assistId) } }));
-    }
+    // (#1381) whether the battery helps a car is each charger's own switch;
+    // these levels say how, for every charger that allows it
     // (#1354) the help starts at the buffer and is full from auto-start
     // (coordinator/decide.py `soc_zone`, flow_calculator.py `battery_assist_potential_w`)
-    if (assistOn) {
+    {
+        levelRows.push(html`<p class="sub2 helpnote">${t('next_batt_help_used_when')}</p>`);
         if (card._has(ids.buffer)) levelRows.push(numRow({ key: 'bq_buffer', sub: 'bq_buffer_sub' }, ids.buffer, Math.round(num(ids.buffer)) + ' %'));
         if (card._has(ids.auto)) levelRows.push(numRow({ key: 'bq_autostart', sub: 'bq_autostart_sub' }, ids.auto, Math.round(num(ids.auto)) + ' %'));
         if (maxId) levelRows.push(numRow(Q.assist_max, maxId, card._kw(num(maxId))));

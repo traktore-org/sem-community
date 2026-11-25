@@ -69,9 +69,10 @@ def test_an_explicit_no_outranks_a_button():
         start_boost("keba", {**KEBA, "ev_battery_may_assist": False}, {},
                     mode="min_plus_solar", connected=True, now=EVENING)
     assert err.value.key == "battery_boost_not_permitted"
+    # (#1381) the install-wide switch is gone: SEM hands-off the battery
+    # (mode Off) is the one install-level "no" left
     with pytest.raises(BoostRefused):
-        start_boost("keba", KEBA,
-                    {"battery_permissions": {"may_assist_ev": False}},
+        start_boost("keba", KEBA, {"battery_mode": "off"},
                     mode="min_plus_solar", connected=True, now=EVENING)
 
 

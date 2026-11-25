@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **The mode control shows every mode** (#1381). An option the card does not know is still a button, by its raw name.
 - 🐛 **"Sun + tariff" fits on a phone** (#1381). On narrow screens the label is "Sun+tariff", on one line.
 - 🐛 **The charge bar matches the target** (#1381). It runs to the Up to you see, and says how much is left.
+- 🐛 **One battery-help switch, on the charger** (#1381). The battery card's switch is gone. If it was off, every charger's help is now off.
+- 🐛 **The battery-help text tells the truth** (#1381). It helps only with spare sun after the house, never at night unless spare sun needed is 0.
 - 🐛 **A new charger no longer shows a removed charger's sessions** (#1421). It gets an id no charger had before. New heat pumps too.
 - 🐛 **A charger stopped by the phase guard comes back** (#1381). SEM switches it on again when the phase has room, one charger at a time.
 - 🐛 **No "night charging" at 0 W after a guard stop** (#1381). The charger reads "Stopped by the phase guard" until it is back on.

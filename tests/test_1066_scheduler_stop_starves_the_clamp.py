@@ -125,6 +125,8 @@ def _view(*, sched=None, gate=None, forced=(None, None), misses=0, ev=True, sola
         scheduler_decision=sched,
         plan_gate=gate,
         battery_permissions=perms,
+        # (#1381) the old install "no" is now the chargers' answer
+        ev_help_allowed=(perms or {}).get("may_assist_ev") is not False,
         grid_funded_load_w=grid_funded,
         sink_verdicts=verdicts,
         morning_window_open=window,
@@ -164,7 +166,9 @@ class TestTheReportersEvening:
         d = decide_battery(self._evening(forced=(False, None)))
         assert d.intent is BatteryIntent.LIMIT_DISCHARGE
         assert d.discharge_limit_w == pytest.approx(1076.0 / 2)
-        assert "may not feed the car" in d.reason
+        # (#1381) the "no" now comes from the chargers' own switch
+        assert d.reason_code == "battery_car_not_allowed"
+        assert "lets the battery help" in d.reason
 
     @pytest.mark.parametrize("charge", [None, True])
     def test_while_a_forced_charge_may_run_the_stop_still_goes_first(self, charge):

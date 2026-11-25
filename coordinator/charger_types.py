@@ -489,6 +489,11 @@ class BatteryView:
     battery_spendable_kwh: float = 0.0
     forecast_spending_enabled: bool = False
     dynamic_floor_pct: float = None
+    ev_help_allowed: bool = True
+    """(#1381) May the pack feed the connected cars at all? True when no
+    car is connected or at least one connected charger's own battery-help
+    switch allows it. The one answer the battery side asks; the install-wide
+    switch it used to read is gone."""
     battery_permissions: "Any" = None
     """(#778) The user's per-permission choices, tri-state: a key absent means
     UNSET and the legacy rule decides. ``None`` here is the same as an empty

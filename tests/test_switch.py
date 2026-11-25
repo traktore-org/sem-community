@@ -46,7 +46,8 @@ class TestSEMSwitches:
                         # #820 — charge pacing, asleep by default; sits with
                         # the battery family it paces.
                         "battery_charge_pacing_enabled",
-                        "battery_may_export", "battery_may_assist_ev",
+                        # (#1381) battery help is each charger's own switch now
+                        "battery_may_export",
                         # #1078 — a discharge limit that also caps charging
                         "battery_discharge_limit_caps_charge",
                         # #1080 — a car's start gap bought on a negative export value

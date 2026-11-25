@@ -68,7 +68,7 @@ const IDS = [
     'number.sem_battery_buffer_soc', 'number.sem_battery_priority_soc', 'number.sem_battery_auto_start_soc',
     'number.sem_battery_assist_max_power', 'number.sem_battery_assist_min_surplus', 'number.sem_battery_capacity',
     'number.sem_legionella_target_temp', 'number.sem_legionella_interval_hours', 'number.sem_heat_pump_boost_offset',
-    'switch.sem_battery_may_assist_ev', 'switch.sem_battery_may_export', 'switch.sem_battery_charge_pacing_enabled',
+    'switch.sem_battery_may_export', 'switch.sem_battery_charge_pacing_enabled',
 ];
 const CHARGER_ENTITIES = [
     ['sensor', 'power'], ['sensor', 'commanded_current'], ['sensor', 'daily_energy'], ['sensor', 'session_energy'],

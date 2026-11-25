@@ -229,7 +229,6 @@ class TestTheTable:
         assert ("sensor", "charging_state") not in ENTITY_MODULES
 
     @pytest.mark.parametrize("pk", [
-        ("switch", "battery_may_assist_ev"),
         ("number", "battery_assist_max_power"),
         ("number", "battery_assist_min_surplus"),
         ("sensor", "flow_battery_to_ev_power"),
@@ -275,7 +274,7 @@ class TestKeepRules:
 
     def test_cross_module_drops_when_either_is_absent(self):
         p = {Module.BATTERY: Presence.PRESENT, Module.EV: Presence.ABSENT}
-        assert not entity_kept("switch", "battery_may_assist_ev", p)
+        assert not entity_kept("number", "battery_assist_max_power", p)
         assert entity_kept("sensor", "battery_soc", p)
 
     def test_kept_descriptions_filters_by_key(self):
@@ -286,7 +285,7 @@ class TestKeepRules:
     def test_absent_entity_ids_are_the_forced_ids(self):
         gone = absent_entity_ids({**all_unknown(), Module.BATTERY: Presence.ABSENT})
         assert "sensor.sem_battery_soc" in gone
-        assert "switch.sem_battery_may_assist_ev" in gone
+        assert "number.sem_battery_assist_max_power" in gone
         assert "number.sem_battery_capacity" in gone
         assert "button.sem_backfill_battery_nights" in gone
         assert "sensor.sem_ev_power" not in gone

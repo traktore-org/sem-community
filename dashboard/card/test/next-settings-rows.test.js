@@ -449,7 +449,9 @@ test('Devices: the battery levels are rows; a tap opens a number dialog that wri
     const el = mk('sem-next-devices-card', DEV, { callService: async (d, s, data) => { calls.push([d, s, data]); } });
     const tpl = batteryBody(el, { id: 'battery', type: 'battery' });
     const out = text(tpl);
-    for (const k of ['bq_priority', 'bq_buffer', 'bq_autostart', 'bq_assist_max', 'bq_solar_gate', 'bq_may_assist']) assert.ok(out.includes(EN[k]), k);
+    for (const k of ['bq_priority', 'bq_buffer', 'bq_autostart', 'bq_assist_max', 'bq_solar_gate', 'next_batt_help_used_when']) assert.ok(out.includes(EN[k]), k);
+    // (#1381) no install-wide battery-help switch on the battery card any more
+    assert.ok(!out.includes(EN.bq_may_assist), 'bq_may_assist');
     assert.match(out, /30 %/);
     assert.ok(out.includes(EN.bq_priority_sub), 'help under the label');
     const specs = [];
@@ -465,10 +467,6 @@ test('Devices: the battery levels are rows; a tap opens a number dialog that wri
     assert.equal(specs[0].max, 100);
     specs[0].onCommit(35);
     assert.deepEqual(calls.at(-1), ['number', 'set_value', { entity_id: 'number.sem_battery_priority_soc', value: 35 }]);
-    const sw = rows.find((r) => text(r).includes(EN.bq_may_assist));
-    assert.match(text(sw), /role="switch"/);
-    fns(sw)[0].fn();
-    assert.deepEqual(calls.at(-1), ['switch', 'turn_off', { entity_id: 'switch.sem_battery_may_assist_ev' }]);
 });
 
 const CAR = { ...BASE, 'sensor.sem_charging_state': S('idle', { per_charger_departure: { keba: { default: '07:00', by_weekday: {}, one_block: false, late_min: 0, boost_allowed: true } },

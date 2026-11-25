@@ -51,7 +51,7 @@ const SETTING_IDS = ['number.sem_electricity_import_rate', 'number.sem_electrici
                      'switch.sem_export_guard_override_external',
                      'number.sem_battery_priority_soc', 'number.sem_battery_buffer_soc', 'number.sem_battery_auto_start_soc',
                      'switch.sem_forecast_spending_enabled', 'switch.sem_battery_charge_pacing_enabled',
-                     'switch.sem_battery_may_export', 'switch.sem_battery_may_assist_ev',
+                     'switch.sem_battery_may_export',
                      'number.sem_battery_max_discharge_power', 'number.sem_battery_morning_drain_floor_soc',
                      'switch.sem_battery_house_sink_enabled', 'number.sem_battery_assist_max_power',
                      'number.sem_battery_assist_min_surplus', 'number.sem_ev_enable_delay_seconds',

@@ -62,10 +62,10 @@ class TestItem2BatterySectionOnTheConfigTab:
     """The four 2.1 switches were HA entities only; the pacing picker and
     the Deye export block lived on options-flow pages 11-12."""
 
-    def test_the_four_switches_render(self):
+    def test_the_three_switches_render(self):
+        # (#1381) battery help for a car is each charger's own switch now
         for ent in ("switch.sem_forecast_spending_enabled",
                     "switch.sem_battery_may_export",
-                    "switch.sem_battery_may_assist_ev",
                     "switch.sem_battery_charge_pacing_enabled"):
             assert f"'{ent}'" in CARD, f"{ent} has no dashboard home"
 

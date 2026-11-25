@@ -31,7 +31,15 @@ def test_no_token_registered_yet_publishes_none():
 
 
 def test_the_registration_stores_the_token_it_put_on_the_url():
-    import inspect
-    from custom_components.solar_energy_management import _async_register_frontend_resources
-    src = inspect.getsource(_async_register_frontend_resources)
-    assert 'f"{DOMAIN}_card_version"' in src and "asset_v['bundle']" in src
+    """The resource URL's ``?v=`` and the published token are one value."""
+    import ast
+    import pathlib
+    tree = ast.parse((pathlib.Path(__file__).resolve().parents[1] / "__init__.py").read_text())
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)
+              and n.name == "_async_register_frontend_resources")
+    stores = [n for n in ast.walk(fn) if isinstance(n, ast.Assign)
+              and isinstance(n.targets[0], ast.Subscript)
+              and isinstance(n.value, ast.Subscript)
+              and getattr(n.value.value, "id", "") == "asset_v"
+              and getattr(n.value.slice, "value", None) == "bundle"]
+    assert len(stores) == 1
