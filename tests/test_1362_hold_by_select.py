@@ -118,6 +118,7 @@ class _Store:
 def _no_dwell(monkeypatch):
     monkeypatch.setattr(SelectHold, "MIN_HOLD_S", 0.0)
     monkeypatch.setattr(SelectHold, "SHOW_WITHIN_S", 0.0)
+    monkeypatch.setattr(SelectHold, "AWAY_FOR_S", 0.0)       # (#1377)
 
 
 def _adapter(hass, store=None, bid="b1", charge=False, **extra):
@@ -245,7 +246,9 @@ class TestHold:
         a = _adapter(hass)
         for _ in range(6):
             await actuate_battery(_limit(0.0), a)
-        assert hass.writes() == [UTILITY, UTILITY]
+        # two tries, then (#1377) the old option once: a cloud write still
+        # on its way must not hold the battery later with no one to undo it
+        assert hass.writes() == [UTILITY, UTILITY, SBU]
         assert "did not show" in a.last_error and "refused" in a.last_error
         assert a.hold_refused is True and a.hold_active is False
 
@@ -257,7 +260,7 @@ class TestHold:
         hass.put(MODE, SBU)                      # the inverter's own logic
         await actuate_battery(_limit(0.0), a)
         await actuate_battery(_limit(0.0), a)
-        assert hass.writes() == [UTILITY]
+        assert hass.writes() == [UTILITY, SBU]   # (#1377) the old option once
         assert "by itself" in a.last_error
 
     async def test_a_failed_write_leaves_no_name_in_the_record(self):
@@ -356,6 +359,7 @@ class _Clock:
 def real_numbers(monkeypatch):
     monkeypatch.setattr(SelectHold, "MIN_HOLD_S", hold_select.MIN_HOLD_S)
     monkeypatch.setattr(SelectHold, "SHOW_WITHIN_S", hold_select.SHOW_WITHIN_S)
+    monkeypatch.setattr(SelectHold, "AWAY_FOR_S", hold_select.AWAY_FOR_S)
     return _Clock(monkeypatch)
 
 
@@ -528,7 +532,8 @@ class TestVerified:
         assert a.hold_refused is False
         clock += 40
         await actuate_battery(_limit(0.0), a)
-        assert a.hold_refused is True and len(hass.writes()) == 2
+        assert a.hold_refused is True
+        assert hass.writes() == [UTILITY, UTILITY, SBU]   # (#1377) old one once
         assert "did not show" in a.last_error
 
     async def test_a_slow_select_that_shows_in_time_is_held(self, real_numbers):

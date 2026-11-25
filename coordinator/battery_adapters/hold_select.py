@@ -26,7 +26,8 @@ from homeassistant.util import dt as dt_util
 from ...utils.log_gate import log_on_change
 from ...utils.select_option import listed_option
 from .charge_record import ForcedChargeRecord
-from .charge_select import SELECT_KEY as CHARGE_SELECT_KEY, read_select
+from .charge_select import (
+    AWAY_FOR_S, SELECT_KEY as CHARGE_SELECT_KEY, SHOW_WITHIN_S, read_select)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,9 +51,9 @@ MIN_HOLD_S = 30 * 60.0
 #: stays in the current option; a put-back is never held back by it: it
 #: gives the battery back to the house (#1362).
 MAX_WRITES_PER_DAY = 12
-#: the select must show the hold option within this long after a write (a
-#: cloud integration is slow); then ONE re-send, then the hold is refused
-SHOW_WITHIN_S = 60.0
+# (#1377) ``SHOW_WITHIN_S`` (60 s, shared with the charge select, imported
+# above): the select must show the hold option that long after a write (a
+# cloud integration is slow); then ONE re-send, then the hold is refused.
 #: a battery that keeps discharging above this while the select shows the
 #: hold option, for this long, ignores the hold: it is refused
 DISCHARGE_REFUSE_W = 100.0
@@ -83,6 +84,8 @@ class SelectHold:
     #: the numbers, as attributes so a test can move them
     MIN_HOLD_S = MIN_HOLD_S
     SHOW_WITHIN_S = SHOW_WITHIN_S
+    #: (#1377) the old option read after SEM's was shown counts this late
+    AWAY_FOR_S = AWAY_FOR_S
     #: a record older than this is not acted on after a restart
     ORPHAN_MAX_AGE_H = 48.0
 
@@ -96,6 +99,9 @@ class SelectHold:
         self._why = ""
         self._writes, self._seen, self._spent = 0, False, None
         self._wrote_at: Optional[float] = None
+        #: (#1377) since when the select reads its old option after it
+        #: showed the hold option
+        self._away_since: Optional[float] = None
         self._discharging_since: Optional[float] = None
         self._adopted = False
         #: (#1362) the hold was asked for a grid charge: its put-back never
@@ -122,6 +128,7 @@ class SelectHold:
         self._writes, self._seen, self._spent = 0, False, None
         self._discharging_since = None
         self._for_charge = False
+        self._away_since = None
 
     @staticmethod
     def _day() -> str:
@@ -176,7 +183,11 @@ class SelectHold:
         if wanted not in options:
             return self._fail(f"{entity} does not list '{option}'")
         if state == wanted:
-            self._seen = self._seen or self._writes > 0
+            # (#1377) seen once a read SHOW_WITHIN_S after the write still
+            # shows it: a cloud select shows a write at once, before a poll
+            if self._writes and self._since_write() >= self.SHOW_WITHIN_S:
+                self._seen = True
+            self._away_since = None
             return await self._join(entity, pack_w)
         return await self._not_shown(entity, option, wanted, state)
 
@@ -192,10 +203,18 @@ class SelectHold:
                          state: str) -> Optional[str]:
         if self._spent:
             return self._spent
+        went_back = (f"{entity} went back to '{state}' by itself — SEM "
+                     "does not hold it again")
+        if self._writes:
+            # (#1377) neither SEM's option nor the old one: set since, and a
+            # cloud read only lags to the old one — over at once, seen or not
+            prior = await self.record.prior_of(entity)
+            if prior is not None and state != prior:
+                return await self._give_up(entity, went_back)
         if self._writes and self._seen:
-            return await self._give_up(
-                entity, f"{entity} went back to '{state}' by itself — SEM "
-                "does not hold it again")
+            if await self._away_waits(entity, state, wanted):
+                return SETTLING
+            return await self._give_up(entity, went_back)
         if self._writes:                        # a write waits to be shown
             if self._since_write() < self.SHOW_WITHIN_S:
                 return SETTLING
@@ -244,12 +263,52 @@ class SelectHold:
         select goes back to what it showed before."""
         await self.record.refuse(entity)
         self.refused, self._why = True, why
+        await self._send_prior_once(entity)         # (#1377) never shown
         await self._release(entity, option, urgent=True)
         return self._fail(why)
+
+    async def _away_waits(self, entity: str, state: str, wanted: str) -> bool:
+        """(#1377) The select showed the hold option and reads the option it
+        had before SEM's write: a cloud read may show that for minutes after
+        a write that landed. True: wait, write nothing, until it has read so
+        for ``AWAY_FOR_S``. Any other option is a change made since."""
+        prior = await self.record.prior_of(entity)
+        if prior is None or state != prior or prior == wanted:
+            return False
+        now = time.monotonic()
+        if self._away_since is None:
+            self._away_since = now
+        if now - self._away_since >= self.AWAY_FOR_S:
+            return False
+        log_on_change(_LOGGER, f"hold_select_away:{entity}", logging.INFO,
+                      "Battery: %s reads '%s' again — SEM waits up to %d min "
+                      "for '%s' before it ends the hold: a cloud read can "
+                      "show the old value for minutes (#1377)", entity, state,
+                      int(self.AWAY_FOR_S // 60), wanted)
+        return True
+
+    async def _send_prior_once(self, entity: str) -> None:
+        """(#1377) A hold SEM wrote ends while the select reads its old
+        option: that option goes out once more, so a hold write still on its
+        way in the cloud cannot land later with no one to put it back. A
+        select that shows it is not changed by it; a value set since is the
+        user's; a select another pack holds is left. Never raises."""
+        if not self._writes:
+            return
+        try:
+            prior = await self.record.prior_of(entity)
+            state, options = read_select(self.hass, entity)
+            if (prior is None or state != prior or prior not in options
+                    or await self.record.others(entity, self._battery())):
+                return
+            await self._select(entity, prior)
+        except Exception:  # noqa: BLE001 — the end has happened regardless
+            _LOGGER.debug("old hold option not sent again", exc_info=True)
 
     async def _give_up(self, entity: str, why: str) -> str:
         self._spent = why
         self.active = False
+        await self._send_prior_once(entity)         # (#1377)
         await self.record.left(entity, self._battery())
         return self._fail(why)
 
