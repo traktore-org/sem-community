@@ -225,7 +225,7 @@ async def test_force_charge_now_defaults_to_an_hour(hass):
         assist_write_intents_enabled=True)
     _add_entry(hass, coordinator)
     response = await intent.async_handle(hass, "test", INTENT_FORCE_CHARGE_NOW, {})
-    coordinator.set_plan_override.assert_called_once_with("c1", "force", 60)
+    coordinator.set_plan_override.assert_called_once_with("c1", "force", 60, user_now=True)
     assert response.response_type == intent.IntentResponseType.ACTION_DONE
     assert "60 minutes" in response.speech["plain"]["speech"]
 
@@ -238,7 +238,7 @@ async def test_force_charge_now_takes_an_explicit_duration(hass):
     response = await intent.async_handle(
         hass, "test", INTENT_FORCE_CHARGE_NOW,
         {"name": {"value": "Carport"}, "minutes": {"value": 30}})
-    coordinator.set_plan_override.assert_called_once_with("c1", "force", 30)
+    coordinator.set_plan_override.assert_called_once_with("c1", "force", 30, user_now=True)
     assert "30 minutes" in response.speech["plain"]["speech"]
 
 
