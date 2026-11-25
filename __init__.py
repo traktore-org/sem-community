@@ -3618,6 +3618,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         _LOGGER.info("Platforms setup completed: %s", PLATFORMS)
         await _async_listen_energy_prefs(hass)
+        # (#1428) A removed charger leaves no entities behind. Runs after the
+        # platforms built this run's entities, so also right after
+        # remove_charger (which reloads the entry). Never fails setup.
+        try:
+            from .charger_entity_sweep import sweep_removed_charger_entities
+            sweep_removed_charger_entities(
+                hass, entry,
+                (entry.options or {}).get("ev_chargers")
+                or (entry.data or {}).get("ev_chargers") or [])
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("Removed-charger entity sweep skipped: %s", exc)
     except Exception as err:
         _LOGGER.error("Failed to setup platforms: %s", err, exc_info=True)
         # Cleanup coordinator data
