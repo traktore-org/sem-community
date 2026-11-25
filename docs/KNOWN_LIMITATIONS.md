@@ -63,3 +63,10 @@ are in [TROUBLESHOOTING.md](TROUBLESHOOTING.md). EV charge rules are in
 | A surplus device runs only on solar. On a dark day its daily target is missed. | Use *Peak only* and your own automation with `binary_sensor.sem_surplus_available`. See [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md#use-the-surplus-signal-in-your-own-automation). |
 | The grid operator's relay is the hard stop. SEM follows its limit, but only for loads it controls. | Mark a device *Behind the grid operator's relay*. |
 </content>
+
+## Energy counters
+
+| Limit | Way around |
+|---|---|
+| A daily counter never steps back. If a meter reports late at the end of the day, the day can end up to about 0.1 kWh above the meter. The row's `yesterday_ended_above_meter_kwh` attribute shows by how much. | None needed; the next day starts from the meter again. |
+| The live base load (`sensor.sem_true_baseload_power`) is a two-minute average, so it follows a real change about a minute late. | Use the daily base load for totals. |

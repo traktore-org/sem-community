@@ -5213,6 +5213,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if isinstance(_day_totals, dict):
                 from .flow_calculator import fit_flows_to_totals
                 energy_flows = fit_flows_to_totals(energy_flows, _day_totals)
+            # (#1382) a published daily flow never steps back within its day
+            from .flow_calculator import hold_published_flows
+            _calc = self._energy_calculator
+            energy_flows, _calc.published_flows = hold_published_flows(
+                energy_flows, getattr(_calc, "published_flows", None),
+                getattr(self._flow_calculator, "flow_day", None))
 
             # Step 3: Calculate costs and performance. ``performance``
             # gets ``energy_flows`` so autarky uses the
@@ -8992,34 +8998,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # partition checks depend on seeing it.
             # (#1044) Home members only: ``home`` has already taken out
             # the draw of the chargers ``ev_power`` read.
-            # (#1394) Each draw as it stood when ``home`` was complete: a
-            # plug that reports every second is ahead of a grid meter that
-            # reports every 15-20 s, and its new load is not in ``home`` yet.
-            from .draw_alignment import DrawHistory
-            _history = getattr(self, "_draw_history", None)
-            if not isinstance(_history, DrawHistory):
-                _history = self._draw_history = DrawHistory()
-            _house_at = None
-            _complete_at = getattr(getattr(self, "_sensor_reader", None),
-                                   "house_complete_at", None)
-            if callable(_complete_at):
-                _house_at = _complete_at()
-            if not isinstance(_house_at, datetime):
-                _house_at = None
+            # (#1394) Both sides as a 120 s mean: ``home`` mixes meter
+            # reads up to ~20 s apart, so one cycle's subtraction meets a
+            # plug's new draw against the house's old one. See
+            # ``baseload_window``.
+            from .baseload_window import BaseloadWindow, live_baseload
+            _window = getattr(self, "_baseload_window", None)
+            if not isinstance(_window, BaseloadWindow):
+                _window = self._baseload_window = BaseloadWindow()
             _controlled_w = 0.0
             for device in home_members(
                     self._surplus_controller._devices.values(),
                     chargers_outside_home(sem_ev_chargers(self), power)):
                 try:
-                    _w = float(device.observed_power_w() or 0.0)
+                    _controlled_w += float(device.observed_power_w() or 0.0)
                 except (AttributeError, TypeError, ValueError):
                     continue
-                _controlled_w += _history.as_of(
-                    str(getattr(device, "device_id", id(device))), _w,
-                    self._power_changed_at(device), _house_at)
-            energy.true_baseload_power = round(
-                float(power.home_consumption_power or 0.0) - _controlled_w, 1
-            )
+            energy.true_baseload_power = round(live_baseload(
+                _window, time.monotonic(),
+                float(power.home_consumption_power or 0.0), _controlled_w), 1)
         except (AttributeError, TypeError) as e:
             _LOGGER.debug("Device runtime update failed: %s", e)
 
@@ -19568,21 +19565,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except (AttributeError, TypeError, ValueError) as e:
             _LOGGER.debug("Failed to restore daily energy for %s: %s",
                           getattr(device, "device_id", "?"), e)
-
-    def _power_changed_at(self, device) -> Optional[datetime]:
-        """(#1394) When the device's power sensor last changed value, or None
-        when its draw does not come from a readable power sensor."""
-        eid = getattr(device, "power_entity_id", None)
-        if not isinstance(eid, str) or not eid:
-            return None
-        try:
-            state = self.hass.states.get(eid)
-        except AttributeError:
-            return None
-        if state is None or state.state in ("unknown", "unavailable", None, ""):
-            return None
-        changed = getattr(state, "last_updated", None)
-        return changed if isinstance(changed, datetime) else None
 
     def _file_device_energy(self, meter_day, power) -> None:
         """(#769) File each device's just-booked kWh into the ledger.

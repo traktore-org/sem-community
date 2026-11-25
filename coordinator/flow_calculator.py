@@ -9,11 +9,13 @@ Destinations: Home, EV, Battery Charge, Grid Export
 """
 from __future__ import annotations
 
+import copy
+
 import logging
 import math
 from dataclasses import dataclass
 from datetime import date
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from homeassistant.util import dt as dt_util
 
@@ -44,6 +46,37 @@ _FLOW_CELLS = {
 }
 _FIT_ITERATIONS = 50
 _FIT_TOLERANCE_KWH = 0.001
+
+
+def hold_published_flows(flows: EnergyFlows, published: Optional[Dict[str, Any]],
+                         day: Any) -> "tuple[EnergyFlows, Dict[str, Any]]":
+    """(#1382) The fitted daily flows, never below what was published today.
+
+    The fit re-divides the whole day each cycle, so a cell can drift down by
+    a few hundredths when one row's ratio to the split moves (a counter
+    step, a catch-up) — PROD 25.11 09:18, grid to house 7.79 → 7.78 kWh.
+    A daily counter that goes back reads as a reset to the recorder. Each
+    fleet cell holds at its last published value until the fit passes it;
+    a new ``day`` starts fresh. Returns the flows and the new record.
+    """
+    day = None if day is None else str(day)
+    same_day = isinstance(published, dict) and published.get("day") == day
+    held = dict(published.get("cells") or {}) if same_day else {}
+    cells: Dict[str, float] = {}
+    lifted: Dict[str, float] = {}
+    for attr in _FLOW_CELLS.values():
+        value = max(0.0, float(getattr(flows, attr, 0.0) or 0.0))
+        floor = held.get(attr)
+        if isinstance(floor, (int, float)) and value < floor:
+            value = float(floor)
+            lifted[attr] = value
+        cells[attr] = value
+    if lifted:
+        # a copy: the integrator's own sums stay as measured
+        flows = copy.copy(flows)
+        for attr, value in lifted.items():
+            setattr(flows, attr, value)
+    return flows, {"day": day, "cells": cells}
 
 
 def fit_flows_to_totals(flows: EnergyFlows, totals: Dict[str, float]) -> EnergyFlows:

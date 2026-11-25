@@ -90,6 +90,7 @@ ACCUMULATOR_ROW_BOUNDS: Dict[str, Optional[float]] = {
 # *save* timestamp from ``_energy_data`` instead (see the export below). It is
 # the one key whose two directions legitimately differ.
 CALCULATOR_STATE_KEYS: tuple[str, ...] = (
+    "published_flows",   # (#1382) daily flows as last published
     "daily_accumulators",
     "monthly_accumulators",
     "yearly_accumulators",
