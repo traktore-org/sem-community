@@ -291,6 +291,11 @@ by day, **At least** at night.
 
 - Without a car sensor, SEM estimates the car's level from the energy sent.
   The estimate is corrected when the car reports its own level.
+- An estimate needs a starting point: a car reading, or a charge that slowed
+  down to the end while the charger still offered power. Until then the card
+  shows no level, only the kWh progress.
+- A stop made by the charger, an app or another system is never read as
+  "full". When the car is full, the bar says "Car full" instead of "to go".
 <a id="slow-polling-soc-sensors-energy-accounted-ceiling"></a>
 - Some car sensors update only every 20 to 30 minutes. A session can then
   overshoot the target. SEM also counts the energy sent since the last reading,
