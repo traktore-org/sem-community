@@ -6538,7 +6538,8 @@ class SensorReader:
         read. The median then may stand on those fills: after two dark
         reads, ``[0, 0, 11040]`` gives 0 W on the first live read, and a
         charger that draws 11 kW looked at rest. ``_ev_power_backed[key]``
-        says whether a live read in the window gave the median's value.
+        says whether live reads in the window gave the median's value: one
+        when every read in it is live, two when a dark fill is in it.
         """
         hist = self._ev_power_hist.get(key)
         if hist is None:
@@ -6557,8 +6558,12 @@ class SensorReader:
             med, backed = float(raw), bool(live)
         else:
             med = sorted(hist)[1]
-            backed = any(f and v == med
-                         for v, f in zip(hist, flags, strict=True))
+            # With a dark fill in the window, one live read is not enough:
+            # ``[0, 0, 0]`` with one live 0 W blip (the blip the median is
+            # for, #910) would read as a stop while the box draws.
+            agree = sum(1 for v, f in zip(hist, flags, strict=True)
+                        if f and v == med)
+            backed = agree >= (1 if all(flags) else 2)
         backed_by_key = getattr(self, "_ev_power_backed", None)
         if backed_by_key is None:
             backed_by_key = self._ev_power_backed = {}

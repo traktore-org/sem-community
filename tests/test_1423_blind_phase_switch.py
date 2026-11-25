@@ -337,6 +337,14 @@ class TestTick:
         assert h._phase_switch_states["c1"] == "stopping"
         assert _calls(h) == 0
 
+    def test_a_live_0_w_keeps_deciding_beside_a_charging_status(self):
+        """Review 2: the status counts only while the power is dark. A
+        status stuck on charging beside a live 0 W changes nothing."""
+        h = _host()
+        _tick(h, _max(), _cp(0.0, charging=False), 0.0,
+              adapter=_adapter(status=True))
+        assert _calls(h) == 1
+
     def test_a_status_that_says_not_charging_is_at_rest(self):
         h = _host()
         _tick(h, _max(), DARK, 0.0, adapter=_adapter(status=False))
@@ -400,17 +408,37 @@ class TestTick:
         assert _calls(h) == 0
 
     def test_a_known_unplug_counts_again(self):
+        """In auto mode no target is set without a car, so only the known
+        unplug clears the count (review 2: manual mode cleared it by the
+        switch that then went out at rest)."""
         h = _host(states={"binary_sensor.box_plug": "off"},
-                  ev_connected_sensor="binary_sensor.box_plug")
-        t = 0.0
-        for _ in range(BLIND_DROPS_MAX):
-            _d, t = _drop(h, t)
-            t += BLIND_RETRY_S
-        assert h._phase_sequencers["c1"].blind_capped
+                  ev_connected_sensor="binary_sensor.box_plug",
+                  phase_mode="auto")
+        _tick(h, _max(), DARK, 0.0)
+        seq = h._phase_sequencers["c1"]
+        seq._blind_drops, seq._blind_target = BLIND_DROPS_MAX, 1
         gone = _cp(0.0, charging=False, connected=False)
-        for k in range(5):
-            _tick(h, _max(), gone, t + 10.0 * k, adapter=None)
+        for k in range(2):
+            _tick(h, _max(), gone, 10.0 + 10.0 * k, adapter=None)
+        assert seq.blind_capped, "not yet: the unplug must hold 30 s"
+        for k in range(2, 6):
+            _tick(h, _max(), gone, 10.0 + 10.0 * k, adapter=None)
+        assert not seq.blind_capped
+        assert _calls(h) == 0, "cleared by the unplug, not by a switch"
+
+    def test_observer_mode_drops_do_not_count(self, caplog):
+        """Review 2: observer mode sends no stop, so a drop says nothing
+        about the sensor: no cap, no warning."""
+        h = _host()
+        h._observer_mode = True
+        t = 0.0
+        with caplog.at_level(logging.INFO):
+            for _ in range(BLIND_DROPS_MAX + 1):
+                _d, t = _drop(h, t)
+                t += BLIND_RETRY_S
         assert not h._phase_sequencers["c1"].blind_capped
+        assert not [r for r in caplog.records
+                    if r.levelno == logging.WARNING and "#1423" in r.getMessage()]
 
     def test_a_stop_that_takes_after_a_dark_spell_switches(self):
         h = _host()
@@ -565,10 +593,20 @@ class TestReaderKnown:
         out = self._feed(r, [11040.0, 11040.0, 0.0, 0.0])
         assert out[3] == (0.0, True)
 
-    def test_a_live_0_beside_a_dark_fill_is_a_reading(self):
+    def test_two_live_0_beside_a_dark_fill_are_a_reading(self):
         r = _reader()
-        out = self._feed(r, [0.0, None, 0.0, 11040.0])
-        assert out[3] == (0.0, True), "a live 0 W gave the median"
+        out = self._feed(r, [11040.0, None, 0.0, 0.0])
+        assert out[3] == (0.0, True), "two live 0 W reads: a stop"
+
+    def test_a_0_w_blip_right_after_a_dark_spell_is_no_reading(self):
+        """Review 2: ``[0, 0, 0]`` with one live 0 W — the blip the median
+        is for (#910) — read as a stop while the box drew 11 kW."""
+        r = _reader()
+        out = self._feed(r, [11040.0, 11040.0, None, None, 0.0, 11040.0,
+                             11040.0])
+        assert out[4] == (0.0, False)
+        assert out[5] == (0.0, False)
+        assert out[6] == (11040.0, True)
 
     def test_a_history_made_elsewhere_counts_as_read(self):
         r = _reader()
@@ -714,6 +752,17 @@ async def test_a_stop_that_goes_dark_and_comes_back_drawing(freezer):
     rig = _rig()
     await _run(rig, freezer,
                [11040.0] * 3 + ["unavailable"] * 4 + [11040.0] * 4)
+    assert _switches(rig) == [], _switches(rig)
+
+
+@pytest.mark.asyncio
+async def test_a_0_w_blip_after_the_dark_spell(freezer):
+    """Review 2: one 0 W read right after the dark spell, then the box
+    draws 11 kW again. Before, that 0 W read as a stop and the switch went
+    out with the box drawing."""
+    rig = _rig()
+    await _run(rig, freezer,
+               ["unavailable"] * 6 + [0.0] + [11040.0] * 4)
     assert _switches(rig) == [], _switches(rig)
 
 

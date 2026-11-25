@@ -1439,17 +1439,19 @@ class EVControlMixin:
         # (#1423) A dark power sensor reads 0 W, and a charger with no
         # status sensor then looked at rest: the switch went out with no
         # stop first, maybe under load. The reconciler's own reading says
-        # whether it draws: a status that says charging is a draw (the
-        # reader's 500 W floor turned the flag off on the dark 0 W), and no
-        # reading is ``blind``. ``at_rest`` is a reading that says nothing
-        # flows; a draw seen wins over ``blind``.
+        # whether it draws, and no reading is ``blind``. While the power is
+        # dark, a status that says charging is a draw (the reader's 500 W
+        # floor turned the flag off on the dark 0 W); a live power reading
+        # keeps deciding as before. ``at_rest`` is a reading that says
+        # nothing flows; a draw seen wins over ``blind``.
         draws = False
         if adapter is not None:
             from .charger_reconciler import charger_draws
             draws = charger_draws(
                 adapter, cp,
                 plug_reading_known=_plug_reading_known(self, charger_cfg))
-        drawing = drawing or draws is True
+        if draws is True and getattr(cp, "power_known", True) is False:
+            drawing = True
         blind = draws is None and not drawing
         at_rest = not drawing and not blind
 
@@ -1787,7 +1789,14 @@ class EVControlMixin:
                      believed_phases=believed, charging=drawing,
                      capability_ready=ready, blind=blind)
         self._phase_switch_states[cid] = r.state
-        if r.blind_drop:
+        if r.blind_drop and self._observer_mode:
+            # (#1423) Observer mode sends no stop: the wait proved nothing
+            # about the sensor, so the drop does not count toward the cap.
+            seq.forgive_blind()
+            _LOGGER.info(
+                "OBSERVER · #1423 %s: WOULD-switch to %sp dropped — the "
+                "charger's power could not be read", cid, desired)
+        elif r.blind_drop:
             # (#1423) Not "gave up": no reading said the box drew, so the
             # target is not marked as one the charger does not take.
             if seq.blind_capped:
