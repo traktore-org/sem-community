@@ -178,7 +178,8 @@ Notes:
   you can pick a time or **until full** instead. Pick another mode to stop it.
 - **Now** also works on a charger set to **Off** or paused. When Now ends,
   the charger is **Off** again.
-- **Now** ends when the car is unplugged. The next car does not inherit it.
+- **Now** ends when its car is unplugged, also with two chargers. The next
+  car does not inherit it.
 - **Now** picked before the car is plugged in waits for it. Its time counts
   from the plug-in; a time you picked stays that time.
 - **Off** does not hold the charger stopped. A wallbox that starts by itself is left alone.
