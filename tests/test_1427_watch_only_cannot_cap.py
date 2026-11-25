@@ -347,8 +347,33 @@ class TestTheHoldSelect:
     async def test_watch_only_lists_the_zero_hold(self):
         hass, ad = _build(_CASES[4][1])
         sc = _sc()
+        await ad.async_adopt_running_charge(observer=True)
         await actuate_battery(_limit(0.0), ad, observer=True, controller=sc)
         assert sc.observer_decisions["battery:b1"]["action"] == "limit_discharge"
+        assert _calls(hass) == []
+
+    @pytest.mark.parametrize("age_h,listed", [(1.0, NO_LIMIT_VERB),
+                                              (25.0, "limit_discharge")])
+    async def test_watch_only_reads_a_refusal_from_live(self, age_h, listed):
+        """(review) The inverter refused SEM's hold while SEM was live; the
+        user then turned watch-only on. Watch-only never tries a hold, so it
+        reads the refusal before the list shows one — and an old one
+        (over 24 h) no longer counts."""
+        import time as _time
+        hass = _hass()
+        record = ForcedChargeRecord(_Store())
+        await record.refuse(HOLD)
+        record._refused[HOLD] = _time.time() - age_h * 3600
+        ad = GenericBatteryAdapter(hass, {
+            "battery_max_discharge_power": 5000,
+            "battery_hold_select_entity": HOLD,
+            "battery_hold_select_option": "Utility",
+            "battery_hold_record": record})
+        assert ad.hold_refused is False            # a new lifetime knows nothing yet
+        sc = _sc()
+        await ad.async_adopt_running_charge(observer=True)
+        await actuate_battery(_limit(0.0), ad, observer=True, controller=sc)
+        assert sc.observer_decisions["battery:b1"]["action"] == listed
         assert _calls(hass) == []
 
 
