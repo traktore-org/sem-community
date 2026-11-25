@@ -643,6 +643,9 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         put back one whose setting was cleared (reads only in observer)."""
         await self._hold.restore_orphan(observer)
         await self._hold.adopt()
+        if observer:
+            # (#1427) the list must not show a hold the inverter refused
+            await self._hold.read_refusal()
 
     @property
     def hold_refused(self) -> bool:

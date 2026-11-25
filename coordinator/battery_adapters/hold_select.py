@@ -157,6 +157,16 @@ class SelectHold:
         return self._fail(f"{entity} has had {MAX_WRITES_PER_DAY} writes from "
                           "SEM today — it stays as it is until tomorrow")
 
+    async def read_refusal(self) -> None:
+        """(#1427) Is a hold refused lately? Reads only. Watch-only never
+        tries a hold, which is where the refusal is read, so its list asks
+        here before it shows a 0 W hold."""
+        chosen = hold_setup(self.config)
+        if chosen is None:
+            return
+        at = await self.record.refused_at(chosen[0])
+        self.refused = at is not None and (time.time() - at) < REFUSAL_MEMORY_S
+
     async def _read_refusal(self, entity: str) -> None:
         at = await self.record.refused_at(entity)
         self.refused = at is not None and (time.time() - at) < REFUSAL_MEMORY_S
