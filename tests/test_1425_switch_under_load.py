@@ -32,7 +32,7 @@ from custom_components.solar_energy_management.coordinator.ev_availability impor
 )
 
 from .test_1423_blind_phase_switch import (
-    DARK, NO_STATUS, SWITCH, T0, _adapter, _calls, _cp, _host, _max, _rig,
+    DARK, NO_STATUS, T0, _adapter, _calls, _cp, _host, _max, _rig,
     _switches, _tick, _values,
 )
 
