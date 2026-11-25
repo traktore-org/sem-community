@@ -740,6 +740,48 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     #: (#1377) this pack joined a charge SEM started for another pack, or
     #: in the last lifetime: SEM's "on" may stand on the permit
     _sel_joined: bool = False
+    #: (#1426) how long a read of SEM's own charge value, after SEM put the
+    #: user's value back, is taken as SEM's (a cloud shows a write minutes
+    #: late; the memory also ends when the entity shows the put-back value,
+    #: shows a value set since, or SEM writes it again)
+    PUT_BACK_SETTLE_S = 15 * 60.0
+
+    async def _as_user_sees(self, entity: str, state: "str | None") -> "str | None":
+        """(#1426) The value the user has, as far as SEM can tell. A read
+        of SEM's own charge value inside ``PUT_BACK_SETTLE_S`` after SEM put
+        the user's value back is a cloud read that has not caught up: the
+        user's value is the one SEM put back. Any other read ends the
+        memory (the put-back has shown, or the value was set since)."""
+        if not entity or state is None:
+            return state
+        row = await self.charge_record.put_back_of(entity)
+        if row is None:
+            return state
+        sem_value, back, at = row
+        if state == sem_value and time.time() - at < self.PUT_BACK_SETTLE_S:
+            return back
+        await self.charge_record.forget_put_back(entity)
+        return state
+
+    async def _note_put_back(self, entity: str, sem_value: str, back: str) -> None:
+        try:
+            await self.charge_record.note_put_back(entity, sem_value, back,
+                                                   time.time())
+        except Exception:  # noqa: BLE001 — a hint, never a reason to fail
+            _LOGGER.debug("put-back not noted", exc_info=True)
+
+    async def _refresh_put_backs(self) -> None:
+        """(#1426) Each stop looks once: an entity that shows the value SEM
+        put back (or one set since) ends the memory."""
+        try:
+            entity = (select_setup(self.config) or ("", ""))[0]
+            if entity:
+                await self._as_user_sees(entity, read_select(self.hass, entity)[0])
+            permit = permit_switch(self.config)
+            if permit:
+                await self._as_user_sees(permit, self._permit_state(permit))
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("put-back memory not refreshed", exc_info=True)
 
     def _select_failed(self, why: str) -> ChargeStatus:
         log_on_change(_LOGGER, f"select_charge:{self.charge_actuator()}",
@@ -807,6 +849,10 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if state is None:
             return self._select_failed(f"{entity} is unavailable — SEM cannot "
                                        "ask it, so no charge is started")
+        if not self._sel_writes:
+            # (#1426) a new start counts from the user's value, never from
+            # SEM's own value a cloud read still shows after the put-back
+            state = await self._as_user_sees(entity, state)
         wanted = listed_option(self.hass, entity, option)   # (#1039)
         if wanted not in options:
             return self._select_failed(f"{entity} does not list '{option}'")
@@ -961,6 +1007,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             await self._put_permit_back()              # (#1377) best effort
             await self._note_failed_start()
             return self._select_failed(f"start failed: {exc}")
+        await self.charge_record.forget_put_back(entity)   # (#1426) SEM's again
         self._sel_writes += 1
         self._sel_wrote_at = time.monotonic()          # (#1377)
         self._active, self._target_soc = True, command.target_soc
@@ -1115,6 +1162,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         since is the user's and is never written over. A select that other
         packs still charge through goes back with the last of them."""
         entity, option = select_setup(self.config)
+        await self._refresh_put_backs()                    # (#1426)
         prior = await self.charge_record.prior_of(entity)
         # (#1377) the reserve goes back FIRST and each restore is tried on
         # its own: a mode or permit that cannot be read must never hold the
@@ -1173,7 +1221,8 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         entity = permit_switch(self.config)
         if not entity:
             return None
-        state = self._permit_state(entity)
+        # (#1426) an "on" that is SEM's own, not yet shown put back, is off
+        state = await self._as_user_sees(entity, self._permit_state(entity))
         if state is None:
             return self._select_failed(f"{entity} is unavailable — SEM cannot "
                                        "ask it, so no charge is started")
@@ -1190,12 +1239,17 @@ class GenericChargeAdapter(BatteryChargeAdapter):
 
     async def _permit_on(self) -> None:
         entity = permit_switch(self.config)
-        if (entity and self._permit_state(entity) == "off"
+        if not entity:
+            return
+        # (#1426) a cloud "on" that is SEM's own, not yet shown put back
+        state = await self._as_user_sees(entity, self._permit_state(entity))
+        if (state == "off"
                 and await self.charge_record.prior_of(entity) is not None):
             self._permit_writes += 1
             self._permit_wrote_at = time.monotonic()       # (#1377)
             await self.hass.services.async_call(
                 "switch", "turn_on", {"entity_id": entity})
+            await self.charge_record.forget_put_back(entity)
 
     async def _put_permit_back(self, resend_off: bool = False
                                ) -> "ChargeStatus | None":
@@ -1225,6 +1279,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             try:
                 await self.hass.services.async_call(
                     "switch", "turn_off", {"entity_id": entity})
+                await self._note_put_back(entity, "on", "off")   # (#1426)
             except Exception as exc:  # noqa: BLE001
                 if state == "on":
                     return self._select_failed(f"stop failed: {exc}")
@@ -1253,6 +1308,9 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                  "option": listed_option(self.hass, entity, prior)})
         except Exception as exc:  # noqa: BLE001
             return self._select_failed(f"stop failed: {exc}")
+        # (#1426) a cloud may show SEM's option for minutes after this write
+        await self._note_put_back(entity, charge_option(self.hass, entity, option),
+                                  listed_option(self.hass, entity, prior))
         return None
 
     def _raise_stuck_repair(self, entity: str, option: str) -> None:
@@ -1276,6 +1334,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         back once if it still shows that option, then drop the name. Through
         the observer gate like every write: in observer mode nothing is sent
         and the record stays. Never raises."""
+        await self._refresh_put_backs()      # (#1426) reads only, every cycle
         if getattr(self, "_orphans_settled", False):
             return
         try:
