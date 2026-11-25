@@ -29,6 +29,8 @@ export const WHY_VERBS = [
     'limit_export', 'release_export',
     // (#1323) a heat pump held below its normal state
     'step_down',
+    // (#1427) a battery asked to limit that has no way to cap it
+    'no_limit',
 ];
 
 export const chipKey = (rec) => `${rec?.device_kind || ''}:${rec?.device_id || ''}`;
@@ -70,8 +72,11 @@ export function wouldVerb(rec, t) {
 /** (#1321) A battery row (the record names its kind either way). */
 export const isBattery = (rec) => (rec?.kind || rec?.device_kind) === 'battery';
 
-/** (#1321) Does the battery would-row set a limit? "Run normally" sets none, so it shows no limit. */
-export const setsLimit = (rec) => /limit/.test(String(rec?.action || ''));
+/**
+ * (#1321) Does the battery would-row set a limit? "Run normally" sets none, so it shows no limit.
+ * (#1427) Nor does `no_limit`: SEM has no way to cap that battery, so no "limited to" figure.
+ */
+export const setsLimit = (rec) => /^limit_/.test(String(rec?.action || ''));
 
 /** (#1321) "Run normally": no limit, no power to name. */
 export const isNormal = (rec) => String(rec?.action || '') === 'normal';

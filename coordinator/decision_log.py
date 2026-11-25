@@ -61,6 +61,14 @@ RESTING_VERBS = frozenset({"idle", "off", "normal", "release", "disable",
                            "stop", "park_off",
                            "stop_force_charge", "stop_force_discharge"})
 
+#: (#1427) A battery asked to limit discharge that has no way to cap it: the
+#: decision is ``limit_discharge``, but SEM sends no limit. The row says
+#: that, so no screen reads "stops powering the car" for a pack that cannot.
+NO_LIMIT_VERB = "no_limit"
+#: …and the decision each such verb stands for, to compare a row with what
+#: the battery was decided to do now.
+_INTENT_OF_VERB = {NO_LIMIT_VERB: "limit_discharge"}
+
 _TEXT_MAX = 120
 _NAME_MAX = 60
 _INPUT_KEYS = ("import_price", "export_rate", "price_level", "soc",
@@ -336,7 +344,7 @@ def _record_is_current(rec: Dict[str, Any], live: Dict[str, Any]) -> bool:
         return True
     verb = str(rec.get("new") or "").split(" ")[0]
     if live["verb"] is not None:
-        return verb == live["verb"]
+        return _INTENT_OF_VERB.get(verb, verb) == live["verb"]
     if live["active"] is not None:
         return (verb not in RESTING_VERBS) == live["active"]
     return True
@@ -417,12 +425,15 @@ def record_charger(log: Optional[DecisionLog], decision, *, verb: str,
 
 def record_battery(log: Optional[DecisionLog], decision, *,
                    value_w: Optional[float] = None,
-                   observer: bool = False) -> Optional[DecisionRecord]:
+                   observer: bool = False,
+                   verb: Optional[str] = None) -> Optional[DecisionRecord]:
     """A :class:`BatteryDecision` at ``actuate_battery()``. ``value_w`` is the
-    watts the intent actually sends (the quantised limit, the charge power)."""
+    watts the intent actually sends (the quantised limit, the charge power).
+    ``verb`` names what is sent when that is not the intent (#1427:
+    :data:`NO_LIMIT_VERB`)."""
     if not isinstance(log, DecisionLog):
         return None
-    intent = getattr(getattr(decision, "intent", None), "value", "normal")
+    intent = verb or getattr(getattr(decision, "intent", None), "value", "normal")
     code = (str(getattr(decision, "reason_code", "") or "")   # (#1174)
             or ("room_capped" if getattr(decision, "room_capped", False)
                 else intent))

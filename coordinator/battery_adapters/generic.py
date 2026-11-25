@@ -612,6 +612,19 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         await self._apply_discharge_limit(watts)
         self._last_intent = BatteryIntent.LIMIT_DISCHARGE
 
+    def discharge_limit_gap(self, watts: float) -> "Optional[str]":
+        """(#1427) The base rule, after the hold: a select holds the battery
+        at 0 W and caps nothing above it (:meth:`_limit_by_hold`), and a
+        hold the inverter refused lately is not tried."""
+        if self._hold_wired():
+            if watts > 0:
+                return self.NO_PARTIAL_HOLD_ERROR
+            if self.hold_refused:
+                return (f"{self.HOLD_ERROR}: "
+                        f"{self._hold.refused_text(hold_setup(self._config)[0])}")
+            return None
+        return super().discharge_limit_gap(watts)
+
     # ── (#1362) a hold through a select ──────────────────────────────
     def _hold_wired(self) -> bool:
         """The select holds the battery only where no discharge-limit number

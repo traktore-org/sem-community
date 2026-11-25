@@ -99,6 +99,9 @@ BATTERY_CHARGE_SLOWED = "battery_charge_slowed"
 # says so, never the reason the charge or sale was asked for
 BATTERY_CHARGE_NOT_STARTED = "battery_charge_not_started"
 BATTERY_SELL_NOT_STARTED = "battery_sell_not_started"
+# (#1427) a limit was asked and this battery has no way to cap it: the
+# row says SEM cannot, never that it limits
+BATTERY_NO_LIMIT = "battery_no_limit"
 
 # ── loads ────────────────────────────────────────────────────────────
 # The first values predate the catalogue (#1084) and keep their spelling:

@@ -83,6 +83,8 @@ def _huawei_solar_devices(hass, reg) -> list:
 
 
 class HuaweiBatteryAdapter(BatteryControlAdapter):
+    #: (#1427) the limit is written in watts only (no percent base)
+    PERCENT_LIMIT_OK = False
     """Huawei battery control. Delegates forced charge to the
     existing :class:`HuaweiChargeAdapter` for backward compat."""
 
@@ -926,6 +928,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
                 "configured — skipping limit %.0f W", watts,
             )
             self._last_discharge_limit_w = watts
+            return
+        if self._percent_limit_unwritable():            # (#1158, #1427)
             return
         # Idempotency (#538): skip the Modbus write when the control entity
         # is already at this value. ``command_normal`` re-issues max every

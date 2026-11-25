@@ -1339,13 +1339,20 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             self._unsafe_latched = True
             await self._store_unsafe(True)
 
+    #: what ``last_error`` says when SEM is asked to limit discharge
+    NO_LIMIT_ERROR = "Deye discharge limiting is not implemented"
+
+    def discharge_limit_gap(self, watts: float) -> Optional[str]:
+        """(#1427) A Deye caps nothing (see below)."""
+        return self.NO_LIMIT_ERROR
+
     async def command_limit_discharge(self, watts: float) -> None:
         # Deye discharge limiting is intentionally outside this first
         # contract. The intent still records what the coordinator asked
         # for — last_intent tracks the accepted command stream, last_error
         # carries the honesty (sibling adapters' convention).
         self._last_intent = BatteryIntent.LIMIT_DISCHARGE
-        self._last_error = "Deye discharge limiting is not implemented"
+        self._last_error = self.NO_LIMIT_ERROR
 
     async def command_force_charge(
         self, target_soc: float, charge_power_w: float, duration_min: int,
