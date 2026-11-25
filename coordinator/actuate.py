@@ -72,6 +72,15 @@ def _observe(decision: ChargerDecision, adapter: ChargerAdapter,
     )
 
 
+def _owed_ids(dev) -> set:
+    """(#1420) The ledger entries the guard's stop left owed, by identity
+    (read only: ``take_owed`` is the hand-back's)."""
+    book = getattr(dev, "command_ledger", None)
+    if not isinstance(book, list):
+        return set()
+    return {id(e) for e in book if isinstance(e, dict) and e.get("owed")}
+
+
 async def actuate(
     decision: ChargerDecision,
     adapter: ChargerAdapter,
@@ -165,13 +174,6 @@ async def _actuate(
         # failsafe stays unarmed, so the other party's session is not ended.
         decision = rewrite(decision, reason_code=RC.CHARGER_PHASE_STOP,
                            safety_stop=True, source="phase_guard", klass=1)
-        log_on_change(
-            _LOGGER, f"yield-override:ev:{decision.charger_id}",
-            logging.WARNING,
-            "phase guard overrides yield: %s — stopping %s. SEM will not "
-            "restart it; the other party owns it",
-            phase_override, decision.charger_id,
-        )
     try:
         if _ydev is not None:
             try:
@@ -185,8 +187,23 @@ async def _actuate(
             except AttributeError:  # a frozen test double
                 pass
         if _override:
+            _before = _owed_ids(_ydev)
             await reconciler.reconcile_and_apply(
                 decision, adapter, power, time.monotonic())
+            # (#1420) Say what went out, not what was meant: the reconciler
+            # may send nothing (a box already stopped, a re-send dwell, a
+            # locked box). A stop that went out is also logged by the
+            # hand-back record (it says SEM switches it back on).
+            _sent = len(_owed_ids(_ydev) - _before)
+            log_on_change(
+                _LOGGER, f"yield-override:ev:{decision.charger_id}",
+                logging.WARNING if _sent else logging.INFO,
+                "phase guard overrides yield: %s — %s",
+                phase_override,
+                (f"sent {decision.charger_id} its stop"
+                 if _sent else
+                 f"nothing sent to {decision.charger_id} this cycle"),
+            )
             return
     finally:
         if _override and _ydev is not None:
