@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **SEM's AI commands work on HA 2026.8 to 2026.10** (#1430). Every command an AI assistant sent there failed with "Unknown intent".
 - 🐛 **A voice "charge now" runs an Off charger** (#1430). Like the Now button, it charges for the minutes you said, then Off again.
 
 - 🐛 **A charge soon after a stop keeps your Powerwall settings, the reserve too** (#1426). The first fix missed that Tesla shows each change at once.
