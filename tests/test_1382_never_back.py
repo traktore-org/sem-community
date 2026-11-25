@@ -128,11 +128,12 @@ class TestTheFlowsHold:
 
 
 def test_every_row_correction_goes_through_the_floor():
-    """Every reconcile that may move a row down takes the floor first."""
+    """Every meter correction that may move a row down takes the floor first.
+    The EV row is the exception by design (#1049): its counter owns the day,
+    and a high read the charger later takes back must come out."""
     src = Path(ec_mod.__file__).read_text()
     tree = ast.parse(src)
     funcs = {n.name: ast.get_source_segment(src, n) for n in ast.walk(tree)
              if isinstance(n, ast.FunctionDef)}
-    for name in ("_reconcile_metered_energy", "_reconcile_home_energy",
-                 "_reconcile_ev_bucket"):
+    for name in ("_reconcile_metered_energy", "_reconcile_home_energy"):
         assert "_not_below_published(" in funcs[name], name

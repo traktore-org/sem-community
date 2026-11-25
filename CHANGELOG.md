@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **Live base load no longer dips below zero** (#1394). House and devices are averaged over two minutes, so meters reporting at different moments no longer clash.
+- 🐛 **Live base load no longer dips below zero** (#1394). House and devices are averaged over two minutes; meters reporting at different moments no longer clash.
 - 🐛 **Daily counters never step back** (#1382). A meter correction holds a day's total until the meter passes it; flows too, also across a restart.
 - 🐛 **Removed items leave no entities behind** (#1428). A removed charger, battery, PV string or load tariff loses its entities at the next start.
 - 🐛 **Removing SEM clears its notifications** (#1428). Statistics and the dashboard stay unless you run Remove leftovers first.

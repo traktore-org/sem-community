@@ -3270,7 +3270,6 @@ class EnergyCalculator:
         )
         if adopted is None:
             return
-        adopted = self._not_below_published(daily_key, adopted)   # (#1382)
         delta = adopted - integrated
         self._daily_accumulators[daily_key] = adopted
         baselines["row"] = adopted
