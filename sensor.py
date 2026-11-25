@@ -3304,11 +3304,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         _key = self.entity_description.key
         if _key.startswith("daily_"):
             try:
-                from homeassistant.util import dt as dt_util
                 _calc = getattr(self.coordinator, "_energy_calculator", None)
                 _cat = _key[len("daily_"):]
                 _cat = _cat[: -len("_energy")] if _cat.endswith("_energy") else _cat
-                _now = _calc.held_above_meter(dt_util.now().date()) if _calc else {}
+                # the calculator's own day, not a clock read of this sensor's
+                _day = getattr(_calc, "booking_day", None)
+                _now = _calc.held_above_meter(_day) if _calc and _day else {}
                 if isinstance(_now, dict) and _cat in _now:
                     attrs["held_above_meter_kwh"] = _now[_cat]
                 _ended = getattr(_calc, "day_end_held", None)
