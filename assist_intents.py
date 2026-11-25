@@ -650,8 +650,13 @@ class SetPeakLimitIntent(intent.IntentHandler):
         if not _PEAK_RANGE[0] <= kw <= _PEAK_RANGE[1]:
             response.async_set_speech("The peak limit must be between 1 and 80 kW.")
             return response
-        await intent_obj.hass.services.async_call(
-            DOMAIN, "update_target_peak", {"target_peak_limit": kw}, blocking=True)
+        from homeassistant.exceptions import ServiceNotFound
+        try:
+            await intent_obj.hass.services.async_call(
+                DOMAIN, "update_target_peak", {"target_peak_limit": kw}, blocking=True)
+        except ServiceNotFound:   # SEM half-started: say so, never a stack trace
+            response.async_set_speech(_NO_ANSWER)
+            return response
         response.response_type = intent.IntentResponseType.ACTION_DONE
         response.async_set_speech(f"The peak limit is now {kw:g} kW." + (
             " SEM is in watch-only mode, so it only plans with it."

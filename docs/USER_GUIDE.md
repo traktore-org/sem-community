@@ -666,6 +666,14 @@ Each hint is one message. Automations can use the event
   - "don't charge the car tonight"
   - "charge the car now, for 30 minutes" (leave out the minutes for one hour)
   - "charge normally again"
+  - "set the charger to Sun plus tariff" (Off, Sun, Sun plus tariff or Now;
+    the old names such as "solar only" still work)
+  - "charge until 7 o'clock" / "charge until full"
+  - "set the peak limit to 4 kilowatts" (1 to 80 kW)
+- Also a question (always on): "how much did solar save this month" (today,
+  this month or this year).
+- While SEM only watches, a change is stored and the answer says nothing is
+  sent to the charger yet.
 
 ### AI assistant
 
@@ -722,6 +730,44 @@ intents:
     data:
       - sentences:
           - "charge [the] [car] normally [again]"
+  SemSetChargeMode:
+    data:
+      - sentences:
+          - "set [the] (charger|car) to {mode}"
+          - "set [the] {name} to {mode}"
+  SemChargeNowUntil:
+    data:
+      - sentences:
+          - "charge [the] [car] until {until}"
+  SemSetPeakLimit:
+    data:
+      - sentences:
+          - "set [the] peak limit to {kw} (kilowatt|kilowatts|kW)"
+  SemSolarSavings:
+    data:
+      - sentences:
+          - "how much did (solar|the sun) save [{period}]"
+lists:
+  mode:
+    values:
+      - "off"
+      - "sun"
+      - "sun plus tariff"
+      - "now"
+      - "solar only"
+      - "min plus solar"
+      - "always max"
+  until:
+    wildcard: true
+  kw:
+    range:
+      from: 1
+      to: 80
+  period:
+    values:
+      - "today"
+      - "this month"
+      - "this year"
 ```
 
 Restart Home Assistant. Test each sentence under **Settings > Voice assistants >

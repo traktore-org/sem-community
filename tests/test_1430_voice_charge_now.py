@@ -190,7 +190,11 @@ async def test_every_sem_ai_tool_reaches_its_intent_real_hass(hass):
     assert len(intent_tools) >= 8
     # each tool gets what its intent needs; an empty call is enough to show
     # the intent is found (a missing required slot is its own, later error)
-    args = {sem_llm.TOOL_PREFIX + "SemSetChargerTargetSoc": {"percent": 80}}
+    args = {sem_llm.TOOL_PREFIX + "SemSetChargerTargetSoc": {"percent": 80},
+            # (#1431) the four newer commands' required slots
+            sem_llm.TOOL_PREFIX + "SemSetChargeMode": {"mode": "sun"},
+            sem_llm.TOOL_PREFIX + "SemChargeNowUntil": {"until": "07:00"},
+            sem_llm.TOOL_PREFIX + "SemSetPeakLimit": {"kw": 5}}
     for tool in intent_tools:
         try:
             result = await tool.async_call(

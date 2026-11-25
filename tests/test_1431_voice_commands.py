@@ -307,6 +307,13 @@ async def test_peak_limit_in_watch_only_says_it_only_plans(hass, peak_calls):
                           "mode, so it only plans with it.")
 
 
+async def test_peak_limit_without_sems_action_answers_honestly(hass):
+    _add(hass, _coordinator(hass, **ON))      # no update_target_peak registered
+    r = await intent.async_handle(hass, "t", INTENT_SET_PEAK_LIMIT,
+                                  {"kw": {"value": 4}})
+    assert _speech(r) == "I don't have an answer for that right now."
+
+
 # ── 4. savings ──────────────────────────────────────────────────────────
 
 async def test_savings_this_month_adds_the_battery_part(hass):
