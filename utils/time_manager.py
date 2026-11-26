@@ -358,6 +358,26 @@ class TimeManager:
         now = dt_util.now()
         return now.replace(hour=6, minute=0, second=0, microsecond=0)
 
+    def sunrise_on(self, day: date) -> datetime:
+        """(#1432) The sunrise that opens the meter day ``day``, local time.
+
+        One answer per date, from the home's location: the same at noon, at
+        night and after a restart. Sensors build ``last_reset`` on it, and
+        Home Assistant reads a changed ``last_reset`` as a new period — so it
+        must not depend on the clock or on ``sun.sun``, whose next rising
+        moves to tomorrow once the sun is up. A date with no sunrise (far
+        north in winter) starts at midnight.
+        """
+        try:
+            from homeassistant.const import SUN_EVENT_SUNRISE
+            from homeassistant.helpers.sun import get_astral_event_date
+            rising = get_astral_event_date(self.hass, SUN_EVENT_SUNRISE, day)
+        except Exception:  # noqa: BLE001 — no location reads as no sunrise
+            rising = None
+        if isinstance(rising, datetime):
+            return dt_util.as_local(rising)
+        return dt_util.start_of_local_day(day)
+
     def get_current_meter_day_sunrise_based(self) -> date:
         """Determine which 'meter day' we're in based on last sunrise.
 

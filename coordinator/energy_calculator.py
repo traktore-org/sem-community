@@ -752,6 +752,10 @@ class EnergyCalculator:
         # day) leaves the sensor on midnight, as it said before.
         self._ev_seen_day: Optional[date] = None
         self._ev_rolled_at: Optional[datetime] = None
+        # (#1432) The first device day this code published. A device period
+        # already running then says no ``last_reset``, as before. Persisted,
+        # or every restart would look like the upgrade.
+        self._device_period_since: Optional[date] = None
         # (#1046) the day key daily_ev was last read from (not persisted:
         # the next cycle sets it before anyone reads it)
         self._daily_ev_day: Optional[date] = None
@@ -4843,6 +4847,34 @@ class EnergyCalculator:
             self._ev_rolled_at = dt_util.now()
         self._ev_seen_day = ev_day
 
+    def device_period_starts(self, meter_day: date) -> Dict[str, Optional[datetime]]:
+        """(#1432) When the device ledger's day, month and year began: the
+        ``last_reset`` of the sensors that publish them.
+
+        The device rows roll at sunrise (``accumulate_device_energy``): the
+        day at the sunrise of ``meter_day``, the month at the sunrise of its
+        first day, the year at the sunrise of 1 January. Each start is read
+        from ``meter_day`` alone, so it moves in the cycle the row falls to
+        0, and a restart cannot move it.
+
+        None for a period already running on the first device day this code
+        published (marked here, persisted). Home Assistant reads a new
+        ``last_reset`` as a new period and would count that period's kWh so
+        far again. Such a row says its start from its next period on.
+        """
+        since = getattr(self, "_device_period_since", None)
+        if since is None:
+            self._device_period_since = since = meter_day
+        sunrise_on = self._time_manager.sunrise_on
+        return {
+            "day": sunrise_on(meter_day) if meter_day > since else None,
+            "month": (sunrise_on(meter_day.replace(day=1))
+                      if (meter_day.year, meter_day.month)
+                      > (since.year, since.month) else None),
+            "year": (sunrise_on(date(meter_day.year, 1, 1))
+                     if meter_day.year > since.year else None),
+        }
+
     def ev_last_reset(self) -> Optional[datetime]:
         """(#1176) When ``daily_ev`` last fell to 0: the car-day sensor's
         ``last_reset``. None until the first rollover this code saw — the
@@ -6332,6 +6364,11 @@ class EnergyCalculator:
                 self._ev_rolled_at.isoformat()
                 if getattr(self, "_ev_rolled_at", None) else None
             ),
+            # (#1432) the first device day this code published
+            "device_period_since": (
+                self._device_period_since.isoformat()
+                if getattr(self, "_device_period_since", None) else None
+            ),
             "ev_day_offset": self._ev_day_offset,
             "ev_day_key": (
                 self._ev_day_key.isoformat() if self._ev_day_key else None
@@ -6538,6 +6575,14 @@ class EnergyCalculator:
             except ValueError:
                 self._ev_seen_day = None
                 self._ev_rolled_at = None
+            # (#1432) a store without it is the upgrade: the day the first
+            # publish marks. A mark set before this restore is kept.
+            try:
+                since = state.get("device_period_since")
+                if since:
+                    self._device_period_since = date.fromisoformat(str(since))
+            except ValueError:
+                pass
             ev_day_offset = state.get("ev_day_offset")
             ev_day_key = state.get("ev_day_key")
             if _valid_hhmm(ev_day_offset) and ev_day_key:

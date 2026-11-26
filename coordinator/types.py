@@ -984,6 +984,12 @@ class HeatPumpSensorData:
     heat_pump_energy_total: float = 0.0
     heat_pump_energy_shifted_today: float = 0.0
     heat_pump_energy_shifted_total: float = 0.0
+    # (#1432) When the rows above began, ISO: the sunrise that opened the
+    # heat pump's day, month and year — their sensors' ``last_reset``. None
+    # for a period that was running when this code first published.
+    heat_pump_day_start: Optional[str] = None
+    heat_pump_month_start: Optional[str] = None
+    heat_pump_year_start: Optional[str] = None
     # Provenance, carried from the device (#768): counter / power / rated /
     # none. ``measured`` is False when the figure is ``rated_power`` × runtime,
     # which may be displayed but never fed back as training data (#755).
@@ -1697,6 +1703,9 @@ class SEMData:
             "heat_pump_energy_total": self.heat_pump.heat_pump_energy_total,
             "heat_pump_energy_shifted_today": self.heat_pump.heat_pump_energy_shifted_today,
             "heat_pump_energy_shifted_total": self.heat_pump.heat_pump_energy_shifted_total,
+            "heat_pump_day_start": self.heat_pump.heat_pump_day_start,
+            "heat_pump_month_start": self.heat_pump.heat_pump_month_start,
+            "heat_pump_year_start": self.heat_pump.heat_pump_year_start,
             "heat_pump_energy_source": self.heat_pump.heat_pump_energy_source,
             "heat_pump_energy_measured": self.heat_pump.heat_pump_energy_measured,
             "heat_pump_cop": self.heat_pump.heat_pump_cop,
