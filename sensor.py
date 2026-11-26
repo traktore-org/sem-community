@@ -88,14 +88,46 @@ NO_RESET_TOTAL_KEYS = frozenset({
     "battery_cycles_estimated", "roi_annual_savings",
 })
 
-#: (#1432) TOTAL sensors that do fall to 0 but do not say when yet: a new
-#: session, the next forecast day, the charger's own counter. Left open in
-#: #1436 (each needs a choice); listed so the guard test knows them.
+#: (#1436) TOTAL sensors that count one session and fall to 0 when the next
+#: one starts. Their ``last_reset`` is the session's start, published with
+#: the value from the same session record, so the two move in one cycle.
+#: Each charger's own row (``charger_{cid}_session_energy``) has the same
+#: rule: ``period_start_key``.
+SESSION_SENSOR_STARTS = {
+    "session_energy": "session_start",
+    "session_cost": "session_start",
+    "battery_session_energy": "battery_session_start",
+    "battery_session_cost": "battery_session_start",
+    "battery_session_savings": "battery_session_start",
+}
+_CHARGER_SESSION_ENERGY = re.compile(r"charger_(.+)_session_energy")
+
+
+def _local_zone():
+    """The home's time zone: a start saved with no offset is local time."""
+    from homeassistant.util import dt as dt_util
+    return dt_util.get_default_time_zone()
+
+
+def period_start_key(sensor_key: str) -> Optional[str]:
+    """(#1432/#1436) The data key that says when the period ``sensor_key``
+    counts began — a device's sunrise day, month or year, or a session —
+    or None for a sensor with no such start."""
+    if sensor_key in DEVICE_DAY_SENSOR_STARTS:
+        return DEVICE_DAY_SENSOR_STARTS[sensor_key]
+    if sensor_key in SESSION_SENSOR_STARTS:
+        return SESSION_SENSOR_STARTS[sensor_key]
+    found = _CHARGER_SESSION_ENERGY.fullmatch(sensor_key)
+    if found:
+        return f"charger_{found.group(1)}_session_start"
+    return None
+
+
+#: (#1432) TOTAL sensors that do fall but do not say when. The solar
+#: forecasts are not counters at all: a forecast takes no state class in
+#: Home Assistant, but dropping it ends their long-term statistics. Left
+#: open (#1436, a decision); listed so the guard test knows them.
 RESET_UNTOLD_TOTAL_KEYS = frozenset({
-    "session_energy", "session_cost",
-    "battery_session_energy", "battery_session_cost",
-    "battery_session_savings",
-    "charger_{cid}_session_energy", "charger_{cid}_session_energy_external",
     "forecast_today_kwh", "forecast_tomorrow_kwh",
     "forecast_remaining_today_kwh",
 })
@@ -2453,15 +2485,19 @@ async def async_setup_entry(
             # reload and may differ from the charger's own counter — load-
             # bearing for solar-share / cost calculations, NOT a pass-through.
             # This new ``_external`` sensor surfaces the charger's truth
-            # alongside it so users (and the dashboard) can compare. Falls
-            # back to 0 when the configured sensor is unavailable / missing.
+            # alongside it so users (and the dashboard) can compare. 0 with
+            # no counter set up; unknown while the counter cannot be read.
+            # (#1436) TOTAL_INCREASING: the charger resets its counter when
+            # it likes and SEM cannot see when, so Home Assistant takes a
+            # fall as a new session. As TOTAL it booked each fall as
+            # negative use.
             SensorEntityDescription(
                 key=f"charger_{cid}_session_energy_external",
                 name=f"{cname} Session Energy (charger)",
                 translation_key="per_charger_session_energy_external",
                 translation_placeholders={"charger": cname},
                 device_class=SensorDeviceClass.ENERGY,
-                state_class=SensorStateClass.TOTAL,
+                state_class=SensorStateClass.TOTAL_INCREASING,
                 native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                 suggested_display_precision=2,
             ),
@@ -2819,6 +2855,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     _last_good_value = None
     _last_good_at = None
     _stale_s = 0
+    # (#1436) the period start Home Assistant has, and when it last saw a
+    # state (``_start_told``); set from the restored state when added
+    _reset_told = None
+    _reset_floor = None
+    _reset_seen = None      # the last start seen in this run
     _attr_should_poll = False
     _attr_has_entity_name = True
 
@@ -3000,6 +3041,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks and restore state when entity is added to hass."""
+        # (#1436) before the first state is written: which period start
+        # Home Assistant already has
+        if self.entity_description.state_class == SensorStateClass.TOTAL:
+            await self._restore_reset()
         await super().async_added_to_hass()
 
         # Restore state for accumulating sensors (TOTAL state class)
@@ -4216,12 +4261,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             "yearly_",  # All yearly_* sensors
         ]
 
-        # (#1432) A device row rolls at sunrise. Its start is published with
-        # its value, read from the same day key, so the two move together.
-        if sensor_key in DEVICE_DAY_SENSOR_STARTS:
-            raw = (self.coordinator.data or {}).get(
-                DEVICE_DAY_SENSOR_STARTS[sensor_key])
-            return dt_util.parse_datetime(raw) if isinstance(raw, str) else None
+        # (#1432) A device row rolls at sunrise; (#1436) a session row falls
+        # to 0 when the next session starts. The start is published with the
+        # value, read from the same record, so the two move together.
+        start_key = period_start_key(sensor_key)
+        if start_key is not None:
+            raw = (self.coordinator.data or {}).get(start_key)
+            return self._start_told(
+                dt_util.parse_datetime(raw) if isinstance(raw, str) else None)
 
         # (#1176) The car's daily energy falls to 0 at the car day's start
         # (the Charge-by time), not at midnight. Saying midnight made the
@@ -4231,7 +4278,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             calc = getattr(self.coordinator, "_energy_calculator", None)
             start = calc.ev_last_reset() if calc is not None else None
             if start is not None:
-                return start
+                return self._start_told(start)
 
         # Check if sensor resets daily
         if any(pattern in sensor_key for pattern in daily_reset_patterns):
@@ -4250,6 +4297,73 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
         # Lifetime totals (never reset) return None
         return None
+
+    def _start_told(self, start: Optional[datetime]) -> Optional[datetime]:
+        """(#1436) The period start to publish as ``last_reset``.
+
+        Home Assistant reads a new ``last_reset`` as a new period from 0, so
+        a start may be published only in the cycle its period begins. A
+        period already running is counted under the old ``last_reset``: None
+        from a build without one, which is the upgrade, and also a beta
+        rolled back and installed again inside the period (SEM's store still
+        holds the start, Home Assistant forgot it). Its start now would
+        count it again.
+
+        ``_reset_told`` is the start Home Assistant has; ``_reset_floor`` is
+        when it last saw a state; both come from the restored state
+        (``_restore_reset``). A start is taken only when it is later than
+        the told one (a new period starts after the last), and when:
+
+        * it moved in this run: SEM saw the period begin;
+        * or Home Assistant has an older start: the period it saw ended,
+          while SEM was down;
+        * or Home Assistant has none, and the start is after its last state:
+          the period began while SEM was down.
+
+        The period start is not when SEM entered it (a polar day row starts
+        at 00:00 of the day before), so the floor is used only for the case
+        that needs it. None is never taken: it starts no period, and a start
+        that came back after a None would count its period again.
+        """
+        if start is not None and start.tzinfo is None:
+            start = start.replace(tzinfo=_local_zone())
+        told = self._reset_told
+        if start is None or start == told:
+            return told
+        seen, self._reset_seen = self._reset_seen, start
+        if told is not None and start < told:
+            return told
+        if seen is not None and start != seen:
+            take = True
+        elif told is not None:
+            take = True
+        else:
+            floor = self._reset_floor
+            take = floor is None or start > floor
+        if take:
+            self._reset_told = start
+        return self._reset_told
+
+    async def _restore_reset(self) -> None:
+        """(#1436) Read the ``last_reset`` Home Assistant has for this sensor,
+        and when it last saw a state, from the restored state. With none
+        saved, the floor is now: no period that began before this run is
+        told, as no start Home Assistant could have counted is."""
+        from homeassistant.util import dt as dt_util
+        told = floor = None
+        try:
+            last = await self.async_get_last_state()
+        except Exception:  # noqa: BLE001 — no restore: the floor is now
+            last = None
+        if last is not None:
+            raw = last.attributes.get("last_reset")
+            told = dt_util.parse_datetime(raw) if isinstance(raw, str) else None
+            if told is not None and told.tzinfo is None:
+                told = told.replace(tzinfo=_local_zone())
+            floor = last.last_updated
+        self._reset_told = told
+        self._reset_floor = floor if floor is not None else dt_util.utcnow()
+        self._reset_seen = None
 
     def _format_charging_state(self, state: str) -> str:
         """Format charging state to human-readable message (#62).

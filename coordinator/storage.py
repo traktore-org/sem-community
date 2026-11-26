@@ -542,6 +542,17 @@ class SEMStorage:
         """Persist EV session state (survives restarts)."""
         self._daily_data["ev_session"] = state
 
+    # (#1436) The battery session — a restart resumes it, as the car's does.
+    def get_battery_session_state(self) -> Dict[str, Any]:
+        """The battery session's saved record, or {}."""
+        state = self._daily_data.get("battery_session")
+        return dict(state) if isinstance(state, dict) else {}
+
+    def set_battery_session_state(self, state: Dict[str, Any]) -> None:
+        """Rides the daily store with ``ev_session``. Lost, a restart cut
+        the session to 0 and Home Assistant booked the fall as use."""
+        self._daily_data["battery_session"] = dict(state)
+
     # (#1069) The current 15-minute peak slot — a restart resumes it spent.
     def get_peak_slot_state(self) -> Dict[str, Any]:
         """The slot tracker's saved state (``PeakSlotTracker.to_state``)."""

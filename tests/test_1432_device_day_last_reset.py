@@ -56,6 +56,7 @@ from custom_components.solar_energy_management.sensor import (
     NO_RESET_TOTAL_KEYS,
     RESET_UNTOLD_TOTAL_KEYS,
     SEMSolarSensor,
+    period_start_key,
 )
 from custom_components.solar_energy_management.utils.time_manager import TimeManager
 
@@ -494,7 +495,10 @@ def test_every_total_sensor_says_when_it_resets():
         if key in listed:
             continue
         real = re.sub(r"\{\w+\}", "x1", key)
-        if _sensor(real, data, calc).last_reset is None:
+        # (#1436) a session row reads its start from its own key
+        start = period_start_key(real)
+        told = {**data, start: "2026-11-26T08:13:15+01:00"} if start else data
+        if _sensor(real, told, calc).last_reset is None:
             untold.append(key)
     assert untold == [], (
         "TOTAL sensors with no reset rule — give them one in "
