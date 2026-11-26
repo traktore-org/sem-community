@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **SEM's AI commands work on HA 2026.8 to 2026.10** (#1430). Every command an AI assistant sent there failed with "Unknown intent".
 - 🐛 **A voice "charge now" runs an Off charger** (#1430). Like the Now button, it charges for the minutes you said, then Off again.
-
+- 🐛 **A slow Powerwall cloud no longer keeps SEM's reserve** (#1429). SEM waits until your settings show for 15 minutes, not 15 minutes from the stop.
 - 🐛 **A charge soon after a stop keeps your Powerwall settings, the reserve too** (#1426). The first fix missed that Tesla shows each change at once.
 - 🐛 **Live base load no longer dips below zero** (#1394). House and devices are averaged over two minutes; meters reporting at different moments no longer clash.
 - 🐛 **Daily counters never step back** (#1382). A meter correction holds a day's total until the meter passes it; flows too, also across a restart.

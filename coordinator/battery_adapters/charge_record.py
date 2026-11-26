@@ -71,8 +71,10 @@ class ForcedChargeRecord:
         #: (#1362) entity → [day, writes SEM made to it that day]
         self._wrote: dict[str, list] = {}
         #: (#1426) entity → [SEM's charge value, the value SEM put back,
-        #: when (epoch s)]: a cloud read can show SEM's own charge value for
-        #: minutes after the put-back, and that read is SEM's, not the user's
+        #: since when (epoch s), the value read since then]: a cloud read can
+        #: show SEM's own charge value for minutes after the put-back, and
+        #: that read is SEM's, not the user's. (#1429) The time is when the
+        #: entity began to show that value, not when SEM wrote
         self._put_back: dict[str, list] = {}
         self._loaded = store is None
         self._readable = store is not None
@@ -151,21 +153,37 @@ class ForcedChargeRecord:
 
     async def note_put_back(self, entity_id: str, sem_value: str,
                             back: str, at: float) -> None:
-        """(#1426) SEM wrote ``back`` over its own ``sem_value``."""
+        """(#1426) SEM wrote ``back`` over its own ``sem_value``. The entity
+        shows ``back`` from ``at``: a cloud entity shows a write at once."""
         entity_id = str(entity_id or "")
         if not entity_id or str(sem_value) == str(back):
             return
         async with self._lock:
             await self._load()
-            self._put_back[entity_id] = [str(sem_value), str(back), float(at)]
+            self._put_back[entity_id] = [str(sem_value), str(back), float(at),
+                                         str(back)]
             await self._save()
 
     async def put_back_of(self, entity_id: str) -> "tuple | None":
-        """(#1426) ``(sem_value, back, at)`` of SEM's last put-back, or None."""
+        """(#1426) ``(sem_value, back, since, shown)`` of SEM's last put-back:
+        the entity has shown ``shown`` (one of the two) since ``since``. None
+        when there is none."""
         async with self._lock:
             await self._load()
             row = self._put_back.get(str(entity_id or ""))
             return tuple(row) if row else None
+
+    async def put_back_shows(self, entity_id: str, shown: str,
+                             since: float) -> None:
+        """(#1429) The entity now shows the other one of the two values:
+        its time starts again."""
+        async with self._lock:
+            await self._load()
+            row = self._put_back.get(str(entity_id or ""))
+            if row is None or str(shown) not in row[:2]:
+                return
+            row[2], row[3] = float(since), str(shown)
+            await self._save()
 
     async def forget_put_back(self, entity_id: str) -> None:
         async with self._lock:
@@ -317,10 +335,20 @@ class ForcedChargeRecord:
             wrote.items() if isinstance(wrote, dict) else ())
             if isinstance(r, list) and len(r) == 2 and isinstance(r[1], int)}
         put_back = record.get("put_back", {})       # (#1426) a hint only
-        self._put_back = {e: [str(r[0]), str(r[1]), float(r[2])] for e, r in (
-            put_back.items() if isinstance(put_back, dict) else ())
-            if isinstance(r, list) and len(r) == 3
-            and isinstance(r[2], (int, float)) and not isinstance(r[2], bool)}
+        # (#1429) what shows, beside the rows: a SEM before it reads them
+        shown = record.get("put_back_shown", {})
+        shown = shown if isinstance(shown, dict) else {}
+        self._put_back = {e: [str(r[0]), str(r[1]), float(r[2]),
+                              # none, or neither of the two: as SEM's
+                              # put-back left it
+                              str(shown[e]) if e in shown and str(
+                                  shown[e]) in (str(r[0]), str(r[1]))
+                              else str(r[1])]
+                          for e, r in (put_back.items()
+                                       if isinstance(put_back, dict) else ())
+                          if isinstance(r, list) and len(r) == 3
+                          and isinstance(r[2], (int, float))
+                          and not isinstance(r[2], bool)}
 
     async def _save(self) -> bool:
         if self._store is None:
@@ -338,7 +366,12 @@ class ForcedChargeRecord:
             if self._wrote:
                 record["wrote"] = {e: list(r) for e, r in self._wrote.items()}
             if self._put_back:      # (#1426)
-                record["put_back"] = {e: list(r) for e, r in self._put_back.items()}
+                record["put_back"] = {e: list(r[:3])
+                                      for e, r in self._put_back.items()}
+                shown = {e: r[3] for e, r in self._put_back.items()
+                         if r[3] != r[1]}
+                if shown:           # (#1429)
+                    record["put_back_shown"] = shown
             await self._store.async_save(record)
         except Exception as exc:  # noqa: BLE001
             log_on_change(_LOGGER, "forced_charge_record:save", logging.WARNING,
