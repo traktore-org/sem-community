@@ -190,6 +190,12 @@ class LedgerSlot:
     # every grid top-up of the car then, so no thin sun slot takes grid
     # power there.
     import_peak: bool = False
+    # (#1362) SEM keeps the pack this slot (the house sink in a cheap hour,
+    # ``sink_verdicts.house_keeps_pack``): the house buys from the grid and
+    # the pack gives it only what the meter may not buy. A battery-run load
+    # is booked as before (left open). Set by ``build_night_ledger``;
+    # False = exactly as before.
+    pack_kept: bool = False
 
     @property
     def hours(self) -> float:
@@ -201,17 +207,38 @@ class LedgerSlot:
 # ---------------------------------------------------------------------------
 
 def build_night_ledger(slots, *, soc_kwh, floor_kwh, max_discharge_w,
-                       peak_limit_w, capacity_kwh=0.0) -> list:
+                       peak_limit_w, capacity_kwh=0.0,
+                       house_sink_enabled=False) -> list:
     """Walk the night once: home draws the battery down to the sunrise floor
     (bounded by discharge power), the remainder lands on the meter, and the
     grid headroom per slot follows. ``_walk`` re-runs whenever packing
     changes the battery's path — a Tier-2 draw empties it EARLIER, the
-    takeover hour moves, and later grid headroom shrinks."""
+    takeover hour moves, and later grid headroom shrinks.
+
+    (#1362) ``house_sink_enabled``: the user's "keep the battery in cheap
+    hours" switch. Each slot asks the live rule (``house_keeps_pack``) with
+    its own cheap word — execution's: ``import_cheap`` on a sun slot, whose
+    ``level_cheap`` is the packer's, else ``level_cheap``."""
+    from .sink_verdicts import house_keeps_pack
     ledger = sorted(slots, key=lambda s: s.start)
     for s in ledger:
         s.cap_kwh = float(capacity_kwh or 0.0)
+        cheap = (s.import_cheap if s.cap_override_w is not None
+                 else s.level_cheap)
+        s.pack_kept = house_keeps_pack(house_sink_enabled, cheap)
     _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w)
     return ledger
+
+
+def _house_ask_kwh(s, home_kwh, peak_limit_w) -> float:
+    """(#1362) What the house asks of the pack this slot. A kept slot asks
+    only what the meter may not buy over the peak limit (the live #1003
+    cover under the hold); with no limit, nothing."""
+    if not getattr(s, "pack_kept", False):
+        return home_kwh
+    if not peak_limit_w or peak_limit_w <= 0:
+        return 0.0
+    return max(0.0, home_kwh - float(peak_limit_w) * s.hours / 1000.0)
 
 
 def level_after_charge(s, soc=None) -> float:
@@ -233,7 +260,9 @@ def _walk(ledger, soc_kwh, floor_kwh, max_discharge_w, peak_limit_w) -> None:
         # Home draws battery first — energy above the floor, power-bounded.
         home_kwh = s.home_w * h / 1000.0
         avail = max(0.0, soc - floor_kwh)
-        batt_home = min(home_kwh, avail,
+        # (#1362) a kept slot: the house buys, the pack covers only the
+        # meter's excess over the peak limit
+        batt_home = min(_house_ask_kwh(s, home_kwh, peak_limit_w), avail,
                         max_discharge_w * h / 1000.0 if h > 0 else 0.0)
         # Tier-2 loads booked into this slot also draw the battery.
         batt_loads = min(s.batt_out_kwh, max(0.0, avail - batt_home))
@@ -1104,8 +1133,12 @@ def _cost_if_now(demands, allocations, ledger, price_of):
 
 
 def takeover_of(ledger):
-    """The first slot whose house draw lands on the meter (the battery is done)."""
-    return next((s.start for s in (ledger or []) if s.home_grid_w > _W_EPS), None)
+    """The first slot whose house draw lands on the meter (the battery is done).
+    (#1362) Not a kept slot: the house buys there on purpose, the pack is not
+    done."""
+    return next((s.start for s in (ledger or [])
+                 if s.home_grid_w > _W_EPS
+                 and not getattr(s, "pack_kept", False)), None)
 
 
 def house_grid_cost(ledger) -> dict:

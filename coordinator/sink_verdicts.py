@@ -54,6 +54,36 @@ class SinkVerdict:
                 "until": self.until.isoformat() if self.until else None}
 
 
+def house_keeps_pack(house_sink_enabled: bool, cheap: bool) -> bool:
+    """(#879) When the house sink keeps the pack: the switch is on and the
+    hour is cheap. (#1362) ONE rule for two readers: the live verdict below
+    and the plan's battery walk (``energy_planner.build_night_ledger``).
+    The plan let the pack cover the house in a cheap hour the live rule
+    kept it in, so the Plan card showed "battery to the house" while SEM
+    held the battery and the house bought from the grid."""
+    return bool(house_sink_enabled) and bool(cheap)
+
+
+#: (#1362) the battery modes whose decision reaches the house sink's hold
+#: (``decide_battery``: "off" and the two manual modes return before it)
+_HOLD_MODES = ("auto", "self_consumption", "allow_arbitrage")
+
+
+def plan_house_sink(config) -> bool:
+    """(#1362) Does the plan keep the pack in cheap hours? The switch is on
+    and every battery's mode reaches the hold. A pack SEM leaves to the
+    inverter ("off") or drives by hand is not held live, so a fleet with
+    one such pack is planned as before (the walk is fleet-wide)."""
+    cfg = config or {}
+    if not bool(cfg.get("battery_house_sink_enabled", False)):
+        return False
+    one = cfg.get("battery_mode") or "auto"
+    modes = cfg.get("battery_modes")
+    if not isinstance(modes, (list, tuple)) or not modes:
+        modes = [one]
+    return all(str(m or one).lower() in _HOLD_MODES for m in modes)
+
+
 def _money(v) -> str:
     """(#1174) A per-kWh value as the sentence shows it: up to 3 decimals."""
     return f"{round(float(v), 3):g}"
@@ -272,7 +302,7 @@ def sink_verdicts(*, now: datetime, tariff_level: Optional[str], upcoming,
         allowance_known=peak_allowance_known, pack_soc=pack_soc,
         release_soc=peak_hold_release_soc, sun_refills_pack=sun_refills_pack,
         released=peak_hold_released) if peak_hold_enabled else None)
-    if house_sink_enabled and answer_for_level(level).is_cheap:
+    if house_keeps_pack(house_sink_enabled, answer_for_level(level).is_cheap):
         out["house"] = SinkVerdict(
             "house", HELD, f"{level} hour — let the house import, keep the pack")
     elif _peak is not None:

@@ -91,9 +91,12 @@ def arbitrage_advice(slots, *, soc_kwh: float, capacity_kwh: float,
     buy_left = {id(s): max_charge_w * s.hours / 1000.0 for s in market}
     # Delivered kWh a slot can absorb = what the home would otherwise
     # import there, bounded by the discharge power cap.
+    # (#1362) Never a slot where SEM keeps the pack (the house sink): the
+    # house buys there on purpose.
     deliver_left = {
-        id(s): min(max(0.0, s.home_grid_w) * s.hours / 1000.0,
-                   max_discharge_w * s.hours / 1000.0)
+        id(s): (0.0 if getattr(s, "pack_kept", False) else
+                min(max(0.0, s.home_grid_w) * s.hours / 1000.0,
+                    max_discharge_w * s.hours / 1000.0))
         for s in market
     }
 
