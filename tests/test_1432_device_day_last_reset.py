@@ -250,17 +250,42 @@ def test_a_restart_across_sunrise_keeps_the_pairing():
     assert s_after["day"] != s_before["day"] and s_after["day"] is not None
 
 
-def test_a_restart_before_sun_sun_is_up_does_not_step_the_day_back():
-    """Review finding: Home Assistant restarts at 07:00 in November and
+@pytest.fixture
+def home_zone():
+    """Set the home's time zone for one test, then put it back."""
+    import zoneinfo
+    before = dt_util.get_default_time_zone()
+
+    def _set(name):
+        dt_util.set_default_time_zone(zoneinfo.ZoneInfo(name))
+    yield _set
+    dt_util.set_default_time_zone(before)
+
+
+@pytest.mark.parametrize(("zone", "lat", "lon", "start", "restart"), [
+    # Amsterdam in November: sunrise 08:20, a 07:00 restart
+    ("Europe/Amsterdam", 52.37, 4.90, (2026, 11, 25, 12), (2026, 11, 28, 7)),
+    # Apia, east of the date line: the clock's day is not the solar day
+    ("Pacific/Apia", -13.83, -171.76, (2026, 11, 25, 12), (2026, 11, 28, 5)),
+    # Tromsø in the polar night: no sunrise for weeks
+    ("Europe/Oslo", 69.65, 18.96, (2026, 12, 8, 12), (2026, 12, 10, 10)),
+])
+def test_a_restart_before_sun_sun_is_up_does_not_step_the_day_back(
+        home_zone, zone, lat, lon, start, restart):
+    """Review finding: Home Assistant restarts before sunrise and
     ``sun.sun`` is not set up at SEM's first cycle. A fixed 06:00 fallback
     put that cycle in the new day; the next cycle, with ``sun.sun``, went
     back to yesterday — and its start with it, which Home Assistant read as
-    a new period: yesterday's kWh counted twice."""
+    a new period: yesterday's kWh counted twice. The fallback now reads the
+    same next rising ``sun.sun`` would publish."""
+    home_zone(zone)
     hass = _SunHass()
-    with freeze_time(_local(2026, 11, 25, 12)) as clock:
+    hass.config.latitude, hass.config.longitude = lat, lon
+    end = _local(*restart) + timedelta(hours=8)
+    with freeze_time(_local(*start)) as clock:
         calc = _calc(hass)
         rows, booked = [], 0.0
-        while dt_util.now() < _local(2026, 11, 28, 7):
+        while dt_util.now() < _local(*restart):
             _d, row, starts = _cycle(calc)
             booked += 2.0 * STEP.total_seconds() / 3600
             rows.append((row["daily_kwh"], starts["day"]))
@@ -272,7 +297,7 @@ def test_a_restart_before_sun_sun_is_up_does_not_step_the_day_back():
         after = _calc(hass)
         after.restore_state(state)
         days = []
-        while dt_util.now() < _local(2026, 11, 28, 12):
+        while dt_util.now() < end:
             day, row, starts = _cycle(after)
             booked += 2.0 * STEP.total_seconds() / 3600
             rows.append((row["daily_kwh"], starts["day"]))
@@ -280,9 +305,26 @@ def test_a_restart_before_sun_sun_is_up_does_not_step_the_day_back():
             hass.states.get = real_get
             clock.tick(STEP)
     assert days == sorted(days)            # the day never steps back
-    assert days[0] == date(2026, 11, 27)   # 07:00 is before the sunrise
     first = 2.0 * STEP.total_seconds() / 3600
     assert _ha_sum(rows) == pytest.approx(booked - first, abs=0.01)
+
+
+def test_near_the_date_line_the_sunrise_is_on_its_own_date(home_zone):
+    """Astral picks the sunrise by the solar day at the home's longitude;
+    in Apia that is the clock's next day. A start a day ahead would be
+    kept as the row's ``last_reset``."""
+    home_zone("Pacific/Apia")
+    hass = _SunHass()
+    hass.config.latitude, hass.config.longitude = -13.83, -171.76
+    tm = TimeManager(hass)
+    day = date(2026, 11, 26)
+    sunrise = tm.sunrise_on(day)
+    assert sunrise.date() == day and 5 <= sunrise.hour <= 7
+    # with sun.sun up at 10:00 the day is today, as without it
+    with freeze_time(_local(2026, 11, 26, 10)):
+        assert tm.get_current_meter_day_sunrise_based() == day
+        hass.states.get = lambda _eid: None
+        assert tm.get_current_meter_day_sunrise_based() == day
 
 
 def test_the_day_rolls_at_the_sunrise_not_minutes_later():
@@ -327,8 +369,11 @@ def test_a_changed_location_does_not_move_a_running_start():
 def test_a_bad_kept_row_is_dropped_not_raised():
     calc = _calc()
     calc.restore_state({"device_period_since": "2026-01-01",
-                        "device_period_kept": {"day": ["2026-11-26"],
-                                               "month": 5, "year": [1, 2]}})
+                        "device_period_kept": {
+                            "day": ["2026-11-26", "not a time"],
+                            "month": 5, "year": [1, 2],
+                            "week": ["2026-11-26", "2026-11-26T08:13:15"]}})
+    assert calc._device_period_kept == {}
     out = calc.device_period_starts(date(2026, 11, 26))
     assert out["day"] == calc._time_manager.sunrise_on(
         date(2026, 11, 26)).isoformat()

@@ -325,51 +325,54 @@ class TimeManager:
         Returns:
             Sunrise datetime in local timezone, or 06:00 today as fallback
         """
+        next_rising = None
+        from_location = False
         try:
             sun_state = self.hass.states.get("sun.sun")
             if sun_state and sun_state.attributes:
                 next_rising = sun_state.attributes.get("next_rising")
-                if next_rising:
-                    # Handle both datetime and string formats
-                    if isinstance(next_rising, str):
-                        # Parse ISO format string to datetime
-                        next_rising = datetime.fromisoformat(next_rising.replace('Z', '+00:00'))
-                    # Convert to local time
-                    sunrise = dt_util.as_local(next_rising)
-
-                    # BUG FIX: next_rising can be tomorrow's sunrise if called after today's sunrise
-                    # If sunrise is tomorrow, subtract 24 hours to get today's sunrise
-                    now = dt_util.now()
-                    if sunrise.date() > now.date():
-                        # (#1432) Today's own sunrise, from the location.
-                        # Tomorrow's minus 24 h is a minute or two later in
-                        # autumn: the meter day rolled minutes after sunrise,
-                        # and a restart then could see the day step back.
-                        today = self._astral_sunrise(now.date())
-                        sunrise = (today if today is not None and today <= now
-                                   else sunrise - timedelta(days=1))
-                        # Same class of bug as #416 forecast_tracker.
-                        # Tracking here so we can see how often the
-                        # next_rising-is-tomorrow case fires in practice.
-                        self._last_sunrise_correction = "next_rising_was_tomorrow"
-                    else:
-                        self._last_sunrise_correction = "none"
-
-                    return sunrise
+                # Handle both datetime and string formats
+                if isinstance(next_rising, str):
+                    # Parse ISO format string to datetime
+                    next_rising = datetime.fromisoformat(next_rising.replace('Z', '+00:00'))
         except Exception as e:
             _LOGGER.debug(f"Could not get sunrise datetime, using default: {e}")
+            next_rising = None
+        if not isinstance(next_rising, datetime):
+            # (#1432) No ``sun.sun`` (not set up yet after a restart): the
+            # same next rising, from the home's location, read the same way
+            # below. A fixed 06:00 put a winter morning restart in the new
+            # meter day; once ``sun.sun`` came up the day stepped back, and
+            # the device rows read yesterday again.
+            next_rising = self._astral_next_rising()
+            from_location = next_rising is not None
+        if next_rising is not None:
+            # Convert to local time
+            sunrise = dt_util.as_local(next_rising)
 
-        # (#1432) No ``sun.sun`` (not set up yet after a restart): the same
-        # sunrise from the home's location. A fixed 06:00 put a winter
-        # morning restart in the new meter day; once ``sun.sun`` came up the
-        # day stepped back, and the device rows read yesterday again.
-        now = dt_util.now()
-        today = self._astral_sunrise(now.date())
-        if today is not None:
-            self._last_sunrise_correction = "fallback_location"
-            return today
+            # BUG FIX: next_rising can be tomorrow's sunrise if called after today's sunrise
+            # If sunrise is tomorrow, subtract 24 hours to get today's sunrise
+            now = dt_util.now()
+            if sunrise.date() > now.date():
+                # (#1432) Today's own sunrise, from the location. Tomorrow's
+                # minus 24 h is a minute or two later in autumn: the meter
+                # day rolled minutes after sunrise.
+                today = self._astral_sunrise(now.date())
+                sunrise = (today if today is not None and today <= now
+                           else sunrise - timedelta(days=1))
+                # Same class of bug as #416 forecast_tracker.
+                # Tracking here so we can see how often the
+                # next_rising-is-tomorrow case fires in practice.
+                self._last_sunrise_correction = "next_rising_was_tomorrow"
+            else:
+                self._last_sunrise_correction = "none"
+            if from_location:
+                self._last_sunrise_correction = "fallback_location"
+            return sunrise
+
         # Fallback: 06:00 today in local time
         self._last_sunrise_correction = "fallback_default_06_00"
+        now = dt_util.now()
         return now.replace(hour=6, minute=0, second=0, microsecond=0)
 
     def sunrise_on(self, day: date) -> datetime:
@@ -388,14 +391,35 @@ class TimeManager:
     def _astral_sunrise(self, day: date):
         """(#1432) The sunrise on ``day`` from the home's location, local
         time — the same sum the sun integration makes. None when that date
-        has no sunrise or there is no location to read."""
+        has no sunrise or there is no location to read.
+
+        Astral picks the sunrise by the solar day at the home's longitude.
+        Near the date line the clock's day is another one (Apia, Tonga), so
+        the neighbours are tried and only a sunrise on ``day`` itself is
+        taken."""
         try:
             from homeassistant.const import SUN_EVENT_SUNRISE
             from homeassistant.helpers.sun import get_astral_event_date
-            rising = get_astral_event_date(self.hass, SUN_EVENT_SUNRISE, day)
+            for d in (day, day - timedelta(days=1), day + timedelta(days=1)):
+                rising = get_astral_event_date(self.hass, SUN_EVENT_SUNRISE, d)
+                if isinstance(rising, datetime):
+                    rising = dt_util.as_local(rising)
+                    if rising.date() == day:
+                        return rising
         except Exception:  # noqa: BLE001 — no location reads as no sunrise
             return None
-        return dt_util.as_local(rising) if isinstance(rising, datetime) else None
+        return None
+
+    def _astral_next_rising(self):
+        """(#1432) The next sunrise from the home's location, UTC — what
+        ``sun.sun`` publishes as ``next_rising``. None without a location."""
+        try:
+            from homeassistant.const import SUN_EVENT_SUNRISE
+            from homeassistant.helpers.sun import get_astral_event_next
+            rising = get_astral_event_next(self.hass, SUN_EVENT_SUNRISE)
+        except Exception:  # noqa: BLE001 — no location reads as no sunrise
+            return None
+        return rising if isinstance(rising, datetime) else None
 
     def get_current_meter_day_sunrise_based(self) -> date:
         """Determine which 'meter day' we're in based on last sunrise.

@@ -468,6 +468,21 @@ PRICE_HOURS = "price_hours"
 PRICE_X_HOURS = "price_x_hours"
 
 
+def _kept_period_row(row) -> bool:
+    """(#1432) A stored ``[first day, start]`` pair that reads back: an ISO
+    date and an ISO time with its zone. Anything else is dropped, and the
+    start is worked out again."""
+    if not (isinstance(row, (list, tuple)) and len(row) == 2
+            and all(isinstance(x, str) for x in row)):
+        return False
+    try:
+        date.fromisoformat(row[0])
+        start = datetime.fromisoformat(row[1])
+    except ValueError:
+        return False
+    return start.tzinfo is not None
+
+
 class EnergyCalculator:
     """Calculates energy totals from power readings over time."""
 
@@ -6390,7 +6405,8 @@ class EnergyCalculator:
                 if getattr(self, "_device_period_since", None) else None
             ),
             "device_period_kept": {
-                k: list(v) for k, v in self._device_period_kept.items()},
+                k: list(v) for k, v in getattr(
+                    self, "_device_period_kept", {}).items()},
             "ev_day_offset": self._ev_day_offset,
             "ev_day_key": (
                 self._ev_day_key.isoformat() if self._ev_day_key else None
@@ -6608,9 +6624,8 @@ class EnergyCalculator:
             kept = state.get("device_period_kept")
             if isinstance(kept, dict):
                 self._device_period_kept = {
-                    str(k): [str(v[0]), str(v[1])] for k, v in kept.items()
-                    if isinstance(v, (list, tuple)) and len(v) == 2
-                    and all(isinstance(x, str) for x in v)}
+                    str(k): [v[0], v[1]] for k, v in kept.items()
+                    if _kept_period_row(v)}
             ev_day_offset = state.get("ev_day_offset")
             ev_day_key = state.get("ev_day_key")
             if _valid_hhmm(ev_day_offset) and ev_day_key:
