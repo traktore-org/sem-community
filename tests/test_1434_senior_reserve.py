@@ -71,5 +71,5 @@ def test_flapping_around_the_threshold_is_monotonic():
     """More sun never means less for the senior: the reservation does not
     jump back and forth between two values while the sun only grows."""
     seen = [_reserve([_senior(rated=2000.0)], w) for w in range(1500, 2600, 50)]
-    for a, b in zip(seen, seen[1:]):
+    for a, b in zip(seen, seen[1:], strict=False):
         assert b >= a
