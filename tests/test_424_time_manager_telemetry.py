@@ -18,9 +18,22 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from homeassistant.util import dt as dt_util
 
 from custom_components.solar_energy_management.utils.time_manager import TimeManager
+
+
+@pytest.fixture(autouse=True)
+def _no_location():
+    """(#1432) A MagicMock hass has no real home location, so astral would
+    return made-up sunrises (and aware times against the naive clocks these
+    tests patch in). These tests pin the sun.sun and 06:00 paths; the
+    location fallback is covered on a real hass in test_1432."""
+    with patch.object(TimeManager, "_astral_sunrise", return_value=None), \
+         patch.object(TimeManager, "_astral_next_rising", return_value=None):
+        yield
 
 
 def _make(hass=None, **config):
