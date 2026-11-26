@@ -8474,6 +8474,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         )
         result[f"charger_{cid}_control_reason"] = broken_now
 
+    def _heat_pump_ledger_view(self, hp_controller):
+        """(#769) The heat pump's ledger row, its shifted part, and (#1432)
+        when its day, month and year began — all read from ONE day key, the
+        day the pump itself rolls on.
+
+        A ``last_reset`` that moves in any other cycle than the row's drop
+        makes Home Assistant count the drop as use, or the day twice. So the
+        starts come from the same key as the kWh, in the same cycle.
+        """
+        hp_ledger = {
+            "daily_kwh": 0.0, "monthly_kwh": 0.0,
+            "yearly_kwh": 0.0, "lifetime_kwh": 0.0,
+        }
+        hp_shifted_today = 0.0
+        hp_shifted_total = 0.0
+        hp_starts: Dict[str, Optional[str]] = {}
+        _calc = getattr(self, "_energy_calculator", None)
+        if _calc is not None and hp_controller is not None:
+            try:
+                _day = getattr(hp_controller, "_daily_runtime_meter_day", None) \
+                    or self.time_manager.get_current_meter_day_sunrise_based()
+                hp_ledger = _calc.get_device_energy("heat_pump", _day)
+                hp_shifted_today = _calc.get_device_shifted("heat_pump", _day)
+                hp_shifted_total = _calc.get_device_shifted(
+                    "heat_pump", _day, lifetime=True
+                )
+                hp_starts = dict(_calc.device_period_starts(_day))
+            except (AttributeError, TypeError, ValueError):
+                pass
+        return hp_ledger, hp_shifted_today, hp_shifted_total, hp_starts
+
     @staticmethod
     def _heat_pump_sensor_state(hp_controller) -> tuple[str, int, bool]:
         """Extract (mode, sg_ready_state_value, solar_boost) from a
@@ -9213,24 +9244,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # mean "SEM asked for this" — energy booked in NORMAL is energy the
         # pump's own thermostat would have taken anyway, and keeping the two
         # apart is what makes "SG-Ready shifted X kWh" a measurement.
-        hp_ledger = {
-            "daily_kwh": 0.0, "monthly_kwh": 0.0,
-            "yearly_kwh": 0.0, "lifetime_kwh": 0.0,
-        }
-        hp_shifted_today = 0.0
-        hp_shifted_total = 0.0
-        _calc = getattr(self, "_energy_calculator", None)
-        if _calc is not None and hp_controller is not None:
-            try:
-                _day = getattr(hp_controller, "_daily_runtime_meter_day", None) \
-                    or self.time_manager.get_current_meter_day_sunrise_based()
-                hp_ledger = _calc.get_device_energy("heat_pump", _day)
-                hp_shifted_today = _calc.get_device_shifted("heat_pump", _day)
-                hp_shifted_total = _calc.get_device_shifted(
-                    "heat_pump", _day, lifetime=True
-                )
-            except (AttributeError, TypeError, ValueError):
-                pass
+        hp_ledger, hp_shifted_today, hp_shifted_total, hp_starts = (
+            self._heat_pump_ledger_view(hp_controller))
 
         # (#1081 Slice A) heat's real price is price / COP, not the raw
         # electricity price — cheaper on a mild day than a cold one even
@@ -9283,6 +9298,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             heat_pump_energy_total=hp_ledger["lifetime_kwh"],
             heat_pump_energy_shifted_today=hp_shifted_today,
             heat_pump_energy_shifted_total=hp_shifted_total,
+            heat_pump_day_start=hp_starts.get("day"),
+            heat_pump_month_start=hp_starts.get("month"),
+            heat_pump_year_start=hp_starts.get("year"),
             heat_pump_energy_source=getattr(
                 hp_controller, "daily_energy_source", "none"
             ) or "none",

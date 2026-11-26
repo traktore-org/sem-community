@@ -67,6 +67,39 @@ _LOGGER = logging.getLogger(__name__)
 #: are TOTAL_INCREASING: no last_reset, a drop starts a new cycle.
 CAR_DAY_SENSOR_KEYS = frozenset({"daily_ev_energy"})
 
+#: (#1432) TOTAL sensors on a device's sunrise day, and the published start
+#: of the period each counts. The rows roll at sunrise, not at midnight; with
+#: no ``last_reset`` Home Assistant booked each sunrise drop as negative use.
+DEVICE_DAY_SENSOR_STARTS = {
+    "heat_pump_energy_today": "heat_pump_day_start",
+    "heat_pump_energy_shifted_today": "heat_pump_day_start",
+    "heat_pump_energy_month": "heat_pump_month_start",
+    "heat_pump_energy_year": "heat_pump_year_start",
+}
+
+#: (#1432) TOTAL sensors whose None ``last_reset`` is meant: they never fall
+#: back to 0 (lifetime totals), or a fall is a real change, not a new period.
+#: Every other TOTAL sensor must match a reset rule in ``last_reset`` — a test
+#: checks each one does (test_1432), so a new sensor cannot read None unseen.
+NO_RESET_TOTAL_KEYS = frozenset({
+    "lifetime_solar_yield_energy", "lifetime_total_savings",
+    "lifetime_grid_cost", "lifetime_co2_avoided",
+    "lifetime_trees_equivalent", "lifetime_ev_cost",
+    "battery_cycles_estimated", "roi_annual_savings",
+})
+
+#: (#1432) TOTAL sensors that do fall to 0 but do not say when yet: a new
+#: session, the next forecast day, the charger's own counter. Left open in
+#: #1436 (each needs a choice); listed so the guard test knows them.
+RESET_UNTOLD_TOTAL_KEYS = frozenset({
+    "session_energy", "session_cost",
+    "battery_session_energy", "battery_session_cost",
+    "battery_session_savings",
+    "charger_{cid}_session_energy", "charger_{cid}_session_energy_external",
+    "forecast_today_kwh", "forecast_tomorrow_kwh",
+    "forecast_remaining_today_kwh",
+})
+
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
 
@@ -4182,6 +4215,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         yearly_reset_patterns = [
             "yearly_",  # All yearly_* sensors
         ]
+
+        # (#1432) A device row rolls at sunrise. Its start is published with
+        # its value, read from the same day key, so the two move together.
+        if sensor_key in DEVICE_DAY_SENSOR_STARTS:
+            raw = (self.coordinator.data or {}).get(
+                DEVICE_DAY_SENSOR_STARTS[sensor_key])
+            return dt_util.parse_datetime(raw) if isinstance(raw, str) else None
 
         # (#1176) The car's daily energy falls to 0 at the car day's start
         # (the Charge-by time), not at midnight. Saying midnight made the
