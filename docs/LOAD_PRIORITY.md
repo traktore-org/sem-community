@@ -38,6 +38,8 @@ is left.
 - A load holds back sun or battery for itself only when it could start now.
   A full tank, a load on Off, or one that needs more sun than there is leaves
   it to the next device.
+  It counts the battery's charge only when it ranks above the battery and the
+  battery is above its reserve.
 
 **Requires.** A load can require another, for example a towel rail that runs
 only when the pool pump runs. A required device sits directly below its parent

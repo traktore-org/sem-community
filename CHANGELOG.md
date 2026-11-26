@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A load above the car holds back only the sun it would get** (#1435). Battery charge no longer counts, and the car's offer stops jumping.
+
 # [2.3.0-beta.29] — 26.11.2026
 
 - 🐛 **A battery hold no longer charges from the grid** (#1362). During a hold SEM sets the charge source to solar only, then back.
