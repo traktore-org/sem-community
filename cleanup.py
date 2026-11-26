@@ -298,6 +298,66 @@ def dismiss_notifications(hass) -> int:
         return 0
 
 
+def delete_own_labels(hass, sem_entry_ids: Iterable[str]) -> int:
+    """(#1428) Delete the labels SEM made, when the last SEM entry goes.
+
+    SEM creates its labels in HA's label list (#670); uninstall left them
+    there. A label is deleted only while it is as SEM made it (its name is
+    its id, SEM's description, no colour, no icon) and nothing but SEM's own
+    entities carries it, and no automation or script targets it: one you
+    changed or use is yours and stays. Never raises; returns how many went.
+    """
+    try:
+        from homeassistant.helpers import area_registry as ar
+        from homeassistant.helpers import device_registry as dr
+        from homeassistant.helpers import entity_registry as er
+        from homeassistant.helpers import label_registry as lr
+
+        from .consts.labels import SEM_LABELS
+        labels, ents = lr.async_get(hass), er.async_get(hass)
+        devs, areas = dr.async_get(hass), ar.async_get(hass)
+    except Exception:  # noqa: BLE001 — a removal must always complete
+        _LOGGER.debug("SEM cleanup: label registry unavailable", exc_info=True)
+        return 0
+    ours = set(sem_entry_ids)
+    removed = 0
+    for label_id, text in SEM_LABELS.items():
+        try:
+            lab = labels.async_get_label(label_id)
+            if (lab is None or lab.name != label_id or lab.color or lab.icon
+                    or (lab.description or "") != text):
+                continue
+            if any(e.platform != DOMAIN or e.config_entry_id not in ours
+                   for e in er.async_entries_for_label(ents, label_id)):
+                continue
+            if (dr.async_entries_for_label(devs, label_id)
+                    or ar.async_entries_for_label(areas, label_id)
+                    or _targeted_by_yours(hass, label_id)):
+                continue
+            labels.async_delete(label_id)
+            removed += 1
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("SEM cleanup: label %s kept", label_id, exc_info=True)
+    return removed
+
+
+def _targeted_by_yours(hass, label_id: str) -> bool:
+    """(#1428) An automation or script that targets the label. Unknown (the
+    component not loaded or the call failing) counts as yes: keep it."""
+    for module, fn in (("automation", "automations_with_label"),
+                       ("script", "scripts_with_label")):
+        if module not in hass.config.components:
+            continue
+        try:
+            import importlib
+            comp = importlib.import_module(f"homeassistant.components.{module}")
+            if getattr(comp, fn)(hass, label_id):
+                return True
+        except Exception:  # noqa: BLE001
+            return True
+    return False
+
+
 def _is_sem_resource(url: str) -> bool:
     """A Lovelace resource URL SEM registered.
 
