@@ -4079,9 +4079,13 @@ async def _async_take_sems_own_files(hass: HomeAssistant,
             e for e in hass.config_entries.async_entries(DOMAIN)
             if e.entry_id != entry.entry_id
         ]
+        labels = 0
         if not remaining:
             stores += await cleanup.async_delete_stores(
                 hass, cleanup.install_wide_store_keys())
+            # (#1428) SEM's labels are install-wide too; this entry's rows
+            # still carry them (HA clears the rows after this hook)
+            labels = cleanup.delete_own_labels(hass, [entry.entry_id])
         repairs = cleanup.delete_repairs(hass)
         resources = await cleanup.async_deregister_resources(hass)
         cleanup.dismiss_notifications(hass)   # (#1428)
@@ -4090,12 +4094,12 @@ async def _async_take_sems_own_files(hass: HomeAssistant,
         # user's by design — say so where a person looks.
         _LOGGER.info(
             "SEM removed: took its own files — %d store(s), %d repair(s), "
-            "%d frontend resource(s), its notifications%s. Kept on purpose: "
+            "%d frontend resource(s), %d label(s), its notifications%s. Kept on purpose: "
             "the long-term statistics of SEM's sensors and the generated "
             "dashboard (and the saved copy of the classic one); run "
             "solar_energy_management.remove_leftovers before removing SEM to "
             "delete those too.",
-            len(stores), repairs, len(resources),
+            len(stores), repairs, len(resources), labels,
             "" if remaining else " (last entry: install-wide stores too)")
     except Exception as e:  # noqa: BLE001 — a removal must always complete
         _LOGGER.warning("SEM removed: cleanup incomplete (non-blocking): %s", e)

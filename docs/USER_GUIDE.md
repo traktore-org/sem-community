@@ -937,8 +937,9 @@ Services > Solar Energy Management > Configure**:
 ## Removing SEM
 
 SEM removes its own entities, its device, storage, Repairs, notifications,
-dashboard resources and hardware commands on uninstall. It undoes only its own
-commands. It never changes your car's authorisation.
+labels, dashboard resources and hardware commands on uninstall. It undoes only
+its own commands. It never changes your car's authorisation. A SEM label you
+renamed, coloured or put on something of your own stays.
 
 It keeps your history, the SEM dashboard and the saved copy of the old
 classic dashboard. To remove them too, run the action

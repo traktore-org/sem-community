@@ -10,6 +10,8 @@ import ast
 import pathlib
 from types import SimpleNamespace
 
+import pytest
+
 from custom_components.solar_energy_management import entity_sweep as es
 
 E = "01ENTRY"
@@ -132,3 +134,162 @@ def test_remove_leftovers_takes_every_sem_dashboard_and_the_classic_copy():
     assert set(cleanup.SEM_DASHBOARD_PATHS) >= {"sem-dashboard", "sem-next"}
     assert cleanup.CLASSIC_DASHBOARD_COPY == dashboard_migration.COPY_KEY
     assert any(rel == "__init__.py" for rel, _l, _k in call_sites("async_remove_dashboards"))
+
+
+# ── the live path, through the real setup ────────────────────────────────
+
+def _rows(hass, entry):
+    from homeassistant.helpers import entity_registry as er
+    reg = er.async_get(hass)
+    return {(r.domain, es.key_of(r.unique_id, entry.entry_id), r.unique_id)
+            for r in er.async_entries_for_config_entry(reg, entry.entry_id)}
+
+
+def _of(rows, cid):
+    """The rows of one charger: key ``charger_<cid>_<name>``, where the name
+    does not start with a number (``ev_charger`` is not ``ev_charger_1``)."""
+    head = f"charger_{cid}_"
+    return {r for r in rows if (r[1] or "").startswith(head)
+            and not r[1][len(head):].split("_", 1)[0].isdigit()}
+
+
+@pytest.mark.asyncio
+async def test_a_removed_chargers_entities_leave_the_registry(sem_real_hass, monkeypatch):
+    """Seen live: a charger removed on 09.11 kept its "Charge By" time entity
+    for two weeks. Two chargers; ev_charger_1 is removed with the card's ✕
+    (the real service and reload). Every row of ev_charger_1 leaves the
+    registry, "Charge By" too; the other charger's rows and SEM's own stay
+    (but the flow sensors only two chargers have), and a plain reload after
+    that removes nothing."""
+    from .test_1144_saved_site_limit import _unload
+    from .test_1149_second_charger_own_wiring import GO
+    from .test_1154_removed_first_charger_flat_keys import (
+        FIRST,
+        _entry,
+        _remove,
+        _set_up,
+    )
+    hass = sem_real_hass
+    entry = _entry(hass, [FIRST, GO])
+    await _set_up(hass, entry)
+    try:
+        before = _rows(hass, entry)
+        gone_rows = _of(before, "ev_charger_1")
+        kept_rows = _of(before, "ev_charger")
+        # not vacuous: the removed charger had rows on every per-charger platform
+        # (switch has no per-charger entity since #277)
+        assert {r[0] for r in gone_rows} >= {"time", "sensor", "number", "select",
+                                              "binary_sensor", "button"}
+        assert ("time", "charger_ev_charger_1_target_time",
+                f"{entry.entry_id}_charger_ev_charger_1_target_time") in gone_rows
+        assert kept_rows and not kept_rows & gone_rows
+        assert ("time", "charger_ev_charger_target_time",
+                f"{entry.entry_id}_charger_ev_charger_target_time") in kept_rows
+
+        await _remove(hass, entry, "ev_charger_1", monkeypatch)
+        after = _rows(hass, entry)
+        assert not gone_rows & after, sorted(gone_rows & after)
+        # per-charger flow sensors exist only with two chargers or more
+        # (sensor.py): the kept charger's go too, nothing else does
+        flows = {r for r in kept_rows if r[1].startswith("charger_ev_charger_flow_")}
+        assert flows and {r[0] for r in flows} == {"sensor"}
+        assert after == before - gone_rows - flows
+
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert _rows(hass, entry) == after
+    finally:
+        await _unload(hass, entry)
+
+
+# ── uninstall takes the labels SEM made, not yours ──────────────────────
+
+def _label_ids(hass):
+    from homeassistant.helpers import label_registry as lr
+    return {lab.label_id for lab in lr.async_get(hass).async_list_labels()}
+
+
+@pytest.mark.asyncio
+async def test_a_label_is_sems_only_as_made_and_on_nothing_else(hass):
+    """Real registries: SEM's label goes only while it is as SEM made it and
+    only SEM entities of the entries removed carry it."""
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+    from homeassistant.helpers import label_registry as lr
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.solar_energy_management import cleanup
+    from custom_components.solar_energy_management.consts.labels import SEM_LABELS
+    dom = "solar_energy_management"
+    sem, other_sem, other = (MockConfigEntry(domain=d) for d in (dom, dom, "demo"))
+    for e in (sem, other_sem, other):
+        e.add_to_hass(hass)
+    labels, ents = lr.async_get(hass), er.async_get(hass)
+    for lid, text in SEM_LABELS.items():
+        labels.async_create(name=lid, description=text)
+    take, on_user, on_sibling, on_device, on_area, renamed, coloured = (
+        "sem_power", "sem_ev", "sem_grid", "sem_solar", "sem_home", "sem_battery", "sem_flow")
+    assert {take, on_user, on_sibling, on_device, on_area, renamed, coloured} <= set(SEM_LABELS)
+
+    def labelled(entry, platform, uid, lid):
+        row = ents.async_get_or_create("sensor", platform, uid, config_entry=entry)
+        return ents.async_update_entity(row.entity_id, labels={lid})
+
+    labelled(sem, dom, "sem_a", take)                    # SEM's own entity
+    user_row = labelled(other, "demo", "u1", on_user)    # yours
+    labelled(other_sem, dom, "sem_b", on_sibling)        # a second SEM entry
+    dev = dr.async_get(hass).async_get_or_create(config_entry_id=other.entry_id,
+                                                 identifiers={("demo", "d1")})
+    dr.async_get(hass).async_update_device(dev.id, labels={on_device})
+    ar.async_get(hass).async_create("Garage", labels={on_area})
+    labels.async_update(renamed, name="My battery")
+    labels.async_update(coloured, color="red")
+
+    n = cleanup.delete_own_labels(hass, [sem.entry_id])
+    left = _label_ids(hass)
+    assert take not in left
+    assert {on_user, on_sibling, on_device, on_area, renamed, coloured} <= left
+    # the labels nothing carries went too
+    untouched = set(SEM_LABELS) - {on_user, on_sibling, on_device, on_area, renamed, coloured}
+    assert not untouched & left and n == len(untouched)
+    assert ents.async_get(user_row.entity_id).labels == {on_user}
+
+
+@pytest.mark.asyncio
+async def test_removing_sem_removes_its_labels(sem_real_hass, monkeypatch):
+    """Through the real setup and removal: the labels SEM made and put on its
+    sensors go with SEM; one you also put on your own entity stays on it."""
+    from homeassistant.helpers import entity_registry as er
+
+    from .test_1149_second_charger_own_wiring import GO
+    from .test_1154_removed_first_charger_flat_keys import FIRST, _entry, _set_up
+    hass = sem_real_hass
+    entry = _entry(hass, [FIRST, GO])
+    await _set_up(hass, entry)
+    ents = er.async_get(hass)
+    carried = set().union(*(r.labels for r in er.async_entries_for_config_entry(
+        ents, entry.entry_id)))
+    assert len(carried) >= 2, carried        # not vacuous: SEM labelled its sensors
+    yours = sorted(carried)[0]
+    row = ents.async_get_or_create("sensor", "demo", "mine")
+    ents.async_update_entity(row.entity_id, labels={yours})
+
+    assert await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    left = _label_ids(hass)
+    assert yours in left and ents.async_get(row.entity_id).labels == {yours}
+    assert not (carried - {yours}) & left, sorted((carried - {yours}) & left)
+    assert not er.async_entries_for_config_entry(ents, entry.entry_id)
+
+
+def test_only_the_last_sem_entry_takes_the_labels():
+    """A second SEM entry still uses the labels: they go with the last one."""
+    from .ast_contracts import calls
+    from custom_components.solar_energy_management import _async_take_sems_own_files
+    assert calls(_async_take_sems_own_files, "delete_own_labels")
+    src = ast.parse(__import__("inspect").getsource(_async_take_sems_own_files).strip())
+    under_last = [n for n in ast.walk(src) if isinstance(n, ast.If)
+                  and ast.unparse(n.test) == "not remaining"
+                  and "delete_own_labels" in ast.unparse(n)]
+    assert under_last, "labels are taken outside the last-entry branch"

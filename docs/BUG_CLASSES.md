@@ -7364,3 +7364,13 @@ Refs #1394.
 **Guard:** `tests/test_1382_never_back.py` — the 23.11 sequence, month and year moving with the held day, a drifting fit, a new day, a restart, and an AST check that each correction takes the floor.
 **Sweep question:** which other daily counter is rewritten from a recomputed total instead of grown by increments?
 Refs #1382 #1384.
+
+### 201. A cleanup copied into each place that makes things — the place added later has none — GUARDED
+
+**What happens.** A charger removed on 09.11.2026 kept its "Charge By" time entity for two weeks, shown as unavailable (#1428). Uninstall left SEM's labels in Home Assistant's label list. #923 found the same on `binary_sensor`, which had no sweep either.
+**Root shape.** Each entity platform ran its own copy of the stale-entity sweep (sensor, number, select, switch, binary_sensor; button borrowed sensor's). The `time` platform came later and got no copy. Uninstall took SEM's stores, Repairs and resources by hand; the labels SEM creates (#670) were never on that list. Kin of class 132 (a thing in two stores, removed from one).
+**Where it lives:** the seven entity platforms (**fixed**: each reports the keys it built with `entity_sweep.report_built_keys`; ONE `sweep_stale_entities` runs after `async_forward_entry_setups`, so also right after `remove_charger`'s reload; a platform that did not report is not swept). Uninstall in `_async_take_sems_own_files`: notifications (**fixed**: `cleanup.dismiss_notifications`), labels (**fixed**: `cleanup.delete_own_labels`, last SEM entry only, and only a label still as SEM made it that nothing but SEM's entities carries), dashboards for `remove_leftovers` (**fixed**: `async_remove_dashboards`, `sem-next` and the classic copy too). SEM has one HA device; Home Assistant removes it and the entity rows with the entry.
+**Guard:** `tests/test_1428_entity_sweep.py` — every platform in `PLATFORMS` reports and none keeps its own `async_remove` (AST); through the real setup a removed charger's rows leave the registry on every platform, "Charge By" too, and a plain reload removes nothing; every `notification_id` in the source is in the dismiss list; real uninstall removes SEM's labels and keeps one you put on your own entity; a renamed, coloured, device-, area- or second-entry label stays.
+**Sweep question:** when you add a new kind of thing SEM makes in Home Assistant (a platform, a label, a helper), which list makes it go again?
+**Left open:** long-term statistics and the generated dashboard stay on purpose; `remove_leftovers` takes them.
+Refs #1428 #923 #935 #670.
