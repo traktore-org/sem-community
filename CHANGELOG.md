@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **An idle load no longer holds back sun it cannot use** (#1434). A heat pump needing 2 kW kept 900 W from the car.
-- 🐛 **A load holds back sun or battery only when it could start** (#1434). Start margin and battery help count; Off or away loads hold nothing.
+- 🐛 **A load holds back sun or battery only when it could start** (#1434). A full tank or an Off load holds nothing.
 
 - ✨ **Set the charge mode by voice** (#1431). "Set the charger to Sun plus tariff"; old names such as "solar only" still work.
 - ✨ **Charge until a time by voice** (#1431). "Charge until 7 o'clock" or "charge until full".

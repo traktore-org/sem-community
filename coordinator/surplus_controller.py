@@ -219,8 +219,9 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
     if cap <= 0.0:
         return 0.0
 
+    devices = list(devices or ())
     reserved = 0.0
-    for device in devices or ():
+    for device in devices:
         if getattr(device, "device_id", None) in excluded:
             continue
         try:
@@ -253,13 +254,18 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
                 continue
             if not _would_start(device):
                 continue
-            claim = _rated_claim(device)
+            # (#1434) What it holds back reaches its own start bar: holding
+            # less let a junior take the rest, and the load never started.
+            claim = max(_rated_claim(device), _start_bar(device))
             # (#1434) Power it cannot start with is not power it is about to
             # take. An idle heat pump that needs 2000 W reserved all 900 W
             # of spare sun, stayed off, and every junior saw 0 W while the
             # sun went to the grid. Judge the senior the way the load pass
-            # will: on the sun left after the seniors above it plus the pack
-            # it may add, against its start threshold plus start reserve.
+            # will: on the sun left after the seniors above it, plus what the
+            # running loads below it draw (the load pass adds that back and
+            # sheds them for it), plus the pack it may add, against its start
+            # threshold plus start reserve.
+            freed = _displaced_draw_w(devices, device, excluded)
             help_w = _pack_help_w(device, pack_w)
             if axis == "battery":
                 if help_w is not None and help_w <= 0.0:
@@ -268,9 +274,10 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
                     pack_left = cap - reserved
                     if help_w is not None:
                         pack_left = min(pack_left, help_w)
-                    if not _could_start(device, max(0.0, float(sun_w)) + pack_left):
+                    if not _could_start(
+                            device, max(0.0, float(sun_w)) + freed + pack_left):
                         continue
-            elif not _could_start(device, cap - reserved + (help_w or 0.0)):
+            elif not _could_start(device, cap - reserved + freed + (help_w or 0.0)):
                 continue
 
         reserved += max(0.0, claim)
@@ -311,6 +318,18 @@ def _would_start(device) -> bool:
     # (#1048) held for a phase over its limit
     if _phase_held(device):
         return False
+    # (#1434) off for SEM, or behind the operator's relay while it is on
+    if (getattr(device, "is_enabled", True) is False
+            or getattr(device, "locked_by_operator", False) is True):
+        return False
+    # (#1434) at its stop (a tank or room already there), or its own start
+    # would refuse (``start_refusal``: at target, no reading, no season).
+    # The load pass reads the same two each cycle; the hot-water margin
+    # latch they touch gives the same answer when read twice.
+    if getattr(device, "stop_condition_met", False) is True:
+        return False
+    if isinstance(getattr(device, "start_refusal", None), str):
+        return False
     # (#1434) paused while the house is away: no run on the sun, unless the
     # hot-water dump may take it or the too-cold limit heats now
     if (_away_pauses(device)
@@ -337,16 +356,52 @@ def _start_threshold(device) -> float:
     return threshold
 
 
+def _start_bar(device) -> float:
+    """(#1434) The load pass's bar for a fresh start: the start threshold
+    plus the start reserve (#688)."""
+    return _start_threshold(device) + max(
+        0.0, _num(getattr(device, "start_reserve_w", 0.0)))
+
+
 def _could_start(device, power_w: float) -> bool:
-    """(#1434) Could this idle device start on ``power_w``? The bar is the
-    load pass's start bar: the start threshold plus the start reserve
-    (#688). A device whose start delay already runs (``_surplus_since``)
-    passed that bar in the load pass and is about to start: yes."""
+    """(#1434) Could this idle device start on ``power_w``? A device whose
+    start delay already runs (``_surplus_since``) passed the bar in the load
+    pass and is about to start: yes."""
     if getattr(device, "_surplus_since", None) is not None:
         return True
-    bar = _start_threshold(device) + max(
-        0.0, _num(getattr(device, "start_reserve_w", 0.0)))
-    return float(power_w) >= bar
+    return float(power_w) >= _start_bar(device)
+
+
+def _displaced_draw_w(devices, senior, excluded=frozenset()) -> float:
+    """(#1434) What the running loads ranked below ``senior`` draw. The load
+    pass adds their draw back to its pool (``active_surplus_draw_w``'s rule)
+    and sheds them for the senior, so the senior may start on it. Without
+    it a running pool pump below the car hid the sun from a heat pump above
+    the car: the car took it, and the heat pump never started."""
+    try:
+        rank = int(getattr(senior, "priority", 99))
+    except (TypeError, ValueError):
+        return 0.0
+    total = 0.0
+    for d in devices:
+        if d is senior or getattr(d, "device_id", None) in excluded:
+            continue
+        if not getattr(d, "is_active", False):
+            continue
+        try:
+            if int(getattr(d, "priority", 99)) <= rank:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if (not device_mode_permits(d)
+                or getattr(d, "locked_by_operator", False) is True):
+            continue
+        draw = getattr(d, "get_current_consumption", None)
+        try:
+            total += max(0.0, float((draw() if callable(draw) else 0.0) or 0.0))
+        except (TypeError, ValueError):
+            continue
+    return total
 
 
 def _pack_help_w(device, pack_w) -> "Optional[float]":
@@ -968,14 +1023,14 @@ def _away_heats(device: "ControllableDevice", active: bool) -> bool:
 
 def _away_heats_peek(device: "ControllableDevice") -> bool:
     """(#1434) ``_away_heats`` for an idle device, read-only (``peek``):
-    the reservation walk only asks. Not readable = it may heat."""
+    the reservation walk only asks."""
     rule = getattr(device, "comfort_away_heats", None)
     if not callable(rule):
         return False
     try:
         return rule(False, peek=True) is True
-    except Exception:  # noqa: BLE001 — unknown keeps the claim
-        return True
+    except Exception:  # noqa: BLE001 — as the load pass: unreadable heats nothing
+        return False
 
 
 def _goal_hour_holds(device, price_is_cheap: bool) -> bool:

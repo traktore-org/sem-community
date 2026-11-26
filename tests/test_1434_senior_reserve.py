@@ -101,7 +101,7 @@ def test_the_start_reserve_is_part_of_the_bar():
     dev = _senior(rated=2000.0)
     dev.start_reserve_w = 300.0
     assert _reserve([dev], 2100.0) == 0.0
-    assert _reserve([dev], 2300.0) == 2000.0
+    assert _reserve([dev], 2300.0) == 2300.0      # its whole start bar
 
 
 def test_a_solar_and_battery_senior_counts_its_pack():
@@ -207,9 +207,76 @@ def test_away_dump_holds_sun_but_no_pack():
     assert _tier1_reserve([dev], sun=3000.0, pack=3000.0) == 0.0
 
 
-def test_away_too_cold_or_unreadable_keeps_the_claim():
-    for away in (_Away(heats=True), _Away(raises=True)):
-        assert _reserve([away.device()], 3000.0) == 2000.0
+def test_away_too_cold_keeps_the_claim():
+    assert _reserve([_Away(heats=True).device()], 3000.0) == 2000.0
+
+
+def test_away_unreadable_band_holds_nothing_as_the_load_pass():
+    """The load pass reads an unreadable band as "heats nothing"."""
+    assert _reserve([_Away(raises=True).device()], 3000.0) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Round 3 — review findings
+# ---------------------------------------------------------------------------
+
+def _running(priority, draw, name="pool"):
+    dev = _senior(priority=priority, rated=draw, active=True, name=name)
+    dev.get_current_consumption = lambda: draw
+    return dev
+
+
+def test_a_running_junior_load_is_sun_the_senior_can_start_on():
+    """Sun 4000 W, house 500 W, a pool pump (prio 9) runs 1500 W, so the
+    headroom is 2000 W. A heat pump at prio 1 needs 2500 W. The load pass
+    adds the pump's draw back and sheds it for the heat pump, so the heat
+    pump starts on 3500 W: the car (prio 5) must not take the 2000 W."""
+    hp = _senior(priority=1, rated=2500.0, name="hp")
+    pool = _running(9, 1500.0)
+    assert _reserve([hp, pool], 2000.0, below=5) == 2000.0
+    # without the pump, 2000 W cannot start it
+    assert _reserve([hp], 2000.0, below=5) == 0.0
+
+
+def test_a_running_senior_above_does_not_count_as_freed():
+    """A load ranked ABOVE the senior keeps its draw in the load pass."""
+    hp = _senior(priority=2, rated=2500.0, name="hp")
+    above = _running(1, 1500.0, name="tank")
+    assert _reserve([above, hp], 2000.0, below=5) == 0.0
+
+
+def test_a_junior_off_for_sem_frees_nothing():
+    hp = _senior(priority=1, rated=2500.0, name="hp")
+    pool = _running(9, 1500.0)
+    pool.control_mode = "off"          # the user's own load, SEM never sheds it
+    assert _reserve([hp, pool], 2000.0, below=5) == 0.0
+
+
+def test_it_holds_its_whole_start_bar():
+    """A 2000 W load with a 300 W start reserve on 3800 W holds 2300 W, not
+    its 2000 W rating: with 2000 W left it would never start."""
+    dev = _senior(rated=2000.0)
+    dev.start_reserve_w = 300.0
+    assert _reserve([dev], 3800.0) == 2300.0
+    low = _senior(rated=1500.0, min_w=2000.0)     # rating below its threshold
+    assert _reserve([low], 3800.0) == 2000.0
+
+
+def test_a_load_that_will_not_start_holds_nothing():
+    """At its stop, a start it would refuse, disabled, or behind the
+    operator's relay: nothing to start, nothing held (both axes)."""
+    stop = _t1(rated=2000.0)
+    stop.stop_condition_met = True
+    refused = _t1(rated=2000.0)
+    refused.start_refusal = "at_target"
+    disabled = _t1(rated=2000.0)
+    disabled.is_enabled = False
+    relay = _t1(rated=2000.0)
+    relay.locked_by_operator = True
+    for dev in (stop, refused, disabled, relay):
+        assert _reserve([dev], 3000.0) == 0.0, dev
+        assert _tier1_reserve([dev], sun=3000.0, pack=3000.0) == 0.0, dev
+        assert _tier1_reserve([dev]) == 0.0, dev
 
 
 def test_the_walk_and_the_load_pass_agree_on_a_start():
@@ -238,6 +305,11 @@ def test_the_walk_and_the_load_pass_agree_on_a_start():
             held = surplus_reserved_w([dev], below_priority=8,
                                       available_w=float(sun), pack_w=pack)
             assert (held > 0.0) == (starts and sun > 0), (sun, pack, held, starts)
+            if held > 0.0:
+                # what it holds is enough for the load pass to start it
+                assert compute_load_intent(
+                    dev, remaining_surplus_w=held, tier1_headroom_w=pack,
+                    is_night=False).on, (sun, pack, held)
             checked += starts
     assert checked > 0, "the sweep never reached a start"
 
