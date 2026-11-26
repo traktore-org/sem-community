@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automazioni usano vecchi nomi della modalità di carica",
       "description": "Le modalità di carica di SEM ora sono Sole, Sole + tariffa, Ora e Spento. Home Assistant rifiuta i vecchi nomi in select.select_option, e un trigger su un vecchio nome non scatta più. Modifica questi: {uses} SEM trova la maggior parte degli usi. Controlla anche i blueprint e le automazioni create fuori dall'interfaccia."
+    },
+    "shared_meter_two_prices": {
+      "title": "Un contatore con due prezzi: {meter}",
+      "description": "I dispositivi {devices} condividono il contatore {meter} ma hanno prezzi diversi. Un contatore ha un solo prezzo, quindi SEM usa il prezzo di {used} per tutti. Date a tutti lo stesso prezzo in Tariffa del dispositivo."
     }
   },
   "selector": {

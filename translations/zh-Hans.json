@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "自动化使用了旧的充电模式名称",
       "description": "SEM 的充电模式现在是 太阳、太阳 + 电价、立即 和 关闭。Home Assistant 在 select.select_option 中拒绝旧名称，基于旧名称的触发器也不再触发。请修改：{uses} SEM 能找到大部分用法。请同时检查蓝图，以及在界面之外创建的自动化。"
+    },
+    "shared_meter_two_prices": {
+      "title": "一个电表两个价格：{meter}",
+      "description": "设备 {devices} 共用电表 {meter}，但价格不同。一个电表只有一个价格，因此 SEM 对它们都使用 {used} 的价格。请在“设备电价”中为它们设置相同的价格。"
     }
   },
   "selector": {

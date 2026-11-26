@@ -264,6 +264,12 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:** On the battery card on **Devices**, set **Below this the battery fills first**, **From this the battery may help the car** and **From this it may help fully** to rise in that order. Any values work, as long as they rise.
 
+### One meter shows two prices
+
+**Symptom:** A Repair says devices on one meter have different prices.
+
+**Fix:** Devices that name the same own meter (for example a heat pump and a car charger behind one second meter) need the same price. Until then SEM uses the first device's price for all of them. Give every device on that meter the same **Device tariff**.
+
 ### The battery platform is pinned to generic
 
 **Symptom:** A brand battery is loaded, but its controls act crudely. A Repair says the platform is Generic.
@@ -433,6 +439,7 @@ Each Repair is a notice in `Settings › System › Repairs`. The key names the 
 
 | Repair | What it means and what to do |
 |---|---|
+| `shared_meter_two_prices` | Devices on one meter have different prices. See [One meter shows two prices](#one-meter-shows-two-prices). |
 | `battery_platform_pinned_generic` | The battery platform is Generic on a brand install. See [The battery platform is pinned to generic](#the-battery-platform-is-pinned-to-generic). |
 | `soc_zones_out_of_order` | The battery zones do not rise. See [Your battery SOC zones are out of order](#your-battery-soc-zones-are-out-of-order). |
 | `battery_control_write_not_taken` | The device does not take a value SEM wrote. See [A battery control write is not taken](#a-battery-control-write-is-not-taken). |

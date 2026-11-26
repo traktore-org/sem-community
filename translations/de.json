@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automationen nutzen alte Lademodus-Namen",
       "description": "Die Lademodi von SEM heissen jetzt Sonne, Sonne + Tarif, Jetzt und Aus. Home Assistant lehnt die alten Namen in select.select_option ab, und ein Auslöser auf einen alten Namen löst nicht mehr aus. Ändere diese: {uses} SEM findet die meisten Stellen. Prüfe auch Blueprints und Automationen, die nicht in der Oberfläche erstellt wurden."
+    },
+    "shared_meter_two_prices": {
+      "title": "Ein Zähler mit zwei Preisen: {meter}",
+      "description": "Die Geräte {devices} teilen den Zähler {meter}, haben aber verschiedene Preise. Ein Zähler hat einen Preis, darum nutzt SEM den Preis von {used} für alle. Gib allen unter Gerätetarif denselben Preis."
     }
   },
   "selector": {

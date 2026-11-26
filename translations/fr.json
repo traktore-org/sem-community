@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Des automatisations utilisent d'anciens noms de mode de charge",
       "description": "Les modes de charge de SEM sont maintenant Soleil, Soleil + tarif, Maintenant et Arrêt. Home Assistant refuse les anciens noms dans select.select_option, et un déclencheur sur un ancien nom ne se déclenche plus. Modifiez ceci : {uses} SEM trouve la plupart des usages. Vérifiez aussi les blueprints et les automatisations créées hors de l'interface."
+    },
+    "shared_meter_two_prices": {
+      "title": "Un compteur avec deux prix : {meter}",
+      "description": "Les appareils {devices} partagent le compteur {meter} mais ont des prix différents. Un compteur a un seul prix, donc SEM utilise le prix de {used} pour tous. Donnez-leur le même prix sous Tarif de l'appareil."
     }
   },
   "selector": {

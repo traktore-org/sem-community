@@ -22,10 +22,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from custom_components.solar_energy_management.coordinator.device_tariff import (
-    DeviceCycle, DeviceTariffs, PlanTariff, apply_tariff, tariff_of,
+    DeviceTariffs, PlanTariff, apply_tariff, tariff_of,
 )
 
-from .test_812_device_tariff import T_NOON, _calc, _cycle
+from .test_812_device_tariff import T_NOON
 
 METER = "sensor.cascade_meter"
 
@@ -46,70 +46,163 @@ def _hass(value):
     return hass
 
 
-def _shared(devs, store, value, at):
-    out = DeviceTariffs(_hass(value)).cycle(devs, store, at)
-    for e in out:   # the booking writes the meter's baseline back
-        if getattr(e, "shared", False) and e.baseline is not None:
-            store[e.device_id] = e.baseline
-    return out
-
-
 @pytest.mark.unit
-class TestASharedMeter:
-    def test_its_step_is_split_by_draw(self):
+class TestASharedMeterIsOneOwnMeter:
+    def test_it_is_one_entry_with_its_members(self):
         pump, car = _dev("heat_pump", 2000.0), _dev("ev_charger", 1000.0)
-        store = {}
-        _shared([pump, car], store, 100.0, T_NOON)            # first read
-        out = _shared([pump, car], store, 100.6, T_NOON + timedelta(minutes=15))
-        by = {e.device_id: e for e in out}
-        assert by["heat_pump"].meter_kwh == pytest.approx(0.4)
-        assert by["ev_charger"].meter_kwh == pytest.approx(0.2)
-        assert by[f"meter:{METER}"].meter_kwh == pytest.approx(0.0)
-        assert all(e.shared for e in out)
-
-    def test_what_none_drew_stays_on_the_meter(self):
-        pump, car = _dev("heat_pump", 0.0), _dev("ev_charger", 0.0)
-        store = {}
-        _shared([pump, car], store, 100.0, T_NOON)
-        out = _shared([pump, car], store, 100.3, T_NOON + timedelta(minutes=15))
-        by = {e.device_id: e for e in out}
-        assert by[f"meter:{METER}"].meter_kwh == pytest.approx(0.3)
-        assert by["heat_pump"].meter_kwh == 0.0 and by["ev_charger"].meter_kwh == 0.0
-
-    def test_the_meter_is_read_once_with_one_baseline(self):
-        pump, car = _dev("heat_pump", 2000.0), _dev("ev_charger", 1000.0)
-        store = {}
-        _shared([pump, car], store, 100.0, T_NOON)
-        assert set(store) == {f"meter:{METER}"}
+        out = DeviceTariffs(_hass(100.0)).cycle([pump, car], {}, T_NOON)
+        assert len(out) == 1
+        e = out[0]
+        assert e.device_id == f"meter:{METER}" and e.meter
+        assert dict(e.members) == {"heat_pump": 2000.0, "ev_charger": 1000.0}
+        assert e.price == pytest.approx(0.20)
 
     def test_a_meter_named_by_one_device_is_unchanged(self):
         pump = _dev("heat_pump", 2000.0)
         out = DeviceTariffs(_hass(100.0)).cycle([pump], {}, T_NOON)
-        assert len(out) == 1 and out[0].meter and not out[0].shared
+        assert len(out) == 1 and out[0].meter and not out[0].members
+
+    def test_two_prices_on_one_meter_are_found(self):
+        pump, car = _dev("heat_pump", 0.0, rate=0.20), _dev("ev_charger", 0.0, rate=0.25)
+        t = DeviceTariffs(_hass(1.0))
+        groups = t.shared_groups([pump, car])
+        assert list(groups) == [METER] and t.mixed_prices(groups[METER])
+        assert not t.mixed_prices([pump, _dev("x", 0.0, rate=0.20)])
+
+
+# ── the real booking: one own-meter path (#1228 hold, #1230 spread) ──────
+
+from .test_1230_coarse_meter_steps import Meter  # noqa: E402
+from .test_1228_own_meter_outage import DAY, HOUSE, PUMP  # noqa: E402
+from .test_812_device_tariff import _load  # noqa: E402
+
+M = "sensor.hp_meter"
+
+
+class Shared(Meter):
+    """The #1230 night house with a heat pump AND a car behind ONE meter
+    (a Messkonzept 12 cascade). The meter counts what both draw."""
+
+    def __init__(self, *, pump_w=2000.0, car_w=1000.0, car_rate=PUMP, **kw):
+        super().__init__(**kw)
+        self.pump_w, self.car_w = pump_w, car_w
+        pump = self.pumps[0]
+        car = _load("ev_charger", rate=car_rate, meter=M)
+        car.rated_power = 11000.0
+        self.pumps = [pump, car]
+        self._draw()
+
+    def _draw(self):
+        self.pumps[0].get_current_consumption.return_value = self.pump_w
+        self.pumps[1].get_current_consumption.return_value = self.car_w
+
+    def run(self, seconds, *, house_w=3300.0, step=10, **_kw):
+        for _ in range(int(seconds // step)):
+            self.now += timedelta(seconds=step)
+            self.imp += house_w * self.grid(self.now) * step / 3.6e6
+            self.meters[M] += (self.pump_w + self.car_w) * step / 3.6e6
+            self._draw()
+            self.cycle(house_w=house_w)
+
+    def kwh(self, did):
+        return self.calc._daily_accumulators.get(f"device_tariff_kwh:{did}_{DAY}", 0.0)
+
+
+def _night(**kw):
+    h = Shared(**kw)
+    h.cycle(house_w=3300.0)
+    h.run(3600)
+    return h
 
 
 @pytest.mark.unit
-class TestTheBooks:
-    def test_house_pays_only_what_no_own_tariff_took(self):
-        calc = _calc(0.30)
-        entries = [
-            DeviceCycle("heat_pump", power_w=1000.0, meter_kwh=0.5, price=0.20, shared=True),
-            DeviceCycle("ev_charger", power_w=500.0, meter_kwh=0.25, price=0.20, shared=True),
-            DeviceCycle(f"meter:{METER}", meter_kwh=0.25, price=0.20, shared=True,
-                        baseline={"entity": METER, "value": 1.0,
-                                  "at": T_NOON.isoformat(), "date": "2026-10-03"}),
-        ]
-        # 1 h at 2 kW import, all of the house from the grid
-        _cycle(calc, T_NOON, import_w=2000.0, entries=entries)
-        day = T_NOON.date()
-        assert calc.get_device_tariff("heat_pump", day)["daily_grid_kwh"] == pytest.approx(0.5)
-        assert calc.get_device_tariff("ev_charger", day)["daily_grid_kwh"] == pytest.approx(0.25)
-        # what nobody drew is the meter's, at its tariff — never the house's
-        assert calc.get_device_tariff(f"meter:{METER}", day)["daily_grid_kwh"] == \
-            pytest.approx(0.25)
-        # the house: 2 kWh − 1 kWh on the cascade meter = 1 kWh at 0.30
-        assert calc._get_daily_cost("cost_import", day) == pytest.approx(1.0 * 0.30 + 1.0 * 0.20)
-        assert calc.device_meter_last[f"meter:{METER}"]["value"] == 1.0
+class TestTheSharedBooks:
+    def test_a_coarse_tick_is_spread_not_clipped(self):
+        """0.1 kWh ticks: each one holds ~2 min of use and must not be
+        clipped to one 10 s cycle's import (the house kept the rest)."""
+        h = _night(tick=0.1)
+        total = h.kwh("heat_pump") + h.kwh("ev_charger") + h.kwh(f"meter:{M}")
+        assert total == pytest.approx(3.0, abs=0.11)
+        assert h.kwh("heat_pump") == pytest.approx(2.0, abs=0.08)
+        assert h.kwh("ev_charger") == pytest.approx(1.0, abs=0.05)
+        assert h.kwh(f"meter:{M}") == pytest.approx(0.0, abs=1e-9)
+
+    def test_the_house_pays_only_what_no_own_tariff_took(self):
+        h = _night(tick=0.1)
+        own = h.kwh("heat_pump") + h.kwh("ev_charger")
+        assert h.import_cost() == pytest.approx(
+            (h.grid_kwh() - own) * HOUSE + own * PUMP, abs=1e-6)
+
+    def test_a_late_meter_every_five_minutes(self):
+        h = _night(tick=0.01, every=300)
+        total = h.kwh("heat_pump") + h.kwh("ev_charger")
+        assert total == pytest.approx(3.0, abs=0.3)   # the last 5 min not shown yet
+        assert h.kwh("heat_pump") / h.kwh("ev_charger") == pytest.approx(2.0, rel=0.02)
+
+    def test_a_step_in_a_sun_cycle_still_books_its_grid_part(self):
+        """Ticks may land in a cycle with no grid share: the step is spread
+        over its span, which had grid — never 0 with the baseline moved on."""
+        h = _night(tick=0.1, grid=lambda now: 0.0 if (now.minute % 2) else 1.0)
+        total = h.kwh("heat_pump") + h.kwh("ev_charger")
+        assert total == pytest.approx(1.5, abs=0.2)
+
+    def test_what_no_member_used_stays_on_the_meter(self):
+        h = Shared(pump_w=0.0, car_w=0.0, tick=0.01)
+        h.cycle(house_w=3300.0)
+        for _ in range(60):     # something behind the meter draws 1 kW
+            h.now += timedelta(seconds=10)
+            h.imp += 3300.0 * 10 / 3.6e6
+            h.meters[M] += 1000.0 * 10 / 3.6e6
+            h.cycle(house_w=3300.0)
+        assert h.kwh("heat_pump") == 0.0 and h.kwh("ev_charger") == 0.0
+        assert h.kwh(f"meter:{M}") == pytest.approx(1000.0 * 600 / 3.6e6, abs=0.011)
+
+    def test_a_restart_mid_span_keeps_the_split(self):
+        h = Shared(tick=0.1)
+        h.cycle(house_w=3300.0)
+        h.run(1800)
+        h.restart()
+        h.cycle(house_w=3300.0)
+        h.run(1800)
+        assert h.kwh("heat_pump") / max(h.kwh("ev_charger"), 1e-9) == pytest.approx(2.0, rel=0.06)
+        assert h.kwh("heat_pump") + h.kwh("ev_charger") == pytest.approx(3.0, abs=0.12)
+
+    def test_an_outage_is_held_and_split(self):
+        """#1228: an hour down; the step over it is held, settled against
+        the rows over that span and split by what each used then."""
+        h = Shared(tick=0.01)
+        h.cycle(house_w=3300.0)
+        h.run(60)
+        before = h.kwh("heat_pump") + h.kwh("ev_charger")
+        h.restart()
+        h.down(3600, import_kwh=3.3, pump_kwh=0.0)
+        h.meters[M] += 3.0
+        h.cycle(house_w=3300.0)
+        h.run(20)
+        after = h.kwh("heat_pump") + h.kwh("ev_charger") + h.kwh(f"meter:{M}")
+        assert after - before == pytest.approx(3.0, abs=0.1)
+        assert h.calc.device_meter_gaps == {}
+
+    def test_midnight_books_as_one_own_meter_does(self):
+        """Across midnight a shared meter books exactly what ONE own meter
+        with the same use books (the same path, #1228/#1230), split 2:1."""
+        tomorrow = DAY.fromordinal(DAY.toordinal() + 1)
+
+        def days(h, ids):
+            return sum(h.calc._daily_accumulators.get(f"device_tariff_kwh:{d}_{day}", 0.0)
+                       for d in ids for day in (DAY, tomorrow))
+
+        h = Shared(tick=0.1)
+        h.now = h.now.replace(hour=23, minute=40)
+        h.cycle(house_w=3300.0)
+        h.run(2400)
+        one = Meter(tick=0.1)
+        one.now = one.now.replace(hour=23, minute=40)
+        one.cycle(house_w=3300.0)
+        one.run(2400, house_w=3300.0, pump_w=3000.0)
+        shared = days(h, ("heat_pump", "ev_charger", f"meter:{M}"))
+        assert shared == pytest.approx(days(one, ("heat_pump",)), abs=0.11)
+        assert days(h, ("heat_pump",)) == pytest.approx(2 * days(h, ("ev_charger",)), abs=0.08)
 
 
 @pytest.mark.unit
@@ -167,3 +260,33 @@ class TestNothingConfiguredChangesNothing:
         b = _dev("ev_charger", 1000.0, rate=0.0, meter="")
         assert not tariff_of(a).configured
         assert DeviceTariffs(_hass(1.0)).cycle([a, b], {}, T_NOON) == []
+
+
+@pytest.mark.unit
+class TestOneMeterOnePrice:
+    def test_two_prices_raise_a_repair_naming_them_and_clear_when_fixed(self):
+        from unittest.mock import patch
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        pump, car = _dev("heat_pump", 0.0, rate=0.20), _dev("ev_charger", 0.0, rate=0.25)
+        coord = SimpleNamespace(hass=MagicMock())
+        base = "custom_components.solar_energy_management.coordinator.repair_issues."
+        with patch(base + "raise_shared_meter_two_prices") as up, \
+                patch(base + "clear_shared_meter_two_prices") as down:
+            SEMCoordinator._check_shared_meter_prices(coord, DeviceTariffs(MagicMock()), [pump, car])
+            assert up.call_count == 1
+            kw = up.call_args.kwargs
+            assert "heat_pump" in kw["devices"] and "ev_charger" in kw["devices"]
+            assert kw["used"].startswith("heat_pump")
+            # the same state again: no second Repair
+            SEMCoordinator._check_shared_meter_prices(coord, DeviceTariffs(MagicMock()), [pump, car])
+            assert up.call_count == 1
+            apply_tariff(car, {"tariff_rate": 0.20})
+            SEMCoordinator._check_shared_meter_prices(coord, DeviceTariffs(MagicMock()), [pump, car])
+            assert down.call_count == 1
+
+    def test_the_whole_meter_is_priced_at_the_first_device(self):
+        pump, car = _dev("heat_pump", 1.0, rate=0.20), _dev("ev_charger", 1.0, rate=0.25)
+        out = DeviceTariffs(_hass(1.0)).cycle([pump, car], {}, T_NOON)
+        assert out[0].price == pytest.approx(0.20)

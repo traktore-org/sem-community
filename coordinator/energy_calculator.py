@@ -524,6 +524,11 @@ class EnergyCalculator:
         #: the value last moved; ``since``, ``since_rows``, ``since_dev``: the
         #: read a step is spread from (``_keep_meter_read``).
         self.device_meter_last: Dict[str, Dict[str, Any]] = {}
+        #: (#1417) shared meter id → each member device's kWh used, summed
+        #: since SEM first saw it (what a shared meter's step is split by)
+        self.meter_members_cum: Dict[str, Dict[str, float]] = {}
+        #: (#1417) this cycle's split of each shared meter's step
+        self._split_now: Dict[str, Dict[str, float]] = {}
         #: (#1228) device id → an own meter's step over time no cycle booked
         #: (SEM down, a skipped cycle, the meter dark), waiting for the house
         #: rows over the same time: kWh, start, the rows at the start.
@@ -5071,6 +5076,7 @@ class EnergyCalculator:
         from .device_tariff import grid_share
         house_rate = float(self._import_rate or 0.0)
         entries, self._device_tariff_cycle = self._device_tariff_cycle, []
+        self._split_now = {}
         left = max(0.0, float(import_kwh or 0.0))
         share = grid_share(getattr(power_flows, "grid_to_home", 0.0),
                            getattr(power, "home_consumption_power", 0.0))
@@ -5088,14 +5094,9 @@ class EnergyCalculator:
                     dev[0] += interval_hours * 3600.0
                     dev[1] += grid_kwh
                     dev[2] += grid_kwh * own
-            if getattr(e, "shared", False):
-                # (#1417) its share of a meter it shares (split by draw);
-                # the meter's row carries the baseline, written here where
-                # the step is booked
-                used = max(0.0, float(e.meter_kwh or 0.0))
-                if e.baseline is not None:
-                    self.device_meter_last[e.device_id] = dict(e.baseline)
-            elif e.meter and e.baseline is not None:
+            if e.members:   # (#1417) a shared meter: what each member used
+                self._note_members(e, interval_hours)
+            if e.meter and e.baseline is not None:
                 last = self.device_meter_last.get(e.device_id)
                 step = max(0.0, float(e.meter_kwh or 0.0))
                 start = self._watched_start(last, e.baseline, dev)
@@ -5125,10 +5126,8 @@ class EnergyCalculator:
             if kwh <= 0:
                 continue
             price = house_rate if e.price is None else float(e.price)
-            self._accumulate(f"{DEVICE_TARIFF_KWH}{e.device_id}", today,
-                             month_key, year_key, kwh)
-            self._accumulate_cost(f"{DEVICE_TARIFF_COST}{e.device_id}", today,
-                                  month_key, year_key, kwh * price)
+            self._book_own(e.device_id, kwh, kwh * price, today, month_key,
+                           year_key, self._split_now.get(e.device_id))
             cost += kwh * price
             left -= kwh
         if spread:
@@ -5214,6 +5213,12 @@ class EnergyCalculator:
         else:
             read["since"], read["since_rows"] = read.get("at"), None
             read["since_dev_t"], read["since_dev_gh"], read["since_dev"] = dev
+        if entry.members:   # (#1417) the members' use at this read / at since
+            cum = dict(self.meter_members_cum.get(entry.device_id, {}))
+            read["members_read"] = cum
+            read["since_members"] = (
+                dict(last.get("since_members") or {}) if same and start is not None
+                and isinstance(last.get("since_members"), dict) else cum)
         self.device_meter_last[entry.device_id] = read
         self._meter_written.add(entry.device_id)
 
@@ -5249,12 +5254,56 @@ class EnergyCalculator:
             kwh = want * scale
             if kwh <= 0.0:
                 continue
-            self._accumulate(f"{DEVICE_TARIFF_KWH}{e.device_id}", today,
-                             month_key, year_key, kwh)
-            self._accumulate_cost(f"{DEVICE_TARIFF_COST}{e.device_id}", today,
-                                  month_key, year_key, kwh * price)
+            self._book_own(e.device_id, kwh, kwh * price, today, month_key,
+                           year_key, self._split_now.get(e.device_id))
             self._accumulate_cost("cost_import", today, month_key, year_key,
                                   kwh * (price - house))
+
+    def _note_members(self, e, interval_hours: float) -> None:
+        """(#1417) Add this cycle's use of each member of a shared meter,
+        and fix the split of the step booked this cycle: each member's use
+        since the read the step is spread from (the same span the #1230
+        spread prices), else since the last read."""
+        cum = self.meter_members_cum.setdefault(e.device_id, {})
+        before = dict(cum)
+        for did, watts in e.members:
+            w = _as_float(watts)
+            if math.isfinite(w) and w > 0.0:
+                cum[did] = cum.get(did, 0.0) + w * interval_hours / 1000.0
+            else:
+                cum.setdefault(did, 0.0)
+        last = self.device_meter_last.get(e.device_id)
+        base = last.get("since_members") if isinstance(last, dict) else None
+        self._split_now[e.device_id] = self._member_weights(
+            e.device_id, base if isinstance(base, dict) else before) or {}
+
+    def _member_weights(self, meter_id: str, base: Any) -> Optional[Dict[str, float]]:
+        """(#1417) Each member's use of a shared meter since ``base`` (their
+        sums at the span's start); None when there is no such start."""
+        if not isinstance(base, dict):
+            return None
+        cum = self.meter_members_cum.get(meter_id, {})
+        return {did: max(0.0, v - _as_float(base.get(did, 0.0)))
+                for did, v in cum.items()}
+
+    def _book_own(self, did: str, kwh: float, cost: float, today: date,
+                  month_key: str, year_key: str,
+                  split: Optional[Dict[str, float]] = None) -> None:
+        """Book own-tariff grid kWh and their cost on one device's rows.
+
+        (#1417) A shared meter (``split``: its members' use over the
+        step's span) books them on its members, in proportion. What no
+        member used — every weight 0, or no span known — stays on the
+        meter's own row: that tariff's, shown as such, never the house's."""
+        weights = {m: w for m, w in (split or {}).items() if w > 0.0}
+        total = sum(weights.values())
+        targets = ([(m, w / total) for m, w in sorted(weights.items())]
+                   if total > 0.0 else [(did, 1.0)])
+        for target, part in targets:
+            self._accumulate(f"{DEVICE_TARIFF_KWH}{target}", today,
+                             month_key, year_key, kwh * part)
+            self._accumulate_cost(f"{DEVICE_TARIFF_COST}{target}", today,
+                                  month_key, year_key, cost * part)
 
     def _hold_meter_gap(self, entry) -> bool:
         """(#1228) Hold a meter step that covers more than one cycle.
@@ -5284,7 +5333,9 @@ class EnergyCalculator:
         else:
             self.device_meter_gaps[entry.device_id] = {
                 "kwh": step, "since": str(last["at"]),
-                "rows": last.get("rows"), "price": entry.price}
+                "rows": last.get("rows"), "price": entry.price,
+                # (#1417) a shared meter: its members' use from that read on
+                "members_since": last.get("members_read")}
         return True
 
     def _device_taken(self, today: date) -> Tuple[float, float]:
@@ -5514,10 +5565,8 @@ class EnergyCalculator:
                 price = float(gap["price"])
             else:
                 price = house
-            self._accumulate(f"{DEVICE_TARIFF_KWH}{did}", today, month_key,
-                             year_key, kwh)
-            self._accumulate_cost(f"{DEVICE_TARIFF_COST}{did}", today,
-                                  month_key, year_key, kwh * price)
+            self._book_own(did, kwh, kwh * price, today, month_key, year_key,
+                           self._member_weights(did, gap.get("members_since")))
             self._accumulate_cost("cost_import", today, month_key, year_key,
                                   kwh * (price - house))
             _LOGGER.info("Own meter of %s: %.3f of %.3f kWh over time SEM did "
@@ -6199,6 +6248,8 @@ class EnergyCalculator:
             "lifetime_home_checked": self._lifetime_home_checked,   # (#1295)
             "rate_history": list(self._rate_history),
             "device_meter_last": dict(self.device_meter_last),   # (#812)
+            # (#1417) what each member of a shared meter used (its split)
+            "meter_members": {k: dict(v) for k, v in self.meter_members_cum.items()},
             # (#1228) a step over an outage still waiting for its rows
             "device_meter_gaps": dict(self.device_meter_gaps),
             # (#1293) the time SEM saw and the flows a meter step is spread
@@ -6382,6 +6433,11 @@ class EnergyCalculator:
                 if isinstance(v, dict) and _finite(v.get("kwh"))
                 and isinstance(v.get("since"), str)}
             self._restore_meter_watch(state.get("meter_watch"))   # (#1293)
+            _mm = state.get("meter_members")
+            self.meter_members_cum = {
+                str(k): {str(d): float(x) for d, x in v.items() if _finite(x)}
+                for k, v in (_mm.items() if isinstance(_mm, dict) else ())
+                if isinstance(v, dict)}
             rate_history = state.get("rate_history", [])
             self._rate_history = deque(
                 rate_history if isinstance(rate_history, list) else [], maxlen=30

@@ -19663,6 +19663,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if calc is None or tariffs is None:
             return
         devices = list(self._surplus_controller._devices.values())
+        self._check_shared_meter_prices(tariffs, devices)
         entries = tariffs.cycle(devices, calc.device_meter_last, dt_util.now())
         names = {d.device_id: getattr(d, "name", d.device_id) for d in devices}
         for e in entries:
@@ -19676,6 +19677,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # registered is not time off its own meter
         calc.set_device_tariff_cycle(
             entries, known=[str(getattr(d, "device_id", "") or "") for d in devices])
+
+    def _check_shared_meter_prices(self, tariffs, devices) -> None:
+        """(#1417) One meter, one price: a Repair names the devices when
+        those sharing a meter carry different tariffs (the first device's
+        price is used for all of them); cleared when they agree again."""
+        from .device_tariff import tariff_of
+        from .repair_issues import (
+            clear_shared_meter_two_prices, raise_shared_meter_two_prices,
+        )
+        groups = tariffs.shared_groups(devices)
+        was = getattr(self, "_shared_meter_mixed", set())
+        now_mixed = set()
+        for meter, group in groups.items():
+            if not tariffs.mixed_prices(group):
+                continue
+            now_mixed.add(meter)
+            if meter in was:
+                continue
+            first = tariff_of(group[0])
+            raise_shared_meter_two_prices(
+                self.hass, meter,
+                devices=", ".join(str(getattr(d, "name", "") or d.device_id) for d in group),
+                used=str(getattr(group[0], "name", "") or group[0].device_id)
+                + (f" ({first.entity})" if first.entity else f" ({first.rate:g})"))
+        for meter in was - now_mixed:
+            clear_shared_meter_two_prices(self.hass, meter)
+        self._shared_meter_mixed = now_mixed
 
     def _device_tariff_books(self) -> Dict[str, Any]:
         """(#812) Today's grid kWh and cost per own-tariff device, for its
@@ -19707,8 +19735,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             meter = tariff_of(device).meter
             if meter and sum(1 for d in self._surplus_controller._devices.values()
                              if tariff_of(d).meter == meter) > 1:
+                from .device_tariff import shared_meter_id
                 out[f"tariff_meter_unassigned_kwh_{did}"] = calc.get_device_tariff(
-                    f"meter:{meter}", day)["daily_grid_kwh"]
+                    shared_meter_id(meter), day)["daily_grid_kwh"]
         return out
 
     def _comfort_split_for(self, device, now):

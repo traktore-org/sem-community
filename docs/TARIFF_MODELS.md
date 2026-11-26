@@ -151,11 +151,18 @@ grid ── main meter ──┬── house            (house price)
                                         └── car charger (second price)
 ```
 
-- **One meter, several devices:** SEM reads the meter once. It splits each step
-  between the devices by what each draws at that moment.
-- **What none of them drew** stays on that meter, at its price. Each device's
+- **One meter, several devices:** SEM reads the meter once and books it like
+  any own meter: a meter that moves in whole ticks, or late, is spread over the
+  time since it last moved, and a step over time SEM was down waits for the
+  house counters of that time. Each step is split between the devices by
+  what each used over that same time.
+- **One meter, one price:** all devices on a meter must have the same price.
+  If they do not, SEM uses the first device's price and a Repair names them.
+- **What none of them used** stays on that meter, at its price. Each device's
   cost sensor shows it as `shared_meter_unassigned_kwh_today`.
 - **The house:** its grid kWh at the house price = the grid import minus
   everything booked to own tariffs. Never below 0.
-- **Limit:** a step that covers a long gap (SEM down) is split by the draw of
-  the first cycle after the gap.
+- **Name the meter a device is directly behind.** Meters inside meters
+  (a sub-meter behind the cascade meter, each named by different devices)
+  are not supported: the inner meter's kWh would also count on the outer
+  meter's unassigned row.

@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automatizace používají staré názvy režimu nabíjení",
       "description": "Režimy nabíjení SEM jsou nyní Slunce, Slunce + tarif, Teď a Vypnuto. Home Assistant odmítá staré názvy v select.select_option a spouštěč se starým názvem se už nespustí. Změňte tyto: {uses} SEM najde většinu míst. Zkontrolujte také blueprinty a automatizace vytvořené mimo rozhraní."
+    },
+    "shared_meter_two_prices": {
+      "title": "Jeden elektroměr se dvěma cenami: {meter}",
+      "description": "Zařízení {devices} sdílejí elektroměr {meter}, ale mají různé ceny. Elektroměr má jednu cenu, proto SEM používá cenu {used} pro všechna. Nastavte všem stejnou cenu v Tarifu zařízení."
     }
   },
   "selector": {

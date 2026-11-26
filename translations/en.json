@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automations use old charge mode names",
       "description": "SEM's charge modes are now Sun, Sun + tariff, Now and Off. Home Assistant refuses the old names in select.select_option, and a trigger on an old name no longer fires. Change these: {uses} SEM finds most uses. Check also blueprints, and automations made outside the UI."
+    },
+    "shared_meter_two_prices": {
+      "title": "One meter with two prices: {meter}",
+      "description": "The devices {devices} share the meter {meter} but have different prices. One meter has one price, so SEM uses the price of {used} for all of them. Give them all the same price under Device tariff."
     }
   },
   "selector": {

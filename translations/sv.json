@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automationer använder gamla namn på laddläge",
       "description": "SEM:s laddlägen heter nu Sol, Sol + tariff, Nu och Av. Home Assistant avvisar de gamla namnen i select.select_option, och en utlösare på ett gammalt namn löser inte längre ut. Ändra dessa: {uses} SEM hittar de flesta ställen. Kontrollera även blueprints och automationer som skapats utanför gränssnittet."
+    },
+    "shared_meter_two_prices": {
+      "title": "En mätare med två priser: {meter}",
+      "description": "Enheterna {devices} delar mätaren {meter} men har olika priser. En mätare har ett pris, så SEM använder priset för {used} för alla. Ge alla samma pris under Enhetens tariff."
     }
   },
   "selector": {
