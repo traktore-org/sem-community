@@ -3615,6 +3615,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     try:
         # (#1204) from here the battery controls hold their places
         coordinator._battery_controls_built = True
+        # (#1428) the sweep judges only what the platforms report in THIS run
+        from .entity_sweep import start_report
+        start_report(hass, entry)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         _LOGGER.info("Platforms setup completed: %s", PLATFORMS)
         await _async_listen_energy_prefs(hass)

@@ -62,6 +62,19 @@ def stale_rows(rows: Iterable[Any], entry_id: str,
     return out
 
 
+def start_report(hass, entry) -> None:
+    """Forget an earlier run's report before the platforms set up.
+
+    A setup that failed after its platforms reported, but before the sweep,
+    left its report behind. A platform that then fails on the retry must
+    not be judged by that old report. Never raises.
+    """
+    try:
+        hass.data.get(DOMAIN, {}).get(_KEY, {}).pop(entry.entry_id, None)
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("entity sweep: could not clear the old report", exc_info=True)
+
+
 def report_built_keys(hass, entry, platform: str, keys: Iterable[str]) -> None:
     """A platform says which keys it built in this run. Never raises."""
     try:

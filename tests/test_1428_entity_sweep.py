@@ -230,7 +230,10 @@ async def test_a_label_is_sems_only_as_made_and_on_nothing_else(hass):
         labels.async_create(name=lid, description=text)
     take, on_user, on_sibling, on_device, on_area, renamed, coloured = (
         "sem_power", "sem_ev", "sem_grid", "sem_solar", "sem_home", "sem_battery", "sem_flow")
-    assert {take, on_user, on_sibling, on_device, on_area, renamed, coloured} <= set(SEM_LABELS)
+    iconed, described, targeted = "sem_status", "sem_config", "sem_energy"
+    yours = {on_user, on_sibling, on_device, on_area, renamed, coloured,
+             iconed, described, targeted}
+    assert yours | {take} <= set(SEM_LABELS) and len(yours) == 9
 
     def labelled(entry, platform, uid, lid):
         row = ents.async_get_or_create("sensor", platform, uid, config_entry=entry)
@@ -245,13 +248,21 @@ async def test_a_label_is_sems_only_as_made_and_on_nothing_else(hass):
     ar.async_get(hass).async_create("Garage", labels={on_area})
     labels.async_update(renamed, name="My battery")
     labels.async_update(coloured, color="red")
+    labels.async_update(iconed, icon="mdi:star")
+    labels.async_update(described, description="my own words")
+    from homeassistant.setup import async_setup_component
+    assert await async_setup_component(hass, "automation", {"automation": {
+        "alias": "mine", "trigger": {"platform": "event", "event_type": "x"},
+        "action": {"service": "homeassistant.turn_on",
+                   "target": {"label_id": targeted}}}})
+    await hass.async_block_till_done()
 
     n = cleanup.delete_own_labels(hass, [sem.entry_id])
     left = _label_ids(hass)
     assert take not in left
-    assert {on_user, on_sibling, on_device, on_area, renamed, coloured} <= left
+    assert yours <= left, sorted(yours - left)
     # the labels nothing carries went too
-    untouched = set(SEM_LABELS) - {on_user, on_sibling, on_device, on_area, renamed, coloured}
+    untouched = set(SEM_LABELS) - yours
     assert not untouched & left and n == len(untouched)
     assert ents.async_get(user_row.entity_id).labels == {on_user}
 
@@ -293,3 +304,23 @@ def test_only_the_last_sem_entry_takes_the_labels():
                   and ast.unparse(n.test) == "not remaining"
                   and "delete_own_labels" in ast.unparse(n)]
     assert under_last, "labels are taken outside the last-entry branch"
+
+
+def test_an_old_report_is_forgotten_before_the_platforms_set_up():
+    """A setup that failed after its platforms reported left the report; a
+    platform that fails on the retry must not be judged by it."""
+    from types import SimpleNamespace as NS
+    hass, entry = NS(data={}), NS(entry_id=E)
+    es.report_built_keys(hass, entry, "time", ["charger_old_target_time"])
+    es.start_report(hass, entry)
+    assert hass.data["solar_energy_management"]["entity_sweep_built"] == {}
+    es.start_report(NS(data={}), entry)          # nothing to forget: no error
+    import inspect
+    from custom_components.solar_energy_management import async_setup_entry
+    src = inspect.getsource(async_setup_entry)
+    calls = [n for n in ast.walk(ast.parse(src.strip())) if isinstance(n, ast.Call)]
+    line = {}
+    for c in calls:
+        name = getattr(c.func, "attr", None) or getattr(c.func, "id", None)
+        line.setdefault(name, c.lineno)
+    assert line["start_report"] < line["async_forward_entry_setups"] < line["sweep_stale_entities"]
