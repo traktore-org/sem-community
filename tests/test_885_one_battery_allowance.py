@@ -730,7 +730,9 @@ class TestAChargerIsNeverReservedForAsALoad:
         )
 
     def test_a_charger_would_eat_the_whole_allowance(self):
-        charger = _load(3, rated=4140.0, name="keba_fa87f74cd3")
+        # (#1434) min_w 400: a senior is judged on whether it could start on
+        # what is left, so the hazard is shown with a charger that could.
+        charger = _load(3, rated=4140.0, min_w=400.0, name="keba_fa87f74cd3")
         loads = [_load(2, rated=1000.0, name="sim_heizband"),
                  _load(5, rated=1083.0, name="heizkoerper_maenner"),
                  _load(5, rated=500.0, name="test_heizband_600")]

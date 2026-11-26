@@ -7374,3 +7374,11 @@ Refs #1382 #1384.
 **Sweep question:** when you add a new kind of thing SEM makes in Home Assistant (a platform, a label, a helper), which list makes it go again?
 **Left open:** long-term statistics and the generated dashboard stay on purpose; `remove_leftovers` takes them.
 Refs #1428 #923 #935 #670.
+
+### 202. A reservation for a device that cannot start with what it reserves — GUARDED
+
+**What happens.** On the .175 rig (26.11.2026) a heat pump at the top of the device list, in Surplus mode, rated 2.0 kW and idle, reserved all 900 W of spare sun. It cannot start on 900 W, so it stayed off; every junior saw 0 W (a car in Sun + tariff never got thin sun) and the sun went to the grid.
+**The rule.** On the solar axis a senior holds back sun only when what is left after the seniors above it reaches its start threshold (`min_power_threshold`, else its rating), or when its own start delay already runs (`_surplus_since`), which is the senior about to start the walk protects (`_reserved_for_seniors`, `_start_threshold` in `coordinator/surplus_controller.py`).
+**Guard:** `tests/test_1434_senior_reserve.py` — the rig case, at the threshold, a modulating start threshold, a running senior, a senior in its start delay, two seniors, more sun never less reservation.
+**Sweep question:** where else does SEM set aside power for a device on its rating instead of on whether it could start now?
+Refs #1434 #885.

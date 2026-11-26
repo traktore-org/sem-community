@@ -246,6 +246,18 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
             if not _would_start(device):
                 continue
             claim = _rated_claim(device)
+            # (#1434) Sun it cannot start with is not sun it is about to
+            # take. An idle heat pump that needs 2000 W reserved all 900 W
+            # of spare sun, stayed off, and every junior saw 0 W while the
+            # sun went to the grid. Judge the senior on what is left after
+            # the seniors above it: below its start threshold it holds
+            # nothing back — unless its own start delay is already running
+            # (``_surplus_since``), which is the senior "about to start" this
+            # walk exists to protect.
+            left = cap - reserved
+            if (_start_threshold(device) > left
+                    and getattr(device, "_surplus_since", None) is None):
+                continue
 
         reserved += max(0.0, claim)
         if reserved >= cap:
@@ -294,6 +306,15 @@ def _would_start(device) -> bool:
         except (TypeError, ValueError):
             pass
     return True
+
+
+def _start_threshold(device) -> float:
+    """(#1434) The power a device needs to switch on at all: its start
+    threshold, else its rating."""
+    threshold = float(getattr(device, "min_power_threshold", 0.0) or 0.0)
+    if threshold <= 0.0:
+        threshold = float(getattr(device, "rated_power", 0.0) or 0.0)
+    return threshold
 
 
 def _rated_claim(device) -> float:
