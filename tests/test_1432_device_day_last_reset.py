@@ -11,7 +11,8 @@ Pinned here:
 
 * ``last_reset`` is the sunrise that opened the row's day, month or year,
   read from the same day key as the kWh — it moves in the cycle the row
-  falls to 0, never in another cycle, and a restart does not move it;
+  falls to 0, never in another cycle; a restart, a restart with no
+  ``sun.sun`` yet, or a changed home location does not move it;
 * a period already running when this code first published says None, as
   before — a new ``last_reset`` mid-period makes Home Assistant count the
   period so far again;
@@ -108,21 +109,20 @@ def _cycle(calc: EnergyCalculator, kw: float = 2.0):
 
 def _ha_sum(rows):
     """Home Assistant's long-term sum of a TOTAL sensor (the sensor
-    recorder's ``_compile_statistics``), one state at a time: a
-    ``last_reset`` other than the last one seen starts a new period from 0;
-    with none, every change is added, up or down."""
+    recorder's ``_compile_statistics``), for one state per 5-minute window:
+    a ``last_reset`` other than the one the last window kept starts a new
+    period from 0; with none, every change is added, up or down. A window
+    keeps its LAST state's ``last_reset``, None too."""
     total, old, old_reset = 0.0, None, None
     for value, reset in rows:
-        reset = reset.isoformat() if reset is not None else None
         if old is None:
             old, old_reset = value, reset
             continue
         if reset is not None and reset != old_reset:
             total += value
-            old_reset = reset
         else:
             total += value - old
-        old = value
+        old, old_reset = value, reset
     return total
 
 
@@ -156,23 +156,23 @@ def test_no_sunrise_that_date_starts_at_midnight():
 
 def test_a_period_running_on_the_first_day_says_none_then_its_sunrise():
     calc = _calc()
-    tm = calc._time_manager
+    def sunrise(day):
+        return calc._time_manager.sunrise_on(day).isoformat()
     first = date(2026, 11, 26)
     assert calc.device_period_starts(first) == {
         "day": None, "month": None, "year": None}
     # the next day: the day says its sunrise; month and year still run
     nxt = date(2026, 11, 27)
     assert calc.device_period_starts(nxt) == {
-        "day": tm.sunrise_on(nxt), "month": None, "year": None}
+        "day": sunrise(nxt), "month": None, "year": None}
     # the next month: the month starts at the sunrise of the 1st
     dec = date(2026, 12, 3)
     assert calc.device_period_starts(dec) == {
-        "day": tm.sunrise_on(dec), "month": tm.sunrise_on(date(2026, 12, 1)),
+        "day": sunrise(dec), "month": sunrise(date(2026, 12, 1)),
         "year": None}
     # the next year: 1 January's sunrise
     jan = date(2027, 1, 5)
-    assert calc.device_period_starts(jan)["year"] == tm.sunrise_on(
-        date(2027, 1, 1))
+    assert calc.device_period_starts(jan)["year"] == sunrise(date(2027, 1, 1))
 
 
 def test_the_first_day_mark_survives_a_restart():
@@ -185,7 +185,8 @@ def test_the_first_day_mark_survives_a_restart():
     after = _calc()
     after.restore_state(state)
     nxt = date(2026, 11, 27)
-    assert after.device_period_starts(nxt)["day"] == after._time_manager.sunrise_on(nxt)
+    assert after.device_period_starts(nxt)["day"] == (
+        after._time_manager.sunrise_on(nxt).isoformat())
     # a store without the mark is the upgrade: today is the first day
     legacy = _calc()
     legacy.restore_state({k: v for k, v in state.items()
@@ -249,7 +250,105 @@ def test_a_restart_across_sunrise_keeps_the_pairing():
     assert s_after["day"] != s_before["day"] and s_after["day"] is not None
 
 
+def test_a_restart_before_sun_sun_is_up_does_not_step_the_day_back():
+    """Review finding: Home Assistant restarts at 07:00 in November and
+    ``sun.sun`` is not set up at SEM's first cycle. A fixed 06:00 fallback
+    put that cycle in the new day; the next cycle, with ``sun.sun``, went
+    back to yesterday — and its start with it, which Home Assistant read as
+    a new period: yesterday's kWh counted twice."""
+    hass = _SunHass()
+    with freeze_time(_local(2026, 11, 25, 12)) as clock:
+        calc = _calc(hass)
+        rows, booked = [], 0.0
+        while dt_util.now() < _local(2026, 11, 28, 7):
+            _d, row, starts = _cycle(calc)
+            booked += 2.0 * STEP.total_seconds() / 3600
+            rows.append((row["daily_kwh"], starts["day"]))
+            clock.tick(STEP)
+        state = calc.get_state()
+        # the restart: no sun.sun for the first cycle
+        real_get = hass.states.get
+        hass.states.get = lambda _eid: None
+        after = _calc(hass)
+        after.restore_state(state)
+        days = []
+        while dt_util.now() < _local(2026, 11, 28, 12):
+            day, row, starts = _cycle(after)
+            booked += 2.0 * STEP.total_seconds() / 3600
+            rows.append((row["daily_kwh"], starts["day"]))
+            days.append(day)
+            hass.states.get = real_get
+            clock.tick(STEP)
+    assert days == sorted(days)            # the day never steps back
+    assert days[0] == date(2026, 11, 27)   # 07:00 is before the sunrise
+    first = 2.0 * STEP.total_seconds() / 3600
+    assert _ha_sum(rows) == pytest.approx(booked - first, abs=0.01)
+
+
+def test_the_day_rolls_at_the_sunrise_not_minutes_later():
+    """The reporter saw the row fall 3-4 minutes after sunrise: tomorrow's
+    sunrise minus 24 h, which is later in autumn. Today's own sunrise now."""
+    hass = _SunHass()
+    tm = TimeManager(hass)
+    sunrise = tm.sunrise_on(date(2026, 11, 26))
+    with freeze_time(sunrise - timedelta(seconds=30)) as clock:
+        assert tm.get_current_meter_day_sunrise_based() == date(2026, 11, 25)
+        clock.tick(timedelta(seconds=60))
+        assert tm.get_current_meter_day_sunrise_based() == date(2026, 11, 26)
+    # no sun.sun at all: the same sunrise, not a fixed 06:00
+    hass.states.get = lambda _eid: None
+    with freeze_time(sunrise - timedelta(minutes=30)):
+        assert tm.get_current_meter_day_sunrise_based() == date(2026, 11, 25)
+        assert tm.get_diagnostics()["sunrise_correction"] == "fallback_location"
+
+
+def test_a_changed_location_does_not_move_a_running_start():
+    """Review finding: the start is a sunrise, so a new home location (or a
+    new astral) gives another one. Moved mid-period, Home Assistant counts
+    the period so far again — a whole year on the year row."""
+    hass = _SunHass()
+    calc = _calc(hass)
+    calc.device_period_starts(date(2025, 6, 1))
+    before = calc.device_period_starts(date(2026, 11, 26))
+    hass.config.latitude, hass.config.elevation = 47.0, 900
+    assert calc.device_period_starts(date(2026, 11, 26)) == before
+    # and after a restart
+    after = _calc(hass)
+    after.restore_state(calc.get_state())
+    assert after.device_period_starts(date(2026, 11, 26)) == before
+    assert "device_period_kept" in CALCULATOR_STATE_KEYS
+    # the next day takes the new location's sunrise; month and year stay
+    nxt = after.device_period_starts(date(2026, 11, 27))
+    assert nxt["day"] == after._time_manager.sunrise_on(
+        date(2026, 11, 27)).isoformat()
+    assert (nxt["month"], nxt["year"]) == (before["month"], before["year"])
+
+
+def test_a_bad_kept_row_is_dropped_not_raised():
+    calc = _calc()
+    calc.restore_state({"device_period_since": "2026-01-01",
+                        "device_period_kept": {"day": ["2026-11-26"],
+                                               "month": 5, "year": [1, 2]}})
+    out = calc.device_period_starts(date(2026, 11, 26))
+    assert out["day"] == calc._time_manager.sunrise_on(
+        date(2026, 11, 26)).isoformat()
+
+
 # ── the coordinator and the sensor ──────────────────────────────────
+
+
+def test_the_coordinator_hands_the_starts_to_the_sensor_data():
+    """The three starts reach ``HeatPumpSensorData`` from the view."""
+    src = (SENSOR_PY.parent / "coordinator" / "coordinator.py").read_text()
+    for node in ast.walk(ast.parse(src)):
+        if (isinstance(node, ast.Call)
+                and getattr(node.func, "id", None) == "HeatPumpSensorData"):
+            kw = {k.arg: ast.unparse(k.value) for k in node.keywords}
+            break
+    else:
+        pytest.fail("no HeatPumpSensorData(...) in coordinator.py")
+    for period in ("day", "month", "year"):
+        assert kw[f"heat_pump_{period}_start"] == f"hp_starts.get('{period}')"
 
 
 def test_the_coordinator_reads_kwh_and_starts_from_one_day():
@@ -267,6 +366,7 @@ def test_the_coordinator_reads_kwh_and_starts_from_one_day():
     assert ledger["daily_kwh"] == pytest.approx(4.0)
     assert starts["day"] == calc._time_manager.sunrise_on(
         date(2026, 11, 26)).isoformat()
+    assert isinstance(starts["day"], str)   # ISO, as coordinator data carries
     assert starts["month"] is None and starts["year"] is None
     # no heat pump: no starts, nothing raised
     assert SEMCoordinator._heat_pump_ledger_view(host, None)[3] == {}

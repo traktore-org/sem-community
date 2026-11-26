@@ -137,6 +137,7 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # (#1432) the first device day this code published: device periods
     # running then say no last_reset
     "device_period_since",
+    "device_period_kept",
     # (#668) lifetime running totals, summed at each day rollover. Dropped
     # since they were introduced, so ``lifetime_total_savings`` fell back to a
     # 7-day-average-rate ESTIMATE of the entire history after every restart

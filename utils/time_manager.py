@@ -341,7 +341,13 @@ class TimeManager:
                     # If sunrise is tomorrow, subtract 24 hours to get today's sunrise
                     now = dt_util.now()
                     if sunrise.date() > now.date():
-                        sunrise = sunrise - timedelta(days=1)
+                        # (#1432) Today's own sunrise, from the location.
+                        # Tomorrow's minus 24 h is a minute or two later in
+                        # autumn: the meter day rolled minutes after sunrise,
+                        # and a restart then could see the day step back.
+                        today = self._astral_sunrise(now.date())
+                        sunrise = (today if today is not None and today <= now
+                                   else sunrise - timedelta(days=1))
                         # Same class of bug as #416 forecast_tracker.
                         # Tracking here so we can see how often the
                         # next_rising-is-tomorrow case fires in practice.
@@ -353,9 +359,17 @@ class TimeManager:
         except Exception as e:
             _LOGGER.debug(f"Could not get sunrise datetime, using default: {e}")
 
+        # (#1432) No ``sun.sun`` (not set up yet after a restart): the same
+        # sunrise from the home's location. A fixed 06:00 put a winter
+        # morning restart in the new meter day; once ``sun.sun`` came up the
+        # day stepped back, and the device rows read yesterday again.
+        now = dt_util.now()
+        today = self._astral_sunrise(now.date())
+        if today is not None:
+            self._last_sunrise_correction = "fallback_location"
+            return today
         # Fallback: 06:00 today in local time
         self._last_sunrise_correction = "fallback_default_06_00"
-        now = dt_util.now()
         return now.replace(hour=6, minute=0, second=0, microsecond=0)
 
     def sunrise_on(self, day: date) -> datetime:
@@ -368,15 +382,20 @@ class TimeManager:
         moves to tomorrow once the sun is up. A date with no sunrise (far
         north in winter) starts at midnight.
         """
+        rising = self._astral_sunrise(day)
+        return rising if rising is not None else dt_util.start_of_local_day(day)
+
+    def _astral_sunrise(self, day: date):
+        """(#1432) The sunrise on ``day`` from the home's location, local
+        time — the same sum the sun integration makes. None when that date
+        has no sunrise or there is no location to read."""
         try:
             from homeassistant.const import SUN_EVENT_SUNRISE
             from homeassistant.helpers.sun import get_astral_event_date
             rising = get_astral_event_date(self.hass, SUN_EVENT_SUNRISE, day)
         except Exception:  # noqa: BLE001 — no location reads as no sunrise
-            rising = None
-        if isinstance(rising, datetime):
-            return dt_util.as_local(rising)
-        return dt_util.start_of_local_day(day)
+            return None
+        return dt_util.as_local(rising) if isinstance(rising, datetime) else None
 
     def get_current_meter_day_sunrise_based(self) -> date:
         """Determine which 'meter day' we're in based on last sunrise.

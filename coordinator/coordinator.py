@@ -8500,11 +8500,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 hp_shifted_total = _calc.get_device_shifted(
                     "heat_pump", _day, lifetime=True
                 )
-                hp_starts = {
-                    period: start.isoformat() if start is not None else None
-                    for period, start
-                    in _calc.device_period_starts(_day).items()
-                }
+                hp_starts = dict(_calc.device_period_starts(_day))
             except (AttributeError, TypeError, ValueError):
                 pass
         return hp_ledger, hp_shifted_today, hp_shifted_total, hp_starts
