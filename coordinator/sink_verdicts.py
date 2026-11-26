@@ -69,11 +69,15 @@ def house_keeps_pack(house_sink_enabled: bool, cheap: bool) -> bool:
 _HOLD_MODES = ("auto", "self_consumption", "allow_arbitrage")
 
 
-def plan_house_sink(config) -> bool:
-    """(#1362) Does the plan keep the pack in cheap hours? The switch is on
-    and every battery's mode reaches the hold. A pack SEM leaves to the
-    inverter ("off") or drives by hand is not held live, so a fleet with
-    one such pack is planned as before (the walk is fleet-wide)."""
+def plan_house_sink(config, adapters=None) -> bool:
+    """(#1362) Does the plan keep the pack in cheap hours? The switch is on,
+    every battery's mode reaches the hold, and every battery SEM has a
+    control for can take a 0 W limit. A pack SEM leaves to the inverter
+    ("off"), drives by hand, or cannot cap (#1427: no limit entity, no hold
+    select, a hold refused lately) is not held live, so a fleet with one
+    such pack is planned as before (the walk is fleet-wide). ``adapters``:
+    the battery controls by id; none built yet (the first cycles) is no
+    gap."""
     cfg = config or {}
     if not bool(cfg.get("battery_house_sink_enabled", False)):
         return False
@@ -81,7 +85,17 @@ def plan_house_sink(config) -> bool:
     modes = cfg.get("battery_modes")
     if not isinstance(modes, (list, tuple)) or not modes:
         modes = [one]
-    return all(str(m or one).lower() in _HOLD_MODES for m in modes)
+    if not all(str(m or one).lower() in _HOLD_MODES for m in modes):
+        return False
+    for adapter in (dict(adapters) if isinstance(adapters, dict) else {}).values():
+        gap_of = getattr(adapter, "discharge_limit_gap", None)
+        try:
+            gap = gap_of(0.0) if callable(gap_of) else None
+        except Exception:  # noqa: BLE001 — a control that cannot say cannot hold
+            return False
+        if isinstance(gap, str) and gap:
+            return False
+    return True
 
 
 def _money(v) -> str:

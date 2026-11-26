@@ -7125,8 +7125,9 @@ house sink HELD in a cheap hour, 0 W discharge in `decide_battery`) and the plan
 (`energy_planner._walk`: the pack covers the house in every slot) were two rules; the walk had
 none for the hold.
 **Where it lives:** `coordinator/sink_verdicts.py` `house_keeps_pack` (**new**: the one rule; the
-live verdict asks it) and `plan_house_sink` (**new**: the switch, and every battery's mode reaches
-the hold — "off" and the manual modes return before it). `coordinator/energy_planner.py`
+live verdict asks it) and `plan_house_sink` (**new**: the switch, every battery's mode reaches the
+hold — "off" and the manual modes return before it — and every battery control can take a 0 W
+limit, the #1427 `discharge_limit_gap`). `coordinator/energy_planner.py`
 `build_night_ledger` (**fixed**: `house_sink_enabled` marks `LedgerSlot.pack_kept` per slot from
 execution's cheap word — `import_cheap` on a sun slot, else `level_cheap`), `_walk` (**fixed**: a
 kept slot covers only the house over the peak limit, the live #1003 cover), `takeover_of`
@@ -7139,16 +7140,16 @@ and now follow the live hold.
 **Guard:** `tests/test_1362_plan_keeps_the_pack.py` — the report's afternoon; the oracle (every
 level word × switch × sun or not: a slot is kept iff the live verdict holds the house); the
 reporter's G12w as a real provider, every hour of a week: the plan's cheap word asked a day ahead
-equals the live word at that hour; the peak cover; the takeover hour; the battery modes; the switch
+equals the live word at that hour; the peak cover; the takeover hour; the battery modes; packs SEM
+cannot hold (the real generic adapter with and without a hold select); the switch
 re-plans; the real `_shadow_energy_plan` with the switch on and off; AST: the live verdict asks
 `house_keeps_pack`, every coordinator `build_night_ledger` call passes `plan_house_sink`. With the
 walk rule off, 4 tests fail.
 **Left open:** (1) the #970 peak hold (its own switch) is not in the walk: it releases on the
 pack's level and the coming sun, which the plan does not model (a choice, not filed). (2) A
 battery-run load in a kept hour is booked from the pack as before; live it runs on grid power
-under the 0 W limit. (3) A pack with no way to hold (no limit entity, no hold select) is planned as
-kept. (4) A calendar holiday is read from today's sensor for later hours. (5) The Simulation models
-no house sink (`battery_sim`, `sink_verdicts={}`). (6) A hold option that also lets the inverter
+under the 0 W limit. (3) A calendar holiday is read from today's sensor for later hours. (4) The
+Simulation models no house sink (`battery_sim`, `sink_verdicts={}`). (5) A hold option that also lets the inverter
 charge from the grid (a Voltronic "Utility" with the charge source on mains) charges in a kept
 hour; SEM cannot see that. All low or a choice, not filed.
 Refs #1362 #879 #1003.
