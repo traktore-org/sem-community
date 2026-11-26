@@ -307,9 +307,9 @@ def _would_start(device) -> bool:
     about the device rather than when real surplus appeared — letting loads
     activate ahead of their own debounce, several times per cycle.
 
-    So: only the two conditions that are genuinely read-only and genuinely
-    mean "not today". Everything else (dependencies, anti-cycle, dwell) is
-    left to the load pass, which is the only place allowed to evaluate them.
+    So: only conditions that are read-only and mean "not now". (#1434) A
+    blocking dependency is one of them; anti-cycle and dwell are short and
+    stay with the load pass, which is the only place allowed to start them.
     Erring toward reserving is the safe direction here — it protects the
     senior device, which is the whole point of the walk.
     """
@@ -330,6 +330,14 @@ def _would_start(device) -> bool:
         return False
     if isinstance(getattr(device, "start_refusal", None), str):
         return False
+    # (#1434) a dependency that blocks it (``must_inactive`` while the other
+    # load runs) can last all day; counted, it held the sun with no end
+    deps = getattr(device, "_check_dependencies", None)
+    try:
+        if callable(deps) and deps() is False:
+            return False
+    except Exception:  # noqa: BLE001 — unknown is not refused
+        pass
     # (#1434) paused while the house is away: no run on the sun, unless the
     # hot-water dump may take it or the too-cold limit heats now
     if (_away_pauses(device)
@@ -374,8 +382,8 @@ def _could_start(device, power_w: float) -> bool:
 
 def _displaced_draw_w(devices, senior, excluded=frozenset()) -> float:
     """(#1434) What the running loads ranked below ``senior`` draw. The load
-    pass adds their draw back to its pool (``active_surplus_draw_w``'s rule)
-    and sheds them for the senior, so the senior may start on it. Without
+    pass adds their draw back to its pool and stops them for the senior, so
+    the senior may start on it. Without
     it a running pool pump below the car hid the sun from a heat pump above
     the car: the car took it, and the heat pump never started."""
     try:
@@ -393,8 +401,21 @@ def _displaced_draw_w(devices, senior, excluded=frozenset()) -> float:
                 continue
         except (TypeError, ValueError):
             continue
-        if (not device_mode_permits(d)
-                or getattr(d, "locked_by_operator", False) is True):
+        # Only a load the load pass can stop for the senior: a sun run in
+        # Surplus mode, not its own run (Legionella), not held on by its
+        # minimum run. A Peak-only or held one keeps running, and counting
+        # it held the sun for a senior that then could not start.
+        mode = getattr(d, "control_mode", None)
+        if getattr(mode, "value", mode) != "surplus":
+            continue
+        if (getattr(d, "locked_by_operator", False) is True
+                or getattr(d, "runs_without_surplus", False) is True):
+            continue
+        can_stop = getattr(d, "can_deactivate", None)
+        try:
+            if callable(can_stop) and can_stop() is False:
+                continue
+        except Exception:  # noqa: BLE001 — unknown: it may not stop
             continue
         draw = getattr(d, "get_current_consumption", None)
         try:

@@ -325,3 +325,41 @@ def test_the_loop_hands_the_walks_the_start_figures():
     batt = call_kwargs(loop, "_tier1_reserved_w")
     assert solar and all("pack_w" in kw for kw in solar)
     assert batt and all({"pack_w", "sun_w"} <= set(kw) for kw in batt)
+
+
+def test_a_junior_the_load_pass_cannot_stop_frees_nothing():
+    """Peak only, its own run, or held on by its minimum run: it keeps
+    running, so its draw is not sun the senior can start on."""
+    peak = _running(9, 1500.0)
+    peak.control_mode = "peak_only"
+    own = _running(9, 1500.0)
+    own.runs_without_surplus = True
+    held = _running(9, 1500.0)
+    held.can_deactivate = lambda: False
+    for junior in (peak, own, held):
+        hp = _senior(priority=1, rated=2500.0, name="hp")
+        assert _reserve([hp, junior], 2000.0, below=5) == 0.0, junior
+    free = _running(9, 1500.0)
+    free.can_deactivate = lambda: True
+    assert _reserve([_senior(priority=1, rated=2500.0, name="hp"), free],
+                    2000.0, below=5) == 2000.0
+
+
+def test_a_blocking_dependency_holds_nothing():
+    """A senior set to run only while another load is off, and that load
+    runs: the load pass refuses its start, so it holds nothing."""
+    dev = _t1(rated=2000.0)
+    dev._check_dependencies = lambda: False
+    assert _reserve([dev], 3000.0) == 0.0
+    assert _tier1_reserve([dev], sun=3000.0, pack=3000.0) == 0.0
+    dev._check_dependencies = lambda: True
+    assert _reserve([dev], 3000.0) == 2000.0
+
+
+def test_battery_axis_counts_a_running_junior_too():
+    """600 W sun + 1500 W pack + a 500 W junior it can stop start a 2500 W
+    load; without the junior it cannot."""
+    hp = _t1(priority=1, rated=2500.0, name="hp")
+    junior = _running(9, 500.0)
+    assert _tier1_reserve([hp, junior], sun=600.0, pack=1500.0, below=5) == 2500.0
+    assert _tier1_reserve([hp], sun=600.0, pack=1500.0, below=5) == 0.0
